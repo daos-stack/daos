@@ -4,9 +4,7 @@ Your contributions are most welcome! There are several good ways to suggest new
 features, offer to add a feature, or just begin a dialog about DAOS:
 
 - Open an issue in [jira](https://jira.hpdd.intel.com)
-
 - Suggest a feature, ask a question, start a discussion, etc. in our [user group](https://daos.groups.io/g/daos)
-
 - Chat with members of the DAOS community real-time on [Gitter](https://gitter.im/daos-storage)
 
 ## Coding Rules
@@ -62,10 +60,8 @@ The first line of the commit comment is the commit summary of the change.
 Changes submitted to the DAOS master branch require a DAOS Jira ticket number
 at the beginning of the commit summary. A DAOS Jira ticket is one that begins
 with DAOS and is therefore part of the DAOS project within Jira.
-For patches to other projects, such as CaRT, a different JIRA project should be
-used (e.g. CART).
 
-The commit summary should also have a component: tag immediately following the
+The commit summary should also have a `component:` tag immediately following the
 Jira ticket number that indicates which DAOS subsystem that the commit is
 related to. Example DAOS subsystems relate to modules like: client, pool,
 container, object, vos, rdb; functional components like rebuild; or auxiliary
@@ -85,9 +81,9 @@ DAOS-nnn component: short description of change under 62 columns
 
 The "component:" should be a lower-case single-word subsystem of the
 DAOS code that best encompasses the change being made.  Examples of
-components include modules: client, pool, container, object, vos, rdb;
-functional subsystems: recovery; and auxiliary areas: build, tests, docs.
-This list is not exhaustive, but is a guideline.
+components include modules: client, pool, container, object, vos, rdb,
+cart; functional subsystems: recovery; and auxiliary areas: build,
+tests, docs. This list is not exhaustive, but is a guideline.
 
 The commit comment should contain a detailed explanation of changes
 being made.  This can be as long as you'd like.  Please give details

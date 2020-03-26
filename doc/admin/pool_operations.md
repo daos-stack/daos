@@ -83,21 +83,13 @@ a106d667-5c5d-4d6f-ac3a-89099196c41a	0
 At creation time, a list of pool properties can be specified through the
 API (not supported by the tool yet):
 
--   DAOS_PROP_CO_LABEL is a string that the administrator can
-    associate with a pool. e.g., project A, project B, IO500 test
-    pool
-
--   DAOS_PROP_PO_ACL is the access control list (ACL) associated with
-    the pool
-
--   DAOS_PROP_PO_SPACE_RB is the space to be reserved on each target
-    for rebuild purpose.
-
--   DAOS_PROP_PO_SELF_HEAL defines whether the pool wants
-    automatically-trigger, or manually-triggered self-healing.
-
--   DAOS_PROP_PO_RECLAIM is used to tune the space reclaim strategy
-    based on time interval, batched commits or snapshot creation.
+| **Pool Property**        | **Description** |
+| ------------------------ | --------------- |
+| `DAOS_PROP_PO_LABEL`<img width=80/>| A string that the administrator can associate with a pool.  e.g., project A, project B, IO500 test pool|
+| `DAOS_PROP_PO_ACL`       | Access control list (ACL) associated with the pool|
+| `DAOS_PROP_PO_SPACE_RB`  | Space reserved on each target for rebuild purpose|
+| `DAOS_PROP_PO_SELF_HEAL` | Define whether the pool wants automatically-trigger, or manually-triggered self-healing|
+| `DAOS_PROP_PO_RECLAIM`   | Tune space reclaim strategy based on time interval, batched commits or snapshot creation|
 
 While those pool properties are currently stored persistently with pool
 metadata, many of them are still under development. Moreover, the
@@ -147,7 +139,7 @@ $ dmg pool get-acl --pool <UUID>
 ```
 
 The output is in the same string format used in the ACL file during creation,
-with one ACE per line.
+with one Access Control Entry (i.e. ACE) per line.
 
 ### Modifying a pool's ACL
 
@@ -162,7 +154,7 @@ To replace a pool's ACL with a new ACL:
 $ dmg pool overwrite-acl --pool <UUID> --acl-file <path>
 ```
 
-#### Updating entries in an existing ACL
+#### Updating an ACE
 
 To add or update multiple entries in an existing pool ACL:
 
@@ -180,7 +172,7 @@ If there is no existing entry for the principal in the ACL, the new entry is
 added to the ACL. If there is already an entry for the principal, that entry
 is replaced with the new one.
 
-#### Removing an entry from the ACL
+#### Removing an ACE
 
 To delete an entry for a given principal in an existing pool ACL:
 
@@ -194,10 +186,7 @@ operation, the principal argument must be formatted as follows:
 
 * Named user: `u:username@`
 * Named group: `g:groupname@`
-* Special principals:
-  * `OWNER@`
-  * `GROUP@`
-  * `EVERYONE@`
+* Special principals: `OWNER@`, `GROUP@` and `EVERYONE@`
 
 The entry for that principal will be completely removed. This does not always
 mean that the principal will have no access. Rather, their access to the pool

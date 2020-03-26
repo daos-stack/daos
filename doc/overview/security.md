@@ -130,19 +130,19 @@ It is not possible to deny access to a specific group in this way, due to
 ##### ACE Examples
 
 * `A::daos_user@:rw`
-  * Allow the UNIX user named daos_user to have read-write access.
+    * Allow the UNIX user named daos_user to have read-write access.
 * `A:G:project_users@:tc`
-  * Allow anyone in the UNIX group project_users to access a pool's contents and
+    * Allow anyone in the UNIX group project_users to access a pool's contents and
     create containers.
 * `A::OWNER@:rwdtTaAo`
-  * Allow the UNIX user who owns the container to have full control.
+    * Allow the UNIX user who owns the container to have full control.
 * `A:G:GROUP@:rwdtT`
-  * Allow the UNIX group that owns the container to read and write data, delete
-    the container, and manipulate container properties.
+    * Allow the UNIX group that owns the container to read and write data, delete
+      the container, and manipulate container properties.
 * `A::EVERYONE@:r`
-  * Allow any user not covered by other rules to have read-only access.
+    * Allow any user not covered by other rules to have read-only access.
 * `A::daos_user@:`
-  * Deny the UNIX user named daos_user any access to the resource.
+    * Deny the UNIX user named daos_user any access to the resource.
 
 #### Enforcement
 

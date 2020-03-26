@@ -14,16 +14,14 @@ different ways:
     to minimize the number of I/O racks and to optimize floor space,
     this approach usually requires high-density storage servers.
 
--   **Disaggregated Storage Model**: In the disaggregated model, the
+-   **Hyper-converged Storage Model**: In this model, the
     storage nodes are integrated into compute racks and can be either
-    dedicated or shared (e.g., in a hyper-converged infrastructure)
-    nodes. The DAOS servers are thus massively distributed and storage
-    access is non-uniform and must take locality into account. This model is
-    common in hyperconverged infrastructure.
+    dedicated or shared nodes. The DAOS servers are thus massively distributed
+    and storage access is non-uniform and must take locality into account.
+    This model is common in hyper-converged infrastructure.
 
-While DAOS is mostly deployed following the pooled model, active
-research is conducted to efficiently support the disaggregated model as
-well.
+While DAOS is mostly deployed following the pooled model, active research is
+conducted to efficiently support the hyper-converged model as well.
 
 ![](./media/image1.png)
 
