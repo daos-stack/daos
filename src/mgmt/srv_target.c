@@ -264,7 +264,7 @@ cleanup_newborn_pools(void)
 int
 ds_mgmt_tgt_setup(void)
 {
-	mode_t	stored_mode, mode;
+	mode_t	stored_mode;
 	int	rc;
 
 	/** create the path string */
@@ -276,9 +276,8 @@ ds_mgmt_tgt_setup(void)
 		D_GOTO(err_newborns, rc = -DER_NOMEM);
 
 	stored_mode = umask(0);
-	mode = S_IRWXU | S_IRWXG | S_IRWXO;
 	/** create NEWBORNS directory if it does not exist already */
-	rc = mkdir(newborns_path, mode);
+	rc = mkdir(newborns_path, S_IRWXU);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
 		umask(stored_mode);
@@ -286,7 +285,7 @@ ds_mgmt_tgt_setup(void)
 	}
 
 	/** create ZOMBIES directory if it does not exist already */
-	rc = mkdir(zombies_path, mode);
+	rc = mkdir(zombies_path, S_IRWXU);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
 		umask(stored_mode);
