@@ -220,9 +220,11 @@ pipeline {
                 sh label: "Playground",
                    script: '''git branch -a
                               git status
-                              git fetch origin
                               git log --graph --pretty=format:'%h -%d %s %cr <%an>' --abbrev-commit | head -50
                               git merge-base origin/''' + daos_branch + ''' HEAD
+                              git diff-tree --no-commit-id --name-only                       \
+                                $(git merge-base origin/''' + daos_branch + ''' HEAD) HEAD | \
+                                grep -v -e "^doc$"
                               git log --graph --pretty=format:'%h -%d %s (%cr) <%an>' --abbrev-commit | head'''
             }
         }
