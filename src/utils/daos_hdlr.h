@@ -102,7 +102,6 @@ struct cmd_args_s {
 	bool			verbose;	/* --verbose mode */
 	char			*entry;		/* --entry for ACL */
 	char			*principal;	/* --principal for ACL */
-	char			*name;		/* --name */
 };
 
 #define ARGS_VERIFY_PUUID(ap, label, rcexpr)			\

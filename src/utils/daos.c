@@ -483,7 +483,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"user",	required_argument,	NULL,	'u'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"principal",	required_argument,	NULL,	'P'},
-		{"name",	required_argument,	NULL,	'n'},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -699,11 +698,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (rc != 0)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
-		case 'n':
-			D_STRNDUP(ap->name, optarg, strlen(optarg));
-			if (ap->name == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
-			break;
 		default:
 			fprintf(stderr, "unknown option : %d\n", rc);
 			D_GOTO(out_free, rc = RC_PRINT_HELP);
@@ -772,8 +766,6 @@ out_free:
 		D_FREE(ap->entry);
 	if (ap->principal != NULL)
 		D_FREE(ap->principal);
-	if (ap->name != NULL)
-		D_FREE(ap->name);
 	D_FREE(cmdname);
 	return rc;
 }
@@ -1206,9 +1198,9 @@ help_hdlr(struct cmd_args_s *ap)
 "	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
 "	--eprange=B-E      container epoch range (destroy-snap)\n"
 "container options (set-prop):\n"
-"	--name=PROPNAME    name of the property to set\n"
-"			   supported props: LABEL\n"
-"	--value=VAL        value of the property\n"
+"	--properties=<name>:<value>[,<name>:<value>,...]\n"
+"			   supported prop names: label\n"
+"			   label value can be any string\n"
 "container options (ACL-related):\n"
 "	--acl-file=PATH    input file containing ACL (overwrite-acl, "
 "			   update-acl)\n"

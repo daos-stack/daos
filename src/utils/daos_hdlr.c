@@ -47,8 +47,6 @@
 
 #include "daos_hdlr.h"
 
-#define MAX_PROP_NAME_LEN	(64)
-
 static int
 parse_acl_file(const char *path, struct daos_acl **acl);
 
@@ -853,44 +851,33 @@ err_out:
 int
 cont_set_prop_hdlr(struct cmd_args_s *ap)
 {
-	int		rc;
-	daos_prop_t	*prop = NULL;
+	int			 rc;
+	struct daos_prop_entry	*entry;
+	uint32_t		 i;
 
-	if (ap->name == NULL || ap->value_str == NULL) {
-		fprintf(stderr, "--name and --value params required\n");
-		return -DER_INVAL;
-	}
-
-	/* Only set one at a time */
-	prop = daos_prop_alloc(1);
-	if (prop == NULL)
-		return -DER_NOMEM;
-
-	/* Only label supported for now */
-	if (strncmp(ap->name, "LABEL", MAX_PROP_NAME_LEN) == 0) {
-		if (strnlen(ap->value_str, DAOS_PROP_LABEL_MAX_LEN + 1) >
-		    DAOS_PROP_LABEL_MAX_LEN) {
-			fprintf(stderr, "label '%s' too long\n", ap->value_str);
-			D_GOTO(err_out, rc = -DER_INVAL);
-		}
-		prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-		D_STRNDUP(prop->dpp_entries[0].dpe_str, ap->value_str,
-			  DAOS_PROP_LABEL_MAX_LEN);
-	} else {
-		fprintf(stderr, "unsupported property '%s'\n", ap->name);
+	if (ap->props == NULL || ap->props->dpp_nr == 0) {
+		fprintf(stderr, "at least one property must be requested\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 
-	rc = daos_cont_set_prop(ap->cont, prop, NULL);
+	/* Validate the properties are supported for set */
+	for (i = 0; i < ap->props->dpp_nr; i++) {
+		entry = &(ap->props->dpp_entries[i]);
+		if (entry->dpe_type != DAOS_PROP_CO_LABEL) {
+			fprintf(stderr, "property not supported for set\n");
+			D_GOTO(err_out, rc = -DER_INVAL);
+		}
+	}
+
+	rc = daos_cont_set_prop(ap->cont, ap->props, NULL);
 	if (rc) {
 		fprintf(stderr, "Container set-prop failed, result: %d\n", rc);
 		D_GOTO(err_out, rc);
 	}
 
-	D_PRINT("Property '%s' was set to '%s'\n", ap->name, ap->value_str);
+	D_PRINT("Properties were successfully set\n");
 
 err_out:
-	daos_prop_free(prop);
 	return rc;
 }
 
