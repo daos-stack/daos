@@ -43,14 +43,6 @@ public class HadoopCmdIT {
 
   @Test
   public void listRoot() throws Exception {
-    String[] argv = new String[]{"-rm", "-r", "/user"};
-    int res = run(argv);
-    Assert.assertTrue(res == 0);
-
-    argv = new String[]{"-mkdir", "/user"};
-    res = run(argv);
-    Assert.assertTrue(res == 0);
-
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     PrintStream ps = null;
     PrintStream defaultPs = System.out;
@@ -58,9 +50,9 @@ public class HadoopCmdIT {
       ps = new PrintStream(bos);
       System.setOut(ps);
 
-      argv = new String[]{"-ls", "/"};
+      String[] argv = new String[]{"-ls", "/"};
       // FsShell.main(args) cannot be used since it calls System.exit
-      res = run(argv);
+      int res = run(argv);
       Assert.assertTrue(res == 0);
       ps.flush();
       Assert.assertTrue(new String(bos.toByteArray()).indexOf("/user") > 0);
@@ -72,13 +64,14 @@ public class HadoopCmdIT {
 
   @Test
   public void testMkdir() throws Exception {
-    String[] argv = new String[]{"-rm", "-r", "/*"};
+    String filePath = "/job_1581472776049_0003-1581473346405-" +
+            "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependencies.jar-" +
+            "1581473454525-16-1-SUCCEEDED-default-1581473439146.jhist_tmp";
+    String[] argv = new String[]{"-rm", "-r", filePath};
     int res = run(argv);
     Assert.assertTrue(res == 0);
 
-    argv = new String[]{"-mkdir", "/job_1581472776049_0003-1581473346405-" +
-            "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependencies.jar-" +
-            "1581473454525-16-1-SUCCEEDED-default-1581473439146.jhist_tmp"};
+    argv = new String[]{"-mkdir", filePath};
     res = run(argv);
     Assert.assertTrue(res == 0);
   }
