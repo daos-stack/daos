@@ -40,7 +40,7 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-def daos_branch = "master-sandbox"
+def daos_branch = env.CHANGE_BRANCH ? env.CHANGE_BRANCH : env.GIT_BRANCH
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
@@ -160,7 +160,6 @@ def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
-     !env.BRANCH_NAME.startsWith("release/") &&
      env.BRANCH_NAME != daos_branch)) {
    currentBuild.result = 'SUCCESS'
    return
@@ -218,12 +217,12 @@ pipeline {
                 //sh label: "Send environment",
                 //   script: 'env | sort | mail -s env brian.murrell@intel.com'
                 sh label: "Playground",
-                   script: '''git branch -a
-                              git status
-                              git log --graph --pretty=format:'%h -%d %s %cr <%an>' --abbrev-commit | head -50
-                              git merge-base origin/''' + daos_branch + ''' HEAD
+                   script: '''if [ -z "${env.CHANGE_ID}" ]; then
+                                  mb_modifier="^"
+                              fi
+                              git merge-base origin/''' + daos_branch + '''$mb_modifier HEAD
                               git diff-tree --no-commit-id --name-only                       \
-                                $(git merge-base origin/''' + daos_branch + ''' HEAD) HEAD | \
+                                $(git merge-base origin/''' + daos_branch + '''$mb_modifier HEAD) HEAD | \
                                 grep -v -e "^doc$"
                               git log --graph --pretty=format:'%h -%d %s (%cr) <%an>' --abbrev-commit | head'''
             }
