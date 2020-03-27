@@ -26,7 +26,7 @@ attention to.
 The reason for a change may be manyfold: bug, enhancement, feature, code style,
 etc. so providing information about this sets the stage for understanding the
 change. If it is a bug, include information about what usage triggers the bug
-and how it manifests (error messages, assertion failure, etc). If it is a
+and how it manifests (error messages, assertion failure, etc.). If it is a
 feature, include information about what improvement is being made, and how it
 will affect usage.
 
@@ -59,20 +59,20 @@ git shortlog to extract information from the patches more easily.
 The first line of the commit comment is the commit summary of the change.
 Changes submitted to the DAOS master branch require a DAOS Jira ticket number
 at the beginning of the commit summary. A DAOS Jira ticket is one that begins
-with DAOS and is therefore part of the DAOS project within Jira.
+with DAOS and is, therefore, part of the DAOS project within Jira.
 
 The commit summary should also have a `component:` tag immediately following the
-Jira ticket number that indicates which DAOS subsystem that the commit is
-related to. Example DAOS subsystems relate to modules like: client, pool,
+Jira ticket number that indicates to which DAOS subsystem the commit is
+related. Example DAOS subsystems relate to modules like client, pool,
 container, object, vos, rdb; functional components like rebuild; or auxiliary
-components like build, tests, doc. This subsystem list is not exhaustive,
+components like build, tests, doc. This subsystem list is not exhaustive
 but provides a good guideline for consistency.
 
 The commit summary line must be 62 characters or less, including the Jira
 ticket number and component tag, so that git shortlog and git format-patch
 can fit the summary onto a single line. The summary must be followed by a blank
-like. The rest of the comments should be wrapped to 70 columns or less.
-This allows for the first line to be used a subject in emails, and also for the
+line. The rest of the comments should be wrapped to 70 columns or less.
+This allows for the first line to be used as a subject in emails, and also for the
 entire body to be displayed using tools like git log or git shortlog in an 80
 column window.
 
