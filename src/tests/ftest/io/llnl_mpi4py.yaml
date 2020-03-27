@@ -16,7 +16,7 @@ pool:
     svcn: 1
     control_method: dmg
 container:
-    cont_type: POSIX
+    type: POSIX
 client_processes:
     np: 8
 test_repo:
