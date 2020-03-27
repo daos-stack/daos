@@ -303,7 +303,7 @@ vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
  * \param	hash[in]	Hash to identify the item
  *
  * \return	Returns a pointer to the entry or NULL if ts_set is not
- *		allocated.
+ *		allocated or we detected a duplicate akey.
  */
 static inline struct vos_ts_entry *
 vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
@@ -328,8 +328,12 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 		info = &ts_table->tt_type_info[0];
 	} else {
 		info = parent->te_info;
-		/* Allocated entry must have a real parent */
-		D_ASSERT((info->ti_type & 1) == 0);
+		if (info->ti_type & 1) {
+			/** this can happen if it's a duplicate key.  Return
+			 * NULL in this case
+			 */
+			return NULL;
+		}
 		hash_idx = hash & info->ti_cache_mask;
 		new_type = info->ti_type + 2;
 	}

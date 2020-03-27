@@ -166,6 +166,7 @@ enum obj_profile_op {
 	OBJ_PF_UPDATE_WAIT,
 	OBJ_PF_UPDATE_REPLY,
 	OBJ_PF_UPDATE,
+	OBJ_PF_MAX,
 };
 
 /* Per pool attached to the migrate tls(per xstream) */
