@@ -219,8 +219,10 @@ pipeline {
                 //   script: 'env | sort | mail -s env brian.murrell@intel.com'
                 sh label: "Playground",
                    script: '''git branch -a
+                              git status
+                              git fetch origin
                               git log --graph --pretty=format:'%h -%d %s %cr <%an>' --abbrev-commit | head -50
-                              git merge-base ''' + daos_branch + ''' HEAD
+                              git merge-base origin/''' + daos_branch + ''' HEAD
                               git log --graph --pretty=format:'%h -%d %s (%cr) <%an>' --abbrev-commit | head'''
             }
         }
