@@ -49,14 +49,14 @@ def scons():
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=['#/src/gurt'])
+    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     denv.AppendUnique(LIBS=['pthread', 'yaml'])
     prereqs.require(denv, 'uuid')
 
     gurt_targets = denv.SharedObject(SRC)
     gurt_lib = denv.SharedLibrary('libgurt', gurt_targets,
                                   SHLIBVERSION=CART_VERSION)
-    denv.InstallVersionedLib('$PREFIX/lib/', gurt_lib,
+    denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib,
                              SHLIBVERSION=CART_VERSION)
 
     Default(gurt_lib)
