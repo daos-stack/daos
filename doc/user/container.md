@@ -192,7 +192,7 @@ $ daos cont overwrite-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
       --acl-file=<path>
 ```
 
-#### Updating Entries in an existing ACL
+#### Adding and Updating ACEs
 
 To add or update multiple entries in an existing container ACL:
 
@@ -211,7 +211,7 @@ If there is no existing entry for the principal in the ACL, the new entry is
 added to the ACL. If there is already an entry for the principal, that entry
 is replaced with the new one.
 
-#### Removing an Entry from the ACL
+#### Removing an ACE
 
 To delete an entry for a given principal in an existing container ACL:
 

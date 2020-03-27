@@ -78,22 +78,26 @@ be accessing it, and that owns any pools that will be used.
 
 There are two mandatory command-line options, these are:
 
-* --svc=RANKS  <service replicas\>
-* --mountpoint=PATH <path to mount DAOS\>
+| **Command-line Option**  | **Description** |
+| ------------------------ | --------------- |
+| --svc=<ranks\>           | service replicas|
+| --mountpoint=<path\>     | path to mount dfuse|
 
 The mount point specified should be en empty directory on the local node that
 is owned by the user.
 
 Additionally, there are several optional command-line options:
 
-* --pool=POOL <pool uuid to connect to\>
-* --container=CONTAINER <container uuid to open\>
-* --sys-name=NAME <DAOS server name\>
-* --foreground <run in foreground\>
-* --singlethreaded <run single threaded\>
+| **Command-line Option** | **Description** |
+| ----------------------- | --------------- |
+| --pool=<uuid\>          | pool uuid to connect to|
+| --container=<uuid\>     | container uuid to open |
+| --sys-name=<name\>      | DAOS server name|
+| --foreground            | run in foreground|
+| --singlethreaded        | run single threaded|
 
 When DFuse starts, it will register a single mount with the kernel at the
-location specified by the --mountpoint option, and this mount will be
+location specified by the `--mountpoint` option, and this mount will be
 visable in /proc/mounts, and possibly the output of df.  The contents of
 multiple pools/containers will be accessible via this single kernel
 mountpoint.

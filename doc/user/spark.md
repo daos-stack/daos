@@ -66,7 +66,7 @@ we can use the following command to create them and get the pool UUID, container
 UUID, and service replicas.
 
 ```bash
-$ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size> -i
+$ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size>
 $ daos cont create --pool <pool UUID> --svc <service replicas> --type POSIX
 ```
 

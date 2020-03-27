@@ -130,7 +130,7 @@ $ dmg pool create --scm-size <size> --acl-file <path>
 
 The ACL file format is detailed in the [here](https://daos-stack.github.io/overview/security/#acl-file).
 
-### Displaying a pool's ACL
+### Displaying a Pool's ACL
 
 To view a pool's ACL:
 
@@ -141,7 +141,7 @@ $ dmg pool get-acl --pool <UUID>
 The output is in the same string format used in the ACL file during creation,
 with one Access Control Entry (i.e. ACE) per line.
 
-### Modifying a pool's ACL
+### Modifying a Pool's ACL
 
 For all of these commands using an ACL file, the ACL file must be in the format
 noted above for pool creation.
@@ -154,7 +154,7 @@ To replace a pool's ACL with a new ACL:
 $ dmg pool overwrite-acl --pool <UUID> --acl-file <path>
 ```
 
-#### Updating an ACE
+#### Adding and Updating ACEs
 
 To add or update multiple entries in an existing pool ACL:
 
