@@ -19,12 +19,12 @@ $ dmg pool create --scm-size=xxG --nvme-size=yyT
 This command creates a pool distributed across the DAOS servers with a
 target size on each server with xxGB of SCM and yyTB of NVMe storage.
 The actual space allocated will be a base-2 representation for SCM
-(i.e. 20GB will be interpreted as 20GiB == `20*2^30` bytes) and base-10
+(i.e., 20GB will be interpreted as 20GiB == `20*2^30` bytes) and base-10
 representation for NVMe (i.e. 20GB will be interpreted as `20*10^9`
-bytes) following convention of units for memory and storage capacity.
+bytes) following the convention of units for memory and storage capacity.
 The UUID allocated to the newly created pool is printed to stdout
-(referred as ${puuid}) as well as the rank where the pool service is
-located (referred as ${svcl}).
+(referred to as ${puuid}) as well as the rank where the pool service is
+located (referred to as ${svcl}).
 
 ```bash
 $ dmg pool create --help
@@ -88,17 +88,17 @@ API (not supported by the tool yet):
 | `DAOS_PROP_PO_LABEL`<img width=80/>| A string that the administrator can associate with a pool.  e.g., project A, project B, IO500 test pool|
 | `DAOS_PROP_PO_ACL`       | Access control list (ACL) associated with the pool|
 | `DAOS_PROP_PO_SPACE_RB`  | Space reserved on each target for rebuild purpose|
-| `DAOS_PROP_PO_SELF_HEAL` | Define whether the pool wants automatically-trigger, or manually-triggered self-healing|
+| `DAOS_PROP_PO_SELF_HEAL` | Define whether the pool wants automatically-trigger or manually-triggered self-healing|
 | `DAOS_PROP_PO_RECLAIM`   | Tune space reclaim strategy based on time interval, batched commits or snapshot creation|
 
 While those pool properties are currently stored persistently with pool
 metadata, many of them are still under development. Moreover, the
-ability to modify some of those properties on an existing pool will also
+ability to modify some of those properties on an existing pool will
 be provided in a future release.
 
 ## Access Control Lists
 
-Client user and group access for pools is controlled by
+Client user and group access for pools are controlled by
 [Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
 Most pool-related tasks are performed using the DMG administrative tool, which
 is authenticated by the administrative certificate rather than user-specific
@@ -139,7 +139,7 @@ $ dmg pool get-acl --pool <UUID>
 ```
 
 The output is in the same string format used in the ACL file during creation,
-with one Access Control Entry (i.e. ACE) per line.
+with one Access Control Entry (i.e., ACE) per line.
 
 ### Modifying a Pool's ACL
 
@@ -186,7 +186,7 @@ operation, the principal argument must be formatted as follows:
 
 * Named user: `u:username@`
 * Named group: `g:groupname@`
-* Special principals: `OWNER@`, `GROUP@` and `EVERYONE@`
+* Special principals: `OWNER@`, `GROUP@`, and `EVERYONE@`
 
 The entry for that principal will be completely removed. This does not always
 mean that the principal will have no access. Rather, their access to the pool
