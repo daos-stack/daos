@@ -125,7 +125,7 @@ def preload_prereqs(prereqs):
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
-    reqs = ['cart', 'argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc',
+    reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal'])
@@ -323,14 +323,8 @@ def scons(): # pylint: disable=too-many-locals
 
         exit(0)
 
-    try:
-        sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
-        from prereq_tools import PreReqComponent
-        print('Using scons_local build')
-    except ImportError:
-        print('scons_local submodule is needed in order to do DAOS build')
-        print('Use git submodule update --init')
-        sys.exit(-1)
+    sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
+    from prereq_tools import PreReqComponent
 
     env = Environment(TOOLS=['extra', 'default'])
 
@@ -349,11 +343,17 @@ def scons(): # pylint: disable=too-many-locals
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
+    prereqs.has_source(env, 'fio')
+    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
+
+    CONF_DIR = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
-    Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm', 'API_VERSION')
+    Export('DAOS_VERSION', 'API_VERSION',
+           'env', 'prereqs', 'platform_arm',
+           'CONF_DIR')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
@@ -377,7 +377,7 @@ def scons(): # pylint: disable=too-many-locals
 
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                ['scons_local/env_modules.py'])
+                ['utils/sl/env_modules.py'])
 
     # install the configuration files
     SConscript('utils/config/SConscript')

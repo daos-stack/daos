@@ -88,6 +88,8 @@ cont_op_parse(const char *str)
 		return CONT_UPDATE_ACL;
 	else if (strcmp(str, "delete-acl") == 0)
 		return CONT_DELETE_ACL;
+	else if (strcmp(str, "set-owner") == 0)
+		return CONT_SET_OWNER;
 	return -1;
 }
 
@@ -167,9 +169,14 @@ tobytes(const char *str)
 	daos_size_t	 size;
 	char		*end;
 
+	if (str == NULL) {
+		fprintf(stderr, "passed NULL string\n");
+		return 0;
+	}
+
 	size = strtoull(str, &end, 0);
 	/* Prevent negative numbers from turning into unsigned */
-	if (str != NULL && str[0] == '-') {
+	if (str[0] == '-') {
 		fprintf(stderr, "WARNING bytes < 0 (string %s)"
 				"converted to "DF_U64" : using 0 instead\n",
 				str, size);
@@ -942,6 +949,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_DELETE_ACL:
 		rc = cont_delete_acl_hdlr(ap);
 		break;
+	case CONT_SET_OWNER:
+		rc = cont_set_owner_hdlr(ap);
+		break;
 	default:
 		break;
 	}
@@ -1110,6 +1120,7 @@ help_hdlr(struct cmd_args_s *ap)
 "	  overwrite-acl    replace a container's ACL\n"
 "	  update-acl       add/modify entries in a container's ACL\n"
 "	  delete-acl       delete an entry from a container's ACL\n"
+"	  set-owner        change the user and/or group that own a container\n"
 "	  stat             get container statistics\n"
 "	  list-attrs       list container user-defined attributes\n"
 "	  del-attr         delete container user-defined attribute\n"
@@ -1194,7 +1205,12 @@ help_hdlr(struct cmd_args_s *ap)
 "			   for groups: g:name@[domain]\n"
 "			   special principals: OWNER@, GROUP@, EVERYONE@\n"
 "	--verbose          verbose mode (get-acl)\n"
-"	--outfile=PATH     write ACL to file (get-acl)\n");
+"	--outfile=PATH     write ACL to file (get-acl)\n"
+"container options (set-owner):\n"
+"	--user=ID          user who will own the container.\n"
+"			   format: username@[domain]\n"
+"	--group=ID         group who will own the container.\n"
+"			   format: groupname@[domain]\n");
 
 	fprintf(stream, "\n"
 "object (obj) commands:\n"

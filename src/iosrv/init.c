@@ -124,7 +124,7 @@ register_dbtree_classes(void)
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
-				   BTR_FEAT_UINT_KEY /* feats */,
+				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
 		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",

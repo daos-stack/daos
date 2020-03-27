@@ -120,10 +120,10 @@ TARGETS := $(DEBS)
 else
 # CentOS/Suse packages that want a locale set need this.
 ifndef LANG
-export LANG = en_US.utf8
+export LANG = C.utf8
 endif
 ifndef LC_ALL
-export LC_ALL = en_US.utf8
+export LC_ALL = C.utf8
 endif
 TARGETS := $(RPMS) $(SRPM)
 endif

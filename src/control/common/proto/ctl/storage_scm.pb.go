@@ -542,7 +542,9 @@ func init() {
 	proto.RegisterType((*FormatScmReq)(nil), "ctl.FormatScmReq")
 }
 
-func init() { proto.RegisterFile("storage_scm.proto", fileDescriptor_fa79a1cba4dc284c) }
+func init() {
+	proto.RegisterFile("storage_scm.proto", fileDescriptor_fa79a1cba4dc284c)
+}
 
 var fileDescriptor_fa79a1cba4dc284c = []byte{
 	// 458 bytes of a gzipped FileDescriptorProto

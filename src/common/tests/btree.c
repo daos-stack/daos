@@ -177,7 +177,7 @@ ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		if (val_iov->iov_buf == NULL)
 			val_iov->iov_buf = val;
 		else if (val_iov->iov_buf_len >= val_size)
-			memcpy(key_iov->iov_buf, val, val_size);
+			memcpy(val_iov->iov_buf, val, val_size);
 
 	}
 	return 0;
@@ -758,6 +758,7 @@ ik_btr_batch_oper(void **state)
 		}
 	}
 	ik_btr_query(NULL);
+	D_FREE(arr);
 }
 
 static void
@@ -872,6 +873,8 @@ ik_btr_drain(void **state)
 		if (empty)
 			break;
 	}
+
+	D_FREE(arr);
 }
 
 static int

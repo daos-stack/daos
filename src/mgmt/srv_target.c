@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -855,8 +855,8 @@ tgt_profile_task(void *arg)
 	int mod_id = 0;
 	int rc = 0;
 
-	for (mod_id = 0; mod_id < 64; mod_id++) {
-		uint64_t mask = 1 << mod_id;
+	for (mod_id = 0; mod_id < (sizeof(uint64_t) * NBBY); mod_id++) {
+		uint64_t mask = 1ULL << mod_id;
 		struct dss_module *module;
 
 		if (!(in->p_module & mask))
@@ -869,7 +869,8 @@ tgt_profile_task(void *arg)
 		}
 
 		if (in->p_op == MGMT_PROFILE_START)
-			rc = module->sm_mod_ops->dms_profile_start(in->p_path);
+			rc = module->sm_mod_ops->dms_profile_start(in->p_path,
+								   in->p_avg);
 		else
 			rc = module->sm_mod_ops->dms_profile_stop();
 		if (rc)

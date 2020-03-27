@@ -417,11 +417,12 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
  *
  * \param coh	  [IN]		Container open handle
  * \param epr	  [IN]		The epoch range of aggregation
+ * \param func	  [IN]		Pointer to csum recalculation function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *));
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -464,6 +465,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
  *			is provided by \a iods.
+ * \param flags	[IN]	Fetch flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN/OUT]
@@ -476,8 +478,8 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
  */
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-	      d_sg_list_t *sgls);
+	      uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+	      daos_iod_t *iods, d_sg_list_t *sgls);
 
 /**
  * Update records for the specfied object.
@@ -491,6 +493,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *			range is provided by \a iods (kvl::kv_epr).
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
+ * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
  * \param iods [IN]	Array of I/O descriptors.
@@ -508,9 +511,9 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-	       d_sg_list_t *sgls);
+	       uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods,
+	       struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls);
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
@@ -521,8 +524,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param epoch	[IN]	Epoch for the punch.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
- * \param flags [IN]	Object punch flags, VOS_OF_REPLAY_PC is the only
- *			currently supported flag.
+ * \param flags [IN]	Object punch flags, including VOS_OF_REPLAY_PC and
+ *			conditional flags
  * \param dkey	[IN]	Optional, the dkey will be punched if \a akeys is not
  *			provided.
  * \param akey_nr [IN]	Number of akeys in \a akeys.
@@ -533,7 +536,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
+	      uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth);
 
 /**
@@ -565,6 +568,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
  *			is provided by \a iods.
+ * \param flags [IN]	conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of I/O descriptors in \a ios.
  * \param iods	[IN/OUT]
@@ -578,7 +582,8 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  */
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		uint64_t flags, daos_key_t *dkey, unsigned int nr,
+		daos_iod_t *iods,
 		bool size_fetch, daos_handle_t *ioh);
 
 /**
@@ -603,6 +608,7 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * \param oid	[IN]	object ID
  * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
  *			range is provided by \a iods (kvl::kv_epr).
+ * \param flags [IN]	conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
@@ -616,9 +622,9 @@ vos_fetch_end(daos_handle_t ioh, int err);
  */
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		 daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-		 struct dcs_iod_csums *iods_csums, daos_handle_t *ioh,
-		 struct dtx_handle *dth);
+		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
+		 daos_handle_t *ioh, struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -922,10 +928,16 @@ int
 vos_pool_get_scm_cutoff(void);
 
 enum vos_pool_opc {
-	/** reset pool GC statistics */
+	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
-	/** force VEA flush */
-	VOS_PO_CTL_VEA_FLUSH,
+	/**
+	 * Pause flushing the free extents in aging buffer. This is usually
+	 * called before container destroy where huge amount of extents could
+	 * be freed in a short period of time.
+	 */
+	VOS_PO_CTL_VEA_PLUG,
+	/** Pairing with PLUG, usually called after container destroy done. */
+	VOS_PO_CTL_VEA_UNPLUG,
 };
 
 /**

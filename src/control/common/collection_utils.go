@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,13 @@
 
 package common
 
-import "unicode"
+import (
+	"encoding/json"
+	"fmt"
+	"unicode"
+
+	"github.com/pkg/errors"
+)
 
 // Includes returns true if string target in slice.
 func Includes(ss []string, target string) bool {
@@ -96,4 +102,36 @@ func Pluralise(s string, n int) string {
 		return s
 	}
 	return s + "s"
+}
+
+// ConcatErrors builds single error from error slice.
+func ConcatErrors(scanErrors []error, err error) error {
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	}
+
+	errStr := "scan error(s):\n"
+	for _, err := range scanErrors {
+		errStr += fmt.Sprintf("  %s\n", err.Error())
+	}
+
+	return errors.New(errStr)
+}
+
+// ParseNumberList converts a comma-separated string of numbers to a slice.
+func ParseNumberList(stringList string, output interface{}) error {
+	str := fmt.Sprintf("[%s]", stringList)
+	if err := json.Unmarshal([]byte(str), output); err != nil {
+		// return more user-friendly errors for malformed inputs
+		switch je := err.(type) {
+		case *json.SyntaxError:
+			return errors.Errorf("unable to parse %q: must be a comma-separated list of numbers", stringList)
+		case *json.UnmarshalTypeError:
+			return errors.Errorf("invalid input: %s can not be stored in %s", je.Value, je.Type)
+		default:
+			// other errors are more likely to be programmer-caused
+			return err
+		}
+	}
+	return nil
 }

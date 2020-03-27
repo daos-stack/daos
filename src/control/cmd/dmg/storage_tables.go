@@ -28,10 +28,11 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/dustin/go-humanize"
 )
 
 func scmModuleScanTable(ms storage.ScmModules) string {
