@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,12 +25,59 @@ package logging_test
 import (
 	"bytes"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestStandardFormat(t *testing.T) {
+type testWrap struct {
+	log logging.Logger
+}
+
+func (tw *testWrap) Debug(msg string) {
+	tw.log.Debug(msg)
+}
+
+func (tw *testWrap) Debugf(fmtStr string, args ...interface{}) {
+	tw.log.Debugf(fmtStr, args...)
+}
+
+// NB: Keep this test at the top of the file to avoid having to
+// update the line numbers all the time.
+func TestLogging_DebugOutputDepth(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+
+	log.Debug("test 1")
+	if !strings.Contains(buf.String(), "logging_test.go:51: test 1") {
+		t.Fatalf("incorrect caller info: %s", buf)
+	}
+	buf.Reset()
+
+	log.Debugf("test 2")
+	if !strings.Contains(buf.String(), "logging_test.go:57: test 2") {
+		t.Fatalf("incorrect caller info: %s", buf)
+	}
+	buf.Reset()
+
+	tw := &testWrap{
+		log: log,
+	}
+
+	tw.Debug("test 3")
+	if !strings.Contains(buf.String(), "logging_test.go:67: test 3") {
+		t.Fatalf("incorrect caller info: %s", buf)
+	}
+	buf.Reset()
+
+	tw.Debugf("test 4")
+	if !strings.Contains(buf.String(), "logging_test.go:73: test 4") {
+		t.Fatalf("incorrect caller info: %s", buf)
+	}
+	buf.Reset()
+}
+
+func TestLogging_StandardFormat(t *testing.T) {
 	logger, buf := logging.NewTestLogger("testPrefix")
 
 	tests := map[string]struct {
@@ -74,7 +121,7 @@ func TestStandardFormat(t *testing.T) {
 	}
 }
 
-func TestJSONFormat(t *testing.T) {
+func TestLogging_JSONFormat(t *testing.T) {
 	var buf bytes.Buffer
 
 	logger := logging.NewCombinedLogger("testPrefix", &buf).
@@ -122,7 +169,7 @@ func TestJSONFormat(t *testing.T) {
 	}
 }
 
-func TestMultipleFormats(t *testing.T) {
+func TestLogging_MultipleFormats(t *testing.T) {
 	var stdBuf bytes.Buffer
 	var jsonBuf bytes.Buffer
 
@@ -195,7 +242,7 @@ func TestMultipleFormats(t *testing.T) {
 	}
 }
 
-func TestLogLevels(t *testing.T) {
+func TestLogging_LogLevels(t *testing.T) {
 	var buf bytes.Buffer
 	logger := logging.NewCombinedLogger("testPrefix", &buf)
 
