@@ -217,14 +217,14 @@ pipeline {
                 //sh label: "Send environment",
                 //   script: 'env | sort | mail -s env brian.murrell@intel.com'
                 sh label: "Playground",
-                   script: '''if [ -z "${env.CHANGE_ID}" ]; then
-                                  mb_modifier="^"
-                              fi
-                              git merge-base origin/''' + daos_branch + '''$mb_modifier HEAD
-                              git diff-tree --no-commit-id --name-only                       \
-                                $(git merge-base origin/''' + daos_branch + '''$mb_modifier HEAD) HEAD | \
-                                grep -v -e "^doc$"
-                              git log --graph --pretty=format:'%h -%d %s (%cr) <%an>' --abbrev-commit | head'''
+                   script: 'if [ -z "' env.CHANGE_ID '''" ]; then
+                                mb_modifier="^"
+                            fi
+                            git merge-base origin/''' + daos_branch + '''$mb_modifier HEAD
+                            git diff-tree --no-commit-id --name-only                       \
+                              $(git merge-base origin/''' + daos_branch + '''$mb_modifier HEAD) HEAD | \
+                              grep -v -e "^doc$"
+                            git log --graph --pretty=format:'%h -%d %s (%cr) <%an>' --abbrev-commit | head'''
             }
         }
     }
