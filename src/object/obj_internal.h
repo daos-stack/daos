@@ -195,9 +195,9 @@ struct migrate_pool_tls {
 	bool			mpt_clear_conts;
 
 	/* Hash table to store the container uuids which have already been
-	 * migrated and successfully initialized
+	 * deleted (used by reintegration)
 	 */
-	struct d_hash_table	mpt_cont_init_tab;
+	struct d_hash_table	mpt_cont_dest_tab;
 
 	/* Service rank list for migrate fetch RPC */
 	d_rank_list_t		mpt_svc_list;

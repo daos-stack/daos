@@ -262,7 +262,10 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 
 	d_rank_list_free(&tls->mpt_svc_list);
 
-	d_hash_table_destroy_inplace(&tls->mpt_cont_init_tab, true /* force */);
+	if (tls->mpt_clear_conts) {
+		d_hash_table_destroy_inplace(&tls->mpt_cont_dest_tab,
+					     true /* force */);
+	}
 
 	obj_tree_destroy(tls->mpt_root_hdl);
 	d_list_del(&tls->mpt_list);
@@ -383,9 +386,12 @@ int migrate_pool_tls_create_one(void *data)
 	pool_tls->mpt_clear_conts = arg->clear_conts;
 	d_list_add(&pool_tls->mpt_list, &tls->ot_pool_list);
 
-	d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 8, NULL,
-				    &migrate_init_cont_tab_ops,
-				    &pool_tls->mpt_cont_init_tab);
+	if (pool_tls->mpt_clear_conts) {
+		d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 8, NULL,
+					    &migrate_init_cont_tab_ops,
+					    &pool_tls->mpt_cont_dest_tab);
+	}
+
 
 	pool_tls->mpt_refcount = 1;
 	rc = daos_rank_list_copy(&pool_tls->mpt_svc_list, arg->svc_list);
@@ -677,6 +683,7 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 static int
 migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 {
+	struct ds_cont_hdl	*s_cont_hdl = NULL;
 	struct ds_cont_child	*cont;
 	daos_handle_t		coh = DAOS_HDL_INVAL;
 	daos_handle_t		oh;
@@ -694,6 +701,29 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 			D_GOTO(free, rc);
 
 		tls->mpt_pool_hdl = ph;
+	}
+
+	/* Open the destination *server* container locally, which will create
+	 * it if it does not exist
+	 */
+	rc = ds_cont_local_open(tls->mpt_pool_uuid, tls->mpt_coh_uuid,
+				mrone->mo_cont_uuid, 0, 0, &s_cont_hdl);
+	if (rc) {
+		D_ERROR("Migrate ds_cont_local_open failed for pool: "DF_UUID
+			" coh: "DF_UUID" cont: "DF_UUID" rc: "DF_RC"\n",
+			DP_UUID(tls->mpt_pool_uuid), DP_UUID(tls->mpt_coh_uuid),
+			DP_UUID(mrone->mo_cont_uuid), DP_RC(rc));
+		D_GOTO(cont_close, rc);
+	}
+
+	/* Close it again, now that it has definitely been created */
+	rc = ds_cont_local_close(tls->mpt_coh_uuid);
+	if (rc) {
+		D_ERROR("Migrate ds_cont_local_close failed for pool: "DF_UUID
+			" coh: "DF_UUID" cont: "DF_UUID" rc: "DF_RC"\n",
+			DP_UUID(tls->mpt_pool_uuid), DP_UUID(tls->mpt_coh_uuid),
+			DP_UUID(mrone->mo_cont_uuid), DP_RC(rc));
+		D_GOTO(cont_close, rc);
 	}
 
 	/* Open client dc handle used to read the remote object data */
@@ -1309,45 +1339,58 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov,
 	return rc;
 }
 
-/* Ensures a VOS container has been created on this system prior to migrating
- * any objects to it. If destroy_existing is true, the container will first be
- * deleted before being recreated (useful for reintegration)
+/* Destroys a container exactly one time per migration session. Uses the
+ * mpt_cont_dest_tab field of the tls to store which containers have already
+ * been deleted this session.
+ *
+ * Only used for reintegration
  */
 static int
-migrate_cont_ensure_created(struct migrate_pool_tls *tls, uuid_t cont_uuid,
-			    bool destroy_existing)
+destroy_existing_container(struct migrate_pool_tls *tls, uuid_t cont_uuid)
 {
-	struct ds_cont_hdl *s_cont_hdl = NULL;
+	d_list_t *link;
 	int rc;
 
-	if (destroy_existing) {
-		/*
-		 * Destroy the destination container locally if it exists to
-		 * clear out existing data.
+	link = d_hash_rec_find(&tls->mpt_cont_dest_tab, cont_uuid,
+			       sizeof(uuid_t));
+	if (!link) {
+		/* Not actually storing anything in the table - just using it
+		 * to test set membership. The link stored is just the simplest
+		 * base list type
 		 */
+		d_list_t *rlink;
+
+		// TODO
+		//D_DEBUG(DB_TRACE,
+		D_INFO(
+			"Destroying container "DF_UUID" before reintegration\n",
+			DP_UUID(cont_uuid));
+
 		rc = ds_cont_tgt_destroy(tls->mpt_pool_uuid, cont_uuid);
 		if (rc != 0) {
 			D_ERROR("Migrate failed to destroy container "
 				"prior to reintegration: " DF_UUID " for pool: "
-				DF_UUID " rc: %d\n",
+				DF_UUID " rc: "DF_RC"\n",
 				DP_UUID(tls->mpt_pool_uuid), DP_UUID(cont_uuid),
-				rc);
+				DP_RC(rc));
+		}
+
+		/* Insert a link into the hash table to mark this cont_uuid as
+		 * having already been initialized
+		 */
+		D_ALLOC_PTR(rlink);
+		if (rlink == NULL)
+			return -DER_NOMEM;
+
+		rc = d_hash_rec_insert(&tls->mpt_cont_dest_tab, cont_uuid,
+				       sizeof(uuid_t), rlink, true);
+		if (rc) {
+			D_ERROR("Failed to insert uuid table entry "DF_RC"\n",
+				DP_RC(rc));
+			D_FREE(rlink);
 			return rc;
 		}
 	}
-
-	/* Open the destination *server* container locally, which will create
-	 * it if it does not exist
-	 */
-	rc = ds_cont_local_open(tls->mpt_pool_uuid, tls->mpt_coh_uuid,
-				cont_uuid, 0, 0, &s_cont_hdl);
-	if (rc)
-		return rc;
-
-	/* Close the container again */
-	rc = ds_cont_local_close(tls->mpt_coh_uuid);
-	if (rc)
-		return rc;
 
 	return 0;
 }
@@ -1369,7 +1412,6 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	daos_handle_t		coh = DAOS_HDL_INVAL;
 	uuid_t			cont_uuid;
 	uint64_t		*snapshots = NULL;
-	d_list_t                *link;
 	int			snap_cnt;
 	int			rc;
 	int			rc1;
@@ -1398,48 +1440,10 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 		tls->mpt_pool_hdl = ph;
 	}
 
-
-	/* Check if the container uuid is in the init hash table
-	 * If it is, this container has already had at least one object in it
-	 * migrated during this cycle, so it does not need to be created
-	 *
-	 * If this migration process is part of reintegration, the container
-	 * should first be deleted before being re-created
-	 *
-	 * TODO: Hook up reintegration boolean
-	 */
-	link = d_hash_rec_find(&tls->mpt_cont_init_tab, cont_uuid,
-			       sizeof(uuid_t));
-	if (!link) {
-		/* Not actually storing anything in the table - just using it
-		 * to test set membership. The link stored is just the simplest
-		 * base list type
-		 */
-		d_list_t *rlink;
-
-		D_DEBUG(DB_TRACE,
-			"Migration ensure container "DF_UUID" created\n",
-			DP_UUID(cont_uuid));
-
-		//rc = migrate_cont_ensure_created(tls, cont_uuid, false);
-		//if (rc)
-		//	D_GOTO(free, rc);
-
-		/* Insert a link into the hash table to mark this cont_uuid as
-		 * having already been initialized
-		 */
-		D_ALLOC_PTR(rlink);
-		if (rlink == NULL)
-			D_GOTO(free, rc=-DER_NOMEM);
-
-		rc = d_hash_rec_insert(&tls->mpt_cont_init_tab, cont_uuid,
-				       sizeof(uuid_t), rlink, true);
-		if (rc) {
-			D_ERROR("Failed to insert uuid table entry "DF_RC"\n",
-				DP_RC(rc));
-			D_FREE(rlink);
+	if (tls->mpt_clear_conts) {
+		destroy_existing_container(tls, cont_uuid);
+		if (rc)
 			D_GOTO(free, rc);
-		}
 	}
 
 	/*
