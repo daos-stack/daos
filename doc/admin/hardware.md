@@ -16,7 +16,7 @@ different ways:
 
 -   **Hyper-converged Storage Model**: In this model, the
     storage nodes are integrated into compute racks and can be either
-    dedicated or shared nodes. The DAOS servers are thus massively distributed
+    dedicated or shared nodes. The DAOS servers are thus massively distributed,
     and storage access is non-uniform and must take locality into account.
     This model is common in hyper-converged infrastructure.
 
@@ -66,7 +66,7 @@ memory express) SSDs to provide capacity. HDDs, as well as SATA and SAS
 SSDs, are not supported by DAOS. Both NVMe 3D-NAND and Optane SSDs are
 supported. Optane SSDs are preferred for DAOS installation that targets
 a very high IOPS rate. NVMe-oF devices are also supported by the
-userspace storage stack, but have never been tested.
+userspace storage stack but have never been tested.
 
 The minimal recommended ratio between SCM and SSDs capacity is 6% to
 guarantee that DAOS has enough space in SCM to store internal metadata
@@ -106,7 +106,7 @@ across storage nodes in different fault domains.
 
 DAOS assumes that fault domains are hierarchical and do not overlap. For
 instance, the first level of a fault domain could be the racks and the
-second one the storage nodes.
+second one, the storage nodes.
 
 For efficient placement and optimal data resilience, more fault
 domains are better. As a result, it is preferable to distribute storage
