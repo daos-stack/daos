@@ -9,7 +9,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -87,10 +87,14 @@ BuildRequires: libpsm_infinipath1
 BuildRequires: libpmemblk1
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
+
+%global min_pmdk 1.8-1
 %if (0%{?suse_version} >= 1500)
-Requires: libpmem1, libpmemobj1
+Requires: libpmem1 >= %{min_pmdk}, libpmemobj1 >= %{min_pmdk}, libpmemblk1 >= %{min_pmdk}
+%else
+Requires: libpmem >= %{min_pmdk}, libpmemobj >= %{min_pmdk}, libpmemblk >= %{min_pmdk}
 %endif
-Requires: fuse >= 3.4.2
+Requires: fuse3 >= 3.4.2
 Requires: protobuf-c
 Requires: spdk <= %{spdk_max_version}
 Requires: fio < 3.4
@@ -347,6 +351,10 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Fri Mar 27 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-8
+- Enforce some minimum package requirements including switching
+  from our custom fuse build to fuse3 from the distribution
+
 * Thu Mar 26 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-7
 - Add systemd scriptlets for managing daos_server/daos_admin services
 
