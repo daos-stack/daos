@@ -218,7 +218,7 @@ pipeline {
                 //sh label: "Send environment",
                 //   script: 'env | sort | mail -s env brian.murrell@intel.com'
                 sh label: "Playground",
-                   script: 'git merge-base origin/' + daos_branch + ''' HEAD
+                   script: 'git merge-base ' + daos_branch + ''' HEAD
                               git log --graph --pretty=format:'%h -%d %s (%cr) <%an>' --abbrev-commit | head'''
             }
         }
