@@ -103,7 +103,9 @@ class FioBase(TestWithServers):
         except subprocess.CalledProcessError as err:
             self.fail("Container create failed:{}".format(err))
 
+        self.log.info('output is')
         self.log.info(output)
+        self.log.info('err is')
         self.log.info(err)
 
         return output.split()[3]

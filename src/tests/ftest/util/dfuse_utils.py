@@ -215,10 +215,11 @@ class Dfuse(DfuseCommand):
         Finally, try and remove the mount point, and that itself should work.
         """
         self.log.info('Stopping dfuse at %s', self.mount_dir.value)
-        general_utils.pcmd(self.hosts, "ps auwx", timeout=30)
 
         if self.mount_dir.value is None:
             return
+
+        general_utils.pcmd(self.hosts, "ps auwx", timeout=30)
         umount_cmd = "if [ -x '$(command -v fusermount)' ]; "
         umount_cmd += "then fusermount -u {0}; else fusermount3 -u {0}; fi".\
                format(self.mount_dir.value)

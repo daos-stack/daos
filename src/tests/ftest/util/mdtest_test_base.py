@@ -116,7 +116,9 @@ class MdtestBase(TestWithServers):
         except subprocess.CalledProcessError as err:
             self.fail("Container create failed:{}".format(err))
 
+        self.log.info('output is')
         self.log.info(output)
+        self.log.info('err is')
         self.log.info(err)
 
         return output.split()[3]
@@ -139,7 +141,8 @@ class MdtestBase(TestWithServers):
             self.dfuse.run()
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse), str(NodeSet(self.dfuse.hosts)),
+                           str(self.dfuse), str(
+                               NodeSet.fromlist(self.dfuse.hosts)),
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
 
