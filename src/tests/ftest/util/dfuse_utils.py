@@ -95,11 +95,6 @@ class Dfuse(DfuseCommand):
         self.dfuse_env = dfuse_env
         self.log_file = log_file
 
-    def __del__(self):
-        """Destroy Dfuse object and stop dfuse """
-        # stop dfuse
-        self.stop()
-
     def create_mount_point(self):
         """Create dfuse directory
         Raises:
