@@ -67,7 +67,7 @@ srv_profile_chunk_alloc(int chunk_size)
 		return NULL;
 
 	D_INIT_LIST_HEAD(&chunk->spc_chunk_list);
-	D_ALLOC(chunk->spc_chunks, chunk_size);
+	D_ALLOC(chunk->spc_chunks, chunk_size * sizeof(*chunk->spc_chunks));
 	chunk->spc_chunk_size = chunk_size;
 	chunk->spc_chunk_offset = 0;
 	if (chunk->spc_chunks == NULL) {
