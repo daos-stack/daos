@@ -40,12 +40,8 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-def daos_branch = ""
-if (env.CHANGE_TARGET) {
-    println("one")
-    daos_branch = env.CHANGE_TARGET
-} else {
-    println("two")
+def daos_branch = env.CHANGE_TARGET
+if (!daos_branch) {
     daos_branch = env.GIT_BRANCH
 }
 def arch = ""
