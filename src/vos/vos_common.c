@@ -334,6 +334,38 @@ vos_fini(void)
 	D_MUTEX_UNLOCK(&mutex);
 }
 
+static int
+abt_thread_stacksize(void)
+{
+	char   *env;
+
+	env = getenv("ABT_THREAD_STACKSIZE");
+	if (env == NULL)
+		env = getenv("ABT_ENV_THREAD_STACKSIZE");
+	if (env != NULL)
+		return atoi(env);
+	return 0;
+}
+
+static int
+set_abt_thread_stacksize(int n)
+{
+	char   *name = "ABT_THREAD_STACKSIZE";
+	char   *value;
+	int	rc;
+
+	D_ASSERTF(n > 0, "%d\n", n);
+	D_ASPRINTF(value, "%d", n);
+	if (value == NULL)
+		return -DER_NOMEM;
+	D_INFO("Setting %s to %s\n", name, value);
+	rc = setenv(name, value, 1 /* overwrite */);
+	D_FREE(value);
+	if (rc != 0)
+		return daos_errno2der(errno);
+	return 0;
+}
+
 int
 vos_init(void)
 {
@@ -344,6 +376,18 @@ vos_init(void)
 	if (vos_inited) {
 		vos_inited++;
 		D_GOTO(out, rc);
+	}
+
+	/* Some cases (DAOS-4310) have been found where the default ABT's ULTs
+	 * stack-size (16K) is not enough and this can lead to stack overrun
+	 * and corruption, so double it just in case
+	 */
+	if (abt_thread_stacksize() < 32768) {
+		rc = set_abt_thread_stacksize(32768);
+		if (rc != 0) {
+			D_ERROR("failed to set ABT_THREAD_STACKSIZE: %d\n", rc);
+			return rc;
+		}
 	}
 
 	rc = ABT_init(0, NULL);
