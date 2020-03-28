@@ -40,7 +40,12 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-def daos_branch = env.CHANGE_TARGET != null ? env.CHANGE_TARGET : env.GIT_BRANCH
+def daos_branch = ""
+if (env.CHANGE_TARGET) {
+    daos_branch = env.CHANGE_TARGET
+} else {
+    daos_branch = env.GIT_BRANCH
+}
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
