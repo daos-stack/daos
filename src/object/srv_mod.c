@@ -125,7 +125,7 @@ char *profile_op_names[] = {
 };
 
 static int
-ds_obj_profile_start(char *path)
+ds_obj_profile_start(char *path, int avg)
 {
 	struct obj_tls *tls = obj_tls_get();
 	int rc;
@@ -133,8 +133,8 @@ ds_obj_profile_start(char *path)
 	if (tls->ot_sp)
 		return 0;
 
-	rc = srv_profile_start(&tls->ot_sp, path, profile_op_names);
-
+	rc = srv_profile_start(&tls->ot_sp, path, avg, OBJ_PF_MAX,
+			       profile_op_names);
 	D_DEBUG(DB_MGMT, "object profile start: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }

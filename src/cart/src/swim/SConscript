@@ -48,16 +48,13 @@ def scons():
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=['#/src/swim'])
+    denv.AppendUnique(CPPPATH=['#/src/cart/src/swim'])
     denv.AppendUnique(LIBS=['gurt'])
-    denv.AppendUnique(RPATH=['$PREFIX/lib'])
     denv.Append(CCFLAGS=['-D_USE_CART_'])
 
     swim_targets = denv.SharedObject(SRC)
     swim_lib = denv.SharedLibrary('libswim', swim_targets)
     denv.Requires(swim_lib, gurt_lib)
-    # disabled until it will need to anybody
-    #denv.Install('$PREFIX/lib/', swim_lib)
 
     Default(swim_targets)
     Export('swim_lib', 'swim_targets')
