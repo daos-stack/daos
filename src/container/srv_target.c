@@ -1038,8 +1038,8 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
  * it will return 1, otherwise return 0 or error code.
  **/
 static int
-cont_child_create_start(struct ds_cont_hdl *hdl, uuid_t pool_uuid,
-			uuid_t cont_uuid)
+cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid,
+			struct ds_cont_child **cont_out)
 {
 	struct ds_pool_child	*pool_child;
 	int rc;
@@ -1051,7 +1051,7 @@ cont_child_create_start(struct ds_cont_hdl *hdl, uuid_t pool_uuid,
 		return -DER_NO_HDL;
 	}
 
-	rc = cont_child_start(pool_child, cont_uuid, &hdl->sch_cont);
+	rc = cont_child_start(pool_child, cont_uuid, cont_out);
 	if (rc != -DER_NONEXIST) {
 		ds_pool_child_put(pool_child);
 		return rc;
@@ -1062,7 +1062,7 @@ cont_child_create_start(struct ds_cont_hdl *hdl, uuid_t pool_uuid,
 
 	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
 	if (!rc) {
-		rc = cont_child_start(pool_child, cont_uuid, &hdl->sch_cont);
+		rc = cont_child_start(pool_child, cont_uuid, cont_out);
 		if (rc != 0)
 			vos_cont_destroy(pool_child->spc_hdl, cont_uuid);
 	}
@@ -1126,6 +1126,19 @@ ds_dtx_resync(void *arg)
 }
 
 int
+ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
+			  struct ds_cont_child **cont)
+{
+	int rc;
+
+	rc = cont_child_create_start(pool_uuid, cont_uuid, cont);
+	if (rc == 1)
+		rc = 0;
+
+	return rc;
+}
+
+int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t flags, uint64_t sec_capas,
 		   struct ds_cont_hdl **cont_hdl)
@@ -1168,12 +1181,16 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	/* cont_uuid is NULL when open rebuild global cont handle */
 	if (cont_uuid != NULL) {
-		rc = cont_child_create_start(hdl, pool_uuid, cont_uuid);
+		struct ds_cont_child *cont;
+
+		rc = cont_child_create_start(pool_uuid, cont_uuid, &cont);
+		if (rc < 0)
+			D_GOTO(err_hdl, rc);
+
+		hdl->sch_cont = cont;
 		if (rc == 1) {
 			poh = hdl->sch_cont->sc_pool->spc_hdl;
 			rc = 0;
-		} else if (rc != 0) {
-			D_GOTO(err_hdl, rc);
 		}
 	}
 

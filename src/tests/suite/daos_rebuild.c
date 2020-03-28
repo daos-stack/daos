@@ -393,6 +393,101 @@ rebuild_pool_destroy(test_arg_t *arg)
 	sleep(1);
 }
 
+static int
+rebuild_pool_connect_internal(void *data)
+{
+	test_arg_t	*arg = data;
+	int		rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       &arg->pool.svc, DAOS_PC_RW,
+				       &arg->pool.poh, &arg->pool.pool_info,
+				       NULL /* ev */);
+		if (rc)
+			print_message("daos_pool_connect failed, rc: %d\n", rc);
+
+		print_message("pool connect "DF_UUIDF"\n",
+			       DP_UUID(arg->pool.pool_uuid));
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
+
+	/** broadcast pool info */
+	if (arg->multi_rank) {
+		MPI_Bcast(&arg->pool.pool_info, sizeof(arg->pool.pool_info),
+			  MPI_CHAR, 0, MPI_COMM_WORLD);
+		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
+			     arg->pool.poh, 0);
+	}
+
+	/** open container */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
+				    &arg->coh, &arg->co_info, NULL);
+		if (rc)
+			print_message("daos_cont_open failed, rc: %d\n", rc);
+
+		print_message("container open "DF_UUIDF"\n",
+			       DP_UUID(arg->co_uuid));
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
+
+	/** broadcast container info */
+	if (arg->multi_rank) {
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh,
+			     0);
+	}
+
+	return 0;
+}
+
+static int
+rebuild_pool_disconnect_internal(void *data)
+{
+	test_arg_t	*arg = data;
+	int		rc = 0;
+	int		rc_reduce = 0;
+
+	/* Close cont and disconnect pool */
+	rc = daos_cont_close(arg->coh, NULL);
+	if (arg->multi_rank) {
+		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
+			      MPI_COMM_WORLD);
+		rc = rc_reduce;
+	}
+	print_message("container close "DF_UUIDF"\n",
+		      DP_UUID(arg->co_uuid));
+	if (rc) {
+		print_message("failed to close container "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+		return rc;
+	}
+
+	arg->coh = DAOS_HDL_INVAL;
+	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
+	if (rc)
+		print_message("failed to disconnect pool "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->pool.pool_uuid), rc);
+
+	print_message("pool disconnect "DF_UUIDF"\n",
+		      DP_UUID(arg->pool.pool_uuid));
+
+	arg->pool.poh = DAOS_HDL_INVAL;
+	MPI_Barrier(MPI_COMM_WORLD);
+	return rc;
+}
+
 static void
 rebuild_drop_scan(void **state)
 {
@@ -422,7 +517,9 @@ rebuild_drop_scan(void **state)
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
+	rebuild_pool_disconnect_internal(arg);
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_pool_connect_internal(arg);
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
@@ -710,42 +807,6 @@ rebuild_close_container(void **state)
 }
 
 static int
-rebuild_pool_disconnect_internal(void *data)
-{
-	test_arg_t	*arg = data;
-	int		rc = 0;
-	int		rc_reduce = 0;
-
-	/* Close cont and disconnect pool */
-	rc = daos_cont_close(arg->coh, NULL);
-	if (arg->multi_rank) {
-		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-			      MPI_COMM_WORLD);
-		rc = rc_reduce;
-	}
-	print_message("container close "DF_UUIDF"\n",
-		      DP_UUID(arg->co_uuid));
-	if (rc) {
-		print_message("failed to close container "DF_UUIDF
-			      ": %d\n", DP_UUID(arg->co_uuid), rc);
-		return rc;
-	}
-
-	arg->coh = DAOS_HDL_INVAL;
-	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
-	if (rc)
-		print_message("failed to disconnect pool "DF_UUIDF
-			      ": %d\n", DP_UUID(arg->pool.pool_uuid), rc);
-
-	print_message("pool disconnect "DF_UUIDF"\n",
-		      DP_UUID(arg->pool.pool_uuid));
-
-	arg->pool.poh = DAOS_HDL_INVAL;
-	MPI_Barrier(MPI_COMM_WORLD);
-	return rc;
-}
-
-static int
 rebuild_destroy_pool_cb(void *data)
 {
 	test_arg_t	*arg = data;
@@ -914,65 +975,6 @@ rebuild_send_objects_fail(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-}
-
-static int
-rebuild_pool_connect_internal(void *data)
-{
-	test_arg_t	*arg = data;
-	int		rc;
-
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->myrank == 0) {
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       &arg->pool.svc, DAOS_PC_RW,
-				       &arg->pool.poh, &arg->pool.pool_info,
-				       NULL /* ev */);
-		if (rc)
-			print_message("daos_pool_connect failed, rc: %d\n", rc);
-
-		print_message("pool connect "DF_UUIDF"\n",
-			       DP_UUID(arg->pool.pool_uuid));
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->multi_rank)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	/** broadcast pool info */
-	if (arg->multi_rank) {
-		MPI_Bcast(&arg->pool.pool_info, sizeof(arg->pool.pool_info),
-			  MPI_CHAR, 0, MPI_COMM_WORLD);
-		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
-			     arg->pool.poh, 0);
-	}
-
-	/** open container */
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->myrank == 0) {
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
-				    &arg->coh, &arg->co_info, NULL);
-		if (rc)
-			print_message("daos_cont_open failed, rc: %d\n", rc);
-
-		print_message("container open "DF_UUIDF"\n",
-			       DP_UUID(arg->co_uuid));
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->multi_rank)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	/** broadcast container info */
-	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh,
-			     0);
-	}
-
-	return 0;
 }
 
 static int

@@ -683,7 +683,6 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 static int
 migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 {
-	struct ds_cont_hdl	*s_cont_hdl = NULL;
 	struct ds_cont_child	*cont;
 	daos_handle_t		coh = DAOS_HDL_INVAL;
 	daos_handle_t		oh;
@@ -703,34 +702,16 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 		tls->mpt_pool_hdl = ph;
 	}
 
-	/* Open the destination *server* container locally, which will create
-	 * it if it does not exist
-	 */
-	rc = ds_cont_local_open(tls->mpt_pool_uuid, tls->mpt_coh_uuid,
-				mrone->mo_cont_uuid, 0, 0, &s_cont_hdl);
-	if (rc) {
-		D_ERROR("Migrate ds_cont_local_open failed for pool: "DF_UUID
-			" coh: "DF_UUID" cont: "DF_UUID" rc: "DF_RC"\n",
-			DP_UUID(tls->mpt_pool_uuid), DP_UUID(tls->mpt_coh_uuid),
-			DP_UUID(mrone->mo_cont_uuid), DP_RC(rc));
-		D_GOTO(cont_close, rc);
-	}
-
-	/* Close it again, now that it has definitely been created */
-	rc = ds_cont_local_close(tls->mpt_coh_uuid);
-	if (rc) {
-		D_ERROR("Migrate ds_cont_local_close failed for pool: "DF_UUID
-			" coh: "DF_UUID" cont: "DF_UUID" rc: "DF_RC"\n",
-			DP_UUID(tls->mpt_pool_uuid), DP_UUID(tls->mpt_coh_uuid),
-			DP_UUID(mrone->mo_cont_uuid), DP_RC(rc));
-		D_GOTO(cont_close, rc);
-	}
+	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, mrone->mo_cont_uuid,
+				       &cont);
+	if (rc)
+		D_GOTO(free, rc);
 
 	/* Open client dc handle used to read the remote object data */
 	rc = dc_cont_local_open(mrone->mo_cont_uuid, tls->mpt_coh_uuid,
 				0, tls->mpt_pool_hdl, &coh);
 	if (rc)
-		D_GOTO(free, rc);
+		D_GOTO(cont_put, rc);
 
 	/* Open the remote object */
 	rc = dsc_obj_open(coh, mrone->mo_oid.id_pub, DAOS_OO_RW, &oh);
@@ -740,15 +721,9 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_TGT_NOSPACE))
 		D_GOTO(obj_close, rc = -DER_NOSPACE);
 
-	/* Look up the container child handle, and take a reference to it */
-	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, mrone->mo_cont_uuid,
-				  &cont);
-	if (rc)
-		D_GOTO(obj_close, rc);
-
 	rc = migrate_punch(tls, mrone, cont);
 	if (rc)
-		D_GOTO(cont_put, rc);
+		D_GOTO(obj_close, rc);
 
 	data_size = daos_iods_len(mrone->mo_iods, mrone->mo_iod_num);
 
@@ -764,12 +739,12 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 
 	tls->mpt_rec_count += mrone->mo_rec_num;
 	tls->mpt_size += mrone->mo_size;
-cont_put:
-	ds_cont_child_put(cont);
 obj_close:
 	dsc_obj_close(oh);
 cont_close:
 	dc_cont_local_close(tls->mpt_pool_hdl, coh);
+cont_put:
+	ds_cont_child_put(cont);
 free:
 	return rc;
 }
