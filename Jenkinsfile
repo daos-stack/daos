@@ -96,6 +96,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             orterun -np 1 -x OFI_INTERFACE=eth0 daos_test -m'''
 
 // bail out of branch builds that are not on a whitelist
+/*
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
      !env.BRANCH_NAME.startsWith("release/") &&
@@ -103,6 +104,7 @@ if (!env.CHANGE_ID &&
    currentBuild.result = 'SUCCESS'
    return
 }
+*/
 
 pipeline {
     agent { label 'lightweight' }
