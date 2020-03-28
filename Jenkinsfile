@@ -158,6 +158,7 @@ def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
 
 
 // bail out of branch builds that are not on a whitelist
+/*
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
      !env.BRANCH_NAME.startsWith("release/") &&
@@ -165,6 +166,7 @@ if (!env.CHANGE_ID &&
    currentBuild.result = 'SUCCESS'
    return
 }
+*/
 
 pipeline {
     agent { label 'lightweight' }
