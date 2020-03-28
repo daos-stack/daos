@@ -42,8 +42,10 @@
 
 def daos_branch = ""
 if (env.CHANGE_TARGET) {
+    println("one")
     daos_branch = env.CHANGE_TARGET
 } else {
+    println("two")
     daos_branch = env.GIT_BRANCH
 }
 def arch = ""
