@@ -566,9 +566,9 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			return 0;
-		else
-			D_ERROR("Fail to remove "DF_DTI" from CoS cache: %d\n",
-				DP_DTI(xid), rc);
+
+		D_ERROR("Fail to remove "DF_DTI" from CoS cache: %d\n",
+			DP_DTI(xid), rc);
 
 		return rc;
 	}
