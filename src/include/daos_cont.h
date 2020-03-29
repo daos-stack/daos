@@ -33,6 +33,7 @@
 extern "C" {
 #endif
 
+#include <daos_types.h>
 #include <daos_security.h>
 
 /**

@@ -30,6 +30,8 @@
 extern "C" {
 #endif
 
+#include <daos_types.h>
+
 /** Type of storage target */
 typedef enum {
 	DAOS_TP_UNKNOWN,

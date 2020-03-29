@@ -34,6 +34,8 @@
 extern "C" {
 #endif
 
+#include <daos_types.h>
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/types.h>
