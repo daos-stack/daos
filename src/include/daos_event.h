@@ -66,7 +66,7 @@ extern "C" {
  *
  * \return		Zero on success, negative value if error
  */
-int
+DAOS_API int
 daos_eq_create(daos_handle_t *eqh);
 
 #define DAOS_EQ_DESTROY_FORCE	1
@@ -79,7 +79,7 @@ daos_eq_create(daos_handle_t *eqh);
  *
  * \return		Zero on success, EBUSY if there is any launched event
  */
-int
+DAOS_API int
 daos_eq_destroy(daos_handle_t eqh, int flags);
 
 /**
@@ -99,7 +99,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags);
  * \return		>= 0	Returned number of events
  *			< 0	negative value if error
  */
-int
+DAOS_API int
 daos_eq_poll(daos_handle_t eqh, int wait_running,
 	     int64_t timeout, unsigned int nevents, daos_event_t **events);
 
@@ -123,7 +123,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running,
  * \return		>= 0	Returned number of events
  *			 < 0	negative value if error
  */
-int
+DAOS_API int
 daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 	      unsigned int nevents, daos_event_t **events);
 
@@ -145,7 +145,7 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
  *
  * \return		Zero on success, negative value if error
  */
-int
+DAOS_API int
 daos_event_init(daos_event_t *ev, daos_handle_t eqh, daos_event_t *parent);
 
 /**
@@ -160,7 +160,7 @@ daos_event_init(daos_event_t *ev, daos_handle_t eqh, daos_event_t *parent);
  *
  * \return		Zero on success, negative value if error
  */
-int
+DAOS_API int
 daos_event_fini(daos_event_t *ev);
 
 /**
@@ -173,7 +173,7 @@ daos_event_fini(daos_event_t *ev);
  * \return		The next child event after \a child, or NULL if it's
  *			the last one.
  */
-daos_event_t *
+DAOS_API daos_event_t *
 daos_event_next(daos_event_t *parent, daos_event_t *child);
 
 /**
@@ -190,7 +190,7 @@ daos_event_next(daos_event_t *parent, daos_event_t *child);
  *
  * \return		Zero on success, negative value if error
  */
-int
+DAOS_API int
 daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag);
 
 /**
@@ -210,7 +210,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag);
  *
  * \return		Zero on success, negative value if error
  */
-int
+DAOS_API int
 daos_event_parent_barrier(struct daos_event *ev);
 
 /**
@@ -221,7 +221,7 @@ daos_event_parent_barrier(struct daos_event *ev);
  *
  * \return		Zero on success, negative value if error
  */
-int
+DAOS_API int
 daos_event_abort(daos_event_t *ev);
 
 #if defined(__cplusplus)
