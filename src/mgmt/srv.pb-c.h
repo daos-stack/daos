@@ -143,14 +143,10 @@ struct  _Mgmt__GetAttachInfoReq
    * System name. For daos_agent only.
    */
   char *sys;
-  /*
-   * Client's NUMA node.  Assists daos_agent to
-   */
-  uint32_t numa;
 };
 #define MGMT__GET_ATTACH_INFO_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__GetAttachInfoResp__Psr

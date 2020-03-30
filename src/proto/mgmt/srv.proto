@@ -61,9 +61,6 @@ message LeaderQueryResp {
 
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
-	uint32 numa = 2;	// Client's NUMA node.  Assists daos_agent to
-				// choose an interface that matches the NUMA
-				// node for best performance.
 }
 
 message GetAttachInfoResp {
