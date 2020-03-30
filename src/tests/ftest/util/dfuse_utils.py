@@ -203,6 +203,10 @@ class Dfuse(DfuseCommand):
                 "Error starting dfuse on the following hosts: {}".format(
                     error_hosts))
 
+        general_utils.pcmd(self.running_hosts, "stat -c %T -f {0}".format(self.mount_dir.value))
+        time.sleep(5)
+        general_utils.pcmd(self.running_hosts, "stat -c %T -f {0}".format(self.mount_dir.value))
+
     def stop(self):
         """Stop dfuse
         Raises:
