@@ -94,6 +94,7 @@ class Dfuse(DfuseCommand):
         self.tmp = tmp
         self.dfuse_env = dfuse_env
         self.log_file = log_file
+        self.running_hosts = NodeSet()
 
     def create_mount_point(self):
         """Create dfuse directory
@@ -105,11 +106,12 @@ class Dfuse(DfuseCommand):
             raise CommandFailure("Mount point not specified, "
                                  "check test yaml file")
 
-        dir_exists, _ = general_utils.check_file_exists(
+        _, missing_nodes = general_utils.check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
-        if not dir_exists:
+        if len(missing_nodes):
+
             cmd = "mkdir -p {}".format(self.mount_dir.value)
-            ret_code = general_utils.pcmd(self.hosts, cmd, timeout=30)
+            ret_code = general_utils.pcmd(missing_nodes, cmd, timeout=30)
             if len(ret_code) > 1 or 0 not in ret_code:
                 error_hosts = NodeSet(
                     ",".join(
@@ -187,8 +189,12 @@ class Dfuse(DfuseCommand):
         # run dfuse command
         ret_code = general_utils.pcmd(self.hosts, env + self.__str__(),
                                       timeout=30)
-        # check for any failures
-        if len(ret_code) > 1 or 0 not in ret_code:
+
+        if 0 in ret_code:
+            self.running_hosts.add(ret_code[0])
+            del ret_code[0]
+
+        if len(ret_code)
             error_hosts = NodeSet(
                 ",".join(
                     [str(node_set) for code, node_set in ret_code.items()
@@ -209,24 +215,31 @@ class Dfuse(DfuseCommand):
 
         Finally, try and remove the mount point, and that itself should work.
         """
-        self.log.info('Stopping dfuse at %s', self.mount_dir.value)
+        self.log.info('Stopping dfuse at %s on %s',
+                      self.mount_dir.value,
+                      self.running_hosts)
 
         if self.mount_dir.value is None:
             return
 
-        general_utils.pcmd(self.hosts, "ps auwx", timeout=30)
+        if not len(self.running_hosts):
+            return
+
+        general_utils.pcmd(self.running_hosts, "stat -c %T -f {0}".format(self.mount_dir.value))
+        general_utils.pcmd(self.running_hosts, "ps auwx", timeout=30)
         umount_cmd = "if [ -x '$(command -v fusermount)' ]; "
         umount_cmd += "then fusermount -u {0}; else fusermount3 -u {0}; fi".\
                format(self.mount_dir.value)
-        ret_code = general_utils.pcmd(self.hosts, umount_cmd, timeout=30)
-        if len(ret_code) > 1 or 0 not in ret_code:
-            error_hosts = NodeSet(
-                ",".join(
-                    [str(node_set) for code, node_set in ret_code.items()
-                     if code != 0]))
+        ret_code = general_utils.pcmd(self.running_hosts, umount_cmd, timeout=30)
+
+        if 0 in ret_code:
+            self.running_hosts.remove(ret_code[0])
+            del ret_code[0]
+
+        if len(self.running_hosts)
             cmd = "pkill dfuse --signal KILL"
-            general_utils.pcmd(error_hosts, cmd, timeout=30)
-            general_utils.pcmd(error_hosts, umount_cmd, timeout=30)
+            general_utils.pcmd(self.running_hosts, cmd, timeout=30)
+            general_utils.pcmd(self.running_hosts, umount_cmd, timeout=30)
             self.remove_mount_point(fail=False)
             raise CommandFailure(
                 "Error stopping dfuse on the following hosts: {}".format(
