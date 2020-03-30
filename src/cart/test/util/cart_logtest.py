@@ -94,6 +94,8 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'd_rank_list_free': ('rank_list->rl_ranks'),
                     'crt_rpc_priv_free': ('rpc_priv')}
 
+memleak_ok = []
+
 mismatch_alloc_seen = {}
 mismatch_free_seen = {}
 
@@ -368,6 +370,8 @@ class LogTest():
         # once this is stable.
         lost_memory = False
         for (_, line) in regions.items():
+            if line.function in memleak_ok:
+                continue
             pointer = line.get_field(-1).rstrip('.')
             if pointer in active_desc:
                 show_line(line, 'error', 'descriptor not freed')
@@ -377,10 +381,12 @@ class LogTest():
             lost_memory = True
 
         pp = pprint.PrettyPrinter()
-        print('Mismatched allocations were allocated at the following locations')
-        print(pp.pformat(mismatch_alloc_seen))
-        print('Mismatched allocations were freed at the following locations')
-        print(pp.pformat(mismatch_free_seen))
+        if mismatch_alloc_seen:
+            print('Mismatched allocations were allocated at the following locations')
+            print(pp.pformat(mismatch_alloc_seen))
+        if mismatch_free_seen:
+            print('Mismatched allocations were freed at the following locations')
+            print(pp.pformat(mismatch_free_seen))
 
         if active_desc:
             for (_, line) in active_desc.items():
