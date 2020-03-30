@@ -194,7 +194,7 @@ class Dfuse(DfuseCommand):
             self.running_hosts.add(ret_code[0])
             del ret_code[0]
 
-        if len(ret_code)
+        if len(ret_code):
             error_hosts = NodeSet(
                 ",".join(
                     [str(node_set) for code, node_set in ret_code.items()
@@ -236,7 +236,7 @@ class Dfuse(DfuseCommand):
             self.running_hosts.remove(ret_code[0])
             del ret_code[0]
 
-        if len(self.running_hosts)
+        if len(self.running_hosts):
             cmd = "pkill dfuse --signal KILL"
             general_utils.pcmd(self.running_hosts, cmd, timeout=30)
             general_utils.pcmd(self.running_hosts, umount_cmd, timeout=30)
