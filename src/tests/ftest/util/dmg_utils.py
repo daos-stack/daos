@@ -316,6 +316,10 @@ class DmgCommand(CommandWithSubCommand):
                 """Get the dmg pool sub command object."""
                 if self.sub_command.value == "blobstore-health":
                     self.sub_command_class = self.BlobstoreHealthSubCommand()
+                elif self.sub_command.value == "device-state":
+                    self.sub_command_class = self.DeviceStateSubCommand()
+                elif self.sub_command.value == "nvme-health":
+                    self.sub_command_class = self.NvmeHealthSubCommand()
                 elif self.sub_command.value == "smd":
                     self.sub_command_class = self.SmdSubCommand()
                 else:
@@ -334,6 +338,31 @@ class DmgCommand(CommandWithSubCommand):
                             "blobstore-health")
                     self.devuuid = FormattedParameter("-u {}", None)
                     self.tgtid = FormattedParameter("-t {}", None)
+
+            class DeviceStateSubCommand(CommandWithParameters):
+                """Defines a dmg storage query device-state object."""
+
+                def __init__(self):
+                    """Create a dmg storage query device-state object."""
+                    super(
+                        DmgCommand.StorageSubCommand.QuerySubCommand.
+                        DeviceStateSubCommand,
+                        self).__init__(
+                            "/run/dmg/storage/query/device-state/*",
+                            "device-state")
+                    self.devuuid = FormattedParameter("-u {}", None)
+
+            class NvmeHealthSubCommand(CommandWithParameters):
+                """Defines a dmg storage query nvme-health object."""
+
+                def __init__(self):
+                    """Create a dmg storage query nvme-health object."""
+                    super(
+                        DmgCommand.StorageSubCommand.QuerySubCommand.
+                        NvmeHealthSubCommand,
+                        self).__init__(
+                            "/run/dmg/storage/query/nvme-health/*",
+                            "nvme-health")
 
             class SmdSubCommand(CommandWithParameters):
                 """Defines a dmg storage query smd object."""
@@ -520,6 +549,98 @@ class DmgCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.force.value = force
         return self._get_result()
 
+    def storage_query_smd(self, devices=True, pools=True):
+        """Get the result of the 'dmg storage query smd' command.
+
+        Args:
+            devices (bool, optional): List all devices/blobstores stored in
+                per-server metadata table. Defaults to True.
+            pools (bool, optional): List all VOS pool targets stored in
+                per-server metadata table. Defaults to True.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.set_sub_command("smd")
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.devices.value = devices
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.pools.value = pools
+        return self._get_result()
+
+    def storage_query_blobstore(self, devuuid, tgtid=None):
+        """Get the result of the 'dmg storage query blobstore-health' command.
+
+        Args:
+            devuuid (str, optional): Device/Blobstore UUID to query.
+                Defaults to None.
+            tgtid (str, optional): VOS target ID to query. Defaults to None.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class. \
+            sub_command_class.set_sub_command("blobstore-health")
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.devuuid.value = devuuid
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.tgtid.value = tgtid
+        return self._get_result()
+
+    def storage_query_device_state(self, devuuid):
+        """Get the result of the 'dmg storage query device-state' command.
+
+        Args:
+            devuuid (str, optional): Device/Blobstore UUID to query.
+                Defaults to None.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class. \
+            sub_command_class.set_sub_command("device-state")
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.devuuid.value = devuuid
+        return self._get_result()
+
+    def storage_query_nvme_health(self):
+        """Get the result of the 'dmg storage query nvme-health' command.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class. \
+            sub_command_class.set_sub_command("nvme-health")
+        return self._get_result()
+
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, group=None, acl_file=None):
         """Create a pool with the dmg command.
@@ -700,6 +821,129 @@ def get_pool_uuid_service_replicas_from_stdout(stdout_str):
         uuid = match.group(1)
         svc = match.group(2)
     return uuid, svc
+
+
+def query_smd_info(stdout_str):
+    """Get storage query smd command information from stdout.
+
+    Example output:
+    boro-10:10001: connected
+    SMD Device List:
+    boro-10:10001:
+            Device:
+                    UUID: c2a1f8f6-fa89-4cda-b133-07f6fde9e868
+                    VOS Target IDs: 0 1 2 3
+
+    SMD Pool List:
+    boro-10:10001:
+            Pool:
+                    UUID: b11ab5e3-0e2a-4858-b3bd-c4d572cc8b11
+                    VOS Target IDs: 3 2 1 0
+                    SPDK Blobs: 4294967296 4294967297 4294967298 4294967299
+
+    Args:
+    stdout_str (str): Output of dmg storage query create command.
+
+    Returns:
+        Dict (key, value): Dictionary that contains the contents query smd.
+    """
+    devs_pattern = r"""(?:\s+|\n|\r\n)([0-9a-zA-Z_-]+):\d+:
+        (?:\s+|\n|\r\n)(?:\s+Device:)
+        (?:\s+|\n|\r\n)\s+UUID:\s+([a-f0-9-]+)
+        (?:\s+|\n|\r\n)\s+VOS\s+Target\s+IDs:\s+([\d+\s+]+\d+)"""
+
+    pools_pattern = r"""(?:\s+|\n|\r\n)([0-9a-zA-Z_-]+):\d+:
+        (?:\s+|\n|\r\n)(?:\s+Pool:)
+        (?:\s+|\n|\r\n)\s+UUID:\s+([a-f0-9-]+)
+        (?:\s+|\n|\r\n)\s+VOS\s+Target\s+IDs:\s+([\d+\s+]+\d+)
+        (?:\s+|\n|\r\n)\s+SPDK\s+Blobs:\s+([\d+\s+]+\d+)"""
+
+    info = []
+    for pattern in devs_pattern, pools_pattern:
+        try:
+            info = re.findall(pattern, stdout_str, re.M | re.I | re.VERBOSE)
+        except re.error as err:
+            print("<regex> error: {}".format(err.args[0]))
+
+    return info
+
+
+def query_blobstore_info(stdout_str):
+    """Get storage query smd command information from stdout.
+
+    Example output:
+        boro-10:10001: connected
+        Blobstore Health Data:
+        boro-10:10001:
+            Device UUID: c2a1f8f6-fa89-4cda-b133-07f6fde9e868
+            Read errors: 0
+            Write errors: 0
+            Unmap errors: 0
+            Checksum errors: 0
+            Device Health:
+                    Error log entries: 0
+                    Media errors: 0
+                    Temperature: 287
+                    Temperature: OK
+                    Available Spare: OK
+                    Device Reliability: OK
+                    Read Only: OK
+                    Volatile Memory Backup: OK
+
+    Args:
+    stdout_str (str): Output of dmg storage query create command.
+
+    Returns:
+        Dict (key, value): Dictionary that contains the contents query smd.
+    """
+    pattern = r"""^([0-9a-zA-Z_-]+):\d+:
+        (?:\s+|\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
+        (?:\s+|\n|\r\n)\s+Read\s+errors:\s+([0-9]+)
+        (?:\s+|\n|\r\n)\s+Write\s+errors:\s+([0-9]+)
+        (?:\s+|\n|\r\n)\s+Unmap\s+errors:\s+([0-9]+)
+        (?:\s+|\n|\r\n)\s+Checksum\s+errors:\s+([0-9]+)
+        (?:\s+|\n|\r\n)\s+[0-9a-zA-Z_-]+\s+[0-9a-zA-Z_-]+:
+        (?:\s+|\n|\r\n)\s+Error\s+log\s+entries:\s+([0-9]+)
+        (?:\s+|\n|\r\n)\s+Media\s+errors:\s+([0-9]+)
+        (?:\s+|\n|\r\n)\s+Temperature:\s+([0-9]+)
+        (?:\s+|\n|\r\n)\s+Temperature:\s+([A-Z]+)
+        (?:\s+|\n|\r\n)\s+Available\s+Spare:\s+([A-Z]+)
+        (?:\s+|\n|\r\n)\s+Device\s+Reliability:\s+([A-Z]+)
+        (?:\s+|\n|\r\n)\s+Read\s+Only:\s+([A-Z]+)
+        (?:\s+|\n|\r\n)\s+Volatile\s+Memory\s+Backup:\s+([A-Z]+)"""
+    info = []
+    try:
+        info = re.findall(pattern, stdout_str, re.M | re.I | re.VERBOSE)
+    except re.error as err:
+        print("<regex> error: {}".format(err.args[0]))
+    return info
+
+
+def query_device_state_info(stdout_str):
+    """Get storage query smd command information from stdout.
+
+    Example output:
+        boro-10:10001: connected
+            Device State Info:
+            boro-10:10001:
+                    Device UUID: c2a1f8f6-fa89-4cda-b133-07f6fde9e868
+                    State: NORMAL
+
+    Args:
+    stdout_str (str): Output of dmg storage query create command.
+
+    Returns:
+        Dict (key, value): Dictionary that contains the contents query smd.
+    """
+    pattern = r"""^([0-9a-zA-Z_-]+):\d+:
+        (?:\s+|\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
+        (?:\s+|\n|\r\n)\s+State:\s+([a-zA-Z]+)"""
+    info = []
+    try:
+        info = re.findall(pattern, stdout_str, re.MULTILINE | re.VERBOSE)
+    except re.error as err:
+        print("<regex> error: {}".format(err.args[0]))
+    return info
 
 
 # ************************************************************************

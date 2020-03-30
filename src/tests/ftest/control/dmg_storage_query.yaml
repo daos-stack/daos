@@ -3,13 +3,33 @@
 hosts:
   test_servers:
     - server-A
+  test_clients:
+    - client-B
 server_config:
   name: daos_server
   port: 10001
-dmg:
-  dmg_sub_command: storage
-  storage:
-    storage_sub_command: query
-    query:
-      query_sub_command: smd
-  insecure: True
+  servers:
+    bdev_class: nvme
+    bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+pool:
+    mode: 511
+    name: daos_server
+    scm_size: 3000000000
+    nvme_size: 9000000000
+    svcn: 1
+    control_method: dmg
+blobstore_info:
+  "Device UUID": aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+  "Read errors": "0"
+  "Write errors": "0"
+  "Unmap errors": "0"
+  "Checksum errors": "0"
+  "Device Health":
+    "Error log entries": "0"
+    "Media errors": "0"
+    "Temperature": aaa
+    "Temperature": OK
+    "Available Spare": OK
+    "Device Reliability": OK
+    "Read Only": OK
+    "Volatile Memory Backup": OK

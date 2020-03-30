@@ -548,13 +548,20 @@ class TestWithServers(TestWithoutServers):
             self.server_managers[index].insecure.value
         return dmg
 
-    def prepare_pool(self):
+    def prepare_pool(self, dmg=None):
         """Create a pool, read the pool parameters from the yaml, create, and
         connect.
 
+        Args:
+            dmg (DmgCommand): An already craeted dmg command. Defaults to None.
+
         This sequence is common for a lot of the container tests.
         """
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        if dmg:
+            self.pool = TestPool(self.context, dmg_command=dmg)
+        else:
+            self.pool = TestPool(
+                self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
         self.pool.connect()
