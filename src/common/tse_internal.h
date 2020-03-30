@@ -81,6 +81,10 @@ struct tse_task_private {
 	 */
 	void				*dtp_priv;
 	/**
+	 * DAOS internal task parameter pointer.
+	 */
+	void				*dtp_priv_internal;
+	/**
 	 * reserved buffer for user to assign embedded parameters, it also can
 	 * be used as task stack space that can push/pop parameters to
 	 * facilitate I/O handling. The embedded parameter uses buffer from the

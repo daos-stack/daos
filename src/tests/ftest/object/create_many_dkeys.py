@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,13 +23,13 @@
 '''
 from __future__ import print_function
 
-import os
 import sys
 import ctypes
 import avocado
-from apricot import TestWithServers
 
-from pydaos.raw import DaosPool, DaosContainer, IORequest, DaosApiError
+from apricot import TestWithServers
+from pydaos.raw import DaosContainer, IORequest, DaosApiError
+
 
 class CreateManyDkeys(TestWithServers):
     """
@@ -39,24 +39,6 @@ class CreateManyDkeys(TestWithServers):
 
     :avocado: recursive
     """
-    def setUp(self):
-        super(CreateManyDkeys, self).setUp()
-        self.pool = DaosPool(self.context)
-        self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
-                         os.geteuid(),
-                         os.getegid(),
-                         self.params.get("size", '/run/pool/createsize/*'),
-                         self.params.get("setname", '/run/pool/createset/*'),
-                         None)
-        self.pool.connect(1 << 1)
-
-    def tearDown(self):
-        try:
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-        finally:
-            super(CreateManyDkeys, self).tearDown()
 
     def write_a_bunch_of_values(self, how_many):
         """
@@ -65,7 +47,7 @@ class CreateManyDkeys(TestWithServers):
         """
 
         self.container = DaosContainer(self.context)
-        self.container.create(self.pool.handle)
+        self.container.create(self.pool.pool.handle)
         self.container.open()
 
         ioreq = IORequest(self.context, self.container, None)
@@ -127,7 +109,7 @@ class CreateManyDkeys(TestWithServers):
         :avocado: tags=all,full,small,object,many_dkeys
 
         """
-
+        self.prepare_pool()
         no_of_dkeys = self.params.get("number_of_dkeys", '/run/dkeys/')
 
         # write a lot of individual data items, verify them, then destroy
