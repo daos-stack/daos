@@ -358,6 +358,7 @@ int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
 		     uint32_t flags, daos_handle_t *th);
 int dc_tx_local_close(daos_handle_t th);
 int dc_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
+int dc_tx_restart(daos_handle_t th);
 
 /** Decode shard number from enumeration anchor */
 static inline uint32_t

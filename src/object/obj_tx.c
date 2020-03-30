@@ -638,6 +638,32 @@ out_tx:
 }
 
 int
+dc_tx_restart(daos_handle_t th)
+{
+	struct dc_tx	*tx;
+	int		 rc = 0;
+
+	tx = dc_tx_hdl2ptr(th);
+	if (tx == NULL)
+		return -DER_NO_HDL;
+
+	if (tx->tx_status != TX_OPEN && tx->tx_status != TX_FAILED) {
+		D_ERROR("Can't restart non-open/non-failed state "
+			"transaction (%d)\n", tx->tx_status);
+		rc = -DER_INVAL;
+	} else {
+		dc_tx_cleanup(tx);
+		daos_dti_gen(&tx->tx_id, crt_hlc_get());
+		tx->tx_status = TX_OPEN;
+	}
+
+	/* -1 for hdl2ptr */
+	dc_tx_decref(tx);
+
+	return rc;
+}
+
+int
 dc_obj_update_attach(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		     daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		     d_sg_list_t *sgls)

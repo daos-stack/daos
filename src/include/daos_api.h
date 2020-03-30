@@ -133,12 +133,24 @@ daos_tx_close(daos_handle_t th, daos_event_t *ev);
  * Return epoch associated with the transaction handle.
  *
  * \param[in]	th	Transaction handle.
- * \param[out]	th	Returned epoch value.
+ * \param[out]	epoch	Returned epoch value.
  *
  * \return		0 if Success, negative if failed.
  */
 DAOS_API int
 daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
+
+/**
+ * Restart the transaction with newer epoch. That clean up its former
+ * non-committed modifications. The transaction can be restarted only
+ * when it is in open or failed status.
+ *
+ * \param[in]	th	Transaction handle.
+ *
+ * \return		0 if Success, negative if failed.
+ */
+DAOS_API int
+daos_tx_restart(daos_handle_t th);
 
 #if defined(__cplusplus)
 }

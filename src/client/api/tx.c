@@ -128,13 +128,7 @@ daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch)
 }
 
 int
-daos_tx_local2global(daos_handle_t th, d_iov_t *glob)
+daos_tx_restart(daos_handle_t th)
 {
-	return -DER_NOSYS;
-}
-
-int
-daos_tx_global2local(daos_handle_t coh, d_iov_t glob, daos_handle_t *th)
-{
-	return -DER_NOSYS;
+	return dc_tx_restart(th);
 }
