@@ -966,7 +966,8 @@ pool_map_initialise(struct pool_map *map, bool activate,
 
 	map->po_domain_layers = cntr.cc_layers;
 
-	D_ALLOC_ARRAY(map->po_comp_fail_cnts, map->po_domain_layers);
+	/* +1 to include the target layer */
+	D_ALLOC_ARRAY(map->po_comp_fail_cnts, map->po_domain_layers + 1);
 	if (map->po_comp_fail_cnts == NULL) {
 		rc = -DER_NOMEM;
 		goto failed;
