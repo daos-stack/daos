@@ -153,9 +153,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return errors.Wrap(err, "parsing input ranklist")
 	}
 
-	req := client.SystemQueryReq{Ranks: ranks}
-
-	resp, err := cmd.conns.SystemQuery(req)
+	resp, err := cmd.conns.SystemQuery(client.SystemQueryReq{Ranks: ranks})
 	if err != nil {
 		return errors.Wrap(err, "System-Query command failed")
 	}
@@ -207,15 +205,22 @@ func displaySystemAction(log logging.Logger, results system.MemberResults) error
 type systemStopCmd struct {
 	logCmd
 	connectedCmd
-	Force bool `long:"force" description:"Force stop DAOS system members"`
+	Force bool   `long:"force" description:"Force stop DAOS system members"`
+	Ranks string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
 }
 
 // Execute is run when systemStopCmd activates
 //
 // Perform prep and kill stages with stop command.
 func (cmd *systemStopCmd) Execute(_ []string) error {
-	req := client.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force}
-	resp, err := cmd.conns.SystemStop(req)
+	var ranks []uint32
+	if err := common.ParseNumberList(cmd.Ranks, &ranks); err != nil {
+		return errors.Wrap(err, "parsing input ranklist")
+	}
+
+	resp, err := cmd.conns.SystemStop(
+		client.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force, Ranks: ranks})
+
 	if err != nil {
 		return errors.Wrap(err, "System-Stop command failed")
 	}
@@ -233,13 +238,17 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 type systemStartCmd struct {
 	logCmd
 	connectedCmd
+	Ranks string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
 }
 
 // Execute is run when systemStartCmd activates
 func (cmd *systemStartCmd) Execute(_ []string) error {
-	req := client.SystemStartReq{}
+	var ranks []uint32
+	if err := common.ParseNumberList(cmd.Ranks, &ranks); err != nil {
+		return errors.Wrap(err, "parsing input ranklist")
+	}
 
-	resp, err := cmd.conns.SystemStart(req)
+	resp, err := cmd.conns.SystemStart(client.SystemStartReq{Ranks: ranks})
 	if err != nil {
 		return errors.Wrap(err, "System-Start command failed")
 	}

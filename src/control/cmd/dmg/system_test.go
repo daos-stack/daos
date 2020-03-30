@@ -53,7 +53,7 @@ func TestSystemCommands(t *testing.T) {
 		{
 			"system query with bad rank option",
 			"system query --rank 0",
-			"ConnectClients SystemQuery-{[0]}",
+			"",
 			errors.New("unknown flag `rank'"),
 		},
 		{
@@ -75,10 +75,58 @@ func TestSystemCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"system stop with single rank",
+			"system stop --ranks 0",
+			"ConnectClients SystemStop-{true true [0] false}",
+			nil,
+		},
+		{
+			"system stop with multiple ranks",
+			"system stop --ranks 0,1,4",
+			"ConnectClients SystemStop-{true true [0 1 4] false}",
+			nil,
+		},
+		{
+			"system stop with bad rank option",
+			"system stop --rank 0",
+			"",
+			errors.New("unknown flag `rank'"),
+		},
+		{
+			"system stop verbose",
+			"system stop --verbose",
+			"",
+			errors.New("unknown flag `verbose'"),
+		},
+		{
 			"system start with no arguments",
 			"system start",
 			"ConnectClients SystemStart-{[]}",
 			nil,
+		},
+		{
+			"system start with single rank",
+			"system start --ranks 0",
+			"ConnectClients SystemStart-{[0]}",
+			nil,
+		},
+		{
+			"system start with multiple ranks",
+			"system start --ranks 0,1,4",
+			"ConnectClients SystemStart-{[0 1 4]}",
+			nil,
+		},
+		{
+			"system start with bad rank option",
+			"system start --rank 0",
+			"",
+			errors.New("unknown flag `rank'"),
+		},
+		{
+			"system start verbose",
+			"system start --verbose",
+			"",
+			errors.New("unknown flag `verbose'"),
 		},
 		{
 			"leader query",

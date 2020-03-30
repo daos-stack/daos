@@ -211,17 +211,17 @@ func (svc *ControlService) prepShutdown(ctx context.Context, rankList []system.R
 				errors.New("harness unresponsive"))
 			svc.log.Debugf("no response from harness %s", addr)
 		}
-
 		results = append(results, hResults...)
 	}
 
-	// prep MS access point last
-	hResults, err := svc.harnessClient.PrepShutdown(ctx, msAddr, msRank)
-	if err != nil {
-		return nil, err
+	// prep MS access point last if in rankList
+	if msRank.InList(rankList) {
+		hResults, err := svc.harnessClient.PrepShutdown(ctx, msAddr, msRank)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, hResults...)
 	}
-
-	results = append(results, hResults...)
 
 	if err := svc.membership.UpdateMemberStates(results); err != nil {
 
@@ -264,16 +264,17 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool, rankList []
 			hResults = svc.reportStoppedRanks("stop", ranks, nil)
 			svc.log.Debugf("no response from harness %s", addr)
 		}
-
 		results = append(results, hResults...)
 	}
 
-	hResults, err := svc.harnessClient.Stop(ctx, msAddr, force, msRank)
-	if err != nil {
-		return nil, err
+	// stop MS access point last if in rankList
+	if msRank.InList(rankList) {
+		hResults, err := svc.harnessClient.Stop(ctx, msAddr, force, msRank)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, hResults...)
 	}
-
-	results = append(results, hResults...)
 
 	if err := svc.membership.UpdateMemberStates(results); err != nil {
 		return nil, err
@@ -349,13 +350,14 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 	msAddr := msMember.Addr.String()
 	msRank := msMember.Rank
 
-	// first start harness managing MS member
-	hResults, err := svc.harnessClient.Start(ctx, msAddr, msRank)
-	if err != nil {
-		return nil, err
+	// first start harness managing MS member if in rankList
+	if msRank.InList(rankList) {
+		hResults, err := svc.harnessClient.Start(ctx, msAddr, msRank)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, hResults...)
 	}
-
-	results = append(results, hResults...)
 
 	for addr, ranks := range hostRanks {
 		if addr == msAddr {
@@ -374,7 +376,6 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 				errors.New("harness unresponsive"))
 			svc.log.Debugf("no response from harness %s", addr)
 		}
-
 		results = append(results, hResults...)
 	}
 
