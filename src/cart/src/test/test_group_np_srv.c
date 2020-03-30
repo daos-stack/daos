@@ -53,6 +53,7 @@ void
 test_run(d_rank_t my_rank)
 {
 	crt_group_t		*grp = NULL;
+	d_rank_list_t		*rank_list = NULL;
 	uint32_t		 grp_size;
 	int			 i;
 	int			 rc = 0;
@@ -85,6 +86,14 @@ test_run(d_rank_t my_rank)
 	DBG_PRINT("Contexts created %d\n", test_g.t_srv_ctx_num);
 
 	if (test_g.t_save_cfg && my_rank == 0) {
+		rc = crt_group_ranks_get(grp, &rank_list);
+		D_ASSERTF(rc == 0, "crt_group_ranks_get() failed; rc=%d\n", rc);
+
+		rc = tc_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
+					test_g.t_srv_ctx_num - 1,
+					test_g.t_srv_ctx_num, 30, 1800);
+		D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
+
 		rc = crt_group_config_path_set(test_g.t_cfg_path);
 		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 
