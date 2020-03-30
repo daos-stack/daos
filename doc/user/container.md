@@ -41,13 +41,13 @@ Chunk Size:     4096
 
 At creation time, a list of container properties can be specified:
 
-|Container Property|Description|
-|----|----|
-|`DAOS_PROP_CO_LABEL` |A string that a user can associate with a container. e.g., "Cat Pics" or "ResNet-50 training data"|
-|`DAOS_PROP_CO_LAYOUT_TYPE`|The container type (POSIX, MPI-IO, HDF5, ...)|
-|`DAOS_PROP_CO_LAYOUT_VER`|A version of the layout that can be used by I/O middleware and application to handle interoperability.|
-|`DAOS_PROP_CO_REDUN_FAC`|The redundancy factor that drives the minimal data protection required for objects stored in the container. e.g., RF1 means no data protection, RF3 only allows 3-way replication or erasure code N+2.|
-|`DAOS_PROP_CO_REDUN_LVL`|The fault domain level that should be used to place data redundancy information (e.g., storage nodes, racks...). This information will be eventually consumed to determine object placement.|
+| **Container Property**     | **Description** |
+| -------------------------  | --------------- |
+| `DAOS_PROP_CO_LABEL`<img width=400/>| A string that a user can associate with a container. e.g., "Cat Pics" or "ResNet-50 training data"|
+| `DAOS_PROP_CO_LAYOUT_TYPE` | The container type (POSIX, MPI-IO, HDF5, ...)|
+| `DAOS_PROP_CO_LAYOUT_VER`  | A version of the layout that can be used by I/O middleware and application to handle interoperability.|
+| `DAOS_PROP_CO_REDUN_FAC`   | The redundancy factor that drives the minimal data protection required for objects stored in the container. e.g., RF1 means no data protection, RF3 only allows 3-way replication or erasure code N+2.|
+| `DAOS_PROP_CO_REDUN_LVL`   | The fault domain level that should be used to place data redundancy information (e.g., storage nodes, racks...). This information will be eventually consumed to determine object placement.|
 
 While those properties are currently stored persistently with container
 metadata, many of them are still under development. The ability to modify some
@@ -192,7 +192,7 @@ $ daos cont overwrite-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
       --acl-file=<path>
 ```
 
-#### Updating Entries in an existing ACL
+#### Adding and Updating ACEs
 
 To add or update multiple entries in an existing container ACL:
 
@@ -211,7 +211,7 @@ If there is no existing entry for the principal in the ACL, the new entry is
 added to the ACL. If there is already an entry for the principal, that entry
 is replaced with the new one.
 
-#### Removing an Entry from the ACL
+#### Removing an ACE
 
 To delete an entry for a given principal in an existing container ACL:
 
