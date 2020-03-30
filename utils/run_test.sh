@@ -72,6 +72,10 @@ if [ -d "/mnt/daos" ]; then
         SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
     fi
 
+    run_test build/src/cart/src/utest/test_linkage
+    run_test build/src/cart/src/utest/test_gurt
+    run_test build/src/cart/src/utest/utest_hlc
+    run_test build/src/cart/src/utest/utest_swim
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm

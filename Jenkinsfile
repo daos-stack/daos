@@ -40,19 +40,7 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-def doc_only_change() {
-    def rc = sh script: '''git diff-tree --no-commit-id --name-only        \
-                               $(git merge-base origin/master HEAD) HEAD |
-                               grep -q -v -e "^doc$"''',
-                returnStatus: true
-
-    return rc == 1
-}
-
-def skip_stage(String stage) {
-    return commitPragma(pragma: 'Skip-' + stage).contains('true')
-}
-
+def daos_branch = "master"
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
@@ -66,7 +54,10 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl spdk-tools " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
 
-def rpm_test_pre = '''nodelist=(${NODELIST//,/ })
+def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
+                          exit 0
+                      fi
+                      nodelist=(${NODELIST//,/ })
                       scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
                                     jenkins@${nodelist[0]}:/tmp
                       scp -i ci_key src/tests/ftest/data/daos_agent_baseline.yaml \
@@ -169,7 +160,8 @@ def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
-     env.BRANCH_NAME != env.CHANGE_TARGET)) {
+     !env.BRANCH_NAME.startsWith("release/") &&
+     env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
    return
 }
@@ -194,9 +186,7 @@ pipeline {
         QUICKBUILD = commitPragma(pragma: 'Quick-build').contains('true')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
-        CART_COMMIT = sh(script: "sed -ne 's/CART *= *\\(.*\\)/\\1/p' utils/build.config",
-                         returnStdout: true).trim()
-        QUICKBUILD_DEPS = sh(script: "rpmspec -q --define cart_sha1\\ ${env.CART_COMMIT} --srpm --requires utils/rpms/daos.spec 2>/dev/null",
+        QUICKBUILD_DEPS = sh(script: "rpmspec -q --srpm --requires utils/rpms/daos.spec 2>/dev/null",
                              returnStdout: true)
     }
 
@@ -217,17 +207,16 @@ pipeline {
                 beforeAgent true
                 allOf {
                     not { branch 'weekly-testing' }
-                    not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                    expression { env.CHANGE_TARGET != 'weekly-testing' }
                 }
             }
             parallel {
                 stage('checkpatch') {
                     when {
-                        beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('checkpatch') }
-                            expression { ! doc_only_change() }
-                        }
+                      beforeAgent true
+                      expression {
+                        ! commitPragma(pragma: 'Skip-checkpatch').contains('true')
+                      }
                     }
                     agent {
                         dockerfile {
@@ -284,15 +273,8 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                anyOf {
-                    // always build branch landings as we depend on lastSuccessfulBuild
-                    // always having RPMs in it
-                    branch env.CHANGE_TARGET
-                    allOf {
-                        expression { ! skip_stage('build') }
-                        expression { ! doc_only_change() }
-                    }
-                }
+                // expression { skipTest != true }
+                expression { ! commitPragma(pragma: 'Skip-build').contains('true') }
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
@@ -333,7 +315,7 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'el-7',
-                                                publish_branch: env.CHANGE_TARGET,
+                                                publish_branch: daos_branch,
                                                 repo_dir: 'artifacts/centos7/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -369,7 +351,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
                     }
                     agent {
@@ -393,6 +375,9 @@ pipeline {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/leap15/
                                   mkdir -p artifacts/leap15/
+                                  if git show -s --format=%B | grep "^Skip-build: true"; then
+                                      exit 0
+                                  fi
                                   make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
                         }
                     }
@@ -410,7 +395,7 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'leap-15',
-                                                publish_branch: env.CHANGE_TARGET,
+                                                publish_branch: daos_branch,
                                                 repo_dir: 'artifacts/leap15/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -451,8 +436,7 @@ pipeline {
                                                 '$BUILDARGS ' +
                                                 '--build-arg QUICKBUILD=' + env.QUICKBUILD +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
-                                                '" --build-arg CART_COMMIT=-' + env.CART_COMMIT +
-                                                ' --build-arg REPOS="' + component_repos + '"'
+                                                '" --build-arg REPOS="' + component_repos + '"'
                         }
                     }
                     steps {
@@ -461,7 +445,11 @@ pipeline {
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
-                                    includes: '''build/src/rdb/raft/src/tests_main,
+                                    includes: '''build/src/cart/src/utest/test_linkage,
+                                                 build/src/cart/src/utest/test_gurt,
+                                                 build/src/cart/src/utest/utest_hlc,
+                                                 build/src/cart/src/utest/utest_swim,
+                                                 build/src/rdb/raft/src/tests_main,
                                                  build/src/common/tests/btree_direct,
                                                  build/src/common/tests/btree,
                                                  build/src/common/tests/sched,
@@ -535,8 +523,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch env.CHANGE_TARGET
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            branch 'master'
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -596,8 +584,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch env.CHANGE_TARGET
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            branch 'master'
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -658,8 +646,8 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -719,8 +707,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch env.CHANGE_TARGET
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            branch 'master'
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -780,8 +768,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch env.CHANGE_TARGET
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            branch 'master'
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -842,8 +830,8 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -905,20 +893,17 @@ pipeline {
         stage('Unit Test') {
             when {
                 beforeAgent true
-                allOf {
-                    not { environment name: 'NO_CI_TESTING', value: 'true' }
-                    // nothing to test if build was skipped
-                    expression { ! skip_stage('build') }
-                    // or it's a doc-only change
-                    expression { ! doc_only_change() }
-                    expression { ! skip_stage('test') }
-                }
+                // expression { skipTest != true }
+                expression { env.NO_CI_TESTING != 'true' }
+                expression { ! commitPragma(pragma: 'Skip-test').contains('true') }
             }
             parallel {
                 stage('run_test.sh') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('run_test') }
+                      expression {
+                        ! commitPragma(pragma: 'Skip-run_test').contains('true')
+                      }
                     }
                     agent {
                         label 'ci_vm1'
@@ -931,7 +916,7 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
                                        inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
-                                                  "cart-devel-${env.CART_COMMIT} fuse3-libs " +
+                                                  "fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
                                                   'libipmctl-devel'
@@ -1039,12 +1024,9 @@ pipeline {
             when {
                 beforeAgent true
                 allOf {
-                    not { environment name: 'NO_CI_TESTING', value: 'true' }
-                    // nothing to test if build was skipped
-                    expression { ! skip_stage('build') }
-                    // or it's a doc-only change
-                    expression { ! doc_only_change() }
-                    expression { ! skip_stage('test') }
+                    // expression { skipTest != true }
+                    expression { env.NO_CI_TESTING != 'true' }
+                    expression { ! commitPragma(pragma: 'Skip-test').contains('true') }
                 }
             }
             parallel {
@@ -1056,7 +1038,7 @@ pipeline {
 //                    when {
 //                        beforeAgent true
 //                        anyOf {
-//                            branch env.CHANGE_TARGET
+//                            branch 'master'
 //                            not {
 //                                // expression returns false on grep match
 //                                expression {
@@ -1076,8 +1058,7 @@ pipeline {
                                                 '$BUILDARGS ' +
                                                 '--build-arg QUICKBUILD=true' +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
-                                                '" --build-arg CART_COMMIT=-' + env.CART_COMMIT +
-                                                ' --build-arg REPOS="' + component_repos + '"'
+                                                '" --build-arg REPOS="' + component_repos + '"'
                         }
                     }
                     steps {
@@ -1115,7 +1096,9 @@ pipeline {
                 stage('Functional') {
                     when {
                         beforeAgent true
-                        expression { ! skip_stage('func-test') }
+                        expression {
+                            ! commitPragma(pragma: 'Skip-func-test').contains('true')
+                        }
                     }
                     agent {
                         label 'ci_vm9'
@@ -1133,8 +1116,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1195,9 +1177,13 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-small') }
+                            expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                            }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test-small').contains('true')
+                            }
                         }
                     }
                     agent {
@@ -1216,8 +1202,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-small:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1296,9 +1281,13 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-medium') }
+                            expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                            }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test-medium').contains('true')
+                            }
                         }
                     }
                     agent {
@@ -1317,8 +1306,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-medium:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1397,9 +1385,13 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-large') }
+                            expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                            }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test-large').contains('true')
+                            }
                         }
                     }
                     agent {
@@ -1418,8 +1410,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-large:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1498,8 +1489,10 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { ! skip_stage('test-centos-rpms') }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-test-centos-rpms').contains('true')
+                            }
                         }
                     }
                     agent {
@@ -1577,7 +1570,7 @@ pipeline {
     }
     post {
         unsuccessful {
-            notifyBrokenBranch branches: env.CHANGE_TARGET
+            notifyBrokenBranch branches: daos_branch
         }
     }
 }

@@ -283,21 +283,6 @@ def define_components(reqs):
                 headers=['fuse3/fuse.h'],
                 out_of_src_build=True)
 
-    retriever = GitRepoRetriever("https://github.com/daos-stack/cart",
-                                 True)
-    reqs.define('cart',
-                retriever=retriever,
-                commands=[SCONS_EXE + " --config=force $JOBS_OPT "
-                          "MERCURY_PREBUILT=$MERCURY_PREFIX "
-                          "PREFIX=$CART_PREFIX "
-                          "MPI_PKG=$MPI_PKG "
-                          "USE_INSTALLED=" + ','.join(reqs.installed) + ' ' +
-                          "install"],
-                headers=["cart/api.h", "gurt/list.h"],
-                libs=["cart", "gurt"],
-                requires=['mercury', 'uuid', 'crypto', 'boost', 'yaml'],
-                package='cart-devel' if inst(reqs, 'cart') else None)
-
     reqs.define('fio',
                 retriever=GitRepoRetriever(
                     'https://github.com/axboe/fio.git'),
