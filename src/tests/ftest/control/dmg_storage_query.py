@@ -23,8 +23,7 @@
 """
 from __future__ import print_function
 
-from dmg_utils import storage_query_smd, storage_query_blobstore
-from dmg_utils import storage_query_device_state, query_smd_info
+from dmg_utils import query_smd_info
 from dmg_utils import query_blobstore_info, query_device_state_info
 from apricot import TestWithServers
 from test_utils_pool import TestPool
