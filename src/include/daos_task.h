@@ -135,6 +135,9 @@ typedef enum {
 	DAOS_OPC_KV_REMOVE,
 	DAOS_OPC_KV_LIST,
 
+	/** Distributed Transaction */
+	DAOS_OPC_DTX_CPD,
+
 	DAOS_OPC_MAX
 } daos_opc_t;
 

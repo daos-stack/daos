@@ -86,6 +86,9 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	tse_task_t	*task;
 	int		rc;
 
+	if (!daos_handle_is_inval(th))
+		return dc_obj_punch_attach(oh, th, flags);
+
 	rc = dc_obj_punch_task_create(oh, th, flags, ev, NULL, &task);
 	if (rc)
 		return rc;
@@ -106,6 +109,9 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		return -DER_INVAL;
 	}
 
+	if (!daos_handle_is_inval(th))
+		return dc_obj_punch_dkeys_attach(oh, th, flags, nr, dkeys);
+
 	rc = dc_obj_punch_dkeys_task_create(oh, th, flags, nr, dkeys, ev, NULL,
 					    &task);
 	if (rc)
@@ -121,6 +127,10 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 {
 	tse_task_t	*task;
 	int		rc;
+
+	if (!daos_handle_is_inval(th))
+		return dc_obj_punch_akeys_attach(oh, th, flags, dkey, nr,
+						 akeys);
 
 	rc = dc_obj_punch_akeys_task_create(oh, th, flags, dkey, nr, akeys, ev,
 					    NULL, &task);
@@ -177,6 +187,10 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 {
 	tse_task_t	*task;
 	int		rc;
+
+	if (!daos_handle_is_inval(th))
+		return dc_obj_update_attach(oh, th, flags, dkey, nr, iods,
+					    sgls);
 
 	rc = dc_obj_update_task_create(oh, th, flags, dkey, nr, iods, sgls,
 				       ev, NULL, &task);

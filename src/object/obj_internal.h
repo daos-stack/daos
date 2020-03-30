@@ -407,6 +407,7 @@ void obj_shard_addref(struct dc_obj_shard *shard);
 void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
+struct dc_object *obj_hdl2ptr(daos_handle_t oh);
 
 struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;
@@ -476,5 +477,10 @@ ec_split_recxs(tse_task_t *task, struct daos_oclass_attr *oca);
 
 void
 ec_free_iods(daos_iod_t *iods, int nr);
+
+/* obj_tx.c */
+int
+dc_tx_hdl2epoch_with_check(daos_handle_t th, bool check_write,
+			   daos_epoch_t *epoch, uint32_t *pm_ver);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

@@ -274,7 +274,7 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		if (!daos_is_zero_dti(dti))
 			goto init;
 
-		daos_dti_gen(&dth->dth_xid, true);
+		daos_dti_gen(&dth->dth_xid, 0);
 		return 0;
 	}
 
@@ -288,7 +288,7 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dlh->dlh_sub_cnt = tgts_cnt;
 
 	if (daos_is_zero_dti(dti)) {
-		daos_dti_gen(&dth->dth_xid, true); /* zero it */
+		daos_dti_gen(&dth->dth_xid, 0); /* zero it */
 		return 0;
 	}
 

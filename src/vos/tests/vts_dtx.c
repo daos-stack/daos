@@ -40,7 +40,7 @@ vts_dtx_cos(void **state, bool punch)
 	uint64_t		 dkey_hash = lrand48();
 	int			 rc;
 
-	daos_dti_gen(&xid, false);
+	daos_dti_gen(&xid, crt_hlc_get());
 
 	/* Insert a DTX into CoS cache. */
 	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
@@ -102,7 +102,7 @@ dtx_3(void **state)
 	flags[2] = DCF_FOR_PUNCH;
 
 	for (i = 0; i < 11; i++) {
-		daos_dti_gen(&xid, false);
+		daos_dti_gen(&xid, crt_hlc_get());
 
 		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
 				     dkey_hash, DAOS_EPOCH_MAX - 1, 0,
@@ -149,7 +149,7 @@ dtx_4(void **state)
 	flags[2] = DCF_FOR_PUNCH;
 
 	for (i = 0; i < 10; i++) {
-		daos_dti_gen(&xid[i], false);
+		daos_dti_gen(&xid[i], crt_hlc_get());
 		dkey_hash = lrand48();
 
 		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid[i],
@@ -167,7 +167,7 @@ dtx_4(void **state)
 
 		for (j = 0; j < 10; j++) {
 			if (daos_dti_equal(&xid[j], &dtes[i].dte_xid)) {
-				daos_dti_gen(&xid[j], true);
+				daos_dti_gen(&xid[j], 0);
 				break;
 			}
 		}
@@ -232,7 +232,7 @@ vts_dtx_prep_update(struct io_test_args *args, struct dtx_id *xid,
 	args->ta_flags = TF_ZERO_COPY;
 	args->ofeat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64;
 
-	daos_dti_gen(xid, false);
+	daos_dti_gen(xid, crt_hlc_get());
 	*epoch = crt_hlc_get();
 
 	vts_key_gen(dkey_buf, args->dkey_size, true, args);
@@ -389,7 +389,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Generate the punch DTX ID. */
-	daos_dti_gen(&xid, false);
+	daos_dti_gen(&xid, crt_hlc_get());
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
 			   dkey_hash, &conflict, DAOS_INTENT_PUNCH, &dth);
@@ -521,7 +521,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	assert_memory_equal(update_buf1, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Generate the punch DTX ID. */
-	daos_dti_gen(&xid, false);
+	daos_dti_gen(&xid, crt_hlc_get());
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
 			   dkey_hash, &conflict, DAOS_INTENT_PUNCH, &dth);
@@ -1078,7 +1078,7 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 		memset(&sgl[i], 0, sizeof(sgl[i]));
 		memset(&rex[i], 0, sizeof(rex[i]));
 
-		daos_dti_gen(&xid[i], false);
+		daos_dti_gen(&xid[i], crt_hlc_get());
 		epoch[i] = crt_hlc_get();
 
 		dts_buf_render(update_buf[i], UPDATE_BUF_SIZE);
@@ -1335,7 +1335,7 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 		memset(&sgl[i], 0, sizeof(sgl[i]));
 		memset(&rex[i], 0, sizeof(rex[i]));
 
-		daos_dti_gen(&xid[i], false);
+		daos_dti_gen(&xid[i], crt_hlc_get());
 		epoch[i] = crt_hlc_get();
 
 		dts_buf_render(update_buf[i], UPDATE_BUF_SIZE);
@@ -1374,7 +1374,7 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid[1], 1);
 	assert_int_equal(rc, 0);
 
-	daos_dti_gen(&xid[3], false);
+	daos_dti_gen(&xid[3], crt_hlc_get());
 	epoch[3] = crt_hlc_get();
 
 	rc = vts_dtx_begin(&xid[3], &args->oid, args->ctx.tc_co_hdl, epoch[3],

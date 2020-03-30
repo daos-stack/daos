@@ -2282,8 +2282,6 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		return cont_attr_get(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_ATTR_SET:
 		return cont_attr_set(tx, pool_hdl, cont, hdl, rpc);
-	case CONT_EPOCH_DISCARD:
-		return ds_cont_epoch_discard(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_AGGREGATE:
 		return ds_cont_epoch_aggregate(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_LIST:
@@ -2377,8 +2375,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 
 	/* TODO: Implement per-container locking. */
 	if (opc == CONT_QUERY || opc == CONT_ATTR_GET ||
-	    opc == CONT_ATTR_LIST || opc == CONT_EPOCH_DISCARD
-	    || opc == CONT_SNAP_LIST)
+	    opc == CONT_ATTR_LIST || opc == CONT_SNAP_LIST)
 		ABT_rwlock_rdlock(svc->cs_lock);
 	else
 		ABT_rwlock_wrlock(svc->cs_lock);

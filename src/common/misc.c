@@ -56,7 +56,7 @@ daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 {
 	int	i;
 
-	if (sgl->sg_iovs == NULL)
+	if (sgl == NULL || sgl->sg_iovs == NULL)
 		return;
 
 	for (i = 0; free_iovs && i < sgl->sg_nr; i++) {
@@ -340,7 +340,7 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 void
 daos_iov_free(d_iov_t *iov)
 {
-	if (iov->iov_buf == NULL)
+	if (iov == NULL || iov->iov_buf == NULL)
 		return;
 	D_ASSERT(iov->iov_buf_len > 0);
 
@@ -574,17 +574,17 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 }
 
 void
-daos_dti_gen(struct dtx_id *dti, bool zero)
+daos_dti_gen(struct dtx_id *dti, daos_epoch_t epoch)
 {
 	static __thread uuid_t uuid;
 
-	if (zero) {
+	if (epoch == 0) {
 		memset(dti, 0, sizeof(*dti));
 	} else {
 		if (uuid_is_null(uuid))
 			uuid_generate(uuid);
 
 		uuid_copy(dti->dti_uuid, uuid);
-		dti->dti_hlc = crt_hlc_get();
+		dti->dti_hlc = epoch;
 	}
 }

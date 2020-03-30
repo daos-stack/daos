@@ -53,8 +53,6 @@ int dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		       daos_handle_t *coh);
 int dc_cont_local_close(daos_handle_t ph, daos_handle_t coh);
 
-int dc_tx_check(daos_handle_t th, bool check_write, daos_epoch_t *epoch);
-
 int dc_cont_create(tse_task_t *task);
 int dc_cont_open(tse_task_t *task);
 int dc_cont_close(tse_task_t *task);
@@ -73,14 +71,5 @@ int dc_cont_alloc_oids(tse_task_t *task);
 int dc_cont_list_snap(tse_task_t *task);
 int dc_cont_create_snap(tse_task_t *task);
 int dc_cont_destroy_snap(tse_task_t *task);
-
-int dc_tx_open(tse_task_t *task);
-int dc_tx_commit(tse_task_t *task);
-int dc_tx_abort(tse_task_t *task);
-int dc_tx_open_snap(tse_task_t *task);
-int dc_tx_close(tse_task_t *task);
-int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
-		     daos_handle_t *th);
-int dc_tx_local_close(daos_handle_t th);
 
 #endif /* __DD_CONT_H__ */

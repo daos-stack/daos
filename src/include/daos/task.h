@@ -188,4 +188,21 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 
 void *
 dc_task_get_args(tse_task_t *task);
+
+int
+dc_obj_update_attach(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		     daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		     d_sg_list_t *sgls);
+
+int
+dc_obj_punch_attach(daos_handle_t oh, daos_handle_t th, uint64_t flags);
+
+int
+dc_obj_punch_dkeys_attach(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+			  unsigned int nr, daos_key_t *dkeys);
+
+int
+dc_obj_punch_akeys_attach(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+			  daos_key_t *dkey, unsigned int nr, daos_key_t *akeys);
+
 #endif

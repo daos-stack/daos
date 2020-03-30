@@ -26,6 +26,7 @@
 
 #include <time.h>
 #include <uuid/uuid.h>
+#include <daos_obj.h>
 
 /* If the count of committable DTXs on leader exceeds this threshold,
  * it will trigger batched DTX commit globally. We will optimize the
@@ -53,7 +54,7 @@ struct dtx_conflict_entry {
 	uint64_t		dce_dkey;
 };
 
-void daos_dti_gen(struct dtx_id *dti, bool zero);
+void daos_dti_gen(struct dtx_id *dti, daos_epoch_t epoch);
 
 static inline void
 daos_dti_copy(struct dtx_id *des, struct dtx_id *src)
@@ -74,6 +75,12 @@ static inline bool
 daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 {
 	return memcmp(dti0, dti1, sizeof(*dti0)) == 0;
+}
+
+static inline daos_epoch_t
+daos_dti2epoch(struct dtx_id *dti)
+{
+	return dti->dti_hlc;
 }
 
 #define DF_DTI		DF_UUID"."DF_X64

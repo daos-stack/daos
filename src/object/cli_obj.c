@@ -72,6 +72,7 @@ struct obj_req_tgts {
 /* Auxiliary args for object I/O */
 struct obj_auxi_args {
 	tse_task_t			*obj_task;
+	daos_handle_t			 th;
 	int				 opc;
 	int				 result;
 	uint32_t			 map_ver_req;
@@ -1493,7 +1494,7 @@ dc_io_epoch()
 
 /* check if the obj request is valid */
 static int
-obj_req_valid(void *args, int opc, daos_epoch_t *epoch)
+obj_req_valid(void *args, int opc, daos_epoch_t *epoch, uint32_t *pm_ver)
 {
 	daos_obj_fetch_t	*f_args;
 	daos_obj_update_t	*u_args;
@@ -1515,7 +1516,8 @@ obj_req_valid(void *args, int opc, daos_epoch_t *epoch)
 		if (rc)
 			goto out;
 
-		rc = dc_tx_check(f_args->th, false, epoch);
+		rc = dc_tx_hdl2epoch_with_check(f_args->th, false, epoch,
+						pm_ver);
 		if (rc) {
 			if (rc != -DER_INVAL)
 				D_GOTO(out, rc);
@@ -1538,7 +1540,8 @@ obj_req_valid(void *args, int opc, daos_epoch_t *epoch)
 		if (rc)
 			goto out;
 
-		rc = dc_tx_check(u_args->th, true, epoch);
+		rc = dc_tx_hdl2epoch_with_check(u_args->th, true, epoch,
+						pm_ver);
 		if (rc) {
 			if (rc != -DER_INVAL)
 				D_GOTO(out, rc);
@@ -1552,7 +1555,8 @@ obj_req_valid(void *args, int opc, daos_epoch_t *epoch)
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		p_args = args;
-		rc = dc_tx_check(p_args->th, true, epoch);
+		rc = dc_tx_hdl2epoch_with_check(p_args->th, true, epoch,
+						pm_ver);
 		if (rc) {
 			if (rc != -DER_INVAL)
 				D_GOTO(out, rc);
@@ -1578,7 +1582,8 @@ obj_req_valid(void *args, int opc, daos_epoch_t *epoch)
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
-		rc = dc_tx_check(l_args->th, false, epoch);
+		rc = dc_tx_hdl2epoch_with_check(l_args->th, false, epoch,
+						pm_ver);
 		if (rc) {
 			if (rc != -DER_INVAL)
 				D_GOTO(out, rc);
@@ -2335,7 +2340,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 /* register the completion cb for obj IO request */
 static int
-obj_reg_comp_cb(tse_task_t *task, int opc, uint32_t map_ver,
+obj_reg_comp_cb(tse_task_t *task, int opc, uint32_t map_ver, daos_handle_t th,
 		struct obj_auxi_args **auxi, void *cb_arg, daos_size_t arg_sz)
 {
 	struct obj_auxi_args	*obj_auxi;
@@ -2344,6 +2349,7 @@ obj_reg_comp_cb(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi->opc = opc;
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = task;
+	obj_auxi->th = th;
 	shard_task_list_init(obj_auxi);
 	*auxi = obj_auxi;
 	return tse_task_register_comp_cb(task, obj_comp_cb, cb_arg, arg_sz);
@@ -2364,8 +2370,9 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg->api_args		= obj_args;
 	if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE)
 		daos_dti_gen(&shard_arg->dti,
-			     (srv_io_mode != DIM_DTX_FULL_ENABLED) ||
-			     daos_obj_is_echo(obj->cob_md.omd_id));
+			     ((srv_io_mode != DIM_DTX_FULL_ENABLED) ||
+			      daos_obj_is_echo(obj->cob_md.omd_id)) ? 0 :
+			     crt_hlc_get());
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;
 	if (obj_auxi->req_reasbed) {
@@ -2529,13 +2536,13 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
 	uint8_t                 *tgt_bitmap = NIL_BITMAP;
-	unsigned int		 map_ver;
+	unsigned int		 map_ver = 0;
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
 	int			 rc;
 	uint8_t                  csum_bitmap = 0;
 
-	rc = obj_req_valid(args, DAOS_OBJ_RPC_FETCH, &epoch);
+	rc = obj_req_valid(args, DAOS_OBJ_RPC_FETCH, &epoch, &map_ver);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 	D_ASSERT(epoch);
@@ -2543,14 +2550,17 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 	obj = obj_hdl2ptr(args->oh);
 	if (obj == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
-	rc = obj_ptr2pm_ver(obj, &map_ver);
-	if (rc) {
-		obj_decref(obj);
-		D_GOTO(out_task, rc);
+
+	if (map_ver == 0) {
+		rc = obj_ptr2pm_ver(obj, &map_ver);
+		if (rc != 0) {
+			obj_decref(obj);
+			D_GOTO(out_task, rc);
+		}
 	}
 
-	rc = obj_reg_comp_cb(task, DAOS_OBJ_RPC_FETCH, map_ver, &obj_auxi,
-			     &obj, sizeof(obj));
+	rc = obj_reg_comp_cb(task, DAOS_OBJ_RPC_FETCH, map_ver, args->th,
+			     &obj_auxi, &obj, sizeof(obj));
 	if (rc != 0) {
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
@@ -2650,12 +2660,12 @@ dc_obj_update(tse_task_t *task)
 	daos_obj_update_t	*args = dc_task_get_args(task);
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
-	unsigned int		 map_ver;
+	unsigned int		 map_ver = 0;
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
 	int			 rc;
 
-	rc = obj_req_valid(args, DAOS_OBJ_RPC_UPDATE, &epoch);
+	rc = obj_req_valid(args, DAOS_OBJ_RPC_UPDATE, &epoch, &map_ver);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 	D_ASSERT(epoch);
@@ -2666,14 +2676,17 @@ dc_obj_update(tse_task_t *task)
 		rc = -DER_NO_HDL;
 		goto out_task;
 	}
-	rc = obj_ptr2pm_ver(obj, &map_ver);
-	if (rc) {
-		obj_decref(obj);
-		goto out_task;
+
+	if (map_ver == 0) {
+		rc = obj_ptr2pm_ver(obj, &map_ver);
+		if (rc != 0) {
+			obj_decref(obj);
+			goto out_task;
+		}
 	}
 
-	rc = obj_reg_comp_cb(task, DAOS_OBJ_RPC_UPDATE, map_ver, &obj_auxi,
-			     &obj, sizeof(obj));
+	rc = obj_reg_comp_cb(task, DAOS_OBJ_RPC_UPDATE, map_ver, args->th,
+			     &obj_auxi, &obj, sizeof(obj));
 	if (rc != 0) {
 		obj_decref(obj);
 		goto out_task;
@@ -2744,14 +2757,14 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 {
 	struct dc_object	*obj;
 	struct obj_auxi_args	*obj_auxi;
-	unsigned int		 map_ver;
+	unsigned int		 map_ver = 0;
 	struct obj_list_arg	 list_args;
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
 	int			 shard = -1;
 	int			 rc;
 
-	rc = obj_req_valid(args, opc, &epoch);
+	rc = obj_req_valid(args, opc, &epoch, &map_ver);
 	if (rc)
 		goto out_task;
 	D_ASSERT(epoch);
@@ -2761,18 +2774,21 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 		rc = -DER_NO_HDL;
 		goto out_task;
 	}
-	rc = obj_ptr2pm_ver(obj, &map_ver);
-	if (rc) {
-		obj_decref(obj);
-		goto out_task;
+
+	if (map_ver == 0) {
+		rc = obj_ptr2pm_ver(obj, &map_ver);
+		if (rc != 0) {
+			obj_decref(obj);
+			goto out_task;
+		}
 	}
 
 	list_args.obj = obj;
 	list_args.anchor = args->anchor;
 	list_args.dkey_anchor = args->dkey_anchor;
 	list_args.akey_anchor = args->akey_anchor;
-	rc = obj_reg_comp_cb(task, opc, map_ver, &obj_auxi, &list_args,
-			     sizeof(list_args));
+	rc = obj_reg_comp_cb(task, opc, map_ver, args->th, &obj_auxi,
+			     &list_args, sizeof(list_args));
 	if (rc != 0) {
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
@@ -2886,7 +2902,8 @@ shard_punch_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	obj_args = dc_task_get_args(obj_auxi->obj_task);
 	shard_arg = container_of(shard_auxi, struct shard_punch_args, pa_auxi);
 	shard_arg->pa_api_args		= obj_args;
-	daos_dti_gen(&shard_arg->pa_dti, srv_io_mode != DIM_DTX_FULL_ENABLED);
+	daos_dti_gen(&shard_arg->pa_dti,
+		     srv_io_mode != DIM_DTX_FULL_ENABLED ? 0 : crt_hlc_get());
 	shard_arg->pa_opc		= obj_auxi->opc;
 	shard_arg->pa_dkey_hash		= dkey_hash;
 	uuid_copy(shard_arg->pa_coh_uuid, coh_uuid);
@@ -2901,12 +2918,12 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 {
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
-	unsigned int		 map_ver;
+	unsigned int		 map_ver = 0;
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
 	int			 rc;
 
-	rc = obj_req_valid(api_args, opc, &epoch);
+	rc = obj_req_valid(api_args, opc, &epoch, &map_ver);
 	if (rc)
 		goto out_task;
 	D_ASSERT(epoch);
@@ -2916,13 +2933,17 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 		rc = -DER_NO_HDL;
 		goto out_task;
 	}
-	rc = obj_ptr2pm_ver(obj, &map_ver);
-	if (rc) {
-		obj_decref(obj);
-		goto out_task;
+
+	if (map_ver == 0) {
+		rc = obj_ptr2pm_ver(obj, &map_ver);
+		if (rc != 0) {
+			obj_decref(obj);
+			goto out_task;
+		}
 	}
 
-	rc = obj_reg_comp_cb(task, opc, map_ver, &obj_auxi, &obj, sizeof(obj));
+	rc = obj_reg_comp_cb(task, opc, map_ver, api_args->th, &obj_auxi,
+			     &obj, sizeof(obj));
 	if (rc) {
 		obj_decref(obj);
 		goto out_task;
@@ -3154,7 +3175,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	uuid_t			cont_uuid;
 	int			shard_first;
 	unsigned int		replicas;
-	unsigned int		map_ver;
+	unsigned int		map_ver = 0;
 	uint64_t		dkey_hash;
 	daos_epoch_t            epoch;
 	int			i = 0;
@@ -3164,7 +3185,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	D_ASSERTF(api_args != NULL,
 		  "Task Argument OPC does not match DC OPC\n");
 
-	rc = dc_tx_check(api_args->th, false, &epoch);
+	rc = dc_tx_hdl2epoch_with_check(api_args->th, false, &epoch, &map_ver);
 	if (rc) {
 		if (rc != -DER_INVAL)
 			goto out_task;
@@ -3189,6 +3210,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	obj_auxi->opc = DAOS_OBJ_RPC_QUERY_KEY;
 	shard_task_list_init(obj_auxi);
 
+	obj_auxi->th = api_args->th;
 	rc = tse_task_register_comp_cb(api_task, obj_comp_cb, &obj,
 				       sizeof(obj));
 	if (rc) {
@@ -3205,9 +3227,11 @@ dc_obj_query_key(tse_task_t *api_task)
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	rc = obj_ptr2pm_ver(obj, &map_ver);
-	if (rc)
-		D_GOTO(out_task, rc);
+	if (map_ver == 0) {
+		rc = obj_ptr2pm_ver(obj, &map_ver);
+		if (rc != 0)
+			D_GOTO(out_task, rc);
+	}
 
 	D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
 	dkey_hash = obj_dkey2hash(api_args->dkey);
@@ -3358,8 +3382,8 @@ dc_obj_sync(tse_task_t *task)
 		D_GOTO(out_task, rc);
 	}
 
-	rc = obj_reg_comp_cb(task, DAOS_OBJ_RPC_SYNC, map_ver, &obj_auxi,
-			     &obj, sizeof(obj));
+	rc = obj_reg_comp_cb(task, DAOS_OBJ_RPC_SYNC, map_ver,
+			     DAOS_HDL_INVAL, &obj_auxi, &obj, sizeof(obj));
 	if (rc != 0) {
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
