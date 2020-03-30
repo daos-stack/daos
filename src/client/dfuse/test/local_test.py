@@ -171,16 +171,17 @@ class DFuse():
 
         cmd = ['valgrind', '--quiet']
 
-        if False:
+        if True:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
 
         if True:
-            cmd.extend(['--suppressions={}'.format(os.path.join(self._conf['CART_PREFIX'], 'etc', 'memcheck-cart.supp')),
-                        '--suppressions={}'.format(os.path.join('utils', 'memcheck-daos-client.supp'))])
+            cmd.extend(['--suppressions={}'.format(os.path.join('src',
+                                                                'cart',
+                                                                'utils',
+                                                                'memcheck-cart.supp')),
+                        '--suppressions={}'.format(os.path.join('utils',
+                                                                'memcheck-daos-client.supp'))])
 
-#        if self.container:
-#            cmd.extend([dfuse_bin, '-s', '0', '-m', 'bob', '-f'])
-#        else:
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
 
         if single_threaded:
@@ -298,6 +299,8 @@ def show_cont(conf, pool):
     return rc.stdout.strip()
 
 def make_pool(daos, conf):
+
+    time.sleep(20)
 
     daos_raw = __import__('pydaos.raw')
 
@@ -474,14 +477,12 @@ EFILES=['src/common/misc.c',
 
 def log_test(conf, filename):
 
-    if not sys.path:
-        return
-    if 'CART_PREFIX' in conf:
-        sys.path.append(os.path.join(conf['CART_PREFIX'], 'TESTING', 'util'))
-    else:
-        file_self = os.path.dirname(os.path.abspath(__file__))
-        logparse_dir = os.path.join(os.dirname(file_self, '../../../../src/cart/util/test')
-        sys.path.append(os.realpath(logparse_dir)
+    file_self = os.path.dirname(os.path.abspath(__file__))
+    logparse_dir = os.path.join(os.path.dirname(file_self), '../../../src/cart/test/util')
+    crt_mod_dir = os.path.realpath(logparse_dir)
+    print('cart dir is', crt_mod_dir)
+    if crt_mod_dir not in sys.path:
+        sys.path.append(crt_mod_dir)
 
     lp = __import__('cart_logparse')
     lt = __import__('cart_logtest')
