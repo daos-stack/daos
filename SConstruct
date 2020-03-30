@@ -386,6 +386,9 @@ def scons():
     # install certificate generation files
     SConscript('utils/certs/SConscript')
 
+    # install man pages
+    SConscript('doc/man/SConscript')
+
     Default(build_prefix)
     Depends('install', build_prefix)
 
