@@ -59,7 +59,7 @@ import shlex
 import string
 
 build_root = os.path.join(sys.path[0], "../../../")
-sys.path.insert(0, os.path.join(build_root, "scons_local"))
+sys.path.insert(0, os.path.join(build_root, "utils/sl"))
 from build_info import BuildInfo
 from env_modules import load_mpi
 from distutils.spawn import find_executable

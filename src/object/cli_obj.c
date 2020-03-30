@@ -2364,7 +2364,8 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg->api_args		= obj_args;
 	if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE)
 		daos_dti_gen(&shard_arg->dti,
-			     srv_io_mode != DIM_DTX_FULL_ENABLED);
+			     (srv_io_mode != DIM_DTX_FULL_ENABLED) ||
+			     daos_obj_is_echo(obj->cob_md.omd_id));
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;
 	if (obj_auxi->req_reasbed) {

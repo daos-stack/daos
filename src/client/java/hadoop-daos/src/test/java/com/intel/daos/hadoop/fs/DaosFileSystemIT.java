@@ -54,4 +54,11 @@ public class DaosFileSystemIT {
     fs.initialize(URI.create(initializationUri), DaosUtils.getConfiguration());
     Assert.assertEquals(URI.create(expectedUri), fs.getUri());
   }
+
+  @AfterClass
+  public static void teardown() throws Exception {
+    if (fs != null) {
+      fs.close();
+    }
+  }
 }

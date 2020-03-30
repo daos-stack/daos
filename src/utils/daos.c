@@ -717,7 +717,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	if (ap->c_op != -1 &&
 	    (ap->c_op == CONT_LIST_OBJS ||
 	     ap->c_op == CONT_STAT ||
-	     ap->c_op == CONT_SET_PROP ||
 	     ap->c_op == CONT_DEL_ATTR ||
 	     ap->c_op == CONT_ROLLBACK)) {
 		fprintf(stderr,
@@ -911,7 +910,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_get_prop_hdlr(ap);
 		break;
 	case CONT_SET_PROP:
-		/* rc = cont_set_prop_hdlr(ap); */
+		rc = cont_set_prop_hdlr(ap);
 		break;
 	case CONT_LIST_ATTRS:
 		rc = cont_list_attrs_hdlr(ap);
@@ -1116,6 +1115,8 @@ help_hdlr(struct cmd_args_s *ap)
 "	  list-objects     list all objects in container\n"
 "	  list-obj\n"
 "	  query            query a container\n"
+"	  get-prop         get a container's properties\n"
+"	  set-prop         set a container's properties\n"
 "	  get-acl          get a container's ACL\n"
 "	  overwrite-acl    replace a container's ACL\n"
 "	  update-acl       add/modify entries in a container's ACL\n"
@@ -1196,6 +1197,10 @@ help_hdlr(struct cmd_args_s *ap)
 "	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 "	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
 "	--eprange=B-E      container epoch range (destroy-snap)\n"
+"container options (set-prop):\n"
+"	--properties=<name>:<value>[,<name>:<value>,...]\n"
+"			   supported prop names: label\n"
+"			   label value can be any string\n"
 "container options (ACL-related):\n"
 "	--acl-file=PATH    input file containing ACL (overwrite-acl, "
 "			   update-acl)\n"

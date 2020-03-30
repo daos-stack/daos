@@ -34,7 +34,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -87,6 +86,10 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 // GetMSLeaderInstance returns a managed IO Server instance to be used as a
 // management target and fails if selected instance is not MS Leader.
 func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
+	if !h.IsStarted() {
+		return nil, FaultHarnessNotStarted
+	}
+
 	h.RLock()
 	defer h.RUnlock()
 
@@ -239,7 +242,7 @@ func (h *IOServerHarness) startInstances(ctx context.Context, membership *system
 //
 // Iterate over instances and call Stop(sig) on each, return when all instances
 // exit or err context is done. Error map returned for each rank stop attempt failure.
-func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...ioserver.Rank) (map[ioserver.Rank]error, error) {
+func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...system.Rank) (map[system.Rank]error, error) {
 	if !h.IsStarted() {
 		return nil, nil
 	}
@@ -249,7 +252,7 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 
 	instances := h.Instances()
 	type rankRes struct {
-		rank ioserver.Rank
+		rank system.Rank
 		err  error
 	}
 	resChan := make(chan rankRes, len(instances))
@@ -265,7 +268,7 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 		}
 
 		if !checkRankList(rank, rankList) {
-			h.log.Debugf("rank %d not in requested list, skipping...", rank.Uint32())
+			h.log.Debugf("rank %d not in requested list, skipping...", rank)
 			continue // filtered out, no result expected
 		}
 
@@ -280,7 +283,7 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 		stopping++
 	}
 
-	stopErrors := make(map[ioserver.Rank]error)
+	stopErrors := make(map[system.Rank]error)
 	if stopping == 0 {
 		return stopErrors, nil
 	}
@@ -474,11 +477,11 @@ func (h *IOServerHarness) IsStarted() bool {
 
 // StartedRanks returns rank assignment of configured harness instances that are
 // in a running state. Rank assignments can be nil.
-func (h *IOServerHarness) StartedRanks() []*ioserver.Rank {
+func (h *IOServerHarness) StartedRanks() []*system.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]*ioserver.Rank, 0, maxIOServers)
+	ranks := make([]*system.Rank, 0, maxIOServers)
 	for _, i := range h.instances {
 		if i.hasSuperblock() && i.IsStarted() {
 			ranks = append(ranks, i.getSuperblock().Rank)

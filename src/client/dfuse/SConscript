@@ -164,6 +164,7 @@ def scons():
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
+    cenv.AppendUnique(LIBS=['gurt'])
     progs = daos_build.program(cenv, 'dfuse/dfuse', common + dfuse_obj)
 
     Default(progs + libs)
