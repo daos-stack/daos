@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.9.1
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -312,6 +312,8 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos.yml
 %{_unitdir}/daos_agent.service
+%{_mandir}/man8/daos.8*
+%{_mandir}/man8/dmg.8*
 
 %files tests
 %dir %{_prefix}/lib/daos
@@ -337,6 +339,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Fri Mar 27 2020 David Quigley <david.quigley@intel.com> - 0.9.1-2
+- add daos and dmg man pages to the daos-client files list
+
 * Wed Mar 18 2020 Johann Lombardi <johann.lombardi@intel.com> - 0.9.1-1
 - Version bump up to 0.9.1
 
