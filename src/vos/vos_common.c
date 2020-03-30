@@ -386,6 +386,7 @@ vos_init(void)
 		rc = set_abt_thread_stacksize(32768);
 		if (rc != 0) {
 			D_ERROR("failed to set ABT_THREAD_STACKSIZE: %d\n", rc);
+			D_MUTEX_UNLOCK(&mutex);
 			return rc;
 		}
 	}
