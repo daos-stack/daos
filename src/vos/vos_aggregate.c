@@ -1167,8 +1167,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		 * The physical entry spans window end, but is fully covered
 		 * in current window, keep it intact.
 		 */
-		if ((rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
-		    !phy_ent->pe_trunc_head) || !phy_ent->pe_retain) {
+		if (rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
+		    !phy_ent->pe_trunc_head) {
 			leftovers++;
 			continue;
 		}
