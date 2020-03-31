@@ -593,7 +593,8 @@ setup_obj_data_for_sv(struct csum_test_ctx *ctx, bool large_buf)
 
 /** Fill an iov buf with data, using \data (duplicate if necessary)
  */
-static void iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill)
+static void
+iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill)
 {
 	iov->iov_len = len_to_fill;
 	const size_t data_len = strlen(data); /** don't include '\0' */
@@ -771,6 +772,19 @@ fetch_with_multiple_extents(void **state)
 			{.idx = 1500, .nr = 512, .data = "D"},
 		},
 		.fetch_recx = {.rx_idx = 2, .rx_nr = 800},
+	});
+
+	/** Overwrites after the first chunk */
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 32,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 4,
+		.recx_cfgs = {
+			{.idx = 8, .nr = 2, .data = "B"},
+			{.idx = 9, .nr = 2, .data = "C"},
+		},
+		.fetch_recx = {.rx_idx = 8, .rx_nr = 3},
 	});
 
 	/** Extents with holes */
