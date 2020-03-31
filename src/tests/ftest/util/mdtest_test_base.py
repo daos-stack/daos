@@ -83,7 +83,7 @@ class MdtestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-                self.dfuse = None
+            self.dfuse = None
         finally:
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
@@ -97,12 +97,8 @@ class MdtestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-    def _create_cont(self, doas_cmd):
+    def _create_cont(self):
         """Create a container.
-
-        Args:
-            daos_cmd (DaosCommand): doas command to issue the container
-                create
 
         Returns:
             str: UUID of the created container
@@ -133,7 +129,7 @@ class MdtestBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self._create_cont(self.daos_cmd))
+        self.dfuse.set_dfuse_cont_param(self._create_cont())
 
         try:
             # start dfuse
