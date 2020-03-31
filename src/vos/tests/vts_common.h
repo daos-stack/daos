@@ -125,7 +125,7 @@ int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators);
 int run_ts_tests(void);
 
 int run_ilog_tests(void);
-
 int run_csum_extent_tests(void);
+int run_mvcc_tests(void);
 
 #endif

@@ -9,8 +9,6 @@ def scons():
     denv = env.Clone()
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
-    prereqs.require(denv, 'cart')
-
     daos_extra_files = denv.Object('daos_hdlr.c')
 
     dmg_old = daos_build.program(denv, 'dmg_old', 'dmg.c', LIBS=libs)

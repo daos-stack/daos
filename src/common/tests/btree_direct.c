@@ -959,6 +959,7 @@ sk_btr_batch_oper(void **state)
 		}
 	}
 	sk_btr_query(NULL);
+	D_FREE(kv);
 }
 
 static void
