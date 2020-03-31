@@ -367,8 +367,7 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info)
 /** Fetch the single value within the specified epoch range of an key */
 static int
 akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
-		  daos_size_t *rsize, daos_size_t *gsize,
-		  struct vos_io_context *ioc)
+		  daos_size_t *rsize, struct vos_io_context *ioc)
 {
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
@@ -409,8 +408,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	if (rc != 0)
 		goto out;
 
-	*rsize = rbund.rb_rsize;
-	*gsize = rbund.rb_gsize;
+	*rsize = rbund.rb_gsize;
 out:
 	return rc;
 }
@@ -653,8 +651,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size,
-				       &iod->iod_size, ioc);
+		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size, ioc);
 		goto out;
 	}
 

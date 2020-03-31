@@ -185,7 +185,7 @@ out_task:
 }
 
 int
-dc_mgmt_profile(uint64_t modules, char *path, bool start)
+dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;
 	struct mgmt_profile_in	*in;
@@ -215,6 +215,7 @@ dc_mgmt_profile(uint64_t modules, char *path, bool start)
 	in = crt_req_get(rpc);
 	in->p_module = modules;
 	in->p_path = path;
+	in->p_avg = avg;
 	in->p_op = start ? MGMT_PROFILE_START : MGMT_PROFILE_STOP;
 	/** send the request */
 	rc = daos_rpc_send_wait(rpc);

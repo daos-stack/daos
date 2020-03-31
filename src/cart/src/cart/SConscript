@@ -89,20 +89,21 @@ def scons():
     Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
+    env.AppendUnique(CPPPATH=[Dir('../gurt').srcnode()])
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=['#/src/cart'])
     denv.AppendUnique(LIBS=['gurt'])
     prereqs.require(denv, 'mercury')
-    denv.AppendUnique(RPATH=['$PREFIX/lib'])
 
     cart_targets = denv.SharedObject(SRC)
 
     compiler = env.get('COMPILER').lower()
     if compiler != 'covc':
         pp_env = Environment(TOOLS=['default', 'extra'])
-        pp_env.AppendUnique(CPPPATH=['src/include', 'src/cart'])
+        pp_env.AppendUnique(CPPPATH=[Dir('../include').srcnode(),
+                                     Dir('.').srcnode()])
         prereqs.require(pp_env, 'mercury', headers_only=True)
 
         # pylint: disable=no-member
@@ -115,7 +116,7 @@ def scons():
     cart_lib = denv.SharedLibrary('libcart', [cart_targets, swim_targets],
                                   SHLIBVERSION=CART_VERSION)
     denv.Requires(cart_lib, [swim_targets, gurt_lib])
-    denv.InstallVersionedLib('$PREFIX/lib/', cart_lib,
+    denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib,
                              SHLIBVERSION=CART_VERSION)
 
     Default(cart_lib)

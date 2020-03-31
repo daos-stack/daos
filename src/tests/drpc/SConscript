@@ -4,7 +4,7 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    libs = ['$LIBS', 'daos_common']
+    libs = ['$LIBS', 'daos_common', 'gurt']
     sources = ['drpc_test.c', 'drpc_test.pb-c.c']
 
     denv = env.Clone()
