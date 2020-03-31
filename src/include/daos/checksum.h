@@ -111,15 +111,17 @@ enum DAOS_CSUM_TYPE daos_contprop2csumtype(int contprop_csum_val);
 struct csum_ft;
 struct daos_csummer {
 	/** Size of csum_buf. */
-	uint32_t dcs_csum_buf_size;
+	uint32_t	 dcs_csum_buf_size;
 	/** Cached configuration for chunk size*/
-	uint32_t dcs_chunk_size;
+	uint32_t	 dcs_chunk_size;
 	/** Pointer to the function table to be used for calculating csums */
-	struct csum_ft *dcs_algo;
+	struct csum_ft	*dcs_algo;
 	/** Pointer to function table specific contexts */
-	void *dcs_ctx;
+	void		*dcs_ctx;
 	/** Points to the buffer where the  calculated csum is to be written */
-	uint8_t *dcs_csum_buf;
+	uint8_t		*dcs_csum_buf;
+	/* [todo-ryon]: align struct */
+	bool		 dcs_srv_verify;
 };
 
 struct csum_ft {
@@ -163,7 +165,7 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type);
  */
 int
 daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
-		  size_t chunk_bytes);
+		  size_t chunk_bytes, bool srv_verify);
 
 /**
  * Initialize the daos_csummer with a known DAOS_CSUM_TYPE
@@ -177,7 +179,7 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
  */
 int
 daos_csummer_type_init(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
-		  size_t chunk_bytes);
+		       size_t chunk_bytes, bool srv_verify);
 
 /** Destroy the daos_csummer */
 void

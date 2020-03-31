@@ -466,7 +466,7 @@ dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
 	chunksize = daos_cont_prop2chunksize(props);
 	daos_csummer_init(&cont->dc_csummer,
 			  daos_csum_type2algo(csum_type),
-			  chunksize);
+			  chunksize, 0);
 }
 
 struct cont_open_args {
@@ -1775,7 +1775,7 @@ csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
 	csum_algo = daos_csum_type2algo(cont_glob->dcg_csum_type);
 	if (csum_algo != NULL)
 		daos_csummer_init(&cont->dc_csummer, csum_algo,
-				  cont_glob->dcg_csum_chunksize);
+				  cont_glob->dcg_csum_chunksize, 0);
 	else
 		cont->dc_csummer = NULL;
 }
