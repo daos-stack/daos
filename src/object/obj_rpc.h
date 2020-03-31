@@ -140,6 +140,7 @@ struct obj_iod_array {
 	/* number obj iods (oia_oiods) */
 	uint32_t		 oia_oiod_nr;
 	daos_iod_t		*oia_iods;
+	struct dcs_iod_csums	*oia_iod_csums;
 	struct obj_io_desc	*oia_oiods;
 	/* byte offset array for target, need this info after RPC dispatched
 	 * to specific target server as there is no oiod info already.
@@ -156,6 +157,7 @@ struct obj_iod_array {
 	((uuid_t)		(orw_co_hdl)		CRT_VAR) \
 	((uuid_t)		(orw_co_uuid)		CRT_VAR) \
 	((uint64_t)		(orw_epoch)		CRT_VAR) \
+	((uint64_t)		(orw_api_flags)		CRT_VAR) \
 	((uint64_t)		(orw_dkey_hash)		CRT_VAR) \
 	((uint32_t)		(orw_map_ver)		CRT_VAR) \
 	((uint32_t)		(orw_nr)		CRT_VAR) \
@@ -164,7 +166,6 @@ struct obj_iod_array {
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
 	((struct dcs_csum_info)	(orw_dkey_csum)		CRT_PTR) \
 	((struct obj_iod_array)	(orw_iod_array)		CRT_VAR) \
-	((struct dcs_iod_csums)	(orw_iod_csums)		CRT_ARRAY) \
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
@@ -179,7 +180,7 @@ struct obj_iod_array {
 	((daos_size_t)		(orw_data_sizes)	CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
-	((struct dcs_iod_csums)	(orw_iod_csum)		CRT_ARRAY)
+	((struct dcs_iod_csums)	(orw_iod_csums)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_update,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
@@ -229,6 +230,7 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 	((uuid_t)		(opi_co_uuid)		CRT_VAR) \
 	((daos_unit_oid_t)	(opi_oid)		CRT_VAR) \
 	((uint64_t)		(opi_epoch)		CRT_VAR) \
+	((uint64_t)		(opi_api_flags)		CRT_VAR) \
 	((uint64_t)		(opi_dkey_hash)		CRT_VAR) \
 	((uint32_t)		(opi_map_ver)		CRT_VAR) \
 	((uint32_t)		(opi_flags)		CRT_VAR) \

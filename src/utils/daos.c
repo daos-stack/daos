@@ -88,6 +88,8 @@ cont_op_parse(const char *str)
 		return CONT_UPDATE_ACL;
 	else if (strcmp(str, "delete-acl") == 0)
 		return CONT_DELETE_ACL;
+	else if (strcmp(str, "set-owner") == 0)
+		return CONT_SET_OWNER;
 	return -1;
 }
 
@@ -167,9 +169,14 @@ tobytes(const char *str)
 	daos_size_t	 size;
 	char		*end;
 
+	if (str == NULL) {
+		fprintf(stderr, "passed NULL string\n");
+		return 0;
+	}
+
 	size = strtoull(str, &end, 0);
 	/* Prevent negative numbers from turning into unsigned */
-	if (str != NULL && str[0] == '-') {
+	if (str[0] == '-') {
 		fprintf(stderr, "WARNING bytes < 0 (string %s)"
 				"converted to "DF_U64" : using 0 instead\n",
 				str, size);
@@ -710,7 +717,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	if (ap->c_op != -1 &&
 	    (ap->c_op == CONT_LIST_OBJS ||
 	     ap->c_op == CONT_STAT ||
-	     ap->c_op == CONT_SET_PROP ||
 	     ap->c_op == CONT_DEL_ATTR ||
 	     ap->c_op == CONT_ROLLBACK)) {
 		fprintf(stderr,
@@ -904,7 +910,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_get_prop_hdlr(ap);
 		break;
 	case CONT_SET_PROP:
-		/* rc = cont_set_prop_hdlr(ap); */
+		rc = cont_set_prop_hdlr(ap);
 		break;
 	case CONT_LIST_ATTRS:
 		rc = cont_list_attrs_hdlr(ap);
@@ -941,6 +947,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case CONT_DELETE_ACL:
 		rc = cont_delete_acl_hdlr(ap);
+		break;
+	case CONT_SET_OWNER:
+		rc = cont_set_owner_hdlr(ap);
 		break;
 	default:
 		break;
@@ -1106,10 +1115,13 @@ help_hdlr(struct cmd_args_s *ap)
 "	  list-objects     list all objects in container\n"
 "	  list-obj\n"
 "	  query            query a container\n"
+"	  get-prop         get a container's properties\n"
+"	  set-prop         set a container's properties\n"
 "	  get-acl          get a container's ACL\n"
 "	  overwrite-acl    replace a container's ACL\n"
 "	  update-acl       add/modify entries in a container's ACL\n"
 "	  delete-acl       delete an entry from a container's ACL\n"
+"	  set-owner        change the user and/or group that own a container\n"
 "	  stat             get container statistics\n"
 "	  list-attrs       list container user-defined attributes\n"
 "	  del-attr         delete container user-defined attribute\n"
@@ -1185,6 +1197,10 @@ help_hdlr(struct cmd_args_s *ap)
 "	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 "	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
 "	--eprange=B-E      container epoch range (destroy-snap)\n"
+"container options (set-prop):\n"
+"	--properties=<name>:<value>[,<name>:<value>,...]\n"
+"			   supported prop names: label\n"
+"			   label value can be any string\n"
 "container options (ACL-related):\n"
 "	--acl-file=PATH    input file containing ACL (overwrite-acl, "
 "			   update-acl)\n"
@@ -1194,7 +1210,12 @@ help_hdlr(struct cmd_args_s *ap)
 "			   for groups: g:name@[domain]\n"
 "			   special principals: OWNER@, GROUP@, EVERYONE@\n"
 "	--verbose          verbose mode (get-acl)\n"
-"	--outfile=PATH     write ACL to file (get-acl)\n");
+"	--outfile=PATH     write ACL to file (get-acl)\n"
+"container options (set-owner):\n"
+"	--user=ID          user who will own the container.\n"
+"			   format: username@[domain]\n"
+"	--group=ID         group who will own the container.\n"
+"			   format: groupname@[domain]\n");
 
 	fprintf(stream, "\n"
 "object (obj) commands:\n"

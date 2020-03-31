@@ -410,7 +410,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 			&ring_domain_ver_sops);
 
 	ver = buf->rb_domains[0].rd_comp->co_ver;
-	merged = &scratch[buf->rb_domain_nr];
+	merged = scratch + buf->rb_domain_nr;
 
 	for (i = start = 0; i < buf->rb_domain_nr; i++) {
 		struct pool_component	 *comp;
@@ -562,6 +562,7 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 	if (rc != 0)
 		return rc;
 
+	D_ASSERT(buf != NULL);
 	rimap->rmp_domain_nr = buf->rb_domain_nr;
 	rimap->rmp_target_nr = buf->rb_target_nr;
 
@@ -574,8 +575,7 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 	D_DEBUG(DB_PL, "Built %d rings for placement map\n",
 		rimap->rmp_ring_nr);
  out:
-	if (buf != NULL)
-		ring_buf_destroy(buf);
+	ring_buf_destroy(buf);
 	return rc;
 }
 

@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
@@ -44,19 +45,6 @@ type storagePrepareCmd struct {
 	scs *server.StorageControlService
 	logCmd
 	commands.StoragePrepareCmd
-}
-
-func concatErrors(scanErrors []error, err error) error {
-	if err != nil {
-		scanErrors = append(scanErrors, err)
-	}
-
-	errStr := "scan error(s):\n"
-	for _, err := range scanErrors {
-		errStr += fmt.Sprintf("  %s\n", err.Error())
-	}
-
-	return errors.New(errStr)
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
@@ -101,21 +89,21 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	scmScan, err := cmd.scs.ScmScan()
 	if err != nil {
-		return concatErrors(scanErrors, err)
+		return common.ConcatErrors(scanErrors, err)
 	}
 
 	if prepScm && len(scmScan.Modules) > 0 {
 		cmd.log.Info(op + " locally-attached SCM...")
 
 		if err := cmd.CheckWarn(cmd.log, scmScan.State); err != nil {
-			return concatErrors(scanErrors, err)
+			return common.ConcatErrors(scanErrors, err)
 		}
 
 		// Prepare SCM modules to be presented as pmem device files.
 		// Pass evaluated state to avoid running GetScmState() twice.
 		resp, err := cmd.scs.ScmPrepare(scm.PrepareRequest{Reset: cmd.Reset})
 		if err != nil {
-			return concatErrors(scanErrors, err)
+			return common.ConcatErrors(scanErrors, err)
 		}
 		if resp.RebootRequired {
 			cmd.log.Info(scm.MsgScmRebootRequired)
@@ -129,7 +117,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	if len(scanErrors) > 0 {
-		return concatErrors(scanErrors, nil)
+		return common.ConcatErrors(scanErrors, nil)
 	}
 
 	return nil

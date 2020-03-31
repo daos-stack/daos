@@ -27,7 +27,7 @@ import threading
 import time
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers
+from apricot import TestWithServers, get_log_file
 from ior_utils import IorCommand
 from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
@@ -108,7 +108,9 @@ class IorTestBase(TestWithServers):
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, True)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
+                           log_file=get_log_file(self.client_log),
+                           dfuse_env=True)
         self.dfuse.get_params(self)
 
         # update dfuse params
@@ -197,16 +199,19 @@ class IorTestBase(TestWithServers):
             intercept (str): path to interception library.
         """
         env = self.ior_cmd.get_default_env(
-            str(manager), self.tmp, self.client_log)
+            str(manager), get_log_file(self.client_log))
         if intercept:
             env["LD_PRELOAD"] = intercept
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
+            self.pool.display_pool_daos_space()
             out = manager.run()
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
+        finally:
+            self.pool.display_pool_daos_space()
 
     def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.
@@ -279,12 +284,13 @@ class IorTestBase(TestWithServers):
         manager = self.get_job_manager_command()
         procs = (self.processes // len(self.hostlist_clients)) * num_clients
         env = self.ior_cmd.get_default_env(
-            str(manager), self.tmp, self.client_log)
+            str(manager), get_log_file(self.client_log))
         if intercept:
             env["LD_PRELOAD"] = intercept
         manager.setup_command(env, hostfile, procs)
         self.lock.release()
         try:
+            self.pool.display_pool_daos_space()
             out = manager.run()
             self.lock.acquire(True)
             results[job_num] = IorCommand.get_ior_metrics(out)
@@ -292,6 +298,8 @@ class IorTestBase(TestWithServers):
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
+        finally:
+            self.pool.display_pool_daos_space()
 
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.

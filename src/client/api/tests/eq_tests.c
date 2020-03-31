@@ -988,7 +988,6 @@ main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	setenv("DAOS_SINGLETON_CLI", "1", 1);
 	setenv("OFI_INTERFACE", "lo", 1);
 
 	rc = daos_debug_init(NULL);

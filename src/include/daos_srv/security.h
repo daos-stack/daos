@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,6 +118,32 @@ bool
 ds_sec_pool_can_connect(uint64_t pool_capas);
 
 /**
+ * Determine if a pool handle with given security capabilities can create a
+ * container.
+ *
+ * \param	pool_capas	Capability bits acquired via
+ *				ds_sec_pool_get_capabilities
+ *
+ * \return	True		Operation allowed
+ *		False		Operation forbidden
+ */
+bool
+ds_sec_pool_can_create_cont(uint64_t pool_capas);
+
+/**
+ * Determine if a pool handle with given security capabilities can delete a
+ * container.
+ *
+ * \param	pool_capas	Capability bits acquired via
+ *				ds_sec_pool_get_capabilities
+ *
+ * \return	True		Operation allowed
+ *		False		Operation forbidden
+ */
+bool
+ds_sec_pool_can_delete_cont(uint64_t pool_capas);
+
+/**
  * Determine if the container can be opened based on the calculated set of
  * container capabilities.
  *
@@ -129,5 +155,121 @@ ds_sec_pool_can_connect(uint64_t pool_capas);
  */
 bool
 ds_sec_cont_can_open(uint64_t cont_capas);
+
+/**
+ * Determine if the container can be deleted by the user with the given
+ * credential, based on the container ACL and ownership information.
+ *
+ * \param	pool_flags	Parent pool handle flags
+ * \param	cred		Pool's security credential
+ * \param	ownership	Container ownership information
+ * \param	acl		Container ACL
+ *
+ * \return	True		Operation allowed
+ *		False		Operation forbidden
+ */
+bool
+ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
+		       struct ownership *ownership, struct daos_acl *acl);
+
+/**
+ * Determine if the container properties can be viewed based on the container
+ * security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_get_props(uint64_t cont_capas);
+
+/**
+ * Determine if the container properties can be modified based on the container
+ * security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_set_props(uint64_t cont_capas);
+
+/**
+ * Determine if the container Access Control List can be viewed based on the
+ * container security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_get_acl(uint64_t cont_capas);
+
+/**
+ * Determine if the container Access Control List can be modified based on the
+ * container security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_set_acl(uint64_t cont_capas);
+
+/**
+ * Determine if the container ownership can be modified based on the container
+ * security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_set_owner(uint64_t cont_capas);
+
+/**
+ * Determine if the container can be written based on the container security
+ * capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_write_data(uint64_t cont_capas);
+
+/**
+ * Determine if the container can be read based on the container security
+ * capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_read_data(uint64_t cont_capas);
+
+/**
+ * Get the security capabilities for a rebuild container handle created by the
+ * DAOS server.
+ *
+ * @return	Bits representing security capabilities
+ */
+uint64_t
+ds_sec_get_rebuild_cont_capabilities(void);
 
 #endif /* __DAOS_SRV_SECURITY_H__ */

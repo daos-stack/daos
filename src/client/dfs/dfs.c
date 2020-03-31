@@ -365,8 +365,8 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 	daos_handle_t	oh;
 	int		rc;
 
-	if (cond_check && dfs_cond_op)
-		cond = DAOS_COND_DKEY_PUNCH;
+	if (cond_check && !dfs_no_cond_op)
+		cond = DAOS_COND_PUNCH;
 
 	if (S_ISLNK(entry.mode))
 		goto punch_entry;
@@ -404,7 +404,7 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	unsigned int	i;
 	int		rc;
 
-	if (cond_check && dfs_cond_op) {
+	if (cond_check && !dfs_no_cond_op) {
 		cond = DAOS_COND_DKEY_INSERT;
 	} else if (cond_check) {
 		/** if cond_ops not enabled, fetch and check (non-atomically) */
@@ -878,7 +878,7 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	/** Open SB object */
 	super_oid.lo = RESERVED_LO;
 	super_oid.hi = SB_HI;
-	daos_obj_generate_id(&super_oid, 0, OC_SX, 0);
+	daos_obj_generate_id(&super_oid, 0, OC_RP_XSF, 0);
 
 	rc = daos_obj_open(coh, super_oid, create ? DAOS_OO_RW : DAOS_OO_RO,
 			   oh, NULL);
@@ -942,7 +942,7 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		else
 			oclass = DFS_DEFAULT_OBJ_CLASS;
 
-		if (dfs_cond_op)
+		if (!dfs_no_cond_op)
 			cond = DAOS_COND_DKEY_INSERT;
 
 		rc = daos_obj_update(*oh, DAOS_TX_NONE, cond, &dkey, SB_AKEYS,
@@ -954,6 +954,10 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 
 		return 0;
 	}
+
+	sb_ver = 0;
+	layout_ver = 0;
+	magic = 0;
 
 	/* otherwise fetch the values and verify SB */
 	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS, iods, sgls,
@@ -970,7 +974,18 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	}
 
 	if (magic != DFS_SB_MAGIC) {
-		D_ERROR("SB MAGIC verification failed\n");
+		D_ERROR("SB MAGIC verification failed.\n");
+		D_GOTO(err, rc = EINVAL);
+	}
+
+	if (iods[1].iod_size != sizeof(sb_ver) || sb_ver != DFS_SB_VERSION) {
+		D_ERROR("Incompatible SB version.\n");
+		D_GOTO(err, rc = EINVAL);
+	}
+
+	if (iods[2].iod_size != sizeof(layout_ver) ||
+	    layout_ver != DFS_LAYOUT_VERSION) {
+		D_ERROR("Incompatible DFS Layout version.\n");
 		D_GOTO(err, rc = EINVAL);
 	}
 
@@ -980,7 +995,6 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	attr->da_oclass_id = (oclass != OC_UNKNOWN) ? oclass :
 		DFS_DEFAULT_OBJ_CLASS;
 
-	/** TODO - check SB & layout versions */
 	return 0;
 err:
 	daos_obj_close(*oh, NULL);
@@ -1197,7 +1211,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	strcpy(dfs->root.name, "/");
 	dfs->root.parent_oid.lo = RESERVED_LO;
 	dfs->root.parent_oid.hi = SB_HI;
-	daos_obj_generate_id(&dfs->root.parent_oid, 0, OC_SX, 0);
+	daos_obj_generate_id(&dfs->root.parent_oid, 0, OC_RP_XSF, 0);
 	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode, 0, &dfs->root);
 	if (rc) {
 		D_ERROR("Failed to open root object\n");
@@ -1427,7 +1441,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	/** Open SB object */
 	super_oid.lo = RESERVED_LO;
 	super_oid.hi = SB_HI;
-	daos_obj_generate_id(&super_oid, 0, OC_SX, 0);
+	daos_obj_generate_id(&super_oid, 0, OC_RP_XSF, 0);
 
 	rc = daos_obj_open(coh, super_oid, DAOS_OO_RO, &dfs->super_oh, NULL);
 	if (rc) {
@@ -1541,14 +1555,14 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	if (rc)
 		return rc;
 
+	D_ASSERT(parent != NULL);
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
 	if (rc)
 		return rc;
 
 	strncpy(new_dir.name, name, DFS_MAX_PATH);
 	new_dir.name[DFS_MAX_PATH] = '\0';
-	rc = create_dir(dfs, th, (parent ? parent->oh : DAOS_HDL_INVAL), cid,
-			&new_dir);
+	rc = create_dir(dfs, th, parent->oh, cid, &new_dir);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3096,7 +3110,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iov;
 
-	if (dfs_cond_op)
+	if (!dfs_no_cond_op)
 		cond = DAOS_COND_DKEY_UPDATE;
 
 	rc = daos_obj_update(oh, th, cond, &dkey, 1, &iod, &sgl, NULL);
@@ -3208,8 +3222,8 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iovs[0];
 
-	if (dfs_cond_op)
-		cond = DAOS_COND_DKEY_INSERT;
+	if (!dfs_no_cond_op)
+		cond = DAOS_COND_DKEY_UPDATE;
 
 	rc = daos_obj_update(oh, th, cond, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
@@ -3350,6 +3364,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;
 	daos_key_t		dkey;
+	uint64_t		cond = 0;
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -3439,7 +3454,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 			}
 		}
 
-		rc = remove_entry(dfs, th, new_parent->oh, new_name, false,
+		rc = remove_entry(dfs, th, new_parent->oh, new_name, true,
 				  new_entry);
 		if (rc) {
 			D_ERROR("Failed to remove entry %s (%d)\n",
@@ -3453,14 +3468,14 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 
 	/** rename symlink */
 	if (S_ISLNK(entry.mode)) {
-		rc = remove_entry(dfs, th, parent->oh, name, false, entry);
+		rc = remove_entry(dfs, th, parent->oh, name, true, entry);
 		if (rc) {
 			D_ERROR("Failed to remove entry %s (%d)\n",
 				name, rc);
 			D_GOTO(out, rc);
 		}
 
-		rc = insert_entry(parent->oh, th, new_name, false, entry);
+		rc = insert_entry(parent->oh, th, new_name, true, entry);
 		if (rc)
 			D_ERROR("Inserting new entry %s failed (%d)\n",
 				new_name, rc);
@@ -3469,15 +3484,18 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	/** insert old entry in new parent object */
-	rc = insert_entry(new_parent->oh, th, new_name, false, entry);
+	rc = insert_entry(new_parent->oh, th, new_name, true, entry);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", new_name, rc);
 		D_GOTO(out, rc);
 	}
 
+	if (!dfs_no_cond_op)
+		cond = DAOS_COND_PUNCH;
+
 	/** remove the old entry from the old parent (just the dkey) */
 	d_iov_set(&dkey, (void *)name, strlen(name));
-	rc = daos_obj_punch_dkeys(parent->oh, th, 0, 1, &dkey, NULL);
+	rc = daos_obj_punch_dkeys(parent->oh, th, cond, 1, &dkey, NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name, rc);
 		D_GOTO(out, rc = daos_der2errno(rc));
@@ -3665,11 +3683,11 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 
 	/** if not default flag, check for xattr existence */
 	if (flags != 0) {
-		if (dfs_cond_op) {
+		if (!dfs_no_cond_op) {
 			if (flags == XATTR_CREATE)
-				cond |= DAOS_COND_AKEY_UPDATE;
-			if (flags == XATTR_REPLACE)
 				cond |= DAOS_COND_AKEY_INSERT;
+			if (flags == XATTR_REPLACE)
+				cond |= DAOS_COND_AKEY_UPDATE;
 		} else {
 			bool exists;
 
@@ -3700,8 +3718,8 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iov;
 
-	if (dfs_cond_op)
-		cond |= DAOS_COND_DKEY_INSERT;
+	if (!dfs_no_cond_op)
+		cond |= DAOS_COND_DKEY_UPDATE;
 
 	iod.iod_size	= size;
 	rc = daos_obj_update(oh, th, cond, &dkey, 1, &iod, &sgl, NULL);
@@ -3826,8 +3844,8 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	/** set akey as the xattr name */
 	d_iov_set(&akey, xname, strlen(xname));
 
-	if (dfs_cond_op)
-		cond = DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_PUNCH;
+	if (!dfs_no_cond_op)
+		cond = DAOS_COND_DKEY_UPDATE | DAOS_COND_PUNCH;
 
 	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
 	if (rc) {
