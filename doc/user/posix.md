@@ -21,12 +21,12 @@ setuid() and setgid() programs, as well as supplementary groups, are currently n
 supported.
 
 While libdfs can be tested from a single instance (i.e., single process or client
-node if used through dfuse), special care is required when the same POSIX
+node if used through DFuse), special care is required when the same POSIX
 container is mounted concurrently by multiple processes. Concurrent DFS mounts
 are not recommended. Support for concurrency control is under development and
 will be documented here once ready.
 
-## dfuse
+## DFuse
 
 DFuse provides File System access to DAOS through the standard libc/kernel/VFS
 POSIX infrastructure.  This allows existing applications to use DAOS without
@@ -43,62 +43,66 @@ vice versa.
 The dfuse daemon runs a single instance per node to provide a user POSIX access
 to DAOS, and it should be run with the credentials of the user and typically will
 be started and stopped on each compute node as part of the prolog and epilog
-scripts of any resource manager or scheduler in use.  One dfuse daemon per node
+scripts of any resource manager or scheduler in use.  One DFuse daemon per node
 can process requests for multiple clients.
 
-A single dfuse instance can provide access to multiple pools and containers
+A single DFuse instance can provide access to multiple pools and containers
 concurrently, or can be limited to a single pool, or a single container.
 
 ### Restrictions
 
 DFuse is limited to a single user. Access to the filesystem from other users,
 including root will not be honored, and as a consequence of this, the chown
-and chgrp calls are not supported.  Hard links and special device files, except 
+and chgrp calls are not supported.  Hard links and special device files, except
 symbolic links, are not supported, nor are any ACLs.
 
 DFuse can run in the foreground, keeping the terminal window open, or it can
 daemonize to run like a system daemon, however, to do this and still be
 able to access DAOS it needs to daemonize before calling daos_init() which in
 turns means it cannot report some kinds of startup errors either on
-stdout/stderr or via its return code.  When initially starting with dfuse it
-is recommended to run in foreground mode (--foreground) to better observe
+stdout/stderr or via its return code.  When initially starting with DFuse it
+is recommended to run in foreground mode (`--foreground`) to better observe
 any failures.
 
-Inodes are managed on the local node by the dfuse, so while inode numbers
+Inodes are managed on the local node by the DFuse, so while inode numbers
 will be consistent on a node for the duration of the session, they are not
-guaranteed to be consistent across restarts of dfuse or across nodes.
+guaranteed to be consistent across restarts of DFuse or across nodes.
 
-It is not possible to see pool/container listings through dfuse, so if readdir,
-ls or others are used for this, dfuse will return ENOTSUP.
+It is not possible to see pool/container listings through DFuse, so if readdir,
+ls or others are used for this, DFuse will return ENOTSUP.
 
 ### Launching
 
-dfuse should be run with the credentials (user/group) of the user that will
+DFuse should be run with the credentials (user/group) of the user that will
 be accessing it, and that owns any pools that will be used.
 
 There are two mandatory command-line options, these are:
 
-* --svc=RANKS  <service replicas>
-* --mountpoint=PATH <path to mount DAOS>
+| **Command-line Option**  | **Description** |
+| ------------------------ | --------------- |
+| --svc=<ranks\>           | service replicas|
+| --mountpoint=<path\>     | path to mount dfuse|
 
 The mount point specified should be en empty directory on the local node that
 is owned by the user.
 
 Additionally, there are several optional command-line options:
 
-* --pool=POOL <pool uuid to connect to>
-* --container=CONTAINER <container uuid to open>
-* --sys-name=NAME <DAOS server name>
-* --foreground <run in foreground>
-* --singlethreaded <run single threaded>
+| **Command-line Option** | **Description** |
+| ----------------------- | --------------- |
+| --pool=<uuid\>          | pool uuid to connect to|
+| --container=<uuid\>     | container uuid to open |
+| --sys-name=<name\>      | DAOS server name|
+| --foreground            | run in foreground|
+| --singlethreaded        | run single threaded|
 
-When dfuse starts, it will register a single mount with the kernel at the
-location specified by the --mountpoint option, and this mount will be
+When DFuse starts, it will register a single mount with the kernel at the
+location specified by the `--mountpoint` option, and this mount will be
 visable in /proc/mounts, and possibly the output of df.  The contents of
 multiple pools/containers will be accessible via this single kernel
 mountpoint.
 
-### Pool/Container paths.
+### Pool/Container Paths
 
 DFuse will only create one kernel level mount point regardless of how it is
 launched, but how POSIX containers are represented within that varies depending
@@ -121,9 +125,9 @@ accessed by the path `<mount point>/<container uuid`
 It is anticipated that in most cases, both pool and container uuids shall be
 used, so the mount point itself will map directly onto a POSIX container.
 
-### Links into other containers.
+### Links into other Containers
 
-It is possible to link to other containers in dfuse, where subdirectories
+It is possible to link to other containers in DFuse, where subdirectories
 within a container resolve not to regular directories as normal, but rather to
 the root of entirely different POSIX containers.
 
@@ -131,11 +135,11 @@ To create a new container and link it into the namespace of an existing one
 use the following command.
 
 ```bash
-daos container create --svc <svc> --type POSIX --pool <pool uuid> --path <path to entry point>
+$ daos container create --svc <svc> --type POSIX --pool <pool uuid> --path <path to entry point>
 ```
 
 The pool uuid should already exist, and the path should specify a location
-somewhere within a dfuse mount point that resolves to a POSIX container.
+somewhere within a DFuse mount point that resolves to a POSIX container.
 Once a link is created it can be accessed through the new path, and following
 the link is virtually transparent.  No container uuid is required. if one is
 not supplied, it will be created.
@@ -143,7 +147,7 @@ not supplied, it will be created.
 To destroy a container again, the following command should be used.
 
 ```bash
-daos container destroy --svc --path <path to entry point>
+$ daos container destroy --svc --path <path to entry point>
 ```
 
 This will both remove the link between the containers and remove the container
@@ -156,10 +160,10 @@ Information about a container, for example, the presence of an entry point betwe
 containers, or the pool and container uuids of the container linked to can be
 read with the following command:
 ```bash
-daos container info --svc --path <path to entry point>
+$ daos container info --svc --path <path to entry point>
 ```
 
-### Enabling caching
+### Enabling Caching
 
 DFuse in normal mode simply provides a communication path between the kernel and
 DAOS. However, this can come with a performance impact, and to help alleviate this
@@ -167,7 +171,7 @@ it is possible to turn on caching, both within dfuse itself and by allowing the
 kernel to cache certain data.  Where and when data is cached there is no attempt
 made to invalidate the caches based on changes to DAOS, other than simple timeouts.
 
-Enabling this option will turn on the following features.
+Enabling this option will turn on the following features:
 
 * Kernel caching of dentries.
 * Kernel caching of negative dentries
@@ -181,7 +185,7 @@ will enable the feature for all accessed containers.  When this option is used,
 the containers accessed should only be accessed from one node, so it may
 be necessary to create a container per node in this model.
 
-### Stopping dfuse.
+### Stopping DFuse
 
 When done, the file system can be unmounted via fusermount:
 
@@ -189,20 +193,22 @@ When done, the file system can be unmounted via fusermount:
 $ fusermount3 -u /tmp/daos
 ```
 
-When this is done, the local dfuse daemon should shut down the mount point,
+When this is done, the local DFuse daemon should shut down the mount point,
 disconnect from the DAOS servers, and exit.  You can also verify that the
 mount point is no longer listed in the /proc/mounts file
 
-### libioil
+### Interception Library
 
-An interception library called libioil is available to work with dfuse. This
-library works in conjunction with dfuse and allows the interception of POSIX I/O
+An interception library called libioil is available to work with DDuse. This
+library works in conjunction with DFuse and allows the interception of POSIX I/O
 calls and issue the I/O operations directly from the application context through
 libdaos without any application changes.  This provides kernel-bypass for I/O data
 leading to improved performance.
 To use this set the LD_PRELOAD to point to the shared library in the DOAS install
 directory:
 
-    LD_PRELOAD=/path/to/daos/install/lib/libioil.so
+```
+LD_PRELOAD=/path/to/daos/install/lib/libioil.so
+```
 
 Support for libioil is currently planned for DAOS v1.2.
