@@ -41,7 +41,7 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 def daos_branch = env.CHANGE_TARGET
-node() { echo "daos_branch:", daos_branch }
+node() { echo "daos_branch: " + daos_branch }
 if (!daos_branch) {
     node() { echo "daos_branch is null" }
     daos_branch = env.GIT_BRANCH
