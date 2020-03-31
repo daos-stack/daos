@@ -675,7 +675,7 @@ typedef struct {
  * \return		0 if task creation succeeds.
  *			negative errno if it fails.
  */
-int
+DAOS_API int
 daos_task_create(daos_opc_t opc, tse_sched_t *sched,
 		 unsigned int num_deps, tse_task_t *dep_tasks[],
 		 tse_task_t **taskp);
@@ -690,7 +690,7 @@ daos_task_create(daos_opc_t opc, tse_sched_t *sched,
  *
  * \return		Success: Pointer to arguments for the DAOS task
  */
-void *
+DAOS_API void *
 daos_task_get_args(tse_task_t *task);
 
 /**
@@ -701,7 +701,7 @@ daos_task_get_args(tse_task_t *task);
  *
  * \return		Pointer to the private state
  */
-void *
+DAOS_API void *
 daos_task_get_priv(tse_task_t *task);
 
 /**
@@ -712,7 +712,7 @@ daos_task_get_priv(tse_task_t *task);
  *
  * \return		private state set by the previous call
  */
-void *
+DAOS_API void *
 daos_task_set_priv(tse_task_t *task, void *priv);
 
 /**
@@ -728,7 +728,7 @@ daos_task_set_priv(tse_task_t *task, void *priv);
  *
  * \return		0 if Success, errno if failed.
  */
-int
+DAOS_API int
 daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty);
 
 #if defined(__cplusplus)
