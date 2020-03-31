@@ -11,6 +11,7 @@ timeout: 1800
 server_config:
     name: daos_server
     servers:
+        log_mask: ERR
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
         bdev_class: nvme
