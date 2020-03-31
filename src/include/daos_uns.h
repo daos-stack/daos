@@ -73,7 +73,7 @@ struct duns_attr_t {
  *
  * \return		0 on Success. Negative on Failure.
  */
-int
+DAOS_API int
 duns_create_path(daos_handle_t poh, const char *path,
 		 struct duns_attr_t *attrp);
 
@@ -87,7 +87,7 @@ duns_create_path(daos_handle_t poh, const char *path,
  *
  * \return		0 on Success. Negative on Failure.
  */
-int
+DAOS_API int
 duns_resolve_path(const char *path, struct duns_attr_t *attr);
 
 /**
@@ -98,7 +98,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr);
  *
  * \return		0 on Success. Negative on Failure.
  */
-int
+DAOS_API int
 duns_destroy_path(daos_handle_t poh, const char *path);
 
 /**
@@ -110,7 +110,7 @@ duns_destroy_path(daos_handle_t poh, const char *path);
  *
  * \return		0 on Success. Negative on Failure.
  */
-int
+DAOS_API int
 duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr);
 
 #if defined(__cplusplus)
