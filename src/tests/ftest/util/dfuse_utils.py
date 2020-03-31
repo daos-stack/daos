@@ -219,7 +219,7 @@ class Dfuse(DfuseCommand):
         see what is being used instead.
         """
         general_utils.pcmd(self.running_hosts,
-                           "stat -c %T -f {0} | grep -v fuseblk".format(self.mount_dir.value)
+                           "stat -c %T -f {0} | grep -v fuseblk".format(self.mount_dir.value),
                            expect_rc=1)
 
     def stop(self):
