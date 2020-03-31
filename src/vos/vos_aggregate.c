@@ -1145,10 +1145,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		D_ASSERT(ext1_covers_ext2(&mw->mw_ext, &lgc_ent->le_ext));
 		D_ASSERT(phy_ent->pe_ref > 0);
-		if (!phy_ent->pe_retain) {
-			phy_ent->pe_ref--;
-			phy_ent->pe_trunc_head = true;
-		}
+		phy_ent->pe_ref--;
+		phy_ent->pe_trunc_head = true;
 	}
 	mw->mw_lgc_cnt = 0;
 
@@ -1169,8 +1167,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		 * The physical entry spans window end, but is fully covered
 		 * in current window, keep it intact.
 		 */
-		if (rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
-		    !phy_ent->pe_trunc_head && !phy_ent->pe_retain) {
+		if ((rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
+		    !phy_ent->pe_trunc_head) || !phy_ent->pe_retain) {
 			leftovers++;
 			continue;
 		}
@@ -1196,12 +1194,10 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		}
 
 		/* Update extent start of truncated physical entry */
-		if (!phy_ent->pe_retain) {
-			rect.rc_ex.ex_lo = mw->mw_ext.ex_hi + 1;
-			phy_ent->pe_off = rect.rc_ex.ex_lo -
-					phy_ent->pe_rect.rc_ex.ex_lo;
-			phy_ent->pe_trunc_head = false;
-		}
+		rect.rc_ex.ex_lo = mw->mw_ext.ex_hi + 1;
+		phy_ent->pe_off = rect.rc_ex.ex_lo -
+				phy_ent->pe_rect.rc_ex.ex_lo;
+		phy_ent->pe_trunc_head = false;
 		leftovers++;
 	}
 	D_ASSERT(leftovers == mw->mw_phy_cnt);
