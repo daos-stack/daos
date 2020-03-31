@@ -83,7 +83,11 @@ struct dtx_handle {
 					 /* epoch conflict, need to renew. */
 					 dth_renew:1,
 					 /* The DTX entry is in active table. */
-					 dth_actived:1;
+					 dth_actived:1,
+					 /* Local TX is started. */
+					 dth_local_tx_started:1,
+					 /* The last sub-modification for DTX */
+					 dth_last_modification:1;
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
 	/* The array of the DTXs for Commit on Share (conflcit). */

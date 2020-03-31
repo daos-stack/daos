@@ -1486,9 +1486,14 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	umem = vos_ioc2umm(ioc);
 
-	err = umem_tx_begin(umem, vos_txd_get());
-	if (err)
-		goto out;
+	if (dth == NULL || !dth->dth_local_tx_started) {
+		err = umem_tx_begin(umem, vos_txd_get());
+		if (err != 0)
+			goto out;
+
+		if (dth != NULL)
+			dth->dth_local_tx_started = 1;
+	}
 
 	vos_dth_set(dth);
 	err = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, ioc->ic_oid,
@@ -1540,11 +1545,19 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	err = vos_publish_blocks(ioc->ic_cont, &ioc->ic_blk_exts, true,
 				 VOS_IOS_GENERIC);
 
-	if (dth != NULL && err == 0)
+	if (err == 0 && dth != NULL && dth->dth_last_modification)
 		err = vos_dtx_prepared(dth);
 
 abort:
-	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
+	if (err != 0 || dth == NULL || dth->dth_last_modification) {
+		if (dth != NULL) {
+			D_ASSERT(dth->dth_local_tx_started);
+			dth->dth_local_tx_started = 0;
+		}
+
+		err = umem_tx_end(umem, err);
+	}
+
 out:
 	if (err != 0) {
 		vos_dtx_cleanup_dth(dth);

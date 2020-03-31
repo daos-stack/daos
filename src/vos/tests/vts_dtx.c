@@ -204,6 +204,14 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_leader = 1;
 	dth->dth_ent = NULL;
 	dth->dth_obj = UMOFF_NULL;
+	dth->dth_sync = 0;
+	dth->dth_solo = 0;
+	dth->dth_dti_cos_done = 0;
+	dth->dth_has_ilog = 0;
+	dth->dth_renew = 0;
+	dth->dth_actived = 0;
+	dth->dth_local_tx_started = 0;
+	dth->dth_last_modification = 1;
 
 	*dthp = dth;
 
