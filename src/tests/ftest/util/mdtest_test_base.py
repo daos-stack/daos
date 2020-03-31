@@ -24,7 +24,6 @@
 from __future__ import print_function
 
 import os
-import subprocess
 import re
 
 from ClusterShell.NodeSet import NodeSet
@@ -84,7 +83,7 @@ class MdtestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            self.dfuse = None
+                self.dfuse = None
         finally:
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
