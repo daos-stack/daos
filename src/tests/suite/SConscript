@@ -1,5 +1,59 @@
 """Build test suite"""
+import subprocess
+""" hack to handle old subprocess version """
+try:
+    from subprocess import DEVNULL
+except ImportError:
+    import os
+    DEVNULL = open(os.devnull, "wb")
+
 import daos_build
+
+test_cmocka_skip = """
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <cmocka.h>
+
+static void
+test(void **state) { skip(); }
+
+int main(int argc, char **argv)
+{
+	const struct CMUnitTest tests[] = {
+		cmocka_unit_test(test),
+		cmocka_unit_test(test),
+	};
+	return cmocka_run_group_tests(tests, NULL, NULL);
+}
+"""
+
+def CheckCmockaSkip(context):
+    context.Message('Checking if cmocka skip() bug is present ... ')
+    rc = context.TryCompile(test_cmocka_skip, '.c')
+    if rc == 0:
+        print " (Compile failed) assuming ",
+        context.Result(not rc)
+        return rc
+    rc = context.TryLink(test_cmocka_skip, '.c')
+    if rc == 0:
+        print " (Link failed) assuming ",
+        context.Result(not rc)
+        return rc
+    prog = context.lastTarget
+    pname = prog.get_abspath()
+    rc = subprocess.call(pname, env={"CMOCKA_TEST_ABORT": "1"}, stdout=DEVNULL, stderr=DEVNULL)
+    """ in case of abort rc is -6 instead of 134 (128+6) with shell ... """
+    if rc == -6:
+        print " (Bug reproduced) ",
+    else:
+        if rc != 0:
+            print " (Other error than bug) assuming ",
+        else:
+            print " (Bug not reproduced) ",
+    context.Result(rc)
+    """ return 0 means error """
+    return not rc
 
 def scons():
     """Execute build"""
@@ -20,52 +74,15 @@ def scons():
     Export('daos_test_obj')
 
     newenv = denv.Clone()
-    try:
-        import os
-        import re
-
-        with open('/etc/os-release') as f:
-            for line in f:
-                if re.search('^ID=', line):
-                    line = line.strip()
-                    id, distro = line.strip().split('=')
-                    distro = distro.strip('"')
-                    break
-        if distro in ['centos', 'rhel', 'fedora', 'opensuse']:
-            import rpm
-            ts = rpm.TransactionSet()
-            headers = ts.dbMatch('name', 'libcmocka')
-            if not headers:
-                print "No package libcmocka installed."
-            else:
-                from pkg_resources import parse_version
-                for h in headers:
-                    if parse_version(h['version']) < parse_version('1.1.5'):
-                        newenv.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
-                    else:
-                        print "libcmocka version without fixed skip(), running with workaround (DAOS-1093)."
-        elif distro in ('"debian"', '"ubuntu"'):
-            import apt
-            cache = apt.Cache()
-            cache.open()
-            """ debian distros use a 0 suffix """
-            if "libcmocka0" in cache:
-                if cache["libcmocka0"].is_installed:
-                    instver = cache["libcmocka0"].installed
-                    if parse_version(instver.version) < parse_version('1.1.5'):
-                        newenv.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
-                    else:
-                        print "libcmocka version without fixed skip(), running with workaround (DAOS-1093)."
-                else:
-                    print "No package libcmocka installed."
-            else:
-                print "No package libcmocka found."
-        else:
-            print "Unable to identify distro."
-    except ImportError:
-        """ just continue to run with workaround !! """
-	print("ImportError: unable to determine if libcmocka has skip() fix.")
-        pass
+    conf = Configure(newenv, custom_tests = {'CheckCmockaSkip' : CheckCmockaSkip})
+    conf.env.AppendUnique(LIBS=['cmocka'])
+    if not conf.CheckCmockaSkip():
+        """ it would be cool to be able to check exit code is effectively 134 (for abort() upon skip() bug) but in all error cases we should decide to use workaround """
+        conf.env.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
+        print "libcmocka version without fixed skip(), running with workaround (DAOS-1093)."
+    else:
+        print "libcmocka version with fixed skip(), don't need workaround (DAOS-1093)."
+    newenv = conf.Finish()
 
     test = daos_build.program(newenv, 'daos_test', Glob('*.c'), LIBS=libraries)
     denv.Install('$PREFIX/bin/', test)
