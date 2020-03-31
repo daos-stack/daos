@@ -15,14 +15,14 @@ def scons():
     denv.AppendUnique(LIBPATH=['smd'])
 
     # Link to DPDK static libs
-    denv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', \
+    denv.AppendUnique(LINKFLAGS=['-lspdk_env_dpdk', '-Wl,--whole-archive', \
 		      '-lrte_mempool', '-lrte_mempool_ring', '-lrte_bus_pci', \
 		      '-lrte_pci', '-lrte_ring', '-lrte_mbuf', '-lrte_eal', \
 		      '-lrte_kvargs', \
 		      '-Wl,--no-whole-archive'])
 
     # SPDK shared libs
-    libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
+    libs = ['spdk_thread', 'spdk_bdev', 'spdk_copy']
     libs += ['spdk_bdev_aio', 'spdk_bdev_nvme', 'spdk_bdev_malloc']
     libs += ['spdk_conf', 'spdk_blob', 'spdk_nvme', 'spdk_util']
     libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
