@@ -371,16 +371,28 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 	if (sy_info) {
 		size = sizeof(sy_info->provider);
+		if (strlen(resp->provider) >= size) {
+			D_ERROR("GetAttachInfo provider string too long\n");
+			rc = -DER_INVAL;
+			goto out_resp;
+		}
 		strncpy(sy_info->provider, resp->provider, size);
-		sy_info->provider[size-1] = '\0';
 
 		size = sizeof(sy_info->interface);
+		if (strlen(resp->interface) >= size) {
+			D_ERROR("GetAttachInfo interface string too long\n");
+			rc = -DER_INVAL;
+			goto out_resp;
+		}
 		strncpy(sy_info->interface, resp->interface, size);
-		sy_info->interface[size-1] = '\0';
 
 		size = sizeof(sy_info->domain);
+		if (strlen(resp->domain) >= size) {
+			D_ERROR("GetAttachInfo domain string too long\n");
+			rc = -DER_INVAL;
+			goto out_resp;
+		}
 		strncpy(sy_info->domain, resp->domain, size);
-		sy_info->domain[size-1] = '\0';
 
 		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
 		sy_info->crt_timeout = resp->crttimeout;
