@@ -40,10 +40,13 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-manager.listener.logger.println("test")
 def daos_branch = env.CHANGE_TARGET
+node() { println("daos_branch:", daos_branch) }
 if (!daos_branch) {
+    node() { println("daos_branch is null") }
     daos_branch = env.GIT_BRANCH
+} else {
+    node() { println("daos_branch is not null") }
 }
 
 // bail out of branch builds that are not on a whitelist
