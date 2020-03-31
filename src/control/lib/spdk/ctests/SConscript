@@ -15,13 +15,12 @@ def scons():
 
     config = Configure(unit_env)
 
-    libs = ['spdk_env_dpdk', 'spdk_nvme']
-    libs += ['isal', 'numa', 'cmocka', 'pthread', 'dl']
-
     if config.CheckHeader("nvme_internal.h"):
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
-                                   unit_env.nc], LIBS=libs)
+                                   unit_env.nc],
+                                  LIBS=['spdk', 'isal', 'spdk_env_dpdk', 'numa',
+                                        'cmocka', 'pthread', 'dl'])
         unit_env.Install("$PREFIX/bin", testbin)
     else:
         print("SPDK nvme_internal.h missing, skipping nvme_control_ut build")

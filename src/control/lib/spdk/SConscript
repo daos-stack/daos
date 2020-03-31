@@ -28,10 +28,9 @@ def scons():
     senv.nc = senv.Object("src/nvme_control.c")
     senv.ncc = senv.Object("src/nvme_control_common.c")
     denv.nvmecontrol = senv.StaticLibrary("nvme_control", [senv.nc, senv.ncc],
-                                          CC=compiler, LIBS=['rte_bus_pci',
-                                                             'spdk_nvme',
+                                          CC=compiler, LIBS=['spdk', 'numa',
                                                              'spdk_env_dpdk',
-                                                             'numa', 'isal'])
+                                                             'isal'])
 
     senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
 
