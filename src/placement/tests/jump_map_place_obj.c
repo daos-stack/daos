@@ -127,7 +127,7 @@ rebuild_object_class(daos_oclass_id_t cid)
 					spare_tgt_ranks, shard_ids,
 					SPARE_MAX_NUM, -1);
 
-			D_ASSERT(0 <= num_new_spares && num_new_spares < 2);
+			D_ASSERT(num_new_spares >= 0 && num_new_spares < 2);
 		}
 
 

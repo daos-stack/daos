@@ -87,7 +87,7 @@ reint_check(struct pl_obj_layout *layout, struct pl_obj_layout *temp_layout,
 	uint32_t original_target;
 	uint32_t reint_target;
 
-	D_ASSERT(0 <= num_reint && num_reint < 2);
+	D_ASSERT(num_reint >= 0 && num_reint < 2);
 
 	/* can't rebuild non replicated date */
 	if (temp_layout->ol_grp_size == 1) {
