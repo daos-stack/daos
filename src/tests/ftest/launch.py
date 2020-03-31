@@ -901,6 +901,23 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     spawn_commands(host_list, "; ".join(commands), 900)
 
 
+def human_to_bytes(h_size):
+    """Convert human readable size values to respective byte value.
+
+    Args:
+        h_size (str): human readable size value to be converted.
+    """
+    if h_size.endswith("KB") or h_size.endswith("kb"):
+        b_size = int(re.sub('[^0-9]', '', h_size)) * (2**10)
+    elif h_size.endswith("MB") or h_size.endswith("mb"):
+        b_size = int(re.sub('[^0-9]', '', h_size)) * (2**20)
+    elif h_size.endswith("GB") or h_size.endswith("gb"):
+        b_size = int(re.sub('[^0-9]', '', h_size)) * (2**30)
+    elif h_size.endswith("B") or h_size.endswith("b"):
+        b_size = int(re.sub('[^0-9]', '', h_size))
+    return b_size
+
+
 def send_notification(hosts, subject, msg, attachment, email_addrs):
     """Send email notification to provided emails with given message.
 
@@ -923,8 +940,6 @@ def get_log_size(test_yaml, test_file, args):
         test_yaml (str): yaml file containing host names
         test_file (str): the test python file
         args (argparse.Namespace): command line arguments for this program
-        size_limit (int): limitsize in bytes that determines when to send
-            notification.
     """
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     log_size_file = os.path.join(logs_dir, "log_size.log")
@@ -956,12 +971,12 @@ def get_log_size(test_yaml, test_file, args):
             msg = []
             o_hosts = None
             for output, o_hosts in output_data:
-                for line in str(output).splitlines():
+                for idx, line in enumerate(str(output).splitlines()):
                     size = line.split("\t")[0]
                     if not size or not size.isdigit():
-                        print("  Error in log_size.log contents in: {}".format(
-                            o_hosts))
-                    elif int(size) > size_limit:
+                        print("  line: {} Error in log_size.log: {}".format(
+                            idx, o_hosts))
+                    elif int(size) > human_to_bytes(args.size_limit):
                         msg.append("Host: {} \nTest File: {}\n".format(
                             ",".join(o_hosts), test_file))
             if msg:
