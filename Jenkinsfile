@@ -180,6 +180,32 @@ if (!env.CHANGE_ID &&
 pipeline {
     agent { label 'lightweight' }
 
+    triggers {
+        cron(env.BRANCH_NAME == 'master' ? '0 0 * * *\n' : '' +
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
+    }
+
+    environment {
+        GITHUB_USER = credentials('daos-jenkins-review-posting')
+        BAHTTPS_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTP_PROXY="' + env.HTTP_PROXY + '" --build-arg http_proxy="' + env.HTTP_PROXY + '"' : ''}"
+        BAHTTP_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '" --build-arg https_proxy="' + env.HTTPS_PROXY + '"' : ''}"
+        UID = sh(script: "id -u", returnStdout: true)
+        BUILDARGS = "$env.BAHTTP_PROXY $env.BAHTTPS_PROXY "                   +
+                    "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
+                    "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
+                    "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+        QUICKBUILD = commitPragma(pragma: 'Quick-build').contains('true')
+        SSH_KEY_ARGS = "-ici_key"
+        CLUSH_ARGS = "-o$SSH_KEY_ARGS"
+        QUICKBUILD_DEPS = sh(script: "rpmspec -q --srpm --requires utils/rpms/daos.spec 2>/dev/null",
+                             returnStdout: true)
+    }
+
+    options {
+        // preserve stashes so that jobs can be started at the test stage
+        preserveStashes(buildCount: 5)
+    }
+
     stages {
         stage('Play') {
             agent {
