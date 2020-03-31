@@ -147,7 +147,7 @@ func dErrFromStatus(sg statusGetter) error {
 		return nil
 	}
 
-	return drpc.DaosStatus(-dStatus)
+	return drpc.DaosStatus(dStatus)
 }
 
 func unaryStatusInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
