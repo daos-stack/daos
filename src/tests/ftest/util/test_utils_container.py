@@ -314,6 +314,7 @@ class TestContainer(TestDaosApiBase):
             self.input_params.chksum_type = con_in[3]
             self.input_params.chunk_size = con_in[4]
             kwargs["con_prop"] = self.input_params
+        self.log(kwargs)
         self._call_method(self.container.create, kwargs)
         self.uuid = self.container.get_uuid_str()
         self.log.info("  Container created with uuid %s", self.uuid)

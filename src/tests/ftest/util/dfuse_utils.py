@@ -96,6 +96,10 @@ class Dfuse(DfuseCommand):
         self.log_file = log_file
         self.running_hosts = NodeSet()
 
+    def __del__(self):
+        if len(self.running_hosts):
+            self.log.error('Dfuse object deleted without shutting down')
+
     def create_mount_point(self):
         """Create dfuse directory
         Raises:
@@ -203,9 +207,20 @@ class Dfuse(DfuseCommand):
                 "Error starting dfuse on the following hosts: {}".format(
                     error_hosts))
 
-        general_utils.pcmd(self.running_hosts, "stat -c %T -f {0}".format(self.mount_dir.value))
+        self.check_running()
         time.sleep(5)
-        general_utils.pcmd(self.running_hosts, "stat -c %T -f {0}".format(self.mount_dir.value))
+        self.check_running()
+
+    def check_running(self):
+        """Check dfuse is running
+
+        Run a command to verify dfuse is running on hosts where it is supposed
+        to be.  Use grep -v and rc=1 here so that if it isn't, then we can
+        see what is being used instead.
+        """
+        general_utils.pcmd(self.running_hosts,
+                           "stat -c %T -f {0} | grep -v fuseblk".format(self.mount_dir.value)
+                           expect_rc=1)
 
     def stop(self):
         """Stop dfuse
@@ -229,7 +244,7 @@ class Dfuse(DfuseCommand):
         if not len(self.running_hosts):
             return
 
-        general_utils.pcmd(self.running_hosts, "stat -c %T -f {0}".format(self.mount_dir.value))
+        self.check_running()
         general_utils.pcmd(self.running_hosts, "ps auwx", timeout=30)
         umount_cmd = "if [ -x '$(command -v fusermount)' ]; "
         umount_cmd += "then fusermount -u {0}; else fusermount3 -u {0}; fi".\
@@ -247,7 +262,7 @@ class Dfuse(DfuseCommand):
             self.remove_mount_point(fail=False)
             raise CommandFailure(
                 "Error stopping dfuse on the following hosts: {}".format(
-                    error_hosts))
+                    self.error_hosts))
         time.sleep(2)
         self.remove_mount_point()
 
@@ -277,6 +292,7 @@ class Dfuse(DfuseCommand):
                 env['OFI_INTERFACE'] = env.pop('fabric_iface')
                 env['OFI_PORT'] = env.pop('fabric_iface_port')
                 env['CRT_PHY_ADDR_STR'] = env.pop('provider')
+                env['D_LOG_MASK'] = 'DFS=DEBUG'
             except Exception as err:
                 raise CommandFailure("Failed to read yaml file:{}".format(err))
 
