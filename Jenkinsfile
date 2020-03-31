@@ -45,9 +45,126 @@ node() { echo "daos_branch: " + daos_branch }
 if (!daos_branch) {
     node() { echo "daos_branch is null" }
     daos_branch = env.GIT_BRANCH
+    node() { echo "set daos_branch: " + daos_branch }
 } else {
     node() { echo "daos_branch is not null" }
 }
+
+def arch = ""
+def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+
+def daos_packages_version = ""
+def el7_component_repos = ""
+def component_repos = ""
+def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
+def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
+def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl spdk-tools " +
+                       "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
+                       "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
+                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
+
+def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
+                          exit 0
+                      fi
+                      nodelist=(${NODELIST//,/ })
+                      scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
+                                    jenkins@${nodelist[0]}:/tmp
+                      scp -i ci_key src/tests/ftest/data/daos_agent_baseline.yaml \
+                                    jenkins@${nodelist[0]}:/tmp
+                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
+
+def rpm_test_daos_test = '''me=\\\$(whoami)
+                            for dir in server agent; do
+                                sudo mkdir /var/run/daos_\\\$dir
+                                sudo chmod 0755 /var/run/daos_\\\$dir
+                                sudo chown \\\$me:\\\$me /var/run/daos_\\\$dir
+                            done
+                            sudo mkdir /tmp/daos_sockets
+                            sudo chmod 0755 /tmp/daos_sockets
+                            sudo chown \\\$me:\\\$me /tmp/daos_sockets
+                            sudo mkdir -p /mnt/daos
+                            sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
+                            sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_server_baseline.yaml
+                            sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_agent_baseline.yaml
+                            sudo cp /tmp/daos_server_baseline.yaml /etc/daos/daos_server.yml
+                            sudo cp /tmp/daos_agent_baseline.yaml /etc/daos/daos_agent.yml
+                            cat /etc/daos/daos_server.yml
+                            cat /etc/daos/daos_agent.yml
+                            module load mpi/openmpi3-x86_64
+                            coproc daos_server --debug start -t 1 --recreate-superblocks
+                            trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
+                            line=\"\"
+                            while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
+                                read line <&\\\${COPROC[0]}
+                                echo \"Server stdout: \\\$line\"
+                            done
+                            echo \"Server started!\"
+                            daos_agent &
+                            AGENT_PID=\\\$!
+                            trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
+                            OFI_INTERFACE=eth0 daos_test -m'''
+
+def rpm_scan_pre = '''set -ex
+                      lmd_tarball='maldetect-current.tar.gz'
+                      if test -e "${lmd_tarball}"; then
+                        zflag="-z ${lmd_tarball}"
+                      else
+                        zflag=
+                      fi
+                      curl http://rfxn.com/downloads/${lmd_tarball} \
+                        ${zflag} --silent --show-error --fail -o ${lmd_tarball}
+                      nodelist=(${NODELIST//,/ })
+                      scp -i ci_key ${lmd_tarball} \
+                        jenkins@${nodelist[0]}:/var/tmp
+                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
+
+def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
+                       lmd_tarball=\\\"maldetect-current.tar.gz\\\"
+                       rm -rf /var/tmp/\\\${lmd_src}
+                       mkdir -p /var/tmp/\\\${lmd_src}
+                       tar -C /var/tmp/\\\${lmd_src} --strip-components=1 \
+                         -xf /var/tmp/\\\${lmd_tarball}
+                       pushd /var/tmp/\\\${lmd_src}
+                         sudo ./install.sh
+                         sudo ln -s /usr/local/maldetect/ /bin/maldet
+                       popd
+                       sudo freshclam
+                       rm -f /var/tmp/clamscan.out
+                       rm /var/tmp/\\\${lmd_tarball}
+                       rm -rf /var/tmp/\\\${lmd_src}
+                       sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb \
+                                -d /usr/local/maldetect/sigs/rfxn.hdb -r \
+                                --exclude-dir=/usr/local/maldetect \
+                                --exclude-dir=/usr/share/clamav \
+                                --exclude-dir=/var/lib/clamav \
+                                --exclude-dir=/sys \
+                                --exclude-dir=/proc \
+                                --exclude-dir=/dev \
+                                --infected / | tee /var/tmp/clamscan.out
+                       rm -f /var/tmp/maldetect.xml
+                       if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
+                         cat << EOF_GOOD > /var/tmp/maldetect.xml
+<testsuite skip=\\\"0\\\" failures=\\\"0\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
+  <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\"/>
+</testsuite>
+EOF_GOOD
+                       else
+                         cat << EOF_BAD > /var/tmp/maldetect.xml
+<testsuite skip=\\\"0\\\" failures=\\\"1\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
+  <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\">
+    <failure message=\\\"Malware Detected\\\" type=\\\"error\\\">
+      <![CDATA[ \\\"\\\$(cat /var/tmp/clamscan.out)\\\" ]]>
+    </failure>
+  </testcase>
+</testsuite>
+EOF_BAD
+                       fi'''
+
+def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
+                       scp -i ci_key \
+                         jenkins@${nodelist[0]}:/var/tmp/maldetect.xml \
+                         ${WORKSPACE}/maldetect.xml'''
+
 
 // bail out of branch builds that are not on a whitelist
 /*
