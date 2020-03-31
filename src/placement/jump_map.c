@@ -394,7 +394,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	current = remap_list->next;
 	spare_tgt = NULL;
 	oid = md->omd_id;
-	key = oid.lo;
+	key = oid.hi ^ oid.lo;
 	spares_left = count_available_spares(jmap, layout, failed_in_layout);
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
@@ -415,7 +415,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 				spares_left);
 
 		if (spare_avail) {
-			rebuild_key = crc(oid.lo, f_shard->fs_shard_idx);
+			rebuild_key = crc(key, f_shard->fs_shard_idx);
 
 			get_target(root, &spare_tgt, crc(key, rebuild_key),
 				   dom_used, tgts_used, layout, shard_id);
@@ -525,7 +525,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	k = 0;
 	fail_tgt_cnt = 0;
 	oid = md->omd_id;
-	key = oid.lo;
+	key = oid.hi ^ oid.lo;
 	target = NULL;
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
