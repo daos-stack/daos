@@ -1,4 +1,6 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
+%define server_svc_name daos_server.service
+%define agent_svc_name daos_agent.service
 
 %global mercury_version 2.0.0a1-0.7.git.41caa14%{?dist}
 
@@ -7,7 +9,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       6%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -70,6 +72,7 @@ BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: Modules
+BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
 %else
 # have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
@@ -120,6 +123,7 @@ Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= 1.8.0
+%systemd_requires
 
 %description server
 This is the package needed to run a DAOS server
@@ -129,6 +133,7 @@ Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
+%systemd_requires
 
 %description client
 This is the package needed to run a DAOS client
@@ -189,13 +194,26 @@ PREFIX="%{?_prefix}"
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/daos_server.service %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/daos_agent.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
-%post server -p /sbin/ldconfig
-%postun server -p /sbin/ldconfig
+%post server
+/sbin/ldconfig
+%systemd_post %{server_svc_name}
+%preun server
+%systemd_preun %{server_svc_name}
+%postun server
+/sbin/ldconfig
+%systemd_postun %{server_svc_name}
+
+%post client
+%systemd_post %{agent_svc_name}
+%preun client
+%systemd_preun %{agent_svc_name}
+%postun client
+%systemd_postun %{agent_svc_name}
 
 %files
 %defattr(-, root, root, -)
@@ -250,7 +268,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/daos_srv/libvos_srv.so
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
-%{_unitdir}/daos_server.service
+%{_unitdir}/%{server_svc_name}
 
 %files client
 %{_prefix}/etc/memcheck-daos-client.supp
@@ -301,7 +319,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos.yml
-%{_unitdir}/daos_agent.service
+%{_unitdir}/%{agent_svc_name}
+%{_mandir}/man8/daos.8*
+%{_mandir}/man8/dmg.8*
 
 %files tests
 %dir %{_prefix}/lib/daos
@@ -329,6 +349,12 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Fri Mar 27 2020 David Quigley <david.quigley@intel.com> - 1.1.0-8
+- add daos and dmg man pages to the daos-client files list
+
+* Thu Mar 26 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-7
+- Add systemd scriptlets for managing daos_server/daos_admin services
+
 * Thu Mar 26 2020 Alexander Oganeozv <alexander.a.oganezov@intel.com> - 1.1.0-6
 - Update ofi to 62f6c937601776dac8a1f97c8bb1b1a6acfbc3c0
 
