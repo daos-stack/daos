@@ -45,7 +45,6 @@ import (
 const (
 	agentSockName        = "agent.sock"
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
-	defaultConfigFile    = "daos_agent.yml"
 )
 
 type cliOptions struct {
@@ -127,16 +126,9 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
 
-	if opts.ConfigPath == "" {
-		defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
-		if _, err := os.Stat(defaultConfigPath); err == nil {
-			opts.ConfigPath = defaultConfigPath
-		}
-	}
-
 	// Load the configuration file using the supplied path or the
 	// default path if none provided.
-	config, err := client.GetConfig(log, opts.ConfigPath)
+	config, err := client.GetAgentConfig(log, opts.ConfigPath)
 	if err != nil {
 		log.Errorf("An unrecoverable error occurred while processing the configuration file: %s", err)
 		return err
