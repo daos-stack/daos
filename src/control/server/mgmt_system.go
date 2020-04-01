@@ -267,7 +267,6 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 			// unexpected error, fail without collecting rank results
 			return nil, err
 		}
-		svc.log.Debug("deadline exceeded when stopping instances")
 	}
 
 	stopped := make(chan struct{})
@@ -344,6 +343,8 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
 
 	resp := &mgmtpb.RanksResp{}
+
+	// wait until harness reports ready
 
 	for _, i := range svc.harness.Instances() {
 		rank, err := i.GetRank()

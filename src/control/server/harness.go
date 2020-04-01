@@ -317,24 +317,10 @@ func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-		case ready := <-instance.AwaitReady():
-			h.log.Debugf("instance ready: %v", ready)
-			if err := instance.SetRank(ctx, ready); err != nil {
+		case ready := <-instance.AwaitDrpcReady():
+			if err := instance.SetupWithDrpc(ctx, ready); err != nil {
 				return err
 			}
-			// update ioserver target count to reflect allocated
-			// number of targets, not number requested when starting
-			instance.SetTargetCount(int(ready.GetNtgts()))
-		}
-
-		if instance.IsMSReplica() {
-			if err := instance.StartManagementService(); err != nil {
-				return errors.Wrap(err, "failed to start management service")
-			}
-		}
-
-		if err := instance.LoadModules(); err != nil {
-			return errors.Wrap(err, "failed to load I/O server modules")
 		}
 	}
 
@@ -355,7 +341,6 @@ func (h *IOServerHarness) monitor(ctx context.Context) error {
 			msg := fmt.Sprintf("instance exited: %v", err)
 			if len(h.StartedRanks()) == 0 {
 				msg += ", all instances stopped!"
-				h.setStartable()
 			}
 			h.log.Info(msg)
 		case <-h.restart: // harness to restart instances
@@ -414,13 +399,12 @@ func (h *IOServerHarness) RestartInstances() error {
 	defer h.RUnlock()
 
 	if !h.IsStarted() {
-		return errors.New("can't start instances: harness not started")
+		return FaultHarnessNotStarted
 	}
-	if !h.IsStartable() {
-		return errors.New("can't start instances: already running")
-	}
-	if len(h.StartedRanks()) > 0 {
-		return errors.New("can't start instances: already started")
+
+	startedRanks := h.StartedRanks()
+	if len(startedRanks) > 0 {
+		return FaultInstancesNotStopped(startedRanks)
 	}
 
 	h.restart <- struct{}{} // trigger harness to restart its instances
@@ -489,13 +473,4 @@ func (h *IOServerHarness) StartedRanks() []*system.Rank {
 	}
 
 	return ranks
-}
-
-func (h *IOServerHarness) setStartable() {
-	atomic.StoreUint32(&h.startable, 1)
-}
-
-// IsStartable indicates whether the IOServerHarness is ready to be started.
-func (h *IOServerHarness) IsStartable() bool {
-	return atomic.LoadUint32(&h.startable) == 1
 }

@@ -152,7 +152,7 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 
 	_, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
-		return nil, err
+		return nil, err // cannot query unless MS is up
 	}
 
 	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)

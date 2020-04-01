@@ -28,6 +28,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -66,8 +67,9 @@ type IOServerInstance struct {
 	bdevClassProvider *bdev.ClassProvider
 	scmProvider       *scm.Provider
 	msClient          *mgmtSvcClient
-	instanceReady     chan *srvpb.NotifyReadyReq
+	drpcReady         chan *srvpb.NotifyReadyReq
 	storageReady      chan struct{}
+	ready             uint32
 	fsRoot            string
 
 	sync.RWMutex
@@ -90,9 +92,21 @@ func NewIOServerInstance(log logging.Logger,
 		bdevClassProvider: bcp,
 		scmProvider:       sp,
 		msClient:          msc,
-		instanceReady:     make(chan *srvpb.NotifyReadyReq),
+		drpcReady:         make(chan *srvpb.NotifyReadyReq),
 		storageReady:      make(chan struct{}),
 	}
+}
+
+func (srv *IOServerInstance) setReady() {
+	atomic.StoreUint32(&srv.ready, 1)
+}
+
+// IsReady indicates whether the IOServerInstance is in a ready state.
+//
+// If true indicates that the instance is fully setup, distinct from
+// drpc and storage ready states.
+func (srv *IOServerInstance) IsReady() bool {
+	return atomic.LoadUint32(&srv.ready) == 1
 }
 
 // scmConfig returns the scm configuration assigned to this instance.
@@ -238,24 +252,24 @@ func (srv *IOServerInstance) IsStarted() bool {
 	return srv.runner.IsRunning()
 }
 
-// NotifyReady receives a ready message from the running IOServer
+// NotifyDrpcReady receives a ready message from the running IOServer
 // instance.
-func (srv *IOServerInstance) NotifyReady(msg *srvpb.NotifyReadyReq) {
+func (srv *IOServerInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
 	srv.log.Debugf("%s instance %d ready: %v", DataPlaneName, srv.Index(), msg)
 
 	// Activate the dRPC client connection to this iosrv
 	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
 
 	go func() {
-		srv.instanceReady <- msg
+		srv.drpcReady <- msg
 	}()
 }
 
-// AwaitReady returns a channel which receives a ready message
+// AwaitDrpcReady returns a channel which receives a ready message
 // when the started IOServer instance indicates that it is
 // ready to receive dRPC messages.
-func (srv *IOServerInstance) AwaitReady() chan *srvpb.NotifyReadyReq {
-	return srv.instanceReady
+func (srv *IOServerInstance) AwaitDrpcReady() chan *srvpb.NotifyReadyReq {
+	return srv.drpcReady
 }
 
 // NotifyStorageReady releases any blocks on AwaitStorageReady().
@@ -489,6 +503,30 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	}
 
 	return makeDrpcCall(dc, module, method, body)
+}
+
+func (srv *IOServerInstance) SetupWithDrpc(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	if err := srv.SetRank(ctx, ready); err != nil {
+		return err
+	}
+	// update ioserver target count to reflect allocated
+	// number of targets, not number requested when starting
+	srv.SetTargetCount(int(ready.GetNtgts()))
+
+	if srv.IsMSReplica() {
+		if err := srv.StartManagementService(); err != nil {
+			return errors.Wrap(err, "failed to start management service")
+		}
+	}
+
+	if err := srv.LoadModules(); err != nil {
+		return errors.Wrap(err, "failed to load I/O server modules")
+	}
+
+	srv.log.Debugf("instance ready: %v", ready)
+	srv.setReady()
+
+	return nil
 }
 
 // BioErrorNotify logs a blob I/O error.
