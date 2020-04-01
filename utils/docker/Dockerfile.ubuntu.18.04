@@ -43,6 +43,9 @@ RUN rm /bin/sh && ln -s bash /bin/sh
 
 RUN locale-gen en_US.UTF-8 || cat /usr/share/i18n/SUPPORTED
 
+# use Java 8 instead of default Java 11
+RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+
 # Dependencies
 
 # Add DAOS user
