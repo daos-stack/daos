@@ -24,7 +24,7 @@ def scons():
     libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
 
     # Other libs
-    libs += ['spdk', 'numa', 'dl', 'smd']
+    libs += ['numa', 'dl']
 
     bio = daos_build.library(denv, "bio", Glob('*.c'), LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', bio)

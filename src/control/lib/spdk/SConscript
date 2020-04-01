@@ -23,7 +23,7 @@ def scons():
     libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
 
     # Other libs
-    libs += ['spdk', 'numa', 'dl', 'isal']
+    libs += ['numa', 'dl', 'isal']
 
     # hack to avoid building this library with cov compiler for the moment
     compiler = senv.get('COMPILER').lower()
