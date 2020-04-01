@@ -1402,6 +1402,9 @@ class DaosInputParams(object):
     def __str__(self):
         return str(self.co_prop)
 
+    def __repr__(self):
+        return str(self.co_prop)
+
 class DaosContainer(object):
     """A python object representing a DAOS container."""
 
@@ -1472,7 +1475,7 @@ class DaosContainer(object):
         if self.cont_input_values.type != "Unknown":
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
-            if self.cont_input_values.type.casefold in ("posix", "POSIX"):
+            if self.cont_input_values.type in ("posix", "POSIX"):
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value)
             elif self.cont_input_values.type == "hdf5":
