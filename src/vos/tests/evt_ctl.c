@@ -2046,113 +2046,6 @@ test_evt_root_deactivate_bug(void **state)
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
-static int
-run_create_test(void)
-{
-	static const struct CMUnitTest evt_create[] = {
-		{ "EVT001: evt_create", ts_open_create, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree create test", evt_create,
-					   NULL, NULL);
-}
-
-static int
-run_destroy_test(void)
-{
-	static const struct CMUnitTest evt_destroy[] = {
-		{ "EVT002: evt_destroy", ts_close_destroy, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree destroy test", evt_destroy,
-						NULL, NULL);
-}
-
-static int
-run_add_test(void)
-{
-	static const struct CMUnitTest evt_add_rect[] = {
-		{ "EVT003: evt_add_rect", ts_add_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree add test", evt_add_rect,
-						NULL, NULL);
-}
-
-static int
-run_many_add_test(void)
-{
-	static const struct CMUnitTest evt_many_add[] = {
-		{ "EVT004: evt_many_add", ts_many_add, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree many add test",
-						evt_many_add, NULL, NULL);
-}
-
-static int
-run_find_rect_test(void)
-{
-	static const struct CMUnitTest evt_find_rect[] = {
-		{ "EVT005: evt_find_rect", ts_find_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree find rect test",
-						evt_find_rect, NULL, NULL);
-}
-
-static int
-run_list_rect_test(void)
-{
-	static const struct CMUnitTest evt_list_rect[] = {
-		{ "EVT006: evt_list_rect", ts_list_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree list rect test",
-						evt_list_rect, NULL, NULL);
-}
-
-static int
-run_delete_rect_test(void)
-{
-	static const struct CMUnitTest evt_delete_rect[] = {
-		{ "EVT007: evt_delete_rect", ts_delete_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree delete rect test",
-						evt_delete_rect, NULL, NULL);
-}
-
-static int
-run_tree_debug_test(void)
-{
-	static const struct CMUnitTest evt_tree_debug[] = {
-		{ "EVT008: evt_tree_debug", ts_tree_debug, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree tree debug test",
-					evt_tree_debug, NULL, NULL);
-}
-
-static int
-run_drain_test(void)
-{
-	static const struct CMUnitTest evt_drain[] = {
-		{ "EVT009: evt_drain", ts_drain, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree drain test",
-					   evt_drain, NULL, NULL);
-}
 
 static void
 test_evt_outer_punch(void **state)
@@ -2342,76 +2235,11 @@ static struct option ts_ops[] = {
 	{ NULL,		0,			NULL,	0	},
 };
 
-static int
-ts_cmd_run(char opc, char *args)
-{
-	int	rc = 0;
-
-	tst_fn_val.optval = args;
-	tst_fn_val.input = true;
-
-	switch (opc) {
-	case 'C':
-		rc = run_create_test();
-		break;
-	case 'D':
-		rc = run_destroy_test();
-		break;
-	case 'o':
-		tst_fn_val.input = false;
-		tst_fn_val.optval = NULL;
-		rc = run_create_test();
-		break;
-	case 'c':
-		tst_fn_val.input = false;
-		rc = run_destroy_test();
-		break;
-	case 'a':
-		rc = run_add_test();
-		break;
-	case 'm':
-		rc = run_many_add_test();
-		break;
-	case 'e':
-		rc = run_drain_test();
-		break;
-	case 'f':
-		rc = run_find_rect_test();
-		break;
-	case 'l':
-		rc = run_list_rect_test();
-		break;
-	case 'd':
-		rc = run_delete_rect_test();
-		break;
-	case 'b':
-		rc = run_tree_debug_test();
-		break;
-	case 't':
-		rc = run_internal_tests();
-		break;
-	case 's':
-		if (strcasecmp(args, "soff") == 0)
-			ts_feats = EVT_FEAT_SORT_SOFF;
-		else if (strcasecmp(args, "dist_even") == 0)
-			ts_feats = EVT_FEAT_SORT_DIST_EVEN;
-		break;
-	default:
-		D_PRINT("Unsupported command %c\n", opc);
-		rc = 0;
-		break;
-	}
-	if (rc != 0)
-		D_PRINT("opc=%d failed with rc="DF_RC"\n", opc, DP_RC(rc));
-
-	return rc;
-}
-
 static void
 ts_group(void ** state){
 	int	opc = 0;
 	while((opc = getopt_long(test_group_stop-test_group_start+1,
-				 test_group_args+2,
+				 test_group_args+test_group_start,
 				 "C:a:m:e:f:g:d:b:Docl::ts",
 				 ts_ops, NULL)) != -1){
 		tst_fn_val.optval = optarg;
@@ -2516,35 +2344,34 @@ main(int argc, char **argv)
 	ts_uma = utest_utx2uma(ts_utx);
 
 	if ((argc - optind) == 1) {
-		rc = dts_cmd_parser(ts_ops, "$ > ", ts_cmd_run);
+		/*rc = dts_cmd_parser(ts_ops, "$ > ", ts_cmd_run);*/
+		print_message("Invalid format.\n");
+		rc = 1;
 		goto out;
 	}
 
-	if(strcmp(argv[1], "--start-test") != 0) {
-		/* It does not have this format: evt_ctl --start-test <test-name> [options]
-		 * So it will execute one cmocka test per parameter */
-		while ((rc = getopt_long(argc, argv, "C:a:m:e:f:g:d:b:Docl::ts:",
-					 ts_ops, NULL)) != -1) {
-			rc = ts_cmd_run(rc, optarg);
+	/* First, execute Internal tests in the command */
+	int j;
+	for(j=0; j<argc;j++){
+		if(strcmp(argv[j],"-t") == 0 ) {
+			rc = run_internal_tests();
 			if (rc != 0)
-				goto out;
+				D_PRINT("Internal tests failed with rc="DF_RC"\n", DP_RC(rc));
 		}
-		rc = 0;
-	} else {
-		int j;
-		for(j=0; j<argc;j++){
-			if(strcmp(argv[j],"-t") == 0 ) {
-				rc = run_internal_tests();
-				if (rc != 0)
-					D_PRINT("Internal tests failed with rc="DF_RC"\n", DP_RC(rc));
-			}
-		}
-		int start_idx = 2;
-		char * test_name = argv[start_idx];
-		int stop_idx = argc-1;
-		rc = run_cmd_line_test(test_name, argv, start_idx, stop_idx);
-
 	}
+	
+	/* Execute the sequence of tests */
+	int start_idx;
+	char* test_name;
+	int stop_idx = argc-1;
+	if(strcmp(argv[1], "--start-test") != 0) {
+		start_idx = 0;
+		test_name = "Default test name";
+	} else {
+		start_idx = 2;
+		test_name = argv[start_idx];
+	}
+	rc = run_cmd_line_test(test_name, argv, start_idx, stop_idx);
  out:
 	daos_debug_fini();
 	rc += utest_utx_destroy(ts_utx);
