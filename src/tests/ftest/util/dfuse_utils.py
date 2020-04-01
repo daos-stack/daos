@@ -227,7 +227,7 @@ class Dfuse(DfuseCommand):
             del retcodes[1]
         if len(retcodes):
             self.log.error('Errors checking running: %s', retcodes)
-            if fail_on_error:
+            if not fail_on_error:
                 return False
             raise CommandFailure('dfuse not running')
         return True
