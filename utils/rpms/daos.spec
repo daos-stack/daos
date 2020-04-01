@@ -1,11 +1,10 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
-# Unlimited maximum version
-%global spdk_max_version 1000
+%global spdk_max_version 20
 
 Name:          daos
 Version:       0.9.1
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -31,7 +30,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
-BuildRequires: spdk-devel <= %{spdk_max_version}, spdk-tools <= %{spdk_max_version}
+BuildRequires: spdk-devel < %{spdk_max_version}, spdk-tools < %{spdk_max_version}
 BuildRequires: fio < 3.4
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
@@ -86,7 +85,7 @@ Requires: libpmem1, libpmemobj1
 %endif
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: spdk <= %{spdk_max_version}
+Requires: spdk < %{spdk_max_version}
 Requires: fio < 3.4
 Requires: openssl
 # ensure we get exactly the right cart RPM
@@ -110,7 +109,7 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: %{name}-client = %{version}-%{release}
-Requires: spdk-tools <= %{spdk_max_version}
+Requires: spdk-tools < %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
@@ -339,6 +338,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Wed Apr 01 2020 Tom Nabarro <tom.nabarro@intel.com> 0.9.1-3
+- constrain max. version of spdk to < v20
+
 * Fri Mar 27 2020 David Quigley <david.quigley@intel.com> - 0.9.1-2
 - add daos and dmg man pages to the daos-client files list
 
