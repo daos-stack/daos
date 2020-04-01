@@ -40,6 +40,7 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
+/*
 def daos_branch = env.CHANGE_TARGET
 node() { echo "daos_branch: " + daos_branch }
 if (!daos_branch) {
@@ -49,6 +50,8 @@ if (!daos_branch) {
 } else {
     node() { echo "daos_branch is not null" }
 }
+*/
+def daos_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -248,7 +251,7 @@ pipeline {
                          to: 'brian.murrell@intel.com',
                          body: sh(script: 'env | sort', returnStdout: true)
                 sh label: "Playground",
-                   script: 'if [ -z "' + env.CHANGE_ID + '''" ]; then
+                   script: 'if [ "' + env.CHANGE_ID + '''" = "null" ]; then
                                 mb_modifier="^"
                             fi
                             echo ''' + env.BRANCH_NAME + '''
