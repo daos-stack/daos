@@ -249,6 +249,8 @@ pipeline {
                    script: 'if [ -z "' + env.CHANGE_ID + '''" ]; then
                                 mb_modifier="^"
                             fi
+                            echo ''' + env.BRANCH_NAME + '''
+                            git branch -a
                             git merge-base origin/''' + daos_branch + '''$mb_modifier HEAD
                             git diff-tree --no-commit-id --name-only                       \
                               $(git merge-base origin/''' + daos_branch + '''$mb_modifier HEAD) HEAD | \
