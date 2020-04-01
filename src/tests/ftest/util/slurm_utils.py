@@ -120,6 +120,8 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
             script_file.write("#SBATCH --output={}\n".format(output))
         if sbatch:
             for key, value in sbatch.items():
+                if key == "error":
+                    value = value + str(unique)
                 script_file.write("#SBATCH --{}={}\n".format(key, value))
         script_file.write("\n")
 
@@ -204,7 +206,7 @@ def watch_job(handle, maxwait, test_obj):
     wait_time = 0
     while True:
         state = check_slurm_job(handle)
-        if state == "PENDING" or state == "RUNNING" or state == "COMPLETING":
+        if state in ("PENDING", "RUNNING", "COMPLETING"):
             if wait_time > maxwait:
                 state = "MAXWAITREACHED"
                 print("Job {} has timedout after {} secs".format(handle,
