@@ -230,6 +230,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// Create new grpc server, register services and start serving.
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,
+		unaryStatusInterceptor,
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,
