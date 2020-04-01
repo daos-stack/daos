@@ -24,7 +24,9 @@ package logging_test
 
 import (
 	"bytes"
+	"fmt"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -43,37 +45,58 @@ func (tw *testWrap) Debugf(fmtStr string, args ...interface{}) {
 	tw.log.Debugf(fmtStr, args...)
 }
 
-// NB: Keep this test at the top of the file to avoid having to
-// update the line numbers all the time.
+func getLineNumber(t *testing.T) int {
+	pc := make([]uintptr, 2)
+	n := runtime.Callers(2, pc)
+	if n > 0 {
+		pc = pc[:n]
+		frames := runtime.CallersFrames(pc)
+		for {
+			frame, _ := frames.Next()
+			return frame.Line
+		}
+	}
+
+	t.Fatal("failed to get test line number")
+	return 0
+}
+
 func TestLogging_DebugOutputDepth(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 
-	log.Debug("test 1")
-	if !strings.Contains(buf.String(), "logging_test.go:51: test 1") {
-		t.Fatalf("incorrect caller info: %s", buf)
+	// not a perfect diff, but good enough for this test
+	cmpOut := func(t *testing.T, want, got string) {
+		if !strings.Contains(got, want) {
+			t.Fatalf("incorrect caller info (-want, +got):\n-%s\n+%s\n", want, got)
+		}
 	}
+
+	line := getLineNumber(t) + 1
+	log.Debug("test 1")
+	wanted := fmt.Sprintf("logging_test.go:%d: test 1", line)
+	cmpOut(t, wanted, buf.String())
 	buf.Reset()
 
+	line = getLineNumber(t) + 1
 	log.Debugf("test 2")
-	if !strings.Contains(buf.String(), "logging_test.go:57: test 2") {
-		t.Fatalf("incorrect caller info: %s", buf)
-	}
+	wanted = fmt.Sprintf("logging_test.go:%d: test 2", line)
+	cmpOut(t, wanted, buf.String())
 	buf.Reset()
 
 	tw := &testWrap{
 		log: log,
 	}
 
+	line = getLineNumber(t) + 1
 	tw.Debug("test 3")
-	if !strings.Contains(buf.String(), "logging_test.go:67: test 3") {
-		t.Fatalf("incorrect caller info: %s", buf)
-	}
+	wanted = fmt.Sprintf("logging_test.go:%d: test 3", line)
+	cmpOut(t, wanted, buf.String())
 	buf.Reset()
 
+	line = getLineNumber(t) + 1
 	tw.Debugf("test 4")
-	if !strings.Contains(buf.String(), "logging_test.go:73: test 4") {
-		t.Fatalf("incorrect caller info: %s", buf)
-	}
+	wanted = fmt.Sprintf("logging_test.go:%d: test 4", line)
+	cmpOut(t, wanted, buf.String())
 	buf.Reset()
 }
 
