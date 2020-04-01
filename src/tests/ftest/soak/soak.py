@@ -371,8 +371,9 @@ class Soak(TestWithServers):
                         cmd = Srun(ior_cmd)
                         cmd.setup_command(env, None, nprocs)
                         cmd.ntasks_per_node.update(ppn)
-                        commands.append(cmd.__str__())
-
+                        log_name = "{}_{}_{}_{}".format(
+                            api, b_size, t_size, o_type)
+                        commands.append([cmd.__str__(), log_name])
                         self.log.info(
                             "<<IOR cmdline>>: %s \n", commands[-1].__str__())
         return commands
@@ -483,7 +484,8 @@ class Soak(TestWithServers):
                             self.dfuse.mount_dir.value,
                             "fio --name=global --directory")
                     # fio command
-                    commands.append(fio_cmd.__str__())
+                    log_name = "{}_{}_{}".format(blocksize, size, rw)
+                    commands.append([fio_cmd.__str__(), log_name])
                     self.log.info(
                         "<<FIO cmdline>>: %s \n", commands[-1])
         return commands
@@ -492,7 +494,7 @@ class Soak(TestWithServers):
         """Create a slurm batch script that will execute a list of cmdlines.
 
         Args:
-            commands(list): commandlines
+            commands(list): commandlines and cmd specific log_name
             job(str): the job name that will be defined in the slurm script
             ppn(int): number of tasks to run on each node
 
@@ -510,13 +512,13 @@ class Soak(TestWithServers):
                 self.bin, "daos_agent"), os.path.join(
                     self.tmp, "daos_agent.yaml"))]
         # Create the sbatch script for each cmdline
-        for cmd in commands:
+        for cmd, log_name in commands:
             output = os.path.join(self.test_log_dir, "%N_" +
                                   self.test_name + "_" + job + "_%j_%t_" +
-                                  str(ppn) + "_")
+                                  str(ppn) + "_" + log_name + "_")
             error = os.path.join(self.test_log_dir, "%N_" +
                                  self.test_name + "_" + job + "_%j_%t_" +
-                                 str(ppn) + "_error_")
+                                 str(ppn) + "_" + log_name + "_error_")
             sbatch = {
                 "time": str(self.job_timeout) + ":00",
                 "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
