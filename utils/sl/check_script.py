@@ -151,7 +151,10 @@ from SCons.Variables import *
         """Get the line number"""
         os.unlink("script")
         log_file.seek(0)
-        output = tempfile.TemporaryFile(mode='w+', encoding='utf-8')
+        try:
+            output = tempfile.TemporaryFile(mode='w+', encoding='utf-8')
+        except TypeError:
+            output = tempfile.TemporaryFile()
         for line in log_file.readlines():
             match = re.search(r":(\d+):", line)
             if match:
@@ -248,7 +251,10 @@ def check_script(fname, *args, **kw):
     if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
         print(" ".join(cmd))
 
-    log_file = tempfile.TemporaryFile(mode='w+', encoding='utf-8')
+    try:
+        log_file = tempfile.TemporaryFile(mode='w+', encoding='utf-8')
+    except TypeError:
+        log_file = tempfile.TemporaryFile()
 
     try:
         subprocess.check_call(cmd, stdout=log_file)
