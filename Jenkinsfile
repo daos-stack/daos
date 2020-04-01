@@ -220,7 +220,7 @@ pipeline {
             steps {
                 checkout([$class: 'GitSCM',
                           branches: [[name: "refs/heads/${env.BRANCH_NAME}"]],
-                          userRemoteConfigs: [[refspec: '+refs/heads/master-sandbox:refs/remotes/@{remote}/master-sandbox',
+                          userRemoteConfigs: [[refspec: '+refs/heads/master-sandbox:refs/remotes/origin/master-sandbox',
                                                url: 'https://github.com/daos-stack/daos/']]])
                 /*
                   [ $class: 'GitSCM',
