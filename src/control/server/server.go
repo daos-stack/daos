@@ -262,7 +262,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
-	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
+	clientNetworkCfg := ClientNetworkCfg{
+		Provider:        cfg.Fabric.Provider,
+		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
+		CrtTimeout:      cfg.Fabric.CrtTimeout,
+	}
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &clientNetworkCfg))
 
 	go func() {
 		_ = grpcServer.Serve(lis)
