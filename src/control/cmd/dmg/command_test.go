@@ -63,7 +63,7 @@ type testConn struct {
 }
 
 func newTestConn(t *testing.T) *testConn {
-	cfg := client.NewConfiguration()
+	cfg := client.NewAdminConfiguration()
 	return &testConn{
 		clientConfig: cfg,
 		t:            t,
@@ -230,7 +230,7 @@ func testExpectedError(t *testing.T, expected, actual error) {
 func createTestConfig(t *testing.T, log logging.Logger, path string) (*os.File, func()) {
 	t.Helper()
 
-	defaultConfig := client.NewConfiguration()
+	defaultConfig := client.NewAdminConfiguration()
 	if err := defaultConfig.SetPath(path); err != nil {
 		t.Fatal(err)
 	}

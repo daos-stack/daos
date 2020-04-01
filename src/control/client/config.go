@@ -39,11 +39,12 @@ import (
 )
 
 const (
-	defaultRuntimeDir  = "/var/run/daos_agent"
-	defaultLogFile     = "/tmp/daos_agent.log"
-	defaultConfigPath  = "../etc/daos.yml"
-	defaultSystemName  = "daos_server"
-	defaultControlPort = 10001
+	defaultRuntimeDir      = "/var/run/daos_agent"
+	defaultLogFile         = "/tmp/daos_agent.log"
+	defaultAgentConfigPath = "../etc/daos_agent.yml"
+	defaultAdminConfigPath = "../etc/daos.yml"
+	defaultSystemName      = "daos_server"
+	defaultControlPort     = 10001
 )
 
 // External interface provides methods to support various os operations.
@@ -80,9 +81,9 @@ type Configuration struct {
 	Ext             External
 }
 
-// newDefaultConfiguration creates a new instance of configuration struct
+// newDefaultAgentConfiguration creates a new instance of configuration struct
 // populated with defaults.
-func newDefaultConfiguration(ext External) *Configuration {
+func newDefaultAgentConfiguration(ext External) *Configuration {
 	return &Configuration{
 		SystemName:      defaultSystemName,
 		AccessPoints:    []string{fmt.Sprintf("localhost:%d", defaultControlPort)},
@@ -90,42 +91,77 @@ func newDefaultConfiguration(ext External) *Configuration {
 		HostList:        []string{fmt.Sprintf("localhost:%d", defaultControlPort)},
 		RuntimeDir:      defaultRuntimeDir,
 		LogFile:         defaultLogFile,
-		Path:            defaultConfigPath,
-		TransportConfig: security.DefaultClientTransportConfig(),
+		Path:            defaultAgentConfigPath,
+		TransportConfig: security.DefaultAgentTransportConfig(),
 		Ext:             ext,
 	}
 }
 
-// GetConfig loads a configuration file from the path given,
+// newDefaultAdminConfiguration creates a new instance of configuration struct
+// populated with defaults.
+func newDefaultAdminConfiguration(ext External) *Configuration {
+	return &Configuration{
+		SystemName:      defaultSystemName,
+		AccessPoints:    []string{fmt.Sprintf("localhost:%d", defaultControlPort)},
+		ControlPort:     defaultControlPort,
+		HostList:        []string{fmt.Sprintf("localhost:%d", defaultControlPort)},
+		RuntimeDir:      defaultRuntimeDir,
+		LogFile:         defaultLogFile,
+		Path:            defaultAdminConfigPath,
+		TransportConfig: security.DefaultAdminTransportConfig(),
+		Ext:             ext,
+	}
+}
+
+// GetAdminConfig loads a configuration file from the path given,
 // or from the default location if none is provided.  It returns a populated
 // Configuration struct based upon the default values and any config file overrides.
-func GetConfig(log logging.Logger, inPath string) (*Configuration, error) {
-	c := NewConfiguration()
+func GetAdminConfig(log logging.Logger, inPath string) (*Configuration, error) {
+	c := NewAdminConfiguration()
+	if err := getConfig(log, inPath, c); err != nil {
+		return nil, errors.Wrapf(err, "Unable to load Admin configuration")
+	}
+	return c, nil
+}
+
+// GetAgentConfig loads a configuration file from the path given,
+// or from the default location if none is provided.  It returns a populated
+// Configuration struct based upon the default values and any config file overrides.
+func GetAgentConfig(log logging.Logger, inPath string) (*Configuration, error) {
+	c := NewAgentConfiguration()
+	if err := getConfig(log, inPath, c); err != nil {
+		return nil, errors.Wrapf(err, "Unable to load Agent configuration")
+	}
+	return c, nil
+}
+
+func getConfig(log logging.Logger, inPath string, c *Configuration) error {
 	if err := c.SetPath(inPath); err != nil {
-		return nil, err
+		return err
 	}
 
 	if _, err := os.Stat(c.Path); err != nil {
 		if inPath == "" && os.IsNotExist(err) {
 			log.Debugf("No configuration file found; using default values")
 			c.Path = ""
-			return c, nil
+			return nil
 		}
-		return nil, err
+		return err
 	}
 
 	if err := c.Load(); err != nil {
-		return nil, errors.Wrapf(err, "parsing config file %s", c.Path)
+		return errors.Wrapf(err, "parsing config file %s", c.Path)
 	}
 	log.Debugf("DAOS Client config read from %s", c.Path)
 
 	if err := c.Validate(log); err != nil {
-		return nil, errors.Wrapf(err, "validating config file %s", c.Path)
+		return errors.Wrapf(err, "validating config file %s", c.Path)
 	}
 
-	return c, nil
+	return nil
 }
 
+// SetPath validates and stores the given string as the path in the config file.
 func (c *Configuration) SetPath(inPath string) error {
 	newPath, err := common.ResolvePath(inPath, c.Path)
 	if err != nil {
@@ -186,8 +222,14 @@ func (c *Configuration) parse(data []byte) error {
 	return yaml.Unmarshal(data, c)
 }
 
-// NewConfiguration creates a new instance of the Configuration struct
+// NewAgentConfiguration creates a new instance of the Configuration struct
 // populated with defaults and default external interface.
-func NewConfiguration() *Configuration {
-	return newDefaultConfiguration(&ext{})
+func NewAgentConfiguration() *Configuration {
+	return newDefaultAgentConfiguration(&ext{})
+}
+
+// NewAdminConfiguration creates a new instance of the Configuration struct
+// populated with defaults and default external interface.
+func NewAdminConfiguration() *Configuration {
+	return newDefaultAdminConfiguration(&ext{})
 }

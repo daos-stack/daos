@@ -166,7 +166,7 @@ func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *loggi
 			}
 		}
 
-		config, err := client.GetConfig(log, opts.ConfigPath)
+		config, err := client.GetAdminConfig(log, opts.ConfigPath)
 		if err != nil {
 			return errors.WithMessage(err, "processing config file")
 		}

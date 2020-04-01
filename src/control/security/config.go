@@ -34,10 +34,12 @@ import (
 
 const (
 	defaultCACert        = ".daos/daosCA.crt"
-	defaultServerCert    = ".daos/daos_server.crt"
-	defaultServerKey     = ".daos/daos_server.key"
-	defaultClientCert    = ".daos/client.crt"
-	defaultClientKey     = ".daos/client.key"
+	defaultServerCert    = ".daos/server.crt"
+	defaultServerKey     = ".daos/server.key"
+	defaultAgentCert     = ".daos/agent.crt"
+	defaultAgentKey      = ".daos/agent.key"
+	defaultAdminCert     = ".daos/admin.crt"
+	defaultAdminKey      = ".daos/admin.key"
 	defaultServer        = "server"
 	defaultClientCertDir = ".daos/clients"
 	defaultInsecure      = false
@@ -50,8 +52,8 @@ type TransportConfig struct {
 	CertificateConfig `yaml:",inline"`
 }
 
-func (tc *TransportConfig) String() string {
-	return fmt.Sprintf("allow insecure: %v", tc.AllowInsecure)
+func (cfg *TransportConfig) String() string {
+	return fmt.Sprintf("allow insecure: %v", cfg.AllowInsecure)
 }
 
 //CertificateConfig contains the specific certificate information for the daos
@@ -67,19 +69,38 @@ type CertificateConfig struct {
 	caPool          *x509.CertPool   `yaml:"-"`
 }
 
-//DefaultClientTransportConfig provides a default transport config disabling
+//DefaultAgentTransportConfig provides a default transport config disabling
 //certificate usage and specifying certificates located under .daos. As this
 //credential is meant to be used as a client credential it specifies a default
 //ServerName as well.
-func DefaultClientTransportConfig() *TransportConfig {
+func DefaultAgentTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
 			ServerName:      defaultServer,
 			ClientCertDir:   "",
 			CARootPath:      defaultCACert,
-			CertificatePath: defaultClientCert,
-			PrivateKeyPath:  defaultClientKey,
+			CertificatePath: defaultAgentCert,
+			PrivateKeyPath:  defaultAgentKey,
+			tlsKeypair:      nil,
+			caPool:          nil,
+		},
+	}
+}
+
+//DefaultAdminTransportConfig provides a default transport config disabling
+//certificate usage and specifying certificates located under .daos. As this
+//credential is meant to be used as a client credential it specifies a default
+//ServerName as well.
+func DefaultAdminTransportConfig() *TransportConfig {
+	return &TransportConfig{
+		AllowInsecure: defaultInsecure,
+		CertificateConfig: CertificateConfig{
+			ServerName:      defaultServer,
+			ClientCertDir:   "",
+			CARootPath:      defaultCACert,
+			CertificatePath: defaultAdminCert,
+			PrivateKeyPath:  defaultAdminKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
 		},

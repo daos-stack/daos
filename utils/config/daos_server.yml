@@ -43,9 +43,9 @@
 #  # Custom CA Root certificate for generated certs
 #  ca_cert: .daos/daosCA.crt
 #  # Server certificate for use in TLS handshakes
-#  cert: .daos/daos_server.crt
+#  cert: .daos/server.crt
 #  # Key portion of Server Certificate
-#  key: .daos/daos_server.key
+#  key: .daos/server.key
 #
 #
 ## Fault domain path

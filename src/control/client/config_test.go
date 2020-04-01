@@ -37,10 +37,19 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func getDefaultConfig(t *testing.T) (*client.Configuration, *os.File, func()) {
+func getAgentConfig(t *testing.T) (*client.Configuration, *os.File, func()) {
+	t.Helper()
+	defaultAgentConfig := client.NewAgentConfiguration()
+	return getConfig(t, defaultAgentConfig)
+}
+func getAdminConfig(t *testing.T) (*client.Configuration, *os.File, func()) {
+	t.Helper()
+	defaultAdminConfig := client.NewAdminConfiguration()
+	return getConfig(t, defaultAdminConfig)
+}
+func getConfig(t *testing.T, defaultConfig *client.Configuration) (*client.Configuration, *os.File, func()) {
 	t.Helper()
 
-	defaultConfig := client.NewConfiguration()
 	newPath, err := common.GetAdjacentPath(defaultConfig.Path)
 	if err != nil {
 		t.Fatal(err)
@@ -74,15 +83,15 @@ func getTestFile(t *testing.T) *os.File {
 	return testFile
 }
 
-func TestLoadConfigDefaultsNoFile(t *testing.T) {
+func TestLoadAgentConfigDefaultsNoFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	defaultConfig, f, cleanup := getDefaultConfig(t)
+	defaultConfig, f, cleanup := getAgentConfig(t)
 	f.Close()
 	defer cleanup()
 
-	cfg, err := client.GetConfig(log, "")
+	cfg, err := client.GetAgentConfig(log, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,11 +103,31 @@ func TestLoadConfigDefaultsNoFile(t *testing.T) {
 	}
 }
 
-func TestLoadConfigFromDefaultFile(t *testing.T) {
+func TestLoadAdminConfigDefaultsNoFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	defaultConfig, f, cleanup := getDefaultConfig(t)
+	defaultConfig, f, cleanup := getAdminConfig(t)
+	f.Close()
+	defer cleanup()
+
+	cfg, err := client.GetAdminConfig(log, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(fmt.Sprintf("%+v", defaultConfig),
+		fmt.Sprintf("%+v", cfg)); diff != "" {
+
+		t.Fatalf("loaded config doesn't match default config (-want, +got):\n%s\n", diff)
+	}
+}
+
+func TestLoadAgentConfigFromDefaultFile(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	defaultConfig, f, cleanup := getAgentConfig(t)
 	defer cleanup()
 
 	defaultConfig.SystemName = t.Name()
@@ -109,7 +138,7 @@ func TestLoadConfigFromDefaultFile(t *testing.T) {
 	}
 	f.Close()
 
-	cfg, err := client.GetConfig(log, "")
+	cfg, err := client.GetAgentConfig(log, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +150,34 @@ func TestLoadConfigFromDefaultFile(t *testing.T) {
 	}
 }
 
-func TestLoadConfigFromFile(t *testing.T) {
+func TestLoadAdminConfigFromDefaultFile(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	defaultConfig, f, cleanup := getAdminConfig(t)
+	defer cleanup()
+
+	defaultConfig.SystemName = t.Name()
+
+	_, err := f.WriteString(fmt.Sprintf("name: %s\n", t.Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	cfg, err := client.GetAdminConfig(log, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(fmt.Sprintf("%+v", defaultConfig),
+		fmt.Sprintf("%+v", cfg)); diff != "" {
+
+		t.Fatalf("loaded config doesn't match default config (-want, +got):\n%s\n", diff)
+	}
+}
+
+func TestLoadAgentConfigFromFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
@@ -134,7 +190,7 @@ func TestLoadConfigFromFile(t *testing.T) {
 	}
 	testFile.Close()
 
-	cfg, err := client.GetConfig(log, testFile.Name())
+	cfg, err := client.GetAgentConfig(log, testFile.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +199,29 @@ func TestLoadConfigFromFile(t *testing.T) {
 		"loaded config doesn't match written config")
 }
 
-func TestLoadConfigFailures(t *testing.T) {
+func TestLoadAdminConfigFromFile(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	testFile := getTestFile(t)
+	defer os.Remove(testFile.Name())
+
+	_, err := testFile.WriteString(fmt.Sprintf("name: %s\n", t.Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	testFile.Close()
+
+	cfg, err := client.GetAdminConfig(log, testFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	common.AssertEqual(t, cfg.SystemName, t.Name(),
+		"loaded config doesn't match written config")
+}
+
+func TestLoadAgentConfigFailures(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
@@ -157,7 +235,7 @@ func TestLoadConfigFailures(t *testing.T) {
 	testFile.Close()
 
 	t.Run("unparseable file", func(t *testing.T) {
-		_, err := client.GetConfig(log, testFile.Name())
+		_, err := client.GetAgentConfig(log, testFile.Name())
 		if err == nil {
 			t.Fatal("Expected GetConfig() to fail on unparseable file")
 		}
@@ -168,14 +246,52 @@ func TestLoadConfigFailures(t *testing.T) {
 	}
 
 	t.Run("unreadable file", func(t *testing.T) {
-		_, err := client.GetConfig(log, testFile.Name())
+		_, err := client.GetAgentConfig(log, testFile.Name())
 		if err == nil {
 			t.Fatal("Expected GetConfig() to fail on unreadable file")
 		}
 	})
 
 	t.Run("nonexistent file", func(t *testing.T) {
-		_, err := client.GetConfig(log, "/this/is/a/bad/path.yml")
+		_, err := client.GetAgentConfig(log, "/this/is/a/bad/path.yml")
+		if err == nil {
+			t.Fatal("Expected GetConfig() to fail on nonexistent file")
+		}
+	})
+}
+func TestLoadAdminConfigFailures(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	testFile := getTestFile(t)
+	defer os.Remove(testFile.Name())
+
+	_, err := testFile.WriteString("fneep blip blorp\nquack moo\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testFile.Close()
+
+	t.Run("unparseable file", func(t *testing.T) {
+		_, err := client.GetAdminConfig(log, testFile.Name())
+		if err == nil {
+			t.Fatal("Expected GetConfig() to fail on unparseable file")
+		}
+	})
+
+	if err := os.Chmod(testFile.Name(), 0000); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("unreadable file", func(t *testing.T) {
+		_, err := client.GetAdminConfig(log, testFile.Name())
+		if err == nil {
+			t.Fatal("Expected GetConfig() to fail on unreadable file")
+		}
+	})
+
+	t.Run("nonexistent file", func(t *testing.T) {
+		_, err := client.GetAdminConfig(log, "/this/is/a/bad/path.yml")
 		if err == nil {
 			t.Fatal("Expected GetConfig() to fail on nonexistent file")
 		}
