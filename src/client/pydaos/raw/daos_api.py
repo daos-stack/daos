@@ -1442,7 +1442,7 @@ class DaosContainer(object):
             conversion.c_uuid(con_uuid, self.uuid)
         self.poh = poh
         if con_prop is not None:
-            self.cont_input_values = con_prop.get_con_create_params()
+            self.cont_input_values = con_prop
         # We will support only basic properties. Full
         # container properties will not be exposed.
         # Create DaosProperty for checksum
