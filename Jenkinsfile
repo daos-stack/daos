@@ -204,7 +204,7 @@ pipeline {
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
-        skipDefaultCheckout(true)
+        //skipDefaultCheckout(true)
     }
 
     stages {
@@ -218,10 +218,12 @@ pipeline {
                 }
             }
             steps {
+                /*
                 checkout([$class: 'GitSCM',
                           branches: [[name: "refs/heads/${env.BRANCH_NAME}"]],
                           userRemoteConfigs: [[refspec: '+refs/heads/master-sandbox:refs/remotes/origin/master-sandbox',
                                                url: 'https://github.com/daos-stack/daos/']]])
+                */
                 /*
                   [ $class: 'GitSCM',
                     branches: [[name: "refs/heads/${env.BRANCH_NAME}"]],
