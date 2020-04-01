@@ -177,7 +177,10 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	iods = orw->orw_iod_array.oia_iods;
 	iods_csums = orwo->orw_iod_csums.ca_arrays;
 
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
+	/** fault injection - corrupt data after getting from server and before
+	 * verifying on client - simulates corruption over network
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH))
 		/** Got csum successfully from server. Now poison it!! */
 		orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum[0]++;
 
@@ -720,8 +723,12 @@ int csum_enum_verify_keys(const struct obj_enum_args *enum_args,
 		       kd->kd_csum_len, 1, CSUM_NO_CHUNK, kd->kd_csum_type);
 		d_iov_set(&key_iov, key_buf, kd->kd_key_len);
 
-		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_AKEY_FAIL) ||
-		    DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_DKEY_FAIL))
+		/**
+		 * fault injection - corrupt keys before verifying - simulates
+		 * corruption over network
+		 */
+		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_AKEY) ||
+		    DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_DKEY))
 			((uint8_t *)key_buf)[0] += 2;
 		rc = daos_csummer_verify_key(csummer, &key_iov, &csum_info);
 		if (rc != 0) {
