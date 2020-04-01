@@ -35,7 +35,7 @@
     </dependency>
     <dependency>
       <groupId>io.daos</groupId>
-      <artifactId>daos-client</artifactId>
+      <artifactId>daos-java</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

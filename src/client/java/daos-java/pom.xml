@@ -11,7 +11,7 @@
   </parent>
 
   <groupId>io.daos</groupId>
-  <artifactId>daos-client</artifactId>
+  <artifactId>daos-java</artifactId>
   <packaging>jar</packaging>
 
   <properties>

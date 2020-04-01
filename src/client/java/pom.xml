@@ -310,7 +310,7 @@
   </reporting>
 
   <modules>
-    <module>daos-client</module>
+    <module>daos-java</module>
     <module>hadoop-daos</module>
     <module>distribution</module>
   </modules>
