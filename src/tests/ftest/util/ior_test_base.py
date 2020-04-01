@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-import subprocess
 import threading
 import time
 

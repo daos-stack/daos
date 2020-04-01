@@ -47,7 +47,7 @@ def clear_icc_env(env):
             for flag in oldflags:
                 if 'diag-disable' in flag:
                     continue
-                if '-Werror-all' == flag:
+                if flag == '-Werror-all':
                     newflags.append('-Werror')
                     continue
                 newflags.append(flag)
