@@ -1167,8 +1167,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		 * The physical entry spans window end, but is fully covered
 		 * in current window, keep it intact.
 		 */
-		if (rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
-		    !phy_ent->pe_trunc_head) {
+		if ((rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
+		     !phy_ent->pe_trunc_head) || phy_ent->pe_retain) {
 			leftovers++;
 			continue;
 		}
@@ -1226,7 +1226,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		phy_ent = lgc_seg->ls_phy_ent;
 
 		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr) &&
-					!lgc_seg->ls_has_csum_err) {
+			!lgc_seg->ls_has_csum_err && !phy_ent->pe_retain) {
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
 			 * physical entry, in additon to re-assigning address.
