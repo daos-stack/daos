@@ -116,6 +116,7 @@ class Test(avocadoTest):
         self.fault_file = None
         self.debug = False
         self.config = None
+        self.local_errors = []
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
@@ -296,8 +297,12 @@ class TestWithServers(TestWithoutServers):
 
     def tearDown(self):
         """Tear down after each test case."""
+        # Include test errors so that failure report includes these errors
+        # at the end of the test for ease of debug
+        errors = self.local_errors
+
         # Destroy any containers first
-        errors = self.destroy_containers(self.container)
+        errors.extend(self.destroy_containers(self.container))
 
         # Destroy any pools next
         errors.extend(self.destroy_pools(self.pool))

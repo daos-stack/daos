@@ -49,6 +49,7 @@ class SoakTestError(Exception):
 
 
 class Soak(TestWithServers):
+    # pylint: disable=too-many-public-methods
     """Execute DAOS Soak test cases.
 
     :avocado: recursive
@@ -79,6 +80,7 @@ class Soak(TestWithServers):
         self.harasser_joblist = None
         self.harasser_results = None
         self.harasser_timeout = None
+        self.all_failed_jobs = None
 
     def job_done(self, args):
         """Call this function when a job is done.
@@ -99,7 +101,8 @@ class Soak(TestWithServers):
         for pool_name in pool_names:
             path = "".join(["/run/", pool_name, "/*"])
             # Create a pool and add it to the overall list of pools
-            self.pool.append(TestPool(self.context, self.log))
+            self.pool.append(TestPool(
+                self.context, self.log, dmg_command=self.get_dmg_command()))
             self.pool[-1].namespace = path
             self.pool[-1].get_params(self)
             self.pool[-1].create()
@@ -115,10 +118,11 @@ class Soak(TestWithServers):
         # copy the files from the remote
         # TO-DO: change scp
         this_host = socket.gethostname()
+        rsync_str = "rsync -avtr --min-size=1B"
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients),
-            "bash -c \"scp -p -r {0} {1}:{0}/.. && rm -rf {0}/*\"".format(
-                self.test_log_dir, this_host),
+            "bash -c \"{0} {1} {2}:{1}/.. && rm -rf {1}/*\"".format(
+                rsync_str, self.test_log_dir, this_host),
             self.srun_params)
         if result.exit_status == 0:
             cmd = "cp -R -p {0}/ \'{1}\'; rm -rf {0}/*".format(
@@ -510,9 +514,13 @@ class Soak(TestWithServers):
             output = os.path.join(self.test_log_dir, "%N_" +
                                   self.test_name + "_" + job + "_%j_%t_" +
                                   str(ppn) + "_")
+            error = os.path.join(self.test_log_dir, "%N_" +
+                                 self.test_name + "_" + job + "_%j_%t_" +
+                                 str(ppn) + "_error_")
             sbatch = {
                 "time": str(self.job_timeout) + ":00",
-                "exclude": NodeSet.fromlist(self.exclude_slurm_nodes)
+                "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
+                "error": str(error)
                 }
             # include the cluster specific params
             sbatch.update(self.srun_params)
@@ -643,7 +651,6 @@ class Soak(TestWithServers):
                     else:
                         self.log.info("<<Job %s could not be killed>>", job)
             # gather all the logfiles for this pass and cleanup test nodes
-            # If there is a failure the files can be gathered again in Teardown
             try:
                 self.get_remote_logs()
             except SoakTestError as error:
@@ -665,6 +672,7 @@ class Soak(TestWithServers):
         # Create the remote log directories from new loop/pass
         self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
         self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
+
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), "mkdir -p {}".format(
                 self.test_log_dir), self.srun_params)
@@ -704,12 +712,13 @@ class Soak(TestWithServers):
         # Wait for jobs to finish and cancel/kill jobs if necessary
         self.failed_job_id_list = self.job_completion(job_id_list)
 
-        # Test fails on first error but could use continue on error here
+        # Log the failing job ID
         if self.failed_job_id_list:
-            raise SoakTestError(
-                "<<FAILED: The following jobs failed {} >>".format(
-                    " ,".join(
-                        str(j_id) for j_id in self.failed_job_id_list)))
+            self.log.info(
+                "<<FAILED: The following jobs failed %s >>", (" ,".join(
+                    str(j_id) for j_id in self.failed_job_id_list)))
+            # accumulate failing job IDs
+            self.all_failed_jobs.extend(self.failed_job_id_list)
 
     def run_soak(self, test_param):
         """Run the soak test specified by the test params.
@@ -722,7 +731,7 @@ class Soak(TestWithServers):
         self.pool = []
         self.harasser_joblist = []
         self.harasser_results = {}
-        self.test_timeout = self.params.get("test_timeout", test_param)
+        test_to = self.params.get("test_timeout", test_param)
         self.job_timeout = self.params.get("job_timeout", test_param)
         self.harasser_timeout = self.params.get("harasser_timeout", test_param)
         self.test_name = self.params.get("name", test_param)
@@ -751,6 +760,7 @@ class Soak(TestWithServers):
             self.srun_params["reservation"] = slurm_reservation
         # Initialize time
         start_time = time.time()
+        self.test_timeout = int(3600 * test_to)
         end_time = start_time + self.test_timeout
         # Create the reserved pool with data
         # self.pool is a list of all the pools used in soak
@@ -764,7 +774,7 @@ class Soak(TestWithServers):
         self.container.get_params(self)
         self.container.create()
         self.container.write_objects(rank, obj_class)
-
+        self.all_failed_jobs = []
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), "rm -rf {}".format(
@@ -785,8 +795,9 @@ class Soak(TestWithServers):
         while time.time() < end_time:
             # Start new pass
             start_loop_time = time.time()
-            self.log.info("<<Soak1 PASS %s: time until done %s>>", self.loop, (
-                end_time - time.time()))
+            self.log.info(
+                "<<Soak1 PASS %s: time until done %s>>", self.loop,
+                time.strftime("%H:%M:%S", time.gmtime(end_time - time.time())))
             # Create all specified pools
             self.add_pools(pool_list)
             self.log.info(
@@ -808,7 +819,8 @@ class Soak(TestWithServers):
                 break
             loop_time = time.time() - start_loop_time
             self.log.info(
-                "<<PASS %s completed in %s seconds>>", self.loop, loop_time)
+                "<<PASS %s completed in %s >>", self.loop, time.strftime(
+                    "%H:%M:%S", time.gmtime(loop_time)))
             # if the time left if less than a loop exit now
             if end_time - time.time() < loop_time:
                 break
@@ -818,6 +830,10 @@ class Soak(TestWithServers):
             self.container.read_objects(),
             "Data verification error on reserved pool"
             "after SOAK completed")
+        # gather the doas logs from the client nodes
+        self.log.info(
+            "<<<<SOAK TOTAL TEST TIME = %s>>>", time.strftime(
+                "%H:%M:%S", time.gmtime(time.time() - start_time)))
 
     def setUp(self):
         """Define test setup to be done."""
@@ -877,21 +893,30 @@ class Soak(TestWithServers):
             self.log.info(
                 "<<Cancel jobs in queue with ids %s >>",
                 self.failed_job_id_list)
-            status = process.system("scancel --partition {}".format(
-                self.partition_clients))
+            status = process.system("scancel --partition {} -w {}".format(
+                self.partition_clients, NodeSet.fromlist(
+                    self.hostlist_clients)))
             if status > 0:
                 errors_detected = True
+                self.local_errors.append("Failed to cancel jobs {}".format(
+                    self.failed_job_id_list))
+        if self.all_failed_jobs:
+            errors_detected = True
+            self.local_errors.append(
+                "FAILED: The following jobs failed {} ".format(
+                    " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
         # One last attempt to copy any logfiles from client nodes
         try:
             self.get_remote_logs()
         except SoakTestError as error:
             self.log.info("Remote copy failed with %s", error)
             errors_detected = True
+        # daos_agent is always started on this node when start agent is false
         if not self.setup_start_agents:
             self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
         super(Soak, self).tearDown()
         if errors_detected:
-            self.fail("Errors detected cancelling slurm jobs in tearDown()")
+            self.fail("Errors detected in tearDown()")
 
     def test_soak_smoke(self):
         """Run soak smoke.
