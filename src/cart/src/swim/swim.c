@@ -516,6 +516,10 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	ctx->sc_piggyback_tx_max = SWIM_PIGGYBACK_TX_COUNT;
 	/* force to choose next target first */
 	ctx->sc_target = SWIM_ID_INVALID;
+
+	/* delay the first ping until all things will be initialized */
+	ctx->sc_next_tick_time = swim_now_ms() + 10 * SWIM_PROTOCOL_PERIOD_LEN;
+
 out:
 	return ctx;
 }
