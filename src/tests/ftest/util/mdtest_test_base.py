@@ -128,9 +128,6 @@ class MdtestBase(TestWithServers):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
 
-        if self.dfuse:
-            self.dfuse.stop()
-
         self.dfuse = Dfuse(self.hostlist_clients,
                            self.tmp,
                            log_file=get_log_file(self.client_log),
@@ -146,11 +143,9 @@ class MdtestBase(TestWithServers):
             self.dfuse.run()
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse), str(
-                               NodeSet.fromlist(self.dfuse.hosts)),
+                           str(self.dfuse), self.dfuse.hosts,
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
-
 
     def execute_mdtest(self):
         """Runner method for Mdtest."""
@@ -173,6 +168,9 @@ class MdtestBase(TestWithServers):
        # Run Mdtest
         self.run_mdtest(self.get_job_manager_command(self.manager),
                         self.processes)
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
     def get_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.

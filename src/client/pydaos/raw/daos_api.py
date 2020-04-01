@@ -1442,7 +1442,7 @@ class DaosContainer(object):
             conversion.c_uuid(con_uuid, self.uuid)
         self.poh = poh
         if con_prop is not None:
-            self.cont_input_values = con_prop
+            self.cont_input_values = con_prop.get_con_create_params()
         # We will support only basic properties. Full
         # container properties will not be exposed.
         # Create DaosProperty for checksum
@@ -1472,6 +1472,7 @@ class DaosContainer(object):
         # dpp_entries will start with idx=0. If layer is not
         # none, checksum dpp_entries will start at idx=1.]
         idx = 0
+        print("daos_apoi: Container type is {}".format(self.cont_input_values.type))
         if self.cont_input_values.type != "Unknown":
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
