@@ -1670,6 +1670,7 @@ struct dc_cont_glob {
 	uint64_t	dcg_capas;
 	uint16_t	dcg_csum_type;
 	uint32_t	dcg_csum_chunksize;
+	bool		dcg_csum_srv_verify;
 };
 
 static inline daos_size_t
@@ -1734,6 +1735,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_csum_type = daos_csummer_get_type(cont->dc_csummer);
 	cont_glob->dcg_csum_chunksize =
 		daos_csummer_get_chunksize(cont->dc_csummer);
+	cont_glob->dcg_csum_srv_verify = cont->dc_csummer->dcs_srv_verify;
 
 	dc_pool_put(pool);
 out_cont:
@@ -1775,7 +1777,8 @@ csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
 	csum_algo = daos_csum_type2algo(cont_glob->dcg_csum_type);
 	if (csum_algo != NULL)
 		daos_csummer_init(&cont->dc_csummer, csum_algo,
-				  cont_glob->dcg_csum_chunksize, 0);
+				  cont_glob->dcg_csum_chunksize,
+				  cont_glob->dcg_csum_srv_verify);
 	else
 		cont->dc_csummer = NULL;
 }
