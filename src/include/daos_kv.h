@@ -65,7 +65,7 @@ extern "C" {
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only
  */
-int
+DAOS_API int
 daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
 	    daos_size_t size, const void *buf, daos_event_t *ev);
 
@@ -93,7 +93,7 @@ daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *			-DER_REC2BIG	Record does not fit in buffer
  *			-DER_EP_RO	Epoch is read-only
  */
-int
+DAOS_API int
 daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
 	    daos_size_t *size, void *buf, daos_event_t *ev);
 
@@ -116,7 +116,7 @@ daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only
  */
-int
+DAOS_API int
 daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       const char *key, daos_event_t *ev);
 
@@ -150,7 +150,7 @@ daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only
  */
-int
+DAOS_API int
 daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 	     daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
 	     daos_event_t *ev);
