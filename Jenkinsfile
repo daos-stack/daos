@@ -204,6 +204,7 @@ pipeline {
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
+        skipDefaultCheckout(true)
     }
 
     stages {
@@ -217,6 +218,30 @@ pipeline {
                 }
             }
             steps {
+                checkout([$class: 'GitSCM',
+                          branches: [[name: "refs/heads/${env.BRANCH_NAME}"]],
+                          userRemoteConfigs: [[refspec: '+refs/heads/master-sandbox:refs/remotes/@{remote}/master-sandbox',
+                                               url: 'https://github.com/daos-stack/daos/']]])
+                /*
+                  [ $class: 'GitSCM',
+                    branches: [[name: "refs/heads/${env.BRANCH_NAME}"]],
+                    extensions: [
+                      [ $class: 'CloneOption', depth: 1,
+                                               honorRefspec: true,
+                                               noTags: true,
+                                               shallow: true],
+                      [ $class: 'LocalBranch', localBranch: env.BRANCH_NAME],
+                      [ $class: 'PruneStaleBranch']
+                    ],
+                    gitTool: scm.gitTool,
+                    userRemoteConfigs: [
+                      [ refspec: scm.userRemoteConfigs[0].refspec,
+                        url: scm.userRemoteConfigs[0].url
+                      ]
+                    ]
+                  ]
+                )
+                  */
                 emailext subject: "environment",
                          to: 'brian.murrell@intel.com',
                          body: sh(script: 'env | sort', returnStdout: true)
