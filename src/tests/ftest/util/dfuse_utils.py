@@ -207,20 +207,30 @@ class Dfuse(DfuseCommand):
                 "Error starting dfuse on the following hosts: {}".format(
                     error_hosts))
 
-        self.check_running()
-        time.sleep(5)
-        self.check_running()
+        if not self.check_running(fail_on_error=False):
+            self.log.info('Waiting five seconds for dfuse to start')
+            time.sleep(5)
+            self.check_running()
 
-    def check_running(self):
+    def check_running(self, fail_on_error=True):
         """Check dfuse is running
 
         Run a command to verify dfuse is running on hosts where it is supposed
         to be.  Use grep -v and rc=1 here so that if it isn't, then we can
         see what is being used instead.
         """
-        general_utils.pcmd(self.running_hosts,
-                           "stat -c %T -f {0} | grep -v fuseblk".format(self.mount_dir.value),
-                           expect_rc=1)
+        retcodes = general_utils.pcmd(self.running_hosts,
+                                      "stat -c %T -f {0} | grep -v fuseblk".\
+                                      format(self.mount_dir.value),
+                                      expect_rc=1)
+        if 1 in retcodes:
+            del retcodes[1]
+        if len(retcodes):
+            self.log.error('Errors checking running: %s', retcodes)
+            if fail_on_error:
+                return False
+            raise CommandFailure('dfuse not running')
+        return True
 
     def stop(self):
         """Stop dfuse
@@ -245,7 +255,6 @@ class Dfuse(DfuseCommand):
             return
 
         self.check_running()
-        general_utils.pcmd(self.running_hosts, "ps auwx", timeout=30)
         umount_cmd = "if [ -x '$(command -v fusermount)' ]; "
         umount_cmd += "then fusermount -u {0}; else fusermount3 -u {0}; fi".\
                format(self.mount_dir.value)
@@ -262,7 +271,7 @@ class Dfuse(DfuseCommand):
             self.remove_mount_point(fail=False)
             raise CommandFailure(
                 "Error stopping dfuse on the following hosts: {}".format(
-                    self.error_hosts))
+                    self.running_hosts))
         time.sleep(2)
         self.remove_mount_point()
 
