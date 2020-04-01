@@ -672,8 +672,9 @@ typedef struct {
  *			before it's scheduled.
  * \param taskp	[OUT]	Pointer to task to be created/initalized with the op.
  *
- * \return		0 if task creation succeeds.
- *			negative errno if it fails.
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NOSYS	Unsupported opc
  */
 DAOS_API int
 daos_task_create(daos_opc_t opc, tse_sched_t *sched,
@@ -726,7 +727,7 @@ daos_task_set_priv(tse_task_t *task, void *priv);
  * \param is_empty [OUT]
  *			flag to indicate whether the scheduler is empty or not.
  *
- * \return		0 if Success, errno if failed.
+ * \return		0 if Success, negative DER if failed.
  */
 DAOS_API int
 daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty);

@@ -123,6 +123,8 @@ daos_tx_abort(daos_handle_t th, daos_event_t *ev);
  * involved.
  *
  * \param[in]	th	Transaction handle to free.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		0 if Success, negative if failed.
  */
@@ -133,7 +135,7 @@ daos_tx_close(daos_handle_t th, daos_event_t *ev);
  * Return epoch associated with the transaction handle.
  *
  * \param[in]	th	Transaction handle.
- * \param[out]	th	Returned epoch value.
+ * \param[out]	epoch	Returned epoch value.
  *
  * \return		0 if Success, negative if failed.
  */
