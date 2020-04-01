@@ -2128,7 +2128,7 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 	else
 		oso->oso_epoch = min(epoch, osi->osi_epoch);
 
-	D_DEBUG(DB_IO, "start: "DF_UOID", epc "DF_U64"\n",
+	D_DEBUG(DB_IO, "obj_sync start: "DF_UOID", epc "DF_U64"\n",
 		DP_UOID(osi->osi_oid), oso->oso_epoch);
 
 	rc = obj_ioc_begin(osi->osi_oid, osi->osi_map_ver,
@@ -2145,7 +2145,7 @@ out:
 	obj_reply_set_status(rpc, rc);
 	obj_ioc_end(&ioc, rc);
 
-	D_DEBUG(DB_IO, "stop: "DF_UOID", epc "DF_U64", rd = %d\n",
+	D_DEBUG(DB_IO, "obj_sync stop: "DF_UOID", epc "DF_U64", rd = %d\n",
 		DP_UOID(osi->osi_oid), oso->oso_epoch, rc);
 
 	rc = crt_reply_send(rpc);
