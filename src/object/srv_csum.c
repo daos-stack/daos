@@ -423,7 +423,8 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 	uint32_t		chunksize;
 	size_t			rec_size;
 	uint32_t		chunk_nr;
-	uint32_t		c;
+	uint32_t		c; /** recx chunk index */
+	uint32_t		sc; /** system chunk index */
 	int			rc = 0;
 
 	chunksize = daos_csummer_get_chunksize(ctx->cc_csummer);
@@ -437,11 +438,12 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 
 	cc_set_iov2ranges(ctx, cc2iov(ctx));
 
-	for (c = 0; c < chunk_nr; c++) { /** for each chunk/checksum */
+	sc = (recx->rx_idx * rec_size) / chunksize;
+	for (c = 0; c < chunk_nr; c++, sc++) { /** for each chunk/checksum */
 		ctx->cc_recx_chunk = csum_recx_chunkidx2range(recx, rec_size,
 							      chunksize, c);
 		ctx->cc_chunk = csum_chunkrange(chunksize / ctx->cc_rec_len,
-						c);
+						sc);
 		ctx->cc_chunk_bytes_left = ctx->cc_recx_chunk.dcr_nr *
 					   rec_size;
 
