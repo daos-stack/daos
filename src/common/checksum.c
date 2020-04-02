@@ -582,7 +582,9 @@ calc_csum_recx(struct daos_csummer *obj, d_sg_list_t *sgl,
 
 	for (i = 0; i < nr; i++) { /** for each extent/checksum buf */
 		csum_nr = daos_recx_calc_chunks(recxs[i], rec_len, chunk_size);
-		C_TRACE("csum_nr: %lu\n", csum_nr);
+		C_TRACE("Calculating %lu checksum(s) for Array Value [%lu-%lu]",
+			csum_nr, recxs[i].rx_idx,
+			recxs[i].rx_idx + recxs[i].rx_nr - 1);
 		bytes = recxs[i].rx_nr * rec_len;
 
 		for (j = 0; j < csum_nr; j++) {
@@ -624,6 +626,7 @@ calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 	if (!(daos_csummer_initialized(obj)))
 		return 0;
 
+	C_TRACE("Calculating checksum for Single Value");
 	if (singv_lo != NULL && singv_lo->cs_even_dist == 1) {
 		D_ASSERT(singv_lo->cs_bytes > 0 &&
 			 singv_lo->cs_bytes < rec_len);

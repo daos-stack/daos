@@ -196,7 +196,26 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i], iod_csum,
 					     singv_lo, shard_idx);
 		if (rc != 0) {
-			D_ERROR("Verify failed: %d\n", rc);
+			if (iod->iod_type == DAOS_IOD_SINGLE) {
+				D_ERROR("Data Verification failed (object: "
+				DF_OID" dkey: %s, akey: %s): %d\n",
+					DP_OID(orw->orw_oid.id_pub),
+					(char *)orw->orw_dkey.iov_buf,
+					(char *)iod->iod_name.iov_buf, rc);
+			}
+			if (iod->iod_type == DAOS_IOD_ARRAY) {
+				D_ERROR("Data Verification failed (object: "
+				DF_OID" dkey: %s, akey: %s, extent: [%lu-%lu]):"
+						" %d\n",
+					DP_OID(orw->orw_oid.id_pub),
+					(char *)orw->orw_dkey.iov_buf,
+					(char *)iod->iod_name.iov_buf,
+				iod->iod_recxs->rx_idx,
+				iod->iod_recxs->rx_idx +
+					iod->iod_recxs->rx_nr - 1,
+				rc);
+			}
+
 			break;
 		}
 	}
