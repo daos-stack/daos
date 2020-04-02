@@ -133,8 +133,8 @@ daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *		nr	[in]: number of key descriptors in \a kds. [out]: number
  *			of returned key descriptors.
  * \param[in,out]
- *		kds	[in]: preallocated array of \a nr key descriptors. [out]:
- *			size of each individual key.
+ *		kds	[in]: preallocated array of \a nr key descriptors.
+ *			[out]: size of each individual key.
  * \param[in]	sgl	Scatter/gather list to store the dkey list.
  *			All keys are written contiguously, with actual
  *			boundaries that can be calculated using \a kds.

@@ -50,6 +50,7 @@ extern "C" {
  * terminator.
  */
 #define DAOS_ACL_MAX_PRINCIPAL_LEN	(255)
+/** DAOS_ACL_MAX_PRINCIPAL_LEN including NULL terminator */
 #define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /**
