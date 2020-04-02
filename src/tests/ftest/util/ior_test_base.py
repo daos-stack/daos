@@ -29,6 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers, get_log_file
 from ior_utils import IorCommand
 from command_utils import Mpirun, CommandFailure
+from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -51,7 +52,6 @@ class IorTestBase(TestWithServers):
         self.hostfile_clients_slots = None
         self.dfuse = None
         self.container = None
-        self.co_prop = None
         self.lock = None
 
     def setUp(self):
@@ -65,8 +65,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
-        self.co_prop = self.params.get("container_properties",
-                                       "/run/container/*")
+
         # Until DAOS-3320 is resolved run IOR for POSIX
         # with single client node
         if self.ior_cmd.api.value == "POSIX":
@@ -97,12 +96,13 @@ class IorTestBase(TestWithServers):
 
     def create_cont(self):
         """Create a TestContainer object to be used to create container."""
-        # Enable container using TestContainer object,
-        # Get Container params
-        self.container = TestContainer(self.pool)
+        # Get container params
+        self.container = TestContainer(
+            self.pool, daos_command=DaosCommand(self.bin))
         self.container.get_params(self)
+
         # create container
-        self.container.create(con_in=self.co_prop)
+        self.container.create()
 
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -157,8 +157,7 @@ class IorTestBase(TestWithServers):
         return out
 
     def update_ior_cmd_with_pool(self):
-        """Update ior_cmd with pool
-        """
+        """Update ior_cmd with pool."""
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
@@ -167,7 +166,7 @@ class IorTestBase(TestWithServers):
         # It will not enable checksum feature
         self.pool.connect()
         self.create_cont()
-         # Update IOR params with the pool and container params
+        # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
 
@@ -249,7 +248,7 @@ class IorTestBase(TestWithServers):
         job2.join()
 
     def get_new_job(self, clients, job_num, results, intercept=None):
-        """Create a new thread for ior run
+        """Create a new thread for ior run.
 
         Args:
             clients (lst): Number of clients the ior would run against.
@@ -265,7 +264,7 @@ class IorTestBase(TestWithServers):
 
     def run_multiple_ior(self, hostfile, num_clients,
                          results, job_num, intercept=None):
-        #pylint: disable=too-many-arguments
+        # pylint: disable=too-many-arguments
         """Run the IOR command.
 
         Args:

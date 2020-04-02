@@ -29,6 +29,11 @@ from command_utils import \
 class DaosCommand(CommandWithSubCommand):
     """Defines a object representing a daos command."""
 
+    METHOD_REGEX = {
+        "run": r"(.*)",
+        "container_create": r"container ([0-9a-f-]+)"
+    }
+
     def __init__(self, path):
         """Create a daos Command object.
 
@@ -526,7 +531,7 @@ class DaosCommand(CommandWithSubCommand):
             sys_name (str, optional): [description]. Defaults to None.
             svc (str, optional): the pool service replicas, e.g. '1,2,3'.
                 Defaults to None.
-            cont (str, optional): [description]. Defaults to None.
+            cont (str, optional): container UUID. Defaults to None.
             path (str, optional): [description]. Defaults to None.
             cont_type (str, optional): the type of container to create. Defaults
                 to None.
@@ -556,5 +561,37 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.oclass.value = oclass
         self.sub_command_class.sub_command_class.chunk_size.value = chunk_size
         self.sub_command_class.sub_command_class.properties.value = properties
+        self.env = env
+        return self._get_result()
+
+    def container_destroy(self, pool, svc, cont, force=None, sys_name=None,
+                          env=None):
+        """Destroy a container.
+
+        Args:
+            pool (str): UUID of the pool in which to create the container
+            svc (str): the pool service replicas, e.g. '1,2,3'.
+            cont (str): container UUID.
+            force (bool, optional): Force the container destroy. Defaults to
+                None.
+            sys_name (str, optional): [description]. Defaults to None.
+            env (dict, optional): dictionary of environment variable names and
+                values (EnvironmentVariables). Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas container destroy command fails.
+
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("destroy")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.force.value = force
         self.env = env
         return self._get_result()

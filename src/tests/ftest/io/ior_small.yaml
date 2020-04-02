@@ -37,7 +37,8 @@ pool:
 #                16384: 16K
 # DAOS-4173: Improvement in this area required.
 container:
-    container_properties: [POSIX, True, True, 100, 0]
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 ior:
     client_processes:
         np_16:
