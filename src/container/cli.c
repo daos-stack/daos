@@ -1735,7 +1735,8 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_csum_type = daos_csummer_get_type(cont->dc_csummer);
 	cont_glob->dcg_csum_chunksize =
 		daos_csummer_get_chunksize(cont->dc_csummer);
-	cont_glob->dcg_csum_srv_verify = cont->dc_csummer->dcs_srv_verify;
+	cont_glob->dcg_csum_srv_verify =
+		daos_csummer_get_srv_verify(cont->dc_csummer);
 
 	dc_pool_put(pool);
 out_cont:

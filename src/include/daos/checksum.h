@@ -200,6 +200,9 @@ daos_csummer_get_type(struct daos_csummer *obj);
 uint32_t
 daos_csummer_get_chunksize(struct daos_csummer *obj);
 
+bool
+daos_csummer_get_srv_verify(struct daos_csummer *obj);
+
 /** Get a string representing the csum the csummer is configured with */
 char *
 daos_csummer_get_name(struct daos_csummer *obj);

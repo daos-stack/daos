@@ -312,6 +312,14 @@ daos_csummer_get_chunksize(struct daos_csummer *obj)
 	return 0;
 }
 
+bool
+daos_csummer_get_srv_verify(struct daos_csummer *obj)
+{
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_srv_verify;
+	return false;
+}
+
 char *
 daos_csummer_get_name(struct daos_csummer *obj)
 {
