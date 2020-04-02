@@ -109,7 +109,7 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: %{name}-client = %{version}-%{release}
-Requires: spdk-tools = %{spdk_version}
+Requires: spdk-tools >= %{spdk_version}
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
