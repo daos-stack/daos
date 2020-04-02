@@ -373,7 +373,7 @@ entries_check(struct umem_instance *umm, struct ilog_df *root,
 				      DF_BOOL "\n",
 				      entry->ie_id.id_epoch,
 				      entry->ie_id.id_tx_id,
-				      DP_BOOL(entry->ie_punch));
+				      DP_BOOL(ilog_is_punch(entry)));
 			print_message("expected epoch="DF_U64" punch="
 				      DF_BOOL "\n", desc->epoch,
 				      DP_BOOL(desc->punch));
@@ -384,10 +384,10 @@ entries_check(struct umem_instance *umm, struct ilog_df *root,
 				      desc->epoch, entry->ie_id.id_epoch);
 			wrong_epoch++;
 		}
-		if (desc->punch != entry->ie_punch) {
+		if (desc->punch != ilog_is_punch(entry)) {
 			print_message("Punch mismatch " DF_BOOL " != " DF_BOOL
 				      "\n", DP_BOOL(desc->punch),
-				      DP_BOOL(entry->ie_punch));
+				      DP_BOOL(ilog_is_punch(entry)));
 			wrong_punch++;
 		}
 
@@ -421,7 +421,7 @@ do_update(daos_handle_t loh, daos_epoch_t epoch,
 {
 	int		rc;
 
-	rc = ilog_update(loh, NULL, epoch, punch);
+	rc = ilog_update(loh, NULL, epoch, 1, punch);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n",
 			      d_errstr(rc));
@@ -441,7 +441,6 @@ do_update(daos_handle_t loh, daos_epoch_t epoch,
 		print_message("Skipping "DF_U64" punch=%s status=%d\n",
 			      epoch, punch ? "true" : "false", current_status);
 	}
-
 
 	return 0;
 }
@@ -529,7 +528,7 @@ ilog_test_update(void **state)
 
 	epoch = 1;
 	current_status = COMMITTABLE;
-	rc = ilog_update(loh, NULL, epoch, false);
+	rc = ilog_update(loh, NULL, epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -541,7 +540,7 @@ ilog_test_update(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Test upgrade to punch in root */
-	rc = ilog_update(loh, NULL, epoch, true);
+	rc = ilog_update(loh, NULL, epoch, 2, true);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -556,7 +555,7 @@ ilog_test_update(void **state)
 
 	/** Same epoch, different DTX */
 	fake_tx_reset();
-	rc = ilog_update(loh, NULL, epoch, true);
+	rc = ilog_update(loh, NULL, epoch, 3, true);
 	if (rc != -DER_TX_RESTART) {
 		print_message("Epoch entry already exists.  Replacing with"
 			      " different DTX should get -DER_TX_RESTART:"
@@ -573,7 +572,7 @@ ilog_test_update(void **state)
 
 	/** New epoch, creation */
 	epoch = 2;
-	rc = ilog_update(loh, NULL, epoch, false);
+	rc = ilog_update(loh, NULL, epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -586,7 +585,7 @@ ilog_test_update(void **state)
 	assert_int_equal(rc, 0);
 
 	/** New epoch, upgrade to punch */
-	rc = ilog_update(loh, NULL, epoch, true);
+	rc = ilog_update(loh, NULL, epoch, 2, true);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -611,6 +610,8 @@ ilog_test_update(void **state)
 			print_message("failed update: %s\n", d_errstr(rc));
 			assert(0);
 		}
+		rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0,
+				   entries);
 		epoch++;
 	}
 	/** NB: It's a bit of a hack to insert aborted entries.   Since fetch
@@ -681,7 +682,7 @@ ilog_test_abort(void **state)
 
 	id.id_epoch = 1;
 	current_status = PREPARED;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -707,7 +708,7 @@ ilog_test_abort(void **state)
 			   entries);
 	assert_int_equal(rc, 0);
 
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 2, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -726,7 +727,7 @@ ilog_test_abort(void **state)
 		for (idx = 2; idx < NUM_REC; idx++) {
 			bool	punch = idx & 1 ? true : false;
 
-			rc = ilog_update(loh, NULL, id.id_epoch,
+			rc = ilog_update(loh, NULL, id.id_epoch, idx - 1,
 					 punch);
 			if (rc != 0) {
 				print_message("Failed to insert ilog: %s\n",
@@ -821,7 +822,7 @@ ilog_test_persist(void **state)
 
 	id.id_epoch = 1;
 	current_status = PREPARED;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -830,7 +831,7 @@ ilog_test_persist(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 2;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -839,7 +840,7 @@ ilog_test_persist(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 3;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -847,7 +848,7 @@ ilog_test_persist(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 4;
-	rc = ilog_update(loh, NULL, id.id_epoch, true);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, true);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -930,7 +931,7 @@ ilog_test_aggregate(void **state)
 
 	id.id_epoch = 1;
 	current_status = PREPARED;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -939,7 +940,7 @@ ilog_test_aggregate(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 2;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -947,7 +948,7 @@ ilog_test_aggregate(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 3;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -955,7 +956,7 @@ ilog_test_aggregate(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 4;
-	rc = ilog_update(loh, NULL, id.id_epoch, true);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, true);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -980,7 +981,7 @@ ilog_test_aggregate(void **state)
 	assert_int_equal(rc, 0);
 
 	id.id_epoch = 5;
-	rc = ilog_update(loh, NULL, id.id_epoch, true);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, true);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -988,7 +989,7 @@ ilog_test_aggregate(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 6;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -1013,7 +1014,7 @@ ilog_test_aggregate(void **state)
 	assert_int_equal(rc, 0);
 
 	id.id_epoch = 7;
-	rc = ilog_update(loh, NULL, id.id_epoch, true);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, true);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -1086,7 +1087,7 @@ ilog_test_discard(void **state)
 
 	id.id_epoch = 1;
 	current_status = PREPARED;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -1095,7 +1096,7 @@ ilog_test_discard(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 2;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -1103,7 +1104,7 @@ ilog_test_discard(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 3;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -1111,7 +1112,7 @@ ilog_test_discard(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 4;
-	rc = ilog_update(loh, NULL, id.id_epoch, true);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, true);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -1135,7 +1136,7 @@ ilog_test_discard(void **state)
 	assert_int_equal(rc, 0);
 
 	id.id_epoch = 5;
-	rc = ilog_update(loh, NULL, id.id_epoch, true);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, true);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -1143,7 +1144,7 @@ ilog_test_discard(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 6;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
@@ -1167,7 +1168,7 @@ ilog_test_discard(void **state)
 	assert_int_equal(rc, 0);
 
 	id.id_epoch = 7;
-	rc = ilog_update(loh, NULL, id.id_epoch, false);
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);

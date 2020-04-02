@@ -786,7 +786,7 @@ io_oi_test(void **state)
 	rc = vos_oi_find_alloc(cont, oid, 1, true, &obj[0], NULL);
 	assert_int_equal(rc, 0);
 
-	rc = vos_oi_find_alloc(cont, oid, 1, true, &obj[1], NULL);
+	rc = vos_oi_find_alloc(cont, oid, 2, true, &obj[1], NULL);
 	assert_int_equal(rc, 0);
 }
 
