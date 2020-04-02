@@ -85,7 +85,7 @@ Requires: libpmem1, libpmemobj1
 %endif
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: spdk >= %{spdk_version}
+Requires: spdk >= %{spdk_version}, spdk < 20
 Requires: fio < 3.4
 Requires: openssl
 # ensure we get exactly the right cart RPM
@@ -109,7 +109,7 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: %{name}-client = %{version}-%{release}
-Requires: spdk-tools >= %{spdk_version}
+Requires: spdk-tools >= %{spdk_version}, spdk-tools < 20
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
