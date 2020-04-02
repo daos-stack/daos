@@ -312,16 +312,6 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(time_t));
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 
-	if (fetch_sym) {
-		D_ALLOC(value, PATH_MAX);
-		if (value == NULL)
-			return ENOMEM;
-
-		recx.rx_nr += PATH_MAX;
-		/** Set Akey for Symlink Value, will be empty if no symlink */
-		d_iov_set(&sg_iovs[i++], value, PATH_MAX);
-	}
-
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= sg_iovs;
@@ -333,15 +323,34 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	}
 
 	if (fetch_sym && S_ISLNK(entry->mode)) {
-		if (sgl.sg_nr_out == i) {
-			size_t sym_len = sg_iovs[i-1].iov_len;
+		size_t sym_len;
 
-			if (sym_len != 0) {
-				D_ASSERT(value);
-				D_STRNDUP(entry->value, value, PATH_MAX - 1);
-				if (entry->value == NULL)
-					D_GOTO(out, rc = ENOMEM);
-			}
+		D_ALLOC(value, PATH_MAX);
+		if (value == NULL)
+			return ENOMEM;
+
+		recx.rx_idx = sizeof(mode_t) + sizeof(time_t) * 3 +
+			sizeof(daos_obj_id_t) + sizeof(daos_size_t);
+		recx.rx_nr = PATH_MAX;
+
+		d_iov_set(&sg_iovs[0], value, PATH_MAX);
+		sgl.sg_nr	= 1;
+		sgl.sg_nr_out	= 0;
+		sgl.sg_iovs	= sg_iovs;
+
+		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, &iod, &sgl, NULL,
+				    NULL);
+		if (rc) {
+			D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+
+		sym_len = sg_iovs[0].iov_len;
+		if (sym_len != 0) {
+			D_ASSERT(value);
+			D_STRNDUP(entry->value, value, PATH_MAX - 1);
+			if (entry->value == NULL)
+				D_GOTO(out, rc = ENOMEM);
 		}
 	}
 
@@ -552,7 +561,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		break;
 	}
 	case S_IFLNK:
-		size = strlen(entry.value) + 1;
+		size = strlen(entry.value);
 		D_FREE(entry.value);
 		break;
 	default:
