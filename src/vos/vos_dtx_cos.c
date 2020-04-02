@@ -545,13 +545,13 @@ vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
 	return min(count, i);
 }
 
-void
+int
 vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 		struct dtx_id *xid, uint64_t dkey_hash, bool punch)
 {
 	struct dtx_cos_key		 key;
-	d_iov_t			 kiov;
-	d_iov_t			 riov;
+	d_iov_t				 kiov;
+	d_iov_t				 riov;
 	struct dtx_cos_rec		*dcr;
 	struct dtx_cos_rec_child	*dcrc;
 	d_list_t			*head;
@@ -563,8 +563,15 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 	d_iov_set(&riov, NULL, 0);
 
 	rc = dbtree_lookup(cont->vc_dtx_cos_hdl, &kiov, &riov);
-	if (rc != 0)
-		return;
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			return 0;
+
+		D_ERROR("Fail to remove "DF_DTI" from CoS cache: %d\n",
+			DP_DTI(xid), rc);
+
+		return rc;
+	}
 
 	dcr = (struct dtx_cos_rec *)riov.iov_buf;
 	if (punch)
@@ -575,11 +582,6 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 	d_list_for_each_entry(dcrc, head, dcrc_link) {
 		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) != 0)
 			continue;
-
-		D_DEBUG(DB_IO, "Remove DTX "DF_DTI" from CoS cache, "
-			"key %llu, intent %s, has ilog entry\n",
-			DP_DTI(&dcrc->dcrc_dti), (unsigned long long)dkey_hash,
-			punch ? "Punch" : "Update");
 
 		d_list_del(&dcrc->dcrc_committable);
 		d_list_del(&dcrc->dcrc_link);
@@ -593,23 +595,24 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 
 		if (dcr->dcr_punch_count == 0 && dcr->dcr_update_count == 0 &&
 		    dcr->dcr_ilog_count == 0)
-			dbtree_delete(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
-				      &kiov, NULL);
+			rc = dbtree_delete(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
+					   &kiov, NULL);
 
-		return;
+		D_CDEBUG(rc != 0, DLOG_ERR, DB_IO, "Remove DTX "DF_DTI" from "
+			 "CoS cache, key %llu, intent %s, has ilog entry: %d\n",
+			 DP_DTI(xid), (unsigned long long)dkey_hash,
+			 punch ? "Punch" : "Update", rc);
+
+		return rc;
 	}
 
 	if (punch)
-		return;
+		return 0;
 
 	/* For UPDATE DTX, the DTX entry can be in {update,ilog}_list */
 	d_list_for_each_entry(dcrc, &dcr->dcr_update_list, dcrc_link) {
 		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) != 0)
 			continue;
-
-		D_DEBUG(DB_IO, "Remove DTX "DF_DTI" from CoS cache, "
-			"key %llu, intent Update, has not ilog entry\n",
-			DP_DTI(&dcrc->dcrc_dti), (unsigned long long)dkey_hash);
 
 		d_list_del(&dcrc->dcrc_committable);
 		d_list_del(&dcrc->dcrc_link);
@@ -620,11 +623,18 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 
 		if (dcr->dcr_punch_count == 0 && dcr->dcr_update_count == 0 &&
 		    dcr->dcr_ilog_count == 0)
-			dbtree_delete(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
-				      &kiov, NULL);
+			rc = dbtree_delete(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
+					   &kiov, NULL);
 
-		return;
+		D_CDEBUG(rc != 0, DLOG_ERR, DB_IO, "Remove DTX "DF_DTI" from "
+			 "CoS cache, key %llu, intent Update, has not ilog "
+			 "entry: %d\n",
+			 DP_DTI(xid), (unsigned long long)dkey_hash, rc);
+
+		break;
 	}
+
+	return rc;
 }
 
 uint64_t
