@@ -213,9 +213,32 @@ class DaosCommand(CommandWithSubCommand):
                 super(
                     DaosCommand.ContainerSubCommand.CreateSubCommand,
                     self).__init__("create")
+                # Additional daos container create parameters:
+                #   --type=CTYPESTR
+                #           container type (HDF5, POSIX)
                 self.type = FormattedParameter("--type={}")
+                #   --oclass=OCLSSTR
+                #           container object class:
+                #               S1, S2, S4, SX, RP_2G1, RP_2G2, RP_2GX, RP_3G1,
+                #               RP_3G2, RP_3GX, RP_4G1, RP_4G2, RP_4GX, RP_XSF,
+                #               S1_ECHO, RP_2G1_ECHO, RP_3G1_ECHO, RP_4G1_ECHO,
+                #               RP_3G1_SR, RP_2G1_SR, S1_SR, EC_2P1G1, EC_2P2G1,
+                #               EC_8P2G1
                 self.oclass = FormattedParameter("--oclass={}")
+                #   --chunk_size=BYTES
+                #           chunk size of files created. Supports suffixes:
+                #               K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)
                 self.chunk_size = FormattedParameter("--chunk_size={}")
+                #   --properties=<name>:<value>[,<name>:<value>,...]
+                #           - supported names:
+                #               label, cksum, cksum_size, srv_cksum, rf
+                #           - supported values:
+                #               label:      <any string>
+                #               cksum:      off, crc[16,32,64], sha1
+                #               cksum_size: <any size>
+                #               srv_cksum:  on, off
+                #               rf:         [0-4]
+                self.properties = FormattedParameter("--properties={}")
 
         class DestroySubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container destroy command."""
@@ -492,9 +515,10 @@ class DaosCommand(CommandWithSubCommand):
         self.env = env
         return self._get_result()
 
+    # pylint: disable=too-many-arguments
     def container_create(self, pool, sys_name=None, svc=None, cont=None,
                          path=None, cont_type=None, oclass=None,
-                         chunk_size=None, env=None):
+                         chunk_size=None, env=None, properties=None):
         """Create a container.
 
         Args:
@@ -510,6 +534,8 @@ class DaosCommand(CommandWithSubCommand):
             chunk_size ([type], optional): [description]. Defaults to None.
             env (dict, optional): dictionary of environment variable names and
                 values (EnvironmentVariables). Defaults to None.
+            properties (str, optional): String of comma-separated <name>:<value>
+                pairs defining the container properties. Defaults to None
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -529,5 +555,6 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.type.value = cont_type
         self.sub_command_class.sub_command_class.oclass.value = oclass
         self.sub_command_class.sub_command_class.chunk_size.value = chunk_size
+        self.sub_command_class.sub_command_class.properties.value = properties
         self.env = env
         return self._get_result()
