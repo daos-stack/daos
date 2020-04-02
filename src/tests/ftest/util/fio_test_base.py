@@ -154,3 +154,7 @@ class FioBase(TestWithServers):
         # Run Fio
         self.fio_cmd.hosts = self.hostlist_clients
         self.fio_cmd.run()
+
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None

@@ -308,7 +308,6 @@ class TestContainer(TestDaosApiBase):
             kwargs["con_uuid"] = uuid
         # Refer daos_api for setting input params for DaosContainer.
         if con_in is not None:
-            self.log.info('container type is %s', con_in[0])
             cop = self.input_params.get_con_create_params()
             cop.type = con_in[0]
             cop.enable_chksum = con_in[1]
@@ -316,7 +315,6 @@ class TestContainer(TestDaosApiBase):
             cop.chksum_type = con_in[3]
             cop.chunk_size = con_in[4]
             kwargs["con_prop"] = cop
-        self.log.info('container props are %s', kwargs)
 
         self._call_method(self.container.create, kwargs)
         self.uuid = self.container.get_uuid_str()
