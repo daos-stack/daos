@@ -248,10 +248,15 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 	if (obj->obj_df) {
+		D_DEBUG(DB_TRACE, "looking up object ilog");
 		found = vos_ilog_ts_lookup(ts_set, &obj->obj_df->vo_ilog);
-		if (!found)
-			vos_ilog_ts_cache(ts_set, &obj->obj_df->vo_ilog,
-					  &oid, sizeof(oid));
+		if (!found) {
+			int	tmprc;
+
+			tmprc = vos_ilog_ts_cache(ts_set, &obj->obj_df->vo_ilog,
+						  &oid, sizeof(oid));
+			D_ASSERT(tmprc == 0); /* Non-zero only valid for akey */
+		}
 		goto check_object;
 	}
 

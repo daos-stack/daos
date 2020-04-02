@@ -589,4 +589,6 @@ int bio_dev_set_faulty(struct bio_xs_context *xs);
 /* Function to increment CSUM media error. */
 void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
 
+/* Too many blob IO queued, need to schedule a NVMe poll? */
+bool bio_need_nvme_poll(struct bio_xs_context *xs);
 #endif /* __BIO_API_H__ */

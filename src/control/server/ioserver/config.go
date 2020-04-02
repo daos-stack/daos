@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -54,10 +55,12 @@ func (sc *StorageConfig) Validate() error {
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
-	Provider       string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
-	Interface      string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
-	InterfacePort  int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
-	PinnedNumaNode *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
+	Provider        string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
+	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
+	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
+	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
+	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
+	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -70,6 +73,12 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	}
 	if fc.InterfacePort == 0 {
 		fc.InterfacePort = other.InterfacePort
+	}
+	if fc.CrtCtxShareAddr == 0 {
+		fc.CrtCtxShareAddr = other.CrtCtxShareAddr
+	}
+	if fc.CrtTimeout == 0 {
+		fc.CrtTimeout = other.CrtTimeout
 	}
 }
 
@@ -132,7 +141,7 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 
 // Config encapsulates an I/O server's configuration.
 type Config struct {
-	Rank              *Rank         `yaml:"rank,omitempty"`
+	Rank              *system.Rank  `yaml:"rank,omitempty"`
 	Modules           string        `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int           `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int           `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
@@ -206,7 +215,7 @@ func (c *Config) WithEnvVars(newVars ...string) *Config {
 
 // WithRank sets the instance rank.
 func (c *Config) WithRank(r uint32) *Config {
-	c.Rank = NewRankPtr(r)
+	c.Rank = system.NewRankPtr(r)
 	return c
 }
 
@@ -316,6 +325,18 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 // WithPinnedNumaNode sets the NUMA node affinity for the I/O server instance
 func (c *Config) WithPinnedNumaNode(numa *uint) *Config {
 	c.Fabric.PinnedNumaNode = numa
+	return c
+}
+
+// WithCrtCtxShareAddr defines the CRT_CTX_SHARE_ADDR for this instance
+func (c *Config) WithCrtCtxShareAddr(addr uint32) *Config {
+	c.Fabric.CrtCtxShareAddr = addr
+	return c
+}
+
+// WithCrtTimeout defines the CRT_TIMEOUT for this instance
+func (c *Config) WithCrtTimeout(timeout uint32) *Config {
+	c.Fabric.CrtTimeout = timeout
 	return c
 }
 

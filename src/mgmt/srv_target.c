@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -869,7 +869,8 @@ tgt_profile_task(void *arg)
 		}
 
 		if (in->p_op == MGMT_PROFILE_START)
-			rc = module->sm_mod_ops->dms_profile_start(in->p_path);
+			rc = module->sm_mod_ops->dms_profile_start(in->p_path,
+								   in->p_avg);
 		else
 			rc = module->sm_mod_ops->dms_profile_stop();
 		if (rc)

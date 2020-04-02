@@ -14,7 +14,6 @@ public class DaosFSFactory {
 
 //  public final static String pooluuid = "53a47469-ea2a-418e-89d3-6d1df1aaadb4";
 //  public final static String contuuid = "9e60aff2-ca28-45fe-bdb0-d1a6c182c342";
-
   public final static String defaultPoolId = "6614df7a-a13f-4f7b-aa1e-0ee3c6804456";
   public final static String defaultContId = "fe258219-5c5f-4f48-bcd4-143996a770ce";
   public final static String pooluuid = System.getProperty("pool_id", defaultPoolId);

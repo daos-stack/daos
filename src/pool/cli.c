@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -511,6 +511,14 @@ dc_pool_connect(tse_task_t *task)
 		rc = dc_mgmt_sys_attach(args->grp, &pool->dp_sys);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
+
+		/** Agent configuration data from pool->dp_sys->sy_info */
+		/** sy_info.provider */
+		/** sy_info.interface */
+		/** sy_info.domain */
+		/** sy_info.crt_ctx_share_addr */
+		/** sy_info.crt_timeout */
+
 		rc = rsvc_client_init(&pool->dp_client, args->svc);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
@@ -1968,7 +1976,7 @@ dc_pool_get_attr(tse_task_t *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	rc = attr_check_input(args->n, args->names,
-			      (void const *const) args->values,
+			      (const void *const*) args->values,
 			      (size_t *)args->sizes, true);
 	if (rc != 0)
 		D_GOTO(out, rc);
