@@ -239,6 +239,9 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 
 	/* XXX: Change it when handle multiple modifications. */
 	dth->dth_last_modification = 1;
+
+	/* Operation sequence starts from 1 instead of 0. */
+	dth->dth_op_seq = 1;
 }
 
 /**

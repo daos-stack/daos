@@ -212,6 +212,7 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_actived = 0;
 	dth->dth_local_tx_started = 0;
 	dth->dth_last_modification = 1;
+	dth->dth_op_seq = 1;
 
 	*dthp = dth;
 

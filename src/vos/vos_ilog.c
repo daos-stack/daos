@@ -127,13 +127,13 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		}
 
 		if (entry->ie_id.id_epoch > epoch) {
-			if (entry->ie_punch &&
+			if (ilog_is_punch(entry) &&
 			    entry->ie_status == ILOG_COMMITTED)
 				info->ii_next_punch = entry->ie_id.id_epoch;
 			continue;
 		}
 
-		if (entry->ie_punch &&
+		if (ilog_is_punch(entry) &&
 		    info->ii_prior_any_punch < entry->ie_id.id_epoch)
 			info->ii_prior_any_punch = entry->ie_id.id_epoch;
 
@@ -156,7 +156,7 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 
 		D_ASSERT(entry->ie_status == ILOG_COMMITTED);
 
-		if (entry->ie_punch) {
+		if (ilog_is_punch(entry)) {
 			info->ii_prior_punch = entry->ie_id.id_epoch;
 			break;
 		}
@@ -270,6 +270,7 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		     struct vos_ilog_info *parent, struct vos_ilog_info *info,
 		     uint32_t cond, struct vos_ts_set *ts_set)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
@@ -324,7 +325,8 @@ update:
 		return rc;
 	}
 
-	rc = ilog_update(loh, &max_epr, epr->epr_hi, false);
+	rc = ilog_update(loh, &max_epr, epr->epr_hi,
+			 dth != NULL ? dth->dth_op_seq : 1, false);
 
 	ilog_close(loh);
 
@@ -348,6 +350,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 		struct vos_ilog_info *info, struct vos_ts_set *ts_set,
 		bool leaf)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
@@ -408,7 +411,8 @@ punch_log:
 		return rc;
 	}
 
-	rc = ilog_update(loh, NULL, epr->epr_hi, true);
+	rc = ilog_update(loh, NULL, epr->epr_hi,
+			 dth != NULL ? dth->dth_op_seq : 1, true);
 
 	ilog_close(loh);
 
