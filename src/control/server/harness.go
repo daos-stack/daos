@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -47,7 +48,7 @@ type IOServerHarness struct {
 	started        uint32
 	startable      uint32
 	restart        chan struct{}
-	errChan        chan error
+	errChan        chan ioserver.InstanceError
 	rankReqTimeout time.Duration
 }
 
@@ -57,7 +58,7 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 		log:            log,
 		instances:      make([]*IOServerInstance, 0, maxIOServers),
 		restart:        make(chan struct{}, 1),
-		errChan:        make(chan error, maxIOServers),
+		errChan:        make(chan ioserver.InstanceError, maxIOServers),
 		rankReqTimeout: defaultRequestTimeout,
 	}
 }
@@ -222,7 +223,6 @@ func (h *IOServerHarness) registerNewMember(membership *system.Membership, insta
 // any MS replicas (membership is normally recorded when handling join requests
 // but bootstrapping MS replicas will not join).
 func (h *IOServerHarness) startInstances(ctx context.Context, membership *system.Membership) error {
-	h.log.Debug("starting instances")
 	for _, instance := range h.Instances() {
 		if err := instance.Start(ctx, h.errChan); err != nil {
 			return err
@@ -308,20 +308,25 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 // management service on MS replicas immediately so other instances can join.
 // I/O server modules are then loaded.
 func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
-	h.log.Debug("waiting for instances to be ready")
 	for _, instance := range h.Instances() {
 		select {
-		case <-ctx.Done():
+		case <-ctx.Done(): // harness exit
 			return ctx.Err()
-		case err := <-h.errChan:
-			if err != nil {
-				return err
+		case instanceErr := <-h.errChan:
+			h.log.Errorf("instance %d exited prematurely", instance.Index())
+			// TODO: Restart failed instances on unexpected exit.
+			if instanceErr.Err != nil {
+				return instanceErr.Err
 			}
 		case ready := <-instance.AwaitDrpcReady():
 			if err := instance.SetupWithDrpc(ctx, ready); err != nil {
 				return err
 			}
 		}
+	}
+
+	if len(h.ReadyRanks()) == 0 {
+		return errors.New("no instances made it to the ready state")
 	}
 
 	return nil
@@ -331,18 +336,24 @@ func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
 // return only when all harness instances are stopped and restart
 // signal is received.
 func (h *IOServerHarness) monitor(ctx context.Context) error {
-	h.log.Debug("monitoring instances")
 	for {
 		select {
 		case <-ctx.Done(): // harness exit
 			return ctx.Err()
-		case err := <-h.errChan: // instance exit
+		case instanceErr := <-h.errChan: // instance exit
 			// TODO: Restart failed instances on unexpected exit.
-			msg := fmt.Sprintf("instance exited: %v", err)
+			msg := fmt.Sprintf("instance %d exited: %s", instanceErr.Idx,
+				instanceErr.Err.Error())
 			if len(h.StartedRanks()) == 0 {
 				msg += ", all instances stopped!"
 			}
 			h.log.Info(msg)
+
+			for _, instance := range h.Instances() {
+				if instance.Index() == instanceErr.Idx {
+					instance._lastErr = instanceErr.Err
+				}
+			}
 		case <-h.restart: // harness to restart instances
 			return nil
 		}
@@ -412,20 +423,6 @@ func (h *IOServerHarness) RestartInstances() error {
 	return nil
 }
 
-// StartManagementService starts the DAOS management service on this node.
-func (h *IOServerHarness) StartManagementService(ctx context.Context) error {
-	h.RLock()
-	defer h.RUnlock()
-
-	for _, instance := range h.instances {
-		if err := instance.StartManagementService(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 type mgmtInfo struct {
 	isReplica       bool
 	shouldBootstrap bool
@@ -468,6 +465,22 @@ func (h *IOServerHarness) StartedRanks() []*system.Rank {
 	ranks := make([]*system.Rank, 0, maxIOServers)
 	for _, i := range h.instances {
 		if i.hasSuperblock() && i.IsStarted() {
+			ranks = append(ranks, i.getSuperblock().Rank)
+		}
+	}
+
+	return ranks
+}
+
+// ReadyRanks returns rank assignment of configured harness instances that are
+// in a ready state. Rank assignments can be nil.
+func (h *IOServerHarness) ReadyRanks() []*system.Rank {
+	h.RLock()
+	defer h.RUnlock()
+
+	ranks := make([]*system.Rank, 0, maxIOServers)
+	for _, i := range h.instances {
+		if i.hasSuperblock() && i.IsReady() {
 			ranks = append(ranks, i.getSuperblock().Rank)
 		}
 	}

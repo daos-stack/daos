@@ -56,6 +56,12 @@ type (
 		running uint32
 		cmd     *exec.Cmd
 	}
+
+	// InstanceError represents error from an instance of a DAOS I/O Server
+	InstanceError struct {
+		Idx uint32
+		Err error
+	}
 )
 
 func (es ExitStatus) Error() string {
@@ -69,6 +75,7 @@ func exitStatus(err error) error {
 	if err != nil {
 		return err
 	}
+
 	return NormalExit
 }
 
@@ -80,10 +87,13 @@ func NewRunner(log logging.Logger, config *Config) *Runner {
 	}
 }
 
-func (r *Runner) run(ctx context.Context, args, env []string) error {
+func (r *Runner) run(ctx context.Context, args, env []string) InstanceError {
+	instanceErr := InstanceError{Idx: r.Config.Index}
+
 	binPath, err := common.FindBinary(ioServerBin)
 	if err != nil {
-		return errors.Wrapf(err, "can't start %s", ioServerBin)
+		instanceErr.Err = errors.Wrapf(err, "can't start %s", ioServerBin)
+		return instanceErr
 	}
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
@@ -116,19 +126,22 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)
 
 	if err := cmd.Start(); err != nil {
-		return errors.Wrapf(exitStatus(err),
+		instanceErr.Err = errors.Wrapf(exitStatus(err),
 			"%s (instance %d) failed to start", binPath, r.Config.Index)
+		return instanceErr
 	}
 	r.cmd = cmd
 
 	r.setRunning()
 	defer r.setStopped()
 
-	return errors.Wrapf(exitStatus(cmd.Wait()), "%s (instance %d) exited", binPath, r.Config.Index)
+	instanceErr.Err = errors.Wrapf(exitStatus(cmd.Wait()),
+		"%s (instance %d) exited", binPath, r.Config.Index)
+	return instanceErr
 }
 
 // Start asynchronously starts the IOServer instance.
-func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
+func (r *Runner) Start(ctx context.Context, errOut chan<- InstanceError) error {
 	args, err := r.Config.CmdLineArgs()
 	if err != nil {
 		return err

@@ -80,7 +80,7 @@ var (
 	)
 )
 
-func FaultInstancesNotStopped(ranks []system.Rank) *fault.Fault {
+func FaultInstancesNotStopped(ranks []*system.Rank) *fault.Fault {
 	return serverFault(
 		code.ServerInstancesNotStopped,
 		fmt.Sprintf("harness has running ranks: %v", ranks),

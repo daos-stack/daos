@@ -47,7 +47,7 @@ import (
 // IOServerRunner defines an interface for starting and stopping the
 // daos_io_server.
 type IOServerRunner interface {
-	Start(context.Context, chan<- error) error
+	Start(context.Context, chan<- ioserver.InstanceError) error
 	IsRunning() bool
 	Signal(os.Signal) error
 	Wait() error
@@ -78,6 +78,7 @@ type IOServerInstance struct {
 	_drpcClient   drpc.DomainSocketClient
 	_scmStorageOk bool // cache positive result of NeedsStorageFormat()
 	_superblock   *Superblock
+	_lastErr      error // populated when harness receives signal
 }
 
 // NewIOServerInstance returns an *IOServerInstance initialized with
@@ -104,9 +105,9 @@ func (srv *IOServerInstance) setReady() {
 // IsReady indicates whether the IOServerInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
-// drpc and storage ready states.
+// drpc and storage ready states, and currently active.
 func (srv *IOServerInstance) IsReady() bool {
-	return atomic.LoadUint32(&srv.ready) == 1
+	return atomic.LoadUint32(&srv.ready) == 1 && srv.IsStarted()
 }
 
 // scmConfig returns the scm configuration assigned to this instance.
@@ -218,7 +219,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 // Start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
-func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) error {
+func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- ioserver.InstanceError) error {
 	if !srv.hasSuperblock() {
 		if err := srv.ReadSuperblock(); err != nil {
 			return errors.Wrap(err, "start failed; no superblock")
@@ -505,6 +506,11 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	return makeDrpcCall(dc, module, method, body)
 }
 
+// SetupWithDrpc sets up instance once dRPC comms are ready, this includes
+// setting the instance rank, starting management service and loading IO server
+// modules.
+//
+// Instance ready state is set to indicate that all setup is complete.
 func (srv *IOServerInstance) SetupWithDrpc(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	if err := srv.SetRank(ctx, ready); err != nil {
 		return err

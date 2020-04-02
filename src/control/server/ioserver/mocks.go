@@ -36,8 +36,8 @@ type (
 		Running    uint32
 		SignalCb   func(uint32, os.Signal)
 		SignalErr  error
-		ErrChanCb  func() error
-		ErrChanErr error
+		ErrChanCb  func(uint32) InstanceError
+		ErrChanErr InstanceError
 	}
 
 	TestRunner struct {
@@ -56,12 +56,12 @@ func NewTestRunner(trc *TestRunnerConfig, sc *Config) *TestRunner {
 	}
 }
 
-func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
+func (tr *TestRunner) Start(ctx context.Context, errChan chan<- InstanceError) error {
 	if tr.runnerCfg.StartCb != nil {
 		tr.runnerCfg.StartCb()
 	}
 	if tr.runnerCfg.ErrChanCb == nil {
-		tr.runnerCfg.ErrChanCb = func() error {
+		tr.runnerCfg.ErrChanCb = func(idx uint32) InstanceError {
 			return tr.runnerCfg.ErrChanErr
 		}
 	}
@@ -69,11 +69,15 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 	go func() {
 		select {
 		case <-ctx.Done():
-			return
-		case errChan <- tr.runnerCfg.ErrChanCb():
-			return
+		case errChan <- tr.runnerCfg.ErrChanCb(tr.serverCfg.Index):
 		}
+		atomic.StoreUint32(&tr.runnerCfg.Running, 0)
+		return
 	}()
+
+	if tr.runnerCfg.StartErr == nil {
+		atomic.StoreUint32(&tr.runnerCfg.Running, 1)
+	}
 
 	return tr.runnerCfg.StartErr
 }

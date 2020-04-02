@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,9 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
-const (
-	retryDelay = 3 * time.Second
-)
+const retryDelay = 3 * time.Second
 
 type (
 	mgmtSvcClientCfg struct {
@@ -47,18 +45,19 @@ type (
 		TransportConfig *security.TransportConfig
 	}
 	mgmtSvcClient struct {
-		log      logging.Logger
-		cfg      mgmtSvcClientCfg
-		clientFn func(*grpc.ClientConn) mgmtpb.MgmtSvcClient
+		log       logging.Logger
+		cfg       mgmtSvcClientCfg
+		connectFn func(context.Context, string, *security.TransportConfig,
+			func(context.Context, mgmtpb.MgmtSvcClient) error, ...grpc.DialOption) error
 	}
 )
 
-func newMgmtSvcClient(ctx context.Context, log logging.Logger, cfg mgmtSvcClientCfg) *mgmtSvcClient {
+func newMgmtSvcClient(ctx context.Context, log logging.Logger, cfg mgmtSvcClientCfg) mgmtpb.MgmtSvcClient {
 	return &mgmtSvcClient{
 		log: log,
 		cfg: cfg,
 		// can be mocked with function that returns mgmtpb.MgmtSvcClient
-		clientFn: mgmtpb.NewMgmtSvcClient,
+		connectFn: withConnection,
 	}
 }
 
@@ -70,11 +69,11 @@ func (msc *mgmtSvcClient) delayRetry(ctx context.Context) {
 	}
 }
 
-func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
+func withConnection(ctx context.Context, ap string, tc *security.TransportConfig,
 	fn func(context.Context, mgmtpb.MgmtSvcClient) error, extraDialOpts ...grpc.DialOption) error {
 
 	var opts []grpc.DialOption
-	authDialOption, err := security.DialOptionForTransportConfig(msc.cfg.TransportConfig)
+	authDialOption, err := security.DialOptionForTransportConfig(tc)
 	if err != nil {
 		return errors.Wrap(err, "Failed to determine dial option from TransportConfig")
 	}
@@ -87,20 +86,22 @@ func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
 	}
 	defer conn.Close()
 
-	return fn(ctx, msc.clientFn(conn))
+	return fn(ctx, mgmtpb.NewMgmtSvcClient(conn))
 }
 
 func (msc *mgmtSvcClient) withConnectionRetry(ctx context.Context, ap string,
 	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
 
-	return msc.withConnection(ctx, ap, fn, grpc.WithBackoffMaxDelay(retryDelay),
+	return msc.connectFn(ctx, ap, msc.cfg.TransportConfig, fn,
+		grpc.WithBackoffMaxDelay(retryDelay),
 		grpc.WithDefaultCallOptions(grpc.FailFast(false)))
 }
 
 func (msc *mgmtSvcClient) withConnectionFailOnBadDial(ctx context.Context, ap string,
 	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
 
-	return msc.withConnection(ctx, ap, fn, grpc.FailOnNonTempDialError(true))
+	return msc.connectFn(ctx, ap, msc.cfg.TransportConfig, fn,
+		grpc.FailOnNonTempDialError(true))
 }
 
 func (msc *mgmtSvcClient) LeaderAddress() (string, error) {
@@ -113,7 +114,7 @@ func (msc *mgmtSvcClient) LeaderAddress() (string, error) {
 	return msc.cfg.AccessPoints[0], nil
 }
 
-func (msc *mgmtSvcClient) retryOnErr(err error, ctx context.Context, prefix string) bool {
+func (msc *mgmtSvcClient) retryOnErr(ctx context.Context, err error, prefix string) bool {
 	if err != nil {
 		msc.log.Debugf("%s: %v", prefix, err)
 		msc.delayRetry(ctx)
@@ -123,7 +124,7 @@ func (msc *mgmtSvcClient) retryOnErr(err error, ctx context.Context, prefix stri
 	return false
 }
 
-func (msc *mgmtSvcClient) retryOnStatus(status int32, ctx context.Context, prefix string) bool {
+func (msc *mgmtSvcClient) retryOnStatus(ctx context.Context, status int32, prefix string) bool {
 	if status != 0 {
 		msc.log.Debugf("%s: %d", prefix, status)
 		msc.delayRetry(ctx)
@@ -159,7 +160,7 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 				}
 
 				resp, err = pbClient.Join(ctx, req)
-				if msc.retryOnErr(err, ctx, prefix) {
+				if msc.retryOnErr(ctx, err, prefix) {
 					continue
 				}
 				if resp == nil {
@@ -167,7 +168,7 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 				}
 				// TODO: Stop retrying upon certain errors (e.g., "not
 				// MS", "rank unavailable", and "excluded").
-				if msc.retryOnStatus(resp.Status, ctx, prefix) {
+				if msc.retryOnStatus(ctx, resp.Status, prefix) {
 					continue
 				}
 
@@ -221,7 +222,7 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req mgmtpb.
 				// error returned if any instance is still running so that
 				// we retry until all are terminated on host
 				resp, err = pbClient.StopRanks(ctx, &req)
-				if msc.retryOnErr(err, ctx, prefix) {
+				if msc.retryOnErr(ctx, err, prefix) {
 					continue
 				}
 				if resp == nil {
@@ -280,4 +281,90 @@ func (msc *mgmtSvcClient) Status(ctx context.Context, destAddr string, req mgmtp
 		})
 
 	return
+}
+
+// LeaderQuery provides a mechanism for clients to discover
+// the system's current Management Service leader
+func (msc *mgmtSvcClient) LeaderQuery(ctx context.Context, in *mgmtpb.LeaderQueryReq, opts ...grpc.CallOption) (*mgmtpb.LeaderQueryResp, error) {
+	return nil, errNotImplemented
+}
+
+// Create a DAOS pool allocated across a number of ranks
+func (msc *mgmtSvcClient) PoolCreate(ctx context.Context, in *mgmtpb.PoolCreateReq, opts ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
+	return nil, errNotImplemented
+}
+
+// Destroy a DAOS pool allocated across a number of ranks.
+func (msc *mgmtSvcClient) PoolDestroy(ctx context.Context, in *mgmtpb.PoolDestroyReq, opts ...grpc.CallOption) (*mgmtpb.PoolDestroyResp, error) {
+	return nil, errNotImplemented
+}
+
+// PoolQuery queries a DAOS pool.
+func (msc *mgmtSvcClient) PoolQuery(ctx context.Context, in *mgmtpb.PoolQueryReq, opts ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
+	return nil, errNotImplemented
+}
+
+// Set a DAOS pool property.
+func (msc *mgmtSvcClient) PoolSetProp(ctx context.Context, in *mgmtpb.PoolSetPropReq, opts ...grpc.CallOption) (*mgmtpb.PoolSetPropResp, error) {
+	return nil, errNotImplemented
+}
+
+// Fetch the Access Control List for a DAOS pool.
+func (msc *mgmtSvcClient) PoolGetACL(ctx context.Context, in *mgmtpb.GetACLReq, opts ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return nil, errNotImplemented
+}
+
+// Overwrite the Access Control List for a DAOS pool with a new one.
+func (msc *mgmtSvcClient) PoolOverwriteACL(ctx context.Context, in *mgmtpb.ModifyACLReq, opts ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return nil, errNotImplemented
+}
+
+// Update existing the Access Control List for a DAOS pool with new entries.
+func (msc *mgmtSvcClient) PoolUpdateACL(ctx context.Context, in *mgmtpb.ModifyACLReq, opts ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return nil, errNotImplemented
+}
+
+// Delete an entry from a DAOS pool's Access Control List.
+func (msc *mgmtSvcClient) PoolDeleteACL(ctx context.Context, in *mgmtpb.DeleteACLReq, opts ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return nil, errNotImplemented
+}
+
+// Get the information required by libdaos to attach to the system.
+func (msc *mgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
+	return nil, errNotImplemented
+}
+
+// Get BIO device health information.
+func (msc *mgmtSvcClient) BioHealthQuery(ctx context.Context, in *mgmtpb.BioHealthReq, opts ...grpc.CallOption) (*mgmtpb.BioHealthResp, error) {
+	return nil, errNotImplemented
+}
+
+// Get SMD device list.
+func (msc *mgmtSvcClient) SmdListDevs(ctx context.Context, in *mgmtpb.SmdDevReq, opts ...grpc.CallOption) (*mgmtpb.SmdDevResp, error) {
+	return nil, errNotImplemented
+}
+
+// Get SMD pool list.
+func (msc *mgmtSvcClient) SmdListPools(ctx context.Context, in *mgmtpb.SmdPoolReq, opts ...grpc.CallOption) (*mgmtpb.SmdPoolResp, error) {
+	return nil, errNotImplemented
+}
+
+// List all pools in a DAOS system: basic info: UUIDs, service ranks.
+func (msc *mgmtSvcClient) ListPools(ctx context.Context, in *mgmtpb.ListPoolsReq, opts ...grpc.CallOption) (*mgmtpb.ListPoolsResp, error) {
+	return nil, errNotImplemented
+}
+
+// Get the current state of the device
+func (msc *mgmtSvcClient) DevStateQuery(ctx context.Context, in *mgmtpb.DevStateReq, opts ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
+	return nil, errNotImplemented
+}
+
+// Set the device state of an NVMe SSD to FAULTY
+func (msc *mgmtSvcClient) StorageSetFaulty(ctx context.Context, in *mgmtpb.DevStateReq, opts ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
+	return nil, errNotImplemented
+}
+
+// List all containers in a pool
+func (msc *mgmtSvcClient) ListContainers(ctx context.Context, in *mgmtpb.ListContReq, opts ...grpc.CallOption) (*mgmtpb.ListContResp, error) {
+	return nil, errNotImplemented
 }
