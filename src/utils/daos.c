@@ -1071,7 +1071,8 @@ out:
 	free(str);
 }
 
-#define FIRST_LEVEL_HELP \
+#define FIRST_LEVEL_HELP() \
+do { \
 	fprintf(stream, \
 	"usage: daos RESOURCE COMMAND [OPTIONS]\n" \
 	"resources:\n" \
@@ -1082,8 +1083,10 @@ out:
 	"	  help             print this message and exit\n"); \
 	fprintf(stream, "\n"); \
 	fprintf(stream, "use 'daos help RESOURCE' for resource specifics\n");
+} while (0)
 
-#define ALL_CONT_CMDS_HELP \
+#define ALL_CONT_CMDS_HELP() \
+do { \
 	fprintf(stream, "\n" \
 	"container (cont) commands:\n" \
 	"	  create           create a container\n" \
@@ -1111,14 +1114,17 @@ out:
 	"	  rollback         roll back container to specified snapshot\n"); \
 	fprintf(stream, "\n"); \
 	fprintf(stream, "use 'daos help cont|container COMMAND' for command specific options\n");
+} while (0)
 
-#define ALL_BUT_CONT_CREATE_OPTS_HELP \
+#define ALL_BUT_CONT_CREATE_OPTS_HELP() \
+do { \
 	fprintf(stream, \
 	"container options (query, and all commands except create):\n" \
 	"	  <pool options>   with --cont use: (--pool, --sys-name, --svc)\n" \
 	"	  <pool options>   with --path use: (--sys-name, --svc)\n" \
 	"	--cont=UUID        (mandatory, or use --path)\n" \
 	"	--path=PATHSTR     (mandatory, or use --cont)\n");
+} while (0)
 
 static int
 help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
@@ -1132,7 +1138,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	fprintf(stream, "daos command (v%s)\n", DAOS_VERSION);
 
 	if (argc == 2) {
-		FIRST_LEVEL_HELP
+		FIRST_LEVEL_HELP();
 	} else if (strcmp(argv[2], "pool") == 0) {
 		fprintf(stream, "\n"
 		"pool commands:\n"
@@ -1142,7 +1148,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	  stat             get pool statistics\n"
 		"	  list-attrs       list pool user-defined attributes\n"
 		"	  get-attr         get pool user-defined attribute\n");
-		
+
 		fprintf(stream,
 		"pool options:\n"
 		"	--pool=UUID        pool UUID\n"
@@ -1155,27 +1161,8 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	} else if (strcmp(argv[2], "container") == 0 ||
 		   strcmp(argv[2], "cont") == 0) {
 		if (argc == 3) {
-			ALL_CONT_CMDS_HELP
+			ALL_CONT_CMDS_HELP();
 		} else if (strcmp(argv[3], "create") == 0) {
-#if 0
-		fprintf(stream,
-		"container (cont) options:\n"
-		"	  <pool options>   (--pool, --sys-name, --svc)\n"
-		"	--cont=UUID        container UUID\n"
-		"	--attr=NAME        container attribute name to set, get, del\n"
-		"	--value=VALUESTR   container attribute value to set\n"
-		"	--path=PATHSTR     container namespace path\n"
-		"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
-		"	--oclass=OCLSSTR   container object class\n"
-		"			   (tiny, small, large, R2, R2S, repl_max)\n"
-		"	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
-		"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
-		"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
-		"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
-		"	--eprange=B-E      container epoch range (destroy-snap)\n"
-		"	--force            destroy container regardless of state\n");
-#endif
-
 			fprintf(stream,
 			"container options (create by UUID):\n"
 			"	  <pool options>   (--pool, --sys-name, --svc)\n"
@@ -1211,7 +1198,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			fprintf(stream,
 			"container options (destroy):\n"
 			"	--force            destroy container regardless of state\n");
-			ALL_BUT_CONT_CREATE_OPTS_HELP
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "get-attr") == 0 ||
 			   strcmp(argv[3], "set-attr") == 0 ||
 			   strcmp(argv[3], "del-attr") == 0) {
@@ -1219,7 +1206,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"container options (attribute-related):\n"
 			"	--attr=NAME        container attribute name to set, get, del\n"
 			"	--value=VALUESTR   container attribute value to set\n");
-			ALL_BUT_CONT_CREATE_OPTS_HELP
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "create-snap") == 0 ||
 			   strcmp(argv[3], "destroy-snap") == 0 ||
 			   strcmp(argv[3], "rollback") == 0) {
@@ -1228,14 +1215,14 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 			"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
 			"	--eprange=B-E      container epoch range (destroy-snap)\n");
-			ALL_BUT_CONT_CREATE_OPTS_HELP
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "set-prop") == 0) {
 			fprintf(stream,
 			"container options (set-prop):\n"
 			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
 			"			   supported prop names: label\n"
 			"			   label value can be any string\n");
-			ALL_BUT_CONT_CREATE_OPTS_HELP
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "get-acl") == 0 ||
 			   strcmp(argv[3], "overwrite-acl") == 0 ||
 			   strcmp(argv[3], "update-acl") == 0 ||
@@ -1251,7 +1238,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"			   special principals: OWNER@, GROUP@, EVERYONE@\n"
 			"	--verbose          verbose mode (get-acl)\n"
 			"	--outfile=PATH     write ACL to file (get-acl)\n");
-			ALL_BUT_CONT_CREATE_OPTS_HELP
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "set-owner") == 0) {
 			fprintf(stream,
 			"container options (set-owner):\n"
@@ -1259,7 +1246,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"			   format: username@[domain]\n"
 			"	--group=ID         group who will own the container.\n"
 			"			   format: groupname@[domain]\n");
-			ALL_BUT_CONT_CREATE_OPTS_HELP
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "list-objects") == 0 ||
 			   strcmp(argv[3], "list-obj") == 0 ||
 			   strcmp(argv[3], "query") == 0 ||
@@ -1267,9 +1254,9 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			   strcmp(argv[3], "stat") == 0 ||
 			   strcmp(argv[3], "list-attrs") == 0 ||
 			   strcmp(argv[3], "list-snaps") == 0) {
-			ALL_BUT_CONT_CREATE_OPTS_HELP
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else {
-			ALL_CONT_CMDS_HELP
+			ALL_CONT_CMDS_HELP();
 		}
 	} else if (strcmp(argv[2], "obj") == 0 ||
 		   strcmp(argv[2], "object") == 0) {
@@ -1278,7 +1265,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	  query            query an object's layout\n"
 		"	  list-keys        list an object's keys\n"
 		"	  dump             dump an object's contents\n");
-	
+
 		fprintf(stream,
 		"object (obj) options:\n"
 		"	  <pool options>   (--pool, --sys-name, --svc)\n"
@@ -1286,7 +1273,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	--oid=HI.LO        object ID\n");
 
 	} else {
-		FIRST_LEVEL_HELP
+		FIRST_LEVEL_HELP();
 	}
 
 	return 0;
