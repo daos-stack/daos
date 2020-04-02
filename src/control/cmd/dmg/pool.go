@@ -59,6 +59,7 @@ type PoolCmd struct {
 type PoolCreateCmd struct {
 	logCmd
 	ctlClientCmd
+	jsonOutputCmd
 	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
@@ -116,6 +117,10 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 	ctx := context.Background()
 	resp, err := control.PoolCreate(ctx, c.ctlClient, req)
 
+	if c.jsonOutputEnabled() {
+		return c.outputJSON(os.Stdout, resp)
+	}
+
 	if err != nil {
 		msg = errors.WithMessage(err, "FAILED").Error()
 	} else {
@@ -159,6 +164,7 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 type PoolQueryCmd struct {
 	logCmd
 	ctlClientCmd
+	jsonOutputCmd
 	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
 }
 
@@ -173,6 +179,10 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 	resp, err := control.PoolQuery(ctx, c.ctlClient, req)
 	if err != nil {
 		return errors.Wrap(err, "pool query failed")
+	}
+
+	if c.jsonOutputEnabled() {
+		return c.outputJSON(os.Stdout, resp)
 	}
 
 	var bld strings.Builder

@@ -24,6 +24,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -67,6 +68,16 @@ type (
 		hostlist  []string
 		ctlClient control.Invoker
 	}
+
+	jsonOutputter interface {
+		enableJsonOutput(bool)
+		jsonOutputEnabled() bool
+		outputJSON(io.Writer, interface{}) error
+	}
+
+	jsonOutputCmd struct {
+		shouldEmitJSON bool
+	}
 )
 
 func (cmd *ctlClientCmd) setClient(c control.Invoker) {
@@ -75,6 +86,24 @@ func (cmd *ctlClientCmd) setClient(c control.Invoker) {
 
 func (cmd *ctlClientCmd) setHostList(hl []string) {
 	cmd.hostlist = hl
+}
+
+func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool) {
+	cmd.shouldEmitJSON = emitJson
+}
+
+func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
+	return cmd.shouldEmitJSON
+}
+
+func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+
+	_, err = out.Write(data)
+	return err
 }
 
 // implement the interface
@@ -115,6 +144,7 @@ type cliOptions struct {
 	Insecure   bool   `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
 	Debug      bool   `short:"d" long:"debug" description:"enable debug output"`
 	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs   bool   `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	// TODO: implement host file parsing
 	HostFile   string     `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
 	ConfigPath string     `short:"o" long:"config-path" description:"Client config file path"`
@@ -172,8 +202,13 @@ func parseOpts(args []string, opts *cliOptions, ctlClient control.Invoker, conns
 			log.WithLogLevel(logging.LogLevelDebug)
 			log.Debug("debug output enabled")
 		}
-		if opts.JSON {
+
+		if opts.JSONLogs {
 			log.WithJSONOutput()
+		}
+
+		if jsonCmd, ok := cmd.(jsonOutputter); ok {
+			jsonCmd.enableJsonOutput(opts.JSON)
 		}
 
 		if logCmd, ok := cmd.(cmdLogger); ok {

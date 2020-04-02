@@ -25,6 +25,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -49,6 +50,7 @@ type storageCmd struct {
 type storagePrepareCmd struct {
 	logCmd
 	ctlClientCmd
+	jsonOutputCmd
 	types.StoragePrepareCmd
 }
 
@@ -89,6 +91,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
+	}
+
 	var bld strings.Builder
 	if err := control.PrintResponseErrors(resp, &bld); err != nil {
 		return err
@@ -105,6 +111,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 type storageScanCmd struct {
 	logCmd
 	ctlClientCmd
+	jsonOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
 }
 
@@ -118,6 +125,10 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	resp, err := control.StorageScan(ctx, cmd.ctlClient, req)
 	if err != nil {
 		return err
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
 	}
 
 	var bld strings.Builder
@@ -137,6 +148,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 type storageFormatCmd struct {
 	logCmd
 	ctlClientCmd
+	jsonOutputCmd
 	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
 	Reformat bool `long:"reformat" description:"Always reformat storage (CAUTION: Potentially destructive)"`
 }
@@ -153,6 +165,10 @@ func (cmd *storageFormatCmd) Execute(args []string) error {
 	resp, err := control.StorageFormat(ctx, cmd.ctlClient, req)
 	if err != nil {
 		return err
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
 	}
 
 	var bld strings.Builder

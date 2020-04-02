@@ -24,6 +24,7 @@
 package control
 
 import (
+	"encoding/json"
 	"sort"
 
 	"github.com/golang/protobuf/proto"
@@ -79,6 +80,16 @@ func (her *HostErrorsResp) Errors() error {
 // HostErrorsMap provides a mapping from error strings to a set of
 // hosts to which the error applies.
 type HostErrorsMap map[string]*hostlist.HostSet
+
+// MarshalJSON implements a custom marshaller to include
+// the hostset as a ranged string.
+func (hem HostErrorsMap) MarshalJSON() ([]byte, error) {
+	out := make(map[string]string)
+	for k, v := range hem {
+		out[k] = v.RangedString()
+	}
+	return json.Marshal(out)
+}
 
 // Add creates or updates the err/addr keyval pair.
 func (hem HostErrorsMap) Add(hostAddr string, hostErr error) (err error) {
