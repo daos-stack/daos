@@ -57,7 +57,7 @@ def skip_stage(String stage) {
     return commitPragma(pragma: 'Skip-' + stage).contains('true')
 }
 
-def daos_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
+daos_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
