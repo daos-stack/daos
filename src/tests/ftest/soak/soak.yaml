@@ -84,7 +84,7 @@ smoke:
     test_timeout: 0.4
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
-    nodesperjob: 
+    nodesperjob:
         - -1
     taskspernode:
         - 1
@@ -101,7 +101,7 @@ soak_stress:
     test_timeout: 2
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
-    nodesperjob: 
+    nodesperjob:
         - -1
     # used for perfomance benchmarks
     taskspernode:
@@ -121,7 +121,8 @@ soak_harassers:
     harasser_timeout: 120
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
-    nodesperjob: 1
+    nodesperjob:
+        - 1
     # used for perfomance benchmarks
     taskspernode:
         - 1

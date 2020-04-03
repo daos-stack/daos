@@ -82,12 +82,21 @@ class Test(avocadoTest):
         # all tests should set a timeout and 60 seconds will enforce that
         if not self.timeout:
             self.timeout = 60
-        # Allow yaml timeout value to be in hours; format 2H
-        if "H" in self.timeout:
-            self.timeout = 3600 * int(self.timeout.replace("H", ""))
-        # Allow yamltimeout value to be in minutes; format 32M
-        if "M" in self.timeout:
-            self.timeout = 60 * int(self.timeout.replace("M", ""))
+        elif isinstance(self.timeout, str):
+            dhm = re.search(
+                r"(?:(\\d+)(?:\\s*d[ays]*\\s*)){0,1}" +
+                "(?:(\\d+)(?:\\s*h[ours]*\\s*)){0,1}" +
+                "(?:(\\d+)(?:\\s*m[inutes]*)){0,1}",
+                self.timeout, re.I).groups()
+            self.timeout = 0
+            if dhm[0] is not None:
+                self.timeout += 24 * 60 * 60 * int(dhm[0])
+            if dhm[1] is not None:
+                self.timeout += 60 * 60 * int(dhm[1])
+            if dhm[2] is not None:
+                self.timeout += 60 * int(dhm[2])
+        self.log.info("self.timeout: %s", self.timeout)
+
         item_list = self.logdir.split('/')
         for index, item in enumerate(item_list):
             if item == 'job-results':

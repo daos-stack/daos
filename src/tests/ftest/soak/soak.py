@@ -919,6 +919,10 @@ class Soak(TestWithServers):
             if status > 0:
                 errors.append("Failed to cancel jobs {}".format(
                     self.failed_job_id_list))
+            else:
+                self.log.info(
+                    "Jobs %s have been successfully cancelled",
+                    self.failed_job_id_list)
         if self.all_failed_jobs:
             errors.append(
                 "FAILED: The following jobs failed {} ".format(
