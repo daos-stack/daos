@@ -70,7 +70,7 @@ class MdtestBase(TestWithServers):
 
         # Until DAOS-3320 is resolved run IOR for POSIX
         # with single client node
-        self.log.ingo('type is %s', self.mdtest_cmd.api.value)
+        self.log.info('type is %s', self.mdtest_cmd.api.value)
         if self.mdtest_cmd.api.value == "POSIX":
             self.log.info("Restricting mdtest to one node")
 
