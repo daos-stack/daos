@@ -101,9 +101,9 @@ struct test_arg {
 };
 
 /* variables for test group */
-char		**test_group_args;
-int		test_group_start;
-int		test_group_stop;
+static char		**test_group_args;
+int			test_group_start;
+int			test_group_stop;
 
 static int
 ts_evt_bio_free(struct umem_instance *umm, struct evt_desc *desc,
@@ -2293,16 +2293,19 @@ ts_cmd_run(char opc, char *args)
 		rc = 0;
 		break;
 	}
-	if(st != NULL) {
+	if (st != NULL)
 		rc = -1;
-	}
+
 	return rc;
 }
 
 static void
-ts_group(void ** state){
+ts_group(void **state)
+{
+
 	int	opc = 0;
-	while((opc = getopt_long(test_group_stop-test_group_start+1,
+
+	while ((opc = getopt_long(test_group_stop-test_group_start+1,
 				 test_group_args+test_group_start,
 				 "C:a:m:e:f:g:d:b:Docl::ts",
 				 ts_ops, NULL)) != -1){
@@ -2311,8 +2314,9 @@ ts_group(void ** state){
 }
 
 static int
-run_cmd_line_test(char* test_name, char** args, int start_idx, int stop_idx)
+run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
 {
+
 	const struct CMUnitTest evt_test[] = {
 		{ test_name, ts_group, NULL, NULL},
 	};
@@ -2321,7 +2325,10 @@ run_cmd_line_test(char* test_name, char** args, int start_idx, int stop_idx)
 	test_group_start = start_idx;
 	test_group_stop = stop_idx;
 
-	return cmocka_run_group_tests_name("Group of tests", evt_test, NULL, NULL);
+	return cmocka_run_group_tests_name("Group of tests",
+					   evt_test,
+					   NULL,
+					   NULL);
 }
 
 int
@@ -2332,7 +2339,7 @@ main(int argc, char **argv)
 	int		j;
 	int		start_idx;
 	char		*test_name;
-	int 		stop_idx;
+	int		stop_idx;
 
 	d_register_alt_assert(mock_assert);
 
@@ -2366,17 +2373,18 @@ main(int argc, char **argv)
 	}
 
 	/* First, execute Internal tests in the command */
-	for(j=0; j<argc;j++){
-		if(strcmp(argv[j],"-t") == 0 ) {
+	for (j = 0; j < argc; j++) {
+		if (strcmp(argv[j], "-t") == 0) {
 			rc = run_internal_tests();
 			if (rc != 0)
-				D_PRINT("Internal tests failed with rc="DF_RC"\n", DP_RC(rc));
+				D_PRINT("Internal tests failed rc="DF_RC"\n",
+					DP_RC(rc));
 		}
 	}
-	
+
 	/* Execute the sequence of tests */
 	stop_idx = argc-1;
-	if(strcmp(argv[1], "--start-test") != 0) {
+	if (strcmp(argv[1], "--start-test") != 0) {
 		start_idx = 0;
 		test_name = "Evt_ctl testing tool";
 	} else {

@@ -79,9 +79,9 @@ struct ik_rec {
 	umem_off_t	ir_val_off;
 };
 
-char	**test_group_args;
-int	test_group_start;
-int	test_group_stop;
+static char	**test_group_args;
+int		test_group_start;
+int		test_group_stop;
 
 #define IK_TREE_CLASS	100
 #define POOL_NAME "/mnt/daos/btree-test"
@@ -900,9 +900,11 @@ static struct option btr_ops[] = {
 };
 
 static void
-ts_group(void ** state){
+ts_group(void **state) {
+
 	int	opt = 0;
 	void	**st = NULL;
+
 	while ((opt = getopt_long(test_group_stop-test_group_start+1,
 				  test_group_args+test_group_start,
 				  "tmC:Deocqu:d:r:f:i:b:p:",
@@ -970,17 +972,21 @@ ts_group(void ** state){
 }
 
 static int
-run_cmd_line_test(char* test_name, char** args, int start_idx, int stop_idx)
+run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
 {
+
 	const struct CMUnitTest btree_test[] = {
 		{test_name, ts_group, NULL, NULL},
 	};
-	
+
 	test_group_args = args;
 	test_group_start = start_idx;
 	test_group_stop = stop_idx;
 
-	return cmocka_run_group_tests_name("Btree group of tests", btree_test, NULL, NULL);
+	return cmocka_run_group_tests_name("Btree group of tests",
+					   btree_test,
+					   NULL,
+					   NULL);
 }
 
 int
@@ -1011,7 +1017,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	if(strcmp(argv[1], "--start-test") == 0){
+	if (strcmp(argv[1], "--start-test") == 0) {
 		optind = 2;
 	} else {
 		optind = 0;
@@ -1050,7 +1056,7 @@ main(int argc, char **argv)
 	/* start over */
 	optind = 0;
 	stop_idx = argc-1;
-	if(strcmp(argv[1], "--start-test") != 0){
+	if (strcmp(argv[1], "--start-test") != 0) {
 		start_idx = 0;
 		test_name = "Btree testing tool";
 	} else {
