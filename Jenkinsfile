@@ -41,6 +41,7 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 def daos_branch = "release/0.9"
+def test_tag = "pr"
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
@@ -53,17 +54,6 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
-def quickbuild = node() { commitPragma(pragma: 'Quick-build').contains('true') }
-if (quickbuild) {
-    /* TODO: this is a big fat hack
-     * what we should be doing here is installing all of the
-     * $(repoquery --requires daos{,-{server,tests}}) dependencies
-     * similar to how we do for QUICKBUILD_DEPS
-     * or just start testing from RPMs instead of continuing to hack
-     * around that :-)
-     */
-    functional_rpms += " spdk-tools"
-}
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -170,7 +160,7 @@ def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (env.BRANCH_NAME != "weekly-testing" &&
+    (!env.BRANCH_NAME.startsWith("weekly-testing") &&
      !env.BRANCH_NAME.startsWith("release/") &&
      env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
@@ -182,7 +172,7 @@ pipeline {
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? '0 0 * * *\n' : '' +
-             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
+             env.BRANCH_NAME == 'weekly-testing-1.x' ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -194,6 +184,7 @@ pipeline {
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+        QUICKBUILD = commitPragma(pragma: 'Quick-build').contains('true')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         QUICKBUILD_DEPS = sh(script: "rpmspec -q --srpm --requires utils/rpms/daos.spec 2>/dev/null",
@@ -216,8 +207,8 @@ pipeline {
             when {
                 beforeAgent true
                 allOf {
-                    not { branch 'weekly-testing' }
-                    expression { env.CHANGE_TARGET != 'weekly-testing' }
+                    not { branch 'weekly-testing*' }
+                    expression { env.CHANGE_TARGET != 'weekly-testing*' }
                 }
             }
             parallel {
@@ -361,7 +352,6 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'el-7',
-                                                publish_branch: daos_branch,
                                                 repo_dir: 'artifacts/centos7/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -396,8 +386,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            not { branch 'weekly-testing*' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing*' }
                         }
                     }
                     agent {
@@ -441,7 +431,6 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'leap-15',
-                                                publish_branch: daos_branch,
                                                 repo_dir: 'artifacts/leap15/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -480,7 +469,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=' + quickbuild +
+                                                '--build-arg QUICKBUILD=' + env.QUICKBUILD +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
                                                 '" --build-arg REPOS="' + component_repos + '"'
                         }
@@ -566,7 +555,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { quickbuild != 'true' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -627,7 +616,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { quickbuild != 'true' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -687,9 +676,9 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { quickbuild != 'true' }
+                            not { branch 'weekly-testing*' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing*' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -750,7 +739,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { quickbuild != 'true' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -811,7 +800,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { quickbuild != 'true' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -871,9 +860,9 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { quickbuild != 'true' }
+                            not { branch 'weekly-testing*' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing*' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -1150,7 +1139,7 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=pr,-hw
+                                               test_tag=''' + test_tag + ''',-hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            # set DAOS_TARGET_OVERSUBSCRIBE env here
@@ -1236,7 +1225,7 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-small:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=pr,hw,small
+                                               test_tag=''' + test_tag + ''',hw,small
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-3)
                                            clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
@@ -1340,7 +1329,7 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-medium:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=pr,hw,medium,ib2
+                                               test_tag=''' + test_tag + ''',hw,medium,ib2
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-5)
                                            clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
@@ -1444,7 +1433,7 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-large:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=pr,hw,large
+                                               test_tag=''' + test_tag + ''',hw,large
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
@@ -1518,8 +1507,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            not { branch 'weekly-testing*' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing*' }
                             expression {
                                 ! commitPragma(pragma: 'Skip-test-centos-rpms').contains('true')
                             }
@@ -1556,8 +1545,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                            not { branch 'weekly-testing*' }
+                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing*' }
                             expression {
                                 ! commitPragma(pragma: 'Skip-scan-centos-rpms').contains('true')
                             }
