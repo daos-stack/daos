@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-from apricot import TestWithServers, get_log_file
+from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
 
 
