@@ -262,7 +262,41 @@ pipeline {
                         }
                         */
                     }
-                }
+                } // stage('checkpatch')
+                stage('Python Bandit check') {
+                    when {
+                      beforeAgent true
+                      expression {
+                        ! commitPragma(pragma: 'Skip-python-bandit').contains('true')
+                      }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.code_scanning'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
+                                                env.JENKINS_URL
+                        }
+                    }
+                    steps {
+                         githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                      description: env.STAGE_NAME,
+                                      context: "build" + "/" + env.STAGE_NAME,
+                                      status: "PENDING"
+                        checkoutScm withSubmodules: true
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            runTest script: 'bandit -r . --format xml -o bandit.xml',
+                                    junit_files: "bandit.xml",
+                                    ignore_failure: true
+                        }
+                    }
+                    post {
+                        always {
+                            junit 'bandit.xml'
+                        }
+                    }
+                } // stage('Python Bandit check')
             }
         }
         stage('Build') {
@@ -1528,7 +1562,9 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            // expression { ! skip_stage('scan-centos-rpms') }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-scan-centos-rpms').contains('true')
+                            }
                         }
                     }
                     agent {
