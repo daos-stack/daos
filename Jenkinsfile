@@ -1065,24 +1065,12 @@ pipeline {
             }
             parallel {
                 stage('Coverity on CentOS 7') {
-                    // Eventually this will only run on Master builds.
-                    // Unfortunately for now, a PR build could break
-                    // the quickbuild, which would not be detected until
-                    // the master build fails.
-//                    when {
-//                        beforeAgent true
-//                        anyOf {
-//                            branch 'master'
-//                            not {
-//                                // expression returns false on grep match
-//                                expression {
-//                                    sh script: 'git show -s --format=%B |' +
-//                                               ' grep "^Coverity-test: true"',
-//                                    returnStatus: true
-//                                }
-//                            }
-//                        }
-//                    }
+                    when {
+                        beforeAgent true
+                        expression {
+                            ! commitPragma(pragma: 'Skip-coverity-test').contains('true')
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
