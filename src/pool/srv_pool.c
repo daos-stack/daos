@@ -3828,6 +3828,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	       struct pool_target_addr_list *out_list,
 	       uint32_t *map_version, struct rsvc_hint *hint)
 {
+	daos_rebuild_opc_t		op;
 	struct pool_target_id_list	target_list = { 0 };
 	bool				updated;
 	int				rc;
@@ -3854,14 +3855,12 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 		D_GOTO(out, rc);
 	}
 
-	int ret;
-	daos_rebuild_opc_t op = (opc == POOL_EXCLUDE ? RB_OP_FAIL : RB_OP_ADD);
+	op = (opc == POOL_EXCLUDE ? RB_OP_FAIL : RB_OP_ADD);
 
-	ret = ds_rebuild_schedule(pool_uuid, *map_version, &target_list, op);
-	if (ret != 0) {
-		D_ERROR("rebuild fails rc %d\n", ret);
-		if (rc == 0)
-			rc = ret;
+	rc = ds_rebuild_schedule(pool_uuid, *map_version, &target_list, op);
+	if (rc != 0) {
+		D_ERROR("rebuild fails rc %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
 out:

@@ -975,20 +975,13 @@ out:
 int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
-	struct cont_tgt_destroy_in *in;
+	struct cont_tgt_destroy_in in;
 	int rc;
 
-	D_ALLOC_PTR(in);
-	if (in == NULL)
-		return -DER_NOMEM;
+	uuid_copy(in.tdi_pool_uuid, pool_uuid);
+	uuid_copy(in.tdi_uuid, cont_uuid);
 
-	uuid_copy(in->tdi_pool_uuid, pool_uuid);
-	uuid_copy(in->tdi_uuid, cont_uuid);
-
-	rc = dss_thread_collective(cont_child_destroy_one, in, 0, DSS_ULT_IO);
-
-	D_FREE(in);
-
+	rc = dss_thread_collective(cont_child_destroy_one, &in, 0, DSS_ULT_IO);
 	return rc;
 }
 

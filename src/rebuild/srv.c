@@ -366,10 +366,7 @@ rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
 bool
 is_current_tgt_unavail(struct rebuild_tgt_pool_tracker *rpt)
 {
-	enum pool_comp_state    state;
-
-	state = (PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN);
-	return rebuild_status_match(rpt, state);
+	return rebuild_status_match(rpt, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN);
 }
 
 static int
@@ -1450,81 +1447,65 @@ free:
 	return rc;
 }
 
+static int
+regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
+			 unsigned int tgts_cnt, daos_rebuild_opc_t rebuild_op)
+{
+	unsigned int	i;
+	int		rc;
+
+	for (i = 0; i < tgts_cnt; i++) {
+		struct pool_target		*tgt = &tgts[i];
+		struct pool_target_id		tgt_id;
+		struct pool_target_id_list	id_list;
+
+		tgt_id.pti_id = tgt->ta_comp.co_id;
+		id_list.pti_ids = &tgt_id;
+		id_list.pti_number = 1;
+
+		rc = ds_rebuild_schedule(pool->sp_uuid, tgt->ta_comp.co_fseq,
+					 &id_list, rebuild_op);
+		if (rc) {
+			D_ERROR(DF_UUID" schedule op %d ver %d failed: rc %d\n",
+				DP_UUID(pool->sp_uuid), rebuild_op,
+				tgt->ta_comp.co_fseq, rc);
+			return rc;
+		}
+	}
+
+	return DER_SUCCESS;
+}
+
 /* Regenerate the rebuild tasks when changing the leader. */
 int
 ds_rebuild_regenerate_task(struct ds_pool *pool)
 {
-	/* DOWN targets that have not yet completed rebuild */
-	struct pool_target *down_tgts;
-	unsigned int	down_tgts_cnt;
-
-	/* UP targets that have not yet been enabled in the pool for use */
-	struct pool_target *up_tgts;
-	unsigned int	up_tgts_cnt;
-	unsigned int	i;
-	int		rc;
+	struct pool_target	*tgts;
+	unsigned int		tgts_cnt;
+	int			rc;
 
 	rebuild_gst.rg_abort = 0;
 
 	/* get all down targets */
-	rc = pool_map_find_down_tgts(pool->sp_map, &down_tgts, &down_tgts_cnt);
+	rc = pool_map_find_down_tgts(pool->sp_map, &tgts, &tgts_cnt);
 	if (rc != 0) {
 		D_ERROR("failed to create failed tgt list rc "DF_RC"\n",
 			DP_RC(rc));
 		return rc;
 	}
 
-	for (i = 0; i < down_tgts_cnt; i++) {
-		struct pool_target		*tgt = &down_tgts[i];
-		struct pool_target_id		tgt_id;
-		struct pool_target_id_list	id_list;
-
-		tgt_id.pti_id = tgt->ta_comp.co_id;
-		id_list.pti_ids = &tgt_id;
-		id_list.pti_number = 1;
-
-		rc = ds_rebuild_schedule(pool->sp_uuid, tgt->ta_comp.co_fseq,
-					 &id_list, RB_OP_FAIL);
-		if (rc) {
-			D_ERROR(DF_UUID" schedule down ver %d failed: rc %d\n",
-				DP_UUID(pool->sp_uuid), tgt->ta_comp.co_fseq,
-				rc);
-			return rc;
-		}
-	}
-
-	if (down_tgts_cnt > 0)
-		return DER_SUCCESS;
-
-	/* TODO: Drain state check / schedule goes here */
+	rc = regenerate_task_internal(pool, tgts, tgts_cnt, RB_OP_FAIL);
+	if (rc != 0)
+		return rc;
 
 	/* get all up targets */
-	rc = pool_map_find_up_tgts(pool->sp_map, &up_tgts, &up_tgts_cnt);
+	rc = pool_map_find_up_tgts(pool->sp_map, &tgts, &tgts_cnt);
 	if (rc != 0) {
 		D_ERROR("failed to create up tgt list rc %d\n", rc);
 		return rc;
 	}
 
-	for (i = 0; i < up_tgts_cnt; i++) {
-		struct pool_target		*tgt = &up_tgts[i];
-		struct pool_target_id		tgt_id;
-		struct pool_target_id_list	id_list;
-
-		tgt_id.pti_id = tgt->ta_comp.co_id;
-		id_list.pti_ids = &tgt_id;
-		id_list.pti_number = 1;
-
-		rc = ds_rebuild_schedule(pool->sp_uuid, tgt->ta_comp.co_fseq,
-					 &id_list, RB_OP_ADD);
-		if (rc) {
-			D_ERROR(DF_UUID" schedule add ver %d failed: rc %d\n",
-				DP_UUID(pool->sp_uuid), tgt->ta_comp.co_fseq,
-				rc);
-			return rc;
-		}
-	}
-
-	return DER_SUCCESS;
+	return regenerate_task_internal(pool, tgts, tgts_cnt, RB_OP_ADD);
 }
 
 /* Hang rebuild ULT on the current xstream */
