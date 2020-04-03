@@ -1152,11 +1152,14 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 
 	out_source = crt_reply_get(source);
 	out_result = crt_reply_get(result);
-	/* rc is error count, rc_errval an aggregation of values. */
+	/* rc is error count, rc_errval first error value */
 	out_result->sao_rc += out_source->sao_rc;
 
-	out_result->sao_rc_errval = MIN(out_result->sao_rc_errval,
-					out_source->sao_rc_errval);
+	if (out_result->sao_rc_errval == 0) {
+		if (out_source->sao_rc_errval != 0)
+			out_result->sao_rc_errval = out_source->sao_rc_errval;
+	}
+
 	return 0;
 }
 
