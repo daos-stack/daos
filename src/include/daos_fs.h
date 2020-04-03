@@ -561,7 +561,7 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
 /**
  * Retrieve Symlink value of object if it's a symlink. If the buffer size passed
  * in is not large enough, we copy up to size of the buffer, and update the size
- * to actual value size.
+ * to actual value size. The size returned includes the null terminator.
  *
  * \param[in]	obj	Open object to query.
  * \param[in]	buf	user buffer to copy the symlink value in.
