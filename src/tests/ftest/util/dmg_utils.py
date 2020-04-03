@@ -529,7 +529,7 @@ class DmgCommand(CommandWithSubCommand):
         the corresponding user/group name string.
 
         Args:
-            scm_size (int): SCM pool size to create.
+            scm_size (str): SCM pool size to create.
             uid (object, optional): User ID with privileges. Defaults to None.
             gid (object, otional): Group ID with privileges. Defaults to None.
             nvme_size (str, optional): NVMe size. Defaults to None.

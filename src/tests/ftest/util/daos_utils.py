@@ -468,10 +468,9 @@ class DaosCommand(CommandWithSubCommand):
         """Query a pool.
 
         Args:
-            pool ([type]): [description]
-            sys_name ([type], optional): [description]. Defaults to None.
-            svc ([type], optional): [description]. Defaults to None.
-            sys ([type], optional): [description]. Defaults to None.
+            pool (String): Pool UUID.
+            sys_name (String, optional): System name. Defaults to None.
+            svc (String, optional): Pool service replicas. Defaults to None.
             env (dict, optional): dictionary of environment variable names and
                 values (EnvironmentVariables). Defaults to None.
 
@@ -499,15 +498,18 @@ class DaosCommand(CommandWithSubCommand):
 
         Args:
             pool (str): UUID of the pool in which to create the container
-            sys_name (str, optional): [description]. Defaults to None.
+            sys_name (str, optional): System name.. Defaults to None.
             svc (str, optional): the pool service replicas, e.g. '1,2,3'.
                 Defaults to None.
-            cont (str, optional): [description]. Defaults to None.
-            path (str, optional): [description]. Defaults to None.
+            cont (str, optional): Container UUID. Defaults to None.
+            path (str, optional): Container namespace path. Defaults to None.
             cont_type (str, optional): the type of container to create. Defaults
                 to None.
             oclass (str, optional): object class. Defaults to None.
-            chunk_size ([type], optional): [description]. Defaults to None.
+            chunk_size ([type], optional): chunk size of files created.
+                Supports suffixes:
+                K (KB), M (MB), G (GB), T (TB), P (PB), E (EB). Defaults to
+                None.
             env (dict, optional): dictionary of environment variable names and
                 values (EnvironmentVariables). Defaults to None.
 
@@ -529,5 +531,31 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.type.value = cont_type
         self.sub_command_class.sub_command_class.oclass.value = oclass
         self.sub_command_class.sub_command_class.chunk_size.value = chunk_size
+        self.env = env
+        return self._get_result()
+
+    def pool_list_cont(self, pool, svc, sys_name=None, env=None):
+        """List containers in the given pool.
+
+        Args:
+            pool (String): Pool UUID
+            svc (String, optional): Service replicas. If there are multiple,
+                numbers are separated by comma like 1,2,3
+            sys_name (String, optional): System name. Defaults to None.
+            env (dict, optional): dictionary of environment variable names and
+                values (EnvironmentVariables). Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: Returned if the command fails.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("list-containers")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
         self.env = env
         return self._get_result()
