@@ -1081,7 +1081,7 @@ simple_sv(void **state)
 
 	iod.iod_nr = 1;
 	iod.iod_recxs = NULL;
-	iod.iod_size = 1; /* [todo-ryon]: this should be bigger than 1 */
+	iod.iod_size = daos_sgl_buf_size(&sgl);
 	iod.iod_type = DAOS_IOD_SINGLE;
 
 	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
