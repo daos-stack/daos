@@ -1,0 +1,373 @@
+.TH dmg 1 "1 April 2020"
+.SH NAME
+dmg \- Administrative tool for managing DAOS clusters
+.SH SYNOPSIS
+\fBdmg\fP [OPTIONS] [COMMAND] [SUBCOMMAND]
+.SH DESCRIPTION
+dmg (DAOS Management) is a tool for connecting to DAOS servers
+for the purpose of issuing administrative commands to the cluster. dmg is
+provided as a means for allowing administrators to securely discover and
+administer DAOS components such as storage allocations, network configuration,
+and access control settings, along with system wide operations.
+.SH OPTIONS
+.SS Application Options
+.TP
+\fB\fB\-\-allow-proxy\fR\fP
+Allow proxy configuration via environment
+.TP
+\fB\fB\-l\fR, \fB\-\-host-list\fR\fP
+comma separated list of addresses <ipv4addr/hostname:port>
+.TP
+\fB\fB\-i\fR, \fB\-\-insecure\fR\fP
+have dmg attempt to connect without certificates
+.TP
+\fB\fB\-d\fR, \fB\-\-debug\fR\fP
+enable debug output
+.TP
+\fB\fB\-j\fR, \fB\-\-json\fR\fP
+Enable JSON output
+.TP
+\fB\fB\-f\fR, \fB\-\-host-file\fR\fP
+path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList
+.TP
+\fB\fB\-o\fR, \fB\-\-config-path\fR\fP
+Client config file path
+.SH COMMANDS
+.SS network
+Perform tasks related to network devices attached to remote servers
+
+\fBAliases\fP: n
+
+.SS network list
+List all known OFI providers on remote servers that are understood by 'scan'
+.SS network scan
+Scan for network interface devices on remote servers
+
+\fBUsage\fP: network scan [scan-OPTIONS]
+.TP
+.TP
+\fB\fB\-p\fR, \fB\-\-provider\fR\fP
+Filter device list to those that support the given OFI provider (default is the provider specified in daos_server.yml)
+.TP
+\fB\fB\-a\fR, \fB\-\-all\fR\fP
+Specify 'all' to see all devices on all providers.  Overrides --provider
+.SS pool
+Perform tasks related to DAOS pools
+
+\fBAliases\fP: p
+
+.SS pool create
+Create a DAOS pool
+
+\fBUsage\fP: pool create [create-OPTIONS]
+.TP
+
+\fBAliases\fP: c
+
+.TP
+\fB\fB\-g\fR, \fB\-\-group\fR\fP
+DAOS pool to be owned by given group, format name@domain
+.TP
+\fB\fB\-u\fR, \fB\-\-user\fR\fP
+DAOS pool to be owned by given user, format name@domain
+.TP
+\fB\fB\-a\fR, \fB\-\-acl-file\fR\fP
+Access Control List file path for DAOS pool
+.TP
+\fB\fB\-s\fR, \fB\-\-scm-size\fR (\fIrequired\fR)\fP
+Size of SCM component of DAOS pool
+.TP
+\fB\fB\-n\fR, \fB\-\-nvme-size\fR\fP
+Size of NVMe component of DAOS pool
+.TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Storage server unique identifiers (ranks) for DAOS pool
+.TP
+\fB\fB\-v\fR, \fB\-\-nsvc\fR <default: \fI"1"\fR>\fP
+Number of pool service replicas
+.TP
+\fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
+DAOS system that pool is to be a part of
+.SS pool delete-acl
+Delete an entry from a DAOS pool's Access Control List
+
+\fBUsage\fP: pool delete-acl [delete-acl-OPTIONS]
+.TP
+
+\fBAliases\fP: da
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of DAOS pool
+.TP
+\fB\fB\-p\fR, \fB\-\-principal\fR (\fIrequired\fR)\fP
+Principal whose entry should be removed
+.SS pool destroy
+Destroy a DAOS pool
+
+\fBUsage\fP: pool destroy [destroy-OPTIONS]
+.TP
+
+\fBAliases\fP: d
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of DAOS pool to destroy
+.TP
+\fB\fB\-f\fR, \fB\-\-force\fR\fP
+Force removal of DAOS pool
+.SS pool get-acl
+Get a DAOS pool's Access Control List
+
+\fBUsage\fP: pool get-acl [get-acl-OPTIONS]
+.TP
+
+\fBAliases\fP: ga
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of DAOS pool
+.TP
+\fB\fB\-o\fR, \fB\-\-outfile\fR\fP
+Output ACL to file
+.TP
+\fB\fB\-f\fR, \fB\-\-force\fR\fP
+Allow to clobber output file
+.TP
+\fB\fB\-v\fR, \fB\-\-verbose\fR\fP
+Add descriptive comments to ACL entries
+.SS pool list
+List DAOS pools
+
+\fBAliases\fP: l
+
+.SS pool overwrite-acl
+Overwrite a DAOS pool's Access Control List
+
+\fBUsage\fP: pool overwrite-acl [overwrite-acl-OPTIONS]
+.TP
+
+\fBAliases\fP: oa
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of DAOS pool
+.TP
+\fB\fB\-a\fR, \fB\-\-acl-file\fR (\fIrequired\fR)\fP
+Path for new Access Control List file
+.SS pool query
+Query a DAOS pool
+
+\fBUsage\fP: pool query [query-OPTIONS]
+.TP
+
+\fBAliases\fP: q
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of DAOS pool to query
+.SS pool set-prop
+Set pool property
+
+\fBUsage\fP: pool set-prop [set-prop-OPTIONS]
+.TP
+
+\fBAliases\fP: sp
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of DAOS pool
+.TP
+\fB\fB\-n\fR, \fB\-\-name\fR (\fIrequired\fR)\fP
+Name of property to be set
+.TP
+\fB\fB\-v\fR, \fB\-\-value\fR (\fIrequired\fR)\fP
+Value of property to be set
+.SS pool update-acl
+Update entries in a DAOS pool's Access Control List
+
+\fBUsage\fP: pool update-acl [update-acl-OPTIONS]
+.TP
+
+\fBAliases\fP: ua
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of DAOS pool
+.TP
+\fB\fB\-a\fR, \fB\-\-acl-file\fR\fP
+Path for new Access Control List file
+.TP
+\fB\fB\-e\fR, \fB\-\-entry\fR\fP
+Single Access Control Entry to add or update
+.SS storage
+Perform tasks related to storage attached to remote servers
+
+\fBAliases\fP: st
+
+.SS storage format
+Format SCM and NVMe storage attached to remote servers.
+
+\fBUsage\fP: storage format [format-OPTIONS]
+.TP
+
+\fBAliases\fP: f
+
+.TP
+\fB\fB\-v\fR, \fB\-\-verbose\fR\fP
+Show results of each SCM & NVMe device format operation
+.TP
+\fB\fB\-\-reformat\fR\fP
+Always reformat storage (CAUTION: Potentially destructive)
+.SS storage prepare
+Prepare SCM and NVMe storage attached to remote servers.
+
+\fBUsage\fP: storage prepare [prepare-OPTIONS]
+.TP
+
+\fBAliases\fP: p
+
+.TP
+\fB\fB\-w\fR, \fB\-\-pci-whitelist\fR\fP
+Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices).
+.TP
+\fB\fB\-p\fR, \fB\-\-hugepages\fR\fP
+Number of hugepages to allocate (in MB) for use by SPDK (default 1024)
+.TP
+\fB\fB\-u\fR, \fB\-\-target-user\fR\fP
+User that will own hugepage mountpoint directory and vfio groups.
+.TP
+\fB\fB\-n\fR, \fB\-\-nvme-only\fR\fP
+Only prepare NVMe storage.
+.TP
+\fB\fB\-s\fR, \fB\-\-scm-only\fR\fP
+Only prepare SCM.
+.TP
+\fB\fB\-\-reset\fR\fP
+Reset SCM modules to memory mode after removing namespaces. Reset SPDK returning NVMe device bindings back to kernel modules.
+.TP
+\fB\fB\-f\fR, \fB\-\-force\fR\fP
+Perform format without prompting for confirmation
+.SS storage query
+Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info.
+
+\fBAliases\fP: q
+
+.SS storage query blobstore-health
+Query internal blobstore health data.
+
+\fBUsage\fP: query blobstore-health [blobstore-health-OPTIONS]
+.TP
+
+\fBAliases\fP: b
+
+.TP
+\fB\fB\-u\fR, \fB\-\-devuuid\fR\fP
+Device/Blobstore UUID to query
+.TP
+\fB\fB\-t\fR, \fB\-\-tgtid\fR\fP
+VOS target ID to query
+.SS storage query device-state
+Query the device state (ie NORMAL or FAULTY).
+
+\fBUsage\fP: query device-state [device-state-OPTIONS]
+.TP
+
+\fBAliases\fP: d
+
+.TP
+\fB\fB\-u\fR, \fB\-\-devuuid\fR (\fIrequired\fR)\fP
+Device/Blobstore UUID to query
+.SS storage query nvme-health
+Query raw NVMe SPDK device statistics.
+
+\fBAliases\fP: n
+
+.SS storage query smd
+Query per-server metadata.
+
+\fBUsage\fP: query smd [smd-OPTIONS]
+.TP
+
+\fBAliases\fP: s
+
+.TP
+\fB\fB\-d\fR, \fB\-\-devices\fR\fP
+List all devices/blobstores stored in per-server metadata table.
+.TP
+\fB\fB\-p\fR, \fB\-\-pools\fR\fP
+List all VOS pool targets stored in per-server metadata table.
+.SS storage scan
+Scan SCM and NVMe storage attached to remote servers.
+
+\fBUsage\fP: storage scan [scan-OPTIONS]
+.TP
+
+\fBAliases\fP: s
+
+.TP
+\fB\fB\-v\fR, \fB\-\-verbose\fR\fP
+List SCM & NVMe device details
+.SS storage set
+Manually set the device state.
+
+\fBAliases\fP: s
+
+.SS storage set nvme-faulty
+Manually set the device state of an NVMe SSD to FAULTY.
+
+\fBUsage\fP: set nvme-faulty [nvme-faulty-OPTIONS]
+.TP
+
+\fBAliases\fP: n
+
+.TP
+\fB\fB\-u\fR, \fB\-\-devuuid\fR (\fIrequired\fR)\fP
+Device/Blobstore UUID to set
+.SS system
+Perform distributed tasks related to DAOS system
+
+\fBAliases\fP: sy
+
+.SS system leader-query
+Query for current Management Service leader
+
+\fBAliases\fP: l
+
+.SS system list-pools
+List all pools in the DAOS system
+
+\fBAliases\fP: p
+
+.SS system query
+Query DAOS system status
+
+\fBUsage\fP: system query [query-OPTIONS]
+.TP
+
+\fBAliases\fP: q
+
+.TP
+\fB\fB\-v\fR, \fB\-\-verbose\fR\fP
+Display more member details
+.TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated list of system ranks to query
+.SS system start
+Perform start of stopped DAOS system
+
+\fBAliases\fP: r
+
+.SS system stop
+Perform controlled shutdown of DAOS system
+
+\fBUsage\fP: system stop [stop-OPTIONS]
+.TP
+
+\fBAliases\fP: s
+
+.TP
+\fB\fB\-\-force\fR\fP
+Force stop DAOS system members
+.SS version
+Print dmg version
