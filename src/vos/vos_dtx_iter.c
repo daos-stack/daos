@@ -179,7 +179,7 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	it_entry->ie_dtx_intent = DAE_INTENT(dae);
 	it_entry->ie_dtx_hash = DAE_DKEY_HASH(dae);
 
-	D_DEBUG(DB_TRACE, "DTX iterator fetch the one "DF_DTI"\n",
+	D_DEBUG(DB_IO, "DTX iterator fetch the one "DF_DTI"\n",
 		DP_DTI(&DAE_XID(dae)));
 
 	return 0;
