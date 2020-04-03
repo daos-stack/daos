@@ -68,6 +68,8 @@ class MdtestBase(TestWithServers):
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
 
+        self.log.info('Checking mode %s', self.mdtest_cmd.api.value)
+
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
