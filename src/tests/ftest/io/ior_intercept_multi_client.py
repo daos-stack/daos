@@ -40,10 +40,6 @@ class IorInterceptMultiClient(IorTestBase):
     def setUp(self):
         """Set up each test case."""
         super(IorInterceptMultiClient, self).setUp()
-        # This set up can be removed once the constraint
-        # in IorTestBase is removed. # DAOS-3320
-        self.hostlist_clients = self.params.get(
-            "test_clients", "/run/hosts/*")
         self.hostfile_clients = write_host_file.write_host_file(
             self.hostlist_clients, self.workdir,
             self.hostfile_clients_slots)
@@ -65,7 +61,7 @@ class IorInterceptMultiClient(IorTestBase):
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,full_regression,hw,large
+        :avocado: tags=all,pr,full_regression,hw,large
         :avocado: tags=daosio,iorinterceptmulticlient
         """
         suffix = self.ior_cmd.transfer_size.value

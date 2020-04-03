@@ -39,10 +39,6 @@ class IorInterceptDfuseMix(IorTestBase):
     def setUp(self):
         """Set up each test case."""
         super(IorInterceptDfuseMix, self).setUp()
-        # Following line can be removed once the constraint
-        # in IorTestBase is removed. # DAOS-3320
-        self.hostlist_clients = self.params.get(
-            "test_clients", "/run/hosts/*")
 
     def test_ior_intercept_dfuse_mix(self):
         """Jira ID: DAOS-3500.
@@ -67,7 +63,7 @@ class IorInterceptDfuseMix(IorTestBase):
                 library provides better performance and not using it
                 does not change the performance.
 
-        :avocado: tags=all,full_regression,hw,large,daosio,iorinterceptmix
+        :avocado: tags=all,pr,full_regression,hw,large,daosio,iorinterceptmix
         """
         without_intercept = dict()
         self.run_multiple_ior_with_pool(without_intercept)

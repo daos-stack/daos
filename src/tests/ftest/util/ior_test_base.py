@@ -67,13 +67,9 @@ class IorTestBase(TestWithServers):
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
         self.co_prop = self.params.get("container_properties",
                                        "/run/container/*")
-        # Until DAOS-3320 is resolved run IOR for POSIX
-        # with single client node
+
         if self.ior_cmd.api.value == "POSIX":
-            self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
+            self.log.info('Not modifying for DAOS-3320')
         # lock is needed for run_multiple_ior method.
         self.lock = threading.Lock()
 
