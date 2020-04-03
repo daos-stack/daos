@@ -487,23 +487,28 @@ vos_ilog_ts_lookup(struct vos_ts_set *ts_set, struct ilog_df *ilog)
 	return vos_ts_lookup(ts_set, idx, false, &entry);
 }
 
-void
+int
 vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
 		  void *record, daos_size_t rec_size)
 {
+	struct vos_ts_entry	*entry;
 	uint32_t		*idx;
 	uint64_t		 hash;
 
 	if (ts_set == NULL)
-		return;
+		return 0;
 
 	hash = vos_hash_get(record, rec_size);
 	if (ilog) {
 		idx = ilog_ts_idx_get(ilog);
-		vos_ts_alloc(ts_set, idx, hash);
+		entry = vos_ts_alloc(ts_set, idx, hash);
+		if (entry == NULL)
+			return -DER_NO_PERM;
 	} else {
 		vos_ts_get_negative(ts_set, hash, false);
 	}
+
+	return 0;
 }
 
 void
@@ -515,11 +520,11 @@ vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog)
 }
 
 void
-vos_ilog_ts_evict(struct ilog_df *ilog)
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type)
 {
 	uint32_t	*idx;
 
 	idx = ilog_ts_idx_get(ilog);
 
-	return vos_ts_evict(idx);
+	return vos_ts_evict(idx, type);
 }

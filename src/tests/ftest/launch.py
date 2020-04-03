@@ -969,7 +969,7 @@ def install_debuginfos():
         cmds.append("sudo debuginfo-install -y "                   \
                     "--exclude ompi-debuginfo,gcc-debuginfo,"      \
                                "gcc-base-debuginfo "               \
-                    "daos-server cart libpmemobj python openmpi3")
+                    "daos-server libpmemobj python openmpi3")
     else:
         import yum
 
@@ -987,7 +987,7 @@ def install_debuginfos():
         #yum_base.install(**kwarg)
 
         for pkg in ['python', 'glibc', 'daos', 'systemd', 'ndctl', 'libpmem',
-                    'mercury', 'cart', 'libfabric', 'argobots']:
+                    'mercury', 'libfabric', 'argobots']:
             try:
                 debug_pkg = debuginfo_map[pkg]
             except KeyError:

@@ -30,13 +30,18 @@
 #ifndef __VOS_TS__
 #define __VOS_TS__
 
+#include <lru_array.h>
 #include <vos_tls.h>
 
+struct vos_ts_table;
+
 struct vos_ts_info {
-	/** Least recently accessed index */
-	uint32_t		ti_lru;
-	/** Most recently accessed index */
-	uint32_t		ti_mru;
+	/** The LRU array */
+	struct lru_array	*ti_array;
+	/** Back pointer to table */
+	struct vos_ts_table	*ti_table;
+	/** Miss indexes for the type */
+	uint32_t		*ti_misses;
 	/** Type identifier */
 	uint32_t		ti_type;
 	/** mask for hash of negative entries */
@@ -47,8 +52,8 @@ struct vos_ts_info {
 
 struct vos_ts_entry {
 	struct vos_ts_info	*te_info;
-	/** Uniquely identifies the record */
-	void			*te_record_ptr;
+	/** Key for current occupant */
+	uint32_t		*te_record_ptr;
 	/** Uniquely identifies the parent record */
 	uint32_t		*te_parent_ptr;
 	/** negative entry cache */
@@ -69,10 +74,6 @@ struct vos_ts_entry {
 	uuid_t			 te_tx_rh;
 	/** write tx */
 	uuid_t			 te_tx_w;
-	/** Next most recently used */
-	uint32_t		 te_next_idx;
-	/** Previous most recently used */
-	uint32_t		 te_prev_idx;
 	/** Hash index in parent */
 	uint32_t		 te_hash_idx;
 };
@@ -98,24 +99,22 @@ struct vos_ts_set {
 	struct vos_ts_set_entry	 ts_entries[0];
 };
 
-/** Table will be per xstream */
-#define VOS_TS_BITS	23
-#define VOS_TS_SIZE	(1 << VOS_TS_BITS)
-#define VOS_TS_MASK	(VOS_TS_SIZE - 1)
-
-/** Timestamp types */
+/** Timestamp types (should all be powers of 2) */
 #define D_FOREACH_TS_TYPE(ACTION)					\
-	ACTION(VOS_TS_TYPE_CONT, "container", 1024,       32 * 1024)	\
-	ACTION(VOS_TS_TYPE_OBJ,  "object",    96 * 1024,  128 * 1024)	\
-	ACTION(VOS_TS_TYPE_DKEY, "dkey",      896 * 1024, 1024 * 1024)	\
-	ACTION(VOS_TS_TYPE_AKEY, "akey",      0,          0)		\
+	ACTION(VOS_TS_TYPE_CONT,	"container",	1024)		\
+	ACTION(VOS_TS_TYPE_OBJ_MISS,	"object miss",	32 * 1024)	\
+	ACTION(VOS_TS_TYPE_OBJ,		"object",	64 * 1024)	\
+	ACTION(VOS_TS_TYPE_DKEY_MISS,	"dkey miss",	128 * 1024)	\
+	ACTION(VOS_TS_TYPE_DKEY,	"dkey",		512 * 1024)	\
+	ACTION(VOS_TS_TYPE_AKEY_MISS,	"akey miss",	1024 * 1024)	\
+	ACTION(VOS_TS_TYPE_AKEY,	"akey",		4 * 1024 * 1024)
 
-#define DEFINE_TS_TYPE(type, desc, count, child_count)	type, type##_CHILD,
+#define DEFINE_TS_TYPE(type, desc, count)	type,
 
 enum {
 	D_FOREACH_TS_TYPE(DEFINE_TS_TYPE)
 	/** Number of timestamp types */
-	VOS_TS_TYPE_COUNT = VOS_TS_TYPE_AKEY_CHILD,
+	VOS_TS_TYPE_COUNT,
 };
 
 struct vos_ts_table {
@@ -125,78 +124,11 @@ struct vos_ts_table {
 	daos_epoch_t		tt_ts_rh;
 	/** Global write timestamp for type */
 	daos_epoch_t		tt_ts_w;
+	/** Miss index table */
+	uint32_t		*tt_misses;
 	/** Timestamp table pointers for a type */
 	struct vos_ts_info	tt_type_info[VOS_TS_TYPE_COUNT];
-	/** The table entries */
-	struct vos_ts_entry	tt_table[VOS_TS_SIZE];
 };
-
-/** Internal API: Evict the LRU, move it to MRU, update relevant time stamps,
- *  and return the index
- */
-void
-vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
-		 struct vos_ts_entry **entryp, uint32_t *idx, uint32_t hash_idx,
-		 uint32_t type);
-
-/** Internal API: Evict selected entry from the cache, update global
- *  timestamps
- */
-void
-vos_ts_evict_entry(struct vos_ts_table *ts_table, struct vos_ts_entry *entry,
-		   uint32_t idx);
-
-/** Internal API: Remove an entry from the lru list */
-static inline void
-remove_ts_entry(struct vos_ts_entry *entries, struct vos_ts_entry *entry)
-{
-	struct vos_ts_entry	*prev = &entries[entry->te_prev_idx];
-	struct vos_ts_entry	*next = &entries[entry->te_next_idx];
-
-	prev->te_next_idx = entry->te_next_idx;
-	next->te_prev_idx = entry->te_prev_idx;
-}
-
-/** Internal API: Insert an entry in the lru list */
-static inline void
-insert_ts_entry(struct vos_ts_entry *entries, struct vos_ts_entry *entry,
-		uint32_t idx, uint32_t prev_idx, uint32_t next_idx)
-{
-	struct vos_ts_entry	*prev;
-	struct vos_ts_entry	*next;
-
-	prev = &entries[prev_idx];
-	next = &entries[next_idx];
-	next->te_prev_idx = idx;
-	prev->te_next_idx = idx;
-	entry->te_prev_idx = prev_idx;
-	entry->te_next_idx = next_idx;
-}
-
-/** Internal API: Make the entry the mru */
-static inline void
-move_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *entry,
-	 uint32_t idx)
-{
-	struct vos_ts_info	*info = entry->te_info;
-
-	if (info->ti_mru == idx) {
-		/** Already the mru */
-		return;
-	}
-
-	if (info->ti_lru == idx)
-		info->ti_lru = entry->te_next_idx;
-
-	/** First remove */
-	remove_ts_entry(&ts_table->tt_table[0], entry);
-
-	/** Now add */
-	insert_ts_entry(&ts_table->tt_table[0], entry, idx, info->ti_mru,
-			info->ti_lru);
-
-	info->ti_mru = idx;
-}
 
 /** Internal API: Grab the parent entry from the set */
 static inline struct vos_ts_entry *
@@ -216,22 +148,6 @@ ts_set_get_parent(struct vos_ts_set *ts_set)
 
 	return parent;
 
-}
-
-/** Internal API to lookup entry from index */
-static inline struct vos_ts_entry *
-vos_ts_lookup_idx(struct vos_ts_table *ts_table, uint32_t *idx)
-{
-	struct vos_ts_entry	*entry;
-	uint32_t		 tindex = *idx & VOS_TS_MASK;
-
-	entry = &ts_table->tt_table[tindex];
-	if (entry->te_record_ptr == idx) {
-		move_lru(ts_table, entry, tindex);
-		return entry;
-	}
-
-	return NULL;
 }
 
 /** Reset the index in the set so an entry can be replaced
@@ -255,6 +171,30 @@ vos_ts_set_reset(struct vos_ts_set *ts_set, uint32_t type, uint32_t akey_nr)
 	ts_set->ts_init_count = idx;
 }
 
+static inline bool
+vos_ts_lookup_internal(struct vos_ts_set *ts_set, uint32_t type, uint32_t *idx,
+		       struct vos_ts_entry **entryp)
+{
+	struct vos_ts_table	*ts_table = vos_ts_table_get();
+	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
+	void			*entry;
+	struct vos_ts_set_entry	 set_entry = {0};
+	bool found;
+
+	ts_table = vos_ts_table_get();
+
+	found = lrua_lookup(info->ti_array, idx, &entry);
+	if (found) {
+		D_ASSERT(ts_set->ts_set_size != ts_set->ts_init_count);
+		set_entry.se_entry = entry;
+		ts_set->ts_entries[ts_set->ts_init_count++] = set_entry;
+		*entryp = entry;
+		return true;
+	}
+
+	return false;
+}
+
 /** Lookup an entry in the timestamp cache and save it to the set.
  *
  * \param	ts_set[in]	The timestamp set
@@ -269,9 +209,7 @@ static inline bool
 vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
 	      struct vos_ts_entry **entryp)
 {
-	struct vos_ts_table	*ts_table = vos_ts_table_get();
-	struct vos_ts_entry	*entry;
-	struct vos_ts_set_entry	 set_entry = {0};
+	uint32_t		 type;
 
 	*entryp = NULL;
 
@@ -281,19 +219,16 @@ vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
 	if (reset)
 		ts_set->ts_init_count--;
 
-	ts_table = vos_ts_table_get();
+	type = MIN(ts_set->ts_init_count * 2, VOS_TS_TYPE_AKEY);
 
-	entry = vos_ts_lookup_idx(ts_table, idx);
-	if (entry != NULL) {
-		D_ASSERT(ts_set->ts_set_size != ts_set->ts_init_count);
-		set_entry.se_entry = entry;
-		ts_set->ts_entries[ts_set->ts_init_count++] = set_entry;
-		*entryp = entry;
-		return true;
-	}
-
-	return false;
+	return vos_ts_lookup_internal(ts_set, type, idx, entryp);
 }
+
+/** Internal function to evict LRU and initialize an entry */
+void
+vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
+		 struct vos_ts_entry **new_entry, uint32_t *idx,
+		 uint32_t hash_idx, uint32_t new_type);
 
 /** Allocate a new entry in the set.   Lookup should be called first and this
  * should only be called if it returns false.
@@ -303,7 +238,7 @@ vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
  * \param	hash[in]	Hash to identify the item
  *
  * \return	Returns a pointer to the entry or NULL if ts_set is not
- *		allocated.
+ *		allocated or we detected a duplicate akey.
  */
 static inline struct vos_ts_entry *
 vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
@@ -319,6 +254,7 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 	if (ts_set == NULL)
 		return NULL;
 
+
 	ts_table = vos_ts_table_get();
 
 	parent = ts_set_get_parent(ts_set);
@@ -328,8 +264,12 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 		info = &ts_table->tt_type_info[0];
 	} else {
 		info = parent->te_info;
-		/* Allocated entry must have a real parent */
-		D_ASSERT((info->ti_type & 1) == 0);
+		if (info->ti_type & 1) {
+			/** this can happen if it's a duplicate key.  Return
+			 * NULL in this case
+			 */
+			return NULL;
+		}
 		hash_idx = hash & info->ti_cache_mask;
 		new_type = info->ti_type + 2;
 	}
@@ -440,8 +380,6 @@ vos_ts_get_negative(struct vos_ts_set *ts_set, uint64_t hash, bool reset)
 
 	D_ASSERT(parent != NULL);
 
-	ts_table = vos_ts_table_get();
-
 	info = parent->te_info;
 	if (info->ti_type & 1) {
 		/** Parent is a negative entry, just reuse it
@@ -451,12 +389,18 @@ vos_ts_get_negative(struct vos_ts_set *ts_set, uint64_t hash, bool reset)
 		goto add_to_set;
 	}
 
+	ts_table = vos_ts_table_get();
+
 	idx = hash & info->ti_cache_mask;
-	if (vos_ts_lookup(ts_set, &parent->te_miss_idx[idx], false, &neg_entry))
+	if (vos_ts_lookup_internal(ts_set, info->ti_type + 1,
+				   &parent->te_miss_idx[idx], &neg_entry)) {
+		D_ASSERT(idx == neg_entry->te_hash_idx);
 		goto out;
+	}
 
 	vos_ts_evict_lru(ts_table, parent, &neg_entry,
 			 &parent->te_miss_idx[idx], idx, info->ti_type + 1);
+	D_ASSERT(idx == neg_entry->te_hash_idx);
 add_to_set:
 	set_entry.se_entry = neg_entry;
 	ts_set->ts_entries[ts_set->ts_init_count++] = set_entry;
@@ -474,17 +418,11 @@ out:
  * \param	type[in]	Type of the object
  */
 static inline void
-vos_ts_evict(uint32_t *idx)
+vos_ts_evict(uint32_t *idx, uint32_t type)
 {
 	struct vos_ts_table	*ts_table = vos_ts_table_get();
-	struct vos_ts_entry	*entry;
-	uint32_t		 tindex = *idx & VOS_TS_MASK;
 
-	entry = &ts_table->tt_table[tindex];
-	if (entry->te_record_ptr != idx)
-		return;
-
-	vos_ts_evict_entry(ts_table, entry, *idx);
+	lrua_evict(ts_table->tt_type_info[type].ti_array, idx);
 }
 
 /** Allocate thread local timestamp cache.   Set the initial global times

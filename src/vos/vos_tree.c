@@ -361,6 +361,9 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (rc != 0)
 		return rc;
 
+	vos_ilog_ts_evict(&krec->kr_ilog, (krec->kr_bmap & KREC_BF_DKEY) ?
+			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY);
+
 	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
 	return gc_add_item((struct vos_pool *)tins->ti_priv, gc,
@@ -893,6 +896,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	d_iov_t			 riov;
 	bool			 found;
 	int			 rc;
+	int			 tmprc;
 
 	/** reset the saved hash */
 	vos_kh_set(0);
@@ -936,7 +940,13 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		/** Key hash already be calculated by dbtree_fetch so no need
 		 *  to pass in the key here.
 		 */
-		vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		tmprc = vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		if (tmprc != 0) {
+			rc = tmprc;
+			D_ASSERT(tmprc == -DER_NO_PERM);
+			D_ASSERT(tclass == VOS_BTR_AKEY);
+			goto out;
+		}
 		break;
 	}
 
@@ -952,7 +962,6 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 			goto out;
 		}
 		krec = rbund.rb_krec;
-
 		vos_ilog_ts_mark(ts_set, &krec->kr_ilog);
 	}
 

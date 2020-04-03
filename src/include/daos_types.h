@@ -31,6 +31,12 @@
 extern "C" {
 #endif
 
+#if __GNUC__ >= 4
+	#define DAOS_API __attribute__ ((visibility ("default")))
+#else
+	#define DAOS_API
+#endif
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -45,6 +51,9 @@ extern "C" {
 
 /** Maximum length (excluding the '\0') of a DAOS system name */
 #define DAOS_SYS_NAME_MAX 15
+
+/** Maximum length (excluding the '\0') of info string info via GetAttachInfo */
+#define DAOS_SYS_INFO_STRING_MAX 63
 
 /**
  * Generic data type definition

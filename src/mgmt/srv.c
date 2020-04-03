@@ -262,6 +262,7 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	tc_in->p_module = in->p_module;
 	tc_in->p_path = in->p_path;
 	tc_in->p_op = in->p_op;
+	tc_in->p_avg = in->p_avg;
 	rc = dss_rpc_send(tc_req);
 	if (rc != 0) {
 		crt_req_decref(tc_req);
