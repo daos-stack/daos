@@ -1371,7 +1371,6 @@ class DaosContProperties(ctypes.Structure):
         self.chksum_type = ctypes.c_uint64(100)
         self.chunk_size = ctypes.c_uint64(0)
 
-
 class DaosInputParams(object):
     # pylint: disable=too-few-public-methods
     """ This is a helper python method
@@ -1396,7 +1395,6 @@ class DaosInputParams(object):
         create container method.
         """
         return self.co_prop
-
 
 class DaosContainer(object):
     """A python object representing a DAOS container."""
@@ -1468,13 +1466,14 @@ class DaosContainer(object):
         if self.cont_input_values.type != "Unknown":
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
-            if self.cont_input_values.type == "posix":
+            if self.cont_input_values.type in ("posix", "POSIX"):
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value)
             elif self.cont_input_values.type == "hdf5":
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
             else:
+                # TODO: This should ideally fail.
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKOWN.value)
             idx = idx + 1
