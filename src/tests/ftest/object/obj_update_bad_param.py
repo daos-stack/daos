@@ -52,11 +52,6 @@ class ObjUpdateBadParam(TestWithServers):
             print(traceback.format_exc())
             self.fail("Test failed during setup .\n")
 
-    def tearDown(self):
-        if self.container:
-            self.container.close()
-            self.container.destroy()
-
     def test_bad_handle(self):
         """
         Test ID: DAOS-1376
