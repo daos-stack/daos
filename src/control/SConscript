@@ -140,6 +140,8 @@ def scons():
     gosrc = Dir('.').srcnode().abspath
     cartpath = Dir('#/src/cart/src/include').srcnode().abspath
 
+    denv.AppendENVPath("CGO_LDFLAGS",
+                       denv.subst("-L$BUILD_DIR/src/cart/src/gurt"), sep=" ")
     denv.AppendENVPath("CGO_CFLAGS", "-I%s" % cartpath, sep=" ")
 
     agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
@@ -154,6 +156,8 @@ def scons():
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
+                            "-L$BUILD_DIR/src/cart/src/gurt "
+                            "-L$BUILD_DIR/src/cart/src/cart "
                             "-L$PREFIX/lib64 -L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access (need for clang build).

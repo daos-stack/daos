@@ -91,6 +91,12 @@ struct rebuild_tgt_pool_tracker {
 				rt_global_done:1;
 };
 
+struct rebuild_server_status {
+	d_rank_t	rank;
+	uint32_t	scan_done:1,
+			pull_done:1;
+};
+
 /* Track the rebuild status globally */
 struct rebuild_global_pool_tracker {
 	/* rebuild status */
@@ -110,16 +116,11 @@ struct rebuild_global_pool_tracker {
 	/** the current version being rebuilt */
 	uint32_t	rgt_rebuild_ver;
 
-	/* bits to track scan status for all targets */
-	uint8_t		*rgt_scan_bits;
+	/** rebuild status for each server */
+	struct rebuild_server_status *rgt_servers;
 
-	/* bits to track pull status for all targets */
-	uint8_t		*rgt_pull_bits;
-
-	/* The size of rgt_scan_bits and
-	 * rgt_pull_bits in bit
-	 */
-	uint32_t	rgt_bits_size;
+	/** number of rgt_server_status */
+	uint32_t	rgt_servers_number;
 
 	/* The term of the current rebuild leader */
 	uint64_t	rgt_leader_term;
@@ -279,26 +280,6 @@ int rebuild_iv_update(void *ns, struct rebuild_iv *rebuild_iv,
 int rebuild_iv_ns_create(struct ds_pool *pool, uint32_t map_ver,
 			 d_rank_list_t *exclude_tgts,
 			 unsigned int master_rank);
-
-static inline bool
-is_rebuild_global_pull_done(struct rebuild_global_pool_tracker *rgt)
-{
-	return isset_range(rgt->rgt_pull_bits, 0, rgt->rgt_bits_size - 1);
-}
-
-static inline bool
-is_rebuild_global_scan_done(struct rebuild_global_pool_tracker *rgt)
-{
-	return isset_range(rgt->rgt_scan_bits, 0, rgt->rgt_bits_size - 1);
-}
-
-static inline bool
-is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt)
-{
-	return is_rebuild_global_scan_done(rgt) &&
-	       is_rebuild_global_pull_done(rgt);
-
-}
 
 int rebuild_iv_init(void);
 int rebuild_iv_fini(void);
