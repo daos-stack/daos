@@ -861,8 +861,10 @@ profile_op_hdlr(int argc, char *argv[])
 	char			*path = NULL;
 	bool			start = false;
 	bool			stop = false;
+	int			average = 1;
 	int			rc;
 	struct option		options[] = {
+		{"average",	required_argument,	NULL,	'a'},
 		{"start",	no_argument,		NULL,	's'},
 		{"end",		no_argument,		NULL,	'e'},
 		{"path",	required_argument,	NULL,	'p'},
@@ -870,8 +872,12 @@ profile_op_hdlr(int argc, char *argv[])
 		{NULL,		0,			NULL,	0}
 	};
 
-	while ((rc = getopt_long(argc, argv, "em:p:s", options, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "em:p:s:a:", options,
+				 NULL)) != -1) {
 		switch (rc) {
+		case 'a':
+			average = atoi(optarg);
+			break;
 		case 'm':
 			rc = module_opt_parse(optarg, &modules);
 			if (rc != 0) {
@@ -913,7 +919,7 @@ profile_op_hdlr(int argc, char *argv[])
 		goto out;
 	}
 
-	rc = dc_mgmt_profile(modules, path, start);
+	rc = dc_mgmt_profile(modules, path, average, start);
 out:
 	if (path)
 		free(path);

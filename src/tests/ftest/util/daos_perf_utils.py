@@ -25,7 +25,6 @@
 from __future__ import print_function
 import os
 import subprocess
-import json
 from distutils.spawn import find_executable
 
 from env_modules import load_mpi

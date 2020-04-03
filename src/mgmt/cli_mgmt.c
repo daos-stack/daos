@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -185,7 +185,7 @@ out_task:
 }
 
 int
-dc_mgmt_profile(uint64_t modules, char *path, bool start)
+dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;
 	struct mgmt_profile_in	*in;
@@ -215,6 +215,7 @@ dc_mgmt_profile(uint64_t modules, char *path, bool start)
 	in = crt_req_get(rpc);
 	in->p_module = modules;
 	in->p_path = path;
+	in->p_avg = avg;
 	in->p_op = start ? MGMT_PROFILE_START : MGMT_PROFILE_STOP;
 	/** send the request */
 	rc = daos_rpc_send_wait(rpc);
@@ -274,7 +275,8 @@ struct dc_mgmt_psr {
  * Callers are responsible for freeing psrs using put_attach_info.
  */
 static int
-get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
+get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
+		struct sys_info *sy_info)
 {
 	struct drpc		*ctx;
 	Mgmt__GetAttachInfoReq	 req = MGMT__GET_ATTACH_INFO_REQ__INIT;
@@ -286,6 +288,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 	struct dc_mgmt_psr      *p;
 	int			 i;
 	int			 rc;
+	int			 size;
 
 	D_DEBUG(DB_MGMT, "getting attach info for %s\n", name);
 
@@ -365,6 +368,37 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 	}
 	*npsrs = resp->n_psrs;
 	*psrs = p;
+
+	if (sy_info) {
+		size = sizeof(sy_info->provider);
+		if (strnlen(resp->provider, size) == size) {
+			D_ERROR("GetAttachInfo provider string too long\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+		strncpy(sy_info->provider, resp->provider, size);
+
+		size = sizeof(sy_info->interface);
+		if (strnlen(resp->interface, size) == size) {
+			D_ERROR("GetAttachInfo interface string too long\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+		strncpy(sy_info->interface, resp->interface, size);
+
+		size = sizeof(sy_info->domain);
+		if (strnlen(resp->domain, size) == size) {
+			D_ERROR("GetAttachInfo domain string too long\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+		strncpy(sy_info->domain, resp->domain, size);
+
+		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
+		sy_info->crt_timeout = resp->crttimeout;
+		D_DEBUG(DB_MGMT,
+			"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
+			"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u\n",
+			sy_info->provider, sy_info->interface, sy_info->domain,
+			sy_info->crt_ctx_share_addr, sy_info->crt_timeout);
+	}
 
 out_resp:
 	mgmt__get_attach_info_resp__free_unpacked(resp, NULL);
@@ -523,7 +557,8 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 	}
 
 	if (psrbs == NULL)
-		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs);
+		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs,
+				     &sys->sy_info);
 	else
 		rc = get_attach_info_from_buf(npsrbs, psrbs, &sys->sy_npsrs,
 					      &sys->sy_psrs);

@@ -146,7 +146,7 @@ the `daos://` URI to access files stored in DAOS. For example, to read
 people.json file from the root directory of DAOS filesystem, we can use the
 following pySpark code:
 
-
 ```python
 df = spark.read.json("daos://default:1/people.json")
 ```
+
