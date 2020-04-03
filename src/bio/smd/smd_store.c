@@ -122,7 +122,7 @@ smd_store_create(char *fname)
 		return -DER_NOMEM;
 	dir = dirname(dir);
 
-	rc = mkdir(dir, 0777);
+	rc = mkdir(dir, 0700);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("Create SMD dir %s failed. %s\n",
 			dir, strerror(errno));
