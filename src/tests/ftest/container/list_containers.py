@@ -39,6 +39,12 @@ class ListContainerTest(TestWithServers):
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize member."""
+        super(ListContainerTest, self).__init__(*args, **kwargs)
+        self.daos_cmd = None
+
     def verify_uuids(self, pool_uuid, service_replicas, expected_uuids):
         """Call daos pool list-cont to list the containers in the given pool
         UUID and verify the output against the given expected container UUIDs
