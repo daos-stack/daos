@@ -95,7 +95,7 @@ class MpioUtils():
                              .format(str(excep)))
     # pylint: disable=R0913
     def run_llnl_mpi4py_hdf5(self, hostfile, pool_uuid, svcl, test_repo,
-                             test_name, client_processes):
+                             test_name, client_processes, cont_uuid):
         """
             Running LLNL, MPI4PY and HDF5 testsuites
             Function Arguments:
@@ -126,19 +126,7 @@ class MpioUtils():
             cmd = " ".join(test_cmd)
         elif test_name == "mpi4py" and \
              os.path.isfile(os.path.join(test_repo, "test_io_daos.py")):
-            cmd = "daos cont create --pool={} --svc={} --type=POSIX".format(
-                pool_uuid, 0)
-            try:
-                container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                             shell=True)
-                (output, err) = container.communicate()
-
-                print("Container created: {}".format(output.split()[3]))
-                env["DAOS_CONT"] = "{}".format(output.split()[3])
-
-            except subprocess.CalledProcessError as err:
-                raise MpioFailed("<Container Create FAILED> \nException occurred: {}"
-                                 .format(err))
+            env["DAOS_CONT"] = "{}".format(cont_uuid)
 
             test_cmd = [env.get_export_str(),
                         mpirun,
