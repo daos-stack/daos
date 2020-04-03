@@ -1155,7 +1155,6 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	/* rc is error count, rc_errval an aggregation of values. */
 	out_result->sao_rc += out_source->sao_rc;
 
-	D_DEBUG(DB_MD, "\n");
 	out_result->sao_rc_errval = MIN(out_result->sao_rc_errval,
 					out_source->sao_rc_errval);
 	return 0;
