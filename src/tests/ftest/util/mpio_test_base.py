@@ -24,10 +24,12 @@
 from __future__    import print_function
 
 import os
+import re
 
 from apricot import TestWithServers
 from mpio_utils import MpioUtils, MpioFailed
 from test_utils_pool import TestPool
+from daos_utils import DaosCommand
 
 
 class LlnlMpi4pyHdf5(TestWithServers):
@@ -41,15 +43,45 @@ class LlnlMpi4pyHdf5(TestWithServers):
         super(LlnlMpi4pyHdf5, self).__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
         self.mpio = None
+        self.daos_cmd = None
+        self.cont_uuid = None
 
     def setUp(self):
         super(LlnlMpi4pyHdf5, self).setUp()
+
+        # initialise daos_cmd
+        self.daos_cmd = DaosCommand(self.bin)
 
         # initialize a python pool object then create the underlying
         self.pool = TestPool(
             self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
+
+    def _create_cont(self, doas_cmd):
+        """Create a container.
+
+        Args:
+            daos_cmd (DaosCommand): doas command to issue the container
+                create
+
+        Returns:
+            str: UUID of the created container
+
+        """
+        cont_type = self.params.get("type", "/run/container/*")
+        result = self.daos_cmd.container_create(
+            pool=self.pool.uuid, svc=self.pool.svc_ranks,
+            cont_type=cont_type)
+
+        # Extract the container UUID from the daos container create output
+        cont_uuid = re.findall(
+            "created\s+container\s+([0-9a-f-]+)", result.stdout)
+        if not cont_uuid:
+            self.fail(
+                "Error obtaining the container uuid from: {}".format(
+                    result.stdout))
+        self.cont_uuid = cont_uuid[0]
 
     def run_test(self, test_repo, test_name):
         """
@@ -65,11 +97,15 @@ class LlnlMpi4pyHdf5(TestWithServers):
         # initialise test specific variables
         client_processes = self.params.get("np", '/run/client_processes/')
 
+        # create container for mpi4py
+        if test_name == "mpi4py":
+            self._create_cont(self.daos_cmd)
+
         try:
             # running tests
             self.mpio.run_llnl_mpi4py_hdf5(
                 self.hostfile_clients, self.pool.uuid, self.pool.svc_ranks,
-                test_repo, test_name, client_processes)
+                test_repo, test_name, client_processes, self.cont_uuid)
         except MpioFailed as excep:
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
 
