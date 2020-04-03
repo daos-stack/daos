@@ -262,11 +262,11 @@ class EvictTests(TestWithServers):
                             count+1, pool[count].uuid, c_uuid_to_str(
                                 pool_info.pi_uuid)))
 
-    def test_evict_bad_server_name(self):
+    def evict_bad_server_name(self):
         """
         Test evicting a pool using an invalid server group name.
 
-        :avocado: tags=all,pool,pr,full_regression,small,poolevict
+        :avocado: tags=all,pool,full_regression,small,poolevict
         :avocado: tags=poolevict_bad_server_name
         """
         test_param = self.params.get("server_name", '/run/badparams/*')
