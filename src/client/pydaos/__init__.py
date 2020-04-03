@@ -86,7 +86,7 @@ dc = DaosClient()
 @atexit.register
 def _cleanup():
     global dc
-    dc = None;
+    dc = None
 
 from .pydaos_core import *
 
