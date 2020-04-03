@@ -39,6 +39,7 @@
 #include <dirent.h>
 
 #include <cmocka.h>
+#ifdef OVERRIDE_CMOCKA_SKIP
 /* redefine cmocka's skip() so it will no longer abort()
  * if CMOCKA_TEST_ABORT=1
  *
@@ -54,6 +55,7 @@
 			_skip(__FILE__, __LINE__); \
 		return; \
 	} while  (0)
+#endif
 
 #include <mpi.h>
 #include <daos/debug.h>

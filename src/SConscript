@@ -12,7 +12,7 @@ HEADERS_SRV = ['vos.h', 'vos_types.h']
 def scons():
     """Execute build"""
 
-    Import('env', 'prereqs')
+    Import('env')
 
     # For Common library (tse.h)
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
@@ -26,6 +26,7 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'),
                     'include/daos_srv/%s' % header)
 
+    SConscript('cart/SConscript')
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('bio/SConscript')

@@ -43,7 +43,6 @@
 
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool		module_initialized;
-bool			dfs_no_cond_op;
 
 const struct daos_task_api dc_funcs[] = {
 	/** Managment */
@@ -193,8 +192,6 @@ daos_init(void)
 	rc = dc_agent_init();
 	if (rc != 0)
 		D_GOTO(out_obj, rc);
-
-	d_getenv_bool("DFS_NO_COND_OP", &dfs_no_cond_op);
 
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);

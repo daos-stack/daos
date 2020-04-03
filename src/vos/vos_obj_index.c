@@ -145,6 +145,8 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		return rc;
 	}
 
+	vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
+
 	D_ASSERT(tins->ti_priv);
 	return gc_add_item((struct vos_pool *)tins->ti_priv, GC_OBJ,
 			   rec->rec_off, 0);
@@ -195,6 +197,7 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
 	int			 rc;
+	int			 tmprc;
 	bool			 found = false;
 
 	*obj_p = NULL;
@@ -215,7 +218,9 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 			goto out;
 	}
 
-	vos_ilog_ts_cache(ts_set, ilog, &oid, sizeof(oid));
+	tmprc = vos_ilog_ts_cache(ts_set, ilog, &oid, sizeof(oid));
+
+	D_ASSERT(tmprc == 0); /* Non-zero return for akey only */
 out:
 	return rc;
 }

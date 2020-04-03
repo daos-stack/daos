@@ -585,7 +585,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 		dth->dth_renew = 1;
 	}
 
-	if (result < 0 || rc < 0)
+	if (result < 0 || rc < 0 || !dth->dth_actived)
 		D_GOTO(out, result = result < 0 ? result : rc);
 
 	if (dth->dth_intent == DAOS_INTENT_PUNCH)
