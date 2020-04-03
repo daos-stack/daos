@@ -1082,7 +1082,7 @@ do { \
 	"	  version          print command version\n" \
 	"	  help             print this message and exit\n"); \
 	fprintf(stream, "\n"); \
-	fprintf(stream, "use 'daos help RESOURCE' for resource specifics\n");
+	fprintf(stream, "use 'daos help RESOURCE' for resource specifics\n"); \
 } while (0)
 
 #define ALL_CONT_CMDS_HELP() \
@@ -1113,7 +1113,7 @@ do { \
 	"			   by name, epoch or range\n" \
 	"	  rollback         roll back container to specified snapshot\n"); \
 	fprintf(stream, "\n"); \
-	fprintf(stream, "use 'daos help cont|container COMMAND' for command specific options\n");
+	fprintf(stream, "use 'daos help cont|container COMMAND' for command specific options\n"); \
 } while (0)
 
 #define ALL_BUT_CONT_CREATE_OPTS_HELP() \
@@ -1123,7 +1123,7 @@ do { \
 	"	  <pool options>   with --cont use: (--pool, --sys-name, --svc)\n" \
 	"	  <pool options>   with --path use: (--sys-name, --svc)\n" \
 	"	--cont=UUID        (mandatory, or use --path)\n" \
-	"	--path=PATHSTR     (mandatory, or use --cont)\n");
+	"	--path=PATHSTR     (mandatory, or use --cont)\n"); \
 } while (0)
 
 static int
