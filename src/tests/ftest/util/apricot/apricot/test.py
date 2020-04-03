@@ -82,7 +82,12 @@ class Test(avocadoTest):
         # all tests should set a timeout and 60 seconds will enforce that
         if not self.timeout:
             self.timeout = 60
-
+        # Allow yaml timeout value to be in hours; format 2H
+        if "H" in self.timeout:
+            self.timeout = 3600 * int(self.timeout.replace("H", ""))
+        # Allow yamltimeout value to be in minutes; format 32M
+        if "M" in self.timeout:
+            self.timeout = 60 * int(self.timeout.replace("M", ""))
         item_list = self.logdir.split('/')
         for index, item in enumerate(item_list):
             if item == 'job-results':
@@ -116,7 +121,6 @@ class Test(avocadoTest):
         self.fault_file = None
         self.debug = False
         self.config = None
-        self.local_errors = []
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
@@ -297,12 +301,8 @@ class TestWithServers(TestWithoutServers):
 
     def tearDown(self):
         """Tear down after each test case."""
-        # Include test errors so that failure report includes these errors
-        # at the end of the test for ease of debug
-        errors = self.local_errors
-
         # Destroy any containers first
-        errors.extend(self.destroy_containers(self.container))
+        errors = (self.destroy_containers(self.container))
 
         # Destroy any pools next
         errors.extend(self.destroy_pools(self.pool))

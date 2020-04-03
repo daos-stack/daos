@@ -68,6 +68,7 @@ class Soak(TestWithServers):
         self.local_pass_dir = None
         self.dfuse = None
         self.test_timeout = None
+        self.start_time = None
         self.job_timeout = None
         self.nodesperjob = None
         self.task_list = None
@@ -81,6 +82,7 @@ class Soak(TestWithServers):
         self.harasser_results = None
         self.harasser_timeout = None
         self.all_failed_jobs = None
+        self.soak_timeout = None
 
     def job_done(self, args):
         """Call this function when a job is done.
@@ -319,14 +321,15 @@ class Soak(TestWithServers):
         with H_LOCK:
             self.harasser_results["SNAPSHOT"] = status
 
-    def create_ior_cmdline(self, job_spec, pool, ppn):
+    def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
         """Create an IOR cmdline to run in slurm batch.
 
         Args:
 
-            job_spec (str): ior job in yaml to run
-            pool (obj):   TestPool obj
-            ppn(int): number of tasks to run on each node
+            job_spec (str):   ior job in yaml to run
+            pool (obj):       TestPool obj
+            ppn(int):         number of tasks to run on each node
+            nodesperjob(int): number of nodes per job
 
         Returns:
             cmd: cmdline string
@@ -364,7 +367,7 @@ class Soak(TestWithServers):
                         ior_cmd.daos_oclass.update(o_type)
                         ior_cmd.set_daos_params(self.server_group, pool)
                         # srun cmdline
-                        nprocs = self.nodesperjob * ppn
+                        nprocs = nodesperjob * ppn
                         env = ior_cmd.get_default_env("srun", self.tmp)
                         if ior_cmd.api.value == "MPIIO":
                             env["DAOS_CONT"] = ior_cmd.daos_cont.value
@@ -512,13 +515,15 @@ class Soak(TestWithServers):
                 self.bin, "daos_agent"), os.path.join(
                     self.tmp, "daos_agent.yaml"))]
         # Create the sbatch script for each cmdline
+        used = []
         for cmd, log_name in commands:
             output = os.path.join(self.test_log_dir, "%N_" +
                                   self.test_name + "_" + job + "_%j_%t_" +
-                                  str(ppn) + "_" + log_name + "_")
+                                  str(ppn*nodesperjob) + "_" + log_name + "_")
             error = os.path.join(self.test_log_dir, "%N_" +
                                  self.test_name + "_" + job + "_%j_%t_" +
-                                 str(ppn) + "_" + log_name + "_error_")
+                                 str(ppn*nodesperjob) + "_" + log_name +
+                                 "_ERROR_")
             sbatch = {
                 "time": str(self.job_timeout) + ":00",
                 "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
@@ -526,10 +531,12 @@ class Soak(TestWithServers):
                 }
             # include the cluster specific params
             sbatch.update(self.srun_params)
+            unique = get_random_string(5, used)
             script = slurm_utils.write_slurm_script(
                 self.test_log_dir, job, output, nodesperjob,
-                added_cmd_list + [cmd], sbatch)
+                added_cmd_list + [cmd], unique, sbatch)
             script_list.append(script)
+            used.append(unique)
         return script_list
 
     def job_setup(self, job, pool):
@@ -547,26 +554,29 @@ class Soak(TestWithServers):
         job_cmdlist = []
         commands = []
         scripts = []
-        self.log.info(
-            "<<Job_Setup %s >> at %s", self.test_name, time.ctime())
+        nodesperjob = []
+        self.log.info("<<Job_Setup %s >> at %s", self.test_name, time.ctime())
+        for npj in self.nodesperjob:
+            # nodesperjob = -1 indicates to use all nodes in client hostlist
+            if npj < 0:
+                npj = len(self.hostlist_clients)
 
-        # nodesperjob = -1 indicates to use all nodes in client hostlist
-        if self.nodesperjob < 0:
-            self.nodesperjob = len(self.hostlist_clients)
-
-        if len(self.hostlist_clients)/self.nodesperjob < 1:
-            raise SoakTestError(
-                "<<FAILED: There are only {} client nodes for this job. "
-                "Job requires {}".format(
-                    len(self.hostlist_clients), self.nodesperjob))
+            if len(self.hostlist_clients)/npj < 1:
+                raise SoakTestError(
+                    "<<FAILED: There are only {} client nodes for this job. "
+                    "Job requires {}".format(
+                        len(self.hostlist_clients), npj))
+            nodesperjob.append(npj)
 
         if "ior" in job:
-            for ppn in self.task_list:
-                commands = self.create_ior_cmdline(job, pool, ppn)
-                # scripts are single cmdline
-                scripts = self.build_job_script(
-                    commands, job, ppn, self.nodesperjob)
-                job_cmdlist.extend(scripts)
+            for npj in nodesperjob:
+                for ppn in self.task_list:
+                    commands = self.create_ior_cmdline(
+                        job, pool, ppn, npj)
+                    # scripts are single cmdline
+                    scripts = self.build_job_script(
+                        commands, job, ppn, npj)
+                    job_cmdlist.extend(scripts)
         elif "fio" in job:
             commands = self.create_fio_cmdline(job, pool)
             # scripts are single cmdline
@@ -590,7 +600,7 @@ class Soak(TestWithServers):
         self.log.info(
             "<<Job Startup - %s >> at %s", self.test_name, time.ctime())
         job_id_list = []
-        # job_cmdlist is a list of batch scrippt files
+        # job_cmdlist is a list of batch script files
         for script in job_cmdlist:
             try:
                 job_id = slurm_utils.run_slurm_script(str(script))
@@ -631,10 +641,10 @@ class Soak(TestWithServers):
         if job_id_list:
             # wait for all the jobs to finish
             while len(self.soak_results) < len(job_id_list):
-                # self.log.info(
-                #       "<<Waiting for results %s >>", self.soak_results))
-                # allow time for jobs to execute on nodes
-                time.sleep(2)
+                # wait for the jobs to complete.
+                # enter tearDown before hitting the avocado timeout
+                if time.time() - self.start_time > self.soak_timeout:
+                    raise SoakTestError("<<FAILED: Soak test timeout >>")
             # check for job COMPLETED and remove it from the job queue
             for job, result in self.soak_results.items():
                 # The queue include status of "COMPLETING"
@@ -761,9 +771,9 @@ class Soak(TestWithServers):
         if slurm_reservation is not None:
             self.srun_params["reservation"] = slurm_reservation
         # Initialize time
-        start_time = time.time()
+        self.start_time = time.time()
         self.test_timeout = int(3600 * test_to)
-        end_time = start_time + self.test_timeout
+        end_time = self.start_time + self.test_timeout
         # Create the reserved pool with data
         # self.pool is a list of all the pools used in soak
         # self.pool[0] will always be the reserved pool
@@ -835,10 +845,13 @@ class Soak(TestWithServers):
         # gather the doas logs from the client nodes
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>", time.strftime(
-                "%H:%M:%S", time.gmtime(time.time() - start_time)))
+                "%H:%M:%S", time.gmtime(time.time() - self.start_time)))
 
     def setUp(self):
         """Define test setup to be done."""
+        # Define a timeout to trigger 10 minutes before avocado timeout
+        # In order to get to tearDown
+        self.soak_timeout = self.timeout - 600
         self.log.info("<<setUp Started>> at %s", time.ctime())
         # Start the daos_agents in the job scripts
         self.setup_start_servers = True
@@ -886,11 +899,16 @@ class Soak(TestWithServers):
         self.agent_sessions = run_agent(
             self, self.hostlist_servers, test_node)
 
-    def tearDown(self):
-        """Define tearDown and clear any left over jobs in squeue."""
-        self.log.info("<<tearDown Started>> at %s", time.ctime())
+    def soak_tear_down(self):
+        """Tear down any test-specific steps prior to running tearDown().
+
+        Returns:
+            list: a list of error strings to report after all tear down
+            steps have been attempted
+
+        """
         # clear out any jobs in squeue;
-        errors_detected = False
+        errors = []
         if self.failed_job_id_list:
             self.log.info(
                 "<<Cancel jobs in queue with ids %s >>",
@@ -899,12 +917,10 @@ class Soak(TestWithServers):
                 self.partition_clients, NodeSet.fromlist(
                     self.hostlist_clients)))
             if status > 0:
-                errors_detected = True
-                self.local_errors.append("Failed to cancel jobs {}".format(
+                errors.append("Failed to cancel jobs {}".format(
                     self.failed_job_id_list))
         if self.all_failed_jobs:
-            errors_detected = True
-            self.local_errors.append(
+            errors.append(
                 "FAILED: The following jobs failed {} ".format(
                     " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
         # One last attempt to copy any logfiles from client nodes
@@ -912,13 +928,22 @@ class Soak(TestWithServers):
             self.get_remote_logs()
         except SoakTestError as error:
             self.log.info("Remote copy failed with %s", error)
-            errors_detected = True
         # daos_agent is always started on this node when start agent is false
         if not self.setup_start_agents:
             self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
+        return errors
+
+    def tearDown(self):
+        """Define tearDown and clear any left over jobs in squeue."""
+        # Perform any test-specific tear down steps and collect any
+        # reported errors
+        self.log.info("<<tearDown Started>> at %s", time.ctime())
+        errors = self.soak_tear_down()
         super(Soak, self).tearDown()
-        if errors_detected:
-            self.fail("Errors detected in tearDown()")
+        if errors:
+            self.fail(
+                "Errors detected during teardown:\n  - {}".format(
+                    "\n  - ".join(errors)))
 
     def test_soak_smoke(self):
         """Run soak smoke.

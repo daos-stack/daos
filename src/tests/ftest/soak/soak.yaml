@@ -16,8 +16,8 @@ srun:
 srun_params:
     reservation:
 # This timeout must be longer than the test_timeout param (+15minutes)
-# 2 hour test = time in seconds
-timeout: 8000
+# 2 hour test
+timeout: 2H
 logdir: /tmp/soak
 server_config:
     name: daos_server
@@ -81,10 +81,11 @@ container_reserved:
 smoke:
     name: soak_smoke
     # smoke test timeout in hours
-    test_timeout: 0.3
+    test_timeout: 0.4
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
-    nodesperjob: -1
+    nodesperjob: 
+        - -1
     taskspernode:
         - 1
     poollist:
@@ -100,7 +101,8 @@ soak_stress:
     test_timeout: 2
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
-    nodesperjob: -1
+    nodesperjob: 
+        - -1
     # used for perfomance benchmarks
     taskspernode:
         - 1
@@ -112,8 +114,6 @@ soak_stress:
     joblist:
         - ior_stress
         - fio_stress
-      #- dmg_create_destroy
-      #- dfs
 soak_harassers:
     name: soak_harassers
     # harasser test timeout in hours
@@ -131,8 +131,7 @@ soak_harassers:
         - ior_smoke
     harasserlist:
         - snapshot
-      #- rebuild
-      #- dmg_create_destroy
+        - rebuild
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DAOS and -a MPIIO
@@ -193,10 +192,7 @@ ior_stress:
         - '512K'
         - '64k'
     daos_oclass:
-        # - "SX"
-        - "RP_2GX"
-        # - "RP_3GX"
-        # - "RP_4GX"
+        - "SX"
 fio_stress:
   names:
     - global
@@ -230,9 +226,6 @@ rebuild:
     svcl: 1
     daos_oclass:
         - "RP_2GX"
-        # - "RP_3GX"
-        # - "RP_2G1"
-        # - "RP_3G1"
 dmg_create_destroy:
     size:
       - 8M
