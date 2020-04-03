@@ -79,7 +79,7 @@ run_test()
 
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" --start-test "B+tree functional test" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -u "$RECORDS"                               \
@@ -97,19 +97,19 @@ run_test()
         -D
 
         echo "B+tree batch operations test..."
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" --start-test "B+tree batch operations test" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -b "$BAT_NUM"                               \
         -D
 
         echo "B+tree drain test..."
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" --start-test "B+tree drain test" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
     else
         echo "B+tree performance test..."
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" --start-test "B+tree performance test" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \
         -D
     fi

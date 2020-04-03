@@ -10,8 +10,7 @@ DAOS_DIR=$(cd "${cwd}/../../.." && echo "$PWD")
 source "$DAOS_DIR/.build_vars.sh"
 EVT_CTL="$SL_PREFIX/bin/evt_ctl"
 
-cmd_create="$VCMD $EVT_CTL $* -C o:4"
-cmd=$cmd_create
+cmd="$VCMD $EVT_CTL $* --start-test \"EVT030: internal tests and evt sequence\" -C o:4"
 
 function word_set {
     ((flag = $1 % 2))
@@ -164,7 +163,7 @@ if (( result != 0 )); then
 	exit "$result"
 fi
 
-cmd=$cmd_create
+cmd="$VCMD $EVT_CTL $* --start-test \"EVT031: evt drain tests\" -C o:4"
 cmd+=" -e s:0,e:128,n:2379 -c"
 echo "$cmd"
 $cmd
