@@ -19,4 +19,4 @@
 # Any reproduction of computer software, computer software documentation, or
 # portions thereof marked with this legend must also reproduce the markings.
 
-com.intel.daos.hadoop.fs.DaosFileSystem
+io.daos.fs.hadoop.DaosFileSystem
