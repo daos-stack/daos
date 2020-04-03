@@ -15,9 +15,9 @@ srun:
     reservation:
 srun_params:
     reservation:
-# This timeout must be longer than the test_timeout param (+15minutes)
+# This timeout must be longer than the test_timeout param (+30minutes)
 # 2 hour test
-timeout: 2H
+timeout: 2H30M
 logdir: /tmp/soak
 server_config:
     name: daos_server

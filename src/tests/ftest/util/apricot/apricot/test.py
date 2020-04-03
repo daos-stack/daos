@@ -77,24 +77,26 @@ class Test(avocadoTest):
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""
         super(Test, self).__init__(*args, **kwargs)
+
+        # if self.timeout is a string any time value may be entered
+        # but the time speciified must be in this order DHMS
+        # examples   10D2H10M10S or 25M or 2H5S
+        if isinstance(self.timeout, str):
+            pattern = r""
+            for interval in ("days", "hours", "minutes", "seconds"):
+                pattern += r"(?:(\d+)(?:\s*{0}[{1}]*\s*)){{0,1}}".format(
+                    interval[0], interval[1:])
+            dhms = re.search(pattern, self.timeout, re.IGNORECASE).groups()
+            self.timeout = 0
+            for index, multiplier in enumerate([24 * 60 * 60, 60 * 60, 60, 1]):
+                if dhms[index] is not None:
+                    self.timeout += multiplier * int(dhms[index])
+
         # set a default timeout of 1 minute
         # tests that want longer should set a timeout in their .yaml file
         # all tests should set a timeout and 60 seconds will enforce that
         if not self.timeout:
             self.timeout = 60
-        elif isinstance(self.timeout, str):
-            dhm = re.search(
-                r"(?:(\\d+)(?:\\s*d[ays]*\\s*)){0,1}" +
-                "(?:(\\d+)(?:\\s*h[ours]*\\s*)){0,1}" +
-                "(?:(\\d+)(?:\\s*m[inutes]*)){0,1}",
-                self.timeout, re.IGNORECASE).groups()
-            self.timeout = 0
-            if dhm[0] is not None:
-                self.timeout += 24 * 60 * 60 * int(dhm[0])
-            if dhm[1] is not None:
-                self.timeout += 60 * 60 * int(dhm[1])
-            if dhm[2] is not None:
-                self.timeout += 60 * int(dhm[2])
         self.log.info("self.timeout: %s", self.timeout)
 
         item_list = self.logdir.split('/')
