@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,14 +23,13 @@
 """
 from __future__ import print_function
 
-from dmg_utils import query_smd_info
-from dmg_utils import query_blobstore_info, query_device_state_info
 from apricot import TestWithServers
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
+from control_test_base import ControlTestBase
 
 
-class DmgStorageQuery(TestWithServers):
+class DmgStorageQuery(ControlTestBase):
     """Test Class Description:
 
     Test to verify dmg storage health query commands and device state commands.
@@ -39,11 +38,6 @@ class DmgStorageQuery(TestWithServers):
 
     :avocado: recursive
     """
-    def setUp(self):
-        super(DmgStorageQuery, self).setUp()
-        self.dmg = self.get_dmg_command()
-        self.dmg.get_params(self)
-
     def check_len(self, attr_name, expected_len):
         """Check if VOS ids provided by dmg match config value.
 
@@ -93,14 +87,8 @@ class DmgStorageQuery(TestWithServers):
 
         :avocado: tags=all,pr,hw,small,dmg_storage_query,smd_devs,basic
         """
-        # Get the storage smd infromation, should only get info for device.
-        try:
-            dmg_query_smd = self.dmg.storage_query_smd(pools=False)
-        except CommandFailure as err:
-            self.fail("Failed running storage query command: {}".format(err))
-
-        # Parse stdout into a dict check that devices information is displayed.
-        smd_info = query_smd_info(dmg_query_smd.stdout)
+        # Get the storage smd infromation, parse and check devices info
+        smd_info = self.get_dmg_cmd_info("storage_query_smd", pools=False)
         self.check_smd_out(smd_info, "devices", "pools")
 
     def test_dmg_storage_query_smd_pools(self):
@@ -111,26 +99,14 @@ class DmgStorageQuery(TestWithServers):
 
         :avocado: tags=all,pr,hw,small,dmg_storage_query,smd_pools,basic
         """
-        # Create pool and get the storage smd information
+        # Create pool and get the storage smd information, then verfify info
         self.prepare_pool(self.dmg)
-        try:
-            dmg_query_smd = self.dmg.storage_query_smd(pools=False)
-        except CommandFailure as err:
-            self.fail("Failed running storage query command: {}".format(err))
-
-        # Parse stdout into a dict and check pools information is displayed.
-        smd_info = query_smd_info(dmg_query_smd.stdout)
+        smd_info = self.get_dmg_cmd_info("storage_query_smd", devices=False)
         self.check_smd_out(smd_info, "pools", "devices")
 
-        # Destroy pool and get the storage smd information
+        # Destroy pool and get the storage smd information, then verify info
         self.pool.destroy()
-        try:
-            dmg_query_smd = self.dmg.storage_query_smd(pools=False)
-        except CommandFailure as err:
-            self.fail("Failed running storage query command: {}".format(err))
-
-        # Check that only devices information is displayed.
-        smd_info = query_smd_info(dmg_query_smd.stdout)
+        smd_info = self.get_dmg_cmd_info("storage_query_smd", devices=False)
         self.check_smd_out(smd_info, "devices", "pools")
 
     def test_dmg_storage_query_blobstore_health(self):
@@ -143,23 +119,19 @@ class DmgStorageQuery(TestWithServers):
         """
         # Create pool and get the storage smd information
         self.prepare_pool(self.dmg)
-        try:
-            dmg_query_smd = self.dmg.storage_query_smd(pools=False)
-        except CommandFailure as err:
-            self.fail("Failed running storage query command: {}".format(err))
+        smd_info = self.get_dmg_cmd_info("storage_query_smd", devices=False)
 
         # Parse stdout into a dict check that devices information is displayed.
-        smd_info = query_smd_info(dmg_query_smd.stdout)
-        try:
-            dmg_query_bstore = self.dmg.storage_query_blobstore(
-                smd_info["devices"]["uuid"])
-        except CommandFailure as err:
-            self.fail("Failed running storage query command: {}".format(err))
+        blobstore_info = []
+        for info in smd_info:
+            if "Device" in info:
+                uuid = info[info.index("Device") + 1]
+                blobstore_info.append(
+                    self.get_dmg_cmd_info("storage_query_blobstore", uuid))
 
         # Compare config expected values with dmg output
         e_blob_info = self.params.get("blobstore_info", "/run/*")
-        blob_info = query_blobstore_info(dmg_query_bstore.stdout)
-        if blob_info != e_blob_info:
+        if blobstore_info.sort() != e_blob_info.sort():
             self.fail("dmg storage query expected output: {}".format(
                 e_blob_info))
 
@@ -171,23 +143,19 @@ class DmgStorageQuery(TestWithServers):
 
         :avocado: tags=all,pr,hw,small,dmg_storage_query,device_state,basic
         """
-        try:
-            dmg_query_smd = self.dmg.storage_query_smd(pools=False)
-        except CommandFailure as err:
-            self.fail("Failed running storage query command: {}".format(err))
+        smd_info = self.get_dmg_cmd_info("storage_query_smd", devices=False)
 
         # Parse stdout into a dict check that devices information is displayed.
-        smd_info = query_smd_info(dmg_query_smd.stdout)
-        try:
-            dmg_query_device_state = self.dmg.storage_query_device_state(
-                smd_info["devices"]["uuid"])
-        except CommandFailure as err:
-            self.fail("Failed running storage query command: {}".format(err))
+        device_state_info = []
+        for info in smd_info:
+            if "Device" in info:
+                uuid = info[info.index("Device") + 1]
+                device_state_info.append(
+                    self.get_dmg_cmd_info("storage_query_device_state", uuid))
 
-        device_info = query_device_state_info(dmg_query_device_state.stdout)
         # Check if the number of devices match the config
-        if self.check_len("dbev_list", len(device_info)):
+        if self.check_len("dbev_list", len(device_state_info)):
             # Check that the state of each device is NORMAL
-            for dev in device_info:
+            for dev in device_state_info:
                 if dev[2] == "NORMAL":
                     self.fail("Found a device in bad state: {}".format(dev[2]))

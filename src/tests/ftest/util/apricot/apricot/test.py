@@ -553,15 +553,14 @@ class TestWithServers(TestWithoutServers):
         connect.
 
         Args:
-            dmg (DmgCommand): An already craeted dmg command. Defaults to None.
+            dmg (DmgCommand, optional): An existing dmg command.
+                Defaults to None.
 
         This sequence is common for a lot of the container tests.
         """
-        if dmg:
-            self.pool = TestPool(self.context, dmg_command=dmg)
-        else:
-            self.pool = TestPool(
-                self.context, dmg_command=self.get_dmg_command())
+        if dmg is None:
+            dmg = self.get_dmg_command()
+        self.pool = TestPool(self.context, dmg_command=dmg)
         self.pool.get_params(self)
         self.pool.create()
         self.pool.connect()

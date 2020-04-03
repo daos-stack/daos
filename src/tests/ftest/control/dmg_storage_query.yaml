@@ -19,17 +19,16 @@ pool:
     svcn: 1
     control_method: dmg
 blobstore_info:
-  "Device UUID": aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
-  "Read errors": "0"
-  "Write errors": "0"
-  "Unmap errors": "0"
-  "Checksum errors": "0"
-  "Device Health":
-    "Error log entries": "0"
-    "Media errors": "0"
-    "Temperature": aaa
-    "Temperature": OK
-    "Available Spare": OK
-    "Device Reliability": OK
-    "Read Only": OK
-    "Volatile Memory Backup": OK
+  - aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+  - "0"
+  - "0"
+  - "0"
+  - "0"
+  - "0"
+  - "0"
+  - aaa
+  - OK
+  - OK
+  - OK
+  - OK
+  - OK

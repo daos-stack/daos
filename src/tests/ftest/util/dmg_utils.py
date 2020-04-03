@@ -50,6 +50,31 @@ class DmgCommand(CommandWithSubCommand):
         self.insecure = FormattedParameter("-i", True)
         self.debug = FormattedParameter("-d", False)
         self.json = FormattedParameter("-j", False)
+        self.METHOD_REGEX_LIST = {
+            "storage_query_smd": r"""([0-9a-zA-Z-_]+):(?:\d+):
+                (?:\n|\r\n)\s+(Pool|Device):
+                (?:\n|\r\n)\s+UUID:\s+([0-9a-f-]+)
+                (?:\n|\r\n)\s+VOS Target IDs:\s+([\d ]+)
+                (?:\n|\r\n)(?:\s+SPDK Blobs:\s+)?([\d ]+)?""",
+            "storage_query_blobstore": r"""^([0-9a-zA-Z_-]+):\d+:
+                (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
+                (?:\n|\r\n)\s+Read\s+errors:\s+([0-9]+)
+                (?:\n|\r\n)\s+Write\s+errors:\s+([0-9]+)
+                (?:\n|\r\n)\s+Unmap\s+errors:\s+([0-9]+)
+                (?:\n|\r\n)\s+Checksum\s+errors:\s+([0-9]+)
+                (?:\n|\r\n)\s+[0-9a-zA-Z_-]+\s+[0-9a-zA-Z_-]+:
+                (?:\n|\r\n)\s+Error\s+log\s+entries:\s+([0-9]+)
+                (?:\n|\r\n)\s+Media\s+errors:\s+([0-9]+)
+                (?:\n|\r\n)\s+Temperature:\s+([0-9]+)
+                (?:\n|\r\n)\s+Temperature:\s+([A-Z]+)
+                (?:\n|\r\n)\s+Available\s+Spare:\s+([A-Z]+)
+                (?:\n|\r\n)\s+Device\s+Reliability:\s+([A-Z]+)
+                (?:\n|\r\n)\s+Read\s+Only:\s+([A-Z]+)
+                (?:\n|\r\n)\s+Volatile\s+Memory\s+Backup:\s+([A-Z]+)""",
+            "storage_query_device_state": r"""^([0-9a-zA-Z_-]+):\d+:
+                (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
+                (?:\n|\r\n)\s+State:\s+([a-zA-Z]+)"""
+        }
 
     def set_hostlist(self, manager):
         """Set the dmg hostlist parameter with the daos server/agent info.
@@ -821,129 +846,6 @@ def get_pool_uuid_service_replicas_from_stdout(stdout_str):
         uuid = match.group(1)
         svc = match.group(2)
     return uuid, svc
-
-
-def query_smd_info(stdout_str):
-    """Get storage query smd command information from stdout.
-
-    Example output:
-    boro-10:10001: connected
-    SMD Device List:
-    boro-10:10001:
-            Device:
-                    UUID: c2a1f8f6-fa89-4cda-b133-07f6fde9e868
-                    VOS Target IDs: 0 1 2 3
-
-    SMD Pool List:
-    boro-10:10001:
-            Pool:
-                    UUID: b11ab5e3-0e2a-4858-b3bd-c4d572cc8b11
-                    VOS Target IDs: 3 2 1 0
-                    SPDK Blobs: 4294967296 4294967297 4294967298 4294967299
-
-    Args:
-    stdout_str (str): Output of dmg storage query create command.
-
-    Returns:
-        Dict (key, value): Dictionary that contains the contents query smd.
-    """
-    devs_pattern = r"""(?:\s+|\n|\r\n)([0-9a-zA-Z_-]+):\d+:
-        (?:\s+|\n|\r\n)(?:\s+Device:)
-        (?:\s+|\n|\r\n)\s+UUID:\s+([a-f0-9-]+)
-        (?:\s+|\n|\r\n)\s+VOS\s+Target\s+IDs:\s+([\d+\s+]+\d+)"""
-
-    pools_pattern = r"""(?:\s+|\n|\r\n)([0-9a-zA-Z_-]+):\d+:
-        (?:\s+|\n|\r\n)(?:\s+Pool:)
-        (?:\s+|\n|\r\n)\s+UUID:\s+([a-f0-9-]+)
-        (?:\s+|\n|\r\n)\s+VOS\s+Target\s+IDs:\s+([\d+\s+]+\d+)
-        (?:\s+|\n|\r\n)\s+SPDK\s+Blobs:\s+([\d+\s+]+\d+)"""
-
-    info = []
-    for pattern in devs_pattern, pools_pattern:
-        try:
-            info = re.findall(pattern, stdout_str, re.M | re.I | re.VERBOSE)
-        except re.error as err:
-            print("<regex> error: {}".format(err.args[0]))
-
-    return info
-
-
-def query_blobstore_info(stdout_str):
-    """Get storage query smd command information from stdout.
-
-    Example output:
-        boro-10:10001: connected
-        Blobstore Health Data:
-        boro-10:10001:
-            Device UUID: c2a1f8f6-fa89-4cda-b133-07f6fde9e868
-            Read errors: 0
-            Write errors: 0
-            Unmap errors: 0
-            Checksum errors: 0
-            Device Health:
-                    Error log entries: 0
-                    Media errors: 0
-                    Temperature: 287
-                    Temperature: OK
-                    Available Spare: OK
-                    Device Reliability: OK
-                    Read Only: OK
-                    Volatile Memory Backup: OK
-
-    Args:
-    stdout_str (str): Output of dmg storage query create command.
-
-    Returns:
-        Dict (key, value): Dictionary that contains the contents query smd.
-    """
-    pattern = r"""^([0-9a-zA-Z_-]+):\d+:
-        (?:\s+|\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
-        (?:\s+|\n|\r\n)\s+Read\s+errors:\s+([0-9]+)
-        (?:\s+|\n|\r\n)\s+Write\s+errors:\s+([0-9]+)
-        (?:\s+|\n|\r\n)\s+Unmap\s+errors:\s+([0-9]+)
-        (?:\s+|\n|\r\n)\s+Checksum\s+errors:\s+([0-9]+)
-        (?:\s+|\n|\r\n)\s+[0-9a-zA-Z_-]+\s+[0-9a-zA-Z_-]+:
-        (?:\s+|\n|\r\n)\s+Error\s+log\s+entries:\s+([0-9]+)
-        (?:\s+|\n|\r\n)\s+Media\s+errors:\s+([0-9]+)
-        (?:\s+|\n|\r\n)\s+Temperature:\s+([0-9]+)
-        (?:\s+|\n|\r\n)\s+Temperature:\s+([A-Z]+)
-        (?:\s+|\n|\r\n)\s+Available\s+Spare:\s+([A-Z]+)
-        (?:\s+|\n|\r\n)\s+Device\s+Reliability:\s+([A-Z]+)
-        (?:\s+|\n|\r\n)\s+Read\s+Only:\s+([A-Z]+)
-        (?:\s+|\n|\r\n)\s+Volatile\s+Memory\s+Backup:\s+([A-Z]+)"""
-    info = []
-    try:
-        info = re.findall(pattern, stdout_str, re.M | re.I | re.VERBOSE)
-    except re.error as err:
-        print("<regex> error: {}".format(err.args[0]))
-    return info
-
-
-def query_device_state_info(stdout_str):
-    """Get storage query smd command information from stdout.
-
-    Example output:
-        boro-10:10001: connected
-            Device State Info:
-            boro-10:10001:
-                    Device UUID: c2a1f8f6-fa89-4cda-b133-07f6fde9e868
-                    State: NORMAL
-
-    Args:
-    stdout_str (str): Output of dmg storage query create command.
-
-    Returns:
-        Dict (key, value): Dictionary that contains the contents query smd.
-    """
-    pattern = r"""^([0-9a-zA-Z_-]+):\d+:
-        (?:\s+|\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
-        (?:\s+|\n|\r\n)\s+State:\s+([a-zA-Z]+)"""
-    info = []
-    try:
-        info = re.findall(pattern, stdout_str, re.MULTILINE | re.VERBOSE)
-    except re.error as err:
-        print("<regex> error: {}".format(err.args[0]))
-    return info
 
 
 # ************************************************************************

@@ -24,6 +24,7 @@
 from logging import getLogger
 import time
 import os
+import re
 import signal
 
 from avocado.utils import process
@@ -306,6 +307,12 @@ class ExecutableCommand(CommandWithParameters):
         self.env = None
         self.sudo = False
 
+        """
+        Dictionary to store the regex patterns that will parse the output of
+        command functions created in child classes of ExecutableCommand class.
+        """
+        self.METHOD_REGEX_LIST = {}
+
     @property
     def process(self):
         """Getter for process attribute of the ExecutableCommand class."""
@@ -431,6 +438,27 @@ class ExecutableCommand(CommandWithParameters):
                 # Indicate an error if the process required a SIGKILL
                 raise CommandFailure("Error stopping '{}'".format(self))
             self._process = None
+
+    def get_cmd_info(self, method_name, kwargs):
+        """Search function acting as a proxy to execute dmg command & get info.
+
+        Args:
+            method_name (str): Name of function to be executed.
+            kwargs (dict): Arguments to be provided to method_name function.
+        """
+        method = getattr(self, method_name)
+        if method is None or method_name not in self.METHOD_REGEX_LIST:
+            raise CommandFailure("No {} method defined".format(method_name))
+
+        # Run command
+        try:
+            res = method(**kwargs)
+        except CommandFailure as error:
+            raise CommandFailure("<dmg> command failed: {}".format(error))
+        # Parse it's output.
+        info = re.findall(
+            self.METHOD_REGEX_LIST[method_name], res.stdout, re.M | re.I | re.X)
+        return info
 
 
 class CommandWithSubCommand(ExecutableCommand):
