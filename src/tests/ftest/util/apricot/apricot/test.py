@@ -87,7 +87,7 @@ class Test(avocadoTest):
                 r"(?:(\\d+)(?:\\s*d[ays]*\\s*)){0,1}" +
                 "(?:(\\d+)(?:\\s*h[ours]*\\s*)){0,1}" +
                 "(?:(\\d+)(?:\\s*m[inutes]*)){0,1}",
-                self.timeout, re.I).groups()
+                self.timeout, re.IGNORECASE).groups()
             self.timeout = 0
             if dhm[0] is not None:
                 self.timeout += 24 * 60 * 60 * int(dhm[0])
