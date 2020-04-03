@@ -44,6 +44,7 @@
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
+#include "../bio/bio_internal.h"
 
 /* handles, pointers for handling I/O */
 struct obj_io_context {
@@ -70,6 +71,35 @@ static bool
 obj_rpc_is_fetch(crt_rpc_t *rpc)
 {
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
+}
+
+static ABT_eventual
+obj_eventual_get(void)
+{
+	struct obj_tls	*tls;
+	ABT_eventual	 et;
+
+	tls = obj_tls_get();
+	D_ASSERT(tls->ot_etls_avail > 0);
+	et = tls->ot_etls[tls->ot_etls_avail - 1];
+	ABT_eventual_reset(et);
+
+	tls->ot_etls_avail--;
+	tls->ot_etls_inuse++;
+
+	return et;
+}
+
+static void
+obj_eventual_put(ABT_eventual et)
+{
+	struct obj_tls  *tls;
+
+	tls = obj_tls_get();
+	D_ASSERT(tls->ot_etls_inuse > 0);
+	tls->ot_etls[tls->ot_etls_avail] = et;
+	tls->ot_etls_avail++;
+	tls->ot_etls_inuse--;
 }
 
 /**
@@ -264,9 +294,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	}
 
 	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
-	rc = ABT_eventual_create(sizeof(*status), &arg.eventual);
-	if (rc != 0)
-		return dss_abterr2der(rc);
+	arg.eventual = obj_eventual_get();
 
 	D_DEBUG(DB_IO, "bulk_op %d sgl_nr %d\n", bulk_op, sgl_nr);
 
@@ -403,7 +431,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	if (rc == 0)
 		rc = ret ? dss_abterr2der(ret) : *status;
 
-	ABT_eventual_free(&arg.eventual);
+	obj_eventual_put(arg.eventual);
 	/* After RDMA is done, corrupt the server data */
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 		struct obj_rw_in	*orw = crt_req_get(rpc);
@@ -928,7 +956,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	uint32_t		tag = dss_get_module_info()->dmi_tgt_id;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	uint64_t		time_start = 0;
-	struct bio_desc		*biod;
+	struct bio_desc		*biod = NULL;
 	daos_key_t		*dkey;
 	crt_bulk_op_t		bulk_op;
 	bool			rma;
@@ -1027,6 +1055,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	}
 
 	biod = vos_ioh2desc(ioh);
+	biod->bd_eventual = obj_eventual_get();
+
 	rc = bio_iod_prep(biod);
 	if (rc) {
 		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
@@ -1091,6 +1121,8 @@ post:
 	err = bio_iod_post(biod);
 	rc = rc ? : err;
 out:
+	if (biod && biod->bd_eventual != ABT_EVENTUAL_NULL)
+		obj_eventual_put(biod->bd_eventual);
 	rc = obj_rw_complete(rpc, cont, ioh, rc, dth);
 	D_TIME_END(time_start, OBJ_PF_UPDATE_LOCAL);
 	return rc;

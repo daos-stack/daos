@@ -164,6 +164,10 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 struct crt_context {
 	d_list_t		 cc_link; /* link to gdata.cg_ctx_list */
 	int			 cc_idx; /* context index */
+	/* timeout per-context */
+	uint32_t		 cc_timeout_sec;
+	/** last timeout check in micro-second */
+	uint64_t		 cc_last_toc;
 	struct crt_hg_context	 cc_hg_ctx; /* HG context */
 	void			*cc_rpc_cb_arg;
 	crt_rpc_task_t		 cc_rpc_cb; /* rpc callback */
@@ -173,8 +177,6 @@ struct crt_context {
 	struct d_binheap	 cc_bh_timeout;
 	/* mutex to protect cc_epi_table and timeout binheap */
 	pthread_mutex_t		 cc_mutex;
-	/* timeout per-context */
-	uint32_t		 cc_timeout_sec;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */

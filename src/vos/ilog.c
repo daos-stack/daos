@@ -483,9 +483,12 @@ ilog_hdl2lctx(daos_handle_t hdl)
 
 static int
 ilog_ptr_set_full(struct ilog_context *lctx, void *dest, const void *src,
-		  size_t len)
+		  size_t len, bool created)
 {
 	int	rc = 0;
+
+	if (created)
+		goto copy;
 
 	rc = ilog_tx_begin(lctx);
 	if (rc != 0) {
@@ -499,19 +502,19 @@ ilog_ptr_set_full(struct ilog_context *lctx, void *dest, const void *src,
 		D_ERROR("Failed to add to undo log\n");
 		goto done;
 	}
-
+copy:
 	memcpy(dest, src, len);
 done:
 	return rc;
 }
 
 #define ilog_ptr_set(lctx, dest, src)	\
-	ilog_ptr_set_full(lctx, dest, src, sizeof(*(src)))
+	ilog_ptr_set_full(lctx, dest, src, sizeof(*(src)), false)
 
 int
 ilog_create(struct umem_instance *umm, struct ilog_df *root)
 {
-	struct ilog_context	lctx = {
+	struct ilog_context     lctx = {
 		.ic_root = (struct ilog_root *)root,
 		.ic_root_off = umem_ptr2off(umm, root),
 		.ic_umm = *umm,
@@ -519,15 +522,10 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root)
 		.ic_in_txn = 0,
 	};
 	struct ilog_root	tmp = {0};
-	int			rc = 0;
 
 	tmp.lr_magic = ILOG_MAGIC + ILOG_VERSION_INC;
-
-	rc = ilog_ptr_set(&lctx, root, &tmp);
-	lctx.ic_ver_inc = false;
-
-	rc = ilog_tx_end(&lctx, rc);
-	return rc;
+	ilog_ptr_set_full(&lctx, root, &tmp, sizeof(tmp), true);
+	return 0;
 }
 
 #define ILOG_ASSERT_VALID(root_df)				\
@@ -1019,7 +1017,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		tmp.lr_id.id_epoch = id_in->id_epoch;
 		if (punch)
 			tmp.lr_magic |= ILOG_PUNCH_MASK;
-		rc = ilog_ptr_set(lctx, root, &tmp);
+		rc = ilog_ptr_set_full(lctx, root, &tmp, sizeof(tmp), true);
 		if (rc != 0)
 			goto done;
 		rc = ilog_log_add(lctx, &root->lr_id);

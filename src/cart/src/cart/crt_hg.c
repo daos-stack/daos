@@ -1544,7 +1544,7 @@ out:
 }
 
 struct crt_hg_bulk_cbinfo {
-	struct crt_bulk_desc	*bci_desc;
+	struct crt_bulk_desc	bci_desc;
 	crt_bulk_cb_t		bci_cb;
 	void			*bci_arg;
 };
@@ -1563,8 +1563,7 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 	D_ASSERT(hg_cbinfo != NULL);
 	bulk_cbinfo = hg_cbinfo->arg;
 	D_ASSERT(bulk_cbinfo != NULL);
-	bulk_desc = bulk_cbinfo->bci_desc;
-	D_ASSERT(bulk_desc != NULL);
+	bulk_desc = &bulk_cbinfo->bci_desc;
 	ctx = bulk_desc->bd_rpc->cr_ctx;
 	hg_ctx = &ctx->cc_hg_ctx;
 	D_ASSERT(hg_ctx != NULL);
@@ -1600,7 +1599,6 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 
 out:
 	D_FREE_PTR(bulk_cbinfo);
-	D_FREE_PTR(bulk_desc);
 	return hg_ret;
 }
 
@@ -1612,7 +1610,6 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	struct crt_hg_context		*hg_ctx;
 	struct crt_hg_bulk_cbinfo	*bulk_cbinfo;
 	hg_bulk_op_t			hg_bulk_op;
-	struct crt_bulk_desc		*bulk_desc_dup;
 	struct crt_rpc_priv		*rpc_priv;
 	hg_return_t			hg_ret = HG_SUCCESS;
 	int				rc = 0;
@@ -1628,14 +1625,8 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	D_ALLOC_PTR(bulk_cbinfo);
 	if (bulk_cbinfo == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC_PTR(bulk_desc_dup);
-	if (bulk_desc_dup == NULL) {
-		D_FREE_PTR(bulk_cbinfo);
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-	crt_bulk_desc_dup(bulk_desc_dup, bulk_desc);
 
-	bulk_cbinfo->bci_desc = bulk_desc_dup;
+	bulk_cbinfo->bci_desc = *bulk_desc;
 	bulk_cbinfo->bci_cb = complete_cb;
 	bulk_cbinfo->bci_arg = arg;
 
@@ -1668,7 +1659,6 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: %d.\n", hg_ret);
 		D_FREE_PTR(bulk_cbinfo);
-		D_FREE_PTR(bulk_desc_dup);
 		rc = crt_hgret_2_der(hg_ret);
 	}
 

@@ -97,9 +97,12 @@ ktr_rec_store(struct btr_instance *tins, struct btr_record *rec,
 		D_ASSERT(csum->cs_csum);
 		krec->kr_cs_type = csum->cs_type;
 		memcpy(vos_krec2csum(krec), csum->cs_csum, csum->cs_len);
+	} else {
+		krec->kr_cs_type = 0;
 	}
-	kbuf = vos_krec2key(krec);
+	krec->kr_pad_8 = 0;
 
+	kbuf = vos_krec2key(krec);
 	if (iov->iov_buf != NULL) {
 		D_ASSERT(iov->iov_buf == key_iov->iov_buf);
 		memcpy(kbuf, iov->iov_buf, iov->iov_len);
@@ -320,7 +323,7 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rbund = iov2rec_bundle(val_iov);
 
-	rec->rec_off = umem_zalloc(&tins->ti_umm, vos_krec_size(rbund));
+	rec->rec_off = umem_alloc(&tins->ti_umm, vos_krec_size(rbund));
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NOSPACE;
 
@@ -334,10 +337,8 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	if (rbund->rb_tclass == VOS_BTR_DKEY)
 		krec->kr_bmap |= KREC_BF_DKEY;
 
-	rbund->rb_krec = krec;
-
 	ktr_rec_store(tins, rec, key_iov, rbund);
-
+	rbund->rb_krec = krec;
 	return rc;
 }
 
@@ -578,8 +579,6 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		if (UMOFF_IS_NULL(rec->rec_off))
 			return -DER_NOSPACE;
 	} else {
-		umem_tx_add(&tins->ti_umm, rbund->rb_off,
-			    vos_irec_msize(rbund));
 		rec->rec_off = rbund->rb_off;
 		rbund->rb_off = UMOFF_NULL; /* taken over by btree */
 	}

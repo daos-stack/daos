@@ -214,9 +214,15 @@ struct migrate_pool_tls {
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
+#define OBJ_EVENTUALS	256
+
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
+	int			ot_etls_inuse;
+	int			ot_etls_avail;
+	ABT_eventual		ot_etls[OBJ_EVENTUALS];
+	ABT_eventual		ot_etls_buf[OBJ_EVENTUALS];
 };
 
 struct obj_ec_parity {

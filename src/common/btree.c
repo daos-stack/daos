@@ -110,7 +110,7 @@ struct btr_trace {
 };
 
 /** backtrace depth */
-#define BTR_TRACE_MAX		40
+#define BTR_TRACE_MAX		20
 
 /**
  * Context for btree operations.
@@ -1346,9 +1346,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	}
 
 	level = -1;
-	memset(&tcx->tc_traces[0], 0,
-	       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
-
 	/* depth could be changed by dbtree_delete/dbtree_iter_delete from
 	 * a different btr_context, so we always reinitialize both depth
 	 * and start point of trace for the context.

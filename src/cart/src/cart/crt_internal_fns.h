@@ -84,14 +84,6 @@ crt_is_service()
 	return crt_gdata.cg_server;
 }
 
-static inline void
-crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
-		  struct crt_bulk_desc *bulk_desc)
-{
-	D_ASSERT(bulk_desc_new != NULL && bulk_desc != NULL);
-	*bulk_desc_new = *bulk_desc;
-}
-
 void
 crt_hdlr_proto_query(crt_rpc_t *rpc_req);
 

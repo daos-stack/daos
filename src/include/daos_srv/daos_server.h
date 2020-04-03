@@ -723,7 +723,7 @@ void dss_init_state_set(enum dss_init_state state);
 /**
  * Run GC for an opened pool, it run GC for all pools if @poh is DAOS_HDL_INVAL
  */
-void dss_gc_run(daos_handle_t poh, int credits);
+bool dss_gc_run(daos_handle_t poh, int credits);
 
 int notify_bio_error(int media_err_type, int tgt_id);
 

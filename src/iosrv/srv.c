@@ -1297,7 +1297,7 @@ dss_dump_ABT_state()
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 }
 
-void
+bool
 dss_gc_run(daos_handle_t poh, int credits)
 {
 	struct dss_xstream *dxs	 = dss_current_xstream();
@@ -1335,16 +1335,28 @@ dss_gc_run(daos_handle_t poh, int credits)
 
 	if (total != 0) /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
+
+	return !!total;
 }
 
 static void
 dss_gc_ult(void *args)
 {
 	 struct dss_xstream *dxs  = dss_current_xstream();
+	 struct dss_sleep_ult *dsu;
+
+	 dsu = dss_sleep_ult_create();
+	 D_ASSERT(dsu);
 
 	 while (!dss_xstream_exiting(dxs)) {
+		bool did_something;
+
 		/* -1 means GC will run until there is nothing to do */
-		dss_gc_run(DAOS_HDL_INVAL, -1);
-		ABT_thread_yield();
+		did_something = dss_gc_run(DAOS_HDL_INVAL, -1);
+		if (did_something)
+			ABT_thread_yield();
+		else
+			dss_ult_sleep(dsu, 1);
 	 }
+	 dss_sleep_ult_destroy(dsu);
 }

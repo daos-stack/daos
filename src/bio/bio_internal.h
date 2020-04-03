@@ -61,6 +61,7 @@ struct bio_dma_buffer {
 	struct bio_dma_chunk	*bdb_cur_chk;
 	unsigned int		 bdb_tot_cnt;
 	unsigned int		 bdb_active_iods;
+	unsigned int		 bdb_waiters;
 	ABT_cond		 bdb_wait_iods;
 	ABT_mutex		 bdb_mutex;
 };
@@ -185,6 +186,7 @@ struct bio_desc {
 	struct bio_rsrvd_dma	 bd_rsrvd;
 	/* Report blob i/o completion */
 	ABT_eventual		 bd_dma_done;
+	ABT_eventual		 bd_eventual;
 	/* Inflight SPDK DMA transfers */
 	unsigned int		 bd_inflights;
 	int			 bd_result;

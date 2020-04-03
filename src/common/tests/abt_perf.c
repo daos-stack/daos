@@ -49,7 +49,7 @@ abt_current_ms(void)
 {
 	struct timespec now;
 
-	clock_gettime(CLOCK_MONOTONIC, &now);
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 	return now.tv_sec * 1000 + now.tv_nsec / 1000000;
 }
 

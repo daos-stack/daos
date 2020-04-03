@@ -84,12 +84,20 @@ obj_tls_init(const struct dss_thread_local_storage *dtls,
 	     struct dss_module_key *key)
 {
 	struct obj_tls *tls;
+	int		i;
+	int		rc;
 
 	D_ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
 	D_INIT_LIST_HEAD(&tls->ot_pool_list);
+	for (i = 0; i < OBJ_EVENTUALS; i++) {
+		rc = ABT_eventual_create(sizeof(int), &tls->ot_etls_buf[i]);
+		D_ASSERT(rc == ABT_SUCCESS);
+		tls->ot_etls[i] = tls->ot_etls_buf[i];
+		tls->ot_etls_avail++;
+	}
 	return tls;
 }
 
@@ -100,6 +108,7 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 	struct obj_tls *tls = data;
 	struct migrate_pool_tls *pool_tls;
 	struct migrate_pool_tls *tmp;
+	int			i;
 
 	d_list_for_each_entry_safe(pool_tls, tmp, &tls->ot_pool_list,
 				   mpt_list)
@@ -107,6 +116,9 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 
 	if (tls->ot_echo_sgl.sg_iovs != NULL)
 		daos_sgl_fini(&tls->ot_echo_sgl, true);
+
+	for (i = 0; i < OBJ_EVENTUALS; i++)
+		ABT_eventual_free(&tls->ot_etls_buf[i]);
 
 	D_FREE(tls);
 }

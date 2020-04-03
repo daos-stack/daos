@@ -190,6 +190,7 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 	biod->bd_sgl_cnt = sgl_cnt;
 
 	biod->bd_dma_done = ABT_EVENTUAL_NULL;
+	biod->bd_eventual = ABT_EVENTUAL_NULL;
 	return biod;
 }
 
@@ -200,7 +201,8 @@ bio_iod_free(struct bio_desc *biod)
 
 	D_ASSERT(!biod->bd_buffer_prep);
 
-	if (biod->bd_dma_done != ABT_EVENTUAL_NULL)
+	if (biod->bd_dma_done != ABT_EVENTUAL_NULL &&
+	    biod->bd_eventual == ABT_EVENTUAL_NULL)
 		ABT_eventual_free(&biod->bd_dma_done);
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
@@ -865,9 +867,11 @@ dma_drop_iod(struct bio_dma_buffer *bdb)
 	D_ASSERT(bdb->bdb_active_iods > 0);
 	bdb->bdb_active_iods--;
 
-	ABT_mutex_lock(bdb->bdb_mutex);
-	ABT_cond_broadcast(bdb->bdb_wait_iods);
-	ABT_mutex_unlock(bdb->bdb_mutex);
+	if (bdb->bdb_waiters) {
+		ABT_mutex_lock(bdb->bdb_mutex);
+		ABT_cond_broadcast(bdb->bdb_wait_iods);
+		ABT_mutex_unlock(bdb->bdb_mutex);
+	}
 }
 
 int
@@ -903,7 +907,9 @@ retry:
 			biod, retry_cnt++);
 
 		ABT_mutex_lock(bdb->bdb_mutex);
+		bdb->bdb_waiters++;
 		ABT_cond_wait(bdb->bdb_wait_iods, bdb->bdb_mutex);
+		bdb->bdb_waiters--;
 		ABT_mutex_unlock(bdb->bdb_mutex);
 
 		D_DEBUG(DB_IO, "IOD %p finished waiting. %d\n",
@@ -920,10 +926,14 @@ retry:
 	bdb = iod_dma_buf(biod);
 	bdb->bdb_active_iods++;
 
-	rc = ABT_eventual_create(0, &biod->bd_dma_done);
-	if (rc != ABT_SUCCESS) {
-		rc = -DER_NOMEM;
-		goto failed;
+	if (biod->bd_eventual == ABT_EVENTUAL_NULL) {
+		rc = ABT_eventual_create(0, &biod->bd_dma_done);
+		if (rc != ABT_SUCCESS) {
+			rc = -DER_NOMEM;
+			goto failed;
+		}
+	} else {
+		biod->bd_dma_done = biod->bd_eventual;
 	}
 
 	dma_rw(biod, true);
