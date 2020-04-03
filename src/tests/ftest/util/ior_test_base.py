@@ -81,7 +81,8 @@ class IorTestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            self.dfuse = None
+            if self.dfuse:
+                self.dfuse.stop()
         finally:
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
@@ -105,7 +106,7 @@ class IorTestBase(TestWithServers):
         # create container
         self.container.create(con_in=self.co_prop)
 
-    def start_dfuse(self):
+    def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
         self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
@@ -146,7 +147,7 @@ class IorTestBase(TestWithServers):
             # Uncomment below two lines once DAOS-3355 is resolved
             if self.ior_cmd.transfer_size.value == "256B":
                 return "Skipping the case for transfer_size=256B"
-            self.start_dfuse()
+            self._start_dfuse()
             testfile = os.path.join(self.dfuse.mount_dir.value,
                                     "testfile{}".format(test_file_suffix))
 
@@ -155,6 +156,9 @@ class IorTestBase(TestWithServers):
         out = self.run_ior(self.get_job_manager_command(), self.processes,
                            intercept)
 
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
         return out
 
     def update_ior_cmd_with_pool(self):
@@ -226,7 +230,7 @@ class IorTestBase(TestWithServers):
 
         # start dfuse for POSIX api. This is specific to interception
         # library test requirements.
-        self.start_dfuse()
+        self._start_dfuse()
 
         # Create two jobs and run in parallel.
         # Job1 will have 3 client set up to use dfuse + interception
@@ -245,6 +249,8 @@ class IorTestBase(TestWithServers):
         job2.start()
         job1.join()
         job2.join()
+        self.dfuse.stop()
+        self.dfuse = None
 
     def get_new_job(self, clients, job_num, results, intercept=None):
         """Create a new thread for ior run
