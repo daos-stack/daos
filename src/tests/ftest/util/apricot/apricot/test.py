@@ -82,7 +82,7 @@ class Test(avocadoTest):
         # but the time speciified must be in this order DHMS
         # examples   10D2H10M10S or 25M or 2H5S
         if isinstance(self.timeout, str):
-            self.timeout = self.timeout.lower()
+            self.timeout = str(self.timeout).lower()
             pattern = r""
             for interval in ("days", "hours", "minutes", "seconds"):
                 pattern += r"(?:(\d+)(?:\s*{0}[{1}]*\s*)){{0,1}}".format(
