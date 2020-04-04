@@ -89,7 +89,6 @@ Requires: libpmem1, libpmemobj1
 %endif
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: fio < 3.4
 Requires: spdk > %{spdk_min_version}, spdk < %{spdk_max_version}
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -139,6 +138,7 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+Requires: fio
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
