@@ -283,6 +283,13 @@ def define_components(reqs):
                 headers=['fuse3/fuse.h'],
                 out_of_src_build=True)
 
+    reqs.define('fio',
+                retriever=GitRepoRetriever(
+                    'https://github.com/axboe/fio.git'),
+                commands=['./configure --prefix="$FIO_PREFIX"',
+                          'make $JOBS_OPT', 'make install'],
+                progs=['genfio', 'fio'])
+
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
