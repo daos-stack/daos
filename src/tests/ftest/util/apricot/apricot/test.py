@@ -82,11 +82,12 @@ class Test(avocadoTest):
         # but the time speciified must be in this order DHMS
         # examples   10D2H10M10S or 25M or 2H5S
         if isinstance(self.timeout, str):
+            self.timeout = self.timeout.lower()
             pattern = r""
             for interval in ("days", "hours", "minutes", "seconds"):
                 pattern += r"(?:(\d+)(?:\s*{0}[{1}]*\s*)){{0,1}}".format(
                     interval[0], interval[1:])
-            dhms = re.search(pattern, self.timeout, re.IGNORECASE).groups()
+            dhms = re.search(pattern, self.timeout).groups()
             self.timeout = 0
             for index, multiplier in enumerate([24 * 60 * 60, 60 * 60, 60, 1]):
                 if dhms[index] is not None:
