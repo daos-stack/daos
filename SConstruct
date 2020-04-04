@@ -361,7 +361,6 @@ def scons(): # pylint: disable=too-many-locals
     if not env.GetOption('clean'):
         run_checks(env)
 
-    prereqs.has_source(env, 'fio')
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
