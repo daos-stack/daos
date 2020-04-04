@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -365,7 +365,8 @@ enum {
  * \param rank	[IN]	Ranks to set parameter. -1 means setting on all servers.
  * \param key_id [IN]	key ID of the parameter.
  * \param value [IN]	value of the parameter.
- * \param value [IN]	optional extra value to set the fail value when
+ * \param value_extra [IN]
+ *			optional extra value to set the fail value when
  *			\a key_id is DMG_CMD_FAIL_LOC and \a value is in
  *			DAOS_FAIL_VALUE mode.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
