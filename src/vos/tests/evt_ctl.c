@@ -103,7 +103,7 @@ struct test_arg {
 /* variables for test group */
 static char		**test_group_args;
 static int		test_group_start;
-int			test_group_stop;
+static int		test_group_stop;
 
 static int
 ts_evt_bio_free(struct umem_instance *umm, struct evt_desc *desc,
