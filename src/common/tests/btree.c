@@ -80,7 +80,7 @@ struct ik_rec {
 };
 
 static char	**test_group_args;
-int		test_group_start;
+static int	test_group_start;
 int		test_group_stop;
 
 #define IK_TREE_CLASS	100
@@ -899,6 +899,17 @@ static struct option btr_ops[] = {
 	{ NULL,		0,			NULL,	0	},
 };
 
+static int
+use_pmem() {
+	int rc;
+	D_PRINT("Using pmem\n");
+	rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
+			       sizeof(*ik_root),
+			       &ik_utx);
+	D_ASSERT(rc == 0);
+	return rc;
+}
+
 static void
 ts_group(void **state) {
 
@@ -1017,28 +1028,39 @@ main(int argc, char **argv)
 		return -1;
 	}
 
+	stop_idx = argc-1;
 	if (strcmp(argv[1], "--start-test") == 0) {
-		optind = 2;
-	} else {
-		optind = 0;
-	}
-
-	/* Check for -m option first */
-	while ((opt = getopt_long(argc, argv, "tmC:Deocqu:d:r:f:i:b:p:",
-				  btr_ops, NULL)) != -1) {
-		if (opt == 'm') {
-			D_PRINT("Using pmem\n");
-			rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
-						   sizeof(*ik_root), &ik_utx);
-			D_ASSERT(rc == 0);
-			break;
-		}
-		if (opt == 't') {
+		start_idx = 2;
+		test_name = argv[2];
+		if (strcmp(argv[3], "-t") == 0) {
 			D_PRINT("Using dynamic tree order\n");
 			dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
+			if (strcmp(argv[4], "-m") == 0)
+				rc = use_pmem();
+		} else if (strcmp(argv[3], "-m") == 0) {
+			rc = use_pmem();
+			if (strcmp(argv[4], "-t") == 0) {
+				D_PRINT("Using dynamic tree order\n");
+				dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
+			}
+		}
+	} else {
+		start_idx = 0;
+		test_name = "Btree testing tool";
+		optind = 0;
+		/* Check for -m option first */
+		while ((opt = getopt_long(argc, argv, "tmC:Deocqu:d:r:f:i:b:p:",
+					  btr_ops, NULL)) != -1) {
+			if (opt == 'm') {
+				rc = use_pmem();
+				break;
+			}
+			if (opt == 't') {
+				D_PRINT("Using dynamic tree order\n");
+				dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
+			}
 		}
 	}
-
 
 	rc = dbtree_class_register(IK_TREE_CLASS,
 				   dynamic_flag | BTR_FEAT_UINT_KEY, &ik_ops);
@@ -1055,14 +1077,6 @@ main(int argc, char **argv)
 
 	/* start over */
 	optind = 0;
-	stop_idx = argc-1;
-	if (strcmp(argv[1], "--start-test") != 0) {
-		start_idx = 0;
-		test_name = "Btree testing tool";
-	} else {
-		start_idx = 2;
-		test_name = argv[start_idx];
-	}
 	rc = run_cmd_line_test(test_name, argv, start_idx, stop_idx);
 	daos_debug_fini();
 	rc += utest_utx_destroy(ik_utx);
