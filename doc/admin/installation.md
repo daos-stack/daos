@@ -101,7 +101,7 @@ $ scons --config=force install
 ```
 
 If you are a developer of DAOS, we recommend following the instructions in the
-[DAOS for Development](https://daos-stack.github.io/admin/installation/#daos-for-development) section.
+[DAOS for Development](https://daos-stack.github.io/dev/development/#building-daos-for-development) section.
 
 Otherwise, the missing dependencies can be built automatically by invoking scons
 with the following parameters:

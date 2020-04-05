@@ -417,7 +417,7 @@ sched_run(ABT_sched sched)
 		 */
 		goto check_event;
 execute:
-		D_ASSERT(pool != ABT_UNIT_NULL);
+		D_ASSERT(pool != ABT_POOL_NULL);
 		ABT_xstream_run_unit(unit, pool);
 start_cycle:
 		if (cycle->sc_new_cycle) {

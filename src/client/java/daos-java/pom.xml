@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.daos</groupId>
+    <artifactId>daos-java-root</artifactId>
+    <version>1.1.0-SNAPSHOT</version>
+  </parent>
+
+  <groupId>io.daos</groupId>
+  <artifactId>daos-java</artifactId>
+  <packaging>jar</packaging>
+
+  <properties>
+    <native.build.path>${project.basedir}/build</native.build.path>
+    <daos.install.path>/usr/local/daos</daos.install.path>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-slf4j-impl</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>commons-lang</groupId>
+      <artifactId>commons-lang</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.code.findbugs</groupId>
+      <artifactId>jsr305</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>native-maven-plugin</artifactId>
+        <version>1.0-alpha-9</version>
+        <extensions>true</extensions>
+        <configuration>
+          <javahClassNames>
+            <javahClassName>io.daos.dfs.DaosFsClient</javahClassName>
+          </javahClassNames>
+          <javahOutputDirectory>${project.basedir}/src/main/native/include</javahOutputDirectory>
+        </configuration>
+        <executions>
+          <execution>
+            <id>generate-head</id>
+            <phase>compile</phase>
+            <goals>
+              <goal>javah</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>1.8</version>
+        <executions>
+          <execution>
+            <id>build-so</id>
+            <phase>compile</phase>
+            <configuration>
+              <tasks>
+                <mkdir dir="${native.build.path}"/>
+                <exec executable="sh" outputproperty="java-home" failonerror="true">
+                  <arg line="./find_java_home.sh"/>
+                </exec>
+                <echo message="Java home is ${java-home}" />
+                <delete file="${project.basedir}/src/main/native/include/io_daos_dfs_DaosFsClient_DaosFsClientBuilder.h"/>
+                <exec dir="${native.build.path}"
+                      failonerror="true"
+                      executable="gcc">
+                  <arg value="-v"/>
+                  <arg value="-I/usr/local/"/>
+                  <arg value="-I${java-home}/include/"/>
+                  <arg value="-I${java-home}/include/linux/"/>
+                  <arg value="-I${daos.install.path}/include/"/>
+                  <arg value="-I${project.basedir}/src/main/native/include/"/>
+                  <arg value="${project.basedir}/src/main/native/io_daos_dfs_DaosFsClient.c"/>
+                  <arg value="-o${native.build.path}/io_daos_dfs_DaosFsClient.o"/>
+                  <arg value="-c"/>
+                  <arg value="-fPIC"/>
+                  <arg value="--std=gnu99"/>
+                </exec>
+                <exec dir="${native.build.path}"
+                      failonerror="true"
+                      executable="gcc">
+                  <arg value="-shared"/>
+                  <arg value="-o${native.build.path}/libdaos-jni.so"/>
+                  <arg value="${native.build.path}/io_daos_dfs_DaosFsClient.o"/>
+                  <arg value="-L${daos.install.path}/lib"/>
+                  <arg value="-L${daos.install.path}/lib64"/>
+                  <arg value="-L/usr/lib"/>
+                  <arg value="-L/usr/lib64"/>
+                  <arg value="-L/usr/local/lib"/>
+                  <arg value="-L/usr/local/lib64"/>
+                  <arg value="-ldaos"/>
+                  <arg value="-luuid"/>
+                  <arg value="-ldaos_common"/>
+                  <arg value="-ldfs"/>
+                  <arg value="-lcart"/>
+                </exec>
+                <copy file="${native.build.path}/libdaos-jni.so" todir="${project.basedir}/target/classes"/>
+              </tasks>
+            </configuration>
+            <goals>
+              <goal>run</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>integration-test</id>
+            <goals>
+              <goal>integration-test</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>verify</id>
+            <goals>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>3.0.0</version>
+        <configuration>
+          <configLocation>../dev/checkstyle/checkstyle.xml</configLocation>
+          <headerLocation>../dev/checkstyle/checkstyle.license</headerLocation>
+          <suppressionsLocation>../dev/checkstyle/suppressions.xml</suppressionsLocation>
+          <encoding>UTF-8</encoding>
+          <failsOnError>false</failsOnError>
+          <linkXRef>false</linkXRef>
+          <includeTestSourceDirectory>false</includeTestSourceDirectory>
+        </configuration>
+        <reportSets>
+          <reportSet>
+            <reports>
+              <report>checkstyle</report>
+            </reports>
+          </reportSet>
+        </reportSets>
+      </plugin>
+    </plugins>
+  </reporting>
+</project>
