@@ -43,31 +43,20 @@ class DmgNetworkScanTest(TestWithServers):
         super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
         self.setup_start_agents = False
 
-    def get_numa_info(self):
-        """Get expected values of numa nodes with lstopo."""
-        lstopo = "lstopo-no-graphics"
-        try:
-            output = run_cmd(lstopo)
-        except process.CmdError as error:
-            # Command failed or possibly timed out
-            msg = "Error occurred running '{}': {}".format(lstopo, error)
-            self.fail(msg)
-
-        # Separate numa node info, pop first item as it has no useful info
-        numas = re.split("NUMANode", output.stdout)
-        numas.pop(0)
-
-        numas_devs = {}
-        for i, numa in enumerate(numas):
-            net_dev = []
-            split_numa = numa.split("\n")
-            for line in split_numa:
-                if "Net" in line or "OpenFabrics" in line:
-                    # Get the devices i.e. eth0, ib0, ib1
-                    net_dev.append("".join(line.strip().split('"')[1::2]))
-            numas_devs[i] = net_dev
-
-        return numas_devs
+    def get_sys_info(self):
+        """ Get expected values of numa nodes with lstopo."""
+        sys_info = {}
+        for d in os.listdir("/sys/class/net/"):
+            sys_info[d] = {}
+            if os.path.exists("/sys/class/net/{}/device/infiniband".format(d)):
+                sys_info[d]["dev"] = os.listdir(
+                    "/sys/class/net/{}/device/infiniband".format(d))
+            if os.path.exists('/sys/class/net/{}/device/numa_node'.format(d)):
+                numa_node = ''.join(
+                    open('/sys/class/net/{}/device/numa_node'.format(d),
+                         'r').read()).rstrip()
+                sys_info[d]["numa"] = numa_node
+        return sys_info
 
     def get_dev_provider(self, device):
         """Get expected values of provider with fi_info.
