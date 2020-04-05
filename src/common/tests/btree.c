@@ -81,7 +81,7 @@ struct ik_rec {
 
 static char	**test_group_args;
 static int	test_group_start;
-int		test_group_stop;
+static int	test_group_stop;
 
 #define IK_TREE_CLASS	100
 #define POOL_NAME "/mnt/daos/btree-test"
