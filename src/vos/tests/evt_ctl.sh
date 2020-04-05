@@ -10,7 +10,8 @@ DAOS_DIR=$(cd "${cwd}/../../.." && echo "$PWD")
 source "$DAOS_DIR/.build_vars.sh"
 EVT_CTL="$SL_PREFIX/bin/evt_ctl"
 
-cmd="$VCMD $EVT_CTL $* --start-test \"EVT030: internal tests and evt sequence\" -C o:4"
+cmd="$VCMD $EVT_CTL $* --start-test \"EVT030: internal tests and evt sequence\"\
+    -C o:4"
 
 function word_set {
     ((flag = $1 % 2))
