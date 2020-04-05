@@ -1468,7 +1468,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	struct vos_ts_entry	*entry;
+	uint64_t		time = 0;
 
+	D_TIME_START(time, VOS_UPDATE_END);
 	D_ASSERT(ioc->ic_update);
 
 	if (err != 0)
@@ -1553,6 +1555,7 @@ out:
 
 	update_read_timestamps(ioc, err);
 
+	D_TIME_END(time, VOS_UPDATE_END);
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 
