@@ -158,9 +158,63 @@ typedef enum {
 } vos_it_epc_expr_t;
 
 enum {
+	/** Conditional Op: Punch key if it exists, fail otherwise */
+	VOS_OF_COND_PUNCH	= DAOS_COND_PUNCH,
+	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
+	VOS_OF_COND_DKEY_INSERT	= DAOS_COND_DKEY_INSERT,
+	/** Conditional Op: Update dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_UPDATE	= DAOS_COND_DKEY_UPDATE,
+	/** Conditional Op: Fetch dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_FETCH	= DAOS_COND_DKEY_FETCH,
+	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */
+	VOS_OF_COND_AKEY_INSERT	= DAOS_COND_AKEY_INSERT,
+	/** Conditional Op: Update akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_UPDATE	= DAOS_COND_AKEY_UPDATE,
+	/** Conditional Op: Fetch akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_FETCH	= DAOS_COND_AKEY_FETCH,
+	/** Indicates the operation should check mvcc timestamps */
+	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
 	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC	= (1 << 0),
+	VOS_OF_REPLAY_PC	= (1 << 8),
 };
+
+/** Mask for any conditionals passed to to the fetch */
+#define VOS_COND_FETCH_MASK	\
+	(VOS_OF_COND_AKEY_FETCH | VOS_OF_COND_DKEY_FETCH)
+
+/** Mask for akey conditionals passed to to the update */
+#define VOS_COND_AKEY_UPDATE_MASK					\
+	(VOS_OF_COND_AKEY_UPDATE | VOS_OF_COND_AKEY_INSERT)
+
+/** Mask for dkey conditionals passed to to the update */
+#define VOS_COND_DKEY_UPDATE_MASK					\
+	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_DKEY_INSERT)
+
+/** Mask for any conditionals passed to to the update */
+#define VOS_COND_UPDATE_MASK					\
+	(VOS_COND_DKEY_UPDATE_MASK | VOS_COND_AKEY_UPDATE_MASK)
+
+D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
+D_CASSERT((VOS_OF_USE_TIMESTAMPS & DAOS_COND_MASK) == 0);
+
+/** vos definitions that match daos_obj_key_query flags */
+enum {
+	/** retrieve the max of dkey, akey, and/or idx of array value */
+	VOS_GET_MAX		= DAOS_GET_MAX,
+	/** retrieve the min of dkey, akey, and/or idx of array value */
+	VOS_GET_MIN		= DAOS_GET_MIN,
+	/** retrieve the dkey */
+	VOS_GET_DKEY		= DAOS_GET_DKEY,
+	/** retrieve the akey */
+	VOS_GET_AKEY		= DAOS_GET_AKEY,
+	/** retrieve the idx of array value */
+	VOS_GET_RECX		= DAOS_GET_RECX,
+	/** Internal flag to indicate timestamps are used */
+	VOS_USE_TIMESTAMPS	= (1 << 5),
+};
+
+D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
+				 VOS_GET_AKEY | VOS_GET_RECX)) == 0);
 
 enum {
 	/** The absence of any flags means iterate all unsorted extents */

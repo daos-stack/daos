@@ -19,12 +19,12 @@ $ dmg pool create --scm-size=xxG --nvme-size=yyT
 This command creates a pool distributed across the DAOS servers with a
 target size on each server with xxGB of SCM and yyTB of NVMe storage.
 The actual space allocated will be a base-2 representation for SCM
-(i.e. 20GB will be interpreted as 20GiB == `20*2^30` bytes) and base-10
+(i.e., 20GB will be interpreted as 20GiB == `20*2^30` bytes) and base-10
 representation for NVMe (i.e. 20GB will be interpreted as `20*10^9`
-bytes) following convention of units for memory and storage capacity.
+bytes) following the convention of units for memory and storage capacity.
 The UUID allocated to the newly created pool is printed to stdout
-(referred as ${puuid}) as well as the rank where the pool service is
-located (referred as ${svcl}).
+(referred to as ${puuid}) as well as the rank where the pool service is
+located (referred to as ${svcl}).
 
 ```bash
 $ dmg pool create --help
@@ -83,42 +83,39 @@ a106d667-5c5d-4d6f-ac3a-89099196c41a	0
 At creation time, a list of pool properties can be specified through the
 API (not supported by the tool yet):
 
--   DAOS_PROP_CO_LABEL is a string that the administrator can
-    associate with a pool. e.g., project A, project B, IO500 test
-    pool
-
--   DAOS_PROP_PO_ACL is the access control list (ACL) associated with
-    the pool
-
--   DAOS_PROP_PO_SPACE_RB is the space to be reserved on each target
-    for rebuild purpose.
-
--   DAOS_PROP_PO_SELF_HEAL defines whether the pool wants
-    automatically-trigger, or manually-triggered self-healing.
-
--   DAOS_PROP_PO_RECLAIM is used to tune the space reclaim strategy
-    based on time interval, batched commits or snapshot creation.
+| **Pool Property**        | **Description** |
+| ------------------------ | --------------- |
+| `DAOS_PROP_PO_LABEL`<img width=80/>| A string that the administrator can associate with a pool.  e.g., project A, project B, IO500 test pool|
+| `DAOS_PROP_PO_ACL`       | Access control list (ACL) associated with the pool|
+| `DAOS_PROP_PO_SPACE_RB`  | Space reserved on each target for rebuild purpose|
+| `DAOS_PROP_PO_SELF_HEAL` | Define whether the pool wants automatically-trigger or manually-triggered self-healing|
+| `DAOS_PROP_PO_RECLAIM`   | Tune space reclaim strategy based on time interval, batched commits or snapshot creation|
 
 While those pool properties are currently stored persistently with pool
 metadata, many of them are still under development. Moreover, the
-ability to modify some of those properties on an existing pool will also
+ability to modify some of those properties on an existing pool will
 be provided in a future release.
 
-## Pool Access Control Lists
+## Access Control Lists
 
-Client user and group access for pools is controlled by 
-[Access Control Lists (ACLs)](/doc/user/acl.md). Most pool-related tasks are
-performed using the DMG administrative tool, which is authenticated by the
-administrative certificate rather than user-specific credentials.
+Client user and group access for pools are controlled by
+[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
+Most pool-related tasks are performed using the DMG administrative tool, which
+is authenticated by the administrative certificate rather than user-specific
+credentials.
 
 Access-controlled client pool accesses include:
+
 * Connecting to the pool.
+
 * Querying the pool.
+
 * Creating containers in the pool.
+
 * Deleting containers in the pool.
 
-This is reflected in the set of supported 
-[pool permissions](/doc/user/acl.md#permissions).
+This is reflected in the set of supported
+[pool permissions](https://daos-stack.github.io/overview/security/#permissions).
 
 A user must be able to connect to the pool in order to access any containers
 inside, regardless of their permissions on those containers.
@@ -131,9 +128,9 @@ To create a pool with a custom ACL:
 $ dmg pool create --scm-size <size> --acl-file <path>
 ```
 
-The ACL file format is detailed in the [User Guide](/doc/user/acl.md#acl-file).
+The ACL file format is detailed in the [here](https://daos-stack.github.io/overview/security/#acl-file).
 
-### Displaying a pool's ACL
+### Displaying a Pool's ACL
 
 To view a pool's ACL:
 
@@ -142,9 +139,9 @@ $ dmg pool get-acl --pool <UUID>
 ```
 
 The output is in the same string format used in the ACL file during creation,
-with one ACE per line.
+with one Access Control Entry (i.e., ACE) per line.
 
-### Modifying a pool's ACL
+### Modifying a Pool's ACL
 
 For all of these commands using an ACL file, the ACL file must be in the format
 noted above for pool creation.
@@ -157,7 +154,7 @@ To replace a pool's ACL with a new ACL:
 $ dmg pool overwrite-acl --pool <UUID> --acl-file <path>
 ```
 
-#### Updating entries in an existing ACL
+#### Adding and Updating ACEs
 
 To add or update multiple entries in an existing pool ACL:
 
@@ -175,7 +172,7 @@ If there is no existing entry for the principal in the ACL, the new entry is
 added to the ACL. If there is already an entry for the principal, that entry
 is replaced with the new one.
 
-#### Removing an entry from the ACL
+#### Removing an ACE
 
 To delete an entry for a given principal in an existing pool ACL:
 
@@ -189,10 +186,7 @@ operation, the principal argument must be formatted as follows:
 
 * Named user: `u:username@`
 * Named group: `g:groupname@`
-* Special principals:
-  * `OWNER@`
-  * `GROUP@`
-  * `EVERYONE@`
+* Special principals: `OWNER@`, `GROUP@`, and `EVERYONE@`
 
 The entry for that principal will be completely removed. This does not always
 mean that the principal will have no access. Rather, their access to the pool
@@ -211,6 +205,7 @@ $ dmg pool query --pool <UUID>
 
 Below is the output for a pool created with SCM space only.
 
+```bash
     pool=47293abe-aa6f-4147-97f6-42a9f796d64a
     Pool 47293abe-aa6f-4147-97f6-42a9f796d64a, ntarget=64, disabled=8
     Pool space info:
@@ -222,6 +217,7 @@ Below is the output for a pool created with SCM space only.
         Total size: 0
         Free: 0, min:0, max:0, mean:0
     Rebuild done, 10 objs, 1026 recs
+```
 
 The total and free sizes are the sum across all the targets whereas
 min/max/mean gives information about individual targets. A min value
@@ -229,6 +225,7 @@ close to 0 means that one target is running out of space.
 
 The example below shows a rebuild in progress and NVMe space allocated.
 
+```bash
     pool=95886b8b-7eb8-454d-845c-fc0ae0ba5671
     Pool 95886b8b-7eb8-454d-845c-fc0ae0ba5671, ntarget=64, disabled=8
     Pool space info:
@@ -240,6 +237,7 @@ The example below shows a rebuild in progress and NVMe space allocated.
         Total size: 56GB
         Free: 28GB, min:470MB, max:512MB, mean:509MB
     Rebuild busy, 75 objs, 9722 recs
+```
 
 Additional status and telemetry data are planned to be exported through
 the management API and tool and will be documented here once available.
@@ -250,7 +248,7 @@ the management API and tool and will be documented here once available.
 
 **To exclude a target from a pool:**
 
-```
+```bash
 $ dmg_old exclude --svc=${svcl} --pool=${puuid} --target=${rank}
 ```
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,8 +141,18 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 			/** Key is not visible at current entry but may be yet
 			 *  visible at prior entry
 			 */
+			if (info->ii_uncommitted < entry->ie_id.id_epoch &&
+			    entry->ie_id.id_epoch > info->ii_create &&
+			    entry->ie_id.id_epoch > info->ii_prior_punch)
+				info->ii_uncommitted = entry->ie_id.id_epoch;
 			continue;
 		}
+
+		/** We we have a committed entry that exceeds uncommitted
+		 *  epoch, clear the uncommitted epoch.
+		 */
+		if (entry->ie_id.id_epoch > info->ii_uncommitted)
+			info->ii_uncommitted = 0;
 
 		D_ASSERT(entry->ie_status == ILOG_COMMITTED);
 
@@ -186,6 +196,7 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 	}
 
 init:
+	info->ii_uncommitted = 0;
 	info->ii_create = 0;
 	info->ii_next_punch = 0;
 	info->ii_empty = true;
@@ -196,6 +207,7 @@ init:
 	if (parent != NULL) {
 		punch = parent->ii_prior_punch;
 		punch_any = parent->ii_prior_any_punch;
+		info->ii_uncommitted = parent->ii_uncommitted;
 	}
 
 	if (rc == 0)
@@ -255,12 +267,13 @@ vos_ilog_update_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr)
 
 int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		     const daos_epoch_range_t *epr,
-		     struct vos_ilog_info *parent, struct vos_ilog_info *info)
+		     struct vos_ilog_info *parent, struct vos_ilog_info *info,
+		     uint32_t cond, struct vos_ts_set *ts_set)
 {
-	daos_epoch_range_t	max_epr = *epr;
-	struct ilog_desc_cbs	cbs;
-	daos_handle_t		loh;
-	int			rc;
+	daos_epoch_range_t	 max_epr = *epr;
+	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 loh;
+	int			 rc;
 
 	if (parent != NULL) {
 		D_ASSERT(parent->ii_prior_any_punch >= parent->ii_prior_punch);
@@ -276,6 +289,12 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 			    DAOS_INTENT_UPDATE, ilog, epr->epr_hi,
 			    0, parent, info);
+	/** For now, if the state isn't settled, just retry with later
+	 *  timestamp.   The state should get settled quickly when there
+	 *  is conditional update and sharing.
+	 */
+	if (cond == VOS_ILOG_COND_UPDATE && info->ii_uncommitted != 0)
+		return -DER_AGAIN;
 	if (rc == -DER_NONEXIST)
 		goto update;
 	if (rc != 0) {
@@ -285,13 +304,19 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	}
 
 	rc = vos_ilog_update_check(info, &max_epr);
-	if (rc == 0)
+	if (rc == 0) {
+		if (cond == VOS_ILOG_COND_INSERT)
+			return -DER_EXIST;
 		return rc;
+	}
 	if (rc != -DER_NONEXIST) {
 		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 update:
+	if (rc == -DER_NONEXIST && cond == VOS_ILOG_COND_UPDATE)
+		return -DER_NONEXIST;
+
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
 	if (rc != 0) {
@@ -313,6 +338,85 @@ update:
 	 * is prior_any_punch.   This field will not be changed by ilog_update
 	 * for the purpose of parsing the child log.
 	 */
+
+	return rc;
+}
+
+int
+vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
+		const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
+		struct vos_ilog_info *info, struct vos_ts_set *ts_set,
+		bool leaf)
+{
+	daos_epoch_range_t	 max_epr = *epr;
+	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 loh;
+	int			 rc;
+
+	if (ts_set == NULL || (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
+		if (leaf)
+			goto punch_log;
+		return 0;
+	}
+
+	/** If we get here, we need to check if the entry exists */
+	D_ASSERT(ts_set->ts_flags & VOS_OF_COND_PUNCH);
+
+	if (parent != NULL) {
+		D_ASSERT(parent->ii_prior_any_punch >= parent->ii_prior_punch);
+
+		if (parent->ii_prior_any_punch > max_epr.epr_lo)
+			max_epr.epr_lo = parent->ii_prior_any_punch;
+	}
+
+	D_DEBUG(DB_TRACE, "Checking existence of incarnation log in range "
+		DF_U64"-"DF_U64"\n", max_epr.epr_lo, max_epr.epr_hi);
+
+	/** Do a fetch first.  The log may already exist */
+	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
+			    DAOS_INTENT_PUNCH, ilog, epr->epr_hi,
+			    0, parent, info);
+	/** For now, if the state isn't settled, just retry with later
+	 *  timestamp.   The state should get settled quickly when there
+	 *  is conditional update and sharing.
+	 */
+	if (info->ii_uncommitted != 0)
+		return -DER_AGAIN;
+	if (rc == -DER_NONEXIST)
+		return -DER_NONEXIST;
+	if (rc != 0) {
+		D_ERROR("Could not update ilog %p at "DF_U64": "DF_RC"\n",
+			ilog, epr->epr_hi, DP_RC(rc));
+		return rc;
+	}
+
+	rc = vos_ilog_update_check(info, &max_epr);
+	if (rc == -DER_NONEXIST)
+		return -DER_NONEXIST;
+	if (rc != 0) {
+		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+	if (!leaf)
+		return 0;
+
+punch_log:
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	if (rc != 0) {
+		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = ilog_update(loh, NULL, epr->epr_hi, true);
+
+	ilog_close(loh);
+
+	if (rc != 0) {
+		D_ERROR("Could not update incarnation log: "DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
 
 	return rc;
 }
@@ -367,4 +471,60 @@ vos_ilog_init(void)
 	}
 
 	return 0;
+}
+
+bool
+vos_ilog_ts_lookup(struct vos_ts_set *ts_set, struct ilog_df *ilog)
+{
+	struct vos_ts_entry	*entry;
+	uint32_t		*idx;
+
+	if (ts_set == NULL)
+		return true;
+
+	idx = ilog_ts_idx_get(ilog);
+
+	return vos_ts_lookup(ts_set, idx, false, &entry);
+}
+
+int
+vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
+		  void *record, daos_size_t rec_size)
+{
+	struct vos_ts_entry	*entry;
+	uint32_t		*idx;
+	uint64_t		 hash;
+
+	if (ts_set == NULL)
+		return 0;
+
+	hash = vos_hash_get(record, rec_size);
+	if (ilog) {
+		idx = ilog_ts_idx_get(ilog);
+		entry = vos_ts_alloc(ts_set, idx, hash);
+		if (entry == NULL)
+			return -DER_NO_PERM;
+	} else {
+		vos_ts_get_negative(ts_set, hash, false);
+	}
+
+	return 0;
+}
+
+void
+vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog)
+{
+	uint32_t		*idx = ilog_ts_idx_get(ilog);
+
+	vos_ts_set_mark_entry(ts_set, idx);
+}
+
+void
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type)
+{
+	uint32_t	*idx;
+
+	idx = ilog_ts_idx_get(ilog);
+
+	return vos_ts_evict(idx, type);
 }

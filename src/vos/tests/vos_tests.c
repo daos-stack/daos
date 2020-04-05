@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,6 +57,7 @@ print_usage()
 	print_message("vos_tests -f|--filter <filter>\n");
 	print_message("vos_tests -e|--exclude <filter>\n");
 	print_message("vos_tests -m|--punch-model-tests\n");
+	print_message("vos_tests -C|--mvcc-tests\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");
 }
@@ -98,6 +99,7 @@ run_all_tests(int keys, bool nest_iterators)
 	failed += run_dtx_tests();
 	failed += run_ilog_tests();
 	failed += run_csum_extent_tests();
+	failed += run_mvcc_tests();
 	return failed;
 }
 
@@ -111,7 +113,7 @@ main(int argc, char **argv)
 	int	ofeats;
 	int	keys;
 	bool	nest_iterators = false;
-	const char *short_options = "apcdglzni:mXA:hf:e:";
+	const char *short_options = "apcdglzni:mXA:hf:e:tC";
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
@@ -124,6 +126,8 @@ main(int argc, char **argv)
 		{"punch_model_tests",	no_argument, 0, 'm'},
 		{"garbage_collector",	no_argument, 0, 'g'},
 		{"ilog_tests",		no_argument, 0, 'l'},
+		{"epoch cache tests",	no_argument, 0, 't'},
+		{"mvcc_tests",		no_argument, 0, 'C'},
 		{"csum_tests",		no_argument, 0, 'z'},
 		{"help",		no_argument, 0, 'h'},
 		{"filter",		required_argument, 0, 'f'},
@@ -230,6 +234,14 @@ main(int argc, char **argv)
 			break;
 		case 'z':
 			nr_failed += run_csum_extent_tests();
+			test_run = true;
+			break;
+		case 't':
+			nr_failed += run_ts_tests();
+			test_run = true;
+			break;
+		case 'C':
+			nr_failed += run_mvcc_tests();
 			test_run = true;
 			break;
 		case 'f':
