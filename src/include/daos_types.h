@@ -201,7 +201,9 @@ typedef enum {
  * index within the rank
  */
 struct d_tgt_list {
+	/** array of ranks */
 	d_rank_t	*tl_ranks;
+	/** array of targets */
 	int32_t		*tl_tgts;
 	/** number of ranks & tgts */
 	uint32_t	tl_nr;
