@@ -23,8 +23,6 @@
 """
 from __future__ import print_function
 
-from apricot import TestWithServers
-from test_utils_pool import TestPool
 from command_utils import CommandFailure
 from control_test_base import ControlTestBase
 
@@ -187,9 +185,10 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=all,pr,hw,small,dmg_storage_set,nvme_faulty,basic
         """
         # Set nvme-faulty command to run without devuuid provided.
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("set")
-        self.sub_command_class.sub_command_class.set_sub_command("nvme-faulty")
+        self.dmg.set_sub_command("storage")
+        self.dmg.sub_command_class.set_sub_command("set")
+        self.dmg.sub_command_class.sub_command_class. \
+            set_sub_command("nvme-faulty")
 
         # Run command, expected to fail.
         try:

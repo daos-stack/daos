@@ -439,7 +439,7 @@ class ExecutableCommand(CommandWithParameters):
                 raise CommandFailure("Error stopping '{}'".format(self))
             self._process = None
 
-    def get_cmd_info(self, method_name, kwargs):
+    def get_cmd_info(self, method_name, **kwargs):
         """Search function acting as a proxy to execute dmg command & get info.
 
         Args:

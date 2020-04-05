@@ -21,15 +21,13 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from avocado.utils import process
 
 from apricot import TestWithServers
-from dmg_utils import DmgCommand
 from command_utils import CommandFailure
 
 
 class ControlTestBase(TestWithServers):
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Defines common methods for control tests.
     :avocado: recursive
     """
@@ -44,7 +42,7 @@ class ControlTestBase(TestWithServers):
         self.dmg = self.get_dmg_command()
         self.dmg.get_params(self)
 
-    def get_dmg_cmd_info(self, method_name, kwargs):
+    def get_dmg_cmd_info(self, method_name, **kwargs):
         """Run the dmg command."""
         # Create dmg command
         try:

@@ -417,7 +417,7 @@ class DmgCommand(CommandWithSubCommand):
                         "/run/dmg/storage/scan/*", "scan")
                 self.summary = FormattedParameter("-m", False)
 
-        class SetSubCommand(CommandWithParameters):
+        class SetSubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage set command."""
 
             def __init__(self):
@@ -429,7 +429,7 @@ class DmgCommand(CommandWithSubCommand):
 
             def get_sub_command_class(self):
                 # pylint: disable=redefined-variable-type
-                """Get the dmg pool sub command object."""
+                """Get the dmg set sub command object."""
                 if self.sub_command.value == "nvme-faulty":
                     self.sub_command_class = self.NvmeFaultySubCommand()
                 else:
