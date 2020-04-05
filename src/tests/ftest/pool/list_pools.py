@@ -64,11 +64,11 @@ class ListPoolsTest(TestWithServers):
         # Create a map of UUID to service replicas for expected and actual and
         # compare.
         actual_map = {}
-        for i in range(len(actual_uuids)):
-            actual_map[actual_uuids[i]] = actual_service_replicas[i]
+        for i, actual_uuid in enumerate(actual_uuids):
+            actual_map[actual_uuid] = actual_service_replicas[i]
         expected_map = {}
-        for i in range(len(expected_uuids)):
-            expected_map[expected_uuids[i]] = expected_service_replicas[i]
+        for i, expected_uuid in enumerate(expected_uuids):
+            expected_map[expected_uuid] = expected_service_replicas[i]
         self.assertEqual(actual_map, expected_map)
 
     def test_list_pools(self):
@@ -120,7 +120,7 @@ class ListPoolsTest(TestWithServers):
         expected_service_replicas = []
         for _ in range(9):
             stdoutput = self.get_dmg_command().pool_create(
-                    scm_size="150MB", target_list=[0, 1, 2, 3]).stdout
+                scm_size="150MB", target_list=[0, 1, 2, 3]).stdout
             uuid, service_replicas = \
                 get_pool_uuid_service_replicas_from_stdout(stdoutput)
             expected_uuids.append(uuid)

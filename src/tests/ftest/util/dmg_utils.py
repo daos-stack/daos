@@ -671,6 +671,20 @@ class DmgCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.principal.value = principal
         return self._get_result()
 
+    def pool_list(self):
+        """List pools.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool delete-acl command fails.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("list")
+        return self._get_result()
+
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     """Get Pool UUID and Service replicas from stdout.
