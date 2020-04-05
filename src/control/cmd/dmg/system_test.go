@@ -51,12 +51,6 @@ func TestSystemCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"system query with bad rank option",
-			"system query --rank 0",
-			"",
-			errors.New("unknown flag `rank'"),
-		},
-		{
 			"system query verbose",
 			"system query --verbose",
 			"ConnectClients SystemQuery-{[]}",
@@ -87,18 +81,6 @@ func TestSystemCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"system stop with bad rank option",
-			"system stop --rank 0",
-			"",
-			errors.New("unknown flag `rank'"),
-		},
-		{
-			"system stop verbose",
-			"system stop --verbose",
-			"",
-			errors.New("unknown flag `verbose'"),
-		},
-		{
 			"system start with no arguments",
 			"system start",
 			"ConnectClients SystemStart-{[]}",
@@ -117,18 +99,6 @@ func TestSystemCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"system start with bad rank option",
-			"system start --rank 0",
-			"",
-			errors.New("unknown flag `rank'"),
-		},
-		{
-			"system start verbose",
-			"system start --verbose",
-			"",
-			errors.New("unknown flag `verbose'"),
-		},
-		{
 			"leader query",
 			"system leader-query",
 			"ConnectClients LeaderQuery-daos_server",
@@ -141,10 +111,16 @@ func TestSystemCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Nonexistent subcommand",
+			"Non-existent subcommand",
 			"system quack",
 			"",
 			fmt.Errorf("Unknown command"),
+		},
+		{
+			"Non-existent option",
+			"system start --rank 0",
+			"",
+			errors.New("unknown flag `rank'"),
 		},
 	})
 }
