@@ -439,6 +439,7 @@ class ExecutableCommand(CommandWithParameters):
                 raise CommandFailure("Error stopping '{}'".format(self))
             self._process = None
 
+    # pylint: disable=no-member
     def get_cmd_info(self, method_name, **kwargs):
         """Search function acting as a proxy to execute dmg command & get info.
 
@@ -459,6 +460,7 @@ class ExecutableCommand(CommandWithParameters):
         info = re.findall(
             self.METHOD_REGEX_LIST[method_name], res.stdout, re.M | re.I | re.X)
         return info
+    # pylint: enable=no-member
 
 
 class CommandWithSubCommand(ExecutableCommand):

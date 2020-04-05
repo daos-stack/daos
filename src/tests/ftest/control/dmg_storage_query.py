@@ -28,6 +28,7 @@ from control_test_base import ControlTestBase
 
 
 class DmgStorageQuery(ControlTestBase):
+    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify dmg storage health query commands and device state commands.
@@ -89,7 +90,7 @@ class DmgStorageQuery(ControlTestBase):
             if "Device" in info:
                 uuid = info[info.index("Device") + 1]
                 device_state_info.append(
-                    self.get_dmg_cmd_info(method_name, uuid))
+                    self.get_dmg_cmd_info(method_name, devuuid=uuid))
 
         # Check that the state of each device is NORMAL
         for dev in device_state_info:
