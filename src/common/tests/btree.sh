@@ -72,14 +72,27 @@ done
 set -x
 set -e
 
+gen_test_conf_string()
+{
+        name=""
+        [ ! -z "$1" ] && name="${name} IDIR=$1"
+        [ ! -z "$2" ] && name="${name} IPL=$2"
+        [ ! -z "$3" ] && name="${name} PMEM=$3"
+        echo $name
+}
+
 run_test()
 {
     printf "\nOptions: IPL='%s' IDIR='%s' PMEM='%s'\n" "$IPL" "$IDIR" "$PMEM"
     if [ -z ${PERF} ]; then
 
+        test_conf=$(gen_test_conf_string ${IDIR} ${IPL} ${PMEM})
+
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
-        "${VCMD[@]}" "$BTR" --start-test "B+tree functional test" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "BTR030: functional test ${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -u "$RECORDS"                               \
@@ -97,19 +110,25 @@ run_test()
         -D
 
         echo "B+tree batch operations test..."
-        "${VCMD[@]}" "$BTR" --start-test "B+tree batch operations test" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "BTR031: batch operations test ${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -b "$BAT_NUM"                               \
         -D
 
         echo "B+tree drain test..."
-        "${VCMD[@]}" "$BTR" --start-test "B+tree drain test" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "BTR032: drain test ${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
     else
         echo "B+tree performance test..."
-        "${VCMD[@]}" "$BTR" --start-test "B+tree performance test" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "BTR033: performance test ${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \
         -D
     fi
