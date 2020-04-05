@@ -33,11 +33,13 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -242,7 +244,10 @@ func TestStorageScan(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if diff := cmp.Diff(tc.expResp, *resp); diff != "" {
+				cmpOpts := []cmp.Option{
+					cmpopts.IgnoreFields(ctl.NvmeController{}, "Healthstats", "Serial"),
+				}
+				if diff := cmp.Diff(tc.expResp, *resp, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 				}
 			}
@@ -732,7 +737,6 @@ func TestStorageFormat(t *testing.T) {
 				t.Fatal(err.Error() + name)
 			}
 
-			mock := &mockStorageFormatServer{}
 			mockWg := new(sync.WaitGroup)
 			mockWg.Add(1)
 
@@ -753,10 +757,12 @@ func TestStorageFormat(t *testing.T) {
 				}
 			}
 
+			var resp *StorageFormatResp
+			var fmtErr error
 			go func() {
 				// should signal wait group in srv to unlock if
 				// successful once format completed
-				_ = cs.StorageFormat(&StorageFormatReq{Reformat: tc.reformat}, mock)
+				resp, fmtErr = cs.StorageFormat(context.TODO(), &StorageFormatReq{Reformat: tc.reformat})
 				mockWg.Done()
 			}()
 
@@ -767,7 +773,12 @@ func TestStorageFormat(t *testing.T) {
 			}
 			mockWg.Wait() // wait for test goroutines to complete
 
-			if diff := cmp.Diff(tc.expResults, mock.Results); diff != "" {
+			if fmtErr != nil {
+				t.Fatal(fmtErr)
+			}
+
+			results := []*StorageFormatResp{resp}
+			if diff := cmp.Diff(tc.expResults, results); diff != "" {
 				t.Fatalf("unexpected results: (-want, +got):\n%s\n", diff)
 			}
 		})

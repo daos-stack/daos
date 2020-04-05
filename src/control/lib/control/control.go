@@ -20,17 +20,23 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-// Package build provides an importable repository of variables set at build time.
-package build
 
-var (
-	// ConfigDir should be set via linker flag using the value of CONF_DIR.
-	ConfigDir string = "./"
-	// DaosVersion should be set via linker flag using the value of DAOS_VERSION.
-	DaosVersion string = "unset"
+package control
 
-	// DefaultControlPort defines the default control plane listener port.
-	DefaultControlPort = 10001
-	// DefaultSystemName defines the default DAOS system name.
-	DefaultSystemName = "daos_server"
+import (
+	"io/ioutil"
+
+	"github.com/daos-stack/daos/src/control/logging"
+)
+
+// defaultLogger is used to provide a valid logger when none has
+// been supplied.
+var defaultLogger debugLogger = logging.NewCombinedLogger("", ioutil.Discard)
+
+type (
+	// debugLogger defines a debug-only logging interface.
+	debugLogger interface {
+		Debug(string)
+		Debugf(string, ...interface{})
+	}
 )

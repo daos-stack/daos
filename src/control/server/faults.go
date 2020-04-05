@@ -77,6 +77,11 @@ var (
 		fmt.Sprintf("%s harness not started", DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
+	FaultDataPlaneNotStarted = serverFault(
+		code.ServerDataPlaneNotStarted,
+		fmt.Sprintf("%s instance not started or not responding on dRPC", DataPlaneName),
+		"retry the operation or check server logs for more details",
+	)
 )
 
 func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {

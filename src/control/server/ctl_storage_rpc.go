@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -100,6 +100,7 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 	if resp.RebootRequired {
 		info = scm.MsgScmRebootRequired
 	}
+	pbResp.Rebootrequired = resp.RebootRequired
 
 	pbResp.Namespaces = make(proto.ScmNamespaces, 0, len(resp.Namespaces))
 	if err := (*proto.ScmNamespaces)(&pbResp.Namespaces).FromNative(resp.Namespaces); err != nil {
@@ -356,7 +357,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 //
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
-func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb.MgmtCtl_StorageFormatServer) error {
+func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq) (*ctlpb.StorageFormatResp, error) {
 	resp := new(ctlpb.StorageFormatResp)
 	resp.Mrets = proto.ScmMountResults{}
 	resp.Crets = proto.NvmeControllerResults{}
@@ -367,19 +368,15 @@ func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb
 	// here for now should help to cut down on shenanigans which might result
 	// in data loss.
 	if c.harness.IsStarted() {
-		return errors.New("cannot format storage with running I/O server instances")
+		return nil, errors.New("cannot format storage with running I/O server instances")
 	}
 
 	// temporary scaffolding
 	for _, i := range c.harness.Instances() {
 		if err := c.doFormat(i, req.Reformat, resp); err != nil {
-			return errors.WithMessage(err, "formatting storage")
+			return nil, errors.WithMessage(err, "formatting storage")
 		}
 	}
 
-	if err := stream.Send(resp); err != nil {
-		return errors.WithMessagef(err, "sending response (%+v)", resp)
-	}
-
-	return nil
+	return resp, nil
 }
