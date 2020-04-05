@@ -102,7 +102,7 @@ struct test_arg {
 
 /* variables for test group */
 static char		**test_group_args;
-int			test_group_start;
+static int		test_group_start;
 int			test_group_stop;
 
 static int
