@@ -73,6 +73,9 @@ class DmgCommand(CommandWithSubCommand):
                 (?:\n|\r\n)\s+Volatile\s+Memory\s+Backup:\s+([A-Z]+)""",
             "storage_query_device_state": r"""^([0-9a-zA-Z_-]+):\d+:
                 (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
+                (?:\n|\r\n)\s+State:\s+([a-zA-Z]+)""",
+            "storage_set_faulty": r"""^([0-9a-zA-Z_-]+):\d+:
+                (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
                 (?:\n|\r\n)\s+State:\s+([a-zA-Z]+)"""
         }
 
@@ -423,7 +426,27 @@ class DmgCommand(CommandWithSubCommand):
                     DmgCommand.StorageSubCommand.SetSubCommand,
                     self).__init__(
                         "/run/dmg/storage/set/*", "set")
-                self.nvme_faulty = FormattedParameter("nvme-faulty", False)
+
+            def get_sub_command_class(self):
+                # pylint: disable=redefined-variable-type
+                """Get the dmg pool sub command object."""
+                if self.sub_command.value == "nvme-faulty":
+                    self.sub_command_class = self.NvmeFaultySubCommand()
+                else:
+                    self.sub_command_class = None
+
+            class NvmeFaultySubCommand(CommandWithParameters):
+                """Defines a dmg storage set nvme-faulty object."""
+
+                def __init__(self):
+                    """Create a dmg storage set nvme-faulty object."""
+                    super(
+                        DmgCommand.StorageSubCommand.SetSubCommand.
+                        NvmeFaultySubCommand,
+                        self).__init__(
+                            "/run/dmg/storage/query/device-state/*",
+                            "nvme-faulty")
+                    self.devuuid = FormattedParameter("-u {}", None)
 
     class SystemSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg system sub command."""
@@ -572,6 +595,20 @@ class DmgCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.hugepages.value = hugepages
         self.sub_command_class.sub_command_class.reset.value = reset
         self.sub_command_class.sub_command_class.force.value = force
+        return self._get_result()
+
+    def storage_set_faulty(self, devuuid):
+        """Get the result of the 'dmg storage set nvme-faulty' command.
+
+        Args:
+            devuuid (str, optional): Device/Blobstore UUID to query.
+                Defaults to None.
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("set")
+        self.sub_command_class.sub_command_class.set_sub_command("nvme-faulty")
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.devuuid.value = devuuid
         return self._get_result()
 
     def storage_query_smd(self, devices=True, pools=True):

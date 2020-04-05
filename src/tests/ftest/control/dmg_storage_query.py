@@ -79,6 +79,25 @@ class DmgStorageQuery(ControlTestBase):
         else:
             self.fail("SMD info not found: {}".format(smd_info))
 
+    def check_dev_state_out(self, smd_info, method_name, state):
+        """Check device state output.
+
+        Args:
+            state (str): State expected. e.i. NORMAL | FAULTY
+        """
+        # Parse stdout into a dict check that devices information is displayed.
+        device_state_info = []
+        for info in smd_info:
+            if "Device" in info:
+                uuid = info[info.index("Device") + 1]
+                device_state_info.append(
+                    self.get_dmg_cmd_info(method_name, uuid))
+
+        # Check that the state of each device is NORMAL
+        for dev in device_state_info:
+            if dev[2] != state:
+                self.fail("Found a device in {} state.".format(dev[2]))
+
     def test_dmg_storage_query_smd_devices(self):
         """
         JIRA ID: DAOS-3925
@@ -90,6 +109,11 @@ class DmgStorageQuery(ControlTestBase):
         # Get the storage smd infromation, parse and check devices info
         smd_info = self.get_dmg_cmd_info("storage_query_smd", pools=False)
         self.check_smd_out(smd_info, "devices", "pools")
+
+        # Check if the number of devices match the config
+        if self.check_len("dbev_list", len(smd_info)):
+            self.fail("Number of devices does not match config: {}".format(
+                len(smd_info)))
 
     def test_dmg_storage_query_smd_pools(self):
         """
@@ -145,17 +169,30 @@ class DmgStorageQuery(ControlTestBase):
         """
         smd_info = self.get_dmg_cmd_info("storage_query_smd", devices=False)
 
-        # Parse stdout into a dict check that devices information is displayed.
-        device_state_info = []
-        for info in smd_info:
-            if "Device" in info:
-                uuid = info[info.index("Device") + 1]
-                device_state_info.append(
-                    self.get_dmg_cmd_info("storage_query_device_state", uuid))
+        # Check that device is in a normal state
+        self.check_dev_state_out(
+            smd_info, "storage_query_device_state", "NORMAL")
 
-        # Check if the number of devices match the config
-        if self.check_len("dbev_list", len(device_state_info)):
-            # Check that the state of each device is NORMAL
-            for dev in device_state_info:
-                if dev[2] == "NORMAL":
-                    self.fail("Found a device in bad state: {}".format(dev[2]))
+        # Set device to faulty state and check that it's in FAULTY state
+        self.check_dev_state_out(smd_info, "storage_set_faulty", "FAULTY")
+        self.check_dev_state_out(
+            smd_info, "storage_query_device_state", "FAULTY")
+
+    def test_dmg_storage_set_nvme_fault(self):
+        """
+        JIRA ID: DAOS-3925
+
+        Test Description: Test 'dmg storage query nvme-faulty' command.
+
+        :avocado: tags=all,pr,hw,small,dmg_storage_set,nvme_faulty,basic
+        """
+        # Set nvme-faulty command to run without devuuid provided.
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("set")
+        self.sub_command_class.sub_command_class.set_sub_command("nvme-faulty")
+
+        # Run command, expected to fail.
+        try:
+            self.dmg.run()
+        except CommandFailure as error:
+            self.log.info("Command failed as expected:%s", error)
