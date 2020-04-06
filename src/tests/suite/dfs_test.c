@@ -562,7 +562,7 @@ dfs_test_syml(void **state)
 	char			*val = "SYMLINK VAL 1";
 	char			tmp_buf[64];
 	struct stat		stbuf;
-	daos_size_t		size;
+	daos_size_t		size = 0;
 	int			rc, op_rc;
 
 	op_rc = dfs_open(dfs_mt, NULL, filename, S_IFLNK | S_IWUSR | S_IRUSR,
