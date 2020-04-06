@@ -78,7 +78,7 @@ gen_test_conf_string()
         [ ! -z "$1" ] && name="${name} IDIR=$1"
         [ ! -z "$2" ] && name="${name} IPL=$2"
         [ ! -z "$3" ] && name="${name} PMEM=$3"
-        echo $name
+        echo "$name"
 }
 
 run_test()
@@ -86,7 +86,7 @@ run_test()
     printf "\nOptions: IPL='%s' IDIR='%s' PMEM='%s'\n" "$IPL" "$IDIR" "$PMEM"
     if [ -z ${PERF} ]; then
 
-        test_conf=$(gen_test_conf_string ${IDIR} ${IPL} ${PMEM})
+        test_conf=$(gen_test_conf_string "${IDIR}" "${IPL}" "${PMEM}")
 
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \

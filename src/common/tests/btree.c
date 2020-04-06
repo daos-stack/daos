@@ -901,6 +901,7 @@ static struct option btr_ops[] = {
 
 static int
 use_pmem() {
+
 	int rc;
 	D_PRINT("Using pmem\n");
 	rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
