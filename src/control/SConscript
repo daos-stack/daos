@@ -141,7 +141,7 @@ def scons():
     cartpath = Dir('#/src/cart/src/include').srcnode().abspath
 
     denv.AppendENVPath("CGO_LDFLAGS",
-                       denv.subst("-L$BUILD_DIR/src/cart/src/gurt"))
+                       denv.subst("-L$BUILD_DIR/src/cart/src/gurt"), sep=" ")
     denv.AppendENVPath("CGO_CFLAGS", "-I%s" % cartpath, sep=" ")
 
     agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
@@ -159,9 +159,8 @@ def scons():
                             "-L$BUILD_DIR/src/cart/src/gurt "
                             "-L$BUILD_DIR/src/cart/src/cart "
                             "-L$PREFIX/lib64 -L$SPDK_PREFIX/lib "
-                            "-L$HWLOC_PREFIX/lib -L$OFI_PREFIX/lib "
-                            "-L$ISAL_PREFIX/lib $_RPATH")
-    # Explicitly link RTE & SPDK libs for CGO access.
+                            "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH")
+    # Explicitly link RTE & SPDK libs for CGO access (need for clang build).
     senv.AppendENVPath("CGO_LDFLAGS", cgolibdirs + \
                        " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev" + \
                        " -lspdk_copy -lrte_mempool  -lrte_mempool_ring" + \
@@ -175,7 +174,6 @@ def scons():
 
     senv.AppendENVPath("CGO_CFLAGS",
                        senv.subst("-I$SPDK_PREFIX/include "
-                                  "-I$HWLOC_PREFIX/include "
                                   "-I$OFI_PREFIX/include"),
                        sep=" ")
 
