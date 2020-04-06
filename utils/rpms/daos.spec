@@ -4,12 +4,12 @@
 
 %global mercury_version 2.0.0a1-0.7.git.41caa14%{?dist}
 
-# Unlimited maximum version
-%global spdk_max_version 1000
+%global spdk_max_version 21
+%global spdk_min_version 19
 
 Name:          daos
 Version:       1.1.0
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -34,8 +34,8 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
-BuildRequires: spdk-devel <= %{spdk_max_version}, spdk-tools <= %{spdk_max_version}
-BuildRequires: fio < 3.4
+BuildRequires: spdk-devel > %{spdk_min_version}, spdk-devel < %{spdk_max_version}
+BuildRequires: spdk-tools > %{spdk_min_version}, spdk-tools < %{spdk_max_version}
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 %else
@@ -82,9 +82,6 @@ BuildRequires: libcurl4
 # have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
 BuildRequires: libpsm_infinipath1
 %endif # 0%{?is_opensuse}
-# have choice for libpmemblk.so.1(LIBPMEMBLK_1.0)(64bit) needed by fio: libpmemblk libpmemblk1
-# have choice for libpmemblk.so.1()(64bit) needed by fio: libpmemblk libpmemblk1
-BuildRequires: libpmemblk1
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
 %if (0%{?suse_version} >= 1500)
@@ -92,8 +89,8 @@ Requires: libpmem1, libpmemobj1
 %endif
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: spdk <= %{spdk_max_version}
 Requires: fio < 3.4
+Requires: spdk > %{spdk_min_version}, spdk < %{spdk_max_version}
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
@@ -115,7 +112,7 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: %{name}-client = %{version}-%{release}
-Requires: spdk-tools <= %{spdk_max_version}
+Requires: spdk-tools > %{spdk_min_version}, spdk-tools < %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
@@ -349,6 +346,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Mon Mar 30 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-9
+- Set version of spdk to < v21, > v19
+
 * Fri Mar 27 2020 David Quigley <david.quigley@intel.com> - 1.1.0-8
 - add daos and dmg man pages to the daos-client files list
 
