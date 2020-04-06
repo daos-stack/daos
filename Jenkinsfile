@@ -57,10 +57,12 @@ def quickbuild = node() { commitPragma(pragma: 'Quick-build').contains('true') }
 if (quickbuild) {
     /* TODO: this is a big fat hack
      * what we should be doing here is installing all of the
-     * $(repoquery --requires daos-devel) dependencies
-     * like we do for QUICKBUILD_DEPS
+     * $(repoquery --requires daos{,-{server,tests}}) dependencies
+     * similar to how we do for QUICKBUILD_DEPS
+     * or just start testing from RPMs instead of continuing to hack
+     * around that :-)
      */
-    functional_rpms += " spdk-tools"
+    functional_rpms += " spdk-tools fio"
 }
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
