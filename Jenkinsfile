@@ -53,7 +53,7 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
-def quickbuild = commitPragma(pragma: 'Quick-build').contains('true')
+def quickbuild = node() { commitPragma(pragma: 'Quick-build').contains('true') }
 if (quickbuild) {
     /* TODO: this is a big fat hack
      * what we should be doing here is installing all of the
