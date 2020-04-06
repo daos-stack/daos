@@ -60,7 +60,7 @@ if (quickbuild) {
      * $(repoquery --requires daos-devel) dependencies
      * like we do for QUICKBUILD_DEPS
      */
-    functional_rpms += "spdk-tools"
+    functional_rpms += " spdk-tools"
 }
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
@@ -192,7 +192,6 @@ pipeline {
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
-        QUICKBUILD = commitPragma(pragma: 'Quick-build').contains('true')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         QUICKBUILD_DEPS = sh(script: "rpmspec -q --srpm --requires utils/rpms/daos.spec 2>/dev/null",
@@ -443,7 +442,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=' + env.QUICKBUILD +
+                                                '--build-arg QUICKBUILD=' + quickbuild +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
                                                 '" --build-arg REPOS="' + component_repos + '"'
                         }
@@ -533,7 +532,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -594,7 +593,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -656,7 +655,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -717,7 +716,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -778,7 +777,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -840,7 +839,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
