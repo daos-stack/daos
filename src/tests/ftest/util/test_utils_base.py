@@ -88,7 +88,6 @@ class TestDaosApiBase(ObjectWithParameters):
         super(TestDaosApiBase, self).__init__(namespace)
         self.cb_handler = cb_handler
         self.debug = BasicParameter(None, False)
-        self.log = getLogger(__name__)
 
     def _log_method(self, name, kwargs):
         """Log the method call with its arguments.

@@ -119,7 +119,9 @@ class IorTestBase(TestWithServers):
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, True)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
+                           log_file=get_log_file(self.client_log),
+                           dfuse_env=True)
         self.dfuse.get_params(self)
 
         # update dfuse params
