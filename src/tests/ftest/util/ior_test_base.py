@@ -52,7 +52,7 @@ class IorTestBase(TestWithServers):
         self.processes = None
         self.hostfile_clients_slots = None
         self.dfuse = None
-        self.container = None
+        self._container = None
         self.co_prop = None
         self.lock = None
         self.daos_cmd = None
@@ -116,15 +116,8 @@ class IorTestBase(TestWithServers):
             self.fail(
                 "Error obtaining the container uuid from: {}".format(
                     result.stdout))
+        self._container = cont_uuid[0]
         return cont_uuid[0]
-
-    def create_cont(self):
-
-        """Create a TestContainer object to be used to create container."""
-        # Enable container using TestContainer object,
-        # Get Container params
-
-        self.container = self._create_cont()
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -136,7 +129,7 @@ class IorTestBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.container)
+        self.dfuse.set_dfuse_cont_param(self._create_cont)
 
         try:
             # start dfuse
@@ -194,7 +187,7 @@ class IorTestBase(TestWithServers):
         self.create_cont()
          # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
-                                     self.container.uuid)
+                                     self._container)
 
     def get_job_manager_command(self):
         """Get the MPI job manager command for IOR.
