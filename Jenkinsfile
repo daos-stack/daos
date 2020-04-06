@@ -53,6 +53,15 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
+def quickbuild = commitPragma(pragma: 'Quick-build').contains('true')
+if (quickbuild) {
+    /* TODO: this is a big fat hack
+     * what we should be doing here is installing all of the
+     * $(repoquery --requires daos-devel) dependencies
+     * like we do for QUICKBUILD_DEPS
+     */
+    functional_rpms += "spdk-tools"
+}
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0

@@ -342,7 +342,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 
 %changelog
 * Sun Apr 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-10
-- Clean up spdk and fio dependencies
+- Clean up spdk dependencies
 
 * Mon Mar 30 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-9
 - Set version of spdk to < v21, > v19
