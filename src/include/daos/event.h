@@ -54,7 +54,6 @@ enum daos_ev_flags {
 struct tse_task_t;
 
 typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
-extern bool dfs_no_cond_op;
 
 /**
  * Finish event queue library.
