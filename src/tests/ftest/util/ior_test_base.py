@@ -92,14 +92,34 @@ class IorTestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
+    def _create_cont(self):
+        """Create a container.
+
+        Returns:
+            str: UUID of the created container
+
+        """
+        cont_type = self.params.get("type", "/run/container/*")
+        result = self.daos_cmd.container_create(
+            pool=self.pool.uuid, svc=self.pool.svc_ranks,
+            cont_type=cont_type)
+
+        # Extract the container UUID from the daos container create output
+        cont_uuid = re.findall(
+            "created\s+container\s+([0-9a-f-]+)", result.stdout)
+        if not cont_uuid:
+            self.fail(
+                "Error obtaining the container uuid from: {}".format(
+                    result.stdout))
+        return cont_uuid[0]
+
     def create_cont(self):
+
         """Create a TestContainer object to be used to create container."""
         # Enable container using TestContainer object,
         # Get Container params
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
-        # create container
-        self.container.create(con_in=self.co_prop)
+
+        self.container = self._create_cont()
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
