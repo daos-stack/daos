@@ -26,7 +26,6 @@ from __future__ import print_function
 import os
 import re
 
-from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers, get_log_file
 from test_utils_pool import TestPool
 from mpio_utils import MpioUtils
@@ -34,8 +33,6 @@ from mdtest_utils import MdtestCommand
 from command_utils import Mpirun, Orterun, CommandFailure
 from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
-import write_host_file
-
 
 class MdtestBase(TestWithServers):
     """Base mdtest class.

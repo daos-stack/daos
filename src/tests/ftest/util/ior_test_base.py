@@ -52,7 +52,6 @@ class IorTestBase(TestWithServers):
         self.processes = None
         self.hostfile_clients_slots = None
         self.dfuse = None
-        self._container = None
         self.co_prop = None
         self.lock = None
         self.daos_cmd = None
@@ -65,7 +64,7 @@ class IorTestBase(TestWithServers):
         super(IorTestBase, self).setUp()
 
         self.daos_cmd = DaosCommand(self.bin)
-        
+
         # Get the parameters for IOR
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
@@ -116,7 +115,6 @@ class IorTestBase(TestWithServers):
             self.fail(
                 "Error obtaining the container uuid from: {}".format(
                     result.stdout))
-        self._container = cont_uuid[0]
         return cont_uuid[0]
 
     def _start_dfuse(self):
@@ -129,7 +127,7 @@ class IorTestBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self._create_cont)
+        self.dfuse.set_dfuse_cont_param(self._create_cont())
 
         try:
             # start dfuse
@@ -184,10 +182,9 @@ class IorTestBase(TestWithServers):
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
         self.pool.connect()
-        self.create_cont()
          # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
-                                     self._container)
+                                     self._create_cont())
 
     def get_job_manager_command(self):
         """Get the MPI job manager command for IOR.
