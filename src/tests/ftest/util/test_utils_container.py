@@ -338,7 +338,7 @@ class TestContainer(TestDaosApiBase):
             kwargs = {
                 "pool": self.pool.uuid,
                 "sys_name": self.pool.name.value,
-                "svc": ",".join(self.pool.svc_ranks),
+                "svc": ",".join(str(rank) for rank in self.pool.svc_ranks),
                 "cont": uuid,
                 "path": self.path.value,
                 "cont_type": self.type.value,
@@ -347,7 +347,7 @@ class TestContainer(TestDaosApiBase):
                 "properties": self.properties.value,
             }
             self._log_method("daos.container_create", kwargs)
-            uuid = self.daos.get_output("container_create", **kwargs)
+            uuid = self.daos.get_output("container_create", **kwargs)[0]
 
             # Populte the empty DaosContainer object with the properties of the
             # container created with daos container create.
