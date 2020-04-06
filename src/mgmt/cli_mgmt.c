@@ -269,6 +269,18 @@ struct dc_mgmt_psr {
 	char		*uri;
 };
 
+#define copy_str(dest, src)				\
+({							\
+	int	__rc = 1;				\
+	size_t	__size = strnlen(src, sizeof(dest));	\
+							\
+	if (__size != sizeof(dest)) {			\
+		memcpy(dest, src, __size + 1);		\
+		__rc = 0;				\
+	}						\
+	__rc;						\
+})
+
 /*
  * Get the attach info (i.e., the CaRT PSRs) for name. npsrs outputs the number
  * of elements in psrs. psrs outputs the array of struct dc_mgmt_psr objects.
@@ -288,7 +300,6 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	struct dc_mgmt_psr      *p;
 	int			 i;
 	int			 rc;
-	int			 size;
 
 	D_DEBUG(DB_MGMT, "getting attach info for %s\n", name);
 
@@ -370,26 +381,20 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	*psrs = p;
 
 	if (sy_info) {
-		size = sizeof(sy_info->provider);
-		if (strnlen(resp->provider, size) == size) {
+		if (copy_str(sy_info->provider, resp->provider)) {
 			D_ERROR("GetAttachInfo provider string too long\n");
 			D_GOTO(out_resp, rc = -DER_INVAL);
 		}
-		strncpy(sy_info->provider, resp->provider, size);
 
-		size = sizeof(sy_info->interface);
-		if (strnlen(resp->interface, size) == size) {
+		if (copy_str(sy_info->interface, resp->interface)) {
 			D_ERROR("GetAttachInfo interface string too long\n");
 			D_GOTO(out_resp, rc = -DER_INVAL);
 		}
-		strncpy(sy_info->interface, resp->interface, size);
 
-		size = sizeof(sy_info->domain);
-		if (strnlen(resp->domain, size) == size) {
+		if (copy_str(sy_info->domain, resp->domain)) {
 			D_ERROR("GetAttachInfo domain string too long\n");
 			D_GOTO(out_resp, rc = -DER_INVAL);
 		}
-		strncpy(sy_info->domain, resp->domain, size);
 
 		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
 		sy_info->crt_timeout = resp->crttimeout;
