@@ -343,7 +343,6 @@ def scons(): # pylint: disable=too-many-locals
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
-    prereqs.has_source(env, 'fio')
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
