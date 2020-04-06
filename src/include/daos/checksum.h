@@ -120,7 +120,6 @@ struct daos_csummer {
 	void		*dcs_ctx;
 	/** Points to the buffer where the  calculated csum is to be written */
 	uint8_t		*dcs_csum_buf;
-	/* [todo-ryon]: align struct */
 	bool		 dcs_srv_verify;
 };
 
