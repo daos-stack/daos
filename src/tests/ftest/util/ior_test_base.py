@@ -103,7 +103,7 @@ class IorTestBase(TestWithServers):
             str: UUID of the created container
 
         """
-        cont_type = self.params.get("type", "/run/container/*")
+        cont_type = 'POSIX'
         result = self.daos_cmd.container_create(
             pool=self.pool.uuid, svc=self.pool.svc_ranks,
             cont_type=cont_type)
