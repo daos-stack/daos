@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
+import re
 import threading
 import time
 
@@ -33,6 +34,7 @@ from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
+from daos_utils import DaosCommand
 from dfuse_utils import Dfuse
 import write_host_file
 
@@ -53,6 +55,7 @@ class IorTestBase(TestWithServers):
         self.container = None
         self.co_prop = None
         self.lock = None
+        self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -61,6 +64,8 @@ class IorTestBase(TestWithServers):
         # Start the servers and agents
         super(IorTestBase, self).setUp()
 
+        self.daos_cmd = DaosCommand(self.bin)
+        
         # Get the parameters for IOR
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
