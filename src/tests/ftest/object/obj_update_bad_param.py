@@ -44,7 +44,8 @@ class ObjUpdateBadParam(TestWithServers):
             # create a container
             self.container = DaosContainer(self.context)
             self.container.create(self.pool.pool.handle)
-            self.plog.info("Container %s created.", self.container.get_uuid_str())
+            self.plog.info("Container %s created.",
+			                        self.container.get_uuid_str())
             # now open it
             self.container.open()
         except DaosApiError as excep:
