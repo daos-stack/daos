@@ -236,7 +236,7 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, &th);
+	rc = dc_tx_local_open(coh, epoch, DTF_RDONLY, &th);
 	if (rc)
 		return rc;
 
@@ -264,7 +264,7 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, &th);
+	rc = dc_tx_local_open(coh, epoch, DTF_RDONLY, &th);
 	if (rc)
 		return rc;
 
@@ -294,7 +294,7 @@ dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epr->epr_hi, &th);
+	rc = dc_tx_local_open(coh, epr->epr_hi, DTF_RDONLY, &th);
 	if (rc)
 		return rc;
 

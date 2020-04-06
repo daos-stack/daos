@@ -127,6 +127,12 @@ enum {
 	DAOS_COND_AKEY_FETCH	= (1 << 6),
 	/** Mask for convenience */
 	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
+
+	/**
+	 * Not copy application buffer when cache modification on client
+	 * for DTX.
+	 */
+	DAOS_ZERO_COPY		= (1ULL << 63)
 };
 
 /**

@@ -653,7 +653,7 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 	int		rc = 0;
 	int		i;
 
-	rc = dc_tx_local_open(obj->cob_coh, epoch, &th);
+	rc = dc_tx_local_open(obj->cob_coh, epoch, DTF_RDONLY, &th);
 	if (rc != 0)
 		return rc;
 

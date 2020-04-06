@@ -22,7 +22,7 @@
  */
 #define D_LOGFAC	DD_FAC(client)
 
-#include <daos/container.h>
+#include <daos/object.h>
 #include <daos/task.h>
 #include "client_internal.h"
 #include "task_internal.h"
@@ -119,6 +119,12 @@ daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
 	args->th	= th;
 
 	return dc_task_schedule(task, true);
+}
+
+int
+daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch)
+{
+	return dc_tx_hdl2epoch(th, epoch);
 }
 
 int

@@ -442,7 +442,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	pool = obj_shard_ptr2pool(shard);
 	if (pool == NULL)
-		D_GOTO(out_obj, rc);
+		D_GOTO(out_obj, rc = -DER_NO_HDL);
 
 	tgt_ep.ep_grp = pool->dp_sys->sy_group;
 	tgt_ep.ep_tag = shard->do_target_idx;
@@ -892,7 +892,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 
 	pool = obj_shard_ptr2pool(obj_shard);
 	if (pool == NULL)
-		D_GOTO(out_put, rc);
+		D_GOTO(out_put, rc = -DER_NO_HDL);
 
 	tgt_ep.ep_grp = pool->dp_sys->sy_group;
 	tgt_ep.ep_tag = obj_shard->do_target_idx;
