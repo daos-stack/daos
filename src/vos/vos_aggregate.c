@@ -73,8 +73,6 @@ struct agg_phy_ent {
 	uint32_t		pe_ref;
 	/* Need to truncate on window flush */
 	bool			pe_trunc_head;
-	/* Do not delete the evt entry, csum is invalid */
-	bool			pe_retain;
 };
 
 /* EV tree logical entry */
@@ -96,8 +94,6 @@ struct agg_lgc_seg {
 	struct agg_phy_ent	*ls_phy_ent;
 	/* Description of the new physical entry to be inserted */
 	struct evt_entry_in	 ls_ent_in;
-	/* indicator of csum error on verify */
-	bool			 ls_has_csum_err;
 };
 
 /* I/O context used on EV tree merge window flush */
@@ -916,10 +912,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		}
 		i++;
 
-		if (phy_ent->pe_retain) {
-			rc = -DER_CSUM;
-			goto out;
-		}
 		D_ASSERT(ext1_covers_ext2(&ent_in->ei_rect.rc_ex, &ext));
 		D_ASSERT(ext1_covers_ext2(&phy_ent->pe_rect.rc_ex, &ext));
 
@@ -1016,16 +1008,12 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		/* Verify prior data, calculate csums for output range. */
 		rc = csum_recalc(io, &bsgl, &sgl, ent_in, io->ic_csum_recalcs,
 				 seg_count, seg_size);
-		if (rc == -DER_CSUM) {
-			lgc_seg->ls_has_csum_err = true;
-			for (i = 0; i < seg_count; i++) {
-				io->ic_csum_recalcs[i].cr_phy_ent->pe_retain =
-									true;
-			}
-			D_ERROR("CSUM verify error: "DF_RC"\n", DP_RC(rc));
+		if (rc) {
+			if (rc == -DER_CSUM)
+				D_ERROR("CSUM verify error: "DF_RC"\n",
+					DP_RC(rc));
 			goto out;
-		} else if (rc)
-			goto out;
+		}
 	}
 
 	/* For csum support, this has moved reserve to after read, in case
@@ -1087,7 +1075,6 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			lgc_seg->ls_idx_start, lgc_seg->ls_idx_end,
 			DP_RECT(&lgc_seg->ls_ent_in.ei_rect));
 
-		lgc_seg->ls_has_csum_err = false;
 		rc = fill_one_segment(ih, mw, lgc_seg, acts);
 		if (rc) {
 			D_ERROR("Fill seg %u-%u %p "DF_RECT" error: "DF_RC"\n",
@@ -1095,11 +1082,7 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 				lgc_seg->ls_phy_ent,
 				DP_RECT(&lgc_seg->ls_ent_in.ei_rect),
 					DP_RC(rc));
-		/* continue if -DER_CSUM */
-			if (rc == -DER_CSUM)
-				rc = 0;
-			else
-				break;
+			break;
 		}
 	}
 
@@ -1150,6 +1133,21 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 	mw->mw_lgc_cnt = 0;
 
+	/* Adjust payload address of truncated physical entries */
+	for (i = 0; i < io->ic_seg_cnt; i++) {
+		lgc_seg = &io->ic_segs[i];
+		ent_in = &io->ic_segs[i].ls_ent_in;
+		phy_ent = lgc_seg->ls_phy_ent;
+
+		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr)) {
+			phy_ent->pe_addr = ent_in->ei_addr;
+			/* Checksum from ent_in is assigned to truncated
+			 * physical entry, in additon to re-assigning address.
+			 */
+			phy_ent->pe_csum_info = ent_in->ei_csum;
+		}
+	}
+
 	/* Remove old physical entries from EV tree */
 	d_list_for_each_entry_safe(phy_ent, tmp, &mw->mw_phy_ents, pe_link) {
 		rect = phy_ent->pe_rect;
@@ -1167,21 +1165,19 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		 * The physical entry spans window end, but is fully covered
 		 * in current window, keep it intact.
 		 */
-		if ((rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
-		     !phy_ent->pe_trunc_head) || phy_ent->pe_retain) {
+		if (rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
+						!phy_ent->pe_trunc_head) {
 			leftovers++;
 			continue;
 		}
 
-		if (!phy_ent->pe_retain) {
-			rc = evt_delete(oiter->it_hdl, &rect, NULL);
-			if (rc) {
-				D_ERROR("Delete "DF_RECT" pe_off:"
-					DF_U64" error: "DF_RC"\n",
-					DP_RECT(&rect), phy_ent->pe_off,
+		rc = evt_delete(oiter->it_hdl, &rect, NULL);
+		if (rc) {
+			D_ERROR("Delete "DF_RECT" pe_off:"
+				DF_U64" error: "DF_RC"\n",
+				DP_RECT(&rect), phy_ent->pe_off,
 				DP_RC(rc));
-				goto abort;
-			}
+			goto abort;
 		}
 
 		/* Physical entry is in window */
@@ -1203,11 +1199,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(leftovers == mw->mw_phy_cnt);
 
 	/* Insert new segments into EV tree */
-
 	for (i = 0; i < io->ic_seg_cnt; i++) {
-		/* Don't insert new segments with component csum errors. */
-		if (io->ic_segs[i].ls_has_csum_err)
-			continue;
 		ent_in = &io->ic_segs[i].ls_ent_in;
 
 		rc = evt_insert(oiter->it_hdl, ent_in,
@@ -1218,23 +1210,6 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			goto abort;
 		}
 	}
-
-	/* Adjust payload address of truncated physical entries */
-	for (i = 0; i < io->ic_seg_cnt; i++) {
-		lgc_seg = &io->ic_segs[i];
-		ent_in = &io->ic_segs[i].ls_ent_in;
-		phy_ent = lgc_seg->ls_phy_ent;
-
-		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr) &&
-			!lgc_seg->ls_has_csum_err && !phy_ent->pe_retain) {
-			phy_ent->pe_addr = ent_in->ei_addr;
-			/* Checksum from ent_in is assigned to truncated
-			 * physical entry, in additon to re-assigning address.
-			 */
-			phy_ent->pe_csum_info = ent_in->ei_csum;
-		}
-	}
-
 
 	/* Clear window size */
 	mw->mw_ext.ex_lo = mw->mw_ext.ex_hi = 0;
@@ -1360,7 +1335,7 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 
 	/* Transfer data from old logical records to reserved new segments */
 	rc = fill_segments(ih, mw, acts);
-	if (rc && rc != -DER_CSUM) {
+	if (rc) {
 		D_ERROR("Fill segments "DF_EXT" error: "DF_RC"\n",
 			DP_EXT(&mw->mw_ext), DP_RC(rc));
 		goto out;
@@ -1420,7 +1395,6 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_rect.rc_epc = epoch;
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
-	phy_ent->pe_retain = false;
 	phy_ent->pe_off = 0;
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
