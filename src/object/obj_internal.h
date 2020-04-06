@@ -382,6 +382,18 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 
+int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
+
+int obj_dkey2shard(struct dc_object *obj, uint64_t hash, unsigned int map_ver,
+		   uint32_t op, bool to_leader);
+
+int obj_get_replicas(struct dc_object *obj);
+
+int obj_shard_open(struct dc_object *obj, unsigned int shard,
+		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
+
+#define obj_shard_close(shard)	dc_obj_shard_close(shard)
+
 static inline bool
 obj_retry_error(int err)
 {

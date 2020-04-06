@@ -51,6 +51,8 @@ enum {
 struct dc_tx_sub_req {
 	/* link into dc_tx::tx_sub_reqs. */
 	d_list_t		 dtsr_link;
+	/* link into dc_tx::tx_candidates_list. */
+	d_list_t		 dtsr_candidate_link;
 	/* Pointer to the object to be modified. */
 	struct dc_object	*dtsr_obj;
 	/* The hashed dkey if applicable. */
@@ -106,6 +108,18 @@ struct dc_tx {
 	uint32_t		 tx_coordinator_tag;
 	/** Reference the pool. */
 	struct dc_pool		*tx_pool;
+	/**
+	 * The list for the sub reqeusts that will be locally handled
+	 * by the coordinator candidates. If related DAOS target for some
+	 * sub request is elected as the coordinator, then use its object
+	 * and dkey_hash to locate the coordinator.
+	 */
+	d_list_t		 tx_candidates_list;
+	/**
+	 * Non-repetitive candidates count that are suitable as the coordinator.
+	 * If two sub requests belong to the same redundancy group, count once.
+	 */
+	uint32_t		 tx_candidates_count;
 };
 
 static void
@@ -185,6 +199,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint32_t flags,
 	D_ASSERT(tx->tx_pool != NULL);
 
 	D_INIT_LIST_HEAD(&tx->tx_sub_reqs);
+	D_INIT_LIST_HEAD(&tx->tx_candidates_list);
 	daos_dti_gen(&tx->tx_id, false);
 	/* If @epoch is zero, then tx_epoch will be generated
 	 * by the first accessed server.
@@ -245,10 +260,13 @@ dc_tx_cleanup(struct dc_tx *tx)
 		}
 
 		obj_decref(dtsr->dtsr_obj);
+		d_list_del(&dtsr->dtsr_candidate_link);
 		D_FREE(dtsr);
 	}
 
 	tx->tx_sub_count = 0;
+	D_ASSERT(d_list_empty(&tx->tx_candidates_list));
+	tx->tx_candidates_count = 0;
 }
 
 static int
@@ -469,6 +487,79 @@ dc_tx_open(tse_task_t *task)
 	return rc;
 }
 
+static int
+dc_tx_refresh_candidate(struct dc_tx *tx, struct dc_tx_sub_req *dtsr)
+{
+	struct dc_tx_sub_req	*first;
+	int			 val1;
+	int			 val2;
+
+	if (d_list_empty(&tx->tx_candidates_list)) {
+		d_list_add_tail(&dtsr->dtsr_candidate_link,
+				&tx->tx_candidates_list);
+		tx->tx_candidates_count = 1;
+		return 0;
+	}
+
+	first = d_list_entry(tx->tx_candidates_list.next, struct dc_tx_sub_req,
+			     dtsr_candidate_link);
+	if (first->dtsr_obj == dtsr->dtsr_obj) {
+		val1 = obj_dkey2grpidx(first->dtsr_obj, first->dtsr_dkey_hash,
+				       tx->tx_pm_ver);
+		if (val1 < 0)
+			return val1 == -DER_STALE ? -DER_AGAIN : val1;
+
+		val2 = obj_dkey2grpidx(dtsr->dtsr_obj, dtsr->dtsr_dkey_hash,
+				       tx->tx_pm_ver);
+		if (val2 < 0)
+			return val2 == -DER_STALE ? -DER_AGAIN : val2;
+
+		d_list_add_tail(&dtsr->dtsr_candidate_link,
+				&tx->tx_candidates_list);
+		if (val1 != val2)
+			tx->tx_candidates_count++;
+
+		return 0;
+	}
+
+	/* R1: Elect the object with the most replicas.
+	 *     That is better for recovery.
+	 */
+	val1 = obj_get_replicas(first->dtsr_obj);
+	val2 = obj_get_replicas(dtsr->dtsr_obj);
+	if (val1 > val2)
+		return 0;
+
+	if (val1 < val2) {
+		D_INIT_LIST_HEAD(&tx->tx_candidates_list);
+		d_list_add_tail(&dtsr->dtsr_candidate_link,
+				&tx->tx_candidates_list);
+		tx->tx_candidates_count = 1;
+
+		return 0;
+	}
+
+	/* R2: Elect the object with the most redundancy groups.
+	 *     That is better for load balance.
+	 */
+	if (first->dtsr_obj->cob_grp_nr > dtsr->dtsr_obj->cob_grp_nr)
+		return 0;
+
+	if (first->dtsr_obj->cob_grp_nr < dtsr->dtsr_obj->cob_grp_nr) {
+		D_INIT_LIST_HEAD(&tx->tx_candidates_list);
+		d_list_add_tail(&dtsr->dtsr_candidate_link,
+				&tx->tx_candidates_list);
+		tx->tx_candidates_count = 1;
+
+		return 0;
+	}
+
+	d_list_add_tail(&dtsr->dtsr_candidate_link, &tx->tx_candidates_list);
+	tx->tx_candidates_count++;
+
+	return 0;
+}
+
 struct tx_commit_cb_args {
 	struct dc_tx	*tcca_tx;
 	crt_rpc_t	*tcca_req;
@@ -508,12 +599,118 @@ out:
 	return rc;
 }
 
+struct dc_tx_target {
+	uint32_t	rank;
+	uint32_t	count;
+};
+
 static int
 dc_tx_elect_coordinator(struct dc_tx *tx)
 {
-	/* TBD: elect coordinator. */
+	struct dc_obj_shard	*shard = NULL;
+	struct dc_tx_target	*targets;
+	struct dc_tx_sub_req	*dtsr;
+	uint32_t		 target_nr;
+	uint32_t		 start;
+	uint32_t		 most = 0;
+	uint32_t		 most_idx = 0;
+	int			 idx;
+	int			 rc = 0;
 
-	return 0;
+	D_ASSERT(!d_list_empty(&tx->tx_candidates_list));
+	D_ASSERT(tx->tx_candidates_count >= 1);
+
+	/* R3: Single candidate case, similar as electing leader from single
+	 *     redundancy group.
+	 */
+	if (tx->tx_candidates_count == 1) {
+		dtsr = d_list_entry(tx->tx_candidates_list.next,
+				    struct dc_tx_sub_req, dtsr_candidate_link);
+		idx = obj_dkey2shard(dtsr->dtsr_obj, dtsr->dtsr_dkey_hash,
+				     tx->tx_pm_ver, DAOS_DTX_RPC_CPD, true);
+		if (idx < 0)
+			return idx;
+
+		rc = obj_shard_open(dtsr->dtsr_obj, idx, tx->tx_pm_ver, &shard);
+		if (rc != 0)
+			return rc;
+
+		tx->tx_coordinator_rank = shard->do_target_rank;
+		tx->tx_coordinator_tag = shard->do_target_idx;
+		obj_shard_close(shard);
+
+		if ((int)tx->tx_coordinator_rank < 0)
+			return tx->tx_coordinator_rank;
+
+		return 0;
+	}
+
+	/* R4: If there are multiple coordinator candidates, then elect the
+	 *     server that owns (handle locally) the most sub requests.
+	 *     That is better for reducing dispatched RPCs.
+	 *
+	 *     If more than one servers that own the same most count of sub
+	 *     requests, then depends on the sub requests order, more late
+	 *     one is more possible to be elected as the coordinator.
+	 */
+	target_nr = pool_map_target_nr(tx->tx_pool->dp_map);
+	D_ALLOC_ARRAY(targets, target_nr);
+	if (targets == NULL)
+		return -DER_NOMEM;
+
+	d_list_for_each_entry(dtsr, &tx->tx_candidates_list,
+			      dtsr_candidate_link) {
+		idx = obj_dkey2grpidx(dtsr->dtsr_obj, dtsr->dtsr_dkey_hash,
+				      tx->tx_pm_ver);
+		if (idx < 0)
+			D_GOTO(out, rc = idx);
+
+		start = idx * obj_get_replicas(dtsr->dtsr_obj);
+		for (idx = start; idx < start + dtsr->dtsr_obj->cob_grp_size;
+		     idx++) {
+			rc = obj_shard_open(dtsr->dtsr_obj, idx, tx->tx_pm_ver,
+					    &shard);
+			if (rc != 0)
+				goto out;
+
+			if (shard->do_target_id == -1 || shard->do_rebuilding)
+				goto close;
+
+			D_ASSERTF(shard->do_target_id < target_nr,
+				  "Invalid target index: idx %u, targets %u\n",
+				  shard->do_target_id, target_nr);
+
+			if (targets[shard->do_target_id].rank == 0)
+				targets[shard->do_target_id].rank =
+					shard->do_target_rank;
+			else
+				D_ASSERTF(targets[shard->do_target_id].rank ==
+					  shard->do_target_rank,
+					  "Invalid target rank for idx %u: "
+					  "rank1 %u, rank2 %u\n",
+					  shard->do_target_id,
+					  shard->do_target_rank,
+					  targets[shard->do_target_id].rank);
+
+			targets[shard->do_target_id].count++;
+
+			if (most < targets[shard->do_target_id].count) {
+				most = targets[shard->do_target_id].count;
+				most_idx = shard->do_target_id;
+			}
+
+close:
+			obj_shard_close(shard);
+		}
+	}
+
+	tx->tx_coordinator_rank = targets[most_idx].rank;
+	tx->tx_coordinator_tag = most;
+
+out:
+	D_FREE(targets);
+
+	return rc;
 }
 
 static int
@@ -832,6 +1029,7 @@ dc_tx_update_attach(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	if (dtsr->dtsr_obj == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
+	D_INIT_LIST_HEAD(&dtsr->dtsr_candidate_link);
 	dtsr->dtsr_opc = DAOS_OBJ_RPC_UPDATE;
 	dtsr->dtsr_dkey_hash = obj_dkey2hash(dkey);
 	dtsr->dtsr_flags = flags & ~DAOS_ZERO_COPY;
@@ -884,8 +1082,11 @@ dc_tx_update_attach(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	}
 
 link:
-	d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
-	tx->tx_sub_count++;
+	rc = dc_tx_refresh_candidate(tx, dtsr);
+	if (rc == 0) {
+		d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
+		tx->tx_sub_count++;
+	}
 
 out:
 	if (rc != 0) {
@@ -935,6 +1136,7 @@ dc_tx_punch_attach(struct dc_tx *tx, daos_handle_t oh, uint64_t flags)
 	if (dtsr->dtsr_obj == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
+	D_INIT_LIST_HEAD(&dtsr->dtsr_candidate_link);
 	dtsr->dtsr_opc = DAOS_OBJ_RPC_PUNCH;
 	dtsr->dtsr_dkey_hash = 0;
 	dtsr->dtsr_flags = flags & ~DAOS_ZERO_COPY;
@@ -942,12 +1144,19 @@ dc_tx_punch_attach(struct dc_tx *tx, daos_handle_t oh, uint64_t flags)
 	if (flags & DAOS_ZERO_COPY)
 		dtsr->dtsr_zero_copy = 1;
 
-	d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
-	tx->tx_sub_count++;
+	rc = dc_tx_refresh_candidate(tx, dtsr);
+	if (rc == 0) {
+		d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
+		tx->tx_sub_count++;
+	}
 
 out:
-	if (rc != 0)
+	if (rc != 0) {
+		if (dtsr->dtsr_obj != NULL)
+			obj_decref(dtsr->dtsr_obj);
+
 		D_FREE(dtsr);
+	}
 
 	return rc;
 }
@@ -973,6 +1182,7 @@ dc_tx_punch_dkeys_attach(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	if (dtsr->dtsr_obj == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
+	D_INIT_LIST_HEAD(&dtsr->dtsr_candidate_link);
 	dtsr->dtsr_opc = DAOS_OBJ_RPC_PUNCH_DKEYS;
 	dtsr->dtsr_dkey_hash = obj_dkey2hash(dkey);
 	dtsr->dtsr_flags = flags & ~DAOS_ZERO_COPY;
@@ -987,13 +1197,19 @@ dc_tx_punch_dkeys_attach(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 			D_GOTO(out, rc);
 	}
 
-	d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
-	tx->tx_sub_count++;
+	rc = dc_tx_refresh_candidate(tx, dtsr);
+	if (rc == 0) {
+		d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
+		tx->tx_sub_count++;
+	}
 
 out:
 	if (rc != 0) {
 		if (dtsr->dtsr_obj != NULL)
 			obj_decref(dtsr->dtsr_obj);
+
+		if (!(flags & DAOS_ZERO_COPY))
+			daos_iov_free(dtsr->dtsr_dkey);
 
 		D_FREE(dtsr);
 	}
@@ -1026,6 +1242,7 @@ dc_tx_punch_akeys_attach(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	if (dtsr->dtsr_obj == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
+	D_INIT_LIST_HEAD(&dtsr->dtsr_candidate_link);
 	dtsr->dtsr_opc = DAOS_OBJ_RPC_PUNCH_AKEYS;
 	dtsr->dtsr_dkey_hash = obj_dkey2hash(dkey);
 	dtsr->dtsr_flags = flags & ~DAOS_ZERO_COPY;
@@ -1056,8 +1273,11 @@ dc_tx_punch_akeys_attach(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	}
 
 link:
-	d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
-	tx->tx_sub_count++;
+	rc = dc_tx_refresh_candidate(tx, dtsr);
+	if (rc != 0) {
+		d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
+		tx->tx_sub_count++;
+	}
 
 out:
 	if (rc != 0) {

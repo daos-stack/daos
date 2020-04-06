@@ -108,7 +108,7 @@ struct obj_auxi_args {
 /**
  * Open an object shard (shard object), cache the open handle.
  */
-static int
+int
 obj_shard_open(struct dc_object *obj, unsigned int shard, unsigned int map_ver,
 	       struct dc_obj_shard **shard_ptr)
 {
@@ -176,8 +176,6 @@ unlock:
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 	return rc;
 }
-
-#define obj_shard_close(shard)	dc_obj_shard_close(shard)
 
 static void
 obj_layout_free(struct dc_object *obj)
@@ -378,7 +376,7 @@ obj_layout_refresh(struct dc_object *obj)
 	return rc;
 }
 
-static int
+int
 obj_get_replicas(struct dc_object *obj)
 {
 	struct daos_oclass_attr *oc_attr;
@@ -484,7 +482,7 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver)
  */
 #define		OBJ_FETCH_LEADER_INTERVAL	2
 
-static int
+int
 obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 {
 	int		grp_size;
@@ -508,7 +506,7 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 	return grp_idx;
 }
 
-static int
+int
 obj_dkey2shard(struct dc_object *obj, uint64_t hash, unsigned int map_ver,
 	       uint32_t op, bool to_leader)
 {
