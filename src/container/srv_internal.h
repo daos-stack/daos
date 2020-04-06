@@ -176,9 +176,6 @@ int ds_cont_epoch_fini_hdl(struct rdb_tx *tx, struct cont *cont,
 int ds_cont_epoch_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			struct cont *cont, struct container_hdl *hdl,
 			crt_rpc_t *rpc);
-int ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			  struct cont *cont, struct container_hdl *hdl,
-			  crt_rpc_t *rpc);
 int ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			struct cont *cont, struct container_hdl *hdl,
 			crt_rpc_t *rpc);
@@ -209,9 +206,6 @@ int ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_cont_tgt_query_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
-void ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc);
-int ds_cont_tgt_epoch_discard_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-					 void *priv);
 void ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 					   void *priv);

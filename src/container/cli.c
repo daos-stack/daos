@@ -2333,8 +2333,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	D_DEBUG(DF_DSMC, DF_CONT": op=%u; hdl="DF_UUID"; epoch="DF_U64"\n",
 		DP_CONT(arg.eoa_req.cra_pool->dp_pool_hdl,
 			arg.eoa_req.cra_cont->dc_uuid), opc,
-		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl),
-		epoch == NULL ? 0 : *epoch);
+		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl), *epoch);
 
 	in = crt_req_get(arg.eoa_req.cra_rpc);
 	in->cei_epoch = *epoch;
@@ -2357,8 +2356,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	return rc;
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc,
-		epoch == NULL ? 0 : *epoch, rc);
+	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc, *epoch, rc);
 	return rc;
 }
 

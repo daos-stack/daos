@@ -73,9 +73,6 @@
 	X(CONT_ATTR_SET,						\
 		0, &CQF_cont_attr_set,					\
 		ds_cont_op_handler, NULL),				\
-	X(CONT_EPOCH_DISCARD,						\
-		0, &CQF_cont_epoch_op,					\
-		ds_cont_op_handler, NULL),				\
 	X(CONT_EPOCH_AGGREGATE,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
@@ -111,10 +108,6 @@
 		0, &CQF_cont_tgt_query,					\
 		ds_cont_tgt_query_handler,				\
 		&ds_cont_tgt_query_co_ops),				\
-	X(CONT_TGT_EPOCH_DISCARD,					\
-		0, &CQF_cont_tgt_epoch_discard,				\
-		ds_cont_tgt_epoch_discard_handler,			\
-		&ds_cont_tgt_epoch_discard_co_ops),			\
 	X(CONT_TGT_EPOCH_AGGREGATE,					\
 		0, &CQF_cont_tgt_epoch_aggregate,			\
 		ds_cont_tgt_epoch_aggregate_handler,			\
@@ -333,17 +326,6 @@ CRT_RPC_DECLARE(cont_tgt_close, DAOS_ISEQ_TGT_CLOSE, DAOS_OSEQ_TGT_CLOSE)
 	((daos_epoch_t)		(tqo_hae)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_tgt_query, DAOS_ISEQ_TGT_QUERY, DAOS_OSEQ_TGT_QUERY)
-
-#define DAOS_ISEQ_CONT_TGT_EPOCH_DISCARD /* input fields */	 \
-	((uuid_t)		(tii_hdl)		CRT_VAR) \
-	((daos_epoch_t)		(tii_epoch)		CRT_VAR)
-
-#define DAOS_OSEQ_CONT_TGT_EPOCH_DISCARD /* output fields */	 \
-				/* number of errors */		 \
-	((int32_t)		(tio_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(cont_tgt_epoch_discard, DAOS_ISEQ_CONT_TGT_EPOCH_DISCARD,
-		DAOS_OSEQ_CONT_TGT_EPOCH_DISCARD)
 
 #define DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE /* input fields */	 \
 	((uuid_t)		(tai_cont_uuid)		CRT_VAR) \
