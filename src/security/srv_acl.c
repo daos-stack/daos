@@ -308,7 +308,8 @@ get_capas_for_principal(struct daos_acl *acl, enum daos_acl_principal_type type,
 	struct daos_ace *ace;
 	int		rc;
 
-	D_DEBUG(DB_MGMT, "Checking ACE for principal type %d\n", type);
+	D_DEBUG(DB_MGMT, "Checking ACE for principal type %d, name %s\n",
+		type, name);
 
 	rc = daos_acl_get_ace_for_principal(acl, type, name, &ace);
 	if (rc != 0)
@@ -343,9 +344,14 @@ add_perms_for_principal(struct daos_acl *acl, enum daos_acl_principal_type type,
 	int		rc;
 	struct daos_ace	*ace = NULL;
 
+	D_DEBUG(DB_MGMT, "Checking ACE for principal type %d, name %s\n",
+		type, name);
+
 	rc = daos_acl_get_ace_for_principal(acl, type, name, &ace);
-	if (rc == 0)
+	if (rc == 0) {
+		D_DEBUG(DB_MGMT, "Adding perms 0x%lx\n", ace->dae_allow_perms);
 		*perms |= ace->dae_allow_perms;
+	}
 
 	return rc;
 }
@@ -360,6 +366,8 @@ get_capas_for_groups(struct daos_acl *acl,
 	int		i;
 	uint64_t	grp_perms = 0;
 	bool		found = false;
+
+	D_DEBUG(DB_MGMT, "Checking union of group ACEs\n");
 
 	/*
 	 * Group permissions are a union of the permissions of all groups the
@@ -385,6 +393,7 @@ get_capas_for_groups(struct daos_acl *acl,
 	}
 
 	if (found) {
+		D_DEBUG(DB_MGMT, "Final group perms: 0x%lx\n", grp_perms);
 		*capas = convert_perms(grp_perms);
 		return 0;
 	}
@@ -406,7 +415,14 @@ get_authsys_capas(struct daos_acl *acl,
 		  uint64_t (*convert_perms)(uint64_t),
 		  uint64_t *capas)
 {
-	int rc;
+	int	rc;
+	size_t	i;
+
+	D_DEBUG(DB_MGMT, "Getting capas for AUTH_SYS token\n");
+	D_DEBUG(DB_MGMT, "\tUser: %s\n", authsys->user);
+	D_DEBUG(DB_MGMT, "\tPrimary Group: %s\n", authsys->group);
+	for (i = 0; i < authsys->n_groups; i++)
+		D_DEBUG(DB_MGMT, "\tGroup: %s\n", authsys->groups[i]);
 
 	/* If this is the owner, and there's an owner entry... */
 	if (authsys_user_is_owner(authsys, ownership)) {
