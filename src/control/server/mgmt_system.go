@@ -178,7 +178,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 			return nil, err
 		}
 
-		if !rank.InList(req.GetSystemRanks()) {
+		if !rank.InList(system.RanksFromUint32(req.GetRanks())) {
 			continue // filtered out, no result expected
 		}
 
@@ -251,7 +251,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 
 	resp := &mgmtpb.RanksResp{}
 
-	rankList := req.GetSystemRanks()
+	rankList := system.RanksFromUint32(req.GetRanks())
 
 	signal := syscall.SIGINT
 	if req.Force {
@@ -350,7 +350,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			return nil, err
 		}
 
-		if !rank.InList(req.GetSystemRanks()) {
+		if !rank.InList(system.RanksFromUint32(req.GetRanks())) {
 			continue // filtered out, no result expected
 		}
 
@@ -406,7 +406,8 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	case <-time.After(svc.harness.rankReqTimeout):
 	}
 
-	results, err := svc.getStartedResults(req.GetSystemRanks(), system.MemberStateStarted, "start", nil)
+	results, err := svc.getStartedResults(system.RanksFromUint32(req.GetRanks()),
+		system.MemberStateStarted, "start", nil)
 	if err != nil {
 		return nil, err
 	}

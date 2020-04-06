@@ -159,7 +159,7 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 	defer cancel()
 
 	// Update and retrieve status of system members in rank list.
-	rankList := req.GetSystemRanks()
+	rankList := system.RanksFromUint32(req.GetRanks())
 	if err := svc.updateMemberStatus(ctx, rankList); err != nil {
 		return nil, err
 	}
@@ -298,7 +298,8 @@ func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemS
 
 	if req.Prep {
 		// prepare system members for shutdown
-		prepResults, err := svc.prepShutdown(ctx, req.GetSystemRanks())
+		prepResults, err := svc.prepShutdown(ctx,
+			system.RanksFromUint32(req.GetRanks()))
 		if err != nil {
 			return nil, err
 		}
@@ -312,7 +313,8 @@ func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemS
 
 	if req.Kill {
 		// shutdown by stopping system members
-		stopResults, err := svc.shutdown(ctx, req.Force, req.GetSystemRanks())
+		stopResults, err := svc.shutdown(ctx, req.Force,
+			system.RanksFromUint32(req.GetRanks()))
 		if err != nil {
 			return nil, err
 		}
@@ -408,7 +410,8 @@ func (svc *ControlService) SystemStart(parent context.Context, req *ctlpb.System
 
 	// start any stopped system members, note that instances will only
 	// be started on hosts with all instances stopped
-	startResults, err := svc.start(ctx, req.GetSystemRanks())
+	startResults, err := svc.start(ctx,
+		system.RanksFromUint32(req.GetRanks()))
 	if err != nil {
 		return nil, err
 	}
