@@ -476,7 +476,7 @@ dfs_test_syml(void **state)
 	char			*val = "SYMLINK VAL 1";
 	char			tmp_buf[64];
 	struct stat		stbuf;
-	daos_size_t		size;
+	daos_size_t		size = 0;
 	int			rc;
 
 	if (arg->myrank != 0)
