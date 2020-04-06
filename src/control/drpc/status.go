@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,130 +25,145 @@
 
 package drpc
 
-// #include <gurt/errno.h>
+import "fmt"
+
+/*
+#cgo LDFLAGS: -lgurt
+
+#include <gurt/errno.h>
+*/
 import "C"
 
 // DaosStatus is a status code in the set defined by the DAOS data plane.
 type DaosStatus int32
 
+func (ds DaosStatus) Error() string {
+	// NB: Currently, d_errstr() just returns a string of the status
+	// name, e.g. -1007 -> "DER_NOSPACE". This is better than nothing,
+	// but hopefully d_errstr() will be extended to provide better strings
+	// similar to perror().
+	dErrStr := C.GoString(C.d_errstr(C.int(ds)))
+	return fmt.Sprintf("DAOS error (%d): %s", ds, dErrStr)
+}
+
 const (
 	// DaosSuccess indicates no error
 	DaosSuccess DaosStatus = 0
 	// DaosNoPermission indicates that access to a resource was denied
-	DaosNoPermission = -C.DER_NO_PERM
+	DaosNoPermission DaosStatus = -C.DER_NO_PERM
 	// DaosNoHandle indicates the handle was invalid
-	DaosNoHandle = -C.DER_NO_HDL
+	DaosNoHandle DaosStatus = -C.DER_NO_HDL
 	// DaosInvalidInput indicates an input was invalid
-	DaosInvalidInput = -C.DER_INVAL
+	DaosInvalidInput DaosStatus = -C.DER_INVAL
 	// DaosExists indicates the entity already exists
-	DaosExists = -C.DER_EXIST
+	DaosExists DaosStatus = -C.DER_EXIST
 	// DaosNonexistant indicates the entity does not exist
-	DaosNonexistant = -C.DER_NONEXIST
+	DaosNonexistant DaosStatus = -C.DER_NONEXIST
 	// DaosUnreachable indicates a node was unreachable
-	DaosUnreachable = -C.DER_UNREACH
+	DaosUnreachable DaosStatus = -C.DER_UNREACH
 	// DaosNoSpace indicates there was not enough storage space
-	DaosNoSpace = -C.DER_NOSPACE
+	DaosNoSpace DaosStatus = -C.DER_NOSPACE
 	// DaosAlready indicates the operation was already done
-	DaosAlready = -C.DER_ALREADY
+	DaosAlready DaosStatus = -C.DER_ALREADY
 	// DaosNoMemory indicates the system ran out of memory
-	DaosNoMemory = -C.DER_NOMEM
+	DaosNoMemory DaosStatus = -C.DER_NOMEM
 	// DaosNotImpl indicates the requested functionality is not implemented
-	DaosNotImpl = -C.DER_NOSYS
+	DaosNotImpl DaosStatus = -C.DER_NOSYS
 	// DaosTimedOut indicates the operation timed out
-	DaosTimedOut = -C.DER_TIMEDOUT
+	DaosTimedOut DaosStatus = -C.DER_TIMEDOUT
 	// DaosBusy indicates the system was busy and didn't process the request
-	DaosBusy = -C.DER_BUSY
+	DaosBusy DaosStatus = -C.DER_BUSY
 	// DaosTryAgain indicates the operation failed, but should be tried again
-	DaosTryAgain = -C.DER_AGAIN
+	DaosTryAgain DaosStatus = -C.DER_AGAIN
 	// DaosProtocolError indicates incompatibility in communications protocols
-	DaosProtocolError = -C.DER_PROTO
+	DaosProtocolError DaosStatus = -C.DER_PROTO
 	// DaosNotInit indicates something in the system wasn't initialized
-	DaosNotInit = -C.DER_UNINIT
+	DaosNotInit DaosStatus = -C.DER_UNINIT
 	// DaosBufTooSmall indicates a provided buffer was too small
-	DaosBufTooSmall = -C.DER_TRUNC
+	DaosBufTooSmall DaosStatus = -C.DER_TRUNC
 	// DaosStructTooSmall indicates data could not fit in the provided structure
-	DaosStructTooSmall = -C.DER_OVERFLOW
+	DaosStructTooSmall DaosStatus = -C.DER_OVERFLOW
 	// DaosCanceled indicates the operation was canceled
-	DaosCanceled = -C.DER_CANCELED
+	DaosCanceled DaosStatus = -C.DER_CANCELED
 	// DaosOutOfGroup indicates that a rank wasn't found in the group
-	DaosOutOfGroup = -C.DER_OOG
+	DaosOutOfGroup DaosStatus = -C.DER_OOG
 	// DaosMercuryError indicates that there was an error in the Mercury transport layer
-	DaosMercuryError = -C.DER_HG
+	DaosMercuryError DaosStatus = -C.DER_HG
 	// DaosUnregistered indicates that a requested RPC was not registered
-	DaosUnregistered = -C.DER_UNREG
+	DaosUnregistered DaosStatus = -C.DER_UNREG
 	// DaosAddrStringFailed indicates that an address string couldn't be generated
-	DaosAddrStringFailed = -C.DER_ADDRSTR_GEN
+	DaosAddrStringFailed DaosStatus = -C.DER_ADDRSTR_GEN
 	// DaosPMIXError indicates an error in the PMIX layer
-	DaosPMIXError = -C.DER_PMIX
+	DaosPMIXError DaosStatus = -C.DER_PMIX
 	// DaosIVCallback indicates that the IV callback cannot be handled locally
-	DaosIVCallback = -C.DER_IVCB_FORWARD
+	DaosIVCallback DaosStatus = -C.DER_IVCB_FORWARD
 	// DaosMiscError indicates an unspecified error
-	DaosMiscError = -C.DER_MISC
+	DaosMiscError DaosStatus = -C.DER_MISC
 	// DaosBadPath indicates that a bad file or directory path was provided
-	DaosBadPath = -C.DER_BADPATH
+	DaosBadPath DaosStatus = -C.DER_BADPATH
 	// DaosNotDir indicates that the path is not to a directory
-	DaosNotDir = -C.DER_NOTDIR
+	DaosNotDir DaosStatus = -C.DER_NOTDIR
 	// DaosCorpcIncomplete indicates that corpc failed
-	DaosCorpcIncomplete = -C.DER_CORPC_INCOMPLETE
+	DaosCorpcIncomplete DaosStatus = -C.DER_CORPC_INCOMPLETE
 	// DaosNoRASRank indicates that no rank is subscribed to RAS
-	DaosNoRASRank = -C.DER_NO_RAS_RANK
+	DaosNoRASRank DaosStatus = -C.DER_NO_RAS_RANK
 	// DaosNotAttached indicates that a service group is not attached
-	DaosNotAttached = -C.DER_NOTATTACH
+	DaosNotAttached DaosStatus = -C.DER_NOTATTACH
 	// DaosMismatch indicates a version mismatch
-	DaosMismatch = -C.DER_MISMATCH
+	DaosMismatch DaosStatus = -C.DER_MISMATCH
 	// DaosEvicted indicates that the rank was evicted
-	DaosEvicted = -C.DER_EVICTED
+	DaosEvicted DaosStatus = -C.DER_EVICTED
 	// DaosNoReply indicates that there was no reply to an RPC
-	DaosNoReply = -C.DER_NOREPLY
+	DaosNoReply DaosStatus = -C.DER_NOREPLY
 	// DaosDenialOfService indicates that there was a denial of service
-	DaosDenialOfService = -C.DER_DOS
+	DaosDenialOfService DaosStatus = -C.DER_DOS
 	// DaosBadTarget indicates that the target was wrong for the RPC
-	DaosBadTarget = -C.DER_BAD_TARGET
+	DaosBadTarget DaosStatus = -C.DER_BAD_TARGET
 	// DaosGroupVersionMismatch indicates that group versions didn't match
-	DaosGroupVersionMismatch = -C.DER_GRPVER
+	DaosGroupVersionMismatch DaosStatus = -C.DER_GRPVER
 )
 
 const (
 	// DaosIOError indicates a generic IO error
 	DaosIOError DaosStatus = -C.DER_IO
 	// DaosFreeMemError indicates an error freeing memory
-	DaosFreeMemError = -C.DER_FREE_MEM
+	DaosFreeMemError DaosStatus = -C.DER_FREE_MEM
 	// DaosNoEntry indicates that the entry was not found
-	DaosNoEntry = -C.DER_ENOENT
+	DaosNoEntry DaosStatus = -C.DER_ENOENT
 	// DaosUnknownType indicates that the entity type was unknown
-	DaosUnknownType = -C.DER_NOTYPE
+	DaosUnknownType DaosStatus = -C.DER_NOTYPE
 	// DaosUnknownSchema indicates that the entity schema was unknown
-	DaosUnknownSchema = -C.DER_NOSCHEMA
+	DaosUnknownSchema DaosStatus = -C.DER_NOSCHEMA
 	// DaosNotLocal indicates that the entity was not local
-	DaosNotLocal = -C.DER_NOLOCAL
+	DaosNotLocal DaosStatus = -C.DER_NOLOCAL
 	// DaosStale indicates that a resource was stale
-	DaosStale = -C.DER_STALE
+	DaosStale DaosStatus = -C.DER_STALE
 	// DaosNotLeader indicates that the replica is not the service leader
-	DaosNotLeader = -C.DER_NOTLEADER
+	DaosNotLeader DaosStatus = -C.DER_NOTLEADER
 	// DaosTargetCreateError indicates that target creation failed
-	DaosTargetCreateError = -C.DER_TGT_CREATE
+	DaosTargetCreateError DaosStatus = -C.DER_TGT_CREATE
 	// DaosEpochReadOnly indicates that the epoch couldn't be modified
-	DaosEpochReadOnly = -C.DER_EP_RO
+	DaosEpochReadOnly DaosStatus = -C.DER_EP_RO
 	// DaosEpochRecycled indicates that the epoch was recycled due to age
-	DaosEpochRecycled = -C.DER_EP_OLD
+	DaosEpochRecycled DaosStatus = -C.DER_EP_OLD
 	// DaosKeyTooBig indicates that the key is too big
-	DaosKeyTooBig = -C.DER_KEY2BIG
+	DaosKeyTooBig DaosStatus = -C.DER_KEY2BIG
 	// DaosRecordTooBig indicates that the record is too big
-	DaosRecordTooBig = -C.DER_REC2BIG
+	DaosRecordTooBig DaosStatus = -C.DER_REC2BIG
 	// DaosIOInvalid indicates a mismatch between IO buffers and object extents
-	DaosIOInvalid = -C.DER_IO_INVAL
+	DaosIOInvalid DaosStatus = -C.DER_IO_INVAL
 	// DaosEventQueueBusy indicates that the event queue is busy
-	DaosEventQueueBusy = -C.DER_EQ_BUSY
+	DaosEventQueueBusy DaosStatus = -C.DER_EQ_BUSY
 	// DaosDomainMismatch indicates that there was a mismatch of domains in cluster components
-	DaosDomainMismatch = -C.DER_DOMAIN
+	DaosDomainMismatch DaosStatus = -C.DER_DOMAIN
 	// DaosShutdown indicates that the service should shut down
-	DaosShutdown = -C.DER_SHUTDOWN
+	DaosShutdown DaosStatus = -C.DER_SHUTDOWN
 	// DaosInProgress indicates that the operation is in progress
-	DaosInProgress = -C.DER_INPROGRESS
+	DaosInProgress DaosStatus = -C.DER_INPROGRESS
 	// DaosNotApplicable indicates that the operation is not applicable
-	DaosNotApplicable = -C.DER_NOTAPPLICABLE
+	DaosNotApplicable DaosStatus = -C.DER_NOTAPPLICABLE
 	// DaosNotReplica indicates that the requested component is not a service replica
-	DaosNotReplica = -C.DER_NOTREPLICA
+	DaosNotReplica DaosStatus = -C.DER_NOTREPLICA
 	// DaosChecksumError indicates a checksum error
-	DaosChecksumError = -C.DER_CSUM
+	DaosChecksumError DaosStatus = -C.DER_CSUM
 )

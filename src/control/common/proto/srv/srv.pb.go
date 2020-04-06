@@ -3,11 +3,9 @@
 
 package srv
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -18,7 +16,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type NotifyReadyReq struct {
 	Uri                  string   `protobuf:"bytes,1,opt,name=uri,proto3" json:"uri,omitempty"`
@@ -35,17 +33,16 @@ func (m *NotifyReadyReq) Reset()         { *m = NotifyReadyReq{} }
 func (m *NotifyReadyReq) String() string { return proto.CompactTextString(m) }
 func (*NotifyReadyReq) ProtoMessage()    {}
 func (*NotifyReadyReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2bbe8325d22c1a26, []int{0}
+	return fileDescriptor_srv_4bbf5276e94a62bb, []int{0}
 }
-
 func (m *NotifyReadyReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NotifyReadyReq.Unmarshal(m, b)
 }
 func (m *NotifyReadyReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NotifyReadyReq.Marshal(b, m, deterministic)
 }
-func (m *NotifyReadyReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NotifyReadyReq.Merge(m, src)
+func (dst *NotifyReadyReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NotifyReadyReq.Merge(dst, src)
 }
 func (m *NotifyReadyReq) XXX_Size() int {
 	return xxx_messageInfo_NotifyReadyReq.Size(m)
@@ -108,17 +105,16 @@ func (m *BioErrorReq) Reset()         { *m = BioErrorReq{} }
 func (m *BioErrorReq) String() string { return proto.CompactTextString(m) }
 func (*BioErrorReq) ProtoMessage()    {}
 func (*BioErrorReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2bbe8325d22c1a26, []int{1}
+	return fileDescriptor_srv_4bbf5276e94a62bb, []int{1}
 }
-
 func (m *BioErrorReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BioErrorReq.Unmarshal(m, b)
 }
 func (m *BioErrorReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_BioErrorReq.Marshal(b, m, deterministic)
 }
-func (m *BioErrorReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BioErrorReq.Merge(m, src)
+func (dst *BioErrorReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BioErrorReq.Merge(dst, src)
 }
 func (m *BioErrorReq) XXX_Size() int {
 	return xxx_messageInfo_BioErrorReq.Size(m)
@@ -183,9 +179,9 @@ func init() {
 	proto.RegisterType((*BioErrorReq)(nil), "srv.BioErrorReq")
 }
 
-func init() { proto.RegisterFile("srv.proto", fileDescriptor_2bbe8325d22c1a26) }
+func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_4bbf5276e94a62bb) }
 
-var fileDescriptor_2bbe8325d22c1a26 = []byte{
+var fileDescriptor_srv_4bbf5276e94a62bb = []byte{
 	// 246 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x91, 0xcf, 0x4a, 0x03, 0x31,
 	0x10, 0xc6, 0x49, 0x63, 0xfa, 0x67, 0x8a, 0x52, 0x82, 0x87, 0xe0, 0x69, 0xe9, 0xa9, 0x78, 0xf0,
