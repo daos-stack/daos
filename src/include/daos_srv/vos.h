@@ -52,21 +52,19 @@ vos_dtx_update_resync_gen(daos_handle_t coh);
  * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
  *
  * \param coh		[IN]	Container open handle.
- * \param oid		[IN]	The target object (shard) ID.
- * \param dti		[IN]	The DTX identifier.
+ * \param dte		[IN]	The DTX entry.
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param epoch		[IN]	The DTX epoch.
  * \param gen		[IN]	The DTX generation.
  * \param flags		[IN]	See dtx_cos_flags.
  *
  * \return		Zero on success.
- * \return		-DER_INPROGRESS	retry with newer epoch.
+ * \return		-DER_AGAIN	retry with newer epoch.
  * \return		Other negative value if error.
  */
 int
-vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		uint64_t dkey_hash, daos_epoch_t epoch, uint64_t gen,
-		uint32_t flags);
+vos_dtx_add_cos(daos_handle_t coh, struct dtx_entry *dte, uint64_t dkey_hash,
+		daos_epoch_t epoch, uint64_t gen, uint32_t flags);
 
 /**
  * Search the specified DTX is in the CoS cache or not.
@@ -75,15 +73,14 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
  * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
- * \param punch		[IN]	For punch DTX or not.
  *
  * \return	0 if the DTX exists in the CoS cache.
  * \return	-DER_NONEXIST if not in the CoS cache.
  * \return	Other negative values on error.
  */
 int
-vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
-		   struct dtx_id *xid, uint64_t dkey_hash, bool punch);
+vos_dtx_lookup_cos(daos_handle_t coh, daos_obj_id_t *oid,
+		   struct dtx_id *xid, uint64_t dkey_hash);
 
 /**
  * Fetch the list of the DTXs to be committed because of (potential) share.
@@ -91,7 +88,6 @@ vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
  * \param coh		[IN]	Container open handle.
  * \param oid		[IN]	The target object (shard) ID.
  * \param dkey_hash	[IN]	The hashed dkey.
- * \param types		[IN]	The DTX types to be listed.
  * \param max		[IN]	The max size of the array for DTX entries.
  * \param dtis		[OUT]	The DTX IDs array to be committed for share.
  *
@@ -99,8 +95,8 @@ vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
  *				on success, negative value if error.
  */
 int
-vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
-		 uint32_t types, int max, struct dtx_id **dtis);
+vos_dtx_list_cos(daos_handle_t coh, daos_obj_id_t *oid, uint64_t dkey_hash,
+		 int max, struct dtx_id **dtis);
 
 /**
  * Fetch the list of the DTXs that can be committed.
@@ -118,7 +114,7 @@ vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
  */
 int
 vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
-			  daos_unit_oid_t *oid, daos_epoch_t epoch,
+			  daos_obj_id_t *oid, daos_epoch_t epoch,
 			  struct dtx_entry **dtes);
 
 /**
@@ -128,7 +124,6 @@ vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
  * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
- * \param punch		[IN]	For punch operation or not.
  * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
@@ -142,9 +137,9 @@ vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
  *			Other negative value if error.
  */
 int
-vos_dtx_check_resend(daos_handle_t coh, daos_unit_oid_t *oid,
+vos_dtx_check_resend(daos_handle_t coh, daos_obj_id_t *oid,
 		     struct dtx_id *dti, uint64_t dkey_hash,
-		     bool punch, daos_epoch_t *epoch);
+		     daos_epoch_t *epoch);
 
 /**
  * Check the specified DTX's persistent status.
@@ -210,6 +205,18 @@ vos_dtx_aggregate(daos_handle_t coh);
  */
 void
 vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
+
+/**
+ * Check the latest sync epoch against the specified object.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	The object ID.
+ * \param epoch	[IN,OUT] Pointer to the latest sync epoch.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_check_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t *epoch);
 
 /**
  * Mark the object has been synced at the specified epoch.

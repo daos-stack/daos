@@ -40,11 +40,11 @@ struct dtx_resync_entry {
 	struct dtx_entry	dre_dte;
 	daos_epoch_t		dre_epoch;
 	uint64_t		dre_hash;
-	uint32_t		dre_intent;
 	uint32_t		dre_in_cache:1;
+	struct dtx_rdg_unit	dre_rdgs[0];
 };
 
-#define dre_oid		dre_dte.dte_oid
+#define dre_oid		dre_rdgs[0].dru_oid
 #define dre_xid		dre_dte.dte_xid
 
 struct dtx_resync_head {
@@ -111,26 +111,22 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 			goto commit;
 
 		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
-					&dre->dre_xid, dre->dre_hash,
-					dre->dre_intent == DAOS_INTENT_PUNCH ?
-					true : false);
+					&dre->dre_xid, dre->dre_hash);
 		if (rc == -DER_NONEXIST) {
-			int	flags = 0;
-
-			if (dre->dre_intent == DAOS_INTENT_PUNCH)
-				flags |= DCF_FOR_PUNCH;
-			rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_oid,
-				&dre->dre_xid, dre->dre_hash, dre->dre_epoch, 0,
-				flags);
+			/* Not sure about whether the DTX contain ilog
+			 * modification or not, just assume it is, not
+			 * correctness issue.
+			 */
+			rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_dte,
+					     dre->dre_hash, dre->dre_epoch,
+					     0, DCF_SHARED);
 			if (rc < 0)
 				D_WARN("Fail to add DTX "DF_DTI" to CoS cache: "
 				       "rc = %d\n",  DP_DTI(&dre->dre_xid), rc);
 		}
 
 commit:
-		dte[j].dte_xid = dre->dre_xid;
-		dte[j].dte_oid = dre->dre_oid;
-		++j;
+		dte[j++] = dre->dre_dte;
 
 next:
 		dtx_dre_release(drh, dre);
@@ -165,34 +161,37 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		return 0;
 
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
+		daos_unit_oid_t		oid = { 0 };
+
 		if (layout != NULL) {
 			pl_obj_layout_free(layout);
 			layout = NULL;
 		}
 
 		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
-					&dre->dre_xid, dre->dre_hash,
-					dre->dre_intent == DAOS_INTENT_PUNCH ?
-					true : false);
+					&dre->dre_xid, dre->dre_hash);
 		/* If it is in CoS cache, no need to check remote replicas. */
 		if (rc == 0) {
 			dre->dre_in_cache = 1;
 			goto commit;
 		}
 
-		rc = ds_pool_check_leader(dra->po_uuid, &dre->dre_oid,
+		oid.id_pub = dre->dre_oid;
+		oid.id_shard = dre->dre_rdgs[0].dru_shards[0];
+
+		rc = ds_pool_check_leader(dra->po_uuid, &oid,
 					  dra->version, &layout);
 		if (rc <= 0) {
 			if (rc < 0)
 				D_WARN("Not sure about the leader for the DTX "
-				       DF_UOID"/"DF_DTI" (ver = %u): rc = %d, "
-				       "skip it.\n",
-				       DP_UOID(dre->dre_oid),
-				       DP_DTI(&dre->dre_xid), dra->version, rc);
+				       DF_UOID"/"DF_DTI" (ver = %u): rc = "DF_RC
+				       ", skip it.\n",
+				       DP_UOID(oid), DP_DTI(&dre->dre_xid),
+				       dra->version, DP_RC(rc));
 			else
 				D_DEBUG(DB_TRACE, "Not the leader for the DTX "
 					DF_UOID"/"DF_DTI" (ver = %u) skip it\n",
-					DP_UOID(dre->dre_oid),
+					DP_UOID(oid),
 					DP_DTI(&dre->dre_xid), dra->version);
 			dtx_dre_release(drh, dre);
 			continue;
@@ -212,9 +211,9 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			 * committed or not, then we have to skip it.
 			 */
 			D_WARN("Not sure about whether the DTX "DF_UOID
-			       "/"DF_DTI" can be committed or not: %d\n",
-			       DP_UOID(dre->dre_oid),
-			       DP_DTI(&dre->dre_xid), rc);
+			       "/"DF_DTI" can be committed or not: rc = "
+			       DF_RC"\n",
+			       DP_UOID(oid), DP_DTI(&dre->dre_xid), DP_RC(rc));
 			dtx_dre_release(drh, dre);
 			continue;
 		}
@@ -232,17 +231,15 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		if (rc != DTX_ST_PREPARED) {
 			if (rc < 0 && rc != -DER_NONEXIST)
 				D_WARN("Not sure about whether the DTX "DF_UOID
-				       "/"DF_DTI" can be abort or not: %d\n",
-				       DP_UOID(dre->dre_oid),
-				       DP_DTI(&dre->dre_xid), rc);
+				       "/"DF_DTI" can be abort or not: rc = "
+				       DF_RC"\n", DP_UOID(oid),
+				       DP_DTI(&dre->dre_xid), DP_RC(rc));
 			dtx_dre_release(drh, dre);
 			continue;
 		}
 
 		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
-					&dre->dre_xid, dre->dre_hash,
-					dre->dre_intent == DAOS_INTENT_PUNCH ?
-					true : false);
+					&dre->dre_xid, dre->dre_hash);
 		if (rc == 0) {
 			dre->dre_in_cache = 1;
 			goto commit;
@@ -292,6 +289,11 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 {
 	struct dtx_resync_args		*dra = args;
 	struct dtx_resync_entry		*dre;
+	struct dtx_entry		*dte;
+
+	/* If I am the original leader, do not need to resync. */
+	if (ent->ie_dtx_flags & DF_LEADER)
+		return 0;
 
 	/* We commit the DTXs periodically, there will be not too many DTXs
 	 * to be checked when resync. So we can load all those uncommitted
@@ -300,15 +302,27 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	 * (or abort) the DTXs (that will change the active-DTX tree).
 	 */
 
-	D_ALLOC_PTR(dre);
+	/* TBD: will support compounded DTX in next phase. */
+	if (ent->ie_dtx_flags & DF_CPD)
+		return 0;
+
+	D_ASSERTF(ent->ie_rdg_cnt == 1, "Invalid rdg count %d\n",
+		  ent->ie_rdg_cnt);
+
+	D_ALLOC(dre, sizeof(*dre) + ent->ie_rdg_size);
 	if (dre == NULL)
 		return -DER_NOMEM;
 
-	dre->dre_epoch = ent->ie_epoch;
-	dre->dre_xid = ent->ie_xid;
-	dre->dre_oid = ent->ie_oid;
-	dre->dre_intent = ent->ie_dtx_intent;
+	dte = &dre->dre_dte;
+	dte->dte_xid = ent->ie_xid;
+	dte->dte_rdg_size = ent->ie_rdg_size;
+	dte->dte_rdg_cnt = ent->ie_rdg_cnt;
+	dte->dte_rdgs = &dre->dre_rdgs[0];
+
+	dre->dre_epoch = ent->ie_dtx_epoch;
 	dre->dre_hash = ent->ie_dtx_hash;
+	memcpy(dte->dte_rdgs, ent->ie_rdgs, ent->ie_rdg_size);
+
 	d_list_add_tail(&dre->dre_link, &dra->tables.drh_list);
 	dra->tables.drh_count++;
 

@@ -257,10 +257,10 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto reset;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
+	if (dth != NULL && dth->dth_dti_cos_cnt > 0 &&
 	    dth->dth_dti_cos_done == 0) {
 		vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count, 0);
+					dth->dth_dti_cos_cnt, 0);
 		dth->dth_dti_cos_done = 1;
 	}
 

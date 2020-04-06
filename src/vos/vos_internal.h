@@ -171,6 +171,8 @@ struct vos_dtx_act_ent {
 	struct vos_dtx_act_ent_df	 dae_base;
 	umem_off_t			 dae_df_off;
 	struct vos_dtx_blob_df		*dae_dbd;
+	/* For DTX RDG information out of inline case. */
+	struct dtx_rdg_unit		*dae_rdgs;
 	/* More DTX records if out of the inlined buffer. */
 	struct vos_dtx_record_df	*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
@@ -178,14 +180,16 @@ struct vos_dtx_act_ent {
 };
 
 #define DAE_XID(dae)		((dae)->dae_base.dae_xid)
-#define DAE_OID(dae)		((dae)->dae_base.dae_oid)
-#define DAE_DKEY_HASH(dae)	((dae)->dae_base.dae_dkey_hash)
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
+#define DAE_DKEY_HASH(dae)	((dae)->dae_base.dae_dkey_hash)
 #define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
 #define DAE_LAYOUT_GEN(dae)	((dae)->dae_base.dae_layout_gen)
-#define DAE_INTENT(dae)		((dae)->dae_base.dae_intent)
+#define DAE_RDG_INLINE(dae)	((dae)->dae_base.dae_rdg_inline)
+#define DAE_RDG_OFF(dae)	((dae)->dae_base.dae_rdg_off)
+#define DAE_RDG_SIZE(dae)	((dae)->dae_base.dae_rdg_size)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
+#define DAE_RDG_CNT(dae)	((dae)->dae_base.dae_rdg_cnt)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_REC_OFF(dae)	((dae)->dae_base.dae_rec_off)
@@ -381,14 +385,13 @@ vos_dtx_cos_register(void);
  * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
- * \param punch		[IN]	For punch DTX or not.
  *
  * \return		Zero on success.
  * \return		Other negative value if error.
  */
 int
-vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct dtx_id *xid, uint64_t dkey_hash, bool punch);
+vos_dtx_del_cos(struct vos_container *cont, daos_obj_id_t *oid,
+		struct dtx_id *xid, uint64_t dkey_hash);
 
 /**
  * Query the oldest DTX's timestamp in the CoS cache.

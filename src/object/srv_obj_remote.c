@@ -57,7 +57,6 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 	struct obj_rw_out		*orwo = crt_reply_get(req);
 	struct obj_rw_in		*orw_parent = crt_req_get(parent_req);
 	struct dtx_leader_handle	*dlh = arg->dlh;
-	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
 	int				rc = cb_info->cci_rc;
 	int				rc1 = 0;
 
@@ -68,11 +67,6 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 		rc1 = -DER_STALE;
 	} else {
 		rc1 = orwo->orw_ret;
-		if (rc1 == -DER_INPROGRESS) {
-			daos_dti_copy(&sub->dss_dce.dce_xid,
-				      &orwo->orw_dti_conflict);
-			sub->dss_dce.dce_dkey = orwo->orw_dkey_conflict;
-		}
 	}
 
 	if (rc >= 0)
@@ -157,8 +151,11 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw->orw_shard_tgts.ca_count	= 0;
 	orw->orw_shard_tgts.ca_arrays	= NULL;
 	orw->orw_flags |= ORF_BULK_BIND | obj_exec_arg->flags;
-	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_count;
+	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_cnt;
 	orw->orw_dti_cos.ca_arrays	= dth->dth_dti_cos;
+	orw->orw_rdgs.iov_buf = dth->dth_entry.dte_rdgs;
+	orw->orw_rdgs.iov_buf_len = dth->dth_entry.dte_rdg_size;
+	orw->orw_rdgs.iov_len = dth->dth_entry.dte_rdg_size;
 
 	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
 		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
@@ -192,7 +189,6 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 	struct obj_punch_out		*opo = crt_reply_get(req);
 	struct obj_punch_in		*opi_parent = crt_req_get(req);
 	struct dtx_leader_handle	*dlh = arg->dlh;
-	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
 	int				rc = cb_info->cci_rc;
 	int				rc1 = 0;
 
@@ -203,11 +199,6 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 		rc1 = -DER_STALE;
 	} else {
 		rc1 = opo->opo_ret;
-		if (rc1 == -DER_INPROGRESS) {
-			daos_dti_copy(&sub->dss_dce.dce_xid,
-				      &opo->opo_dti_conflict);
-			sub->dss_dce.dce_dkey = opo->opo_dkey_conflict;
-		}
 	}
 
 	if (rc >= 0)
@@ -277,8 +268,11 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	opi->opi_shard_tgts.ca_count = 0;
 	opi->opi_shard_tgts.ca_arrays = NULL;
 	opi->opi_flags |= obj_exec_arg->flags;
-	opi->opi_dti_cos.ca_count = dth->dth_dti_cos_count;
+	opi->opi_dti_cos.ca_count = dth->dth_dti_cos_cnt;
 	opi->opi_dti_cos.ca_arrays = dth->dth_dti_cos;
+	opi->opi_rdgs.iov_buf = dth->dth_entry.dte_rdgs;
+	opi->opi_rdgs.iov_buf_len = dth->dth_entry.dte_rdg_size;
+	opi->opi_rdgs.iov_len = dth->dth_entry.dte_rdg_size;
 
 	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
 		DP_UOID(opi->opi_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);

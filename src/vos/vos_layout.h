@@ -145,13 +145,6 @@ enum vos_dtx_record_types {
 	DTX_RT_EVT	= 3,
 };
 
-enum vos_dtx_entry_flags {
-	/* The DTX is the leader */
-	DTX_EF_LEADER			= (1 << 0),
-	/* The DTX entry is invalid. */
-	DTX_EF_INVALID			= (1 << 1),
-};
-
 /** The agent of the record being modified via the DTX in both SCM and DRAM. */
 struct vos_dtx_record_df {
 	/** The DTX record type, see enum vos_dtx_record_types. */
@@ -165,44 +158,57 @@ struct vos_dtx_record_df {
 #define DTX_INLINE_REC_CNT	4
 #define DTX_REC_CAP_DEFAULT	4
 
-
 /** Active DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_act_ent_df {
 	/** The DTX identifier. */
 	struct dtx_id			dae_xid;
-	/** The identifier of the modified object (shard). */
-	daos_unit_oid_t			dae_oid;
-	/** The hashed dkey if applicable. */
-	uint64_t			dae_dkey_hash;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			dae_epoch;
+	/** The hashed dkey if applicable (only for non-compounded case). */
+	uint64_t			dae_dkey_hash;
 	/** The server generation when handles the DTX. */
 	uint64_t			dae_srv_gen;
 	/** The active DTX entry on-disk layout generation. */
 	uint64_t			dae_layout_gen;
-	/** The intent of related modification. */
-	uint32_t			dae_intent;
+	/** Inline single RDG if it is large enough, check DF_INLINE_RDG. */
+	struct dtx_rdg_unit		dae_rdg_inline;
+	union {
+		/**
+		 * Must be the next to dae_inline_rdg to hold more shards info
+		 * for partial modified EC object. For 8 + 2 EC object, it can
+		 * cover the case of modifying not more than 3 of the shards.
+		 */
+		uint32_t		dae_shards[2];
+		/**
+		 * Non-inline mode if dae_rdg_cnt > 1, or dae_inline_rdg plus
+		 * dae_shards is not large enough to hold the modified shards.
+		 *
+		 * Offset for dtx_rdg_unit array.
+		 */
+		umem_off_t		dae_rdg_off;
+	};
+	/** The size of dtx_rdg_unit. */
+	uint32_t			dae_rdg_size;
 	/** The index in the current vos_dtx_blob_df. */
 	int32_t				dae_index;
 	/** The inlined dtx records. */
 	struct vos_dtx_record_df	dae_rec_inline[DTX_INLINE_REC_CNT];
-	/** DTX flags, see enum vos_dtx_entry_flags. */
-	uint32_t			dae_flags;
+	/** The count of redundancy groups that are touched via the DTX. */
+	uint16_t			dae_rdg_cnt;
+	/** 64-bits alignment. */
+	uint16_t			dae_padding;
+	/** DTX flags, see enum dtx_flags. */
+	uint16_t			dae_flags;
 	/** The DTX records count, including inline case. */
-	uint32_t			dae_rec_cnt;
+	uint16_t			dae_rec_cnt;
 	/** The offset for the list of vos_dtx_record_df if out of inline. */
 	umem_off_t			dae_rec_off;
 };
 
-/* Assume dae_rec_cnt is next to dae_flags. */
-D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_cnt) ==
-	  offsetof(struct vos_dtx_act_ent_df, dae_flags) +
-	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_flags));
-
-/* Assume dae_rec_off is next to dae_rec_cnt. */
-D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_off) ==
-	  offsetof(struct vos_dtx_act_ent_df, dae_rec_cnt) +
-	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_rec_cnt));
+/* Assume dae_shards is next to dae_rdg_inline. */
+D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_shards) ==
+	  offsetof(struct vos_dtx_act_ent_df, dae_rdg_inline) +
+	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_rdg_inline));
 
 /** Committed DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_cmt_ent_df {
@@ -307,9 +313,9 @@ struct vos_krec_df {
 	struct ilog_df			kr_ilog;
 	union {
 		/** btree root under the key */
-		struct btr_root			kr_btr;
+		struct btr_root		kr_btr;
 		/** evtree root, which is only used by akey */
-		struct evt_root			kr_evt;
+		struct evt_root		kr_evt;
 	};
 	/* Checksum and key are stored after tree root */
 };

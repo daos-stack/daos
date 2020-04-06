@@ -31,60 +31,72 @@
 #include <daos_srv/dtx_srv.h>
 #include "vts_io.h"
 
+static struct dtx_rdg_unit	vts_dtx_rdg;
+
 static void
-vts_dtx_cos(void **state, bool punch)
+vts_dtx_gen_dte(daos_unit_oid_t *oid, struct dtx_id *xid,
+		struct dtx_entry *dte)
+{
+	vts_dtx_rdg.dru_oid = oid->id_pub;
+	vts_dtx_rdg.dru_shard_cnt = 1;
+	vts_dtx_rdg.dru_shards[0] = oid->id_shard;
+
+	dte->dte_xid = *xid;
+	dte->dte_rdg_size = sizeof(vts_dtx_rdg);
+	dte->dte_rdg_cnt = 1;
+	dte->dte_rdgs = &vts_dtx_rdg;
+}
+
+static void
+vts_dtx_cos(void **state, bool shared)
 {
 	struct io_test_args	*args = *state;
 	struct vos_container	*cont;
 	struct dtx_id		 xid;
+	struct dtx_entry	 dte;
 	uint64_t		 dkey_hash = lrand48();
 	int			 rc;
 
 	daos_dti_gen(&xid, false);
 
+	vts_dtx_gen_dte(&args->oid, &xid, &dte);
 	/* Insert a DTX into CoS cache. */
-	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-			     dkey_hash, DAOS_EPOCH_MAX - 1, 0,
-			     punch ? DCF_FOR_PUNCH : 0);
+	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &dte, dkey_hash,
+			     DAOS_EPOCH_MAX - 1, 0, shared ? DCF_SHARED : 0);
 	assert_int_equal(rc, 0);
 
-	/* Query the DTX with different @punch parameter will find nothing. */
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash, !punch);
-	assert_int_equal(rc, -DER_NONEXIST);
-
 	/* Query the DTX different dkey hash will find nothing. */
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash + 1, punch);
+	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid.id_pub, &xid,
+				dkey_hash + 1);
 	assert_int_equal(rc, -DER_NONEXIST);
 
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash, punch);
+	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid.id_pub, &xid,
+				dkey_hash);
 	assert_int_equal(rc, 0);
 
 	cont = vos_hdl2cont(args->ctx.tc_co_hdl);
 	/* Remove the DTX from CoS cache. */
-	vos_dtx_del_cos(cont, &args->oid, &xid, dkey_hash, punch);
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash, punch);
+	vos_dtx_del_cos(cont, &args->oid.id_pub, &xid, dkey_hash);
+	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid.id_pub, &xid,
+				dkey_hash);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
-/* update-DTX CoS cache insert/delete/query */
+/* DTX CoS cache insert/delete/query without share */
 static void
 dtx_1(void **state)
 {
 	vts_dtx_cos(state, false);
 }
 
-/* punch-DTX CoS cache insert/delete/query */
+/* DTX CoS cache insert/delete/query with share */
 static void
 dtx_2(void **state)
 {
 	vts_dtx_cos(state, true);
 }
 
-/* DTX CoS cache list */
+/* DTX CoS cache list CoS */
 static void
 dtx_3(void **state)
 {
@@ -92,40 +104,28 @@ dtx_3(void **state)
 	struct dtx_id		*dti_cos = NULL;
 	struct dtx_id		 xid;
 	struct dtx_stat		 stat = { 0 };
+	struct dtx_entry	 dte[11];
 	uint64_t		 dkey_hash = lrand48();
-	int			 flags[3];
+	int			 flags[2];
 	int			 rc;
 	int			 i;
 
 	flags[0] = 0;
-	flags[1] = DCF_HAS_ILOG;
-	flags[2] = DCF_FOR_PUNCH;
+	flags[1] = DCF_SHARED;
 
 	for (i = 0; i < 11; i++) {
 		daos_dti_gen(&xid, false);
 
-		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				     dkey_hash, DAOS_EPOCH_MAX - 1, 0,
-				     flags[i % 3]);
+		vts_dtx_gen_dte(&args->oid, &xid, &dte[i]);
+		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &dte[i], dkey_hash,
+				     DAOS_EPOCH_MAX - 1, 0, flags[i % 2]);
 		assert_int_equal(rc, 0);
 	}
 
-	rc = vos_dtx_list_cos(args->ctx.tc_co_hdl, &args->oid, dkey_hash,
-			      DCLT_PUNCH, 100, &dti_cos);
-	/* xid[1,2,4,5,7,8,10] */
-	assert_int_equal(rc, 7);
-	D_FREE(dti_cos);
-
-	rc = vos_dtx_list_cos(args->ctx.tc_co_hdl, &args->oid, dkey_hash,
-			      DCLT_UPDATE, 100, &dti_cos);
-	/* xid[0,1,3,4,6,7,9,10] */
-	assert_int_equal(rc, 8);
-	D_FREE(dti_cos);
-
-	rc = vos_dtx_list_cos(args->ctx.tc_co_hdl, &args->oid, dkey_hash,
-			      DCLT_PUNCH | DCLT_UPDATE, 100, &dti_cos);
-	/* xid[all] */
-	assert_int_equal(rc, 11);
+	rc = vos_dtx_list_cos(args->ctx.tc_co_hdl, &args->oid.id_pub, dkey_hash,
+			      100, &dti_cos);
+	/* xid[1,3,5,7,9] */
+	assert_int_equal(rc, 5);
 	D_FREE(dti_cos);
 
 	vos_dtx_stat(args->ctx.tc_co_hdl, &stat);
@@ -139,22 +139,22 @@ dtx_4(void **state)
 	struct io_test_args	*args = *state;
 	struct dtx_entry	*dtes = NULL;
 	struct dtx_id		 xid[10];
+	struct dtx_entry	 dte[10];
 	uint64_t		 dkey_hash;
-	int			 flags[3];
+	int			 flags[2];
 	int			 rc;
 	int			 i;
 
 	flags[0] = 0;
-	flags[1] = DCF_HAS_ILOG;
-	flags[2] = DCF_FOR_PUNCH;
+	flags[1] = DCF_SHARED;
 
 	for (i = 0; i < 10; i++) {
 		daos_dti_gen(&xid[i], false);
 		dkey_hash = lrand48();
 
-		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid[i],
-				     dkey_hash, DAOS_EPOCH_MAX - 1, 0,
-				     flags[i % 3]);
+		vts_dtx_gen_dte(&args->oid, &xid[i], &dte[i]);
+		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &dte[i], dkey_hash,
+				     DAOS_EPOCH_MAX - 1, 0, flags[i % 2]);
 		assert_int_equal(rc, 0);
 	}
 
@@ -180,8 +180,7 @@ dtx_4(void **state)
 
 static int
 vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
-	      daos_epoch_t epoch, uint64_t dkey_hash,
-	      struct dtx_conflict_entry *conflict, uint32_t intent,
+	      daos_epoch_t epoch, uint64_t dkey_hash, uint32_t intent,
 	      struct dtx_handle **dthp)
 {
 	struct dtx_handle	*dth;
@@ -190,20 +189,31 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	if (dth == NULL)
 		return -DER_NOMEM;
 
-	dth->dth_xid = *xid;
-	dth->dth_oid = *oid;
+	vts_dtx_gen_dte(oid, xid, &dth->dth_entry);
+
 	dth->dth_coh = coh;
 	dth->dth_epoch = epoch;
-	D_INIT_LIST_HEAD(&dth->dth_shares);
-	dth->dth_dkey_hash = dkey_hash;
-	dth->dth_ver = 1; /* init version */
-	dth->dth_intent = intent;
-	dth->dth_dti_cos = NULL;
-	dth->dth_dti_cos_count = 0;
-	dth->dth_conflict = conflict;
+	dth->dth_ver = 1;
+
+	dth->dth_sync = 0;
 	dth->dth_leader = 1;
+	dth->dth_solo = 0;
+	dth->dth_compounded = 0;
+	dth->dth_dti_cos_done = 0;
+	dth->dth_touch_shared = 0;
+	dth->dth_renew = 0;
+	dth->dth_actived = 0;
+
+	dth->dth_gen = 0;
 	dth->dth_ent = NULL;
-	dth->dth_obj = UMOFF_NULL;
+
+	dth->dth_dti_cos = NULL;
+	dth->dth_dti_cos_cnt = 0;
+
+	dth->dth_intent = intent;
+	dth->dth_op_seq = 1;
+	dth->dth_dkey_hash = dkey_hash;
+	dth->dth_oid = *oid;
 
 	*dthp = dth;
 
@@ -273,7 +283,7 @@ dtx_5(void **state)
 	struct io_test_args		*args = *state;
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
+	struct dtx_entry		 dte;
 	struct dtx_stat			 stat = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
@@ -299,7 +309,7 @@ dtx_5(void **state)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -308,9 +318,9 @@ dtx_5(void **state)
 	/* The DTX is 'prepared'. */
 	vts_dtx_end(dth);
 
+	vts_dtx_gen_dte(&args->oid, &xid, &dte);
 	/* Add former DTX into CoS cache. */
-	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-			     dkey_hash, epoch, 0, 0);
+	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &dte, dkey_hash, epoch, 0, 0);
 	assert_int_equal(rc, 0);
 
 	vos_dtx_stat(args->ctx.tc_co_hdl, &stat);
@@ -331,7 +341,6 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 {
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
 	daos_recx_t			 rex = { 0 };
@@ -354,7 +363,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -392,7 +401,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	daos_dti_gen(&xid, false);
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_PUNCH, &dth);
+			   dkey_hash, DAOS_INTENT_PUNCH, &dth);
 	assert_int_equal(rc, 0);
 
 	if (punch_obj)
@@ -465,7 +474,6 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 {
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
 	daos_recx_t			 rex = { 0 };
@@ -496,7 +504,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -524,7 +532,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	daos_dti_gen(&xid, false);
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_PUNCH, &dth);
+			   dkey_hash, DAOS_INTENT_PUNCH, &dth);
 	assert_int_equal(rc, 0);
 
 	if (punch_obj)
@@ -588,7 +596,6 @@ dtx_14(void **state)
 	struct io_test_args		*args = *state;
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
 	daos_recx_t			 rex = { 0 };
@@ -611,7 +618,7 @@ dtx_14(void **state)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -661,7 +668,6 @@ dtx_15(void **state)
 	struct io_test_args		*args = *state;
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
 	daos_recx_t			 rex = { 0 };
@@ -692,7 +698,7 @@ dtx_15(void **state)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -741,7 +747,7 @@ dtx_16(void **state)
 	struct io_test_args		*args = *state;
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
+	struct dtx_entry		 dte;
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
 	daos_recx_t			 rex = { 0 };
@@ -766,7 +772,7 @@ dtx_16(void **state)
 			    &epoch, false);
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -794,9 +800,9 @@ dtx_16(void **state)
 	/* Former DTX is not committed, so nothing can be fetched. */
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
+	vts_dtx_gen_dte(&args->oid, &xid, &dte);
 	/* Insert a DTX into CoS cache. */
-	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-			     dkey_hash, epoch, 0, 0);
+	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &dte, dkey_hash, epoch, 0, 0);
 	assert_int_equal(rc, 0);
 
 	/* Fetch again. */
@@ -874,7 +880,6 @@ dtx_17(void **state)
 	/* Assume I am the leader. */
 	for (i = 0; i < 10; i++) {
 		struct dtx_handle		*dth = NULL;
-		struct dtx_conflict_entry	 conflict = { 0 };
 		d_iov_t				 dkey_iov;
 		uint64_t			 dkey_hash;
 
@@ -888,7 +893,7 @@ dtx_17(void **state)
 				    false);
 
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
-				   epoch[i], dkey_hash, &conflict,
+				   epoch[i], dkey_hash,
 				   DAOS_INTENT_UPDATE, &dth);
 		assert_int_equal(rc, 0);
 
@@ -966,7 +971,6 @@ dtx_18(void **state)
 	/* Assume I am the leader. */
 	for (i = 0; i < 10; i++) {
 		struct dtx_handle		*dth = NULL;
-		struct dtx_conflict_entry	 conflict = { 0 };
 		d_iov_t				 dkey_iov;
 		uint64_t			 dkey_hash;
 
@@ -976,7 +980,7 @@ dtx_18(void **state)
 				    UPDATE_REC_SIZE, &dkey_hash, &epoch, false);
 
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
-				   epoch, dkey_hash, &conflict,
+				   epoch, dkey_hash,
 				   DAOS_INTENT_UPDATE, &dth);
 		assert_int_equal(rc, 0);
 
@@ -1024,7 +1028,6 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 {
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid[5];
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod[5];
 	d_sg_list_t			 sgl[5];
 	daos_recx_t			 rex[5];
@@ -1058,7 +1061,7 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid[0], &args->oid, args->ctx.tc_co_hdl, epoch[0],
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch[0], &dkey, &iod[0], &sgl[0],
@@ -1102,7 +1105,7 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 		iod[i].iod_nr = 1;
 
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
-				   epoch[i], dkey_hash, &conflict,
+				   epoch[i], dkey_hash,
 				   DAOS_INTENT_UPDATE, &dth);
 		assert_int_equal(rc, 0);
 
@@ -1283,7 +1286,6 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 {
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid[4];
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod[3];
 	d_sg_list_t			 sgl[3];
 	daos_recx_t			 rex[3];
@@ -1315,7 +1317,7 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid[0], &args->oid, args->ctx.tc_co_hdl, epoch[0],
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch[0], &dkey, &iod[0], &sgl[0],
@@ -1359,7 +1361,7 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 		iod[i].iod_nr = 1;
 
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
-				   epoch[i], dkey_hash, &conflict,
+				   epoch[i], dkey_hash,
 				   DAOS_INTENT_UPDATE, &dth);
 		assert_int_equal(rc, 0);
 
@@ -1378,7 +1380,7 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 	epoch[3] = crt_hlc_get();
 
 	rc = vts_dtx_begin(&xid[3], &args->oid, args->ctx.tc_co_hdl, epoch[3],
-			   dkey_hash, &conflict, DAOS_INTENT_PUNCH, &dth);
+			   dkey_hash, DAOS_INTENT_PUNCH, &dth);
 	assert_int_equal(rc, 0);
 
 	/* Punch the object or dkey. */
@@ -1511,11 +1513,11 @@ dtx_tst_teardown(void **state)
 }
 
 static const struct CMUnitTest dtx_tests[] = {
-	{ "VOS501: update-DTX CoS cache insert/delete/query",
+	{ "VOS501: DTX CoS cache insert/delete/query without share",
 	  dtx_1, NULL, dtx_tst_teardown },
-	{ "VOS502: punch-DTX CoS cache insert/delete/query",
+	{ "VOS502: DTX CoS cache insert/delete/query with share",
 	  dtx_2, NULL, dtx_tst_teardown },
-	{ "VOS503: DTX CoS cache list",
+	{ "VOS503: DTX CoS cache list CoS",
 	  dtx_3, NULL, dtx_tst_teardown },
 	{ "VOS504: DTX CoS cache fetch committable",
 	  dtx_4, NULL, dtx_tst_teardown },

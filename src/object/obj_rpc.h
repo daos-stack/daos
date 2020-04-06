@@ -164,6 +164,7 @@ struct obj_iod_array {
 	((uint32_t)		(orw_start_shard)	CRT_VAR) \
 	((uint32_t)		(orw_flags)		CRT_VAR) \
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
+	((d_iov_t)		(orw_rdgs)		CRT_VAR) \
 	((struct dcs_csum_info)	(orw_dkey_csum)		CRT_PTR) \
 	((struct obj_iod_array)	(orw_iod_array)		CRT_VAR) \
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
@@ -174,8 +175,6 @@ struct obj_iod_array {
 #define DAOS_OSEQ_OBJ_RW	/* output fields */		 \
 	((int32_t)		(orw_ret)		CRT_VAR) \
 	((uint32_t)		(orw_map_version)	CRT_VAR) \
-	((uint64_t)		(orw_dkey_conflict)	CRT_VAR) \
-	((struct dtx_id)	(orw_dti_conflict)	CRT_VAR) \
 	((daos_size_t)		(orw_iod_sizes)		CRT_ARRAY) \
 	((daos_size_t)		(orw_data_sizes)	CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
@@ -234,6 +233,7 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 	((uint64_t)		(opi_dkey_hash)		CRT_VAR) \
 	((uint32_t)		(opi_map_ver)		CRT_VAR) \
 	((uint32_t)		(opi_flags)		CRT_VAR) \
+	((d_iov_t)		(opi_rdgs)		CRT_VAR) \
 	((struct dtx_id)	(opi_dti_cos)		CRT_ARRAY) \
 	((d_iov_t)		(opi_dkeys)		CRT_ARRAY) \
 	((d_iov_t)		(opi_akeys)		CRT_ARRAY) \
@@ -241,9 +241,7 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 
 #define DAOS_OSEQ_OBJ_PUNCH	/* output fields */		 \
 	((int32_t)		(opo_ret)		CRT_VAR) \
-	((uint32_t)		(opo_map_version)	CRT_VAR) \
-	((uint64_t)		(opo_dkey_conflict)	CRT_VAR) \
-	((struct dtx_id)	(opo_dti_conflict)	CRT_VAR)
+	((uint32_t)		(opo_map_version)	CRT_VAR)
 
 CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 
@@ -323,7 +321,6 @@ void obj_reply_set_status(crt_rpc_t *rpc, int status);
 int obj_reply_get_status(crt_rpc_t *rpc);
 void obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version);
 uint32_t obj_reply_map_version_get(crt_rpc_t *rpc);
-void obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce);
 
 static inline bool
 obj_is_modification_opc(uint32_t opc)

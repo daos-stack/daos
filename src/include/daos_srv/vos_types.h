@@ -32,8 +32,8 @@
 #include <daos/checksum.h>
 
 enum dtx_cos_flags {
-	DCF_FOR_PUNCH	= (1 << 0),
-	DCF_HAS_ILOG	= (1 << 1),
+	/* Contains target (obj/dkey/akey) that can be shared by others. */
+	DCF_SHARED	= (1 << 0),
 };
 
 enum vos_oi_attr {
@@ -291,22 +291,10 @@ typedef struct {
 			/** Non-zero if punched */
 			daos_epoch_t		ie_punch;
 			union {
-				/** dkey or akey */
-				struct {
-					/** key value */
-					daos_key_t		ie_key;
-				};
-				/** object or DTX entry */
-				struct {
-					/** The DTX identifier. */
-					struct dtx_id		ie_xid;
-					/** oid */
-					daos_unit_oid_t		ie_oid;
-					/* The dkey hash for DTX iteration. */
-					uint64_t		ie_dtx_hash;
-					/* The DTX intent for DTX iteration. */
-					uint32_t		ie_dtx_intent;
-				};
+				/** key value */
+				daos_key_t	ie_key;
+				/** oid */
+				daos_unit_oid_t	ie_oid;
 			};
 		};
 		/** Array entry */
@@ -323,6 +311,16 @@ typedef struct {
 			struct dcs_csum_info	ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
+		};
+		/** DTX entry */
+		struct {
+			struct dtx_id		ie_xid;
+			uint64_t		ie_dtx_epoch;
+			uint64_t		ie_dtx_hash;
+			uint16_t		ie_dtx_flags;
+			uint16_t		ie_rdg_cnt;
+			uint32_t		ie_rdg_size;
+			struct dtx_rdg_unit	*ie_rdgs;
 		};
 	};
 	/* Flags to describe the entry */

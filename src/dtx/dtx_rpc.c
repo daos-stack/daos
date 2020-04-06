@@ -402,82 +402,50 @@ btr_ops_t dbtree_dtx_cf_ops = {
 #define DTX_CF_BTREE_ORDER	20
 
 static int
-dtx_get_tgt_cnt(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
-{
-	struct daos_oclass_attr	*oc_attr;
-	int			 tgt_cnt;
-
-	if (layout->ol_nr <= oid->id_shard)
-		return -DER_INVAL;
-
-	oc_attr = daos_oclass_attr_find(oid->id_pub);
-
-
-	if (oc_attr->ca_resil != DAOS_RES_REPL &&
-	    oc_attr->ca_resil != DAOS_RES_EC)
-		return -DER_NOTAPPLICABLE;
-	if (oc_attr->ca_resil == DAOS_RES_REPL)
-		tgt_cnt = oc_attr->u.rp.r_num;
-	else {
-		tgt_cnt = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
-	}
-
-	if (tgt_cnt == DAOS_OBJ_REPL_MAX)
-		tgt_cnt = layout->ol_grp_size;
-
-	if (tgt_cnt < 1)
-		return -DER_INVAL;
-
-	return tgt_cnt;
-}
-
-static int
 dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 		     uuid_t co_uuid, daos_handle_t tree, d_list_t *head,
-		     int *length, daos_unit_oid_t *oid, struct dtx_id *dti,
+		     int *length, struct dtx_entry *dte,
 		     int count, uint32_t version)
 {
+	struct dtx_rdg_unit		*rdg = &dte->dte_rdgs[0];
 	struct pl_obj_layout		*layout = NULL;
 	struct daos_obj_md		 md = { 0 };
 	struct dtx_cf_rec_bundle	 dcrb;
 	d_rank_t			 myrank;
-	int				 tgt_cnt;
-	int				 start;
 	int				 rc;
 	int				 i;
 
-	md.omd_id = oid->id_pub;
+	/* TBD: will support compounded DTX in next phase. */
+	D_ASSERT(dte->dte_rdg_cnt == 1);
+
+	md.omd_id = rdg->dru_oid;
 	md.omd_ver = version;
 	rc = pl_obj_place(map, &md, NULL, &layout);
 	if (rc != 0)
 		return rc;
 
 	D_ASSERT(layout != NULL);
-	tgt_cnt = dtx_get_tgt_cnt(oid, layout);
-	if (tgt_cnt < 0) {
-		rc = tgt_cnt;
-		goto out;
-	}
+	if (rdg->dru_shard_cnt < 0)
+		D_GOTO(out, rc = rdg->dru_shard_cnt);
 
 	/* Skip single-redundancy object. */
-	if (tgt_cnt == 1)
+	if (rdg->dru_shard_cnt == 1)
 		D_GOTO(out, rc = 0);
 
 	dcrb.dcrb_count = count;
-	dcrb.dcrb_dti = dti;
+	dcrb.dcrb_dti = &dte->dte_xid;
 	dcrb.dcrb_head = head;
 	dcrb.dcrb_length = length;
 
 	crt_group_rank(NULL, &myrank);
-	start = (oid->id_shard / tgt_cnt) * tgt_cnt;
-	for (i = start; i < start + tgt_cnt && rc >= 0; i++) {
+	for (i = 0; i < rdg->dru_shard_cnt && rc >= 0; i++) {
 		struct pl_obj_shard	*shard;
 		struct pool_target	*target;
 		d_iov_t		 kiov;
 		d_iov_t		 riov;
 
 		/* skip unavailable target(s). */
-		shard = &layout->ol_shards[i];
+		shard = &layout->ol_shards[rdg->dru_shards[i]];
 		if (shard->po_target == -1)
 			continue;
 
@@ -521,7 +489,7 @@ dtx_dti_classify(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t tree,
 	if (pool == NULL)
 		return -DER_INVAL;
 
-	map = pl_map_find(po_uuid, dtes[0].dte_oid.id_pub);
+	map = pl_map_find(po_uuid, dtes[0].dte_rdgs->dru_oid);
 	if (map == NULL) {
 		D_WARN("Failed to find pool map for DTX classification on "
 		       DF_UUID"\n", DP_UUID(po_uuid));
@@ -535,8 +503,8 @@ dtx_dti_classify(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t tree,
 
 	for (i = 0; i < count; i++) {
 		rc = dtx_dti_classify_one(pool, map, po_uuid, co_uuid,
-					  tree, head, &length, &dtes[i].dte_oid,
-					  &dtes[i].dte_xid, count, version);
+					  tree, head, &length, &dtes[i],
+					  count, version);
 		if (rc < 0)
 			break;
 
@@ -717,29 +685,26 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 	  struct pl_obj_layout *layout)
 {
 	struct dtx_req_args	 dra;
+	struct dtx_rdg_unit	*rdg = &dte->dte_rdgs[0];
 	struct ds_pool		*pool;
-	daos_unit_oid_t		*oid = &dte->dte_oid;
 	struct dtx_req_rec	*drr;
 	struct dtx_req_rec	*next;
 	d_list_t		 head;
 	d_rank_t		 myrank;
-	int			 tgt_cnt;
 	int			 length = 0;
-	int			 start;
 	int			 rc = 0;
 	int			 i;
 
-	if (layout->ol_nr <= oid->id_shard)
-		return -DER_INVAL;
+	/* TBD: will support compounded DTX in next phase. */
+	D_ASSERT(dte->dte_rdg_cnt == 1);
 
-	tgt_cnt = dtx_get_tgt_cnt(oid, layout);
-	if (tgt_cnt < 0)
-		return tgt_cnt;
+	if (rdg->dru_shard_cnt < 0)
+		return rdg->dru_shard_cnt;
 
 	/* If no other target, then current target is the unique
 	 * one that can be committed if it is 'prepared'.
 	 */
-	if (tgt_cnt == 1)
+	if (rdg->dru_shard_cnt == 1)
 		return DTX_ST_PREPARED;
 
 	pool = ds_pool_lookup(po_uuid);
@@ -748,13 +713,12 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 
 	D_INIT_LIST_HEAD(&head);
 	crt_group_rank(NULL, &myrank);
-	start = (oid->id_shard / tgt_cnt) * tgt_cnt;
-	for (i = start; i < start + tgt_cnt; i++) {
+	for (i = 0; i < rdg->dru_shard_cnt; i++) {
 		struct pl_obj_shard	*shard;
 		struct pool_target	*target;
 
 		/* skip unavailable or in-rebuilding target(s). */
-		shard = &layout->ol_shards[i];
+		shard = &layout->ol_shards[rdg->dru_shards[i]];
 		if (shard->po_target == -1 || shard->po_rebuilding)
 			continue;
 

@@ -106,14 +106,12 @@ obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_child *cont,
 
 static void
 obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
-	     struct dtx_conflict_entry *dce, struct ds_cont_hdl *cont_hdl)
+	     struct ds_cont_hdl *cont_hdl)
 {
 	int rc;
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
-	if (dce != NULL)
-		obj_reply_dtx_conflict_set(rpc, dce);
 
 	D_DEBUG(DB_TRACE, "rpc %p opc %d send reply, pmv %d, status %d.\n",
 		rpc, opc_get(rpc->cr_opc), map_version, status);
@@ -984,6 +982,9 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				    orw->orw_sgls.ca_count);
 		}
 
+		dtx_sub_init(dth, &orw->orw_oid, orw->orw_dkey_hash,
+			     DAOS_INTENT_UPDATE);
+
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
 			      orw->orw_epoch,
 			      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
@@ -1274,7 +1275,6 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	daos_key_t			*dkey = &orw->orw_dkey;
 	struct obj_io_context		 ioc;
 	struct dtx_handle                dth = { 0 };
-	struct dtx_conflict_entry	 conflict = { 0 };
 	uint32_t			 opc = opc_get(rpc->cr_opc);
 	int				 rc;
 
@@ -1304,9 +1304,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid,
-				       &orw->orw_dti,
-				       orw->orw_dkey_hash, false,
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid.id_pub,
+				       &orw->orw_dti, orw->orw_dkey_hash,
 				       &orw->orw_epoch);
 
 		/* Do nothing if 'prepared' or 'committed'. */
@@ -1339,11 +1338,10 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = 0);
 	}
 
-	rc = dtx_begin(&orw->orw_dti, &orw->orw_oid, ioc.ioc_vos_coh,
-		       orw->orw_epoch, orw->orw_dkey_hash,
-		       &conflict, orw->orw_dti_cos.ca_arrays,
-		       orw->orw_dti_cos.ca_count, orw->orw_map_ver,
-		       DAOS_INTENT_UPDATE, &dth);
+	rc = dtx_begin(&orw->orw_dti, ioc.ioc_vos_coh, orw->orw_epoch,
+		       orw->orw_map_ver, orw->orw_rdgs.iov_len, 1,
+		       orw->orw_rdgs.iov_buf, orw->orw_dti_cos.ca_count,
+		       orw->orw_dti_cos.ca_arrays, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1363,7 +1361,7 @@ out:
 		rc = -DER_IO;
 
 	rc = dtx_end(&dth, ioc.ioc_coh, ioc.ioc_coc, rc);
-	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, &conflict, ioc.ioc_coh);
+	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coh);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -1405,6 +1403,40 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 	return ds_obj_remote_update(dlh, arg, idx, comp_cb);
 }
 
+static int
+ds_obj_gen_rdgs(daos_unit_oid_t oid, struct daos_shard_tgt *fw_tgts,
+		uint32_t fw_tgt_cnt, struct dtx_rdg_unit **rdgs_out)
+{
+	struct dtx_rdg_unit	*rdgs;
+	int			 size = sizeof(*rdgs);
+	int			 i;
+
+	if (fw_tgt_cnt > 2)
+		size += sizeof(fw_tgts[0].st_shard) * (fw_tgt_cnt - 2);
+
+	D_ALLOC(rdgs, size);
+	if (rdgs == NULL)
+		return -DER_NOMEM;
+
+	rdgs->dru_oid = oid.id_pub;
+	rdgs->dru_shard_cnt = 1;
+	rdgs->dru_shards[0] = oid.id_shard;
+	for (i = 0; i < fw_tgt_cnt; i++) {
+		if (fw_tgts[i].st_rank == TGTS_IGNORE)
+			continue;
+
+		rdgs->dru_shards[rdgs->dru_shard_cnt++] = fw_tgts[i].st_shard;
+	}
+
+	*rdgs_out = rdgs;
+
+	size = sizeof(*rdgs);
+	if (rdgs->dru_shard_cnt > 3)
+		size += sizeof(fw_tgts[0].st_shard) * (rdgs->dru_shard_cnt - 3);
+
+	return size;
+}
+
 void
 ds_obj_rw_handler(crt_rpc_t *rpc)
 {
@@ -1417,6 +1449,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	uint32_t			flags = 0;
 	uint32_t			opc = opc_get(rpc->cr_opc);
 	struct obj_ec_split_req		*split_req = NULL;
+	struct dtx_id			*dti_cos = NULL;
+	struct dtx_rdg_unit		*rdgs = NULL;
+	int				dti_cos_cnt;
+	int				rdg_size;
 	int				rc;
 
 	D_ASSERT(orw != NULL);
@@ -1471,9 +1507,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (orw->orw_flags & ORF_RESEND) {
 		daos_epoch_t	tmp = 0;
 
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid,
-				       &orw->orw_dti, orw->orw_dkey_hash,
-				       false, &tmp);
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid.id_pub,
+				       &orw->orw_dti, orw->orw_dkey_hash, &tmp);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
 
@@ -1489,9 +1524,32 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		goto cleanup;
 	}
 
+	rdg_size = ds_obj_gen_rdgs(orw->orw_oid, orw->orw_shard_tgts.ca_arrays,
+				   orw->orw_shard_tgts.ca_count, &rdgs);
+	if (rdg_size < 0)
+		D_GOTO(out, rc = rdg_size);
+
 	D_TIME_START(time_start, OBJ_PF_UPDATE);
 
 renew:
+	/*
+	 * For leader case, we need to find out the potential conflict
+	 * (or share the same non-committed object/dkey) DTX(s) in the
+	 * CoS (committable) cache, piggyback them via the dispdatched
+	 * RPC to non-leaders. Then the non-leader replicas can commit
+	 * them before real modifications to avoid availability issues.
+	 */
+	if (dti_cos != NULL) {
+		D_FREE(dti_cos);
+		dti_cos = NULL;
+	}
+
+	dti_cos_cnt = vos_dtx_list_cos(ioc.ioc_vos_coh, &orw->orw_oid.id_pub,
+				       orw->orw_dkey_hash, DTX_THRESHOLD_COUNT,
+				       &dti_cos);
+	if (dti_cos_cnt < 0)
+		D_GOTO(out, rc = dti_cos_cnt);
+
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
@@ -1504,12 +1562,12 @@ renew:
 	 * modification or not, so still need to dispatch
 	 * the RPC to other replicas.
 	 */
-	rc = dtx_leader_begin(&orw->orw_dti, &orw->orw_oid, ioc.ioc_vos_coh,
-			      orw->orw_epoch, orw->orw_dkey_hash,
-			      orw->orw_map_ver, DAOS_INTENT_UPDATE,
+	rc = dtx_leader_begin(&orw->orw_dti, ioc.ioc_vos_coh, orw->orw_epoch,
+			      orw->orw_map_ver, orw->orw_rdgs.iov_len, 1,
+			      orw->orw_rdgs.iov_buf,
 			      orw->orw_shard_tgts.ca_arrays,
 			      orw->orw_shard_tgts.ca_count,
-			      orw->orw_api_flags & VOS_COND_UPDATE_MASK, &dlh);
+			      dti_cos_cnt, dti_cos, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1552,9 +1610,14 @@ out:
 		goto cleanup;
 
 reply:
-	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, NULL, ioc.ioc_coh);
+	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coh);
 
 cleanup:
+	if (rdgs != NULL)
+		D_FREE(rdgs);
+	if (dti_cos != NULL)
+		D_FREE(dti_cos);
+
 	D_TIME_END(time_start, OBJ_PF_UPDATE);
 	obj_ec_split_req_fini(split_req);
 	obj_ioc_end(&ioc, rc);
@@ -1874,15 +1937,12 @@ out:
 }
 
 static void
-obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version,
-		   struct dtx_conflict_entry *dce)
+obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 {
 	int rc;
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
-	if (dce != NULL)
-		obj_reply_dtx_conflict_set(rpc, dce);
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
@@ -1900,6 +1960,8 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 		D_DEBUG(DB_TRACE, "disable dtx\n");
 		dth = NULL;
 	}
+
+	dtx_sub_init(dth, &opi->opi_oid, opi->opi_dkey_hash, DAOS_INTENT_PUNCH);
 
 	switch (opc) {
 	case DAOS_OBJ_RPC_PUNCH:
@@ -1939,7 +2001,6 @@ void
 ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 {
 	struct dtx_handle		 dth = { 0 };
-	struct dtx_conflict_entry	 conflict = { 0 };
 	struct obj_io_context		 ioc;
 	struct obj_punch_in		*opi;
 	int				 rc;
@@ -1954,9 +2015,9 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid,
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid.id_pub,
 				       &opi->opi_dti, opi->opi_dkey_hash,
-				       true, &opi->opi_epoch);
+				       &opi->opi_epoch);
 
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc == -DER_ALREADY || rc == 0)
@@ -1977,11 +2038,10 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	}
 
 	/* Start the local transaction */
-	rc = dtx_begin(&opi->opi_dti, &opi->opi_oid, ioc.ioc_vos_coh,
-		       opi->opi_epoch, opi->opi_dkey_hash,
-		       &conflict, opi->opi_dti_cos.ca_arrays,
-		       opi->opi_dti_cos.ca_count, opi->opi_map_ver,
-		       DAOS_INTENT_PUNCH, &dth);
+	rc = dtx_begin(&opi->opi_dti, ioc.ioc_vos_coh, opi->opi_epoch,
+		       opi->opi_map_ver, opi->opi_rdgs.iov_len, 1,
+		       opi->opi_rdgs.iov_buf, opi->opi_dti_cos.ca_count,
+		       opi->opi_dti_cos.ca_arrays, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -2002,7 +2062,7 @@ out:
 
 	/* Stop the local transaction */
 	rc = dtx_end(&dth, ioc.ioc_coh, ioc.ioc_coc, rc);
-	obj_punch_complete(rpc, rc, ioc.ioc_map_ver, &conflict);
+	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -2041,6 +2101,10 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	struct obj_punch_in		*opi;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc;
+	struct dtx_id			*dti_cos = NULL;
+	struct dtx_rdg_unit		*rdgs = NULL;
+	int				dti_cos_cnt;
+	int				rdg_size;
 	uint32_t			flags = 0;
 	int				rc;
 
@@ -2096,9 +2160,8 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	if (opi->opi_flags & ORF_RESEND) {
 		daos_epoch_t	tmp = 0;
 
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid,
-				       &opi->opi_dti, opi->opi_dkey_hash,
-				       true, &tmp);
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid.id_pub,
+				       &opi->opi_dti, opi->opi_dkey_hash, &tmp);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
 
@@ -2115,7 +2178,30 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		goto cleanup;
 	}
 
+	rdg_size = ds_obj_gen_rdgs(opi->opi_oid, opi->opi_shard_tgts.ca_arrays,
+				   opi->opi_shard_tgts.ca_count, &rdgs);
+	if (rdg_size < 0)
+		D_GOTO(out, rc = rdg_size);
+
 renew:
+	/*
+	 * For leader case, we need to find out the potential conflict
+	 * (or share the same non-committed object/dkey) DTX(s) in the
+	 * CoS (committable) cache, piggyback them via the dispdatched
+	 * RPC to non-leaders. Then the non-leader replicas can commit
+	 * them before real modifications to avoid availability issues.
+	 */
+	if (dti_cos != NULL) {
+		D_FREE(dti_cos);
+		dti_cos = NULL;
+	}
+
+	dti_cos_cnt = vos_dtx_list_cos(ioc.ioc_vos_coh, &opi->opi_oid.id_pub,
+				       opi->opi_dkey_hash, DTX_THRESHOLD_COUNT,
+				       &dti_cos);
+	if (dti_cos_cnt < 0)
+		D_GOTO(out, rc = dti_cos_cnt);
+
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
@@ -2128,12 +2214,12 @@ renew:
 	 * modification or not, so still need to dispatch
 	 * the RPC to other replicas.
 	 */
-	rc = dtx_leader_begin(&opi->opi_dti, &opi->opi_oid, ioc.ioc_vos_coh,
-			      opi->opi_epoch, opi->opi_dkey_hash,
-			      opi->opi_map_ver, DAOS_INTENT_PUNCH,
+	rc = dtx_leader_begin(&opi->opi_dti, ioc.ioc_vos_coh, opi->opi_epoch,
+			      opi->opi_map_ver, opi->opi_rdgs.iov_len, 1,
+			      opi->opi_rdgs.iov_buf,
 			      opi->opi_shard_tgts.ca_arrays,
 			      opi->opi_shard_tgts.ca_count,
-			      opi->opi_api_flags & VOS_OF_COND_PUNCH, &dlh);
+			      dti_cos_cnt, dti_cos, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -2173,8 +2259,13 @@ out:
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		goto cleanup;
 
-	obj_punch_complete(rpc, rc, ioc.ioc_map_ver, NULL);
+	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
 cleanup:
+	if (rdgs != NULL)
+		D_FREE(rdgs);
+	if (dti_cos != NULL)
+		D_FREE(dti_cos);
+
 	obj_ioc_end(&ioc, rc);
 }
 
