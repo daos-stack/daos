@@ -78,24 +78,21 @@ class DmgStorageQuery(ControlTestBase):
         else:
             self.fail("SMD info not found: {}".format(smd_info))
 
-    def check_dev_state_out(self, smd_info, method_name, state):
+    def get_devs_info(self, smd_info, method_name):
         """Check device state output.
 
         Args:
-            state (str): State expected. e.i. NORMAL | FAULTY
+            smd_info (str): smd info used to grab uuid and get other cmds info
+            method_name (str): name of method to be run
         """
-        # Parse stdout into a dict check that devices information is displayed.
-        device_state_info = []
+        device_info = []
         for info in smd_info:
             if "Device" in info:
                 uuid = info[info.index("Device") + 1]
-                device_state_info.append(
-                    self.get_dmg_cmd_info(method_name, devuuid=uuid))
+                device_info.append(
+                    self.get_dmg_output(method_name, devuuid=uuid))
 
-        # Check that the state of each device is NORMAL
-        for dev in device_state_info:
-            if dev[2] != state:
-                self.fail("Found a device in {} state.".format(dev[2]))
+        return device_info
 
     def test_dmg_storage_query_smd_devices(self):
         """
@@ -106,7 +103,7 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=all,pr,hw,small,dmg_storage_query,smd_devs,basic
         """
         # Get the storage smd infromation, parse and check devices info
-        smd_info = self.get_dmg_cmd_info("storage_query_smd", pools=False)
+        smd_info = self.get_dmg_output("storage_query_smd", pools=False)
         self.check_smd_out(smd_info, "devices", "pools")
 
         # Check if the number of devices match the config
@@ -124,12 +121,12 @@ class DmgStorageQuery(ControlTestBase):
         """
         # Create pool and get the storage smd information, then verfify info
         self.prepare_pool(self.dmg)
-        smd_info = self.get_dmg_cmd_info("storage_query_smd", devices=False)
+        smd_info = self.get_dmg_output("storage_query_smd", devices=False)
         self.check_smd_out(smd_info, "pools", "devices")
 
         # Destroy pool and get the storage smd information, then verify info
         self.pool.destroy()
-        smd_info = self.get_dmg_cmd_info("storage_query_smd", devices=False)
+        smd_info = self.get_dmg_output("storage_query_smd", devices=False)
         self.check_smd_out(smd_info, "devices", "pools")
 
     def test_dmg_storage_query_blobstore_health(self):
@@ -142,21 +139,18 @@ class DmgStorageQuery(ControlTestBase):
         """
         # Create pool and get the storage smd information
         self.prepare_pool(self.dmg)
-        smd_info = self.get_dmg_cmd_info("storage_query_smd", devices=False)
+        smd_info = self.get_dmg_output("storage_query_smd", devices=False)
 
-        # Parse stdout into a dict check that devices information is displayed.
-        blobstore_info = []
-        for info in smd_info:
-            if "Device" in info:
-                uuid = info[info.index("Device") + 1]
-                blobstore_info.append(
-                    self.get_dmg_cmd_info("storage_query_blobstore", uuid))
+        # Get the device uuid and run command
+        devs_info = self.get_devs_uuid(smd_info, "storage_query_blobstore")
+        print(devs_info)
 
         # Compare config expected values with dmg output
         e_blob_info = self.params.get("blobstore_info", "/run/*")
-        if blobstore_info.sort() != e_blob_info.sort():
-            self.fail("dmg storage query expected output: {}".format(
-                e_blob_info))
+        print(e_blob_info)
+        # if blobstore_info.sort() != e_blob_info.sort():
+        #     self.fail("dmg storage query expected output: {}".format(
+        #         e_blob_info))
 
     def test_dmg_storage_query_device_state(self):
         """
@@ -166,16 +160,24 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,pr,hw,small,dmg_storage_query,device_state,basic
         """
-        smd_info = self.get_dmg_cmd_info("storage_query_smd", devices=False)
+        smd_info = self.get_dmg_output("storage_query_smd", devices=False)
 
-        # Check that device is in a normal state
-        self.check_dev_state_out(
-            smd_info, "storage_query_device_state", "NORMAL")
+        # Check that the state of each device is NORMAL
+        devs_info = self.get_devs_uuid(smd_info, "storage_query_device_state")
+        for dev in devs_info:
+            if dev[2] != "NORMAL":
+                self.fail("Found a device in {} state.".format(dev[2]))
 
         # Set device to faulty state and check that it's in FAULTY state
-        self.check_dev_state_out(smd_info, "storage_set_faulty", "FAULTY")
-        self.check_dev_state_out(
-            smd_info, "storage_query_device_state", "FAULTY")
+        devs_info = self.get_devs_uuid(smd_info, "storage_set_faulty")
+        for dev in devs_info:
+            if dev[2] != "FAULTY":
+                self.fail("Found a device in {} state.".format(dev[2]))
+
+        devs_info = self.get_devs_uuid(smd_info, "storage_query_device_state")
+        for dev in devs_info:
+            if dev[2] != "FAULTY":
+                self.fail("Found a device in {} state.".format(dev[2]))
 
     def test_dmg_storage_set_nvme_fault(self):
         """

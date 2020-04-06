@@ -36,21 +36,7 @@ from command_utils import \
 class DmgCommand(CommandWithSubCommand):
     """Defines a object representing a dmg command."""
 
-    def __init__(self, path):
-        """Create a dmg Command object.
-
-        Args:
-            path (str): path to the dmg command
-        """
-        super(DmgCommand, self).__init__("/run/dmg/*", "dmg", path)
-
-        self.hostlist = FormattedParameter("-l {}")
-        self.hostfile = FormattedParameter("-f {}")
-        self.configpath = FormattedParameter("-o {}")
-        self.insecure = FormattedParameter("-i", True)
-        self.debug = FormattedParameter("-d", False)
-        self.json = FormattedParameter("-j", False)
-        self.METHOD_REGEX_LIST = {
+    METHOD_REGEX_LIST = {
             "storage_query_smd": r"""([0-9a-zA-Z-_]+):(?:\d+):
                 (?:\n|\r\n)\s+(Pool|Device):
                 (?:\n|\r\n)\s+UUID:\s+([0-9a-f-]+)
@@ -77,7 +63,22 @@ class DmgCommand(CommandWithSubCommand):
             "storage_set_faulty": r"""^([0-9a-zA-Z_-]+):\d+:
                 (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
                 (?:\n|\r\n)\s+State:\s+([a-zA-Z]+)"""
-        }
+    }
+
+    def __init__(self, path):
+        """Create a dmg Command object.
+
+        Args:
+            path (str): path to the dmg command
+        """
+        super(DmgCommand, self).__init__("/run/dmg/*", "dmg", path)
+
+        self.hostlist = FormattedParameter("-l {}")
+        self.hostfile = FormattedParameter("-f {}")
+        self.configpath = FormattedParameter("-o {}")
+        self.insecure = FormattedParameter("-i", True)
+        self.debug = FormattedParameter("-d", False)
+        self.json = FormattedParameter("-j", False)
 
     def set_hostlist(self, manager):
         """Set the dmg hostlist parameter with the daos server/agent info.

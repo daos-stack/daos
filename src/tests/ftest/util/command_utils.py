@@ -285,6 +285,12 @@ class CommandWithParameters(ObjectWithParameters):
 class ExecutableCommand(CommandWithParameters):
     """A class for command with paramaters."""
 
+    """
+        Dictionary to store the regex patterns that will parse the output of
+        command functions created in child classes of ExecutableCommand class.
+        """
+    METHOD_REGEX_LIST = {"run": r"(.*)"}
+
     def __init__(self, namespace, command, path="", subprocess=False):
         """Create a ExecutableCommand object.
 
@@ -306,12 +312,6 @@ class ExecutableCommand(CommandWithParameters):
         self.verbose = True
         self.env = None
         self.sudo = False
-
-        """
-        Dictionary to store the regex patterns that will parse the output of
-        command functions created in child classes of ExecutableCommand class.
-        """
-        self.METHOD_REGEX_LIST = {}
 
     @property
     def process(self):
@@ -440,26 +440,43 @@ class ExecutableCommand(CommandWithParameters):
             self._process = None
 
     # pylint: disable=no-member
-    def get_cmd_info(self, method_name, **kwargs):
-        """Search function acting as a proxy to execute dmg command & get info.
+    def get_output(self, method_name, **kwargs):
+        """Get output from the command issued by the specified method.
+
+        Issue the specified method and return a list of strings that result from
+        searching its standard output for a fixed set of patterns defined for
+        the class method.
 
         Args:
-            method_name (str): Name of function to be executed.
-            kwargs (dict): Arguments to be provided to method_name function.
-        """
-        method = getattr(self, method_name)
-        if method is None or method_name not in self.METHOD_REGEX_LIST:
-            raise CommandFailure("No {} method defined".format(method_name))
+            method_name (str): name of the method to execute
 
-        # Run command
-        try:
-            res = method(**kwargs)
-        except CommandFailure as error:
-            raise CommandFailure("<dmg> command failed: {}".format(error))
-        # Parse it's output.
-        info = re.findall(
-            self.METHOD_REGEX_LIST[method_name], res.stdout, re.M | re.I | re.X)
-        return info
+        Raises:
+            CommandFailure: if there is an error finding the method, finding the
+                method's regex pattern, or executing the method
+
+        Returns:
+            list: a list of strings obtained from the method's output parsed
+                through its regex
+
+        """
+        # Get the method to call to obtain the CmdResult
+        method = getattr(self, method_name)
+        if method is None:
+            raise CommandFailure(
+                "No '{}()' method defined for this class".format(method_name))
+
+        # Get the regex pattern to filter the CmdResult.stdout
+        if method_name not in self.METHOD_REGEX:
+            raise CommandFailure(
+                "No pattern regex defined for '{}()'".format(method_name))
+        pattern = self.METHOD_REGEX[method_name]
+
+        # Run the command and parse the output using the regex
+        result = method(**kwargs)
+        if not isinstance(result, process.CmdResult):
+            raise CommandFailure(
+                "{}() did not return a CmdResult".format(method_name))
+        return re.findall(pattern, result.stdout)
     # pylint: enable=no-member
 
 
