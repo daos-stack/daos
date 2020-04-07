@@ -630,9 +630,6 @@ ilog_destroy(struct umem_instance *umm,
 fail:
 	rc = ilog_tx_end(&lctx, rc);
 
-	if (rc == 0)
-		vos_ts_evict(&lctx.ic_root->lr_ts_idx);
-
 	return rc;
 }
 

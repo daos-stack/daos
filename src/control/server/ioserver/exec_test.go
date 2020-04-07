@@ -146,7 +146,9 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
-		WithPinnedNumaNode(&numaNode)
+		WithPinnedNumaNode(&numaNode).
+		WithCrtCtxShareAddr(1).
+		WithCrtTimeout(30)
 	runner := NewRunner(log, cfg)
 	errOut := make(chan error)
 
@@ -163,6 +165,8 @@ func TestRunnerNormalExit(t *testing.T) {
 	wantArgs := "-t 42 -x 1 -p 1 -I 0"
 	var gotArgs string
 	env := []string{
+		"CRT_CTX_SHARE_ADDR=1",
+		"CRT_TIMEOUT=30",
 		"OFI_INTERFACE=qib0",
 		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",
 	}
