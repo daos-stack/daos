@@ -123,11 +123,14 @@ def set_defaults(env):
 
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
-    env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-O0', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
-    env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
-    env.Append(CCFLAGS=['-D_FORTIFY_SOURCE=2'])
+    env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=1'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+    env.Append(CCFLAGS=['-Wno-unused-function'])
+    env.Append(CCFLAGS=['-Wno-unused-label'])
+    env.Append(CCFLAGS=['-Wno-unused-variable'])
+    env.Append(CCFLAGS=['-Wno-unused-but-set-variable'])
 
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
