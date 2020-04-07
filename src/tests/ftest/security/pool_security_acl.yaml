@@ -3,30 +3,32 @@
 hosts:
   test_servers:
     - server-A
+    - server-B
+    - server-C
   test_clients:
-    - server-B   #server client different host
+    - server-C
+#server and agent security
+server_manager:
+  insecure: True
+agent_config:
   transport_config:
-    - allow_insecure: False
-    - ca_cert: ~/.daos/daosCA.crt
-    - cert: ~/.daos/daos_agent.crt
-    - key: ~/.daos/daos_agent.key
-    - server_name: server
-timeout: 1200
+    allow_insecure: True
+    ca_cert: .daos/daosCA.crt
+    cert: .daos/clients/agent.crt
+    key: .daos/clients/agent.key
+    client_cert_dir: .daos/clients
+    server_name: server
+timeout: 600
 server_config:
   name: daos_server
   port: 10001
-daos_server:
-  start:
-     insecure: False
-dmg:
-  request: pool
-  action: create
-  create:
-    scm_size: 16000000
+#dmg pool_acl
 pool_acl:
   user_prefix: daos_ci
-  num_user: 5
-  num_group: 5
+  num_user: 1
+  num_group: 1
+  scm_size: 16000008
+  insecure: True
   test_users: !mux
     user_type1:
       user:

@@ -5,28 +5,27 @@ hosts:
     - server-A
   test_clients:
     - server-B
-  transport_config:
-    - allow_insecure: False
-    - ca_cert: ~/.daos/daosCA.crt
-    - cert: ~/.daos/daos_agent.crt
-    - key: ~/.daos/daos_agent.key
-    - server_name: server
 timeout: 600
 server_config:
   name: daos_server
   port: 10001
-daos_server:
-  start:
-     insecure: False
-dmg:
-  request: pool
-  action: create
-  create:
-    scm_size: 16000000
+#server and agent security
+server_manager:
+  insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+    ca_cert: .daos/daosCA.crt
+    cert: .daos/clients/agent.crt
+    key: .daos/clients/agent.key
+    client_cert_dir: .daos/clients
+    server_name: server
 pool_acl:
   user_prefix: daos_ci
   num_user: 1
   num_group: 1
+  insecure: True
+  scm_size: 16000008
   primary_secondary_group_test:
     primary_group:
       pg_permission:
@@ -45,38 +44,38 @@ pool_acl:
         sg_read_write:
           - pass
           - pass
-      test2:
-        sg_permission:
-          - none
-          - rw
-        sg_read_write:
-          - pass
-          - pass
-      test3:
-        sg_permission:
-          - r
-          - none
-        sg_read_write:
-          - pass
-          - deny
-      test4:
-        sg_permission:
-          - none
-          - w
-        sg_read_write:
-          - deny
-          - deny
-      test5:
-        sg_permission:
-          - wr
-          - w
-        sg_read_write:
-          - pass
-          - pass
-      test6:
-        sg_permission:
-          - none
-          - none
-        sg_read_write:
-          - deny
-          - deny
+#      test2:
+#        sg_permission:
+#          - none
+#          - rw
+#        sg_read_write:
+#          - pass
+#          - pass
+#      test3:
+#        sg_permission:
+#          - r
+#          - none
+#        sg_read_write:
+#          - pass
+#          - deny
+#      test4:
+#        sg_permission:
+#          - none
+#          - w
+#        sg_read_write:
+#          - deny
+#          - deny
+#      test5:
+#        sg_permission:
+#          - wr
+#          - w
+#        sg_read_write:
+#          - pass
+#          - pass
+#      test6:
+#        sg_permission:
+#          - none
+#          - none
+#        sg_read_write:
+#          - deny
+#          - deny

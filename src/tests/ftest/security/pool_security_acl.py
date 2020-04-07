@@ -55,7 +55,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             verify pool user and group read, write, read-write and none
             permissions enforcement with all forms of input under different
             test sceanrios.
-        :avocado: tags=all,full_regression,security,pool_acl,sec_acl
+        :avocado: tags=all,full_regression,security,pool_acl,sec_acl1
         '''
         user_uid = os.geteuid()
         user_gid = os.getegid()

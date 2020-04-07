@@ -52,7 +52,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             acl permission, verify pool user and group read, write, read-write
             and none permissions enforcement with all forms of input under
             different test sceanrios.
-        :avocado: tags=all,full_regression,security,pool_acl,sec_acl_groups
+        :avocado: tags=all,full_regression,security,pool_acl,sec_acl_groups,sec_acl2
         '''
         user_gid = os.getegid()
         current_group = grp.getgrgid(user_gid)[0]
@@ -69,6 +69,10 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
                       "'none', 'r', w', 'rw'", primary_grp_perm)
 
         self.log.info("==Starting self.pool_acl_verification")
+        print("======")
+        print("==user_gid      = ", user_gid)
+        print("==current_group = ", current_group)
+        print("======")
         self.log.info(" =acl_entries = %s", acl_entries)
         self.log.info(" =expect read = %s", read)
         self.log.info(" =expect write= %s", write)
