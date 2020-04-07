@@ -847,12 +847,13 @@ cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 	 * Need the pool for the IV namespace
 	 */
 	hdl->sch_csummer = NULL;
-	props = daos_prop_alloc(2);
+	props = daos_prop_alloc(3);
 	if (props == NULL) {
 		return -DER_NOMEM;
 	}
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 	rc = cont_iv_prop_fetch(hdl->sch_cont->sc_pool->spc_pool->sp_iv_ns,
 				hdl->sch_uuid, props);
 	if (rc != 0)
@@ -863,7 +864,8 @@ cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 	if (daos_cont_csum_prop_is_enabled(csum_val))
 		rc = daos_csummer_type_init(&hdl->sch_csummer,
 					    daos_contprop2csumtype(csum_val),
-					    daos_cont_prop2chunksize(props));
+					    daos_cont_prop2chunksize(props),
+					    daos_cont_prop2serververify(props));
 done:
 	daos_prop_free(props);
 

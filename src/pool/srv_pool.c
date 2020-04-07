@@ -3626,7 +3626,8 @@ out:
 static int
 ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 			unsigned int opc, uint32_t *map_version_p,
-			struct rsvc_hint *hint, bool *p_updated)
+			struct rsvc_hint *hint, bool *p_updated,
+			bool evict_rank)
 {
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
@@ -3656,7 +3657,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, opc);
+	rc = ds_pool_map_tgts_update(map, tgts, opc, evict_rank);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -3800,21 +3801,21 @@ int
 ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE_OUT,
-				       NULL, NULL, NULL);
+				       NULL, NULL, NULL, false);
 }
 
 int
 ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE,
-				       NULL, NULL, NULL);
+				       NULL, NULL, NULL, false);
 }
 
 int
 ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_ADD_IN,
-				       NULL, NULL, NULL);
+				       NULL, NULL, NULL, false);
 }
 
 /*
@@ -3826,7 +3827,7 @@ static int
 ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	       struct pool_target_addr_list *list,
 	       struct pool_target_addr_list *out_list,
-	       uint32_t *map_version, struct rsvc_hint *hint)
+	       uint32_t *map_version, struct rsvc_hint *hint, bool evict_rank)
 {
 	daos_rebuild_opc_t		op;
 	struct pool_target_id_list	target_list = { 0 };
@@ -3841,7 +3842,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 
 	/* Update target by target id */
 	rc = ds_pool_update_internal(pool_uuid, &target_list, opc, map_version,
-				     hint, &updated);
+				     hint, &updated, evict_rank);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3888,7 +3889,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	list.pta_addrs = in->pti_addr_list.ca_arrays;
 	rc = ds_pool_update(in->pti_op.pi_uuid, opc_get(rpc->cr_opc), &list,
 			    &out_list, &out->pto_op.po_map_version,
-			    &out->pto_op.po_hint);
+			    &out->pto_op.po_hint, false);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3917,8 +3918,8 @@ ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank)
 	list.pta_number = 1;
 	list.pta_addrs = &tgt_rank;
 
-	rc = ds_pool_update(pool_uuid, POOL_EXCLUDE, &list,
-			    &out_list, &map_version, NULL);
+	rc = ds_pool_update(pool_uuid, POOL_EXCLUDE, &list, &out_list,
+			    &map_version, NULL, true);
 
 	D_DEBUG(DB_MGMT, "Exclude pool "DF_UUID"/%u rank %u: rc %d\n",
 		DP_UUID(pool_uuid), map_version, rank, rc);
