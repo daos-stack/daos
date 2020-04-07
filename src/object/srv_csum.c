@@ -548,7 +548,7 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 			rc = cc_add_csums_for_recx(&ctx, recx, info);
 			if (rc != 0) {
 				D_ERROR("Failed to add csum for "
-	    					"recx"DF_RECX": %d\n",
+						"recx"DF_RECX": %d\n",
 					DP_RECX(*recx), rc);
 			}
 		}

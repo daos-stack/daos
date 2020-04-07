@@ -204,7 +204,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			} else  if (iod->iod_type == DAOS_IOD_ARRAY) {
 				D_ERROR("Data Verification failed (object: "
 						DF_OID" , extent: "DF_RECX"):"
-	  					" "DF_RC"\n",
+						" "DF_RC"\n",
 					DP_OID(orw->orw_oid.id_pub),
 					DP_RECX(iod->iod_recxs[i]),
 					DP_RC(rc));

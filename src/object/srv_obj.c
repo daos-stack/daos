@@ -2300,7 +2300,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 			if (iod->iod_type == DAOS_IOD_ARRAY) {
 				D_ERROR("Data Verification failed (object: "
 						DF_OID ", "
-	     					"extent: "DF_RECX"): %d\n",
+						"extent: "DF_RECX"): %d\n",
 					DP_OID(orw->orw_oid.id_pub),
 					DP_RECX(iod->iod_recxs[i]),
 					rc);
