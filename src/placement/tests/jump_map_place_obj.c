@@ -28,7 +28,7 @@
 #include <daos.h>
 #include "place_obj_common.h"
 
-#define DOM_NR		8
+#define DOM_NR		18
 #define	NODE_PER_DOM	1
 #define VOS_PER_TARGET	4
 #define SPARE_MAX_NUM	(DOM_NR * 3)
@@ -248,8 +248,7 @@ reint_object_class(daos_oclass_id_t cid)
 int
 main(int argc, char **argv)
 {
-	struct daos_oclass_attr *obj_attr;
-	daos_obj_id_t		 oid;
+//	struct daos_oclass_attr *obj_attr;
 	daos_oclass_id_t	*test_classes;
 	uint32_t		 num_test_oc;
 	char			 oclass_name[50];
@@ -271,16 +270,6 @@ main(int argc, char **argv)
 	for (oc_index = 0; oc_index < num_test_oc; ++oc_index) {
 
 		daos_oclass_id2name(test_classes[oc_index],  oclass_name);
-		daos_obj_generate_id(&oid, 0, test_classes[oc_index], 0);
-		obj_attr = daos_oclass_attr_find(oid);
-
-		/* Skip Erasure Codded objects for now. */
-		if (obj_attr->ca_resil == DAOS_RES_EC) {
-			D_PRINT("Skipping erasure coded class: %s\n",
-					oclass_name);
-			continue;
-		}
-
 		D_PRINT("Running oclass test: %s\n", oclass_name);
 
 		placement_object_class(test_classes[oc_index]);
