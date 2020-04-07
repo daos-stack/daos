@@ -136,12 +136,6 @@ rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
 }
 
 static void
-reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
-{
-	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, false);
-}
-
-static void
 rebuild_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 		    int ranks_nr)
 {
@@ -149,27 +143,12 @@ rebuild_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 			false);
 }
 
-static void
-reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
-		    int ranks_nr)
-{
-	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, false,
-			false);
-}
 void
 rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 			   int failed_tgt)
 {
 	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, true, false);
 }
-
-void
-reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
-			   int failed_tgt)
-{
-	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false, false);
-}
-
 
 void
 rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
@@ -488,6 +467,62 @@ rebuild_pool_disconnect_internal(void *data)
 	return rc;
 }
 
+void
+reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+			       int failed_tgt)
+{
+	/* XXX: Disconnecting and reconnecting is necessary for the time being
+	 * while reintegration only supports "offline" mode and without
+	 * incremental reintegration. Disconnecting from the pool allows the
+	 * containers to be deleted before reintegration occurs
+	 *
+	 * Once incremental reintegration support is added, this should be
+	 * removed
+	 */
+	rebuild_pool_disconnect_internal(arg);
+	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false, false);
+	rebuild_pool_connect_internal(arg);
+}
+
+static void
+reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
+{
+
+	/* XXX: Disconnecting and reconnecting is necessary for the time being
+	 * while reintegration only supports "offline" mode and without
+	 * incremental reintegration. Disconnecting from the pool allows the
+	 * containers to be deleted before reintegration occurs
+	 *
+	 * Once incremental reintegration support is added, this should be
+	 * removed
+	 */
+	rebuild_pool_disconnect_internal(arg);
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, false);
+	rebuild_pool_connect_internal(arg);
+}
+
+static void
+reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
+			int ranks_nr)
+{
+	int i;
+
+	/* XXX: Disconnecting and reconnecting is necessary for the time being
+	 * while reintegration only supports "offline" mode and without
+	 * incremental reintegration. Disconnecting from the pool allows the
+	 * containers to be deleted before reintegration occurs
+	 *
+	 * Once incremental reintegration support is added, this should be
+	 * removed
+	 */
+	for (i = 0; i < args_cnt; i++)
+		rebuild_pool_disconnect_internal(args[i]);
+	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, false,
+			false);
+	for (i = 0; i < args_cnt; i++)
+		rebuild_pool_connect_internal(args[i]);
+}
+
 static void
 rebuild_drop_scan(void **state)
 {
@@ -517,9 +552,7 @@ rebuild_drop_scan(void **state)
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
-	rebuild_pool_disconnect_internal(arg);
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_pool_connect_internal(arg);
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
