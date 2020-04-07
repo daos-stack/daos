@@ -2259,45 +2259,19 @@ out:
 }
 
 static int
-cont_prop_srv_verify(struct ds_iv_ns *ns, uuid_t co_hdl)
-{
-	int			rc;
-	daos_prop_t		cont_prop = {0};
-	struct daos_prop_entry	entry = {0};
-
-	entry.dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	cont_prop.dpp_entries = &entry;
-	cont_prop.dpp_nr = 1;
-
-	rc = cont_iv_prop_fetch(ns, co_hdl, &cont_prop);
-	if (rc != 0)
-		return false;
-	return daos_cont_prop2serververify(&cont_prop);
-}
-
-static int
 obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
 		    struct daos_csummer *csummer)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
-	struct ds_pool		*pool;
 	uint64_t		 iods_nr = orw->orw_iod_array.oia_iod_nr;
 	unsigned int		 i;
 	int			 rc = 0;
 
-	if (!daos_csummer_initialized(csummer))
-		return 0;
-
-	pool = ds_pool_lookup(orw->orw_pool_uuid);
-	if (pool == NULL)
-		return -DER_NONEXIST;
-
 	if (!obj_rpc_is_update(rpc) ||
-	    !cont_prop_srv_verify(pool->sp_iv_ns, orw->orw_co_hdl)) {
-		ds_pool_put(pool);
+	    !daos_csummer_initialized(csummer) ||
+	    !csummer->dcs_srv_verify)
 		return 0;
-	}
 
 	for (i = 0; i < iods_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
@@ -2344,6 +2318,5 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 		}
 	}
 
-	ds_pool_put(pool);
 	return rc;
 }
