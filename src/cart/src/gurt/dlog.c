@@ -493,8 +493,11 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 */
 	if (mst.logfd >= 0)
 		if (write(mst.logfd, b, tlen) < 0) {
-			fprintf(stderr, "%s:%d, write failed %d(%s).\n",
-				__func__, __LINE__, errno, strerror(errno));
+			static int log_count;
+
+			if (log_count++ < 200)
+				fprintf(stderr, "%s:%d, write to %d failed %d(%s).\n",
+					__func__, __LINE__, mst.logfd, errno, strerror(errno));
 			errno = save_errno;
 		}
 

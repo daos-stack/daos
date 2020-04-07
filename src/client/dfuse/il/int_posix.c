@@ -362,7 +362,8 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl call on %d failed %d %d", fd, rc, err);
+		DFUSE_LOG_INFO("ioctl call on %d failed %d %d(%s)",
+			       fd, rc, err, strerror(err));
 		return false;
 	}
 
