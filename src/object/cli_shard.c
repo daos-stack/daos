@@ -198,22 +198,16 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		if (rc != 0) {
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
 				D_ERROR("Data Verification failed (object: "
-				DF_OID" dkey: %s, akey: %s): %d\n",
+					DF_OID"): "DF_RC"\n",
 					DP_OID(orw->orw_oid.id_pub),
-					(char *)orw->orw_dkey.iov_buf,
-					(char *)iod->iod_name.iov_buf, rc);
-			}
-			if (iod->iod_type == DAOS_IOD_ARRAY) {
+					DP_RC(rc));
+			} else  if (iod->iod_type == DAOS_IOD_ARRAY) {
 				D_ERROR("Data Verification failed (object: "
-				DF_OID" dkey: %s, akey: %s, extent: [%lu-%lu]):"
-						" %d\n",
+						DF_OID" , extent: "DF_RECX"):"
+	  					" "DF_RC"\n",
 					DP_OID(orw->orw_oid.id_pub),
-					(char *)orw->orw_dkey.iov_buf,
-					(char *)iod->iod_name.iov_buf,
-				iod->iod_recxs->rx_idx,
-				iod->iod_recxs->rx_idx +
-					iod->iod_recxs->rx_nr - 1,
-				rc);
+					DP_RECX(iod->iod_recxs[i]),
+					DP_RC(rc));
 			}
 
 			break;

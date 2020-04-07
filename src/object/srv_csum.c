@@ -128,7 +128,7 @@ cc_verify_orig_extents(struct csum_context *ctx)
 	uint32_t		 v;
 
 	for (v = 0; v < to_verify_nr; v++) {
-		C_TRACE("(CALC) Verifying original extent");
+		C_TRACE("(CALC) Verifying original extent\n");
 		uint8_t			 csum[csum_len];
 		bool			 match;
 		struct to_verify	*verify;
@@ -143,7 +143,7 @@ cc_verify_orig_extents(struct csum_context *ctx)
 		match = daos_csummer_csum_compare(csummer, csum,
 						  verify->tv_csum, csum_len);
 		if (!match) {
-			D_ERROR("Original extent corrupted");
+			D_ERROR("Original extent corrupted\n");
 			return -DER_CSUM;
 		}
 	}
@@ -270,7 +270,7 @@ cc_remember_to_copy(struct csum_context *ctx, struct dcs_csum_info *info,
 {
 	C_TRACE("Remember to copy csum (idx=%d, len=%d)\n", idx, len);
 	if (csum == NULL) {
-		D_ERROR("Expected to have checksums to copy for fetch.");
+		D_ERROR("Expected to have checksums to copy for fetch.\n");
 		return;
 	}
 	if (ctx->cc_csums_to_copy_to == NULL) {
@@ -522,7 +522,7 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		if (bio_addr_is_hole(&(bio_sgl_iov(bsgl, i)->bi_addr)))
 			continue;
 		if (!ci_is_valid(&biov_csums[j++])) {
-			D_ERROR("Invalid csum for biov %d.", i);
+			D_ERROR("Invalid csum for biov %d.\n", i);
 			return -DER_CSUM;
 		}
 	}
@@ -548,9 +548,8 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 			rc = cc_add_csums_for_recx(&ctx, recx, info);
 			if (rc != 0) {
 				D_ERROR("Failed to add csum for "
-					"recx[%lu-%lu]: %d",
-					recx->rx_idx,
-					recx->rx_idx + recx->rx_nr - 1, rc);
+	    					"recx"DF_RECX": %d\n",
+					DP_RECX(*recx), rc);
 			}
 		}
 	}
