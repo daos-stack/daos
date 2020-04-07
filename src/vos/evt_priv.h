@@ -204,6 +204,15 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 struct evt_extent
 evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size);
 
+/**
+ * Update the csum info for an entry so it takes into account the selected
+ * extent.
+ */
+void
+evt_entry_csum_update(const struct evt_extent *const ext,
+		      const struct evt_extent *const sel,
+		      struct dcs_csum_info *csum_info);
+
 /* By definition, all rectangles overlap in the epoch range because all
  * are from start to infinity.  However, for common queries, we often only want
  * rectangles intersect at a given epoch
