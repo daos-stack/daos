@@ -502,12 +502,12 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	return makeDrpcCall(dc, module, method, body)
 }
 
-// SetupWithDrpc sets up instance once dRPC comms are ready, this includes
+// FinishStartup sets up instance once dRPC comms are ready, this includes
 // setting the instance rank, starting management service and loading IO server
 // modules.
 //
 // Instance ready state is set to indicate that all setup is complete.
-func (srv *IOServerInstance) SetupWithDrpc(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+func (srv *IOServerInstance) FinishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	if err := srv.SetRank(ctx, ready); err != nil {
 		return err
 	}

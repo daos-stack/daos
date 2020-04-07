@@ -321,7 +321,7 @@ func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
 				return instanceErr.Err
 			}
 		case ready := <-instance.AwaitDrpcReady():
-			if err := instance.SetupWithDrpc(ctx, ready); err != nil {
+			if err := instance.FinishStartup(ctx, ready); err != nil {
 				return err
 			}
 		}
