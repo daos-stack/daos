@@ -1042,21 +1042,14 @@ do { \
 	"	  get-prop         get all container's properties\n" \
 	"	  set-prop         set container's properties\n" \
 	"	  get-acl          get a container's ACL\n" \
-	"	  overwrite-acl    replace a container's ACL\n" \
-	"	  update-acl       add/modify entries in a container's ACL\n" \
-	"	  delete-acl       delete an entry from a container's ACL\n" \
-	"	  set-owner        change the user and/or group that own a container\n" \
-	"	  stat             get container statistics\n" \
 	"	  list-attrs       list container user-defined attributes\n" \
-	"	  del-attr         delete container user-defined attribute\n" \
 	"	  get-attr         get container user-defined attribute\n" \
 	"	  set-attr         set container user-defined attribute\n" \
 	"	  create-snap      create container snapshot (optional name)\n" \
 	"			   at most recent committed epoch\n" \
 	"	  list-snaps       list container snapshots taken\n" \
 	"	  destroy-snap     destroy container snapshots\n" \
-	"			   by name, epoch or range\n" \
-	"	  rollback         roll back container to specified snapshot\n"); \
+	"			   by name, epoch or range\n"); \
 	fprintf(stream, "\n"); \
 	fprintf(stream, "use 'daos help cont|container COMMAND' for command specific options\n"); \
 } while (0)
@@ -1090,9 +1083,10 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	  list-containers  list all containers in pool\n"
 		"	  list-cont\n"
 		"	  query            query a pool\n"
-		"	  stat             get pool statistics\n"
 		"	  list-attrs       list pool user-defined attributes\n"
-		"	  get-attr         get pool user-defined attribute\n");
+		"	  get-attr         get pool user-defined attribute\n"
+		"	  set-attr         set pool user-defined attribute\n"
+		"	  get-prop         get all pool's properties\n");
 
 		fprintf(stream,
 		"pool options:\n"
@@ -1131,72 +1125,35 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"			   cksum supported values are off, crc[16,32,64], sha1\n"
 			"			   cksum_size can be any size\n"
 			"			   srv_cksum values can be on, off\n"
-			"			   rf supported values are [0-4]\n"
-			"	--acl-file=PATH    input file containing ACL\n"
-			"	--user=ID          user who will own the container.\n"
-			"			   format: username@[domain]\n"
-			"			   default is the effective user\n"
-			"	--group=ID         group who will own the container.\n"
-			"			   format: groupname@[domain]\n"
-			"			   default is the effective group\n");
+			"			   rf supported values are [0-4]\n");
 		} else if (strcmp(argv[3], "destroy") == 0) {
 			fprintf(stream,
 			"container options (destroy):\n"
 			"	--force            destroy container regardless of state\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "get-attr") == 0 ||
-			   strcmp(argv[3], "set-attr") == 0 ||
-			   strcmp(argv[3], "del-attr") == 0) {
+			   strcmp(argv[3], "set-attr") == 0) {
 			fprintf(stream,
 			"container options (attribute-related):\n"
-			"	--attr=NAME        container attribute name to set, get, del\n"
+			"	--attr=NAME        container attribute name to set, get\n"
 			"	--value=VALUESTR   container attribute value to set\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "create-snap") == 0 ||
-			   strcmp(argv[3], "destroy-snap") == 0 ||
-			   strcmp(argv[3], "rollback") == 0) {
+			   strcmp(argv[3], "destroy-snap") == 0) {
 			fprintf(stream,
-			"container options (snapshot and rollback-related):\n"
-			"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
-			"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
+			"container options (snapshot-related):\n"
+			"	--snap=NAME        container snapshot (create/destroy-snap)\n"
+			"	--epc=EPOCHNUM     container epoch (destroy-snap)\n"
 			"	--eprange=B-E      container epoch range (destroy-snap)\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
-		} else if (strcmp(argv[3], "set-prop") == 0) {
-			fprintf(stream,
-			"container options (set-prop):\n"
-			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
-			"			   supported prop names: label\n"
-			"			   label value can be any string\n");
-			ALL_BUT_CONT_CREATE_OPTS_HELP();
-		} else if (strcmp(argv[3], "get-acl") == 0 ||
-			   strcmp(argv[3], "overwrite-acl") == 0 ||
-			   strcmp(argv[3], "update-acl") == 0 ||
-			   strcmp(argv[3], "delete-acl") == 0) {
+		} else if (strcmp(argv[3], "get-acl") == 0) {
 			fprintf(stream,
 			"container options (ACL-related):\n"
-			"	--acl-file=PATH    input file containing ACL (overwrite-acl, "
-			"			   update-acl)\n"
-			"	--entry=ACE        add or modify a single ACL entry (update-acl)\n"
-			"	--principal=ID     principal of entry (delete-acl)\n"
-			"			   for users: u:name@[domain]\n"
-			"			   for groups: g:name@[domain]\n"
-			"			   special principals: OWNER@, GROUP@, EVERYONE@\n"
 			"	--verbose          verbose mode (get-acl)\n"
 			"	--outfile=PATH     write ACL to file (get-acl)\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
-		} else if (strcmp(argv[3], "set-owner") == 0) {
-			fprintf(stream,
-			"container options (set-owner):\n"
-			"	--user=ID          user who will own the container.\n"
-			"			   format: username@[domain]\n"
-			"	--group=ID         group who will own the container.\n"
-			"			   format: groupname@[domain]\n");
-			ALL_BUT_CONT_CREATE_OPTS_HELP();
-		} else if (strcmp(argv[3], "list-objects") == 0 ||
-			   strcmp(argv[3], "list-obj") == 0 ||
-			   strcmp(argv[3], "query") == 0 ||
+		} else if (strcmp(argv[3], "query") == 0 ||
 			   strcmp(argv[3], "get-prop") == 0 ||
-			   strcmp(argv[3], "stat") == 0 ||
 			   strcmp(argv[3], "list-attrs") == 0 ||
 			   strcmp(argv[3], "list-snaps") == 0) {
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
@@ -1207,9 +1164,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		   strcmp(argv[2], "object") == 0) {
 		fprintf(stream, "\n"
 		"object (obj) commands:\n"
-		"	  query            query an object's layout\n"
-		"	  list-keys        list an object's keys\n"
-		"	  dump             dump an object's contents\n");
+		"	  query            query an object's layout\n");
 
 		fprintf(stream,
 		"object (obj) options:\n"
