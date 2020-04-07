@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,7 +92,9 @@ extern "C" {
 	/** Incompatible durable format version */			\
 	ACTION(DER_DF_INCOMPT,		(DER_ERR_DAOS_BASE + 23))	\
 	/** Record size error */					\
-	ACTION(DER_REC_SIZE,		(DER_ERR_DAOS_BASE + 24))
+	ACTION(DER_REC_SIZE,		(DER_ERR_DAOS_BASE + 24))	\
+	/** XXX: Use it only when needs to restart the DTX */		\
+	ACTION(DER_RESTART,		(DER_ERR_DAOS_BASE + 25))
 
 #ifdef DAOS_USE_GURT_ERRNO
 	/* When new errno's added above, we need to define them here
