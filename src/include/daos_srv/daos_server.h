@@ -123,9 +123,11 @@ do {						\
 
 #define D_TIME_END(sp, start, op)		\
 do {						\
+	int time_msec;				\
 	if ((sp) == NULL || start == 0)		\
 		break;				\
-	srv_profile_count(sp, op, (int)(daos_get_ntime() - start)); \
+	time_msec = (daos_get_ntime() - start)/1000; \
+	srv_profile_count(sp, op, time_msec);	\
 } while (0)
 
 /**
@@ -214,33 +216,37 @@ struct dss_drpc_handler {
 	drpc_handler_t	handler;	/** dRPC handler for the module */
 };
 
-/* The profile structure to record single operation */
-struct srv_profile_op {
-	int		pro_id;		/* id in obj_profile_op */
-	uint64_t	pro_time;	/* time cost for this id */
+struct srv_profile_chunk {
+	d_list_t	spc_chunk_list;
+	uint32_t	spc_chunk_offset;
+	uint32_t	spc_chunk_size;
+	uint64_t	*spc_chunks;
 };
 
-/* The chunk for a group of srv_profile */
-struct srv_profile_chunk {
-	d_list_t	      spc_chunk_list;
-	struct srv_profile_op *spc_profiles;
-	int		      spc_idx;
-	int		      spc_chunk_size;
+/* The profile structure to record single operation */
+struct srv_profile_op {
+	int		pro_op;			/* operation */
+	char		*pro_op_name;		/* name of the op */
+	int		pro_acc_cnt;		/* total number of val */
+	int		pro_acc_val;		/* current total val */
+	d_list_t	pro_chunk_list;		/* list of all chunks */
+	d_list_t	pro_chunk_idle_list;	/* idle list of profile chunk */
+	int		pro_chunk_total_cnt;	/* Count in idle list & list */
+	int		pro_chunk_cnt;		/* count in list */
+	struct srv_profile_chunk *pro_current_chunk; /* current chunk */
 };
 
 /* Holding the total trunk list for a specific profiling module */
 struct srv_profile {
-	struct srv_profile_chunk *sp_current_chunk;
-	d_list_t	sp_list;	/* active list for profile chunk */
-	d_list_t	sp_idle_list;	/* idle list for profile chunk */
-	/* Count in idle list & list */
-	int		sp_chunk_total_cnt;
-	/* count in list */
-	int		sp_chunk_cnt;
+	struct srv_profile_op *sp_ops;
+	int		sp_ops_cnt;
+	int		sp_avg;
+	int		sp_id;
 	char		*sp_dir_path;	/* Where to dump the profiling */
 	char		**sp_names;	/* profile name */
 	ABT_thread	sp_dump_thread;	/* dump thread for profile */
-	int		sp_stop:1;
+	unsigned int	sp_stop:1,
+			sp_empty:1;
 };
 
 struct dss_module_ops {
@@ -248,13 +254,14 @@ struct dss_module_ops {
 	ABT_pool (*dms_abt_pool_choose_cb)(crt_rpc_t *rpc, ABT_pool *pools);
 
 	/* Each module to start/stop the profiling */
-	int	(*dms_profile_start)(char *path);
+	int	(*dms_profile_start)(char *path, int avg);
 	int	(*dms_profile_stop)(void);
 };
 
 int srv_profile_stop(struct srv_profile *sp);
 int srv_profile_count(struct srv_profile *sp, int id, int time);
-int srv_profile_start(struct srv_profile **sp_p, char *path, char **names);
+int srv_profile_start(struct srv_profile **sp_p, char *path, int avg,
+		      int op_cnt, char **names);
 void srv_profile_destroy(struct srv_profile *sp);
 
 /**

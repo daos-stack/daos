@@ -543,8 +543,7 @@ class TestPool(TestDaosApiBase):
         env = {
             "DAOS_POOL": self.uuid,
             "DAOS_SVCL": "1",
-            "DAOS_SINGLETON_CLI": "1",
-            "PYTHONPATH": os.getenv("PYTHONPATH", ""),
+            "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
         load_mpi("openmpi")
         current_path = os.path.dirname(os.path.abspath(__file__))

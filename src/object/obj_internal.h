@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,6 +166,7 @@ enum obj_profile_op {
 	OBJ_PF_UPDATE_WAIT,
 	OBJ_PF_UPDATE_REPLY,
 	OBJ_PF_UPDATE,
+	OBJ_PF_MAX,
 };
 
 /* Per pool attached to the migrate tls(per xstream) */
