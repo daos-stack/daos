@@ -430,6 +430,59 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	return 0, nil
 }
 
+// GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
+// It looks for an intersection between the nodeset or cpuset of this pid and the nodeset or cpuset of each
+// NUMA node looking for a match to identify the corresponding NUMA socket ID.
+func GetNUMASocketIDForPid(pid int32) (uint, error) {
+	var i uint
+
+	deviceScanCfg, err := initDeviceScan()
+	if err != nil {
+		return 0, err
+	}
+	defer cleanUp(deviceScanCfg.topology)
+
+	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
+	numObj := uint(C.hwloc_get_nbobjs_by_depth(deviceScanCfg.topology, C.uint(depth)))
+	if numObj == 0 {
+		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
+		return 0, nil
+	}
+
+	cpuset := C.hwloc_bitmap_alloc()
+	defer C.hwloc_bitmap_free(cpuset)
+	status := C.hwloc_get_proc_cpubind(deviceScanCfg.topology, C.int(pid), cpuset, 0)
+	if status != 0 {
+		log.Debugf("hwloc_get_proc_cpubind failure!")
+		return 0, nil
+	}
+
+	nodeset := C.hwloc_bitmap_alloc()
+	defer C.hwloc_bitmap_free(nodeset)
+	C.hwloc_cpuset_to_nodeset(deviceScanCfg.topology, cpuset, nodeset)
+
+	for i = 0; i < numObj; i++ {
+		numanode := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(depth), C.uint(i))
+		if numanode == nil {
+			// We don't want the lack of NUMA information to be an error.
+			// If we get this far and can't access the NUMA topology data,
+			// we will use NUMA ID 0.
+			log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
+			return 0, nil
+		}
+
+		if C.hwloc_bitmap_intersects(nodeset, numanode.nodeset) != 0 {
+			return uint(numanode.logical_index), nil
+		}
+
+		if C.hwloc_bitmap_intersects(cpuset, numanode.cpuset) != 0 {
+			return uint(numanode.logical_index), nil
+		}
+	}
+	log.Debugf("Unable to determine NUMA socket ID.  Using NUMA 0")
+	return 0, nil
+}
+
 // GetAffinityForNetworkDevices searches the system topology reported by hwloc
 // for the devices specified by deviceNames and returns the corresponding
 // name, cpuset, nodeset and NUMA node information for each device it finds.
