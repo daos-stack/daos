@@ -211,7 +211,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
  */
 int
 ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
-			int opc)
+			int opc, bool evict_rank)
 {
 	uint32_t	version;
 	int		i;
@@ -256,7 +256,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is down.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			if (pool_map_node_status_match(dom,
+			if (evict_rank && pool_map_node_status_match(dom,
 				PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
 				D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
 					dom->do_comp.co_rank);
@@ -295,7 +295,8 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is excluded.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			if (pool_map_node_status_match(dom,
+
+			if (evict_rank && pool_map_node_status_match(dom,
 						PO_COMP_ST_DOWNOUT)) {
 				D_DEBUG(DF_DSMS, "change rank %u to DOWNOUT\n",
 					dom->do_comp.co_rank);

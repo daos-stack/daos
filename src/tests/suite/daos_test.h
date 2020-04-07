@@ -300,8 +300,6 @@ int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
-void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			      const char *grp, d_rank_list_t *svc);
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
