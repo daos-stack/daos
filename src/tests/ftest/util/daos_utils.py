@@ -492,16 +492,16 @@ class DaosCommand(CommandWithSubCommand):
 
         return result
 
-    def pool_query(self, pool, sys_name=None, svc=None, sys=None, env=None):
+    def pool_query(self, pool, sys_name=None, svc=None, sys=None):
         """Query a pool.
 
         Args:
-            pool ([type]): [description]
-            sys_name ([type], optional): [description]. Defaults to None.
-            svc ([type], optional): [description]. Defaults to None.
-            sys ([type], optional): [description]. Defaults to None.
-            env (dict, optional): dictionary of environment variable names and
-                values (EnvironmentVariables). Defaults to None.
+            pool (str): pool UUID
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+            svc (str, optional): the pool service replicas, e.g. '1,2,3'.
+                Defaults to None.
+            sys (str, optional): [description]. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -517,28 +517,27 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.sys_name.value = sys_name
         self.sub_command_class.sub_command_class.svc.value = svc
         self.sub_command_class.sub_command_class.sys.value = sys
-        self.env = env
         return self._get_result()
 
-    # pylint: disable=too-many-arguments
     def container_create(self, pool, sys_name=None, svc=None, cont=None,
                          path=None, cont_type=None, oclass=None,
-                         chunk_size=None, env=None, properties=None):
+                         chunk_size=None, properties=None):
         """Create a container.
 
         Args:
             pool (str): UUID of the pool in which to create the container
-            sys_name (str, optional): [description]. Defaults to None.
+            sys_name (str, optional):  DAOS system name context for servers.
+                Defaults to None.
             svc (str, optional): the pool service replicas, e.g. '1,2,3'.
                 Defaults to None.
             cont (str, optional): container UUID. Defaults to None.
-            path (str, optional): [description]. Defaults to None.
+            path (str, optional): container namespace path. Defaults to None.
             cont_type (str, optional): the type of container to create. Defaults
                 to None.
             oclass (str, optional): object class. Defaults to None.
-            chunk_size ([type], optional): [description]. Defaults to None.
-            env (dict, optional): dictionary of environment variable names and
-                values (EnvironmentVariables). Defaults to None.
+            chunk_size (str, optional): chunk size of files created. Supports
+                suffixes: K (KB), M (MB), G (GB), T (TB), P (PB), E (EB).
+                Defaults to None.
             properties (str, optional): String of comma-separated <name>:<value>
                 pairs defining the container properties. Defaults to None
 
@@ -561,11 +560,9 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.oclass.value = oclass
         self.sub_command_class.sub_command_class.chunk_size.value = chunk_size
         self.sub_command_class.sub_command_class.properties.value = properties
-        self.env = env
         return self._get_result()
 
-    def container_destroy(self, pool, svc, cont, force=None, sys_name=None,
-                          env=None):
+    def container_destroy(self, pool, svc, cont, force=None, sys_name=None):
         """Destroy a container.
 
         Args:
@@ -574,9 +571,8 @@ class DaosCommand(CommandWithSubCommand):
             cont (str): container UUID.
             force (bool, optional): Force the container destroy. Defaults to
                 None.
-            sys_name (str, optional): [description]. Defaults to None.
-            env (dict, optional): dictionary of environment variable names and
-                values (EnvironmentVariables). Defaults to None.
+            sys_name (str, optional):  DAOS system name context for servers.
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -593,5 +589,4 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.svc.value = svc
         self.sub_command_class.sub_command_class.cont.value = cont
         self.sub_command_class.sub_command_class.force.value = force
-        self.env = env
         return self._get_result()
