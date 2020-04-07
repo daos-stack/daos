@@ -88,7 +88,7 @@ class ListPoolsTest(TestWithServers):
         expected_service_replicas = []
         for i in range(4):
             stdoutput = self.get_dmg_command().pool_create(
-                scm_size="150MB", target_list=[i]).stdout
+                scm_size="1G", target_list=[i]).stdout
             uuid, service_replicas = \
                 get_pool_uuid_service_replicas_from_stdout(stdoutput)
             expected_uuids.append(uuid)
@@ -106,7 +106,7 @@ class ListPoolsTest(TestWithServers):
         rank_list = [[0, 1], [2, 3]]
         for ranks in rank_list:
             stdoutput = self.get_dmg_command().pool_create(
-                scm_size="150MB", target_list=ranks).stdout
+                scm_size="1G", target_list=ranks).stdout
             uuid, service_replicas = \
                 get_pool_uuid_service_replicas_from_stdout(stdoutput)
             expected_uuids.append(uuid)
@@ -115,12 +115,12 @@ class ListPoolsTest(TestWithServers):
         for uuid in expected_uuids:
             self.get_dmg_command().pool_destroy(uuid)
 
-        # Create 9 pools over 4 hosts
+        # Create 4 pools over 4 hosts
         expected_uuids = []
         expected_service_replicas = []
-        for _ in range(9):
+        for _ in range(4):
             stdoutput = self.get_dmg_command().pool_create(
-                scm_size="150MB", target_list=[0, 1, 2, 3]).stdout
+                scm_size="1G", target_list=[0, 1, 2, 3]).stdout
             uuid, service_replicas = \
                 get_pool_uuid_service_replicas_from_stdout(stdoutput)
             expected_uuids.append(uuid)
@@ -136,7 +136,7 @@ class ListPoolsTest(TestWithServers):
         expected_service_replicas = []
         for _ in range(3):
             stdoutput = self.get_dmg_command().pool_create(
-                scm_size="150MB", svcn="3").stdout
+                scm_size="1G", svcn="3").stdout
             uuid, service_replicas = \
                 get_pool_uuid_service_replicas_from_stdout(stdoutput)
             expected_uuids.append(uuid)
