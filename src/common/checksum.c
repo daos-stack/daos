@@ -236,7 +236,7 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type)
 
 int
 daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
-		      size_t chunk_bytes)
+		  size_t chunk_bytes, bool srv_verify)
 {
 	struct daos_csummer	*result;
 	int			 rc = 0;
@@ -250,6 +250,7 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 
 	result->dcs_algo = ft;
 	result->dcs_chunk_size = chunk_bytes;
+	result->dcs_srv_verify = srv_verify;
 
 	if (result->dcs_algo->cf_init)
 		rc = result->dcs_algo->cf_init(result);
@@ -262,9 +263,10 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 
 int
 daos_csummer_type_init(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
-		       size_t chunk_bytes)
+		       size_t chunk_bytes, bool srv_verify)
 {
-	return daos_csummer_init(obj, daos_csum_type2algo(type), chunk_bytes);
+	return daos_csummer_init(obj, daos_csum_type2algo(type), chunk_bytes,
+				 srv_verify);
 }
 
 void daos_csummer_destroy(struct daos_csummer **obj)
@@ -308,6 +310,14 @@ daos_csummer_get_chunksize(struct daos_csummer *obj)
 	if (daos_csummer_initialized(obj))
 		return obj->dcs_chunk_size;
 	return 0;
+}
+
+bool
+daos_csummer_get_srv_verify(struct daos_csummer *obj)
+{
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_srv_verify;
+	return false;
 }
 
 char *
