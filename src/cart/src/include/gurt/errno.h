@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2019 Intel Corporation
+/* Copyright (C) 2017-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -176,18 +176,14 @@
 	/** Incompatible durable format version */			\
 	ACTION(DER_DF_INCOMPT,		(DER_ERR_DAOS_BASE + 23))	\
 	/** Record size error */					\
-	ACTION(DER_REC_SIZE,		(DER_ERR_DAOS_BASE + 24))
+	ACTION(DER_REC_SIZE,		(DER_ERR_DAOS_BASE + 24))	\
+	/** Used to indicate a transaction should restart */		\
+	ACTION(DER_TX_RESTART,		(DER_ERR_DAOS_BASE + 25))
 
-#if defined(D_ERRNO_V2)
-/** Defines the gurt error codes */
-#define D_FOREACH_ERR_RANGE(ACTION)	\
-	ACTION(GURT,	1000)
-#else /* !D_ERRNO_V2 */
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
 	ACTION(GURT,	1000)		\
 	ACTION(DAOS,	2000)
-#endif /* D_ERRNO_V2 */
 
 #define D_DEFINE_ERRNO(name, value) name = value,
 

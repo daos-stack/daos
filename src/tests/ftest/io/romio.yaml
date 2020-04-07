@@ -3,10 +3,18 @@ hosts:
     - server-A
   test_clients:
     - client-B
-timeout: 240
+timeout: 300
 # below mentioned path should be replaced by path of
 # romio test suite directory in CI nodes when available.
 server_config:
     name: daos_server
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 1000000000
+    svcn: 1
+    control_method: dmg
+container:
+    type: POSIX
 romio:
     romio_repo: "/usr/lib64/romio/test/"

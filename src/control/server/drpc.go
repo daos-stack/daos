@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,8 +81,8 @@ func checkSocketDir(sockDir string) error {
 	return nil
 }
 
-// drpcSetup specifies socket path and starts drpc server.
-func drpcSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
+// drpcServerSetup specifies socket path and starts drpc server.
+func drpcServerSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
 	// Clean up any previous execution's sockets before we create any new sockets
 	if err := drpcCleanup(sockDir); err != nil {
 		return err
@@ -177,6 +177,11 @@ func makeDrpcCall(client drpc.DomainSocketClient, module int32, method int32,
 
 	// Forward the request to the I/O server via dRPC
 	if err = client.Connect(); err != nil {
+		if te, ok := errors.Cause(err).(interface{ Temporary() bool }); ok {
+			if !te.Temporary() {
+				return nil, FaultDataPlaneNotStarted
+			}
+		}
 		return drpcResp, errors.Wrap(err, "connect to client")
 	}
 	defer client.Close()

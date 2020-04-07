@@ -72,14 +72,27 @@ done
 set -x
 set -e
 
+gen_test_conf_string()
+{
+        name=""
+        [ ! -z "$1" ] && name="${name}_IDIR=$1"
+        [ ! -z "$2" ] && name="${name}_IPL=$2"
+        [ ! -z "$3" ] && name="${name}_PMEM=$3"
+        echo "$name"
+}
+
 run_test()
 {
     printf "\nOptions: IPL='%s' IDIR='%s' PMEM='%s'\n" "$IPL" "$IDIR" "$PMEM"
     if [ -z ${PERF} ]; then
 
+        test_conf=$(gen_test_conf_string "${IDIR}" "${IPL}" "${PMEM}")
+
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "BTR030_functional_test_${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -u "$RECORDS"                               \
@@ -97,19 +110,25 @@ run_test()
         -D
 
         echo "B+tree batch operations test..."
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "BTR031_batch_operations_test_${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -b "$BAT_NUM"                               \
         -D
 
         echo "B+tree drain test..."
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "BTR032_drain_test_${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
     else
         echo "B+tree performance test..."
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "BTR033_performance_test_${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \
         -D
     fi

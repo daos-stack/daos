@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,9 +24,15 @@
 package main
 
 import (
+	"context"
+	"os"
+	"strings"
+
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 // storageQueryCmd is the struct representing the query storage subcommand
@@ -43,15 +49,35 @@ type storageQueryCmd struct {
 // an alias for "storage scan").
 type nvmeHealthQueryCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 }
 
 // Execute is run when nvmeHealthQueryCmd activates. Runs NVMe
 // storage scan including health query on all connected servers.
 func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
-	cmd.log.Info(cmd.conns.StorageScan(nil).StringHealthStats())
+	ctx := context.Background()
+	req := &control.StorageScanReq{}
+	req.SetHostList(cmd.hostlist)
+	resp, err := control.StorageScan(ctx, cmd.ctlClient, req)
+	if err != nil {
+		return err
+	}
 
-	return nil
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
+	}
+
+	var bld strings.Builder
+	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+		return err
+	}
+	if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
+
+	return resp.Errors()
 }
 
 // bsHealthQueryCmd is the struct representing the "storage query bio" subcommand

@@ -10,11 +10,12 @@ def scons():
 
     denv = env.Clone()
 
-    mpi = daos_build.configure_mpi(prereqs, denv, libs)
-    if mpi is None:
-        print("\nSkipping compilation for tests that need MPI")
-        print("Install and load mpich or openmpi\n")
-        return
+    if not GetOption('help') and not GetOption('clean'):
+        mpi = daos_build.configure_mpi(prereqs, denv, libs)
+        if mpi is None:
+            print("\nSkipping compilation for tests that need MPI")
+            print("Install and load mpich or openmpi\n")
+            return
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])

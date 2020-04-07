@@ -1637,13 +1637,15 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (!hdl_has_query_access(hdl, cont, in->cqi_bits))
 		return -DER_NO_PERM;
 
-	rc = cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
-			      in->cqi_op.ci_hdl, out);
-	if (rc)
-		return rc;
+	if (in->cqi_bits & DAOS_CO_QUERY_TGT) {
+		rc = cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
+				      in->cqi_op.ci_hdl, out);
+		if (rc)
+			return rc;
+	}
 
 	/* Caller didn't actually ask for any props */
-	if (in->cqi_bits == 0)
+	if ((in->cqi_bits & DAOS_CO_QUERY_PROP_ALL) == 0)
 		return 0;
 
 	/* the allocated prop will be freed after rpc replied in

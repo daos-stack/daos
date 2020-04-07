@@ -22,6 +22,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(csum)
+#define C_TRACE(...)	D_DEBUG(DB_CSUM, __VA_ARGS__)
 
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -138,6 +139,11 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		unsigned int rec_size, unsigned int prefix_len)
 {
 	unsigned int	j = 0;
+
+	if (recalc->cr_phy_off && DAOS_FAIL_CHECK(DAOS_VOS_AGG_MW_THRESH)) {
+		D_INFO("CHECKSUM merge window failure injection.\n");
+		return false;
+	}
 
 	/* The index j is used to determine the start offset within
 	 * the prior checksum array (associated with the input physical
@@ -291,6 +297,7 @@ ds_csum_recalc(void *args)
 	struct csum_recalc_args	*cs_args = (struct csum_recalc_args *) args;
 	struct dss_module_info  *info;
 
+	C_TRACE("Checksum Aggregation\n");
 	ABT_eventual_create(0, &cs_args->csum_eventual);
 	dss_ult_create(ds_csum_agg_recalc, args,
 		       DSS_ULT_CHECKSUM, DSS_TGT_SELF, 0, NULL);

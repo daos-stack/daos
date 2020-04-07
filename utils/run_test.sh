@@ -43,6 +43,13 @@ run_test()
     local in="$*"
     local a="${in// /-}"
     local b="${a////-}"
+
+    if [ -n "${RUN_TEST_FILTER}" ]; then
+        if ! [[ "$*" =~ ${RUN_TEST_FILTER} ]]; then
+            echo "Skipping test: $in"
+            return
+        fi
+    fi
     export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
     echo "Running $* with log file: ${D_LOG_FILE}"
 

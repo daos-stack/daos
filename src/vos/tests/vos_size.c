@@ -34,14 +34,14 @@
 
 static int alloc_overhead = 16;
 
-#define FOREACH_TYPE(ACTION)					\
-	ACTION(container, VOS_TC_CONTAINER, 0)			\
-	ACTION(object, VOS_TC_OBJECT, 0)			\
-	ACTION(dkey, VOS_TC_DKEY, 0)				\
-	ACTION(akey, VOS_TC_AKEY, 0)				\
-	ACTION(integer_dkey, VOS_TC_DKEY, DAOS_OF_DKEY_UINT64)	\
-	ACTION(integer_akey, VOS_TC_AKEY, DAOS_OF_AKEY_UINT64)	\
-	ACTION(single_value, VOS_TC_SV, 0)			\
+#define FOREACH_TYPE(ACTION)						\
+	ACTION(container, VOS_TC_CONTAINER, 0)				\
+	ACTION(object, VOS_TC_OBJECT, 0)				\
+	ACTION(dkey, VOS_TC_DKEY, 0)					\
+	ACTION(akey, VOS_TC_AKEY, 0)					\
+	ACTION(integer_dkey, VOS_TC_DKEY, BTR_FEAT_DIRECT_KEY)		\
+	ACTION(integer_akey, VOS_TC_AKEY, BTR_FEAT_DIRECT_KEY)		\
+	ACTION(single_value, VOS_TC_SV, 0)				\
 	ACTION(array, VOS_TC_ARRAY, 0)
 
 #define DECLARE_TYPE(name, type, feats)	\
@@ -49,7 +49,7 @@ static int alloc_overhead = 16;
 
 #define CHECK_CALL(name, type, feats)					\
 	do {								\
-		rc = vos_tree_get_overhead(alloc_overhead, type, 0,	\
+		rc = vos_tree_get_overhead(alloc_overhead, type, feats,	\
 					   &name);			\
 		if (rc != 0) {						\
 			printf(#name " lookup failed: rc = "DF_RC"\n",	\

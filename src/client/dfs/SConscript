@@ -1,17 +1,15 @@
 """Build FUSE client"""
 import daos_build
 
-def scons():
-    """Execute build"""
-    Import('env', 'prereqs')
-
-    denv = env.Clone()
-    denv.AppendIfSupported(CCFLAGS='-fvisibility=hidden')
-
-    """ If Lustre installed build a Lustre-aware libduns """
+def configure_lustre(denv):
+    """Do Lustre configure checks"""
+    if GetOption('help') or GetOption('clean'):
+        return denv
+    #If Lustre installed build a Lustre-aware libduns
     conf = Configure(denv)
     gotversion = False
-    if not conf.CheckLibWithHeader('lustreapi', 'linux/lustre/lustre_user.h', 'c'):
+    if not conf.CheckLibWithHeader('lustreapi', 'linux/lustre/lustre_user.h',
+                                   'c'):
         print("No installed Lustre version detected")
     else:
         print("Installed Lustre version detected")
@@ -25,7 +23,15 @@ def scons():
         conf.env.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
     else:
         print("Not building with Lustre bindings.")
-    denv = conf.Finish()
+    return conf.Finish()
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
+
+    denv = env.Clone()
+
+    denv = configure_lustre(denv)
 
     denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
 

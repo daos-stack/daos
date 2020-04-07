@@ -9,6 +9,7 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/kr/pretty v0.1.0 // indirect
+	github.com/mitchellh/hashstructure v1.0.0
 	github.com/pkg/errors v0.9.1
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a
 	golang.org/x/sys v0.0.0-20200317113312-5766fd39f98d

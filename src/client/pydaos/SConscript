@@ -4,6 +4,9 @@ import daos_build
 def build_shim_module(env, lib_prefix, version):
     """Build PyDAOS shim module for the specified python version"""
 
+    if GetOption('help'):
+        return
+
     new_env = env.Clone()
     extra_flags = ""
 

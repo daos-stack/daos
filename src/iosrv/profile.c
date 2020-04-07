@@ -320,22 +320,35 @@ out:
 		free(path);
 }
 
+char *profile_op_names[] = {
+	[OBJ_PF_UPDATE_PREP] = "update_prep",
+	[OBJ_PF_UPDATE_DISPATCH] = "update_dispatch",
+	[OBJ_PF_UPDATE_LOCAL] = "update_local",
+	[OBJ_PF_UPDATE_END] = "update_end",
+	[OBJ_PF_UPDATE_WAIT] = "update_end",
+	[OBJ_PF_UPDATE_REPLY] = "update_repl",
+	[OBJ_PF_UPDATE] = "update",
+	[VOS_UPDATE_END] = "vos_update_end",
+};
+
 int
-srv_profile_start(struct srv_profile **sp_p, char *path, int avg, int op_cnt,
-		  char **names)
+srv_profile_start(char *path, int avg)
 {
-	struct srv_profile *sp;
+	struct srv_profile **sp_p = &dss_get_module_info()->dmi_sp;
 	int		   tgt_id = dss_get_module_info()->dmi_tgt_id;
+	struct srv_profile *sp;
 	int		   i;
 	int		   rc;
 
-	sp = srv_profile_alloc(op_cnt);
+	sp = srv_profile_alloc(PF_MAX_CNT);
 	if (sp == NULL)
 		return -DER_NOMEM;
 
 	sp->sp_empty = 1;
-	for (i = 0; i < op_cnt; i++) {
-		rc = srv_profile_op_init(&sp->sp_ops[i], i, names[i]);
+	D_ASSERT(PF_MAX_CNT == ARRAY_SIZE(profile_op_names));
+	for (i = 0; i < PF_MAX_CNT; i++) {
+		rc = srv_profile_op_init(&sp->sp_ops[i], i,
+					 profile_op_names[i]);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -347,9 +360,11 @@ srv_profile_start(struct srv_profile **sp_p, char *path, int avg, int op_cnt,
 
 		strcpy(sp->sp_dir_path, path);
 	}
+
 	sp->sp_stop = 0;
 	sp->sp_avg = avg;
 	sp->sp_id = tgt_id;
+
 	/* TODO: this ULT probably need in a lower priority ULT */
 	rc = dss_ult_create(srv_profile_dump, sp, DSS_ULT_MISC,
 			    tgt_id, 0, &sp->sp_dump_thread);
@@ -391,12 +406,19 @@ srv_profile_count(struct srv_profile *sp, int id, int val)
 }
 
 int
-srv_profile_stop(struct srv_profile *sp)
+srv_profile_stop(void)
 {
+	struct dss_module_info	*dmi = dss_get_module_info(); 
+	struct srv_profile *sp = dmi->dmi_sp;
+
+	if (sp == NULL)
+		return 0;
+
 	sp->sp_stop = 1;
 
 	ABT_thread_join(sp->sp_dump_thread);
 	srv_profile_destroy(sp);
-
+	dmi->dmi_sp = NULL;
+	
 	return 0;
 }

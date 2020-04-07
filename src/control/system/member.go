@@ -39,18 +39,28 @@ import (
 type MemberState int
 
 const (
+	// MemberStateUnknown is the default invalid state.
 	MemberStateUnknown MemberState = iota
+	// MemberStateReady indicates the member has setup successfully.
+	MemberStateReady
+	// MemberStateStarted indicates the member has joined the system.
 	MemberStateStarted
-	MemberStateStopping     // prep-shutdown successfully run
-	MemberStateStopped      // process cleanly stopped
-	MemberStateEvicted      // rank has been evicted from DAOS system
-	MemberStateErrored      // process stopped with errors
-	MemberStateUnresponsive // e.g. zombie process
+	// MemberStateStopping indicates prep-shutdown successfully run.
+	MemberStateStopping
+	// MemberStateStopped indicates process has been stopped.
+	MemberStateStopped
+	// MemberStateEvicted indicates rank has been evicted from DAOS system.
+	MemberStateEvicted
+	// MemberStateErrored indicates the process stopped with errors.
+	MemberStateErrored
+	// MemberStateUnresponsive indicates the process is not responding.
+	MemberStateUnresponsive
 )
 
 func (ms MemberState) String() string {
 	return [...]string{
 		"Unknown",
+		"Ready",
 		"Started",
 		"Stopping",
 		"Stopped",
@@ -69,6 +79,7 @@ type Member struct {
 	state MemberState
 }
 
+// MarshalJSON marshals system.Member to JSON.
 func (sm *Member) MarshalJSON() ([]byte, error) {
 	// use a type alias to leverage the default marshal for
 	// most fields
@@ -84,6 +95,7 @@ func (sm *Member) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// UnmarshalJSON unmarshals system.Member from JSON.
 func (sm *Member) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		return nil
@@ -147,6 +159,7 @@ type MemberResult struct {
 	State   MemberState
 }
 
+// MarshalJSON marshals system.MemberResult to JSON.
 func (mr *MemberResult) MarshalJSON() ([]byte, error) {
 	// use a type alias to leverage the default marshal for
 	// most fields
@@ -160,6 +173,7 @@ func (mr *MemberResult) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// UnmarshalJSON unmarshals system.MemberResult from JSON.
 func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		return nil
@@ -310,15 +324,24 @@ func mapMemberStates(states ...MemberState) map[MemberState]struct{} {
 
 // HostRanks returns mapping of control addresses to ranks managed by harness at
 // that address.
-func (m *Membership) HostRanks() map[string][]Rank {
+//
+// Filter to include only host keys with any of the provided ranks, if supplied.
+func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
 	m.RLock()
 	defer m.RUnlock()
 
 	hostRanks := make(map[string][]Rank)
 	for _, member := range m.members {
 		addr := member.Addr.String()
+
+		if !member.Rank.InList(rankList) {
+			continue
+		}
+
 		if _, exists := hostRanks[addr]; exists {
 			hostRanks[addr] = append(hostRanks[addr], member.Rank)
+			ranks := hostRanks[addr]
+			sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
 			continue
 		}
 		hostRanks[addr] = []Rank{member.Rank}
@@ -328,14 +351,18 @@ func (m *Membership) HostRanks() map[string][]Rank {
 }
 
 // Members returns slice of references to all system members filtering members
-// with excluded states. Results ordered by member rank.
-func (m *Membership) Members(excludedStates ...MemberState) (ms Members) {
+// with excluded states and those not in rank list. Results ordered by member rank.
+func (m *Membership) Members(rankList []Rank, excludedStates ...MemberState) (ms Members) {
 	var ranks []Rank
 
 	m.RLock()
 	defer m.RUnlock()
 
 	for rank := range m.members {
+		if !rank.InList(rankList) {
+			continue
+		}
+
 		ranks = append(ranks, rank)
 	}
 

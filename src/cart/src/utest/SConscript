@@ -43,6 +43,8 @@ LIBPATH = [Dir('../cart'), Dir('../gurt')]
 
 def scons():
     """Scons function"""
+    if GetOption('help'):
+        return
 
     # pylint: disable=too-many-locals
     Import('env', 'prereqs', 'cart_targets', 'swim_targets', 'gurt_targets')

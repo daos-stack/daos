@@ -355,10 +355,6 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info)
 	 * that will persist until fetch is complete ... so memcpy isn't needed
 	 */
 	ioc->ic_biov_csums[ioc->ic_biov_csums_at] = *csum_info;
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
-		/* poison the checksum */
-		ioc->ic_biov_csums[ioc->ic_biov_csums_at].cs_csum[0] += 2;
-
 	ioc->ic_biov_csums_at++;
 
 	return 0;
@@ -955,16 +951,12 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 
 	tree_rec_bundle2iov(&rbund, &riov);
 
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL)) {
-		rbund.rb_csum	= &csum;
-	} else {
-		struct dcs_csum_info *value_csum = vos_ioc2csum(ioc);
+	struct dcs_csum_info *value_csum = vos_ioc2csum(ioc);
 
-		if (value_csum != NULL)
-			rbund.rb_csum	= value_csum;
-		else
-			rbund.rb_csum	= &csum;
-	}
+	if (value_csum != NULL)
+		rbund.rb_csum	= value_csum;
+	else
+		rbund.rb_csum	= &csum;
 
 	rbund.rb_biov	= biov;
 	rbund.rb_rsize	= rsize;
@@ -1003,14 +995,11 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	if (ci_is_valid(csum)) {
 		ent.ei_csum = *csum;
-		/* change the checksum for fault injection*/
-		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
-			ent.ei_csum.cs_csum[0] += 1;
 	}
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
-	rc = evt_insert(toh, &ent);
+	rc = evt_insert(toh, &ent, NULL);
 
 	return rc;
 }
@@ -1546,7 +1535,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	struct vos_ts_entry	*entry;
+	uint64_t		time = 0;
 
+	D_TIME_START(time, VOS_UPDATE_END);
 	D_ASSERT(ioc->ic_update);
 
 	if (err != 0)
@@ -1631,6 +1622,7 @@ out:
 
 	update_ts_on_update(ioc, err);
 
+	D_TIME_END(time, VOS_UPDATE_END);
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 

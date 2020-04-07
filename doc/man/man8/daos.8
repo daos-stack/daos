@@ -129,8 +129,7 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fB--chunk_size=\fRBYTES chunk size of files created. Supports suffixes:
 .br
 				      K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)
-.TP
-.I container \fBOPTION\fRs (create):
+.br
 	  \fB--properties=\fR<name>:<value>[,<name>:<value>,...]      (optional) container properties
 .br
 				      Supported properties names:
@@ -144,6 +143,20 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 				      \fBsrv_cksum\fR checksum server verify (can be {on,off})
 .br
 				      \fBrf\fR redundancy factor (can be {0,1,2,3,4})
+.br
+	  \fB--acl-file=\fRPATH    input file containing ACL
+.br
+	  \fB--user=\fRID		 user who will own the container.
+.br
+					 format: username@[domain]
+.br
+					 default is the effective user
+.br
+	  \fB--group=\fRID		 group who will own the container.
+.br
+					 format: groupname@[domain]
+.br
+					 default is the effective group
 .TP
 .I container \fBOPTION\fRs (destroy):
 	  \fB--force\fR            destroy container regardless of state
@@ -153,9 +166,9 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  <\fIpool\fR options>   with \fB--path\fR use: (\fB--sys-name\fR, \fB--svc\fR)
 .br
-	  \fB--cont=\fRUUID        (mandatory, or use \fB--path\fR)
+	  \fB--cont=\fRUUID        (mandatory, unless using \fB--path\fR)
 .br
-	  \fB--path=\fRPATHSTR     (mandatory, or use \fB--cont\fR)
+	  \fB--path=\fRPATHSTR     (mandatory, unless using \fB--cont\fR)
 .br
                         namespace path must provide direct link to DAOS container
 .TP

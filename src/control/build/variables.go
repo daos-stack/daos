@@ -28,4 +28,9 @@ var (
 	ConfigDir string = "./"
 	// DaosVersion should be set via linker flag using the value of DAOS_VERSION.
 	DaosVersion string = "unset"
+
+	// DefaultControlPort defines the default control plane listener port.
+	DefaultControlPort = 10001
+	// DefaultSystemName defines the default DAOS system name.
+	DefaultSystemName = "daos_server"
 )

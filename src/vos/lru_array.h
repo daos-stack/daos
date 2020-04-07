@@ -60,7 +60,9 @@ struct lru_array {
 	/** Number of indices */
 	uint32_t		la_count;
 	/** record size */
-	uint32_t		la_record_size;
+	uint16_t		la_record_size;
+	/** eviction count */
+	uint16_t		la_evicting;
 	/** Allocated payload entries */
 	void			*la_payload;
 	/** Callbacks for implementation */
@@ -96,18 +98,20 @@ lrua_remove_entry(struct lru_entry *entries, struct lru_entry *entry)
 
 /** Internal API: Insert an entry in the lru list */
 static inline void
-lrua_insert_entry(struct lru_entry *entries, struct lru_entry *entry,
-		  uint32_t idx, uint32_t prev_idx, uint32_t next_idx)
+lrua_insert_mru(struct lru_array *array, struct lru_entry *entry,
+		uint32_t idx)
 {
+	struct lru_entry	*entries = &array->la_table[0];
 	struct lru_entry	*prev;
 	struct lru_entry	*next;
 
-	prev = &entries[prev_idx];
-	next = &entries[next_idx];
+	prev = &entries[array->la_mru];
+	next = &entries[array->la_lru];
+	D_ASSERT(prev != next);
 	next->le_prev_idx = idx;
 	prev->le_next_idx = idx;
-	entry->le_prev_idx = prev_idx;
-	entry->le_next_idx = next_idx;
+	entry->le_prev_idx = array->la_mru;
+	entry->le_next_idx = array->la_lru;
 }
 
 /** Internal API: Make the entry the mru */
@@ -119,16 +123,21 @@ lrua_move_to_mru(struct lru_array *array, struct lru_entry *entry, uint32_t idx)
 		return;
 	}
 
-	if (array->la_lru == idx)
+	if (array->la_lru == idx) {
+		/** Ordering doesn't change in circular list so just update
+		 *  the lru and mru idx
+		 */
 		array->la_lru = entry->le_next_idx;
+		goto set_mru;
+	}
 
 	/** First remove */
 	lrua_remove_entry(&array->la_table[0], entry);
 
-	/** Now add */
-	lrua_insert_entry(&array->la_table[0], entry, idx,
-			  array->la_mru, array->la_lru);
+	/** Insert between MRU and LRU */
+	lrua_insert_mru(array, entry, idx);
 
+set_mru:
 	array->la_mru = idx;
 }
 
@@ -144,7 +153,10 @@ lrua_lookup_idx(struct lru_array *array, const uint32_t *idx)
 
 	entry = &array->la_table[tindex];
 	if (entry->le_record_idx == idx) {
-		lrua_move_to_mru(array, entry, tindex);
+		if (!array->la_evicting) {
+			/** Only make mru if we are not evicting it */
+			lrua_move_to_mru(array, entry, tindex);
+		}
 		return entry;
 	}
 
@@ -226,7 +238,7 @@ lrua_evict(struct lru_array *array, uint32_t *idx);
  */
 int
 lrua_array_alloc(struct lru_array **array, uint32_t nr_ent,
-		 uint32_t record_size, const struct lru_callbacks *cbs,
+		 uint16_t record_size, const struct lru_callbacks *cbs,
 		 void *arg);
 
 

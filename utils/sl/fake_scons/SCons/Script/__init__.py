@@ -54,6 +54,10 @@ class DefaultEnvironment():
         """Fake CFile"""
         return []
 
+    def WhereIs(self, *args, **kw):
+        """Fake WhereIs"""
+        return []
+
     def Java(self, *args, **kw):
         """Fake Java"""
         return []
@@ -221,7 +225,7 @@ class DefaultEnvironment():
         """Fake subst"""
         return val
 
-    def get(self, var):
+    def get(self, var, *args, **kw):
         """Fake get"""
         return var
 
@@ -255,6 +259,7 @@ class Variables():
 class Configure():
     """Fake Configure"""
     def __init__(self, *args, **kw):
+        self.env = DefaultEnvironment()
         """constructor"""
 
     def CheckHeader(self, *args, **kw):
@@ -265,8 +270,24 @@ class Configure():
         """Fake CheckLib"""
         return True
 
+    def CheckLibWithHeader(self, *args, **kw):
+        """Fake CheckLibWithHeader"""
+        return True
+
+    def CheckStructMember(self, *args, **kw):
+        """Fake CheckStructMember"""
+        return True
+
+    def CheckCmockaSkip(self, *args, **kw):
+        """Fake CheckCmockaSkip"""
+        return True
+
     def CheckProg(self, *args, **kw):
         """Fake CheckProg"""
+        return True
+
+    def CheckFunc(self, *args, **kw):
+        """Fake CheckFunc"""
         return True
 
     def CheckFlag(self, *args, **kw):

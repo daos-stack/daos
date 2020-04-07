@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,9 +49,6 @@ static void
 debug_fini_locked(void)
 {
 	int	rc;
-
-	/* Deregister daos specific error codes */
-	daos_errno_fini();
 
 	D_LOG_DEREGISTER_DB(DAOS_FOREACH_DB);
 
@@ -205,16 +202,6 @@ daos_debug_init(char *logfile)
 	io_bypass_init();
 	dd_ref = 1;
 	D_MUTEX_UNLOCK(&dd_lock);
-
-	/* Register daos specific error codes */
-	rc = daos_errno_init();
-	if (rc != 0) {
-		D_ERROR("DAOS error strings could not be registered: "DF_RC"\n",
-			DP_RC(rc));
-		/* Ignore the error as it only affects new daos error codes
-		 * log messages.
-		 */
-	}
 
 	return 0;
 

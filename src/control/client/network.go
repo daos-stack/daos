@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,9 @@ import (
 
 const (
 	networkScanTimeout = 10 * time.Second
+
+	msgStreamRecv = "%T recv() failed"
+	msgTypeAssert = "type assertion failed, wanted %T got %T"
 )
 
 type ProviderListResult struct {

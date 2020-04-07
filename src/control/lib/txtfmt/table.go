@@ -26,6 +26,7 @@ package txtfmt
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"text/tabwriter"
 )
 
@@ -42,7 +43,14 @@ type TableFormatter struct {
 
 // Init instantiates internal variables.
 func (t *TableFormatter) Init() {
-	t.writer = tabwriter.NewWriter(&t.out, 0, 0, 1, ' ', 0)
+	t.InitWriter(&t.out)
+}
+
+// InitWriter optionally sets up the tabwriter to
+// use the supplied io.Writer instead of the internal
+// buffer.
+func (t *TableFormatter) InitWriter(w io.Writer) {
+	t.writer = tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
 }
 
 // SetColumnTitles sets the ordered column titles for the table.

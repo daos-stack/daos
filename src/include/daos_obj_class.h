@@ -27,8 +27,6 @@
 extern "C" {
 #endif
 
-#include <daos_types.h>
-
 /**
  * Predefined object classes
  * It describes schema of data distribution & protection.
@@ -466,7 +464,7 @@ struct daos_oclass_list {
  *
  * \return		The Object class ID, 0 / OC_UNKNOWN if unknown.
  */
-DAOS_API int
+int
 daos_oclass_name2id(const char *name);
 
 /**
@@ -477,7 +475,7 @@ daos_oclass_name2id(const char *name);
  *
  * \return		>= 0 on success and required length of str, -1 if error.
  */
-DAOS_API size_t
+size_t
 daos_oclass_names_list(size_t size, char *str);
 
 /**
@@ -489,7 +487,7 @@ daos_oclass_names_list(size_t size, char *str);
  *
  * \return		0 on success, -1 if invalid class.
  */
-DAOS_API int
+int
 daos_oclass_id2name(daos_oclass_id_t oc_id, char *name);
 
 /**
@@ -511,7 +509,7 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *name);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EXIST	Object class ID already existed
  */
-DAOS_API int
+int
 daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
 			struct daos_oclass_attr *attr, daos_event_t *ev);
 
@@ -532,7 +530,7 @@ daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NONEXIST	Nonexistent class ID
  */
-DAOS_API int
+int
 daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
 		     struct daos_oclass_attr *attr, daos_event_t *ev);
 
@@ -555,7 +553,7 @@ daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *list,
 		    daos_anchor_t *anchor, daos_event_t *ev);
 

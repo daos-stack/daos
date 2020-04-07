@@ -424,9 +424,10 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
 				   ds_csum_agg_recalc);
-	assert_int_equal(rc, 0);
-
-	verify_view(arg, oid, dkey, akey, ds);
+	if (rc != -DER_CSUM) {
+		assert_int_equal(rc, 0);
+		verify_view(arg, oid, dkey, akey, ds);
+	}
 }
 
 static inline int
@@ -1892,7 +1893,6 @@ aggregate_20(void **state)
 	aggregate_11(state);
 	arg->ta_flags &= ~TF_USE_CSUMS;
 }
-
 /*
  * Aggregate on single akey->EV, random punch, small flush threshold.
  */
