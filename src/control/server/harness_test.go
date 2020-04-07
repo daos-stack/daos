@@ -31,7 +31,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -120,7 +119,7 @@ func TestServer_HarnessCreateSuperblocks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h.setStarted()
+	h.started.SetTrue()
 	mi, err := h.GetMSLeaderInstance()
 	if err != nil {
 		t.Fatal(err)
@@ -239,7 +238,7 @@ func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			h.setStarted()
+			h.started.SetTrue()
 
 			_, err := h.GetMSLeaderInstance()
 			CmpErr(t, tc.expError, err)
@@ -642,14 +641,14 @@ func TestHarness_StopInstances(t *testing.T) {
 			}
 			svc := newTestMgmtSvcMulti(log, tc.ioserverCount, false)
 			if !tc.harnessNotStarted {
-				svc.harness.setStarted()
+				svc.harness.started.SetTrue()
 			}
 			for i, srv := range svc.harness.Instances() {
 				trc := &ioserver.TestRunnerConfig{}
 				trc.SignalCb = func(idx uint32, sig os.Signal) { signalsSent.Store(idx, sig) }
 				trc.SignalErr = tc.signalErr
 				if !tc.harnessNotStarted {
-					atomic.StoreUint32(&trc.Running, 1)
+					trc.Running.SetTrue()
 				}
 
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())

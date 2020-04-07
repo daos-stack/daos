@@ -28,12 +28,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"sync/atomic"
 	"syscall"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -53,7 +53,7 @@ type (
 	Runner struct {
 		Config  *Config
 		log     logging.Logger
-		running uint32
+		running atm.Bool
 		cmd     *exec.Cmd
 	}
 
@@ -132,8 +132,8 @@ func (r *Runner) run(ctx context.Context, args, env []string) InstanceError {
 	}
 	r.cmd = cmd
 
-	r.setRunning()
-	defer r.setStopped()
+	r.running.SetTrue()
+	defer r.running.SetFalse()
 
 	instanceErr.Err = errors.Wrapf(exitStatus(cmd.Wait()),
 		"%s (instance %d) exited", binPath, r.Config.Index)
@@ -158,17 +158,9 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- InstanceError) error {
 	return nil
 }
 
-func (r *Runner) setRunning() {
-	atomic.StoreUint32(&r.running, 1)
-}
-
-func (r *Runner) setStopped() {
-	atomic.StoreUint32(&r.running, 0)
-}
-
 // IsRunning indicates whether the Runner process is running or not.
 func (r *Runner) IsRunning() bool {
-	return atomic.LoadUint32(&r.running) != 0
+	return r.running.Load()
 }
 
 // Signal sends relevant signal to the Runner process (idempotent).

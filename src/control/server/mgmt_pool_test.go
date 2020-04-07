@@ -155,7 +155,7 @@ func TestMgmtSvc_PoolCreate(t *testing.T) {
 				if err := harness.AddInstance(srv); err != nil {
 					panic(err)
 				}
-				harness.setStarted()
+				harness.started.SetTrue()
 
 				tc.mgmtSvc = newMgmtSvc(harness, nil, nil)
 			}
@@ -278,7 +278,7 @@ func TestListPools_NoMS(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	h := NewIOServerHarness(log)
-	h.setStarted()
+	h.started.SetTrue()
 	svc := newMgmtSvc(h, nil, nil)
 
 	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())

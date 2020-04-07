@@ -26,7 +26,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -270,7 +269,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 
 				trc := &ioserver.TestRunnerConfig{}
 				if !tc.instancesStopped {
-					atomic.StoreUint32(&trc.Running, 1)
+					trc.Running.SetTrue()
 				}
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
@@ -289,7 +288,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 				}
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 
-				srv.setReady()
+				srv.ready.SetTrue()
 			}
 
 			svc.harness.rankReqTimeout = 50 * time.Millisecond
@@ -417,7 +416,7 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 
 				trc := &ioserver.TestRunnerConfig{}
 				if !tc.instancesStopped {
-					atomic.StoreUint32(&trc.Running, 1)
+					trc.Running.SetTrue()
 				}
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
@@ -436,7 +435,7 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 				}
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 
-				srv.setReady()
+				srv.ready.SetTrue()
 			}
 
 			svc.harness.rankReqTimeout = 50 * time.Millisecond
@@ -575,7 +574,7 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 
 				trc := &ioserver.TestRunnerConfig{}
 				if !tc.instancesStopped {
-					atomic.StoreUint32(&trc.Running, 1)
+					trc.Running.SetTrue()
 				}
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
@@ -598,7 +597,7 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 				}
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 
-				srv.setReady()
+				srv.ready.SetTrue()
 			}
 
 			svc.harness.rankReqTimeout = 50 * time.Millisecond
@@ -674,7 +673,7 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 			ioserverCount := maxIOServers
 			svc := newTestMgmtSvcMulti(log, ioserverCount, false)
 
-			svc.harness.setStarted()
+			svc.harness.started.SetTrue()
 
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
@@ -684,7 +683,7 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 
 				trc := &ioserver.TestRunnerConfig{}
 				if !tc.instancesStopped {
-					atomic.StoreUint32(&trc.Running, 1)
+					trc.Running.SetTrue()
 				}
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
@@ -692,7 +691,7 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 				srv._superblock.Rank = new(system.Rank)
 				*srv._superblock.Rank = system.Rank(i + 1)
 
-				srv.setReady()
+				srv.ready.SetTrue()
 			}
 
 			svc.harness.rankReqTimeout = 50 * time.Millisecond

@@ -28,11 +28,11 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -45,8 +45,8 @@ type IOServerHarness struct {
 	sync.RWMutex
 	log            logging.Logger
 	instances      []*IOServerInstance
-	started        uint32
-	startable      uint32
+	started        atm.Bool
+	startable      atm.Bool
 	restart        chan struct{}
 	errChan        chan ioserver.InstanceError
 	rankReqTimeout time.Duration
@@ -57,6 +57,8 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
 		log:            log,
 		instances:      make([]*IOServerInstance, 0, maxIOServers),
+		started:        atm.NewBool(false),
+		startable:      atm.NewBool(false),
 		restart:        make(chan struct{}, 1),
 		errChan:        make(chan ioserver.InstanceError, maxIOServers),
 		rankReqTimeout: defaultRequestTimeout,
@@ -370,8 +372,8 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 	// Now we want to block any RPCs that might try to mess with storage
 	// (format, firmware update, etc) before attempting to start I/O servers
 	// which are using the storage.
-	h.setStarted()
-	defer h.setStopped()
+	h.started.SetTrue()
+	defer h.started.SetFalse()
 
 	ctx, shutdown := context.WithCancel(parent)
 	defer shutdown()
@@ -443,17 +445,9 @@ func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
 	return mi, nil
 }
 
-func (h *IOServerHarness) setStarted() {
-	atomic.StoreUint32(&h.started, 1)
-}
-
-func (h *IOServerHarness) setStopped() {
-	atomic.StoreUint32(&h.started, 0)
-}
-
 // IsStarted indicates whether the IOServerHarness is in a running state.
 func (h *IOServerHarness) IsStarted() bool {
-	return atomic.LoadUint32(&h.started) == 1
+	return h.started.Load()
 }
 
 // StartedRanks returns rank assignment of configured harness instances that are

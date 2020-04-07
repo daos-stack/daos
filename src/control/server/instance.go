@@ -28,7 +28,6 @@ import (
 	"net"
 	"os"
 	"sync"
-	"sync/atomic"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -36,6 +35,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -69,7 +69,7 @@ type IOServerInstance struct {
 	msClient          *mgmtSvcClient
 	drpcReady         chan *srvpb.NotifyReadyReq
 	storageReady      chan struct{}
-	ready             uint32
+	ready             atm.Bool
 	fsRoot            string
 
 	sync.RWMutex
@@ -98,16 +98,12 @@ func NewIOServerInstance(log logging.Logger,
 	}
 }
 
-func (srv *IOServerInstance) setReady() {
-	atomic.StoreUint32(&srv.ready, 1)
-}
-
 // IsReady indicates whether the IOServerInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
 func (srv *IOServerInstance) IsReady() bool {
-	return atomic.LoadUint32(&srv.ready) == 1 && srv.IsStarted()
+	return srv.ready.IsTrue() && srv.IsStarted()
 }
 
 // scmConfig returns the scm configuration assigned to this instance.
@@ -530,7 +526,7 @@ func (srv *IOServerInstance) SetupWithDrpc(ctx context.Context, ready *srvpb.Not
 	}
 
 	srv.log.Debugf("instance ready: %v", ready)
-	srv.setReady()
+	srv.ready.SetTrue()
 
 	return nil
 }

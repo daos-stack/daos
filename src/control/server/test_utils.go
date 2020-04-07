@@ -141,7 +141,7 @@ func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
 	if err := harness.AddInstance(srv); err != nil {
 		panic(err)
 	}
-	harness.setStarted()
+	harness.started.SetTrue()
 
 	return newMgmtSvc(harness, nil, nil)
 }
