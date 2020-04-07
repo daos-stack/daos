@@ -40,9 +40,6 @@ class IorInterceptMultiClient(IorTestBase):
     def setUp(self):
         """Set up each test case."""
         super(IorInterceptMultiClient, self).setUp()
-        self.hostfile_clients = write_host_file.write_host_file(
-            self.hostlist_clients, self.workdir,
-            self.hostfile_clients_slots)
 
     def test_ior_intercept_multi_client(self):
         """Jira ID: DAOS-3499.

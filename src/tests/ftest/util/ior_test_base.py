@@ -72,8 +72,6 @@ class IorTestBase(TestWithServers):
         self.co_prop = self.params.get("container_properties",
                                        "/run/container/*")
 
-        if self.ior_cmd.api.value == "POSIX":
-            self.log.info('Not modifying for DAOS-3320')
         # lock is needed for run_multiple_ior method.
         self.lock = threading.Lock()
 
