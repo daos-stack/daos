@@ -36,33 +36,33 @@ from command_utils import \
 class DmgCommand(CommandWithSubCommand):
     """Defines a object representing a dmg command."""
 
-    METHOD_REGEX_LIST = {
-            "storage_query_smd": r"""([0-9a-zA-Z-_]+):(?:\d+):
-                (?:\n|\r\n)\s+(Pool|Device):
-                (?:\n|\r\n)\s+UUID:\s+([0-9a-f-]+)
-                (?:\n|\r\n)\s+VOS Target IDs:\s+([\d ]+)
-                (?:\n|\r\n)(?:\s+SPDK Blobs:\s+)?([\d ]+)?""",
-            "storage_query_blobstore": r"""^([0-9a-zA-Z_-]+):\d+:
-                (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
-                (?:\n|\r\n)\s+Read\s+errors:\s+([0-9]+)
-                (?:\n|\r\n)\s+Write\s+errors:\s+([0-9]+)
-                (?:\n|\r\n)\s+Unmap\s+errors:\s+([0-9]+)
-                (?:\n|\r\n)\s+Checksum\s+errors:\s+([0-9]+)
-                (?:\n|\r\n)\s+[0-9a-zA-Z_-]+\s+[0-9a-zA-Z_-]+:
-                (?:\n|\r\n)\s+Error\s+log\s+entries:\s+([0-9]+)
-                (?:\n|\r\n)\s+Media\s+errors:\s+([0-9]+)
-                (?:\n|\r\n)\s+Temperature:\s+([0-9]+)
-                (?:\n|\r\n)\s+Temperature:\s+([A-Z]+)
-                (?:\n|\r\n)\s+Available\s+Spare:\s+([A-Z]+)
-                (?:\n|\r\n)\s+Device\s+Reliability:\s+([A-Z]+)
-                (?:\n|\r\n)\s+Read\s+Only:\s+([A-Z]+)
-                (?:\n|\r\n)\s+Volatile\s+Memory\s+Backup:\s+([A-Z]+)""",
-            "storage_query_device_state": r"""^([0-9a-zA-Z_-]+):\d+:
-                (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
-                (?:\n|\r\n)\s+State:\s+([a-zA-Z]+)""",
-            "storage_set_faulty": r"""^([0-9a-zA-Z_-]+):\d+:
-                (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
-                (?:\n|\r\n)\s+State:\s+([a-zA-Z]+)"""
+    METHOD_REGEX = {
+        "storage_query_smd": r"""([0-9a-zA-Z-_]+):(?:\d+):
+            (?:\n|\r\n)\s+(Pool|Device):
+            (?:\n|\r\n)\s+UUID:\s+([0-9a-f-]+)
+            (?:\n|\r\n)\s+VOS Target IDs:\s+([\d ]+)
+            (?:\n|\r\n)(?:\s+SPDK Blobs:\s+)?([\d ]+)?""",
+        "storage_query_blobstore": r"""^([0-9a-zA-Z_-]+):\d+:
+            (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
+            (?:\n|\r\n)\s+Read\s+errors:\s+([0-9]+)
+            (?:\n|\r\n)\s+Write\s+errors:\s+([0-9]+)
+            (?:\n|\r\n)\s+Unmap\s+errors:\s+([0-9]+)
+            (?:\n|\r\n)\s+Checksum\s+errors:\s+([0-9]+)
+            (?:\n|\r\n)\s+[0-9a-zA-Z_-]+\s+[0-9a-zA-Z_-]+:
+            (?:\n|\r\n)\s+Error\s+log\s+entries:\s+([0-9]+)
+            (?:\n|\r\n)\s+Media\s+errors:\s+([0-9]+)
+            (?:\n|\r\n)\s+Temperature:\s+([0-9]+)
+            (?:\n|\r\n)\s+Temperature:\s+([A-Z]+)
+            (?:\n|\r\n)\s+Available\s+Spare:\s+([A-Z]+)
+            (?:\n|\r\n)\s+Device\s+Reliability:\s+([A-Z]+)
+            (?:\n|\r\n)\s+Read\s+Only:\s+([A-Z]+)
+            (?:\n|\r\n)\s+Volatile\s+Memory\s+Backup:\s+([A-Z]+)""",
+        "storage_query_device_state": r"""^([0-9a-zA-Z_-]+):\d+:
+            (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
+            (?:\n|\r\n)\s+State:\s+([a-zA-Z]+)""",
+        "storage_set_faulty": r"""^([0-9a-zA-Z_-]+):\d+:
+            (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
+            (?:\n|\r\n)\s+State:\s+([a-zA-Z]+)"""
     }
 
     def __init__(self, path):

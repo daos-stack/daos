@@ -285,11 +285,7 @@ class CommandWithParameters(ObjectWithParameters):
 class ExecutableCommand(CommandWithParameters):
     """A class for command with paramaters."""
 
-    """
-        Dictionary to store the regex patterns that will parse the output of
-        command functions created in child classes of ExecutableCommand class.
-        """
-    METHOD_REGEX_LIST = {"run": r"(.*)"}
+    METHOD_REGEX = {"run": r"(.*)"}
 
     def __init__(self, namespace, command, path="", subprocess=False):
         """Create a ExecutableCommand object.

@@ -44,7 +44,6 @@ class ControlTestBase(TestWithServers):
 
     def get_dmg_output(self, method_name, **kwargs):
         """Run the dmg command."""
-        # Create dmg command
         try:
             info = self.dmg.get_output(method_name, **kwargs)
         except CommandFailure as err:

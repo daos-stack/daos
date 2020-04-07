@@ -142,7 +142,7 @@ class DmgStorageQuery(ControlTestBase):
         smd_info = self.get_dmg_output("storage_query_smd", devices=False)
 
         # Get the device uuid and run command
-        devs_info = self.get_devs_uuid(smd_info, "storage_query_blobstore")
+        devs_info = self.get_devs_info(smd_info, "storage_query_blobstore")
         print(devs_info)
 
         # Compare config expected values with dmg output
@@ -163,18 +163,18 @@ class DmgStorageQuery(ControlTestBase):
         smd_info = self.get_dmg_output("storage_query_smd", devices=False)
 
         # Check that the state of each device is NORMAL
-        devs_info = self.get_devs_uuid(smd_info, "storage_query_device_state")
+        devs_info = self.get_devs_info(smd_info, "storage_query_device_state")
         for dev in devs_info:
             if dev[2] != "NORMAL":
                 self.fail("Found a device in {} state.".format(dev[2]))
 
         # Set device to faulty state and check that it's in FAULTY state
-        devs_info = self.get_devs_uuid(smd_info, "storage_set_faulty")
+        devs_info = self.get_devs_info(smd_info, "storage_set_faulty")
         for dev in devs_info:
             if dev[2] != "FAULTY":
                 self.fail("Found a device in {} state.".format(dev[2]))
 
-        devs_info = self.get_devs_uuid(smd_info, "storage_query_device_state")
+        devs_info = self.get_devs_info(smd_info, "storage_query_device_state")
         for dev in devs_info:
             if dev[2] != "FAULTY":
                 self.fail("Found a device in {} state.".format(dev[2]))
