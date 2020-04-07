@@ -25,8 +25,6 @@
 import os
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
-import write_host_file
-
 
 class IorInterceptMultiClient(IorTestBase):
     # pylint: disable=too-many-ancestors

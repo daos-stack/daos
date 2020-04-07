@@ -32,7 +32,6 @@ from ior_utils import IorCommand
 from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 
 from daos_utils import DaosCommand
 from dfuse_utils import Dfuse

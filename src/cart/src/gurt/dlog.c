@@ -499,6 +499,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 				fprintf(stderr, "%s:%d, write to %d failed %d(%s).\n",
 					__func__, __LINE__, mst.logfd, errno, strerror(errno));
 			errno = save_errno;
+			flags |= DLOG_STDERR;
 		}
 
 	if (mst.oflags & DLOG_FLV_STDOUT)

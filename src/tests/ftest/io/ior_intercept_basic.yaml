@@ -42,7 +42,7 @@ ior:
               # transfer/block size when using
               # interception library.
               write_x: 3
-              read_x: 2
+              read_x: 1.5
           objectclass:
             oclass_SX:
               daos_oclass: "SX"
