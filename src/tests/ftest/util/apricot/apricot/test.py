@@ -318,6 +318,7 @@ class TestWithServers(TestWithoutServers):
             list: a list of error strings to report at the end of tearDown().
 
         """
+        self.log.info("teardown() started")
         return []
 
     def tearDown(self):

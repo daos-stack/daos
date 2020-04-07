@@ -903,7 +903,7 @@ class Soak(TestWithServers):
             steps have been attempted
 
         """
-        errors = []
+        errors = super(Soak, self).pre_tear_down()
         # clear out any jobs in squeue;
         if self.failed_job_id_list:
             self.log.info(
@@ -927,13 +927,6 @@ class Soak(TestWithServers):
         if not self.setup_start_agents:
             self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
         return errors
-
-    def tearDown(self):
-        """Define tearDown and clear any left over jobs in squeue."""
-        # Perform any test-specific tear down steps and collect any
-        # reported errors
-        self.log.info("<<tearDown Started>> at %s", time.ctime())
-        super(Soak, self).tearDown()
 
     def test_soak_smoke(self):
         """Run soak smoke.
