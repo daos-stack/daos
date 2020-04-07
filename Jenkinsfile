@@ -267,7 +267,8 @@ pipeline {
                     when {
                       beforeAgent true
                       expression {
-                        ! commitPragma(pragma: 'Skip-python-bandit').contains('true')
+                        ! commitPragma(pragma: 'Skip-python-bandit',
+                                def_val: 'true').contains('true')
                       }
                     }
                     agent {
@@ -286,7 +287,8 @@ pipeline {
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            runTest script: 'bandit -r . --format xml -o bandit.xml',
+                            runTest script: '''bandit --format xml -o bandit.xml \
+                                                      -r $(git ls-tree --name-only HEAD)''',
                                     junit_files: "bandit.xml",
                                     ignore_failure: true
                         }
