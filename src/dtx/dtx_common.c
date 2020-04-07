@@ -538,6 +538,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 		return result;
 
 	if (dlh->dlh_sub_cnt == 0) {
+		if (result == -DER_AGAIN)
+			dth->dth_renew = 1;
+
 		if (daos_is_zero_dti(&dth->dth_xid))
 			return result;
 

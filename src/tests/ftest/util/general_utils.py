@@ -112,9 +112,9 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     if timeout and task.num_timeout() > 0:
         nodes = task.iter_keys_timeout()
         print(
-            "{}: timeout detected running '{}' on {}/{} hosts".format(
+            "{}: timeout detected running '{}' on {}/{} hosts after {}s".format(
                 NodeSet.fromlist(nodes),
-                command, task.num_timeout(), len(hosts)))
+                command, task.num_timeout(), len(hosts), timeout))
         retcode = 255
         if retcode not in retcode_dict:
             retcode_dict[retcode] = NodeSet()
