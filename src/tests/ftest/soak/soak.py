@@ -35,6 +35,7 @@ from agent_utils import run_agent
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
+from getpass import getuser
 import socket
 import threading
 from avocado.utils import process
@@ -86,7 +87,7 @@ class Soak(TestWithServers):
         self.local_pass_dir = None
         self.dfuse = None
         self.test_timeout = None
-        self.start_time = None
+        self.end_time = None
         self.job_timeout = None
         self.nodesperjob = None
         self.task_list = None
@@ -100,7 +101,7 @@ class Soak(TestWithServers):
         self.harasser_results = None
         self.harasser_timeout = None
         self.all_failed_jobs = None
-        self.soak_timeout = None
+        self.username = None
 
     def job_done(self, args):
         """Call this function when a job is done.
@@ -609,6 +610,10 @@ class Soak(TestWithServers):
         self.log.info(
             "<<Job Startup - %s >> at %s", self.test_name, time.ctime())
         job_id_list = []
+        # before submitting the jobs to the queue, check the job timeout;
+        if time.time() > self.end_time:
+            self.log.info("<< SOAK test timeout in Job Startup>>")
+            return job_id_list
         # job_cmdlist is a list of batch script files
         for script in job_cmdlist:
             try:
@@ -650,8 +655,10 @@ class Soak(TestWithServers):
             while len(self.soak_results) < len(job_id_list):
                 # wait for the jobs to complete.
                 # enter tearDown before hitting the avocado timeout
-                if time.time() - self.start_time > self.soak_timeout:
-                    raise SoakTestError("<<FAILED: Soak test timeout >>")
+                if time.time() > self.end_time:
+                    self.log.info("<< SOAK test timeout in Job Completion>>")
+                    break
+                time.sleep(5)
             # check for job COMPLETED and remove it from the job queue
             for job, result in self.soak_results.items():
                 # The queue include status of "COMPLETING"
@@ -765,10 +772,6 @@ class Soak(TestWithServers):
             self.srun_params = {"partition": self.partition_clients}
         if slurm_reservation is not None:
             self.srun_params["reservation"] = slurm_reservation
-        # Initialize time
-        self.start_time = time.time()
-        self.test_timeout = int(3600 * test_to)
-        end_time = self.start_time + self.test_timeout
         # Create the reserved pool with data
         # self.pool is a list of all the pools used in soak
         # self.pool[0] will always be the reserved pool
@@ -798,13 +801,17 @@ class Soak(TestWithServers):
             raise SoakTestError(
                 "<<FAILED: Soak directory on testnode not removed {}>>".format(
                     error))
+        # Initialize time
+        start_time = time.time()
+        self.test_timeout = int(3600 * test_to)
+        self.end_time = start_time + self.test_timeout
         self.log.info("<<START %s >> at %s", self.test_name, time.ctime())
-        while time.time() < end_time:
+        while time.time() < self.end_time:
             # Start new pass
             start_loop_time = time.time()
             self.log.info(
                 "<<Soak1 PASS %s: time until done %s>>", self.loop,
-                DDHHMMSS_format(end_time - time.time()))
+                DDHHMMSS_format(self.end_time - time.time()))
             # Create all specified pools
             self.add_pools(pool_list)
             self.log.info(
@@ -828,9 +835,9 @@ class Soak(TestWithServers):
             self.log.info(
                 "<<PASS %s completed in %s >>", self.loop, DDHHMMSS_format(
                     loop_time))
-            # if the time left if less than a loop exit now
-            if end_time - time.time() < loop_time:
-                break
+            # # if the time left if less than a loop exit now
+            # if end_time - time.time() < loop_time:
+            #     break
             self.loop += 1
         # TO-DO: use IOR
         self.assertTrue(
@@ -840,18 +847,16 @@ class Soak(TestWithServers):
         # gather the doas logs from the client nodes
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>", DDHHMMSS_format(
-                time.time() - self.start_time))
+                time.time() - start_time))
 
     def setUp(self):
         """Define test setup to be done."""
-        # Define a timeout to trigger 10 minutes before avocado timeout
-        # In order to get to tearDown
-        self.soak_timeout = self.timeout - 600
         self.log.info("<<setUp Started>> at %s", time.ctime())
         # Start the daos_agents in the job scripts
         self.setup_start_servers = True
         self.setup_start_agents = False
         super(Soak, self).setUp()
+        self.username = getuser()
         # Initialize loop param for all tests
         self.loop = 1
         self.exclude_slurm_nodes = []
@@ -890,7 +895,7 @@ class Soak(TestWithServers):
         self.agent_sessions = run_agent(
             self, self.hostlist_servers, test_node)
 
-    def soak_tear_down(self):
+    def pre_tear_down(self):
         """Tear down any test-specific steps prior to running tearDown().
 
         Returns:
@@ -898,25 +903,21 @@ class Soak(TestWithServers):
             steps have been attempted
 
         """
-        # clear out any jobs in squeue;
         errors = []
+        # clear out any jobs in squeue;
         if self.failed_job_id_list:
             self.log.info(
                 "<<Cancel jobs in queue with ids %s >>",
                 self.failed_job_id_list)
-            status = process.system("scancel --partition {} -w {}".format(
-                self.partition_clients, NodeSet.fromlist(
-                    self.hostlist_clients)))
+            status = process.system("scancel --partition {} -u {}".format(
+                self.partition_clients, self.username))
             if status > 0:
                 errors.append("Failed to cancel jobs {}".format(
                     self.failed_job_id_list))
-            else:
-                self.log.info(
-                    "Jobs %s have been successfully cancelled",
-                    self.failed_job_id_list)
         if self.all_failed_jobs:
-            errors.append("FAILED: The following jobs failed {} ".format(
+            errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
+
         # One last attempt to copy any logfiles from client nodes
         try:
             self.get_remote_logs()
@@ -932,12 +933,7 @@ class Soak(TestWithServers):
         # Perform any test-specific tear down steps and collect any
         # reported errors
         self.log.info("<<tearDown Started>> at %s", time.ctime())
-        errors = self.soak_tear_down()
         super(Soak, self).tearDown()
-        if errors:
-            self.fail(
-                "Errors detected during teardown:\n  - {}".format(
-                    "\n  - ".join(errors)))
 
     def test_soak_smoke(self):
         """Run soak smoke.
@@ -980,11 +976,3 @@ class Soak(TestWithServers):
         """
         test_param = "/run/soak_harassers/"
         self.run_soak(test_param)
-
-
-def main():
-    """Kicks off test with main function."""
-
-
-if __name__ == "__main__":
-    main()

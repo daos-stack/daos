@@ -311,11 +311,21 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_servers:
             self.start_servers()
 
+    def pre_tear_down(self):
+        """Tear down steps to optionally run before tearDown().
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        return []
+
     def tearDown(self):
         """Tear down after each test case."""
+        # include errors from tests
+        errors = self.pre_tear_down()
         # Destroy any containers first
-        errors = (self.destroy_containers(self.container))
-
+        errors.extend(self.destroy_containers(self.container))
         # Destroy any pools next
         errors.extend(self.destroy_pools(self.pool))
 
