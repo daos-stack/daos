@@ -68,6 +68,11 @@ $ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
 $ sudo reboot
 ```
 
+!!! warning
+    VFIO support is a new feature for DAOS 1.2 and has been tested on the
+    following platforms:
+    •	CentOS 7.7
+
 ### Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
