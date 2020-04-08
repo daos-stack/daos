@@ -127,17 +127,24 @@ class IorTestBase(TestWithServers):
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
-    def run_ior_with_pool(self, intercept=None, test_file_suffix=""):
+    def run_ior_with_pool(self, intercept=None, test_file_suffix="",
+                          test_file="daos:testFile"):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
         override the values read from the yaml file.
 
         Args:
-            intercept (str): path to the interception library. Shall be used
-                             only for POSIX through DFUSE.
-            ior_flags (str, optional): ior flags. Defaults to None.
-            object_class (str, optional): daos object class. Defaults to None.
+            intercept (str, optional): path to the interception library. Shall
+                    be used only for POSIX through DFUSE. Defaults to None.
+            test_file_suffix (str, optional): suffix to add to the end of the
+                test file name. Defaults to "".
+            test_file (str, optional): ior test file name. Defaults to
+                "daos:testFile". Is ignored when using POSIX through DFUSE.
+
+        Returns:
+            CmdResult: result of the ior command execution
+
         """
         self.update_ior_cmd_with_pool()
         # start dfuse if api is POSIX
@@ -147,10 +154,9 @@ class IorTestBase(TestWithServers):
             if self.ior_cmd.transfer_size.value == "256B":
                 return "Skipping the case for transfer_size=256B"
             self._start_dfuse()
-            testfile = os.path.join(self.dfuse.mount_dir.value,
-                                    "testfile{}".format(test_file_suffix))
+            test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
 
-            self.ior_cmd.test_file.update(testfile)
+        self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
         out = self.run_ior(self.get_job_manager_command(), self.processes,
                            intercept)
