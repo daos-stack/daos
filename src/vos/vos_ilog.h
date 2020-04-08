@@ -295,9 +295,9 @@ vos_ilog_ts_lookup(struct vos_ts_set *ts_set, struct ilog_df *ilog);
  *  \param	record[in]	The record to hash
  *  \param	rec_size[in]	The size of the record to hash
  *
- *  \return the existing or new entry
+ *  \return 0 on success or an error
  */
-void
+int
 vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
 		  void *record, daos_size_t rec_size);
 
@@ -311,8 +311,9 @@ vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog);
 /** Evict the cached timestamp entry, if present
  *
  *  \param	ilog[in]	The incarnation log
+ *  \param	type[in]	The timestamp type
  */
 void
-vos_ilog_ts_evict(struct ilog_df *ilog);
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type);
 
 #endif /* __VOS_ILOG_H__ */

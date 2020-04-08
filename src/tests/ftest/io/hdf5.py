@@ -21,7 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from apricot import skipForTicket
 from mpio_test_base import LlnlMpi4pyHdf5
 
 
@@ -32,7 +31,6 @@ class Hdf5(LlnlMpi4pyHdf5):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-4197")
     def test_hdf5(self):
         """Jira ID: DAOS-2252.
 

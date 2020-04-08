@@ -5,17 +5,19 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.intel.daos</groupId>
+    <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
   </parent>
 
-  <groupId>com.intel.daos</groupId>
+  <groupId>io.daos</groupId>
   <artifactId>hadoop-daos</artifactId>
   <packaging>jar</packaging>
 
   <properties>
     <hadoop.version>2.7.6</hadoop.version>
+    <native.build.path>${project.basedir}/build</native.build.path>
+    <daos.install.path>/usr/local/daos</daos.install.path>
   </properties>
 
   <dependencies>
@@ -32,8 +34,8 @@
       <artifactId>log4j-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.intel.daos</groupId>
-      <artifactId>daos-java-api</artifactId>
+      <groupId>io.daos</groupId>
+      <artifactId>daos-java</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -82,21 +84,35 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
-        <configuration>
-          <forkCount>0</forkCount>
-        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
         <executions>
           <execution>
-            <id>integration-test</id>
             <goals>
-              <goal>integration-test</goal>
+              <goal>test-jar</goal>
             </goals>
           </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-shade-plugin</artifactId>
+        <executions>
           <execution>
-            <id>verify</id>
+            <phase>package</phase>
             <goals>
-              <goal>verify</goal>
+              <goal>shade</goal>
             </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <transformers>
+                <transformer
+                  implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>META-INF/org.apache.hadoop.fs.FileSystem</resource>
+                </transformer>
+              </transformers>
+            </configuration>
           </execution>
         </executions>
       </plugin>

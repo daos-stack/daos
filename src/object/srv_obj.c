@@ -1270,7 +1270,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
 		unsigned char	*buf = dkey->iov_buf;
 
-		buf[0] += 1;
+		buf[0] += orw->orw_oid.id_shard + 1;
 		orw->orw_dkey_hash = obj_dkey2hash(dkey);
 	}
 
@@ -2230,7 +2230,7 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 	else
 		oso->oso_epoch = min(epoch, osi->osi_epoch);
 
-	D_DEBUG(DB_IO, "start: "DF_UOID", epc "DF_U64"\n",
+	D_DEBUG(DB_IO, "obj_sync start: "DF_UOID", epc "DF_U64"\n",
 		DP_UOID(osi->osi_oid), oso->oso_epoch);
 
 	rc = obj_ioc_begin(osi->osi_oid, osi->osi_map_ver,
@@ -2247,7 +2247,7 @@ out:
 	obj_reply_set_status(rpc, rc);
 	obj_ioc_end(&ioc, rc);
 
-	D_DEBUG(DB_IO, "stop: "DF_UOID", epc "DF_U64", rd = %d\n",
+	D_DEBUG(DB_IO, "obj_sync stop: "DF_UOID", epc "DF_U64", rd = %d\n",
 		DP_UOID(osi->osi_oid), oso->oso_epoch, rc);
 
 	rc = crt_reply_send(rpc);
@@ -2256,45 +2256,19 @@ out:
 }
 
 static int
-cont_prop_srv_verify(struct ds_iv_ns *ns, uuid_t co_hdl)
-{
-	int			rc;
-	daos_prop_t		cont_prop = {0};
-	struct daos_prop_entry	entry = {0};
-
-	entry.dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	cont_prop.dpp_entries = &entry;
-	cont_prop.dpp_nr = 1;
-
-	rc = cont_iv_prop_fetch(ns, co_hdl, &cont_prop);
-	if (rc != 0)
-		return false;
-	return daos_cont_prop2serververify(&cont_prop);
-}
-
-static int
 obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
 		    struct daos_csummer *csummer)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
-	struct ds_pool		*pool;
 	uint64_t		 iods_nr = orw->orw_iod_array.oia_iod_nr;
 	unsigned int		 i;
 	int			 rc = 0;
 
-	if (!daos_csummer_initialized(csummer))
-		return 0;
-
-	pool = ds_pool_lookup(orw->orw_pool_uuid);
-	if (pool == NULL)
-		return -DER_NONEXIST;
-
 	if (!obj_rpc_is_update(rpc) ||
-	    !cont_prop_srv_verify(pool->sp_iv_ns, orw->orw_co_hdl)) {
-		ds_pool_put(pool);
+	    !daos_csummer_initialized(csummer) ||
+	    !csummer->dcs_srv_verify)
 		return 0;
-	}
 
 	for (i = 0; i < iods_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
@@ -2321,6 +2295,5 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 		}
 	}
 
-	ds_pool_put(pool);
 	return rc;
 }

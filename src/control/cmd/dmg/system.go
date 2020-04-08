@@ -67,7 +67,7 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 
 // addRankPrefix is a hack, but don't want to modify the hostlist library to
 // accept invalid hostnames.
-func addRankPrefix(rank uint32) string {
+func addRankPrefix(rank system.Rank) string {
 	return fmt.Sprintf("r-%d", rank)
 }
 

@@ -669,7 +669,7 @@ VOS provides a tool vos_stats.py that can take a set of assumptions about how ma
 
 To run an example, first setup the paths
 ```
-[~/daos]$ source ./scons_local/utils/setup_local.sh
+[~/daos]$ source ./utils/sl/setup_local.sh
 /home/jvolivie/daos
 Build vars file found: ./.build_vars.sh
 ```
