@@ -989,7 +989,6 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	struct ilog_df		*ilog = NULL;
 	daos_epoch_range_t	 epr = {0, epoch};
 	bool			 found = false;
-	bool			 mark = false;
 	int			 rc;
 
 	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
@@ -1006,29 +1005,39 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		if (!found)
 			vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
 
+		if (rc == -DER_NONEXIST) {
+			if ((flags & VOS_OF_REPLAY_PC) != 0)
+				goto insert_entry;
+			if ((flags & VOS_OF_COND_PUNCH) == 0)
+				rc = 0;
+			goto done;
+		}
 		if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH)) {
 			rc = -DER_NONEXIST;
 			goto done;
 		}
+	} else if (rc != 0) {
+		/** Abort on any other error */
+		goto done;
 	}
 
+insert_entry:
 	if (rc != 0) {
+		/** If it's not a replay punch, we should not insert
+		 *  anything.   In such case, ts_set will be NULL
+		 */
+		D_ASSERT(ts_set == NULL);
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
 				   key_iov, val_iov);
 		if (rc)
 			goto done;
-
-		mark = true;
 	}
 
 	/** Punch always adds a log entry */
 	rbund = iov2rec_bundle(val_iov);
 	krec = rbund->rb_krec;
-
-	if (mark)
-		vos_ilog_ts_mark(ts_set, ilog);
 
 	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, parent,
 			    info, ts_set, true);
@@ -1036,10 +1045,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;
 done:
-	if (rc != 0)
-		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 "Failed to punch key: "DF_RC"\n",
-			 DP_RC(rc));
+	VOS_TX_LOG_FAILURE(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

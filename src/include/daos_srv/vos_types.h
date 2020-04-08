@@ -176,6 +176,8 @@ enum {
 	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
 	/** replay punch (underwrite) */
 	VOS_OF_REPLAY_PC	= (1 << 8),
+	/** Set when propagating a punch the results in empty subtree */
+	VOS_OF_PUNCH_PROPAGATE	= (1 << 9),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -196,6 +198,7 @@ enum {
 
 D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
 D_CASSERT((VOS_OF_USE_TIMESTAMPS & DAOS_COND_MASK) == 0);
+D_CASSERT((VOS_OF_PUNCH_PROPAGATE & DAOS_COND_MASK) == 0);
 
 /** vos definitions that match daos_obj_key_query flags */
 enum {

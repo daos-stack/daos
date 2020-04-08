@@ -301,13 +301,15 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	rc = vos_ilog_punch(cont, &obj->vo_ilog, &epr, NULL,
 			    info, ts_set, true);
 
-	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
-		rc = -DER_TX_RESTART;
+	if ((rc == -DER_NONEXIST || rc == 0) &&
+	    vos_ts_check_rh_conflict_type(ts_set, VOS_TS_TYPE_OBJ, epoch)) {
+		if (rc == 0 ||
+		    (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH) == 0))
+			rc = -DER_TX_RESTART;
+	}
 
-	if (rc != 0)
-		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 "Failed to update incarnation log entry: "DF_RC"\n",
-			 DP_RC(rc));
+	VOS_TX_LOG_FAILURE(rc, "Failed to update incarnation log no punch: "
+			   DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

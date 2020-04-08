@@ -72,6 +72,8 @@ struct vos_ts_entry {
 	uuid_t			 te_tx_rh;
 	/** Hash index in parent */
 	uint32_t		 te_hash_idx;
+	/** Entry punched due to non-empty subtree */
+	bool			 te_punch_propagated;
 };
 
 struct vos_ts_set_entry {
@@ -205,7 +207,7 @@ vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
 
 	*entryp = NULL;
 
-	if (ts_set == NULL)
+	if (ts_set == NULL || (ts_set->ts_flags & VOS_OF_PUNCH_PROPAGATE))
 		return true;
 
 	if (reset)
@@ -245,7 +247,6 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 
 	if (ts_set == NULL)
 		return NULL;
-
 
 	ts_table = vos_ts_table_get();
 
@@ -535,6 +536,52 @@ vos_ts_check_rh_conflict(struct vos_ts_set *ts_set, daos_epoch_t write_time)
 	 * issue without MVCC.
 	 */
 	return true;
+}
+
+static inline bool
+vos_ts_check_rh_conflict_type(struct vos_ts_set *ts_set, uint32_t type,
+			      daos_epoch_t write_time)
+{
+	struct vos_ts_entry	*entry;
+	uint32_t		 akey_nr = 0;
+
+	if (ts_set == NULL)
+		return false;
+
+	if (type == VOS_TS_TYPE_AKEY)
+		akey_nr = ts_set->ts_init_count - 3;
+
+	entry = vos_ts_set_get_entry_type(ts_set, type, akey_nr);
+	if (entry == NULL || write_time > entry->te_ts_rh)
+		return false;
+
+	/** TODO: Need to eventually handle == case but it should not be an
+	 * issue without MVCC.
+	 */
+	return true;
+}
+
+/** Mark an entry as a propagated punch.  This has two purposes.   When we
+ *  do lookups, we avoid adding a new entry to the set because it's already
+ *  in the set.   And when we update timestamps, we update the high
+ *  timestamp for all entities we punch when the punch is conditional.
+ *
+ *  \param	ts_set[in]	The timestamp set
+ *  \param	flag[in]	The flag to set
+ */
+static inline void
+vos_ts_set_punch_propagate(struct vos_ts_set *ts_set, uint32_t type)
+{
+	struct vos_ts_entry	*entry;
+
+	if (ts_set == NULL)
+		return;
+
+	D_ASSERT(type == VOS_TS_TYPE_OBJ || type == VOS_TS_TYPE_DKEY);
+
+	ts_set->ts_flags |= VOS_OF_PUNCH_PROPAGATE;
+	entry = vos_ts_set_get_entry_type(ts_set, type, 0);
+	entry->te_punch_propagated = true;
 }
 
 #endif /* __VOS_TS__ */

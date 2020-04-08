@@ -42,6 +42,26 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
+/** Macro to log failures.  Expected failures go to DB_IO, otherwise they are
+ *  logged as errors.
+ */
+#define VOS_TX_LOG_FAILURE(rc, ...)			\
+	do {						\
+		bool	__is_err = true;		\
+							\
+		if (rc == 0)				\
+			break;				\
+		switch (rc) {				\
+		case -DER_TX_RESTART:			\
+		case -DER_INPROGRESS:			\
+		case -DER_NONEXIST:			\
+			__is_err = false;		\
+			break;				\
+		}					\
+		D_CDEBUG(__is_err, DLOG_ERR, DB_IO,	\
+			 __VA_ARGS__);			\
+	} while (0)
+
 #define VOS_CONT_ORDER		20	/* Order of container tree */
 #define VOS_OBJ_ORDER		20	/* Order of object tree */
 #define VOS_KTR_ORDER		23	/* order of d/a-key tree */
@@ -967,6 +987,24 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
+
+/** Internal bit for initializing iterator from open tree handle */
+#define VOS_IT_KEY_TREE	(1 << 31)
+
+/** Internal vos iterator API for iterating through keys using an
+ *  open tree handle to initialize the iterator
+ *
+ *  \param obj[IN]	VOS object
+ *  \param toh[IN]	Open key tree handle
+ *  \param type[IN]	Iterator type (VOS_ITER_AKEY/DKEY only)
+ *  \param epr[IN]	Valid epoch range for iteration
+ *  \param cb[IN]	Callback for key
+ *  \param arg[IN]	argument to pass to callback
+ */
+int
+vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
+		const daos_epoch_range_t *epr, vos_iter_cb_t cb,
+		void *arg);
 
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;

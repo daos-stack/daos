@@ -34,8 +34,12 @@
 #include "vts_array.h"
 
 struct mvcc_arg {
-	int		i;	/* used to generate different oids, etc. */
-	daos_epoch_t	epoch;	/* used to generate different epochs */
+	/** used to generate different oids, etc. */
+	int		i;
+	/** Fail on failed test */
+	bool		fail_fast;
+	/** used to generate different epochs */
+	daos_epoch_t	epoch;
 };
 
 enum type {
@@ -591,6 +595,7 @@ static void
 conflicting_rw(void **state)
 {
 	struct io_test_args	*arg = *state;
+	struct mvcc_arg		*mvcc_arg = arg->custom;
 	struct op		*r;
 	struct op		*w;
 	int			 i = 0;
@@ -607,6 +612,7 @@ conflicting_rw(void **state)
 				continue;
 
 			nfailed += conflicting_rw_exec(arg, i, r, w);
+			assert_true(!mvcc_arg->fail_fast || nfailed == 0);
 			i++;
 		}
 	}
@@ -636,6 +642,7 @@ setup_mvcc(void **state)
 	D_ALLOC_PTR(mvcc_arg);
 	D_ASSERT(mvcc_arg != NULL);
 	mvcc_arg->epoch = 10;
+	d_getenv_bool("CMOCKA_TEST_ABORT", &mvcc_arg->fail_fast);
 	arg->custom = mvcc_arg;
 	return 0;
 }
