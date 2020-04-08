@@ -74,6 +74,7 @@ struct obj_auxi_args {
 	tse_task_t			*obj_task;
 	int				 opc;
 	int				 result;
+	daos_epoch_t			 epoch;
 	uint32_t			 map_ver_req;
 	uint32_t			 map_ver_reply;
 	uint32_t			 io_retry:1,
@@ -1349,7 +1350,7 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 {
 	struct umem_attr	uma;
 	daos_handle_t		bth;
-	d_iov_t		key;
+	d_iov_t			key;
 	int			idx;
 	bool			overlapped;
 	struct btr_root		broot = { 0 };
@@ -2531,14 +2532,8 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 	uint8_t                 *tgt_bitmap = NIL_BITMAP;
 	unsigned int		 map_ver;
 	uint64_t		 dkey_hash;
-	daos_epoch_t		 epoch;
 	int			 rc;
 	uint8_t                  csum_bitmap = 0;
-
-	rc = obj_req_valid(args, DAOS_OBJ_RPC_FETCH, &epoch);
-	if (rc != 0)
-		D_GOTO(out_task, rc);
-	D_ASSERT(epoch);
 
 	obj = obj_hdl2ptr(args->oh);
 	if (obj == NULL)
@@ -2554,6 +2549,13 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 	if (rc != 0) {
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
+	}
+
+	if (!obj_auxi->io_retry) {
+		rc = obj_req_valid(args, DAOS_OBJ_RPC_FETCH, &obj_auxi->epoch);
+		if (rc != 0)
+			D_GOTO(out_task, rc);
+		D_ASSERT(obj_auxi->epoch);
 	}
 
 	rc = obj_rw_req_reassemb(obj, args, obj_auxi);
@@ -2621,7 +2623,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 		goto out_task;
 	}
 
-	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, epoch,
+	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, obj_auxi->epoch,
 			    shard_rw_prep, dc_obj_shard_rw, task);
 	return rc;
 
@@ -2652,13 +2654,7 @@ dc_obj_update(tse_task_t *task)
 	struct dc_object	*obj;
 	unsigned int		 map_ver;
 	uint64_t		 dkey_hash;
-	daos_epoch_t		 epoch;
 	int			 rc;
-
-	rc = obj_req_valid(args, DAOS_OBJ_RPC_UPDATE, &epoch);
-	if (rc != 0)
-		D_GOTO(out_task, rc);
-	D_ASSERT(epoch);
 
 	obj = obj_hdl2ptr(args->oh);
 	if (obj == NULL) {
@@ -2677,6 +2673,13 @@ dc_obj_update(tse_task_t *task)
 	if (rc != 0) {
 		obj_decref(obj);
 		goto out_task;
+	}
+
+	if (!obj_auxi->io_retry) {
+		rc = obj_req_valid(args, DAOS_OBJ_RPC_UPDATE, &obj_auxi->epoch);
+		if (rc != 0)
+			D_GOTO(out_task, rc);
+		D_ASSERT(obj_auxi->epoch);
 	}
 
 	rc = obj_rw_req_reassemb(obj, args, obj_auxi);
@@ -2715,7 +2718,7 @@ dc_obj_update(tse_task_t *task)
 		goto out_task;
 	}
 
-	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, epoch,
+	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, obj_auxi->epoch,
 			    shard_rw_prep, dc_obj_shard_rw, task);
 	return rc;
 
@@ -2747,14 +2750,8 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 	unsigned int		 map_ver;
 	struct obj_list_arg	 list_args;
 	uint64_t		 dkey_hash;
-	daos_epoch_t		 epoch;
 	int			 shard = -1;
 	int			 rc;
-
-	rc = obj_req_valid(args, opc, &epoch);
-	if (rc)
-		goto out_task;
-	D_ASSERT(epoch);
 
 	obj = obj_hdl2ptr(args->oh);
 	if (!obj) {
@@ -2776,6 +2773,13 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 	if (rc != 0) {
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
+	}
+
+	if (!obj_auxi->io_retry) {
+		rc = obj_req_valid(args, opc, &obj_auxi->epoch);
+		if (rc)
+			goto out_task;
+		D_ASSERT(obj_auxi->epoch);
 	}
 
 	dkey_hash = obj_dkey2hash(args->dkey);
@@ -2810,7 +2814,7 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 	D_DEBUG(DB_IO, "list opc %d "DF_OID" dkey %llu\n", opc,
 		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash);
 
-	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, epoch,
+	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, obj_auxi->epoch,
 			    shard_list_prep, dc_obj_shard_list, task);
 	return rc;
 
@@ -2903,13 +2907,7 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 	struct dc_object	*obj;
 	unsigned int		 map_ver;
 	uint64_t		 dkey_hash;
-	daos_epoch_t		 epoch;
 	int			 rc;
-
-	rc = obj_req_valid(api_args, opc, &epoch);
-	if (rc)
-		goto out_task;
-	D_ASSERT(epoch);
 
 	obj = obj_hdl2ptr(api_args->oh);
 	if (!obj) {
@@ -2928,6 +2926,13 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 		goto out_task;
 	}
 
+	if (!obj_auxi->io_retry) {
+		rc = obj_req_valid(api_args, opc, &obj_auxi->epoch);
+		if (rc)
+			goto out_task;
+		D_ASSERT(obj_auxi->epoch);
+	}
+
 	dkey_hash = obj_dkey2hash(api_args->dkey);
 	rc = obj_req_get_tgts(obj, opc, NULL, api_args->dkey, dkey_hash,
 			      NIL_BITMAP, map_ver, false, false,
@@ -2942,7 +2947,7 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 	D_DEBUG(DB_IO, "punch "DF_OID" dkey %llu\n",
 		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash);
 
-	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, epoch,
+	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, obj_auxi->epoch,
 			    shard_punch_prep, dc_obj_shard_punch, task);
 	return rc;
 
