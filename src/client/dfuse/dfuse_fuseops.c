@@ -89,9 +89,6 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
-	/* This does not work as ioctl.c assumes fi->fh is a file handle */
-	conn->want &= ~FUSE_CAP_IOCTL_DIR;
-
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
 
 	dfuse_show_flags(fs_handle, conn->want);
