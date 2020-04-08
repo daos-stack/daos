@@ -248,7 +248,6 @@ reint_object_class(daos_oclass_id_t cid)
 int
 main(int argc, char **argv)
 {
-//	struct daos_oclass_attr *obj_attr;
 	daos_oclass_id_t	*test_classes;
 	uint32_t		 num_test_oc;
 	char			 oclass_name[50];
