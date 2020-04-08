@@ -121,16 +121,3 @@ if [ $? -eq 0 ]; then
 fi
 export PATH
 export SL_PREFIX
-
-# Set some ORTE runtime variables, use "orte-info --param all all" for help on
-# individual options.
-
-# Allow overcommit of CPUs.
-export OMPI_MCA_rmaps_base_oversubscribe=1
-
-# Prevent orte from killing the job on single process failure
-# export OMPI_MCA_orte_abort_on_non_zero_status=0
-
-# Use /tmp for temporary files.  This is required for OS X.
-export OMPI_MCA_orte_tmpdir_base=/tmp
-
