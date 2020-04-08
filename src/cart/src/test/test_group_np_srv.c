@@ -89,6 +89,7 @@ test_run(d_rank_t my_rank)
 		rc = crt_group_ranks_get(grp, &rank_list);
 		D_ASSERTF(rc == 0, "crt_group_ranks_get() failed; rc=%d\n", rc);
 
+		DBG_PRINT("Waiting for ranks...\n");
 		rc = tc_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
 					test_g.t_srv_ctx_num - 1,
 					test_g.t_srv_ctx_num, 30, 1800);
