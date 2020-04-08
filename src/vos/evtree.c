@@ -1138,7 +1138,7 @@ evt_node_tx_add(struct evt_context *tcx, struct evt_node *nd)
 	return umem_tx_add_ptr(evt_umm(tcx), nd, evt_node_size(tcx));
 }
 
-static int
+static inline int
 evt_node_free(struct evt_context *tcx, umem_off_t nd_off)
 {
 	return umem_free(evt_umm(tcx), nd_off);
@@ -1210,11 +1210,12 @@ evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level,
 	if (empty) {
 		rc = evt_node_free(tcx, nd_off);
 	} else {
-		evt_node_tx_add(tcx, nd);
-		nd->tn_nr = i;
+		rc = evt_node_tx_add(tcx, nd);
+		if (rc == 0)
+			nd->tn_nr = i;
 	}
 
-	if (empty_ret)
+	if (rc == 0 && empty_ret)
 		*empty_ret = empty;
 out:
 	return rc;
@@ -1461,7 +1462,7 @@ static int
 evt_root_destroy(struct evt_context *tcx, bool *destroyed)
 {
 	struct evt_root *root;
-	int		 rc;
+	int		 rc = 0;
 	bool		 empty = true;
 
 	root = tcx->tc_root;
@@ -1474,9 +1475,9 @@ evt_root_destroy(struct evt_context *tcx, bool *destroyed)
 
 	*destroyed = empty;
 	if (empty)
-		evt_root_free(tcx);
+		rc = evt_root_free(tcx);
 
-	return 0;
+	return rc;
 }
 
 static int64_t
@@ -2865,10 +2866,8 @@ evt_node_delete(struct evt_context *tcx)
 
 		if (node->tn_nr == 1) {
 			/* this node can be removed so bubble up */
-			if (level == 0) {
-				evt_root_deactivate(tcx);
-				return 0;
-			}
+			if (level == 0)
+				return evt_root_deactivate(tcx);
 
 			old_cur = nm_cur;
 			rc = umem_free(evt_umm(tcx), nm_cur);
