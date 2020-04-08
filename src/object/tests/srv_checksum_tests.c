@@ -163,7 +163,7 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 	size_t		 nr;
 	uint8_t		*dummy_csums;
 
-	daos_csummer_init(&ctx->csummer, &fake_algo, setup->chunksize);
+	daos_csummer_init(&ctx->csummer, &fake_algo, setup->chunksize, 0);
 
 	csum_len = daos_csummer_get_csum_len(ctx->csummer);
 	cs = daos_csummer_get_chunksize(ctx->csummer);
@@ -858,7 +858,7 @@ update_fetch_sv(void **state)
 	char			*data = "abcd";
 	uint32_t		 csum = 0x12345678;
 
-	daos_csummer_init(&csummer, &fake_algo, 4);
+	daos_csummer_init(&csummer, &fake_algo, 4, 0);
 
 	iod.iod_type = DAOS_IOD_SINGLE;
 	iod.iod_size = strlen(data);

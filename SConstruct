@@ -33,6 +33,20 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
+def run_checks(env):
+    """Run all configure time checks"""
+
+    cenv = env.Clone()
+    cenv.Append(CFLAGS='-Werror')
+    if cenv.get("COMPILER") == 'icc':
+        cenv.Replace(CC='gcc', CXX='g++')
+    config = Configure(cenv)
+
+    if config.CheckHeader('stdatomic.h'):
+        env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+
+    config.Finish()
+
 def get_version():
     """ Read version from VERSION file """
     with open("VERSION", "r") as version_file:
@@ -343,7 +357,10 @@ def scons(): # pylint: disable=too-many-locals
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
-    prereqs.has_source(env, 'fio')
+
+    if not env.GetOption('clean'):
+        run_checks(env)
+
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 

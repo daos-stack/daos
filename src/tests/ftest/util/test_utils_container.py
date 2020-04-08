@@ -308,12 +308,14 @@ class TestContainer(TestDaosApiBase):
             kwargs["con_uuid"] = uuid
         # Refer daos_api for setting input params for DaosContainer.
         if con_in is not None:
-            self.input_params.type = con_in[0]
-            self.input_params.enable_chksum = con_in[1]
-            self.input_params.srv_verify = con_in[2]
-            self.input_params.chksum_type = con_in[3]
-            self.input_params.chunk_size = con_in[4]
-            kwargs["con_prop"] = self.input_params
+            cop = self.input_params.get_con_create_params()
+            cop.type = con_in[0]
+            cop.enable_chksum = con_in[1]
+            cop.srv_verify = con_in[2]
+            cop.chksum_type = con_in[3]
+            cop.chunk_size = con_in[4]
+            kwargs["con_prop"] = cop
+
         self._call_method(self.container.create, kwargs)
         self.uuid = self.container.get_uuid_str()
         self.log.info("  Container created with uuid %s", self.uuid)
