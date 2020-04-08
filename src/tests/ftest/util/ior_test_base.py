@@ -152,9 +152,6 @@ class IorTestBase(TestWithServers):
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
-            # Uncomment below two lines once DAOS-3355 is resolved
-            if self.ior_cmd.transfer_size.value == "256B":
-                return "Skipping the case for transfer_size=256B"
             self._start_dfuse()
             testfile = os.path.join(self.dfuse.mount_dir.value,
                                     "testfile{}".format(test_file_suffix))
