@@ -32,7 +32,7 @@ BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: libabt-devel >= 1.0rc1
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
-BuildRequires: fuse-devel >= 3.4.2
+BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel > %{spdk_min_version}, spdk-devel < %{spdk_max_version}
 BuildRequires: spdk-tools > %{spdk_min_version}, spdk-tools < %{spdk_max_version}
