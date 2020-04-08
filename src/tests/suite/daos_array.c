@@ -1080,29 +1080,122 @@ truncate_array(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 } /* End str_mem_str_arr_io */
 
+/** number of elements to write to array */
+#define MAX_IO_NUM_ELEMS	4096
+#define MAX_IO_CELL_SIZE	4096
+#define MAX_IO_SIZE		16777216
+
+static void
+reproducer_helper(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_size_t	lg_chunk_size = 8388608; /* 8M */
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	daos_array_iod_t iod;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	char		*wbuf;
+	daos_size_t	i;
+	daos_event_t	ev, *evp;
+	int		rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** create the array on rank 0 and share the oh. */
+	if (arg->myrank == 0) {
+		oid = dts_oid_gen(OC_SX, feat, 0);
+		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1,
+				       lg_chunk_size, &oh, NULL);
+		assert_int_equal(rc, 0);
+	}
+	array_oh_share(arg->coh, arg->myrank, &oh);
+
+	/** Allocate and set buffer */
+	D_ALLOC(wbuf, MAX_IO_SIZE);
+	assert_non_null(wbuf);
+	dts_buf_render(wbuf, MAX_IO_SIZE);
+
+	/** set array location */
+	iod.arr_nr = MAX_IO_NUM_ELEMS;
+	D_ALLOC_ARRAY(iod.arr_rgs, MAX_IO_NUM_ELEMS);
+	assert_non_null(iod.arr_rgs);
+	for (i = 0; i < MAX_IO_NUM_ELEMS; i++) {
+		iod.arr_rgs[i].rg_len = MAX_IO_CELL_SIZE;
+		iod.arr_rgs[i].rg_idx = 2 * MAX_IO_CELL_SIZE * i;
+	}
+
+	/** set memory location */
+	sgl.sg_nr = 1;
+	d_iov_set(&iov, wbuf, MAX_IO_SIZE);
+	sgl.sg_iovs = &iov;
+
+//	sgl.sg_nr = MAX_IO_NUM_ELEMS;
+//	D_ALLOC_ARRAY(sgl.sg_iovs, MAX_IO_NUM_ELEMS);
+//	for (i = 0 ; i < MAX_IO_NUM_ELEMS; i++) {
+//		d_iov_set(&sgl.sg_iovs[i], &wbuf, MAX_IO_CELL_SIZE);
+//	}
+
+	/** Write */
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_int_equal(rc, 0);
+	}
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl,
+			      arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	if (arg->async) {
+		/** Wait for completion */
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, 0);
+
+		rc = daos_event_fini(&ev);
+		assert_int_equal(rc, 0);
+	}
+
+	/* Wait for aggregation */
+	sleep(100);
+
+	D_FREE(wbuf);
+	D_FREE(iod.arr_rgs);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+} /* End contig_mem_str_arr_io_helper */
+
+static void
+reproducer(void **state) {
+	print_message("Testing with cell size = 4k\n");
+	reproducer_helper(state);
+}
+
+
 static const struct CMUnitTest array_api_tests[] = {
-	{"Array API: create/open/close (blocking)",
+	{"Array API1: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
-	{"Array API: small/simple array IO (blocking)",
+	{"Array API2: small/simple array IO (blocking)",
 	 small_io, async_disable, NULL},
-	{"Array API: Contiguous memory and array (blocking)",
+	{"Array API3: Contiguous memory and array (blocking)",
 	 contig_mem_contig_arr_io, async_disable, NULL},
-	{"Array API: Contiguous memory and array (non-blocking)",
+	{"Array API4: Contiguous memory and array (non-blocking)",
 	 contig_mem_contig_arr_io, async_enable, NULL},
-	{"Array API: Contiguous memory Strided array (blocking)",
+	{"Array API5: Contiguous memory Strided array (blocking)",
 	 contig_mem_str_arr_io, async_disable, NULL},
-	{"Array API: Contiguous memory Strided array (non-blocking)",
+	{"Array API6: Contiguous memory Strided array (non-blocking)",
 	 contig_mem_str_arr_io, async_enable, NULL},
-	{"Array API: Strided memory and array (blocking)",
+	{"Array API7: Strided memory and array (blocking)",
 	 str_mem_str_arr_io, async_disable, NULL},
-	{"Array API: Strided memory and array (non-blocking)",
+	{"Array API8: Strided memory and array (non-blocking)",
 	 str_mem_str_arr_io, async_enable, NULL},
-	{"Array API: Read from Empty array and records (blocking)",
+	{"Array API9: Read from Empty array and records (blocking)",
 	 read_empty_records, async_disable, NULL},
-	{"Array API: strided_array (blocking)",
+	{"Array API10: strided_array (blocking)",
 	 strided_array, async_disable, NULL},
-	{"Array API: write after truncate",
+	{"Array API11: write after truncate",
 	 truncate_array, async_disable, NULL},
+	{"Array API12: reproducer",
+	 reproducer, async_disable, NULL},
 };
 
 static int
@@ -1113,14 +1206,21 @@ daos_array_setup(void **state)
 }
 
 int
-run_daos_array_test(int rank, int size)
+run_daos_array_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DAOS Array API tests",
-					 array_api_tests, daos_array_setup,
-					 test_teardown);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (sub_tests_size == 0) {
+		sub_tests_size = ARRAY_SIZE(array_api_tests);
+		sub_tests = NULL;
+	}
+
+	rc = run_daos_sub_tests("DAOS Array API tests", array_api_tests,
+				ARRAY_SIZE(array_api_tests), sub_tests, sub_tests_size,
+				daos_array_setup, test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
+
 }
