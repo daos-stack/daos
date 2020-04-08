@@ -339,8 +339,8 @@ count_available_spares(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	uint32_t unusable_tgts;
 	uint32_t num_targets;
 
-	num_targets =  pool_map_find_target(jmap->jmp_map.pl_poolmap,
-			 PO_COMP_ID_ALL, NULL);
+	num_targets =  pool_map_find_domain(jmap->jmp_map.pl_poolmap,
+			jmap->min_redundant_dom, PO_COMP_ID_ALL, NULL);
 
 	/* we might not have any valid targets left at all */
 	unusable_tgts = layout->ol_nr;
