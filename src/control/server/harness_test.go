@@ -53,7 +53,7 @@ import (
 
 const (
 	testShortTimeout = 50 * time.Millisecond
-	testLongTimeout  = 4 * testShortTimeout
+	testLongTimeout  = 20 * testShortTimeout
 )
 
 func TestServer_HarnessCreateSuperblocks(t *testing.T) {
@@ -373,7 +373,7 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 		"delayed failure": {
 			trc: &ioserver.TestRunnerConfig{
 				ErrChanCb: func(idx uint32) ioserver.InstanceError {
-					time.Sleep(testShortTimeout / 2)
+					time.Sleep(testShortTimeout * 9)
 					return ioserver.InstanceError{Idx: idx, Err: errors.New("oops")}
 				},
 			},
@@ -403,7 +403,7 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 			},
 			expIoErrs: map[uint32]error{
 				0: errors.New("oops"),
-				1: errors.New("oo"),
+				1: errors.New("oops"),
 			},
 		},
 	} {
@@ -496,7 +496,7 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 				}))
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), testShortTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), testShortTimeout*10)
 			defer cancel()
 
 			// start harness async and signal completion
@@ -508,20 +508,78 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 				close(done)
 			}()
 
+			waitDrpcReady := make(chan struct{})
+			go func() {
+				for {
+					ready := true
+					for _, srv := range harness.Instances() {
+						if srv.waitDrpc.IsFalse() {
+							ready = false
+						}
+					}
+					if ready {
+						close(waitDrpcReady)
+						break
+					}
+					<-time.After(testShortTimeout)
+				}
+			}()
+
+			select {
+			case <-waitDrpcReady:
+			case <-ctx.Done():
+				if tc.expStartErr != context.DeadlineExceeded {
+					<-done
+					CmpErr(t, tc.expStartErr, gotErr)
+					return
+				}
+				// deadline exceeded as expected but desired state not reached
+				t.Fatalf("instances did not get to waiting for dRPC state: %s", ctx.Err())
+			}
+			t.Log("instances ready and waiting for dRPC ready notification")
+
 			// simulate receiving notify ready whilst instances
 			// running in harness
 			for _, srv := range harness.Instances() {
 				req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
 				go func(i *IOServerInstance) {
-					i.drpcReady <- req
+					select {
+					case i.drpcReady <- req:
+					case <-ctx.Done():
+					}
 				}(srv)
 			}
 
+			waitReady := make(chan struct{})
+			go func() {
+				for {
+					if len(harness.ReadyRanks()) == len(harness.Instances()) {
+						close(waitReady)
+						return
+					}
+					select {
+					case <-time.After(testShortTimeout):
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
+
 			select {
-			case <-time.After(testShortTimeout * 2):
-				cancel()
-			case <-done:
+			case <-waitReady:
+			case <-ctx.Done():
+				if tc.expStartErr != context.DeadlineExceeded {
+					<-done
+					CmpErr(t, tc.expStartErr, gotErr)
+					return
+				}
+				// deadline exceeded as expected but desired state not reached
+				t.Fatalf("instances did not get to ready state: %s", ctx.Err())
 			}
+			t.Log("instances setup and ready")
+
+			<-done
+			t.Log("harness Start() exited")
 
 			if instanceStarts != tc.expStartCount {
 				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)

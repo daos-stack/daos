@@ -128,7 +128,7 @@ func TestRunnerContextExit(t *testing.T) {
 	if errors.Cause(exitErr.Err) == NormalExit {
 		t.Fatal("expected process to not exit normally")
 	}
-	if exitErr.Idx != 9 {
+	if exitErr.Idx != cfg.Index {
 		t.Fatal("expected exit error to contain instance index")
 	}
 

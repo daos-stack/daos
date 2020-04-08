@@ -67,6 +67,7 @@ type IOServerInstance struct {
 	bdevClassProvider *bdev.ClassProvider
 	scmProvider       *scm.Provider
 	msClient          *mgmtSvcClient
+	waitDrpc          atm.Bool
 	drpcReady         chan *srvpb.NotifyReadyReq
 	storageReady      chan struct{}
 	ready             atm.Bool
@@ -252,7 +253,7 @@ func (srv *IOServerInstance) IsStarted() bool {
 // NotifyDrpcReady receives a ready message from the running IOServer
 // instance.
 func (srv *IOServerInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
-	srv.log.Debugf("%s instance %d ready: %v", DataPlaneName, srv.Index(), msg)
+	srv.log.Debugf("%s instance %d drpc ready: %v", DataPlaneName, srv.Index(), msg)
 
 	// Activate the dRPC client connection to this iosrv
 	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
@@ -271,7 +272,6 @@ func (srv *IOServerInstance) AwaitDrpcReady() chan *srvpb.NotifyReadyReq {
 
 // NotifyStorageReady releases any blocks on AwaitStorageReady().
 func (srv *IOServerInstance) NotifyStorageReady() {
-	srv.log.Debugf("%s instance %d notifying storage ready", DataPlaneName, srv.Index())
 	go func() {
 		close(srv.storageReady)
 	}()
@@ -525,7 +525,7 @@ func (srv *IOServerInstance) FinishStartup(ctx context.Context, ready *srvpb.Not
 		return errors.Wrap(err, "failed to load I/O server modules")
 	}
 
-	srv.log.Debugf("instance ready: %v", ready)
+	srv.log.Debugf("instance %d ready: %v", srv.Index(), ready)
 	srv.ready.SetTrue()
 
 	return nil

@@ -52,7 +52,7 @@ type (
 	}
 )
 
-func newMgmtSvcClient(ctx context.Context, log logging.Logger, cfg mgmtSvcClientCfg) mgmtpb.MgmtSvcClient {
+func newMgmtSvcClient(ctx context.Context, log logging.Logger, cfg mgmtSvcClientCfg) *mgmtSvcClient {
 	return &mgmtSvcClient{
 		log: log,
 		cfg: cfg,
@@ -281,90 +281,4 @@ func (msc *mgmtSvcClient) Status(ctx context.Context, destAddr string, req mgmtp
 		})
 
 	return
-}
-
-// LeaderQuery provides a mechanism for clients to discover
-// the system's current Management Service leader
-func (msc *mgmtSvcClient) LeaderQuery(ctx context.Context, in *mgmtpb.LeaderQueryReq, opts ...grpc.CallOption) (*mgmtpb.LeaderQueryResp, error) {
-	return nil, errNotImplemented
-}
-
-// Create a DAOS pool allocated across a number of ranks
-func (msc *mgmtSvcClient) PoolCreate(ctx context.Context, in *mgmtpb.PoolCreateReq, opts ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
-	return nil, errNotImplemented
-}
-
-// Destroy a DAOS pool allocated across a number of ranks.
-func (msc *mgmtSvcClient) PoolDestroy(ctx context.Context, in *mgmtpb.PoolDestroyReq, opts ...grpc.CallOption) (*mgmtpb.PoolDestroyResp, error) {
-	return nil, errNotImplemented
-}
-
-// PoolQuery queries a DAOS pool.
-func (msc *mgmtSvcClient) PoolQuery(ctx context.Context, in *mgmtpb.PoolQueryReq, opts ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
-	return nil, errNotImplemented
-}
-
-// Set a DAOS pool property.
-func (msc *mgmtSvcClient) PoolSetProp(ctx context.Context, in *mgmtpb.PoolSetPropReq, opts ...grpc.CallOption) (*mgmtpb.PoolSetPropResp, error) {
-	return nil, errNotImplemented
-}
-
-// Fetch the Access Control List for a DAOS pool.
-func (msc *mgmtSvcClient) PoolGetACL(ctx context.Context, in *mgmtpb.GetACLReq, opts ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
-	return nil, errNotImplemented
-}
-
-// Overwrite the Access Control List for a DAOS pool with a new one.
-func (msc *mgmtSvcClient) PoolOverwriteACL(ctx context.Context, in *mgmtpb.ModifyACLReq, opts ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
-	return nil, errNotImplemented
-}
-
-// Update existing the Access Control List for a DAOS pool with new entries.
-func (msc *mgmtSvcClient) PoolUpdateACL(ctx context.Context, in *mgmtpb.ModifyACLReq, opts ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
-	return nil, errNotImplemented
-}
-
-// Delete an entry from a DAOS pool's Access Control List.
-func (msc *mgmtSvcClient) PoolDeleteACL(ctx context.Context, in *mgmtpb.DeleteACLReq, opts ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
-	return nil, errNotImplemented
-}
-
-// Get the information required by libdaos to attach to the system.
-func (msc *mgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
-	return nil, errNotImplemented
-}
-
-// Get BIO device health information.
-func (msc *mgmtSvcClient) BioHealthQuery(ctx context.Context, in *mgmtpb.BioHealthReq, opts ...grpc.CallOption) (*mgmtpb.BioHealthResp, error) {
-	return nil, errNotImplemented
-}
-
-// Get SMD device list.
-func (msc *mgmtSvcClient) SmdListDevs(ctx context.Context, in *mgmtpb.SmdDevReq, opts ...grpc.CallOption) (*mgmtpb.SmdDevResp, error) {
-	return nil, errNotImplemented
-}
-
-// Get SMD pool list.
-func (msc *mgmtSvcClient) SmdListPools(ctx context.Context, in *mgmtpb.SmdPoolReq, opts ...grpc.CallOption) (*mgmtpb.SmdPoolResp, error) {
-	return nil, errNotImplemented
-}
-
-// List all pools in a DAOS system: basic info: UUIDs, service ranks.
-func (msc *mgmtSvcClient) ListPools(ctx context.Context, in *mgmtpb.ListPoolsReq, opts ...grpc.CallOption) (*mgmtpb.ListPoolsResp, error) {
-	return nil, errNotImplemented
-}
-
-// Get the current state of the device
-func (msc *mgmtSvcClient) DevStateQuery(ctx context.Context, in *mgmtpb.DevStateReq, opts ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
-	return nil, errNotImplemented
-}
-
-// Set the device state of an NVMe SSD to FAULTY
-func (msc *mgmtSvcClient) StorageSetFaulty(ctx context.Context, in *mgmtpb.DevStateReq, opts ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
-	return nil, errNotImplemented
-}
-
-// List all containers in a pool
-func (msc *mgmtSvcClient) ListContainers(ctx context.Context, in *mgmtpb.ListContReq, opts ...grpc.CallOption) (*mgmtpb.ListContResp, error) {
-	return nil, errNotImplemented
 }

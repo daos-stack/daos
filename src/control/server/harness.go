@@ -225,6 +225,7 @@ func (h *IOServerHarness) registerNewMember(membership *system.Membership, insta
 // any MS replicas (membership is normally recorded when handling join requests
 // but bootstrapping MS replicas will not join).
 func (h *IOServerHarness) startInstances(ctx context.Context, membership *system.Membership) error {
+	h.log.Debug("starting instances")
 	for _, instance := range h.Instances() {
 		if err := instance.Start(ctx, h.errChan); err != nil {
 			return err
@@ -235,6 +236,8 @@ func (h *IOServerHarness) startInstances(ctx context.Context, membership *system
 				return err
 			}
 		}
+
+		instance.waitDrpc.SetTrue()
 	}
 
 	return nil
@@ -245,6 +248,7 @@ func (h *IOServerHarness) startInstances(ctx context.Context, membership *system
 // Iterate over instances and call Stop(sig) on each, return when all instances
 // exit or err context is done. Error map returned for each rank stop attempt failure.
 func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...system.Rank) (map[system.Rank]error, error) {
+	h.log.Debugf("stopping instances %v", rankList)
 	if !h.IsStarted() {
 		return nil, nil
 	}
@@ -310,6 +314,7 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 // management service on MS replicas immediately so other instances can join.
 // I/O server modules are then loaded.
 func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
+	h.log.Debug("waiting for instances to start-up")
 	for _, instance := range h.Instances() {
 		select {
 		case <-ctx.Done(): // harness exit
@@ -338,6 +343,7 @@ func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
 // return only when all harness instances are stopped and restart
 // signal is received.
 func (h *IOServerHarness) monitor(ctx context.Context) error {
+	h.log.Debug("monitoring instances")
 	for {
 		select {
 		case <-ctx.Done(): // harness exit
