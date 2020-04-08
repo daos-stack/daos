@@ -246,7 +246,8 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
-export CRT_PHY_ADDR_STR=ofi+sockets
+# export CRT_PHY_ADDR_STR=ofi+sockets
+export CRT_PHY_ADDR_STR=ofi+verbs;ofi_rxm
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE

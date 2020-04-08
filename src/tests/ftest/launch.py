@@ -762,6 +762,7 @@ def run_tests(test_files, tag_filter, args):
         "--ignore-missing-references on",
         "--show-job-log" if not args.sparse else "",
         "--html-job-result on",
+        "--sysinfo on",
         tag_filter
     ]
 
