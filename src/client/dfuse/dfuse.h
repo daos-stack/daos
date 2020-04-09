@@ -284,8 +284,8 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
-			DFUSE_TRA_DEBUG(desc, "Returning %d '%s'",	\
-					__err, strerror(__err));	\
+			DFUSE_TRA_INFO(desc, "Returning %d '%s'",	\
+				       __err, strerror(__err));		\
 		__rc = fuse_reply_err(req, __err);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(desc,				\
