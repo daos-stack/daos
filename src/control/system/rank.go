@@ -92,3 +92,35 @@ func checkRank(r Rank) error {
 	}
 	return nil
 }
+
+// InList checks rank is present in provided rank list.
+//
+// Empty rank list indicates no filtering.
+func (r *Rank) InList(ranks []Rank) bool {
+	if len(ranks) == 0 {
+		return true
+	}
+	for _, rank := range ranks {
+		if r.Equals(rank) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// RemoveFromList removes given rank from provided list
+// and returns modified list.
+//
+// Ignores miss in list.
+func (r *Rank) RemoveFromList(ranks []Rank) []Rank {
+	rankList := make([]Rank, 0, len(ranks))
+	for _, rank := range ranks {
+		if r.Equals(rank) {
+			continue // skip this rank
+		}
+		rankList = append(rankList, rank)
+	}
+
+	return rankList
+}

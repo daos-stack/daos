@@ -252,3 +252,61 @@ func TestSystem_NonPointerRankEquals(t *testing.T) {
 		})
 	}
 }
+
+func TestSystem_RankRemoveFromList(t *testing.T) {
+	for name, tc := range map[string]struct {
+		r        Rank
+		rl       []Rank
+		expRanks []Rank
+	}{
+		"no list": {
+			r:        Rank(1),
+			rl:       []Rank{},
+			expRanks: []Rank{},
+		},
+		"present": {
+			r:        Rank(1),
+			rl:       []Rank{Rank(0), Rank(1)},
+			expRanks: []Rank{Rank(0)},
+		},
+		"absent": {
+			r:        Rank(1),
+			rl:       []Rank{Rank(0), Rank(2)},
+			expRanks: []Rank{Rank(0), Rank(2)},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotList := tc.r.RemoveFromList(tc.rl)
+			common.AssertEqual(t, tc.expRanks, gotList, name)
+		})
+	}
+}
+
+func TestSystem_RankInList(t *testing.T) {
+	for name, tc := range map[string]struct {
+		r       Rank
+		rl      []Rank
+		expBool bool
+	}{
+		"no list": {
+			r:       Rank(1),
+			rl:      []Rank{},
+			expBool: true,
+		},
+		"present": {
+			r:       Rank(1),
+			rl:      []Rank{Rank(0), Rank(1)},
+			expBool: true,
+		},
+		"absent": {
+			r:       Rank(1),
+			rl:      []Rank{Rank(0), Rank(2)},
+			expBool: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotBool := tc.r.InList(tc.rl)
+			common.AssertEqual(t, tc.expBool, gotBool, name)
+		})
+	}
+}

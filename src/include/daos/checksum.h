@@ -553,5 +553,11 @@ csum_align_boundaries(daos_off_t lo, daos_off_t hi, daos_off_t lo_boundary,
 		      daos_off_t hi_boundary, daos_off_t record_size,
 		      size_t chunksize);
 
+/**
+ * DAOS Checksum Fault Injection ... corrupt data
+ */
+void
+dcf_corrupt(d_sg_list_t *data, uint32_t nr);
+
 #endif /** __DAOS_CHECKSUM_H */
 
