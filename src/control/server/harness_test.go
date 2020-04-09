@@ -52,9 +52,10 @@ import (
 )
 
 const (
-	testShortTimeout   = 600 * time.Millisecond
-	testLongTimeout    = 6 * testShortTimeout
-	delayedFailTimeout = 500 * time.Millisecond
+	testShortTimeout   = 60 * time.Millisecond
+	testMediumTimeout  = 100 * testShortTimeout
+	testLongTimeout    = 2 * testMediumTimeout
+	delayedFailTimeout = 80 * testShortTimeout
 )
 
 func TestServer_HarnessCreateSuperblocks(t *testing.T) {
@@ -490,41 +491,47 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 				}
 			}
 
+			instances := harness.Instances()
+
 			// set mock dRPC client to record call details
-			for _, srv := range harness.Instances() {
+			for _, srv := range instances {
 				srv.setDrpcClient(newMockDrpcClient(&mockDrpcClientConfig{
 					SendMsgResponse: &drpc.Response{},
 				}))
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), testShortTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), testMediumTimeout)
 			defer cancel()
 
 			// start harness async and signal completion
 			var gotErr error
 			membership := system.NewMembership(log)
 			done := make(chan struct{})
-			go func() {
+			go func(inCtx context.Context) {
 				gotErr = harness.Start(ctx, membership, nil)
 				close(done)
-			}()
+			}(ctx)
 
 			waitDrpcReady := make(chan struct{})
-			go func() {
+			go func(inCtx context.Context) {
 				for {
 					ready := true
-					for _, srv := range harness.Instances() {
+					for _, srv := range instances {
 						if srv.waitDrpc.IsFalse() {
 							ready = false
 						}
 					}
 					if ready {
 						close(waitDrpcReady)
-						break
+						return
 					}
-					<-time.After(testShortTimeout)
+					select {
+					case <-time.After(testShortTimeout):
+					case <-inCtx.Done():
+						return
+					}
 				}
-			}()
+			}(ctx)
 
 			select {
 			case <-waitDrpcReady:
@@ -541,30 +548,30 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 
 			// simulate receiving notify ready whilst instances
 			// running in harness
-			for _, srv := range harness.Instances() {
+			for _, srv := range instances {
 				req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
-				go func(i *IOServerInstance) {
+				go func(inCtx context.Context, i *IOServerInstance) {
 					select {
 					case i.drpcReady <- req:
-					case <-ctx.Done():
+					case <-inCtx.Done():
 					}
-				}(srv)
+				}(ctx, srv)
 			}
 
 			waitReady := make(chan struct{})
-			go func() {
+			go func(inCtx context.Context) {
 				for {
-					if len(harness.ReadyRanks()) == len(harness.Instances()) {
+					if len(harness.ReadyRanks()) == len(instances) {
 						close(waitReady)
 						return
 					}
 					select {
 					case <-time.After(testShortTimeout):
-					case <-ctx.Done():
+					case <-inCtx.Done():
 						return
 					}
 				}
-			}()
+			}(ctx)
 
 			select {
 			case <-waitReady:
@@ -593,7 +600,7 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 
 			// verify expected RPCs were made, ranks allocated and
 			// members added to membership
-			for _, srv := range harness.Instances() {
+			for _, srv := range instances {
 				gotDrpcCalls := srv._drpcClient.(*mockDrpcClient).Calls
 				if diff := cmp.Diff(tc.expDrpcCalls[srv.Index()], gotDrpcCalls); diff != "" {
 					t.Fatalf("unexpected dRPCs for instance %d (-want, +got):\n%s\n",
