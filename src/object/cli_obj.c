@@ -1427,7 +1427,7 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 	for (i = 0; i < nr; i++) {
 		if (iods[i].iod_name.iov_buf == NULL)
 			/* XXX checksum & eprs should not be mandatory */
-			return false;
+			return -DER_INVAL;
 
 		switch (iods[i].iod_type) {
 		default:
