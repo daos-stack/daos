@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,12 +32,12 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 // readACLFile reads in a file representing an ACL, and translates it into an
 // AccessControlList structure
-func readACLFile(aclFile string) (*client.AccessControlList, error) {
+func readACLFile(aclFile string) (*common.AccessControlList, error) {
 	file, err := os.Open(aclFile)
 	if err != nil {
 		return nil, errors.WithMessage(err, "opening ACL file")
@@ -62,9 +62,9 @@ func isACLFileComment(line string) bool {
 }
 
 // parseACL reads the content from io.Reader and puts the results into a
-// client.AccessControlList structure.
+// common.AccessControlList structure.
 // Assumes that ACE strings are provided one per line.
-func parseACL(reader io.Reader) (*client.AccessControlList, error) {
+func parseACL(reader io.Reader) (*common.AccessControlList, error) {
 	aceList := make([]string, 0)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
@@ -78,11 +78,11 @@ func parseACL(reader io.Reader) (*client.AccessControlList, error) {
 		}
 	}
 
-	return &client.AccessControlList{Entries: aceList}, nil
+	return &common.AccessControlList{Entries: aceList}, nil
 }
 
 // formatACL converts the AccessControlList to a human-readable string.
-func formatACL(acl *client.AccessControlList, verbose bool) string {
+func formatACL(acl *common.AccessControlList, verbose bool) string {
 	var builder strings.Builder
 
 	if acl.HasOwner() {
@@ -110,7 +110,7 @@ func formatACL(acl *client.AccessControlList, verbose bool) string {
 }
 
 // formatACLDefault formats the AccessControlList in non-verbose mode.
-func formatACLDefault(acl *client.AccessControlList) string {
+func formatACLDefault(acl *common.AccessControlList) string {
 	return formatACL(acl, false)
 }
 

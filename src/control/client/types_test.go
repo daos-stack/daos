@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -71,7 +72,7 @@ func TestAccessControlList_Empty(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.acl.Empty(), tc.expResult, "result didn't match")
+			AssertEqual(t, tc.acl.Empty(), tc.expResult, "result didn't match")
 		})
 	}
 }
@@ -132,7 +133,7 @@ func TestAccessControlList_HasOwner(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.acl.HasOwner(), tc.expResult, "result didn't match")
+			AssertEqual(t, tc.acl.HasOwner(), tc.expResult, "result didn't match")
 		})
 	}
 }
@@ -193,7 +194,7 @@ func TestAccessControlList_HasOwnerGroup(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.acl.HasOwnerGroup(), tc.expResult, "result didn't match")
+			AssertEqual(t, tc.acl.HasOwnerGroup(), tc.expResult, "result didn't match")
 		})
 	}
 }
@@ -242,7 +243,7 @@ func TestAccessControlListFromPB(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result := accessControlListFromPB(tc.pbACL)
+			result := proto.AccessControlListFromPB(tc.pbACL)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -317,7 +318,7 @@ func TestPoolDiscoveriesFromPB(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result := poolDiscoveriesFromPB(tc.pbPools)
+			result := proto.PoolDiscoveriesFromPB(tc.pbPools)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
