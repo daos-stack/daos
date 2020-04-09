@@ -1062,8 +1062,7 @@ daos_off_t
 csum_record_chunksize(daos_off_t default_chunksize, daos_off_t rec_size)
 {
 	D_ASSERT(rec_size > 0 && default_chunksize > 0);
-	if (default_chunksize % rec_size == 0)
-		return default_chunksize;
+
 	if (rec_size > default_chunksize)
 		return rec_size;
 	return (default_chunksize / rec_size) * rec_size;
