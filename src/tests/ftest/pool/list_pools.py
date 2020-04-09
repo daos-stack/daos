@@ -79,7 +79,7 @@ class ListPoolsTest(TestWithServers):
             output list matches the output returned when the pools were
             created.
 
-        :avocado: tags=all,pool,full_regression,list_pools
+        :avocado: tags=all,large,pool,full_regression,list_pools
         """
         # Create 1 pool in each of the 4 hosts
         # Expected -> pool create output
