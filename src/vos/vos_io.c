@@ -1601,7 +1601,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	 * read conflict
 	 */
 	if (ioc->ic_read_conflict) {
-		err = -DER_AGAIN;
+		err = -DER_TX_RESTART;
 		goto abort;
 	}
 

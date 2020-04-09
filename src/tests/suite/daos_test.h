@@ -337,6 +337,10 @@ void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			 bool discard);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt);
+
+void reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+				int failed_tgt);
+
 void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
 			   int *failed_tgts, int nr);
 

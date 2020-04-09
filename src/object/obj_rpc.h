@@ -294,6 +294,7 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((uint64_t)		(om_max_eph)		CRT_VAR)	\
 	((uint32_t)		(om_version)		CRT_VAR)	\
 	((uint32_t)		(om_tgt_idx)		CRT_VAR)	\
+	((int32_t)		(om_clear_conts)	CRT_VAR)	\
 	((daos_unit_oid_t)	(om_oids)		CRT_ARRAY)	\
 	((uint64_t)		(om_ephs)		CRT_ARRAY)	\
 	((uint32_t)		(om_shards)		CRT_ARRAY)

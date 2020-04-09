@@ -70,6 +70,9 @@
 	X(POOL_ADD,							\
 		0, &CQF_pool_add,					\
 		ds_pool_update_handler, NULL),				\
+	X(POOL_ADD_IN,							\
+		0, &CQF_pool_add_in,					\
+		ds_pool_update_handler, NULL),				\
 	X(POOL_EXCLUDE_OUT,						\
 		0, &CQF_pool_exclude_out,				\
 		ds_pool_update_handler, NULL),				\
@@ -273,6 +276,8 @@ struct pool_target_addr_list {
 CRT_RPC_DECLARE(pool_tgt_update, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_add, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DECLARE(pool_add_in, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_exclude, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)

@@ -138,7 +138,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	}
 
 	if (rc == 0 && read_conflict)
-		rc = -DER_AGAIN;
+		rc = -DER_TX_RESTART;
 
 	return rc;
 }
@@ -280,7 +280,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	if (rc == 0 && read_conflict)
-		rc = -DER_AGAIN;
+		rc = -DER_TX_RESTART;
 
 	if (dth != NULL && rc == 0)
 		rc = vos_dtx_prepared(dth);

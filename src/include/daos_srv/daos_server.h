@@ -698,7 +698,7 @@ int
 ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
 		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
 		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		  unsigned int *shards, int cnt);
+		  unsigned int *shards, int cnt, int clear_conts);
 void
 ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
 

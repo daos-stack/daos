@@ -302,7 +302,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 			    info, ts_set, true);
 
 	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
-		rc = -DER_AGAIN;
+		rc = -DER_TX_RESTART;
 
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,

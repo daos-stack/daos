@@ -294,7 +294,7 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	 *  is conditional update and sharing.
 	 */
 	if (cond == VOS_ILOG_COND_UPDATE && info->ii_uncommitted != 0)
-		return -DER_AGAIN;
+		return -DER_INPROGRESS;
 	if (rc == -DER_NONEXIST)
 		goto update;
 	if (rc != 0) {
@@ -381,7 +381,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	 *  is conditional update and sharing.
 	 */
 	if (info->ii_uncommitted != 0)
-		return -DER_AGAIN;
+		return -DER_INPROGRESS;
 	if (rc == -DER_NONEXIST)
 		return -DER_NONEXIST;
 	if (rc != 0) {

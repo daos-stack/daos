@@ -1034,7 +1034,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			    info, ts_set, true);
 
 	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
-		rc = -DER_AGAIN;
+		rc = -DER_TX_RESTART;
 done:
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,

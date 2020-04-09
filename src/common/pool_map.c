@@ -935,7 +935,7 @@ pool_map_finalise(struct pool_map *map)
  *
  * \param map		[IN]	The pool map to be initialised.
  * \param activate	[IN]	Activate pool components.
- * \param tree		[IN]	Componenent tree for the pool map.
+ * \param tree		[IN]	Component tree for the pool map.
  */
 static int
 pool_map_initialise(struct pool_map *map, bool activate,
@@ -1975,12 +1975,28 @@ pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 
 
 /**
- * Find all targets in DOWN state. Raft leader can use it drive target
- * rebuild one by one.
+ * Find all targets in UP state. (but not included in the pool for active I/O
+ * i.e. UP_IN). Raft leader can use it drive target reintegration/addition.
+ */
+int
+pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+		      unsigned int *tgt_cnt)
+{
+	struct find_tgts_param param;
+
+	memset(&param, 0, sizeof(param));
+	param.ftp_chk_status = 1;
+	param.ftp_status = PO_COMP_ST_UP;
+
+	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp, tgt_cnt);
+}
+
+/**
+ * Find all targets in UPIN state (included in the pool for active I/O).
  */
 int
 pool_map_find_upin_tgts(struct pool_map *map, struct pool_target **tgt_pp,
-		      unsigned int *tgt_cnt)
+			unsigned int *tgt_cnt)
 {
 	struct find_tgts_param param;
 
@@ -1988,8 +2004,7 @@ pool_map_find_upin_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 	param.ftp_chk_status = 1;
 	param.ftp_status = PO_COMP_ST_UPIN;
 
-	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
-				  tgt_cnt);
+	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp, tgt_cnt);
 }
 
 static void

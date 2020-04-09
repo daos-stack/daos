@@ -36,20 +36,13 @@ import (
 
 // AccessControlList is a structure for the access control list.
 type AccessControlList struct {
-	Entries    []string // Access Control Entries in short string format
-	Owner      string   // User that owns the resource
+	Entries    []string `json:"ACL"`       // Access Control Entries in short string format
+	Owner      string   `json:"OwnerUser"` // User that owns the resource
 	OwnerGroup string   // Group that owns the resource
 }
 
 func (acl *AccessControlList) MarshalJSON() ([]byte, error) {
 	return json.Marshal(acl.Entries)
-}
-
-func (acl *AccessControlList) UnmarshalJSON(data []byte) error {
-	if acl == nil {
-		return errors.Errorf("nil %T", acl)
-	}
-	return json.Unmarshal(data, &acl.Entries)
 }
 
 // Empty checks whether there are any entries in the AccessControlList
