@@ -95,8 +95,7 @@ def add_del_user(hosts, ba_cmd, user):
         homedir = "-r"
     cmd = " ".join(("sudo", bash_cmd, homedir, user))
     print("     =Clients/hosts {0}, exec cmd: {1}".format(hosts, cmd))
-    pcmd(hosts, cmd, False)
-
+    pcmd(hosts, cmd, True)
 
 def create_acl_file(file_name, permissions):
     """Create a acl_file with permissions.
@@ -232,10 +231,11 @@ class PoolSecurityTestBase(TestWithServers):
             else:
                 self.log.info(
                     " =Test Passed on verify_daos_pool %s, Succeed.\n", action)
-        elif err_code not in result.stderr:
+##DH++
+        elif err_code[0] not in result.stderr and  err_code[1] not in result.stderr:
             self.fail(
                 "##Test Fail on verify_daos_pool {}, expected Failure of {}, "
-                "but Passed.".format(action, expect))
+                "did not show.".format(action, expect))
         else:
             self.log.info(
                 " =Test Passed on verify_daos_pool %s expected error of %s.\n",
@@ -248,13 +248,14 @@ class PoolSecurityTestBase(TestWithServers):
             svc (int):  pool svc number.
             uuid (str): pool uuid number.
             action (str): read or write on pool.
-            expect (str): expecting behavior pass or deny with RC -1001.
+            expect (str): expecting behavior pass or deny with RC -1001/-1025.
 
         Return:
             bool: pass or fail.
 
         """
-        deny_access = '-1001'
+##DH++
+        deny_access = ['-1001', '-1025']
         daos_cmd = DaosCommand(self.bin)
         daos_cmd.exit_status_exception = False
         if action.lower() == "write":
@@ -360,6 +361,13 @@ class PoolSecurityTestBase(TestWithServers):
         self.log.info("  (8-1)verify_pool_acl_prim_sec_groups, cmd= %s", cmd)
         add_del_user(self.hostlist_clients, cmd, l_group)
 
+        ##DAOS-4478
+        bash_cmd = "groups"
+        self.log.info(
+            "     =>Clients/hosts %s, exec cmd: %s",
+            self.hostlist_clients, bash_cmd)
+        pcmd(self.hostlist_clients, bash_cmd, True)
+
         self.log.info(
             "  (8-2)Before update sec_group permission, pool_acl_list= %s",
             pool_acl_list)
@@ -431,7 +439,8 @@ class PoolSecurityTestBase(TestWithServers):
         acl_file = os.path.join(self.tmp, get_acl_file)
         num_user = self.params.get("num_user", "/run/pool_acl/*")
         num_group = self.params.get("num_group", "/run/pool_acl/*")
-
+#DH++
+        client_insecure = self.params.get("insecure", "/run/pool_acl/*")
         # (2)Generate acl file with permissions
         self.log.info("  (1)Generate acl file with user/group permissions")
         permission_list = self.create_pool_acl(num_user,
@@ -441,6 +450,13 @@ class PoolSecurityTestBase(TestWithServers):
 
         # (3)Create a pool with acl
         self.dmg.exit_status_exception = False
+#DH++
+        self.dmg.insecure.value = client_insecure 
+        print("===========")
+        print("== self.dmg.insecure.value =", client_insecure)
+        print("===========")
+
+
         result = self.dmg.pool_create(scm_size, acl_file=acl_file)
         self.dmg.exit_status_exception = True
         self.log.info("  (2)dmg= %s", self.dmg)
