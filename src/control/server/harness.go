@@ -381,7 +381,7 @@ func (h *IOServerHarness) monitor(ctx context.Context) error {
 
 // Start starts all configured instances, waits for them to be ready and then
 // loops monitoring instance exit, harness exit and harness restart signals.
-func (h *IOServerHarness) Start(parent context.Context, membership *system.Membership, cfg *Configuration) error {
+func (h *IOServerHarness) Start(parentCtx context.Context, membership *system.Membership, cfg *Configuration) error {
 	if h.IsStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -409,6 +409,31 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 		}()
 	}
 
+	for _, i := range h.Instances() {
+		if startErr := i.Start(ctx, membership, cfg); startErr != nil {
+			return errors.WithMessagef(startErr, "starting instance %d", i.Index())
+		}
+	}
+
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (srv *IOServerInstance) Start(ctx context.Context, membership *system.Membership, cfg *Configuration) startErr {
+	// Spawn instance processing loops and listen for exit.
+	go func(errChan chan InstanceError) {
+		if err := i.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
+			errChan <- InstanceError{
+				Idx: i.Index(), Err: err,
+			}
+		}
+		if err := i.CreateSuperblocks(cfg.RecreateSuperblocks); err != nil {
+			errChan <- InstanceError{
+				Idx: i.Index(), Err: err,
+			}
+		}
+	}(h.errChan)
+
 	for {
 		if err := h.startInstances(ctx, membership); err != nil {
 			return err
@@ -421,7 +446,6 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 		}
 	}
 }
-
 // RestartInstances will signal the harness to start configured instances once
 // stopped.
 func (h *IOServerHarness) RestartInstances() error {
