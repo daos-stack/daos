@@ -926,7 +926,6 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	uint32_t		tag = dss_get_module_info()->dmi_tgt_id;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	uint64_t		time_start = 0;
-	struct obj_tls		*tls = obj_tls_get();
 	struct bio_desc		*biod;
 	daos_key_t		*dkey;
 	crt_bulk_op_t		bulk_op;
@@ -937,7 +936,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	uint64_t		*offs;
 	int			err, rc = 0;
 
-	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
+	D_TIME_START(time_start, OBJ_PF_UPDATE_LOCAL);
 
 	if (daos_is_zero_dti(&orw->orw_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
@@ -1072,7 +1071,7 @@ post:
 	rc = rc ? : err;
 out:
 	rc = obj_rw_complete(rpc, cont, ioh, rc, dth);
-	D_TIME_END(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
+	D_TIME_END(time_start, OBJ_PF_UPDATE_LOCAL);
 	return rc;
 }
 
@@ -1390,7 +1389,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 {
 	struct obj_rw_in		*orw = crt_req_get(rpc);
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
-	struct obj_tls			*tls = obj_tls_get();
 	struct dtx_leader_handle	dlh = { 0 };
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc;
@@ -1470,7 +1468,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		goto cleanup;
 	}
 
-	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE);
+	D_TIME_START(time_start, OBJ_PF_UPDATE);
 
 renew:
 	/*
@@ -1536,7 +1534,7 @@ reply:
 	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, NULL, ioc.ioc_coh);
 
 cleanup:
-	D_TIME_END(tls->ot_sp, time_start, OBJ_PF_UPDATE);
+	D_TIME_END(time_start, OBJ_PF_UPDATE);
 	obj_ec_split_req_fini(split_req);
 	obj_ioc_end(&ioc, rc);
 }
