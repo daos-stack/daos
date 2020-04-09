@@ -79,7 +79,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
 
 def configure_go(denv):
     """Do Go compiler checks"""
-    if GetOption('help'):
+    if GetOption('help') or GetOption('clean'):
         return
     def check_go_version(context):
         """Check GO Version"""

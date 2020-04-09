@@ -274,6 +274,14 @@ class Configure():
         """Fake CheckLibWithHeader"""
         return True
 
+    def CheckStructMember(self, *args, **kw):
+        """Fake CheckStructMember"""
+        return True
+
+    def CheckCmockaSkip(self, *args, **kw):
+        """Fake CheckCmockaSkip"""
+        return True
+
     def CheckProg(self, *args, **kw):
         """Fake CheckProg"""
         return True

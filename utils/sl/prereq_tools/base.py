@@ -597,7 +597,7 @@ def check_flag_cc(context, flag):
 
 def check_flags(env, config, key, value):
     """Check and append all supported flags"""
-    if GetOption('help'):
+    if GetOption('help') or GetOption('clean'):
         return
     checked = []
     for flag in value:

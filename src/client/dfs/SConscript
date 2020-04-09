@@ -3,7 +3,7 @@ import daos_build
 
 def configure_lustre(denv):
     """Do Lustre configure checks"""
-    if GetOption('help'):
+    if GetOption('help') or GetOption('clean'):
         return denv
     #If Lustre installed build a Lustre-aware libduns
     conf = Configure(denv)

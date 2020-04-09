@@ -109,19 +109,19 @@ def check_struct_member(env, text, struct, member):
 
     env.Message('Checking for {} in {} '.format(member, struct))
 
-    rc = env.TryCompile('{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text,
-                                                                               struct,
-                                                                               member),
-                        '.c')
+    src = '{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text, struct,
+                                                                 member)
+    rc = env.TryCompile(src, '.c')
     env.Result(rc)
     return rc
 
 def configure_fuse(cenv):
     """Configure for specific version of fuse"""
-    if GetOption('help'):
+    if GetOption('help') or GetOption('clean'):
         return
 
-    check = Configure(cenv, custom_tests={'CheckStructMember': check_struct_member})
+    check = Configure(cenv,
+                      custom_tests={'CheckStructMember': check_struct_member})
 
     if check.CheckStructMember('#include <fuse3/fuse.h>',
                                'struct fuse_file_info',

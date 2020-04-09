@@ -57,7 +57,7 @@ def CheckCmockaSkip(context):
 #pylint: disable=no-member
 def configure_cmocka(nenv):
     """configure cmocka environment"""
-    if GetOption('help'):
+    if GetOption('help') or GetOption('clean'):
         return nenv
     conf = Configure(nenv, custom_tests={'CheckCmockaSkip' : CheckCmockaSkip})
     conf.env.AppendUnique(LIBS=['cmocka'])
