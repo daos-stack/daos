@@ -231,7 +231,7 @@ ctl_daos_list(struct dts_io_credit *cred)
 	char		*kstr;
 	char		 kbuf[CTL_BUF_LEN];
 	uint32_t	 knr = KDS_NR;
-	daos_key_desc_t	 kds[KDS_NR];
+	daos_key_desc_t	 kds[KDS_NR] = {0};
 	daos_anchor_t	 anchor;
 	int		 i;
 	int		 rc = 0;
