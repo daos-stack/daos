@@ -47,8 +47,9 @@ type (
 		TransportConfig *security.TransportConfig
 	}
 	mgmtSvcClient struct {
-		log logging.Logger
-		cfg mgmtSvcClientCfg
+		log      logging.Logger
+		cfg      mgmtSvcClientCfg
+		clientFn func(*grpc.ClientConn) mgmtpb.MgmtSvcClient
 	}
 )
 
@@ -56,6 +57,8 @@ func newMgmtSvcClient(ctx context.Context, log logging.Logger, cfg mgmtSvcClient
 	return &mgmtSvcClient{
 		log: log,
 		cfg: cfg,
+		// can be mocked with function that returns mgmtpb.MgmtSvcClient
+		clientFn: mgmtpb.NewMgmtSvcClient,
 	}
 }
 
@@ -84,7 +87,7 @@ func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
 	}
 	defer conn.Close()
 
-	return fn(ctx, mgmtpb.NewMgmtSvcClient(conn))
+	return fn(ctx, msc.clientFn(conn))
 }
 
 func (msc *mgmtSvcClient) withConnectionRetry(ctx context.Context, ap string,

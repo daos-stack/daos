@@ -267,7 +267,7 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 			return nil, err
 		}
 
-		if !checkRankList(rank, rankList) {
+		if !rank.InList(rankList) {
 			h.log.Debugf("rank %d not in requested list, skipping...", rank)
 			continue // filtered out, no result expected
 		}
