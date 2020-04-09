@@ -445,16 +445,14 @@ func GetNUMASocketIDForPid(pid int32) (uint, error) {
 	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
 	numObj := uint(C.hwloc_get_nbobjs_by_depth(deviceScanCfg.topology, C.uint(depth)))
 	if numObj == 0 {
-		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
-		return 0, nil
+		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
 
 	cpuset := C.hwloc_bitmap_alloc()
 	defer C.hwloc_bitmap_free(cpuset)
 	status := C.hwloc_get_proc_cpubind(deviceScanCfg.topology, C.int(pid), cpuset, 0)
 	if status != 0 {
-		log.Debugf("hwloc_get_proc_cpubind failure!")
-		return 0, nil
+		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
 
 	nodeset := C.hwloc_bitmap_alloc()
@@ -464,11 +462,7 @@ func GetNUMASocketIDForPid(pid int32) (uint, error) {
 	for i = 0; i < numObj; i++ {
 		numanode := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(depth), C.uint(i))
 		if numanode == nil {
-			// We don't want the lack of NUMA information to be an error.
-			// If we get this far and can't access the NUMA topology data,
-			// we will use NUMA ID 0.
-			log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
-			return 0, nil
+			return 0, errors.Errorf("NUMA Node data is unavailable.")
 		}
 
 		if C.hwloc_bitmap_intersects(nodeset, numanode.nodeset) != 0 {
@@ -479,8 +473,8 @@ func GetNUMASocketIDForPid(pid int32) (uint, error) {
 			return uint(numanode.logical_index), nil
 		}
 	}
-	log.Debugf("Unable to determine NUMA socket ID.  Using NUMA 0")
-	return 0, nil
+
+	return 0, errors.Errorf("NUMA Node data is unavailable.")
 }
 
 // GetAffinityForNetworkDevices searches the system topology reported by hwloc

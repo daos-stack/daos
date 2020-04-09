@@ -30,6 +30,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -44,7 +45,7 @@ import (
 )
 
 type clientProcessCfg struct {
-	timeStamp string
+	timeStamp time.Time
 	numaNode  uint
 	devIdx    int
 }
@@ -143,13 +144,14 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		clientData := mod.clientData[pid]
 		// If it's a client with new PID, or a different client with a cached PID,
 		// update the cache with the new data.
-		if clientData.timeStamp != fi.ModTime().String() {
+		//if clientData.timeStamp != fi.ModTime().String() {
+		if clientData.timeStamp != fi.ModTime() {
 			numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
 			if err != nil {
 				return nil, err
 			}
 
-			mod.clientData[pid] = clientProcessCfg{devIdx: mod.devIdx[numaNode], timeStamp: fi.ModTime().String(), numaNode: numaNode}
+			mod.clientData[pid] = clientProcessCfg{devIdx: mod.devIdx[numaNode], timeStamp: fi.ModTime(), numaNode: numaNode}
 			resmgmtpb, ok := mod.resmgmtpb[numaNode][mod.devIdx[numaNode]]
 			if !ok {
 				return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, clientData.devIdx)
@@ -261,7 +263,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		}
 	}
 
-	mod.clientData[pid] = clientProcessCfg{devIdx: mod.devIdx[numaNode], timeStamp: fi.ModTime().String(), numaNode: numaNode}
+	mod.clientData[pid] = clientProcessCfg{devIdx: mod.devIdx[numaNode], timeStamp: fi.ModTime(), numaNode: numaNode}
 	resmgmtpb, ok := mod.resmgmtpb[numaNode][mod.clientData[pid].devIdx]
 	if !ok {
 		return nil, errors.Errorf("GetAttachInfo entry for numaNode %d and device index %d did not exist.", numaNode, mod.clientData[pid].devIdx)
