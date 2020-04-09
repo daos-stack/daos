@@ -44,6 +44,8 @@ CRT_LAUNCH = 'crt_launch.c'
 
 def scons():
     """scons function"""
+    if GetOption('help'):
+        return
 
     Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
 

@@ -25,6 +25,8 @@ def scons():
     # Other libs
     libs += ['numa', 'dl', 'isal', 'cmocka', 'pthread']
 
+    if GetOption('help'):
+        return
     config = Configure(unit_env)
 
     if config.CheckHeader("nvme_internal.h"):

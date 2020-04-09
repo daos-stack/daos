@@ -35,7 +35,8 @@ PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
 
 def run_checks(env):
     """Run all configure time checks"""
-
+    if GetOption('help'):
+        return
     cenv = env.Clone()
     cenv.Append(CFLAGS='-Werror')
     if cenv.get("COMPILER") == 'icc':
@@ -353,7 +354,8 @@ def scons(): # pylint: disable=too-many-locals
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    daos_build.load_mpi_path(env)
+    if not GetOption('help'):
+        daos_build.load_mpi_path(env)
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])

@@ -4,6 +4,9 @@ import daos_build
 def scons():
     """Execute build"""
 
+    if GetOption('help'):
+        return
+
     Import('env', 'prereqs')
 
     libs = ['daos', 'gurt', 'daos_common', 'uuid',

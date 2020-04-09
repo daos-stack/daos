@@ -308,11 +308,8 @@ def main():
         error_count += check_script("components")
         print("Checking build_info")
         error_count += check_script("build_info")
-        print("Checking test/build_info validation.py")
-        error_count += check_script("test/validate_build_info.py",
-                                    "-d", "wrong-import-position")
         print("Checking check_script.py")
-        error_count += check_script("check_script.py")
+        error_count += check_script("check_script")
 
     if args.fname:
         error_count += check_script(args.fname, wrap=args.wrap,

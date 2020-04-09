@@ -83,7 +83,7 @@ def scons():
     # Build the unit tests
     SConscript('utest/SConscript')
 
-    if not env.GetOption('clean'):
+    if not env.GetOption('clean') and not env.GetOption('help'):
 
         print("Checking local headers can be included")
         broken_includes = False
