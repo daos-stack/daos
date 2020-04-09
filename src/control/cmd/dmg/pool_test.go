@@ -41,7 +41,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
+func createACLFile(t *testing.T, path string, acl *AccessControlList) {
 	t.Helper()
 
 	file, err := os.Create(path)
@@ -75,7 +75,7 @@ func TestPoolCommands(t *testing.T) {
 
 	// Some tests need a valid ACL file
 	testACLFile := filepath.Join(tmpDir, "test_acl.txt")
-	testACL := &client.AccessControlList{
+	testACL := &AccessControlList{
 		Entries: []string{"A::OWNER@:rw", "A:G:GROUP@:rw"},
 	}
 	createACLFile(t, testACLFile, testACL)
@@ -412,7 +412,7 @@ func TestPoolCommands(t *testing.T) {
 				"ConnectClients",
 				fmt.Sprintf("PoolUpdateACL-%+v", client.PoolUpdateACLReq{
 					UUID: "12345678-1234-1234-1234-1234567890ab",
-					ACL:  &client.AccessControlList{Entries: []string{"A::user@:rw"}},
+					ACL:  &AccessControlList{Entries: []string{"A::user@:rw"}},
 				}),
 			}, " "),
 			nil,

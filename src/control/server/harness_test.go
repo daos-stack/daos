@@ -38,8 +38,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
@@ -307,6 +310,14 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 					AccessPoints: []string{"localhost"},
 				}
 				msClient := newMgmtSvcClient(context.TODO(), log, msClientCfg)
+				mockMSClient := proto.NewMockMgmtSvcClient(
+					proto.MockMgmtSvcClientConfig{})
+
+				clientFn := func(*grpc.ClientConn) mgmtpb.MgmtSvcClient {
+					return mockMSClient
+				}
+				msClient.clientFn = clientFn
+
 				srv := NewIOServerInstance(log, bdevProvider, scmProvider, msClient, runner)
 				if err := harness.AddInstance(srv); err != nil {
 					t.Fatal(err)
