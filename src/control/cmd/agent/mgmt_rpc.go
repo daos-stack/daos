@@ -144,7 +144,6 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		clientData := mod.clientData[pid]
 		// If it's a client with new PID, or a different client with a cached PID,
 		// update the cache with the new data.
-		//if clientData.timeStamp != fi.ModTime().String() {
 		if clientData.timeStamp != fi.ModTime() {
 			numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
 			if err != nil {
