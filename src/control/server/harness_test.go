@@ -52,8 +52,9 @@ import (
 )
 
 const (
-	testShortTimeout = 50 * time.Millisecond
-	testLongTimeout  = 20 * testShortTimeout
+	testShortTimeout   = 600 * time.Millisecond
+	testLongTimeout    = 6 * testShortTimeout
+	delayedFailTimeout = 500 * time.Millisecond
 )
 
 func TestServer_HarnessCreateSuperblocks(t *testing.T) {
@@ -373,7 +374,7 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 		"delayed failure": {
 			trc: &ioserver.TestRunnerConfig{
 				ErrChanCb: func(idx uint32) ioserver.InstanceError {
-					time.Sleep(testShortTimeout * 9)
+					time.Sleep(delayedFailTimeout)
 					return ioserver.InstanceError{Idx: idx, Err: errors.New("oops")}
 				},
 			},
@@ -496,7 +497,7 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 				}))
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), testShortTimeout*10)
+			ctx, cancel := context.WithTimeout(context.Background(), testShortTimeout)
 			defer cancel()
 
 			// start harness async and signal completion
