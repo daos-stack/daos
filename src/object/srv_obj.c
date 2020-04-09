@@ -93,7 +93,7 @@ obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_child *cont,
 			      vos_fetch_end(ioh, status);
 
 		if (rc != 0) {
-			D_ERROR(DF_UOID "%s end failed: %d\n",
+			D_ERROR(DF_UOID " %s end failed: %d\n",
 				DP_UOID(orwi->orw_oid),
 				update ? "Update" : "Fetch", rc);
 			if (status == 0)
@@ -814,8 +814,10 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 			&csum_infos[biov_csums_idx],
 			&biov_csums_used, get_iod_csum(iod_csums, i));
 
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("Failed to add csum for iod\n");
 			return rc;
+		}
 		biov_csums_idx += biov_csums_used;
 	}
 
@@ -2307,7 +2309,19 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 		daos_sgl_fini(&sgl, false);
 
 		if (rc != 0) {
-			D_ERROR("Verify failed: %d\n", rc);
+			if (iod->iod_type == DAOS_IOD_SINGLE) {
+				D_ERROR("Data Verification failed (object: "
+					DF_OID"): %d\n",
+					DP_OID(orw->orw_oid.id_pub), rc);
+			}
+			if (iod->iod_type == DAOS_IOD_ARRAY) {
+				D_ERROR("Data Verification failed (object: "
+						DF_OID ", "
+						"extent: "DF_RECX"): %d\n",
+					DP_OID(orw->orw_oid.id_pub),
+					DP_RECX(iod->iod_recxs[i]),
+					rc);
+			}
 			break;
 		}
 	}

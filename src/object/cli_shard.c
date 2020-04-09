@@ -199,7 +199,20 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i], iod_csum,
 					     singv_lo, shard_idx);
 		if (rc != 0) {
-			D_ERROR("Verify failed: %d\n", rc);
+			if (iod->iod_type == DAOS_IOD_SINGLE) {
+				D_ERROR("Data Verification failed (object: "
+					DF_OID"): "DF_RC"\n",
+					DP_OID(orw->orw_oid.id_pub),
+					DP_RC(rc));
+			} else  if (iod->iod_type == DAOS_IOD_ARRAY) {
+				D_ERROR("Data Verification failed (object: "
+						DF_OID" , extent: "DF_RECX"):"
+						" "DF_RC"\n",
+					DP_OID(orw->orw_oid.id_pub),
+					DP_RECX(iod->iod_recxs[i]),
+					DP_RC(rc));
+			}
+
 			break;
 		}
 	}

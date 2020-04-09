@@ -2496,6 +2496,7 @@ static int
 obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		     uint64_t dkey_hash, unsigned int map_ver, uint8_t *bitmap)
 {
+	D_WARN("Retrying replica because of checksum error.\n");
 	struct daos_oclass_attr	*oca;
 	unsigned int		 next_shard, retry_size, shard_cnt, shard_idx;
 	int			 rc = 0;
