@@ -30,8 +30,6 @@
 extern "C" {
 #endif
 
-#include <daos_types.h>
-
 /** Type of storage target */
 typedef enum {
 	DAOS_TP_UNKNOWN,
@@ -202,7 +200,7 @@ struct daos_pool_cont_info {
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Pool is nonexistent
  */
-DAOS_API int
+int
 daos_pool_connect(const uuid_t uuid, const char *grp,
 		  const d_rank_list_t *svc, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
@@ -221,7 +219,7 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid pool handle
  */
-DAOS_API int
+int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
 
 /*
@@ -248,7 +246,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
  *					required buffer size is returned through
  *					glob->iov_buf_len.
  */
-DAOS_API int
+int
 daos_pool_local2global(daos_handle_t poh, d_iov_t *glob);
 
 /**
@@ -263,7 +261,7 @@ daos_pool_local2global(daos_handle_t poh, d_iov_t *glob);
  *			0		Success
  *			-DER_INVAL	Invalid parameter
  */
-DAOS_API int
+int
 daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
 
 /**
@@ -299,7 +297,7 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid pool handle
  */
-DAOS_API int
+int
 daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 		daos_prop_t *pool_prop, daos_event_t *ev);
 
@@ -323,7 +321,7 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NONEXIST	No pool on specified targets
  */
-DAOS_API int
+int
 daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
 		       d_rank_list_t *failed, daos_target_info_t *info_list,
 		       daos_event_t *ev);
@@ -345,7 +343,7 @@ daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_pool_list_attr(daos_handle_t poh, char *buffer, size_t *size,
 		    daos_event_t *ev);
 
@@ -367,7 +365,7 @@ daos_pool_list_attr(daos_handle_t poh, char *buffer, size_t *size,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[],
 		   void *const buffers[], size_t sizes[], daos_event_t *ev);
 
@@ -383,7 +381,7 @@ daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[],
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
 		   void const *const values[], size_t const sizes[],
 		   daos_event_t *ev);
@@ -405,7 +403,7 @@ daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
  * \return		0		Success
  *			-DER_TRUNC	\a cbuf cannot hold \a ncont items
  */
-DAOS_API int
+int
 daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
 		    struct daos_pool_cont_info *cbuf, daos_event_t *ev);
 
