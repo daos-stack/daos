@@ -46,23 +46,22 @@ type attachInfoCache struct {
 	log              logging.Logger
 	cachedAttachInfo bool
 	// maps NUMA affinity and device index to a response
-	resmgmtpb        map[int]map[int][]byte
+	resmgmtpb map[int]map[int][]byte
 	// maps NUMA affinity to a device index
-	devIdx           map[int]int
-	mutex            sync.Mutex
+	devIdx map[int]int
+	mutex  sync.Mutex
 }
-
 
 // mgmtModule represents the daos_agent dRPC module. It acts mostly as a
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	log              logging.Logger
-	sys              string
+	log logging.Logger
+	sys string
 	// The access point
-	ap               string
-	tcfg             *security.TransportConfig
-	attachInfoResp   attachInfoCache
+	ap             string
+	tcfg           *security.TransportConfig
+	attachInfoResp attachInfoCache
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
