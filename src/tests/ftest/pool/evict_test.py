@@ -88,7 +88,7 @@ class EvictTests(TestWithServers):
             self.pool.uuid, self.pool.pool.handle.value, self.pool.name)
 
         if test_param == "BAD_SERVER_NAME":
-            # Attempt to evict pool with invald server group name
+            # Attempt to evict pool with invalid server group name
             # set the server group name directly
             self.pool.pool.group = ctypes.create_string_buffer(test_param)
             self.log.info(
