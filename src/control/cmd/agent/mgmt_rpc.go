@@ -24,13 +24,11 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -44,28 +42,21 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
-type clientProcessCfg struct {
-	timeStamp time.Time
-	numaNode  uint
-	devIdx    int
-}
-
 // mgmtModule represents the daos_agent dRPC module. It acts mostly as a
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	log logging.Logger
-	sys string
+	log              logging.Logger
+	sys              string
 	// The access point
 	ap               string
 	tcfg             *security.TransportConfig
 	cachedAttachInfo bool
 	// maps NUMA affinity and device index to a response
-	resmgmtpb map[uint]map[int][]byte
+	resmgmtpb        map[uint]map[int][]byte
 	// maps NUMA affinity to a device index
-	devIdx     map[uint]int
-	clientData map[int32]clientProcessCfg
-	mutex      sync.Mutex
+	devIdx           map[uint]int
+	mutex            sync.Mutex
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
@@ -135,46 +126,24 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		mod.log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
-	fi, err := os.Stat(fmt.Sprintf("/proc/%d", pid))
-	if err != nil {
-		return nil, errors.Wrapf(err, "client process %d not found", pid)
-	}
-
 	if mod.cachedAttachInfo {
-		clientData := mod.clientData[pid]
-		// If it's a client with new PID, or a different client with a cached PID,
-		// update the cache with the new data.
-		if clientData.timeStamp != fi.ModTime() {
-			numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
-			if err != nil {
-				return nil, err
-			}
+		numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
+		if err != nil {
+			return nil, err
+		}
 
-			mod.clientData[pid] = clientProcessCfg{devIdx: mod.devIdx[numaNode], timeStamp: fi.ModTime(), numaNode: numaNode}
-			resmgmtpb, ok := mod.resmgmtpb[numaNode][mod.devIdx[numaNode]]
-			if !ok {
-				return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, clientData.devIdx)
-			}
-			mod.log.Debugf("Client on NUMA %d using device %d\n", numaNode, mod.devIdx[numaNode])
-			mod.loadBalance(numaNode)
-			return resmgmtpb, nil
-		}
-		// Otherwise, return the cached data for this client
-		mod.log.Debugf("Client on NUMA %d using device %d\n", clientData.numaNode, clientData.devIdx)
-		resmgmtpb, ok := mod.resmgmtpb[clientData.numaNode][clientData.devIdx]
+		resmgmtpb, ok := mod.resmgmtpb[numaNode][mod.devIdx[numaNode]]
 		if !ok {
-			return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", clientData.numaNode, clientData.devIdx)
+			return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, mod.devIdx[numaNode])
 		}
+		mod.log.Debugf("Client on NUMA %d using device %d\n", numaNode, mod.devIdx[numaNode])
+		mod.loadBalance(numaNode)
 		return resmgmtpb, nil
 	}
 
 	numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
 	if err != nil {
 		return nil, err
-	}
-
-	if len(mod.clientData) == 0 {
-		mod.clientData = make(map[int32]clientProcessCfg)
 	}
 
 	req := &mgmtpb.GetAttachInfoReq{}
@@ -254,18 +223,13 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 				mod.resmgmtpb[fs.NUMANode] = make(map[int][]byte)
 			}
 			mod.resmgmtpb[fs.NUMANode][len(mod.resmgmtpb[fs.NUMANode])] = resmgmtpb
-			mod.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, fs.NUMANode, len(mod.resmgmtpb[fs.NUMANode]))
-		}
-
-		for i, numaEntry := range mod.resmgmtpb {
-			mod.log.Debugf("There are %d device entries for NUMA node %d", len(numaEntry), i)
+			mod.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, fs.NUMANode, len(mod.resmgmtpb[fs.NUMANode])-1)
 		}
 	}
 
-	mod.clientData[pid] = clientProcessCfg{devIdx: mod.devIdx[numaNode], timeStamp: fi.ModTime(), numaNode: numaNode}
-	resmgmtpb, ok := mod.resmgmtpb[numaNode][mod.clientData[pid].devIdx]
+	resmgmtpb, ok := mod.resmgmtpb[numaNode][mod.devIdx[numaNode]]
 	if !ok {
-		return nil, errors.Errorf("GetAttachInfo entry for numaNode %d and device index %d did not exist.", numaNode, mod.clientData[pid].devIdx)
+		return nil, errors.Errorf("GetAttachInfo entry for numaNode %d and device index %d did not exist.", numaNode, mod.devIdx[numaNode])
 	}
 	mod.loadBalance(numaNode)
 	mod.cachedAttachInfo = true
