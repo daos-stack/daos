@@ -21,6 +21,7 @@ daos_server:
 pool_acl:
   scm_size: 16777216
   user_prefix: daos_ci
+  insecure: True
   num_user: 1
   num_group: 1
   primary_secondary_group_test:

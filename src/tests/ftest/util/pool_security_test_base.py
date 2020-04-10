@@ -232,7 +232,8 @@ class PoolSecurityTestBase(TestWithServers):
                 self.log.info(
                     " =Test Passed on verify_daos_pool %s, Succeed.\n", action)
 ##DH++
-        elif err_code[0] not in result.stderr and  err_code[1] not in result.stderr:
+        elif err_code[0] not in result.stderr and  \
+            err_code[1] not in result.stderr:
             self.fail(
                 "##Test Fail on verify_daos_pool {}, expected Failure of {}, "
                 "did not show.".format(action, expect))
@@ -451,7 +452,7 @@ class PoolSecurityTestBase(TestWithServers):
         # (3)Create a pool with acl
         self.dmg.exit_status_exception = False
 #DH++
-        self.dmg.insecure.value = client_insecure 
+        self.dmg.insecure.value = client_insecure
         print("===========")
         print("== self.dmg.insecure.value =", client_insecure)
         print("===========")
