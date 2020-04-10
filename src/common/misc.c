@@ -280,8 +280,8 @@ daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 		       size_t requested_bytes,
 		       daos_sgl_process_cb process_cb, void *cb_args)
 {
-	uint8_t		*buf;
-	size_t		 len;
+	uint8_t		*buf = NULL;
+	size_t		 len = 0;
 	bool		 end = false;
 	int		 rc  = 0;
 
