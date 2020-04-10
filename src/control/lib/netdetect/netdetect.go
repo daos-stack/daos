@@ -433,7 +433,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
 // It looks for an intersection between the nodeset or cpuset of this pid and the nodeset or cpuset of each
 // NUMA node looking for a match to identify the corresponding NUMA socket ID.
-func GetNUMASocketIDForPid(pid int32) (uint, error) {
+func GetNUMASocketIDForPid(pid int32) (int, error) {
 	var i uint
 
 	deviceScanCfg, err := initDeviceScan()
@@ -466,11 +466,11 @@ func GetNUMASocketIDForPid(pid int32) (uint, error) {
 		}
 
 		if C.hwloc_bitmap_intersects(nodeset, numanode.nodeset) != 0 {
-			return uint(numanode.logical_index), nil
+			return int(numanode.logical_index), nil
 		}
 
 		if C.hwloc_bitmap_intersects(cpuset, numanode.cpuset) != 0 {
-			return uint(numanode.logical_index), nil
+			return int(numanode.logical_index), nil
 		}
 	}
 

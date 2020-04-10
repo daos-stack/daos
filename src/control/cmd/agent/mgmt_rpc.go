@@ -42,6 +42,17 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
+type attachInfoCache struct {
+	log              logging.Logger
+	cachedAttachInfo bool
+	// maps NUMA affinity and device index to a response
+	resmgmtpb        map[int]map[int][]byte
+	// maps NUMA affinity to a device index
+	devIdx           map[int]int
+	mutex            sync.Mutex
+}
+
+
 // mgmtModule represents the daos_agent dRPC module. It acts mostly as a
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
@@ -51,12 +62,7 @@ type mgmtModule struct {
 	// The access point
 	ap               string
 	tcfg             *security.TransportConfig
-	cachedAttachInfo bool
-	// maps NUMA affinity and device index to a response
-	resmgmtpb        map[uint]map[int][]byte
-	// maps NUMA affinity to a device index
-	devIdx           map[uint]int
-	mutex            sync.Mutex
+	attachInfoResp   attachInfoCache
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
@@ -94,10 +100,101 @@ func (mod *mgmtModule) ID() int32 {
 // to assign network interface adapters to clients
 // on the same NUMA node that have multiple adapters
 // to choose from.
-func (mod *mgmtModule) loadBalance(numaNode uint) {
-	numDevs := len(mod.resmgmtpb[numaNode])
-	newDevIdx := (mod.devIdx[numaNode] + 1) % numDevs
-	mod.devIdx[numaNode] = newDevIdx
+func (aic *attachInfoCache) loadBalance(numaNode int) {
+	numDevs := len(aic.resmgmtpb[numaNode])
+	newDevIdx := (aic.devIdx[numaNode] + 1) % numDevs
+	aic.devIdx[numaNode] = newDevIdx
+}
+
+func (aic *attachInfoCache) getCachedResponse(numaNode int) ([]byte, error) {
+	deviceIndex := aic.devIdx[numaNode]
+
+	aic.loadBalance(numaNode)
+
+	resmgmtpb, ok := aic.resmgmtpb[numaNode][deviceIndex]
+	if !ok {
+		return nil, errors.Errorf("Cached GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, deviceIndex)
+	}
+	aic.log.Debugf("Retrieved cached response for NUMA %d with device index %d\n", numaNode, deviceIndex)
+	return resmgmtpb, nil
+}
+
+// initResponseCache generates a unique dRPC response corresponding to each device specified
+// in the scanResults.  The responses are differentiated based on the network device NUMA affinity.
+func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, scanResults []netdetect.FabricScan) error {
+	if len(scanResults) == 0 {
+		return errors.Errorf("No devices found in the scanResults")
+	}
+
+	if len(aic.resmgmtpb) == 0 {
+		aic.resmgmtpb = make(map[int]map[int][]byte)
+	}
+
+	if len(aic.devIdx) == 0 {
+		aic.devIdx = make(map[int]int)
+	}
+
+	for _, fs := range scanResults {
+		if fs.DeviceName == "lo" {
+			continue
+		}
+		resp.Interface = fs.DeviceName
+		// by default, the domain is the deviceName
+		resp.Domain = fs.DeviceName
+		if strings.HasPrefix(resp.Provider, "ofi+verbs") {
+			deviceAlias, err := netdetect.GetDeviceAlias(resp.Interface)
+			if err != nil {
+				aic.log.Debugf("non-fatal error: %v. unable to determine OFI_DOMAIN for %s", err, resp.Interface)
+			} else {
+				resp.Domain = deviceAlias
+				aic.log.Debugf("OFI_DOMAIN has been detected as: %s", resp.Domain)
+			}
+		}
+		numa := int(fs.NUMANode)
+
+		resmgmtpb, err := proto.Marshal(resp)
+		if err != nil {
+			return drpc.MarshalingFailure()
+		}
+
+		_, ok := aic.resmgmtpb[numa]
+		if !ok {
+			aic.resmgmtpb[numa] = make(map[int][]byte)
+		}
+		aic.resmgmtpb[numa][len(aic.resmgmtpb[numa])] = resmgmtpb
+		aic.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, numa, len(aic.resmgmtpb[numa])-1)
+	}
+
+	// As long as there are some responses in the cache, enable it.
+	if len(aic.resmgmtpb) > 0 {
+		aic.enableCache()
+	}
+
+	return nil
+}
+
+func (aic *attachInfoCache) lock() {
+	aic.mutex.Lock()
+}
+
+func (aic *attachInfoCache) unlock() {
+	aic.mutex.Unlock()
+}
+
+func (aic *attachInfoCache) haveCachedData() bool {
+	return aic.cachedAttachInfo
+}
+
+func (aic *attachInfoCache) disableCache() {
+	aic.cachedAttachInfo = false
+}
+
+func (aic *attachInfoCache) enableCache() {
+	aic.cachedAttachInfo = true
+}
+
+func (aic *attachInfoCache) setLogger(log logging.Logger) {
+	aic.log = log
 }
 
 // handleGetAttachInfo invokes the GetAttachInfo dRPC.  The agent determines the
@@ -118,32 +215,27 @@ func (mod *mgmtModule) loadBalance(numaNode uint) {
 // The use of cached data may be disabled by exporting
 // "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, error) {
-	mod.mutex.Lock()
-	defer mod.mutex.Unlock()
+	mod.attachInfoResp.lock()
+	defer mod.attachInfoResp.unlock()
+
+	mod.attachInfoResp.setLogger(mod.log)
 
 	if os.Getenv("DAOS_AGENT_DISABLE_CACHE") == "true" {
-		mod.cachedAttachInfo = false
+		mod.attachInfoResp.disableCache()
 		mod.log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
-	if mod.cachedAttachInfo {
+	if mod.attachInfoResp.haveCachedData() {
 		numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
 		if err != nil {
 			return nil, err
 		}
 
-		resmgmtpb, ok := mod.resmgmtpb[numaNode][mod.devIdx[numaNode]]
-		if !ok {
-			return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, mod.devIdx[numaNode])
+		resmgmtpb, err := mod.attachInfoResp.getCachedResponse(numaNode)
+		if err != nil {
+			return nil, err
 		}
-		mod.log.Debugf("Client on NUMA %d using device %d\n", numaNode, mod.devIdx[numaNode])
-		mod.loadBalance(numaNode)
 		return resmgmtpb, nil
-	}
-
-	numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
-	if err != nil {
-		return nil, err
 	}
 
 	req := &mgmtpb.GetAttachInfoReq{}
@@ -186,53 +278,20 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, err
 	}
 
-	// Create and cache a set of dRPC responses that can be indexed by the NUMA affinity and the device index.
-	// The NUMA affinity depends on the client PID.  The device index depends on an internally maintained
-	// index that points to the current device to offer a client on a given NUMA node.
-	if len(mod.resmgmtpb) == 0 {
-		mod.resmgmtpb = make(map[uint]map[int][]byte)
-
-		if len(mod.devIdx) == 0 {
-			mod.devIdx = make(map[uint]int)
-		}
-
-		for _, fs := range scanResults {
-			if fs.DeviceName == "lo" {
-				continue
-			}
-			resp.Interface = fs.DeviceName
-			// by default, the domain is the deviceName
-			resp.Domain = fs.DeviceName
-			if strings.HasPrefix(resp.Provider, "ofi+verbs") {
-				deviceAlias, err := netdetect.GetDeviceAlias(resp.Interface)
-				if err != nil {
-					mod.log.Debugf("non-fatal error: %v. unable to determine OFI_DOMAIN for %s", err, resp.Interface)
-				} else {
-					resp.Domain = deviceAlias
-					mod.log.Debugf("OFI_DOMAIN has been detected as: %s", resp.Domain)
-				}
-			}
-
-			resmgmtpb, err := proto.Marshal(resp)
-			if err != nil {
-				return nil, drpc.MarshalingFailure()
-			}
-
-			_, ok := mod.resmgmtpb[fs.NUMANode]
-			if !ok {
-				mod.resmgmtpb[fs.NUMANode] = make(map[int][]byte)
-			}
-			mod.resmgmtpb[fs.NUMANode][len(mod.resmgmtpb[fs.NUMANode])] = resmgmtpb
-			mod.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, fs.NUMANode, len(mod.resmgmtpb[fs.NUMANode])-1)
-		}
+	err = mod.attachInfoResp.initResponseCache(resp, scanResults)
+	if err != nil {
+		return nil, err
 	}
 
-	resmgmtpb, ok := mod.resmgmtpb[numaNode][mod.devIdx[numaNode]]
-	if !ok {
-		return nil, errors.Errorf("GetAttachInfo entry for numaNode %d and device index %d did not exist.", numaNode, mod.devIdx[numaNode])
+	numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
+	if err != nil {
+		return nil, err
 	}
-	mod.loadBalance(numaNode)
-	mod.cachedAttachInfo = true
+
+	resmgmtpb, err := mod.attachInfoResp.getCachedResponse(numaNode)
+	if err != nil {
+		return nil, err
+	}
 
 	return resmgmtpb, nil
 }
