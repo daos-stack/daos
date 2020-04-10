@@ -43,6 +43,12 @@ class DmgNetworkScanTest(TestWithServers):
         super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
         self.setup_start_agents = False
 
+    def parse_dmg_out(self):
+        """ Parse the output of the dmg network scan command."""
+        pattern = r"""(?:|([A-Za-z0-9-_]+):\d+:(?:\n|\n\r))
+            (?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+([a-z0-9+]+))"""
+
+
     def get_sys_info(self):
         """ Get expected values of numa nodes with lstopo."""
         sys_info = {}
@@ -96,14 +102,8 @@ class DmgNetworkScanTest(TestWithServers):
         :avocado: tags=all,small,pr,hw,dmg,network_scan,basic
         """
         # Create dmg command
-        dmg = DmgCommand(os.path.join(self.prefix, "bin"))
+        dmg = self.get_dmg_command()
         dmg.get_params(self)
-
-        # Update hostlist value for dmg command
-        port = self.params.get("port", "/run/server_config/*")
-        servers_with_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
-        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
 
         try:
             dmg_cmd_out = dmg.run()
