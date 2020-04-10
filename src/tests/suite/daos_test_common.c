@@ -58,7 +58,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 {
 	test_arg_t		*arg = *state;
 	struct test_pool	*outpool;
-	int			 rc;
+	int			 rc = 0;
 
 	outpool = opool ? opool : &arg->pool;
 
@@ -198,7 +198,7 @@ static int
 test_setup_cont_create(void **state, daos_prop_t *co_prop)
 {
 	test_arg_t *arg = *state;
-	int rc;
+	int rc = 0;
 
 	if (arg->myrank == 0) {
 		uuid_generate(arg->co_uuid);
@@ -225,7 +225,7 @@ static int
 test_setup_cont_open(void **state)
 {
 	test_arg_t *arg = *state;
-	int rc;
+	int rc = 0;
 
 	if (arg->myrank == 0) {
 		print_message("setup: opening container\n");
