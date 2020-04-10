@@ -37,6 +37,7 @@ import (
 // userInfo is an internal implementation of the security.User interface
 type userInfo struct {
 	info *user.User
+	log  logging.Logger
 }
 
 func (u *userInfo) Username() string {
@@ -49,10 +50,13 @@ func (u *userInfo) GroupIDs() ([]uint32, error) {
 		return nil, err
 	}
 
+	u.log.Errorf("GIDs: %+v", gidStrs)
+
 	gids := []uint32{}
 	for _, gstr := range gidStrs {
 		gid, err := strconv.Atoi(gstr)
 		if err != nil {
+			u.log.Errorf("Skipping gid '%s'", gstr)
 			continue
 		}
 		gids = append(gids, uint32(gid))
@@ -62,7 +66,9 @@ func (u *userInfo) GroupIDs() ([]uint32, error) {
 }
 
 // external is an internal implementation of the UserExt interface
-type external struct{}
+type external struct {
+	log logging.Logger
+}
 
 // LookupUserId is a wrapper for user.LookupId
 func (e *external) LookupUserID(uid uint32) (auth.User, error) {
@@ -73,12 +79,14 @@ func (e *external) LookupUserID(uid uint32) (auth.User, error) {
 	}
 	return &userInfo{
 		info: info,
+		log:  e.log,
 	}, nil
 }
 
 // LookupGroupId is a wrapper for user.LookupGroupId
 func (e *external) LookupGroupID(gid uint32) (*user.Group, error) {
 	gidStr := strconv.FormatUint(uint64(gid), 10)
+	e.log.Errorf("Looking up group ID %s", gidStr)
 	return user.LookupGroupId(gidStr)
 }
 
@@ -95,7 +103,7 @@ func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *Securi
 		log:    log,
 		config: tc,
 	}
-	mod.ext = &external{}
+	mod.ext = &external{log: log}
 	return &mod
 }
 
@@ -135,7 +143,7 @@ func (m *SecurityModule) getCredential(session *drpc.Session) ([]byte, error) {
 		return m.credRespWithStatus(drpc.DaosMiscError)
 	}
 
-	m.log.Errorf("Credential: %v+", cred)
+	m.log.Errorf("Credential: %+v", cred)
 
 	resp := &auth.GetCredResp{Cred: cred}
 	return drpc.Marshal(resp)
