@@ -345,7 +345,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Tue Mar 31 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-11
+* Fri Apr 10 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-11
 - Enforce some minimum package requirements including switching
   from our custom fuse build to fuse3 from the distribution
 
