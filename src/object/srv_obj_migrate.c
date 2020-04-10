@@ -40,9 +40,7 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-/* TODO: import this srv_internal.h?
- * Seems like pulling in that file might be a bit messy
- */
+/* This needs to be here to avoid pulling in all of srv_internal.h */
 int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
