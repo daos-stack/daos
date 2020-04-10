@@ -3225,7 +3225,8 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		/* Prop might be allocated and returned even if rc != 0 */
+		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry == NULL) {
@@ -3251,8 +3252,8 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 
 out_prop:
-	daos_prop_free(prop);
-out_lock:
+	if (prop != NULL)
+		daos_prop_free(prop);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
@@ -3373,7 +3374,8 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		/* Prop might be allocated and returned even if rc != 0 */
+		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry == NULL) {
@@ -3400,8 +3402,8 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 
 out_prop:
-	daos_prop_free(prop);
-out_lock:
+	if (prop != NULL)
+		daos_prop_free(prop);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
@@ -3958,7 +3960,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		if (in->pvi_pool_destroy && !in->pvi_pool_destroy_force) {
 			D_DEBUG(DF_DSMS, DF_UUID": busy, %u open handles\n",
 				DP_UUID(in->pvi_op.pi_uuid), n_hdl_uuids);
-			D_GOTO(out_lock, rc = -DER_BUSY);
+			D_GOTO(out_free, rc = -DER_BUSY);
 		} else {
 			/* Pool evict, or pool destroy with force=true */
 			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
@@ -3975,13 +3977,14 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		rc = rdb_tx_update(&tx, &svc->ps_root,
 				   &ds_pool_prop_connectable, &value);
 		if (rc != 0)
-			D_GOTO(out_lock, rc);
+			D_GOTO(out_free, rc);
 		D_DEBUG(DF_DSMS, DF_UUID": pool destroy/evict: mark pool for "
 			"no new connections\n", DP_UUID(in->pvi_op.pi_uuid));
 	}
 
 	rc = rdb_tx_commit(&tx);
 	/* No need to set out->pvo_op.po_map_version. */
+out_free:
 	D_FREE(hdl_uuids);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
@@ -4469,3 +4472,4 @@ out_svc:
 	pool_svc_put_leader(svc);
 	return rc;
 }
+

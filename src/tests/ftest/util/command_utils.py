@@ -24,6 +24,7 @@
 from logging import getLogger
 import time
 import os
+import re
 import signal
 
 from avocado.utils import process
@@ -284,6 +285,11 @@ class CommandWithParameters(ObjectWithParameters):
 class ExecutableCommand(CommandWithParameters):
     """A class for command with paramaters."""
 
+    # A list of regular expressions for each class method that produces a
+    # CmdResult object.  Used by the self.get_output() method to return specific
+    # values from the standard ouput yielded by the method.
+    METHOD_REGEX = {"run": r"(.*)"}
+
     def __init__(self, namespace, command, path="", subprocess=False):
         """Create a ExecutableCommand object.
 
@@ -431,6 +437,44 @@ class ExecutableCommand(CommandWithParameters):
                 # Indicate an error if the process required a SIGKILL
                 raise CommandFailure("Error stopping '{}'".format(self))
             self._process = None
+
+    def get_output(self, method_name, **kwargs):
+        """Get output from the command issued by the specified method.
+
+        Issue the specified method and return a list of strings that result from
+        searching its standard output for a fixed set of patterns defined for
+        the class method.
+
+        Args:
+            method_name (str): name of the method to execute
+
+        Raises:
+            CommandFailure: if there is an error finding the method, finding the
+                method's regex pattern, or executing the method
+
+        Returns:
+            list: a list of strings obtained from the method's output parsed
+                through its regex
+
+        """
+        # Get the method to call to obtain the CmdResult
+        method = getattr(self, method_name)
+        if method is None:
+            raise CommandFailure(
+                "No '{}()' method defined for this class".format(method_name))
+
+        # Get the regex pattern to filter the CmdResult.stdout
+        if method_name not in self.METHOD_REGEX:
+            raise CommandFailure(
+                "No pattern regex defined for '{}()'".format(method_name))
+        pattern = self.METHOD_REGEX[method_name]
+
+        # Run the command and parse the output using the regex
+        result = method(**kwargs)
+        if not isinstance(result, process.CmdResult):
+            raise CommandFailure(
+                "{}() did not return a CmdResult".format(method_name))
+        return re.findall(pattern, result.stdout)
 
 
 class CommandWithSubCommand(ExecutableCommand):
