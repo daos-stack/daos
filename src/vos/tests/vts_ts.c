@@ -290,7 +290,8 @@ on_entry_evict(void *payload, uint32_t idx, void *arg)
 {
 	struct lru_record	*record = payload;
 
-	record->record->value = 0xdeadbeef;
+	record->record->value = MAGIC1;
+	record->record = NULL;
 }
 
 static void
@@ -309,7 +310,7 @@ on_entry_fini(void *payload, uint32_t idx, void *arg)
 	struct lru_record	*record = payload;
 
 	if (record->record)
-		record->record->value = 0xdeadbeef;
+		record->record->value = MAGIC1;
 }
 
 static const struct lru_callbacks lru_cbs = {
@@ -402,6 +403,119 @@ lru_array_test(void **state)
 	assert_false(found);
 }
 
+#define STRESS_ITER 500
+#define BIG_TEST 50000
+static void
+lru_array_stress_test(void **state)
+{
+	struct lru_arg		*ts_arg = *state;
+	struct lru_record	*entry;
+	struct index_record	*stress_entries;
+	int			 evicted, inserted;
+	int			 i, op, j;
+	bool			 found;
+	int			 freq_map[] = {2, 3, 7, 13, 17};
+	int			 freq_idx;
+	int			 freq_idx2;
+	int			 freq;
+
+	D_ALLOC_ARRAY(stress_entries, BIG_TEST);
+	assert_non_null(stress_entries);
+
+	for (j = 0; j < STRESS_ITER * ARRAY_SIZE(freq_map); j++) {
+		freq_idx = j % ARRAY_SIZE(freq_map);
+		/** First evict all */
+		for (i = 0; i < NUM_INDEXES; i++) {
+			found = lrua_lookup(ts_arg->array,
+					    &ts_arg->indexes[i].idx,
+					    (void **)&entry);
+			assert_false(found);
+		}
+		/** Now insert most */
+		for (i = 0; i < NUM_INDEXES; i++) {
+			if ((i % freq_map[freq_idx]) == 0)
+				continue;
+			entry = lrua_alloc(ts_arg->array,
+					   &ts_arg->indexes[i].idx, true);
+			assert_non_null(entry);
+			entry->record = &ts_arg->indexes[i];
+			ts_arg->indexes[i].value = i;
+		}
+		freq_idx2 = (freq_idx + 1) % ARRAY_SIZE(freq_map);
+		freq = freq_map[freq_idx] * freq_map[freq_idx2];
+		/** Now evict some of them */
+		evicted = 0;
+		for (i = NUM_INDEXES - 1; i >= 0; i--) {
+			if ((i % freq) == 0)
+				continue;
+			found = lrua_lookup(ts_arg->array,
+					    &ts_arg->indexes[i].idx,
+					    (void **)&entry);
+			if (!found)
+				continue;
+
+			assert_non_null(entry);
+			assert_true(entry->magic1 == MAGIC1);
+			assert_true(entry->magic2 == MAGIC2);
+
+			evicted++;
+
+			lrua_evict(ts_arg->array, &ts_arg->indexes[i].idx);
+		}
+
+		assert_int_equal(evicted, LRU_ARRAY_SIZE);
+	}
+
+	for (i = 0; i < BIG_TEST; i++) {
+		stress_entries[i].value = MAGIC1;
+		op = rand() % 10;
+
+		if (op < 7) {
+			entry = lrua_alloc(ts_arg->array,
+					   &stress_entries[i].idx, true);
+			assert_non_null(entry);
+
+			entry->record = &stress_entries[i];
+			stress_entries[i].value = i;
+		} else {
+			op = rand() % i;
+			for (j = 0; j < i; j++) {
+				if (stress_entries[op].value != MAGIC1)
+					break;
+				op = (op + 1) % i;
+			}
+
+			if (stress_entries[op].value != MAGIC1) {
+				lrua_evict(ts_arg->array,
+					   &stress_entries[op].idx);
+				assert_true(stress_entries[op].value == MAGIC1);
+			}
+		}
+	}
+
+	inserted = 0;
+	for (i = 0; i < BIG_TEST; i++) {
+		if (stress_entries[i].value == MAGIC1)
+			continue;
+
+		inserted++;
+		found = lrua_lookup(ts_arg->array,
+				    &stress_entries[i].idx, (void **)&entry);
+		assert_true(found);
+		assert_non_null(entry);
+		assert_true(entry->magic1 == MAGIC1);
+		assert_true(entry->magic2 == MAGIC2);
+		assert_true(entry->record == &stress_entries[i]);
+		assert_true(stress_entries[i].value = i);
+
+		lrua_evict(ts_arg->array, &stress_entries[i].idx);
+	}
+
+	assert_int_equal(inserted, LRU_ARRAY_SIZE);
+
+	D_FREE(stress_entries);
+}
+
 static int
 init_lru_test(void **state)
 {
@@ -433,15 +547,19 @@ finalize_lru_test(void **state)
 
 	lrua_array_free(ts_arg->array);
 
+	D_FREE(ts_arg);
+
 	return 0;
 }
 
 
 static const struct CMUnitTest ts_tests[] = {
-	{ "VOS600.1: VOS timestamp allocation test", ilog_test_ts_get,
-		alloc_ts_cache, NULL},
-	{ "VOS600.2: LRU array test", lru_array_test, init_lru_test,
+	{ "VOS600.1: LRU array test", lru_array_test, init_lru_test,
 		finalize_lru_test},
+	{ "VOS600.2: LRU array stress", lru_array_stress_test, init_lru_test,
+		finalize_lru_test},
+	{ "VOS600.3: VOS timestamp allocation test", ilog_test_ts_get,
+		alloc_ts_cache, NULL},
 };
 
 static int

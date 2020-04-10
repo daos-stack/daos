@@ -72,10 +72,9 @@ lrua_evict_lru(struct lru_array *array, struct lru_entry **entryp,
 		evict_cb(array, entry, array->la_lru);
 	}
 
-	*idx = array->la_lru;
+	*idx = array->la_mru = array->la_lru;
 	entry->le_record_idx = idx;
 	array->la_lru = entry->le_next_idx;
-	array->la_mru = *idx;
 
 	*entryp = entry;
 }
@@ -98,18 +97,25 @@ lrua_evict(struct lru_array *array, uint32_t *idx)
 
 	entry->le_record_idx = NULL;
 
-	if (array->la_mru == tidx)
-		array->la_mru = entry->le_prev_idx;
-
-	if (array->la_lru == tidx)
+	if (array->la_lru == tidx) {
+		/** If it's already the lru, nothing to do */
 		return;
+	}
+
+	if (array->la_mru == tidx) {
+		/** Circular ordering doesn't change.  Just need to update the
+		 *  lru and mru indexes.
+		 */
+		array->la_mru = entry->le_prev_idx;
+		array->la_lru = tidx;
+		return;
+	}
 
 	/** Remove from current location */
 	lrua_remove_entry(&array->la_table[0], entry);
 
-	/** Add at the LRU */
-	lrua_insert_entry(&array->la_table[0], entry, tidx, array->la_mru,
-			  array->la_lru);
+	/** Add between MRU and LRU */
+	lrua_insert_mru(array, entry, tidx);
 
 	array->la_lru = tidx;
 }

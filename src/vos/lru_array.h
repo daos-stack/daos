@@ -96,18 +96,20 @@ lrua_remove_entry(struct lru_entry *entries, struct lru_entry *entry)
 
 /** Internal API: Insert an entry in the lru list */
 static inline void
-lrua_insert_entry(struct lru_entry *entries, struct lru_entry *entry,
-		  uint32_t idx, uint32_t prev_idx, uint32_t next_idx)
+lrua_insert_mru(struct lru_array *array, struct lru_entry *entry,
+		uint32_t idx)
 {
+	struct lru_entry	*entries = &array->la_table[0];
 	struct lru_entry	*prev;
 	struct lru_entry	*next;
 
-	prev = &entries[prev_idx];
-	next = &entries[next_idx];
+	prev = &entries[array->la_mru];
+	next = &entries[array->la_lru];
+	D_ASSERT(prev != next);
 	next->le_prev_idx = idx;
 	prev->le_next_idx = idx;
-	entry->le_prev_idx = prev_idx;
-	entry->le_next_idx = next_idx;
+	entry->le_prev_idx = array->la_mru;
+	entry->le_next_idx = array->la_lru;
 }
 
 /** Internal API: Make the entry the mru */
@@ -119,15 +121,20 @@ lrua_move_to_mru(struct lru_array *array, struct lru_entry *entry, uint32_t idx)
 		return;
 	}
 
-	if (array->la_lru == idx)
+	if (array->la_lru == idx) {
+		/** Ordering doens't change in circular list so just update
+		 *  the lru and mru idx
+		 */
 		array->la_lru = entry->le_next_idx;
+		array->la_mru = idx;
+		return;
+	}
 
 	/** First remove */
 	lrua_remove_entry(&array->la_table[0], entry);
 
-	/** Now add */
-	lrua_insert_entry(&array->la_table[0], entry, idx,
-			  array->la_mru, array->la_lru);
+	/** Insert between MRU and LRU */
+	lrua_insert_mru(array, entry, idx);
 
 	array->la_mru = idx;
 }
