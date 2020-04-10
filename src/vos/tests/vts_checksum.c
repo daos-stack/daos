@@ -666,6 +666,76 @@ evt_entry_aligned_tests(void **state)
 	});
 }
 
+static void
+test_evt_entry_csum_update(void **state)
+{
+	const uint32_t			csum_buf_len = 32;
+	uint8_t				buf[csum_buf_len];
+	struct dcs_csum_info		actual;
+	const struct dcs_csum_info	expected  = {
+		.cs_buf_len = csum_buf_len,
+		.cs_nr = 4,
+		.cs_csum = buf,
+		.cs_len = 8,
+		.cs_chunksize = 4,
+		.cs_type = 3
+	};
+	struct evt_extent		ext = {.ex_lo = 0, .ex_hi = 31};
+	struct evt_extent		sel = {.ex_lo = 0, .ex_hi = 7};
+
+	actual = expected;
+
+	/** Don't update unnecessarily */
+	evt_entry_csum_update(&ext, &sel, &actual);
+	assert_int_equal(expected.cs_nr, actual.cs_nr);
+	assert_int_equal(expected.cs_buf_len, actual.cs_buf_len);
+	assert_ptr_equal(expected.cs_csum, actual.cs_csum);
+
+	/** Will still need the first checksum to verify the first chunk */
+	actual = expected;
+	sel.ex_lo = 3;
+	evt_entry_csum_update(&ext, &sel, &actual);
+	assert_int_equal(expected.cs_nr, actual.cs_nr);
+	assert_int_equal(expected.cs_buf_len, actual.cs_buf_len);
+	assert_ptr_equal(expected.cs_csum, actual.cs_csum);
+
+	/**
+	 * Because the selected extent doesn't include the first chunk, the
+	 * first checksum should be removed
+	 */
+	actual = expected;
+	sel.ex_lo = 4;
+	evt_entry_csum_update(&ext, &sel, &actual);
+	assert_int_equal(expected.cs_nr - 1, actual.cs_nr);
+	assert_int_equal(expected.cs_buf_len - expected.cs_len,
+		actual.cs_buf_len);
+	assert_ptr_equal(expected.cs_csum + expected.cs_len, actual.cs_csum);
+
+	/**
+	 * Only 1 byte of second chunk, but still keep second checksum
+	 */
+	actual = expected;
+	sel.ex_lo = 7;
+	evt_entry_csum_update(&ext, &sel, &actual);
+	assert_int_equal(expected.cs_nr - 1, actual.cs_nr);
+	assert_int_equal(expected.cs_buf_len - expected.cs_len,
+		actual.cs_buf_len);
+	assert_ptr_equal(expected.cs_csum + expected.cs_len, actual.cs_csum);
+
+	/**
+	 * Only 1 byte of second chunk, but still keep second checksum
+	 */
+	actual = expected;
+	sel.ex_lo = 8;
+	sel.ex_hi = 16;
+	evt_entry_csum_update(&ext, &sel, &actual);
+	assert_int_equal(expected.cs_nr - 2, actual.cs_nr);
+	assert_int_equal(expected.cs_buf_len - expected.cs_len * 2,
+		actual.cs_buf_len);
+	assert_ptr_equal(expected.cs_csum + expected.cs_len * 2,
+			 actual.cs_csum);
+}
+
 int setup(void **state)
 {
 	return 0;
@@ -696,9 +766,9 @@ static const struct CMUnitTest update_fetch_checksums_for_array_types[] = {
 	{ "EVT_CSUM" desc, test_fn, setup, teardown}
 static const struct CMUnitTest evt_checksums_tests[] = {
 	EVT("01: Some EVT Checksum Helper Functions",
-		 evt_csum_helper_functions_tests),
-	EVT("02: Test the alignment of entries",
-		 evt_entry_aligned_tests),
+		evt_csum_helper_functions_tests),
+	EVT("02: Test the alignment of entries", evt_entry_aligned_tests),
+	EVT("03: Test the alignment of entries", test_evt_entry_csum_update),
 };
 
 int run_csum_extent_tests(void)
