@@ -67,7 +67,7 @@ class SoakTestError(Exception):
     """Soak exception class."""
 
 
-class Soak(TestWithServers):
+class SoakTestBase(TestWithServers):
     # pylint: disable=too-many-public-methods
     """Execute DAOS Soak test cases.
 
@@ -76,7 +76,7 @@ class Soak(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a SoakBase object."""
-        super(Soak, self).__init__(*args, **kwargs)
+        super(SoakTestBase, self).__init__(*args, **kwargs)
         self.failed_job_id_list = None
         self.test_log_dir = None
         self.exclude_slurm_nodes = None
@@ -102,6 +102,92 @@ class Soak(TestWithServers):
         self.harasser_timeout = None
         self.all_failed_jobs = None
         self.username = None
+
+    def setUp(self):
+        """Define test setup to be done."""
+        self.log.info("<<setUp Started>> at %s", time.ctime())
+        # Start the daos_agents in the job scripts
+        self.setup_start_servers = True
+        self.setup_start_agents = False
+        super(SoakTestBase, self).setUp()
+        self.username = getuser()
+        # Initialize loop param for all tests
+        self.loop = 1
+        self.exclude_slurm_nodes = []
+        # Setup logging directories for soak logfiles
+        # self.output dir is an avocado directory .../data/
+        self.log_dir = self.params.get("logdir", "/run/*")
+        self.outputsoakdir = self.outputdir + "/soak"
+        # Create the remote log directories on all client nodes
+        self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
+        self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
+        # Fail if slurm partition daos_client is not defined
+        if not self.partition_clients:
+            raise SoakTestError(
+                "<<FAILED: Partition is not correctly setup for daos "
+                "slurm partition>>")
+        # Check if the server nodes are in the client list;
+        # this will happen when only one partition is specified
+        for host_server in self.hostlist_servers:
+            if host_server in self.hostlist_clients:
+                self.hostlist_clients.remove(host_server)
+                self.exclude_slurm_nodes.append(host_server)
+        self.log.info(
+            "<<Updated hostlist_clients %s >>", self.hostlist_clients)
+        # include test node for log cleanup; remove from client list
+        test_node = [socket.gethostname().split('.', 1)[0]]
+        if test_node[0] in self.hostlist_clients:
+            self.hostlist_clients.remove(test_node[0])
+            self.exclude_slurm_nodes.append(test_node[0])
+            self.log.info(
+                "<<Updated hostlist_clients %s >>", self.hostlist_clients)
+        if not self.hostlist_clients:
+            self.fail("There are no nodes that are client only;"
+                      "check if the partition also contains server nodes")
+        self.node_list = self.hostlist_clients + test_node
+        # Start agent on test node - need daos_agent yaml file
+        self.agent_sessions = run_agent(
+            self, self.hostlist_servers, test_node)
+
+    def pre_tear_down(self):
+        """Tear down any test-specific steps prior to running tearDown().
+
+        Returns:
+            list: a list of error strings to report after all tear down
+            steps have been attempted
+
+        """
+        errors = []
+        # clear out any jobs in squeue;
+        if self.failed_job_id_list:
+            self.log.info(
+                "<<Cancel jobs in queue with ids %s >>",
+                self.failed_job_id_list)
+            status = process.system("scancel --partition {} -u {}".format(
+                self.partition_clients, self.username))
+            if status > 0:
+                errors.append("Failed to cancel jobs {}".format(
+                    self.failed_job_id_list))
+        if self.all_failed_jobs:
+            errors.append("SOAK FAILED: The following jobs failed {} ".format(
+                " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
+
+        # One last attempt to copy any logfiles from client nodes
+        try:
+            self.get_remote_logs()
+        except SoakTestError as error:
+            self.log.info("Remote copy failed with %s", error)
+        # daos_agent is always started on this node when start agent is false
+        if not self.setup_start_agents:
+            self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
+        return errors
+
+    def tearDown(self):
+        """Define tearDown and clear any left over jobs in squeue."""
+        # Perform any test-specific tear down steps and collect any
+        # reported errors
+        self.log.info("<<tearDown Started>> at %s", time.ctime())
+        super(SoakTestBase, self).tearDown()
 
     def job_done(self, args):
         """Call this function when a job is done.
@@ -848,124 +934,3 @@ class Soak(TestWithServers):
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>", DDHHMMSS_format(
                 time.time() - start_time))
-
-    def setUp(self):
-        """Define test setup to be done."""
-        self.log.info("<<setUp Started>> at %s", time.ctime())
-        # Start the daos_agents in the job scripts
-        self.setup_start_servers = True
-        self.setup_start_agents = False
-        super(Soak, self).setUp()
-        self.username = getuser()
-        # Initialize loop param for all tests
-        self.loop = 1
-        self.exclude_slurm_nodes = []
-        # Setup logging directories for soak logfiles
-        # self.output dir is an avocado directory .../data/
-        self.log_dir = self.params.get("logdir", "/run/*")
-        self.outputsoakdir = self.outputdir + "/soak"
-        # Create the remote log directories on all client nodes
-        self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
-        self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
-        # Fail if slurm partition daos_client is not defined
-        if not self.partition_clients:
-            raise SoakTestError(
-                "<<FAILED: Partition is not correctly setup for daos "
-                "slurm partition>>")
-        # Check if the server nodes are in the client list;
-        # this will happen when only one partition is specified
-        for host_server in self.hostlist_servers:
-            if host_server in self.hostlist_clients:
-                self.hostlist_clients.remove(host_server)
-                self.exclude_slurm_nodes.append(host_server)
-        self.log.info(
-            "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        # include test node for log cleanup; remove from client list
-        test_node = [socket.gethostname().split('.', 1)[0]]
-        if test_node[0] in self.hostlist_clients:
-            self.hostlist_clients.remove(test_node[0])
-            self.exclude_slurm_nodes.append(test_node[0])
-            self.log.info(
-                "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        if not self.hostlist_clients:
-            self.fail("There are no nodes that are client only;"
-                      "check if the partition also contains server nodes")
-        self.node_list = self.hostlist_clients + test_node
-        # Start agent on test node - need daos_agent yaml file
-        self.agent_sessions = run_agent(
-            self, self.hostlist_servers, test_node)
-
-    def pre_tear_down(self):
-        """Tear down any test-specific steps prior to running tearDown().
-
-        Returns:
-            list: a list of error strings to report after all tear down
-            steps have been attempted
-
-        """
-        errors = super(Soak, self).pre_tear_down()
-        # clear out any jobs in squeue;
-        if self.failed_job_id_list:
-            self.log.info(
-                "<<Cancel jobs in queue with ids %s >>",
-                self.failed_job_id_list)
-            status = process.system("scancel --partition {} -u {}".format(
-                self.partition_clients, self.username))
-            if status > 0:
-                errors.append("Failed to cancel jobs {}".format(
-                    self.failed_job_id_list))
-        if self.all_failed_jobs:
-            errors.append("SOAK FAILED: The following jobs failed {} ".format(
-                " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
-
-        # One last attempt to copy any logfiles from client nodes
-        try:
-            self.get_remote_logs()
-        except SoakTestError as error:
-            self.log.info("Remote copy failed with %s", error)
-        # daos_agent is always started on this node when start agent is false
-        if not self.setup_start_agents:
-            self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
-        return errors
-
-    def test_soak_smoke(self):
-        """Run soak smoke.
-
-        Test ID: DAOS-2192
-
-        Test Description:  This will create a slurm batch job that runs
-        various jobs defined in the soak yaml.  It will run for ~10 min
-
-        :avocado: tags=soak_smoke
-        """
-        test_param = "/run/smoke/"
-        self.run_soak(test_param)
-
-    def test_soak_stress(self):
-        """Run all soak tests .
-
-        Test ID: DAOS-2256
-        Test ID: DAOS-2509
-        Test Description: This will create a slurm batch job that runs
-        various jobs defined in the soak yaml
-        This test will run for the time specififed in
-        /run/test_timeout.
-
-        :avocado: tags=soak,soak_stress
-        """
-        test_param = "/run/soak_stress/"
-        self.run_soak(test_param)
-
-    def test_soak_harassers(self):
-        """Run all soak tests with harassers.
-
-        Test ID: DAOS-2511
-        Test Description: This will create a soak job that runs
-        various harassers  defined in the soak yaml
-        This test will run for the time specififed in
-        /run/test_timeout.
-
-        :avocado: tags=soak,soak_harassers
-        """
-        test_param = "/run/soak_harassers/"
-        self.run_soak(test_param)
