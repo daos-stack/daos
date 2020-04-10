@@ -256,7 +256,6 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
 
-	tc_in->p_module = in->p_module;
 	tc_in->p_path = in->p_path;
 	tc_in->p_op = in->p_op;
 	tc_in->p_avg = in->p_avg;

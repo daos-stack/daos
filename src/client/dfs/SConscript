@@ -30,7 +30,6 @@ def scons():
     Import('env', 'prereqs')
 
     denv = env.Clone()
-    denv.AppendIfSupported(CCFLAGS='-fvisibility=hidden')
 
     denv = configure_lustre(denv)
 

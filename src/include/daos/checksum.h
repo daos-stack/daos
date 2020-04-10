@@ -372,7 +372,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  *				distributed to multiple targets. When it is NULL
  *				it means replica object, or EC object located
  *				in single target.
- * @param[in]	p_iods_csums	pointer that will reference the
+ * @param[out]	p_iods_csums	pointer that will reference the
  *				the memory allocated
  * @return			number of iod_csums allocated, or
  *				negative if error
@@ -547,6 +547,12 @@ struct daos_csum_range
 csum_align_boundaries(daos_off_t lo, daos_off_t hi, daos_off_t lo_boundary,
 		      daos_off_t hi_boundary, daos_off_t record_size,
 		      size_t chunksize);
+
+/**
+ * DAOS Checksum Fault Injection ... corrupt data
+ */
+void
+dcf_corrupt(d_sg_list_t *data, uint32_t nr);
 
 #endif /** __DAOS_CHECKSUM_H */
 
