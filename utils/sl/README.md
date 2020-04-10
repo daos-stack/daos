@@ -1,3 +1,4 @@
+```
 OVERVIEW
 
 scons_local is a set of build tools and scripts used to support
@@ -110,3 +111,4 @@ AlwaysBuild(RUN_TESTS)
 Jenkins:
 If configuring Jenkins to find memcheck results, add **/memcheck-*.xml to your
 Jenkins configuration.
+```

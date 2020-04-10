@@ -365,7 +365,7 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
  *			-DER_EP_OLD	Epoch is too old and has no data for
  *					this object
  */
-DAOS_API int
+int
 daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
 	      daos_handle_t *oh, daos_event_t *ev);
 
@@ -381,7 +381,7 @@ daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
  *			0		Success
  *			-DER_NO_HDL	Invalid object open handle
  */
-DAOS_API int
+int
 daos_obj_close(daos_handle_t oh, daos_event_t *ev);
 
 /**
@@ -405,7 +405,7 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  *					related resent history may have been
  *					aggregated. Punch result is undefined.
  */
-DAOS_API int
+int
 daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       daos_event_t *ev);
 
@@ -432,7 +432,7 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					related resent history may have been
  *					aggregated. Punch result is undefined.
  */
-DAOS_API int
+int
 daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		     unsigned int nr, daos_key_t *dkeys, daos_event_t *ev);
 
@@ -460,7 +460,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					related resent history may have been
  *					aggregated. Punch result is undefined.
  */
-DAOS_API int
+int
 daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		     daos_key_t *dkey, unsigned int nr, daos_key_t *akeys,
 		     daos_event_t *ev);
@@ -484,7 +484,7 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
 	       d_rank_list_t *ranks, daos_event_t *ev);
 
@@ -552,7 +552,7 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *					fit into output buffer
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
-DAOS_API int
+int
 daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev);
@@ -608,7 +608,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					related resent history may have been
  *					aggregated. Update result is undefined.
  */
-DAOS_API int
+int
 daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		d_sg_list_t *sgls, daos_event_t *ev);
@@ -658,7 +658,7 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					times \a kds[0].kd_key_len) and do the
  *					enumerate again.
  */
-DAOS_API int
+int
 daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 		   daos_key_desc_t *kds, d_sg_list_t *sgl,
 		   daos_anchor_t *anchor, daos_event_t *ev);
@@ -709,7 +709,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
  *					times \a kds[0].kd_key_len) and do the
  *					enumerate again.
  */
-DAOS_API int
+int
 daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 		   uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
 		   daos_anchor_t *anchor, daos_event_t *ev);
@@ -762,7 +762,7 @@ daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 		   daos_key_t *akey, daos_size_t *size, uint32_t *nr,
 		   daos_recx_t *recxs, daos_epoch_range_t *eprs,
@@ -812,7 +812,7 @@ daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev);
@@ -830,7 +830,7 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_MISMATCH	Found data inconsistency
  */
-DAOS_API int
+int
 daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch);
 
 #if defined(__cplusplus)

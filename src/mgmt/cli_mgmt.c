@@ -185,7 +185,7 @@ out_task:
 }
 
 int
-dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start)
+dc_mgmt_profile(char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;
 	struct mgmt_profile_in	*in;
@@ -213,7 +213,6 @@ dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start)
 
 	D_ASSERT(rpc != NULL);
 	in = crt_req_get(rpc);
-	in->p_module = modules;
 	in->p_path = path;
 	in->p_avg = avg;
 	in->p_op = start ? MGMT_PROFILE_START : MGMT_PROFILE_STOP;
@@ -571,6 +570,7 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 		goto err_sys;
 	if (sys->sy_npsrs < 1) {
 		D_ERROR(">= 1 PSRs required: %d\n", sys->sy_npsrs);
+		rc = -DER_MISC;
 		goto err_psrs;
 	}
 

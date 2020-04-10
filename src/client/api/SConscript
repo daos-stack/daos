@@ -7,7 +7,6 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
-    denv.AppendIfSupported(CCFLAGS='-fvisibility=hidden')
 
     prereqs.require(denv, 'protobufc')
 

@@ -908,8 +908,10 @@ get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 		new_prop->dpp_entries[i].dpe_type = ACCESS_PROPS[i];
 
 	rc = ds_pool_svc_get_prop(pool_uuid, ranks, new_prop);
-	if (rc != 0)
+	if (rc != 0) {
+		daos_prop_free(new_prop);
 		return rc;
+	}
 
 	*prop = new_prop;
 	return 0;
