@@ -45,8 +45,7 @@ extern "C" {
  * \return		allocated rank list that user is responsible to free
  *			with d_rank_list_free().
  */
-DAOS_API d_rank_list_t *
-daos_rank_list_parse(const char *str, const char *sep);
+d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
 
 /*
  * Transaction API
@@ -64,7 +63,7 @@ daos_rank_list_parse(const char *str, const char *sep);
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_open(daos_handle_t coh, daos_handle_t *th, daos_event_t *ev);
 
 /**
@@ -83,7 +82,7 @@ daos_tx_open(daos_handle_t coh, daos_handle_t *th, daos_event_t *ev);
  *			-DER_INVAL      Invalid parameter
  *			-DER_RESTART	transaction conflict detected.
  */
-DAOS_API int
+int
 daos_tx_commit(daos_handle_t th, daos_event_t *ev);
 
 /**
@@ -101,7 +100,7 @@ daos_tx_commit(daos_handle_t th, daos_event_t *ev);
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
 		  daos_event_t *ev);
 
@@ -115,7 +114,7 @@ daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_abort(daos_handle_t th, daos_event_t *ev);
 
 /**
@@ -128,7 +127,7 @@ daos_tx_abort(daos_handle_t th, daos_event_t *ev);
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_close(daos_handle_t th, daos_event_t *ev);
 
 /**
@@ -139,7 +138,7 @@ daos_tx_close(daos_handle_t th, daos_event_t *ev);
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 
 #if defined(__cplusplus)

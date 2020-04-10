@@ -136,6 +136,7 @@ sched_init(ABT_sched sched, ABT_sched_config config)
 				    &data->sd_dx);
 	if (ret != ABT_SUCCESS) {
 		D_ERROR("Failed to read ABT sched config: %d\n", ret);
+		D_FREE(data);
 		return ret;
 	}
 
