@@ -868,7 +868,7 @@ static int
 rebuild_pool_connect_internal(void *data)
 {
 	test_arg_t	*arg = data;
-	int		rc;
+	int		rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
@@ -1487,8 +1487,6 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	shard = layout->ol_shards[0];
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
 			 &arg->pool.alive_svc, shard->os_ranks[0]);
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    &arg->pool.svc, shard->os_ranks[0]);
 
 	/* Sleep 10 seconds after it scan finish and hang before rebuild */
 	print_message("sleep 10 seconds to wait scan to be finished \n");
@@ -1497,8 +1495,6 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	/* Then kill rank 1 */
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
 			 &arg->pool.alive_svc, shard->os_ranks[1]);
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    &arg->pool.svc, shard->os_ranks[1]);
 
 	/* Continue rebuild */
 	daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
@@ -1544,13 +1540,6 @@ rebuild_fail_all_replicas(void **state)
 			daos_kill_server(arg, arg->pool.pool_uuid,
 					 arg->group, &arg->pool.alive_svc,
 					 rank);
-		}
-
-		for (j = 0; j < layout->ol_shards[i]->os_replica_nr; j++) {
-			d_rank_t rank = layout->ol_shards[i]->os_ranks[j];
-
-			daos_exclude_server(arg->pool.pool_uuid, arg->group,
-					    &arg->pool.svc, rank);
 		}
 	}
 
