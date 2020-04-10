@@ -49,3 +49,45 @@ func (m *SystemQueryReq) GetSystemRanks() []system.Rank {
 	}
 	return nil
 }
+
+// SetSystemRanks is a convenience method to convert a slice of
+// system ranks to a slice of uint32 ranks for this request.
+func (m *SystemStopReq) SetSystemRanks(sysRanks []system.Rank) error {
+	if m == nil {
+		return errors.New("nil request")
+	}
+	return convert.Types(sysRanks, &m.Ranks)
+}
+
+// GetSystemRanks is a convenience method to convert this request's
+// slice of uint32 ranks to a slice of system ranks.
+func (m *SystemStopReq) GetSystemRanks() []system.Rank {
+	if m != nil {
+		var sysRanks []system.Rank
+		if err := convert.Types(m.GetRanks(), &sysRanks); err == nil {
+			return sysRanks
+		}
+	}
+	return nil
+}
+
+// SetSystemRanks is a convenience method to convert a slice of
+// system ranks to a slice of uint32 ranks for this request.
+func (m *SystemStartReq) SetSystemRanks(sysRanks []system.Rank) error {
+	if m == nil {
+		return errors.New("nil request")
+	}
+	return convert.Types(sysRanks, &m.Ranks)
+}
+
+// GetSystemRanks is a convenience method to convert this request's
+// slice of uint32 ranks to a slice of system ranks.
+func (m *SystemStartReq) GetSystemRanks() []system.Rank {
+	if m != nil {
+		var sysRanks []system.Rank
+		if err := convert.Types(m.GetRanks(), &sysRanks); err == nil {
+			return sysRanks
+		}
+	}
+	return nil
+}

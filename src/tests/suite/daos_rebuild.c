@@ -376,7 +376,7 @@ static int
 rebuild_pool_connect_internal(void *data)
 {
 	test_arg_t	*arg = data;
-	int		rc;
+	int		rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
@@ -1008,7 +1008,9 @@ rebuild_send_objects_fail(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
 }
+
 
 static int
 rebuild_pool_disconnect_cb(void *data)

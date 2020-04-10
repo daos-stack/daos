@@ -27,6 +27,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -184,7 +186,7 @@ type ListPoolsReq struct {
 // of pools in the system.
 type ListPoolsResp struct {
 	Status int32
-	Pools  []*PoolDiscovery
+	Pools  []*common.PoolDiscovery
 }
 
 // ListPools fetches the list of all pools and their service replicas from the
@@ -212,6 +214,6 @@ func (c *connList) ListPools(req ListPoolsReq) (*ListPoolsResp, error) {
 	}
 
 	return &ListPoolsResp{
-		Pools: poolDiscoveriesFromPB(pbResp.Pools),
+		Pools: proto.PoolDiscoveriesFromPB(pbResp.Pools),
 	}, nil
 }
