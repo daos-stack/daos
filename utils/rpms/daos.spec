@@ -4,12 +4,9 @@
 
 %global mercury_version 2.0.0a1-0.7.git.41caa14%{?dist}
 
-%global spdk_max_version 21
-%global spdk_min_version 19
-
 Name:          daos
 Version:       1.1.0
-Release:       10%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -34,8 +31,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
-BuildRequires: spdk-devel > %{spdk_min_version}, spdk-devel < %{spdk_max_version}
-BuildRequires: spdk-tools > %{spdk_min_version}, spdk-tools < %{spdk_max_version}
+BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 %else
@@ -93,8 +89,6 @@ Requires: libpmem >= %{min_pmdk}, libpmemobj >= %{min_pmdk}, libpmemblk >= %{min
 %endif
 Requires: fuse3 >= 3.4.2
 Requires: protobuf-c
-Requires: fio < 3.4
-Requires: spdk > %{spdk_min_version}, spdk < %{spdk_max_version}
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
@@ -116,7 +110,7 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: %{name}-client = %{version}-%{release}
-Requires: spdk-tools > %{spdk_min_version}, spdk-tools < %{spdk_max_version}
+Requires: spdk-tools
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
@@ -143,6 +137,7 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+Requires: fio
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -350,9 +345,12 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Tue Mar 31 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-10
+* Tue Mar 31 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-11
 - Enforce some minimum package requirements including switching
   from our custom fuse build to fuse3 from the distribution
+
+* Sun Apr 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-10
+- Clean up spdk dependencies
 
 * Mon Mar 30 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-9
 - Set version of spdk to < v21, > v19
