@@ -81,8 +81,8 @@ func checkSocketDir(sockDir string) error {
 	return nil
 }
 
-// drpcSetup specifies socket path and starts drpc server.
-func drpcSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
+// drpcServerSetup specifies socket path and starts drpc server.
+func drpcServerSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
 	// Clean up any previous execution's sockets before we create any new sockets
 	if err := drpcCleanup(sockDir); err != nil {
 		return err

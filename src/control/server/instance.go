@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -236,11 +237,35 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- ioserver.
 	return srv.runner.Start(ctx, errChan)
 }
 
-// Stop sends signal to stop IOServerInstance runner.
+// Stop sends signal to stop IOServerInstance runner (but doesn't wait for
+// process to exit).
 func (srv *IOServerInstance) Stop(signal os.Signal) error {
 	if err := srv.runner.Signal(signal); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+// RemoveSocket removes the socket file used for dRPC communication with
+// harness and updates relevant ready states.
+func (srv *IOServerInstance) RemoveSocket() error {
+	fMsg := fmt.Sprintf("removing instance %d socket file", srv.Index())
+
+	dc, err := srv.getDrpcClient()
+	if err != nil {
+		return errors.Wrap(err, fMsg)
+	}
+	srvSock := dc.GetSocketPath()
+
+	if err := checkDrpcClientSocketPath(srvSock); err != nil {
+		return errors.Wrap(err, fMsg)
+	}
+	os.Remove(srvSock)
+
+	// reset state
+	srv.ready.SetFalse()
+	srv.drpcReady = make(chan *srvpb.NotifyReadyReq)
 
 	return nil
 }
@@ -525,7 +550,6 @@ func (srv *IOServerInstance) FinishStartup(ctx context.Context, ready *srvpb.Not
 		return errors.Wrap(err, "failed to load I/O server modules")
 	}
 
-	srv.log.Debugf("instance %d ready: %v", srv.Index(), ready)
 	srv.ready.SetTrue()
 
 	return nil
