@@ -523,6 +523,30 @@ lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
 	       req, true);
 }
 
+static int
+pool_storage_info(void **state, daos_pool_info_t *pinfo)
+{
+	test_arg_t *arg = *state;
+	int rc;
+
+	/*get only pool space info*/
+	pinfo->pi_bits = DPI_SPACE;
+	rc = daos_pool_query(arg->pool.poh, NULL, pinfo, NULL, NULL);
+	if (rc != 0) {
+		print_message("pool query failed %d\n", rc);
+		return rc;
+	}
+
+	print_message("AEP space: Total = %" PRIu64 " Free= %" PRIu64"\t"
+	"NVMe space: Total = %" PRIu64 " Free= %" PRIu64"\n",
+	pinfo->pi_space.ps_space.s_total[0],
+	pinfo->pi_space.ps_space.s_free[0],
+	pinfo->pi_space.ps_space.s_total[1],
+	pinfo->pi_space.ps_space.s_free[1]);
+
+	return rc;
+}
+
 /**
  * Very basic test for overwrites in different transactions.
  */
@@ -583,6 +607,8 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
  * Test mixed SCM & NVMe overwrites in different transactions with a large
  * record size. Iod size is needed for insert/lookup since the same akey is
  * being used.
+ * Adding Pool size verification to check <4K size writes to SCM and >4K to
+ * NVMe.
  */
 static void
 io_overwrite_large(void **state, daos_obj_id_t oid)
@@ -599,6 +625,9 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	int		 rx_nr; /* number of record extents */
 	int		 rec_idx = 0; /* index for next insert */
 	int		 i;
+	daos_pool_info_t pinfo;
+	daos_size_t	 nvme_initial_size;
+	daos_size_t	 nvme_current_size;
 
 	if (size < OW_IOD_SIZE || (size % OW_IOD_SIZE != 0))
 		return;
@@ -624,6 +653,10 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, OW_IOD_SIZE, size,
 				DAOS_TX_NONE, &req);
 	assert_memory_equal(ow_buf, fbuf, size);
+
+	/*Get the inital pool size after writing first transaction*/
+	pool_storage_info(state, &pinfo);
+	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
 	/**
 	 * Mixed SCM & NVMe overwrites. 3k, 4k, and 5k overwrites for a 12k
@@ -660,6 +693,26 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 		rec_idx += rx_nr; /* next index for insert/lookup */
 		/* Increment next overwrite size by 1 record extent */
 		rx_nr++;
+
+		/*Verify the SCM/NVMe Pool Free size based on tranfer size*/
+		pool_storage_info(state, &pinfo);
+		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
+		if (overwrite_sz < 4096) {
+		/*NVMe Size should not be changed as overwrite_sz is <4K*/
+			if (nvme_initial_size != nvme_current_size) {
+				fail_msg("Observed Value= %"
+				PRIu64", & Expected Value =%"PRIu64"",
+				nvme_current_size, nvme_initial_size);
+			}
+		} else{
+			/*NVMe Size should not be same as overwrite_sz is >4K*/
+			if (nvme_initial_size == nvme_current_size) {
+				fail_msg("Observed Value = %"
+					PRIu64",& Expected Value =%"PRIu64"",
+					nvme_current_size, nvme_initial_size);
+			}
+		}
+		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 	}
 
 	D_FREE(fbuf);
@@ -748,6 +801,97 @@ io_overwrite(void **state)
 
 	/** Large record with mixed SCM/NVMe overwrites */
 	io_overwrite_large(state, oid);
+}
+
+static void
+io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct ioreq		req;
+	daos_obj_id_t		oid;
+	daos_pool_info_t	pinfo;
+	char			*ow_buf;
+	char			*fbuf;
+	const char		dkey[] = "dkey";
+	const char		akey[] = "akey";
+	daos_size_t		size = 4 * 1024; /* record size */
+	int			buf_idx; /* overwrite buffer index */
+	int			rx_nr; /* number of record extents */
+	int			record_set;
+	daos_size_t		nvme_free_size;
+
+	/* choose random object */
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/* Alloc and set buffer to be a sting*/
+	D_ALLOC(ow_buf, size);
+	assert_non_null(ow_buf);
+	dts_buf_render(ow_buf, size);
+	/* Alloc the fetch buffer */
+	D_ALLOC(fbuf, size);
+	assert_non_null(fbuf);
+	memset(fbuf, 0, size);
+
+	/* Get the pool info at the beginning */
+	pool_storage_info(state, &pinfo);
+	nvme_free_size = pinfo.pi_space.ps_space.s_free[1];
+
+	/* Set and verify the full initial string in first transaction */
+	rx_nr = size / OW_IOD_SIZE;
+	/* Insert the initial 4K record which will go through NVMe */
+	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
+				rx_nr, DAOS_TX_NONE, &req);
+	/* Lookup the initial 4K record */
+	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, OW_IOD_SIZE, size,
+				DAOS_TX_NONE, &req);
+	/* Verify the 4K data */
+	assert_memory_equal(ow_buf, fbuf, size);
+
+	/**
+	*Get the pool storage information and verify data written
+	*on NVMe by comparing the NVMe Free pool size
+	*/
+	pool_storage_info(state, &pinfo);
+	if (pinfo.pi_space.ps_space.s_free[1] + size != nvme_free_size) {
+		fail_msg("\nObserved Value = %" PRIu64 " and Expected Value =%"
+			PRIu64 "", pinfo.pi_space.ps_space.s_free[1],
+			nvme_free_size - size);
+	}
+	nvme_free_size = pinfo.pi_space.ps_space.s_free[1];
+
+	for (record_set = 0, buf_idx = 0; record_set < 10; record_set++) {
+		buf_idx += 20;
+		memset(fbuf, 0, size);
+		/* Change Two bytes value to original array*/
+		ow_buf[buf_idx + 1] = 48;
+		ow_buf[buf_idx + 2] = 49;
+
+		/* Re-write the same array with modified Two values*/
+		insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf,
+			OW_IOD_SIZE, 1, DAOS_TX_NONE, &req);
+
+		/*Read and verify the data with Two updated values*/
+		lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf,
+			OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
+		assert_memory_equal(ow_buf, fbuf, size);
+
+		/*Verify the pool size*/
+		pool_storage_info(state, &pinfo);
+
+		/**
+		*Data written on SCM and scm free size should get decrease
+		*and NVMe free size should not change.
+		*/
+		if (pinfo.pi_space.ps_space.s_free[1] != nvme_free_size) {
+			fail_msg("Observed Value = %"PRIu64", Expected Value =%"
+				PRIu64"", pinfo.pi_space.ps_space.s_free[1],
+				nvme_free_size);
+		}
+	}
+	D_FREE(fbuf);
+	D_FREE(ow_buf);
+	ioreq_fini(&req);
 }
 
 /** i/o to variable idx offset */
@@ -3864,6 +4008,9 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO40: Record count after punch/enumeration",
 	  punch_enum_then_verify_record_count, async_disable,
 	  test_case_teardown},
+	{ "IO41: IO Rewritten data fetch and validate pool size",
+	  io_rewritten_same_array_with_large_small_size_verify_poolsize,
+	  async_disable, test_case_teardown},
 };
 
 int
