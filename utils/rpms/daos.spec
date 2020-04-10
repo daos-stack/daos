@@ -342,7 +342,8 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 
 %changelog
 * Fri Apr 10 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-11
-- Update to mercury 4871023 to pick na_ofi.c race condition fix
+- Update to mercury 4871023 to pick na_ofi.c race condition fix for
+  "No route to host" errors.
 
 * Sun Apr 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-10
 - Clean up spdk dependencies
