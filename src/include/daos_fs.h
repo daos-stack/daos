@@ -82,7 +82,7 @@ typedef struct {
  *
  * \return              0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		daos_handle_t *coh, dfs_t **dfs);
 
@@ -101,7 +101,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
 
 /**
@@ -113,7 +113,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_umount(dfs_t *dfs);
 
 /**
@@ -124,7 +124,7 @@ dfs_umount(dfs_t *dfs);
  *
  * \return              0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_query(dfs_t *dfs, dfs_attr_t *attr);
 
 /**
@@ -139,7 +139,7 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_local2global(dfs_t *dfs, d_iov_t *glob);
 
 /**
@@ -156,7 +156,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 		 dfs_t **dfs);
 
@@ -172,7 +172,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_set_prefix(dfs_t *dfs, const char *prefix);
 
 /**
@@ -183,7 +183,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
 
 /**
@@ -199,7 +199,7 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
 	   mode_t *mode, struct stat *stbuf);
 
@@ -222,7 +222,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	       dfs_obj_t **obj, mode_t *mode, struct stat *stbuf);
 
@@ -249,7 +249,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
 	 const char *value, dfs_obj_t **obj);
@@ -266,7 +266,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **new_obj);
 
 /**
@@ -282,7 +282,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **new_obj);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob);
 
 /**
@@ -298,7 +298,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **obj);
 
 /**
@@ -308,7 +308,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **obj);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_release(dfs_obj_t *obj);
 
 /**
@@ -325,7 +325,7 @@ dfs_release(dfs_obj_t *obj);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	 daos_size_t *read_size, daos_event_t *ev);
 
@@ -344,7 +344,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 	  daos_size_t *read_size, daos_event_t *ev);
 
@@ -360,7 +360,7 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	  daos_event_t *ev);
 
@@ -376,7 +376,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 	   daos_event_t *ev);
 
@@ -389,7 +389,7 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
 
 /**
@@ -405,7 +405,7 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
 
 /**
@@ -426,7 +426,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	    uint32_t *nr, struct dirent *dirs);
 
@@ -456,7 +456,7 @@ typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *udata);
 
@@ -471,7 +471,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	  daos_oclass_id_t cid);
 
@@ -488,7 +488,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 	   daos_obj_id_t *oid);
 
@@ -507,7 +507,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	 char *new_name, daos_obj_id_t *oid);
 
@@ -522,7 +522,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1,
 	     dfs_obj_t *parent2, char *name2);
 
@@ -534,7 +534,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
 
 /**
@@ -548,7 +548,7 @@ dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh);
 
 /**
@@ -560,7 +560,7 @@ dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
 
 /**
@@ -576,7 +576,7 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
 
 /**
@@ -594,7 +594,7 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  *
  * \return		0 on Success. errno code on Failure.
  */
-DAOS_API int
+int
 dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name);
 
 /**
@@ -618,7 +618,7 @@ dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name,
 	 struct stat *stbuf);
 
@@ -631,7 +631,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 
 /** Option to set the mode_t on an entry */
@@ -657,7 +657,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
  *
  * \return		0 on Success. errno code on Failure.
  */
-DAOS_API int
+int
 dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags);
 
 /**
@@ -674,7 +674,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
 
 /**
@@ -689,7 +689,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
 
 /**
@@ -702,7 +702,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_sync(dfs_t *dfs);
 
 /**
@@ -720,7 +720,7 @@ dfs_sync(dfs_t *dfs);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	     const void *value, daos_size_t size, int flags);
 
@@ -737,7 +737,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	     daos_size_t *size);
 
@@ -751,7 +751,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
 
 /**
@@ -769,7 +769,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
 /**
@@ -781,7 +781,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
  *
  * \return              0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs);
 
 /**
@@ -791,7 +791,7 @@ dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs);
  *
  * \return		0 on success, errno code on failure.
  */
-DAOS_API int
+int
 dfs_umount_root_cont(dfs_t *dfs);
 
 #if defined(__cplusplus)

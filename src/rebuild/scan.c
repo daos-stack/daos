@@ -418,19 +418,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	daos_handle_t			coh;
 	int				rc;
 
-	/* resync DTXs' status firstly. */
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
 		D_DEBUG(DB_REBUILD, DF_UUID" already scan\n",
 			DP_UUID(arg->co_uuid));
 		return 0;
-	}
-
-	rc = dtx_resync(iter_param->ip_hdl, rpt->rt_pool_uuid, entry->ie_couuid,
-			rpt->rt_rebuild_ver, true);
-	if (rc) {
-		D_ERROR(DF_UUID" dtx resync failed: rc %d\n",
-			DP_UUID(rpt->rt_pool_uuid), rc);
-		return rc;
 	}
 
 	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
@@ -450,7 +441,6 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			 rebuild_obj_scan_cb, NULL, arg);
 	vos_cont_close(coh);
 
-	/* Since dtx_resync might yield, let's reprobe anyway */
 	*acts |= VOS_ITER_CB_YIELD;
 	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" iterate cont done: rc %d\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid), rc);
@@ -535,6 +525,14 @@ rebuild_scan_leader(void *data)
 	struct rebuild_tgt_pool_tracker *rpt = data;
 	struct rebuild_pool_tls	  *tls;
 	int			   rc;
+
+	D_DEBUG(DB_REBUILD, DF_UUID "check resync %u < %u\n",
+		DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_dtx_resync_version,
+		rpt->rt_rebuild_ver);
+
+	/* Wait for dtx resync to finish */
+	while (rpt->rt_pool->sp_dtx_resync_version < rpt->rt_rebuild_ver)
+		ABT_thread_yield();
 
 	rc = dss_thread_collective(rebuild_scanner, rpt, 0, DSS_ULT_REBUILD);
 	if (rc)

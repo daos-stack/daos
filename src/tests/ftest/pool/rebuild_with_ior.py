@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2018-2019 Intel Corporation.
+"""
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,24 +20,26 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 from apricot import skipForTicket
 from ior_test_base import IorTestBase
 
-#pylint: disable=R0903
+
+# pylint: disable=too-few-public-methods,too-many-ancestors
 class RebuildWithIOR(IorTestBase):
-    """
+    """Rebuild test cases featuring IOR.
+
     This class contains tests for pool rebuild that feature I/O going on
     during the rebuild using IOR.
+
     :avocado: recursive
     """
 
     @skipForTicket("DAOS-2773")
     def test_rebuild_with_ior(self):
-        """
-        Jira ID: DAOS-951
+        """Jira ID: DAOS-951.
 
         Test Description: Trigger a rebuild while I/O is ongoing.
                           I/O performed using IOR.
@@ -48,7 +50,6 @@ class RebuildWithIOR(IorTestBase):
 
         :avocado: tags=all,pr,small,pool,rebuild,rebuildwithior
         """
-
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
@@ -79,8 +80,7 @@ class RebuildWithIOR(IorTestBase):
 
         # perform first set of io using IOR
         self.ior_cmd.flags.update(iorflags_write)
-        self.ior_cmd.test_file.update(file1)
-        self.run_ior_with_pool()
+        self.run_ior_with_pool(test_file=file1)
 
         # Kill the server
         self.pool.start_rebuild([rank], self.d_log)
@@ -102,14 +102,11 @@ class RebuildWithIOR(IorTestBase):
 
         # perform second set of io using IOR
         self.ior_cmd.flags.update(iorflags_write)
-        self.ior_cmd.test_file.update(file2)
-        self.run_ior_with_pool()
+        self.run_ior_with_pool(test_file=file2)
 
         # check data intergrity using ior for both ior runs
         self.ior_cmd.flags.update(iorflags_read)
-        self.ior_cmd.test_file.update(file1)
-        self.run_ior_with_pool()
+        self.run_ior_with_pool(test_file=file1)
 
         self.ior_cmd.flags.update(iorflags_read)
-        self.ior_cmd.test_file.update(file2)
-        self.run_ior_with_pool()
+        self.run_ior_with_pool(test_file=file2)

@@ -139,7 +139,8 @@ int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
  * srv_util.c
  */
 int ds_pool_map_tgts_update(struct pool_map *map,
-			    struct pool_target_id_list *tgts, int opc);
+			    struct pool_target_id_list *tgts, int opc,
+			    bool evict_rank);
 int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 				  d_rank_list_t *failed, d_rank_list_t *alt);
 extern struct bio_reaction_ops nvme_reaction_ops;
