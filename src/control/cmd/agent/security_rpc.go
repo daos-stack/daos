@@ -135,6 +135,8 @@ func (m *SecurityModule) getCredential(session *drpc.Session) ([]byte, error) {
 		return m.credRespWithStatus(drpc.DaosMiscError)
 	}
 
+	m.log.Errorf("Credential: %v+", cred)
+
 	resp := &auth.GetCredResp{Cred: cred}
 	return drpc.Marshal(resp)
 }
