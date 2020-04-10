@@ -52,7 +52,7 @@ def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_re
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
-                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
+                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
 def quickbuild = node() { commitPragma(pragma: 'Quick-build').contains('true') }
 if (quickbuild) {
     /* TODO: this is a big fat hack
@@ -62,7 +62,7 @@ if (quickbuild) {
      * or just start testing from RPMs instead of continuing to hack
      * around that :-)
      */
-    functional_rpms += " spdk-tools fio"
+    functional_rpms += " spdk-tools"
 }
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
