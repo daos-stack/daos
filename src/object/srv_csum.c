@@ -69,7 +69,7 @@ struct csum_context {
 	/** cached value of record size */
 	size_t			 cc_rec_len;
 	/** cached value of chunk size */
-	daos_off_t		 cc_chunksize;
+	daos_off_t		 cc_rec_chunksize;
 
 	/** if new checksums are needed for chunks of recx, store original
 	 * extent/csum so it can be verified
@@ -307,11 +307,11 @@ cc_set_chunk2ranges(struct csum_context *ctx)
 	daos_off_t cur_rec_idx =
 		ctx->cc_ext_start + ctx->cc_bsgl_idx->iov_offset /
 				    ctx->cc_rec_len;
-	ctx->cc_raw_chunk = csum_recidx2range(ctx->cc_chunksize,
+	ctx->cc_raw_chunk = csum_recidx2range(ctx->cc_rec_chunksize,
 					      cur_rec_idx, ctx->cc_raw.dcr_lo,
 					      ctx->cc_raw.dcr_hi,
 					      ctx->cc_rec_len);
-	ctx->cc_req_chunk = csum_recidx2range(ctx->cc_chunksize,
+	ctx->cc_req_chunk = csum_recidx2range(ctx->cc_rec_chunksize,
 					      cur_rec_idx,
 					      ctx->cc_req.dcr_lo,
 					      ctx->cc_req.dcr_hi,
@@ -423,16 +423,16 @@ static int
 cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 		      struct dcs_csum_info *info)
 {
-	uint32_t		chunksize;
+	uint32_t		rec_chunksize;
 	size_t			rec_size;
 	uint32_t		chunk_nr;
 	uint32_t		c; /** recx chunk index */
 	uint32_t		sc; /** system chunk index */
 	int			rc = 0;
 
-	chunksize = daos_csummer_get_chunksize(ctx->cc_csummer);
 	rec_size = ctx->cc_rec_len;
-	chunk_nr = daos_recx_calc_chunks(*recx, rec_size, chunksize);
+	rec_chunksize = ctx->cc_rec_chunksize;
+	chunk_nr = daos_recx_calc_chunks(*recx, rec_size, rec_chunksize);
 
 	/** Because the biovs are acquired by searching for the recx, the first
 	 * selected/requested record of a biov will be the recx index
@@ -441,11 +441,11 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 
 	cc_set_iov2ranges(ctx, cc2iov(ctx));
 
-	sc = (recx->rx_idx * rec_size) / chunksize;
+	sc = (recx->rx_idx * rec_size) / rec_chunksize;
 	for (c = 0; c < chunk_nr; c++, sc++) { /** for each chunk/checksum */
 		ctx->cc_recx_chunk = csum_recx_chunkidx2range(recx, rec_size,
-							      chunksize, c);
-		ctx->cc_chunk = csum_chunkrange(chunksize / ctx->cc_rec_len,
+							      rec_chunksize, c);
+		ctx->cc_chunk = csum_chunkrange(rec_chunksize / ctx->cc_rec_len,
 						sc);
 		ctx->cc_chunk_bytes_left = ctx->cc_recx_chunk.dcr_nr *
 					   rec_size;
@@ -500,7 +500,7 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 	if (!(daos_csummer_initialized(csummer) && bsgl))
 		return 0;
 
-	if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+	if (!csum_iod_is_supported(iod))
 		return 0;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
@@ -531,7 +531,8 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 	ctx.cc_csummer = csummer;
 	ctx.cc_bsgl_idx = &bsgl_idx;
 	ctx.cc_rec_len = iod->iod_size;
-	ctx.cc_chunksize = csummer->dcs_chunk_size;
+	ctx.cc_rec_chunksize = daos_csummer_get_rec_chunksize(csummer,
+							      iod->iod_size);
 	ctx.cc_bsgl = bsgl;
 	ctx.cc_biov_csums = biov_csums;
 	ctx.cc_to_verify = ctx.cc_to_verify_embedded;
