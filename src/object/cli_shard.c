@@ -177,7 +177,10 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	iods = orw->orw_iod_array.oia_iods;
 	iods_csums = orwo->orw_iod_csums.ca_arrays;
 
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
+	/** fault injection - corrupt data after getting from server and before
+	 * verifying on client - simulates corruption over network
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH))
 		/** Got csum successfully from server. Now poison it!! */
 		orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum[0]++;
 
@@ -189,14 +192,27 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		daos_iod_t		*iod = &iods[i];
 		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
 
-		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+		if (!csum_iod_is_supported(iod))
 			continue;
 
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
 		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i], iod_csum,
 					     singv_lo, shard_idx);
 		if (rc != 0) {
-			D_ERROR("Verify failed: %d\n", rc);
+			if (iod->iod_type == DAOS_IOD_SINGLE) {
+				D_ERROR("Data Verification failed (object: "
+					DF_OID"): "DF_RC"\n",
+					DP_OID(orw->orw_oid.id_pub),
+					DP_RC(rc));
+			} else  if (iod->iod_type == DAOS_IOD_ARRAY) {
+				D_ERROR("Data Verification failed (object: "
+						DF_OID" , extent: "DF_RECX"):"
+						" "DF_RC"\n",
+					DP_OID(orw->orw_oid.id_pub),
+					DP_RECX(iod->iod_recxs[i]),
+					DP_RC(rc));
+			}
+
 			break;
 		}
 	}
@@ -720,8 +736,12 @@ int csum_enum_verify_keys(const struct obj_enum_args *enum_args,
 		       kd->kd_csum_len, 1, CSUM_NO_CHUNK, kd->kd_csum_type);
 		d_iov_set(&key_iov, key_buf, kd->kd_key_len);
 
-		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_AKEY_FAIL) ||
-		    DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_DKEY_FAIL))
+		/**
+		 * fault injection - corrupt keys before verifying - simulates
+		 * corruption over network
+		 */
+		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_AKEY) ||
+		    DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_DKEY))
 			((uint8_t *)key_buf)[0] += 2;
 		rc = daos_csummer_verify_key(csummer, &key_iov, &csum_info);
 		if (rc != 0) {

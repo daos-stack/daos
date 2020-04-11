@@ -36,11 +36,6 @@
 
 #define NO_FLAGS	    (0)
 
-/* Fault injection */
-#define FAULT_INJECT		1
-#define RESET_FAULT_INJECT	0
-static	int	fault_injection_flag;
-
 /** epoch generator */
 static daos_epoch_t		vts_epoch_gen;
 
@@ -710,9 +705,6 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	iod.iod_nr	= 1;
 
 	/* Act */
-	if (fault_injection_flag == FAULT_INJECT) {
-		daos_fail_loc_set(DAOS_CHECKSUM_UPDATE_FAIL | DAOS_FAIL_ALWAYS);
-	}
 	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
 				NULL, true);
 	if (rc)
@@ -726,9 +718,6 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 
 	iod.iod_size = DAOS_REC_ANY;
 
-	if (fault_injection_flag == FAULT_INJECT) {
-		daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ALWAYS);
-	}
 	/* Act again */
 	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &iod, &sgl, true);
 	if (rc)

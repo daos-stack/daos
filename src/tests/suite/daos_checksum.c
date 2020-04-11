@@ -65,35 +65,49 @@ set_fi(uint64_t flag)
 	daos_fail_loc_set(flag | DAOS_FAIL_ONCE);
 }
 static void
-set_update_csum_fi()
+client_corrupt_on_update()
 {
-	set_fi(DAOS_CHECKSUM_UPDATE_FAIL);
+	set_fi(DAOS_CSUM_CORRUPT_UPDATE);
 }
 static void
-set_fetch_csum_fi()
+client_corrupt_on_fetch()
 {
-	set_fi(DAOS_CHECKSUM_FETCH_FAIL);
-}
-static void
-set_fetch_akey_fi()
-{
-	set_fi(DAOS_CHECKSUM_FETCH_AKEY_FAIL);
-}
-static void
-set_client_data_corrupt_fi()
-{
-	daos_fail_loc_set(DAOS_CHECKSUM_CDATA_CORRUPT | DAOS_FAIL_ALWAYS);
-}
-static void
-set_fetch_dkey_fi()
-{
-	set_fi(DAOS_CHECKSUM_FETCH_DKEY_FAIL);
+	set_fi(DAOS_CSUM_CORRUPT_FETCH);
 }
 
 static void
-unset_csum_fi()
+client_corrupt_akey_on_fetch()
 {
-	daos_fail_loc_set(0); /** turn off fault injection */
+	set_fi(DAOS_CSUM_CORRUPT_FETCH_AKEY);
+}
+
+static void
+client_corrupt_dkey_on_fetch()
+{
+	set_fi(DAOS_CSUM_CORRUPT_FETCH_DKEY);
+}
+
+static void
+client_clear_fault()
+{
+	daos_fail_loc_set(0);
+}
+
+static void
+server_corrupt_disk(const char *group)
+{
+	int rc = daos_mgmt_set_params(group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_CSUM_CORRUPT_DISK | DAOS_FAIL_ALWAYS,
+				      0, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+server_clear_fault(const char *group)
+{
+	int rc = daos_mgmt_set_params(group, -1,
+				      DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	assert_int_equal(rc, 0);
 }
 
 /** easily setup an iov and allocate */
@@ -354,37 +368,23 @@ io_with_server_side_verify(void **state)
 	cleanup_cont_obj(&ctx);
 
 	/** 3. Server verify disabled, corruption occurs, update should work */
-	set_update_csum_fi();
+	client_corrupt_on_update();
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_cont_obj(&ctx);
-	unset_csum_fi();
+	client_clear_fault();
 
 	/** 4. Server verify enabled, corruption occurs, update should fail */
-	set_update_csum_fi();
+	client_corrupt_on_update();
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, -DER_CSUM);
 	cleanup_cont_obj(&ctx);
-	unset_csum_fi();
+	client_clear_fault();
 
-	/**5. Data corruption. Update should fail due CRC mismatch */
-	set_client_data_corrupt_fi();
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, oc);
-	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
-			     &ctx.update_iod, &ctx.update_sgl, NULL);
-	assert_int_equal(rc, 0);
-	cleanup_cont_obj(&ctx);
-
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, oc);
-	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
-			     &ctx.update_iod, &ctx.update_sgl, NULL);
-	assert_int_equal(rc, -DER_CSUM);
-	cleanup_cont_obj(&ctx);
-	unset_csum_fi();
 	cleanup_data(&ctx);
 }
 
@@ -402,17 +402,13 @@ test_server_data_corruption(void **state)
 	/**1. Simple server data corruption after RDMA */
 	setup_multiple_extent_data(&ctx);
 	/** Set the Server data corruption flag */
-	rc = daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				DAOS_CHECKSUM_SDATA_CORRUPT | DAOS_FAIL_ALWAYS,
-				0, NULL);
-	assert_int_equal(rc, 0);
+	server_corrupt_disk(arg->group);
 	/** Perform the update */
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			&ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	/** Clear the fail injection flag */
-	rc = daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
-	assert_int_equal(rc, 0);
+	server_clear_fault(arg->group);
 	/** Fetch should result in checksum failure : SSD bad data*/
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
@@ -466,11 +462,11 @@ test_fetch_array(void **state)
 			    ctx.update_sgl.sg_iovs->iov_buf_len);
 
 	/** 2. Detect corruption - fetch again with fault injection enabled */
-	set_fetch_csum_fi();
+	client_corrupt_on_fetch();
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_int_equal(rc, -DER_CSUM);
-	unset_csum_fi();
+	client_clear_fault();
 	cleanup_data(&ctx);
 
 	/** 3. Complicated data success case */
@@ -488,11 +484,11 @@ test_fetch_array(void **state)
 			    ctx.update_sgl.sg_iovs->iov_buf_len);
 
 	/** 4. Complicated data with corruption */
-	set_fetch_csum_fi();
+	client_corrupt_on_fetch();
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_int_equal(rc, -DER_CSUM);
-	unset_csum_fi();
+	client_clear_fault();
 
 	if (test_runable(*state, 2)) {
 		/** 5. Replicated object with corruption */
@@ -502,7 +498,7 @@ test_fetch_array(void **state)
 		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 				     &ctx.update_iod, &ctx.update_sgl, NULL);
 		assert_int_equal(rc, 0);
-		set_fetch_csum_fi();
+		client_corrupt_on_fetch();
 		rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 				    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 		assert_int_equal(rc, 0);
@@ -510,11 +506,11 @@ test_fetch_array(void **state)
 		assert_memory_equal(ctx.update_sgl.sg_iovs->iov_buf,
 				    ctx.fetch_sgl.sg_iovs->iov_buf,
 				    ctx.update_sgl.sg_iovs->iov_buf_len);
-		unset_csum_fi();
+		client_clear_fault();
 		cleanup_data(&ctx);
 
 		/** 6. Replicated (complicated data) object with corruption */
-		set_fetch_csum_fi();
+		client_corrupt_on_fetch();
 		setup_multiple_extent_data(&ctx);
 		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 				     &ctx.update_iod, &ctx.update_sgl, NULL);
@@ -530,7 +526,7 @@ test_fetch_array(void **state)
 	}
 
 	/** Clean up */
-	unset_csum_fi();
+	client_clear_fault();
 	cleanup_data(&ctx);
 	cleanup_cont_obj(&ctx);
 }
@@ -774,19 +770,6 @@ fetch_with_multiple_extents(void **state)
 		.fetch_recx = {.rx_idx = 2, .rx_nr = 800},
 	});
 
-	/** Overwrites after the first chunk */
-	ARRAY_UPDATE_FETCH_TESTCASE(state, {
-		.chunksize = 32,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
-		.server_verify = false,
-		.rec_size = 4,
-		.recx_cfgs = {
-			{.idx = 8, .nr = 2, .data = "B"},
-			{.idx = 9, .nr = 2, .data = "C"},
-		},
-		.fetch_recx = {.rx_idx = 8, .rx_nr = 3},
-	});
-
 	/** Extents with holes */
 	/** TODO: Holes not supported yet */
 #if 0
@@ -802,6 +785,54 @@ ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.fetch_recx = {.rx_idx = 0, .rx_nr = 18},
 	});
 #endif
+}
+
+static void
+overwrites_after_first_chunk(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 32,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 4,
+		.recx_cfgs = {
+			{.idx = 8, .nr = 2, .data = "B"},
+			{.idx = 9, .nr = 2, .data = "C"},
+		},
+		.fetch_recx = {.rx_idx = 8, .rx_nr = 3},
+	});
+
+}
+
+static void
+unaligned_record_size(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 4,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 3,
+		.recx_cfgs = {
+			{.idx = 8, .nr = 5, .data = "B"},
+		},
+		.fetch_recx = {.rx_idx = 8, .rx_nr = 2},
+	});
+}
+
+static void
+record_size_larger_than_chunksize(void **state)
+{
+	/** Overwrites after the first chunk */
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 4,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 20,
+		.recx_cfgs = {
+			{.idx = 0, .nr = 100, .data = "A"},
+		},
+		.fetch_recx = {.rx_idx = 0, .rx_nr = 100},
+	});
 }
 
 static void
@@ -831,7 +862,7 @@ single_value_test(void **state, bool large_buf)
 	 * - update will succeed because server side verification is disabled
 	 * - fetch will fail because data was corrupted on update
 	 */
-	set_update_csum_fi();
+	client_corrupt_on_update();
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl,
 			     NULL);
@@ -840,14 +871,14 @@ single_value_test(void **state, bool large_buf)
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_int_equal(-DER_CSUM, rc);
-	unset_csum_fi();
+	client_clear_fault();
 
 	/**
 	 * fault injection on fetch
 	 * - update will succeed
 	 * - fetch will fail because data was corrupted on fetch
 	 */
-	set_fetch_csum_fi();
+	client_corrupt_on_fetch();
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl,
 			     NULL);
@@ -856,7 +887,7 @@ single_value_test(void **state, bool large_buf)
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_int_equal(-DER_CSUM, rc);
-	unset_csum_fi();
+	client_clear_fault();
 
 	/** Reset the container with server side verification enabled */
 	cleanup_cont_obj(&ctx);
@@ -867,7 +898,7 @@ single_value_test(void **state, bool large_buf)
 	 * - update will fail because server side verification is enabled
 	 * - fetch will not get data
 	 */
-	set_update_csum_fi();
+	client_corrupt_on_update();
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl,
 			     NULL);
@@ -880,7 +911,7 @@ single_value_test(void **state, bool large_buf)
 	assert_int_equal(0, rc);
 	assert_string_equal("", (char *)ctx.fetch_sgl.sg_iovs->iov_buf);
 
-	unset_csum_fi();
+	client_clear_fault();
 
 	/** Clean up */
 	cleanup_data(&ctx);
@@ -962,7 +993,7 @@ mix_test(void **state)
 	 * - update will succeed because server side verification is disabled
 	 * - fetch will fail because data was corrupted on update
 	 */
-	set_update_csum_fi();
+	client_corrupt_on_update();
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
 			     iods, sgls, NULL);
 	assert_int_equal(0, rc);
@@ -970,14 +1001,14 @@ mix_test(void **state)
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
 			    iods, fetch_sgls, NULL, NULL);
 	assert_int_equal(-DER_CSUM, rc);
-	unset_csum_fi();
+	client_clear_fault();
 
 	/**
 	 * fault injection on fetch
 	 * - update will succeed
 	 * - fetch will fail because data was corrupted on fetch
 	 */
-	set_fetch_csum_fi();
+	client_corrupt_on_fetch();
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
 			     iods, sgls, NULL);
 	assert_int_equal(0, rc);
@@ -985,7 +1016,7 @@ mix_test(void **state)
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
 			    iods, fetch_sgls, NULL, NULL);
 	assert_int_equal(-DER_CSUM, rc);
-	unset_csum_fi();
+	client_clear_fault();
 
 	/** Reset the container with server side verification enabled */
 	cleanup_cont_obj(&ctx);
@@ -996,7 +1027,7 @@ mix_test(void **state)
 	 * - update will fail because server side verification is enabled
 	 * - fetch will not get data
 	 */
-	set_update_csum_fi();
+	client_corrupt_on_update();
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
 			     iods, sgls, NULL);
 	assert_int_equal(-DER_CSUM, rc);
@@ -1011,7 +1042,7 @@ mix_test(void **state)
 	assert_string_equal("", (char *)fetch_sv_sgl->sg_iovs->iov_buf);
 	assert_string_equal("", (char *)fetch_array_sgl->sg_iovs->iov_buf);
 
-	unset_csum_fi();
+	client_clear_fault();
 
 	/** Clean up */
 	d_sgl_fini(sv_sgl, true);
@@ -1043,7 +1074,7 @@ key_csum_fetch_update(void **state, int update_fi_flag, int fetch_fi_flag)
 			     &ctx.update_iod, &ctx.update_sgl,
 			     NULL);
 	assert_int_equal(-DER_CSUM, rc);
-	unset_csum_fi();
+	client_clear_fault();
 
 	/**
 	 * Sanity check that with failure injection disabled update still
@@ -1062,7 +1093,7 @@ key_csum_fetch_update(void **state, int update_fi_flag, int fetch_fi_flag)
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_int_equal(-DER_CSUM, rc);
-	unset_csum_fi();
+	client_clear_fault();
 
 	/**
 	 * Sanity check that with failure injection disabled fetch still
@@ -1081,16 +1112,16 @@ static void
 test_update_fetch_a_key(void **state)
 {
 	key_csum_fetch_update(state,
-			      DAOS_CHECKSUM_UPDATE_AKEY_FAIL,
-			      DAOS_CHECKSUM_FETCH_AKEY_FAIL);
+			      DAOS_CSUM_CORRUPT_UPDATE_AKEY,
+			      DAOS_CSUM_CORRUPT_FETCH_AKEY);
 }
 
 static void
 test_update_fetch_d_key(void **state)
 {
 	key_csum_fetch_update(state,
-			      DAOS_CHECKSUM_UPDATE_DKEY_FAIL,
-			      DAOS_CHECKSUM_FETCH_DKEY_FAIL);
+			      DAOS_CSUM_CORRUPT_UPDATE_DKEY,
+			      DAOS_CSUM_CORRUPT_FETCH_DKEY);
 
 }
 
@@ -1126,11 +1157,11 @@ test_enumerate_a_key(void **state)
 	iov_alloc(&sgl.sg_iovs[1], 100);
 
 	/** inject failure ... should return CSUM error */
-	set_fetch_akey_fi();
+	client_corrupt_akey_on_fetch();
 	rc = daos_obj_list_akey(ctx.oh, DAOS_TX_NONE, &ctx.dkey, &nr, kds, &sgl,
 				&anchor, NULL);
 	assert_int_equal(-DER_CSUM, rc);
-	unset_csum_fi();
+	client_clear_fault();
 
 	/** Sanity check that no failure still returns success */
 	nr = KDS_NR;
@@ -1178,7 +1209,7 @@ test_enumerate_d_key(void **state)
 	iov_alloc(&sgl.sg_iovs[1], 100);
 
 	/** inject failure ... should return CSUM error */
-	set_fetch_dkey_fi();
+	client_corrupt_dkey_on_fetch();
 
 	memset(&anchor, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor) && rc == 0) {
@@ -1188,7 +1219,7 @@ test_enumerate_d_key(void **state)
 	}
 
 	assert_int_equal(-DER_CSUM, rc);
-	unset_csum_fi();
+	client_clear_fault();
 
 	/** Sanity check that no failure still returns success */
 	nr = KDS_NR;
@@ -1227,6 +1258,11 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM02: Fetch Array Type", test_fetch_array),
 	CSUM_TEST("DAOS_CSUM03: Setup multiple overlapping/unaligned extents",
 		  fetch_with_multiple_extents),
+	CSUM_TEST("DAOS_CSUM3.1: Overwrites after first chunk",
+		overwrites_after_first_chunk),
+	CSUM_TEST("DAOS_CSUM3.2: Unaligned record size", unaligned_record_size),
+	CSUM_TEST("DAOS_CSUM3.3: Record size is larger than chunk size",
+		record_size_larger_than_chunksize),
 	CSUM_TEST("DAOS_CSUM04: Server data corrupted after RDMA",
 		  test_server_data_corruption),
 	CSUM_TEST("DAOS_CSUM05: Single Value Checksum", single_value),

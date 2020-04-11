@@ -26,18 +26,11 @@ pool:
     nvme_size: 9000000000
     svcn: 1
     control_method: dmg
-# Container Properties
-# 1. API used for creating container [POSIX]
-# 2. Checksum_Enable : True/False
-# 3. Server Verify : True/False
-# 4. Checksum Type : 100 (default).
-#                    1: CRC16, 2: CRC32
-#                    3: CRC64, 4: SHA1
-# 5. Chunk Size: 0 (default)
-#                16384: 16K
-# DAOS-4173: Improvement in this area required.
 container:
-    container_properties: [POSIX, True, True, 100, 0]
+    type: POSIX
+    # Disabling checksum due to DAOS-4458
+    # properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
 ior:
     client_processes:
         np_16:

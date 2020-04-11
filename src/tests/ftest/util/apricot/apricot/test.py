@@ -550,7 +550,7 @@ class TestWithServers(TestWithoutServers):
         errors = self.pre_tear_down()
 
         # Destroy any containers first
-        errors = self.destroy_containers(self.container)
+        errors.extend(self.destroy_containers(self.container))
 
         # Destroy any pools next
         errors.extend(self.destroy_pools(self.pool))
