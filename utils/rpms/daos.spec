@@ -141,7 +141,7 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: %{name} = %{version}-%{release}
 %endif
 Summary: The DAOS development libraries and headers
-Requires: cart-devel >= 4.6.0
+Requires: cart-devel >= 4.6.1
 
 %description devel
 This is the package needed to build software with the DAOS library.
@@ -314,9 +314,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Wed Apr 08 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.1-4
+* Sun Apr 11 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.1-4
 - Use distro versions of fuse and fio
-- Use CaRT release 4.6.0
+- Use CaRT release 4.6.1
 - Remove sha-based cart dependencies
 - Remove libfabric Requires: cart will bring that in
 - Remove build support for SLES12/Leap42.3
