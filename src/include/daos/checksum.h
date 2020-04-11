@@ -199,6 +199,10 @@ daos_csummer_get_type(struct daos_csummer *obj);
 uint32_t
 daos_csummer_get_chunksize(struct daos_csummer *obj);
 
+/** Get an appropriate chunksize (based on configured chunksize) for a record */
+uint32_t
+daos_csummer_get_rec_chunksize(struct daos_csummer *obj, uint64_t rec_size);
+
 bool
 daos_csummer_get_srv_verify(struct daos_csummer *obj);
 
@@ -465,15 +469,12 @@ csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size);
 
 static inline bool
-csum_iod_is_supported(uint64_t chunksize, daos_iod_t *iod)
+csum_iod_is_supported(daos_iod_t *iod)
 {
 	/**
-	 * iod_size must be greater than 1 and chunksize must be larger
-	 * than iod size if it's an array type. Doesn't support very large
-	 * record size yet for array types
+	 * iod_size must be greater than 1
 	 */
-	return iod->iod_size > 0 &&
-	       (iod->iod_type == DAOS_IOD_SINGLE || iod->iod_size <= chunksize);
+	return iod->iod_size > 0;
 }
 
 /**
@@ -487,6 +488,10 @@ daos_off_t
 csum_chunk_align_floor(daos_off_t off, size_t chunksize);
 daos_off_t
 csum_chunk_align_ceiling(daos_off_t off, size_t chunksize);
+
+/** get appropriate chunksize for the record size */
+daos_off_t
+csum_record_chunksize(daos_off_t default_chunksize, daos_off_t rec_size);
 
 /** Represents a chunk, extent, or some calculated alignment for a range
  */
