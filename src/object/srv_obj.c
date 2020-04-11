@@ -844,7 +844,7 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 		struct dcs_iod_csums	*csum =
 					&orw->orw_iod_array.oia_iod_csums[i];
 
-		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+		if (!csum_iod_is_supported(iod))
 			continue;
 		rc = daos_csummer_verify_key(csummer,
 					     &iod->iod_name,

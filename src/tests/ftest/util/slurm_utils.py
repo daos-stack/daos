@@ -87,7 +87,7 @@ def delete_slurm_partition(name):
     return status
 
 
-def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
+def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
     """Generate a script for submitting a job to slurm.
 
     path      --where to write the script file
@@ -97,16 +97,17 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
     cmds      --shell commands that are to be executed
     sbatch    --dictionary containing other less often used parameters to
                 sbatch, e.g. mem:100
+    uniq string  --a unique string to append to the job and log files
     returns   --the full path of the script
     """
     if name is None or nodecount is None or cmds is None:
         raise SlurmFailed("Bad parameters passed for slurm script.")
-
-    unique = random.randint(1, 100000)
+    if uniq is None:
+        uniq = random.randint(1, 100000)
 
     if not os.path.exists(path):
         os.makedirs(path)
-    scriptfile = path + '/jobscript' + "_" + str(unique) + ".sh"
+    scriptfile = path + '/jobscript' + "_" + str(uniq) + ".sh"
     with open(scriptfile, 'w') as script_file:
         # identify what be used to run this script
         script_file.write("#!/bin/bash\n#\n")
@@ -116,10 +117,12 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
         script_file.write("#SBATCH --nodes={}\n".format(nodecount))
         script_file.write("#SBATCH --distribution=cyclic\n")
         if output is not None:
-            output = output + str(unique)
+            output = output + str(uniq)
             script_file.write("#SBATCH --output={}\n".format(output))
         if sbatch:
             for key, value in sbatch.items():
+                if key == "error":
+                    value = value + str(uniq)
                 script_file.write("#SBATCH --{}={}\n".format(key, value))
         script_file.write("\n")
 
@@ -204,7 +207,7 @@ def watch_job(handle, maxwait, test_obj):
     wait_time = 0
     while True:
         state = check_slurm_job(handle)
-        if state == "PENDING" or state == "RUNNING" or state == "COMPLETING":
+        if state in ("PENDING", "RUNNING", "COMPLETING"):
             if wait_time > maxwait:
                 state = "MAXWAITREACHED"
                 print("Job {} has timedout after {} secs".format(handle,
