@@ -38,7 +38,7 @@ class SoakSmoke(SoakTestBase):
         Test ID: DAOS-2192
 
         Test Description:  This will create a slurm batch job that runs
-        various jobs defined in the soak yaml.  It will run for no more than 
+        various jobs defined in the soak yaml.  It will run for no more than
         20 min
 
         :avocado: tags=soak_smoke
