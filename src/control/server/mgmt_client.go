@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,9 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
-const (
-	retryDelay = 3 * time.Second
-)
+const retryDelay = 3 * time.Second
 
 type (
 	mgmtSvcClientCfg struct {
@@ -47,9 +45,10 @@ type (
 		TransportConfig *security.TransportConfig
 	}
 	mgmtSvcClient struct {
-		log      logging.Logger
-		cfg      mgmtSvcClientCfg
-		clientFn func(*grpc.ClientConn) mgmtpb.MgmtSvcClient
+		log       logging.Logger
+		cfg       mgmtSvcClientCfg
+		connectFn func(context.Context, string, *security.TransportConfig,
+			func(context.Context, mgmtpb.MgmtSvcClient) error, ...grpc.DialOption) error
 	}
 )
 
@@ -58,7 +57,7 @@ func newMgmtSvcClient(ctx context.Context, log logging.Logger, cfg mgmtSvcClient
 		log: log,
 		cfg: cfg,
 		// can be mocked with function that returns mgmtpb.MgmtSvcClient
-		clientFn: mgmtpb.NewMgmtSvcClient,
+		connectFn: withConnection,
 	}
 }
 
@@ -70,11 +69,11 @@ func (msc *mgmtSvcClient) delayRetry(ctx context.Context) {
 	}
 }
 
-func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
+func withConnection(ctx context.Context, ap string, tc *security.TransportConfig,
 	fn func(context.Context, mgmtpb.MgmtSvcClient) error, extraDialOpts ...grpc.DialOption) error {
 
 	var opts []grpc.DialOption
-	authDialOption, err := security.DialOptionForTransportConfig(msc.cfg.TransportConfig)
+	authDialOption, err := security.DialOptionForTransportConfig(tc)
 	if err != nil {
 		return errors.Wrap(err, "Failed to determine dial option from TransportConfig")
 	}
@@ -87,20 +86,22 @@ func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
 	}
 	defer conn.Close()
 
-	return fn(ctx, msc.clientFn(conn))
+	return fn(ctx, mgmtpb.NewMgmtSvcClient(conn))
 }
 
 func (msc *mgmtSvcClient) withConnectionRetry(ctx context.Context, ap string,
 	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
 
-	return msc.withConnection(ctx, ap, fn, grpc.WithBackoffMaxDelay(retryDelay),
+	return msc.connectFn(ctx, ap, msc.cfg.TransportConfig, fn,
+		grpc.WithBackoffMaxDelay(retryDelay),
 		grpc.WithDefaultCallOptions(grpc.FailFast(false)))
 }
 
 func (msc *mgmtSvcClient) withConnectionFailOnBadDial(ctx context.Context, ap string,
 	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
 
-	return msc.withConnection(ctx, ap, fn, grpc.FailOnNonTempDialError(true))
+	return msc.connectFn(ctx, ap, msc.cfg.TransportConfig, fn,
+		grpc.FailOnNonTempDialError(true))
 }
 
 func (msc *mgmtSvcClient) LeaderAddress() (string, error) {
@@ -113,7 +114,7 @@ func (msc *mgmtSvcClient) LeaderAddress() (string, error) {
 	return msc.cfg.AccessPoints[0], nil
 }
 
-func (msc *mgmtSvcClient) retryOnErr(err error, ctx context.Context, prefix string) bool {
+func (msc *mgmtSvcClient) retryOnErr(ctx context.Context, err error, prefix string) bool {
 	if err != nil {
 		msc.log.Debugf("%s: %v", prefix, err)
 		msc.delayRetry(ctx)
@@ -123,7 +124,7 @@ func (msc *mgmtSvcClient) retryOnErr(err error, ctx context.Context, prefix stri
 	return false
 }
 
-func (msc *mgmtSvcClient) retryOnStatus(status int32, ctx context.Context, prefix string) bool {
+func (msc *mgmtSvcClient) retryOnStatus(ctx context.Context, status int32, prefix string) bool {
 	if status != 0 {
 		msc.log.Debugf("%s: %d", prefix, status)
 		msc.delayRetry(ctx)
@@ -159,7 +160,7 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 				}
 
 				resp, err = pbClient.Join(ctx, req)
-				if msc.retryOnErr(err, ctx, prefix) {
+				if msc.retryOnErr(ctx, err, prefix) {
 					continue
 				}
 				if resp == nil {
@@ -167,7 +168,7 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 				}
 				// TODO: Stop retrying upon certain errors (e.g., "not
 				// MS", "rank unavailable", and "excluded").
-				if msc.retryOnStatus(resp.Status, ctx, prefix) {
+				if msc.retryOnStatus(ctx, resp.Status, prefix) {
 					continue
 				}
 
@@ -221,7 +222,7 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req mgmtpb.
 				// error returned if any instance is still running so that
 				// we retry until all are terminated on host
 				resp, err = pbClient.StopRanks(ctx, &req)
-				if msc.retryOnErr(err, ctx, prefix) {
+				if msc.retryOnErr(ctx, err, prefix) {
 					continue
 				}
 				if resp == nil {

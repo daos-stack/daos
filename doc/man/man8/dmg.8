@@ -1,4 +1,4 @@
-.TH dmg 1 "1 April 2020"
+.TH dmg 1 "5 April 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -359,8 +359,14 @@ Comma separated list of system ranks to query
 .SS system start
 Perform start of stopped DAOS system
 
+\fBUsage\fP: system start [start-OPTIONS]
+.TP
+
 \fBAliases\fP: r
 
+.TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated list of system ranks to query
 .SS system stop
 Perform controlled shutdown of DAOS system
 
@@ -372,5 +378,8 @@ Perform controlled shutdown of DAOS system
 .TP
 \fB\fB\-\-force\fR\fP
 Force stop DAOS system members
+.TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated list of system ranks to query
 .SS version
 Print dmg version

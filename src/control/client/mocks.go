@@ -41,7 +41,6 @@ import (
 )
 
 var (
-	MockUUID         = "00000000-0000-0000-0000-000000000000"
 	MockServers      = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
 	MockCtrlrs       = NvmeControllers{MockNvmeController()}
 	MockSuccessState = ctlpb.ResponseState{Status: ctlpb.ResponseStatus_CTL_SUCCESS}
