@@ -69,8 +69,8 @@ func (hc *harnessClient) prepareRequest(ranks []system.Rank, force bool) (*mgmtp
 		return nil, errors.New("number of of ranks exceeds maximum")
 	}
 
-	req := &mgmtpb.RanksReq{Force: force}
-	return req, req.SetSystemRanks(ranks)
+	return &mgmtpb.RanksReq{
+		Force: force, Ranks: system.RanksToUint32(ranks)}, nil
 }
 
 // call issues gRPC to remote harness using a supplied client function to the
