@@ -43,4 +43,6 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,hw,medium,ib2,unittest,daos_test_rebuild
         """
+        if self.subtest_name == "rebuild_tests_27":
+            self.cancelForTicket("DAOS-4512")
         DaosCoreBase.run_subtest(self)
