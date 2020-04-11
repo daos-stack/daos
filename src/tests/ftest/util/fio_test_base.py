@@ -26,7 +26,7 @@ from __future__ import print_function
 import re
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers, get_log_file
+from apricot import TestWithServers
 from test_utils_pool import TestPool
 from fio_utils import FioCommand
 from command_utils import CommandFailure
@@ -99,7 +99,7 @@ class FioBase(TestWithServers):
 
         # Extract the container UUID from the daos container create output
         cont_uuid = re.findall(
-            "created\s+container\s+([0-9a-f-]+)", result.stdout)
+            r"created\s+container\s+([0-9a-f-]+)", result.stdout)
         if not cont_uuid:
             self.fail(
                 "Error obtaining the container uuid from: {}".format(
@@ -109,14 +109,13 @@ class FioBase(TestWithServers):
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
-                           log_file=get_log_file(self.client_log),
-                           dfuse_env=self.basepath)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
         self.dfuse.get_params(self)
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
         self.dfuse.set_dfuse_cont_param(self._create_cont())
+        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
 
         try:
             # start dfuse

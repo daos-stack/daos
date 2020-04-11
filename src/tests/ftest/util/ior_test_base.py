@@ -26,9 +26,10 @@ import threading
 import time
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers, get_log_file
+from apricot import TestWithServers
 from ior_utils import IorCommand
-from command_utils import Mpirun, CommandFailure
+from command_utils import CommandFailure
+from job_manager_utils import Mpirun
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -108,14 +109,13 @@ class IorTestBase(TestWithServers):
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
-                           log_file=get_log_file(self.client_log),
-                           dfuse_env=True)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
         self.dfuse.get_params(self)
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
         self.dfuse.set_dfuse_cont_param(self.container)
+        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
 
         try:
             # start dfuse
@@ -161,8 +161,7 @@ class IorTestBase(TestWithServers):
         return out
 
     def update_ior_cmd_with_pool(self):
-        """Update ior_cmd with pool
-        """
+        """Update ior_cmd with pool."""
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
@@ -171,7 +170,7 @@ class IorTestBase(TestWithServers):
         # It will not enable checksum feature
         self.pool.connect()
         self.create_cont()
-         # Update IOR params with the pool and container params
+        # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
 
@@ -201,8 +200,7 @@ class IorTestBase(TestWithServers):
             processes (int): number of host processes
             intercept (str): path to interception library.
         """
-        env = self.ior_cmd.get_default_env(
-            str(manager), get_log_file(self.client_log))
+        env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
         manager.setup_command(env, self.hostfile_clients, processes)
@@ -255,7 +253,7 @@ class IorTestBase(TestWithServers):
         self.dfuse = None
 
     def get_new_job(self, clients, job_num, results, intercept=None):
-        """Create a new thread for ior run
+        """Create a new thread for ior run.
 
         Args:
             clients (lst): Number of clients the ior would run against.
@@ -271,7 +269,7 @@ class IorTestBase(TestWithServers):
 
     def run_multiple_ior(self, hostfile, num_clients,
                          results, job_num, intercept=None):
-        #pylint: disable=too-many-arguments
+        # pylint: disable=too-many-arguments
         """Run the IOR command.
 
         Args:
@@ -288,8 +286,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.test_file.update(testfile)
         manager = self.get_job_manager_command()
         procs = (self.processes // len(self.hostlist_clients)) * num_clients
-        env = self.ior_cmd.get_default_env(
-            str(manager), get_log_file(self.client_log))
+        env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
         manager.setup_command(env, hostfile, procs)

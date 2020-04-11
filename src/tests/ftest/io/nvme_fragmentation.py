@@ -114,7 +114,7 @@ class NvmeFragmentation(TestWithServers):
                                          ["{}{}{}".format(oclass,
                                                           api,
                                                           test[0])])
-            env = ior_cmd.get_default_env(str(manager), self.tmp)
+            env = ior_cmd.get_default_env(str(manager))
             manager.setup_command(env, self.hostfile_clients,
                                   processes)
 

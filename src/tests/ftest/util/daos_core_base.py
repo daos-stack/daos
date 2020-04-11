@@ -23,8 +23,9 @@
 """
 
 from avocado.utils import process
-from apricot import TestWithServers, get_log_file
+from apricot import TestWithServers
 from env_modules import load_mpi
+from general_utils import get_log_file
 
 
 class DaosCoreBase(TestWithServers):

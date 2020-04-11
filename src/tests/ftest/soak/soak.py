@@ -25,13 +25,16 @@ portions thereof marked with this legend must also reproduce the markings.
 import os
 import time
 from apricot import TestWithServers
+from agent_utils_params import \
+    DaosAgentTransportCredentials, DaosAgentYamlParameters
+from agent_utils import DaosAgentCommand, DaosAgentManager
+from command_utils_base import CommonConfig
 from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
-from command_utils import Srun
+from job_manager_utils import Srun
 from general_utils import get_random_string
 import slurm_utils
-from agent_utils import run_agent
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
@@ -49,6 +52,7 @@ class SoakTestError(Exception):
 
 
 class Soak(TestWithServers):
+    # pylint: disable=too-many-public-methods
     """Execute DAOS Soak test cases.
 
     :avocado: recursive
@@ -361,7 +365,7 @@ class Soak(TestWithServers):
                         ior_cmd.set_daos_params(self.server_group, pool)
                         # srun cmdline
                         nprocs = self.nodesperjob * ppn
-                        env = ior_cmd.get_default_env("srun", self.tmp)
+                        env = ior_cmd.get_default_env("srun")
                         if ior_cmd.api.value == "MPIIO":
                             env["DAOS_CONT"] = ior_cmd.daos_cont.value
                         cmd = Srun(ior_cmd)
@@ -405,13 +409,13 @@ class Soak(TestWithServers):
             pool (obj):   TestPool obj
         """
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
-                           dfuse_env=self.basepath)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
         self.dfuse.get_params(self)
 
         # update dfuse params
         self.dfuse.set_dfuse_params(pool)
         self.dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
+        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
 
         # create dfuse mount point
         cmd = "mkdir -p {}".format(self.dfuse.mount_dir.value)
@@ -498,13 +502,13 @@ class Soak(TestWithServers):
         """
         self.log.info("<<Build Script>> at %s", time.ctime())
         script_list = []
+
         # Start the daos_agent in the batch script for now
         # TO-DO:  daos_agents start with systemd
-        added_cmd_list = [
-            "srun -l --mpi=pmi2 --ntasks-per-node=1 "
-            "--export=ALL {} -o {} &".format(os.path.join(
-                self.bin, "daos_agent"), os.path.join(
-                    self.tmp, "daos_agent.yml"))]
+        agent_launch_cmds = [
+            "mkdir -p {}".format(os.environ.get("DAOS_TEST_LOG_DIR"))]
+        agent_launch_cmds.append(self.get_agent_launch_command())
+
         # Create the sbatch script for each cmdline
         for cmd in commands:
             output = os.path.join(self.test_log_dir, "%N_" +
@@ -518,9 +522,37 @@ class Soak(TestWithServers):
             sbatch.update(self.srun_params)
             script = slurm_utils.write_slurm_script(
                 self.test_log_dir, job, output, nodesperjob,
-                added_cmd_list + [cmd], sbatch)
+                agent_launch_cmds + [cmd], sbatch)
             script_list.append(script)
         return script_list
+
+    def get_agent_launch_command(self):
+        """Get the command to launch the daos_agent command.
+
+        Returns:
+            str: the command to launch the daos_agent command as a background
+                process
+
+        """
+        # Create the common config yaml entries for the daos_agent command
+        transport = DaosAgentTransportCredentials()
+        config_file = self.get_config_file(self.server_group, "agent")
+        common_cfg = CommonConfig(self.server_group, transport)
+
+        # Create an AgentCommand to manage with a new AgentManager object
+        agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
+        agent_cmd = DaosAgentCommand(self.bin, agent_cfg)
+        agent_mgr = DaosAgentManager(agent_cmd, "Srun")
+        agent_mgr.manager.ntasks_per_node.value = 1
+
+        # Get any daos_agent command/yaml options from the test yaml
+        agent_mgr.manager.job.get_params(self)
+
+        # Assign the access points list
+        agent_mgr.set_config_value("access_points", self.hostlist_servers[:1])
+
+        # TO-DO:  daos_agents start with systemd
+        return " ".join([str(agent_mgr), "&"])
 
     def job_setup(self, job, pool):
         """Create the cmdline needed to launch job.
@@ -745,8 +777,8 @@ class Soak(TestWithServers):
             "reservation", "/run/srun_params/*")
 
         # Srun params
-        if self.partition_clients is not None:
-            self.srun_params = {"partition": self.partition_clients}
+        if self.client_partition is not None:
+            self.srun_params = {"partition": self.client_partition}
         if slurm_reservation is not None:
             self.srun_params["reservation"] = slurm_reservation
         # Initialize time
@@ -840,7 +872,7 @@ class Soak(TestWithServers):
         self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
 
         # Fail if slurm partition daos_client is not defined
-        if not self.partition_clients:
+        if not self.client_partition:
             raise SoakTestError(
                 "<<FAILED: Partition is not correctly setup for daos "
                 "slurm partition>>")
@@ -864,9 +896,6 @@ class Soak(TestWithServers):
             self.fail("There are no nodes that are client only;"
                       "check if the partition also contains server nodes")
         self.node_list = self.hostlist_clients + test_node
-        # Start agent on test node - need daos_agent yaml file
-        self.agent_sessions = run_agent(
-            self, self.hostlist_servers, test_node)
 
     def tearDown(self):
         """Define tearDown and clear any left over jobs in squeue."""
@@ -878,7 +907,7 @@ class Soak(TestWithServers):
                 "<<Cancel jobs in queue with ids %s >>",
                 self.failed_job_id_list)
             status = process.system("scancel --partition {}".format(
-                self.partition_clients))
+                self.client_partition))
             if status > 0:
                 errors_detected = True
         # One last attempt to copy any logfiles from client nodes
