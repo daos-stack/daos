@@ -704,12 +704,15 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 				PRIu64", & Expected Value =%"PRIu64"",
 				nvme_current_size, nvme_initial_size);
 			}
-		} else{
-			/*NVMe Size should not be same as overwrite_sz is >4K*/
-			if (nvme_initial_size == nvme_current_size) {
-				fail_msg("Observed Value = %"
-					PRIu64",& Expected Value =%"PRIu64"",
-					nvme_current_size, nvme_initial_size);
+		} else {
+			/*NVMe Size should be increased as overwrite_sz is >4K*/
+			if (nvme_current_size > nvme_initial_size -
+				overwrite_sz) {
+				fail_msg("\nNVMe_current_size =%"
+					PRIu64 " > NVMe_initial_size = %"
+					PRIu64 "- overwrite_sz =%" PRIu64 "",
+					nvme_current_size, nvme_initial_size,
+					overwrite_sz);
 			}
 		}
 		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
@@ -818,7 +821,8 @@ io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
 	int			buf_idx; /* overwrite buffer index */
 	int			rx_nr; /* number of record extents */
 	int			record_set;
-	daos_size_t		nvme_free_size;
+	daos_size_t		nvme_initial_size;
+	daos_size_t		nvme_current_size;
 
 	/* choose random object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
@@ -835,7 +839,7 @@ io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
 
 	/* Get the pool info at the beginning */
 	pool_storage_info(state, &pinfo);
-	nvme_free_size = pinfo.pi_space.ps_space.s_free[1];
+	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
 	/* Set and verify the full initial string in first transaction */
 	rx_nr = size / OW_IOD_SIZE;
@@ -849,16 +853,21 @@ io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
 	assert_memory_equal(ow_buf, fbuf, size);
 
 	/**
-	*Get the pool storage information and verify data written
-	*on NVMe by comparing the NVMe Free pool size
+	*Get the pool storage information
 	*/
 	pool_storage_info(state, &pinfo);
-	if (pinfo.pi_space.ps_space.s_free[1] + size != nvme_free_size) {
-		fail_msg("\nObserved Value = %" PRIu64 " and Expected Value =%"
-			PRIu64 "", pinfo.pi_space.ps_space.s_free[1],
-			nvme_free_size - size);
+	nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
+
+	/**
+	* Verify data written on NVMe by comparing the NVMe Free size.
+	*/
+	if (nvme_current_size > nvme_initial_size - size) {
+		fail_msg("\nNVMe_current_size =%"
+			PRIu64 " > NVMe_initial_size = %"
+			PRIu64 "- written size =%" PRIu64 "",
+			nvme_current_size, nvme_initial_size, size);
 	}
-	nvme_free_size = pinfo.pi_space.ps_space.s_free[1];
+	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
 	for (record_set = 0, buf_idx = 0; record_set < 10; record_set++) {
 		buf_idx += 20;
@@ -878,16 +887,16 @@ io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
 
 		/*Verify the pool size*/
 		pool_storage_info(state, &pinfo);
-
+		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 		/**
-		*Data written on SCM and scm free size should get decrease
-		*and NVMe free size should not change.
+		*Data written on SCM so NVMe free size should not change.
 		*/
-		if (pinfo.pi_space.ps_space.s_free[1] != nvme_free_size) {
-			fail_msg("Observed Value = %"PRIu64", Expected Value =%"
-				PRIu64"", pinfo.pi_space.ps_space.s_free[1],
-				nvme_free_size);
+		if (nvme_current_size != nvme_initial_size) {
+			fail_msg("NVMe_current_size =%"
+				PRIu64" != nvme_current_size %" PRIu64"",
+				nvme_current_size, nvme_initial_size);
 		}
+		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 	}
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
