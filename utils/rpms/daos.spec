@@ -1,6 +1,7 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 %global spdk_version 19.04.1
+%global cart_version 4.6.1
 
 Name:          daos
 Version:       0.9.1
@@ -14,7 +15,7 @@ Source1:       scons_local-%{version}.tar.gz
 
 BuildRequires: scons
 BuildRequires: gcc-c++
-BuildRequires: cart-devel >= 4.6.0
+BuildRequires: cart-devel >= %{cart_version}
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
 BuildRequires: libpsm2-devel
@@ -141,7 +142,7 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: %{name} = %{version}-%{release}
 %endif
 Summary: The DAOS development libraries and headers
-Requires: cart-devel >= 4.6.1
+Requires: cart-devel >= %{cart_version}
 
 %description devel
 This is the package needed to build software with the DAOS library.
