@@ -24,24 +24,16 @@ package storage
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 func concat(base string, idx int32) string {
 	return fmt.Sprintf("%s-%d", base, idx)
 }
 
-func getIndex(varIdx ...int32) int32 {
-	if len(varIdx) == 0 {
-		varIdx = append(varIdx, 1)
-	}
-
-	return varIdx[0]
-}
-
 func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
-	idx := getIndex(varIdx...)
+	idx := common.GetIndex(varIdx...)
 	tWarn := false
 	if idx > 0 {
 		tWarn = true
@@ -53,7 +45,7 @@ func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
 }
 
 func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
-	idx := getIndex(varIdx...)
+	idx := common.GetIndex(varIdx...)
 	return &NvmeNamespace{
 		ID:   uint32(idx),
 		Size: uint64(idx),
@@ -61,7 +53,7 @@ func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 }
 
 func MockNvmeController(varIdx ...int32) *NvmeController {
-	idx := getIndex(varIdx...)
+	idx := common.GetIndex(varIdx...)
 
 	return &NvmeController{
 		Model:       concat("model", idx),
@@ -75,7 +67,7 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 }
 
 func MockScmModule(varIdx ...int32) *ScmModule {
-	idx := uint32(getIndex(varIdx...))
+	idx := uint32(common.GetIndex(varIdx...))
 
 	return &ScmModule{
 		ChannelID:       idx,
@@ -88,26 +80,13 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 }
 
 func MockScmNamespace(varIdx ...int32) *ScmNamespace {
-	idx := getIndex(varIdx...)
+	idx := common.GetIndex(varIdx...)
 
 	return &ScmNamespace{
-		UUID:        MockUUID(varIdx...),
+		UUID:        common.MockUUID(varIdx...),
 		BlockDevice: fmt.Sprintf("/dev/pmem%d", idx),
 		Name:        fmt.Sprintf("pmem%d", idx),
 		NumaNode:    uint32(idx),
 		Size:        uint64(idx),
 	}
-}
-
-func MockUUID(varIdx ...int32) string {
-	idx := getIndex(varIdx...)
-	idxStr := strconv.Itoa(int(idx))
-
-	return fmt.Sprintf("%s-%s-%s-%s-%s",
-		strings.Repeat(idxStr, 8),
-		strings.Repeat(idxStr, 4),
-		strings.Repeat(idxStr, 4),
-		strings.Repeat(idxStr, 4),
-		strings.Repeat(idxStr, 12),
-	)
 }

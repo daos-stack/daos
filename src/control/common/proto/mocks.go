@@ -25,6 +25,7 @@ package proto
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/grpc"
 
@@ -32,6 +33,8 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/system"
+	"github.com/pkg/errors"
 )
 
 // MockNvmeNamespace is a mock protobuf Namespace message used in tests for
@@ -136,11 +139,12 @@ type MockMgmtSvcClientConfig struct {
 }
 
 type MockMgmtSvcClient struct {
-	Cfg MockMgmtSvcClientConfig
+	Cfg   MockMgmtSvcClientConfig
+	Calls []string
 }
 
 func NewMockMgmtSvcClient(cfg MockMgmtSvcClientConfig) mgmtpb.MgmtSvcClient {
-	return &MockMgmtSvcClient{cfg}
+	return &MockMgmtSvcClient{Cfg: cfg}
 }
 
 func (m *MockMgmtSvcClient) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq, o ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
@@ -229,8 +233,24 @@ func (m *MockMgmtSvcClient) StorageSetFaulty(ctx context.Context, req *mgmtpb.De
 }
 
 func (m *MockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...grpc.CallOption) (*mgmtpb.JoinResp, error) {
+	m.Calls = append(m.Calls, fmt.Sprintf("Join %d", req.GetRank()))
 
-	return &mgmtpb.JoinResp{}, nil
+	// if req rank == NilRank, map uuid to rank
+	// otherwise, simulate join where requested rank is valid and returned
+	rank := req.GetRank()
+	nilRank := system.NilRank
+	if nilRank.Uint32() == rank {
+		switch req.GetUuid() {
+		case common.MockUUID(0):
+			rank = 0
+		case common.MockUUID(1):
+			rank = 1
+		default:
+			return nil, errors.New("Mock Join doesn't recognise UUID")
+		}
+	}
+
+	return &mgmtpb.JoinResp{Rank: rank}, nil
 }
 
 func (m *MockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {

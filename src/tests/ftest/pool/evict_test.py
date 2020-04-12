@@ -94,7 +94,7 @@ class EvictTests(TestWithServers):
             self.log.info(
                 "Evicting pool with invalid Server Group Name: %s", test_param)
         elif test_param == "invalid_uuid":
-            # Attempt to evict pool with invald UUID
+            # Attempt to evict pool with invalid UUID
             bogus_uuid = self.pool.uuid
             # in case uuid4() generates pool.uuid
             while bogus_uuid == self.pool.uuid:
@@ -266,7 +266,7 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid server group name.
 
-        :avocado: tags=all,pool,pr,full_regression,small,poolevict
+        :avocado: tags=all,pool,full_regression,small,poolevict
         :avocado: tags=poolevict_bad_server_name
         """
         test_param = self.params.get("server_name", '/run/badparams/*')

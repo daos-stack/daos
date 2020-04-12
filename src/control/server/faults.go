@@ -31,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -78,6 +79,14 @@ var (
 		"retry the operation or check server logs for more details",
 	)
 )
+
+func FaultInstancesNotStopped(ranks []*system.Rank) *fault.Fault {
+	return serverFault(
+		code.ServerInstancesNotStopped,
+		fmt.Sprintf("harness has running ranks: %v", ranks),
+		"retry the operation after stopping all harness' ranks",
+	)
+}
 
 func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 	return serverFault(
