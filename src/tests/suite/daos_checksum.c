@@ -770,19 +770,6 @@ fetch_with_multiple_extents(void **state)
 		.fetch_recx = {.rx_idx = 2, .rx_nr = 800},
 	});
 
-	/** Overwrites after the first chunk */
-	ARRAY_UPDATE_FETCH_TESTCASE(state, {
-		.chunksize = 32,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
-		.server_verify = false,
-		.rec_size = 4,
-		.recx_cfgs = {
-			{.idx = 8, .nr = 2, .data = "B"},
-			{.idx = 9, .nr = 2, .data = "C"},
-		},
-		.fetch_recx = {.rx_idx = 8, .rx_nr = 3},
-	});
-
 	/** Extents with holes */
 	/** TODO: Holes not supported yet */
 #if 0
@@ -798,6 +785,54 @@ ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.fetch_recx = {.rx_idx = 0, .rx_nr = 18},
 	});
 #endif
+}
+
+static void
+overwrites_after_first_chunk(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 32,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 4,
+		.recx_cfgs = {
+			{.idx = 8, .nr = 2, .data = "B"},
+			{.idx = 9, .nr = 2, .data = "C"},
+		},
+		.fetch_recx = {.rx_idx = 8, .rx_nr = 3},
+	});
+
+}
+
+static void
+unaligned_record_size(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 4,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 3,
+		.recx_cfgs = {
+			{.idx = 8, .nr = 5, .data = "B"},
+		},
+		.fetch_recx = {.rx_idx = 8, .rx_nr = 2},
+	});
+}
+
+static void
+record_size_larger_than_chunksize(void **state)
+{
+	/** Overwrites after the first chunk */
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 4,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 20,
+		.recx_cfgs = {
+			{.idx = 0, .nr = 100, .data = "A"},
+		},
+		.fetch_recx = {.rx_idx = 0, .rx_nr = 100},
+	});
 }
 
 static void
@@ -1223,6 +1258,11 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM02: Fetch Array Type", test_fetch_array),
 	CSUM_TEST("DAOS_CSUM03: Setup multiple overlapping/unaligned extents",
 		  fetch_with_multiple_extents),
+	CSUM_TEST("DAOS_CSUM3.1: Overwrites after first chunk",
+		overwrites_after_first_chunk),
+	CSUM_TEST("DAOS_CSUM3.2: Unaligned record size", unaligned_record_size),
+	CSUM_TEST("DAOS_CSUM3.3: Record size is larger than chunk size",
+		record_size_larger_than_chunksize),
 	CSUM_TEST("DAOS_CSUM04: Server data corrupted after RDMA",
 		  test_server_data_corruption),
 	CSUM_TEST("DAOS_CSUM05: Single Value Checksum", single_value),

@@ -6,7 +6,6 @@ def scons():
     Import('env', 'prereqs')
 
     denv = env.Clone()
-    denv.AppendIfSupported(CCFLAGS='-fvisibility=hidden')
 
     """ If Lustre installed build a Lustre-aware libduns """
     conf = Configure(denv)
