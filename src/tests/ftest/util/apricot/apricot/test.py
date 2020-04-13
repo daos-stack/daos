@@ -321,7 +321,7 @@ class TestWithServers(TestWithoutServers):
         # Kill commands left running on the hosts (from a previous test) before
         # starting any tests.  Currently only handles 'orterun' processes, but
         # can be expanded.
-        hosts = self.hostlist_servers.copy()
+        hosts = list(self.hostlist_servers)
         if self.hostlist_clients:
             hosts.extend(self.hostlist_clients)
         self.stop_leftover_processes(["orterun"], hosts)

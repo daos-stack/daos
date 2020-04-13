@@ -116,8 +116,11 @@ class DaosServerYamlParameters(YamlParameters):
         # the yaml file
         self.servers_per_host = BasicParameter(None)
 
-        # Single server config parameters
-        self.server_params = []
+        # Single server config parameters. Default to one set of I/O server
+        # parameters - for the config_file_gen.py tool. Calling get_params()
+        # will update the list to match the number of I/O servers requested by
+        # the self.servers_per_host.value.
+        self.server_params = [self.PerServerYamlParameters()]
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
