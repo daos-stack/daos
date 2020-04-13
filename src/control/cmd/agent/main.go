@@ -51,7 +51,7 @@ const (
 type cliOptions struct {
 	AllowProxy bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	Debug      bool       `short:"d" long:"debug" description:"Enable debug output"`
-	JSONLog    bool       `short:"J" long:"json-logging" description:"Enable JSON output"`
+	JSONLog    bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath string     `short:"o" long:"config-path" description:"Path to agent configuration file"`
 	Insecure   bool       `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
 	RuntimeDir string     `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
