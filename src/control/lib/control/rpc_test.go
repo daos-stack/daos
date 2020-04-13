@@ -118,7 +118,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 			}(),
 			req: &testRequest{
 				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
-					time.Sleep(1 * time.Second) // shouldn't be allowed to run this long
+					time.Sleep(10 * time.Second) // shouldn't be allowed to run this long
 					return defaultMessage, nil
 				},
 			},
@@ -160,7 +160,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 
 			respChan, gotErr := client.InvokeUnaryRPCAsync(ctx, tc.req)
 			if tc.withCancel != nil {
-				// Call the test cancel, if defined.
+				// Cancel the parent context to test cleanup.
 				tc.withCancel.cancel()
 			}
 
@@ -243,11 +243,11 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			}(),
 			req: &testRequest{
 				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
-					time.Sleep(1 * time.Second) // shouldn't be allowed to run this long
+					time.Sleep(10 * time.Second) // shouldn't be allowed to run this long
 					return defaultMessage, nil
 				},
 			},
-			expResp: &UnaryResponse{},
+			expErr: context.Canceled,
 		},
 		"multiple hosts in request": {
 			req: &testRequest{
@@ -283,11 +283,14 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			ctx, cancel := context.WithCancel(outerCtx)
 			defer cancel() // always clean up after test
 
-			gotResp, gotErr := client.InvokeUnaryRPC(ctx, tc.req)
 			if tc.withCancel != nil {
-				// Call the test cancel, if defined.
-				tc.withCancel.cancel()
+				go func() {
+					// Cancel the parent context to test cleanup.
+					time.Sleep(1 * time.Millisecond)
+					tc.withCancel.cancel()
+				}()
 			}
+			gotResp, gotErr := client.InvokeUnaryRPC(ctx, tc.req)
 
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
