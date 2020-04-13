@@ -199,6 +199,7 @@ struct vos_dtx_cmt_ent {
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
+#define DCE_OID(dce)		((dce)->dce_base.dce_oid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 
 /* in-memory structures standalone instance */

@@ -207,6 +207,7 @@ D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_off) ==
 /** Committed DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_cmt_ent_df {
 	struct dtx_id			dce_xid;
+	daos_unit_oid_t			dce_oid;
 	daos_epoch_t			dce_epoch;
 };
 

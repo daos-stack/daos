@@ -529,6 +529,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	DCE_XID(dce) = *dti;
+	DCE_OID(dce) = DAE_OID(dae);
 	DCE_EPOCH(dce) = epoch != 0 ? epoch : DAE_EPOCH(dae);
 	dce->dce_reindex = 0;
 
