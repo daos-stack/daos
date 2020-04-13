@@ -26,7 +26,7 @@ from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 
 class ListPoolsTest(TestWithServers):
-    """Test class for list pools test.
+    """Test class for dmg pool list tests.
 
     Test Class Description:
         This class contains tests for list pool.
@@ -34,42 +34,52 @@ class ListPoolsTest(TestWithServers):
     :avocado: recursive
     """
 
-    def compare_pool_info(self, expected_uuids, expected_service_replicas):
-        """Compare expected and actual pool UUIDs and service replicas.
+    def run_case(self, rank_lists, sr=None):
+        """Run test case.
 
-        Expected is from pool create output and actual is pool list output.
-
-        Sample output
-        wolf-3:10001: connected
-        Pool UUID                            Svc Replicas
-        ---------                            ------------
-        b4a27b5b-688a-4d1e-8c38-363e32eb4f29 1,2,3
-        d7e7128f-14fb-4c6f-9c0b-13974fc17274 1,2,3
-        0123270f-4cbf-4a0f-a446-5239d4a57bcd 1,2,3
+        Create pools, call dmg pool list to get the list, and compare against
+        the UUIDs and service replicas returned at create time.
 
         Args:
-            expected_uuids (List of string): UUIDs of all pools created.
-            expected_service_replicas (List of list of string): Service
-                replicas of all pools. Each pool may have multiple service
-                replicas, so it's a list of list.
+            rank_lists (List of list of integer): Rank lists.
+            sr (String, optional): Service replicas. Defaults to None.
         """
-        stdoutput = self.get_dmg_command().pool_list().stdout
-        all_pools = stdoutput.splitlines()[3:]
-        actual_uuids = []
-        actual_service_replicas = []
-        for pool_info in all_pools:
-            pool_info_list = pool_info.split()
-            actual_uuids.append(pool_info_list[0])
-            actual_service_replicas.append(pool_info_list[1].split(","))
+        expected_uuids = []
+        expected_service_replicas = []
+        # Iterate rank lists to create pools. Store the returned UUID and
+        # service replicas in the expected lists.
+        for rank_list in rank_lists:
+            stdoutput = self.get_dmg_command().pool_create(
+                scm_size="1G", target_list=rank_list, svcn=sr).stdout
+            uuid, service_replicas = \
+                get_pool_uuid_service_replicas_from_stdout(stdoutput)
+            expected_uuids.append(uuid)
+            expected_service_replicas.append(service_replicas.split(","))
+
+        # Sample dmg pool list output.
+        # wolf-3:10001: connected
+        # Pool UUID                            Svc Replicas
+        # ---------                            ------------
+        # b4a27b5b-688a-4d1e-8c38-363e32eb4f29 1,2,3
+        # d7e7128f-14fb-4c6f-9c0b-13974fc17274 1,2,3
+        # 0123270f-4cbf-4a0f-a446-5239d4a57bcd 1,2,3
+
+        # Call dmg pool list. get_output will parse the stdout with the regex
+        # defined in dmg_utils.py and return the output as list of tuple. First
+        # element is UUID and second is service replicas.
+        output_list = self.get_dmg_command().get_output("pool_list")
         # Create a map of UUID to service replicas for expected and actual and
         # compare.
         actual_map = {}
-        for i, actual_uuid in enumerate(actual_uuids):
-            actual_map[actual_uuid] = actual_service_replicas[i]
+        for uuid_sr in output_list:
+            actual_map[uuid_sr[0]] = uuid_sr[1].split(",").sort()
         expected_map = {}
         for i, expected_uuid in enumerate(expected_uuids):
-            expected_map[expected_uuid] = expected_service_replicas[i]
+            expected_map[expected_uuid] = expected_service_replicas[i].sort()
         self.assertEqual(actual_map, expected_map)
+        # Destroy all the pools
+        for uuid in expected_uuids:
+            self.get_dmg_command().pool_destroy(uuid)
 
     def test_list_pools(self):
         """JIRA ID: DAOS-3459
@@ -81,64 +91,16 @@ class ListPoolsTest(TestWithServers):
 
         :avocado: tags=all,large,pool,full_regression,list_pools
         """
-        # Create 1 pool in each of the 4 hosts
-        # Expected -> pool create output
-        # Actual -> pool list output
-        expected_uuids = []
-        expected_service_replicas = []
-        for i in range(4):
-            stdoutput = self.get_dmg_command().pool_create(
-                scm_size="1G", target_list=[i]).stdout
-            uuid, service_replicas = \
-                get_pool_uuid_service_replicas_from_stdout(stdoutput)
-            expected_uuids.append(uuid)
-            expected_service_replicas.append(service_replicas.split(","))
-        self.compare_pool_info(expected_uuids, expected_service_replicas)
-
-        # Destroy all the pools
-        for uuid in expected_uuids:
-            self.get_dmg_command().pool_destroy(uuid)
-
+        # Create 1 pool in each of the 4 hosts.
+        self.run_case(rank_lists=[[0], [1], [2], [3]])
         # Create 1 pool over the first 2 hosts and 1 pool over the second 2
-        # hosts
-        expected_uuids = []
-        expected_service_replicas = []
-        rank_list = [[0, 1], [2, 3]]
-        for ranks in rank_list:
-            stdoutput = self.get_dmg_command().pool_create(
-                scm_size="1G", target_list=ranks).stdout
-            uuid, service_replicas = \
-                get_pool_uuid_service_replicas_from_stdout(stdoutput)
-            expected_uuids.append(uuid)
-            expected_service_replicas.append(service_replicas.split(","))
-        self.compare_pool_info(expected_uuids, expected_service_replicas)
-        for uuid in expected_uuids:
-            self.get_dmg_command().pool_destroy(uuid)
-
-        # Create 4 pools over 4 hosts
-        expected_uuids = []
-        expected_service_replicas = []
-        for _ in range(4):
-            stdoutput = self.get_dmg_command().pool_create(
-                scm_size="1G", target_list=[0, 1, 2, 3]).stdout
-            uuid, service_replicas = \
-                get_pool_uuid_service_replicas_from_stdout(stdoutput)
-            expected_uuids.append(uuid)
-            expected_service_replicas.append(service_replicas.split(","))
-        self.compare_pool_info(expected_uuids, expected_service_replicas)
-        for uuid in expected_uuids:
-            self.get_dmg_command().pool_destroy(uuid)
-
+        # hosts.
+        self.run_case(rank_lists=[[0, 1], [2, 3]])
+        # Create 4 pools over 4 hosts.
+        self.run_case(
+            rank_lists=[[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3],
+            [0, 1, 2 ,3]])
         # Create 3 pools over all 6 hosts with --svcn=3. The purpose is to test
         # multiple service replicas. We need 6 hosts. If it's less than 6, we
         # would only get one service replica for a pool.
-        expected_uuids = []
-        expected_service_replicas = []
-        for _ in range(3):
-            stdoutput = self.get_dmg_command().pool_create(
-                scm_size="1G", svcn="3").stdout
-            uuid, service_replicas = \
-                get_pool_uuid_service_replicas_from_stdout(stdoutput)
-            expected_uuids.append(uuid)
-            expected_service_replicas.append(service_replicas.split(","))
-        self.compare_pool_info(expected_uuids, expected_service_replicas)
+        self.run_case(rank_lists=[None, None, None], sr="3")

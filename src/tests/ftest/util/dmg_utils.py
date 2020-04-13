@@ -36,6 +36,19 @@ from command_utils import \
 class DmgCommand(CommandWithSubCommand):
     """Defines a object representing a dmg command."""
 
+    METHOD_REGEX = {
+        "run": r"(.*)",
+        # Sample output of dmg pool list.
+        # wolf-3:10001: connected
+        # Pool UUID                            Svc Replicas
+        # ---------                            ------------
+        # b4a27b5b-688a-4d1e-8c38-363e32eb4f29 1,2,3
+        # Between the first and the second group, use " +"; i.e., one or more
+        # whitespaces. If we use "\s+", it'll pick up the second divider as
+        # UUID since it's made up of hyphens and \s includes new line.
+        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))"
+    }
+
     def __init__(self, path):
         """Create a dmg Command object.
 
