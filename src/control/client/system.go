@@ -58,7 +58,9 @@ func (c *connList) SystemStop(req SystemStopReq) (*SystemStopResp, error) {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemStopReq{Prep: req.Prep, Kill: req.Kill, Force: req.Force}
+	rpcReq := &ctlpb.SystemStopReq{
+		Prep: req.Prep, Kill: req.Kill, Force: req.Force, Ranks: req.Ranks,
+	}
 
 	c.log.Debugf("DAOS system stop request: %s\n", rpcReq)
 
@@ -93,7 +95,7 @@ func (c *connList) SystemStart(req SystemStartReq) (*SystemStartResp, error) {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemStartReq{}
+	rpcReq := &ctlpb.SystemStartReq{Ranks: req.Ranks}
 
 	c.log.Debugf("DAOS system start request: %s\n", rpcReq)
 
