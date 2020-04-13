@@ -13,6 +13,7 @@ config.log
 /install/
 utils/daos_build.pyc
 *.tar.gz
+*.tar
 *.tgz
 *.pyc
 src/tests/ftest/*/*.yaml.dist
