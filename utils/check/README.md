@@ -12,11 +12,11 @@ The three scripts in this section can be used to make a list of packages
 that the libraries installed by DAOS depend on, and then check the if
 RedHat has any CVEs listed for them.
 
-To use these scripts the following should be setup.
+To use these scripts the following should be set up.
 
-1. A test system with CentOS 7 installed with sudo.
+1. A test system with CentOS 7 installed including the `sudo` command.
 1. These three scripts need to be copied to that system.
-1. Recommend that you setup a working directory, as these scripts
+1. Recommend that you set up a working directory, as these scripts
    will put files and directories in it as they run.
 
 ### download_rpms.sh

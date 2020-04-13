@@ -20,27 +20,21 @@ set -uex
 : "${SOFILES:="daos_depends_libraries"}"
 : "${PACKAGES:="daos_depends_packages"}"
 
-
-repo_file="/etc/yum.repos.d/"
-repo_file+="repo.dc.hpdd.intel.com_repository_daos-stack-"
-repo_file+="el-7-x86_64-stable-local.repo"
-
 repo_url="https://repo.dc.hpdd.intel.com/repository/"
 repo_url+="daos-stack-el-7-x86_64-stable-local"
 
+: "${DAOS_STACK_EL_7_LOCAL_REPO:="${repo_url}"}"
+
+repo_dir="/etc/yum.repos.d/"
+repo_base1="${DAOS_STACK_EL_7_LOCAL_REPO#*/*/*}"
+repo_file="${repo_dir}${repo_base1//\//_}.repo"
+
 if [ ! -e "${repo_file}" ]; then
-  cat << EOF > daos_repo_file
-
-[repo.dc.hpdd.intel.com_repository_daos-stack-el-7-x86_64-stable-local]
-name=added from: ${repo_url}
-baseurl=${repo_url}
-enabled=1
-
-gpgcheck = False
-
-EOF
-  sudo cp daos_repo_file "${repo_file}"
-  sudo yum -y makecache
+  sudo yum -y install yum-utils
+  sudo yum-config-manager --add-repo "${DAOS_STACK_EL_7_LOCAL_REPO}"
+fi
+if ! grep "gpgcheck = false" "${repo_file}"; then
+  echo "gpgcheck = false" | sudo tee -a "${repo_file}"
 fi
 
 sudo yum -y remove cart cart-debuginfo cart-devel cart-tests \
