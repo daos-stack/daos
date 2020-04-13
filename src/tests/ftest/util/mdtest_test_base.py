@@ -23,7 +23,6 @@
 """
 from __future__ import print_function
 
-import os
 import re
 
 from apricot import TestWithServers
@@ -176,11 +175,9 @@ class MdtestBase(TestWithServers):
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
-            path = os.path.join(mpio_util.mpichinstall, "bin")
-            return Mpirun(self.mdtest_cmd, path, mpitype="mpich")
+            return Mpirun(self.mdtest_cmd, mpitype="mpich")
 
-        path = os.path.join(self.ompi_prefix, "bin")
-        return Orterun(self.mdtest_cmd, path)
+        return Orterun(self.mdtest_cmd)
 
     def run_mdtest(self, manager, processes):
         """Run the Mdtest command.

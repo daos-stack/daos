@@ -21,6 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from distutils.spawn import find_executable
+import os
+
 from command_utils import ExecutableCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from env_modules import load_mpi
@@ -127,16 +130,16 @@ class JobManager(ExecutableCommand):
 class Orterun(JobManager):
     """A class for the orterun job manager command."""
 
-    def __init__(self, job, path="", subprocess=False):
+    def __init__(self, job, subprocess=False):
         """Create a Orterun object.
 
         Args:
             job (ExecutableCommand): command object to manage.
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
+        load_mpi("openmpi")
+        path = os.path.dirname(find_executable("orterun"))
         super(Orterun, self).__init__(
             "/run/orterun", "orterun", job, path, subprocess)
 
@@ -249,16 +252,16 @@ class Orterun(JobManager):
 class Mpirun(JobManager):
     """A class for the mpirun job manager command."""
 
-    def __init__(self, job, path="", subprocess=False, mpitype="openmpi"):
+    def __init__(self, job, subprocess=False, mpitype="openmpi"):
         """Create a Mpirun object.
 
         Args:
             job (ExecutableCommand): command object to manage.
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
+        load_mpi(mpitype)
+        path = os.path.dirname(find_executable("mpirun"))
         super(Mpirun, self).__init__(
             "/run/mpirun", "mpirun", job, path, subprocess)
 

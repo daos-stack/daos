@@ -20,8 +20,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
-
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure
@@ -156,8 +154,7 @@ class ContainerCreate(TestWithServers):
 
         if use_ior:
             # Get ior params
-            mpirun_path = os.path.join(self.ompi_prefix, "bin")
-            mpirun = Mpirun(IorCommand(), mpirun_path)
+            mpirun = Mpirun(IorCommand())
             mpirun.job.get_params(self)
             mpirun.setup_command(
                 mpirun.job.get_default_env("mpirun"),

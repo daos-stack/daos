@@ -23,7 +23,6 @@
 """
 from __future__ import print_function
 
-import os
 import traceback
 import uuid
 import threading
@@ -220,8 +219,7 @@ class ObjectMetadata(TestWithServers):
                     "F", "/run/ior/ior{}flags/".format(operation))
 
                 # Define the job manager for the IOR command
-                path = os.path.join(self.ompi_prefix, "bin")
-                manager = Orterun(ior_cmd, path)
+                manager = Orterun(ior_cmd)
                 env = ior_cmd.get_default_env(str(manager))
                 manager.setup_command(env, self.hostfile_clients, processes)
 
