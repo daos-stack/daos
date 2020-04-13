@@ -178,11 +178,11 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 			return nil, err
 		}
 
-		if !rank.InList(req.GetSystemRanks()) {
+		if !rank.InList(system.RanksFromUint32(req.GetRanks())) {
 			continue // filtered out, no result expected
 		}
 
-		if !i.IsStarted() {
+		if !i.IsReady() {
 			resp.Results = append(resp.Results,
 				NewRankResult(rank, "prep shutdown",
 					system.MemberStateStopped, nil))
@@ -214,7 +214,7 @@ func (svc *mgmtSvc) getStartedResults(rankList []system.Rank, desiredState syste
 		}
 
 		state := system.MemberStateStarted
-		if !i.IsStarted() {
+		if !i.IsReady() {
 			state = system.MemberStateStopped
 		}
 
@@ -251,7 +251,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 
 	resp := &mgmtpb.RanksResp{}
 
-	rankList := req.GetSystemRanks()
+	rankList := system.RanksFromUint32(req.GetRanks())
 
 	signal := syscall.SIGINT
 	if req.Force {
@@ -267,7 +267,6 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 			// unexpected error, fail without collecting rank results
 			return nil, err
 		}
-		svc.log.Debug("deadline exceeded when stopping instances")
 	}
 
 	stopped := make(chan struct{})
@@ -351,11 +350,11 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			return nil, err
 		}
 
-		if !rank.InList(req.GetSystemRanks()) {
+		if !rank.InList(system.RanksFromUint32(req.GetRanks())) {
 			continue // filtered out, no result expected
 		}
 
-		if !i.IsStarted() {
+		if !i.IsReady() {
 			resp.Results = append(resp.Results,
 				NewRankResult(rank, "ping", system.MemberStateStopped, nil))
 			continue
@@ -407,7 +406,8 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	case <-time.After(svc.harness.rankReqTimeout):
 	}
 
-	results, err := svc.getStartedResults(req.GetSystemRanks(), system.MemberStateStarted, "start", nil)
+	results, err := svc.getStartedResults(system.RanksFromUint32(req.GetRanks()),
+		system.MemberStateStarted, "start", nil)
 	if err != nil {
 		return nil, err
 	}
