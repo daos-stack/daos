@@ -13,9 +13,10 @@ def scons():
 
     denv = env.Clone()
 
-    mpi = daos_build.configure_mpi(prereqs, denv, libs)
-    if mpi is None:
-        return
+    if not GetOption('help') and not GetOption('clean'):
+        mpi = daos_build.configure_mpi(prereqs, denv, libs)
+        if mpi is None:
+            return
 
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
     denv.AppendUnique(CPPDEFINES=['TEST'])

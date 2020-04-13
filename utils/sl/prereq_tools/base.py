@@ -597,6 +597,8 @@ def check_flag_cc(context, flag):
 
 def check_flags(env, config, key, value):
     """Check and append all supported flags"""
+    if GetOption('help') or GetOption('clean'):
+        return
     checked = []
     for flag in value:
         if flag in checked:
@@ -839,7 +841,7 @@ class PreReqComponent():
                                    'gcc', ['gcc', 'covc', 'clang', 'icc'],
                                    ignorecase=1))
 
-        if GetOption('clean'):
+        if GetOption('clean') or GetOption('help'):
             return
 
         compiler = self.__env.get('COMPILER').lower()
@@ -1176,7 +1178,7 @@ class PreReqComponent():
         """Get the build directory for external components"""
         return self.__build_dir
 
-    def get_prebuilt_path(self, name, prebuilt_default):
+    def get_prebuilt_path(self, name):
         """Get the path for a prebuilt component"""
         if name in self.__prebuilt_path:
             return self.__prebuilt_path[name]
@@ -1185,7 +1187,7 @@ class PreReqComponent():
         self.add_opts(PathVariable(opt_name,
                                    'Alternate installation '
                                    'prefix for %s' % name,
-                                   prebuilt_default, PathVariable.PathIsDir))
+                                   None, PathVariable.PathIsDir))
         self.setup_path_var(opt_name)
         prebuilt = self.__env.get(opt_name)
         if prebuilt and not os.path.exists(prebuilt):
@@ -1477,6 +1479,9 @@ class _Component():
             print('Would check for missing system libraries')
             return False
 
+        if GetOption('help'):
+            return True
+
         config = Configure(env)
 
         for lib in self.required_libs:
@@ -1543,6 +1548,9 @@ class _Component():
                 env.SetOption('no_exec', True)
             return True
 
+        if GetOption('help'):
+            return True
+
         config = Configure(env)
         for prog in self.progs:
             if not config.CheckProg(prog):
@@ -1596,11 +1604,10 @@ class _Component():
         """Setup paths for a required component"""
         self.prereqs.setup_path_var(self.src_opt)
         self.prereqs.setup_path_var(self.prebuilt_opt)
-        prebuilt_default = None
         if not self.retriever:
-            prebuilt_default = "/usr"
-        self.prebuilt_path = self.prereqs.get_prebuilt_path(self.name,
-                                                            prebuilt_default)
+            self.prebuilt_path = "/usr"
+        else:
+            self.prebuilt_path = self.prereqs.get_prebuilt_path(self.name)
 
         (self.component_prefix, self.prefix) = \
             self.prereqs.get_prefixes(self.name, self.prebuilt_path)
