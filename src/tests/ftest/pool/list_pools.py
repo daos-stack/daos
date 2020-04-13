@@ -99,7 +99,7 @@ class ListPoolsTest(TestWithServers):
         # Create 4 pools over 4 hosts.
         self.run_case(
             rank_lists=[[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3],
-                        [0, 1, 2 ,3]])
+                        [0, 1, 2, 3]])
         # Create 3 pools over all 6 hosts with --svcn=3. The purpose is to test
         # multiple service replicas. We need 6 hosts. If it's less than 6, we
         # would only get one service replica for a pool.
