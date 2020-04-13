@@ -124,7 +124,7 @@ lrua_move_to_mru(struct lru_array *array, struct lru_entry *entry, uint32_t idx)
 	}
 
 	if (array->la_lru == idx) {
-		/** Ordering doens't change in circular list so just update
+		/** Ordering doesn't change in circular list so just update
 		 *  the lru and mru idx
 		 */
 		array->la_lru = entry->le_next_idx;
