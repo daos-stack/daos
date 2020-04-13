@@ -271,7 +271,7 @@ class TestWithServers(TestWithoutServers):
             "name", "/server_config/", "daos_server")
 
         # Support using different job managers to launch the daos agent/servers
-        self.manager_class = self.params.get("manager_class", "/", "OpenMPI")
+        self.manager_class = self.params.get("manager_class", "/", "Orterun")
 
         # Determine which hosts to use as servers and optionally clients.
         self.hostlist_servers = self.params.get("test_servers", "/run/hosts/*")

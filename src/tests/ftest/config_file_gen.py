@@ -130,7 +130,7 @@ def main():
         "-g", "--group_name",
         action="store",
         type=str,
-        default="daos",
+        default="daos_server",
         help="server group name")
     parser.add_argument(
         "-n", "--node_list",

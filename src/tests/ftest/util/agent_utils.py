@@ -101,7 +101,7 @@ class DaosAgentCommand(YamlCommand):
 class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts."""
 
-    def __init__(self, agent_command, manager="OpenMPI"):
+    def __init__(self, agent_command, manager="Orterun"):
         """Create a DaosAgentManager object.
 
         Args:
