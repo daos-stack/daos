@@ -59,6 +59,9 @@ type PoolCreateResp struct {
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
 func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
+	// NB: This method is a stub to indicate that it has been replaced
+	// by functionality in the control API, and will be removed when
+	// the client package is removed.
 	return nil, nil
 }
 
@@ -75,6 +78,9 @@ type PoolDestroyReq struct {
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
 func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
+	// NB: This method is a stub to indicate that it has been replaced
+	// by functionality in the control API, and will be removed when
+	// the client package is removed.
 	return nil
 }
 
@@ -132,6 +138,9 @@ func (prs PoolRebuildState) String() string {
 
 // PoolQuery performs a query against the pool service.
 func (c *connList) PoolQuery(req PoolQueryReq) (*PoolQueryResp, error) {
+	// NB: This method is a stub to indicate that it has been replaced
+	// by functionality in the control API, and will be removed when
+	// the client package is removed.
 	return nil, nil
 }
 
