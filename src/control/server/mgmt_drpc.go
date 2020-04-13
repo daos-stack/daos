@@ -82,7 +82,7 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return errors.Wrap(err, "check NotifyReady request socket path")
 	}
 
-	mod.iosrvs[req.InstanceIdx].NotifyReady(req)
+	mod.iosrvs[req.InstanceIdx].NotifyDrpcReady(req)
 
 	return nil
 }
