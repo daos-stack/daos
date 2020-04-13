@@ -1,3 +1,4 @@
+```
 OVERVIEW
 
 scons_local is a set of build tools and scripts used to support
@@ -87,6 +88,27 @@ USE_INSTALLED=<c1>[,<c2>[,...]]    When --build-deps is set, the
                                    components.  For all components,
                                    use 'all'.  Default is 'none'
 
+ENV_SCRIPT=path>                   By default, the scripts will read
+                                   $HOME/.scons_localrc as a SConscript
+                                   giving the user the opportunity to
+                                   modify the default environment used
+                                   by the daos build.  This option
+                                   allows specification of an alternate
+                                   location.
+
+GO_BIN=<path>                      Alternative path to go binary
+
+COMPILER=<compiler>                Specify an alternate compiler.
+                                   Supported options are icc, gcc,
+                                   and clang.
+
+BUILD_DIR=<path>                   Alternative path to place
+                                   intermediate build targets.  Default
+                                   is /path/to/daos_src/build
+
+EXCLUDE=<component>                Components that should not be built.
+                                   Only option is psm2 at present.
+
 UNIT TESTING OVERVIEW
 Overview of unit testing capabilities added by prereq_tools
 When using prereq_tools, 3 new builders get added to your default environment.
@@ -110,3 +132,4 @@ AlwaysBuild(RUN_TESTS)
 Jenkins:
 If configuring Jenkins to find memcheck results, add **/memcheck-*.xml to your
 Jenkins configuration.
+```

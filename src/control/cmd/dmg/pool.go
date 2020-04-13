@@ -86,7 +86,7 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		}
 	}
 
-	var acl *client.AccessControlList
+	var acl *common.AccessControlList
 	if c.ACLFile != "" {
 		acl, err = readACLFile(c.ACLFile)
 		if err != nil {
@@ -374,7 +374,7 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 		return errors.New("either ACL file or entry parameter is required")
 	}
 
-	var acl *client.AccessControlList
+	var acl *common.AccessControlList
 	if d.ACLFile != "" {
 		aclFileResult, err := readACLFile(d.ACLFile)
 		if err != nil {
@@ -382,7 +382,7 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 		}
 		acl = aclFileResult
 	} else {
-		acl = &client.AccessControlList{
+		acl = &common.AccessControlList{
 			Entries: []string{d.Entry},
 		}
 	}

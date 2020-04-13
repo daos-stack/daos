@@ -71,8 +71,10 @@ extern struct crt_proto_format rsvc_proto_fmt;
 	((uint64_t)		(sai_size)		CRT_VAR) \
 	((d_rank_list_t)	(sai_ranks)		CRT_PTR)
 
-#define DAOS_OSEQ_RSVC_START /* output fields */		 \
-	((int32_t)		(sao_rc)		CRT_VAR)
+#define DAOS_OSEQ_RSVC_START /* output fields (rc: err count) */ \
+	((int32_t)		(sao_rc)		CRT_VAR) \
+	((int32_t)		(sao_rc_errval)		CRT_VAR)
+
 
 CRT_RPC_DECLARE(rsvc_start, DAOS_ISEQ_RSVC_START, DAOS_OSEQ_RSVC_START)
 

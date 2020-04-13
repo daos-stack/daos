@@ -22,13 +22,6 @@
 //
 package mgmt
 
-import (
-	"errors"
-
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	"github.com/daos-stack/daos/src/control/system"
-)
-
 // SetPropertyName sets the Property field to a string-based name.
 func (r *PoolSetPropReq) SetPropertyName(name string) {
 	r.Property = &PoolSetPropReq_Name{
@@ -55,25 +48,4 @@ func (r *PoolSetPropReq) SetValueNumber(numVal uint64) {
 	r.Value = &PoolSetPropReq_Numval{
 		Numval: numVal,
 	}
-}
-
-// SetSystemRanks is a convenience method to convert a slice of
-// system ranks to a slice of uint32 ranks for this request.
-func (m *RanksReq) SetSystemRanks(sysRanks []system.Rank) error {
-	if m == nil {
-		return errors.New("nil request")
-	}
-	return convert.Types(sysRanks, &m.Ranks)
-}
-
-// GetSystemRanks is a convenience method to convert this request's
-// slice of uint32 ranks to a slice of system ranks.
-func (m *RanksReq) GetSystemRanks() []system.Rank {
-	if m != nil {
-		var sysRanks []system.Rank
-		if err := convert.Types(m.GetRanks(), &sysRanks); err == nil {
-			return sysRanks
-		}
-	}
-	return nil
 }

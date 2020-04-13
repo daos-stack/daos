@@ -120,6 +120,7 @@ const (
 	ServerPoolNvmeTooSmall
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
+	ServerInstancesNotStopped
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

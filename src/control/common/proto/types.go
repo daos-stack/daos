@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package proto
 
 import (
@@ -33,6 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -325,3 +327,35 @@ func (smr ScmMountResults) HasErrors() bool {
 // ScmModuleResults is an alias for protobuf ScmModuleResult message slice
 // representing operation results on a number of SCM modules.
 type ScmModuleResults []*ctlpb.ScmModuleResult
+
+// AccessControlListFromPB converts from the protobuf ACLResp structure to an
+// AccessControlList structure.
+func AccessControlListFromPB(pbACL *mgmtpb.ACLResp) *common.AccessControlList {
+	if pbACL == nil {
+		return &common.AccessControlList{}
+	}
+	return &common.AccessControlList{
+		Entries:    pbACL.ACL,
+		Owner:      pbACL.OwnerUser,
+		OwnerGroup: pbACL.OwnerGroup,
+	}
+}
+
+// PoolDiscoveriesFromPB converts the protobuf ListPoolsResp_Pool structures to
+// PoolDiscovery structures.
+func PoolDiscoveriesFromPB(pbPools []*mgmtpb.ListPoolsResp_Pool) []*common.PoolDiscovery {
+	pools := make([]*common.PoolDiscovery, 0, len(pbPools))
+	for _, pbPool := range pbPools {
+		svcReps := make([]uint32, 0, len(pbPool.Svcreps))
+		for _, rep := range pbPool.Svcreps {
+			svcReps = append(svcReps, rep)
+		}
+
+		pools = append(pools, &common.PoolDiscovery{
+			UUID:        pbPool.Uuid,
+			SvcReplicas: svcReps,
+		})
+	}
+
+	return pools
+}
