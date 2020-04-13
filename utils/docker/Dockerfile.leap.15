@@ -36,12 +36,8 @@ RUN update-ca-certificates;    \
     pip install -U wheel;      \
     pip install scons==3.0.1
 
-RUN curl -fsSL -o /tmp/jhli.key https://download.opensuse.org/repositories/home:/jhli/SLE_15/repodata/repomd.xml.key
-RUN rpm --import /tmp/jhli.key; \
-    zypper --non-interactive addrepo \
- https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo; \
-    zypper --non-interactive addrepo \
- https://download.opensuse.org/repositories/devel:languages:go/openSUSE_Leap_15.1/devel:languages:go.repo; \
+ run zypper --non-interactive addrepo \
+    https://download.opensuse.org/repositories/devel:languages:go/openSUSE_Leap_15.1/devel:languages:go.repo; \
     zypper --non-interactive --gpg-auto-import-keys refresh; \
     zypper --non-interactive install -y ipmctl-devel go
 
