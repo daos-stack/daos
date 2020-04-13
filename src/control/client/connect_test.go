@@ -577,7 +577,7 @@ func TestPoolSetProp(t *testing.T) {
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
@@ -593,7 +593,7 @@ func TestPoolSetProp(t *testing.T) {
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
@@ -604,7 +604,7 @@ func TestPoolSetProp(t *testing.T) {
 				addresses: MockServers,
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: "",
 			},
 			expErr: errors.New("invalid property name"),
@@ -614,7 +614,7 @@ func TestPoolSetProp(t *testing.T) {
 				addresses: MockServers,
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 			},
 			expErr: errors.New("unhandled property value"),
@@ -627,7 +627,7 @@ func TestPoolSetProp(t *testing.T) {
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValNum,
 			},
@@ -648,12 +648,12 @@ func TestPoolSetProp(t *testing.T) {
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
 			expResp: &PoolSetPropResp{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
@@ -673,12 +673,12 @@ func TestPoolSetProp(t *testing.T) {
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValNum,
 			},
 			expResp: &PoolSetPropResp{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    strconv.FormatUint(testPropValNum, 10),
 			},

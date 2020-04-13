@@ -126,6 +126,7 @@ const (
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
+	ServerInstancesNotStopped
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700
