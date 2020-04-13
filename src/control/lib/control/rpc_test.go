@@ -25,6 +25,8 @@ package control
 
 import (
 	"context"
+	"os"
+	"runtime"
 	"sort"
 	"testing"
 	"time"
@@ -32,6 +34,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -141,7 +144,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			//goRoutinesAtStart := runtime.NumGoroutine()
+			goRoutinesAtStart := runtime.NumGoroutine()
 
 			client := NewClient(
 				WithClientConfig(clientCfg),
@@ -190,9 +193,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 			cancel()
 			// Give things a little bit of time to settle down before checking for
 			// any lingering goroutines.
-			// TODO: Enable this test, but it's flaky for now because the grpc connections don't
-			// seem to cancel.
-			/*time.Sleep(5 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 			goRoutinesAtEnd := runtime.NumGoroutine()
 			if goRoutinesAtEnd != goRoutinesAtStart {
 				t.Errorf("expected final goroutine count to be %d, got %d\n", goRoutinesAtStart, goRoutinesAtEnd)
@@ -200,7 +201,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				if err := unix.Kill(os.Getpid(), unix.SIGABRT); err != nil {
 					t.Fatal(err)
 				}
-			}*/
+			}
 		})
 	}
 }

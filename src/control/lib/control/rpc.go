@@ -208,6 +208,9 @@ func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (
 					if err == nil {
 						msg, err = req.getRPC()(ctx, conn)
 					}
+					if conn != nil {
+						conn.Close()
+					}
 				}
 
 				select {
