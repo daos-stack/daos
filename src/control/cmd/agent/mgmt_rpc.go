@@ -227,7 +227,8 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	if mod.attachInfoResp.haveCachedData() {
 		numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
 		if err != nil {
-			return nil, err
+			mod.log.Debugf("Could not determine the NUMA node affinity.  Using numaNode 0")
+			numaNode = 0
 		}
 
 		resmgmtpb, err := mod.attachInfoResp.getCachedResponse(numaNode)
@@ -284,7 +285,8 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 
 	numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
 	if err != nil {
-		return nil, err
+		mod.log.Debugf("Could not determine the NUMA node affinity.  Using numaNode 0")
+		numaNode = 0
 	}
 
 	resmgmtpb, err := mod.attachInfoResp.getCachedResponse(numaNode)
