@@ -1278,6 +1278,78 @@ cond_test(void **state)
 			"temp");
 }
 
+#define NUM_OBJ 50000
+static void
+many_objects_test(void **state)
+{
+	struct io_test_args	*arg = *state;
+	daos_unit_oid_t		 *oid;
+	d_sg_list_t		 sgl[MAX_SGL] = {0};
+	d_iov_t			 iov[MAX_SGL];
+	daos_epoch_t		 epoch = 500;
+	int			 i;
+	int			 oid_nr1, oid_nr2, oid_nr3;
+	char			 j;
+	char			 dkey[2] = {0};
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	D_ALLOC_ARRAY(oid, NUM_OBJ);
+	assert_non_null(oid);
+
+	for (i = 0; i < NUM_OBJ; i++) {
+		/** Generate a bunch of oids */
+		oid[i] = gen_oid(0);
+	}
+
+	for (i = 0; i < MAX_SGL; i++) {
+		sgl[i].sg_iovs = &iov[i];
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 1;
+	}
+
+	for (i = 0; i < NUM_OBJ; i++) {
+		for (j = 'a'; j <= 'h'; j++) {
+			dkey[0] = j;
+			oid_nr1 = rand() % NUM_OBJ;
+			oid_nr2 = rand() % NUM_OBJ;
+			oid_nr3 = rand() % NUM_OBJ;
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid[oid_nr1],
+				       epoch++, dkey, "b",
+				       VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid[oid_nr2],
+				       epoch++, dkey, "g",
+				       VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid[oid_nr3],
+				       epoch++, dkey, "k",
+				       VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid[oid_nr2],
+				       epoch++, dkey, "b",
+				       VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid[oid_nr3],
+				       epoch++, dkey, "g",
+				       VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid[oid_nr1],
+				       epoch++, dkey, "k",
+				       VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid[oid_nr3],
+				       epoch++, dkey, "b",
+				       VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid[oid_nr1],
+				       epoch++, dkey, "g",
+				       VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid[oid_nr2],
+				       epoch++, dkey, "k",
+				       VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
+			cond_fetch_op(state, arg->ctx.tc_co_hdl, oid[oid_nr3],
+				      epoch++, dkey, "k", VOS_OF_USE_TIMESTAMPS,
+				      0, sgl, "foo", 'x');
+		}
+	}
+
+	D_FREE(oid);
+}
+
 static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS800: VOS punch model array set/get size",
 	  array_set_get_size, pm_setup, pm_teardown },
@@ -1297,6 +1369,7 @@ static const struct CMUnitTest punch_model_tests[] = {
 	  object_punch_and_fetch, NULL, NULL },
 	{ "VOS809: SGL test", sgl_test, NULL, NULL },
 	{ "VOS810: Conditionals test", cond_test, NULL, NULL },
+	{ "VOS811: Many objects", many_objects_test, NULL, NULL },
 };
 
 int

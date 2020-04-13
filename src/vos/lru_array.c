@@ -26,6 +26,7 @@
  *
  * Author: Jeff Olivier <jeffrey.v.olivier@intel.com>
  */
+#define D_LOGFAC DD_FAC(vos)
 #include "lru_array.h"
 
 static void
@@ -34,7 +35,9 @@ evict_cb(struct lru_array *array, struct lru_entry *entry, uint32_t idx)
 	if (array->la_cbs.lru_on_evict == NULL)
 		return;
 
+	array->la_evicting++;
 	array->la_cbs.lru_on_evict(entry->le_payload, idx, array->la_arg);
+	array->la_evicting--;
 }
 
 static void
@@ -107,8 +110,7 @@ lrua_evict(struct lru_array *array, uint32_t *idx)
 		 *  lru and mru indexes.
 		 */
 		array->la_mru = entry->le_prev_idx;
-		array->la_lru = tidx;
-		return;
+		goto set_lru;
 	}
 
 	/** Remove from current location */
@@ -117,12 +119,13 @@ lrua_evict(struct lru_array *array, uint32_t *idx)
 	/** Add between MRU and LRU */
 	lrua_insert_mru(array, entry, tidx);
 
+set_lru:
 	array->la_lru = tidx;
 }
 
 int
 lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent,
-		 uint32_t record_size, const struct lru_callbacks *cbs,
+		 uint16_t record_size, const struct lru_callbacks *cbs,
 		 void *arg)
 {
 	struct lru_array	*array;
