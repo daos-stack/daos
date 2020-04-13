@@ -272,6 +272,7 @@ struct index_record {
 struct lru_arg {
 	struct lru_array	*array;
 	struct index_record	 indexes[NUM_INDEXES];
+	bool			 lookup;
 };
 
 struct lru_record {
@@ -288,7 +289,18 @@ struct lru_record {
 static void
 on_entry_evict(void *payload, uint32_t idx, void *arg)
 {
+	struct lru_record	*read_record;
 	struct lru_record	*record = payload;
+	struct lru_arg		*ts_arg = arg;
+	bool			 found;
+
+	if (ts_arg->lookup) {
+		found = lrua_lookup(ts_arg->array, &record->record->idx,
+				    (void **)&read_record);
+		assert_true(found);
+		assert_non_null(read_record);
+		assert_true(read_record == payload);
+	}
 
 	record->record->value = MAGIC1;
 	record->record = NULL;
@@ -512,6 +524,41 @@ lru_array_stress_test(void **state)
 	}
 
 	assert_int_equal(inserted, LRU_ARRAY_SIZE);
+
+	for (i = 0; i < LRU_ARRAY_SIZE; i++) {
+		entry = lrua_alloc(ts_arg->array,
+				   &stress_entries[i].idx, true);
+		assert_non_null(entry);
+		entry->record = &stress_entries[i];
+		stress_entries[i].value = i;
+	}
+
+	ts_arg->lookup = true;
+	for (i = 0; i < LRU_ARRAY_SIZE; i++) {
+		j = i + LRU_ARRAY_SIZE;
+		entry = lrua_alloc(ts_arg->array,
+				   &stress_entries[j].idx, true);
+		assert_non_null(entry);
+		entry->record = &stress_entries[j];
+		stress_entries[j].value = j;
+	}
+
+	for (i = LRU_ARRAY_SIZE - 1; i >= 0; i--) {
+		j = i +  2 * LRU_ARRAY_SIZE;
+		entry = lrua_alloc(ts_arg->array,
+				   &stress_entries[j].idx, true);
+		assert_non_null(entry);
+		entry->record = &stress_entries[j];
+		stress_entries[j].value = j;
+	}
+
+	for (i = 0; i < LRU_ARRAY_SIZE; i++) {
+		j = i + 2 * LRU_ARRAY_SIZE;
+		lrua_evict(ts_arg->array, &stress_entries[j].idx);
+		assert_true(stress_entries[j].value == MAGIC1);
+	}
+
+	ts_arg->lookup = false;
 
 	D_FREE(stress_entries);
 }
