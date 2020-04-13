@@ -53,6 +53,14 @@ const (
 type networkProviderValidation func(string, string) error
 type networkNUMAValidation func(string, uint) error
 
+// ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
+// These settings bring coherence between the client and server network configuration.
+type ClientNetworkCfg struct {
+	Provider        string
+	CrtCtxShareAddr uint32
+	CrtTimeout      uint32
+}
+
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Configuration struct {
@@ -148,6 +156,24 @@ func (c *Configuration) WithModules(mList string) *Configuration {
 // WithFabricProvider sets the top-level fabric provider.
 func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 	c.Fabric.Provider = provider
+	for _, srv := range c.Servers {
+		srv.Fabric.Update(c.Fabric)
+	}
+	return c
+}
+
+// WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
+func (c *Configuration) WithCrtCtxShareAddr(addr uint32) *Configuration {
+	c.Fabric.CrtCtxShareAddr = addr
+	for _, srv := range c.Servers {
+		srv.Fabric.Update(c.Fabric)
+	}
+	return c
+}
+
+// WithCrtTimeout sets the top-level CrtTimeout.
+func (c *Configuration) WithCrtTimeout(timeout uint32) *Configuration {
+	c.Fabric.CrtTimeout = timeout
 	for _, srv := range c.Servers {
 		srv.Fabric.Update(c.Fabric)
 	}

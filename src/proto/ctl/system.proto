@@ -73,7 +73,7 @@ message SystemStartResp {
 
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
-	int32 rank = 1; // negative indicates NilRank
+	repeated uint32 ranks = 1; // system ranks to query
 }
 
 // SystemQueryResp returns active system members.

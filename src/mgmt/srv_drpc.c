@@ -168,7 +168,7 @@ ds_mgmt_drpc_create_mgmt_svc(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		if (rc != 0) {
 			D_ERROR("Unable to parse server UUID: %s\n",
 				req->uuid);
-			goto out;
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
 
@@ -279,7 +279,7 @@ ds_mgmt_drpc_join(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = uuid_parse(req->uuid, in.ji_server.sr_uuid);
 	if (rc != 0) {
 		D_ERROR("Failed to parse UUID: %s\n", req->uuid);
-		goto out;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	len = strnlen(req->addr, ADDR_STR_MAX_LEN);
 	if (len >= ADDR_STR_MAX_LEN) {
@@ -458,7 +458,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0) {
 		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
-		goto out;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
@@ -537,7 +537,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0) {
 		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
-		goto out;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/* Sys and force params are currently ignored in receiver. */
@@ -1460,7 +1460,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		if (rc != 0) {
 			D_ERROR("Unable to parse device UUID %s: "DF_RC"\n",
 				req->dev_uuid, DP_RC(rc));
-			goto out;
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	} else
 		uuid_clear(uuid); /* need to set uuid = NULL */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,6 +145,8 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		return rc;
 	}
 
+	vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
+
 	D_ASSERT(tins->ti_priv);
 	return gc_add_item((struct vos_pool *)tins->ti_priv, GC_OBJ,
 			   rec->rec_off, 0);
@@ -189,11 +191,14 @@ static btr_ops_t oi_btr_ops = {
  */
 int
 vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
-	    struct vos_obj_df **obj_p)
+	    struct vos_obj_df **obj_p, struct vos_ts_set *ts_set)
 {
-	d_iov_t		key_iov;
-	d_iov_t		val_iov;
-	int		rc;
+	struct ilog_df		*ilog = NULL;
+	d_iov_t			 key_iov;
+	d_iov_t			 val_iov;
+	int			 rc;
+	int			 tmprc;
+	bool			 found = false;
 
 	*obj_p = NULL;
 	d_iov_set(&key_iov, &oid, sizeof(oid));
@@ -206,7 +211,17 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 
 		D_ASSERT(daos_unit_obj_id_equal(obj->vo_id, oid));
 		*obj_p = obj;
+		ilog = &obj->vo_ilog;
+
+		found = vos_ilog_ts_lookup(ts_set, ilog);
+		if (found)
+			goto out;
 	}
+
+	tmprc = vos_ilog_ts_cache(ts_set, ilog, &oid, sizeof(oid));
+
+	D_ASSERT(tmprc == 0); /* Non-zero return for akey only */
+out:
 	return rc;
 }
 
@@ -215,7 +230,8 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
  */
 int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p)
+		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p,
+		  struct vos_ts_set *ts_set)
 {
 	struct vos_obj_df	*obj = NULL;
 	d_iov_t			 key_iov;
@@ -227,7 +243,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
 		DP_UOID(oid));
 
-	rc = vos_oi_find(cont, oid, &obj);
+	rc = vos_oi_find(cont, oid, &obj, ts_set);
 	if (rc == 0)
 		goto do_log;
 	if (rc != -DER_NONEXIST)
@@ -247,6 +263,8 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 	}
 	obj = val_iov.iov_buf;
+
+	vos_ilog_ts_mark(ts_set, &obj->vo_ilog);
 do_log:
 	if (!log)
 		goto skip_log;
@@ -271,27 +289,26 @@ skip_log:
  */
 int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
-	     daos_epoch_t epoch, uint32_t flags, struct vos_obj_df *obj)
+	     daos_epoch_t epoch, uint64_t flags, struct vos_obj_df *obj,
+	     struct vos_ilog_info *info, struct vos_ts_set *ts_set)
 {
-	daos_handle_t		 loh = DAOS_HDL_INVAL;
-	struct ilog_desc_cbs	 cbs;
-	int		 rc = 0;
+	daos_epoch_range_t	 epr = {0, epoch};
+	int			 rc = 0;
 
 	D_DEBUG(DB_TRACE, "Punch obj "DF_UOID", epoch="DF_U64".\n",
 		DP_UOID(oid), epoch);
 
-	/* Create a new incarnation of the log for punch */
-	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, &loh);
-	if (rc != 0)
-		return rc;
+	rc = vos_ilog_punch(cont, &obj->vo_ilog, &epr, NULL,
+			    info, ts_set, true);
 
-	rc = ilog_update(loh, NULL, epoch, true);
-
-	ilog_close(loh);
+	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
+		rc = -DER_AGAIN;
 
 	if (rc != 0)
-		D_ERROR("Failed to punch object, "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
+			 "Failed to update incarnation log entry: "DF_RC"\n",
+			 DP_RC(rc));
+
 	return rc;
 }
 

@@ -36,6 +36,7 @@
  *       Container property KVS (GENERIC):
  *         Snapshot KVS (INTEGER)
  *         User attribute KVS (GENERIC)
+ *         Handle index KVS (GENERIC)
  *       ... (more container property KVSs)
  *     Container handle KVS (GENERIC)
  */
@@ -82,6 +83,7 @@ extern d_iov_t ds_cont_prop_owner;		/* string */
 extern d_iov_t ds_cont_prop_owner_group;	/* string */
 extern d_iov_t ds_cont_prop_snapshots;		/* snapshot KVS */
 extern d_iov_t ds_cont_attr_user;		/* user attribute KVS */
+extern d_iov_t ds_cont_prop_handles;		/* handle index KVS */
 
 /*
  * Snapshot KVS (RDB_KVS_INTEGER)
@@ -98,9 +100,18 @@ extern d_iov_t ds_cont_attr_user;		/* user attribute KVS */
  */
 
 /*
+ * Handle index KVS (RDB_KVS_GENERIC)
+ *
+ * A key is a container handle UUID (uuid_t). A value is an unused byte (char),
+ * as RDB values must be nonempty. This KVS stores UUIDs of all handles of
+ * _one_ container.
+ */
+
+/*
  * Container handle KVS (RDB_KVS_GENERIC)
  *
  * A key is a container handle UUID (uuid_t). A value is a container_hdl object.
+ * This KVS stores handles of _all_ containers in the DB.
  */
 struct container_hdl {
 	uuid_t		ch_pool_hdl;

@@ -180,12 +180,11 @@ class MdtestCommand(ExecutableCommand):
                 for index in range(pool.pool.svc.rl_nr)]])
         self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
-    def get_default_env(self, manager_cmd, attach_info, log_file=None):
+    def get_default_env(self, manager_cmd, log_file=None):
         """Get the default enviroment settings for running mdtest.
 
         Args:
             manager_cmd (str): job manager command
-            attach_info (str): CART attach info path
             log_file (str, optional): log file. Defaults to None.
 
         Returns:
@@ -193,9 +192,7 @@ class MdtestCommand(ExecutableCommand):
 
         """
         env = EnvironmentVariables()
-        env["CRT_ATTACH_INFO_PATH"] = attach_info
         env["MPI_LIB"] = "\"\""
-        env["DAOS_SINGLETON_CLI"] = 1
         env["FI_PSM2_DISCONNECT"] = 1
         if log_file:
             env["D_LOG_FILE"] = log_file

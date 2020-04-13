@@ -4,9 +4,8 @@ Several HPC I/O middleware libraries have been ported to the native API.
 
 ## MPI-IO
 
-DAOS has its own MPI-IO ROM ADIO driver located in a MPICH fork on GitHub:
-
-<https://github.com/daos-stack/mpich>
+DAOS has its own MPI-IO ROM ADIO driver located in a MPICH fork on
+[GitHub](https://github.com/daos-stack/mpich).
 
 This driver has been submitted upstream for integration.
 
@@ -26,8 +25,8 @@ To build the MPI-IO driver:
 
 -   make -j8; make install
 
-Switch the PATH and LD_LIBRARY_PATH to where you want to build your client apps or libs
-that use MPI to the installed MPICH.
+Switch the `PATH` and `LD_LIBRARY_PATH` to where you want to build your client
+apps or libs that use MPI to the installed MPICH.
 
 Build any client (HDF5, ior, mpi test suites) normally with the mpicc and mpich
 library installed above (see child pages).
@@ -38,12 +37,12 @@ To run an example:
    This will return a pool uuid "puuid" and service rank list "svcl"
 2.   At the client side, the following environment variables need to be set:
 
+```bash
         export PATH=/path/to/mpich/install/bin:$PATH
         export LD_LIBRARY_PATH=/path/to/mpich/install/lib:$LD_LIBRARY_PATH
         export MPI_LIB=""
-        export CRT_ATTACH_INFO_PATH=/path/ (whatever was passed to daos_server start -a)
-        export DAOS_SINGLETON_CLI=1
-2.  export DAOS_POOL=puuid; export DAOS_SVCL=svcl
+```
+2.  `export DAOS_POOL=puuid; export DAOS_SVCL=svcl`
     This is just temporary till we have a better way of passing pool
     connect info to MPI-IO and other middleware over DAOS.
 3.  Run the client application or test.
@@ -60,5 +59,8 @@ Limitations to the current implementation include:
 
 ## HDF5
 
-A prototype version of an HDF5 DAOS connector is available. Please refer to the
-DAOS VOL connector user guide[^3] for instructions on how to build and use it.
+A [HDF5 DAOS connector](https://bitbucket.hdfgroup.org/projects/HDF5VOL/repos/daos-vol/browse)
+is available. Please refer to the DAOS VOL connector user guide[^3] for
+instructions on how to build and use it.
+
+[^3]: https://bitbucket.hdfgroup.org/projects/HDF5VOL/repos/daos-vol/browse/docs/users_guide.pdf

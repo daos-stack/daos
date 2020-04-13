@@ -188,7 +188,7 @@ update_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 
 	D_DEBUG(DB_IO, "Writing "DF_U64" records of size "DF_U64" at offset "
 		DF_U64"\n", nr, rec_size, offset);
-	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0,
+	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0, 0,
 			      &array->va_dkey, 1, &array->va_iod, NULL, sgls);
 }
 
@@ -231,7 +231,7 @@ fetch_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 
 	D_DEBUG(DB_IO, "Reading "DF_U64" records of size "DF_U64" at offset "
 		DF_U64"\n", nr, rec_size, offset);
-	return vos_obj_fetch(array->va_coh, array->va_oid, epoch,
+	return vos_obj_fetch(array->va_coh, array->va_oid, epoch, 0,
 			     &array->va_dkey, 1, &array->va_iod, sgls);
 }
 
@@ -251,7 +251,7 @@ update_meta(struct vts_array *array, daos_epoch_t epoch,
 	d_iov_set(&array->va_sv_iod.iod_name, &akey, sizeof(akey));
 
 	D_DEBUG(DB_IO, "Writing metadata at epoch "DF_U64"\n", epoch);
-	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0,
+	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0, 0,
 			&array->va_dkey, 1, &array->va_sv_iod, NULL, &sgl);
 }
 
@@ -271,7 +271,7 @@ fetch_meta(struct vts_array *array, daos_epoch_t epoch,
 	d_iov_set(&array->va_sv_iod.iod_name, &akey, sizeof(akey));
 
 	D_DEBUG(DB_IO, "Reading metadata at epoch "DF_U64"\n", epoch);
-	return vos_obj_fetch(array->va_coh, array->va_oid, epoch,
+	return vos_obj_fetch(array->va_coh, array->va_oid, epoch, 0,
 			     &array->va_dkey, 1, &array->va_sv_iod, &sgl);
 }
 

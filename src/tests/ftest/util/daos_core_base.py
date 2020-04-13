@@ -59,6 +59,7 @@ class DaosCoreBase(TestWithServers):
                                       '/run/daos_tests/num_clients/*')
         num_replicas = self.params.get("num_replicas",
                                        '/run/daos_tests/num_replicas/*')
+        scm_size = self.params.get("scm_size", '/run/pool/*')
         args = self.params.get("args", '/run/daos_tests/Tests/*', "")
 
         cmd = "{} {} -n {} -x D_LOG_FILE={} {} -s {} -{} {}".format(
@@ -69,6 +70,7 @@ class DaosCoreBase(TestWithServers):
         env = {}
         env['CMOCKA_XML_FILE'] = "%g_results.xml"
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
+        env['POOL_SCM_SIZE'] = "{}".format(scm_size)
 
         load_mpi("openmpi")
         try:

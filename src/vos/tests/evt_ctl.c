@@ -1775,7 +1775,7 @@ test_evt_overlap_split_internal(void **state)
 		goto finish1;
 	D_ALLOC_ARRAY(actual_data, NUM_EPOCHS * record_size);
 	if (actual_data == NULL)
-		goto finish2;
+		goto finish1;
 
 	for (epoch = 1; epoch < NUM_EPOCHS; epoch++) {
 	/* Write a big extent at epoch 1.
@@ -1913,7 +1913,6 @@ finish:
 	D_FREE(actual_data);
 finish1:
 	D_FREE(data);
-finish2:
 	D_FREE(expected_data);
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);

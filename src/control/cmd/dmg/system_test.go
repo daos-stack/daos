@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ package main
 import (
 	"fmt"
 	"testing"
+
+	"github.com/pkg/errors"
 )
 
 func TestSystemCommands(t *testing.T) {
@@ -33,19 +35,25 @@ func TestSystemCommands(t *testing.T) {
 		{
 			"system query with no arguments",
 			"system query",
-			"ConnectClients SystemQuery-{-1}",
+			"ConnectClients SystemQuery-{[]}",
 			nil,
 		},
 		{
 			"system query with single rank",
-			"system query --rank 0",
-			"ConnectClients SystemQuery-{0}",
+			"system query --ranks 0",
+			"ConnectClients SystemQuery-{[0]}",
+			nil,
+		},
+		{
+			"system query with multiple ranks",
+			"system query --ranks 0,1,4",
+			"ConnectClients SystemQuery-{[0 1 4]}",
 			nil,
 		},
 		{
 			"system query verbose",
 			"system query --verbose",
-			"ConnectClients SystemQuery-{-1}",
+			"ConnectClients SystemQuery-{[]}",
 			nil,
 		},
 		{
@@ -61,9 +69,33 @@ func TestSystemCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"system stop with single rank",
+			"system stop --ranks 0",
+			"ConnectClients SystemStop-{true true [0] false}",
+			nil,
+		},
+		{
+			"system stop with multiple ranks",
+			"system stop --ranks 0,1,4",
+			"ConnectClients SystemStop-{true true [0 1 4] false}",
+			nil,
+		},
+		{
 			"system start with no arguments",
 			"system start",
 			"ConnectClients SystemStart-{[]}",
+			nil,
+		},
+		{
+			"system start with single rank",
+			"system start --ranks 0",
+			"ConnectClients SystemStart-{[0]}",
+			nil,
+		},
+		{
+			"system start with multiple ranks",
+			"system start --ranks 0,1,4",
+			"ConnectClients SystemStart-{[0 1 4]}",
 			nil,
 		},
 		{
@@ -79,10 +111,16 @@ func TestSystemCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Nonexistent subcommand",
+			"Non-existent subcommand",
 			"system quack",
 			"",
 			fmt.Errorf("Unknown command"),
+		},
+		{
+			"Non-existent option",
+			"system start --rank 0",
+			"",
+			errors.New("unknown flag `rank'"),
 		},
 	})
 }

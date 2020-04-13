@@ -372,6 +372,28 @@ daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
 		     d_string_t name, daos_event_t *ev);
 
 /**
+ * Update a container's owner user and/or owner group.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	group	New owner group (NULL if not updating)
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
+		    daos_event_t *ev);
+
+/**
  * List the names of all user-defined container attributes.
  *
  * \param[in]	coh	Container handle.
@@ -472,7 +494,7 @@ daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  * Rollback to a specific persistent snapshot.
  *
  * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch if persistent snapshot to rollback to.
+ * \param[in]	epoch	Epoch of a persistent snapshot to rollback to.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */

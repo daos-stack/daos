@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -241,18 +241,18 @@ dtx_req_list_cb(void **args)
 	} else {
 		for (i = 0; i < dra->dra_length; i++) {
 			drr = args[i];
-			if (dra->dra_result == 0)
+			if ((drr->drr_result < 0) &&
+			    (dra->dra_result == 0 ||
+			     dra->dra_result == -DER_NONEXIST))
 				dra->dra_result = drr->drr_result;
-
-			if (dra->dra_result != 0) {
-				D_ERROR("DTX req for opc %x failed: rc = %d.\n",
-					dra->dra_opc, dra->dra_result);
-				return;
-			}
 		}
 
-		D_DEBUG(DB_TRACE, "DTX req for opc %x succeed.\n",
-			dra->dra_opc);
+		drr = args[0];
+		D_CDEBUG(dra->dra_result < 0, DLOG_ERR, DB_TRACE,
+			 "DTX req for opc %x ("DF_DTI") %s, count %d: %d.\n",
+			 dra->dra_opc, DP_DTI(drr->drr_dti),
+			 dra->dra_result < 0 ? "failed" : "succeed",
+			 dra->dra_length, dra->dra_result);
 	}
 }
 
@@ -452,6 +452,7 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	if (rc != 0)
 		return rc;
 
+	D_ASSERT(layout != NULL);
 	tgt_cnt = dtx_get_tgt_cnt(oid, layout);
 	if (tgt_cnt < 0) {
 		rc = tgt_cnt;
@@ -500,8 +501,7 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	}
 
 out:
-	if (layout != NULL)
-		pl_obj_layout_free(layout);
+	pl_obj_layout_free(layout);
 	return rc > 0 ? 0 : rc;
 }
 
@@ -611,13 +611,20 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	}
 
 	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count);
+	/* -DER_NONEXIST may be caused by race or repeated commit, ignore it. */
+	if (rc1 == -DER_NONEXIST)
+		rc1 = 0;
 
-	if (dra.dra_future != ABT_FUTURE_NULL)
+	if (dra.dra_future != ABT_FUTURE_NULL) {
 		rc2 = dtx_req_wait(&dra);
+		if (rc2 == -DER_NONEXIST)
+			rc2 = 0;
+	}
 
 out:
-	D_DEBUG(DB_TRACE, "Commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
-		DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
+	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
+		 "Commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
+		 DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
 
 	if (dti != NULL)
 		D_FREE(dti);
@@ -630,7 +637,7 @@ out:
 	if (cont != NULL)
 		ds_cont_child_put(cont);
 
-	return rc > 0 ? 0 : rc;
+	return rc < 0 ? rc : (rc1 < 0 ? rc1 : (rc2 < 0 ? rc2 : 0));
 }
 
 int
@@ -680,12 +687,16 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 	if (rc1 == -DER_NONEXIST)
 		rc1 = 0;
 
-	if (dra.dra_future != ABT_FUTURE_NULL)
+	if (dra.dra_future != ABT_FUTURE_NULL) {
 		rc2 = dtx_req_wait(&dra);
+		if (rc2 == -DER_NONEXIST)
+			rc2 = 0;
+	}
 
 out:
-	D_DEBUG(DB_TRACE, "Abort DTXs "DF_DTI", count %d: rc %d %d %d\n",
-		DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
+	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
+		 "Abort DTXs "DF_DTI", count %d: rc %d %d %d\n",
+		 DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
 
 	if (dti != NULL)
 		D_FREE(dti);
@@ -698,7 +709,7 @@ out:
 	if (cont != NULL)
 		ds_cont_child_put(cont);
 
-	return rc > 0 ? 0 : rc;
+	return rc < 0 ? rc : (rc1 < 0 ? rc1 : (rc2 < 0 ? rc2 : 0));
 }
 
 int

@@ -32,6 +32,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <daos_task.h>
+#include <daos/task.h>
 
 enum daos_ev_flags {
 	/**
@@ -53,7 +54,6 @@ enum daos_ev_flags {
 struct tse_task_t;
 
 typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
-extern bool dfs_cond_op;
 
 /**
  * Finish event queue library.
@@ -194,10 +194,10 @@ dc_task_get_opc(tse_task_t *task);
 	tse_task_decref(task)
 
 #define dc_task_set_priv(task, priv)				\
-	tse_task_set_priv(task, priv)
+	tse_task_set_priv_internal(task, priv)
 
 #define dc_task_get_priv(task)					\
-	tse_task_get_priv(task)
+	tse_task_get_priv_internal(task)
 
 #define dc_task_list_add(task, head)				\
 	tse_task_list_add(task, head)

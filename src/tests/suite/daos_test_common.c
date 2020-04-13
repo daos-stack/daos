@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 {
 	test_arg_t		*arg = *state;
 	struct test_pool	*outpool;
-	int			 rc;
+	int			 rc = 0;
 
 	outpool = opool ? opool : &arg->pool;
 
@@ -139,7 +139,7 @@ static int
 test_setup_pool_connect(void **state, struct test_pool *pool)
 {
 	test_arg_t *arg = *state;
-	int rc;
+	int rc = -DER_INVAL;
 
 	if (pool != NULL) {
 		assert_int_equal(arg->pool.slave, 1);
@@ -199,7 +199,7 @@ static int
 test_setup_cont_create(void **state, daos_prop_t *co_prop)
 {
 	test_arg_t *arg = *state;
-	int rc;
+	int rc = 0;
 
 	if (arg->myrank == 0) {
 		uuid_generate(arg->co_uuid);
@@ -226,7 +226,7 @@ static int
 test_setup_cont_open(void **state)
 {
 	test_arg_t *arg = *state;
-	int rc;
+	int rc = 0;
 
 	if (arg->myrank == 0) {
 		print_message("setup: opening container\n");
@@ -860,34 +860,15 @@ daos_add_server(const uuid_t pool_uuid, const char *grp,
 }
 
 void
-daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
-		 d_rank_list_t *svc, d_rank_t rank)
-{
-	int tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
-	int rc;
-
-	arg->srv_disabled_ntgts += tgts_per_node;
-	if (d_rank_in_rank_list(svc, rank))
-		svc->rl_nr--;
-	print_message("\tKilling rank %d (total of %d with %d already "
-		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
-		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
-
-	/** kill server */
-	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
-	assert_int_equal(rc, 0);
-}
-
-void
-daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			 const char *grp, d_rank_list_t *svc)
+daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
+		 const char *grp, d_rank_list_t *svc, d_rank_t rank)
 {
 	int		tgts_per_node;
 	int		disable_nodes;
 	int		failures = 0;
 	int		max_failure;
 	int		i;
-	d_rank_t	rank;
+	int		rc;
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -906,10 +887,18 @@ daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 		return;
 	}
 
-	rank = arg->srv_nnodes - disable_nodes - 1;
+	if ((int)rank == -1)
+		rank = arg->srv_nnodes - disable_nodes - 1;
 
-	daos_kill_server(arg, pool_uuid, grp, svc, rank);
-	daos_exclude_server(pool_uuid, grp, svc, rank);
+	arg->srv_disabled_ntgts += tgts_per_node;
+	if (d_rank_in_rank_list(svc, rank))
+		svc->rl_nr--;
+	print_message("\tKilling rank %d (total of %d with %d already "
+		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
+		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
+
+	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
+	assert_int_equal(rc, 0);
 }
 
 struct daos_acl *
@@ -931,6 +920,27 @@ get_daos_acl_with_owner_perms(uint64_t perms)
 }
 
 daos_prop_t *
+get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
+				 struct daos_acl *acl, uint32_t acl_type)
+{
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(2);
+	assert_non_null(prop);
+
+	prop->dpp_entries[0].dpe_type = acl_type;
+	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+	assert_non_null(prop->dpp_entries[0].dpe_val_ptr);
+
+	prop->dpp_entries[1].dpe_type = owner_type;
+	D_STRNDUP(prop->dpp_entries[1].dpe_str, owner,
+		  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	assert_non_null(prop->dpp_entries[1].dpe_str);
+
+	return prop;
+}
+
+daos_prop_t *
 get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 {
 	daos_prop_t	*prop;
@@ -939,8 +949,41 @@ get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 	acl = get_daos_acl_with_owner_perms(perms);
 
 	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+
 	prop->dpp_entries[0].dpe_type = type;
 	prop->dpp_entries[0].dpe_val_ptr = acl;
 
+	/* No need to free ACL - belongs to prop now */
+	return prop;
+}
+
+daos_prop_t *
+get_daos_prop_with_user_acl_perms(uint64_t perms)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+	struct daos_ace	*ace;
+	char		*user = NULL;
+
+	assert_int_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
+
+	acl = get_daos_acl_with_owner_perms(0);
+
+	ace = daos_ace_create(DAOS_ACL_USER, user);
+	assert_non_null(ace);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = perms;
+	assert_true(daos_ace_is_valid(ace));
+
+	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
+
+	/* Set effective user up as non-owner */
+	prop = get_daos_prop_with_owner_and_acl("nobody@", DAOS_PROP_CO_OWNER,
+						acl, DAOS_PROP_CO_ACL);
+
+	daos_ace_free(ace);
+	daos_acl_free(acl);
+	D_FREE(user);
 	return prop;
 }

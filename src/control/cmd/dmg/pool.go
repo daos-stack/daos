@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 const (
@@ -65,6 +66,7 @@ type PoolCreateCmd struct {
 	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
 	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
+	UUID       string `short:"p" long:"pool" description:"UUID to be used when creating the pool, randomly generated if not specified"`
 }
 
 // Execute is run when PoolCreateCmd subcommand is activated
@@ -84,7 +86,7 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		}
 	}
 
-	var acl *client.AccessControlList
+	var acl *common.AccessControlList
 	if c.ACLFile != "" {
 		acl, err = readACLFile(c.ACLFile)
 		if err != nil {
@@ -102,24 +104,15 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "formatting user/group strings")
 	}
 
-	ranks := make([]uint32, 0)
-	if len(c.RankList) > 0 {
-		rankStr := strings.Split(c.RankList, ",")
-		for _, rank := range rankStr {
-			r, err := strconv.Atoi(rank)
-			if err != nil {
-				return errors.WithMessage(err, "parsing rank list")
-			}
-			if r < 0 {
-				return errors.Errorf("invalid rank: %d", r)
-			}
-			ranks = append(ranks, uint32(r))
-		}
+	var ranks []uint32
+	if err := common.ParseNumberList(c.RankList, &ranks); err != nil {
+		return errors.WithMessage(err, "parsing rank list")
 	}
 
 	req := &client.PoolCreateReq{
 		ScmBytes: scmBytes, NvmeBytes: nvmeBytes, RankList: ranks,
 		NumSvcReps: c.NumSvcReps, Sys: c.Sys, Usr: usr, Grp: grp, ACL: acl,
+		UUID: c.UUID,
 	}
 
 	resp, err := c.conns.PoolCreate(req)
@@ -381,7 +374,7 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 		return errors.New("either ACL file or entry parameter is required")
 	}
 
-	var acl *client.AccessControlList
+	var acl *common.AccessControlList
 	if d.ACLFile != "" {
 		aclFileResult, err := readACLFile(d.ACLFile)
 		if err != nil {
@@ -389,7 +382,7 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 		}
 		acl = aclFileResult
 	} else {
-		acl = &client.AccessControlList{
+		acl = &common.AccessControlList{
 			Entries: []string{d.Entry},
 		}
 	}

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,12 +28,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"sync/atomic"
 	"syscall"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -53,8 +53,14 @@ type (
 	Runner struct {
 		Config  *Config
 		log     logging.Logger
-		running uint32
+		running atm.Bool
 		cmd     *exec.Cmd
+	}
+
+	// InstanceError represents error from an instance of a DAOS I/O Server
+	InstanceError struct {
+		Idx uint32
+		Err error
 	}
 )
 
@@ -69,6 +75,7 @@ func exitStatus(err error) error {
 	if err != nil {
 		return err
 	}
+
 	return NormalExit
 }
 
@@ -80,10 +87,13 @@ func NewRunner(log logging.Logger, config *Config) *Runner {
 	}
 }
 
-func (r *Runner) run(ctx context.Context, args, env []string) error {
+func (r *Runner) run(ctx context.Context, args, env []string) InstanceError {
+	instanceErr := InstanceError{Idx: r.Config.Index}
+
 	binPath, err := common.FindBinary(ioServerBin)
 	if err != nil {
-		return errors.Wrapf(err, "can't start %s", ioServerBin)
+		instanceErr.Err = errors.Wrapf(err, "can't start %s", ioServerBin)
+		return instanceErr
 	}
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
@@ -116,19 +126,22 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)
 
 	if err := cmd.Start(); err != nil {
-		return errors.Wrapf(exitStatus(err),
+		instanceErr.Err = errors.Wrapf(exitStatus(err),
 			"%s (instance %d) failed to start", binPath, r.Config.Index)
+		return instanceErr
 	}
 	r.cmd = cmd
 
-	r.setRunning()
-	defer r.setStopped()
+	r.running.SetTrue()
+	defer r.running.SetFalse()
 
-	return errors.Wrapf(exitStatus(cmd.Wait()), "%s (instance %d) exited", binPath, r.Config.Index)
+	instanceErr.Err = errors.Wrapf(exitStatus(cmd.Wait()),
+		"%s (instance %d) exited", binPath, r.Config.Index)
+	return instanceErr
 }
 
 // Start asynchronously starts the IOServer instance.
-func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
+func (r *Runner) Start(ctx context.Context, errOut chan<- InstanceError) error {
 	args, err := r.Config.CmdLineArgs()
 	if err != nil {
 		return err
@@ -145,32 +158,29 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	return nil
 }
 
-func (r *Runner) setRunning() {
-	atomic.StoreUint32(&r.running, 1)
-}
-
-func (r *Runner) setStopped() {
-	atomic.StoreUint32(&r.running, 0)
-}
-
 // IsRunning indicates whether the Runner process is running or not.
 func (r *Runner) IsRunning() bool {
-	return atomic.LoadUint32(&r.running) != 0
+	return r.running.Load()
 }
 
-// Stop sends relevant shutdown signal to the Runner process (idempotent).
-func (r *Runner) Stop(force bool) error {
+// Signal sends relevant signal to the Runner process (idempotent).
+func (r *Runner) Signal(signal os.Signal) error {
 	if !r.IsRunning() {
 		return nil
 	}
 
-	signal := syscall.SIGTERM
-	if force {
-		signal = syscall.SIGKILL
-	}
-	r.log.Debugf("Stopping I/O server instance %d (%s)", r.Config.Index, signal)
+	r.log.Debugf("Signalling I/O server instance %d (%s)", r.Config.Index, signal)
 
 	return r.cmd.Process.Signal(signal)
+}
+
+// Wait waits for the process to exit.
+func (r *Runner) Wait() error {
+	if !r.IsRunning() {
+		return nil
+	}
+
+	return r.cmd.Wait()
 }
 
 // GetConfig returns the runner's configuration

@@ -45,9 +45,10 @@ class daos_named_kv():
         except Exception:
             pass
 
-        os.environ['CRT_PHY_ADDR_STR'] = transport
-        os.environ['OFI_INTERFACE'] = interface
-        os.environ['DAOS_SINGLETON_CLI'] = '1'
+        if 'CRT_PHY_ADDR_STR' not in os.environ:
+            os.environ['CRT_PHY_ADDR_STR'] = transport
+        if interface and 'OFI_INTERFACE' not in os.environ:
+            os.environ['OFI_INTERFACE'] = interface
 
         self.daos = __import__('pydaos')
 
@@ -70,6 +71,54 @@ class daos_named_kv():
         for kv in self.root_kv:
             yield kv
 
+LENGTH_KEY = '__length'
+
+def new_migrate(root):
+    """Migrate data from multiple KVs to a single KV"""
+
+    batch_size = 200
+
+    files = sorted(root.get_kv_list())
+
+    if 'root' in files:
+        files.remove('root')
+
+    target = root.get_kv_by_name('root')
+
+    target_offset = 0
+
+    for ifile in files:
+
+        index = 0
+
+        source = root.get_kv_by_name(ifile)
+
+        at_end = False
+
+        while not at_end:
+            data = {}
+            for i in range(index, index + batch_size):
+
+                index += 1
+
+                data[str(i)] = None
+
+            source.bget(data)
+            tdata = {}
+
+            for key in data:
+                if data[key] is None:
+                    at_end = True
+                else:
+                    i = int(key)
+                    tdata[str(i+target_offset)] = data[key]
+
+            target.bput(tdata)
+
+        target_offset += pickle.loads(source[LENGTH_KEY])
+
+        target[LENGTH_KEY] = pickle.dumps(target_offset)
+
 def main():
     """Migrate data from dbm file to named DAOS KV"""
 
@@ -85,6 +134,10 @@ def main():
                           CUID)
 
     print('Kvs are {}'.format(','.join(sorted(my_kv.get_kv_list()))))
+
+    if True:
+        new_migrate(my_kv)
+        return
 
     if len(sys.argv) != 5:
         print('Also need directory/file to import')
@@ -102,8 +155,6 @@ def main():
 
     kv = my_kv.get_kv_by_name(src_file)
 
-    LENGTH_KEY = '__length'
-
     count = pickle.loads(db[LENGTH_KEY])
 
     try:
@@ -111,8 +162,6 @@ def main():
         start_count += 1
     except KeyError:
         start_count = 0
-
-    start_count = 0
 
     print('Copying records from {} to {}'.format(start_count, count))
 
@@ -122,41 +171,48 @@ def main():
     last_report_time = start_time
     to_copy = count - start_count + 1
     # CHANGE THIS TO MODIFY REPORTING FREQUENCY
-    report_freq = 0.1
+    report_freq = 2
 
     bytes_total = 0
 
     try:
-        for idx in range(start_count, count + 1):
+        tdata = {}
+        idx = count
+        for idx in range(start_count, count):
             key = str(idx)
             value = db[key]
-            value_len = len(value)
-            bytes_total += value_len
-            kv[key] = value
-            kv[LENGTH_KEY] = pickle.dumps(idx)
+            tdata[key] = value
 
             copy_count += 1
             now = time.perf_counter()
+
+            if idx % 400 == 0:
+                tdata[LENGTH_KEY] = pickle.dumps(idx)
+                kv.bput(tdata)
+                tdata = {}
 
             if now - last_report_time > report_freq:
 
                 time_per_record = (now - start_time) / copy_count
 
                 # Make the remaining time in minutes so it's easier to parse
-                remaining_time = int((time_per_record * (to_copy - copy_count)/60))
+                remaining_time = int((time_per_record * (to_copy - copy_count)))
 
-                print('Copied {}/{} records in {:.2f} seconds {} minutes remaining.'.format(copy_count,
-                                                                                            to_copy,
-                                                                                            now - start_time,
-                                                                                            remaining_time))
+                print('Copied {}/{} records in {:.2f} seconds ({:.0f}) {} seconds remaining.'.format(copy_count,
+                                                                                                     to_copy,
+                                                                                                     now - start_time,
+                                                                                                     copy_count / (now - start_time),
+                                                                                                     remaining_time))
                 last_report_time = now
+        tdata[LENGTH_KEY] = pickle.dumps(idx)
+        kv.bput(tdata)
+
     except KeyboardInterrupt:
         pass
 
     now = time.perf_counter()
     print('Completed, Copied {} records in {:.2f} seconds.'.format(copy_count,
                                                                    now - start_time))
-    print('Copied {} bytes'.format(bytes_total))
 
 if __name__ == '__main__':
     main()

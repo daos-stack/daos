@@ -37,9 +37,10 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
-#include <vos_layout.h>
-#include <vos_ilog.h>
-#include <vos_obj.h>
+#include "vos_tls.h"
+#include "vos_layout.h"
+#include "vos_ilog.h"
+#include "vos_obj.h"
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */
 #define VOS_OBJ_ORDER		20	/* Order of object tree */
@@ -47,8 +48,6 @@
 #define VOS_SVT_ORDER		5	/* order of single value tree */
 #define VOS_EVT_ORDER		23	/* evtree order */
 #define DTX_BTREE_ORDER		23	/* Order for DTX tree */
-
-
 
 #define DAOS_VOS_VERSION 1
 
@@ -151,6 +150,8 @@ struct vos_container {
 	uint32_t		vc_dtx_committed_count;
 	/* The items count in vc_dtx_committed_tmp_list. */
 	uint32_t		vc_dtx_committed_tmp_count;
+	/** Index for timestamp lookup */
+	uint32_t		*vc_ts_idx;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 	/**
@@ -200,17 +201,6 @@ struct vos_dtx_cmt_ent {
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 
-struct vos_imem_strts {
-	/**
-	 * In-memory object cache for the PMEM
-	 * object table
-	 */
-	struct daos_lru_cache	*vis_ocache;
-	/** Hash table to refcount VOS handles */
-	/** (container/pool, etc.,) */
-	struct d_hash_table	*vis_pool_hhash;
-	struct d_hash_table	*vis_cont_hhash;
-};
 /* in-memory structures standalone instance */
 struct bio_xs_context		*vsa_xsctxt_inst;
 extern int vos_evt_feats;
@@ -242,67 +232,6 @@ extern struct vos_iter_ops vos_oi_iter_ops;
 extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_cont_iter_ops;
 extern struct vos_iter_ops vos_dtx_iter_ops;
-
-/** VOS thread local storage structure */
-struct vos_tls {
-	/* in-memory structures TLS instance */
-	/* TODO: move those members to vos_tls, nosense to have another
-	 * data structure for it.
-	 */
-	struct vos_imem_strts		 vtl_imems_inst;
-	/** pools registered for GC */
-	d_list_t			 vtl_gc_pools;
-	/* PMDK transaction stage callback data */
-	struct umem_tx_stage_data	 vtl_txd;
-	/** XXX: The DTX handle.
-	 *
-	 *	 Transferring DTX handle via TLS can avoid much changing
-	 *	 of existing functions' interfaces, and avoid the corner
-	 *	 cases that someone may miss to set the DTX handle when
-	 *	 operate related tree.
-	 *
-	 *	 But honestly, it is some hack to pass the DTX handle via
-	 *	 the TLS. It requires that there is no CPU yield during the
-	 *	 processing. Otherwise, the vtl_dth may be changed by other
-	 *	 ULTs. The user needs to guarantee that by itself.
-	 */
-	struct dtx_handle		*vtl_dth;
-};
-
-struct vos_tls *
-vos_tls_get();
-
-static inline struct d_hash_table *
-vos_pool_hhash_get(void)
-{
-	return vos_tls_get()->vtl_imems_inst.vis_pool_hhash;
-}
-
-static inline struct d_hash_table *
-vos_cont_hhash_get(void)
-{
-	return vos_tls_get()->vtl_imems_inst.vis_cont_hhash;
-}
-
-static inline struct umem_tx_stage_data *
-vos_txd_get(void)
-{
-	return &vos_tls_get()->vtl_txd;
-}
-
-static inline struct dtx_handle *
-vos_dth_get(void)
-{
-	return vos_tls_get()->vtl_dth;
-}
-
-static inline void
-vos_dth_set(struct dtx_handle *dth)
-{
-	D_ASSERT(dth == NULL || vos_tls_get()->vtl_dth == NULL);
-
-	vos_tls_get()->vtl_dth = dth;
-}
 
 static inline void
 vos_pool_addref(struct vos_pool *pool)
@@ -457,8 +386,11 @@ vos_dtx_cos_register(void);
  * \param xid		[IN]	Pointer to the DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param punch		[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success.
+ * \return		Other negative value if error.
  */
-void
+int
 vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 		struct dtx_id *xid, uint64_t dkey_hash, bool punch);
 
@@ -948,12 +880,14 @@ int
 key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		 enum vos_tree_class tclass, daos_key_t *key, int flags,
 		 uint32_t intent, struct vos_krec_df **krecp,
-		 daos_handle_t *sub_toh);
+		 daos_handle_t *sub_toh, struct vos_ts_set *ts_set);
 void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
-	       d_iov_t *key_iov, d_iov_t *val_iov, int flags);
+	       d_iov_t *key_iov, d_iov_t *val_iov, uint64_t flags,
+	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
+	       struct vos_ilog_info *info);
 
 /* vos_io.c */
 uint16_t
@@ -999,6 +933,15 @@ int
 gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 	    uint64_t args);
 
+static inline uint64_t
+vos_hash_get(void *buf, uint64_t len)
+{
+	if (buf == NULL)
+		return vos_kh_get();
+
+	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
+}
+
 /**
  * Aggregate the creation/punch records in the current entry of the object
  * iterator
@@ -1028,5 +971,8 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
+
+/** Start epoch of vos */
+extern daos_epoch_t	vos_start_epoch;
 
 #endif /* __VOS_INTERNAL_H__ */

@@ -36,7 +36,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -50,7 +50,7 @@ type Superblock struct {
 	Version     uint8
 	UUID        string
 	System      string
-	Rank        *ioserver.Rank
+	Rank        *system.Rank
 	ValidRank   bool
 	MS          bool
 	CreateMS    bool
@@ -150,7 +150,7 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 	}
 
 	if cfg.Rank != nil || msInfo.isReplica && msInfo.shouldBootstrap {
-		superblock.Rank = new(ioserver.Rank)
+		superblock.Rank = new(system.Rank)
 		if cfg.Rank != nil {
 			*superblock.Rank = *cfg.Rank
 		}

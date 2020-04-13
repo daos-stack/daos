@@ -687,7 +687,12 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 rechoose:
 	/* Create a POOL_CREATE request. */
 	ep.ep_grp = NULL;
-	rsvc_client_choose(&client, &ep);
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out_client;
+	}
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: "DF_RC"\n",
@@ -2404,7 +2409,12 @@ ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 
 rechoose:
 	ep.ep_grp = NULL; /* primary group */
-	rsvc_client_choose(&client, &ep);
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto out_client;
+	}
 
 realloc_resp:
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_LIST_CONT, &rpc);
@@ -2814,7 +2824,12 @@ ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 rechoose:
 	ep.ep_grp = NULL; /* primary group */
-	rsvc_client_choose(&client, &ep);
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out_client;
+	}
 
 realloc:
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_QUERY, &rpc);
@@ -2959,7 +2974,12 @@ ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 rechoose:
 	ep.ep_grp = NULL; /* primary group */
-	rsvc_client_choose(&client, &ep);
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out_client;
+	}
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_PROP_GET, &rpc);
 	if (rc != 0) {
@@ -3103,7 +3123,12 @@ ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t *prop)
 
 rechoose:
 	ep.ep_grp = NULL; /* primary group */
-	rsvc_client_choose(&client, &ep);
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out_client;
+	}
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_PROP_SET, &rpc);
 	if (rc != 0) {
@@ -3200,7 +3225,8 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		/* Prop might be allocated and returned even if rc != 0 */
+		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry == NULL) {
@@ -3226,8 +3252,8 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 
 out_prop:
-	daos_prop_free(prop);
-out_lock:
+	if (prop != NULL)
+		daos_prop_free(prop);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
@@ -3271,7 +3297,12 @@ ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 rechoose:
 	ep.ep_grp = NULL; /* primary group */
-	rsvc_client_choose(&client, &ep);
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out_client;
+	}
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_ACL_UPDATE, &rpc);
 	if (rc != 0) {
@@ -3343,7 +3374,8 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		/* Prop might be allocated and returned even if rc != 0 */
+		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry == NULL) {
@@ -3370,8 +3402,8 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 
 out_prop:
-	daos_prop_free(prop);
-out_lock:
+	if (prop != NULL)
+		daos_prop_free(prop);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
@@ -3412,7 +3444,7 @@ ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 	size_t				name_buf_len;
 
 	D_DEBUG(DB_MGMT, DF_UUID": Deleting entry from pool ACL\n",
-			DP_UUID(pool_uuid));
+		DP_UUID(pool_uuid));
 
 	if (principal_name != NULL) {
 		/* Need to sanitize the incoming string */
@@ -3430,7 +3462,12 @@ ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 rechoose:
 	ep.ep_grp = NULL; /* primary group */
-	rsvc_client_choose(&client, &ep);
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out_client;
+	}
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_ACL_DELETE, &rpc);
 	if (rc != 0) {
@@ -3515,7 +3552,8 @@ out:
 static int
 ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 			unsigned int opc, uint32_t *map_version_p,
-			struct rsvc_hint *hint, bool *p_updated)
+			struct rsvc_hint *hint, bool *p_updated,
+			bool evict_rank)
 {
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
@@ -3545,7 +3583,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, opc);
+	rc = ds_pool_map_tgts_update(map, tgts, opc, evict_rank);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -3689,14 +3727,14 @@ int
 ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE_OUT,
-				       NULL, NULL, NULL);
+				       NULL, NULL, NULL, false);
 }
 
 int
 ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE,
-				       NULL, NULL, NULL);
+				       NULL, NULL, NULL, false);
 }
 
 /*
@@ -3708,7 +3746,7 @@ static int
 ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	       struct pool_target_addr_list *list,
 	       struct pool_target_addr_list *out_list,
-	       uint32_t *map_version, struct rsvc_hint *hint)
+	       uint32_t *map_version, struct rsvc_hint *hint, bool evict_rank)
 {
 	struct pool_target_id_list	target_list = { 0 };
 	bool				updated;
@@ -3722,7 +3760,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 
 	/* Update target by target id */
 	rc = ds_pool_update_internal(pool_uuid, &target_list, opc, map_version,
-				     hint, &updated);
+				     hint, &updated, evict_rank);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3770,7 +3808,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	list.pta_addrs = in->pti_addr_list.ca_arrays;
 	rc = ds_pool_update(in->pti_op.pi_uuid, opc_get(rpc->cr_opc), &list,
 			    &out_list, &out->pto_op.po_map_version,
-			    &out->pto_op.po_hint);
+			    &out->pto_op.po_hint, false);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3800,7 +3838,7 @@ ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank)
 	list.pta_addrs = &tgt_rank;
 
 	rc = ds_pool_update(pool_uuid, POOL_EXCLUDE, &list, &out_list,
-			    &map_version, NULL);
+			    &map_version, NULL, true);
 
 	D_DEBUG(DB_MGMT, "Exclude pool "DF_UUID"/%u rank %u: rc %d\n",
 		DP_UUID(pool_uuid), map_version, rank, rc);
@@ -3922,7 +3960,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		if (in->pvi_pool_destroy && !in->pvi_pool_destroy_force) {
 			D_DEBUG(DF_DSMS, DF_UUID": busy, %u open handles\n",
 				DP_UUID(in->pvi_op.pi_uuid), n_hdl_uuids);
-			D_GOTO(out_lock, rc = -DER_BUSY);
+			D_GOTO(out_free, rc = -DER_BUSY);
 		} else {
 			/* Pool evict, or pool destroy with force=true */
 			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
@@ -3939,13 +3977,14 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		rc = rdb_tx_update(&tx, &svc->ps_root,
 				   &ds_pool_prop_connectable, &value);
 		if (rc != 0)
-			D_GOTO(out_lock, rc);
+			D_GOTO(out_free, rc);
 		D_DEBUG(DF_DSMS, DF_UUID": pool destroy/evict: mark pool for "
 			"no new connections\n", DP_UUID(in->pvi_op.pi_uuid));
 	}
 
 	rc = rdb_tx_commit(&tx);
 	/* No need to set out->pvo_op.po_map_version. */
+out_free:
 	D_FREE(hdl_uuids);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
@@ -3992,7 +4031,12 @@ ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
 
 rechoose:
 	ep.ep_grp = NULL; /* primary group */
-	rsvc_client_choose(&client, &ep);
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out_client;
+	}
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_EVICT, &rpc);
 	if (rc != 0) {
@@ -4428,3 +4472,4 @@ out_svc:
 	pool_svc_put_leader(svc);
 	return rc;
 }
+

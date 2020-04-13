@@ -202,13 +202,13 @@ teardown(void **state)
 	ret = vos_pool_close(test_arg->poh);
 	assert_int_equal(ret, 0);
 
+	D_ASSERT(test_arg->fname != NULL);
 	ret = vos_pool_destroy(test_arg->fname, test_arg->pool_uuid);
 	assert_int_equal(ret, 0);
 
 	if (vts_file_exists(test_arg->fname))
 		remove(test_arg->fname);
-	if (test_arg->fname)
-		D_FREE(test_arg->fname);
+	D_FREE(test_arg->fname);
 
 	D_FREE(test_arg);
 	return 0;

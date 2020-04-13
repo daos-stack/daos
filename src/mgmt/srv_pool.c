@@ -407,8 +407,10 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_CORPC))
 		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
+		D_ERROR(DF_UUID": dss_rpc_send MGMT_TGT_CREATE: %d\n",
+			DP_UUID(pool_uuid), rc);
 		crt_req_decref(tc_req);
-		goto out_preparation;
+		goto tgt_fail;
 	}
 
 	tc_out = crt_reply_get(tc_req);
@@ -906,8 +908,10 @@ get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 		new_prop->dpp_entries[i].dpe_type = ACCESS_PROPS[i];
 
 	rc = ds_pool_svc_get_prop(pool_uuid, ranks, new_prop);
-	if (rc != 0)
+	if (rc != 0) {
+		daos_prop_free(new_prop);
 		return rc;
+	}
 
 	*prop = new_prop;
 	return 0;

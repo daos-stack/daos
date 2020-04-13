@@ -88,7 +88,7 @@ struct btr_node {
 
 enum {
 	BTR_ORDER_MIN			= 3,
-	BTR_ORDER_MAX			= 255
+	BTR_ORDER_MAX			= 63
 };
 
 /**

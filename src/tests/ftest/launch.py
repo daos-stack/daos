@@ -181,7 +181,6 @@ def set_test_environment(args):
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
-    os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
 
     # Set the default location for daos log files written during testing if not
     # already defined.
@@ -1061,7 +1060,7 @@ def install_debuginfos():
         cmds.append("sudo debuginfo-install -y "                   \
                     "--exclude ompi-debuginfo,gcc-debuginfo,"      \
                                "gcc-base-debuginfo "               \
-                    "daos-server cart libpmemobj python openmpi3")
+                    "daos-server libpmemobj python openmpi3")
     else:
         import yum
 
@@ -1079,7 +1078,7 @@ def install_debuginfos():
         #yum_base.install(**kwarg)
 
         for pkg in ['python', 'glibc', 'daos', 'systemd', 'ndctl', 'libpmem',
-                    'mercury', 'cart', 'libfabric', 'argobots']:
+                    'mercury', 'libfabric', 'argobots']:
             try:
                 debug_pkg = debuginfo_map[pkg]
             except KeyError:

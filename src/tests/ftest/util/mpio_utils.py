@@ -94,27 +94,27 @@ class MpioUtils():
             raise MpioFailed("<ROMIO Test FAILED> \nException occurred: {}"
                              .format(str(excep)))
     # pylint: disable=R0913
-    def run_llnl_mpi4py_hdf5(self, hostfile, pool_uuid, test_repo,
-                             test_name, client_processes):
+    def run_llnl_mpi4py_hdf5(self, hostfile, pool_uuid, svcl, test_repo,
+                             test_name, client_processes, cont_uuid):
         """
             Running LLNL, MPI4PY and HDF5 testsuites
             Function Arguments:
                 hostfile          --client hostfile
                 pool_uuid         --Pool UUID
+                svcl              --Pool SVCL
                 test_repo         --test repo location
                 test_name         --name of test to be tested
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
         env = EnvironmentVariables()
-        env["MPIO_USER_PATH"] = "daos:"
         env["DAOS_POOL"] = "{}".format(pool_uuid)
-        env["DAOS_SVCL"] = "{}".format(0)
-        env["HDF5_PARAPREFIX"] = "daos:"
+        env["DAOS_SVCL"] = "{}".format(":".join([str(item) for item in svcl]))
         mpirun = os.path.join(self.mpichinstall, "bin", "mpirun")
         # running 8 client processes
         if test_name == "llnl" and os.path.isfile(
                 os.path.join(test_repo, "testmpio_daos")):
+            env["MPIO_USER_PATH"] = "daos:"
             test_cmd = [env.get_export_str(),
                         mpirun,
                         '-np',
@@ -126,6 +126,8 @@ class MpioUtils():
             cmd = " ".join(test_cmd)
         elif test_name == "mpi4py" and \
              os.path.isfile(os.path.join(test_repo, "test_io_daos.py")):
+            env["DAOS_CONT"] = "{}".format(cont_uuid)
+
             test_cmd = [env.get_export_str(),
                         mpirun,
                         '-np',
@@ -138,6 +140,7 @@ class MpioUtils():
         elif test_name == "hdf5" and \
              (os.path.isfile(os.path.join(test_repo, "testphdf5")) and
               os.path.isfile(os.path.join(test_repo, "t_shapesame"))):
+            env["HDF5_PARAPREFIX"] = "daos:"
             cmd = ''
             for test in ["testphdf5", "t_shapesame"]:
                 fqtp = os.path.join(test_repo, test)

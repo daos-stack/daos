@@ -200,7 +200,7 @@ def run_agent(test, server_list, client_list=None):
                     nodeset, host_type, directory, user))
 
     # launch the agent
-    export_log_mask = "export D_LOG_MASK=DEBUG;"
+    export_log_mask = "export D_LOG_MASK=DEBUG,RPC=ERR;"
     export_cmd = export_log_mask + "export DD_MASK=mgmt,io,md,epc,rebuild;"
     daos_agent_bin = os.path.join(test.prefix, "bin", "daos_agent")
     daos_agent_cmd = " ".join((export_cmd, daos_agent_bin, "-o", agent_yaml))
@@ -275,6 +275,8 @@ def include_local_host(hosts):
     if hosts is None:
         hosts = [local_host]
     elif local_host not in hosts:
+        # Take a copy of hosts to avoid modifying-in-place
+        hosts = list(hosts)
         hosts.append(local_host)
     return hosts
 

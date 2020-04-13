@@ -24,7 +24,7 @@
 from __future__ import print_function
 
 import os
-import subprocess
+import re
 
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers, get_log_file
@@ -33,6 +33,7 @@ from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
 from command_utils import Mpirun, Orterun, CommandFailure
 from dfuse_utils import Dfuse
+from daos_utils import DaosCommand
 import write_host_file
 
 
@@ -49,7 +50,7 @@ class MdtestBase(TestWithServers):
         self.processes = None
         self.hostfile_clients_slots = None
         self.dfuse = None
-        self.container = None
+        self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -57,6 +58,9 @@ class MdtestBase(TestWithServers):
         self.update_log_file_names()
         # Start the servers and agents
         super(MdtestBase, self).setUp()
+
+        # initialise daos_cmd
+        self.daos_cmd = DaosCommand(self.bin)
 
         # Get the parameters for Mdtest
         self.mdtest_cmd = MdtestCommand()
@@ -67,15 +71,20 @@ class MdtestBase(TestWithServers):
         # Until DAOS-3320 is resolved run IOR for POSIX
         # with single client node
         if self.mdtest_cmd.api.value == "POSIX":
+            self.log.info("Restricting mdtest to one node")
             self.hostlist_clients = [self.hostlist_clients[0]]
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
+        self.log.info('Clients %s', self.hostlist_clients)
+        self.log.info('Servers %s', self.hostlist_servers)
+
     def tearDown(self):
         """Tear down each test case."""
         try:
-            self.dfuse = None
+            if self.dfuse:
+                self.dfuse.stop()
         finally:
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
@@ -90,34 +99,34 @@ class MdtestBase(TestWithServers):
         self.pool.create()
 
     def _create_cont(self):
-        """Create a TestContainer object to be used to create container."""
-        # TO-DO: Enable container using TestContainer object,
-        # once DAOS-3355 is resolved.
-        # Get Container params
-        #self.container = TestContainer(self.pool)
-        #self.container.get_params(self)
+        """Create a container.
 
-        # create container
-        # self.container.create()
-        env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
-        # command to create container of posix type
-        cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
-            self.mdtest_cmd.dfs_pool_uuid.value, self.mdtest_cmd.dfs_svcl.value)
-        try:
-            container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                         shell=True)
-            (output, err) = container.communicate()
-            self.log.info("Container created with UUID %s", output.split()[3])
+        Returns:
+            str: UUID of the created container
 
-        except subprocess.CalledProcessError as err:
-            self.fail("Container create failed:{}".format(err))
+        """
+        cont_type = self.params.get("type", "/run/container/*")
+        result = self.daos_cmd.container_create(
+            pool=self.pool.uuid, svc=self.pool.svc_ranks,
+            cont_type=cont_type)
 
-        return output.split()[3]
+        # Extract the container UUID from the daos container create output
+        cont_uuid = re.findall(
+            "created\s+container\s+([0-9a-f-]+)", result.stdout)
+        if not cont_uuid:
+            self.fail(
+                "Error obtaining the container uuid from: {}".format(
+                    result.stdout))
+        return cont_uuid[0]
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, True)
+
+        self.dfuse = Dfuse(self.hostlist_clients,
+                           self.tmp,
+                           log_file=get_log_file(self.client_log),
+                           dfuse_env=True)
         self.dfuse.get_params(self)
 
         # update dfuse params
@@ -129,10 +138,9 @@ class MdtestBase(TestWithServers):
             self.dfuse.run()
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse), str(NodeSet(self.dfuse.hosts)),
+                           str(self.dfuse), self.dfuse.hosts,
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
-
 
     def execute_mdtest(self):
         """Runner method for Mdtest."""
@@ -155,6 +163,9 @@ class MdtestBase(TestWithServers):
        # Run Mdtest
         self.run_mdtest(self.get_job_manager_command(self.manager),
                         self.processes)
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
     def get_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.
@@ -182,10 +193,13 @@ class MdtestBase(TestWithServers):
             processes (int): number of host processes
         """
         env = self.mdtest_cmd.get_default_env(
-            str(manager), self.tmp, get_log_file(self.client_log))
+            str(manager), get_log_file(self.client_log))
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
+            self.pool.display_pool_daos_space()
             manager.run()
         except CommandFailure as error:
             self.log.error("Mdtest Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
+        finally:
+            self.pool.display_pool_daos_space()

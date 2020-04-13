@@ -262,6 +262,7 @@ cat <<EOF > ~/.config/avocado/avocado.conf
 logs_dir = $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results
 
 [sysinfo.collectibles]
+files = \$HOME/.config/avocado/sysinfo/files
 # File with list of commands that will be executed and have their output
 # collected
 commands = \$HOME/.config/avocado/sysinfo/commands
@@ -272,6 +273,10 @@ cat <<EOF > ~/.config/avocado/sysinfo/commands
 ps axf
 dmesg
 df -h
+EOF
+
+cat <<EOF > ~/.config/avocado/sysinfo/files
+/proc/mounts
 EOF
 
 # apply patch for https://github.com/avocado-framework/avocado/pull/3076/

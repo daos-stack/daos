@@ -2,12 +2,12 @@
 # Versioning Object Store
 
 The Versioning Object Store (VOS) is responsible for providing and maintaining a persistent object store that supports byte-granular access and versioning for a single shard in a <a href="/doc/storage_model.md#DAOS_Pool">DAOS pool</a>.
-It maintains its own metadata in persistent memory and may store data either in persistent memory or on block storage, depending on available storage and performance requirements.
+It maintains its metadata in persistent memory and may store data either in persistent memory or on block storage, depending on available storage and performance requirements.
 It must provide this functionality with minimum overhead so that performance can approach the theoretical performance of the underlying hardware as closely as possible, both with respect to latency and bandwidth.
 Its internal data structures, in both persistent and non-persistent memory, must also support the highest levels of concurrency so that throughput scales over the cores of modern processor architectures.
 Finally, and critically, it must validate the integrity of all persisted object data to eliminate the possibility of silent data corruption, both in normal operation and under all possible recoverable failures.
 
-This section provides the details for achieving the aforementioned design goals in building a versioning object store for DAOS.
+This section provides the details for achieving the design goals discussed above in building a versioning object store for DAOS.
 
 This document contains the following sections:
 
@@ -22,6 +22,9 @@ This document contains the following sections:
     - <a href="#723">Key in VOS KV Stores</a>
     - <a href="#724">Internal Data Structures</a>
 - <a href="#73">Key Array Stores</a>
+- <a href="#82">Conditional Update and MVCC</a>
+    - <a href="#821">Read Timestamps</a>
+    - <a href="#822">MVCC Rules</a>
 - <a href="#74">Epoch Based Operations</a>
     - <a href="#741">VOS Discard</a>
     - <a href="#742">VOS Aggregate</a>
@@ -38,28 +41,28 @@ This document contains the following sections:
 ### In-Memory Storage
 
 The VOS is designed to use a persistent-memory storage model that takes advantage of byte-granular, sub-microsecond storage access possible with new NVRAM technology.
-This enables a disruptive change in performance compared to conventional storage systems for application and system metadata, and small, fragmented and misaligned I/O.
+This enables a disruptive change in performance compared to conventional storage systems for application and system metadata and small, fragmented, and misaligned I/O.
 Direct access to byte-addressable low-latency storage opens up new horizons where metadata can be scanned in less than a second without bothering with seek time and alignment.
 
 The VOS relies on a log-based architecture using persistent memory primarily to maintain internal persistent metadata indexes.
 The actual data can be stored either in persistent memory directly or in block-based NVMe storage.
 The DAOS service has two tiers of storage: Storage Class Memory (SCM) for byte-granular application data and metadata, and NVMe for bulk application data.
-Similar to how PMDK is currently used to faciliate access to SCM, the Storage Performance Development Kit (<a href="https://spdk.io/">SPDK</a>) is used to provide seamless and efficient access to NVMe SSDs.
+Similar to how PMDK is currently used to facilitate access to SCM, the Storage Performance Development Kit (<a href="https://spdk.io/">SPDK</a>) is used to provide seamless and efficient access to NVMe SSDs.
 The current DAOS storage model involves three DAOS server xstreams per core, along with one main DAOS server xstream per core mapped to an NVMe SSD device.
 DAOS storage allocations can occur on either SCM by using a PMDK pmemobj pool, or on NVMe, using an SPDK blob.
-All local server metadata will be stored in a per-server pmemobj pool on SCM and will include all current and relevant NVMe device, pool, and xstream mapping information.
+All local server metadata will be stored in a per-server pmemobj pool on SCM and will include all current and relevant NVMe devices, pool, and xstream mapping information.
 Please refer to the <a href="../bio/README.md">Blob I/O</a> (BIO) module for more information regarding NVMe, SPDK, and per-server metadata.
 Special care is taken when developing and modifying the VOS layer because any software bug could corrupt data structures in persistent memory.
 The VOS, therefore, checksums its persistent data structures despite the presence of hardware ECC.
 
-The VOS provides a lightweight I/O stack fully in user space, leveraging the <a href="pmem.io">PMDK</a> open source libraries developed to support this programming model.
+The VOS provides a lightweight I/O stack fully in user space, leveraging the <a href="pmem.io">PMDK</a> open-source libraries developed to support this programming model.
 
 <a id="64"></a>
 
 ### Lightweight I/O Stack: PMDK Libraries
-Although persistent memory is accessible via direct load/store, updates go through multiple levels of caches including the processor L1/2/3 caches and the NVRAM controller.
+Although persistent memory is accessible via direct load/store, updates go through multiple levels of caches, including the processor L1/2/3 caches and the NVRAM controller.
 Durability is guaranteed only after all those caches have been explicitly flushed.
-The VOS maintains internal data structures in persistent memory that must retain some level of consistency so that operation may be resumed without loss of durable data after an unexpected crash, or power outage.
+The VOS maintains internal data structures in persistent memory that must retain some level of consistency so that operation may be resumed without loss of durable data after an unexpected crash or power outage.
 The processing of a request will typically result in several memory allocations and updates that must be applied atomically.
 
 Consequently, a transactional interface must be implemented on top of persistent memory to guarantee internal VOS consistency.
@@ -84,7 +87,7 @@ The VOS also maintains and provides a way to extract statistics like total space
 
 The primary purpose of the VOS is to capture and log object updates in arbitrary time order and integrate these into an ordered epoch history that can be traversed efficiently on demand.
 This provides a major scalability improvement for parallel I/O by correctly ordering conflicting updates without requiring them to be serialized in time.
-For example, if two application processes agree how to resolve a conflict on a given update, they may write their updates independently with the assurance that they will be resolved in correct order at the VOS.
+For example, if two application processes agree on how to resolve a conflict on a given update, they may write their updates independently with the assurance that they will be resolved in the correct order at the VOS.
 
 The VOS also allows all object updates associated with a given epoch and process group to be discarded.
 This functionality ensures that when a DAOS transaction must be aborted, all associated updates are invisible before the epoch is committed for that process group and becomes immutable.
@@ -92,7 +95,7 @@ This ensures that distributed updates are atomic - i.e.
 when a commit completes, either all updates have been applied or been discarded.
 
 Finally, the VOS may aggregate the epoch history of objects in order to reclaim space used by inaccessible data and to speed access by simplifying indices.
-For example, when an array object is "punched" from 0 to infinity in a given epoch, all data updated after the latest snapshot before this epoch, becomes inaccessible once the container is closed.
+For example, when an array object is "punched" from 0 to infinity in a given epoch, all data updated after the latest snapshot before this epoch becomes inaccessible once the container is closed.
 
 Internally, the VOS maintains an index of container UUIDs that references each container stored in a particular pool.
 The container itself contains three indices.
@@ -102,7 +105,7 @@ The other two indicies are for maintining active and committed <a href="#811">DT
 DAOS supports two types of values, each associated with a Distribution Key (DKEY) and an Attribute Key (AKEY): Single value and Array value.
 The DKEY is used for placement, determining which VOS pool is used to store the data.
 The AKEY identifies the data to be stored.
-The ability to to specify both a DKEY and an AKEY provides applications with flexibility to either distribute or co-locate different values in DAOS.
+The ability to specify both a DKEY and an AKEY provides applications with the flexibility to either distribute or co-locate different values in DAOS.
 A single value is an atomic value meaning that writes to an AKEY update the entire value and reads retrieve the latest value in its entirety.
 An array value is an index of equally sized records.  Each update to an array value only affects the specified records and reads read the latest updates to each record index requested.
 Each VOS pool maintains the VOS provides a per container hierarchy of containers, objects, DKEYs, AKEYs, and values as shown <a href="#7a">below</a>.
@@ -111,9 +114,9 @@ The latter uses the upper bits of the array index to create a DKEY and uses a fi
 For the remainder of the VOS description, Key-Value and Key-Array shall be used to describe the VOS layout rather than these simplifying abstractions.
 In other words, they shall describe the DKEY-AKEY-Value in a single VOS pool.
 
-VOS objects are not created explicitly, but are created on first write by creating the object metadata and inserting a reference to it in the owning container's object index.
-All object updates log the data for each update, which may be an object, DKEY, AKEY, single value, or array value punch or an update to a single value or array value.
-Note that "punch" of an extent of an array object is logged as zeroed extents, rather than causing relevant array extents or key values to be discarded. A punch of an object, DKEY, AKEY, or single value is logged so that reads at a later timestamp see no data.
+VOS objects are not created explicitly but are created on the first write by creating the object metadata and inserting a reference to it in the owning container's object index.
+All object updates log the data for each update, which may be an object, DKEY, AKEY, a single value, or array value punch or an update to a single value or array value.
+Note that "punch" of an extent of an array object is logged as zeroed extents, rather than causing relevant array extents or key values to be discarded. A punch of an object, DKEY, AKEY, or single value is logged, so that reads at a later timestamp see no data.
 This ensures that the full version history of objects remain accessible.   The DAOS api, however, only allows accessing data at snapshots so VOS aggregation can aggresively remove objects, keys, and values that are no longer accessible at a known snapshot.
 
 <a id="7a"></a>
@@ -121,8 +124,8 @@ This ensures that the full version history of objects remain accessible.   The D
 
 When performing lookup on a single value in an object, the object index is traversed to find the index node with the highest epoch number less than or equal to the requested epoch (near-epoch) that matches the key.
 If a value or negative entry is found, it is returned.
-Otherwise a "miss" is returned meaning that this key has never been updated in this VOS.
-This ensures that the most recent value in the epoch history of is returned irrespective of the time-order in which they were integrated, and that all updates after the requested epoch are ignored.
+Otherwise, a "miss" is returned, meaning that this key has never been updated in this VOS.
+This ensures that the most recent value in the epoch history of is returned irrespective of the time-order in which they were integrated and that all updates after the requested epoch are ignored.
 
 Similarly, when reading an array object, its index is traversed to create a gather descriptor that collects all object extent fragments in the requested extent with the highest epoch number less than or equal to the requested epoch.
 Entries in the gather descriptor either reference an extent containing data, a punched extent that the requestor can interpret as all zeroes, or a "miss", meaning that this VOS has received no updates in this extent.
@@ -132,9 +135,9 @@ Again, this ensures that the most recent data in the epoch history of the array 
 
 ### VOS Indexes
 
-The value of the object index table points to a DKEY index.
-The values in the DKEY index, indexed by DKEY and epoch, point to an AKEY index.
-The values in the AKEY index, indexed by AKEY and epoch, point to either a Single Value index or an Array index.
+The value of the object index table, indexed by OID, points to a DKEY index.
+The values in the DKEY index, indexed by DKEY, point to an AKEY index.
+The values in the AKEY index, indexed by AKEY, point to either a Single Value index or an Array index.
 A single value index is referenced by epoch and will return the latest value inserted at or prior to the epoch.
 An array value is indexed by the extent and the epoch and will return portions of extents visible at the epoch.
 
@@ -143,6 +146,12 @@ For example, an object can be replicated, erasure coded, use checksums, or have 
 If integer or lexical keys are used, the object index is ordered by keys, making queries, such as array size, more efficient.
 Otherwise, keys are ordered by the hashed value in the index.
 The object ID is 128 bits.  The upper 32 bits are used to encodes the object type, and key types while the lower 96 bits are a user defined identifier that must be unique to the container.
+
+Each object, dkey, and akey has an associated incarnation log.  The incarnation
+log can be described as an in-order log of creation and punch events for the
+associated entity.   The log is checked for each entity in the path to the value
+to ensure the entity, and therefore the value, is visible at the requested
+time.
 
 <a id="712"></a>
 
@@ -187,15 +196,15 @@ Additionally, it supports iteration through visible extents.
 
 ## Key Value Stores (Single Value)
 
-High performance simulations generating large quantities of data require indexing and analysis of data, to achieve good insight.
-Key Value (KV) stores can play a vital role in simplifying storage of such complex data and allowing efficient processing.
+High-performance simulations generating large quantities of data require indexing and analysis of data, to achieve good insight.
+Key Value (KV) stores can play a vital role in simplifying the storage of such complex data and allowing efficient processing.
 
 VOS provides a multi-version, concurrent KV store on persistent memory that can grow dynamically and provide quick near-epoch retrieval and enumeration of key values.
 
 Although there is an array of previous work on KV stores, most of them focus on cloud environments and do not provide effective versioning support.
-Some KV stores , provide versioning support, but expect monotonically increasing ordering of versions and further, do not have the concept of near-epoch retrieval.
+Some KV stores provide versioning support but expect monotonically increasing ordering of versions and further, do not have the concept of near-epoch retrieval.
 
-VOS must be able to accept insertion of KV pairs at any epoch, and must be able to provide good scalability for concurrent updates and lookups on any key-value object.
+VOS must be able to accept insertion of KV pairs at any epoch and must be able to provide good scalability for concurrent updates and lookups on any key-value object.
 KV objects must also be able to support any type and size of keys and values.
 
 
@@ -203,21 +212,21 @@ KV objects must also be able to support any type and size of keys and values.
 
 ### Operations Supported with Key Value Store
 
-VOS supports large keys and values with four types of operations namely, update, lookup, punch, and key enumeration.
+VOS supports large keys and values with four types of operations; update, lookup, punch, and key enumeration.
 
 The update and punch operations add a new key to a KV store or log a new value of an existing key.
 Punch logs the special value "punched", effectively a negative entry, to record the epoch when the key was deleted.
-Sharing the same epoch for both an update and a punch of the same object, key, value, or extent is disallowed and VOS will return an error when such is attempted.
+Sharing the same epoch for both an update and a punch of the same object, key, value, or extent is disallowed, and VOS will return an error when such is attempted.
 
 Lookup traverses the KV metadata to determine the state of the given key at the given epoch.
 If the key is not found at all, a "miss" is returned to indicate that the key is absent from this VOS.
-Otherwise the value at the near-epoch or greatest epoch less than or equal to the requested epoch is returned.
+Otherwise, the value at the near-epoch or greatest epoch less than or equal to the requested epoch is returned.
 If this is the special "punched" value, it means the key was deleted in the requested epoch.
 The value here refers to the value in the internal tree-data structure.
-The key-value record of the KV-object is stored in the tree as value of its node.
+The key-value record of the KV-object is stored in the tree as the value of its node.
 So in case of punch this value contains a "special" return code/flag to identify the punch operation.
 
-VOS also supports enumeration of keys belonging to a particular epoch.
+VOS also supports the enumeration of keys belonging to a particular epoch.
 
 <a id="723"></a>
 
@@ -234,7 +243,7 @@ keys. The actual key still must be compared for correctness.
 #### Direct Keys
 The use of hashed keys results in unordered keys.  This is problematic in cases
 where the user's algorithms may benefit from ordering.   Therefore, VOS supports
-two types of keys that are not hashed, but rather interpreted directly.
+two types of keys that are not hashed but rather interpreted directly.
 ##### Lexical Keys
 Lexical keys are compared using a lexical ordering.  This enables usage such as
 sorted strings.   Presently, lexical keys are limited in length, however to
@@ -246,34 +255,34 @@ as a dkey and the lower bits as an offset. This enables such objects to use the
 the DAOS key query API to calculate the size more efficiently.
 
 KV stores in VOS allow the user to maintain versions of the different KV pairs in random order.
-For example, an update can happen in epoch 10 and followed by another update in epoch 5, where HCE is less than 5.
+For example, an update can happen in epoch 10, and followed by another update in epoch 5, where HCE is less than 5.
 To provide this level of flexibility, each key in the KV store must maintain the epoch of update/punch along with the key.
 The ordering of entries in index trees first happens based on the key, and then based on the epochs.
 This kind of ordering allows epochs of the same key to land in the same subtree, thereby minimizing search costs.
 Conflict resolution and tracking is performed using <a href="#81">DTX</a> described later.
-DTX ensures that replicas are consistent and failed or uncommitted updates are not visible externally.
+DTX ensures that replicas are consistent, and failed or uncommitted updates are not visible externally.
 
 <a id="724"></a>
 
 ### Internal Data Structures
 
-Designing a VOS KV store requires a tree data structure that can grow dynamically and re-main self-balanced.
-The tree needs to be balanced to ensure that time complexity does not increase with increase in tree size.
-Tree data structures considered are red-black trees and B+ Trees, the former a binary search tree and the latter an n-ary search tree.
+Designing a VOS KV store requires a tree data structure that can grow dynamically and remain self-balanced.
+The tree needs to be balanced to ensure that time complexity does not increase with an increase in tree size.
+Tree data structures considered are red-black trees and B+ Trees, the former is a binary search tree, and the latter an n-ary search tree.
 
 Although red-black trees provide less rigid balancing compared to AVL trees, they compensate by having cheaper rebalancing cost.
-Red-black trees are more widely used in examples such as the Linux kernel, the java-util library and the C++ standard template library.
+Red-black trees are more widely used in examples such as the Linux kernel, the java-util library, and the C++ standard template library.
 B+ trees differ from B trees in the fact they do not have data associated with their internal nodes.
 This can facilitate fitting more keys on a page of memory.
-In addition, leaf-nodes of a B+ trees are linked; this means doing a full scan would require just one linear pass through all the leaf nodes, which can potentially minimize cache misses to access data in comparison to a B Tree.
+In addition, leaf-nodes of B+ trees are linked; this means doing a full scan would require just one linear pass through all the leaf nodes, which can potentially minimize cache misses to access data in comparison to a B Tree.
 
 To support update and punch as mentioned in the previous section (<a href="#721">Operations Supported with Key Value Stores</a>), an epoch-validity range is set along with the associated key for every update or punch request, which marks the key to be valid from the current epoch until the highest possible epoch.
-Updates to the same key on a future epoch or past epoch, modifies the end epoch validity of the previous update or punch accordingly.
-This way only one key has a validity range for any given key-epoch pair lookup while the entire history of updates to the key are recorded.
+Updates to the same key on a future epoch or past epoch modify the end epoch validity of the previous update or punch accordingly.
+This way only one key has a validity range for any given key-epoch pair lookup while the entire history of updates to the key is recorded.
 This facilitates nearest-epoch search.
 Both punch and update have similar keys, except for a simple flag identifying the operation on the queried epoch.
 Lookups must be able to search a given key in a given epoch and return the associated value.
-In addition to the epoch-validity range the container handle cookie generated by DAOS is also stored along with the key of the tree.
+In addition to the epoch-validity range, the container handle cookie generated by DAOS is also stored along with the key of the tree.
 This cookie is required to identify behavior in case of overwrites on the same epoch.
 
 A simple example input for crearting a KV store is listed in the <a href="#7c">Table</a> below.
@@ -297,20 +306,20 @@ For explanation purposes, representative keys and values are used in the example
 
 ![../../doc/graph/Fig_011.png](../../doc/graph/Fig_011.png "Red Black Tree based KV Store with Multi-Key")
 
-The red black tree, like any traditional binary tree, organizes the keys lesser than the root to the left subtree and keys greater than the root to the right subtree.
+The red-black tree, like any traditional binary tree, organizes the keys lesser than the root to the left subtree and keys greater than the root to the right subtree.
 Value pointers are stored along with the keys in each node.
-On the other hand, a B+ Tree based index stores keys in ascending order at the leaves, which is where the value is stored.
+On the other hand, a B+ Tree-based index stores keys in ascending order at the leaves, which is where the value is stored.
 The root nodes and internal nodes (color-coded in blue and maroon accordingly) facilitate locating the appropriate leaf node.
 Each B+ Tree node has multiple slots, where the number of slots is determined from the order.
 The nodes can have a maximum of order-1 slots.
-The container handle cookie must be stored with every key in case of red black trees, but in case of B+ Trees having cookies only in leaf nodes would suffice, since cookies are not used in traversing.
+The container handle cookie must be stored with every key in case of red-black trees, but in case of B+ Trees having cookies only in leaf nodes would suffice, since cookies are not used in traversing.
 
-In the <a href="#7e">table</a> below, n is number of entries in tree, m is the number of keys, k is the number of the key, epoch entries between two unique keys.
+In the <a href="#7e">table</a> below, n is the number of entries in the tree, m is the number of keys, k is the number of the key, epoch entries between two unique keys.
 
 <b>Comparison of average case computational complexity for index</b>
 <a id="7e"></a>
 
-|Operation|Reb-black tree|B+Tree|
+|Operation|Red-black tree|B+Tree|
 |---|---|---|
 |Update|O(log2n)|O(log<sub>b</sub>n)|
 |Lookup|O(log2n)|O(log<sub>b</sub>n)|
@@ -319,13 +328,13 @@ In the <a href="#7e">table</a> below, n is number of entries in tree, m is the n
 
 Although both these solutions are viable implementations, determining the ideal data structure would depend on the performance of these data structures on persistent memory hardware.
 
-VOS also supports concurrent access to these structures, which mandates that the data structure of choice provide good scalability while there are concurrent updates.
+VOS also supports concurrent access to these structures, which mandates that the data structure of choice provides good scalability while there are concurrent updates.
 Compared to B+ Tree, rebalancing in red-black trees causes more intrusive tree structure change; accordingly, B+ Trees may provide better performance with concurrent accesses.
 Furthermore, because B+ Tree nodes contain many slots depending on the size of each node, prefetching in cache can potentially be easier.
 In addition, the sequential computational complexities in the <a href="#7e">Table</a> above show that a B+ Tree-based KV store with a reasonable order, can perform better in comparison to a Red-black tree.
 
 VOS supports enumerating keys valid in a given epoch.
-VOS provides an iterator-based approach, to extract all the keys and values from a KV object.
+VOS provides an iterator-based approach to extract all the keys and values from a KV object.
 Primarily, KV indexes are ordered by keys and then by epochs.
 With each key holding a long history of updates, the size of a tree can be huge.
 Enumeration with a tree-successors approach can result in an asymptotic complexity of O(m* log (n) + log (n)) with red-black trees, where m is the number of keys valid in the requested epoch.
@@ -335,12 +344,12 @@ Because "m" keys need to be retrieved, O( m * log2 (n)) would be the complexity 
 In the case of B+-trees, leaf nodes are in ascending order, and enumeration would be to parse the leaf nodes directly.
 The complexity would be O (m * k + logbn), where m is the number of keys valid in an epoch, k is the number of entries between two different keys in B+ tree leaf nodes, and b is the order for the B+tree.
 Having "k" epoch entries between two distinct keys incurs in a complexity of O(m * k).
-The additional O(logbn) is required to locate first leftmost key in the tree.
+The additional O(logbn) is required to locate the first leftmost key in the tree.
 The generic iterator interfaces as shown in <a href="#7d">Figure</a> above would be used for KV enumeration also.
 
-In addition to enumeration of keys for an object valid in an epoch, VOS also supports enumerating keys of an object modified between two epochs.
+In addition to the enumeration of keys for an object valid in an epoch, VOS also supports enumerating keys of an object modified between two epochs.
 The epoch index table provides keys updated in each epoch.
-On aggregating the list of keys associated with each epoch, (by keeping the latest update of the key and discarding the older versions) VOS can generate a list of keys, with their latest epoch.
+On aggregating the list of keys associated with each epoch, (by keeping the latest update of the key and discarding the older versions) VOS can generate a list of keys with their latest epoch.
 By looking up each key from the list in its associated index data structure, VOS can extract values with an iterator-based approach.
 
 <a id="73"></a>
@@ -379,12 +388,12 @@ VOS array objects also support punch over both partial and complete extent range
 <a id="7j"></a>
 
 R-Trees provide a reasonable way to represent both extent and epoch validity ranges in such a way as to limit the search space required to handle a read request.
-VOS provides a specialied R-Tree, caled an Extent-Validity tree (EV-Tree) to store and query versioned array indicies.
+VOS provides a specialized R-Tree, called an Extent-Validity tree (EV-Tree) to store and query versioned array indices.
 In a traditional R-Tree implementation, rectangles are bounded and immutable.
 In VOS, the "rectangle" consists of the extent range on one axis and the epoch validity range on the other.
 However, the epoch validity range is unknown at the time of insert so all rectangles are inserted assuming an upper bound of infinity.
-Originally, the DAOS design called for splitting such in-tree rectangles on insert to bound the validity range but a few factors resulted in the decision to keep the original validity range.  First, updates to persistent memory are an order of magnitude more expensive than lookups.  Second, overwrites between snapshots can be deleted by aggregation thus maintaining a reasonably small history of overlapping writes.   As such, the EV-Tree implements a two part algorithm on fetch.
-1. Find all overlapping extents.  This will include all writes that happened before the requested epoch even if they are covered by a subsequent write.
+Originally, the DAOS design called for splitting such in-tree rectangles on insert to bound the validity range but a few factors resulted in the decision to keep the original validity range.  First, updates to persistent memory are an order of magnitude more expensive than lookups.  Second, overwrites between snapshots can be deleted by aggregation, thus maintaining a reasonably small history of overlapping writes.   As such, the EV-Tree implements a two part algorithm on fetch.
+1. Find all overlapping extents.  This will include all writes that happened before the requested epoch, even if they are covered by a subsequent write.
 2. Sort this by extent start and then by epoch
 3. Walk through the sorted array, splitting extents if necessary and marking them as visible as applicable
 4. Re-sort the array.  This final sort can optionally keep or discard holes and covered extents, depending on the use case.
@@ -405,23 +414,161 @@ The figure <a href="#7k">above</a> shows the EV-Tree construction for the same e
 ![../../doc/graph/Fig_017.png](../../doc/graph/Fig_017.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
 
 Inserts in an EV-Tree locate the appropriate leaf-node to insert, by checking for overlap.
-If multiple bounding boxes overlap, the bounding box with least enlargement is chosen.
+If multiple bounding boxes overlap, the bounding box with the least enlargement is chosen.
 Further ties are resolved by choosing the bounding box with the least area.
 The maximum cost of each insert can be O (log<sub>b</sub>n).
 
 Searching an EV-Tree would work similar to R-Tree, aside from the false overlap issue described above.
 All overlapping internal nodes must be pursued, till there are matching internal nodes and leaves.
 Since extent ranges can span across multiple rectangles, a single search can hit multiple rectangles.
-In an ideal case (where the entire extent range falls on one rectangle) the read cost is O(log<sub>b</sub>n) where b is the order of the tree.
-The sorting and splitting phase adds additional overhead of O(n log n) where n is the number of matching extents.
-In the worst case, this is equivalent to all extents in the tree but this is mitigated by aggregation and the expectation that the tree associated with a single shard of a single key will be relatively small.
+In an ideal case (where the entire extent range falls on one rectangle), the read cost is O(log<sub>b</sub>n) where b is the order of the tree.
+The sorting and splitting phase adds the additional overhead of O(n log n) where n is the number of matching extents.
+In the worst case, this is equivalent to all extents in the tree, but this is mitigated by aggregation and the expectation that the tree associated with a single shard of a single key will be relatively small.
 
-For deleting nodes from an EV-Tree, same approach as search can be used to locate nodes, and nodes/slots can be deleted.
+For deleting nodes from an EV-Tree, the same approach as search can be used to locate nodes, and nodes/slots can be deleted.
 Once deleted, to coalesce multiple leaf-nodes that have less than order/2 entries, reinsertion is done.
 EV-tree reinserts are done (instead of merging leaf-nodes as in B+ trees) because on deletion of leaf node/slots, the size of bounding boxes changes, and it is important to make sure the rectangles are organized into minimum bounding boxes without unnecessary overlaps.
 In VOS, delete is required only during aggregation and discard operations.
 These operations are discussed in a following section (<a hfer="#74">Epoch Based Operations</a>).
 
+<a id="82"></a>
+## Conditional Update and MVCC
+
+VOS supports conditional operations on individual dkeys and akeys.  The
+following operations are supported:
+
+- Conditional fetch:  Fetch if the key exists, fail with -DER_NONEXIST otherwise
+- Conditional update: Update if the key exists, fail with -DER_NONEXIST otherwise
+- Conditional insert: Update if the key doesn't exist, fail with -DER_EXIST otherwise
+- Conditional punch:  Punch if the key exists, fail with -DER_NONEXIST otherwise
+
+These operations provide atomic operations enabling certain use cases that
+require such.  Conditional operations are implemented using a combination of
+existence checks and read timestamps.   The read timestamps enable limited
+MVCC to prevent read/write races and provide atomicity guarantees.
+
+<a id="821"></a>
+### Read Timestamps
+
+VOS tracks multiple read timestamps for containers, objects, dkeys, and akeys
+for the express purpose of supporting conditional operations and
+distributed transactions from individual clients.  These timestamps are
+allocated from a flat array, partitioned by type, using an LRU algorithm
+for each type (container, object, dkey, akey, and negative entries for
+each).   For example, when a key is accessed, it is looked up by the stored
+index.  If it's still in cache, the timestamps are used.   If it isn't
+in cache, or upon creation, it is pulled into cache by evicting the LRU
+entry for the type.   This provides an O(1) lookup for timestamps
+associated with each entity.  Two read timestamps for each entity: 1. A low
+timestamp (entity.low) indicating that _all_ nodes in the subtree rooted at the
+entity have been read at entity.low and 2. A high timestamp (entity.high)
+indicating that _at least_ one node in the subtree rooted at the entity has
+been read at entity.high. For any leaf node (i.e., akey), low == high; for any
+non-leaf node, low <= high.
+
+<a id="822"></a>
+### MVCC Rules
+
+Every DAOS I/O operation belongs to a transaction. If a user does not associate
+an operation with a transaction, DAOS regards this operation as a
+single-operation transaction. A conditional update, as defined above, is
+therefore regarded as a transaction comprising a conditional check, and if the
+check passes, an update, or punch operation.
+
+Every transaction gets an epoch. Single-operation transactions and conditional
+updates get their epochs from the redundancy group servers they access,
+snapshot read transactions get their epoch from the snapshot records and other
+transactions get their epochs from the initiating clients' HLC. A transaction
+performs all operations using its epoch.
+
+The MVCC rules ensure that transactions execute as if they are serialized in
+their epoch order while complying with external consistency, as long as the
+system clock offsets are always within the expected maximal system clock offset
+(epsilon). For convenience, the rules classify the I/O operations into reads
+and writes:
+
+  - Reads
+      - Fetch akeys [akey level]
+      - Check object emptiness [object level]
+      - Check dkey emptiness [dkey level]
+      - Check akey emptiness [akey level]
+      - List objects under container [container level]
+      - List dkeys under object [object level]
+      - List akeys under dkey [dkey level]
+      - Query min/max dkeys under object [object level]
+      - Query min/max akeys under dkey [dkey level]
+  - Writes
+      - Update akeys [akey level]
+      - Punch akeys [akey level]
+      - Punch dkey [dkey level]
+      - Punch object [object level]
+
+And each read or write is at one of the four levels: container, object, dkey,
+and akey. An operation is regarded as an access to the whole subtree rooted at
+its level. Although this introduces a few false conflicts (e.g., a list
+operation versus a lower level update that does not change the list result),
+the assumption simplifies the rules.
+
+A read at epoch e follows these rules:
+
+    // Epoch uncertainty check
+    if e is uncertain
+        if there is any overlapping, unaborted write in (e, e + epsilon]
+            reject
+
+    find the highest overlapping, unaborted write in [0, e]
+    if the write is not committed
+        wait for the write to commit or abort
+        if aborted
+            retry the find skipping this write
+
+    // Read timestamp update
+    for level i from container to the read's level lv
+        update i.high
+    update lv.low
+
+A write at epoch e follows these rules:
+
+    // Epoch uncertainty check
+    if e is uncertain
+        if there is any overlapping, unaborted write in (e, e + epsilon]
+            reject
+
+    // Read timestamp check
+    for level i from container to one level above the write
+        if (i.low > e) || ((i.low == e) && (other reader @ i.low))
+            reject
+    if (i.high > e) || ((i.high == e) && (other reader @ i.high))
+        reject
+
+    find if there is any overlapping write at e
+    if found and from a different transaction
+        reject
+
+A transaction involving both reads and writes must follow both sets of rules.
+As an optimization, read-only transactions do not need to update read
+timestamps. Snapshot creations, however, must update the read timestamps as if
+it is a transaction reading the whole container.
+
+When a transaction is rejected, it restarts with the same transaction ID but a
+higher epoch. If the epoch becomes higher than the original epoch plus epsilon,
+the epoch becomes certain, guaranteeing the restarts due to the epoch
+uncertainty checks are bounded.
+
+Deadlocks among transactions are impossible. A transaction t_1 with epoch e_1
+may block a transaction t_2 with epoch e_2 only when t_2 needs to wait for
+t_1's writes to commit. Since the client caching is used, t_1 must be
+committing, whereas t_2 may be reading or committing. If t_2 is reading, then
+e_1 <= e_2. If t_2 is committing, then e_1 < e_2. Suppose there is a cycle of
+transactions reaching a deadlock. If the cycle includes a committing-committing
+edge, then the epochs along the cycle must increase and then decrease, causing
+a contradiction. If all edges are committing-reading, then there must be two
+such edges together, causing a contradiction that a reading transaction cannot
+block other transactions. Deadlocks are, therefore, not a concern.
+
+If an entity keeps getting reads with increasing epochs, writes to this entity
+may keep being rejected due to the entity's ever-increasing read timestamps. A
+solution to starvation problems like this is a work in progress.
 
 <a id="74"></a>
 
@@ -430,13 +577,13 @@ These operations are discussed in a following section (<a hfer="#74">Epoch Based
 Epochs provide a way for modifying VOS objects without destroying the history of updates/writes.
 Each update consumes memory and discarding unused history can help reclaim unused space.
 VOS provides methods to compact the history of writes/updates and reclaim space in every storage node.
-VOS also supports rollback of history incase transactions are aborted.
+VOS also supports rollback of history in case transactions are aborted.
 The DAOS API timestamp corresponds to a VOS epoch.
-The API only allows reading either the latest state or from a persistent snapshot which is simply a reference on a given epoch.
+The API only allows reading either the latest state or from a persistent snapshot, which is simply a reference on a given epoch.
 
 To compact epochs, VOS allows all epochs between snapshots to be aggregated, i.e., the value/extent-data of the latest epoch of any key is always kept over older epochs.
 This also ensures that merging history does not cause loss of exclusive updates/writes made to an epoch.
-To rollback history VOS provides the discard operation.
+To rollback history, VOS provides the discard operation.
 
 ```C
 int vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
@@ -451,38 +598,38 @@ Aggregate and discard operations in VOS accept a range of epochs to be aggregate
 ### VOS Discard
 
 Discard forcefully removes epochs without aggregation.
-Use of this operation is necessary only when value/extent-data associated with a pair needs to be discarded.
+This operation is necessary only when the value/extent-data associated with a pair needs to be discarded.
 During this operation, VOS looks up all objects associated with each cookie in the requested epoch range from the cookie index table and removes the records directly from the respective object trees by looking at their respective epoch validity.
-DAOS requires discard to service abort requests.
-Abort operations require discard to be synchronous.
+DAOS requires a discard to service abort requests.
+Abort operations require a discard to be synchronous.
 
 During discard, keys and byte-array rectangles need to be searched for nodes/slots whose end-epoch is (discard_epoch -  1).
-This means that there was an update before the now discarded epoch and its validity got modified to support near-epoch lookup.
+This means that there was an update before the now discarded epoch, and its validity got modified to support near-epoch lookup.
 This epoch validity of the previous update has to be extended to infinity to ensure future lookups at near-epoch would fetch the last known updated value for the key/extent range.
 
 <a id="742"></a>
 
 ### VOS Aggregate
 
-During aggregation, VOS must retain the latest update to a key/extent-range discarding the others and any updates visible at a persisitent snapshot.
-VOS can freely remove or consolidate keys or extents so long as it doesn't alter the view visible at the latest timestamp or at any persistent snapshot epoch.
+During aggregation, VOS must retain the latest update to a key/extent-range discarding the others and any updates visible at a persistent snapshot.
+VOS can freely remove or consolidate keys or extents so long as it doesn't alter the view visible at the latest timestamp or any persistent snapshot epoch.
 Aggregation makes use of the vos_iterate API to find both visible and hidden entries between persistent snapshots and removes hidden keys and extents and merges contiguous partial extents to reduce metadata overhead.
 Aggregation can be an expensive operation but doesn't need to consume cycles on the critical path.
-A special aggregation ULT processes aggregation, yielding frequently to avoid blocking continuing I/O.
+A special aggregation ULT processes aggregation, frequently yielding to avoid blocking the continuing I/O.
 
 <a id="79"></a>
 
 ## VOS Checksum Management
 
 VOS is responsible for storing checksums during an object update and retrieve checksums on an object fetch.
-Checksums will be stored with other VOS metadata in storage class memory.  For Single Value types a single checksum is stored.
+Checksums will be stored with other VOS metadata in storage class memory.  For Single Value types, a single checksum is stored.
 For Array Value types, multiple checksums can be stored based on the chunk size.
 
 The **Chunk Size** is defined as the maximum number of bytes of data that a checksum is derived from.
 While extents are defined in terms of records, the chunk size is defined in terms of bytes.
 When calculating the number of checksums needed for an extent, the number of records and the record size is needed.
 Checksums should typically be derived from Chunk Size bytes, however,
-if the extent is smaller than Chunk Size or an extent is not "Chunk Aligned" than a checksum might be derived from bytes smaller than Chunk Size.
+if the extent is smaller than Chunk Size or an extent is not "Chunk Aligned," then a checksum might be derived from bytes smaller than Chunk Size.
 
 The **Chunk Alignment** will have an absolute offset, not an I/O offset. So even if an extent is exactly, or less than, Chunk Size bytes long, it may have more than one Chunk if it crosses the alignment barrier.
 
@@ -502,8 +649,8 @@ The following diagram illustrates the overall VOS layout and where checksums wil
 
 ### Checksum VOS Flow (vos_obj_update/vos_obj_fetch)
 
-On an update, the checksum(s) are part of the I/O Descriptor.
-Then, in akey_update_single/akey_update_recx, the checksum buffer pointer is included in the internal structures used for tree updates (vos_rec_bundle for SV and evt_entry_in for EV). As already mentioned, the size of the persistent structure allocated includes the size of the checksum(s). Finally, while storing the record (svt_rec_store) or extent (evt_insert) the checksum(s) are copied to the end of the persistent structure.
+On update, the checksum(s) are part of the I/O Descriptor.
+Then, in akey_update_single/akey_update_recx, the checksum buffer pointer is included in the internal structures used for tree updates (vos_rec_bundle for SV and evt_entry_in for EV). As already mentioned, the size of the persistent structure allocated includes the size of the checksum(s). Finally, while storing the record (svt_rec_store) or extent (evt_insert), the checksum(s) are copied to the end of the persistent structure.
 
 On a fetch, the update flow is essentially reversed.
 
@@ -522,7 +669,7 @@ VOS provides a tool vos_stats.py that can take a set of assumptions about how ma
 
 To run an example, first setup the paths
 ```
-[~/daos]$ source ./scons_local/utils/setup_local.sh
+[~/daos]$ source ./utils/sl/setup_local.sh
 /home/jvolivie/daos
 Build vars file found: ./.build_vars.sh
 ```
@@ -532,7 +679,7 @@ Then run vos_size to create vos_size.yaml with metadata size information
 [~/daos]$ vos_size
 ```
 
-Finally, execute vos_size.py to get a meta data estimate for the use cases in an input.yaml.
+Finally, execute vos_size.py to get a metadata estimate for the use cases in an input.yaml.
 An example input yaml is installed to /etc.  This file has comments documenting configuration
 options.
 ```
@@ -573,7 +720,7 @@ transaction to guarantee consistency among replicas.
 When an application wants to modify (update or punch) an object with multiple
 replicas, the client sends the modification RPC to the leader replica (Via
 <a href="#812">DTX Leader Election</a> algorithm discussed below).  The leader
-dispatches the RPC to the other replicas and each replica makes its own
+dispatches the RPC to the other replicas, and each replica makes its
 modification in parallel.  Bulk transfers are not forwarded by the leader but
 rather transferred directly from the client, improving load balance and
 decreasing latency by utilizing the full client-server bandwidth.
@@ -584,33 +731,33 @@ current RPC within the container.  All modifications in a DTX are logged in a
 DTX transaction table and back references to the table are kept in each modified
 record.  After local modifications are done, each non-leader replica marks the
 DTX state as 'prepared' and replies to the leader replica.  The leader sets the
-DTX state to 'committable' as soon as it has completed its own modifications and
+DTX state to 'committable' as soon as it has completed its modifications and
 has received successful replies from all replicas.  If any replica(s) failed to
-execute the modification, it will reply to the leader with failure and the
+execute the modification, it will reply to the leader with failure, and the
 leader will ask remaining replicas to 'abort' the DTX.   Once the DTX is set
 by the leader to 'committable' or 'abort', it replies to the client with the
 appropriate status.
 
 The client may consider a modification complete as soon as it receives a
 successful reply from the leader, regardless of whether the DTX is actually
-'committed' or not.   It is the responsibilty of the leader replica to commit
+'committed' or not.   It is the responsibility of the leader replica to commit
 the 'committable' DTX asynchronously, when the 'committable' DTX count exceeds
 some threshold or piggybacked via dispatched RPCs due to potential conflict with
 subsequent modifications.
 
 When an application wants to read something from an object with multiple
 replicas, the client can send the RPC to any replica.  On the server side, if
-related DTX has been committed or is committable, the record can be returned to
-If the DTX state is prepared and the replica is not the leader, it will reply
+the related DTX has been committed or is committable, the record can be returned to.
+If the DTX state is prepared, and the replica is not the leader, it will reply
 to the client telling it to send the RPC to the leader instead.  If it is the
 leader and is in any state other than 'committed' or 'committable', the entry
-is ignored and the latest committed modification is returned to the client.
+is ignored, and the latest committed modification is returned to the client.
 
-The DTX model is built inside DAOS container.  Each container maintains its own
-DTX table that is organized as two B+tree in SCM: one for active DTXs and the
+The DTX model is built inside a DAOS container.  Each container maintains its own
+DTX table that is organized as two B+trees in SCM: one for active DTXs and the
 other for committed DTXs.
 The following diagram represents the modification of a replicated object under
-DTX model.
+the DTX model.
 
 <b>Modify multiple replicated object under DTX model</b>
 
@@ -626,19 +773,19 @@ replicas, including:
 1. All modification RPCs are sent to the leader.  The leader performs necessary
 sanity checks before dispatching modifications to other replicas.
 
-2. Non-leader replicas tell client to redirect reads in 'prepared' DTX state to
-the leader replica.  The leader, therefore, may handle a heaver load on reads
+2. Non-leader replicas tell the client to redirect reads in 'prepared' DTX state to
+the leader replica.  The leader, therefore, may handle a heavier load on reads
 than non-leaders.
 
-To avoid general load imbalance, leader selection is done for each object or
+To avoid general load imbalance, the leader selection is done for each object or
 dkey following these general guidelines:
 
 R1: When different replicated objects share the same redundancy group, the same
 leader should not be used for each object.
 
-R2: When a replicated object with multiple DKEYs spans multiple redundancy
+R2: When a replicated object with multiple DKEYs span multiple redundancy
 groups, the leaders in different redundancy groups should be on different
 servers.
 
 R3: Servers that fail frequently should be avoided in leader selection to avoid
-too frequent leader migration.
+frequent leader migration.

@@ -578,7 +578,7 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
 #endif
 }
 
-#define OW_IOD_SIZE	1024 /* used for mixed record overwrite */
+#define OW_IOD_SIZE	1024ULL /* used for mixed record overwrite */
 /**
  * Test mixed SCM & NVMe overwrites in different transactions with a large
  * record size. Iod size is needed for insert/lookup since the same akey is
@@ -1956,7 +1956,7 @@ next_step:
 	print_message("validating data ... sg_nr_out %d, iod_size %d.\n",
 		      sgl.sg_nr_out, (int)iod.iod_size);
 	assert_int_equal(sgl.sg_nr_out, 2);
-	assert_memory_equal(buf, buf_out, sizeof(buf));
+	assert_memory_equal(buf, buf_out, buf_len);
 
 	print_message("short read should get iov_len with tail hole trimmed\n");
 	memset(buf_out, 0, buf_len);
@@ -3300,6 +3300,70 @@ punch_then_lookup(void **state)
 	}
 }
 
+/**
+ * Verify the number of record after punch and enumeration.
+ */
+static void
+punch_enum_then_verify_record_count(void **state)
+{
+	daos_obj_id_t	oid;
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_anchor_t	anchor;
+	char		data_buf[100];
+	char		fetch_buf[100] = { 0 };
+	int		i;
+	int		total_rec = 0;
+	uint32_t	number;
+
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	memset(data_buf, 'a', 100);
+	/** Insert record with 100 extents **/
+	print_message("Insert single record with 100 extents\n");
+	insert_single_with_rxnr("dkey", "akey", 0, data_buf,
+		1, 100, DAOS_TX_NONE, &req);
+
+	/** Punch record extent from 50 to 60 **/
+	print_message("Punch record 50 to 60:\n");
+	punch_rec_with_rxnr("dkey", "akey", 50, 10, DAOS_TX_NONE, &req);
+
+	/** Lookup all the records **/
+	print_message("Lookup all the records:\n");
+	lookup_single_with_rxnr("dkey", "akey", 0, fetch_buf,
+		1, 100, DAOS_TX_NONE, &req);
+
+	print_message("Verify punch and non-punch data:\n");
+	for (i = 0; i < 100; i++) {
+		/** Verify the punch record extent from 50-59 are empty **/
+		if (i >= 50 && i <= 59)
+			assert_memory_equal(&fetch_buf[i], "", 1);
+		/** Verify the non-punch records extent data **/
+		else
+			assert_memory_equal(&fetch_buf[i], "a", 1);
+	}
+
+	/** Enumerate record */
+	print_message("Enumerating record extents...\n");
+	total_rec = 0;
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_epoch_range_t	eprs[5];
+		daos_recx_t		recxs[5];
+		daos_size_t		size;
+
+		number = 5;
+		enumerate_rec(DAOS_TX_NONE, "dkey", "akey", &size,
+			      &number, recxs, eprs, &anchor, true, &req);
+		total_rec += number;
+	}
+
+	/** Record count should be 2**/
+	assert_int_equal(total_rec, 2);
+	print_message("Number of record after Enumeration = %d\n", total_rec);
+}
+
 static void
 split_sgl_internal(void **state, int size)
 {
@@ -3797,6 +3861,9 @@ static const struct CMUnitTest io_tests[] = {
 	  io_capa_iv_fetch, async_disable, test_case_teardown},
 	{ "IO39: Update with invalid sg and record",
 	  io_invalid, async_disable, test_case_teardown},
+	{ "IO40: Record count after punch/enumeration",
+	  punch_enum_then_verify_record_count, async_disable,
+	  test_case_teardown},
 };
 
 int

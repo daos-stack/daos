@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -419,7 +419,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	char		iov_buf[DSS_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
 	bool		fetch = false;
 	int		i;
-	int		rc;
+	int		rc = 0;
 
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -473,7 +473,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				start, iod_cnt);
 			rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 					    mrone->mo_epoch, mrone->mo_version,
-					    &mrone->mo_dkey, iod_cnt,
+					    0, &mrone->mo_dkey, iod_cnt,
 					    &mrone->mo_iods[start], NULL,
 					    &sgls[start]);
 			if (rc) {
@@ -488,7 +488,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	if (iod_cnt > 0)
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_epoch, mrone->mo_version,
-				    &mrone->mo_dkey, iod_cnt,
+				    0, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], NULL,
 				    &sgls[start]);
 
@@ -505,7 +505,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, mrone->mo_epoch,
-			      &mrone->mo_dkey, mrone->mo_iod_num,
+			      0, &mrone->mo_dkey, mrone->mo_iod_num,
 			      mrone->mo_iods, NULL, &ioh, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
@@ -617,7 +617,7 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	if (mrone->mo_punch_iod_num > 0) {
 		rc = vos_obj_update(cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_rec_punch_eph,
-				    mrone->mo_version, &mrone->mo_dkey,
+				    mrone->mo_version, 0, &mrone->mo_dkey,
 				    mrone->mo_punch_iod_num,
 				    mrone->mo_punch_iods, NULL, NULL);
 		D_DEBUG(DB_TRACE, DF_UOID" mrone %p punch %d eph "DF_U64

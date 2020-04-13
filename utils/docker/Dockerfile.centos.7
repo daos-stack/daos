@@ -67,13 +67,11 @@ RUN yum -y install epel-release; \
 RUN yum -y install \
            python2-avocado python2-avocado-plugins-output-html \
            python2-avocado-plugins-varianter-yaml-to-mux       \
-           yum-plugin-copr python-pathlib                      \
+           python-pathlib                                      \
            ndctl ipmctl e2fsprogs                              \
            python2-clustershell python2-Cython python2-pip     \
            python36-clustershell python36-paramiko             \
            python36-numpy python36-jira python3-pip;           \
-    yum -y copr enable jhli/ipmctl;                            \
-    yum -y copr enable jhli/safeclib;                          \
     yum -y install libipmctl-devel openmpi3-devel hwloc-devel
 
 # DAOS python 3 packages required for pylint
@@ -98,7 +96,6 @@ RUN chown daos.daos /mnt/daos
 ARG JENKINS_URL=""
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS=""
-ARG CART_COMMIT=""
 ARG REPOS=""
 RUN if $QUICKBUILD; then                                                         \
         echo -e "[repo.dc.hpdd.intel.com_repository_daos-stack-el-7-x86_64-stable-local]\n\
@@ -129,7 +126,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;         
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
-RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury,cart-devel,cart,fio
+RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury
 
 # Switch to new user
 #USER $USER
@@ -151,5 +148,3 @@ ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
 ENV CRT_PHY_ADDR_STR="ofi+sockets"
 ENV OFI_INTERFACE=eth0
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
-ENV DAOS_SINGLETON_CLI=1
-ENV CRT_ATTACH_INFO_PATH=/tmp/uri

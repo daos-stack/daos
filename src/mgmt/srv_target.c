@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -852,29 +852,12 @@ static int
 tgt_profile_task(void *arg)
 {
 	struct mgmt_profile_in *in = arg;
-	int mod_id = 0;
 	int rc = 0;
 
-	for (mod_id = 0; mod_id < 64; mod_id++) {
-		uint64_t mask = 1 << mod_id;
-		struct dss_module *module;
-
-		if (!(in->p_module & mask))
-			continue;
-
-		module = dss_module_get(mod_id);
-		if (module == NULL || module->sm_mod_ops == NULL) {
-			D_ERROR("no module sm_mod_ops %d\n", mod_id);
-			continue;
-		}
-
-		if (in->p_op == MGMT_PROFILE_START)
-			rc = module->sm_mod_ops->dms_profile_start(in->p_path);
-		else
-			rc = module->sm_mod_ops->dms_profile_stop();
-		if (rc)
-			break;
-	}
+	if (in->p_op == MGMT_PROFILE_START)
+		rc = srv_profile_start(in->p_path, in->p_avg);
+	else
+		rc = srv_profile_stop();
 
 	D_DEBUG(DB_MGMT, "profile task: rc "DF_RC"\n", DP_RC(rc));
 	return rc;

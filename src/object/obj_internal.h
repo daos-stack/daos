@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/tse.h>
+#include <daos/task.h>
 #include <daos/placement.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
@@ -140,7 +141,9 @@ struct obj_reasb_req {
 	struct obj_io_desc		*orr_oiods;
 	struct obj_ec_recx_array	*orr_recxs;
 	struct obj_ec_seg_sorter	*orr_sorters;
+	struct dcs_singv_layout		*orr_singv_los;
 	uint32_t			 orr_tgt_nr;
+	struct daos_oclass_attr		*orr_oca;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
@@ -155,15 +158,6 @@ enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
 }
 
 extern struct dss_module_key obj_module_key;
-enum obj_profile_op {
-	OBJ_PF_UPDATE_PREP = 0,
-	OBJ_PF_UPDATE_DISPATCH,
-	OBJ_PF_UPDATE_LOCAL,
-	OBJ_PF_UPDATE_END,
-	OBJ_PF_UPDATE_WAIT,
-	OBJ_PF_UPDATE_REPLY,
-	OBJ_PF_UPDATE,
-};
 
 /* Per pool attached to the migrate tls(per xstream) */
 struct migrate_pool_tls {
@@ -222,7 +216,6 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
-	struct srv_profile	*ot_sp;
 	d_list_t		ot_pool_list;
 };
 
@@ -270,6 +263,7 @@ struct shard_rw_args {
 	uint64_t		*offs;
 	struct dcs_csum_info	*dkey_csum;
 	struct dcs_iod_csums	*iod_csums;
+	struct obj_reasb_req	*reasb_req;
 };
 
 struct shard_punch_args {
