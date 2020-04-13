@@ -26,13 +26,21 @@ from __future__ import print_function
 import os
 import re
 
-from dmg_utils import DmgCommand
 from general_utils import run_cmd
 from avocado.utils import process
-from apricot import TestWithServers
+from control_test_base import ControlTestBase
 
 
-class DmgNetworkScanTest(TestWithServers):
+class NetDev(object):
+    """A class to represent the information of a network device"""
+    def __init__(self, host, fabric_iface, provider, numa_node):
+        """ Initialize the network device data object."""
+        self.host = host
+        self.fabric_iface = fabric_iface
+        self.provider = provider
+        self.numa_node = numa_node
+
+class DmgNetworkScanTest(ControlTestBase):
     """Test Class Description:
     Simple test to verify the network scan function of the dmg tool.
     :avocado: recursive
@@ -42,12 +50,6 @@ class DmgNetworkScanTest(TestWithServers):
         """Initialize a DmgNetworkScanTest object."""
         super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
         self.setup_start_agents = False
-
-    def parse_dmg_out(self):
-        """ Parse the output of the dmg network scan command."""
-        pattern = r"""(?:|([A-Za-z0-9-_]+):\d+:(?:\n|\n\r))
-            (?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+([a-z0-9+]+))"""
-
 
     def get_sys_info(self):
         """ Get expected values of numa nodes with lstopo."""
@@ -101,28 +103,10 @@ class DmgNetworkScanTest(TestWithServers):
         devices on the system.
         :avocado: tags=all,small,pr,hw,dmg,network_scan,basic
         """
-        # Create dmg command
-        dmg = self.get_dmg_command()
-        dmg.get_params(self)
+        net_scan_info = self.get_dmg_output("network_scan")
+        for dev_info in net_scan_info:
+            if dev_info[0] != "":
 
-        try:
-            dmg_cmd_out = dmg.run()
-        except process.CmdError as details:
-            self.fail("dmg command failed: {}".format(details))
-
-        # This parse asumes that the device information is listed on separate
-        # lines and with this format 'info_type: info'
-        if isinstance(dmg_cmd_out.stdout, str):
-            pout = {}
-            net_items = ["numa_node:", "iface:", "provider:"]
-            for i, line in enumerate(dmg_cmd_out.stdout.splitlines()):
-                for j, item in enumerate(net_items):
-                    if item in line:
-                        pout[i + j] = line.strip('\t')
-
-        # Format the dict of values into list pairs
-        dmg_out = [pout.values()[i:(i + 3)] for i in range(0, len(pout), 3)]
-        self.log.info("Received data from dmg output: %s", str(dmg_out))
 
         # Validate dmg output against 3rd party tools: lstopo, fi_info
         covered = []

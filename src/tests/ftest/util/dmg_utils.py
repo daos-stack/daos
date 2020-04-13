@@ -36,6 +36,11 @@ from command_utils import \
 class DmgCommand(CommandWithSubCommand):
     """Defines a object representing a dmg command."""
 
+    METHOD_REGEX = {
+        "network_scan": r"""(?:|([A-Za-z0-9-_]+):\d+:(?:\n|\n\r))
+            (?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+([a-z0-9+]+))"""
+    }
+
     def __init__(self, path):
         """Create a dmg Command object.
 
@@ -466,6 +471,23 @@ class DmgCommand(CommandWithSubCommand):
             raise CommandFailure("<dmg> command failed: {}".format(error))
 
         return result
+
+    def network_scan(self, provider=None, all_devs=False):
+        """Get the result of the dmg network scan command.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage scan command fails.
+
+        """
+        self.set_sub_command("network")
+        self.sub_command_class.set_sub_command("scan")
+        self.sub_command_class.sub_command_class.provider.value = provider
+        self.sub_command_class.sub_command_class.all.value = all_devs
+        return self._get_result()
 
     def storage_scan(self):
         """Get the result of the dmg storage scan command.
