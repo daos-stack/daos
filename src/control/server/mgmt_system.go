@@ -258,7 +258,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 		signal = syscall.SIGKILL
 	}
 
-	ctx, cancel := context.WithTimeout(parent, ioserverShutdownTimeout)
+	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
 	defer cancel()
 
 	stopErrs, err := svc.harness.StopInstances(ctx, signal, rankList...)
