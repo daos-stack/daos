@@ -77,9 +77,9 @@ func formatNameGroup(usr string, grp string) (string, string, error) {
 	return usr, grp, nil
 }
 
-// genCreateRequest takes a *PoolCreateRequest and generates a valid protobuf
+// genPoolCreateRequest takes a *PoolCreateRequest and generates a valid protobuf
 // request, filling in any missing fields with reasonable defaults.
-func genCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
+func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
 	// ensure pool ownership is set up correctly
 	in.User, in.UserGroup, err = formatNameGroup(in.User, in.UserGroup)
 	if err != nil {
@@ -143,7 +143,7 @@ type (
 // Default values for missing request parameters (e.g. owner/group) are generated when
 // appropriate.
 func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq) (*PoolCreateResp, error) {
-	pbReq, err := genCreateRequest(req)
+	pbReq, err := genPoolCreateRequest(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate PoolCreate request")
 	}
