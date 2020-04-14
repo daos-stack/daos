@@ -142,12 +142,7 @@ func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ..
 //
 // Ranks will be forcefully stopped if the force parameter is specified.
 func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, ranks ...system.Rank) (system.MemberResults, error) {
-	rpcReq, err := hc.prepareRequest(ranks, force)
-	if err != nil {
-		return nil, err
-	}
-
-	return hc.call(ctx, addr, rpcReq, hc.client.Stop)
+	return nil, errors.New("not implemented") // moved to server/mgmt_client.go:StopRanks()
 }
 
 // Start sends Start gRPC using the MgmtSvcClient to the control server at the

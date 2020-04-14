@@ -30,6 +30,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/mitchellh/hashstructure"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
@@ -156,11 +157,17 @@ type Members []*Member
 // MemberResult refers to the result of an action on a Member identified
 // its string representation "address/rank".
 type MemberResult struct {
-	Rank    Rank
-	Action  string
-	Errored bool
-	Msg     string
-	State   MemberState
+	Rank    Rank        `hash:"set"`
+	Action  string      `hash:"set"`
+	Errored bool        `hash:"set"`
+	Msg     string      `hash:"set"`
+	State   MemberState `hash:"set"`
+}
+
+// HashKey returns a uint64 value suitable for use as a key into
+// a map of RankResult.
+func (mr *MemberResult) HashKey() (uint64, error) {
+	return hashstructure.Hash(mr, nil)
 }
 
 // MarshalJSON marshals system.MemberResult to JSON.

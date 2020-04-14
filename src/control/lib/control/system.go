@@ -27,9 +27,11 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/system"
@@ -200,4 +202,76 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 
 	resp := new(ListPoolsResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemRanksReq contains the parameters for a system ranks request.
+type SystemRanksReq struct {
+	unaryRequest
+	Ranks []system.Rank
+}
+
+// SystemRanksResp contains the response from a system ranks request.
+type SystemRanksResp struct {
+	HostErrorsResp // record unresponsive hosts
+	RankResults    system.MemberResults
+}
+
+// addHostResponse is responsible for validating the given HostResponse
+// and adding it's results to the SystemRanksResp.
+func (srr *SystemRanksResp) addHostResponse(hr *HostResponse) (err error) {
+	pbResp, ok := hr.Message.(*mgmtpb.RanksResp)
+	if !ok {
+		return errors.Errorf("unable to unpack message: %+v", hr.Message)
+	}
+
+	memberResults := make(system.MemberResults, 0)
+	if err := convert.Types(pbResp.GetResults(), &memberResults); err != nil {
+		if srr.HostErrors == nil {
+			srr.HostErrors = make(HostErrorsMap)
+		}
+		return srr.HostErrors.Add(hr.Addr, err)
+	}
+
+	if srr.RankResults == nil {
+		srr.RankResults = make(system.MemberResults, 0)
+	}
+	srr.RankResults = append(srr.RankResults, memberResults...)
+
+	return
+}
+
+// SystemStopRanks concurrently performs stop ranks across all hosts
+// supplied in the request's hostlist. The function blocks until all
+// results (successful or otherwise) are received, and returns a
+// single response structure containing results for all host scan
+// operations.
+func SystemStopRanks(ctx context.Context, rpcClient UnaryInvoker, req *SystemRanksReq) (*SystemRanksResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).StopRanks(ctx, &mgmtpb.RanksReq{
+			Ranks: system.RanksToUint32(req.Ranks),
+		})
+	})
+
+	rpcClient.Debugf("DAOS system stop-ranks request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	srr := new(SystemRanksResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := srr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if err := srr.addHostResponse(hostResp); err != nil {
+			return nil, err
+		}
+	}
+
+	return srr, nil
 }

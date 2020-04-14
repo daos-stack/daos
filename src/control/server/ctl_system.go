@@ -24,6 +24,7 @@
 package server
 
 import (
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -231,6 +233,31 @@ func (svc *ControlService) prepShutdown(ctx context.Context, rankList []system.R
 	return results, nil
 }
 
+// resultsFromUnreachableHosts generates member results for ranks on unreachable hosts.
+func (svc *ControlService) resultsFromUnreachableHosts(hostRanks map[string][]system.Rank, hostErrors control.HostErrorsMap) system.MemberResults {
+	ranks := make([]system.Rank, 0, len(hostRanks)*maxIOServers)
+
+	// add rank results for any on reachable harness addrs
+	for errMsg, hostSet := range hostErrors {
+		if !strings.Contains(errMsg, "connection refused") {
+			continue
+		}
+		for _, addr := range strings.Split(hostSet.DerangedString(), ",") {
+			ranks = append(ranks, hostRanks[addr]...)
+			svc.log.Debugf("no response from harness %s", addr)
+		}
+	}
+
+	return svc.reportStoppedRanks("stop", ranks, nil)
+}
+
+func (svc *ControlService) systemStop(ctx context.Context, rankList []system.Rank, hostList []string) (*control.SystemRanksResp, error) {
+	req := &control.SystemRanksReq{Ranks: rankList}
+	req.SetHostList(hostList)
+
+	return control.SystemStopRanks(ctx, svc.rpcClient, req)
+}
+
 // shutdown requests registered harnesses to stop its instances (system members).
 //
 // Each host address represents a gRPC server associated with a harness managing
@@ -248,6 +275,9 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool, rankList []
 	msAddr := msMember.Addr.String()
 	msRank := msMember.Rank
 
+	totalRankList := make([]system.Rank, 0, len(hostRanks)*maxIOServers)
+	hostList := make([]string, 0, len(hostRanks))
+	// build the host set and rank list to send unary RPCs to non-MS hosts
 	for addr, ranks := range hostRanks {
 		if addr == msAddr {
 			ranks = msRank.RemoveFromList(ranks)
@@ -255,25 +285,28 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool, rankList []
 		if len(ranks) == 0 {
 			continue
 		}
-
-		hResults, err := svc.harnessClient.Stop(ctx, addr, force, ranks...)
-		if err != nil {
-			if !isUnreachableError(err) {
-				return nil, errors.Wrapf(err, "harness %s stop", addr)
-			}
-			hResults = svc.reportStoppedRanks("stop", ranks, nil)
-			svc.log.Debugf("no response from harness %s", addr)
-		}
-		results = append(results, hResults...)
+		totalRankList = append(totalRankList, ranks...)
+		hostList = append(hostList, addr)
 	}
 
-	// stop MS access point last if in rankList
+	// stop all ranks except MS leader
+	resp, err := svc.systemStop(ctx, totalRankList, hostList)
+	if err != nil {
+		return nil, err
+	}
+	results = append(results,
+		svc.resultsFromUnreachableHosts(hostRanks, resp.HostErrors)...)
+	results = append(results, resp.RankResults...)
+
+	// stop MS leader rank last if in rankList
 	if len(rankList) == 0 || msRank.InList(rankList) {
-		hResults, err := svc.harnessClient.Stop(ctx, msAddr, force, msRank)
+		msResp, err := svc.systemStop(ctx, []system.Rank{msRank}, []string{msAddr})
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, hResults...)
+		results = append(results,
+			svc.resultsFromUnreachableHosts(hostRanks, msResp.HostErrors)...)
+		results = append(results, resp.RankResults...)
 	}
 
 	if err := svc.membership.UpdateMemberStates(results); err != nil {

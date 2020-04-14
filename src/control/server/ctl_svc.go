@@ -24,6 +24,7 @@
 package server
 
 import (
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -37,14 +38,16 @@ type ControlService struct {
 	StorageControlService
 	harness       *IOServerHarness
 	membership    *system.Membership
-	harnessClient HarnessClient
+	harnessClient HarnessClient // to be replaced by rpcClient
+	rpcClient     control.Invoker
 }
 
 // NewControlService returns ControlService to be used as gRPC control service
 // datastore. Initialised with sensible defaults and provided components.
 func NewControlService(l logging.Logger, h *IOServerHarness,
 	bp *bdev.Provider, sp *scm.Provider,
-	cfg *Configuration, m *system.Membership) (*ControlService, error) {
+	cfg *Configuration, m *system.Membership,
+	rc control.Invoker) (*ControlService, error) {
 
 	scs, err := DefaultStorageControlService(l, cfg)
 	if err != nil {
@@ -58,5 +61,6 @@ func NewControlService(l logging.Logger, h *IOServerHarness,
 		harness:               h,
 		membership:            m,
 		harnessClient:         NewHarnessClient(l, h),
+		rpcClient:             rc,
 	}, nil
 }

@@ -197,46 +197,6 @@ func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req
 	return
 }
 
-// Stop calls function remotely over gRPC on server listening at destAddr.
-//
-// Shipped function terminates ranks directly from the harness at the listening
-// address without requesting over dRPC.
-func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, stopErr error) {
-	stopErr = msc.withConnectionFailOnBadDial(ctx, destAddr,
-		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
-
-			prefix := fmt.Sprintf("stop(%s, %+v)", destAddr, req)
-			msc.log.Debugf(prefix + " begin")
-			defer msc.log.Debugf(prefix + " end")
-
-			for {
-				var err error
-
-				select {
-				case <-ctx.Done():
-					return errors.Wrap(ctx.Err(), prefix)
-				default:
-				}
-
-				// returns on time out or when all instances are stopped
-				// error returned if any instance is still running so that
-				// we retry until all are terminated on host
-				resp, err = pbClient.StopRanks(ctx, &req)
-				if msc.retryOnErr(ctx, err, prefix) {
-					continue
-				}
-				if resp == nil {
-					return errors.New("unexpected nil response status")
-				}
-				// TODO: Stop retrying upon certain errors.
-
-				return nil
-			}
-		})
-
-	return
-}
-
 // Start calls function remotely over gRPC on server listening at destAddr.
 //
 // Shipped function issues StartRanks requests over dRPC to start each
