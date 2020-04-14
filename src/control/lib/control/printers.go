@@ -108,53 +108,6 @@ func getPrintHosts(in string, opts ...PrintConfigOption) string {
 	return strings.Join(out, ",")
 }
 
-// PrintPoolQueryResponse generates a human-readable representation of the supplied
-// PoolQueryResp struct and writes it to the supplied io.Writer.
-func PrintPoolQueryResponse(pqr *PoolQueryResp, out io.Writer, opts ...PrintConfigOption) error {
-	if pqr == nil {
-		return errors.Errorf("nil %T", pqr)
-	}
-	w := txtfmt.NewErrWriter(out)
-
-	// Maintain output compability with the `daos pool query` output.
-	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d\n",
-		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets)
-	fmt.Fprintln(w, "Pool space info:")
-	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
-	if pqr.Scm != nil {
-		fmt.Fprintln(w, "- SCM:")
-		fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(pqr.Scm.Total))
-		fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			humanize.Bytes(pqr.Scm.Free), humanize.Bytes(pqr.Scm.Min),
-			humanize.Bytes(pqr.Scm.Max), humanize.Bytes(pqr.Scm.Mean))
-	}
-	if pqr.Nvme != nil {
-		fmt.Fprintln(w, "- NVMe:")
-		fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(pqr.Nvme.Total))
-		fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			humanize.Bytes(pqr.Nvme.Free), humanize.Bytes(pqr.Nvme.Min),
-			humanize.Bytes(pqr.Nvme.Max), humanize.Bytes(pqr.Nvme.Mean))
-	}
-	if pqr.Rebuild != nil {
-		if pqr.Rebuild.Status == 0 {
-			fmt.Fprintf(w, "Rebuild %s, %d objs, %d recs\n",
-				pqr.Rebuild.State, pqr.Rebuild.Objects, pqr.Rebuild.Records)
-		} else {
-			fmt.Fprintf(w, "Rebuild failed, rc=%d, status=%d", pqr.Status, pqr.Rebuild.Status)
-		}
-	}
-
-	return w.Err
-}
-
-func (pqr *PoolQueryResp) String() string {
-	var bld strings.Builder
-	if err := PrintPoolQueryResponse(pqr, &bld); err != nil {
-		return fmt.Sprintf("failed to print %T", pqr)
-	}
-	return bld.String()
-}
-
 // PrintHostErrorsMap generates a human-readable representation of the supplied
 // HostErrorsMap struct and writes it to the supplied io.Writer.
 func PrintHostErrorsMap(hem HostErrorsMap, out io.Writer, opts ...PrintConfigOption) error {
@@ -179,14 +132,6 @@ func PrintHostErrorsMap(hem HostErrorsMap, out io.Writer, opts ...PrintConfigOpt
 
 	tablePrint.Format(table)
 	return nil
-}
-
-func (hem HostErrorsMap) String() string {
-	var bld strings.Builder
-	if err := PrintHostErrorsMap(hem, &bld); err != nil {
-		return fmt.Sprintf("failed to print %T: %s", hem, err)
-	}
-	return bld.String()
 }
 
 func PrintResponseErrors(resp hostErrorsGetter, out io.Writer, opts ...PrintConfigOption) error {
@@ -393,25 +338,6 @@ func PrintHostStorageMap(hsm HostStorageMap, out io.Writer, opts ...PrintConfigO
 	return nil
 }
 
-func (hsm HostStorageMap) String() string {
-	var bld strings.Builder
-	if err := PrintHostStorageMap(hsm, &bld); err != nil {
-		return fmt.Sprintf("failed to print %T: %s", hsm, err)
-	}
-	return bld.String()
-}
-
-func (ssr *StorageScanResp) String() string {
-	var bld strings.Builder
-	if err := PrintResponseErrors(ssr, &bld); err != nil {
-		return fmt.Sprintf("failed to print %T: %s", ssr, err)
-	}
-	if err := PrintHostStorageMap(ssr.HostStorage, &bld); err != nil {
-		return fmt.Sprintf("failed to print %T: %s", ssr, err)
-	}
-	return bld.String()
-}
-
 // PrintStoragePrepareMap generates a human-readable representation of the supplied
 // HostStorageMap which is populated in response to a StoragePrepare operation.
 func PrintStoragePrepareMap(hsm HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
@@ -439,17 +365,6 @@ func PrintStoragePrepareMap(hsm HostStorageMap, out io.Writer, opts ...PrintConf
 
 	tablePrint.Format(table)
 	return nil
-}
-
-func (spr *StoragePrepareResp) String() string {
-	var bld strings.Builder
-	if err := PrintResponseErrors(spr, &bld); err != nil {
-		return fmt.Sprintf("failed to print %T: %s", spr, err)
-	}
-	if err := PrintStoragePrepareMap(spr.HostStorage, &bld); err != nil {
-		return fmt.Sprintf("failed to print %T: %s", spr, err)
-	}
-	return bld.String()
 }
 
 func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
@@ -529,15 +444,4 @@ func PrintStorageFormatMap(hsm HostStorageMap, out io.Writer, opts ...PrintConfi
 
 	tablePrint.Format(table)
 	return nil
-}
-
-func (sfr *StorageFormatResp) String() string {
-	var bld strings.Builder
-	if err := PrintResponseErrors(sfr, &bld); err != nil {
-		return fmt.Sprintf("failed to print %T: %s", sfr, err)
-	}
-	if err := PrintStorageFormatMap(sfr.HostStorage, &bld); err != nil {
-		return fmt.Sprintf("failed to print %T: %s", sfr, err)
-	}
-	return bld.String()
 }

@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
@@ -189,7 +190,7 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := control.PrintPoolQueryResponse(resp, &bld); err != nil {
+	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
 		return err
 	}
 	c.log.Info(bld.String())
