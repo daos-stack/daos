@@ -26,6 +26,8 @@ pool:
     nvme_size: 9000000000
     svcn: 1
     control_method: dmg
+container:
+    type: POSIX
 ior:
     client_processes:
         np_16:
