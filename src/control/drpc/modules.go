@@ -68,6 +68,8 @@ const (
 	MethodPoolCreate = C.DRPC_METHOD_MGMT_POOL_CREATE
 	// MethodPoolDestroy is a ModuleMgmt method
 	MethodPoolDestroy = C.DRPC_METHOD_MGMT_POOL_DESTROY
+	// MethodPoolReintegrate is a ModuleMgmt method
+	MethodPoolReintegrate = C.DRPC_METHOD_MGMT_REINTEGRATE
 	// MethodBioHealth is a ModuleMgmt method
 	MethodBioHealth = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
 	// MethodSetUp is a ModuleMgmt method

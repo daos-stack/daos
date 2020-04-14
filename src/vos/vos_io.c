@@ -355,10 +355,6 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info)
 	 * that will persist until fetch is complete ... so memcpy isn't needed
 	 */
 	ioc->ic_biov_csums[ioc->ic_biov_csums_at] = *csum_info;
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
-		/* poison the checksum */
-		ioc->ic_biov_csums[ioc->ic_biov_csums_at].cs_csum[0] += 2;
-
 	ioc->ic_biov_csums_at++;
 
 	return 0;
@@ -618,10 +614,13 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	rc = key_tree_prepare(ioc->ic_obj, ak_toh,
 			      VOS_BTR_AKEY, &iod->iod_name, flags,
-			      DAOS_INTENT_DEFAULT, &krec, &toh, NULL);
+			      DAOS_INTENT_DEFAULT, &krec, &toh, ioc->ic_ts_set);
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
+			if (ioc->ic_ts_set &&
+			    ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH)
+				goto out;
 			D_DEBUG(DB_IO, "Nonexistent akey "DF_KEY"\n",
 				DP_KEY(&iod->iod_name));
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
@@ -637,10 +636,13 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
+			if (ioc->ic_ts_set &&
+			    ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH)
+				goto out;
+			iod_empty_sgl(ioc, ioc->ic_sgl_at);
 			D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
 				(int)iod->iod_name.iov_len,
 				(char *)iod->iod_name.iov_buf);
-			iod_empty_sgl(ioc, ioc->ic_sgl_at);
 			rc = 0;
 		} else {
 			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
@@ -725,9 +727,12 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
 			      dkey, 0, DAOS_INTENT_DEFAULT, &krec,
-			      &toh, NULL);
+			      &toh, ioc->ic_ts_set);
 
 	if (rc == -DER_NONEXIST) {
+		if (ioc->ic_ts_set &&
+		    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK)
+			goto out;
 		for (i = 0; i < ioc->ic_iod_nr; i++)
 			iod_empty_sgl(ioc, i);
 		D_DEBUG(DB_IO, "Nonexistent dkey\n");
@@ -745,6 +750,9 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
+			if (ioc->ic_ts_set &&
+			    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK)
+				goto out;
 			for (i = 0; i < ioc->ic_iod_nr; i++)
 				iod_empty_sgl(ioc, i);
 			D_DEBUG(DB_IO, "Nonexistent dkey\n");
@@ -781,12 +789,65 @@ vos_fetch_end(daos_handle_t ioh, int err)
 	return err;
 }
 
+static void
+update_ts_on_fetch(struct vos_io_context *ioc, int err)
+{
+	struct vos_ts_set	*ts_set = ioc->ic_ts_set;
+	struct vos_ts_entry	*entry;
+	struct vos_ts_entry	*prev;
+	int			 akey_idx;
+
+	if (ts_set == NULL)
+		return;
+
+	/** Aborted for another reason, no timestamp updates */
+	if (err != 0 && err != -DER_NONEXIST)
+		return;
+
+	/** Fetch is always a read of the value so always update the
+	 *  both akey timestamps regardless
+	 */
+	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_CONT, 0);
+	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_OBJ, 0);
+	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+	prev = entry;
+	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
+
+	if (entry == NULL)
+		goto update_prev;
+	if (ts_set->ts_flags & VOS_OF_COND_DKEY_FETCH)
+		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
+	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+
+	if (entry == prev)
+		return;
+
+	prev = entry;
+
+	for (akey_idx = 0; akey_idx < ioc->ic_iod_nr; akey_idx++) {
+		entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_AKEY,
+						  akey_idx);
+		if (entry == NULL)
+			goto update_prev;
+
+		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
+		entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+	}
+
+	return;
+
+update_prev:
+	prev->te_ts_rl = MAX(prev->te_ts_rl, ioc->ic_epr.epr_hi);
+}
+
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		daos_iod_t *iods, bool size_fetch, daos_handle_t *ioh)
 {
 	struct vos_io_context	*ioc;
+	struct vos_ts_entry	*entry;
 	int i, rc;
 
 	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
@@ -797,27 +858,40 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		return rc;
 
+	if (!vos_ts_lookup(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, false,
+			   &entry)) {
+		/** Re-cache the container timestamps */
+		entry = vos_ts_alloc(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx,
+				     0);
+	}
+
 	rc = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, oid,
 			  &ioc->ic_epr, true, DAOS_INTENT_DEFAULT, true,
-			  &ioc->ic_obj, NULL);
+			  &ioc->ic_obj, ioc->ic_ts_set);
 	if (rc != -DER_NONEXIST && rc != 0)
-		goto error;
+		goto out;
 
 	if (rc == -DER_NONEXIST) {
+		if (ioc->ic_ts_set &&
+		    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK)
+			goto out;
 		rc = 0;
 		for (i = 0; i < iod_nr; i++)
 			iod_empty_sgl(ioc, i);
 	} else {
 		rc = dkey_fetch(ioc, dkey);
 		if (rc != 0)
-			goto error;
+			goto out;
 	}
 
 	*ioh = vos_ioc2ioh(ioc);
 
+out:
+	update_ts_on_fetch(ioc, rc);
+
+	if (rc != 0)
+		return vos_fetch_end(vos_ioc2ioh(ioc), rc);
 	return 0;
-error:
-	return vos_fetch_end(vos_ioc2ioh(ioc), rc);
 }
 
 static umem_off_t
@@ -877,16 +951,12 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 
 	tree_rec_bundle2iov(&rbund, &riov);
 
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL)) {
-		rbund.rb_csum	= &csum;
-	} else {
-		struct dcs_csum_info *value_csum = vos_ioc2csum(ioc);
+	struct dcs_csum_info *value_csum = vos_ioc2csum(ioc);
 
-		if (value_csum != NULL)
-			rbund.rb_csum	= value_csum;
-		else
-			rbund.rb_csum	= &csum;
-	}
+	if (value_csum != NULL)
+		rbund.rb_csum	= value_csum;
+	else
+		rbund.rb_csum	= &csum;
 
 	rbund.rb_biov	= biov;
 	rbund.rb_rsize	= rsize;
@@ -925,9 +995,6 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	if (ci_is_valid(csum)) {
 		ent.ei_csum = *csum;
-		/* change the checksum for fault injection*/
-		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
-			ent.ei_csum.cs_csum[0] += 1;
 	}
 
 	biov = iod_update_biov(ioc);
@@ -1417,7 +1484,7 @@ update_cancel(struct vos_io_context *ioc)
 }
 
 static void
-update_read_timestamps(struct vos_io_context *ioc, int err)
+update_ts_on_update(struct vos_io_context *ioc, int err)
 {
 	struct vos_ts_set	*ts_set = ioc->ic_ts_set;
 	struct vos_ts_entry	*entry;
@@ -1468,7 +1535,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	struct vos_ts_entry	*entry;
+	uint64_t		time = 0;
 
+	D_TIME_START(time, VOS_UPDATE_END);
 	D_ASSERT(ioc->ic_update);
 
 	if (err != 0)
@@ -1551,8 +1620,9 @@ out:
 		update_cancel(ioc);
 	}
 
-	update_read_timestamps(ioc, err);
+	update_ts_on_update(ioc, err);
 
+	D_TIME_END(time, VOS_UPDATE_END);
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 

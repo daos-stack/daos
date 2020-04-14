@@ -46,6 +46,7 @@ type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
 	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
+	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate a list of targets for a rank"`
 	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
 	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
@@ -86,7 +87,7 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		}
 	}
 
-	var acl *client.AccessControlList
+	var acl *common.AccessControlList
 	if c.ACLFile != "" {
 		acl, err = readACLFile(c.ACLFile)
 		if err != nil {
@@ -181,7 +182,37 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 	return err
 }
 
-// PoolQueryCmd is the struct representing the command to destroy a DAOS pool.
+// PoolReintegrateCmd is the struct representing the command to Add a DAOS target.
+type PoolReintegrateCmd struct {
+	logCmd
+	connectedCmd
+	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to start reintegration in"`
+	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
+	Targetidx string `long:"target-idx" required:"1" description:"Comma-seperated list of target idx(s) to be reintegrated into the rank"`
+}
+
+// Execute is run when PoolReintegrateCmd subcommand is activated
+func (r *PoolReintegrateCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	var idxlist []uint32
+	if err := common.ParseNumberList(r.Targetidx, &idxlist); err != nil {
+		return errors.WithMessage(err, "parsing rank list")
+	}
+
+	req := &client.PoolReintegrateReq{UUID: r.UUID, Rank: r.Rank, Targetidx: idxlist}
+
+	err := r.conns.PoolReintegrate(req)
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	r.log.Infof("Reintegration command %s\n", msg)
+
+	return err
+}
+
+// PoolQueryCmd is the struct representing the command to query a DAOS pool.
 type PoolQueryCmd struct {
 	logCmd
 	connectedCmd
@@ -374,7 +405,7 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 		return errors.New("either ACL file or entry parameter is required")
 	}
 
-	var acl *client.AccessControlList
+	var acl *common.AccessControlList
 	if d.ACLFile != "" {
 		aclFileResult, err := readACLFile(d.ACLFile)
 		if err != nil {
@@ -382,7 +413,7 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 		}
 		acl = aclFileResult
 	} else {
-		acl = &client.AccessControlList{
+		acl = &common.AccessControlList{
 			Entries: []string{d.Entry},
 		}
 	}

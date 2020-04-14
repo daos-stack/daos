@@ -525,6 +525,10 @@ dss_srv_handler(void *arg)
 	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
 
 	wait_all_exited(dx);
+	if (dmi->dmi_sp) {
+		srv_profile_destroy(dmi->dmi_sp);
+		dmi->dmi_sp = NULL;
+	}
 nvme_fini:
 	if (dx->dx_main_xs)
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);

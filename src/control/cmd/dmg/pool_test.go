@@ -41,7 +41,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
+func createACLFile(t *testing.T, path string, acl *AccessControlList) {
 	t.Helper()
 
 	file, err := os.Create(path)
@@ -75,7 +75,7 @@ func TestPoolCommands(t *testing.T) {
 
 	// Some tests need a valid ACL file
 	testACLFile := filepath.Join(tmpDir, "test_acl.txt")
-	testACL := &client.AccessControlList{
+	testACL := &AccessControlList{
 		Entries: []string{"A::OWNER@:rw", "A:G:GROUP@:rw"},
 	}
 	createACLFile(t, testACLFile, testACL)
@@ -217,6 +217,32 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testScmSizeStr, testEmptyFile),
 			"ConnectClients",
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
+		},
+		{
+			"Reintegrate a target with single target idx",
+			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolReintegrate-%+v", &client.PoolReintegrateReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reintegrate a target with multiple idx",
+			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolReintegrate-%+v", &client.PoolReintegrateReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1, 2, 3},
+				}),
+			}, " "),
+			nil,
 		},
 		{
 			"Destroy pool with force",
@@ -412,7 +438,7 @@ func TestPoolCommands(t *testing.T) {
 				"ConnectClients",
 				fmt.Sprintf("PoolUpdateACL-%+v", client.PoolUpdateACLReq{
 					UUID: "12345678-1234-1234-1234-1234567890ab",
-					ACL:  &client.AccessControlList{Entries: []string{"A::user@:rw"}},
+					ACL:  &AccessControlList{Entries: []string{"A::user@:rw"}},
 				}),
 			}, " "),
 			nil,
