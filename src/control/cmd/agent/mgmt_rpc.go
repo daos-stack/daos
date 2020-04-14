@@ -46,9 +46,9 @@ type mgmtModule struct {
 	log logging.Logger
 	sys string
 	// The access point
-	ap             string
-	tcfg           *security.TransportConfig
-	aiCache        *attachInfoCache
+	ap      string
+	tcfg    *security.TransportConfig
+	aiCache *attachInfoCache
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {

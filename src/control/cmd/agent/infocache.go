@@ -40,16 +40,16 @@ import (
 const defaultNumaNode = 0
 
 type attachInfoCache struct {
-	log          logging.Logger
+	log logging.Logger
 	// is caching enabled?
-	enabled      atm.Bool
+	enabled atm.Bool
 	// is the cache initialized?
-	initialized  atm.Bool
+	initialized atm.Bool
 	// maps NUMA affinity and device index to a response
-	resmgmtpb    map[int]map[int][]byte
+	resmgmtpb map[int]map[int][]byte
 	// maps NUMA affinity to a device index
-	devIdx       map[int]int
-	mutex        sync.Mutex
+	devIdx map[int]int
+	mutex  sync.Mutex
 }
 
 // loadBalance is a simple round-robin load balancing scheme
