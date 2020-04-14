@@ -570,6 +570,7 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 		goto err_sys;
 	if (sys->sy_npsrs < 1) {
 		D_ERROR(">= 1 PSRs required: %d\n", sys->sy_npsrs);
+		rc = -DER_MISC;
 		goto err_psrs;
 	}
 

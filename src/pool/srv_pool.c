@@ -3023,6 +3023,82 @@ out:
 	return rc;
 }
 
+int
+ds_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *ranks,
+		uint32_t reint_rank, struct pool_target_id_list *reint_list)
+{
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	struct pool_target_addr_list	list;
+	struct pool_add_in		*in;
+	struct pool_add_out		*out;
+	int i = 0;
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		return rc;
+
+rechoose:
+
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_ADD, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool add rpc: "
+			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pti_op.pi_uuid, pool_uuid);
+
+	rc = pool_target_addr_list_alloc(reint_list->pti_number, &list);
+	if (rc) {
+		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_rpc, rc);
+	}
+
+	/* pool_update rpc requires an addr list. */
+	for (i = 0; i < reint_list->pti_number; i++) {
+		list.pta_addrs[i].pta_target = reint_list->pti_ids[i].pti_id;
+		list.pta_addrs[i].pta_rank = reint_rank;
+	}
+
+	in->pti_addr_list.ca_arrays = list.pta_addrs;
+	in->pti_addr_list.ca_count = (size_t)list.pta_number;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+		out->pto_op.po_rc, &out->pto_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->pto_op.po_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": Failed to set targets to UP state for "
+				"reintegration: "DF_RC"\n", DP_UUID(pool_uuid),
+				DP_RC(rc));
+		D_GOTO(out_rpc, rc);
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+	return rc;
+}
+
 /**
  * Set a pool's properties without having a handle for the pool
  */
@@ -3225,7 +3301,8 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		/* Prop might be allocated and returned even if rc != 0 */
+		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry == NULL) {
@@ -3251,8 +3328,8 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 
 out_prop:
-	daos_prop_free(prop);
-out_lock:
+	if (prop != NULL)
+		daos_prop_free(prop);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
@@ -3373,7 +3450,8 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		/* Prop might be allocated and returned even if rc != 0 */
+		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry == NULL) {
@@ -3400,8 +3478,8 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 
 out_prop:
-	daos_prop_free(prop);
-out_lock:
+	if (prop != NULL)
+		daos_prop_free(prop);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
@@ -3750,7 +3828,6 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	bool				updated;
 	int				rc;
 
-	/* Convert target address list to target id list */
 	rc = pool_find_all_targets_by_addr(pool_uuid, list, &target_list,
 					   out_list, hint);
 	if (rc)
@@ -3958,7 +4035,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		if (in->pvi_pool_destroy && !in->pvi_pool_destroy_force) {
 			D_DEBUG(DF_DSMS, DF_UUID": busy, %u open handles\n",
 				DP_UUID(in->pvi_op.pi_uuid), n_hdl_uuids);
-			D_GOTO(out_lock, rc = -DER_BUSY);
+			D_GOTO(out_free, rc = -DER_BUSY);
 		} else {
 			/* Pool evict, or pool destroy with force=true */
 			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
@@ -3975,13 +4052,14 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		rc = rdb_tx_update(&tx, &svc->ps_root,
 				   &ds_pool_prop_connectable, &value);
 		if (rc != 0)
-			D_GOTO(out_lock, rc);
+			D_GOTO(out_free, rc);
 		D_DEBUG(DF_DSMS, DF_UUID": pool destroy/evict: mark pool for "
 			"no new connections\n", DP_UUID(in->pvi_op.pi_uuid));
 	}
 
 	rc = rdb_tx_commit(&tx);
 	/* No need to set out->pvo_op.po_map_version. */
+out_free:
 	D_FREE(hdl_uuids);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
