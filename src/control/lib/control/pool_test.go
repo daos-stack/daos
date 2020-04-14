@@ -25,9 +25,9 @@ package control
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
@@ -35,21 +35,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
-
-// mockMSResponse returns a UnaryResponse to simulate a response from a MS
-// replica.
-func mockMSResponse(addr string, err error, msg proto.Message) *UnaryResponse {
-	return &UnaryResponse{
-		fromMS: true,
-		Responses: []*HostResponse{
-			{
-				Addr:    addr,
-				Message: msg,
-				Error:   err,
-			},
-		},
-	}
-}
 
 func TestControl_PoolDestroy(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -71,7 +56,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 				UUID: MockUUID,
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", errors.New("remote failed"), nil),
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
 		},
@@ -86,7 +71,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 				UUID: MockUUID,
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", nil,
+				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolDestroyResp{},
 				),
 			},
@@ -130,7 +115,7 @@ func TestControl_PoolCreate(t *testing.T) {
 		"remote failure": {
 			req: &PoolCreateReq{},
 			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", errors.New("remote failed"), nil),
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
 		},
@@ -145,7 +130,7 @@ func TestControl_PoolCreate(t *testing.T) {
 				UUID: MockUUID,
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", nil,
+				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolCreateResp{
 						Svcreps: []uint32{0, 1, 2},
 					},
@@ -197,7 +182,7 @@ func TestControl_PoolQuery(t *testing.T) {
 		},
 		"remote failure": {
 			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", errors.New("remote failed"), nil),
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
 		},
@@ -209,7 +194,7 @@ func TestControl_PoolQuery(t *testing.T) {
 		},
 		"query succeeds": {
 			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", nil,
+				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
 						Uuid:            MockUUID,
 						Totaltargets:    42,
@@ -283,6 +268,164 @@ func TestControl_PoolQuery(t *testing.T) {
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolQuery(ctx, mi, req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPoolSetProp(t *testing.T) {
+	const (
+		testPropName          = "test-prop"
+		testPropValStr        = "test-val"
+		testPropValNum uint64 = 42
+	)
+	defaultReq := &PoolSetPropReq{
+		UUID:     MockUUID,
+		Property: testPropName,
+		Value:    testPropValStr,
+	}
+
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *PoolSetPropReq
+		expResp *PoolSetPropResp
+		expErr  error
+	}{
+		"local failure": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"invalid UUID": {
+			req: &PoolSetPropReq{
+				UUID: "bad",
+			},
+			expErr: errors.New("invalid UUID"),
+		},
+		"empty request property": {
+			req: &PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: "",
+			},
+			expErr: errors.New("invalid property name"),
+		},
+		"invalid request value": {
+			req: &PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: testPropName,
+			},
+			expErr: errors.New("unhandled property value"),
+		},
+		"wrong response message": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &MockMessage{}),
+			},
+			expErr: errors.New("unable to extract"),
+		},
+		"invalid response property": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolSetPropResp{
+						Property: nil,
+						Value:    nil,
+					},
+				),
+			},
+			expErr: errors.New("unable to represent response value"),
+		},
+		"invalid response value": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolSetPropResp{
+						Property: &mgmtpb.PoolSetPropResp_Name{
+							Name: testPropName,
+						},
+						Value: nil,
+					},
+				),
+			},
+			expErr: errors.New("unable to represent response value"),
+		},
+		"successful string property": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolSetPropResp{
+						Property: &mgmtpb.PoolSetPropResp_Name{
+							Name: testPropName,
+						},
+						Value: &mgmtpb.PoolSetPropResp_Strval{
+							Strval: testPropValStr,
+						},
+					},
+				),
+			},
+			req: &PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    testPropValStr,
+			},
+			expResp: &PoolSetPropResp{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    testPropValStr,
+			},
+		},
+		"successful numeric property": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolSetPropResp{
+						Property: &mgmtpb.PoolSetPropResp_Name{
+							Name: testPropName,
+						},
+						Value: &mgmtpb.PoolSetPropResp_Numval{
+							Numval: testPropValNum,
+						},
+					},
+				),
+			},
+			req: &PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    testPropValNum,
+			},
+			expResp: &PoolSetPropResp{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    strconv.FormatUint(testPropValNum, 10),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			req := tc.req
+			if req == nil {
+				req = defaultReq
+			}
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotResp, gotErr := PoolSetProp(ctx, mi, req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

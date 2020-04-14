@@ -37,7 +37,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -104,44 +103,9 @@ func (tc *testConn) ClearConns() client.ResultMap {
 	return nil
 }
 
-func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) client.ResultMap {
-	tc.appendInvocation("StoragePrepare")
-	return nil
-}
-
-func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanResp {
-	tc.appendInvocation(fmt.Sprintf("StorageScan-%+v", req))
-	return &client.StorageScanResp{}
-}
-
-func (tc *testConn) StorageFormat(reformat bool) client.StorageFormatResults {
-	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
-	return client.StorageFormatResults{}
-}
-
-func (tc *testConn) PoolCreate(req *client.PoolCreateReq) (*client.PoolCreateResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolCreate-%+v", req))
-	return &client.PoolCreateResp{}, nil
-}
-
-func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
-	tc.appendInvocation(fmt.Sprintf("PoolDestroy-%+v", req))
-	return nil
-}
-
 func (tc *testConn) PoolReintegrate(req *client.PoolReintegrateReq) error {
 	tc.appendInvocation(fmt.Sprintf("PoolReintegrate-%+v", req))
 	return nil
-}
-
-func (tc *testConn) PoolQuery(req client.PoolQueryReq) (*client.PoolQueryResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolQuery-%+v", req))
-	return nil, nil
-}
-
-func (tc *testConn) PoolSetProp(req client.PoolSetPropReq) (*client.PoolSetPropResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolSetProp-%+v", req))
-	return &client.PoolSetPropResp{}, nil
 }
 
 func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
@@ -290,9 +254,28 @@ type bridgeConnInvoker struct {
 }
 
 func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.UnaryRequest) (*control.UnaryResponse, error) {
+	// Use the testConn to fill out the calls slice for compatiblity
+	// with old-style Connection tests.
 	bci.conn.ConnectClients(nil)
 	bci.conn.appendInvocation(printRequest(bci.t, uReq))
-	return bci.MockInvoker.InvokeUnaryRPC(ctx, uReq)
+
+	// Synthesize a response as necessary. The dmg command tests
+	// that interact with the MS will need a valid-ish MS response
+	// in order to avoid failing response validation.
+	resp := &control.UnaryResponse{}
+	switch uReq.(type) {
+	case *control.PoolCreateReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolCreateResp{})
+	case *control.PoolDestroyReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolDestroyResp{})
+	case *control.PoolSetPropReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolSetPropResp{
+			Property: &mgmtpb.PoolSetPropResp_Name{},
+			Value:    &mgmtpb.PoolSetPropResp_Numval{},
+		})
+	}
+
+	return resp, nil
 }
 
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
