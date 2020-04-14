@@ -25,9 +25,11 @@ def scons():
     # Other libs
     libs += ['numa', 'dl', 'isal', 'cmocka', 'pthread']
 
+    if GetOption('help'):
+        return
     config = Configure(unit_env)
 
-    if config.CheckHeader("nvme_internal.h"):
+    if GetOption('clean') or config.CheckHeader("nvme_internal.h"):
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
                                    unit_env.nc], LIBS=libs)
