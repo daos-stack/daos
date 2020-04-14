@@ -84,6 +84,45 @@ func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
 	return nil
 }
 
+// PoolReintegrateReq struct contains request
+type PoolReintegrateReq struct {
+	UUID      string
+	Rank      uint32
+	Targetidx []uint32
+}
+
+// ReintegrateResp as no other parameters other than success/failure for now.
+
+// PoolReintegrate will set a pool target for a specific rank back to up.
+// This should automatically start the reintegration process.
+// error (including any DER code from DAOS).
+//
+// Isolate protobuf encapsulation in client and don't expose to calling code.
+func (c *connList) PoolReintegrate(req *PoolReintegrateReq) error {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return err
+	}
+
+	rpcReq := &mgmtpb.PoolReintegrateReq{Uuid: req.UUID, Rank: req.Rank, Targetidx: req.Targetidx}
+
+	c.log.Debugf("Reintegrate DAOS pool target request: %s\n", rpcReq)
+
+	rpcResp, err := mc.getSvcClient().PoolReintegrate(context.Background(), rpcReq)
+	if err != nil {
+		return err
+	}
+
+	c.log.Debugf("Reintegrate DAOS pool response: %s\n", rpcResp)
+
+	if rpcResp.GetStatus() != 0 {
+		return errors.Errorf("DAOS returned error code: %d\n",
+			rpcResp.GetStatus())
+	}
+
+	return nil
+}
+
 type (
 	// PoolQueryReq contains pool query parameters.
 	PoolQueryReq struct {

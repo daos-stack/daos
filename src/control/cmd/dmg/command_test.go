@@ -129,6 +129,11 @@ func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	return nil
 }
 
+func (tc *testConn) PoolReintegrate(req *client.PoolReintegrateReq) error {
+	tc.appendInvocation(fmt.Sprintf("PoolReintegrate-%+v", req))
+	return nil
+}
+
 func (tc *testConn) PoolQuery(req client.PoolQueryReq) (*client.PoolQueryResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolQuery-%+v", req))
 	return nil, nil

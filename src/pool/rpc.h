@@ -112,6 +112,9 @@
 		0, &CQF_pool_prop_get,					\
 		ds_pool_prop_get_handler,				\
 		NULL),							\
+	X(POOL_ADD_TGT,							\
+		0, &CQF_pool_add,					\
+		ds_pool_update_handler, NULL),				\
 	X(POOL_PROP_SET,						\
 		0, &CQF_pool_prop_set,					\
 		ds_pool_prop_set_handler,				\
