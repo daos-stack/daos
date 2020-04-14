@@ -39,6 +39,7 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -186,12 +187,19 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 		return err
 	}
 
+
+	enabled := atm.NewBool(!(os.Getenv("DAOS_AGENT_DISABLE_CACHE") == "true"))
+	if enabled.IsFalse() {
+		log.Debugf("GetAttachInfo agent caching has been disabled\n")
+	}
+
 	drpcServer.RegisterRPCModule(NewSecurityModule(log, config.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
-		log:  log,
-		sys:  config.SystemName,
-		ap:   config.AccessPoints[0],
-		tcfg: config.TransportConfig,
+		log:     log,
+		sys:     config.SystemName,
+		ap:      config.AccessPoints[0],
+		tcfg:    config.TransportConfig,
+		aiCache: &attachInfoCache{log: log, enabled: enabled},
 	})
 
 	err = drpcServer.Start()
