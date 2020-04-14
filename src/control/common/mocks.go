@@ -20,32 +20,54 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package ctl
+
+package common
 
 import (
-	"errors"
-
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	"github.com/daos-stack/daos/src/control/system"
+	"fmt"
+	"strconv"
+	"strings"
 )
 
-// SetSystemRanks is a convenience method to convert a slice of
-// system ranks to a slice of uint32 ranks for this request.
-func (m *SystemQueryReq) SetSystemRanks(sysRanks []system.Rank) error {
-	if m == nil {
-		return errors.New("nil request")
-	}
-	return convert.Types(sysRanks, &m.Ranks)
+// MockACLResult mocks an ACLResult.
+type MockACLResult struct {
+	Acl    []string
+	Status int32
+	Err    error
 }
 
-// GetSystemRanks is a convenience method to convert this request's
-// slice of uint32 ranks to a slice of system ranks.
-func (m *SystemQueryReq) GetSystemRanks() []system.Rank {
-	if m != nil {
-		var sysRanks []system.Rank
-		if err := convert.Types(m.GetRanks(), &sysRanks); err == nil {
-			return sysRanks
-		}
+// ACL returns a properly formed AccessControlList from the mock data
+func (m *MockACLResult) ACL() *AccessControlList {
+	return &AccessControlList{
+		Entries: m.Acl,
 	}
-	return nil
+}
+
+// MockListPoolsResult mocks list pool results.
+type MockListPoolsResult struct {
+	Status int32
+	Err    error
+}
+
+// GetIndex return suitable index value for auto generating mocks.
+func GetIndex(varIdx ...int32) int32 {
+	if len(varIdx) == 0 {
+		varIdx = append(varIdx, 1)
+	}
+
+	return varIdx[0]
+}
+
+// MockUUID returns mock UUID values for use in tests.
+func MockUUID(varIdx ...int32) string {
+	idx := GetIndex(varIdx...)
+	idxStr := strconv.Itoa(int(idx))
+
+	return fmt.Sprintf("%s-%s-%s-%s-%s",
+		strings.Repeat(idxStr, 8),
+		strings.Repeat(idxStr, 4),
+		strings.Repeat(idxStr, 4),
+		strings.Repeat(idxStr, 4),
+		strings.Repeat(idxStr, 12),
+	)
 }

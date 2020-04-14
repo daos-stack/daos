@@ -85,6 +85,11 @@ lrua_remove_entry(struct lru_entry *entries, struct lru_entry *entry)
 	struct lru_entry	*prev = &entries[entry->le_prev_idx];
 	struct lru_entry	*next = &entries[entry->le_next_idx];
 
+	/** This is an internal API used to remove an entry that will be
+	 *  immediately added back.  So we should never get down to a
+	 *  single entry in practice.
+	 */
+	D_ASSERT(prev != next);
 	prev->le_next_idx = entry->le_next_idx;
 	next->le_prev_idx = entry->le_prev_idx;
 }

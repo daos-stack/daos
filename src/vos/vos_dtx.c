@@ -932,10 +932,16 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct dtx_handle	*dth = vos_dth_get();
 	int			 rc = 0;
 
+	if (dth == NULL) {
+		*tx_id = UMOFF_NULL;
+		return 0;
+	}
+
 	/* For single participator case, we only need committed DTX
 	 * entry for handling resend case, nothing for active table.
 	 */
-	if (dth == NULL || dth->dth_solo) {
+	if (dth->dth_solo) {
+		dth->dth_actived = 1;
 		*tx_id = UMOFF_NULL;
 		return 0;
 	}
@@ -1058,12 +1064,12 @@ handle_df:
 int
 vos_dtx_prepared(struct dtx_handle *dth)
 {
-	struct vos_dtx_act_ent		*dae = dth->dth_ent;
+	struct vos_dtx_act_ent		*dae;
 	struct vos_container		*cont;
 	struct umem_instance		*umm;
 	struct vos_dtx_blob_df		*dbd;
 
-	if (dae == NULL)
+	if (!dth->dth_actived)
 		return 0;
 
 	cont = vos_hdl2cont(dth->dth_coh);
@@ -1074,11 +1080,15 @@ vos_dtx_prepared(struct dtx_handle *dth)
 
 		rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
 					     dth->dth_epoch);
+		dth->dth_actived = 0;
 		if (rc == 0)
 			dth->dth_sync = 1;
 
 		return rc;
 	}
+
+	dae = dth->dth_ent;
+	D_ASSERT(dae != NULL);
 
 	umm = vos_cont2umm(cont);
 	dbd = dae->dae_dbd;
@@ -1719,12 +1729,16 @@ vos_dtx_cleanup_dth(struct dtx_handle *dth)
 	if (dth == NULL || !dth->dth_actived)
 		return;
 
-	d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
-	rc = dbtree_delete(vos_hdl2cont(dth->dth_coh)->vc_dtx_active_hdl,
-			   BTR_PROBE_EQ, &kiov, NULL);
-	if (rc != 0)
-		D_ERROR(DF_UOID" failed to remove DTX entry "DF_DTI": %d\n",
-			DP_UOID(dth->dth_oid), DP_DTI(&dth->dth_xid), rc);
-	else
-		dth->dth_actived = 0;
+	if (!dth->dth_solo) {
+		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
+		rc = dbtree_delete(
+				vos_hdl2cont(dth->dth_coh)->vc_dtx_active_hdl,
+				BTR_PROBE_EQ, &kiov, NULL);
+		if (rc != 0)
+			D_ERROR(DF_UOID" failed to remove DTX entry "
+				DF_DTI": rc = "DF_RC"\n", DP_UOID(dth->dth_oid),
+				DP_DTI(&dth->dth_xid), DP_RC(rc));
+	}
+
+	dth->dth_actived = 0;
 }
