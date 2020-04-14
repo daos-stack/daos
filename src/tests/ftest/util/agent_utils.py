@@ -276,7 +276,8 @@ def include_local_host(hosts):
         hosts = [local_host]
     elif local_host not in hosts:
         # Take a copy of hosts to avoid modifying-in-place
-        hosts = list(hosts)
+# Following statement causing DHOS-4478
+#        hosts = list(hosts)
         hosts.append(local_host)
     return hosts
 
