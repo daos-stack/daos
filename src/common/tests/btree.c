@@ -996,7 +996,7 @@ run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
 	test_group_start = start_idx;
 	test_group_stop = stop_idx;
 
-	return cmocka_run_group_tests_name("Btree group of tests",
+	return cmocka_run_group_tests_name(test_name,
 					   btree_test,
 					   NULL,
 					   NULL);

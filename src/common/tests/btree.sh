@@ -75,9 +75,9 @@ set -e
 gen_test_conf_string()
 {
         name=""
-        [ ! -z "$1" ] && name="${name} IDIR=$1"
-        [ ! -z "$2" ] && name="${name} IPL=$2"
-        [ ! -z "$3" ] && name="${name} PMEM=$3"
+        [ ! -z "$1" ] && name="${name}_IDIR=$1"
+        [ ! -z "$2" ] && name="${name}_IPL=$2"
+        [ ! -z "$3" ] && name="${name}_PMEM=$3"
         echo "$name"
 }
 
@@ -91,7 +91,7 @@ run_test()
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
         "${VCMD[@]}" "$BTR" \
-        --start-test "BTR030: functional test ${test_conf}" \
+        --start-test "BTR030_functional_test_${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
@@ -111,7 +111,7 @@ run_test()
 
         echo "B+tree batch operations test..."
         "${VCMD[@]}" "$BTR" \
-        --start-test "BTR031: batch operations test ${test_conf}" \
+        --start-test "BTR031_batch_operations_test_${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
@@ -120,14 +120,14 @@ run_test()
 
         echo "B+tree drain test..."
         "${VCMD[@]}" "$BTR" \
-        --start-test "BTR032: drain test ${test_conf}" \
+        --start-test "BTR032_drain_test_${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
     else
         echo "B+tree performance test..."
         "${VCMD[@]}" "$BTR" \
-        --start-test "BTR033: performance test ${test_conf}" \
+        --start-test "BTR033_performance_test_${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \
         -D
