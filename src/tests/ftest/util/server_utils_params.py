@@ -154,6 +154,10 @@ class DaosServerYamlParameters(YamlParameters):
         # Get the common config yaml parameters
         yaml_data = super(DaosServerYamlParameters, self).get_yaml_data()
 
+        # Remove the "servers_per_host" BasicParameter as it is not an actual
+        # daos_server configuration file parameter
+        yaml_data.pop("servers_per_host", None)
+
         # Add the per-server yaml parameters
         yaml_data["servers"] = []
         for index in range(len(self.server_params)):

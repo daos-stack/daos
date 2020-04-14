@@ -26,10 +26,6 @@ portions thereof marked with this legend must also reproduce the markings.
 import os
 import time
 from apricot import TestWithServers
-from agent_utils_params import \
-    DaosAgentTransportCredentials, DaosAgentYamlParameters
-from agent_utils import DaosAgentCommand, DaosAgentManager
-from command_utils_base import CommonConfig
 from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
@@ -529,7 +525,8 @@ class Soak(TestWithServers):
         # TO-DO:  daos_agents start with systemd
         agent_launch_cmds = [
             "mkdir -p {}".format(os.environ.get("DAOS_TEST_LOG_DIR"))]
-        agent_launch_cmds.append(self.get_agent_launch_command())
+        agent_launch_cmds.append(
+            " ".join([str(self.agent_managers[0].manager.job), "&"]))
 
         # Create the sbatch script for each cmdline
         used = []
@@ -555,37 +552,6 @@ class Soak(TestWithServers):
             script_list.append(script)
             used.append(unique)
         return script_list
-
-    def get_agent_launch_command(self):
-        """Get the command to launch the daos_agent command.
-
-        Returns:
-            str: the command to launch the daos_agent command as a background
-                process
-
-        """
-        # Create the common config yaml entries for the daos_agent command
-        transport = DaosAgentTransportCredentials()
-        config_file = self.get_config_file(self.server_group, "agent")
-        common_cfg = CommonConfig(self.server_group, transport)
-
-        # Create an AgentCommand to manage with a new AgentManager object
-        agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
-        agent_cmd = DaosAgentCommand(self.bin, agent_cfg)
-        agent_mgr = DaosAgentManager(agent_cmd, "Srun")
-        agent_mgr.manager.label.value = True
-        agent_mgr.manager.mpi.value = "pmi2"
-        agent_mgr.manager.ntasks_per_node.value = 1
-        agent_mgr.manager.export.value = "ALL"
-
-        # Get any daos_agent command/yaml options from the test yaml
-        agent_mgr.manager.job.get_params(self)
-
-        # Assign the access points list
-        agent_mgr.set_config_value("access_points", self.hostlist_servers[:1])
-
-        # TO-DO:  daos_agents start with systemd
-        return " ".join([str(agent_mgr), "&"])
 
     def job_setup(self, job, pool):
         """Create the cmdline needed to launch job.
@@ -917,16 +883,17 @@ class Soak(TestWithServers):
         self.log.info(
             "<<Updated hostlist_clients %s >>", self.hostlist_clients)
         # include test node for log cleanup; remove from client list
-        test_node = [socket.gethostname().split('.', 1)[0]]
-        if test_node[0] in self.hostlist_clients:
-            self.hostlist_clients.remove(test_node[0])
-            self.exclude_slurm_nodes.append(test_node[0])
-            self.log.info(
-                "<<Updated hostlist_clients %s >>", self.hostlist_clients)
+        self.exclude_slurm_nodes.append(self.hostfile_clients.pop(-1))
+        self.log.info("<<Updated hostlist_clients %s >>", self.hostlist_clients)
         if not self.hostlist_clients:
             self.fail("There are no nodes that are client only;"
                       "check if the partition also contains server nodes")
-        self.node_list = self.hostlist_clients + test_node
+
+        # Start an agent on the test control host to enable API calls for
+        # reserved pool and containers.  The test control host should be the
+        # last host in the hostlist_clients list.
+        agent_groups = {self.server_group: self.exclude_slurm_nodes[-1:]}
+        self.start_agents(agent_groups)
 
     def pre_tear_down(self):
         """Tear down any test-specific steps prior to running tearDown().

@@ -255,6 +255,15 @@ class TestWithServers(TestWithoutServers):
         """Set up each test case."""
         super(TestWithServers, self).setUp()
 
+        # Support configuring the startup of servers and agents by the setup()
+        # method from the test yaml file
+        self.setup_start_servers = self.params.get(
+            "start_servers", "/run/setup/*", self.setup_start_servers)
+        self.setup_start_agents = self.params.get(
+            "start_agents", "/run/setup/*", self.setup_start_agents)
+
+        # The server config name should be obtained from each ServerManager
+        # object, but some tests still use this TestWithServers attribute.
         self.server_group = self.params.get(
             "name", "/server_config/", "daos_server")
 

@@ -234,6 +234,7 @@ class IorCommand(ExecutableCommand):
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             env["DAOS_POOL"] = self.daos_pool.value
             env["DAOS_SVCL"] = self.daos_svcl.value
+            env["DAOS_CONT"] = self.daos_cont.value
             env["IOR_HINT__MPI__romio_daos_obj_class"] = self.daos_oclass.value
 
         return env
