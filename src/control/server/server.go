@@ -33,7 +33,6 @@ import (
 	"os/user"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -61,8 +60,6 @@ const (
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128
 )
-
-var ioserverShutdownTimeout = 15 * time.Second
 
 func cfgHasBdev(cfg *Configuration) bool {
 	for _, srvCfg := range cfg.Servers {
@@ -280,24 +277,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
-		var err error
+		// SIGKILL I/O servers immediately on exit.
+		// TODO: Re-enable attempted graceful shutdown of I/O servers.
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
 
-		defer func() {
-			if errors.Cause(err) == context.DeadlineExceeded {
-				log.Debug("resorting to kill signal")
-			}
-			shutdown() // Kill I/O servers if running after graceful shutdown.
-		}()
-
-		stopCtx, cancel := context.WithTimeout(ctx, ioserverShutdownTimeout)
-		defer cancel()
-
-		// Attampt graceful shutdown of I/O servers.
-		if _, err = harness.StopInstances(stopCtx, sig); err != nil {
-			log.Error(errors.Wrap(err, "graceful shutdown").Error())
-		}
+		shutdown()
 	}()
 
 	if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
