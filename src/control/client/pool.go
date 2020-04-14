@@ -26,13 +26,11 @@ package client
 import (
 	"strconv"
 
-	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -61,48 +59,10 @@ type PoolCreateResp struct {
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
 func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
-	mc, err := chooseServiceLeader(c.controllers)
-	if err != nil {
-		return nil, err
-	}
-
-	poolUUID, err := uuid.Parse(req.UUID)
-
-	if err != nil {
-		if req.UUID == "" {
-			poolUUID, err = uuid.NewRandom()
-		}
-		if err != nil {
-			return nil, errors.Wrapf(err, "bad pool UUID: %q", req.UUID)
-		}
-	}
-	poolUUIDStr := poolUUID.String()
-
-	rpcReq := &mgmtpb.PoolCreateReq{
-		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes, Ranks: req.RankList,
-		Numsvcreps: req.NumSvcReps, Sys: req.Sys, User: req.Usr,
-		Usergroup: req.Grp, Uuid: poolUUIDStr,
-	}
-
-	if !req.ACL.Empty() {
-		rpcReq.Acl = req.ACL.Entries
-	}
-
-	c.log.Debugf("Create DAOS pool request: %s\n", rpcReq)
-
-	rpcResp, err := mc.getSvcClient().PoolCreate(context.Background(), rpcReq)
-	if err != nil {
-		return nil, err
-	}
-
-	c.log.Debugf("Create DAOS pool response: %s\n", rpcResp)
-
-	if rpcResp.GetStatus() != 0 {
-		return nil, errors.Errorf("DAOS returned error code: %d\n",
-			rpcResp.GetStatus())
-	}
-
-	return &PoolCreateResp{UUID: poolUUIDStr, SvcReps: rpcResp.GetSvcreps()}, nil
+	// NB: This method is a stub to indicate that it has been replaced
+	// by functionality in the control API, and will be removed when
+	// the client package is removed.
+	return nil, nil
 }
 
 // PoolDestroyReq struct contains request
@@ -118,27 +78,9 @@ type PoolDestroyReq struct {
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
 func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
-	mc, err := chooseServiceLeader(c.controllers)
-	if err != nil {
-		return err
-	}
-
-	rpcReq := &mgmtpb.PoolDestroyReq{Uuid: req.UUID, Force: req.Force}
-
-	c.log.Debugf("Destroy DAOS pool request: %s\n", rpcReq)
-
-	rpcResp, err := mc.getSvcClient().PoolDestroy(context.Background(), rpcReq)
-	if err != nil {
-		return err
-	}
-
-	c.log.Debugf("Destroy DAOS pool response: %s\n", rpcResp)
-
-	if rpcResp.GetStatus() != 0 {
-		return errors.Errorf("DAOS returned error code: %d\n",
-			rpcResp.GetStatus())
-	}
-
+	// NB: This method is a stub to indicate that it has been replaced
+	// by functionality in the control API, and will be removed when
+	// the client package is removed.
 	return nil
 }
 
@@ -235,35 +177,10 @@ func (prs PoolRebuildState) String() string {
 
 // PoolQuery performs a query against the pool service.
 func (c *connList) PoolQuery(req PoolQueryReq) (*PoolQueryResp, error) {
-	mc, err := chooseServiceLeader(c.controllers)
-	if err != nil {
-		return nil, err
-	}
-
-	rpcReq := &mgmtpb.PoolQueryReq{
-		Uuid: req.UUID,
-	}
-
-	c.log.Debugf("DAOS pool query request: %s\n", rpcReq)
-
-	rpcResp, err := mc.getSvcClient().PoolQuery(context.Background(), rpcReq)
-	if err != nil {
-		return nil, err
-	}
-
-	c.log.Debugf("DAOS pool query response: %s\n", rpcResp)
-
-	if rpcResp.GetStatus() != 0 {
-		return nil, errors.Errorf("DAOS returned error code: %d\n",
-			rpcResp.GetStatus())
-	}
-
-	resp := new(PoolQueryResp)
-	if err := convert.Types(rpcResp, resp); err != nil {
-		return nil, errors.Wrap(err, "failed to convert from proto to native")
-	}
-
-	return resp, nil
+	// NB: This method is a stub to indicate that it has been replaced
+	// by functionality in the control API, and will be removed when
+	// the client package is removed.
+	return nil, nil
 }
 
 // PoolSetPropReq contains pool set-prop parameters.
