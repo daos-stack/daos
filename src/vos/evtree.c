@@ -1115,7 +1115,8 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	struct evt_node		*nd;
 	umem_off_t		 nd_off;
 
-	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx));
+	nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx),
+				VOS_SLAB_EVT_NODE);
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
@@ -2490,21 +2491,22 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 
 	ne->ne_rect = ent->ei_rect;
 	if (leaf) {
-		umem_off_t	desc_off;
+		umem_off_t desc_off;
+		uint32_t   csum_buf_size =
+				evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+		size_t     desc_size = sizeof(struct evt_desc) + csum_buf_size;
 
-		uint32_t csum_buf_size =
-			evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
-
-		if (csum_buf_size > 0)
+		if (csum_buf_size > 0) {
 			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
 						"for checksum", csum_buf_size);
-
-		size_t allocation_size = sizeof(struct evt_desc) +
-					 csum_buf_size;
-
-		desc_off = umem_zalloc(evt_umm(tcx), allocation_size);
+			desc_off = umem_zalloc(evt_umm(tcx), desc_size);
+		} else {
+			desc_off = vos_slab_alloc(evt_umm(tcx), desc_size,
+							VOS_SLAB_EVT_DESC);
+		}
 		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOSPACE;
+
 		ne->ne_child = desc_off;
 		desc = evt_off2ptr(tcx, desc_off);
 		rc = evt_desc_log_add(tcx, desc);
