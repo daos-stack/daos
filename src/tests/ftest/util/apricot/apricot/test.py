@@ -200,6 +200,7 @@ class TestWithoutServers(Test):
 
         self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)
+        self.test_log = TestLogger(self.log, self.d_log)
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -207,20 +208,6 @@ class TestWithoutServers(Test):
 
         if self.fault_file:
             os.remove(self.fault_file)
-
-    def multi_log(self, msg, log_type="info"):
-        """Log the provided message to the daos log and the test log.
-
-        Args:
-            msg (str): message to log
-            log_type (str, optional): logging method name to call with the
-                message.  Defaults to "info".
-        """
-        for log_object in (self.d_log, self.log):
-            try:
-                getattr(log_object, log_type)(msg)
-            except AttributeError as error:
-                self.fail("Error logging '{}': {}".format(msg, error))
 
 
 class TestWithServers(TestWithoutServers):
@@ -599,14 +586,14 @@ class TestWithServers(TestWithoutServers):
         if containers:
             if not isinstance(containers, (list, tuple)):
                 containers = [containers]
-            self.multi_log("Destroying containers")
+            self.test_log.info("Destroying containers")
             for container in containers:
                 # Only close a container that has been openned by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
                         container.close()
                     except (DaosApiError, TestFail) as error:
-                        self.multi_log("  {}".format(error))
+                        self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error closing the container: {}".format(error))
 
@@ -615,7 +602,7 @@ class TestWithServers(TestWithoutServers):
                     try:
                         container.destroy()
                     except (DaosApiError, TestFail) as error:
-                        self.multi_log("  {}".format(error))
+                        self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error destroying container: {}".format(error))
         return error_list
@@ -635,14 +622,14 @@ class TestWithServers(TestWithoutServers):
         if pools:
             if not isinstance(pools, (list, tuple)):
                 pools = [pools]
-            self.multi_log("Destroying pools")
+            self.test_log.info("Destroying pools")
             for pool in pools:
                 # Only disconnect a pool that has been connected by the test
                 if not hasattr(pool, "connected") or pool.connected:
                     try:
                         pool.disconnect()
                     except (DaosApiError, TestFail) as error:
-                        self.multi_log("  {}".format(error))
+                        self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error disconnecting pool: {}".format(error))
 
@@ -651,7 +638,7 @@ class TestWithServers(TestWithoutServers):
                     try:
                         pool.destroy(1)
                     except (DaosApiError, TestFail) as error:
-                        self.multi_log("  {}".format(error))
+                        self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error destroying pool: {}".format(error))
         return error_list
