@@ -443,7 +443,7 @@ dc_obj_verify_move_cursor(struct dc_obj_verify_args *dova, daos_obj_id_t oid)
 	struct dc_obj_verify_cursor	*cursor = &dova->cursor;
 	daos_iod_t			*iod = &cursor->iod;
 	uint32_t			 gen = cursor->gen + 1;
-	int				 rc;
+	int				 rc = 0;
 	int				 i;
 
 	dova->data_fetched = 0;

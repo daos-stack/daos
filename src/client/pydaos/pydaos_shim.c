@@ -136,7 +136,7 @@ static PyObject *
 cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 {
 	PyObject	*return_list;
-	daos_handle_t	 coh;
+	daos_handle_t	 coh = {0};
 	daos_handle_t	 poh = {0};
 	d_rank_list_t	*svcl = NULL;
 	int		 rc;
