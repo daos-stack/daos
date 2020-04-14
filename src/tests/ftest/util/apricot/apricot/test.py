@@ -45,6 +45,7 @@ from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
 from server_utils import DaosServerCommand, DaosServerManager
 from general_utils import get_partition_hosts, stop_processes
+from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from env_modules import load_mpi
