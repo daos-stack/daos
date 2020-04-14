@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.9.1
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -70,8 +70,12 @@ BuildRequires: libcurl4
 %endif # 0%{?is_opensuse}
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
+
+%global min_pmdk 1.8-1
 %if (0%{?suse_version} >= 1500)
-Requires: libpmem1, libpmemobj1
+Requires: libpmem1 >= %{min_pmdk}, libpmemobj1 >= %{min_pmdk}, libpmemblk1 >= %{min_pmdk}
+%else
+Requires: libpmem >= %{min_pmdk}, libpmemobj >= %{min_pmdk}, libpmemblk >= %{min_pmdk}
 %endif
 Requires: fuse3 >= 3.4.2
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
@@ -315,6 +319,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Tue Apr 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.1-5
+- Enforce some minimum pmdk package requirements
+
 * Sun Apr 11 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.1-4
 - Use distro versions of fuse and fio
 - Use CaRT release 4.6.1
