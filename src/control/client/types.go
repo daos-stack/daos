@@ -28,11 +28,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/daos-stack/daos/src/control/common/proto"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // ControllerFactory is an interface providing capability to connect clients.
@@ -295,123 +293,4 @@ func (rm ResultStateMap) String() string {
 	}
 
 	return buf.String()
-}
-
-// ScmScanResult represents the result of scanning for SCM
-// modules installed on a storage node and SCM namespaces.
-type ScmScanResult struct {
-	Modules    storage.ScmModules
-	Namespaces storage.ScmNamespaces
-	Err        error
-}
-
-func (result *ScmScanResult) String() string {
-	switch {
-	case result.Err != nil:
-		return fmt.Sprintf("SCM Error: %s", result.Err)
-	case len(result.Namespaces) > 0:
-		return fmt.Sprintf("SCM Namespaces:\n%s", result.Namespaces)
-	default:
-		return fmt.Sprintf("SCM Modules:\n%s", result.Modules)
-	}
-}
-
-func (result *ScmScanResult) Summary() (out string) {
-	switch {
-	case result.Err != nil:
-		return fmt.Sprintf("Error: %s", result.Err)
-	case len(result.Namespaces) > 0:
-		out = result.Namespaces.Summary()
-	default:
-		out = result.Modules.Summary()
-	}
-	return fmt.Sprintf("%s", out)
-}
-
-// ScmScanMap maps ScmModuleScanResult structs to the addresses
-// of remote servers identified by an address string.
-type ScmScanResults map[string]*ScmScanResult
-
-// NvmeScanResult represents the result of scanning for SCM
-// modules installed on a storage node.
-type NvmeScanResult struct {
-	Ctrlrs proto.NvmeControllers
-	Err    error
-}
-
-func (result *NvmeScanResult) String() string {
-	if result.Err != nil {
-		return fmt.Sprintf("NVMe Error: %s", result.Err)
-	}
-	return result.Ctrlrs.String()
-}
-
-func (result *NvmeScanResult) StringHealthStats() string {
-	if result.Err != nil {
-		return fmt.Sprintf("NVMe Error: %s", result.Err)
-	}
-	return result.Ctrlrs.StringHealthStats()
-}
-
-func (result *NvmeScanResult) Summary() (out string) {
-	if result.Err != nil {
-		return fmt.Sprintf("Error: %s", result.Err)
-	}
-	return fmt.Sprintf("%s", result.Ctrlrs.Summary())
-}
-
-// NvmeScanResults maps NvmeScanResult structs to the addresses
-// of remote servers identified by an address string.
-type NvmeScanResults map[string]*NvmeScanResult
-
-// StorageScanReq encapsulated subsystem scan parameters.
-type StorageScanReq struct{}
-
-// StorageScanResp encapsulated subsystem results.
-type StorageScanResp struct {
-	Servers []string
-	Nvme    NvmeScanResults
-	Scm     ScmScanResults
-}
-
-func (ssr *StorageScanResp) StringHealthStats() string {
-	var buf bytes.Buffer
-
-	for _, srv := range ssr.Servers {
-		fmt.Fprintf(&buf, "%s\n", srv)
-		fmt.Fprintf(&buf, "\t%s", ssr.Nvme[srv].StringHealthStats())
-	}
-
-	return buf.String()
-}
-
-// StorageFormatReq encapsulated subsystem format parameters.
-type StorageFormatReq struct {
-	Reformat bool
-}
-
-// StorageFormatResults stores results of format operations on NVMe controllers
-// and SCM mountpoints.
-type StorageFormatResults map[string]StorageFormatResult
-
-func (sfr StorageFormatResults) Keys() (keys []string) {
-	for key, _ := range sfr {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	return keys
-}
-
-type StorageFormatResult struct {
-	Nvme proto.NvmeControllerResults
-	Scm  proto.ScmMountResults
-	Err  error
-}
-
-func (sfr *StorageFormatResult) HasErrors() bool {
-	if sfr.Err != nil || sfr.Scm.HasErrors() || sfr.Nvme.HasErrors() {
-		return true
-	}
-	return false
 }

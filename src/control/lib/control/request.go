@@ -73,6 +73,12 @@ func (r *request) SetHostList(hl []string) {
 	r.HostList = hl
 }
 
+// AddHost appends the given host to the request's hostlist,
+// which may override the configured hostlist.
+func (r *request) AddHost(hostAddr string) {
+	r.HostList = append(r.HostList, hostAddr)
+}
+
 // isMSRequest implements part of the targetChooser interface,
 // and will always return false for a basic request.
 func (r *request) isMSRequest() bool {

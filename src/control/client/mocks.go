@@ -25,7 +25,6 @@ package client
 
 import (
 	"io"
-	"sort"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -311,26 +310,4 @@ func defaultMockConnect(log logging.Logger) Connect {
 		log, connectivity.Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
 		MockModuleResults, MockScmNamespaces, MockMountResults,
 		nil, nil, nil, nil, MockACL, nil)
-}
-
-// MockScanResp mocks scan results from scm and nvme for multiple servers.
-// Each result indicates success or failure through presence of Err.
-func MockScanResp(cs *NvmeControllers, ms *ScmModules, nss *ScmNamespaces, addrs Addresses) *StorageScanResp {
-	nvmeResults := make(NvmeScanResults)
-	scmResults := make(ScmScanResults)
-
-	for _, addr := range addrs {
-		nvmeResults[addr] = &NvmeScanResult{Ctrlrs: *cs}
-
-		sResult := &ScmScanResult{}
-		modules, _ := ms.ToNative()
-		namespaces, _ := nss.ToNative()
-		sResult.Modules = modules
-		sResult.Namespaces = namespaces
-		scmResults[addr] = sResult
-	}
-
-	sort.Strings(addrs)
-
-	return &StorageScanResp{Servers: addrs, Nvme: nvmeResults, Scm: scmResults}
 }
