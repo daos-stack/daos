@@ -1223,6 +1223,24 @@ test_akey_csum(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
+static void
+test_calc_rec_chunksize(void **state)
+{
+	/**	expected,	default_chunksize,	rec_size */
+	assert_int_equal(1, csum_record_chunksize(1, 1));
+	assert_int_equal(2, csum_record_chunksize(2, 2));
+	assert_int_equal(2, csum_record_chunksize(2, 1));
+	assert_int_equal(2, csum_record_chunksize(3, 2));
+	assert_int_equal(3, csum_record_chunksize(4, 3));
+	assert_int_equal(10, csum_record_chunksize(4, 10));
+	assert_int_equal(18, csum_record_chunksize(20, 3));
+	assert_int_equal(UINT_MAX,
+		csum_record_chunksize(UINT_MAX - 1, UINT_MAX));
+	assert_int_equal(UINT_MAX - 1,
+		csum_record_chunksize(UINT_MAX, UINT_MAX - 1));
+}
+
+
 static int test_setup(void **state)
 {
 	return 0;
@@ -1292,6 +1310,8 @@ static const struct CMUnitTest tests[] = {
 		test_verify_sv_data, test_setup, test_teardown},
 	{"CSUM26: iod csums includes 'a' key csum",
 		test_akey_csum, test_setup, test_teardown},
+	{"CSUM27: Calc record chunk size",
+		test_calc_rec_chunksize, test_setup, test_teardown},
 };
 
 int

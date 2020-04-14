@@ -77,11 +77,28 @@ class Test(avocadoTest):
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""
         super(Test, self).__init__(*args, **kwargs)
+
+        # if self.timeout is a string any time value may be entered
+        # but the time speciified must be in this order DHMS
+        # examples   10D2H10M10S or 25M or 2H5S
+        # pylint: disable=no-member
+        if isinstance(self.timeout, str):
+            pattern = r""
+            for interval in ("days", "hours", "minutes", "seconds"):
+                pattern += r"(?:(\d+)(?:\s*{0}[{1}]*\s*)){{0,1}}".format(
+                    interval[0], interval[1:])
+            dhms = re.search(pattern, self.timeout, re.IGNORECASE).groups()
+            self.timeout = 0
+            for index, multiplier in enumerate([24 * 60 * 60, 60 * 60, 60, 1]):
+                if dhms[index] is not None:
+                    self.timeout += multiplier * int(dhms[index])
+        # pylint: enable=no-member
         # set a default timeout of 1 minute
         # tests that want longer should set a timeout in their .yaml file
         # all tests should set a timeout and 60 seconds will enforce that
         if not self.timeout:
             self.timeout = 60
+        self.log.info("self.timeout: %s", self.timeout)
 
         item_list = self.logdir.split('/')
         for index, item in enumerate(item_list):
@@ -294,11 +311,22 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_servers:
             self.start_servers()
 
+    def pre_tear_down(self):
+        """Tear down steps to optionally run before tearDown().
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        self.log.info("teardown() started")
+        return []
+
     def tearDown(self):
         """Tear down after each test case."""
+        # include errors from tests
+        errors = self.pre_tear_down()
         # Destroy any containers first
-        errors = self.destroy_containers(self.container)
-
+        errors.extend(self.destroy_containers(self.container))
         # Destroy any pools next
         errors.extend(self.destroy_pools(self.pool))
 

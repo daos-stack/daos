@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ func connectSetupServers(
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems ScmNamespaces, mountResults ScmMountResults,
 	scanRet error, formatRet error, killRet error, connectRet error,
-	ACLRet *mockACLResult, listPoolsRet *mockListPoolsResult) Connect {
+	ACLRet *MockACLResult, listPoolsRet *MockListPoolsResult) Connect {
 
 	connect := newMockConnect(
 		log, state, ctrlrs, ctrlrResults, modules,
@@ -60,8 +60,8 @@ func connectSetup(
 	state State, ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
 	modules ScmModules, moduleResults ScmModuleResults, pmems ScmNamespaces,
 	mountResults ScmMountResults, scanRet error, formatRet error,
-	killRet error, connectRet error, ACLRet *mockACLResult,
-	listPoolsRet *mockListPoolsResult) Connect {
+	killRet error, connectRet error, ACLRet *MockACLResult,
+	listPoolsRet *MockListPoolsResult) Connect {
 
 	return connectSetupServers(MockServers, log, state, ctrlrs,
 		ctrlrResults, modules, moduleResults, pmems, mountResults, scanRet,
@@ -235,8 +235,8 @@ func TestPoolQuery(t *testing.T) {
 		"query fails": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolQueryErr: errors.New("query failed"),
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolQueryErr: errors.New("query failed"),
 				},
 			},
 			expErr: errors.New("query failed"),
@@ -244,8 +244,8 @@ func TestPoolQuery(t *testing.T) {
 		"nonzero resp status": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolQueryResult: &mgmtpb.PoolQueryResp{
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolQueryResult: &mgmtpb.PoolQueryResp{
 						Status: -42,
 					},
 				},
@@ -255,9 +255,9 @@ func TestPoolQuery(t *testing.T) {
 		"query succeeds": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolQueryResult: &mgmtpb.PoolQueryResp{
-						Uuid:            MockUUID,
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolQueryResult: &mgmtpb.PoolQueryResp{
+						Uuid:            MockUUID(),
 						Totaltargets:    42,
 						Activetargets:   16,
 						Disabledtargets: 17,
@@ -284,7 +284,7 @@ func TestPoolQuery(t *testing.T) {
 				},
 			},
 			expResp: &PoolQueryResp{
-				UUID:            MockUUID,
+				UUID:            MockUUID(),
 				TotalTargets:    42,
 				ActiveTargets:   16,
 				DisabledTargets: 17,
@@ -368,10 +368,10 @@ func TestPoolGetACL(t *testing.T) {
 			if tt.expectedResp != nil {
 				expectedACL = tt.expectedResp.ACL.Entries
 			}
-			aclResult := &mockACLResult{
-				acl:    expectedACL,
-				status: tt.getACLRespStatus,
-				err:    tt.getACLErr,
+			aclResult := &MockACLResult{
+				Acl:    expectedACL,
+				Status: tt.getACLRespStatus,
+				Err:    tt.getACLErr,
 			}
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
@@ -402,7 +402,7 @@ func TestPoolOverwriteACL(t *testing.T) {
 	defer ShowBufferOnFailure(t, buf)
 
 	testACL := &AccessControlList{
-		Entries: MockACL.acl,
+		Entries: MockACL.Acl,
 	}
 
 	for name, tt := range map[string]struct {
@@ -453,10 +453,10 @@ func TestPoolOverwriteACL(t *testing.T) {
 			if tt.expectedResp != nil {
 				expectedACL = tt.expectedResp.ACL.Entries
 			}
-			aclResult := &mockACLResult{
-				acl:    expectedACL,
-				status: tt.overwriteACLRespStatus,
-				err:    tt.overwriteACLErr,
+			aclResult := &MockACLResult{
+				Acl:    expectedACL,
+				Status: tt.overwriteACLRespStatus,
+				Err:    tt.overwriteACLErr,
 			}
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
@@ -488,7 +488,7 @@ func TestPoolUpdateACL(t *testing.T) {
 	defer ShowBufferOnFailure(t, buf)
 
 	testACL := &AccessControlList{
-		Entries: MockACL.acl,
+		Entries: MockACL.Acl,
 	}
 
 	for name, tt := range map[string]struct {
@@ -544,10 +544,10 @@ func TestPoolUpdateACL(t *testing.T) {
 			if tt.expectedResp != nil {
 				expectedACL = tt.expectedResp.ACL.Entries
 			}
-			aclResult := &mockACLResult{
-				acl:    expectedACL,
-				status: tt.updateACLRespStatus,
-				err:    tt.updateACLErr,
+			aclResult := &MockACLResult{
+				Acl:    expectedACL,
+				Status: tt.updateACLRespStatus,
+				Err:    tt.updateACLErr,
 			}
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
@@ -623,10 +623,10 @@ func TestPoolDeleteACL(t *testing.T) {
 			if tt.expectedResp != nil {
 				expectedACL = tt.expectedResp.ACL.Entries
 			}
-			aclResult := &mockACLResult{
-				acl:    expectedACL,
-				status: tt.deleteACLRespStatus,
-				err:    tt.deleteACLErr,
+			aclResult := &MockACLResult{
+				Acl:    expectedACL,
+				Status: tt.deleteACLRespStatus,
+				Err:    tt.deleteACLErr,
 			}
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
@@ -684,7 +684,7 @@ func TestListPools(t *testing.T) {
 		"success": {
 			addr:                MockServers,
 			listPoolsRespStatus: 0,
-			expectedResp:        &ListPoolsResp{Pools: poolDiscoveriesFromPB(MockPoolList)},
+			expectedResp:        &ListPoolsResp{Pools: PoolDiscoveriesFromPB(MockPoolList)},
 			expectedErr:         "",
 		},
 	} {
@@ -694,9 +694,9 @@ func TestListPools(t *testing.T) {
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
 				MockModuleResults, MockScmNamespaces, MockMountResults,
 				nil, nil, nil, nil, MockACL,
-				&mockListPoolsResult{
-					err:    tt.listPoolsErr,
-					status: tt.listPoolsRespStatus,
+				&MockListPoolsResult{
+					Err:    tt.listPoolsErr,
+					Status: tt.listPoolsRespStatus,
 				})
 
 			resp, err := cc.ListPools(ListPoolsReq{})
@@ -733,12 +733,12 @@ func TestPoolSetProp(t *testing.T) {
 		"set-prop fails": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolSetPropErr: errors.New("set-prop failed"),
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolSetPropErr: errors.New("set-prop failed"),
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
@@ -747,14 +747,14 @@ func TestPoolSetProp(t *testing.T) {
 		"nonzero resp status": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolSetPropResult: &mgmtpb.PoolSetPropResp{
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolSetPropResult: &mgmtpb.PoolSetPropResp{
 						Status: -42,
 					},
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
@@ -765,7 +765,7 @@ func TestPoolSetProp(t *testing.T) {
 				addresses: MockServers,
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: "",
 			},
 			expErr: errors.New("invalid property name"),
@@ -775,7 +775,7 @@ func TestPoolSetProp(t *testing.T) {
 				addresses: MockServers,
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 			},
 			expErr: errors.New("unhandled property value"),
@@ -783,12 +783,12 @@ func TestPoolSetProp(t *testing.T) {
 		"invalid response value": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolSetPropResult: &mgmtpb.PoolSetPropResp{},
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolSetPropResult: &mgmtpb.PoolSetPropResp{},
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValNum,
 			},
@@ -797,8 +797,8 @@ func TestPoolSetProp(t *testing.T) {
 		"successful string property": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolSetPropResult: &mgmtpb.PoolSetPropResp{
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolSetPropResult: &mgmtpb.PoolSetPropResp{
 						Property: &mgmtpb.PoolSetPropResp_Name{
 							Name: testPropName,
 						},
@@ -809,12 +809,12 @@ func TestPoolSetProp(t *testing.T) {
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
 			expResp: &PoolSetPropResp{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
@@ -822,8 +822,8 @@ func TestPoolSetProp(t *testing.T) {
 		"successful numeric property": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolSetPropResult: &mgmtpb.PoolSetPropResp{
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolSetPropResult: &mgmtpb.PoolSetPropResp{
 						Property: &mgmtpb.PoolSetPropResp_Name{
 							Name: testPropName,
 						},
@@ -834,12 +834,12 @@ func TestPoolSetProp(t *testing.T) {
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValNum,
 			},
 			expResp: &PoolSetPropResp{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    strconv.FormatUint(testPropValNum, 10),
 			},

@@ -149,7 +149,7 @@ daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr,
  *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 		  daos_size_t cell_size, daos_size_t chunk_size,
 		  daos_handle_t *oh, daos_event_t *ev);
@@ -181,7 +181,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			-DER_NONEXIST	Cannot find object
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 		unsigned int mode, daos_size_t *cell_size,
 		daos_size_t *chunk_size, daos_handle_t *oh, daos_event_t *ev);
@@ -214,7 +214,7 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_PERM	Permission denied
  */
-DAOS_API int
+int
 daos_array_open_with_attr(daos_handle_t coh, daos_obj_id_t oid,
 			  daos_handle_t th, unsigned int mode,
 			  daos_size_t cell_size, daos_size_t chunk_size,
@@ -240,7 +240,7 @@ daos_array_open_with_attr(daos_handle_t coh, daos_obj_id_t oid,
  *					required buffer size is returned through
  *					glob->iov_buf_len.
  */
-DAOS_API int
+int
 daos_array_local2global(daos_handle_t oh, d_iov_t *glob);
 
 /**
@@ -260,7 +260,7 @@ daos_array_local2global(daos_handle_t oh, d_iov_t *glob);
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_HDL	Container handle is nonexistent
  */
-DAOS_API int
+int
 daos_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 			daos_handle_t *oh);
 
@@ -276,7 +276,7 @@ daos_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
  *			0		Success
  *			-DER_NO_HDL	Invalid object open handle
  */
-DAOS_API int
+int
 daos_array_close(daos_handle_t oh, daos_event_t *ev);
 
 /**
@@ -301,7 +301,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  *			-DER_REC2BIG	Record is too large and can't be
  *					fit into output buffer
  */
-DAOS_API int
+int
 daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		d_sg_list_t *sgl, daos_event_t *ev);
 
@@ -326,7 +326,7 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *			-DER_REC2BIG	Record is too large and can't be
  *					fit into output buffer
  */
-DAOS_API int
+int
 daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		 d_sg_list_t *sgl, daos_event_t *ev);
 
@@ -346,7 +346,7 @@ daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
 		    daos_event_t *ev);
 
@@ -369,7 +369,7 @@ daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
 		    daos_event_t *ev);
 
@@ -394,7 +394,7 @@ daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
 
 /**
@@ -413,7 +413,7 @@ daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		 daos_event_t *ev);
 
@@ -432,7 +432,7 @@ daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_INVAL	Invalid parameter
  */
-DAOS_API int
+int
 daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 		    daos_size_t *cell_size);
 

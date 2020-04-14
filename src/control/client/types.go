@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -414,89 +414,4 @@ func (sfr *StorageFormatResult) HasErrors() bool {
 		return true
 	}
 	return false
-}
-
-// AccessControlList is a structure for the access control list.
-type AccessControlList struct {
-	Entries    []string // Access Control Entries in short string format
-	Owner      string   // User that owns the resource
-	OwnerGroup string   // Group that owns the resource
-}
-
-// Empty checks whether there are any entries in the AccessControlList
-func (acl *AccessControlList) Empty() bool {
-	if acl == nil || len(acl.Entries) == 0 {
-		return true
-	}
-	return false
-}
-
-// HasOwner checks whether the AccessControlList has an owner user.
-func (acl *AccessControlList) HasOwner() bool {
-	if acl == nil {
-		return false
-	}
-
-	if acl.Owner != "" {
-		return true
-	}
-	return false
-}
-
-// HasOwnerGroup checks whether the AccessControlList has an owner group.
-func (acl *AccessControlList) HasOwnerGroup() bool {
-	if acl == nil {
-		return false
-	}
-
-	if acl.OwnerGroup != "" {
-		return true
-	}
-	return false
-}
-
-// String displays the AccessControlList in a basic string format.
-func (acl *AccessControlList) String() string {
-	if acl == nil {
-		return "nil"
-	}
-	return fmt.Sprintf("%+v", *acl)
-}
-
-// accessControlListFromPB converts from the protobuf ACLResp structure to an
-// AccessControlList structure.
-func accessControlListFromPB(pbACL *mgmtpb.ACLResp) *AccessControlList {
-	if pbACL == nil {
-		return &AccessControlList{}
-	}
-	return &AccessControlList{
-		Entries:    pbACL.ACL,
-		Owner:      pbACL.OwnerUser,
-		OwnerGroup: pbACL.OwnerGroup,
-	}
-}
-
-// PoolDiscovery represents the basic discovery information for a pool.
-type PoolDiscovery struct {
-	UUID        string   // Unique identifier
-	SvcReplicas []uint32 // Ranks of pool service replicas
-}
-
-// poolDiscoveriesFromPB converts the protobuf ListPoolsResp_Pool structures to
-// PoolDiscovery structures.
-func poolDiscoveriesFromPB(pbPools []*mgmtpb.ListPoolsResp_Pool) []*PoolDiscovery {
-	pools := make([]*PoolDiscovery, 0, len(pbPools))
-	for _, pbPool := range pbPools {
-		svcReps := make([]uint32, 0, len(pbPool.Svcreps))
-		for _, rep := range pbPool.Svcreps {
-			svcReps = append(svcReps, rep)
-		}
-
-		pools = append(pools, &PoolDiscovery{
-			UUID:        pbPool.Uuid,
-			SvcReplicas: svcReps,
-		})
-	}
-
-	return pools
 }

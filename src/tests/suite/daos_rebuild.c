@@ -868,7 +868,7 @@ static int
 rebuild_pool_connect_internal(void *data)
 {
 	test_arg_t	*arg = data;
-	int		rc;
+	int		rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
