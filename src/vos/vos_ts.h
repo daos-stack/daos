@@ -62,8 +62,6 @@ struct vos_ts_entry {
 	daos_epoch_t		 te_ts_rl;
 	/** Max read time for subtrees */
 	daos_epoch_t		 te_ts_rh;
-	/** Write time */
-	daos_epoch_t		 te_ts_w;
 	/** uuid's of transactions.  These can potentially be changed
 	 *  to 16 bits and save some space here.  But for now, stick
 	 *  with the full id.
@@ -72,8 +70,6 @@ struct vos_ts_entry {
 	uuid_t			 te_tx_rl;
 	/** high read tx */
 	uuid_t			 te_tx_rh;
-	/** write tx */
-	uuid_t			 te_tx_w;
 	/** Hash index in parent */
 	uint32_t		 te_hash_idx;
 };
@@ -102,12 +98,12 @@ struct vos_ts_set {
 /** Timestamp types (should all be powers of 2) */
 #define D_FOREACH_TS_TYPE(ACTION)					\
 	ACTION(VOS_TS_TYPE_CONT,	"container",	1024)		\
-	ACTION(VOS_TS_TYPE_OBJ_MISS,	"object miss",	32 * 1024)	\
-	ACTION(VOS_TS_TYPE_OBJ,		"object",	64 * 1024)	\
-	ACTION(VOS_TS_TYPE_DKEY_MISS,	"dkey miss",	128 * 1024)	\
-	ACTION(VOS_TS_TYPE_DKEY,	"dkey",		512 * 1024)	\
-	ACTION(VOS_TS_TYPE_AKEY_MISS,	"akey miss",	1024 * 1024)	\
-	ACTION(VOS_TS_TYPE_AKEY,	"akey",		4 * 1024 * 1024)
+	ACTION(VOS_TS_TYPE_OBJ_MISS,	"object miss",	16 * 1024)	\
+	ACTION(VOS_TS_TYPE_OBJ,		"object",	32 * 1024)	\
+	ACTION(VOS_TS_TYPE_DKEY_MISS,	"dkey miss",	64 * 1024)	\
+	ACTION(VOS_TS_TYPE_DKEY,	"dkey",		128 * 1024)	\
+	ACTION(VOS_TS_TYPE_AKEY_MISS,	"akey miss",	256 * 1024)	\
+	ACTION(VOS_TS_TYPE_AKEY,	"akey",		512 * 1024)
 
 #define DEFINE_TS_TYPE(type, desc, count)	type,
 
@@ -122,8 +118,6 @@ struct vos_ts_table {
 	daos_epoch_t		tt_ts_rl;
 	/** Global read high timestamp for type */
 	daos_epoch_t		tt_ts_rh;
-	/** Global write timestamp for type */
-	daos_epoch_t		tt_ts_w;
 	/** Miss index table */
 	uint32_t		*tt_misses;
 	/** Timestamp table pointers for a type */
@@ -180,8 +174,6 @@ vos_ts_lookup_internal(struct vos_ts_set *ts_set, uint32_t type, uint32_t *idx,
 	void			*entry;
 	struct vos_ts_set_entry	 set_entry = {0};
 	bool found;
-
-	ts_table = vos_ts_table_get();
 
 	found = lrua_lookup(info->ti_array, idx, &entry);
 	if (found) {
@@ -467,25 +459,6 @@ vos_ts_update_read_high(struct vos_ts_entry *entry, daos_epoch_t epoch)
 	if (entry == NULL)
 		return;
 	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
-}
-
-/** Update the write timestamp, if applicable
- *
- *  \param	entry[in,out]	Entry to update
- *  \param	epoch[in]	Update epoch
- */
-static inline void
-vos_ts_update_write(struct vos_ts_entry *entry, daos_epoch_t epoch,
-		    const uuid_t xid)
-{
-	if (entry == NULL)
-		return;
-
-	if (entry->te_ts_w >= epoch)
-		return;
-
-	entry->te_ts_w = epoch;
-	uuid_copy(entry->te_tx_w, xid);
 }
 
 /** Allocate a timestamp set

@@ -158,16 +158,6 @@ enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
 }
 
 extern struct dss_module_key obj_module_key;
-enum obj_profile_op {
-	OBJ_PF_UPDATE_PREP = 0,
-	OBJ_PF_UPDATE_DISPATCH,
-	OBJ_PF_UPDATE_LOCAL,
-	OBJ_PF_UPDATE_END,
-	OBJ_PF_UPDATE_WAIT,
-	OBJ_PF_UPDATE_REPLY,
-	OBJ_PF_UPDATE,
-	OBJ_PF_MAX,
-};
 
 /* Per pool attached to the migrate tls(per xstream) */
 struct migrate_pool_tls {
@@ -226,7 +216,6 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
-	struct srv_profile	*ot_sp;
 	d_list_t		ot_pool_list;
 };
 

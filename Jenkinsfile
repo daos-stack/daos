@@ -52,7 +52,18 @@ def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_re
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
-                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
+                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
+def quickbuild = node() { commitPragma(pragma: 'Quick-build').contains('true') }
+if (quickbuild) {
+    /* TODO: this is a big fat hack
+     * what we should be doing here is installing all of the
+     * $(repoquery --requires daos{,-{server,tests}}) dependencies
+     * similar to how we do for QUICKBUILD_DEPS
+     * or just start testing from RPMs instead of continuing to hack
+     * around that :-)
+     */
+    functional_rpms += " spdk-tools"
+}
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -183,7 +194,6 @@ pipeline {
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
-        QUICKBUILD = commitPragma(pragma: 'Quick-build').contains('true')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         QUICKBUILD_DEPS = sh(script: "rpmspec -q --srpm --requires utils/rpms/daos.spec 2>/dev/null",
@@ -267,7 +277,8 @@ pipeline {
                     when {
                       beforeAgent true
                       expression {
-                        ! commitPragma(pragma: 'Skip-python-bandit').contains('true')
+                        ! commitPragma(pragma: 'Skip-python-bandit',
+                                def_val: 'true').contains('true')
                       }
                     }
                     agent {
@@ -286,7 +297,8 @@ pipeline {
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            runTest script: 'bandit -r . --format xml -o bandit.xml',
+                            runTest script: '''bandit --format xml -o bandit.xml \
+                                                      -r $(git ls-tree --name-only HEAD)''',
                                     junit_files: "bandit.xml",
                                     ignore_failure: true
                         }
@@ -468,7 +480,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=' + env.QUICKBUILD +
+                                                '--build-arg QUICKBUILD=' + quickbuild +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
                                                 '" --build-arg REPOS="' + component_repos + '"'
                         }
@@ -558,7 +570,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -619,7 +631,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -681,7 +693,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -742,7 +754,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -803,7 +815,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -865,7 +877,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -1162,7 +1174,7 @@ pipeline {
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
+                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
                                       lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
@@ -1265,12 +1277,11 @@ pipeline {
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
+                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
                                       lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                   arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                  arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                   if [ -n "$arts" ]; then
                                       mv $(echo $arts | tr '\n' ' ') "Functional/"
                                   fi'''
@@ -1369,12 +1380,11 @@ pipeline {
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
+                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
                                       lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                   arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                  arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                   if [ -n "$arts" ]; then
                                       mv $(echo $arts | tr '\n' ' ') "Functional/"
                                   fi'''
@@ -1473,7 +1483,7 @@ pipeline {
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
+                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
                                       lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'

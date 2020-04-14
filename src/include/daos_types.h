@@ -31,12 +31,6 @@
 extern "C" {
 #endif
 
-#if __GNUC__ >= 4
-	#define DAOS_API __attribute__ ((visibility ("default")))
-#else
-	#define DAOS_API
-#endif
-
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
