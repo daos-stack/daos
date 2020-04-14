@@ -1718,7 +1718,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 	}
 
-	/* step 3, forward the requst to the final target */
+	/* step 3, forward the request to the final target */
 	rc = crt_uri_lookup_forward(rpc_req, g_rank);
 	if (rc != 0)
 		D_ERROR("crt_uri_lookup_forward() failed, rc %d\n", rc);

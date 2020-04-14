@@ -1000,7 +1000,7 @@ typedef struct {
  *			-DER_INVAL	Invalid parameter
  *			-DER_NOSYS	Unsupported opc
  */
-DAOS_API int
+int
 daos_task_create(daos_opc_t opc, tse_sched_t *sched,
 		 unsigned int num_deps, tse_task_t *dep_tasks[],
 		 tse_task_t **taskp);
@@ -1015,7 +1015,7 @@ daos_task_create(daos_opc_t opc, tse_sched_t *sched,
  *
  * \return		Success: Pointer to arguments for the DAOS task
  */
-DAOS_API void *
+void *
 daos_task_get_args(tse_task_t *task);
 
 /**
@@ -1026,7 +1026,7 @@ daos_task_get_args(tse_task_t *task);
  *
  * \return		Pointer to the private state
  */
-DAOS_API void *
+void *
 daos_task_get_priv(tse_task_t *task);
 
 /**
@@ -1037,7 +1037,7 @@ daos_task_get_priv(tse_task_t *task);
  *
  * \return		private state set by the previous call
  */
-DAOS_API void *
+void *
 daos_task_set_priv(tse_task_t *task, void *priv);
 
 /**
@@ -1053,7 +1053,7 @@ daos_task_set_priv(tse_task_t *task, void *priv);
  *
  * \return		0 if Success, negative DER if failed.
  */
-DAOS_API int
+int
 daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty);
 
 #if defined(__cplusplus)

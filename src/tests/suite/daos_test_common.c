@@ -139,7 +139,7 @@ static int
 test_setup_pool_connect(void **state, struct test_pool *pool)
 {
 	test_arg_t *arg = *state;
-	int rc;
+	int rc = -DER_INVAL;
 
 	if (pool != NULL) {
 		assert_int_equal(arg->pool.slave, 1);
