@@ -263,9 +263,7 @@ func (srv *IOServerInstance) RemoveSocket() error {
 	}
 	os.Remove(srvSock)
 
-	// reset state
 	srv.ready.SetFalse()
-	srv.drpcReady = make(chan *srvpb.NotifyReadyReq)
 
 	return nil
 }
