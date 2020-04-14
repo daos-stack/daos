@@ -475,6 +475,9 @@ lru_array_stress_test(void **state)
 			lrua_evict(ts_arg->array, &ts_arg->indexes[i].idx);
 		}
 
+		/** The array is full at start of loop so there will be
+		 *  LRU_ARRAY_SIZE entries and we evict all of them
+		 */
 		assert_int_equal(evicted, LRU_ARRAY_SIZE);
 	}
 
@@ -490,11 +493,11 @@ lru_array_stress_test(void **state)
 			entry->record = &stress_entries[i];
 			stress_entries[i].value = i;
 		} else {
-			op = rand() % i;
+			op = rand() % (i + 1);
 			for (j = 0; j < i; j++) {
 				if (stress_entries[op].value != MAGIC1)
 					break;
-				op = (op + 1) % i;
+				op = (op + 1) % (i + 1);
 			}
 
 			if (stress_entries[op].value != MAGIC1) {
@@ -533,6 +536,7 @@ lru_array_stress_test(void **state)
 		stress_entries[i].value = i;
 	}
 
+	/** Cause evict to lookup the entry to trigger DAOS-4548 */
 	ts_arg->lookup = true;
 	for (i = 0; i < LRU_ARRAY_SIZE; i++) {
 		j = i + LRU_ARRAY_SIZE;

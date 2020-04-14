@@ -137,6 +137,10 @@ lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent,
 	uint32_t		 next_idx;
 	uint32_t		 prev_idx;
 
+	/** The prev != next assertions require the array to have a minimum
+	 *  size of 3.   Just assert this precondition.
+	 */
+	D_ASSERT(nr_ent > 2);
 	aligned_size = (record_size + 7) & ~7;
 
 	*arrayp = NULL;
