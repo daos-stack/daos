@@ -657,6 +657,33 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
 }
 
+int
+ds_mgmt_pool_reintegrate(uuid_t pool_uuid, uint32_t reint_rank,
+		struct pool_target_id_list *reint_list)
+{
+	int			rc;
+	d_rank_list_t		*ranks;
+	struct mgmt_svc		*svc;
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	D_DEBUG(DB_MGMT, "Reintegrating targets for pool "DF_UUID"\n",
+			DP_UUID(pool_uuid));
+	rc = ds_pool_reintegrate(pool_uuid, ranks, reint_rank, reint_list);
+
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
 /* Free array of pools created in ds_mgmt_list_pools() iteration.
  * CaRT and drpc handlers use same mgmt_list_pools_one type for the array.
  */

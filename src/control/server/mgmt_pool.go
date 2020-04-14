@@ -110,6 +110,38 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	return resp, nil
 }
 
+// PoolReintegrate implements the method defined for the Management Service.
+func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq) (*mgmtpb.PoolReintegrateResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if req.GetUuid() == "" {
+		// TODO: do we want to validate pool exists via ListPools?
+		return nil, errors.New("nil UUID")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolReintegrate dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolReintegrate, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolReintegrateResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolReintegrate response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolReintegrate dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // PoolQuery forwards a pool query request to the I/O server.
 func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*mgmtpb.PoolQueryResp, error) {
 	if req == nil {
