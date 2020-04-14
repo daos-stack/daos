@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-import re
 import threading
 import time
 
@@ -33,7 +32,6 @@ from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 
-from daos_utils import DaosCommand
 from dfuse_utils import Dfuse
 import write_host_file
 
@@ -53,7 +51,6 @@ class IorTestBase(TestWithServers):
         self.dfuse = None
         self.co_prop = None
         self.lock = None
-        self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -93,26 +90,14 @@ class IorTestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-    def _create_cont(self):
-        """Create a container.
-
-        Returns:
-            str: UUID of the created container
-
-        """
-        cont_type = 'POSIX'
-        result = self.daos_cmd.container_create(
-            pool=self.pool.uuid, svc=self.pool.svc_ranks,
-            cont_type=cont_type)
-
-        # Extract the container UUID from the daos container create output
-        cont_uuid = re.findall(
-            "created\s+container\s+([0-9a-f-]+)", result.stdout)
-        if not cont_uuid:
-            self.fail(
-                "Error obtaining the container uuid from: {}".format(
-                    result.stdout))
-        return cont_uuid[0]
+    def create_cont(self):
+        """Create a TestContainer object to be used to create container."""
+        # Enable container using TestContainer object,
+        # Get Container params
+        self.container = TestContainer(self.pool)
+        self.container.get_params(self)
+        # create container
+        self.container.create(con_in=self.co_prop)
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -124,7 +109,7 @@ class IorTestBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self._create_cont())
+        self.dfuse.set_dfuse_cont_param(self.container)
 
         try:
             # start dfuse
@@ -178,7 +163,7 @@ class IorTestBase(TestWithServers):
         self.pool.connect()
          # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
-                                     self._create_cont())
+                                     self.container.uuid)
 
     def get_job_manager_command(self):
         """Get the MPI job manager command for IOR.
