@@ -339,15 +339,14 @@ func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemS
 // If all are present return true, else false.
 func (svc *ControlService) allRanksOnHostInList(addr string, rankList []system.Rank) ([]system.Rank, bool) {
 	var rank system.Rank
-	var ok bool
 	addrRanks := svc.membership.HostRanks()[addr]
 
+	ok := true
 	for _, rank = range addrRanks {
-		if rank.InList(rankList) {
-			ok = true
-			continue
+		if !rank.InList(rankList) {
+			ok = false
+			break
 		}
-		ok = false
 	}
 	if !ok {
 		svc.log.Debugf("skip host %s: rank %d not in rank list %v",
@@ -397,7 +396,7 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 	for addr, ranks := range hostRanks {
 		// All ranks configured at addr will be started, therefore if
 		// any of the harness ranks are not in rankList then don't start
-		// harness and indicate why.
+		// harness.
 		//
 		// TODO: when DAOS-4456 lands and ranks can be started, remove
 		//       below mitigation/code block
