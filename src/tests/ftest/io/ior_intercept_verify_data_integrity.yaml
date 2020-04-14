@@ -30,6 +30,8 @@ pool:
         nvme_size: 200000000000
     createsvc:
         svcn: 1
+container:
+    type: POSIX
 ior:
     client_processes:
         np_24:
