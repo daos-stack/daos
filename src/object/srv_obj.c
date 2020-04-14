@@ -109,6 +109,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 	     struct dtx_conflict_entry *dce, struct ds_cont_hdl *cont_hdl)
 {
 	int rc;
+	int i;
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
@@ -138,6 +139,14 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 		if (orwo->orw_iod_csums.ca_arrays != NULL) {
 			D_FREE(orwo->orw_iod_csums.ca_arrays);
 			orwo->orw_iod_csums.ca_count = 0;
+		}
+
+		if (orwo->orw_maps.ca_arrays != NULL) {
+			for (i = 0; i < orwo->orw_maps.ca_count; i++)
+				D_FREE(orwo->orw_maps.ca_arrays[i].iom_recxs);
+
+			D_FREE(orwo->orw_maps.ca_arrays);
+			orwo->orw_maps.ca_count = 0;
 		}
 
 		if (cont_hdl) {
@@ -916,6 +925,76 @@ obj_log_csum_err(void)
 	bio_log_csum_err(bxc, info->dmi_tgt_id);
 }
 
+static void
+map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t byte_idx)
+{
+	map->iom_recxs[map->iom_nr].rx_idx = byte_idx / map->iom_size;
+	map->iom_recxs[map->iom_nr].rx_nr = biov->bi_data_len / map->iom_size;
+	map->iom_nr++;
+}
+
+/** create maps for actually written to extents. */
+static int
+obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
+{
+	struct obj_rw_in	*orw = crt_req_get(rpc);
+	struct obj_rw_out	*orwo = crt_reply_get(rpc);
+	daos_iom_t		*maps;
+	daos_iom_t		*map;
+	struct bio_sglist	*bsgl;
+	daos_iod_t		*iod;
+	struct bio_iov		*biov;
+	uint32_t		 iods_nr;
+	uint32_t		 i, j;
+	uint64_t		 byte_idx;
+	uint32_t		 map_recx_nr;
+
+	/**
+	 * Allocate memory for the maps. There will be 1 per iod
+	 * Will be freed in obj_rw_reply
+	 */
+	iods_nr = orw->orw_iod_array.oia_iod_nr;
+	D_ALLOC_ARRAY(maps, iods_nr);
+	if (maps == NULL)
+		return -DER_NOMEM;
+	for (i = 0; i <  iods_nr; i++) {
+		bsgl = bio_iod_sgl(biod, i); /** 1 bsgl per iod */
+		iod = &orw->orw_iod_array.oia_iods[i];
+		map = &maps[i];
+		map_recx_nr = bsgl->bs_nr_out - bio_sgl_holes(bsgl);
+
+		/** will be freed in obj_rw_reply */
+		D_ALLOC_ARRAY(map->iom_recxs, map_recx_nr);
+		if (map->iom_recxs == NULL) {
+			D_FREE(maps);
+			return -DER_NOMEM;
+		}
+
+		map->iom_size = iod->iod_size;
+		map->iom_type = iod->iod_type;
+
+		if (map->iom_type != DAOS_IOD_ARRAY)
+			continue;
+
+		byte_idx = 0;
+		for (j = 0; j < bsgl->bs_nr_out; j++) {
+			biov = bio_sgl_iov(bsgl, j);
+			if (!bio_addr_is_hole(&biov->bi_addr))
+				map_add_recx(map, biov, byte_idx);
+
+			byte_idx += biov->bi_data_len;
+		}
+		D_ASSERT(map_recx_nr == map->iom_nr);
+		map->iom_recx_lo = map->iom_recxs[0];
+		map->iom_recx_hi = map->iom_recxs[map->iom_nr - 1];
+	}
+
+	orwo->orw_maps.ca_count = iods_nr;
+	orwo->orw_maps.ca_arrays = maps;
+
+	return 0;
+}
+
 static int
 obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	     struct ds_cont_child *cont, daos_iod_t *split_iods,
@@ -1084,6 +1163,9 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				    orw->orw_sgls.ca_count);
 		}
 	}
+
+	if (obj_rpc_is_fetch(rpc))
+		rc = obj_fetch_create_maps(rpc, biod);
 
 	if (rc == -DER_CSUM)
 		obj_log_csum_err();
