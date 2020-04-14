@@ -24,6 +24,7 @@ pool:
     control_method: dmg
 container:
     type: POSIX
+    control_method: daos
 ior:
     client_processes:
       np: 16

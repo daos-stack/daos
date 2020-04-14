@@ -32,6 +32,7 @@ pool:
         svcn: 1
 container:
     type: POSIX
+    control_method: daos
 ior:
     client_processes:
         np_24:
