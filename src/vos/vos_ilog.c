@@ -520,11 +520,11 @@ vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog)
 }
 
 void
-vos_ilog_ts_evict(struct ilog_df *ilog)
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type)
 {
 	uint32_t	*idx;
 
 	idx = ilog_ts_idx_get(ilog);
 
-	return vos_ts_evict(idx);
+	return vos_ts_evict(idx, type);
 }

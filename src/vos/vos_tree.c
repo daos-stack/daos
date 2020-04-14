@@ -361,6 +361,9 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (rc != 0)
 		return rc;
 
+	vos_ilog_ts_evict(&krec->kr_ilog, (krec->kr_bmap & KREC_BF_DKEY) ?
+			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY);
+
 	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
 	return gc_add_item((struct vos_pool *)tins->ti_priv, gc,

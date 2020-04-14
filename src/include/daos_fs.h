@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,22 +39,25 @@ extern "C" {
 
 #include <dirent.h>
 
+/** Maximum Path length */
 #define DFS_MAX_PATH		NAME_MAX
+/** Maximum file size */
 #define DFS_MAX_FSIZE		(~0ULL)
 
+/** File/Directory/Symlink object handle struct */
 typedef struct dfs_obj dfs_obj_t;
+/** DFS mount handle struct */
 typedef struct dfs dfs_t;
 
+/** struct holding attributes for a DFS container */
 typedef struct {
-	/*
-	 * User ID for DFS container (Optional); can be mapped to a Lustre FID
-	 * for example in the Unified namespace.
-	 */
+	/** Optional user ID for DFS container. */
 	uint64_t		da_id;
 	/** Default Chunk size for all files in container */
 	daos_size_t		da_chunk_size;
 	/** Default Object Class for all objects in the container */
 	daos_oclass_id_t	da_oclass_id;
+	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
 } dfs_attr_t;
 
@@ -221,7 +224,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
  */
 int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
-	       dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf);
+	       dfs_obj_t **obj, mode_t *mode, struct stat *stbuf);
 
 /**
  * Create/Open a directory, file, or Symlink.
@@ -327,6 +330,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	 daos_size_t *read_size, daos_event_t *ev);
 
 /**
+ * Non-contiguous read interface to a DFS file.
  * Same as dfs_read with the ability to have a segmented file layout to read.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
@@ -361,7 +365,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	  daos_event_t *ev);
 
 /**
- * Write data to the file object.
+ * Non-contiguous write interface to a DFS file.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.
@@ -496,7 +500,8 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
  * \param[in]	name	Link name of object.
  * \param[in]	new_parent
  *			Target parent directory object. If NULL, use root obj.
- * \param[in]	name	New link name of object.
+ * \param[in]	new_name
+ *			New link name of object.
  * \param[in]	oid	Optionally return the DAOS Object ID of a removed obj
  *			as a result of a rename.
  *
@@ -561,7 +566,7 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
 /**
  * Retrieve Symlink value of object if it's a symlink. If the buffer size passed
  * in is not large enough, we copy up to size of the buffer, and update the size
- * to actual value size.
+ * to actual value size. The size returned includes the null terminator.
  *
  * \param[in]	obj	Open object to query.
  * \param[in]	buf	user buffer to copy the symlink value in.
@@ -582,7 +587,7 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  * is a local operation and doesn't change anything on the storage.
  *
  * \param[in]	obj	Open object handle to update.
- * \param[in]	parent_oid
+ * \param[in]	parent_obj
  *			Open object handle of new parent.
  * \param[in]	name	Optional new name of entry in parent. Pass NULL to leave
  *			the entry name unchanged.
@@ -629,9 +634,13 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name,
 int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 
+/** Option to set the mode_t on an entry */
 #define DFS_SET_ATTR_MODE	(1 << 0)
+/** Option to set the access time on an entry */
 #define DFS_SET_ATTR_ATIME	(1 << 1)
+/** Option to set the modify time on an entry */
 #define DFS_SET_ATTR_MTIME	(1 << 2)
+/** Option to set size of a file */
 #define DFS_SET_ATTR_SIZE	(1 << 3)
 
 /**

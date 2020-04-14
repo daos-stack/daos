@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019 - 2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
 extern "C" {
 #endif
 
+/** struct that has the values to make the connection from the UNS to DAOS */
 struct duns_attr_t {
 	/** Pool uuid of the container. */
 	uuid_t			da_puuid;
@@ -54,7 +55,9 @@ struct duns_attr_t {
 	bool			da_on_lustre;
 };
 
+/** extended attribute name that will container the UNS info */
 #define DUNS_XATTR_NAME		"user.daos"
+/** Length of the extended attribute */
 #define DUNS_MAX_XATTR_LEN	170
 
 /**
@@ -67,8 +70,8 @@ struct duns_attr_t {
  *
  * \param[in]	poh	Pool handle
  * \param[in]	path	Valid path in an existing namespace.
- * \param[in/out]
- *		attr	Struct containing the attributes. The uuid of the
+ * \param[in,out]
+ *		attrp	Struct containing the attributes. The uuid of the
  *			container created is returned in da_cuuid.
  *
  * \return		0 on Success. Negative on Failure.

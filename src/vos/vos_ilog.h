@@ -311,8 +311,9 @@ vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog);
 /** Evict the cached timestamp entry, if present
  *
  *  \param	ilog[in]	The incarnation log
+ *  \param	type[in]	The timestamp type
  */
 void
-vos_ilog_ts_evict(struct ilog_df *ilog);
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type);
 
 #endif /* __VOS_ILOG_H__ */

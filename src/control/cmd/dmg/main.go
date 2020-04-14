@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 
@@ -119,6 +120,20 @@ func exitWithError(log logging.Logger, err error) {
 		log.Errorf("%s: %s", cmdName, fault.ShowResolutionFor(err))
 	}
 	os.Exit(1)
+}
+
+func writeManPage(wr io.Writer) {
+	var opts cliOptions
+	p := flags.NewParser(&opts, flags.Default)
+	p.Name = "dmg"
+	p.ShortDescription = "Administrative tool for managing DAOS clusters"
+	p.Usage = "[OPTIONS] [COMMAND] [SUBCOMMAND]"
+	p.LongDescription = `dmg (DAOS Management) is a tool for connecting to DAOS servers
+for the purpose of issuing administrative commands to the cluster. dmg is
+provided as a means for allowing administrators to securely discover and
+administer DAOS components such as storage allocations, network configuration,
+and access control settings, along with system wide operations.`
+	p.WriteManPage(wr)
 }
 
 func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *logging.LeveledLogger) error {

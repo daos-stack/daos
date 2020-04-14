@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -185,7 +185,7 @@ out_task:
 }
 
 int
-dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start)
+dc_mgmt_profile(char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;
 	struct mgmt_profile_in	*in;
@@ -213,7 +213,6 @@ dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start)
 
 	D_ASSERT(rpc != NULL);
 	in = crt_req_get(rpc);
-	in->p_module = modules;
 	in->p_path = path;
 	in->p_avg = avg;
 	in->p_op = start ? MGMT_PROFILE_START : MGMT_PROFILE_STOP;
@@ -269,13 +268,26 @@ struct dc_mgmt_psr {
 	char		*uri;
 };
 
+#define copy_str(dest, src)				\
+({							\
+	int	__rc = 1;				\
+	size_t	__size = strnlen(src, sizeof(dest));	\
+							\
+	if (__size != sizeof(dest)) {			\
+		memcpy(dest, src, __size + 1);		\
+		__rc = 0;				\
+	}						\
+	__rc;						\
+})
+
 /*
  * Get the attach info (i.e., the CaRT PSRs) for name. npsrs outputs the number
  * of elements in psrs. psrs outputs the array of struct dc_mgmt_psr objects.
  * Callers are responsible for freeing psrs using put_attach_info.
  */
 static int
-get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
+get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
+		struct sys_info *sy_info)
 {
 	struct drpc		*ctx;
 	Mgmt__GetAttachInfoReq	 req = MGMT__GET_ATTACH_INFO_REQ__INIT;
@@ -366,6 +378,31 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 	}
 	*npsrs = resp->n_psrs;
 	*psrs = p;
+
+	if (sy_info) {
+		if (copy_str(sy_info->provider, resp->provider)) {
+			D_ERROR("GetAttachInfo provider string too long\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (copy_str(sy_info->interface, resp->interface)) {
+			D_ERROR("GetAttachInfo interface string too long\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (copy_str(sy_info->domain, resp->domain)) {
+			D_ERROR("GetAttachInfo domain string too long\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
+		sy_info->crt_timeout = resp->crttimeout;
+		D_DEBUG(DB_MGMT,
+			"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
+			"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u\n",
+			sy_info->provider, sy_info->interface, sy_info->domain,
+			sy_info->crt_ctx_share_addr, sy_info->crt_timeout);
+	}
 
 out_resp:
 	mgmt__get_attach_info_resp__free_unpacked(resp, NULL);
@@ -524,7 +561,8 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 	}
 
 	if (psrbs == NULL)
-		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs);
+		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs,
+				     &sys->sy_info);
 	else
 		rc = get_attach_info_from_buf(npsrbs, psrbs, &sys->sy_npsrs,
 					      &sys->sy_psrs);
@@ -532,6 +570,7 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 		goto err_sys;
 	if (sys->sy_npsrs < 1) {
 		D_ERROR(">= 1 PSRs required: %d\n", sys->sy_npsrs);
+		rc = -DER_MISC;
 		goto err_psrs;
 	}
 

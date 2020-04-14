@@ -43,6 +43,7 @@
 #include "daos_api.h"
 #include "daos_fs.h"
 #include "daos_uns.h"
+#include "daos_prop.h"
 
 #include "daos_hdlr.h"
 
@@ -487,7 +488,6 @@ out:
  *
  * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_set_prop_hdlr()
  * int cont_del_attr_hdlr()
  * int cont_rollback_hdlr()
  */
@@ -845,6 +845,39 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 
 err_out:
 	daos_prop_free(prop_query);
+	return rc;
+}
+
+int
+cont_set_prop_hdlr(struct cmd_args_s *ap)
+{
+	int			 rc;
+	struct daos_prop_entry	*entry;
+	uint32_t		 i;
+
+	if (ap->props == NULL || ap->props->dpp_nr == 0) {
+		fprintf(stderr, "at least one property must be requested\n");
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+
+	/* Validate the properties are supported for set */
+	for (i = 0; i < ap->props->dpp_nr; i++) {
+		entry = &(ap->props->dpp_entries[i]);
+		if (entry->dpe_type != DAOS_PROP_CO_LABEL) {
+			fprintf(stderr, "property not supported for set\n");
+			D_GOTO(err_out, rc = -DER_INVAL);
+		}
+	}
+
+	rc = daos_cont_set_prop(ap->cont, ap->props, NULL);
+	if (rc) {
+		fprintf(stderr, "Container set-prop failed, result: %d\n", rc);
+		D_GOTO(err_out, rc);
+	}
+
+	D_PRINT("Properties were successfully set\n");
+
+err_out:
 	return rc;
 }
 

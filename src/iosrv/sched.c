@@ -136,6 +136,7 @@ sched_init(ABT_sched sched, ABT_sched_config config)
 				    &data->sd_dx);
 	if (ret != ABT_SUCCESS) {
 		D_ERROR("Failed to read ABT sched config: %d\n", ret);
+		D_FREE(data);
 		return ret;
 	}
 
@@ -417,7 +418,7 @@ sched_run(ABT_sched sched)
 		 */
 		goto check_event;
 execute:
-		D_ASSERT(pool != ABT_UNIT_NULL);
+		D_ASSERT(pool != ABT_POOL_NULL);
 		ABT_xstream_run_unit(unit, pool);
 start_cycle:
 		if (cycle->sc_new_cycle) {

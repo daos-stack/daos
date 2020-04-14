@@ -140,7 +140,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;         
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
-RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury,fio
+RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury
 
 # Switch to new user
 #USER $USER

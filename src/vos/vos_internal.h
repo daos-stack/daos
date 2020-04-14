@@ -386,8 +386,11 @@ vos_dtx_cos_register(void);
  * \param xid		[IN]	Pointer to the DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param punch		[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success.
+ * \return		Other negative value if error.
  */
-void
+int
 vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 		struct dtx_id *xid, uint64_t dkey_hash, bool punch);
 

@@ -22,6 +22,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(csum)
+#define C_TRACE(...)	D_DEBUG(DB_CSUM, __VA_ARGS__)
 
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -209,7 +210,7 @@ ds_csum_agg_recalc(void *recalc_args)
 		return;
 	}
 	daos_csummer_type_init(&csummer, csum_info.cs_type,
-			       csum_info.cs_chunksize);
+			       csum_info.cs_chunksize, 0);
 	for (i = 0; i < args->cra_seg_cnt; i++) {
 		bool		is_valid = false;
 		unsigned int	this_buf_nr, this_buf_idx;
@@ -291,6 +292,7 @@ ds_csum_recalc(void *args)
 	struct csum_recalc_args	*cs_args = (struct csum_recalc_args *) args;
 	struct dss_module_info  *info;
 
+	C_TRACE("Checksum Aggregation\n");
 	ABT_eventual_create(0, &cs_args->csum_eventual);
 	dss_ult_create(ds_csum_agg_recalc, args,
 		       DSS_ULT_CHECKSUM, DSS_TGT_SELF, 0, NULL);

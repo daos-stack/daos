@@ -6,10 +6,10 @@
   <includeBaseDirectory>false</includeBaseDirectory>
   <fileSets>
     <fileSet>
-      <directory>${project.parent.basedir}/daos-java-api/target</directory>
+      <directory>${project.parent.basedir}/daos-java/target</directory>
       <outputDirectory>.</outputDirectory>
       <includes>
-        <include>daos-java-api-${project.version}.jar</include>
+        <include>daos-java-${project.version}.jar</include>
       </includes>
     </fileSet>
     <fileSet>

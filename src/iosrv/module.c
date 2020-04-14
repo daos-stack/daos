@@ -273,20 +273,28 @@ dss_module_cleanup_all(void)
 	struct loaded_mod      *mod;
 	int			rc = 0;
 
+	D_INFO("Cleaning up all loaded modules\n");
 	D_MUTEX_LOCK(&loaded_mod_list_lock);
+	D_INFO("Iterating through loaded modules list\n");
 	d_list_for_each_entry_reverse(mod, &loaded_mod_list, lm_lk) {
 		struct dss_module *m = mod->lm_dss_mod;
 
-		if (m->sm_cleanup == NULL)
+		if (m->sm_cleanup == NULL) {
+			D_INFO("Module %s: no sm_cleanup func\n", m->sm_name);
 			continue;
+		}
+		D_INFO("Module %s: invoke sm_cleanup func\n", m->sm_name);
 		rc = m->sm_cleanup();
 		if (rc != 0) {
 			D_ERROR("failed to clean up module %s: "DF_RC"\n",
 				m->sm_name, DP_RC(rc));
 			break;
 		}
+		D_INFO("Module %s: cleaned up\n", m->sm_name);
 	}
+	D_INFO("Done iterating through loaded modules list\n");
 	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+	D_INFO("Done cleaning up all loaded modules\n");
 	return rc;
 }
 

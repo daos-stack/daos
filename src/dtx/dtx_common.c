@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,7 +96,6 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 {
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 	struct ds_pool_child	*pool = cont->sc_pool;
-	ABT_future		 future = dbca->dbca_deregistering;
 	int			 rc;
 
 	D_ASSERT(dbca->dbca_deregistering != NULL);
@@ -123,7 +122,7 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 	 * flush done, then free the dbca.
 	 */
 	d_list_del_init(&dbca->dbca_link);
-	rc = ABT_future_set(future, NULL);
+	rc = ABT_future_set(dbca->dbca_deregistering, NULL);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed for DTX "
 		  "flush on "DF_UUID": rc = %d\n", DP_UUID(cont->sc_uuid), rc);
 }
@@ -539,6 +538,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 		return result;
 
 	if (dlh->dlh_sub_cnt == 0) {
+		if (result == -DER_AGAIN)
+			dth->dth_renew = 1;
+
 		if (daos_is_zero_dti(&dth->dth_xid))
 			return result;
 
@@ -586,7 +588,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 		dth->dth_renew = 1;
 	}
 
-	if (result < 0 || rc < 0)
+	if (result < 0 || rc < 0 || !dth->dth_actived)
 		D_GOTO(out, result = result < 0 ? result : rc);
 
 	if (dth->dth_intent == DAOS_INTENT_PUNCH)

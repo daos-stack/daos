@@ -12,13 +12,13 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.intel.daos</groupId>
+  <groupId>io.daos</groupId>
   <artifactId>daos-java-root</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>1.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>DAOS Java Root POM</name>
-  <description>Java API for DAOS Object and DAOS FS</description>
+  <description>Java Root POM for DAOS</description>
   <url>http://daos.io</url>
 
   <properties>
@@ -310,7 +310,7 @@
   </reporting>
 
   <modules>
-    <module>daos-java-api</module>
+    <module>daos-java</module>
     <module>hadoop-daos</module>
     <module>distribution</module>
   </modules>
