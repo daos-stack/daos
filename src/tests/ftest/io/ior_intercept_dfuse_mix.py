@@ -36,10 +36,6 @@ class IorInterceptDfuseMix(IorTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up each test case."""
-        super(IorInterceptDfuseMix, self).setUp()
-
     def test_ior_intercept_dfuse_mix(self):
         """Jira ID: DAOS-3500.
 

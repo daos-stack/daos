@@ -36,10 +36,6 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up each test case."""
-        super(IorInterceptVerifyDataIntegrity, self).setUp()
-
     def test_ior_intercept_verify_data(self):
         """Jira ID: DAOS-3502.
 

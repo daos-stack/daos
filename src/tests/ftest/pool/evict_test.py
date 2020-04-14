@@ -262,7 +262,7 @@ class EvictTests(TestWithServers):
                             count+1, pool[count].uuid, c_uuid_to_str(
                                 pool_info.pi_uuid)))
 
-    def evict_bad_server_name(self):
+    def test_evict_bad_server_name(self):
         """
         Test evicting a pool using an invalid server group name.
 
