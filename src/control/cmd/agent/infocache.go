@@ -95,6 +95,8 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 		aic.devIdx = make(map[int]int)
 	}
 
+	netdetect.SetLogger(aic.log)
+
 	for _, fs := range scanResults {
 		if fs.DeviceName == "lo" {
 			continue

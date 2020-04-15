@@ -46,9 +46,10 @@ type mgmtModule struct {
 	log logging.Logger
 	sys string
 	// The access point
-	ap      string
-	tcfg    *security.TransportConfig
-	aiCache *attachInfoCache
+	ap       string
+	tcfg     *security.TransportConfig
+	aiCache  *attachInfoCache
+	haveNuma bool
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
@@ -100,11 +101,15 @@ func (mod *mgmtModule) ID() int32 {
 // The use of cached data may be disabled by exporting
 // "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, error) {
+	var err error
+	numaNode := defaultNumaNode
 
-	numaNode, err := netdetect.GetNUMASocketIDForPid(pid)
-	if err != nil {
-		mod.log.Debugf("Could not determine the NUMA node affinity.  Using default Numa Node: %d", defaultNumaNode)
-		numaNode = defaultNumaNode
+	if mod.haveNuma {
+		numaNode, err = netdetect.GetNUMASocketIDForPid(pid)
+		if err != nil {
+			return nil, err
+		}
+		mod.log.Infof("Client detected on NUMA node %d", numaNode)
 	}
 
 	if mod.aiCache.enabled.IsTrue() && mod.aiCache.initialized.IsTrue() {

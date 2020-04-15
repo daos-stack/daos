@@ -27,10 +27,11 @@ package netdetect
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../include
-#cgo LDFLAGS: -lhwloc -lfabric
+#cgo LDFLAGS: -lhwloc -lfabric -lnuma
 #include <stdlib.h>
 #include <hwloc.h>
 #include <stdio.h>
+#include <numa.h>
 #include <rdma/fabric.h>
 #include <rdma/fi_domain.h>
 #include <rdma/fi_endpoint.h>
@@ -136,6 +137,7 @@ func (da *DeviceAffinity) String() string {
 func initLib(flags int) (C.hwloc_topology_t, error) {
 	var topology C.hwloc_topology_t
 	var hwlocFlags C.ulong
+
 	status := C.hwloc_topology_init(&topology)
 	if status != 0 {
 		return nil, errors.Errorf("hwloc_topology_init failure: %v", status)
@@ -428,6 +430,28 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 
 	log.Debugf("Unable to determine NUMA socket ID.  Using NUMA 0")
 	return 0, nil
+}
+
+// NumaAvailability verifies that NUMA data is available to process
+// If it is not, the functions that make use of NUMA node data cannot return
+// valid information.
+func NumaAvailability() bool {
+	return C.numa_available() != -1
+}
+
+func NumaAvailabilityHwloc() (int, error) {
+	deviceScanCfg, err := initDeviceScan()
+	if err != nil {
+		return 0, err
+	}
+	defer cleanUp(deviceScanCfg.topology)
+
+	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
+	numObj := int(C.hwloc_get_nbobjs_by_depth(deviceScanCfg.topology, C.uint(depth)))
+	if numObj == 0 {
+		return 0, errors.Errorf("NUMA Node data is unavailable.")
+	}
+	return numObj, nil
 }
 
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
