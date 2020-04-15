@@ -69,8 +69,6 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
                       "'none', 'r', w', 'rw'", primary_grp_perm)
 
         self.log.info("==Starting self.pool_acl_verification")
-        self.log.info(" =user_gid      = %s", user_gid)
-        self.log.info(" =current_group = %s", current_group)
         self.log.info(" =acl_entries = %s", acl_entries)
         self.log.info(" =expect read = %s", read)
         self.log.info(" =expect write= %s", write)
