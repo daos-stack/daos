@@ -11,6 +11,7 @@ server_config:
     name: daos_server
     servers:
         bdev_class: nvme
+        log_mask: INFO
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]

@@ -495,11 +495,12 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 		if (write(mst.logfd, b, tlen) < 0) {
 			static int log_count;
 
-			if (log_count++ < 200)
+			if (log_count++ < 200) {
 				fprintf(stderr, "%s:%d, write to %d failed %d(%s).\n",
 					__func__, __LINE__, mst.logfd, errno, strerror(errno));
+				flags |= DLOG_STDERR;
+			}
 			errno = save_errno;
-			flags |= DLOG_STDERR;
 		}
 
 	if (mst.oflags & DLOG_FLV_STDOUT)
