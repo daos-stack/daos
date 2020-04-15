@@ -562,9 +562,13 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &value);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0)
-			D_ERROR(DF_CONT": container already exists\n",
+			D_DEBUG(DF_DSMS, DF_CONT": container already exists\n",
 				DP_CONT(pool_hdl->sph_pool->sp_uuid,
 					in->cci_op.ci_uuid));
+		else
+			D_ERROR(DF_CONT": container lookup failed: "DF_RC"\n",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid,
+					in->cci_op.ci_uui), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
