@@ -568,7 +568,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		else
 			D_ERROR(DF_CONT": container lookup failed: "DF_RC"\n",
 				DP_CONT(pool_hdl->sph_pool->sp_uuid,
-					in->cci_op.ci_uui), DP_RC(rc));
+					in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
