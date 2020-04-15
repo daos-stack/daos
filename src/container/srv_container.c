@@ -2160,11 +2160,6 @@ out:
 		prop = cqo->cqo_prop;
 	}
 	out->co_rc = rc;
-	if (rc != 0)
-		D_ERROR(DF_CONT": rpc %p: hdl="DF_UUID" opc=%u reply "DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid),
-			rpc, DP_UUID(in->ci_hdl), opc, DP_RC(rc));
-
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
 
