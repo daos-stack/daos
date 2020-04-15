@@ -190,7 +190,7 @@ class TestWithoutServers(Test):
             os.makedirs(self.tmp)
 
         # setup fault injection, this MUST be before API setup
-        fault_list = self.params.get("fault_list", '/run/faults/*/')
+        fault_list = self.params.get("fault_list", '/run/faults/*')
         if fault_list:
             # not using workdir because the huge path was messing up
             # orterun or something, could re-evaluate this later
