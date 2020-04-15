@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.9.1
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -48,6 +48,7 @@ BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
+BuildRequires: python-distro
 %else
 %if (0%{?suse_version} >= 1315)
 # see src/client/dfs/SConscript for why we need /etc/os-release
@@ -60,6 +61,7 @@ BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: Modules
+BuildRequires: python3-distro
 %if 0%{?is_opensuse}
 # have choice for boost-devel needed by cart-devel: boost-devel boost_1_58_0-devel
 BuildRequires: boost-devel
@@ -315,6 +317,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Wed Apr 15 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.1-5
+- Add BR: python-distro for scons_local
+
 * Sun Apr 11 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.1-4
 - Use distro versions of fuse and fio
 - Use CaRT release 4.6.1
