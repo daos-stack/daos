@@ -145,6 +145,8 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		return rc;
 	}
 
+	vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
+
 	D_ASSERT(tins->ti_priv);
 	return gc_add_item((struct vos_pool *)tins->ti_priv, GC_OBJ,
 			   rec->rec_off, 0);

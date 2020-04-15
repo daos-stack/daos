@@ -539,8 +539,10 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		goto out;
 
 	dtx_rec_release(cont, dae, false, &offset);
-	vos_dtx_del_cos(cont, &DAE_OID(dae), dti, DAE_DKEY_HASH(dae),
+	rc = vos_dtx_del_cos(cont, &DAE_OID(dae), dti, DAE_DKEY_HASH(dae),
 			DAE_INTENT(dae) == DAOS_INTENT_PUNCH ? true : false);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	/* If dbtree_delete() failed, the @dae will be left in the active DTX
 	 * table until close the container. It is harmless but waste some DRAM.
@@ -551,8 +553,9 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		umem_free(vos_cont2umm(cont), offset);
 
 out:
-	D_DEBUG(DB_IO, "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
-		DP_DTI(dti), DP_RC(rc));
+	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_IO,
+		 "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
+		 DP_DTI(dti), DP_RC(rc));
 	if (rc != 0) {
 		if (dce != NULL)
 			D_FREE_PTR(dce);
@@ -928,10 +931,16 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct dtx_handle	*dth = vos_dth_get();
 	int			 rc = 0;
 
+	if (dth == NULL) {
+		*tx_id = UMOFF_NULL;
+		return 0;
+	}
+
 	/* For single participator case, we only need committed DTX
 	 * entry for handling resend case, nothing for active table.
 	 */
-	if (dth == NULL || dth->dth_solo) {
+	if (dth->dth_solo) {
+		dth->dth_actived = 1;
 		*tx_id = UMOFF_NULL;
 		return 0;
 	}
@@ -1054,12 +1063,12 @@ handle_df:
 int
 vos_dtx_prepared(struct dtx_handle *dth)
 {
-	struct vos_dtx_act_ent		*dae = dth->dth_ent;
+	struct vos_dtx_act_ent		*dae;
 	struct vos_container		*cont;
 	struct umem_instance		*umm;
 	struct vos_dtx_blob_df		*dbd;
 
-	if (dae == NULL)
+	if (!dth->dth_actived)
 		return 0;
 
 	cont = vos_hdl2cont(dth->dth_coh);
@@ -1070,11 +1079,15 @@ vos_dtx_prepared(struct dtx_handle *dth)
 
 		rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
 					     dth->dth_epoch);
+		dth->dth_actived = 0;
 		if (rc == 0)
 			dth->dth_sync = 1;
 
 		return rc;
 	}
+
+	dae = dth->dth_ent;
+	D_ASSERT(dae != NULL);
 
 	umm = vos_cont2umm(cont);
 	dbd = dae->dae_dbd;
@@ -1250,12 +1263,15 @@ again:
 		dce_df = &dbd->dbd_commmitted_data[dbd->dbd_count];
 	}
 
-	for (i = 0, j = 0; i < slots; i++, cur++) {
+	for (i = 0, j = 0; i < slots && rc1 == 0; i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
 		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce);
 		if (rc == 0 && dce != NULL)
 			committed++;
+
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 
 		if (rc1 == 0)
 			rc1 = rc;
@@ -1282,7 +1298,7 @@ again:
 	if (j > 0)
 		dbd->dbd_count += j;
 
-	if (count == 0)
+	if (count == 0 || rc1 != 0)
 		return committed > 0 ? 0 : rc1;
 
 	if (j < slots) {
@@ -1342,12 +1358,15 @@ new_blob:
 
 	cont_df->cd_dtx_committed_tail = dbd_off;
 
-	for (i = 0, j = 0; i < count; i++, cur++) {
+	for (i = 0, j = 0; i < count && rc1 == 0; i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
 		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce);
 		if (rc == 0 && dce != NULL)
 			committed++;
+
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 
 		if (rc1 == 0)
 			rc1 = rc;
@@ -1709,12 +1728,16 @@ vos_dtx_cleanup_dth(struct dtx_handle *dth)
 	if (dth == NULL || !dth->dth_actived)
 		return;
 
-	d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
-	rc = dbtree_delete(vos_hdl2cont(dth->dth_coh)->vc_dtx_active_hdl,
-			   BTR_PROBE_EQ, &kiov, NULL);
-	if (rc != 0)
-		D_ERROR(DF_UOID" failed to remove DTX entry "DF_DTI": %d\n",
-			DP_UOID(dth->dth_oid), DP_DTI(&dth->dth_xid), rc);
-	else
-		dth->dth_actived = 0;
+	if (!dth->dth_solo) {
+		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
+		rc = dbtree_delete(
+				vos_hdl2cont(dth->dth_coh)->vc_dtx_active_hdl,
+				BTR_PROBE_EQ, &kiov, NULL);
+		if (rc != 0)
+			D_ERROR(DF_UOID" failed to remove DTX entry "
+				DF_DTI": rc = "DF_RC"\n", DP_UOID(dth->dth_oid),
+				DP_DTI(&dth->dth_xid), DP_RC(rc));
+	}
+
+	dth->dth_actived = 0;
 }

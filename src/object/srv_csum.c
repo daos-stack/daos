@@ -69,7 +69,7 @@ struct csum_context {
 	/** cached value of record size */
 	size_t			 cc_rec_len;
 	/** cached value of chunk size */
-	daos_off_t		 cc_chunksize;
+	daos_off_t		 cc_rec_chunksize;
 
 	/** if new checksums are needed for chunks of recx, store original
 	 * extent/csum so it can be verified
@@ -128,6 +128,7 @@ cc_verify_orig_extents(struct csum_context *ctx)
 	uint32_t		 v;
 
 	for (v = 0; v < to_verify_nr; v++) {
+		C_TRACE("(CALC) Verifying original extent\n");
 		uint8_t			 csum[csum_len];
 		bool			 match;
 		struct to_verify	*verify;
@@ -141,8 +142,10 @@ cc_verify_orig_extents(struct csum_context *ctx)
 
 		match = daos_csummer_csum_compare(csummer, csum,
 						  verify->tv_csum, csum_len);
-		if (!match)
+		if (!match) {
+			D_ERROR("Original extent corrupted\n");
 			return -DER_CSUM;
+		}
 	}
 
 	return 0;
@@ -248,7 +251,7 @@ cc_new_csum_update(struct csum_context *ctx, struct dcs_csum_info *info,
 		daos_csummer_reset(ctx->cc_csummer);
 		ctx->cc_csum_started = true;
 	}
-	C_TRACE("Updating for new checksum. "
+	C_TRACE("(CALC) Updating new checksum. "
 		"Chunk idx = %d, bytes for chunk = %lu\n",
 		chunk_idx, biov_bytes_for_chunk);
 	return daos_csummer_update(ctx->cc_csummer,
@@ -267,7 +270,7 @@ cc_remember_to_copy(struct csum_context *ctx, struct dcs_csum_info *info,
 {
 	C_TRACE("Remember to copy csum (idx=%d, len=%d)\n", idx, len);
 	if (csum == NULL) {
-		D_ERROR("Expected to have checksums to copy for fetch.");
+		D_ERROR("Expected to have checksums to copy for fetch.\n");
 		return;
 	}
 	if (ctx->cc_csums_to_copy_to == NULL) {
@@ -304,11 +307,11 @@ cc_set_chunk2ranges(struct csum_context *ctx)
 	daos_off_t cur_rec_idx =
 		ctx->cc_ext_start + ctx->cc_bsgl_idx->iov_offset /
 				    ctx->cc_rec_len;
-	ctx->cc_raw_chunk = csum_recidx2range(ctx->cc_chunksize,
+	ctx->cc_raw_chunk = csum_recidx2range(ctx->cc_rec_chunksize,
 					      cur_rec_idx, ctx->cc_raw.dcr_lo,
 					      ctx->cc_raw.dcr_hi,
 					      ctx->cc_rec_len);
-	ctx->cc_req_chunk = csum_recidx2range(ctx->cc_chunksize,
+	ctx->cc_req_chunk = csum_recidx2range(ctx->cc_rec_chunksize,
 					      cur_rec_idx,
 					      ctx->cc_req.dcr_lo,
 					      ctx->cc_req.dcr_hi,
@@ -420,15 +423,16 @@ static int
 cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 		      struct dcs_csum_info *info)
 {
-	uint32_t		chunksize;
+	uint32_t		rec_chunksize;
 	size_t			rec_size;
 	uint32_t		chunk_nr;
-	uint32_t		c;
+	uint32_t		c; /** recx chunk index */
+	uint32_t		sc; /** system chunk index */
 	int			rc = 0;
 
-	chunksize = daos_csummer_get_chunksize(ctx->cc_csummer);
 	rec_size = ctx->cc_rec_len;
-	chunk_nr = daos_recx_calc_chunks(*recx, rec_size, chunksize);
+	rec_chunksize = ctx->cc_rec_chunksize;
+	chunk_nr = daos_recx_calc_chunks(*recx, rec_size, rec_chunksize);
 
 	/** Because the biovs are acquired by searching for the recx, the first
 	 * selected/requested record of a biov will be the recx index
@@ -437,11 +441,12 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 
 	cc_set_iov2ranges(ctx, cc2iov(ctx));
 
-	for (c = 0; c < chunk_nr; c++) { /** for each chunk/checksum */
+	sc = (recx->rx_idx * rec_size) / rec_chunksize;
+	for (c = 0; c < chunk_nr; c++, sc++) { /** for each chunk/checksum */
 		ctx->cc_recx_chunk = csum_recx_chunkidx2range(recx, rec_size,
-							      chunksize, c);
-		ctx->cc_chunk = csum_chunkrange(chunksize / ctx->cc_rec_len,
-						c);
+							      rec_chunksize, c);
+		ctx->cc_chunk = csum_chunkrange(rec_chunksize / ctx->cc_rec_len,
+						sc);
 		ctx->cc_chunk_bytes_left = ctx->cc_recx_chunk.dcr_nr *
 					   rec_size;
 
@@ -495,7 +500,7 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 	if (!(daos_csummer_initialized(csummer) && bsgl))
 		return 0;
 
-	if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+	if (!csum_iod_is_supported(iod))
 		return 0;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
@@ -517,7 +522,7 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		if (bio_addr_is_hole(&(bio_sgl_iov(bsgl, i)->bi_addr)))
 			continue;
 		if (!ci_is_valid(&biov_csums[j++])) {
-			D_ERROR("Invalid csum for biov %d.", i);
+			D_ERROR("Invalid csum for biov %d.\n", i);
 			return -DER_CSUM;
 		}
 	}
@@ -526,7 +531,8 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 	ctx.cc_csummer = csummer;
 	ctx.cc_bsgl_idx = &bsgl_idx;
 	ctx.cc_rec_len = iod->iod_size;
-	ctx.cc_chunksize = csummer->dcs_chunk_size;
+	ctx.cc_rec_chunksize = daos_csummer_get_rec_chunksize(csummer,
+							      iod->iod_size);
 	ctx.cc_bsgl = bsgl;
 	ctx.cc_biov_csums = biov_csums;
 	ctx.cc_to_verify = ctx.cc_to_verify_embedded;
@@ -539,8 +545,14 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		daos_recx_t		*recx = &iod->iod_recxs[i];
 		struct dcs_csum_info	*info = &iod_csums->ic_data[i];
 
-		if (ctx.cc_rec_len > 0 && ci_is_valid(info))
+		if (ctx.cc_rec_len > 0 && ci_is_valid(info)) {
 			rc = cc_add_csums_for_recx(&ctx, recx, info);
+			if (rc != 0) {
+				D_ERROR("Failed to add csum for "
+						"recx"DF_RECX": %d\n",
+					DP_RECX(*recx), rc);
+			}
+		}
 	}
 
 	/** return the count of biov csums used. */

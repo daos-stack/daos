@@ -77,7 +77,7 @@ cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		return -DER_NONEXIST;
 
 	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	vos_ts_evict(&cont_df->cd_ts_idx);
+	vos_ts_evict(&cont_df->cd_ts_idx, VOS_TS_TYPE_CONT);
 
 	return gc_add_item(tins->ti_priv, GC_CONT, rec->rec_off, 0);
 }

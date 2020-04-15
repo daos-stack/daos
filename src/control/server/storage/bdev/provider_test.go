@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ func TestBdevScan(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expRes, gotRes); diff != "" {
+			if diff := cmp.Diff(tc.expRes, gotRes, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -302,6 +302,7 @@ func TestBdevFormat(t *testing.T) {
 			cmpOpts := []cmp.Option{
 				cmp.Comparer(common.CmpErrBool),
 			}
+			cmpOpts = append(cmpOpts, defCmpOpts()...)
 			if diff := cmp.Diff(tc.expRes, gotRes, cmpOpts...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
 			}

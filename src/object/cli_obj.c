@@ -1425,7 +1425,7 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 	for (i = 0; i < nr; i++) {
 		if (iods[i].iod_name.iov_buf == NULL)
 			/* XXX checksum & eprs should not be mandatory */
-			return false;
+			return -DER_INVAL;
 
 		switch (iods[i].iod_type) {
 		default:
@@ -2432,13 +2432,16 @@ csum_obj_update(struct dc_object *obj, daos_obj_update_t *args,
 		D_ERROR("daos_csummer_calc_iods error: %d", rc);
 		return rc;
 	}
-	/** fault injection */
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_DKEY_FAIL))
+
+	/** fault injection - corrupt data and/or keys after calculating
+	 * checksum - simulates corruption over network
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE_DKEY))
 		((char *) args->dkey->iov_buf)[0]++;
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_AKEY_FAIL))
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE_AKEY))
 		((char *)iod_csums[0].ic_akey.cs_csum)[0]++;
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
-		((char *)iod_csums[0].ic_data->cs_csum)[0]++;
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE))
+		dcf_corrupt(args->sgls, args->nr);
 
 	obj_auxi->rw_args.iod_csums = iod_csums;
 	obj_auxi->rw_args.dkey_csum = dkey_csum;
@@ -2474,10 +2477,13 @@ csum_obj_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 		return rc;
 	}
 
-	/** fault injection */
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_DKEY_FAIL))
+	/**
+	 * fault injection - corrupt keys after calculating checksum -
+	 * simulates corruption over network
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_DKEY))
 		dkey_csum->cs_csum[0]++;
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_AKEY_FAIL))
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_AKEY))
 		iod_csums[0].ic_akey.cs_csum[0]++;
 
 	obj_auxi->rw_args.iod_csums = iod_csums;
@@ -2493,6 +2499,7 @@ static int
 obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		     uint64_t dkey_hash, unsigned int map_ver, uint8_t *bitmap)
 {
+	D_WARN("Retrying replica because of checksum error.\n");
 	struct daos_oclass_attr	*oca;
 	unsigned int		 next_shard, retry_size, shard_cnt, shard_idx;
 	int			 rc = 0;
