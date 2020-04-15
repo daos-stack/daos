@@ -24,9 +24,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/user"
 	"strconv"
 	"strings"
 
@@ -34,7 +34,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 const (
@@ -58,7 +60,8 @@ type PoolCmd struct {
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
 type PoolCreateCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
@@ -87,9 +90,9 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		}
 	}
 
-	var acl *common.AccessControlList
+	var acl *control.AccessControlList
 	if c.ACLFile != "" {
-		acl, err = readACLFile(c.ACLFile)
+		acl, err = control.ReadACLFile(c.ACLFile)
 		if err != nil {
 			return err
 		}
@@ -100,23 +103,27 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 			maxNumSvcReps, c.NumSvcReps)
 	}
 
-	usr, grp, err := formatNameGroup(c.UserName, c.GroupName)
-	if err != nil {
-		return errors.WithMessage(err, "formatting user/group strings")
-	}
-
 	var ranks []uint32
 	if err := common.ParseNumberList(c.RankList, &ranks); err != nil {
 		return errors.WithMessage(err, "parsing rank list")
 	}
 
-	req := &client.PoolCreateReq{
-		ScmBytes: scmBytes, NvmeBytes: nvmeBytes, RankList: ranks,
-		NumSvcReps: c.NumSvcReps, Sys: c.Sys, Usr: usr, Grp: grp, ACL: acl,
+	req := &control.PoolCreateReq{
+		ScmBytes: scmBytes, NvmeBytes: nvmeBytes, Ranks: ranks,
+		NumSvcReps: c.NumSvcReps, Sys: c.Sys,
+		User: c.UserName, UserGroup: c.GroupName, ACL: acl,
 		UUID: c.UUID,
 	}
+	// FIXME (DAOS-4546): Pool requests should not set the hostlist.
+	req.SetHostList(c.hostlist)
 
-	resp, err := c.conns.PoolCreate(req)
+	ctx := context.Background()
+	resp, err := control.PoolCreate(ctx, c.ctlClient, req)
+
+	if c.jsonOutputEnabled() {
+		return c.outputJSON(os.Stdout, resp)
+	}
+
 	if err != nil {
 		msg = errors.WithMessage(err, "FAILED").Error()
 	} else {
@@ -129,38 +136,10 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 	return err
 }
 
-// formatNameGroup converts system names to principal and if both user and group
-// are unspecified, takes effective user name and that user's primary group.
-func formatNameGroup(usr string, grp string) (string, string, error) {
-	if usr == "" && grp == "" {
-		eUsr, err := user.Current()
-		if err != nil {
-			return "", "", err
-		}
-
-		eGrp, err := user.LookupGroupId(eUsr.Gid)
-		if err != nil {
-			return "", "", err
-		}
-
-		usr, grp = eUsr.Username, eGrp.Name
-	}
-
-	if usr != "" && !strings.Contains(usr, "@") {
-		usr += "@"
-	}
-
-	if grp != "" && !strings.Contains(grp, "@") {
-		grp += "@"
-	}
-
-	return usr, grp, nil
-}
-
 // PoolDestroyCmd is the struct representing the command to destroy a DAOS pool.
 type PoolDestroyCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
 	// TODO: implement --sys & --svc options (currently unsupported server side)
 	UUID  string `long:"pool" required:"1" description:"UUID of DAOS pool to destroy"`
 	Force bool   `short:"f" long:"force" description:"Force removal of DAOS pool"`
@@ -170,9 +149,12 @@ type PoolDestroyCmd struct {
 func (d *PoolDestroyCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	req := &client.PoolDestroyReq{UUID: d.UUID, Force: d.Force}
+	req := &control.PoolDestroyReq{UUID: d.UUID, Force: d.Force}
+	// FIXME (DAOS-4546): Pool requests should not set the hostlist.
+	req.SetHostList(d.hostlist)
 
-	err := d.conns.PoolDestroy(req)
+	ctx := context.Background()
+	err := control.PoolDestroy(ctx, d.ctlClient, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -215,50 +197,33 @@ func (r *PoolReintegrateCmd) Execute(args []string) error {
 // PoolQueryCmd is the struct representing the command to query a DAOS pool.
 type PoolQueryCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
 func (c *PoolQueryCmd) Execute(args []string) error {
-	req := client.PoolQueryReq{
+	req := &control.PoolQueryReq{
 		UUID: c.UUID,
 	}
+	// FIXME (DAOS-4546): Pool requests should not set the hostlist.
+	req.SetHostList(c.hostlist)
 
-	resp, err := c.conns.PoolQuery(req)
+	ctx := context.Background()
+	resp, err := control.PoolQuery(ctx, c.ctlClient, req)
 	if err != nil {
 		return errors.Wrap(err, "pool query failed")
 	}
 
-	// Maintain output compability with the `daos pool query` output.
-	var bld strings.Builder
-	fmt.Fprintf(&bld, "Pool %s, ntarget=%d, disabled=%d\n",
-		resp.UUID, resp.TotalTargets, resp.DisabledTargets)
-	bld.WriteString("Pool space info:\n")
-	fmt.Fprintf(&bld, "- Target(VOS) count:%d\n", resp.ActiveTargets)
-	if resp.Scm != nil {
-		bld.WriteString("- SCM:\n")
-		fmt.Fprintf(&bld, "  Total size: %s\n", humanize.Bytes(resp.Scm.Total))
-		fmt.Fprintf(&bld, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			humanize.Bytes(resp.Scm.Free), humanize.Bytes(resp.Scm.Min),
-			humanize.Bytes(resp.Scm.Max), humanize.Bytes(resp.Scm.Mean))
-	}
-	if resp.Nvme != nil {
-		bld.WriteString("- NVMe:\n")
-		fmt.Fprintf(&bld, "  Total size: %s\n", humanize.Bytes(resp.Nvme.Total))
-		fmt.Fprintf(&bld, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			humanize.Bytes(resp.Nvme.Free), humanize.Bytes(resp.Nvme.Min),
-			humanize.Bytes(resp.Nvme.Max), humanize.Bytes(resp.Nvme.Mean))
-	}
-	if resp.Rebuild != nil {
-		if resp.Rebuild.Status == 0 {
-			fmt.Fprintf(&bld, "Rebuild %s, %d objs, %d recs\n",
-				resp.Rebuild.State, resp.Rebuild.Objects, resp.Rebuild.Records)
-		} else {
-			fmt.Fprintf(&bld, "Rebuild failed, rc=%d, status=%d", resp.Status, resp.Rebuild.Status)
-		}
+	if c.jsonOutputEnabled() {
+		return c.outputJSON(os.Stdout, resp)
 	}
 
+	var bld strings.Builder
+	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
+		return err
+	}
 	c.log.Info(bld.String())
 	return nil
 }
