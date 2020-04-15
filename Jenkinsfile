@@ -40,7 +40,6 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-
 def daos_branch = "release/0.9"
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -53,7 +52,18 @@ def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_re
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
-                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
+                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
+def quickbuild = node() { commitPragma(pragma: 'Quick-build').contains('true') }
+if (quickbuild) {
+    /* TODO: this is a big fat hack
+     * what we should be doing here is installing all of the
+     * $(repoquery --requires daos{,-{server,tests}}) dependencies
+     * similar to how we do for QUICKBUILD_DEPS
+     * or just start testing from RPMs instead of continuing to hack
+     * around that :-)
+     */
+    functional_rpms += " spdk-tools"
+}
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -184,12 +194,9 @@ pipeline {
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
-       QUICKBUILD = commitPragma(pragma: 'Quick-build').contains('true')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
-        CART_COMMIT = sh(script: "sed -ne 's/CART *= *\\(.*\\)/\\1/p' utils/build.config",
-                         returnStdout: true).trim()
-        QUICKBUILD_DEPS = sh(script: "rpmspec -q --define cart_sha1\\ ${env.CART_COMMIT} --srpm --requires utils/rpms/daos.spec 2>/dev/null",
+        QUICKBUILD_DEPS = sh(script: "rpmspec -q --srpm --requires utils/rpms/daos.spec 2>/dev/null",
                              returnStdout: true)
     }
 
@@ -473,10 +480,9 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=' + env.QUICKBUILD +
+                                                '--build-arg QUICKBUILD=' + quickbuild +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
-                                                '" --build-arg CART_COMMIT=-' + env.CART_COMMIT +
-                                                ' --build-arg REPOS="' + component_repos + '"'
+                                                '" --build-arg REPOS="' + component_repos + '"'
                         }
                     }
                     steps {
@@ -560,7 +566,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -621,7 +627,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -683,7 +689,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -744,7 +750,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -805,7 +811,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -867,7 +873,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { env.QUICKBUILD != 'true' }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -952,7 +958,7 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
                                        inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
-                                                  "cart-devel-${env.CART_COMMIT} fuse3-libs " +
+                                                  "cart-devel fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
                                                   'libipmctl-devel'
@@ -1082,8 +1088,7 @@ pipeline {
                                                 '$BUILDARGS ' +
                                                 '--build-arg QUICKBUILD=true' +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
-                                                '" --build-arg CART_COMMIT=-' + env.CART_COMMIT +
-                                                ' --build-arg REPOS="' + component_repos + '"'
+                                                '" --build-arg REPOS="' + component_repos + '"'
                         }
                     }
                     steps {
@@ -1141,8 +1146,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1228,8 +1232,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-small:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1333,8 +1336,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-medium:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1438,8 +1440,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-large:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1541,10 +1542,10 @@ pipeline {
                                        inst_rpms: 'environment-modules'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
-                                            "sudo yum -y install daos-client-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos{,-client}-${daos_packages_version}\n" +
                                             "sudo yum -y history rollback last-1\n" +
-                                            "sudo yum -y install daos-server-${daos_packages_version}\n" +
-                                            "sudo yum -y install daos-tests-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos{,-server}-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos{,-tests}-${daos_packages_version}\n" +
                                             "${rpm_test_daos_test}" + '"',
                                     junit_files: null,
                                     failure_artifacts: env.STAGE_NAME, ignore_failure: true
@@ -1581,9 +1582,8 @@ pipeline {
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: rpm_scan_pre +
                                             "sudo yum -y install " +
-                                            "daos-client-${daos_packages_version} " +
-                                            "daos-server-${daos_packages_version} " +
-                                            "daos-tests-${daos_packages_version}\n" +
+                                            "daos{,-{client,server,tests}}-" +
+                                            "${daos_packages_version}\n" +
                                             rpm_scan_test + '"\n' +
                                             rpm_scan_post,
                                     junit_files: 'maldetect.xml',

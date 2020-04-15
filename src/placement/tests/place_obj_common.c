@@ -259,6 +259,9 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 	rc = pool_buf_attach(buf, comps, nr);
 	D_ASSERT(rc == 0);
 
+	/* No longer needed, copied into pool buf */
+	D_FREE(comps);
+
 	rc = pool_map_create(buf, 1, po_map_out);
 	D_ASSERT(rc == 0);
 

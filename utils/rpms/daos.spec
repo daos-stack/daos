@@ -1,10 +1,11 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 %global spdk_version 19.04.1
+%global cart_version 4.6.1
 
 Name:          daos
 Version:       0.9.1
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -14,11 +15,7 @@ Source1:       scons_local-%{version}.tar.gz
 
 BuildRequires: scons
 BuildRequires: gcc-c++
-%if %{defined cart_sha1}
-BuildRequires: cart-devel-%{cart_sha1}
-%else
-BuildRequires: cart-devel
-%endif
+BuildRequires: cart-devel >= %{cart_version}
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
 BuildRequires: libpsm2-devel
@@ -28,10 +25,9 @@ BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: libabt-devel >= 1.0rc1
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
-BuildRequires: fuse-devel >= 3.4.2
+BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel = %{spdk_version}
-BuildRequires: fio < 3.4
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 %else
@@ -71,27 +67,25 @@ BuildRequires: boost-devel
 # have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
 # have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
 BuildRequires: libcurl4
-# have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
-# have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
-BuildRequires: libpsm_infinipath1
 %endif # 0%{?is_opensuse}
-# have choice for libpmemblk.so.1(LIBPMEMBLK_1.0)(64bit) needed by fio: libpmemblk libpmemblk1
-# have choice for libpmemblk.so.1()(64bit) needed by fio: libpmemblk libpmemblk1
-BuildRequires: libpmemblk1
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1, libpmemobj1
 %endif
-Requires: fuse >= 3.4.2
+Requires: fuse3 >= 3.4.2
+# because our repo has a deprecated fuse-3.x RPM, make sure we don't
+# get it when fuse3 Requires: /etc/fuse.conf
+Requires: fuse < 3, fuse3-libs >= 3.4.2
 Requires: protobuf-c
 Requires: spdk >= %{spdk_version}, spdk < 20
-Requires: fio < 3.4
 Requires: openssl
-# ensure we get exactly the right cart RPM
-%if %{defined cart_sha1}
-Requires: cart-%{cart_sha1}
-%endif
+# this should be satisfied by autoprovides but daos-1.x also provides
+# lib{car,gur}t.so.x so if it is in an available repo, RPM will try to
+# install it to satisfy the shared libraries.
+Requires: cart
+# the main/common package needs the client package
+Requires: %{name}-client = %{version}-%{release}
 
 
 %description
@@ -115,11 +109,6 @@ Requires: ipmctl
 Requires: hwloc
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-# ensure we get exactly the right cart RPM
-%if %{defined cart_sha1}
-Requires: cart-%{cart_sha1}
-%endif
-Requires: libfabric >= 1.8.0
 
 %description server
 This is the package needed to run a DAOS server
@@ -127,11 +116,6 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
-# ensure we get exactly the right cart RPM
-%if %{defined cart_sha1}
-Requires: cart-%{cart_sha1}
-%endif
-Requires: libfabric >= 1.8.0
 
 %description client
 This is the package needed to run a DAOS client
@@ -143,10 +127,7 @@ Requires: python-pathlib
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
-# ensure we get exactly the right cart RPM
-%if %{defined cart_sha1}
-Requires: cart-%{cart_sha1}
-%endif
+Requires: fio
 
 
 %description tests
@@ -161,11 +142,7 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: %{name} = %{version}-%{release}
 %endif
 Summary: The DAOS development libraries and headers
-%if %{defined cart_sha1}
-Requires: cart-devel-%{cart_sha1}
-%else
-Requires: cart-devel
-%endif
+Requires: cart-devel >= %{cart_version}
 
 %description devel
 This is the package needed to build software with the DAOS library.
@@ -338,6 +315,13 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Sun Apr 11 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.1-4
+- Use distro versions of fuse and fio
+- Use CaRT release 4.6.1
+- Remove sha-based cart dependencies
+- Remove libfabric Requires: cart will bring that in
+- Remove build support for SLES12/Leap42.3
+
 * Thu Apr 02 2020 Tom Nabarro <tom.nabarro@intel.com> 0.9.1-3
 - pin version of spdk to 19.04.1 and restrict runtime version >=
 
