@@ -973,7 +973,8 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 		map->iom_size = iod->iod_size;
 		map->iom_type = iod->iod_type;
 
-		if (map->iom_type != DAOS_IOD_ARRAY)
+		if (map->iom_type != DAOS_IOD_ARRAY ||
+			bsgl->bs_nr_out == 0)
 			continue;
 
 		byte_idx = 0;
@@ -1012,12 +1013,15 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	crt_bulk_op_t		bulk_op;
 	bool			rma;
 	bool			bulk_bind;
+	bool			create_map;
 	bool			size_fetch = false;
 	daos_iod_t		*iods;
 	uint64_t		*offs;
 	int			err, rc = 0;
 
 	D_TIME_START(time_start, OBJ_PF_UPDATE_LOCAL);
+
+	create_map = orw->orw_flags & ORF_CREATE_MAP;
 
 	if (daos_is_zero_dti(&orw->orw_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
@@ -1163,8 +1167,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				    orw->orw_sgls.ca_count);
 		}
 	}
-
-	if (obj_rpc_is_fetch(rpc))
+	if (obj_rpc_is_fetch(rpc) && create_map)
 		rc = obj_fetch_create_maps(rpc, biod);
 
 	if (rc == -DER_CSUM)

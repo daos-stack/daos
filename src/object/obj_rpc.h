@@ -136,6 +136,8 @@ enum obj_rpc_flags {
 	 * now only used for single value EC handling.
 	 */
 	ORF_EC			= (1 << 4),
+	/** Include the map on fetch (daos_iom_t) */
+	ORF_CREATE_MAP		= (1 << 5),
 };
 
 struct obj_iod_array {
