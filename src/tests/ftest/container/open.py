@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from __future__ import print_function
-
 import traceback
 import uuid
 
@@ -53,6 +51,22 @@ class OpenContainerTest(TestWithServers):
 
     :avocado: recursive
     """
+    def __init__(self, *args, **kwargs):
+        """Initialize member."""
+        super(OpenContainerTest, self).__init__(*args, **kwargs)
+        self.expected_result = RESULT_PASS
+
+    def tearDown(self):
+        # If we call container.open with invalid parameter, container destroy
+        # during the tearDown causes an error. In order to prevent it, set None
+        # to self.container so that container destroy won't happen and it'll
+        # proceed to pool destroy. On the other hand, if we open container with
+        # valid parameter, we need to destroy it during the tearDown; if we
+        # set None, it'll skip container destroy step, try to destroy pool, and
+        # cause an error because the container in the pool isn't destroyed.
+        if self.expected_result == RESULT_FAIL:
+            self.container = None
+        super(OpenContainerTest, self).tearDown()
 
     def test_container_open(self):
         """Jira ID: DAOS-3223
@@ -87,10 +101,10 @@ class OpenContainerTest(TestWithServers):
         expected_for_param = []
         expected_for_param.append(uuid_states[0])
         expected_for_param.append(poh_states[0])
-        expected_result = RESULT_PASS
+        self.expected_result = RESULT_PASS
         for result in expected_for_param:
             if result == RESULT_FAIL:
-                expected_result = RESULT_FAIL
+                self.expected_result = RESULT_FAIL
                 break
 
         # Prepare the messages for the 3 test cases
@@ -125,9 +139,7 @@ class OpenContainerTest(TestWithServers):
         # Create the pool and connect. Then create the container from the pool
         # Add the pool and the container created into a list
         container_uuids = []
-        #for i in range(2):
-        i = 0
-        while i < 2:
+        for _ in range(2):
             self.pool.append(TestPool(
                 self.context, dmg_command=self.get_dmg_command()))
             self.pool[-1].get_params(self)
@@ -137,7 +149,6 @@ class OpenContainerTest(TestWithServers):
             self.container[-1].get_params(self)
             self.container[-1].create()
             container_uuids.append(uuid.UUID(self.container[-1].uuid))
-            i += 1
 
         # Decide which pool handle and container UUID to use. The PASS/FAIL
         # number corresponds to the index for self.pool and container_uuids
@@ -149,13 +160,14 @@ class OpenContainerTest(TestWithServers):
             self.container[0].open(self.pool[pool_handle_index].pool
                                    .handle.value,
                                    container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS,
+            self.assertEqual(self.expected_result, RESULT_PASS,
                              result_messages[test_case][0])
         except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
-            self.assertEqual(expected_result, RESULT_FAIL,
+            self.assertEqual(self.expected_result, RESULT_FAIL,
                              result_messages[test_case][1])
+
         # Case 2. Symmetric to Case 1. Use the other handle and UUID
         pool_handle_index = pool_handle_index ^ 1
         container_uuid_index = container_uuid_index ^ 1
@@ -163,10 +175,10 @@ class OpenContainerTest(TestWithServers):
             self.container[1].open(self.pool[pool_handle_index].pool
                                    .handle.value,
                                    container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS,
+            self.assertEqual(self.expected_result, RESULT_PASS,
                              result_messages[test_case][2])
         except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
-            self.assertEqual(expected_result, RESULT_FAIL,
+            self.assertEqual(self.expected_result, RESULT_FAIL,
                              result_messages[test_case][3])
