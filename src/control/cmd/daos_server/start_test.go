@@ -310,14 +310,14 @@ func TestStartLoggingOptions(t *testing.T) {
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`hello\n$`),
 		},
-		"JSON (Short)": {
-			argList:   []string{"-j"},
+		"JSON Logs (Short)": {
+			argList:   []string{"-J"},
 			logFnName: "Info",
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`"message":"hello"`),
 		},
-		"JSON (Long)": {
-			argList:   []string{"--json"},
+		"JSON Logs (Long)": {
+			argList:   []string{"--json-logging"},
 			logFnName: "Info",
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`"message":"hello"`),
