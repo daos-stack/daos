@@ -10,7 +10,6 @@ hosts:
     - ca_cert: ~/.daos/daosCA.crt
     - cert: ~/.daos/daos_agent.crt
     - key: ~/.daos/daos_agent.key
-    - client_cert_dir: ~/.daos/clients
     - server_name: server
 timeout: 600
 server_config:
@@ -19,12 +18,8 @@ server_config:
 daos_server:
   start:
      insecure: False
-dmg:
-  request: pool
-  action: create
-  create:
-    scm_size: 16000000
 pool_acl:
+  scm_size: 16777216
   user_prefix: daos_ci
   num_user: 1
   num_group: 1
