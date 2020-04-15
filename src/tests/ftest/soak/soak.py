@@ -883,7 +883,7 @@ class Soak(TestWithServers):
         self.log.info(
             "<<Updated hostlist_clients %s >>", self.hostlist_clients)
         # include test node for log cleanup; remove from client list
-        self.exclude_slurm_nodes.append(self.hostfile_clients.pop(-1))
+        self.exclude_slurm_nodes.append(self.hostlist_clients.pop(-1))
         self.log.info("<<Updated hostlist_clients %s >>", self.hostlist_clients)
         if not self.hostlist_clients:
             self.fail("There are no nodes that are client only;"
