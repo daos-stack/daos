@@ -454,6 +454,18 @@ func NumaAvailabilityHwloc() (int, error) {
 	return numObj, nil
 }
 
+func MaxNodes() int {
+	return int(C.numa_max_node())
+}
+
+func MaxNodesConf() int {
+	return int(C.numa_num_configured_nodes())
+}
+
+func MemBind() bool {
+	return C.numa_get_membind == unsafe.Pointer(C.numa_all_nodes_ptr)
+}
+
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
 // It looks for an intersection between the nodeset or cpuset of this pid and the nodeset or cpuset of each
 // NUMA node looking for a match to identify the corresponding NUMA socket ID.
