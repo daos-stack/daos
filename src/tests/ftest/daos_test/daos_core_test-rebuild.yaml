@@ -70,7 +70,7 @@ daos_tests:
     test_r_20:
       daos_test: r
       test_name: rebuild tests 20
-      args: -s3 -u subtests="27"
+      args: -s3 -u subtests="20"
     test_r_21:
       daos_test: r
       test_name: rebuild tests 21

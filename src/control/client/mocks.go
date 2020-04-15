@@ -141,11 +141,8 @@ func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *ctlpb.StorageS
 	}, m.cfg.scanRet
 }
 
-func (m *mockMgmtCtlClient) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq, o ...grpc.CallOption) (ctlpb.MgmtCtl_StorageFormatClient, error) {
-	return &mgmtCtlStorageFormatClient{
-			ctrlrResults: m.cfg.nvmeControllerResults,
-			mountResults: m.cfg.scmMountResults},
-		m.cfg.formatRet
+func (m *mockMgmtCtlClient) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq, o ...grpc.CallOption) (*ctlpb.StorageFormatResp, error) {
+	return nil, m.cfg.formatRet
 }
 
 type mgmtCtlNetworkScanDevicesClient struct {

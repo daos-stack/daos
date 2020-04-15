@@ -100,6 +100,11 @@ struct test_arg {
 	char			*ta_pool_name;
 };
 
+/* variables for test group */
+static char		**test_group_args;
+static int		test_group_start;
+static int		test_group_stop;
+
 static int
 ts_evt_bio_free(struct umem_instance *umm, struct evt_desc *desc,
 		daos_size_t nob, void *args)
@@ -2040,113 +2045,6 @@ test_evt_root_deactivate_bug(void **state)
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
-static int
-run_create_test(void)
-{
-	static const struct CMUnitTest evt_create[] = {
-		{ "EVT001: evt_create", ts_open_create, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree create test", evt_create,
-					   NULL, NULL);
-}
-
-static int
-run_destroy_test(void)
-{
-	static const struct CMUnitTest evt_destroy[] = {
-		{ "EVT002: evt_destroy", ts_close_destroy, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree destroy test", evt_destroy,
-						NULL, NULL);
-}
-
-static int
-run_add_test(void)
-{
-	static const struct CMUnitTest evt_add_rect[] = {
-		{ "EVT003: evt_add_rect", ts_add_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree add test", evt_add_rect,
-						NULL, NULL);
-}
-
-static int
-run_many_add_test(void)
-{
-	static const struct CMUnitTest evt_many_add[] = {
-		{ "EVT004: evt_many_add", ts_many_add, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree many add test",
-						evt_many_add, NULL, NULL);
-}
-
-static int
-run_find_rect_test(void)
-{
-	static const struct CMUnitTest evt_find_rect[] = {
-		{ "EVT005: evt_find_rect", ts_find_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree find rect test",
-						evt_find_rect, NULL, NULL);
-}
-
-static int
-run_list_rect_test(void)
-{
-	static const struct CMUnitTest evt_list_rect[] = {
-		{ "EVT006: evt_list_rect", ts_list_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree list rect test",
-						evt_list_rect, NULL, NULL);
-}
-
-static int
-run_delete_rect_test(void)
-{
-	static const struct CMUnitTest evt_delete_rect[] = {
-		{ "EVT007: evt_delete_rect", ts_delete_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree delete rect test",
-						evt_delete_rect, NULL, NULL);
-}
-
-static int
-run_tree_debug_test(void)
-{
-	static const struct CMUnitTest evt_tree_debug[] = {
-		{ "EVT008: evt_tree_debug", ts_tree_debug, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree tree debug test",
-					evt_tree_debug, NULL, NULL);
-}
-
-static int
-run_drain_test(void)
-{
-	static const struct CMUnitTest evt_drain[] = {
-		{ "EVT009: evt_drain", ts_drain, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree drain test",
-					   evt_drain, NULL, NULL);
-}
 
 static void
 test_evt_outer_punch(void **state)
@@ -2339,50 +2237,50 @@ static struct option ts_ops[] = {
 static int
 ts_cmd_run(char opc, char *args)
 {
-	int	rc = 0;
+	int	 rc = 0;
+	void	 **st = NULL;
 
 	tst_fn_val.optval = args;
 	tst_fn_val.input = true;
 
 	switch (opc) {
 	case 'C':
-		rc = run_create_test();
+		ts_open_create(st);
 		break;
 	case 'D':
-		rc = run_destroy_test();
+		ts_close_destroy(st);
 		break;
 	case 'o':
 		tst_fn_val.input = false;
 		tst_fn_val.optval = NULL;
-		rc = run_create_test();
+		ts_open_create(st);
 		break;
 	case 'c':
 		tst_fn_val.input = false;
-		rc = run_destroy_test();
+		ts_close_destroy(st);
 		break;
 	case 'a':
-		rc = run_add_test();
+		ts_add_rect(st);
 		break;
 	case 'm':
-		rc = run_many_add_test();
+		ts_many_add(st);
 		break;
 	case 'e':
-		rc = run_drain_test();
+		ts_drain(st);
 		break;
 	case 'f':
-		rc = run_find_rect_test();
+		ts_find_rect(st);
 		break;
 	case 'l':
-		rc = run_list_rect_test();
+		ts_list_rect(st);
 		break;
 	case 'd':
-		rc = run_delete_rect_test();
+		ts_delete_rect(st);
 		break;
 	case 'b':
-		rc = run_tree_debug_test();
+		ts_tree_debug(st);
 		break;
 	case 't':
-		rc = run_internal_tests();
 		break;
 	case 's':
 		if (strcasecmp(args, "soff") == 0)
@@ -2395,10 +2293,42 @@ ts_cmd_run(char opc, char *args)
 		rc = 0;
 		break;
 	}
-	if (rc != 0)
-		D_PRINT("opc=%d failed with rc="DF_RC"\n", opc, DP_RC(rc));
+	if (st != NULL)
+		rc = -1;
 
 	return rc;
+}
+
+static void
+ts_group(void **state)
+{
+
+	int	opc = 0;
+
+	while ((opc = getopt_long(test_group_stop-test_group_start+1,
+				 test_group_args+test_group_start,
+				 "C:a:m:e:f:g:d:b:Docl::ts",
+				 ts_ops, NULL)) != -1){
+		ts_cmd_run(opc, optarg);
+	}
+}
+
+static int
+run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
+{
+
+	const struct CMUnitTest evt_test[] = {
+		{ test_name, ts_group, NULL, NULL},
+	};
+
+	test_group_args = args;
+	test_group_start = start_idx;
+	test_group_stop = stop_idx;
+
+	return cmocka_run_group_tests_name("Group of tests",
+					   evt_test,
+					   NULL,
+					   NULL);
 }
 
 int
@@ -2406,6 +2336,10 @@ main(int argc, char **argv)
 {
 	struct timeval	tv;
 	int		rc;
+	int		j;
+	int		start_idx;
+	char		*test_name;
+	int		stop_idx;
 
 	d_register_alt_assert(mock_assert);
 
@@ -2438,13 +2372,26 @@ main(int argc, char **argv)
 		goto out;
 	}
 
-	while ((rc = getopt_long(argc, argv, "C:a:m:e:f:g:d:b:Docl::ts:",
-				 ts_ops, NULL)) != -1) {
-		rc = ts_cmd_run(rc, optarg);
-		if (rc != 0)
-			goto out;
+	/* First, execute Internal tests in the command */
+	for (j = 0; j < argc; j++) {
+		if (strcmp(argv[j], "-t") == 0) {
+			rc = run_internal_tests();
+			if (rc != 0)
+				D_PRINT("Internal tests failed rc="DF_RC"\n",
+					DP_RC(rc));
+		}
 	}
-	rc = 0;
+
+	/* Execute the sequence of tests */
+	stop_idx = argc-1;
+	if (strcmp(argv[1], "--start-test") != 0) {
+		start_idx = 0;
+		test_name = "Evt_ctl testing tool";
+	} else {
+		start_idx = 2;
+		test_name = argv[start_idx];
+	}
+	rc = run_cmd_line_test(test_name, argv, start_idx, stop_idx);
  out:
 	daos_debug_fini();
 	rc += utest_utx_destroy(ts_utx);
