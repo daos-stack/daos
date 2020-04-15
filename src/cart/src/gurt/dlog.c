@@ -641,8 +641,18 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			fprintf(stderr, "strdup failed.\n");
 			goto error;
 		}
-		mst.logfd =
-		    open(mst.logfile, log_flags, 0666);
+		/* merge stderr into log file, to aggregate and order with
+		 * messages from Mercury/libfabric
+		 */
+		if (freopen(mst.logfile, truncate ? "w" : "a",
+			    stderr) == NULL) {
+			fprintf(stderr, "d_log_open: cannot open %s: %s\n",
+				mst.logfile, strerror(errno));
+			goto error;
+		}
+		/* set per-line buffering to limit jumbling */
+		setlinebuf(stderr);
+		mst.logfd = fileno(stderr);
 		if (mst.logfd < 0) {
 			fprintf(stderr, "d_log_open: cannot open %s: %s\n",
 				mst.logfile, strerror(errno));
