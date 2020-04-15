@@ -39,6 +39,7 @@ import (
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -209,8 +210,18 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 	}
 
+	// Create rpcClient for inter-server communcation.
+	cliCfg := control.DefaultClientConfig()
+	cliCfg.TransportConfig = cfg.TransportConfig
+	rpcClient := control.NewClient(
+		control.WithClientConfig(cliCfg),
+		control.WithClientLogger(log),
+	)
+
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership)
+	controlService, err := NewControlService(
+		log, harness, bdevProvider, scmProvider, cfg, membership, rpcClient,
+	)
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}

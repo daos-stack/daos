@@ -268,7 +268,7 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 		expMembers       system.Members         // members to have been registered during Stop()
 		expIoErrs        map[uint32]error       // errors expected from instances
 	}{
-		"normal startup/shutdown": {
+		/*"normal startup/shutdown": {
 			trc: &ioserver.TestRunnerConfig{
 				ErrChanCb: func(idx uint32) ioserver.InstanceError {
 					time.Sleep(testLongTimeout)
@@ -328,7 +328,7 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 				0: system.Rank(1),
 				1: system.Rank(2),
 			},
-		},
+		},*/
 		"normal startup/shutdown with MS bootstrap": {
 			trc: &ioserver.TestRunnerConfig{
 				ErrChanCb: func(idx uint32) ioserver.InstanceError {
@@ -367,7 +367,7 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 				system.NewMember(system.Rank(0), "", defaultAddr, system.MemberStateStarted),
 			},
 		},
-		"fails to start": {
+		/*"fails to start": {
 			trc:           &ioserver.TestRunnerConfig{StartErr: errors.New("no")},
 			expStartErr:   errors.New("no"),
 			expStartCount: 1, // first one starts, dies, next one never starts
@@ -407,7 +407,7 @@ func TestServer_HarnessIOServerStart(t *testing.T) {
 				0: errors.New("oops"),
 				1: errors.New("oops"),
 			},
-		},
+		},*/
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

@@ -31,6 +31,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -354,13 +355,19 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 
 	// first start harness managing MS member if in rankList
 	if msRank.InList(rankList) {
-		hResults, err := svc.harnessClient.Start(ctx, msAddr, msRank)
+		msReq := &control.SystemStartReq{
+			Ranks: []system.Rank{msRank},
+		}
+		msReq.SetHostList([]string{msAddr})
+
+		msResp, err := control.SystemStart(ctx, svc.rpcClient, msReq)
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, hResults...)
+		results = append(results, msResp.Results...)
 	}
 
+	startReq := new(control.SystemStartReq)
 	for addr, ranks := range hostRanks {
 		if addr == msAddr {
 			ranks = msRank.RemoveFromList(ranks)
@@ -369,17 +376,15 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 			continue
 		}
 
-		hResults, err := svc.harnessClient.Start(ctx, addr, ranks...)
-		if err != nil {
-			if !isUnreachableError(err) {
-				return nil, errors.Wrapf(err, "harness %s start", addr)
-			}
-			hResults = svc.reportStoppedRanks("start", ranks,
-				errors.New("harness unresponsive"))
-			svc.log.Debugf("no response from harness %s", addr)
-		}
-		results = append(results, hResults...)
+		startReq.HostList = append(startReq.HostList, addr)
+		startReq.Ranks = append(startReq.Ranks, ranks...)
 	}
+
+	startResp, err := control.SystemStart(ctx, svc.rpcClient, startReq)
+	if err != nil {
+		return nil, err
+	}
+	results = append(results, startResp.Results...)
 
 	// in the case of start, don't manually update member states, members
 	// are updated as they join or bootstrap, only update state on errors
