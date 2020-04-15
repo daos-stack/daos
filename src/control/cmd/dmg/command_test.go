@@ -24,6 +24,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,10 +33,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -256,12 +261,38 @@ func createTestConfig(t *testing.T, log logging.Logger, path string) (*os.File, 
 	return f, cleanup
 }
 
-func runCmd(t *testing.T, cmd string, log *logging.LeveledLogger, conn client.Connect) error {
+func runCmd(t *testing.T, cmd string, log *logging.LeveledLogger, ctlClient control.Invoker, conn client.Connect) error {
 	t.Helper()
 
 	var opts cliOptions
 	args := append([]string{"--insecure"}, strings.Split(cmd, " ")...)
-	return parseOpts(args, &opts, conn, log)
+	return parseOpts(args, &opts, ctlClient, conn, log)
+}
+
+// printRequest generates a stable string representation of the
+// supplied UnaryRequest. It only includes exported fields in
+// the output.
+func printRequest(t *testing.T, req control.UnaryRequest) string {
+	buf, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("unable to print %+v: %s", req, err)
+	}
+	return fmt.Sprintf("%T-%s", req, string(buf))
+}
+
+// bridgeConnInvoker is a temporary bridge between old-style client.Connection
+// requests and new-style control API requests. It is intended to ease transition
+// to the new control API without requiring a complete rewrite of all tests.
+type bridgeConnInvoker struct {
+	control.MockInvoker
+	t    *testing.T
+	conn *testConn
+}
+
+func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.UnaryRequest) (*control.UnaryResponse, error) {
+	bci.conn.ConnectClients(nil)
+	bci.conn.appendInvocation(printRequest(bci.t, uReq))
+	return bci.MockInvoker.InvokeUnaryRPC(ctx, uReq)
 }
 
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
@@ -277,8 +308,14 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 			f.Close()
 			defer cleanup()
 
+			ctlClient := control.DefaultMockInvoker(log)
 			conn := newTestConn(t)
-			err := runCmd(t, st.cmd, log, conn)
+			bridge := &bridgeConnInvoker{
+				MockInvoker: *ctlClient,
+				t:           t,
+				conn:        conn,
+			}
+			err := runCmd(t, st.cmd, log, bridge, conn)
 			if err != st.expectedErr {
 				if st.expectedErr == nil {
 					t.Fatalf("expected nil error, got %+v", err)
@@ -294,8 +331,10 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 			if st.expectedCalls != "" {
 				st.expectedCalls = fmt.Sprintf("SetTransportConfig %s", st.expectedCalls)
 			}
-			common.AssertEqual(t, strings.Join(conn.called, " "), st.expectedCalls,
-				"called functions do not match expected calls")
+
+			if diff := cmp.Diff(st.expectedCalls, strings.Join(conn.called, " ")); diff != "" {
+				t.Fatalf("unexpected function calls (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
@@ -306,7 +345,7 @@ func TestBadCommand(t *testing.T) {
 
 	var opts cliOptions
 	conn := newTestConn(t)
-	err := parseOpts([]string{"foo"}, &opts, conn, log)
+	err := parseOpts([]string{"foo"}, &opts, nil, conn, log)
 	testExpectedError(t, fmt.Errorf("Unknown command `foo'"), err)
 }
 
@@ -316,6 +355,6 @@ func TestNoCommand(t *testing.T) {
 
 	var opts cliOptions
 	conn := newTestConn(t)
-	err := parseOpts([]string{}, &opts, conn, log)
+	err := parseOpts([]string{}, &opts, nil, conn, log)
 	testExpectedError(t, fmt.Errorf("Please specify one command"), err)
 }
