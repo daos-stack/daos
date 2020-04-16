@@ -45,9 +45,8 @@ import (
 )
 
 const (
-	agentSockName        = "agent.sock"
-	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
-	defaultConfigFile    = "daos_agent.yml"
+	agentSockName     = "agent.sock"
+	defaultConfigFile = "daos_agent.yml"
 )
 
 type cliOptions struct {
@@ -146,12 +145,6 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 
 	// Override configuration with any commandline values given
 	applyCmdLineOverrides(log, config, opts)
-
-	env := config.Ext.Getenv(daosAgentDrpcSockEnv)
-	if env != config.RuntimeDir {
-		log.Debugf("Environment variable '%s' has value '%s' which does not "+
-			"match '%s'", daosAgentDrpcSockEnv, env, config.RuntimeDir)
-	}
 
 	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
 	log.Debugf("Full socket path is now: %s", sockPath)
