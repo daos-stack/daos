@@ -68,7 +68,9 @@ func (aic *attachInfoCache) loadBalance(numaNode int) int {
 
 func (aic *attachInfoCache) getResponse(numaNode int) ([]byte, error) {
 	deviceIndex := aic.loadBalance(numaNode)
+	aic.mutex.Lock()
 	resmgmtpb, ok := aic.resmgmtpb[numaNode][deviceIndex]
+	aic.mutex.Unlock()
 	if !ok {
 		return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, deviceIndex)
 	}

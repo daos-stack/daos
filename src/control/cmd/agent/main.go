@@ -186,6 +186,7 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 		log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
+	netdetect.SetLogger(log)
 	numaAware, err := netdetect.NumaAware()
 	if err != nil {
 		return err

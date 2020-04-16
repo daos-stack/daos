@@ -112,11 +112,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	}
 
 	if mod.aiCache.enabled.IsTrue() && mod.aiCache.initialized.IsTrue() {
-		resmgmtpb, err := mod.aiCache.getResponse(numaNode)
-		if err != nil {
-			return nil, err
-		}
-		return resmgmtpb, nil
+		return mod.aiCache.getResponse(numaNode)
 	}
 
 	req := &mgmtpb.GetAttachInfoReq{}
@@ -164,10 +160,5 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, err
 	}
 
-	resmgmtpb, err := mod.aiCache.getResponse(numaNode)
-	if err != nil {
-		return nil, err
-	}
-
-	return resmgmtpb, nil
+	return mod.aiCache.getResponse(numaNode)
 }
