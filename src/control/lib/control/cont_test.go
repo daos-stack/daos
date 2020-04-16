@@ -134,15 +134,6 @@ func TestControl_ContSetOwner(t *testing.T) {
 			},
 			expErr: errors.New("remote failed"),
 		},
-		"DAOS reported failure": {
-			req: validReq,
-			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", nil,
-					&mgmtpb.ContSetOwnerResp{Status: -1001},
-				),
-			},
-			expErr: errors.New("DAOS returned error code: -1001"),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

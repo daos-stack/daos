@@ -83,15 +83,5 @@ func ContSetOwner(ctx context.Context, rpcClient UnaryInvoker, req *ContSetOwner
 
 	rpcClient.Debugf("Set DAOS container owner response: %+v\n", msResp)
 
-	setOwnerResp, ok := msResp.(*mgmtpb.ContSetOwnerResp)
-	if !ok {
-		return errors.New("unexpected response")
-	}
-
-	if setOwnerResp.GetStatus() != 0 {
-		return errors.Errorf("DAOS returned error code: %d",
-			setOwnerResp.GetStatus())
-	}
-
 	return nil
 }

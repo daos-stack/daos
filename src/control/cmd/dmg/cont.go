@@ -56,8 +56,6 @@ func (c *ContSetOwnerCmd) Execute(args []string) error {
 		Group:    c.GroupName,
 	}
 
-	req.SetHostList(c.hostlist)
-
 	ctx := context.Background()
 	err := control.ContSetOwner(ctx, c.ctlClient, req)
 	if err != nil {
