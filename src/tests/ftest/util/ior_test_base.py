@@ -200,7 +200,7 @@ class IorTestBase(TestWithServers):
         if intercept:
             env["LD_PRELOAD"] = intercept
             if not debug:
-                env["D_LOG_MASK"] = warn
+                env["D_LOG_MASK"] = "WARN"
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
             self.pool.display_pool_daos_space()
