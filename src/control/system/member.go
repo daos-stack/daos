@@ -41,6 +41,8 @@ type MemberState int
 const (
 	// MemberStateUnknown is the default invalid state.
 	MemberStateUnknown MemberState = iota
+	// MemberStateReady indicates the member has setup successfully.
+	MemberStateReady
 	// MemberStateStarted indicates the member has joined the system.
 	MemberStateStarted
 	// MemberStateStopping indicates prep-shutdown successfully run.
@@ -58,6 +60,7 @@ const (
 func (ms MemberState) String() string {
 	return [...]string{
 		"Unknown",
+		"Ready",
 		"Started",
 		"Stopping",
 		"Stopped",

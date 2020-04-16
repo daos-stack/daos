@@ -38,30 +38,35 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const defaultRequestTimeout = 3 * time.Second
+const (
+	defaultRequestTimeout = 3 * time.Second
+	defaultStartTimeout   = 10 * defaultRequestTimeout
+)
 
 // IOServerHarness is responsible for managing IOServer instances.
 type IOServerHarness struct {
 	sync.RWMutex
-	log            logging.Logger
-	instances      []*IOServerInstance
-	started        atm.Bool
-	startable      atm.Bool
-	restart        chan struct{}
-	errChan        chan ioserver.InstanceError
-	rankReqTimeout time.Duration
+	log              logging.Logger
+	instances        []*IOServerInstance
+	started          atm.Bool
+	startable        atm.Bool
+	restart          chan struct{}
+	errChan          chan ioserver.InstanceError
+	rankReqTimeout   time.Duration
+	rankStartTimeout time.Duration
 }
 
 // NewIOServerHarness returns an initialized *IOServerHarness.
 func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
-		log:            log,
-		instances:      make([]*IOServerInstance, 0, maxIOServers),
-		started:        atm.NewBool(false),
-		startable:      atm.NewBool(false),
-		restart:        make(chan struct{}, 1),
-		errChan:        make(chan ioserver.InstanceError, maxIOServers),
-		rankReqTimeout: defaultRequestTimeout,
+		log:              log,
+		instances:        make([]*IOServerInstance, 0, maxIOServers),
+		started:          atm.NewBool(false),
+		startable:        atm.NewBool(false),
+		restart:          make(chan struct{}, 1),
+		errChan:          make(chan ioserver.InstanceError, maxIOServers),
+		rankReqTimeout:   defaultRequestTimeout,
+		rankStartTimeout: defaultStartTimeout,
 	}
 }
 
@@ -243,10 +248,11 @@ func (h *IOServerHarness) startInstances(ctx context.Context, membership *system
 	return nil
 }
 
-// StopInstances will signal harness-managed instances.
+// StopInstances will signal harness-managed instances and return (doesn't wait
+// for child processes to exit).
 //
 // Iterate over instances and call Stop(sig) on each, return when all instances
-// exit or err context is done. Error map returned for each rank stop attempt failure.
+// have been sent signal. Error map returned for each rank stop attempt failure.
 func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...system.Rank) (map[system.Rank]error, error) {
 	h.log.Debugf("stopping instances %v", rankList)
 	if !h.IsStarted() {
@@ -350,16 +356,21 @@ func (h *IOServerHarness) monitor(ctx context.Context) error {
 			return ctx.Err()
 		case instanceErr := <-h.errChan: // instance exit
 			// TODO: Restart failed instances on unexpected exit.
-			msg := fmt.Sprintf("instance %d exited: %s", instanceErr.Idx,
-				instanceErr.Err.Error())
+			msg := fmt.Sprintf("instance %d exited: %s",
+				instanceErr.Idx, instanceErr.Err.Error())
 			if len(h.StartedRanks()) == 0 {
 				msg += ", all instances stopped!"
 			}
 			h.log.Info(msg)
 
 			for _, instance := range h.Instances() {
-				if instance.Index() == instanceErr.Idx {
-					instance._lastErr = instanceErr.Err
+				if instance.Index() != instanceErr.Idx {
+					continue
+				}
+
+				instance._lastErr = instanceErr.Err
+				if err := instance.RemoveSocket(); err != nil {
+					h.log.Errorf("removing socket file: %s", err)
 				}
 			}
 		case <-h.restart: // harness to restart instances
@@ -384,21 +395,21 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 	ctx, shutdown := context.WithCancel(parent)
 	defer shutdown()
 
-	defer func() {
-		if cfg != nil {
+	if cfg != nil {
+		// Single daos_server dRPC server to handle all iosrv requests
+		if err := drpcServerSetup(ctx, h.log, cfg.SocketDir, h.Instances(),
+			cfg.TransportConfig); err != nil {
+
+			return errors.WithMessage(err, "dRPC server setup")
+		}
+		defer func() {
 			if err := drpcCleanup(cfg.SocketDir); err != nil {
 				h.log.Errorf("error during dRPC cleanup: %s", err)
 			}
-		}
-	}()
+		}()
+	}
 
 	for {
-		if cfg != nil {
-			// Single daos_server dRPC server to handle all iosrv requests
-			if err := drpcSetup(ctx, h.log, cfg.SocketDir, h.Instances(), cfg.TransportConfig); err != nil {
-				return errors.WithMessage(err, "dRPC setup")
-			}
-		}
 		if err := h.startInstances(ctx, membership); err != nil {
 			return err
 		}
