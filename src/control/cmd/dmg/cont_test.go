@@ -30,7 +30,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 func TestContSetOwnerCommand(t *testing.T) {
@@ -52,7 +52,7 @@ func TestContSetOwnerCommand(t *testing.T) {
 			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --user=%s", testPoolUUID, testContUUID, testUser),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("ContSetOwner-%+v", client.ContSetOwnerReq{
+				printRequest(t, &control.ContSetOwnerReq{
 					PoolUUID: testPoolUUID.String(),
 					ContUUID: testContUUID.String(),
 					User:     testUser,
@@ -66,7 +66,7 @@ func TestContSetOwnerCommand(t *testing.T) {
 			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --group=%s", testPoolUUID, testContUUID, testGroup),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("ContSetOwner-%+v", client.ContSetOwnerReq{
+				printRequest(t, &control.ContSetOwnerReq{
 					PoolUUID: testPoolUUID.String(),
 					ContUUID: testContUUID.String(),
 					User:     "",
@@ -81,7 +81,7 @@ func TestContSetOwnerCommand(t *testing.T) {
 				testPoolUUID, testContUUID, testUser, testGroup),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("ContSetOwner-%+v", client.ContSetOwnerReq{
+				printRequest(t, &control.ContSetOwnerReq{
 					PoolUUID: testPoolUUID.String(),
 					ContUUID: testContUUID.String(),
 					User:     testUser,

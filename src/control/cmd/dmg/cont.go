@@ -24,9 +24,11 @@
 package main
 
 import (
+	"context"
+
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 // ContCmd is the struct representing the top-level container subcommand.
@@ -37,7 +39,7 @@ type ContCmd struct {
 // ContSetOwnerCmd is the struct representing the command to change the owner of a DAOS container.
 type ContSetOwnerCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
 	GroupName string `short:"g" long:"group" description:"New owner-group for the container, format name@domain"`
 	UserName  string `short:"u" long:"user" description:"New owner-user for the container, format name@domain"`
 	ContUUID  string `short:"c" long:"cont" required:"1" description:"UUID of the DAOS container"`
@@ -47,14 +49,17 @@ type ContSetOwnerCmd struct {
 // Execute runs the container set-owner command
 func (c *ContSetOwnerCmd) Execute(args []string) error {
 	msg := "SUCCEEDED"
-	req := client.ContSetOwnerReq{
+	req := &control.ContSetOwnerReq{
 		ContUUID: c.ContUUID,
 		PoolUUID: c.PoolUUID,
 		User:     c.UserName,
 		Group:    c.GroupName,
 	}
 
-	err := c.conns.ContSetOwner(req)
+	req.SetHostList(c.hostlist)
+
+	ctx := context.Background()
+	err := control.ContSetOwner(ctx, c.ctlClient, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "FAILED").Error()
 	}

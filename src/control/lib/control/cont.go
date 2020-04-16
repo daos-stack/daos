@@ -21,68 +21,76 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package client
+package control
 
 import (
-	"github.com/google/uuid"
+	"context"
+
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-// ContSetOwnerReq struct contains request
+// ContSetOwnerReq contains the parameters for the set owner request
 type ContSetOwnerReq struct {
+	msRequest
+	unaryRequest
 	ContUUID string // Container UUID
 	PoolUUID string // UUID of the pool for the container
 	User     string // User to own the container, or empty if none
 	Group    string // Group to own the container, or empty if none
 }
 
-// ContSetOwner will create a DAOS pool using provided parameters and generated
-// UUID. Return values will be UUID, list of service replicas and error
-// (including any DER code from DAOS).
-//
-// Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) ContSetOwner(req ContSetOwnerReq) error {
-	mc, err := chooseServiceLeader(c.controllers)
-	if err != nil {
+// ContSetOwner changes the owner user and/or group of a DAOS container.
+func ContSetOwner(ctx context.Context, rpcClient UnaryInvoker, req *ContSetOwnerReq) error {
+	if req == nil {
+		return errors.New("nil request")
+	}
+
+	if err := checkUUID(req.ContUUID); err != nil {
 		return err
 	}
 
-	_, err = uuid.Parse(req.ContUUID)
-	if err != nil {
-		return errors.Wrapf(err, "bad container UUID: %q", req.ContUUID)
-	}
-
-	_, err = uuid.Parse(req.PoolUUID)
-	if err != nil {
-		return errors.Wrapf(err, "bad pool UUID: %q", req.PoolUUID)
+	if err := checkUUID(req.PoolUUID); err != nil {
+		return err
 	}
 
 	if req.User == "" && req.Group == "" {
 		return errors.New("no user or group specified")
 	}
 
-	rpcReq := &mgmtpb.ContSetOwnerReq{
-		ContUUID:   req.ContUUID,
-		PoolUUID:   req.PoolUUID,
-		Owneruser:  req.User,
-		Ownergroup: req.Group,
-	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).ContSetOwner(ctx, &mgmtpb.ContSetOwnerReq{
+			ContUUID:   req.ContUUID,
+			PoolUUID:   req.PoolUUID,
+			Owneruser:  req.User,
+			Ownergroup: req.Group,
+		})
+	})
 
-	c.log.Debugf("DAOS container set-owner request: %s\n", rpcReq)
-
-	rpcResp, err := mc.getSvcClient().ContSetOwner(context.Background(), rpcReq)
+	rpcClient.Debugf("Set DAOS container owner request: %+v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	c.log.Debugf("DAOS container set-owner response: %s\n", rpcResp)
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "container set-owner failed")
+	}
 
-	if rpcResp.GetStatus() != 0 {
+	rpcClient.Debugf("Set DAOS container owner response: %+v\n", msResp)
+
+	setOwnerResp, ok := msResp.(*mgmtpb.ContSetOwnerResp)
+	if !ok {
+		return errors.New("unexpected response")
+	}
+
+	if setOwnerResp.GetStatus() != 0 {
 		return errors.Errorf("DAOS returned error code: %d",
-			rpcResp.GetStatus())
+			setOwnerResp.GetStatus())
 	}
 
 	return nil

@@ -84,6 +84,8 @@ func (mi *MockInvoker) InvokeUnaryRPC(_ context.Context, uReq UnaryRequest) (*Un
 		uResp.Responses = addMSResp(&mgmtpb.PoolCreateResp{})
 	case *PoolDestroyReq:
 		uResp.Responses = addMSResp(&mgmtpb.PoolDestroyResp{})
+	case *ContSetOwnerReq:
+		uResp.Responses = addMSResp(&mgmtpb.ContSetOwnerResp{})
 	}
 	return uResp, nil
 }

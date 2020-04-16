@@ -86,7 +86,6 @@ type Connect interface {
 	SystemStart(SystemStartReq) (*SystemStartResp, error)
 	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
 	ListPools(ListPoolsReq) (*ListPoolsResp, error)
-	ContSetOwner(ContSetOwnerReq) error
 }
 
 // connList is an implementation of Connect and stores controllers
