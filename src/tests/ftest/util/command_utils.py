@@ -856,6 +856,7 @@ class Srun(JobManager):
         self.distribution = FormattedParameter("--distribution={}", None)
         self.nodefile = FormattedParameter("--nodefile={}", None)
         self.nodelist = FormattedParameter("--nodelist={}", None)
+        self.nodes = FormattedParameter("--nodes={}", None)
         self.ntasks_per_node = FormattedParameter("--ntasks-per-node={}", None)
         self.reservation = FormattedParameter("--reservation={}", None)
         self.partition = FormattedParameter("--partition={}", None)

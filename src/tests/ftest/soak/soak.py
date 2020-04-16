@@ -475,6 +475,7 @@ class SoakTestBase(TestWithServers):
                         cmd = Srun(ior_cmd)
                         cmd.setup_command(env, None, nprocs)
                         cmd.ntasks_per_node.update(ppn)
+                        cmd.nodes.update(nodesperjob)
                         log_name = "{}_{}_{}_{}".format(
                             api, b_size, t_size, o_type)
                         commands.append([cmd.__str__(), log_name])
