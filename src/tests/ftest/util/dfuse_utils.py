@@ -173,7 +173,7 @@ class Dfuse(DfuseCommand):
                     "following hosts: {}".format(self.mount_dir.value,
                                                  failed_nodes))
 
-    def run(self):
+    def run(self, debug=True):
         """ Run the dfuse command.
         Raises:
             CommandFailure: In case dfuse run command fails
@@ -189,7 +189,7 @@ class Dfuse(DfuseCommand):
         # create dfuse dir if does not exist
         self.create_mount_point()
         # obtain env export string
-        env = self.get_default_env()
+        env = self.get_default_env(debug)
         # run dfuse command
         ret_code = general_utils.pcmd(self.hosts, env + self.__str__(),
                                       timeout=30)
@@ -278,7 +278,7 @@ class Dfuse(DfuseCommand):
         time.sleep(2)
         self.remove_mount_point()
 
-    def get_default_env(self):
+    def get_default_env(self, debug=True):
 
         """Get the default enviroment settings for running Dfuse.
         Returns:
@@ -304,6 +304,8 @@ class Dfuse(DfuseCommand):
                 env['OFI_INTERFACE'] = env.pop('fabric_iface')
                 env['OFI_PORT'] = env.pop('fabric_iface_port')
                 env['CRT_PHY_ADDR_STR'] = env.pop('provider')
+                if not debug:
+                    env['D_LOG_MASK'] = 'WARN'
             except Exception as err:
                 raise CommandFailure("Failed to read yaml file:{}".format(err))
 

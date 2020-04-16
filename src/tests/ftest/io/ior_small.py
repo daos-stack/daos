@@ -66,7 +66,7 @@ class IorSmall(IorTestBase):
                     self.ior_cmd.transfer_size.update(test[0])
                     self.ior_cmd.block_size.update(test[1])
                     # run ior
-                    self.run_ior_with_pool()
+                    self.run_ior_with_pool(debug=False)
 
         # Running a variant for ior fpp
         self.ior_cmd.flags.update(flags[1])
@@ -75,4 +75,4 @@ class IorSmall(IorTestBase):
         self.ior_cmd.transfer_size.update((transfer_block_size[1])[0])
         self.ior_cmd.daos_oclass.update(obj_class[0])
         # run ior
-        self.run_ior_with_pool()
+        self.run_ior_with_pool(debug=False)

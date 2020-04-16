@@ -97,7 +97,7 @@ class IorTestBase(TestWithServers):
         # create container
         self.container.create()
 
-    def _start_dfuse(self):
+    def _start_dfuse(self, debug=True):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
         self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
@@ -111,7 +111,7 @@ class IorTestBase(TestWithServers):
 
         try:
             # start dfuse
-            self.dfuse.run()
+            self.dfuse.run(debug)
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
                            str(self.dfuse),
@@ -120,7 +120,7 @@ class IorTestBase(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
-                          test_file="daos:testFile"):
+                          test_file="daos:testFile", debug=True):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -142,13 +142,13 @@ class IorTestBase(TestWithServers):
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
-            self._start_dfuse()
+            self._start_dfuse(debug)
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
         out = self.run_ior(self.get_job_manager_command(), self.processes,
-                           intercept)
+                           intercept, debug)
 
         if self.dfuse:
             self.dfuse.stop()
@@ -187,7 +187,7 @@ class IorTestBase(TestWithServers):
         mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
         return Mpirun(self.ior_cmd, mpirun_path, mpitype="mpich")
 
-    def run_ior(self, manager, processes, intercept=None):
+    def run_ior(self, manager, processes, intercept=None, debug=True):
         """Run the IOR command.
 
         Args:
@@ -199,6 +199,8 @@ class IorTestBase(TestWithServers):
             str(manager), get_log_file(self.client_log))
         if intercept:
             env["LD_PRELOAD"] = intercept
+            if not debug:
+                env["D_LOG_MASK"] = warn
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
             self.pool.display_pool_daos_space()

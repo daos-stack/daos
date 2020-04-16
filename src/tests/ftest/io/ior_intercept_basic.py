@@ -57,10 +57,10 @@ class IorIntercept(IorTestBase):
 
         :avocado: tags=all,pr,full_regression,hw,small,daosio,iorinterceptbasic
         """
-        out = self.run_ior_with_pool()
+        out = self.run_ior_with_pool(debug=False)
         without_intercept = IorCommand.get_ior_metrics(out)
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-        out = self.run_ior_with_pool(intercept)
+        out = self.run_ior_with_pool(intercept, debug=False)
         with_intercept = IorCommand.get_ior_metrics(out)
         max_mib = int(IorMetrics.Max_MiB)
         min_mib = int(IorMetrics.Min_MiB)
