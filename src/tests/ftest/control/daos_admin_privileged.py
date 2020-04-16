@@ -33,9 +33,12 @@ from apricot import TestWithServers
 
 
 class DaosAdminPrivTest(TestWithServers):
-    """Test Class Description:
-    Test to verify that daos_server when run as normal user, can perform
-    privileged functions.
+    """The daos_admin test cases.
+
+    Test Class Description:
+        Test to verify that daos_server when run as normal user, can perform
+        privileged functions.
+
     :avocado: recursive
     """
 
@@ -46,10 +49,12 @@ class DaosAdminPrivTest(TestWithServers):
         self.setup_start_servers = False
 
     def test_daos_admin_format(self):
-        """
-        JIRA ID: DAOS-2895
-        Test Description: Test daso_admin functionality to perform format
-        privileged operations while daos_server is run as normal user.
+        """JIRA ID: DAOS-2895.
+
+        Test Description:
+            Test daso_admin functionality to perform format privileged
+            operations while daos_server is run as normal user.
+
         :avocado: tags=all,pr,hw,small,daos_admin,basic
         """
         # Verify that daos_admin has the correct permissions
@@ -61,7 +66,7 @@ class DaosAdminPrivTest(TestWithServers):
 
         # Setup server as non-root
         self.log.info("Preparing to run daos_server as non-root user")
-        server = ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin"))
+        server = ServerManager(self.bin)
         server.get_params(self)
         server.hosts = (
             self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
@@ -91,7 +96,8 @@ class DaosAdminPrivTest(TestWithServers):
         # try:
         #     server.storage_prepare(user, "nvme")
         # except ServerFailed as err:
-        #     self.fail("Failed preparing nvme as non-root user: {}".format(err))
+        #     self.fail(
+        #         "Failed preparing nvme as non-root user: {}".format(err))
 
         # Start server
         try:

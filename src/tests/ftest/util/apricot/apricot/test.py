@@ -472,9 +472,7 @@ class TestWithServers(TestWithoutServers):
             for group, hosts in server_groups.items():
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
-                self.server_managers.append(ServerManager(
-                    self.bin,
-                    os.path.join(self.ompi_prefix, "bin")))
+                self.server_managers.append(ServerManager(self.bin))
                 self.server_managers[-1].get_params(self)
                 self.server_managers[-1].runner.job.yaml_params.name = group
                 self.server_managers[-1].hosts = (
@@ -533,8 +531,8 @@ class TestWithServers(TestWithoutServers):
 
         if hosts:
             return hosts, partiton_name
-        else:
-            return host_list, None
+
+        return host_list, None
 
     def update_log_file_names(self, test_name=None):
         """Define agent, server, and client log files that include the test id.
@@ -582,8 +580,10 @@ class TestWithServers(TestWithoutServers):
         return dmg
 
     def prepare_pool(self):
-        """Create a pool, read the pool parameters from the yaml, create, and
-        connect.
+        """Create a TestPool object to create and connect to a pool.
+
+        The TestPool parameters are read from the test yaml file, which are used
+        to create and connect to the pool.
 
         This sequence is common for a lot of the container tests.
         """

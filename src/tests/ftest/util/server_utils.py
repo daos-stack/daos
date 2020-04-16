@@ -43,9 +43,10 @@ from avocado.utils import genio
 from distutils.spawn import find_executable
 # Remove above imports when depricating run_server and stop_server functions.
 
-from command_utils import BasicParameter, FormattedParameter, ExecutableCommand
-from command_utils import ObjectWithParameters, CommandFailure
-from command_utils import DaosCommand, Orterun, CommandWithParameters
+from command_utils_base import CommandFailure, BasicParameter, \
+    FormattedParameter, ObjectWithParameters, CommandWithParameters
+from command_utils import ExecutableCommand, DaosCommand
+from job_manager_utils import Orterun
 from general_utils import pcmd
 from dmg_utils import storage_format
 from write_host_file import write_host_file
@@ -467,12 +468,11 @@ class ServerManager(ExecutableCommand):
         "OFI_PORT": "fabric_iface_port",
     }
 
-    def __init__(self, daosbinpath, runnerpath, timeout=300):
+    def __init__(self, daosbinpath, timeout=300):
         """Create a ServerManager object.
 
         Args:
             daosbinpath (str): Path to daos bin
-            runnerpath (str): Path to Orterun binary.
             timeout (int, optional): Time for the server to start.
                 Defaults to 300.
         """
@@ -482,8 +482,7 @@ class ServerManager(ExecutableCommand):
         self._hosts = None
 
         # Setup orterun command defaults
-        self.runner = Orterun(
-            DaosServer(self.daosbinpath), runnerpath, True)
+        self.runner = Orterun(DaosServer(self.daosbinpath), True)
 
         # Setup server command defaults
         self.runner.job.action.value = "start"

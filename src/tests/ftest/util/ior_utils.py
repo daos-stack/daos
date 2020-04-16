@@ -27,8 +27,9 @@ import re
 import uuid
 from enum import IntEnum
 
-from command_utils import FormattedParameter, ExecutableCommand
-from command_utils import EnvironmentVariables, CommandFailure
+from command_utils_base import \
+    CommandFailure, FormattedParameter, EnvironmentVariables
+from command_utils import ExecutableCommand
 
 
 class IorCommand(ExecutableCommand):
@@ -40,10 +41,10 @@ class IorCommand(ExecutableCommand):
         >>> ior_cmd.get_params(self)
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
         >>> mpirun = Mpirun()
-        >>> log = get_log_file(self.client_log)
-        >>> env = self.ior_cmd.get_default_env(log)
-        >>> processes = len(self.hostlist_clients)
-        >>> mpirun.setup_command(env, self.hostfile_clients, processes)
+        >>> env = self.ior_cmd.get_default_env(mpirun, self.client_log)
+        >>> mpirun.assign_hosts(self.hostlist_clients, self.workdir, None)
+        >>> mpirun.assign_processes(len(self.hostlist_clients))
+        >>> mpirun.assign_environment(env)
         >>> mpirun.run()
     """
 
@@ -241,13 +242,15 @@ class IorCommand(ExecutableCommand):
 
     @staticmethod
     def get_ior_metrics(cmdresult):
-        """Parse the CmdResult (output of the test) and look for
-           the ior stdout and get the read and write metrics.
+        """Get the ior read and write metrics.
+
+        Parse the CmdResult (output of the test) and look for the ior stdout and
+        get the read and write metrics.
 
         Args:
             cmdresult (CmdResult): output of job manager
 
-       Returns:
+        Returns:
             metrics (tuple) : list of write and read metrics from ior run
 
         """
@@ -265,12 +268,12 @@ class IorCommand(ExecutableCommand):
 
     @staticmethod
     def log_metrics(logger, message, metrics):
-        """Log the ior metrics
+        """Log the ior metrics.
 
-           Args:
-               logger (log): logger object handle
-               message (str) : Message to print before logging metrics
-               metric (lst) : IOR write and read metrics
+        Args:
+            logger (Logger): logger object handle
+            message (str) : Message to print before logging metrics
+            metric (list) : IOR write and read metrics
         """
         logger.info("\n")
         logger.info(message)
@@ -280,8 +283,7 @@ class IorCommand(ExecutableCommand):
 
 
 class IorMetrics(IntEnum):
-    """Index Name and Number of each column in IOR result summary.
-    """
+    """Index Name and Number of each column in IOR result summary."""
 
     # Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
