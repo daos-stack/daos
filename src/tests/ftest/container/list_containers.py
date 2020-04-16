@@ -40,6 +40,11 @@ class ListContainerTest(TestWithServers):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a ListContainerTest object."""
+        super(ListContainerTest, self).__init__(*args, **kwargs)
+        self.daos_cmd = None
+
     def create_list(self, count, pool_uuid, sr, expected_uuids):
         """Create container and call daos pool list-cont to list and verify.
 
