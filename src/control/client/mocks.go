@@ -25,7 +25,6 @@ package client
 
 import (
 	"io"
-	"sort"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -141,11 +140,8 @@ func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *ctlpb.StorageS
 	}, m.cfg.scanRet
 }
 
-func (m *mockMgmtCtlClient) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq, o ...grpc.CallOption) (ctlpb.MgmtCtl_StorageFormatClient, error) {
-	return &mgmtCtlStorageFormatClient{
-			ctrlrResults: m.cfg.nvmeControllerResults,
-			mountResults: m.cfg.scmMountResults},
-		m.cfg.formatRet
+func (m *mockMgmtCtlClient) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq, o ...grpc.CallOption) (*ctlpb.StorageFormatResp, error) {
+	return nil, m.cfg.formatRet
 }
 
 type mgmtCtlNetworkScanDevicesClient struct {
@@ -314,26 +310,4 @@ func defaultMockConnect(log logging.Logger) Connect {
 		log, connectivity.Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
 		MockModuleResults, MockScmNamespaces, MockMountResults,
 		nil, nil, nil, nil, MockACL, nil)
-}
-
-// MockScanResp mocks scan results from scm and nvme for multiple servers.
-// Each result indicates success or failure through presence of Err.
-func MockScanResp(cs *NvmeControllers, ms *ScmModules, nss *ScmNamespaces, addrs Addresses) *StorageScanResp {
-	nvmeResults := make(NvmeScanResults)
-	scmResults := make(ScmScanResults)
-
-	for _, addr := range addrs {
-		nvmeResults[addr] = &NvmeScanResult{Ctrlrs: *cs}
-
-		sResult := &ScmScanResult{}
-		modules, _ := ms.ToNative()
-		namespaces, _ := nss.ToNative()
-		sResult.Modules = modules
-		sResult.Namespaces = namespaces
-		scmResults[addr] = sResult
-	}
-
-	sort.Strings(addrs)
-
-	return &StorageScanResp{Servers: addrs, Nvme: nvmeResults, Scm: scmResults}
 }
