@@ -46,10 +46,10 @@ type mgmtModule struct {
 	log logging.Logger
 	sys string
 	// The access point
-	ap       string
-	tcfg     *security.TransportConfig
-	aiCache  *attachInfoCache
-	haveNuma bool
+	ap        string
+	tcfg      *security.TransportConfig
+	aiCache   *attachInfoCache
+	numaAware bool
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
@@ -104,7 +104,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	var err error
 	numaNode := defaultNumaNode
 
-	if mod.haveNuma {
+	if mod.numaAware {
 		numaNode, err = netdetect.GetNUMASocketIDForPid(pid)
 		if err != nil {
 			return nil, err

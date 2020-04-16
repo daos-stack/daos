@@ -193,27 +193,23 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 		log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
-	resNumaLib := netdetect.NumaAvailability()
-	log.Infof("Numalib NUMA node data available: %v", resNumaLib)
-	if !resNumaLib {
-		log.Infof("This system does not support NUMA.  Using default Numa Node: %d", defaultNumaNode)
-	}
-
-	resHwloc, err := netdetect.NumaAvailabilityHwloc()
+	numaAware, err := netdetect.NumaAware()
 	if err != nil {
-		log.Errorf("NumaAvailabilityHwloc error: %v", err)
 		return err
 	}
-	log.Infof("Hwloc results show there are %d nodes", resHwloc)
+
+	if !numaAware {
+		log.Debugf("This system is not NUMA aware")
+	}
 
 	drpcServer.RegisterRPCModule(NewSecurityModule(log, config.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
-		log:      log,
-		sys:      config.SystemName,
-		ap:       config.AccessPoints[0],
-		tcfg:     config.TransportConfig,
-		aiCache:  &attachInfoCache{log: log, enabled: enabled},
-		haveNuma: resNumaLib,
+		log:       log,
+		sys:       config.SystemName,
+		ap:        config.AccessPoints[0],
+		tcfg:      config.TransportConfig,
+		aiCache:   &attachInfoCache{log: log, enabled: enabled},
+		numaAware: numaAware,
 	})
 
 	err = drpcServer.Start()

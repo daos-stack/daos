@@ -27,7 +27,7 @@ package netdetect
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../include
-#cgo LDFLAGS: -lhwloc -lfabric -lnuma
+#cgo LDFLAGS: -lhwloc -lfabric
 #include <stdlib.h>
 #include <hwloc.h>
 #include <stdio.h>
@@ -432,26 +432,18 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	return 0, nil
 }
 
-// NumaAvailability verifies that NUMA data is available to process
-// If it is not, the functions that make use of NUMA node data cannot return
-// valid information.
-func NumaAvailability() bool {
-	return C.numa_available() != -1
-}
-
-func NumaAvailabilityHwloc() (int, error) {
+// NumaAware verifies that NUMA data is available to process
+func NumaAware() (bool, error) {
 	deviceScanCfg, err := initDeviceScan()
 	if err != nil {
-		return 0, err
+		return false, err
 	}
 	defer cleanUp(deviceScanCfg.topology)
 
 	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
 	numObj := int(C.hwloc_get_nbobjs_by_depth(deviceScanCfg.topology, C.uint(depth)))
-	if numObj == 0 {
-		return 0, errors.Errorf("NUMA Node data is unavailable.")
-	}
-	return numObj, nil
+
+	return numObj > 0, nil
 }
 
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
