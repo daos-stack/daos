@@ -650,19 +650,24 @@ class ServerManager(ExecutableCommand):
 
     def stop(self):
         """Stop the server through the runner."""
+        errors = []
+
         self.log.info("Stopping servers")
+        try:
+            self.runner.stop()
+        except CommandFailure as error:
+            errors.append(error)
+
         if self.runner.job.yaml_params.is_nvme():
-            self.kill()
             self.storage_reset()
             # Make sure the mount directory belongs to non-root user
             self.log.info("Changing ownership of mount to non-root user")
             cmd = "sudo chown -R {0}:{0} /mnt/daos*".format(getpass.getuser())
             pcmd(self._hosts, cmd, False)
-        else:
-            try:
-                self.runner.stop()
-            except CommandFailure as error:
-                raise ServerFailed("Failed to stop servers:{}".format(error))
+
+        if errors:
+            raise ServerFailed(
+                "Failed to stop servers:\n  {}".format("  \n".join(errors)))
 
     def server_clean(self):
         """Prepare the hosts before starting daos server."""

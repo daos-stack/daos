@@ -28,14 +28,14 @@ import time
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers, get_log_file
 from ior_utils import IorCommand
-from command_utils import Mpirun, CommandFailure
+from command_utils import CommandFailure
+from job_manager_utils import Mpirun
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
 from dfuse_utils import Dfuse
-import write_host_file
 
 
 class IorTestBase(TestWithServers):
@@ -70,9 +70,7 @@ class IorTestBase(TestWithServers):
         # with single client node
         if self.ior_cmd.api.value == "POSIX":
             self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
+
         # lock is needed for run_multiple_ior method.
         self.lock = threading.Lock()
 
@@ -158,8 +156,8 @@ class IorTestBase(TestWithServers):
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
-        out = self.run_ior(self.get_job_manager_command(), self.processes,
-                           intercept)
+        out = self.run_ior(
+            self.get_job_manager_command(), self.processes, intercept)
 
         if self.dfuse:
             self.dfuse.stop()
@@ -210,7 +208,10 @@ class IorTestBase(TestWithServers):
             str(manager), get_log_file(self.client_log))
         if intercept:
             env["LD_PRELOAD"] = intercept
-        manager.setup_command(env, self.hostfile_clients, processes)
+        manager.assign_hosts(
+            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_processes(processes)
+        manager.assign_environment(env)
         try:
             self.pool.display_pool_daos_space()
             out = manager.run()
@@ -268,21 +269,33 @@ class IorTestBase(TestWithServers):
             results (dict): A dictionary object to store the ior metrics
             intercept (path): Path to interception library
         """
-        hostfile = write_host_file.write_host_file(
-            clients, self.workdir, self.hostfile_clients_slots)
-        job = threading.Thread(target=self.run_multiple_ior, args=[
-            hostfile, len(clients), results, job_num, intercept])
+        job = threading.Thread(
+            target=self.run_multiple_ior,
+            args=[
+                clients,
+                self.workdir,
+                self.hostfile_clients_slots,
+                len(clients),
+                results,
+                job_num,
+                intercept]
+        )
         return job
 
-    def run_multiple_ior(self, hostfile, num_clients,
+    def run_multiple_ior(self, hosts, path, slots, num_clients,
                          results, job_num, intercept=None):
         # pylint: disable=too-many-arguments
         """Run the IOR command.
 
         Args:
-            manager (str): mpi job manager command
-            processes (int): number of host processes
-            intercept (str): path to interception library.
+            hosts (list): list of hosts on which to run ior
+            path (str): path for the hostfile
+            slots (int): slots for the hostfile
+            num_clients (int): number of host processes
+            results (dict): A dictionary object to store the ior metrics
+            job_num (int): Assigned job number
+            intercept (str, optional): path to interception library. Defaults to
+                None.
         """
         self.lock.acquire(True)
         tsize = self.ior_cmd.transfer_size.value
@@ -297,7 +310,9 @@ class IorTestBase(TestWithServers):
             str(manager), get_log_file(self.client_log))
         if intercept:
             env["LD_PRELOAD"] = intercept
-        manager.setup_command(env, hostfile, procs)
+        manager.assign_hosts(hosts, path, slots)
+        manager.assign_processes(procs)
+        manager.assign_environment(env)
         self.lock.release()
         try:
             self.pool.display_pool_daos_space()

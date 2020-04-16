@@ -24,7 +24,8 @@ import os
 
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers, skipForTicket
-from command_utils import CommandFailure, Mpirun
+from command_utils import CommandFailure
+from job_manager_utils import Mpirun
 from ior_utils import IorCommand
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -158,12 +159,15 @@ class ContainerCreate(TestWithServers):
             mpirun_path = os.path.join(self.ompi_prefix, "bin")
             mpirun = Mpirun(IorCommand(), mpirun_path)
             mpirun.job.get_params(self)
-            mpirun.setup_command(
-                mpirun.job.get_default_env("mpirun", self.tmp),
-                self.hostfile_clients, len(self.hostlist_clients))
+            mpirun.assign_hosts(
+                self.hostlist_clients, self.workdir,
+                self.hostfile_clients_slots)
+            mpirun.assign_processes(len(self.hostlist_clients))
+            mpirun.assign_environment(
+                mpirun.job.get_default_env("mpirun", self.tmp))
 
         # Cancel any tests with tickets already assigned
-        if rank == 1 or rank == 2:
+        if rank in (1, 2):
             self.cancelForTicket("DAOS-2434")
 
         errors = [0 for _ in range(loop_qty)]

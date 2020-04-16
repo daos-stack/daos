@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 import os
@@ -31,7 +31,7 @@ import avocado
 
 try:
     # python 3.x
-    import queue as queue
+    import queue
 except ImportError:
     # python 2.7
     import Queue as queue
@@ -40,12 +40,13 @@ from apricot import TestWithServers, skipForTicket
 from agent_utils import run_agent, stop_agent
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
-from command_utils import Orterun, CommandFailure
+from command_utils import CommandFailure
+from job_manager_utils import Orterun
 from server_utils import run_server, stop_server
-from write_host_file import write_host_file
 from test_utils_pool import TestPool
 
 NO_OF_MAX_CONTAINER = 13034
+
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
@@ -87,10 +88,6 @@ class ObjectMetadata(TestWithServers):
         """Set up each test case."""
         # Start the servers and agents
         super(ObjectMetadata, self).setUp()
-
-        # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
 
         # Create a pool
         self.pool = TestPool(self.context, self.log)
@@ -223,7 +220,9 @@ class ObjectMetadata(TestWithServers):
                 path = os.path.join(self.ompi_prefix, "bin")
                 manager = Orterun(ior_cmd, path)
                 env = ior_cmd.get_default_env(str(manager))
-                manager.setup_command(env, self.hostfile_clients, processes)
+                manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+                manager.assign_processes(processes)
+                manager.assign_environment(env)
 
                 # Add a thread for these IOR arguments
                 threads.append(

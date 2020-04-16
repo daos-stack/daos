@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,21 +20,20 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 import os
 import re
 
-from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers, get_log_file
 from test_utils_pool import TestPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
-from command_utils import Mpirun, Orterun, CommandFailure
+from command_utils import CommandFailure
+from job_manager_utils import Mpirun, Orterun
 from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
-import write_host_file
 
 
 class MdtestBase(TestWithServers):
@@ -73,9 +72,6 @@ class MdtestBase(TestWithServers):
         if self.mdtest_cmd.api.value == "POSIX":
             self.log.info("Restricting mdtest to one node")
             self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
 
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
@@ -112,7 +108,7 @@ class MdtestBase(TestWithServers):
 
         # Extract the container UUID from the daos container create output
         cont_uuid = re.findall(
-            "created\s+container\s+([0-9a-f-]+)", result.stdout)
+            r"created\s+container\s+([0-9a-f-]+)", result.stdout)
         if not cont_uuid:
             self.fail(
                 "Error obtaining the container uuid from: {}".format(
@@ -144,7 +140,6 @@ class MdtestBase(TestWithServers):
 
     def execute_mdtest(self):
         """Runner method for Mdtest."""
-
         # Create a pool if one does not already exist
         if self.pool is None:
             self._create_pool()
@@ -160,7 +155,7 @@ class MdtestBase(TestWithServers):
             self._start_dfuse()
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
-       # Run Mdtest
+        # Run Mdtest
         self.run_mdtest(self.get_job_manager_command(self.manager),
                         self.processes)
         if self.dfuse:
@@ -194,7 +189,10 @@ class MdtestBase(TestWithServers):
         """
         env = self.mdtest_cmd.get_default_env(
             str(manager), get_log_file(self.client_log))
-        manager.setup_command(env, self.hostfile_clients, processes)
+        manager.assign_hosts(
+            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_processes(processes)
+        manager.assign_environment(env)
         try:
             self.pool.display_pool_daos_space()
             manager.run()
