@@ -97,7 +97,8 @@ extern bool		dss_helper_pool;
 /* module.c */
 int dss_module_init(void);
 int dss_module_fini(bool force);
-int dss_module_load(const char *modname, uint64_t *mod_facs);
+int dss_module_load(const char *modname, void *arg);
+int dss_module_load_init(const char *modname, void *arg);
 int dss_module_unload(const char *modname);
 void dss_module_unload_all(void);
 int dss_module_setup_all(void);

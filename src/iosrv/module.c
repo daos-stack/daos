@@ -44,6 +44,8 @@ struct loaded_mod {
 	struct dss_module	*lm_dss_mod;
 	/* linked list of loaded module */
 	d_list_t		 lm_lk;
+	/** Module is initialized */
+	bool			 lm_init;
 };
 
 /* Track list of loaded modules */
@@ -83,7 +85,7 @@ dss_module_search(const char *modname)
 #define DSS_MODNAME_MAX_LEN	32
 
 int
-dss_module_load(const char *modname, uint64_t *mod_facs)
+dss_module_load(const char *modname, void *arg)
 {
 	struct loaded_mod	*lmod;
 	struct dss_module	*smod;
@@ -135,6 +137,41 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 		D_GOTO(err_lmod, rc = -DER_INVAL);
 	}
 
+	/* module successfully loaded (not yet initialized), add it to the
+	 * tracking list
+	 */
+	D_MUTEX_LOCK(&loaded_mod_list_lock);
+	d_list_add_tail(&lmod->lm_lk, &loaded_mod_list);
+	dss_modules[smod->sm_mod_id] = smod;
+	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+
+	return 0;
+err_lmod:
+	D_FREE(lmod);
+err_hdl:
+	dlclose(handle);
+	return rc;
+}
+
+int
+dss_module_load_init(const char *modname, void *arg)
+{
+	struct dss_module	*smod;
+	struct loaded_mod	*lmod;
+	uint64_t		*mod_facs = arg;
+	int			rc = 0;
+
+	/* lookup the module from the loaded module list */
+	D_MUTEX_LOCK(&loaded_mod_list_lock);
+	lmod = dss_module_search(modname);
+	if (lmod == NULL) {
+		D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+		/* module not found ... */
+		return -DER_ENOENT;
+	}
+	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+
+	smod = lmod->lm_dss_mod;
 	/* initialize the module */
 	rc = smod->sm_init();
 	if (rc) {
@@ -165,11 +202,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	if (mod_facs != NULL)
 		*mod_facs = smod->sm_facs;
 
-	/* module successfully loaded, add it to the tracking list */
-	D_MUTEX_LOCK(&loaded_mod_list_lock);
-	d_list_add_tail(&lmod->lm_lk, &loaded_mod_list);
-	dss_modules[smod->sm_mod_id] = smod;
-	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+	lmod->lm_init = true;
 
 	return 0;
 
@@ -179,9 +212,11 @@ err_mod_init:
 	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
 err_lmod:
+	D_MUTEX_LOCK(&loaded_mod_list_lock);
+	d_list_del_init(&lmod->lm_lk);
+	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+	dlclose(lmod->lm_hdl);
 	D_FREE(lmod);
-err_hdl:
-	dlclose(handle);
 	return rc;
 }
 
@@ -191,6 +226,8 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	struct dss_module	*smod = lmod->lm_dss_mod;
 	int			 rc;
 
+	if (lmod->lm_init == false)
+		goto close_mod;
 	/* unregister RPC handlers */
 	rc = daos_rpc_unregister(smod->sm_proto_fmt);
 	if (rc) {
@@ -214,6 +251,7 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 
 	}
 
+close_mod:
 	/* close the library handle */
 	dlclose(lmod->lm_hdl);
 
@@ -327,7 +365,7 @@ dss_module_unload_all(void)
 
 	d_list_for_each_entry_safe(mod, tmp, &destroy_list, lm_lk) {
 		d_list_del_init(&mod->lm_lk);
-		dss_module_unload_internal(mod);
+
 		D_FREE(mod);
 	}
 }
