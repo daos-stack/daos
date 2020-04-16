@@ -84,6 +84,7 @@ BuildRequires: libpsm_infinipath1
 %endif # (0%{?rhel} >= 7)
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1, libpmemobj1
+%endif
 Requires: fuse3 >= 3.4.2
 Requires: protobuf-c
 Requires: openssl
