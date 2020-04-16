@@ -1515,10 +1515,16 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cqi_op.ci_uuid), rpc,
 		DP_UUID(in->cqi_op.ci_hdl));
 
-	rc = cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
-			      in->cqi_op.ci_hdl, out);
-	if (rc)
-		return rc;
+	if (in->cqi_bits & DAOS_CO_QUERY_TGT) {
+		rc = cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
+				      in->cqi_op.ci_hdl, out);
+		if (rc)
+			return rc;
+	}
+
+	/* Caller didn't actually ask for any props */
+	if ((in->cqi_bits & DAOS_CO_QUERY_PROP_ALL) == 0)
+		return 0;
 
 	/* the allocated prop will be freed after rpc replied in
 	 * ds_cont_op_handler.

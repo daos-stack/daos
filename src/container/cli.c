@@ -973,6 +973,8 @@ dc_cont_query(tse_task_t *task)
 	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
 	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
 	in->cqi_bits = cont_query_bits(args->prop);
+	if (args->info != NULL)
+		in->cqi_bits |= DAOS_CO_QUERY_TGT;
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
