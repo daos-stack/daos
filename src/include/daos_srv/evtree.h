@@ -422,7 +422,8 @@ struct evt_policy_ops {
 			     struct evt_node *node,
 			     uint64_t in_off,
 			     const struct evt_entry_in *entry,
-			     bool *mbr_changed);
+			     bool *mbr_changed,
+			     uint8_t **csum_bufp);
 	/**
 	 * move half entries of the current node \a nd_src to the new
 	 * node \a nd_dst.
@@ -509,8 +510,10 @@ int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
  *
  * \param toh		[IN]	The tree open handle
  * \param entry		[IN]	The entry to insert
+ * \param csum_bufp	[OUT]	The pointer for the csum copy location.
  */
-int evt_insert(daos_handle_t toh, const struct evt_entry_in *entry);
+int evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
+	       uint8_t **csum_bufp);
 
 /**
  * Delete an extent \a rect from an opened tree.

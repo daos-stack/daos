@@ -27,13 +27,19 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
-
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 const (
 	MockUUID = "00000000-1111-2222-3333-444444444444"
 )
+
+// MockMessage implements the proto.Message
+// interface, and can be used for test mocks.
+type MockMessage struct{}
+
+func (mm *MockMessage) Reset()         {}
+func (mm *MockMessage) String() string { return "mock" }
+func (mm *MockMessage) ProtoMessage()  {}
 
 type (
 	// MockInvokerConfig defines the configured responses
@@ -52,6 +58,21 @@ type (
 	}
 )
 
+// MockMSResponse creates a synthetic Management Service response
+// from the supplied HostResponse values.
+func MockMSResponse(hostAddr string, hostErr error, hostMsg proto.Message) *UnaryResponse {
+	return &UnaryResponse{
+		fromMS: true,
+		Responses: []*HostResponse{
+			{
+				Addr:    hostAddr,
+				Error:   hostErr,
+				Message: hostMsg,
+			},
+		},
+	}
+}
+
 func (mi *MockInvoker) Debug(msg string) {
 	mi.log.Debug(msg)
 }
@@ -65,29 +86,17 @@ func (mi *MockInvoker) InvokeUnaryRPC(_ context.Context, uReq UnaryRequest) (*Un
 		return mi.cfg.UnaryResponse, mi.cfg.UnaryError
 	}
 
-	// This is a little gross, but allows us to keep the complexity here rather
-	// than in the tests. In particular, the dmg CLI surface tests don't really
-	// need to know all of the details.
-	addMSResp := func(msg proto.Message) []*HostResponse {
-		return []*HostResponse{
-			&HostResponse{
-				Message: msg,
+	// If the config didn't define a response, just dummy one up for
+	// tests that don't care.
+	return &UnaryResponse{
+		fromMS: uReq.isMSRequest(),
+		Responses: []*HostResponse{
+			{
+				Addr:    "dummy",
+				Message: &MockMessage{},
 			},
-		}
-	}
-	uResp := &UnaryResponse{
-		fromMS:    uReq.isMSRequest(),
-		Responses: []*HostResponse{},
-	}
-	switch uReq.(type) {
-	case *PoolCreateReq:
-		uResp.Responses = addMSResp(&mgmtpb.PoolCreateResp{})
-	case *PoolDestroyReq:
-		uResp.Responses = addMSResp(&mgmtpb.PoolDestroyResp{})
-	case *ContSetOwnerReq:
-		uResp.Responses = addMSResp(&mgmtpb.ContSetOwnerResp{})
-	}
-	return uResp, nil
+		},
+	}, nil
 }
 
 func (mi *MockInvoker) InvokeUnaryRPCAsync(_ context.Context, _ UnaryRequest) (HostResponseChan, error) {

@@ -91,7 +91,7 @@ func TestControl_ContSetOwner(t *testing.T) {
 		"both user and group success": {
 			req: validReq,
 			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", nil,
+				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.ContSetOwnerResp{},
 				),
 			},
@@ -103,7 +103,7 @@ func TestControl_ContSetOwner(t *testing.T) {
 				User:     "someuser@",
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", nil,
+				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.ContSetOwnerResp{},
 				),
 			},
@@ -115,7 +115,7 @@ func TestControl_ContSetOwner(t *testing.T) {
 				Group:    "somegroup@",
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", nil,
+				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.ContSetOwnerResp{},
 				),
 			},
@@ -130,7 +130,7 @@ func TestControl_ContSetOwner(t *testing.T) {
 		"remote failure": {
 			req: validReq,
 			mic: &MockInvokerConfig{
-				UnaryResponse: mockMSResponse("host1", errors.New("remote failed"), nil),
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
 		},

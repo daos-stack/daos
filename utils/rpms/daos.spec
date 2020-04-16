@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       11%{?relval}%{?dist}
+Release:       10%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -29,7 +29,7 @@ BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: libabt-devel >= 1.0rc1
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
-BuildRequires: fuse3-devel >= 3.4.2
+BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
@@ -80,14 +80,10 @@ BuildRequires: libpsm_infinipath1
 %endif # 0%{?is_opensuse}
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
-
-%global min_pmdk 1.8-1
 %if (0%{?suse_version} >= 1500)
-Requires: libpmem1 >= %{min_pmdk}, libpmemobj1 >= %{min_pmdk}, libpmemblk1 >= %{min_pmdk}
-%else
-Requires: libpmem >= %{min_pmdk}, libpmemobj >= %{min_pmdk}, libpmemblk >= %{min_pmdk}
+Requires: libpmem1, libpmemobj1
 %endif
-Requires: fuse3 >= 3.4.2
+Requires: fuse >= 3.4.2
 Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -345,10 +341,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Fri Apr 10 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-11
-- Enforce some minimum package requirements including switching
-  from our custom fuse build to fuse3 from the distribution
-
 * Sun Apr 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-10
 - Clean up spdk dependencies
 
