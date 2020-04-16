@@ -99,7 +99,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	}
 
 	/* load the dynamic library */
-	sprintf(name, "lib%s.so", modname);
+	sprintf(name, "daos_srv/lib%s.so", modname);
 	handle = dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
 	if (handle == NULL) {
 		D_ERROR("cannot load %s: %s\n", name, dlerror());
