@@ -41,13 +41,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-type dummyMessage struct{}
-
-func (dm *dummyMessage) Reset()         {}
-func (dm *dummyMessage) String() string { return "" }
-func (dm *dummyMessage) ProtoMessage()  {}
-
-var defaultMessage = &dummyMessage{}
+var defaultMessage = &MockMessage{}
 
 type testRequest struct {
 	rpcFn    unaryRPC

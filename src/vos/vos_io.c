@@ -1006,7 +1006,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
-	rc = evt_insert(toh, &ent);
+	rc = evt_insert(toh, &ent, NULL);
 
 	return rc;
 }
