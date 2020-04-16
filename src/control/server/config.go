@@ -33,6 +33,7 @@ import (
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -44,8 +45,6 @@ import (
 const (
 	defaultRuntimeDir   = "/var/run/daos_server"
 	defaultConfigPath   = "../etc/daos_server.yml"
-	defaultSystemName   = "daos_server"
-	defaultPort         = 10001
 	configOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
 )
@@ -304,10 +303,10 @@ func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
-		SystemName:         defaultSystemName,
+		SystemName:         build.DefaultSystemName,
 		SocketDir:          defaultRuntimeDir,
-		AccessPoints:       []string{fmt.Sprintf("localhost:%d", defaultPort)},
-		ControlPort:        defaultPort,
+		AccessPoints:       []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
+		ControlPort:        build.DefaultControlPort,
 		TransportConfig:    security.DefaultServerTransportConfig(),
 		Hyperthreads:       false,
 		Path:               defaultConfigPath,

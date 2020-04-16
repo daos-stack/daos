@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ type (
 
 	// ScmNamespace represents a mapping of AppDirect regions to block device files.
 	ScmNamespace struct {
-		UUID        string `json:"uuid"`
+		UUID        string `json:"uuid" hash:"ignore"`
 		BlockDevice string `json:"blockdev"`
 		Name        string `json:"dev"`
 		NumaNode    uint32 `json:"numa_node"`
@@ -77,6 +77,13 @@ type (
 
 	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
 	ScmNamespaces []*ScmNamespace
+
+	ScmMountPoint struct {
+		Info string
+		Path string
+	}
+
+	ScmMountPoints []*ScmMountPoint
 
 	// NvmeDeviceHealth represents a set of health statistics for a NVMe device.
 	NvmeDeviceHealth struct {
@@ -105,12 +112,13 @@ type (
 	// NvmeController represents a NVMe device controller which includes health
 	// and namespace information.
 	NvmeController struct {
+		Info        string
 		Model       string
-		Serial      string
+		Serial      string `hash:"ignore"`
 		PciAddr     string
 		FwRev       string
 		SocketID    int32
-		HealthStats *NvmeDeviceHealth
+		HealthStats *NvmeDeviceHealth `hash:"ignore"`
 		Namespaces  []*NvmeNamespace
 	}
 
@@ -193,4 +201,24 @@ func (sns ScmNamespaces) Capacity() (tb uint64) {
 func (sns ScmNamespaces) Summary() string {
 	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(sns.Capacity()), len(sns),
 		common.Pluralise("namespace", len(sns)))
+}
+
+func (nc *NvmeController) Capacity() (tb uint64) {
+	for _, n := range nc.Namespaces {
+		tb += n.Size
+	}
+	return
+}
+
+func (ncs NvmeControllers) Capacity() (tb uint64) {
+	for _, c := range ncs {
+		tb += (*NvmeController)(c).Capacity()
+	}
+	return
+}
+
+// Summary reports accumulated storage space and the number of controllers.
+func (ncs NvmeControllers) Summary() string {
+	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(ncs.Capacity()),
+		len(ncs), common.Pluralise("controller", len(ncs)))
 }
