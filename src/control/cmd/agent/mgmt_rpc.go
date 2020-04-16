@@ -109,7 +109,6 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		if err != nil {
 			return nil, err
 		}
-		mod.log.Infof("Client detected on NUMA node %d", numaNode)
 	}
 
 	if mod.aiCache.enabled.IsTrue() && mod.aiCache.initialized.IsTrue() {
