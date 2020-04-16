@@ -3792,6 +3792,85 @@ io_invalid(void **state)
 	assert_int_equal(rc, 0);
 }
 
+/**
+ * Write multiple 4k I/O extents with start index 0, then again
+ * with start index 1, with an index gap between each record,
+ * then wait for aggregation to be triggered.
+ * The gap in indexes prevents records from combining and allows for
+ * maximum amount of read I/Os upon aggregation.
+ */
+static void
+max_io_agg_threshold_internal(daos_obj_id_t oid, struct ioreq *req,
+			      char *data_buf, int num_recs,
+			      const char dkey[], const char akey[])
+{
+	int idx;
+	int i;
+
+	idx = 0;
+	print_message("Insert %d 4k records at index:0\n", num_recs);
+	for (i = 0; i < num_recs; i++) {
+		insert_single_with_rxnr(dkey, akey, idx, data_buf, 4096,
+					1, DAOS_TX_NONE, req);
+		idx++;
+		/**
+		 * Prevent records from coalescing on aggregation,
+		 * necessary to get a large amount of BIO reads
+		 * during aggregation of nvme extents
+		 */
+		idx += 1;
+	}
+	idx = 1;
+	print_message("Insert %d 4k records at index:1 (same key)\n",
+		      num_recs);
+	for (i = 0; i < num_recs; i++) {
+		insert_single_with_rxnr(dkey, akey, idx, data_buf, 4096,
+					1, DAOS_TX_NONE, req);
+		idx++;
+		/** Prevent records from coalescing on aggregation */
+		idx += 1;
+	}
+}
+
+/**
+ * Test max I/O threshold with aggregation (originally 512, bumped to 4k
+ * in DAOS-4269)
+ */
+static void
+max_io_agg_threshold(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*data_buf;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	D_ALLOC(data_buf, IO_SIZE_NVME);
+	assert_non_null(data_buf);
+	dts_buf_render(data_buf, IO_SIZE_NVME);
+
+	/**
+	 * Insert 260 records twice under the same akey. This should result in
+	 * ~520 nvme segments being read for aggregation, which is larger
+	 * than the default max I/O threshold of 512. The max iops have now
+	 * been bumped to 4k, and anything over the threshold should not fail
+	 * and should be queued. Then insert 4100 records to test new threshold.
+	 */
+	max_io_agg_threshold_internal(oid, &req, data_buf, 260,
+				      "dkey_iomax", "akey_iomax");
+	max_io_agg_threshold_internal(oid, &req, data_buf, 2050,
+				      "dkey_iomax_4k", "akey_iomax_4k");
+
+	/** Wait >90 sec for aggregation to be triggered */
+	print_message("100 sec wait for aggregation to be triggered\n");
+	sleep(100);
+
+	D_FREE(data_buf);
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -3873,6 +3952,8 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO40: Record count after punch/enumeration",
 	  punch_enum_then_verify_record_count, async_disable,
 	  test_case_teardown},
+	{ "IO41: test max io threshold with aggregation",
+	  max_io_agg_threshold, async_disable, test_case_teardown},
 };
 
 int
