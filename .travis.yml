@@ -18,4 +18,4 @@ berfore_install:
 
 script:
  - docker build -f utils/docker/Dockerfile.$DOCKER_IMAGE -t daos/$DOCKER_IMAGE --build-arg NOBUILD=1 --build-arg UID=$UID .
- - docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes USE_INSTALLED=fuse install"
+ - docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes install"
