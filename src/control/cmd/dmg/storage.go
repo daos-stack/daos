@@ -118,7 +118,7 @@ type storageScanCmd struct {
 // Execute is run when storageScanCmd activates.
 //
 // Runs NVMe and SCM storage scan on all connected servers.
-func (cmd *storageScanCmd) Execute(args []string) error {
+func (cmd *storageScanCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	req := &control.StorageScanReq{}
 	req.SetHostList(cmd.hostlist)
