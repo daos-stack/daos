@@ -111,15 +111,16 @@ enum DAOS_CSUM_TYPE daos_contprop2csumtype(int contprop_csum_val);
 struct csum_ft;
 struct daos_csummer {
 	/** Size of csum_buf. */
-	uint32_t dcs_csum_buf_size;
+	uint32_t	 dcs_csum_buf_size;
 	/** Cached configuration for chunk size*/
-	uint32_t dcs_chunk_size;
+	uint32_t	 dcs_chunk_size;
 	/** Pointer to the function table to be used for calculating csums */
-	struct csum_ft *dcs_algo;
+	struct csum_ft	*dcs_algo;
 	/** Pointer to function table specific contexts */
-	void *dcs_ctx;
+	void		*dcs_ctx;
 	/** Points to the buffer where the  calculated csum is to be written */
-	uint8_t *dcs_csum_buf;
+	uint8_t		*dcs_csum_buf;
+	bool		 dcs_srv_verify;
 };
 
 struct csum_ft {
@@ -163,7 +164,7 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type);
  */
 int
 daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
-		  size_t chunk_bytes);
+		  size_t chunk_bytes, bool srv_verify);
 
 /**
  * Initialize the daos_csummer with a known DAOS_CSUM_TYPE
@@ -177,7 +178,7 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
  */
 int
 daos_csummer_type_init(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
-		  size_t chunk_bytes);
+		       size_t chunk_bytes, bool srv_verify);
 
 /** Destroy the daos_csummer */
 void
@@ -197,6 +198,13 @@ daos_csummer_get_type(struct daos_csummer *obj);
 
 uint32_t
 daos_csummer_get_chunksize(struct daos_csummer *obj);
+
+/** Get an appropriate chunksize (based on configured chunksize) for a record */
+uint32_t
+daos_csummer_get_rec_chunksize(struct daos_csummer *obj, uint64_t rec_size);
+
+bool
+daos_csummer_get_srv_verify(struct daos_csummer *obj);
 
 /** Get a string representing the csum the csummer is configured with */
 char *
@@ -368,7 +376,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  *				distributed to multiple targets. When it is NULL
  *				it means replica object, or EC object located
  *				in single target.
- * @param[in]	p_iods_csums	pointer that will reference the
+ * @param[out]	p_iods_csums	pointer that will reference the
  *				the memory allocated
  * @return			number of iod_csums allocated, or
  *				negative if error
@@ -461,15 +469,12 @@ csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size);
 
 static inline bool
-csum_iod_is_supported(uint64_t chunksize, daos_iod_t *iod)
+csum_iod_is_supported(daos_iod_t *iod)
 {
 	/**
-	 * iod_size must be greater than 1 and chunksize must be larger
-	 * than iod size if it's an array type. Doesn't support very large
-	 * record size yet for array types
+	 * iod_size must be greater than 1
 	 */
-	return iod->iod_size > 0 &&
-	       (iod->iod_type == DAOS_IOD_SINGLE || iod->iod_size <= chunksize);
+	return iod->iod_size > 0;
 }
 
 /**
@@ -483,6 +488,10 @@ daos_off_t
 csum_chunk_align_floor(daos_off_t off, size_t chunksize);
 daos_off_t
 csum_chunk_align_ceiling(daos_off_t off, size_t chunksize);
+
+/** get appropriate chunksize for the record size */
+daos_off_t
+csum_record_chunksize(daos_off_t default_chunksize, daos_off_t rec_size);
 
 /** Represents a chunk, extent, or some calculated alignment for a range
  */
@@ -543,6 +552,12 @@ struct daos_csum_range
 csum_align_boundaries(daos_off_t lo, daos_off_t hi, daos_off_t lo_boundary,
 		      daos_off_t hi_boundary, daos_off_t record_size,
 		      size_t chunksize);
+
+/**
+ * DAOS Checksum Fault Injection ... corrupt data
+ */
+void
+dcf_corrupt(d_sg_list_t *data, uint32_t nr);
 
 #endif /** __DAOS_CHECKSUM_H */
 

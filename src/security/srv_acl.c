@@ -231,6 +231,7 @@ validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 
 	request = new_validation_request(server_socket, creds);
 	if (request == NULL) {
+		drpc_close(server_socket);
 		return -DER_NOMEM;
 	}
 

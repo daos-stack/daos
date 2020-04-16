@@ -1177,6 +1177,7 @@ cond_test(void **state)
 	daos_unit_oid_t		 oid;
 	d_sg_list_t		 sgl[MAX_SGL] = {0};
 	d_iov_t			 iov[MAX_SGL];
+	daos_epoch_t		 epoch = 5;
 	int			 i;
 
 	if (getenv("DAOS_IO_BYPASS"))
@@ -1193,65 +1194,85 @@ cond_test(void **state)
 	}
 
 	/** Conditional update of non-existed key should fail */
-	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 5, "a", "b",
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE,
 		       -DER_NONEXIST, sgl, "foo");
 	/** Non conditional update should fail due to later read */
-	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 3, "a", "b",
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 3, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS, -DER_AGAIN, sgl, "foo");
 	/** Conditional insert should succeed */
-	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 6, "a", "b",
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_INSERT, 0, sgl,
 		       "foo");
 	/** Conditional insert should fail */
-	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 7, "a", "b",
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_INSERT,
 		       -DER_EXIST, sgl, "bar");
 	/** Check the value */
-	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, 8, "a", "b",
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo", 'x');
 	/** Check the value before, should be empty */
-	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, 5, "a", "b",
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 4, "a", "b",
 		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxxx", 'x');
-	obj_punch_op(state, arg->ctx.tc_co_hdl, oid, 9);
+	obj_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++);
 	/** Non conditional fetch should not see data anymore */
-	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, 10, "a", "b",
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxxx", 'x');
 	/** Conditional update of non-existed key should fail */
-	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 9, "a", "b",
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE,
 		       -DER_NONEXIST, sgl, "foo");
 	/** Conditional punch of non-existed akey should fail */
-	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, 11, "a", "b",
+	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);
 	/** Key doesn't exist still, that supercedes read conflict */
-	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, 11, "a",
+	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);
 	/** Conditional punch of non-existed dkey should fail */
-	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, 12, "a",
+	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);
-	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, 13, "z",
+	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "z",
 			VOS_OF_COND_DKEY_UPDATE | VOS_OF_USE_TIMESTAMPS,
 			-DER_NONEXIST, sgl, 5, "a", "foo", "b", "bar", "c",
 			"foobar", "d", "value", "e", "abc");
-	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, 12, "z",
+	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "z",
 			VOS_OF_COND_DKEY_INSERT | VOS_OF_USE_TIMESTAMPS,
 			-DER_AGAIN, sgl, 5, "a", "foo", "b", "bar", "c",
 			"foobar", "d", "value", "e", "abc");
-	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, 14, "z",
+	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "z",
 			VOS_OF_COND_DKEY_INSERT | VOS_OF_USE_TIMESTAMPS,
 			0, sgl, 5, "a", "foo", "b", "bar", "c",
 			"foobar", "d", "value", "e", "abc");
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "z", "a",
+		      VOS_OF_COND_AKEY_FETCH | VOS_OF_USE_TIMESTAMPS, 0, sgl,
+		      "foo", 'x');
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "nonexist",
+		      VOS_OF_COND_AKEY_FETCH | VOS_OF_USE_TIMESTAMPS,
+		      -DER_NONEXIST, sgl, "xxx", 'x');
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
+		       "nonexist", VOS_OF_USE_TIMESTAMPS, -DER_AGAIN, sgl,
+		       "foo");
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "nonexist", "a",
+		      VOS_OF_COND_DKEY_FETCH | VOS_OF_USE_TIMESTAMPS,
+		      -DER_NONEXIST, sgl, "xxx", 'x');
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "nonexist",
+		       "a", VOS_OF_USE_TIMESTAMPS, -DER_AGAIN, sgl,
+		       "foo");
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "nonexist",
+		       "a", VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "nonexist", "a",
+		      VOS_OF_COND_DKEY_FETCH | VOS_OF_USE_TIMESTAMPS, 0, sgl,
+		      "foo", 'x');
 
 	oid = gen_oid(0);
 	/** Test duplicate akey */
-	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, 17, "a",
+	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a",
 			VOS_OF_USE_TIMESTAMPS, -DER_NO_PERM, sgl, 5, "c", "foo",
 			"c", "bar", "d", "val", "e", "flag", "f", "temp");
-	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, 17, "a",
+	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a",
 			VOS_OF_USE_TIMESTAMPS, -DER_NO_PERM, sgl, 5, "new",
 			"foo", "f", "bar", "d", "val", "e", "flag", "new",
 			"temp");

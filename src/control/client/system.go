@@ -27,6 +27,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -56,7 +58,9 @@ func (c *connList) SystemStop(req SystemStopReq) (*SystemStopResp, error) {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemStopReq{Prep: req.Prep, Kill: req.Kill, Force: req.Force}
+	rpcReq := &ctlpb.SystemStopReq{
+		Prep: req.Prep, Kill: req.Kill, Force: req.Force, Ranks: req.Ranks,
+	}
 
 	c.log.Debugf("DAOS system stop request: %s\n", rpcReq)
 
@@ -91,7 +95,7 @@ func (c *connList) SystemStart(req SystemStartReq) (*SystemStartResp, error) {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemStartReq{}
+	rpcReq := &ctlpb.SystemStartReq{Ranks: req.Ranks}
 
 	c.log.Debugf("DAOS system start request: %s\n", rpcReq)
 
@@ -184,7 +188,7 @@ type ListPoolsReq struct {
 // of pools in the system.
 type ListPoolsResp struct {
 	Status int32
-	Pools  []*PoolDiscovery
+	Pools  []*common.PoolDiscovery
 }
 
 // ListPools fetches the list of all pools and their service replicas from the
@@ -212,6 +216,6 @@ func (c *connList) ListPools(req ListPoolsReq) (*ListPoolsResp, error) {
 	}
 
 	return &ListPoolsResp{
-		Pools: poolDiscoveriesFromPB(pbResp.Pools),
+		Pools: proto.PoolDiscoveriesFromPB(pbResp.Pools),
 	}, nil
 }

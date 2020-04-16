@@ -1,4 +1,4 @@
-.TH dmg 1 "1 April 2020"
+.TH dmg 1 "7 April 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -26,6 +26,9 @@ enable debug output
 .TP
 \fB\fB\-j\fR, \fB\-\-json\fR\fP
 Enable JSON output
+.TP
+\fB\fB\-J\fR, \fB\-\-json-logging\fR\fP
+Enable JSON-formatted log output
 .TP
 \fB\fB\-f\fR, \fB\-\-host-file\fR\fP
 path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList
@@ -169,6 +172,23 @@ Query a DAOS pool
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
 UUID of DAOS pool to query
+.SS pool reintegrate
+Reintegrate a list of targets for a rank
+
+\fBUsage\fP: pool reintegrate [reintegrate-OPTIONS]
+.TP
+
+\fBAliases\fP: r
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of the DAOS pool to start reintegration in
+.TP
+\fB\fB\-\-rank\fR (\fIrequired\fR)\fP
+Rank of the targets to be reintegrated
+.TP
+\fB\fB\-\-target-idx\fR (\fIrequired\fR)\fP
+Comma-seperated list of target idx(s) to be reintegrated into the rank
 .SS pool set-prop
 Set pool property
 
@@ -359,8 +379,14 @@ Comma separated list of system ranks to query
 .SS system start
 Perform start of stopped DAOS system
 
+\fBUsage\fP: system start [start-OPTIONS]
+.TP
+
 \fBAliases\fP: r
 
+.TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated list of system ranks to query
 .SS system stop
 Perform controlled shutdown of DAOS system
 
@@ -372,5 +398,8 @@ Perform controlled shutdown of DAOS system
 .TP
 \fB\fB\-\-force\fR\fP
 Force stop DAOS system members
+.TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated list of system ranks to query
 .SS version
 Print dmg version

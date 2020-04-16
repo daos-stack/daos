@@ -226,24 +226,6 @@ ktr_key_cmp_lexical(struct vos_krec_df *krec, d_iov_t *kiov)
 }
 
 static int
-ktr_key_cmp_uint64(struct vos_krec_df *krec, d_iov_t *kiov)
-{
-	uint64_t k1, k2;
-
-	if (krec->kr_size != kiov->iov_len ||
-	    krec->kr_size != sizeof(uint64_t)) {
-		D_ERROR("invalid kr_size %d.\n", krec->kr_size);
-		return BTR_CMP_ERR;
-	}
-
-	k1 = *(uint64_t *)vos_krec2key(krec);
-	k2 = *(uint64_t *)kiov->iov_buf;
-
-	return (k1 > k2) ? BTR_CMP_GT :
-			   ((k1 < k2) ? BTR_CMP_LT : BTR_CMP_EQ);
-}
-
-static int
 ktr_key_cmp_default(struct vos_krec_df *krec, d_iov_t *kiov)
 {
 	/* This only gets called if hash comparison matches. */
@@ -268,9 +250,7 @@ ktr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 
 	krec  = vos_rec2krec(tins, rec);
 
-	if (feats & VOS_KEY_CMP_UINT64)
-		cmp = ktr_key_cmp_uint64(krec, key_iov);
-	else if (feats & VOS_KEY_CMP_LEXICAL)
+	if (feats & VOS_KEY_CMP_LEXICAL)
 		cmp = ktr_key_cmp_lexical(krec, key_iov);
 	else
 		cmp = ktr_key_cmp_default(krec, key_iov);
@@ -716,16 +696,16 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 	{
 		.ta_class	= VOS_BTR_DKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_DIRECT_KEY |
-				  BTR_FEAT_DYNAMIC_ROOT,
+		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_UINT_KEY |
+				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_dkey",
 		.ta_ops		= &key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_AKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_DIRECT_KEY |
-				  BTR_FEAT_DYNAMIC_ROOT,
+		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_UINT_KEY |
+				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_akey",
 		.ta_ops		= &key_btr_ops,
 	},

@@ -38,10 +38,11 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
+func createACLFile(t *testing.T, path string, acl *AccessControlList) {
 	t.Helper()
 
 	file, err := os.Create(path)
@@ -75,7 +76,7 @@ func TestPoolCommands(t *testing.T) {
 
 	// Some tests need a valid ACL file
 	testACLFile := filepath.Join(tmpDir, "test_acl.txt")
-	testACL := &client.AccessControlList{
+	testACL := &AccessControlList{
 		Entries: []string{"A::OWNER@:rw", "A:G:GROUP@:rw"},
 	}
 	createACLFile(t, testACLFile, testACL)
@@ -117,12 +118,13 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testScmSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server", // FIXME: This should be a constant
-					Usr:        eUsr.Username + "@",
-					Grp:        eGrp.Name + "@",
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []uint32{},
 				}),
 			}, " "),
 			nil,
@@ -133,14 +135,15 @@ func TestPoolCommands(t *testing.T) {
 				testScmSizeStr, testNvmeSizeStr, testACLFile),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NvmeBytes:  uint64(testNvmeSize),
 					NumSvcReps: 3,
 					Sys:        "fnord",
-					Usr:        "foo@",
-					Grp:        "bar@",
-					ACL:        testACL,
+					User:       "foo@",
+					UserGroup:  "bar@",
+					Ranks:      []uint32{},
+					ACL:        (*control.AccessControlList)(testACL),
 				}),
 			}, " "),
 			nil,
@@ -151,14 +154,15 @@ func TestPoolCommands(t *testing.T) {
 				strconv.Itoa(testScmSize), strconv.Itoa(testNvmeSize), testACLFile),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NvmeBytes:  uint64(testNvmeSize),
 					NumSvcReps: 3,
 					Sys:        "fnord",
-					Usr:        "foo@",
-					Grp:        "bar@",
-					ACL:        testACL,
+					User:       "foo@",
+					UserGroup:  "bar@",
+					Ranks:      []uint32{},
+					ACL:        (*control.AccessControlList)(testACL),
 				}),
 			}, " "),
 			nil,
@@ -168,12 +172,13 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testScmSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
-					Usr:        "foo@home",
-					Grp:        "bar@home",
+					User:       "foo@home",
+					UserGroup:  "bar@home",
+					Ranks:      []uint32{},
 				}),
 			}, " "),
 			nil,
@@ -183,11 +188,12 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testScmSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
-					Usr:        "foo@",
+					User:       "foo@",
+					Ranks:      []uint32{},
 				}),
 			}, " "),
 			nil,
@@ -197,11 +203,12 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testScmSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
-					Grp:        "foo@",
+					UserGroup:  "foo@",
+					Ranks:      []uint32{},
 				}),
 			}, " "),
 			nil,
@@ -219,11 +226,37 @@ func TestPoolCommands(t *testing.T) {
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
 		{
+			"Reintegrate a target with single target idx",
+			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolReintegrate-%+v", &client.PoolReintegrateReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reintegrate a target with multiple idx",
+			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolReintegrate-%+v", &client.PoolReintegrateReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1, 2, 3},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Destroy pool with force",
 			"pool destroy --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolDestroy-%+v", &client.PoolDestroyReq{
+				printRequest(t, &control.PoolDestroyReq{
 					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Force: true,
 				}),
@@ -412,7 +445,7 @@ func TestPoolCommands(t *testing.T) {
 				"ConnectClients",
 				fmt.Sprintf("PoolUpdateACL-%+v", client.PoolUpdateACLReq{
 					UUID: "12345678-1234-1234-1234-1234567890ab",
-					ACL:  &client.AccessControlList{Entries: []string{"A::user@:rw"}},
+					ACL:  &AccessControlList{Entries: []string{"A::user@:rw"}},
 				}),
 			}, " "),
 			nil,
@@ -454,7 +487,10 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 	aclFile := filepath.Join(tmpDir, "out.txt")
 
 	conn := newTestConn(t)
-	err := runCmd(t, fmt.Sprintf("pool get-acl --pool 12345678-1234-1234-123456789abc --outfile %s", aclFile), log, conn)
+	err := runCmd(t,
+		fmt.Sprintf("pool get-acl --pool 12345678-1234-1234-123456789abc --outfile %s", aclFile),
+		log, control.DefaultMockInvoker(log), conn,
+	)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ func connectSetupServers(
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems ScmNamespaces, mountResults ScmMountResults,
 	scanRet error, formatRet error, killRet error, connectRet error,
-	ACLRet *mockACLResult, listPoolsRet *mockListPoolsResult) Connect {
+	ACLRet *MockACLResult, listPoolsRet *MockListPoolsResult) Connect {
 
 	connect := newMockConnect(
 		log, state, ctrlrs, ctrlrResults, modules,
@@ -60,8 +60,8 @@ func connectSetup(
 	state State, ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
 	modules ScmModules, moduleResults ScmModuleResults, pmems ScmNamespaces,
 	mountResults ScmMountResults, scanRet error, formatRet error,
-	killRet error, connectRet error, ACLRet *mockACLResult,
-	listPoolsRet *mockListPoolsResult) Connect {
+	killRet error, connectRet error, ACLRet *MockACLResult,
+	listPoolsRet *MockListPoolsResult) Connect {
 
 	return connectSetupServers(MockServers, log, state, ctrlrs,
 		ctrlrResults, modules, moduleResults, pmems, mountResults, scanRet,
@@ -167,167 +167,6 @@ func TestGetClearConns(t *testing.T) {
 	checkResults(t, MockServers, results, nil)
 }
 
-func TestStorageScan(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
-
-	cc := defaultClientSetup(log)
-
-	gotResp := cc.StorageScan(&StorageScanReq{})
-
-	expResp := MockScanResp(&MockCtrlrs, &MockScmModules, &MockScmNamespaces, MockServers)
-
-	if diff := cmp.Diff(expResp, gotResp); diff != "" {
-		t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
-	}
-}
-
-func TestStorageFormat(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
-
-	for name, tt := range map[string]struct {
-		formatRet error
-		reformat  bool
-	}{
-		"ok": {},
-		"fails": {
-			formatRet: MockErr,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			cc := connectSetup(
-				log, Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
-				MockModuleResults, MockScmNamespaces, MockMountResults,
-				nil, tt.formatRet, nil, nil, MockACL, nil)
-
-			formatResults := cc.StorageFormat(tt.reformat)
-
-			if tt.formatRet != nil {
-				for _, addr := range MockServers {
-					AssertEqual(t, formatResults[addr],
-						StorageFormatResult{Err: tt.formatRet},
-						"unexpected error for nvme result")
-				}
-				return
-			}
-
-			for _, srv := range MockServers {
-				AssertEqual(t, formatResults[srv].Scm, MockMountResults,
-					"unexpected client SCM Mount results returned")
-				AssertEqual(t, formatResults[srv].Nvme, MockCtrlrResults,
-					"unexpected client NVMe SSD controller results returned")
-			}
-		})
-	}
-}
-
-func TestPoolQuery(t *testing.T) {
-	for name, tc := range map[string]struct {
-		mc      *mockConnectConfig
-		req     PoolQueryReq
-		expResp *PoolQueryResp
-		expErr  error
-	}{
-		"no active connections": {
-			expErr: errors.New("no active connections"),
-		},
-		"query fails": {
-			mc: &mockConnectConfig{
-				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolQueryErr: errors.New("query failed"),
-				},
-			},
-			expErr: errors.New("query failed"),
-		},
-		"nonzero resp status": {
-			mc: &mockConnectConfig{
-				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolQueryResult: &mgmtpb.PoolQueryResp{
-						Status: -42,
-					},
-				},
-			},
-			expErr: errors.New("DAOS returned error code: -42"),
-		},
-		"query succeeds": {
-			mc: &mockConnectConfig{
-				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolQueryResult: &mgmtpb.PoolQueryResp{
-						Uuid:            MockUUID,
-						Totaltargets:    42,
-						Activetargets:   16,
-						Disabledtargets: 17,
-						Rebuild: &mgmtpb.PoolRebuildStatus{
-							State:   mgmtpb.PoolRebuildStatus_BUSY,
-							Objects: 1,
-							Records: 2,
-						},
-						Scm: &mgmtpb.StorageUsageStats{
-							Total: 123456,
-							Free:  0,
-							Min:   1,
-							Max:   2,
-							Mean:  3,
-						},
-						Nvme: &mgmtpb.StorageUsageStats{
-							Total: 123456,
-							Free:  0,
-							Min:   1,
-							Max:   2,
-							Mean:  3,
-						},
-					},
-				},
-			},
-			expResp: &PoolQueryResp{
-				UUID:            MockUUID,
-				TotalTargets:    42,
-				ActiveTargets:   16,
-				DisabledTargets: 17,
-				Rebuild: &PoolRebuildStatus{
-					State:   PoolRebuildStateBusy,
-					Objects: 1,
-					Records: 2,
-				},
-				Scm: &StorageUsageStats{
-					Total: 123456,
-					Free:  0,
-					Min:   1,
-					Max:   2,
-					Mean:  3,
-				},
-				Nvme: &StorageUsageStats{
-					Total: 123456,
-					Free:  0,
-					Min:   1,
-					Max:   2,
-					Mean:  3,
-				},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			c := newMockConnectCfg(log, tc.mc)
-			gotResp, gotErr := c.PoolQuery(tc.req)
-			CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
-				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
 func TestPoolGetACL(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer ShowBufferOnFailure(t, buf)
@@ -368,10 +207,10 @@ func TestPoolGetACL(t *testing.T) {
 			if tt.expectedResp != nil {
 				expectedACL = tt.expectedResp.ACL.Entries
 			}
-			aclResult := &mockACLResult{
-				acl:    expectedACL,
-				status: tt.getACLRespStatus,
-				err:    tt.getACLErr,
+			aclResult := &MockACLResult{
+				Acl:    expectedACL,
+				Status: tt.getACLRespStatus,
+				Err:    tt.getACLErr,
 			}
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
@@ -402,7 +241,7 @@ func TestPoolOverwriteACL(t *testing.T) {
 	defer ShowBufferOnFailure(t, buf)
 
 	testACL := &AccessControlList{
-		Entries: MockACL.acl,
+		Entries: MockACL.Acl,
 	}
 
 	for name, tt := range map[string]struct {
@@ -453,10 +292,10 @@ func TestPoolOverwriteACL(t *testing.T) {
 			if tt.expectedResp != nil {
 				expectedACL = tt.expectedResp.ACL.Entries
 			}
-			aclResult := &mockACLResult{
-				acl:    expectedACL,
-				status: tt.overwriteACLRespStatus,
-				err:    tt.overwriteACLErr,
+			aclResult := &MockACLResult{
+				Acl:    expectedACL,
+				Status: tt.overwriteACLRespStatus,
+				Err:    tt.overwriteACLErr,
 			}
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
@@ -488,7 +327,7 @@ func TestPoolUpdateACL(t *testing.T) {
 	defer ShowBufferOnFailure(t, buf)
 
 	testACL := &AccessControlList{
-		Entries: MockACL.acl,
+		Entries: MockACL.Acl,
 	}
 
 	for name, tt := range map[string]struct {
@@ -544,10 +383,10 @@ func TestPoolUpdateACL(t *testing.T) {
 			if tt.expectedResp != nil {
 				expectedACL = tt.expectedResp.ACL.Entries
 			}
-			aclResult := &mockACLResult{
-				acl:    expectedACL,
-				status: tt.updateACLRespStatus,
-				err:    tt.updateACLErr,
+			aclResult := &MockACLResult{
+				Acl:    expectedACL,
+				Status: tt.updateACLRespStatus,
+				Err:    tt.updateACLErr,
 			}
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
@@ -623,10 +462,10 @@ func TestPoolDeleteACL(t *testing.T) {
 			if tt.expectedResp != nil {
 				expectedACL = tt.expectedResp.ACL.Entries
 			}
-			aclResult := &mockACLResult{
-				acl:    expectedACL,
-				status: tt.deleteACLRespStatus,
-				err:    tt.deleteACLErr,
+			aclResult := &MockACLResult{
+				Acl:    expectedACL,
+				Status: tt.deleteACLRespStatus,
+				Err:    tt.deleteACLErr,
 			}
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
@@ -684,7 +523,7 @@ func TestListPools(t *testing.T) {
 		"success": {
 			addr:                MockServers,
 			listPoolsRespStatus: 0,
-			expectedResp:        &ListPoolsResp{Pools: poolDiscoveriesFromPB(MockPoolList)},
+			expectedResp:        &ListPoolsResp{Pools: PoolDiscoveriesFromPB(MockPoolList)},
 			expectedErr:         "",
 		},
 	} {
@@ -694,9 +533,9 @@ func TestListPools(t *testing.T) {
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
 				MockModuleResults, MockScmNamespaces, MockMountResults,
 				nil, nil, nil, nil, MockACL,
-				&mockListPoolsResult{
-					err:    tt.listPoolsErr,
-					status: tt.listPoolsRespStatus,
+				&MockListPoolsResult{
+					Err:    tt.listPoolsErr,
+					Status: tt.listPoolsRespStatus,
 				})
 
 			resp, err := cc.ListPools(ListPoolsReq{})
@@ -733,12 +572,12 @@ func TestPoolSetProp(t *testing.T) {
 		"set-prop fails": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolSetPropErr: errors.New("set-prop failed"),
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolSetPropErr: errors.New("set-prop failed"),
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
@@ -747,14 +586,14 @@ func TestPoolSetProp(t *testing.T) {
 		"nonzero resp status": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolSetPropResult: &mgmtpb.PoolSetPropResp{
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolSetPropResult: &mgmtpb.PoolSetPropResp{
 						Status: -42,
 					},
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
@@ -765,7 +604,7 @@ func TestPoolSetProp(t *testing.T) {
 				addresses: MockServers,
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: "",
 			},
 			expErr: errors.New("invalid property name"),
@@ -775,7 +614,7 @@ func TestPoolSetProp(t *testing.T) {
 				addresses: MockServers,
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 			},
 			expErr: errors.New("unhandled property value"),
@@ -783,12 +622,12 @@ func TestPoolSetProp(t *testing.T) {
 		"invalid response value": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolSetPropResult: &mgmtpb.PoolSetPropResp{},
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolSetPropResult: &mgmtpb.PoolSetPropResp{},
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValNum,
 			},
@@ -797,8 +636,8 @@ func TestPoolSetProp(t *testing.T) {
 		"successful string property": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolSetPropResult: &mgmtpb.PoolSetPropResp{
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolSetPropResult: &mgmtpb.PoolSetPropResp{
 						Property: &mgmtpb.PoolSetPropResp_Name{
 							Name: testPropName,
 						},
@@ -809,12 +648,12 @@ func TestPoolSetProp(t *testing.T) {
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
 			expResp: &PoolSetPropResp{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
@@ -822,8 +661,8 @@ func TestPoolSetProp(t *testing.T) {
 		"successful numeric property": {
 			mc: &mockConnectConfig{
 				addresses: MockServers,
-				svcClientCfg: mockMgmtSvcClientConfig{
-					poolSetPropResult: &mgmtpb.PoolSetPropResp{
+				svcClientCfg: MockMgmtSvcClientConfig{
+					PoolSetPropResult: &mgmtpb.PoolSetPropResp{
 						Property: &mgmtpb.PoolSetPropResp_Name{
 							Name: testPropName,
 						},
@@ -834,12 +673,12 @@ func TestPoolSetProp(t *testing.T) {
 				},
 			},
 			req: PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    testPropValNum,
 			},
 			expResp: &PoolSetPropResp{
-				UUID:     MockUUID,
+				UUID:     MockUUID(),
 				Property: testPropName,
 				Value:    strconv.FormatUint(testPropValNum, 10),
 			},
