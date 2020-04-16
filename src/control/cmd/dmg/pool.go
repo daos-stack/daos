@@ -231,7 +231,8 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 // PoolSetPropCmd represents the command to set a property on a pool.
 type PoolSetPropCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 	UUID     string `long:"pool" required:"1" description:"UUID of DAOS pool"`
 	Property string `short:"n" long:"name" required:"1" description:"Name of property to be set"`
 	Value    string `short:"v" long:"value" required:"1" description:"Value of property to be set"`
@@ -239,7 +240,7 @@ type PoolSetPropCmd struct {
 
 // Execute is run when PoolSetPropCmd subcommand is activated.
 func (c *PoolSetPropCmd) Execute(_ []string) error {
-	req := client.PoolSetPropReq{
+	req := &control.PoolSetPropReq{
 		UUID:     c.UUID,
 		Property: c.Property,
 	}
@@ -249,9 +250,14 @@ func (c *PoolSetPropCmd) Execute(_ []string) error {
 		req.SetNumber(numVal)
 	}
 
-	resp, err := c.conns.PoolSetProp(req)
+	ctx := context.Background()
+	resp, err := control.PoolSetProp(ctx, c.ctlClient, req)
 	if err != nil {
 		return errors.Wrap(err, "pool set-prop failed")
+	}
+
+	if c.jsonOutputEnabled() {
+		return c.outputJSON(os.Stdout, resp)
 	}
 
 	c.log.Infof("pool set-prop succeeded (%s=%q)", resp.Property, resp.Value)
