@@ -383,7 +383,7 @@ enabled=0
 EOF\"
 
 # now run it!
-if ! ./launch.py -crispa -ls daos-logs=1G,job_log=5MB -ts \
+if ! ./launch.py -crispa -ls daos_logs=1G,job_log=5MB -ts \
 ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
