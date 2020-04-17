@@ -625,6 +625,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	int		 rx_nr; /* number of record extents */
 	int		 rec_idx = 0; /* index for next insert */
 	int		 i;
+	int		 rc;
 	daos_pool_info_t pinfo;
 	daos_size_t	 nvme_initial_size;
 	daos_size_t	 nvme_current_size;
@@ -655,7 +656,8 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	assert_memory_equal(ow_buf, fbuf, size);
 
 	/*Get the inital pool size after writing first transaction*/
-	pool_storage_info(state, &pinfo);
+	rc = pool_storage_info(state, &pinfo);
+	assert_int_equal(rc, 0);
 	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
 	/**
@@ -695,7 +697,8 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 		rx_nr++;
 
 		/*Verify the SCM/NVMe Pool Free size based on tranfer size*/
-		pool_storage_info(state, &pinfo);
+		rc = pool_storage_info(state, &pinfo);
+		assert_int_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 		if (overwrite_sz < 4096) {
 		/*NVMe Size should not be changed as overwrite_sz is <4K*/
@@ -821,6 +824,7 @@ io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
 	int			buf_idx; /* overwrite buffer index */
 	int			rx_nr; /* number of record extents */
 	int			record_set;
+	int			rc;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
 
@@ -838,7 +842,8 @@ io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
 	memset(fbuf, 0, size);
 
 	/* Get the pool info at the beginning */
-	pool_storage_info(state, &pinfo);
+	rc = pool_storage_info(state, &pinfo);
+	assert_int_equal(rc, 0);
 	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
 	/* Set and verify the full initial string in first transaction */
@@ -855,7 +860,8 @@ io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
 	/**
 	*Get the pool storage information
 	*/
-	pool_storage_info(state, &pinfo);
+	rc = pool_storage_info(state, &pinfo);
+	assert_int_equal(rc, 0);
 	nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 
 	/**
@@ -886,14 +892,15 @@ io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
 		assert_memory_equal(ow_buf, fbuf, size);
 
 		/*Verify the pool size*/
-		pool_storage_info(state, &pinfo);
+		rc = pool_storage_info(state, &pinfo);
+		assert_int_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 		/**
 		*Data written on SCM so NVMe free size should not change.
 		*/
 		if (nvme_current_size != nvme_initial_size) {
 			fail_msg("NVMe_current_size =%"
-				PRIu64" != nvme_current_size %" PRIu64"",
+				PRIu64" != NVMe_initial_size %" PRIu64"",
 				nvme_current_size, nvme_initial_size);
 		}
 		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
