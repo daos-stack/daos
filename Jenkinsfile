@@ -1132,6 +1132,7 @@ pipeline {
                                                       $DAOS_BASE/install/bin/orig_daos_admin
 
                                                cd $DAOS_BASE
+                                               hostname
                                                ./src/client/dfuse/test/local_test.py"''',
                               junit_files: 'test_results/*.xml'
                     }

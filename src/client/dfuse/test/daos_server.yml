@@ -1,0 +1,26 @@
+name: daos_server
+port: 10001
+provider: ofi+sockets
+socket_dir: /tmp/daos_sockets
+nr_hugepages: 4096
+control_log_mask: DEBUG
+control_log_file: /tmp/daos_control.log
+access_points: ['localhost:10001']
+servers:
+-
+  targets: 2
+  first_core: 0
+  nr_xs_helpers: 2
+  fabric_iface: eth0
+  fabric_iface_port: 31416
+  log_mask: DEBUG
+  log_file: /tmp/server.log
+  env_vars:
+  - DAOS_MD_CAP=1024
+  - CRT_CTX_SHARE_ADDR=0
+  - CRT_TIMEOUT=30
+  - FI_SOCKETS_MAX_CONN_RETRY=1
+  - FI_SOCKETS_CONN_TIMEOUT=2000
+  scm_mount: /mnt/daos
+  scm_class: ram
+  scm_size: 4

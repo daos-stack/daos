@@ -71,28 +71,34 @@ class DaosServer():
                 except NotADirectoryError:
                     os.remove(os.path.join('/mnt/daos', fname))
         daos_server = os.path.join(self._conf['PREFIX'], 'bin', 'daos_server')
-        config_file = os.path.expanduser(os.path.join('~', 'daos_server.yml.works'))
 
-        cmd = [daos_server, '--config={}'.format(config_file),
+        self_dir = os.path.dirname(os.path.abspath(__file__))
+
+        server_config = os.path.join(self_dir, 'daos_server.yml')
+
+        cmd = [daos_server, '--config={}'.format(server_config),
                'start', '-t' '4', '--insecure',
                '--recreate-superblocks']
 
-        my_env = os.environ.copy()
-        my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-        my_env['OFI_INTERFACE'] = 'lo'
-        my_env['D_LOG_MASK'] = 'INFO'
-        my_env['DD_MASK'] = 'all'
-        my_env['DAOS_DISABLE_REQ_FWD'] = '1'
-        self._sp = subprocess.Popen(cmd, env=my_env)
+        server_env = os.environ.copy()
+        server_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
+        server_env['OFI_INTERFACE'] = 'lo'
+        server_env['D_LOG_MASK'] = 'INFO'
+        server_env['DD_MASK'] = 'all'
+        server_env['DAOS_DISABLE_REQ_FWD'] = '1'
+        self._sp = subprocess.Popen(cmd, env=server_env)
 
-        agent_file = os.path.expanduser(os.path.join('~', 'daos_agent.yml'))
+        agent_config = os.path.join(self_dir, 'daos_agent.yml')
 
+        agent_env = os.environ.copy()
+        # DAOS-??? Need to set this for agent
+        agent_env['LD_LIBRARY_PATH'] = os.path.join(self._conf['PREFIX'], 'lib64')
         agent_bin = os.path.join(self._conf['PREFIX'], 'bin', 'daos_agent')
 
-        print(agent_file)
         self._agent = subprocess.Popen([agent_bin,
-                                        '--config-path={}'.format(agent_file),
-                                        '-i'])
+                                        '--config-path={}'.format(agent_config),
+                                        '-i'],
+                                       env=agent_env)
         time.sleep(2)
 
     def __del__(self):
