@@ -34,7 +34,7 @@ import re
 import yaml
 
 from general_utils import pcmd, check_file_exists
-from command_utils import ObjectWithParameters, BasicParameter
+from command_utils_base import ObjectWithParameters, BasicParameter
 
 
 class AgentFailed(Exception):

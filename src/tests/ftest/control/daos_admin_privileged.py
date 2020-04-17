@@ -28,7 +28,7 @@ import getpass
 
 from dmg_utils import storage_format
 from server_utils import ServerManager, ServerFailed
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from apricot import TestWithServers
 
 

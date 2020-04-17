@@ -28,9 +28,9 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand
+from command_utils_base import \
+    CommandFailure, FormattedParameter, CommandWithParameters
+from command_utils import CommandWithSubCommand
 
 
 class DmgCommand(CommandWithSubCommand):
@@ -693,6 +693,7 @@ class DmgCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the dmg pool delete-acl command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list")

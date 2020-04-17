@@ -24,8 +24,8 @@
 from distutils.spawn import find_executable
 import os
 
-from command_utils import ExecutableCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
+from command_utils import ExecutableCommand
 from env_modules import load_mpi
 from general_utils import pcmd
 from write_host_file import write_host_file

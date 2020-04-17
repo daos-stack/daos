@@ -29,7 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers, get_log_file
 from test_utils_pool import TestPool
 from fio_utils import FioCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
 
@@ -99,7 +99,7 @@ class FioBase(TestWithServers):
 
         # Extract the container UUID from the daos container create output
         cont_uuid = re.findall(
-            "created\s+container\s+([0-9a-f-]+)", result.stdout)
+            r"created\s+container\s+([0-9a-f-]+)", result.stdout)
         if not cont_uuid:
             self.fail(
                 "Error obtaining the container uuid from: {}".format(

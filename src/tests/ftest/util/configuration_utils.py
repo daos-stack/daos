@@ -26,7 +26,7 @@ import re
 
 from ClusterShell.NodeSet import NodeSet
 
-from command_utils import ObjectWithParameters, BasicParameter
+from command_utils_base import ObjectWithParameters, BasicParameter
 from general_utils import run_task
 
 

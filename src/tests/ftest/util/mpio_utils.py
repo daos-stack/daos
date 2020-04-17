@@ -26,22 +26,22 @@ from __future__ import print_function
 import os
 import subprocess
 from env_modules import load_mpi
-from command_utils import EnvironmentVariables
+from command_utils_base import EnvironmentVariables
 
 
 class MpioFailed(Exception):
-    """Raise if MPIO failed"""
+    """Raise if MPIO failed."""
+
 
 class MpioUtils():
-    """MpioUtils Class"""
+    """MpioUtils Class."""
 
     def __init__(self):
-
+        """Initialize a MpioUtils class object."""
         self.mpichinstall = None
 
     def mpich_installed(self, hostlist):
-        """Check if mpich is installed"""
-
+        """Check if mpich is installed."""
         load_mpi('mpich')
 
         try:
@@ -59,14 +59,20 @@ class MpioUtils():
     # pylint: disable=R0913
     def run_mpiio_tests(self, hostfile, pool_uuid, svcl, test_repo,
                         test_name, client_processes, cont_uuid):
-        """
-            Running LLNL, MPI4PY and HDF5 testsuites
-            Function Arguments:
-                hostfile          --client hostfile
-                pool_uuid         --Pool UUID
-                svcl              --Pool SVCL
-                test_repo         --test repo location
-                test_name         --name of test to be tested
+        """Run LLNL, MPI4PY and HDF5 testsuites.
+
+        Args:
+            hostfile (str): client hostfile
+            pool_uuid (str): pool UUID
+            svcl (str): pool SVCL
+            test_repo (str): test repo location
+            test_name (str): name of test to be tested
+            client_processes (int): number of client processes
+            cont_uuid (str): container UUID
+
+        Raises:
+            MpioFailed: if there is an error creating or running the command
+
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
@@ -143,5 +149,5 @@ class MpioUtils():
                                  + " code:{}".format(process.poll()))
 
         except (ValueError, OSError) as excep:
-            raise MpioFailed("<Test FAILED> \nException occurred: {}"\
-                                 .format(str(excep)))
+            raise MpioFailed(
+                "<Test FAILED> \nException occurred: {}".format(str(excep)))

@@ -21,9 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand
+from command_utils_base import \
+    CommandFailure, FormattedParameter, CommandWithParameters
+from command_utils import CommandWithSubCommand
 
 
 class DaosCommand(CommandWithSubCommand):

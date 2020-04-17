@@ -40,7 +40,7 @@ from apricot import TestWithServers, skipForTicket
 from agent_utils import run_agent, stop_agent
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Orterun
 from server_utils import run_server, stop_server
 from test_utils_pool import TestPool

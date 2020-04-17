@@ -26,8 +26,8 @@ from __future__ import print_function
 
 import uuid
 
-from command_utils import FormattedParameter, ExecutableCommand
-from command_utils import EnvironmentVariables
+from command_utils_base import FormattedParameter, EnvironmentVariables
+from command_utils import ExecutableCommand
 
 
 class MdtestCommand(ExecutableCommand):
@@ -138,7 +138,6 @@ class MdtestCommand(ExecutableCommand):
                 [name for name in all_param_names if "dfs" in name])
 
         return param_names
-
 
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the Mdtest params for the DAOS group, pool, and container uuid.

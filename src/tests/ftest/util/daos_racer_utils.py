@@ -23,9 +23,9 @@
 """
 
 from apricot import get_log_file
-from command_utils import \
-    CommandFailure, BasicParameter, FormattedParameter, ExecutableCommand, \
-    EnvironmentVariables
+from command_utils_base import \
+    CommandFailure, BasicParameter, FormattedParameter, EnvironmentVariables
+from command_utils import ExecutableCommand
 from general_utils import pcmd
 
 
