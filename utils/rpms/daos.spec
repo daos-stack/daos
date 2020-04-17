@@ -4,8 +4,8 @@
 %global cart_version 4.6.1
 
 Name:          daos
-Version:       0.9.1
-Release:       5%{?relval}%{?dist}
+Version:       0.9.2
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -317,6 +317,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Fri Apr 17 2020 Johann Lombardi <johann.lombardi@intel.com> - 0.9.2-1
+- Version bump up to 0.9.2
+
 * Wed Apr 15 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.1-5
 - Add BR: python-distro for scons_local
 
