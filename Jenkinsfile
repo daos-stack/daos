@@ -1128,9 +1128,6 @@ pipeline {
                                                sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin
                                                sudo chown root /usr/bin/daos_admin
                                                sudo chmod 4755 /usr/bin/daos_admin
-					       sudo mkdir /var/run/daos_agent
-                                               sudo chmod 500 /var/run/daos_agent
-                                               sudo chown jenkins:jenkins /var/run/daos_agent
                                                /bin/rm $DAOS_BASE/install/bin/daos_admin
 
                                                cd $DAOS_BASE
@@ -1207,6 +1204,7 @@ pipeline {
                                           fi"
                                       true''',
                             label: "Collect artifacts and tear down"
+                            archiveArtifacts artifacts: 'vm_test/**'
                         }
                     }
                 }

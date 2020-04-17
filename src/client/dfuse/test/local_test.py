@@ -52,6 +52,7 @@ class DaosServer():
         self._sp = None
         self._conf = conf
         self._agent = None
+        self.agent_dir = None
 
 #        symlink_file('/tmp/dfuse_server.latest.log', '/tmp/server.log')
 
@@ -60,6 +61,9 @@ class DaosServer():
             os.mkdir(socket_dir)
         if os.path.exists('/tmp/server.log'):
             os.unlink('/tmp/server.log')
+
+        self._agent_dir = tempfile.TemporaryDirectory(prefix='daos_agent_')
+        self.agent_dir = self._agent_dir.name
 
     def start(self):
         """Start a DAOS server"""
@@ -77,7 +81,7 @@ class DaosServer():
         server_config = os.path.join(self_dir, 'daos_server.yml')
 
         cmd = [daos_server, '--config={}'.format(server_config),
-               'start', '-t' '4', '--insecure',
+               'start', '-t' '4', '--insecure', '-d', self.agent_dir,
                '--recreate-superblocks']
 
         server_env = os.environ.copy()
@@ -97,7 +101,7 @@ class DaosServer():
 
         self._agent = subprocess.Popen([agent_bin,
                                         '--config-path={}'.format(agent_config),
-                                        '-i'],
+                                        '-i', '--runtime_dir', self.agent_dir],
                                        env=agent_env)
         time.sleep(2)
 
@@ -174,6 +178,7 @@ class DFuse():
         my_env['DD_MASK'] = 'all'
         my_env['DD_SUBSYS'] = 'all'
         my_env['D_LOG_FILE'] = self.log_file
+        my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
 
         cmd = ['valgrind', '--quiet']
 
@@ -289,6 +294,7 @@ def import_daos(server, conf):
 
     os.environ['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     os.environ['OFI_INTERFACE'] = 'lo'
+    os.environ["DAOS_AGENT_DRPC_DIR"] = server.agent_dir
 
     import pydaos
     daos = __import__('pydaos')
