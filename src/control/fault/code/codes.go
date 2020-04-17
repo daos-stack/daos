@@ -99,6 +99,11 @@ const (
 	ClientUnknown Code = iota + 500
 	ClientConfigBadControlPort
 	ClientConfigBadAccessPoints
+	ClientConfigEmptyHostList
+	ClientConnectionBadHost
+	ClientConnectionNoRoute
+	ClientConnectionRefused
+	ClientConnectionClosed
 
 	// server fault codes
 	ServerUnknown Code = iota + 600
@@ -120,6 +125,7 @@ const (
 	ServerPoolNvmeTooSmall
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
+	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
 
 	// spdk library bindings codes

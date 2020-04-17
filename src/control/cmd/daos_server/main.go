@@ -51,9 +51,9 @@ type mainOpts struct {
 	ConfigPath string `short:"o" long:"config" description:"Server config file path"`
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
 	// subcommand's -d flag when we default to running it.
-	Debug  bool `short:"b" long:"debug" description:"Enable debug output"`
-	JSON   bool `short:"j" long:"json" description:"Enable JSON output"`
-	Syslog bool `long:"syslog" description:"Enable logging to syslog"`
+	Debug   bool `short:"b" long:"debug" description:"Enable debug output"`
+	JSONLog bool `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
 	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
@@ -103,7 +103,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		if opts.Debug {
 			log.SetLevel(logging.LogLevelDebug)
 		}
-		if opts.JSON {
+		if opts.JSONLog {
 			log.WithJSONOutput()
 		}
 		if opts.Syslog {

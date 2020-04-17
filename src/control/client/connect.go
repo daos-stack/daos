@@ -31,7 +31,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -64,27 +63,11 @@ type Connect interface {
 	GetActiveConns(ResultMap) ResultMap
 	NetworkListProviders() ResultMap
 	NetworkScanDevices(searchProvider string) NetworkScanResultMap
-	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
-	PoolDestroy(*PoolDestroyReq) error
-	PoolQuery(PoolQueryReq) (*PoolQueryResp, error)
-	PoolSetProp(PoolSetPropReq) (*PoolSetPropResp, error)
-	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
-	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
-	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
-	PoolDeleteACL(PoolDeleteACLReq) (*PoolDeleteACLResp, error)
 	SetTransportConfig(*security.TransportConfig)
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
-	StorageScan(*StorageScanReq) *StorageScanResp
-	StorageFormat(reformat bool) StorageFormatResults
-	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
 	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
-	SystemQuery(SystemQueryReq) (*SystemQueryResp, error)
-	SystemStop(SystemStopReq) (*SystemStopResp, error)
-	SystemStart(SystemStartReq) (*SystemStartResp, error)
-	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
-	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }
 
 // connList is an implementation of Connect and stores controllers
