@@ -86,6 +86,9 @@ BuildRequires: libpsm_infinipath1
 Requires: libpmem1, libpmemobj1
 %endif
 Requires: fuse3 >= 3.4.2
+# because our repo has a deprecated fuse-3.x RPM, make sure we don't
+# get it when fuse3 Requires: /etc/fuse.conf
+Requires: fuse < 3, fuse3-libs >= 3.4.2
 Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
