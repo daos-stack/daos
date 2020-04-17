@@ -12,17 +12,13 @@ server_config:
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
-    createmode:
-        mode_RW:
-             mode: 146
-    createset:
-        group: daos_server
-    createsize:
-        # 300 G
-        scm_size: 30000000000
-        nvme_size: 320000000000
-    createsvc:
-        svcn: 1
+    mode: 146 # 146 is RW
+    name: daos_server
+    # 300 G
+    scm_size: 30000000000
+    nvme_size: 320000000000
+    svcn: 1
+    control_method: dmg
 ior:
     client_processes:
         np_16:

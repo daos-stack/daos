@@ -13,7 +13,7 @@ def scons():
     denv.Append(CCFLAGS=['-Wframe-larger-than=131072'])
     # rebuild
     rebuild = daos_build.library(denv, 'rebuild',
-                                 ['scan.c', 'srv.c', 'rpc.c', 'initiator.c',
+                                 ['scan.c', 'srv.c', 'rpc.c',
                                   'rebuild_iv.c'])
     denv.Install('$PREFIX/lib64/daos_srv', rebuild)
 

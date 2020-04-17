@@ -27,21 +27,13 @@
 ## Transport Credentials Specifying certificates to secure communications
 
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
 #  allow_insecure: false
+#
 #  # Custom CA Root certificate for generated certs
 #  ca_cert: .daos/daosCA.crt
-#  # Server certificate for use in TLS handshakes
-#  cert: .daos/daos_server.crt
-#  # Key portion of Server Certificate
-#  key: .daos/daos_server.key
-#  # Name of server accodring to its certificate
-#  server_name: server
-
-# Use the given directory for creating unix domain sockets
-# default: /var/run/daos_agent
-#runtime_dir: /var/run/daos_agent
-
-# Full path and name of the DAOS agent logfile.
-# default: /tmp/daos_agent.log
-#log_file: /tmp/daos_agent.log
+#  # Admin certificate for use in TLS handshakes
+#  cert: .daos/admin.crt
+#  # Key portion of Admin Certificate
+#  key: .daos/admin.key

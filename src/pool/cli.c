@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -358,8 +358,6 @@ pool_connect_cp(tse_task_t *task, void *data)
 			put_pool = false;
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
-		if (rc == -DER_NOTREPLICA)
-			rc = -DER_NONEXIST;
 		D_ERROR("failed to connect to pool: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
@@ -513,6 +511,14 @@ dc_pool_connect(tse_task_t *task)
 		rc = dc_mgmt_sys_attach(args->grp, &pool->dp_sys);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
+
+		/** Agent configuration data from pool->dp_sys->sy_info */
+		/** sy_info.provider */
+		/** sy_info.interface */
+		/** sy_info.domain */
+		/** sy_info.crt_ctx_share_addr */
+		/** sy_info.crt_timeout */
+
 		rc = rsvc_client_init(&pool->dp_client, args->svc);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
@@ -526,8 +532,15 @@ dc_pool_connect(tse_task_t *task)
 	/** Choose an endpoint and create an RPC. */
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
+		goto out_pool;
+	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -549,7 +562,7 @@ dc_pool_connect(tse_task_t *task)
 
 	uuid_copy(pci->pci_op.pi_uuid, args->uuid);
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
-	pci->pci_capas = args->flags;
+	pci->pci_flags = args->flags;
 	pci->pci_query_bits = pool_query_bits(args->info, NULL);
 
 	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,
@@ -684,8 +697,13 @@ dc_pool_disconnect(tse_task_t *task)
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		goto out_pool;
+	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1112,7 +1130,12 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	}
 
 	ep.ep_grp = state->sys->sy_group;
-	rsvc_client_choose(&state->client, &ep);
+	rc = rsvc_client_choose(&state->client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(args->uuid), DP_RC(rc));
+		goto out_client;
+	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1305,8 +1328,13 @@ dc_pool_query(tse_task_t *task)
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		goto out_pool;
+	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_QUERY, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool query rpc: %d\n",
@@ -1432,8 +1460,13 @@ dc_pool_list_cont(tse_task_t *task)
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		goto out_pool;
+	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_LIST_CONT, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool list cont rpc: %d\n",
@@ -1535,8 +1568,6 @@ pool_evict_cp(tse_task_t *task, void *data)
 
 	rc = out->pvo_op.po_rc;
 	if (rc != 0) {
-		if (rc == -DER_NOTREPLICA)
-			rc = -DER_NONEXIST;
 		D_ERROR("failed to evict pool handles: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
@@ -1591,7 +1622,14 @@ dc_pool_evict(tse_task_t *task)
 	}
 
 	ep.ep_grp = state->sys->sy_group;
-	rsvc_client_choose(&state->client, &ep);
+	rc = rsvc_client_choose(&state->client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(args->uuid), DP_RC(rc));
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
+		goto out_client;
+	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_EVICT, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
@@ -1751,8 +1789,14 @@ pool_req_prepare(daos_handle_t poh, enum pool_operation opcode,
 
 	ep.ep_grp  = args->pra_pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&args->pra_pool->dp_client_lock);
-	rsvc_client_choose(&args->pra_pool->dp_client, &ep);
+	rc = rsvc_client_choose(&args->pra_pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&args->pra_pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(args->pra_pool->dp_pool), DP_RC(rc));
+		pool_req_cleanup(CLEANUP_POOL, args);
+		goto out;
+	}
 
 	rc = pool_req_create(ctx, &ep, opcode, &args->pra_rpc);
 	if (rc != 0) {
@@ -1932,7 +1976,7 @@ dc_pool_get_attr(tse_task_t *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	rc = attr_check_input(args->n, args->names,
-			      (void const *const) args->values,
+			      (const void *const*) args->values,
 			      (size_t *)args->sizes, true);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -2100,8 +2144,13 @@ dc_pool_stop_svc(tse_task_t *task)
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		goto out_pool;
+	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_SVC_STOP, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create POOL_SVC_STOP RPC: %d\n",
@@ -2186,7 +2235,12 @@ rsvc_client_state_create(tse_task_t *task, d_rank_list_t *targets,
 	}
 
 	ep.ep_grp = state->scs_sys->sy_group;
-	rsvc_client_choose(&state->scs_client, &ep);
+	rc = rsvc_client_choose(&state->scs_client, &ep);
+	if (rc != 0) {
+		D_ERROR("cannot find pool service: "DF_RC"\n", DP_RC(rc));
+		rsvc_client_state_cleanup(CCS_CU_CLI, state);
+		return rc;
+	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, opc, rpcp);
 	if (rc != 0) {
 		rsvc_client_state_cleanup(CCS_CU_CLI, state);

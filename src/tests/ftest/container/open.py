@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -128,7 +128,8 @@ class OpenContainerTest(TestWithServers):
         #for i in range(2):
         i = 0
         while i < 2:
-            self.pool.append(TestPool(self.context, self.log))
+            self.pool.append(TestPool(
+                self.context, dmg_command=self.get_dmg_command()))
             self.pool[-1].get_params(self)
             self.pool[-1].create()
             self.pool[-1].connect()

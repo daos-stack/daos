@@ -47,10 +47,7 @@
 #define REBUILD_PROTO_SRV_RPC_LIST					\
 	X(REBUILD_OBJECTS_SCAN,						\
 		0, &CQF_rebuild_scan,					\
-		rebuild_tgt_scan_handler, &rebuild_tgt_scan_co_ops),	\
-	X(REBUILD_OBJECTS,						\
-		0, &CQF_rebuild,					\
-		rebuild_obj_handler, NULL)
+		rebuild_tgt_scan_handler, &rebuild_tgt_scan_co_ops)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -67,11 +64,9 @@ extern struct crt_proto_format rebuild_proto_fmt;
 	((uuid_t)		(rsi_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(rsi_pool_hdl_uuid)	CRT_VAR) \
 	((uuid_t)		(rsi_cont_hdl_uuid)	CRT_VAR) \
-	((d_rank_list_t)	(rsi_svc_list)		CRT_PTR) \
 	((uint64_t)		(rsi_leader_term)	CRT_VAR) \
 	((uint32_t)		(rsi_tgts_num)		CRT_VAR) \
 	((uint32_t)		(rsi_ns_id)		CRT_VAR) \
-	((uint32_t)		(rsi_pool_map_ver)	CRT_VAR) \
 	((uint32_t)		(rsi_rebuild_ver)	CRT_VAR) \
 	((uint32_t)		(rsi_master_rank)	CRT_VAR) \
 	((uint32_t)		(rsi_padding)		CRT_VAR)

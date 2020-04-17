@@ -109,6 +109,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_SET_UP:
 		ds_mgmt_drpc_set_up(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_REINTEGRATE:
+		ds_mgmt_drpc_pool_reintegrate(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_BIO_HEALTH_QUERY:
 		ds_mgmt_drpc_bio_health_query(drpc_req, drpc_resp);
 		break;
@@ -256,9 +259,9 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
 
-	tc_in->p_module = in->p_module;
 	tc_in->p_path = in->p_path;
 	tc_in->p_op = in->p_op;
+	tc_in->p_avg = in->p_avg;
 	rc = dss_rpc_send(tc_req);
 	if (rc != 0) {
 		crt_req_decref(tc_req);

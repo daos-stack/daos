@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,7 +133,7 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 	int			 start;
 	int			 end;
 	int			 mid;
-	int			 cmp;
+	int			 cmp = 0;
 
 	enta = &iter->it_entries;
 	start = 0;

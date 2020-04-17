@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,7 +105,12 @@ ds_sec_alloc_default_daos_pool_acl(void)
 	uint64_t	owner_perms;
 	uint64_t	grp_perms;
 
-	/* pool owner and grp have full read/write access */
+	/*
+	 * TODO: modify default pool owner/group perms to the more granular
+	 * create_cont/del_cont
+	 */
+
+	/* pool owner and group have full read/write access */
 	owner_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
 	grp_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
 
@@ -226,6 +231,7 @@ validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 
 	request = new_validation_request(server_socket, creds);
 	if (request == NULL) {
+		drpc_close(server_socket);
 		return -DER_NOMEM;
 	}
 
@@ -277,55 +283,28 @@ ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token)
 	return rc;
 }
 
-static int
-get_auth_sys_payload(Auth__Token *token, Auth__Sys **payload)
+static uint64_t
+pool_capas_from_perms(uint64_t perms)
 {
-	if (token->flavor != AUTH__FLAVOR__AUTH_SYS) {
-		D_ERROR("Credential auth flavor not supported\n");
-		return -DER_PROTO;
-	}
+	uint64_t capas = 0;
 
-	*payload = auth__sys__unpack(NULL, token->data.len, token->data.data);
-	if (*payload == NULL) {
-		D_ERROR("Invalid auth_sys payload\n");
-		return -DER_PROTO;
-	}
+	if ((perms & DAOS_ACL_PERM_READ) ||
+	    (perms & DAOS_ACL_PERM_GET_PROP))
+		capas |= POOL_CAPA_READ;
+	if ((perms & DAOS_ACL_PERM_WRITE) ||
+	    (perms & DAOS_ACL_PERM_CREATE_CONT))
+		capas |= POOL_CAPA_CREATE_CONT;
+	if ((perms & DAOS_ACL_PERM_WRITE) ||
+	    (perms & DAOS_ACL_PERM_DEL_CONT))
+		capas |= POOL_CAPA_DEL_CONT;
 
-	return 0;
-}
-
-static bool
-perms_have_access(uint64_t perms, uint64_t capas)
-{
-	D_DEBUG(DB_MGMT, "Allow Perms: 0x%lx\n", perms);
-
-	if ((capas & DAOS_PC_RO) &&
-	    (perms & DAOS_ACL_PERM_READ)) {
-		D_DEBUG(DB_MGMT, "Allowing read-only access\n");
-		return true;
-	}
-
-	if ((capas & (DAOS_PC_RW | DAOS_PC_EX)) &&
-	    (perms & DAOS_ACL_PERM_READ) &&
-	    (perms & DAOS_ACL_PERM_WRITE)) {
-		D_DEBUG(DB_MGMT, "Allowing RW access\n");
-		return true;
-	}
-
-	return false;
-}
-
-static bool
-ace_has_access(struct daos_ace *ace, uint64_t capas)
-{
-	return perms_have_access(ace->dae_allow_perms, capas);
+	return capas;
 }
 
 static int
-check_access_for_principal(struct daos_acl *acl,
-			   enum daos_acl_principal_type type,
-			   const char *name,
-			   uint64_t capas)
+get_capas_for_principal(struct daos_acl *acl, enum daos_acl_principal_type type,
+			const char *name, uint64_t (*convert_perms)(uint64_t),
+			uint64_t *capas)
 {
 	struct daos_ace *ace;
 	int		rc;
@@ -333,14 +312,11 @@ check_access_for_principal(struct daos_acl *acl,
 	D_DEBUG(DB_MGMT, "Checking ACE for principal type %d\n", type);
 
 	rc = daos_acl_get_ace_for_principal(acl, type, name, &ace);
-	if (rc == 0 && ace_has_access(ace, capas))
-		return 0;
-
-	/* ACE not found */
-	if (rc == -DER_NONEXIST)
+	if (rc != 0)
 		return rc;
 
-	return -DER_NO_PERM;
+	*capas = convert_perms(ace->dae_allow_perms);
+	return 0;
 }
 
 static bool
@@ -376,9 +352,10 @@ add_perms_for_principal(struct daos_acl *acl, enum daos_acl_principal_type type,
 }
 
 static int
-check_access_for_groups(struct daos_acl *acl,
-			struct pool_owner *ownership,
-			Auth__Sys *authsys, uint64_t capas)
+get_capas_for_groups(struct daos_acl *acl,
+		     struct ownership *ownership,
+		     Auth__Sys *authsys, uint64_t (*convert_perms)(uint64_t),
+		     uint64_t *capas)
 {
 	int		rc;
 	int		i;
@@ -409,60 +386,152 @@ check_access_for_groups(struct daos_acl *acl,
 	}
 
 	if (found) {
-		if (perms_have_access(grp_perms, capas))
-			return 0;
-
-		return -DER_NO_PERM;
+		*capas = convert_perms(grp_perms);
+		return 0;
 	}
 
 	return -DER_NONEXIST;
 }
 
+static bool
+authsys_user_is_owner(Auth__Sys *authsys, struct ownership *ownership)
+{
+	return strncmp(authsys->user, ownership->user,
+		       DAOS_ACL_MAX_PRINCIPAL_LEN) == 0;
+}
+
 static int
-check_authsys_permissions(struct daos_acl *acl,
-			  struct pool_owner *ownership,
-			  Auth__Sys *authsys, uint64_t capas)
+get_authsys_capas(struct daos_acl *acl,
+		  struct ownership *ownership,
+		  Auth__Sys *authsys,
+		  uint64_t (*convert_perms)(uint64_t),
+		  uint64_t *capas)
 {
 	int rc;
 
 	/* If this is the owner, and there's an owner entry... */
-	if (strncmp(authsys->user, ownership->user,
-		    DAOS_ACL_MAX_PRINCIPAL_LEN) == 0) {
-		rc = check_access_for_principal(acl, DAOS_ACL_OWNER, NULL,
-						capas);
+	if (authsys_user_is_owner(authsys, ownership)) {
+		rc = get_capas_for_principal(acl, DAOS_ACL_OWNER, NULL,
+					     convert_perms,
+					     capas);
 		if (rc != -DER_NONEXIST)
 			return rc;
 	}
 
-	rc = check_access_for_principal(acl, DAOS_ACL_USER, authsys->user,
-					capas);
+	/* didn't match the owner entry, try the user by name */
+	rc = get_capas_for_principal(acl, DAOS_ACL_USER, authsys->user,
+				     convert_perms, capas);
 	if (rc != -DER_NONEXIST)
 		return rc;
 
-	return check_access_for_groups(acl, ownership, authsys, capas);
+	return get_capas_for_groups(acl, ownership, authsys, convert_perms,
+				    capas);
+}
+
+static int
+get_auth_sys_payload(Auth__Token *token, Auth__Sys **payload)
+{
+	if (token->flavor != AUTH__FLAVOR__AUTH_SYS) {
+		D_ERROR("Credential auth flavor not supported\n");
+		return -DER_PROTO;
+	}
+
+	*payload = auth__sys__unpack(NULL, token->data.len, token->data.data);
+	if (*payload == NULL) {
+		D_ERROR("Invalid auth_sys payload\n");
+		return -DER_PROTO;
+	}
+
+	return 0;
+}
+
+static void
+filter_pool_capas_based_on_flags(uint64_t flags, uint64_t *capas)
+{
+	if (flags & DAOS_PC_RO)
+		*capas &= POOL_CAPAS_RO_MASK;
+	else if (!(*capas & POOL_CAPAS_RO_MASK) ||
+		 !(*capas & ~POOL_CAPAS_RO_MASK))
+		/*
+		 * User requested RW - if they don't have permissions for both
+		 * read and write capas, we shouldn't grant them any.
+		 */
+		*capas = 0;
+}
+
+static bool
+is_ownership_valid(struct ownership *ownership)
+{
+	if (daos_acl_principal_is_valid(ownership->user) &&
+	    daos_acl_principal_is_valid(ownership->group))
+		return true;
+
+	return false;
+}
+
+static int
+get_sec_capas_for_token(Auth__Token *token, struct ownership *ownership,
+			struct daos_acl *acl, uint64_t owner_min_capas,
+			uint64_t (*convert_perms)(uint64_t), uint64_t *capas)
+{
+	int		rc;
+	Auth__Sys	*authsys;
+
+	rc = get_auth_sys_payload(token, &authsys);
+	if (rc != 0)
+		return rc;
+
+	rc = get_authsys_capas(acl, ownership, authsys, convert_perms, capas);
+
+	/*
+	 * No match found to any specific entry. If there is an Everyone entry,
+	 * we can use the capas for that.
+	 */
+	if (rc == -DER_NONEXIST)
+		rc = get_capas_for_principal(acl, DAOS_ACL_EVERYONE, NULL,
+					     convert_perms, capas);
+
+	/* No match - default no capabilities */
+	if (rc == -DER_NONEXIST) {
+		*capas = 0;
+		rc = 0;
+	}
+
+	/* Owner may have certain implicit permissions */
+	if (authsys_user_is_owner(authsys, ownership))
+		*capas |= owner_min_capas;
+
+	auth__sys__free_unpacked(authsys, NULL);
+	return rc;
 }
 
 int
-ds_sec_check_pool_access(struct daos_acl *acl, struct pool_owner *ownership,
-			 d_iov_t *cred, uint64_t capas)
+ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
+			     struct ownership *ownership,
+			     struct daos_acl *acl, uint64_t *capas)
 {
-	int		rc = 0;
-	Auth__Token	*token = NULL;
-	Auth__Sys	*authsys = NULL;
+	int		rc;
+	Auth__Token	*token;
 
-	if (acl == NULL || ownership == NULL || cred == NULL) {
-		D_ERROR("NULL input, acl=0x%p, ownership=0x%p, cred=0x%p\n",
-			acl, ownership, cred);
+	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL) {
+		D_ERROR("NULL input\n");
 		return -DER_INVAL;
 	}
 
-	if (ownership->user == NULL || ownership->group == NULL) {
-		D_ERROR("Invalid ownership structure\n");
+	if (!is_ownership_valid(ownership)) {
+		D_ERROR("Invalid ownership\n");
+		return -DER_INVAL;
+	}
+
+	/* Pool flags are mutually exclusive */
+	if ((flags != DAOS_PC_RO) && (flags != DAOS_PC_RW) &&
+	    (flags != DAOS_PC_EX)) {
+		D_ERROR("Invalid flags\n");
 		return -DER_INVAL;
 	}
 
 	if (daos_acl_validate(acl) != 0) {
-		D_ERROR("ACL content not valid\n");
+		D_ERROR("Invalid ACL\n");
 		return -DER_INVAL;
 	}
 
@@ -473,34 +542,242 @@ ds_sec_check_pool_access(struct daos_acl *acl, struct pool_owner *ownership,
 		return rc;
 	}
 
-	rc = get_auth_sys_payload(token, &authsys);
+	rc = get_sec_capas_for_token(token, ownership, acl,
+				     0, /* no special owner perms */
+				     pool_capas_from_perms, capas);
+	if (rc == 0)
+		filter_pool_capas_based_on_flags(flags, capas);
+
 	auth__token__free_unpacked(token, NULL);
-	if (rc != 0)
-		return rc;
+	return rc;
+}
+
+static uint64_t
+cont_capas_from_perms(uint64_t perms)
+{
+	uint64_t capas = 0;
+
+	if (perms & DAOS_ACL_PERM_READ)
+		capas |= CONT_CAPA_READ_DATA;
+	if (perms & DAOS_ACL_PERM_WRITE)
+		capas |= CONT_CAPA_WRITE_DATA;
+	if (perms & DAOS_ACL_PERM_GET_PROP)
+		capas |= CONT_CAPA_GET_PROP;
+	if (perms & DAOS_ACL_PERM_SET_PROP)
+		capas |= CONT_CAPA_SET_PROP;
+	if (perms & DAOS_ACL_PERM_GET_ACL)
+		capas |= CONT_CAPA_GET_ACL;
+	if (perms & DAOS_ACL_PERM_SET_ACL)
+		capas |= CONT_CAPA_SET_ACL;
+	if (perms & DAOS_ACL_PERM_SET_OWNER)
+		capas |= CONT_CAPA_SET_OWNER;
+	if (perms & DAOS_ACL_PERM_DEL_CONT)
+		capas |= CONT_CAPA_DELETE;
+
+	return capas;
+}
+
+static void
+filter_cont_capas_based_on_flags(uint64_t flags, uint64_t *capas)
+{
+	if (flags & DAOS_COO_RO)
+		*capas &= CONT_CAPAS_RO_MASK;
+	else if (!(*capas & CONT_CAPAS_RO_MASK) ||
+		 !(*capas & ~CONT_CAPAS_RO_MASK))
+		/*
+		 * User requested RW - if they don't have permissions for both
+		 * read and write capas of some kind, we won't grant them any.
+		 */
+		*capas = 0;
+}
+
+static bool
+container_flags_valid(uint64_t flags)
+{
+	if (flags == 0 || (flags & ~DAOS_COO_MASK))
+		return false;
 
 	/*
-	 * Check ACL for permission via AUTH_SYS credentials
+	 * Read-only and read-write flags conflict
 	 */
-	rc = check_authsys_permissions(acl, ownership, authsys, capas);
-	if (rc == 0)
-		goto access_allowed;
-	else if (rc != -DER_NONEXIST)
-		goto access_denied;
+	if ((flags & DAOS_COO_RO) && (flags & DAOS_COO_RW))
+		return false;
+
+	return true;
+}
+
+static Auth__Token *
+unpack_token_from_cred(d_iov_t *cred)
+{
+	Auth__Credential	*unpacked;
+	Auth__Token		*token = NULL;
+
+	unpacked = auth__credential__unpack(NULL, cred->iov_buf_len,
+					    cred->iov_buf);
+	if (unpacked == NULL) {
+		D_ERROR("Couldn't unpack credential\n");
+		return NULL;
+	}
+
+	if (unpacked->token != NULL)
+		token = auth_token_dup(unpacked->token);
+
+	auth__credential__free_unpacked(unpacked, NULL);
+	return token;
+}
+
+int
+ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
+			     struct ownership *ownership,
+			     struct daos_acl *acl, uint64_t *capas)
+{
+	Auth__Token	*token;
+	int		rc;
+	uint64_t	owner_min_perms = CONT_CAPA_GET_ACL | CONT_CAPA_SET_ACL;
+
+	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL) {
+		D_ERROR("NULL input\n");
+		return -DER_INVAL;
+	}
+
+	if (!is_ownership_valid(ownership)) {
+		D_ERROR("Invalid ownership\n");
+		return -DER_INVAL;
+	}
+
+	if (!container_flags_valid(flags)) {
+		D_ERROR("Invalid flags\n");
+		return -DER_INVAL;
+	}
+
+	if (daos_acl_validate(acl) != 0) {
+		D_ERROR("Invalid ACL\n");
+		return -DER_INVAL;
+	}
+
+	if (cred->iov_buf == NULL) {
+		D_ERROR("Credential data is NULL\n");
+		return -DER_INVAL;
+	}
 
 	/*
-	 * Last resort - if credentials don't match any ACEs
+	 * The credential has already been validated at pool connect.
 	 */
-	rc = check_access_for_principal(acl, DAOS_ACL_EVERYONE, NULL, capas);
+	token = unpack_token_from_cred(cred);
+	if (token == NULL)
+		return -DER_INVAL;
+
+	rc = get_sec_capas_for_token(token, ownership, acl,
+				     owner_min_perms, /* owner access to ACL */
+				     cont_capas_from_perms, capas);
 	if (rc == 0)
-		goto access_allowed;
+		filter_cont_capas_based_on_flags(flags, capas);
 
-access_denied:
-	D_INFO("Access denied\n");
-	auth__sys__free_unpacked(authsys, NULL);
-	return -DER_NO_PERM;
+	auth__token__free_unpacked(token, NULL);
+	return rc;
+}
 
-access_allowed:
-	D_INFO("Access allowed\n");
-	auth__sys__free_unpacked(authsys, NULL);
-	return 0;
+bool
+ds_sec_pool_can_connect(uint64_t pool_capas)
+{
+	return (pool_capas & POOL_CAPA_READ) != 0;
+}
+
+bool
+ds_sec_pool_can_create_cont(uint64_t pool_capas)
+{
+	return (pool_capas & POOL_CAPA_CREATE_CONT) != 0;
+}
+bool
+ds_sec_pool_can_delete_cont(uint64_t pool_capas)
+{
+	return (pool_capas & POOL_CAPA_DEL_CONT) != 0;
+}
+
+bool
+ds_sec_cont_can_open(uint64_t cont_capas)
+{
+	/*
+	 * Need to have some form of read access at minimum.
+	 */
+	return (cont_capas & CONT_CAPAS_RO_MASK) != 0;
+}
+
+bool
+ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
+		       struct ownership *ownership,
+		       struct daos_acl *acl)
+{
+	int		rc;
+	uint64_t	capas = 0;
+	uint64_t	cont_flags = 0;
+
+	/*
+	 * Translate the pool flags to allow us to properly filter RO/RW
+	 * permissions
+	 */
+	if (pool_flags & DAOS_PC_RO)
+		cont_flags |= DAOS_COO_RO;
+	if (pool_flags & DAOS_PC_RW)
+		cont_flags |= DAOS_COO_RW;
+
+	rc = ds_sec_cont_get_capabilities(cont_flags, cred, ownership, acl,
+					  &capas);
+	if (rc != 0) {
+		D_ERROR("failed to get container capabilities: %d\n", rc);
+		return false;
+	}
+
+	return (capas & CONT_CAPA_DELETE) != 0;
+}
+
+bool
+ds_sec_cont_can_get_props(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_GET_PROP) != 0;
+}
+
+bool
+ds_sec_cont_can_set_props(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_PROP) != 0;
+}
+
+bool
+ds_sec_cont_can_get_acl(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_GET_ACL) != 0;
+}
+
+bool
+ds_sec_cont_can_set_acl(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_ACL) != 0;
+}
+
+bool
+ds_sec_cont_can_set_owner(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_OWNER) != 0;
+}
+
+bool
+ds_sec_cont_can_write_data(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_WRITE_DATA) != 0;
+}
+
+bool
+ds_sec_cont_can_read_data(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_READ_DATA) != 0;
+}
+
+uint64_t
+ds_sec_get_rebuild_cont_capabilities(void)
+{
+	/*
+	 * Internally generated rebuild container handles can read data
+	 */
+	return CONT_CAPA_READ_DATA;
 }

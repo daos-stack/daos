@@ -16,6 +16,7 @@ server_config:
     bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
 pool:
   scm_size: 14G
+  control_method: dmg
 gen_io_conf:
   no_of_ranks: !mux
     default_single_rank:

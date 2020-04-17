@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -42,8 +44,10 @@ type mgmtModule struct {
 	log logging.Logger
 	sys string
 	// The access point
-	ap   string
-	tcfg *security.TransportConfig
+	ap               string
+	tcfg             *security.TransportConfig
+	cachedAttachInfo bool
+	resmgmtpb        []byte
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
@@ -60,6 +64,15 @@ func (mod *mgmtModule) ID() int32 {
 }
 
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
+	if os.Getenv("DAOS_AGENT_DISABLE_CACHE") == "true" {
+		mod.cachedAttachInfo = false
+		mod.log.Debugf("GetAttachInfo agent caching has been disabled\n")
+	}
+
+	if mod.cachedAttachInfo {
+		return mod.resmgmtpb, nil
+	}
+
 	req := &mgmtpb.GetAttachInfoReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
@@ -90,10 +103,12 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 		return nil, errors.Wrapf(err, "GetAttachInfo %s %v", mod.ap, *req)
 	}
 
-	resmgmtpb, err := proto.Marshal(resp)
+	mod.resmgmtpb, err = proto.Marshal(resp)
 	if err != nil {
 		return nil, drpc.MarshalingFailure()
 	}
 
-	return resmgmtpb, nil
+	mod.cachedAttachInfo = true
+
+	return mod.resmgmtpb, nil
 }

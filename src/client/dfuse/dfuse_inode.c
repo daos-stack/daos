@@ -156,6 +156,7 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		}
 
 		d_list_del(&dfs->dfs_list);
+		D_MUTEX_DESTROY(&dfs->dfs_read_mutex);
 		D_FREE(dfs);
 
 		if (d_list_empty(&dfp->dfp_dfs_list)) {

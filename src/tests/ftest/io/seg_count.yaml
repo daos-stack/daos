@@ -12,20 +12,14 @@ hosts:
     - client-I
     - client-J
 timeout: 2000
-server_manager:
-    recreate: true
 server_config:
     name: daos_server
 pool:
-    createmode:
-        mode_RW:
-             mode: 146
-    createset:
-        setname: daos_server
-    createsize:
-        scm_size: 60000000000
-    createsvc:
-        svcn: 3
+    mode: 146
+    name: daos_server
+    scm_size: 60000000000
+    svcn: 3
+    control_method: dmg
 ior:
     client_processes: !mux
         slots_16:

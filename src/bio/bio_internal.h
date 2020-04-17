@@ -127,6 +127,7 @@ struct bio_blobstore {
 /* Per-xstream NVMe context */
 struct bio_xs_context {
 	int			 bxc_tgt_id;
+	unsigned int		 bxc_blob_rw;	/* inflight blob read/write */
 	struct spdk_thread	*bxc_thread;
 	struct bio_blobstore	*bxc_blobstore;
 	struct spdk_io_channel	*bxc_io_channel;
@@ -224,8 +225,7 @@ enum {
 
 struct media_error_msg {
 	struct bio_blobstore	*mem_bs;
-	bool			 mem_update; /* read or write error */
-	bool			 mem_unmap; /* unmap error */
+	int			 mem_err_type;
 	int			 mem_tgt_id;
 };
 

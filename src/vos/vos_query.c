@@ -92,7 +92,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	if (rc != 0)
 		return rc;
 
-	if (query->qt_flags & DAOS_GET_MAX) {
+	if (query->qt_flags & VOS_GET_MAX) {
 		if (daos_anchor_is_zero(anchor))
 			opc = BTR_PROBE_LAST;
 		else
@@ -132,7 +132,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		query->qt_epr = epr;
 		query->qt_punch = punch;
 
-		if (query->qt_flags & DAOS_GET_MAX)
+		if (query->qt_flags & VOS_GET_MAX)
 			rc = dbtree_iter_prev(ih);
 		else
 			rc = dbtree_iter_next(ih);
@@ -168,7 +168,7 @@ query_recx(struct open_query *query, daos_recx_t *recx)
 		return rc;
 
 	opc = EVT_ITER_EMBEDDED | EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES;
-	if (query->qt_flags & DAOS_GET_MAX)
+	if (query->qt_flags & VOS_GET_MAX)
 		opc |= EVT_ITER_REVERSE;
 
 	filter.fr_ex.ex_lo = 0;
@@ -220,7 +220,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 	int			 rc = 0;
 	bool			 check = true;
 
-	if (tree_type == DAOS_GET_DKEY) {
+	if (tree_type == VOS_GET_DKEY) {
 		toh = &query->qt_dkey_toh;
 		to_open = query->qt_dkey_root;
 		tclass = VOS_BTR_DKEY;
@@ -268,7 +268,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 			return rc;
 	}
 
-	if (tree_type == DAOS_GET_DKEY)
+	if (tree_type == VOS_GET_DKEY)
 		query->qt_akey_root = &rbund.rb_krec->kr_btr;
 	else if ((rbund.rb_krec->kr_bmap & KREC_BF_EVT) == 0)
 		return -DER_NONEXIST;
@@ -302,58 +302,59 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	daos_epoch_range_t	 obj_epr = {0, epoch};
 	int			 rc = 0;
 
-	if ((flags & DAOS_GET_MAX) && (flags & DAOS_GET_MIN)) {
-		D_ERROR("Ambiguous query.  Please select either DAOS_GET_MAX"
-			" or DAOS_GET_MIN\n");
+	if ((flags & VOS_GET_MAX) && (flags & VOS_GET_MIN)) {
+		D_ERROR("Ambiguous query.  Please select either VOS_GET_MAX"
+			" or VOS_GET_MIN\n");
 		return -DER_INVAL;
 	}
 
-	if (!(flags & DAOS_GET_MAX) && !(flags & DAOS_GET_MIN)) {
-		D_ERROR("No query type.  Please select either DAOS_GET_MAX"
-			" or DAOS_GET_MIN\n");
+	if (!(flags & VOS_GET_MAX) && !(flags & VOS_GET_MIN)) {
+		D_ERROR("No query type.  Please select either VOS_GET_MAX"
+			" or VOS_GET_MIN\n");
 		return -DER_INVAL;
 	}
 
-	if ((flags & (DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX)) == 0) {
+	if ((flags & (VOS_GET_DKEY | VOS_GET_AKEY | VOS_GET_RECX)) == 0) {
 		D_ERROR("No tree queried.  Please select one or more of"
-			" DAOS_GET_DKEY, DAOS_GET_AKEY, or DAOS_GET_RECX\n");
+			" VOS_GET_DKEY, VOS_GET_AKEY, or VOS_GET_RECX\n");
 		return -DER_INVAL;
 	}
 
-	if (flags & DAOS_GET_DKEY) {
+	if (flags & VOS_GET_DKEY) {
 		if (dkey == NULL) {
-			D_ERROR("dkey can't be NULL with DAOS_GET_DKEY\n");
+			D_ERROR("dkey can't be NULL with VOS_GET_DKEY\n");
 			return -DER_INVAL;
 		}
 		daos_anchor_set_zero(&dkey_anchor);
 	}
 
-	if (flags & DAOS_GET_AKEY && akey == NULL) {
-		D_ERROR("akey can't be NULL with DAOS_GET_AKEY\n");
+	if (flags & VOS_GET_AKEY && akey == NULL) {
+		D_ERROR("akey can't be NULL with VOS_GET_AKEY\n");
 		return -DER_INVAL;
 	}
 
-	if (flags & DAOS_GET_RECX && recx == NULL) {
-		D_ERROR("recx can't be NULL with DAOS_GET_RECX\n");
+	if (flags & VOS_GET_RECX && recx == NULL) {
+		D_ERROR("recx can't be NULL with VOS_GET_RECX\n");
 		return -DER_INVAL;
 	}
 
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
-			  &obj_epr, true, DAOS_INTENT_DEFAULT, true, &obj);
+			  &obj_epr, true, DAOS_INTENT_DEFAULT, true, &obj, 0);
 	if (rc != 0) {
 		LOG_RC(rc, "Could not hold object: %s\n", d_errstr(rc));
 		return rc;
 	}
 
+	D_ASSERT(obj != NULL);
 	/* only integer keys supported */
 	obj_feats = daos_obj_id2feat(obj->obj_df->vo_id.id_pub);
-	if ((flags & DAOS_GET_DKEY) &&
+	if ((flags & VOS_GET_DKEY) &&
 	    (obj_feats & DAOS_OF_DKEY_UINT64) == 0) {
 		rc = -DER_INVAL;
 		D_ERROR("Only integer dkey supported for query\n");
 		goto out;
 	}
-	if ((flags & DAOS_GET_AKEY) &&
+	if ((flags & VOS_GET_AKEY) &&
 	    (obj_feats & DAOS_OF_AKEY_UINT64) == 0) {
 		rc = -DER_INVAL;
 		D_ERROR("Only integer akey supported for query\n");
@@ -373,23 +374,23 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		/* Reset the epoch range */
 		query.qt_epr = obj_epr;
 		query.qt_punch = obj->obj_ilog_info.ii_prior_punch;
-		rc = open_and_query_key(&query, dkey, DAOS_GET_DKEY,
+		rc = open_and_query_key(&query, dkey, VOS_GET_DKEY,
 					&dkey_anchor);
 		if (rc != 0) {
 			LOG_RC(rc, "Could not query dkey: %s\n", d_errstr(rc));
 			break;
 		}
 
-		if ((flags & (DAOS_GET_AKEY | DAOS_GET_RECX)) == 0)
+		if ((flags & (VOS_GET_AKEY | VOS_GET_RECX)) == 0)
 			break;
 
-		if (query.qt_flags & DAOS_GET_AKEY)
+		if (query.qt_flags & VOS_GET_AKEY)
 			daos_anchor_set_zero(&akey_anchor);
 
 		dkey_punch = query.qt_punch;
 		dkey_epr = query.qt_epr;
 		for (;;) {
-			rc = open_and_query_key(&query, akey, DAOS_GET_AKEY,
+			rc = open_and_query_key(&query, akey, VOS_GET_AKEY,
 						&akey_anchor);
 			if (rc != 0) {
 				LOG_RC(rc, "Could not query akey: %s\n",
@@ -397,7 +398,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 				break;
 			}
 
-			if ((flags & DAOS_GET_RECX) == 0)
+			if ((flags & VOS_GET_RECX) == 0)
 				break;
 
 			rc = query_recx(&query, recx);
@@ -406,7 +407,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 				LOG_RC(rc, "Could not query recx: %s\n",
 				       d_errstr(rc));
 				if (rc == -DER_NONEXIST &&
-				    query.qt_flags & DAOS_GET_AKEY) {
+				    query.qt_flags & VOS_GET_AKEY) {
 					/* Reset the epoch range to last dkey */
 					query.qt_epr = dkey_epr;
 					query.qt_punch = dkey_punch;
@@ -416,7 +417,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 			break;
 		}
 		if (rc == -DER_NONEXIST &&
-		    query.qt_flags & DAOS_GET_DKEY) {
+		    query.qt_flags & VOS_GET_DKEY) {
 			continue;
 		}
 		break;
@@ -428,7 +429,6 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	if (!daos_handle_is_inval(query.qt_dkey_toh))
 		dbtree_close(query.qt_dkey_toh);
 out:
-	if (obj)
-		vos_obj_release(vos_obj_cache_current(), obj, false);
+	vos_obj_release(vos_obj_cache_current(), obj, false);
 	return rc;
 }

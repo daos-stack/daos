@@ -378,7 +378,9 @@ func init() {
 	proto.RegisterType((*ValidateCredResp)(nil), "auth.ValidateCredResp")
 }
 
-func init() { proto.RegisterFile("auth.proto", fileDescriptor_8bbd6f3875b0e874) }
+func init() {
+	proto.RegisterFile("auth.proto", fileDescriptor_8bbd6f3875b0e874)
+}
 
 var fileDescriptor_8bbd6f3875b0e874 = []byte{
 	// 348 bytes of a gzipped FileDescriptorProto

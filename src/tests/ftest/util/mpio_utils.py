@@ -25,8 +25,6 @@ from __future__ import print_function
 
 import os
 import subprocess
-import paramiko
-import socket
 from env_modules import load_mpi
 from command_utils import EnvironmentVariables
 
@@ -58,63 +56,36 @@ class MpioUtils():
             print("Mpich not installed \n {}".format(excep))
             return False
 
-    @staticmethod
-    def run_romio(hostlist, romio_test_repo):
-        """
-            Running ROMIO testsuite under mpich
-            Function Arguments:
-                hostlist --list of client hosts
-                romio_test_repo --built romio test directory
-        """
-
-        env = EnvironmentVariables()
-        env["D_LOG_FILE"] = os.environ.get("D_LOG_FILE", "")
-        env["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", "eth0")
-
-        test_cmd = [env.get_export_str(),
-                    os.path.join(romio_test_repo, 'runtests'),
-                    '-fname=daos:test1',
-                    '-subset',
-                    '-daos']
-        run_cmd = " ".join(test_cmd)
-        print("Romio test run command: {}".format(run_cmd))
-
-        try:
-            # establish conection and run romio test
-            # All the tests must pass with "No Errors"
-            # if any test fails it should return "non-zero exit code"
-            ssh = paramiko.SSHClient()
-            ssh.load_system_host_keys()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostlist[0])
-            _, ssh_stdout, ssh_stderr = ssh.exec_command(run_cmd)
-            print(ssh_stdout.read())
-            print(ssh_stderr.read())
-        except (IOError, OSError, paramiko.SSHException, socket.error) as excep:
-            raise MpioFailed("<ROMIO Test FAILED> \nException occurred: {}"
-                             .format(str(excep)))
     # pylint: disable=R0913
-    def run_llnl_mpi4py_hdf5(self, hostfile, pool_uuid, test_repo,
-                             test_name, client_processes):
+    def run_mpiio_tests(self, hostfile, pool_uuid, svcl, test_repo,
+                        test_name, client_processes, cont_uuid):
         """
             Running LLNL, MPI4PY and HDF5 testsuites
             Function Arguments:
                 hostfile          --client hostfile
                 pool_uuid         --Pool UUID
+                svcl              --Pool SVCL
                 test_repo         --test repo location
                 test_name         --name of test to be tested
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
         env = EnvironmentVariables()
-        env["MPIO_USER_PATH"] = "daos:"
         env["DAOS_POOL"] = "{}".format(pool_uuid)
-        env["DAOS_SVCL"] = "{}".format(0)
-        env["HDF5_PARAPREFIX"] = "daos:"
+        env["DAOS_SVCL"] = "{}".format(":".join([str(item) for item in svcl]))
+        env["DAOS_CONT"] = "{}".format(cont_uuid)
         mpirun = os.path.join(self.mpichinstall, "bin", "mpirun")
-        # running 8 client processes
-        if test_name == "llnl" and os.path.isfile(
+
+        if test_name == "romio" and os.path.isfile(
+                os.path.join(test_repo, "runtests")):
+            test_cmd = [env.get_export_str(),
+                        os.path.join(test_repo, 'runtests'),
+                        '-fname=daos:test1',
+                        '-subset']
+            cmd = " ".join(test_cmd)
+        elif test_name == "llnl" and os.path.isfile(
                 os.path.join(test_repo, "testmpio_daos")):
+            env["MPIO_USER_PATH"] = "daos:"
             test_cmd = [env.get_export_str(),
                         mpirun,
                         '-np',
@@ -138,6 +109,7 @@ class MpioUtils():
         elif test_name == "hdf5" and \
              (os.path.isfile(os.path.join(test_repo, "testphdf5")) and
               os.path.isfile(os.path.join(test_repo, "t_shapesame"))):
+            env["HDF5_PARAPREFIX"] = "daos:"
             cmd = ''
             for test in ["testphdf5", "t_shapesame"]:
                 fqtp = os.path.join(test_repo, test)

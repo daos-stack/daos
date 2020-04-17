@@ -150,7 +150,8 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	for (i = 0; i < update_recx_nr; i++) {
 		uint64_t csum_buf_len;
 
-		csum_buf_len = csum_size * test.update_recxs[i].csum_count;
+		csum_buf_len = (uint64_t)csum_size *
+				test.update_recxs[i].csum_count;
 		csum_infos[i].cs_type = 1;
 		csum_infos[i].cs_nr = test.update_recxs[i].csum_count;
 		csum_infos[i].cs_chunksize = test.chunksize;
@@ -171,7 +172,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 					 "0123456789ABCDEF");
 
 	/** update with a checksum */
-	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
+	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, 0, &k.dkey, 1,
 			    &iod, &iod_csums, &sgl);
 	if (rc != 0)
 		fail_msg("vos_obj_update failed with error code %d", rc);
@@ -187,7 +188,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	 * have access to the vos io handler to get the checksums (this is
 	 * how the server object layer already interfaces with VOS)
 	 */
-	vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
+	vos_fetch_begin(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
 			false, &ioh);
 
 	biod = vos_ioh2desc(ioh);
@@ -418,97 +419,10 @@ update_fetch_csum_for_array_10(void **state)
 }
 
 /**
- * ------------------------------------------------
- * Fault Injection
- * ------------------------------------------------
- */
-static void
-set_csum_fi(int flag)
-{
-	daos_fail_loc_set(flag | DAOS_FAIL_ALWAYS);
-}
-
-static void
-unset_csum_fi()
-{
-	daos_fail_loc_set(0); /** revert any fi */
-}
-
-void
-csum_fault_injection(void **state)
-{
-	struct extent_key	 k;
-	daos_recx_t		 recx;
-	struct dcs_iod_csums	 iod_csums = {0};
-	struct dcs_csum_info	 info = {0};
-	uint64_t		 csum;
-	daos_iod_t		 iod;
-	d_sg_list_t		 sgl;
-	int			 rc;
-	struct dcs_csum_info	*fetched_csums;
-	daos_handle_t		 ioh = DAOS_HDL_INVAL;
-
-	extent_key_from_test_args(&k, *state);
-
-	dts_sgl_init_with_strings(&sgl, 1, "ABCD");
-	csum = 0xABCD;
-
-	recx.rx_idx = 0;
-	recx.rx_nr = daos_sgl_data_len(&sgl);
-	ci_set(&info, &csum, 8, 8, 1, 8, 0);
-	iod.iod_nr = 1;
-	iod.iod_recxs = &recx;
-	iod.iod_name = k.akey;
-	iod.iod_size = 1;
-	iod.iod_type = DAOS_IOD_ARRAY;
-
-	iod_csums.ic_data = &info;
-
-	set_csum_fi(DAOS_CHECKSUM_UPDATE_FAIL);
-
-	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
-			    &iod, &iod_csums, &sgl);
-	assert_int_equal(0, rc);
-	unset_csum_fi();
-
-	rc = vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
-			false, &ioh);
-	assert_int_equal(0, rc);
-
-	fetched_csums = vos_ioh2ci(ioh);
-	assert_int_not_equal(*(uint64_t *)fetched_csums->cs_csum, 0xABCD);
-
-	rc = vos_fetch_end(ioh, rc);
-	assert_int_equal(0, rc);
-
-	csum = 0xABCD;
-	set_csum_fi(DAOS_CHECKSUM_FETCH_FAIL);
-	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
-			    &iod, NULL, &sgl);
-	assert_int_equal(0, rc);
-
-	rc = vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
-			     false, &ioh);
-	assert_int_equal(0, rc);
-
-	fetched_csums = vos_ioh2ci(ioh);
-	assert_int_not_equal(*(uint64_t *)fetched_csums->cs_csum, 0xABCD);
-
-	rc = vos_fetch_end(ioh, rc);
-	assert_int_equal(0, rc);
-
-	unset_csum_fi();
-
-	/** clean up */
-	d_sgl_fini(&sgl, true);
-}
-
-/**
  * -------------------------------------
  * Helper function tests
  * -------------------------------------
  */
-
 
 struct evt_csum_test_args {
 	uint32_t lo;
@@ -776,7 +690,6 @@ static const struct CMUnitTest update_fetch_checksums_for_array_types[] = {
 	VOS("08: Partial -> more partial", update_fetch_csum_for_array_8),
 	VOS("09: Many sequential extents", update_fetch_csum_for_array_9),
 	VOS("10: Holes", update_fetch_csum_for_array_10),
-	VOS("11: Checksum fault injection test", csum_fault_injection),
 };
 
 #define	EVT(desc, test_fn) \

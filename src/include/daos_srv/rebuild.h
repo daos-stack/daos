@@ -36,11 +36,10 @@ bool is_rebuild_container(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_rebuild_pool(uuid_t pool_uuid, uuid_t poh_uuid);
 
 int ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
-			struct pool_target_id_list *tgts_failed,
-			d_rank_list_t *svc_list);
+			struct pool_target_id_list *tgts_failed);
 int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);
-int ds_rebuild_regenerate_task(struct ds_pool *pool, d_rank_list_t *svc_list);
+int ds_rebuild_regenerate_task(struct ds_pool *pool);
 int ds_rebuild_pool_map_update(struct ds_pool *pool);
 void ds_rebuild_leader_stop_all(void);
 void ds_rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version);

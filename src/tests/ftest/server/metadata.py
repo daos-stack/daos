@@ -45,8 +45,7 @@ from server_utils import run_server, stop_server
 from write_host_file import write_host_file
 from test_utils_pool import TestPool
 
-NO_OF_MAX_CONTAINER = 13180
-
+NO_OF_MAX_CONTAINER = 13034
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
@@ -131,19 +130,20 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=all,metadata,pr,small,metadatafill
+        :avocado: tags=all,metadata,large,metadatafill,hw
+        :avocado: tags=full_regression
         """
         self.pool.pool.connect(2)
         container = DaosContainer(self.context)
 
-        self.d_log.debug("Fillup Metadata....")
+        self.log.info("Fillup Metadata....")
         for _cont in range(NO_OF_MAX_CONTAINER):
             container.create(self.pool.pool.handle)
 
         # This should fail with no Metadata space Error.
-        self.d_log.debug("Metadata Overload...")
+        self.log.info("Metadata Overload...")
         try:
-            for _cont in range(250):
+            for _cont in range(400):
                 container.create(self.pool.pool.handle)
             self.fail("Test expected to fail with a no metadata space error")
 
@@ -153,7 +153,6 @@ class ObjectMetadata(TestWithServers):
 
         self.fail("Test was expected to fail but it passed.\n")
 
-    @skipForTicket("DAOS-1965")
     @avocado.fail_on(DaosApiError)
     def test_metadata_addremove(self):
         """JIRA ID: DAOS-1512.
@@ -164,18 +163,19 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_free_space,nvme,small
+        :avocado: tags=metadata,metadata_free_space,nvme,large,hw
+        :avocado: tags=full_regression
         """
         self.pool.pool.connect(2)
         for k in range(10):
             container_array = []
-            self.d_log.debug("Container Create Iteration {}".format(k))
+            self.log.info("Container Create Iteration %d / 9", k)
             for cont in range(NO_OF_MAX_CONTAINER):
                 container = DaosContainer(self.context)
                 container.create(self.pool.pool.handle)
                 container_array.append(container)
 
-            self.d_log.debug("Container Remove Iteration {} ".format(k))
+            self.log.info("Container Remove Iteration %d / 9", k)
             for cont in container_array:
                 cont.destroy()
 
@@ -194,7 +194,7 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_ior,nvme,small
+        :avocado: tags=metadata,metadata_ior,nvme,large
         """
         files_per_thread = 400
         total_ior_threads = 5
@@ -222,7 +222,7 @@ class ObjectMetadata(TestWithServers):
                 # Define the job manager for the IOR command
                 path = os.path.join(self.ompi_prefix, "bin")
                 manager = Orterun(ior_cmd, path)
-                env = ior_cmd.get_default_env(str(manager), self.tmp)
+                env = ior_cmd.get_default_env(str(manager))
                 manager.setup_command(env, self.hostfile_clients, processes)
 
                 # Add a thread for these IOR arguments

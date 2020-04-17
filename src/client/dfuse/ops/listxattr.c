@@ -29,7 +29,7 @@ dfuse_cb_listxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		   size_t size)
 {
 	size_t out_size = 0;
-	char *value;
+	char *value = NULL;
 	int rc;
 
 	rc = dfs_listxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, NULL,
@@ -58,5 +58,7 @@ dfuse_cb_listxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	D_FREE(value);
 	return;
 err:
+	if (value != NULL)
+		D_FREE(value);
 	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }

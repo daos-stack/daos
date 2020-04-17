@@ -48,15 +48,30 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 static int
 key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	  daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys,
-	  uint32_t flags)
+	  uint64_t flags, struct vos_ts_set *ts_set)
 {
 	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
 	struct dcs_csum_info	 csum;
+	struct vos_ilog_info	 obj_info = {0};
+	struct vos_ilog_info	 dkey_info = {0};
+	struct vos_ilog_info	 akey_info = {0};
+	daos_epoch_range_t	 epr = {0, epoch};
 	d_iov_t			 riov;
+	bool			 read_conflict = false;
 	int			 rc;
 
+	if (flags & VOS_OF_COND_PUNCH) {
+		vos_ilog_fetch_init(&obj_info);
+		vos_ilog_fetch_init(&dkey_info);
+		vos_ilog_fetch_init(&akey_info);
+	}
 	rc = obj_tree_init(obj);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = vos_ilog_punch(obj->obj_cont, &obj->obj_df->vo_ilog, &epr, NULL,
+			    &obj_info, ts_set, false);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -71,7 +86,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		rbund.rb_tclass	= VOS_BTR_DKEY;
 
 		rc = key_tree_punch(obj, obj->obj_toh, epoch, dkey, &riov,
-				    flags);
+				    flags, ts_set, &obj_info, &dkey_info);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -81,12 +96,20 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 
 		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
 				      dkey, SUBTR_CREATE, DAOS_INTENT_PUNCH,
-				      &krec, &toh);
+				      &krec, &toh, ts_set);
 		if (rc) {
 			D_ERROR("Error preparing dkey: rc="DF_RC"\n",
 				DP_RC(rc));
 			D_GOTO(out, rc);
 		}
+
+		if (vos_ts_check_rl_conflict(ts_set, epoch))
+			read_conflict = true;
+
+		rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr,
+				    &obj_info, &dkey_info, ts_set, false);
+		if (rc)
+			D_GOTO(out, rc);
 
 		/* We do not need to add an incarnation log entry in parent tree
 		 * on punch.   If the subtree has nothing but punches, no need
@@ -97,7 +120,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		for (i = 0; i < akey_nr; i++) {
 			rbund.rb_iov = &akeys[i];
 			rc = key_tree_punch(obj, toh, epoch, &akeys[i], &riov,
-					    flags);
+					    flags, ts_set, &dkey_info,
+					    &akey_info);
 			if (rc != 0) {
 				D_ERROR("Error punching akey: rc="DF_RC"\n",
 					DP_RC(rc));
@@ -107,18 +131,30 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		key_tree_release(toh, 0);
 	}
  out:
+	if (flags & VOS_OF_COND_PUNCH) {
+		vos_ilog_fetch_finish(&obj_info);
+		vos_ilog_fetch_finish(&dkey_info);
+		vos_ilog_fetch_finish(&akey_info);
+	}
+
+	if (rc == 0 && read_conflict)
+		rc = -DER_AGAIN;
+
 	return rc;
 }
 
 static int
 obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
-	  uint32_t flags)
+	  uint64_t flags, struct vos_ts_set *ts_set)
 {
 	struct vos_container	*cont;
+	struct vos_ilog_info	 info;
 	int			 rc;
 
+	vos_ilog_fetch_init(&info);
 	cont = vos_hdl2cont(coh);
-	rc = vos_oi_punch(cont, obj->obj_id, epoch, flags, obj->obj_df);
+	rc = vos_oi_punch(cont, obj->obj_id, epoch, flags, obj->obj_df, &info,
+			  ts_set);
 	if (rc)
 		D_GOTO(failed, rc);
 
@@ -127,27 +163,94 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	 */
 	vos_obj_evict(obj);
 failed:
+	vos_ilog_fetch_finish(&info);
 	return rc;
 }
+
+static void
+update_read_timestamps(struct vos_ts_set *ts_set, daos_epoch_t epoch,
+		       int akey_nr, int err)
+{
+	struct vos_ts_entry	*entry;
+	int			 akey_idx;
+
+	if (ts_set == NULL)
+		return;
+
+	/** No conditional flags, so no timestamp updates */
+	if ((ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0)
+		return;
+
+	/** Aborted for another reason, no timestamp updates */
+	if (err != 0 && err != -DER_NONEXIST)
+		return;
+
+	if (err == 0) {
+		/** the update succeeded so any negative entries used for
+		 *  checks should be changed to positive entries
+		 */
+		vos_ts_set_upgrade(ts_set);
+	}
+
+	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_CONT, 0);
+	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_OBJ, 0);
+	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+
+	if (ts_set->ts_init_count == 2) {
+		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
+		return;
+	}
+	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
+	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+	if (ts_set->ts_init_count == 3) {
+		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
+		return;
+	}
+	for (akey_idx = 0; akey_idx < akey_nr; akey_idx++) {
+		entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_AKEY,
+						  akey_idx);
+		if (entry == NULL)
+			return;
+		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
+		entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+	}
+}
+
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys.
  */
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
+	      uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
+	struct vos_ts_entry	*entry;
+	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
 	daos_epoch_range_t	 epr = {0, epoch};
+	bool			 read_conflict = false;
 	int			 rc = 0;
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
 		DP_UOID(oid), epoch);
 
+	rc = vos_ts_set_allocate(&ts_set, flags, akey_nr);
+	if (rc != 0)
+		goto reset;
+
 	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
+
+	if (!vos_ts_lookup(ts_set, cont->vc_ts_idx, false, &entry)) {
+		/** Re-cache the container timestamps */
+		entry = vos_ts_alloc(ts_set, cont->vc_ts_idx, 0);
+	}
+
+	if (vos_ts_check_rl_conflict(ts_set, epoch))
+		read_conflict = true;
 
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc != 0)
@@ -163,14 +266,21 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
-			  false, DAOS_INTENT_PUNCH, true, &obj);
+			  false, DAOS_INTENT_PUNCH, true, &obj, ts_set);
 	if (rc == 0) {
-		if (dkey) /* key punch */
+		if (dkey) { /* key punch */
+			if (vos_ts_check_rl_conflict(ts_set, epoch))
+				read_conflict = true;
+
 			rc = key_punch(obj, epoch, pm_ver, dkey,
-				       akey_nr, akeys, flags);
-		else /* object punch */
-			rc = obj_punch(coh, obj, epoch, flags);
+				       akey_nr, akeys, flags, ts_set);
+		} else { /* object punch */
+			rc = obj_punch(coh, obj, epoch, flags, ts_set);
+		}
 	}
+
+	if (rc == 0 && read_conflict)
+		rc = -DER_AGAIN;
 
 	if (dth != NULL && rc == 0)
 		rc = vos_dtx_prepared(dth);
@@ -187,6 +297,9 @@ reset:
 	}
 	vos_dth_set(NULL);
 
+	update_read_timestamps(ts_set, epoch, akey_nr, rc);
+	vos_ts_set_free(ts_set);
+
 	return rc;
 }
 
@@ -201,7 +314,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	int			 rc;
 
 	rc = vos_obj_hold(occ, cont, oid, &epr, true, DAOS_INTENT_KILL, true,
-			  &obj);
+			  &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
@@ -267,7 +380,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 
 	rc = key_tree_prepare(obj, toh, key_type, key, flags,
 			      vos_iter_intent(&oiter->it_iter), &krec,
-			      sub_toh);
+			      sub_toh, NULL);
 	if (rc == -DER_NONEXIST)
 		return rc;
 
@@ -463,7 +576,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
 			      &ent->ie_key, 0, vos_iter_intent(&oiter->it_iter),
-			      NULL, &toh);
+			      NULL, &toh, NULL);
 	if (rc != 0) {
 		D_DEBUG(DB_IO, "can't load the akey tree: "DF_RC"\n",
 			DP_RC(rc));
@@ -964,6 +1077,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_vis_flags = entry.en_visibility;
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;
+	it_entry->ie_csum	= entry.en_csum;
 	bio_iov_set(&it_entry->ie_biov, entry.en_addr,
 		    it_entry->ie_recx.rx_nr * it_entry->ie_rsize);
  out:
@@ -1045,7 +1159,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 			  param->ip_oid, &oiter->it_epr, true,
 			  vos_iter_intent(&oiter->it_iter),
 			  (oiter->it_flags & VOS_IT_PUNCHED) == 0,
-			  &oiter->it_obj);
+			  &oiter->it_obj, NULL);
 
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_IO, "Empty object, nothing to iterate\n");
@@ -1154,7 +1268,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 			  info->ii_oid, &info->ii_epr, true,
 			  vos_iter_intent(&oiter->it_iter),
 			  (oiter->it_flags & VOS_IT_PUNCHED) == 0,
-			  &oiter->it_obj);
+			  &oiter->it_obj, NULL);
 
 	D_ASSERTF(rc != -DER_NONEXIST,
 		  "Nested iterator called without setting probe");

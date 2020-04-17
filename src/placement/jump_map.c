@@ -336,22 +336,19 @@ uint32_t
 count_available_spares(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		uint32_t failed_in_layout)
 {
-	uint32_t num_failed;
-	uint32_t spares_left;
+	uint32_t unusable_tgts;
+	uint32_t num_targets;
 
-	spares_left = jmap->jmp_domain_nr;
-	num_failed = pool_map_get_failed_cnt(jmap->jmp_map.pl_poolmap,
-			jmap->min_redundant_dom);
+	num_targets =  pool_map_find_domain(jmap->jmp_map.pl_poolmap,
+			jmap->min_redundant_dom, PO_COMP_ID_ALL, NULL);
 
-	if (spares_left + failed_in_layout < (num_failed + layout->ol_nr))
+	/* we might not have any valid targets left at all */
+	unusable_tgts = layout->ol_nr;
+
+	if (unusable_tgts >= num_targets || layout->ol_grp_size == 1)
 		return 0;
 
-	/* Add back the ones already counted as failed in the layout
-	 * Or we would double count them.
-	 */
-	spares_left = spares_left - (num_failed + layout->ol_nr);
-	spares_left += failed_in_layout;
-	return spares_left;
+	return num_targets - unusable_tgts;
 }
 
 /**
@@ -397,7 +394,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	current = remap_list->next;
 	spare_tgt = NULL;
 	oid = md->omd_id;
-	key = oid.lo;
+	key = oid.hi ^ oid.lo;
 	spares_left = count_available_spares(jmap, layout, failed_in_layout);
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
@@ -418,13 +415,11 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 				spares_left);
 
 		if (spare_avail) {
-			rebuild_key = crc(oid.lo, f_shard->fs_shard_idx);
+			rebuild_key = crc(key, f_shard->fs_shard_idx);
 
 			get_target(root, &spare_tgt, crc(key, rebuild_key),
 				   dom_used, tgts_used, layout, shard_id);
-
-			if (pool_target_unavail(spare_tgt, for_reint) == false)
-				spares_left--;
+			spares_left--;
 		}
 
 		determine_valid_spares(spare_tgt, md, spare_avail, &current,
@@ -515,12 +510,10 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 {
 	struct pool_target      *target;
 	struct pool_domain      *root;
-	struct pool_domain      *min_redundant_dom;
 	daos_obj_id_t           oid;
 	uint8_t                 *dom_used;
 	uint8_t                 *tgts_used;
 	uint32_t                dom_used_length;
-	uint32_t		doms_left;
 	uint64_t                key;
 	uint32_t		fail_tgt_cnt;
 	int i, j, k, rc;
@@ -532,17 +525,8 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	k = 0;
 	fail_tgt_cnt = 0;
 	oid = md->omd_id;
-	key = oid.lo;
-	doms_left = jmap->jmp_domain_nr;
+	key = oid.hi ^ oid.lo;
 	target = NULL;
-
-	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap,
-			  jmap->min_redundant_dom,
-			  PO_COMP_ID_ALL, &min_redundant_dom);
-	if (rc == 0) {
-		D_ERROR("Could not find node type in pool map.");
-		return -DER_NONEXIST;
-	}
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
@@ -584,6 +568,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		setbit(tgts_used, target->ta_comp.co_id);
 
 		if (pool_target_unavail(target, for_reint)) {
+			fail_tgt_cnt++;
 			rc = remap_alloc_one(remap_list, 0, target, false);
 			if (rc)
 				D_GOTO(out, rc);
@@ -596,19 +581,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		k = 1;
 	}
 
-
 	for (i = 0; i < jmop->jmop_grp_nr; i++) {
-
-		if (doms_left < jmop->jmop_grp_size) {
-			uint32_t start_dom;
-			uint32_t end_dom;
-
-			doms_left = jmap->jmp_domain_nr;
-			start_dom =  min_redundant_dom - root;
-			end_dom = start_dom + (doms_left - 1);
-
-			clrbit_range(dom_used, start_dom, end_dom);
-		}
 
 		for (; j < jmop->jmop_grp_size; j++, k++) {
 			uint32_t tgt_id;
@@ -632,13 +605,12 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 				if (rc)
 					D_GOTO(out, rc);
 			}
-			doms_left--;
 		}
 		j = 0;
 	}
 
-	rc = obj_remap_shards(jmap, md, layout, jmop, remap_list, for_reint,
-			      tgts_used, dom_used, fail_tgt_cnt);
+	rc = obj_remap_shards(jmap, md, layout, jmop, remap_list,
+				for_reint, tgts_used, dom_used, fail_tgt_cnt);
 out:
 	if (rc) {
 		D_ERROR("jump_map_obj_layout_fill failed, rc "DF_RC"\n",
@@ -970,8 +942,8 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
-			     array_size, myrank, &idx, layout, &reint_list);
-
+			     array_size, myrank, &idx, reint_layout,
+			     &reint_list);
 out:
 	remap_list_free_all(&reint_list);
 	remap_list_free_all(&remap_list);

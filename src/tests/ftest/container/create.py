@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,13 +23,11 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 import uuid
 
 from apricot import TestWithServers
-
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosContainer, DaosApiError
 
 
 class CreateContainerTest(TestWithServers):
@@ -47,51 +45,35 @@ class CreateContainerTest(TestWithServers):
 
         :avocado: tags=all,container,tiny,smoke,full_regression,containercreate
         """
-        pool = None
         contuuid = None
         expected_results = []
 
+        # setup the pool
+        self.prepare_pool()
+
+        # maybe use the good handle, maybe not
+        handleparam = self.params.get("handle", '/run/poolhandle/*')
+        if handleparam == 'VALID':
+            poh = self.pool.pool.handle
+        else:
+            poh = handleparam
+            expected_results.append('FAIL')
+
+        # maybe use a good UUID, maybe not
+        uuidparam = self.params.get("uuid", "/uuids/*")
+        expected_results.append(uuidparam[1])
+        if uuidparam[0] == 'NULLPTR':
+            contuuid = 'NULLPTR'
+        else:
+            contuuid = uuid.UUID(uuidparam[0])
+
+        should_fail = False
+        for result in expected_results:
+            if result == 'FAIL':
+                should_fail = True
+                break
+
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            createmode = self.params.get("mode", '/run/poolparams/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-            createsetid = self.params.get("setname", '/run/poolparams/')
-            createsize = self.params.get("size", '/run/poolparams/')
-
-            # setup the pool
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid)
-            pool.connect(1 << 1)
-
-            # maybe use the good handle, maybe not
-            handleparam = self.params.get("handle", '/run/poolhandle/*')
-            if handleparam == 'VALID':
-                poh = pool.handle
-            else:
-                poh = handleparam
-                expected_results.append('FAIL')
-
-            # maybe use a good UUID, maybe not
-            uuidparam = self.params.get("uuid", "/uuids/*")
-            expected_results.append(uuidparam[1])
-            if uuidparam[0] == 'NULLPTR':
-                self.cancel("skipping this test until DAOS-2043 is fixed")
-                # Commenting the line below as it will result in an
-                # AttributeError and never get to the DAOS API code.
-                # Should be further investigated as part of DAOS-3081
-                # contuuid = 'NULLPTR'
-            else:
-                contuuid = uuid.UUID(uuidparam[0])
-
-            should_fail = False
-            for result in expected_results:
-                if result == 'FAIL':
-                    should_fail = True
-                    break
-
             self.container = DaosContainer(self.context)
             self.container.create(poh, contuuid)
 

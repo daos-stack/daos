@@ -1,6 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
-
 hosts:
  test_servers:
    - boro-A
@@ -13,20 +10,16 @@ hosts:
  test_clients:
    - boro-H
 timeout: 4000
-server_manager:
-    recreate: true
 server_config:
  name: daos_server
  servers:
    bdev_class: nvme
    bdev_list: ["0000:81:00.0","0000:da:00.0"]
 pool:
- createmode:
-  mode: 511
- createset:
-  setname: daos_server
- createsvc:
-  svcn: 1
+ mode: 511
+ name: daos_server
+ svcn: 1
+ control_method: dmg
 ior:
  client_processes:
    np: 16
@@ -53,8 +46,8 @@ ior:
        - 60000000
  ior_sequence:
 #   - [scmsize, nvmesize]
-    - [500000000, 5000000000]        #[500M, 5G]
-    - [500000000, 50000000000]       #[500M, 50G]
-    - [3000000000, 500000000000]      #[3G, 500G]
+    - [500M, 10G]
+    - [500M, 50G]
+    - [3G, 500G]
 # Uncomment this once DAOS-3339 is resolved
 #    - [3000000000, 800000000000]     #[3G, 800G]

@@ -48,6 +48,7 @@ extern "C" {
  * terminator.
  */
 #define DAOS_ACL_MAX_PRINCIPAL_LEN	(255)
+/** DAOS_ACL_MAX_PRINCIPAL_LEN including NULL terminator */
 #define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /**
@@ -157,6 +158,7 @@ enum daos_acl_perm {
  * Mask of all valid permissions for DAOS pools
  */
 #define DAOS_ACL_PERM_POOL_ALL	(DAOS_ACL_PERM_READ |			\
+				 DAOS_ACL_PERM_GET_PROP |		\
 				 DAOS_ACL_PERM_WRITE |			\
 				 DAOS_ACL_PERM_CREATE_CONT |		\
 				 DAOS_ACL_PERM_DEL_CONT)
@@ -314,8 +316,6 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
  * \param[in]	type			Principal type of the ACE to remove
  * \param[in]	principal_name		Principal name of the ACE to remove
  *					(NULL if type isn't user/group)
- * \param[out]	new_acl			Reallocated copy of the ACL with the
- *					ACE removed
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input

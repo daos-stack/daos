@@ -28,6 +28,8 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_test.h"
 
+#define TEST_MAX_ATTR_LEN	(128)
+
 /** create/destroy container */
 static void
 co_create(void **state)
@@ -279,6 +281,24 @@ is_acl_prop_default(struct daos_acl *prop)
 	return true;
 }
 
+static daos_prop_t *
+get_query_prop_all(void)
+{
+	daos_prop_t	*prop;
+	const int	prop_count = DAOS_PROP_CO_NUM;
+	int		i;
+
+	prop = daos_prop_alloc(prop_count);
+	assert_non_null(prop);
+
+	for (i = 0; i < prop_count; i++) {
+		prop->dpp_entries[i].dpe_type = DAOS_PROP_CO_MIN + 1 + i;
+		assert_true(prop->dpp_entries[i].dpe_type < DAOS_PROP_CO_MAX);
+	}
+
+	return prop;
+}
+
 static void
 co_properties(void **state)
 {
@@ -291,10 +311,12 @@ co_properties(void **state)
 	struct daos_prop_entry	*entry;
 	daos_pool_info_t	 info = {0};
 	int			 rc;
+	char			*exp_owner;
+	char			*exp_owner_grp;
 
 	print_message("create container with properties, and query/verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
@@ -316,22 +338,11 @@ co_properties(void **state)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	const int prop_count = 9;
-
-	prop_query = daos_prop_alloc(prop_count);
-	prop_query->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	prop_query->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
-	prop_query->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
-	prop_query->dpp_entries[3].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	prop_query->dpp_entries[4].dpe_type = DAOS_PROP_CO_ENCRYPT;
-	prop_query->dpp_entries[5].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
-	prop_query->dpp_entries[6].dpe_type = DAOS_PROP_CO_ACL;
-	prop_query->dpp_entries[7].dpe_type = DAOS_PROP_CO_OWNER;
-	prop_query->dpp_entries[8].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+	prop_query = get_query_prop_all();
 	rc = daos_cont_query(arg->coh, NULL, prop_query, NULL);
 	assert_int_equal(rc, 0);
 
-	assert_int_equal(prop_query->dpp_nr, prop_count);
+	assert_int_equal(prop_query->dpp_nr, DAOS_PROP_CO_NUM);
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
@@ -374,24 +385,28 @@ co_properties(void **state)
 	}
 
 	/* default owner */
+	assert_int_equal(daos_acl_uid_to_principal(geteuid(), &exp_owner), 0);
 	print_message("Checking owner set to default\n");
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_OWNER);
 	if (entry == NULL || entry->dpe_str == NULL ||
-	    strncmp(entry->dpe_str, "NOBODY@",
-		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+	    strncmp(entry->dpe_str, exp_owner, DAOS_ACL_MAX_PRINCIPAL_LEN)) {
 		print_message("Owner prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+	D_FREE(exp_owner);
 
 	/* default owner-group */
+	assert_int_equal(daos_acl_gid_to_principal(getegid(), &exp_owner_grp),
+			 0);
 	print_message("Checking owner-group set to default\n");
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_OWNER_GROUP);
 	if (entry == NULL || entry->dpe_str == NULL ||
-	    strncmp(entry->dpe_str, "NOBODY@",
+	    strncmp(entry->dpe_str, exp_owner_grp,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
 		print_message("Owner-group prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+	D_FREE(exp_owner_grp);
 
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
@@ -466,27 +481,126 @@ co_op_retry(void **state)
 }
 
 static void
+co_acl_get(test_arg_t *arg, struct daos_acl *exp_acl,
+	   const char *exp_owner, const char *exp_owner_grp)
+{
+	int			rc;
+	daos_prop_t		*acl_prop = NULL;
+	struct daos_prop_entry	*entry;
+	struct daos_acl		*actual_acl;
+
+	print_message("Getting the container ACL\n");
+	rc = daos_cont_get_acl(arg->coh, &acl_prop, NULL);
+	assert_int_equal(rc, 0);
+
+	assert_non_null(acl_prop);
+	assert_int_equal(acl_prop->dpp_nr, 3);
+
+	print_message("Checking ACL\n");
+	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_ACL);
+	if (entry == NULL || entry->dpe_val_ptr == NULL) {
+		print_message("ACL prop wasn't returned.\n");
+		assert_false(true); /* fail the test */
+	}
+	actual_acl = entry->dpe_val_ptr;
+	assert_int_equal(actual_acl->dal_ver, exp_acl->dal_ver);
+	assert_int_equal(actual_acl->dal_len, exp_acl->dal_len);
+	assert_memory_equal(actual_acl->dal_ace, exp_acl->dal_ace,
+			    exp_acl->dal_len);
+
+	print_message("Checking owner\n");
+	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, exp_owner,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner prop verification failed.\n");
+		assert_false(true); /* fail the test */
+	}
+
+	print_message("Checking owner-group\n");
+	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER_GROUP);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, exp_owner_grp,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner-group prop verification failed.\n");
+		assert_false(true); /* fail the test */
+	}
+
+	daos_prop_free(acl_prop);
+}
+
+static void
+add_ace_with_perms(struct daos_acl **acl, enum daos_acl_principal_type type,
+		   const char *name, uint64_t perms)
+{
+	struct daos_ace *ace;
+	int		rc;
+
+	ace = daos_ace_create(type, name);
+	assert_non_null(ace);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = perms;
+
+	rc = daos_acl_add_ace(acl, ace);
+	assert_int_equal(rc, 0);
+
+	daos_ace_free(ace);
+}
+
+static char *
+get_current_user_name(void)
+{
+	uid_t	uid;
+	int	rc;
+	char	*user = NULL;
+
+	uid = geteuid();
+	rc = daos_acl_uid_to_principal(uid, &user);
+	assert_int_equal(rc, 0);
+	assert_non_null(user);
+
+	return user;
+}
+
+static void
 co_acl(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	daos_prop_t		*prop_in;
-	daos_prop_t		*prop_out = NULL;
-	struct daos_prop_entry	*entry;
 	daos_pool_info_t	 info = {0};
 	int			 rc;
 	const char		*exp_owner = "fictionaluser@";
 	const char		*exp_owner_grp = "admins@";
-	struct daos_acl		*exp_acl, *actual_acl;
+	struct daos_acl		*exp_acl;
+	struct daos_acl		*update_acl;
+	struct daos_ace		*ace;
+	char			*user;
+	d_string_t		 name_to_remove = "friendlyuser@";
+	uint8_t			 type_to_remove = DAOS_ACL_USER;
 
 	print_message("create container with access props, and verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
-	/* Empty ACL is a weird case, but valid */
+	print_message("Case 1: initial non-default ACL/ownership\n");
+	/*
+	 * Want to set up with a non-default ACL and owner/group.
+	 * This ACL gives the effective user permissions to interact
+	 * with the ACL. This is the bare minimum required to run the tests.
+	 */
+	user = get_current_user_name();
+
+	print_message("Creating ACL with entry for user %s\n", user);
+
 	exp_acl = daos_acl_create(NULL, 0);
 	assert_non_null(exp_acl);
+
+	add_ace_with_perms(&exp_acl, DAOS_ACL_USER, user,
+			   DAOS_ACL_PERM_GET_ACL | DAOS_ACL_PERM_SET_ACL);
+	add_ace_with_perms(&exp_acl, DAOS_ACL_EVERYONE, NULL,
+			   DAOS_ACL_PERM_READ);
 	assert_int_equal(daos_acl_cont_validate(exp_acl), 0);
 
 	/*
@@ -516,49 +630,93 @@ co_acl(void **state)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	print_message("Getting the container ACL\n");
-	rc = daos_cont_get_acl(arg->coh, &prop_out, NULL);
+	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
+
+	print_message("Case 2: overwrite ACL\n");
+	/*
+	 * Modify the existing ACL - don't want to clobber the user entry
+	 * though.
+	 */
+	rc = daos_acl_remove_ace(&exp_acl, DAOS_ACL_EVERYONE, NULL);
 	assert_int_equal(rc, 0);
 
-	assert_non_null(prop_out);
-	assert_int_equal(prop_out->dpp_nr, 3);
+	add_ace_with_perms(&exp_acl, DAOS_ACL_OWNER, NULL,
+			   DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_SET_PROP |
+			   DAOS_ACL_PERM_DEL_CONT);
+	add_ace_with_perms(&exp_acl, DAOS_ACL_GROUP, "testgroup@",
+			   DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_READ |
+			   DAOS_ACL_PERM_WRITE | DAOS_ACL_PERM_DEL_CONT);
+	add_ace_with_perms(&exp_acl, DAOS_ACL_GROUP, "testgroup2@",
+			   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
 
-	print_message("Checking ACL\n");
-	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_ACL);
-	if (entry == NULL || entry->dpe_val_ptr == NULL) {
-		print_message("ACL prop wasn't returned.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+	rc = daos_acl_get_ace_for_principal(exp_acl, DAOS_ACL_USER, user, &ace);
+	assert_int_equal(rc, 0);
+	ace->dae_allow_perms |= DAOS_ACL_PERM_SET_OWNER;
+
+	assert_int_equal(daos_acl_cont_validate(exp_acl), 0);
+
+	rc = daos_cont_overwrite_acl(arg->coh, exp_acl, NULL);
+	assert_int_equal(rc, 0);
+
+	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
+
+	print_message("Case 3: update ACL\n");
+
+	/* Add one new entry and update an entry already in our ACL */
+	update_acl = daos_acl_create(NULL, 0);
+	add_ace_with_perms(&update_acl, DAOS_ACL_USER, "friendlyuser@",
+			   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
+	add_ace_with_perms(&update_acl, DAOS_ACL_GROUP, "testgroup2@",
+			   DAOS_ACL_PERM_READ);
+
+	assert_int_equal(daos_acl_cont_validate(update_acl), 0);
+
+	/* Update expected ACL to include changes */
+	ace = daos_acl_get_next_ace(update_acl, NULL);
+	while (ace != NULL) {
+		assert_int_equal(daos_acl_add_ace(&exp_acl, ace), 0);
+		ace = daos_acl_get_next_ace(update_acl, ace);
 	}
-	actual_acl = entry->dpe_val_ptr;
-	assert_int_equal(actual_acl->dal_ver, exp_acl->dal_ver);
-	assert_int_equal(actual_acl->dal_len, exp_acl->dal_len);
 
-	print_message("Checking owner\n");
-	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_OWNER);
-	if (entry == NULL || entry->dpe_str == NULL ||
-	    strncmp(entry->dpe_str, exp_owner,
-		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
-	}
+	rc = daos_cont_update_acl(arg->coh, update_acl, NULL);
+	assert_int_equal(rc, 0);
 
-	print_message("Checking owner-group\n");
-	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_OWNER_GROUP);
-	if (entry == NULL || entry->dpe_str == NULL ||
-	    strncmp(entry->dpe_str, exp_owner_grp,
-		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner-group prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
-	}
+	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
+	print_message("Case 4: delete entry from ACL with bad handle\n");
+	rc = daos_cont_delete_acl(DAOS_HDL_INVAL, type_to_remove,
+				  name_to_remove, NULL);
+	assert_int_equal(rc, -DER_NO_HDL);
+
+	print_message("Case 5: delete entry from ACL\n");
+
+	/* Update expected ACL to remove the entry */
+	assert_int_equal(daos_acl_remove_ace(&exp_acl, type_to_remove,
+					     name_to_remove), 0);
+
+	rc = daos_cont_delete_acl(arg->coh, type_to_remove, name_to_remove,
+				  NULL);
+	assert_int_equal(rc, 0);
+
+	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
+
+	print_message("Case 6: delete entry no longer in ACL\n");
+
+	/* try deleting same entry again - should be gone */
+	rc = daos_cont_delete_acl(arg->coh, type_to_remove, name_to_remove,
+				  NULL);
+	assert_int_equal(rc, -DER_NONEXIST);
+
+	/* Clean up */
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_prop_free(prop_in);
-	daos_prop_free(prop_out);
 	daos_acl_free(exp_acl);
+	daos_acl_free(update_acl);
+	D_FREE(user);
 	test_teardown((void **)&arg);
 }
 
@@ -576,7 +734,7 @@ co_set_prop(void **state)
 
 	print_message("create container with default props and modify them.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
@@ -635,11 +793,1252 @@ co_set_prop(void **state)
 	test_teardown((void **)&arg);
 }
 
+static void
+co_create_access_denied(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	daos_prop_t	*prop;
+	int		 rc;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("Try to create container on pool with no create perms\n");
+
+	/* on the pool, write is an alias for create+del cont */
+	prop = get_daos_prop_with_owner_acl_perms(DAOS_ACL_PERM_POOL_ALL &
+						  ~DAOS_ACL_PERM_CREATE_CONT &
+						  ~DAOS_ACL_PERM_WRITE,
+						  DAOS_PROP_PO_ACL);
+
+	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
+
+	if (arg->myrank == 0) {
+		uuid_generate(arg->co_uuid);
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
+		assert_int_equal(rc, -DER_NO_PERM);
+
+		/*
+		 * Clear the UUID to avoid attempts to destroy, since it wasn't
+		 * created
+		 */
+		uuid_clear(arg->co_uuid);
+	}
+
+	uuid_clear(arg->co_uuid); /* wasn't actually created */
+
+	daos_prop_free(prop);
+	test_teardown((void **)&arg);
+}
+
+static void
+co_destroy_access_denied(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	daos_prop_t	*pool_prop;
+	daos_prop_t	*cont_prop;
+	int		 rc;
+	struct daos_acl	*cont_acl = NULL;
+	struct daos_ace	*update_ace;
+	daos_handle_t	coh;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Pool doesn't give the owner delete cont privs. For the pool, write
+	 * is an alias for create+del container.
+	 */
+	pool_prop = get_daos_prop_with_owner_acl_perms(DAOS_ACL_PERM_POOL_ALL &
+						       ~DAOS_ACL_PERM_DEL_CONT &
+						       ~DAOS_ACL_PERM_WRITE,
+						       DAOS_PROP_PO_ACL);
+
+	/* container doesn't give delete privs to the owner */
+	cont_prop = get_daos_prop_with_owner_acl_perms(DAOS_ACL_PERM_CONT_ALL &
+						       ~DAOS_ACL_PERM_DEL_CONT,
+						       DAOS_PROP_CO_ACL);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CREATE)
+		rc = test_setup_next_step((void **)&arg, NULL, pool_prop,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		print_message("Try to delete container where pool and cont "
+			      "deny access\n");
+		rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1, NULL);
+		assert_int_equal(rc, -DER_NO_PERM);
+
+		print_message("Delete with privs from container ACL only\n");
+
+		cont_acl = daos_acl_dup(cont_prop->dpp_entries[0].dpe_val_ptr);
+		assert_non_null(cont_acl);
+		rc = daos_acl_get_ace_for_principal(cont_acl, DAOS_ACL_OWNER,
+						    NULL,
+						    &update_ace);
+		assert_int_equal(rc, 0);
+		update_ace->dae_allow_perms = DAOS_ACL_PERM_CONT_ALL;
+
+		print_message("- getting container handle\n");
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
+				    &coh, NULL, NULL);
+		assert_int_equal(rc, 0);
+
+		print_message("- updating cont ACL to restore delete privs\n");
+		rc = daos_cont_update_acl(coh, cont_acl, NULL);
+		assert_int_equal(rc, 0);
+
+		print_message("- closing container\n");
+		rc = daos_cont_close(coh, NULL);
+		assert_int_equal(rc, 0);
+
+		print_message("Deleting container now should succeed\n");
+		rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1, NULL);
+		assert_int_equal(rc, 0);
+
+		/* Clear cont uuid since we already deleted it */
+		uuid_clear(arg->co_uuid);
+	}
+
+	daos_acl_free(cont_acl);
+	daos_prop_free(pool_prop);
+	daos_prop_free(cont_prop);
+	test_teardown((void **)&arg);
+}
+
+static void
+co_destroy_allowed_by_pool(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	daos_prop_t	*pool_prop;
+	daos_prop_t	*cont_prop;
+	int		 rc;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	/* pool gives the owner all privs, including delete cont */
+	pool_prop = get_daos_prop_with_owner_acl_perms(DAOS_ACL_PERM_POOL_ALL,
+						       DAOS_PROP_PO_ACL);
+
+	/* container doesn't give delete privs to the owner */
+	cont_prop = get_daos_prop_with_owner_acl_perms(DAOS_ACL_PERM_CONT_ALL &
+						       ~DAOS_ACL_PERM_DEL_CONT,
+						       DAOS_PROP_CO_ACL);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CREATE)
+		rc = test_setup_next_step((void **)&arg, NULL, pool_prop,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		print_message("Deleting container with only pool-level "
+			      "perms\n");
+		rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1, NULL);
+		assert_int_equal(rc, 0);
+
+		/* Clear cont uuid since we already deleted it */
+		uuid_clear(arg->co_uuid);
+	}
+
+	daos_prop_free(pool_prop);
+	daos_prop_free(cont_prop);
+	test_teardown((void **)&arg);
+}
+
+static void
+expect_cont_open_access(test_arg_t *arg, uint64_t perms, uint64_t flags,
+			int exp_result)
+{
+	daos_prop_t	*prop;
+	int		 rc = 0;
+
+	arg->cont_open_flags = flags;
+	prop = get_daos_prop_with_user_acl_perms(perms);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
+
+	if (arg->myrank == 0) {
+		/* Make sure we actually got to the container open step */
+		assert_int_equal(arg->setup_state, SETUP_CONT_CONNECT);
+		assert_int_equal(rc, exp_result);
+	}
+
+	/* Cleanup */
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+	daos_prop_free(prop);
+}
+
+static void
+co_open_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	int		rc;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("cont ACL gives the user no permissions\n");
+	expect_cont_open_access(arg, 0, DAOS_COO_RO, -DER_NO_PERM);
+
+	print_message("cont ACL gives the user RO, they want RW\n");
+	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RW,
+				   -DER_NO_PERM);
+
+	print_message("cont ACL gives the user RO, they want RO\n");
+	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RO,
+				   0);
+
+	print_message("cont ACL gives the user RW, they want RO\n");
+	expect_cont_open_access(arg,
+				   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				   DAOS_COO_RO,
+				   0);
+
+	print_message("cont ACL gives the user RW, they want RW\n");
+	expect_cont_open_access(arg,
+				   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				   DAOS_COO_RW,
+				   0);
+
+	test_teardown((void **)&arg);
+}
+
+static void
+expect_co_query_access(test_arg_t *arg, daos_prop_t *query_prop,
+		       uint64_t perms, int exp_result)
+{
+	daos_prop_t		*cont_prop;
+	daos_cont_info_t	 info;
+	int			 rc = 0;
+
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+
+	arg->cont_open_flags = DAOS_COO_RO;
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_cont_query(arg->coh, &info, query_prop, NULL);
+		assert_int_equal(rc, exp_result);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static daos_prop_t *
+get_single_query_prop(uint32_t type)
+{
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+
+	prop->dpp_entries[0].dpe_type = type;
+
+	return prop;
+}
+
+static void
+co_query_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	daos_prop_t	*prop;
+	int		rc;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("Not asking for any props\n");
+	expect_co_query_access(arg, NULL,
+			       DAOS_ACL_PERM_CONT_ALL &
+			       ~DAOS_ACL_PERM_GET_PROP &
+			       ~DAOS_ACL_PERM_GET_ACL,
+			       -0);
+
+	print_message("Empty prop object (all props), but no get-prop\n");
+	prop = daos_prop_alloc(0);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_GET_PROP,
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Empty prop object (all props), but no get-ACL\n");
+	prop = daos_prop_alloc(0);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_GET_ACL,
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Empty prop object (all props), with access\n");
+	prop = daos_prop_alloc(0);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_GET_ACL,
+			       0);
+	daos_prop_free(prop);
+
+	print_message("All props with no get-prop access\n");
+	prop = get_query_prop_all();
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_GET_PROP,
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("All props with no get-ACL access\n");
+	prop = get_query_prop_all();
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_GET_ACL,
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("All props with only prop and ACL access\n");
+	prop = get_query_prop_all();
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_GET_ACL,
+			       0);
+	daos_prop_free(prop);
+
+	/*
+	 * ACL props can only be accessed by users with get-ACL permission
+	 */
+	print_message("ACL prop with no get-ACL access\n");
+	prop = get_single_query_prop(DAOS_PROP_CO_ACL);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_GET_ACL,
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("ACL prop with only get-ACL access\n");
+	prop = get_single_query_prop(DAOS_PROP_CO_ACL);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_GET_ACL,
+			       0);
+	daos_prop_free(prop);
+
+	/*
+	 * Props unrelated to access/ACLs can only be accessed by users with
+	 * the get-prop permission
+	 */
+	print_message("Non-access-related prop with no get-prop access\n");
+	prop = get_single_query_prop(DAOS_PROP_CO_LABEL);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_GET_PROP,
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Non-access-related prop with only prop access\n");
+	prop = get_single_query_prop(DAOS_PROP_CO_LABEL);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_GET_PROP,
+			       0);
+	daos_prop_free(prop);
+
+	/*
+	 * Ownership props can be accessed by users with either get-prop or
+	 * get-acl access
+	 */
+	print_message("Owner with only prop access\n");
+	prop = get_single_query_prop(DAOS_PROP_CO_OWNER);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_GET_PROP,
+			       0);
+	daos_prop_free(prop);
+
+	print_message("Owner with only ACL access\n");
+	prop = get_single_query_prop(DAOS_PROP_CO_OWNER);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_GET_ACL,
+			       0);
+	daos_prop_free(prop);
+
+	print_message("Owner with neither get-prop nor get-acl access\n");
+	prop = get_single_query_prop(DAOS_PROP_CO_OWNER);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL &
+			       ~(DAOS_ACL_PERM_GET_PROP |
+				 DAOS_ACL_PERM_GET_ACL),
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Owner-group with only prop access\n");
+	prop = get_single_query_prop(DAOS_PROP_CO_OWNER_GROUP);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_GET_PROP,
+			       0);
+	daos_prop_free(prop);
+
+	print_message("Owner-group with only ACL access\n");
+	prop = get_single_query_prop(DAOS_PROP_CO_OWNER_GROUP);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_GET_ACL,
+			       0);
+	daos_prop_free(prop);
+
+	print_message("Owner-group with no get-prop or get-acl access\n");
+	prop = get_single_query_prop(DAOS_PROP_CO_OWNER_GROUP);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL &
+			       ~(DAOS_ACL_PERM_GET_PROP |
+				 DAOS_ACL_PERM_GET_ACL),
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	test_teardown((void **)&arg);
+}
+
+static void
+expect_co_get_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
+{
+	daos_prop_t		*cont_prop;
+	daos_prop_t		*acl_prop;
+	int			 rc = 0;
+
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+
+	arg->cont_open_flags = DAOS_COO_RO;
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_cont_get_acl(arg->coh, &acl_prop, NULL);
+		assert_int_equal(rc, exp_result);
+
+		if (rc == 0)
+			daos_prop_free(acl_prop);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+co_get_acl_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	int		rc;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("No get-ACL permissions\n");
+	expect_co_get_acl_access(arg,
+				 DAOS_ACL_PERM_CONT_ALL &
+				 ~DAOS_ACL_PERM_GET_ACL,
+				 -DER_NO_PERM);
+
+	print_message("Only get-ACL permissions\n");
+	expect_co_get_acl_access(arg, DAOS_ACL_PERM_GET_ACL, 0);
+
+	test_teardown((void **)&arg);
+}
+
+static void
+expect_co_set_prop_access(test_arg_t *arg, daos_prop_t *prop, uint64_t perms,
+			  int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	int		 rc = 0;
+
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_cont_set_prop(arg->coh, prop, NULL);
+		assert_int_equal(rc, exp_result);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+setup_str_prop_entry(struct daos_prop_entry *entry, uint32_t type,
+		     const char *val)
+{
+	entry->dpe_type = type;
+	D_STRNDUP(entry->dpe_str, val, DAOS_ACL_MAX_PRINCIPAL_LEN);
+}
+
+static daos_prop_t *
+get_daos_prop_with_owner(const char *user, const char *group)
+{
+	uint32_t	nr = 0;
+	uint32_t	i = 0;
+	daos_prop_t	*prop;
+
+	if (user != NULL)
+		nr++;
+	if (group != NULL)
+		nr++;
+
+	assert_true(nr > 0); /* test error! */
+
+	prop = daos_prop_alloc(nr);
+	assert_non_null(prop);
+
+	if (user != NULL) {
+		setup_str_prop_entry(&prop->dpp_entries[i], DAOS_PROP_CO_OWNER,
+				     user);
+		i++;
+	}
+
+	if (group != NULL) {
+		setup_str_prop_entry(&prop->dpp_entries[i],
+				     DAOS_PROP_CO_OWNER_GROUP, group);
+		i++;
+	}
+
+	return prop;
+}
+
+static daos_prop_t *
+get_daos_prop_with_label(void)
+{
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+
+	setup_str_prop_entry(&prop->dpp_entries[0], DAOS_PROP_CO_LABEL,
+			     "My container");
+
+	return prop;
+}
+
+static daos_prop_t *
+get_daos_prop_with_all_prop_categories(void)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+
+	prop = daos_prop_alloc(4);
+	assert_non_null(prop);
+
+	setup_str_prop_entry(&prop->dpp_entries[0], DAOS_PROP_CO_LABEL,
+			     "Container 1");
+	setup_str_prop_entry(&prop->dpp_entries[1], DAOS_PROP_CO_OWNER,
+			     "niceuser@");
+	setup_str_prop_entry(&prop->dpp_entries[2], DAOS_PROP_CO_OWNER_GROUP,
+			     "nicegroup@");
+
+	acl = get_daos_acl_with_owner_perms(DAOS_ACL_PERM_CONT_ALL);
+	prop->dpp_entries[3].dpe_type = DAOS_PROP_CO_ACL;
+	prop->dpp_entries[3].dpe_val_ptr = acl;
+
+	return prop;
+}
+
+static void
+co_set_prop_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	daos_prop_t	*prop;
+	test_arg_t	*arg = NULL;
+	int		 rc;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * ACL modification through set-prop only works if you have set-ACL
+	 * permissions
+	 */
+	print_message("No set-ACL permissions\n");
+	prop = get_daos_prop_with_owner_acl_perms(DAOS_ACL_PERM_CONT_ALL,
+						  DAOS_PROP_CO_ACL);
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_SET_ACL,
+				  -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Has set-ACL permissions\n");
+	prop = get_daos_prop_with_owner_acl_perms(DAOS_ACL_PERM_CONT_ALL,
+						  DAOS_PROP_CO_ACL);
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_READ |
+				  DAOS_ACL_PERM_SET_ACL,
+				  0);
+	daos_prop_free(prop);
+
+	/*
+	 * Owner modification through set-prop only works if you have set-owner
+	 * permissions
+	 */
+	print_message("Set owner only, with no set-owner perms\n");
+	prop = get_daos_prop_with_owner("someuser@", NULL);
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_SET_OWNER,
+				  -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Set owner-group only, with no set-owner perms\n");
+	prop = get_daos_prop_with_owner(NULL, "somegroup@");
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_SET_OWNER,
+				  -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Set both owner and group, with no set-owner perms\n");
+	prop = get_daos_prop_with_owner("someuser@", "somegroup@");
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_SET_OWNER,
+				  -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Set both owner and group, with set-owner perms\n");
+	prop = get_daos_prop_with_owner("someuser@", "somegroup@");
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_READ | DAOS_ACL_PERM_SET_OWNER,
+				  0);
+	daos_prop_free(prop);
+
+	/*
+	 * Setting regular props requires set-prop permission
+	 */
+	print_message("Set label, with no set-prop perms\n");
+	prop = get_daos_prop_with_label();
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_SET_PROP,
+				  -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Set label, with set-prop perms\n");
+	prop = get_daos_prop_with_label();
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_READ | DAOS_ACL_PERM_SET_PROP,
+				  0);
+	daos_prop_free(prop);
+
+	/*
+	 * Set all three categories requires all three permissions
+	 */
+	print_message("Set multiple, with no set-prop perms\n");
+	prop = get_daos_prop_with_all_prop_categories();
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_SET_PROP,
+				  -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Set multiple, with no set-owner perms\n");
+	prop = get_daos_prop_with_all_prop_categories();
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_SET_OWNER,
+				  -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Set multiple, with no set-ACL perms\n");
+	prop = get_daos_prop_with_all_prop_categories();
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_SET_OWNER,
+				  -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Set multiple, with all required perms\n");
+	prop = get_daos_prop_with_all_prop_categories();
+	expect_co_set_prop_access(arg, prop,
+				  DAOS_ACL_PERM_READ |
+				  DAOS_ACL_PERM_SET_PROP |
+				  DAOS_ACL_PERM_SET_OWNER |
+				  DAOS_ACL_PERM_SET_ACL,
+				  0);
+	daos_prop_free(prop);
+
+	test_teardown((void **)&arg);
+}
+
+static void
+expect_co_overwrite_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	struct daos_acl	*acl = NULL;
+	int		 rc = 0;
+
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		acl = get_daos_acl_with_owner_perms(DAOS_ACL_PERM_CONT_ALL);
+
+		rc = daos_cont_overwrite_acl(arg->coh, acl, NULL);
+		assert_int_equal(rc, exp_result);
+
+		daos_acl_free(acl);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+expect_co_update_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	struct daos_acl	*acl = NULL;
+	int		 rc = 0;
+
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		acl = get_daos_acl_with_owner_perms(DAOS_ACL_PERM_CONT_ALL);
+
+		rc = daos_cont_update_acl(arg->coh, acl, NULL);
+		assert_int_equal(rc, exp_result);
+
+		daos_acl_free(acl);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+expect_co_delete_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	int		 rc = 0;
+
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_cont_delete_acl(arg->coh, DAOS_ACL_OWNER, NULL, NULL);
+		assert_int_equal(rc, exp_result);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+co_modify_acl_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	int		 rc;
+	uint64_t	 no_set_acl_perm = DAOS_ACL_PERM_CONT_ALL &
+					   ~DAOS_ACL_PERM_SET_ACL;
+	uint64_t	 min_set_acl_perm = DAOS_ACL_PERM_READ |
+					    DAOS_ACL_PERM_SET_ACL;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("Overwrite ACL denied with no set-ACL perm\n");
+	expect_co_overwrite_acl_access(arg, no_set_acl_perm,
+				       -DER_NO_PERM);
+
+	print_message("Overwrite ACL allowed with set-ACL perm\n");
+	expect_co_overwrite_acl_access(arg, min_set_acl_perm,
+				       0);
+
+	print_message("Update ACL denied with no set-ACL perm\n");
+	expect_co_update_acl_access(arg,
+				    DAOS_ACL_PERM_CONT_ALL &
+				    ~DAOS_ACL_PERM_SET_ACL,
+				    -DER_NO_PERM);
+
+	print_message("Update ACL allowed with set-ACL perm\n");
+	expect_co_update_acl_access(arg,
+				    DAOS_ACL_PERM_READ |
+				    DAOS_ACL_PERM_SET_ACL,
+				    0);
+
+	print_message("Delete ACL denied with no set-ACL perm\n");
+	expect_co_delete_acl_access(arg,
+				    DAOS_ACL_PERM_CONT_ALL &
+				    ~DAOS_ACL_PERM_SET_ACL,
+				    -DER_NO_PERM);
+
+	print_message("Delete ACL allowed with set-ACL perm\n");
+	expect_co_delete_acl_access(arg,
+				    DAOS_ACL_PERM_READ |
+				    DAOS_ACL_PERM_SET_ACL,
+				    0);
+
+	test_teardown((void **)&arg);
+}
+
+static void
+expect_ownership(test_arg_t *arg, d_string_t user, d_string_t grp)
+{
+	int			 rc;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*entry;
+
+	prop = daos_prop_alloc(2);
+	assert_non_null(prop);
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_OWNER;
+	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+
+	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
+	assert_int_equal(rc, 0);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
+	assert_non_null(entry);
+	assert_string_equal(entry->dpe_str, user);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
+	assert_non_null(entry);
+	assert_string_equal(entry->dpe_str, grp);
+
+	daos_prop_free(prop);
+}
+
+static void
+co_set_owner(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	d_string_t	 original_user;
+	d_string_t	 original_grp;
+	d_string_t	 new_user = "newuser@";
+	d_string_t	 new_grp = "newgrp@";
+	int		 rc;
+
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * To start with, the euid/egid are the owner user/group.
+	 */
+	assert_int_equal(daos_acl_uid_to_principal(geteuid(), &original_user),
+			 0);
+	assert_int_equal(daos_acl_gid_to_principal(getegid(), &original_grp),
+			 0);
+
+	if (arg->myrank == 0) {
+		print_message("Set owner with null params\n");
+		rc = daos_cont_set_owner(arg->coh, NULL, NULL, NULL);
+		assert_int_equal(rc, -DER_INVAL);
+
+		print_message("Set owner with invalid user\n");
+		rc = daos_cont_set_owner(arg->coh, "not_a_valid_user", new_grp,
+					 NULL);
+		assert_int_equal(rc, -DER_INVAL);
+
+		print_message("Set owner with invalid grp\n");
+		rc = daos_cont_set_owner(arg->coh, new_user, "not_a_valid_grp",
+					 NULL);
+		assert_int_equal(rc, -DER_INVAL);
+
+		print_message("Set owner user\n");
+		rc = daos_cont_set_owner(arg->coh, new_user, NULL, NULL);
+		assert_int_equal(rc, 0);
+		expect_ownership(arg, new_user, original_grp);
+
+		print_message("Change owner user back\n");
+		rc = daos_cont_set_owner(arg->coh, original_user, NULL, NULL);
+		assert_int_equal(rc, 0);
+		expect_ownership(arg, original_user, original_grp);
+
+		print_message("Set owner group\n");
+		rc = daos_cont_set_owner(arg->coh, NULL, new_grp, NULL);
+		assert_int_equal(rc, 0);
+		expect_ownership(arg, original_user, new_grp);
+
+		print_message("Change owner group back\n");
+		rc = daos_cont_set_owner(arg->coh, NULL, original_grp, NULL);
+		assert_int_equal(rc, 0);
+		expect_ownership(arg, original_user, original_grp);
+
+		print_message("Set both owner user and group\n");
+		rc = daos_cont_set_owner(arg->coh, new_user, new_grp, NULL);
+		assert_int_equal(rc, 0);
+		expect_ownership(arg, new_user, new_grp);
+	}
+
+	D_FREE(original_user);
+	D_FREE(original_grp);
+	test_teardown((void **)&arg);
+}
+
+static void
+expect_co_set_owner_access(test_arg_t *arg, d_string_t user, d_string_t grp,
+			   uint64_t perms, int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	int		 rc = 0;
+
+	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
+						       DAOS_PROP_CO_ACL);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_cont_set_owner(arg->coh, user, grp, NULL);
+		assert_int_equal(rc, exp_result);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+co_set_owner_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	int		 rc;
+	uint64_t	 no_perm = DAOS_ACL_PERM_CONT_ALL &
+				   ~DAOS_ACL_PERM_SET_OWNER;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("Set owner user denied with no set-owner perm\n");
+	expect_co_set_owner_access(arg, "user@", NULL, no_perm,
+				   -DER_NO_PERM);
+
+	print_message("Set owner group denied with no set-owner perm\n");
+	expect_co_set_owner_access(arg, NULL, "group@", no_perm,
+				   -DER_NO_PERM);
+
+	print_message("Set both owner and grp denied with no set-owner perm\n");
+	expect_co_set_owner_access(arg, "user@", "group@", no_perm,
+				   -DER_NO_PERM);
+
+	print_message("Set owner allowed with set-owner perm\n");
+	expect_co_set_owner_access(arg, "user@", "group@",
+				   DAOS_ACL_PERM_READ |
+				   DAOS_ACL_PERM_SET_OWNER,
+				   0);
+
+	test_teardown((void **)&arg);
+}
+
+static void
+co_destroy_force(void **state)
+{
+	test_arg_t	*arg = *state;
+	uuid_t		 uuid;
+	daos_handle_t	 coh;
+	daos_cont_info_t info;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_generate(uuid);
+
+	print_message("creating container "DF_UUIDF"\n",
+		      DP_UUID(uuid));
+	rc = daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("opening container\n");
+	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh,
+			    &info, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("destroying container (force=false): should err\n");
+	rc = daos_cont_destroy(arg->pool.poh, uuid, 0 /* force */, NULL);
+	assert_int_equal(rc, -DER_BUSY);
+
+	print_message("destroying container (force=true): should succeed\n");
+	rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("closing container: should succeed\n");
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+co_owner_implicit_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	int		 rc;
+	daos_prop_t	*owner_deny_prop;
+	struct daos_acl	*acl;
+	daos_prop_t	*tmp_prop;
+	daos_prop_t	*acl_prop;
+
+	/*
+	 * An owner with no permissions still has get/set ACL access
+	 * implicitly
+	 */
+	owner_deny_prop = get_daos_prop_with_owner_acl_perms(0,
+							     DAOS_PROP_CO_ACL);
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  owner_deny_prop);
+	assert_int_equal(rc, 0);
+
+	print_message("Owner has no permissions for non-ACL access\n");
+
+	print_message("- Verify get-prop denied\n");
+	tmp_prop = daos_prop_alloc(0);
+	rc = daos_cont_query(arg->coh, NULL, tmp_prop, NULL);
+	assert_int_equal(rc, -DER_NO_PERM);
+	daos_prop_free(tmp_prop);
+
+	print_message("- Verify set-prop denied\n");
+	tmp_prop = daos_prop_alloc(1);
+	tmp_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+	D_STRNDUP(tmp_prop->dpp_entries[0].dpe_str, "My Label", 16);
+	rc = daos_cont_set_prop(arg->coh, tmp_prop, NULL);
+	assert_int_equal(rc, -DER_NO_PERM);
+	daos_prop_free(tmp_prop);
+
+	print_message("- Verify set-owner denied\n");
+	rc = daos_cont_set_owner(arg->coh, "somebody@", "somegroup@", NULL);
+	assert_int_equal(rc, -DER_NO_PERM);
+
+	print_message("Owner has get-ACL access implicitly\n");
+	rc = daos_cont_get_acl(arg->coh, &acl_prop, NULL);
+	assert_int_equal(rc, 0);
+
+	/* sanity check */
+	assert_non_null(daos_prop_entry_get(acl_prop, DAOS_PROP_CO_ACL));
+	assert_non_null(daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER));
+	assert_non_null(daos_prop_entry_get(acl_prop,
+					    DAOS_PROP_CO_OWNER_GROUP));
+	daos_prop_free(acl_prop);
+
+	print_message("Owner has set-ACL implicitly\n");
+	/* Just a copy of the current ACL */
+	acl = daos_acl_dup(owner_deny_prop->dpp_entries[0].dpe_val_ptr);
+
+	print_message("- Verify overwrite-ACL\n");
+	rc = daos_cont_overwrite_acl(arg->coh, acl, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("- Verify update-ACL\n");
+	rc = daos_cont_update_acl(arg->coh, acl, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("- Verify delete-ACL\n");
+	rc = daos_cont_delete_acl(arg->coh, DAOS_ACL_OWNER, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	daos_acl_free(acl);
+	daos_prop_free(owner_deny_prop);
+	test_teardown((void **)&arg);
+}
+
+static void
+expect_co_set_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	int		 rc = 0;
+	const char	*name = "AttrName";
+	const char	*value = "This is the value";
+	const size_t	 size = strnlen(value, TEST_MAX_ATTR_LEN);
+
+	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
+						       DAOS_PROP_CO_ACL);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		/* Trivial case - just to see if we have access */
+		rc = daos_cont_set_attr(arg->coh, 1, &name,
+					(const void * const*)&value,
+					&size,
+					NULL);
+		assert_int_equal(rc, exp_result);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	int		 rc = 0;
+	const char	*name = "AttrName";
+	size_t		 val_size = TEST_MAX_ATTR_LEN;
+	char		 value[val_size];
+
+	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
+						       DAOS_PROP_CO_ACL);
+
+	arg->cont_open_flags = DAOS_COO_RO;
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		/* Trivial case - just to see if we have access */
+		rc = daos_cont_get_attr(arg->coh, 1, &name,
+					(void * const*)&value,
+					&val_size,
+					NULL);
+		assert_int_equal(rc, exp_result);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+expect_co_list_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	int		 rc = 0;
+	char		 buf[TEST_MAX_ATTR_LEN];
+	size_t		 bufsize = sizeof(buf);
+
+	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
+						       DAOS_PROP_CO_ACL);
+
+	arg->cont_open_flags = DAOS_COO_RO;
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_cont_list_attr(arg->coh, buf, &bufsize, NULL);
+		assert_int_equal(rc, exp_result);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+co_attribute_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	int		 rc;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("Set attr denied with no write-data perms\n");
+	expect_co_set_attr_access(arg,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_WRITE,
+				  -DER_NO_PERM);
+
+	print_message("Set attr allowed with RW data access\n");
+	expect_co_set_attr_access(arg, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				  0);
+
+	print_message("Set attr allowed with write-data access\n");
+	expect_co_set_attr_access(arg, DAOS_ACL_PERM_GET_PROP |
+				  DAOS_ACL_PERM_WRITE,
+				  0);
+
+	print_message("Get attr denied with no read-data perms\n");
+	expect_co_get_attr_access(arg,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_READ,
+				  -DER_NO_PERM);
+
+	print_message("Get attr allowed with RW access\n");
+	/* Attr isn't set, but we get past the permissions check */
+	expect_co_get_attr_access(arg,
+				  DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				  -DER_NONEXIST);
+
+	print_message("Get attr allowed with RO data access\n");
+	/* Attr isn't set, but we get past the permissions check */
+	expect_co_get_attr_access(arg, DAOS_ACL_PERM_READ,
+				  -DER_NONEXIST);
+
+	print_message("List attr denied with no read-data perms\n");
+	expect_co_list_attr_access(arg,
+				   DAOS_ACL_PERM_CONT_ALL &
+				   ~DAOS_ACL_PERM_READ,
+				   -DER_NO_PERM);
+
+	print_message("List attr allowed with RW access\n");
+	expect_co_list_attr_access(arg,
+				   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				   0);
+
+	print_message("List attr allowed with RO data access\n");
+	expect_co_list_attr_access(arg, DAOS_ACL_PERM_READ,
+				   0);
+
+	test_teardown((void **)&arg);
+}
+
 static int
 co_setup_sync(void **state)
 {
 	async_disable(state);
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
@@ -647,14 +2046,14 @@ static int
 co_setup_async(void **state)
 {
 	async_enable(state);
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
@@ -673,10 +2072,36 @@ static const struct CMUnitTest co_tests[] = {
 	  co_properties, NULL, test_case_teardown},
 	{ "CONT7: retry CONT_{CLOSE,DESTROY,QUERY}",
 	  co_op_retry, NULL, test_case_teardown},
-	{ "CONT8: get container ACL",
+	{ "CONT8: get/set container ACL",
 	  co_acl, NULL, test_case_teardown},
 	{ "CONT9: container set prop",
 	  co_set_prop, NULL, test_case_teardown},
+	{ "CONT10: container create access denied",
+	  co_create_access_denied, NULL, test_case_teardown},
+	{ "CONT11: container destroy access denied",
+	  co_destroy_access_denied, NULL, test_case_teardown},
+	{ "CONT12: container destroy allowed by pool ACL only",
+	  co_destroy_allowed_by_pool, NULL, test_case_teardown},
+	{ "CONT13: container open access by ACL",
+	  co_open_access, NULL, test_case_teardown},
+	{ "CONT14: container query access by ACL",
+	  co_query_access, NULL, test_case_teardown},
+	{ "CONT15: container get-acl access by ACL",
+	  co_get_acl_access, NULL, test_case_teardown},
+	{ "CONT16: container set-prop access by ACL",
+	  co_set_prop_access, NULL, test_case_teardown},
+	{ "CONT17: container overwrite/update/delete ACL access by ACL",
+	  co_modify_acl_access, NULL, test_case_teardown},
+	{ "CONT18: container set owner",
+	  co_set_owner, NULL, test_case_teardown},
+	{ "CONT19: container set-owner access by ACL",
+	  co_set_owner_access, NULL, test_case_teardown},
+	{ "CONT20: container destroy force",
+	  co_destroy_force, NULL, test_case_teardown},
+	{ "CONT21: container owner has implicit ACL access",
+	  co_owner_implicit_access, NULL, test_case_teardown},
+	{ "CONT22: container get/set attribute access by ACL",
+	  co_attribute_access, NULL, test_case_teardown},
 };
 
 int

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
+#include <daos_srv/evtree.h>
 
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
@@ -109,7 +110,8 @@ struct ds_cont_child {
 struct ds_cont_hdl {
 	d_list_t		sch_entry;
 	uuid_t			sch_uuid;	/* of the container handle */
-	uint64_t		sch_capas;
+	uint64_t		sch_flags;	/* user-supplied flags */
+	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
 	struct daos_csummer	*sch_csummer;
 	int			sch_ref;
@@ -123,7 +125,8 @@ int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-		   uint64_t capas, struct ds_cont_hdl **cont_hdl);
+		   uint64_t flags, uint64_t sec_capas,
+		   struct ds_cont_hdl **cont_hdl);
 int
 ds_cont_local_close(uuid_t cont_hdl_uuid);
 
@@ -180,5 +183,38 @@ cont_iv_capa_fetch(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 int
 cont_iv_snapshot_invalidate(void *ns, uuid_t cont_uuid, unsigned int shortcut,
 			    unsigned int sync_mode);
+
+struct csum_recalc {
+	struct evt_extent	 cr_log_ext;
+	struct evt_extent	*cr_phy_ext;
+	struct agg_phy_ent	*cr_phy_ent; /* Incomplete ex vos_aggregate.c */
+	struct dcs_csum_info	*cr_phy_csum;
+	daos_off_t		 cr_phy_off;
+	unsigned int		 cr_prefix_len;
+	unsigned int		 cr_suffix_len;
+};
+
+struct csum_recalc_args {
+	struct bio_sglist	*cra_bsgl;	/* read sgl */
+	d_sg_list_t		*cra_sgl;	/* write sgl */
+	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
+	struct csum_recalc	*cra_recalcs;   /* recalc info */
+	void			*cra_buf;	/* read buffer */
+	struct bio_xs_context	*cra_bio_ctxt;	/* used to log error */
+	daos_size_t		 cra_seg_size;  /* size of coalesced entry */
+	unsigned int		 cra_seg_cnt;   /* # of read segments */
+	unsigned int		 cra_buf_len;	/* length of read buffer */
+	int			 cra_tgt_id;	/* used to log error */
+	int			 cra_rc;	/* return code */
+	ABT_eventual		 csum_eventual;
+};
+
+/* Callback funtion to pass to vos_aggregation */
+void
+ds_csum_recalc(void *args);
+
+/* Used for VOS unit tests */
+void
+ds_csum_agg_recalc(void *args);
 
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

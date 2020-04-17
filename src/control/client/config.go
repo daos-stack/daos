@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -183,7 +183,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 
 // decodes YAML representation of Configuration struct
 func (c *Configuration) parse(data []byte) error {
-	return yaml.Unmarshal(data, c)
+	return yaml.UnmarshalStrict(data, c)
 }
 
 // NewConfiguration creates a new instance of the Configuration struct

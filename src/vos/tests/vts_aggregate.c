@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 
 #include "vts_io.h"
 #include <vos_internal.h>
+#include <daos_srv/container.h>
 
 #define VERBOSE_MSG(...)			\
 {						\
@@ -199,7 +200,6 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 
 	return nr;
 }
-
 static int
 lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 {
@@ -213,7 +213,7 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 	 */
 	rc = vos_obj_hold(vos_obj_cache_current(),
 			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, true,
-			  DAOS_INTENT_DEFAULT, true, &obj);
+			  DAOS_INTENT_DEFAULT, true, &obj, 0);
 	if (rc == 0)
 		vos_obj_release(vos_obj_cache_current(), obj, false);
 	return rc;
@@ -422,10 +422,12 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	if (ds->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a);
-	assert_int_equal(rc, 0);
-
-	verify_view(arg, oid, dkey, akey, ds);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
+				   ds_csum_agg_recalc);
+	if (rc != -DER_CSUM) {
+		assert_int_equal(rc, 0);
+		verify_view(arg, oid, dkey, akey, ds);
+	}
 }
 
 static inline int
@@ -592,7 +594,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	if (ds_sample->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL);
 	assert_int_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -626,7 +628,6 @@ discard_1(void **state)
 		aggregate_basic(arg, &ds, 0, NULL);
 	}
 }
-
 /*
  * Discard on single akey-SV with epr [A, B].
  */
@@ -1120,7 +1121,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 		if (discard)
 			rc = vos_discard(arg->ctx.tc_co_hdl, &epr);
 		else
-			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr);
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL);
 
 		assert_int_equal(rc, 0);
 
@@ -1207,7 +1208,6 @@ agg_punches_test(void **state, int record_type, bool discard)
 	}
 	daos_fail_loc_set(0);
 }
-
 static void
 discard_14(void **state)
 {
@@ -1809,7 +1809,7 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;
@@ -1841,6 +1841,96 @@ aggregate_16(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, false);
 }
+
+/*
+ * Aggregate on single akey-EV, disjoint records.
+ */
+static void
+aggregate_17(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_6(state);
+	arg->ta_flags &= ~TF_USE_CSUMS;
+}
+
+/*
+ * Aggregate on single akey-EV, fully covered records.
+ */
+static void
+aggregate_18(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_9(state);
+	arg->ta_flags &= ~TF_USE_CSUMS;
+}
+
+/*
+ * Aggregate on single akey-EV, records spans merge window.
+ */
+static void
+aggregate_19(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_10(state);
+	arg->ta_flags &= ~TF_USE_CSUMS;
+}
+
+/*
+ * Aggregate on single akey->EV, random punch, random yield.
+ */
+static void
+aggregate_20(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_11(state);
+	arg->ta_flags &= ~TF_USE_CSUMS;
+}
+/*
+ * Aggregate on single akey->EV, random punch, small flush threshold.
+ */
+static void
+aggregate_21(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[500];
+	daos_recx_t		 recx_tot;
+	int			 i;
+
+	recx_tot.rx_idx = 0;
+	recx_tot.rx_nr = 1000;
+	for (i = 0; i < 500; i++)
+		generate_recx(&recx_tot, &recx_arr[i]);
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = 16;
+	ds.td_expected_recs = -1;
+	ds.td_recx_nr = 500;
+	ds.td_recx = &recx_arr[0];
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 500;
+	ds.td_agg_epr.epr_lo = 100;
+	ds.td_agg_epr.epr_hi = 500;
+	ds.td_discard = false;
+
+	VERBOSE_MSG("Aggregate with random punch, small flush threshold.\n");
+
+	daos_fail_loc_set(DAOS_VOS_AGG_MW_THRESH | DAOS_FAIL_ALWAYS);
+	daos_fail_value_set(50);
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_basic(arg, &ds, -1, NULL);
+	arg->ta_flags &= ~TF_USE_CSUMS;
+	daos_fail_loc_set(0);
+}
+
 
 static int
 agg_tst_teardown(void **state)
@@ -1880,7 +1970,6 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_14, NULL, agg_tst_teardown },
 	{ "VOS465: Discard object/key punches array",
 	  discard_15, NULL, agg_tst_teardown },
-
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
@@ -1916,6 +2005,16 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_15, NULL, agg_tst_teardown },
 	{ "VOS416: Aggregate many object/key punches array",
 	  aggregate_16, NULL, agg_tst_teardown },
+	{ "VOS417: Aggregate EV, disjoint records, csum",
+	  aggregate_17, NULL, agg_tst_teardown },
+	{ "VOS418: Aggregate EV, fully covered records, csum",
+	  aggregate_18, NULL, agg_tst_teardown },
+	{ "VOS419: Aggregate EV, records spanning window end, csum",
+	  aggregate_19, NULL, agg_tst_teardown },
+	{ "VOS420: Aggregate EV with random punch, random yield, csum",
+	  aggregate_20, NULL, agg_tst_teardown },
+	{ "VOS421: Aggregate EV with random punch, small flush threshold, csum",
+	  aggregate_21, NULL, agg_tst_teardown },
 };
 
 int

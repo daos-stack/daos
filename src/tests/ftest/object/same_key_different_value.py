@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
-from apricot import TestWithServers
 
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from apricot import TestWithServers
+from pydaos.raw import DaosContainer, DaosApiError
+
 
 class SameKeyDifferentValue(TestWithServers):
     """
@@ -36,26 +36,13 @@ class SameKeyDifferentValue(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
+        super(SameKeyDifferentValue, self).setUp()
+        self.prepare_pool()
+
         try:
-            super(SameKeyDifferentValue, self).setUp()
-
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/pool/createmode/')
-            createsetid = self.params.get("setname", '/run/pool/createset/')
-            createsize = self.params.get("size", '/run/pool/createsize/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-            self.pool.connect(1 << 1)
-
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
 
             # now open it
             self.container.open()

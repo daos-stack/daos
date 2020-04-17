@@ -75,6 +75,11 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 		if (entry->dpe_val_ptr)
 			D_FREE(entry->dpe_val_ptr);
 		break;
+	case DAOS_PROP_PO_SVC_LIST:
+		if (entry->dpe_val_ptr)
+			d_rank_list_free(
+				(d_rank_list_t *)entry->dpe_val_ptr);
+		break;
 	default:
 		break;
 	};
@@ -155,7 +160,7 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 			entry = &result->dpp_entries[result_i];
 			result_i++;
 		}
-		daos_prop_entry_copy(&new_prop->dpp_entries[i], entry);
+		rc = daos_prop_entry_copy(&new_prop->dpp_entries[i], entry);
 		if (rc != 0)
 			goto err;
 	}
@@ -308,6 +313,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			break;
 		/* container-only properties */
+		case DAOS_PROP_PO_SVC_LIST:
+			break;
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_LAYOUT_UNKOWN &&
@@ -377,6 +384,9 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 		     struct daos_prop_entry *entry_dup)
 {
 	struct daos_acl		*acl_ptr;
+	const d_rank_list_t	*svc_list;
+	d_rank_list_t		*dst_list;
+	int			rc;
 
 	D_ASSERT(entry != NULL);
 	D_ASSERT(entry_dup != NULL);
@@ -414,6 +424,16 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 			D_ERROR("failed to dup ownership info.\n");
 			return -DER_NOMEM;
 		}
+		break;
+	case DAOS_PROP_PO_SVC_LIST:
+		svc_list = entry->dpe_val_ptr;
+
+		rc = d_rank_list_dup(&dst_list, svc_list);
+		if (rc) {
+			D_ERROR("failed dup rank list\n");
+			return rc;
+		}
+		entry_dup->dpe_val_ptr = dst_list;
 		break;
 	default:
 		entry_dup->dpe_val = entry->dpe_val;
@@ -510,7 +530,9 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	bool			 acl_alloc = false;
 	bool			 owner_alloc = false;
 	bool			 group_alloc = false;
+	bool			 svc_list_alloc = false;
 	struct daos_acl		*acl;
+	d_rank_list_t		*dst_list;
 	uint32_t		 type;
 	int			 i;
 	int			 rc = 0;
@@ -570,6 +592,14 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			group_alloc = true;
+		} else if (type == DAOS_PROP_PO_SVC_LIST) {
+			d_rank_list_t *svc_list = entry_reply->dpe_val_ptr;
+
+			rc = d_rank_list_dup(&dst_list, svc_list);
+			if (rc)
+				D_GOTO(out, rc);
+			svc_list_alloc = true;
+			entry_req->dpe_val_ptr = dst_list;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -593,9 +623,14 @@ out:
 			free_str_prop_entry(prop_req, DAOS_PROP_PO_OWNER_GROUP);
 			free_str_prop_entry(prop_req, DAOS_PROP_CO_OWNER_GROUP);
 		}
-		if (entries_alloc) {
-			D_FREE(prop_req->dpp_entries);
+		if (svc_list_alloc) {
+			entry_req = daos_prop_entry_get(prop_req,
+						DAOS_PROP_PO_SVC_LIST);
+			d_rank_list_free(entry_req->dpe_val_ptr);
 		}
+
+		if (entries_alloc)
+			D_FREE(prop_req->dpp_entries);
 	}
 	return rc;
 }

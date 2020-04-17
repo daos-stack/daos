@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,13 +30,13 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/dustin/go-humanize"
 	uuid "github.com/google/uuid"
-	bytesize "github.com/inhies/go-bytesize"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -50,7 +50,7 @@ type Superblock struct {
 	Version     uint8
 	UUID        string
 	System      string
-	Rank        *ioserver.Rank
+	Rank        *system.Rank
 	ValidRank   bool
 	MS          bool
 	CreateMS    bool
@@ -150,7 +150,7 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 	}
 
 	if cfg.Rank != nil || msInfo.isReplica && msInfo.shouldBootstrap {
-		superblock.Rank = new(ioserver.Rank)
+		superblock.Rank = new(system.Rank)
 		if cfg.Rank != nil {
 			*superblock.Rank = *cfg.Rank
 		}
@@ -171,10 +171,10 @@ func (srv *IOServerInstance) logScmStorage() error {
 	}
 
 	frSize := uint64(stBuf.Frsize)
-	totalBytes := float64(frSize * stBuf.Blocks)
-	availBytes := float64(frSize * stBuf.Bavail)
+	totalBytes := frSize * stBuf.Blocks
+	availBytes := frSize * stBuf.Bavail
 	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
-		bytesize.New(totalBytes), bytesize.New(availBytes))
+		humanize.Bytes(totalBytes), humanize.Bytes(availBytes))
 	return nil
 }
 

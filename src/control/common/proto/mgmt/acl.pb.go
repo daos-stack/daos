@@ -228,7 +228,9 @@ func init() {
 	proto.RegisterType((*DeleteACLReq)(nil), "mgmt.DeleteACLReq")
 }
 
-func init() { proto.RegisterFile("acl.proto", fileDescriptor_a452f070aeef01eb) }
+func init() {
+	proto.RegisterFile("acl.proto", fileDescriptor_a452f070aeef01eb)
+}
 
 var fileDescriptor_a452f070aeef01eb = []byte{
 	// 199 bytes of a gzipped FileDescriptorProto

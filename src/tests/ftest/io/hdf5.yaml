@@ -4,21 +4,23 @@ hosts:
     test_clients:
         - client-B
 timeout: 1800
-server_manager:
-    recreate: true
 server_config:
     name: daos_server
+    servers:
+        bdev_class: nvme
+        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
-    createmode:
-        mode_RW:
-             mode: 146
-    createset:
-        setname: daos_server
-    createsize:
-        size: 25000000000
-    createsvc:
-        svcn: 1
+    mode: 146
+    name: daos_server
+    scm_size: 30000000000
+    nvme_size: 40000000000
+    svcn: 1
+    control_method: dmg
+container:
+    type: POSIX
 client_processes:
-    np: 8
+    np: 6
 test_repo:
     hdf5: "/usr/lib64/hdf5/tests"

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,14 +22,23 @@
 //
 package ioserver
 
-import "context"
+import (
+	"context"
+	"os"
+
+	"github.com/daos-stack/daos/src/control/lib/atm"
+)
 
 type (
 	TestRunnerConfig struct {
 		StartCb    func()
 		StartErr   error
-		ErrChanCb  func() error
-		ErrChanErr error
+		WaitErr    error
+		Running    atm.Bool
+		SignalCb   func(uint32, os.Signal)
+		SignalErr  error
+		ErrChanCb  func(uint32) InstanceError
+		ErrChanErr InstanceError
 	}
 
 	TestRunner struct {
@@ -48,12 +57,12 @@ func NewTestRunner(trc *TestRunnerConfig, sc *Config) *TestRunner {
 	}
 }
 
-func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
+func (tr *TestRunner) Start(ctx context.Context, errChan chan<- InstanceError) error {
 	if tr.runnerCfg.StartCb != nil {
 		tr.runnerCfg.StartCb()
 	}
 	if tr.runnerCfg.ErrChanCb == nil {
-		tr.runnerCfg.ErrChanCb = func() error {
+		tr.runnerCfg.ErrChanCb = func(idx uint32) InstanceError {
 			return tr.runnerCfg.ErrChanErr
 		}
 	}
@@ -61,18 +70,36 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 	go func() {
 		select {
 		case <-ctx.Done():
-			return
-		case errChan <- tr.runnerCfg.ErrChanCb():
-			return
+		case errChan <- tr.runnerCfg.ErrChanCb(tr.serverCfg.Index):
 		}
+		tr.runnerCfg.Running.SetFalse()
+		return
 	}()
+
+	if tr.runnerCfg.StartErr == nil {
+		tr.runnerCfg.Running.SetTrue()
+	}
 
 	return tr.runnerCfg.StartErr
 }
 
-func (tr *TestRunner) Stop(bool) error { return nil }
+func (tr *TestRunner) Signal(sig os.Signal) error {
+	if tr.runnerCfg.SignalCb != nil {
+		tr.runnerCfg.SignalCb(tr.serverCfg.Index, sig)
+	}
+	return tr.runnerCfg.SignalErr
+}
 
-func (tr *TestRunner) IsRunning() bool { return true }
+func (tr *TestRunner) Wait() error {
+	if tr.runnerCfg.WaitErr == nil {
+		tr.runnerCfg.Running.SetFalse()
+	}
+	return tr.runnerCfg.WaitErr
+}
+
+func (tr *TestRunner) IsRunning() bool {
+	return tr.runnerCfg.Running.IsTrue()
+}
 
 func (tr *TestRunner) GetConfig() *Config {
 	return tr.serverCfg

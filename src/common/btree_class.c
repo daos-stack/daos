@@ -1243,6 +1243,39 @@ struct iv_rec {
 };
 
 static int
+iv_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
+{
+	struct iv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void		*v = umem_off2ptr(&tins->ti_umm, r->ir_value);
+	uint64_t	 a, b;
+
+	D_ASSERT(key->iov_buf != NULL);
+	b = *(uint64_t *)key->iov_buf;
+
+	D_ASSERT(r->ir_value_len >= sizeof(uint64_t));
+	D_ASSERT(v != NULL);
+	/* The first field of value is the integer key */
+	a = *(uint64_t *)v;
+
+	return (a < b) ? BTR_CMP_LT : ((a > b) ? BTR_CMP_GT : BTR_CMP_EQ);
+}
+
+static void
+iv_key_encode(struct btr_instance *tins, d_iov_t *key, daos_anchor_t *anchor)
+{
+	D_ASSERT(key->iov_len >= sizeof(uint64_t));
+	memcpy(&anchor->da_buf[0], key->iov_buf, sizeof(uint64_t));
+}
+
+static void
+iv_key_decode(struct btr_instance *tins, d_iov_t *key, daos_anchor_t *anchor)
+{
+	key->iov_buf = &anchor->da_buf[0];
+	key->iov_buf_len = sizeof(uint64_t);
+	key->iov_len = key->iov_buf_len;
+}
+
+static int
 iv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	     struct btr_record *rec)
 {
@@ -1291,17 +1324,27 @@ static int
 iv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key,
 	     d_iov_t *val)
 {
-	if (key != NULL) {
-		if (key->iov_buf == NULL)
-			key->iov_buf = rec->rec_hkey;
-		else if (key->iov_buf_len >= sizeof(uint64_t))
-			memcpy(key->iov_buf, rec->rec_hkey, sizeof(uint64_t));
-		key->iov_len = sizeof(uint64_t);
-	}
-	if (val != NULL) {
-		struct iv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-		void	       *v = umem_off2ptr(&tins->ti_umm, r->ir_value);
+	struct iv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void	       *v = umem_off2ptr(&tins->ti_umm, r->ir_value);
 
+	if (key != NULL) {
+		size_t	len = sizeof(uint64_t);
+
+		if (tins->ti_root->tr_feats & BTR_FEAT_DIRECT_KEY) {
+			if (key->iov_buf == NULL)
+				key->iov_buf = v;
+			else if (key->iov_buf_len >= len)
+				memcpy(key->iov_buf, v, len);
+		} else {
+			if (key->iov_buf == NULL)
+				key->iov_buf = rec->rec_hkey;
+			else if (key->iov_buf_len >= len)
+				memcpy(key->iov_buf, rec->rec_hkey, len);
+		}
+		key->iov_len = len;
+	}
+
+	if (val != NULL) {
 		if (val->iov_buf == NULL)
 			val->iov_buf = v;
 		else if (r->ir_value_len <= val->iov_buf_len)
@@ -1356,6 +1399,9 @@ iv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 }
 
 btr_ops_t dbtree_iv_ops = {
+	.to_key_cmp	= iv_key_cmp,
+	.to_key_encode	= iv_key_encode,
+	.to_key_decode	= iv_key_decode,
 	.to_rec_alloc	= iv_rec_alloc,
 	.to_rec_free	= iv_rec_free,
 	.to_rec_fetch	= iv_rec_fetch,

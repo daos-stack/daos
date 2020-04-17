@@ -26,6 +26,7 @@ from ior_test_base import IorTestBase
 
 
 class IorSmall(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with 1 server with basic parameters.
 
     :avocado: recursive
@@ -46,7 +47,7 @@ class IorSmall(IorTestBase):
             All above three cases to be run with single client and
                 multiple client processes in two separate nodes.
 
-        :avocado: tags=all,daosio,small,pr,hw,iorsmall
+        :avocado: tags=all,pr,hw,large,daosio,iorsmall
         """
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')

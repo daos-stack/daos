@@ -137,14 +137,70 @@ fill_obj(daos_handle_t ih, vos_iter_entry_t *entry, struct dss_enum_arg *arg,
 	return 0;
 }
 
+static void
+iov_append(d_iov_t *iov, void *buf, uint64_t buf_len)
+{
+	D_ASSERT(iov->iov_len + buf_len <= iov->iov_buf_len);
+	memcpy(iov->iov_buf + iov->iov_len, buf, buf_len);
+	iov->iov_len += buf_len;
+}
+
+static int
+fill_csum(vos_iter_entry_t *key_ent, struct dss_enum_arg *arg)
+{
+	struct daos_csummer	*csummer = arg->csummer;
+	d_iov_t			*csum_iov = &arg->csum_iov;
+	struct dcs_csum_info	*csum_info;
+	uint16_t		 csum_len;
+	int			 rc;
+
+	if (!daos_csummer_initialized(csummer))
+		return 0;
+
+	csum_len = daos_csummer_get_csum_len(csummer);
+	arg->kds[arg->kds_len].kd_csum_len = csum_len;
+	arg->kds[arg->kds_len].kd_csum_type = daos_csummer_get_type(csummer);
+
+	rc = daos_csummer_calc_key(csummer, &key_ent->ie_key, &csum_info);
+	if (rc != 0)
+		return rc;
+
+	/** Make sure the csum buffer is big enough ... resize if needed */
+	if (csum_iov->iov_buf == NULL) {
+		/** This must be freed by the object layer
+		 * (currently in obj_enum_complete)
+		 */
+		D_ALLOC(csum_iov->iov_buf, csum_len);
+		if (csum_iov->iov_buf == NULL)
+			return -DER_NOMEM;
+		csum_iov->iov_buf_len = csum_len;
+		csum_iov->iov_len = 0;
+	} else if (csum_iov->iov_len + csum_len > csum_iov->iov_buf_len) {
+		void *p;
+
+		D_REALLOC(p, csum_iov->iov_buf,
+			  csum_iov->iov_buf_len * 2);
+		if (p == NULL)
+			return -DER_NOMEM;
+		csum_iov->iov_buf = p;
+		csum_iov->iov_buf_len *= 2;
+	}
+
+	iov_append(csum_iov, csum_info->cs_csum, csum_info->cs_buf_len);
+	daos_csummer_free_ci(csummer, &csum_info);
+
+	return 0;
+}
+
 static int
 fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	 vos_iter_type_t vos_type)
 {
 	d_iov_t		*iov;
-	daos_size_t	total_size;
-	int		type;
-	int		kds_cap;
+	daos_size_t	 total_size;
+	int		 type;
+	int		 kds_cap;
+	int		 rc;
 
 	D_ASSERT(vos_type == VOS_ITER_DKEY || vos_type == VOS_ITER_AKEY);
 
@@ -181,16 +237,13 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 
 	D_ASSERT(arg->kds_len < arg->kds_cap);
 	arg->kds[arg->kds_len].kd_key_len = key_ent->ie_key.iov_len;
-	arg->kds[arg->kds_len].kd_csum_len = 0;
 	arg->kds[arg->kds_len].kd_val_type = type;
+	rc = fill_csum(key_ent, arg);
+	if (rc != 0)
+		return rc;
 	arg->kds_len++;
 
-	D_ASSERT(iov->iov_len + key_ent->ie_key.iov_len <
-		 iov->iov_buf_len);
-	memcpy(iov->iov_buf + iov->iov_len, key_ent->ie_key.iov_buf,
-	       key_ent->ie_key.iov_len);
-
-	iov->iov_len += key_ent->ie_key.iov_len;
+	iov_append(iov, key_ent->ie_key.iov_buf, key_ent->ie_key.iov_len);
 
 	if (key_ent->ie_punch != 0 && arg->need_punch) {
 		int pi_size = sizeof(key_ent->ie_punch);

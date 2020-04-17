@@ -299,7 +299,6 @@ bio_sgl_iov(struct bio_sglist *bsgl, uint32_t idx)
 	return &bsgl->bs_iovs[idx];
 }
 
-
 /**
  * Callbacks called on NVMe device state transition
  *
@@ -313,7 +312,7 @@ bio_sgl_iov(struct bio_sglist *bsgl, uint32_t idx)
 struct bio_reaction_ops {
 	int (*faulty_reaction)(int *tgt_ids, int tgt_cnt);
 	int (*reint_reaction)(int *tgt_ids, int tgt_cnt);
-	int (*ioerr_reaction)(bool unmap, bool update, int tgt_id);
+	int (*ioerr_reaction)(int err_type, int tgt_id);
 };
 
 /*
@@ -587,5 +586,9 @@ int bio_get_dev_state(struct bio_dev_state *dev_state,
  */
 int bio_dev_set_faulty(struct bio_xs_context *xs);
 
+/* Function to increment CSUM media error. */
+void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
 
+/* Too many blob IO queued, need to schedule a NVMe poll? */
+bool bio_need_nvme_poll(struct bio_xs_context *xs);
 #endif /* __BIO_API_H__ */

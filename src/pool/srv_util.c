@@ -211,7 +211,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
  */
 int
 ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
-			int opc)
+			int opc, bool evict_rank)
 {
 	uint32_t	version;
 	int		i;
@@ -256,7 +256,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is down.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			if (pool_map_node_status_match(dom,
+			if (evict_rank && pool_map_node_status_match(dom,
 				PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
 				D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
 					dom->do_comp.co_rank);
@@ -295,7 +295,8 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is excluded.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			if (pool_map_node_status_match(dom,
+
+			if (evict_rank && pool_map_node_status_match(dom,
 						PO_COMP_ST_DOWNOUT)) {
 				D_DEBUG(DF_DSMS, "change rank %u to DOWNOUT\n",
 					dom->do_comp.co_rank);
@@ -447,7 +448,7 @@ int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 	*failed_tgts_cnt = 0;
 	pool = ds_pool_lookup(pool_uuid);
 	if (pool == NULL || pool->sp_map == NULL)
-		return 0;
+		D_GOTO(output, rc = 0);
 
 	/* Check if we need excluded the failure targets, NB:
 	 * since the ranks in the pool map are ranks of primary
@@ -735,11 +736,11 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 }
 
 static int
-nvme_bio_error(bool unmap, bool update, int tgt_id)
+nvme_bio_error(int media_err_type, int tgt_id)
 {
 	int rc;
 
-	rc = notify_bio_error(unmap, update, tgt_id);
+	rc = notify_bio_error(media_err_type, tgt_id);
 
 	return rc;
 }

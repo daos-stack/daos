@@ -22,16 +22,15 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 // ScmModule represent Storage Class Memory modules installed.
 type ScmModule struct {
-	//string uid = 1; // The uid of the module.
-	Physicalid uint32 `protobuf:"varint,1,opt,name=physicalid,proto3" json:"physicalid,omitempty"`
-	//string handle = 3; // The device handle of the module.
-	//string serial = 8; // The serial number of the module.
-	Capacity uint64 `protobuf:"varint,2,opt,name=capacity,proto3" json:"capacity,omitempty"`
-	//string fwrev = 10; // The firmware revision of the module.
-	Loc                  *ScmModule_Location `protobuf:"bytes,3,opt,name=loc,proto3" json:"loc,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
-	XXX_unrecognized     []byte              `json:"-"`
-	XXX_sizecache        int32               `json:"-"`
+	Channelid            uint32   `protobuf:"varint,1,opt,name=channelid,proto3" json:"channelid,omitempty"`
+	Channelposition      uint32   `protobuf:"varint,2,opt,name=channelposition,proto3" json:"channelposition,omitempty"`
+	Controllerid         uint32   `protobuf:"varint,3,opt,name=controllerid,proto3" json:"controllerid,omitempty"`
+	Socketid             uint32   `protobuf:"varint,4,opt,name=socketid,proto3" json:"socketid,omitempty"`
+	Physicalid           uint32   `protobuf:"varint,5,opt,name=physicalid,proto3" json:"physicalid,omitempty"`
+	Capacity             uint64   `protobuf:"varint,6,opt,name=capacity,proto3" json:"capacity,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *ScmModule) Reset()         { *m = ScmModule{} }
@@ -59,6 +58,34 @@ func (m *ScmModule) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ScmModule proto.InternalMessageInfo
 
+func (m *ScmModule) GetChannelid() uint32 {
+	if m != nil {
+		return m.Channelid
+	}
+	return 0
+}
+
+func (m *ScmModule) GetChannelposition() uint32 {
+	if m != nil {
+		return m.Channelposition
+	}
+	return 0
+}
+
+func (m *ScmModule) GetControllerid() uint32 {
+	if m != nil {
+		return m.Controllerid
+	}
+	return 0
+}
+
+func (m *ScmModule) GetSocketid() uint32 {
+	if m != nil {
+		return m.Socketid
+	}
+	return 0
+}
+
 func (m *ScmModule) GetPhysicalid() uint32 {
 	if m != nil {
 		return m.Physicalid
@@ -73,142 +100,72 @@ func (m *ScmModule) GetCapacity() uint64 {
 	return 0
 }
 
-func (m *ScmModule) GetLoc() *ScmModule_Location {
-	if m != nil {
-		return m.Loc
-	}
-	return nil
-}
-
-type ScmModule_Location struct {
-	Channel              uint32   `protobuf:"varint,1,opt,name=channel,proto3" json:"channel,omitempty"`
-	Channelpos           uint32   `protobuf:"varint,2,opt,name=channelpos,proto3" json:"channelpos,omitempty"`
-	Memctrlr             uint32   `protobuf:"varint,3,opt,name=memctrlr,proto3" json:"memctrlr,omitempty"`
-	Socket               uint32   `protobuf:"varint,4,opt,name=socket,proto3" json:"socket,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *ScmModule_Location) Reset()         { *m = ScmModule_Location{} }
-func (m *ScmModule_Location) String() string { return proto.CompactTextString(m) }
-func (*ScmModule_Location) ProtoMessage()    {}
-func (*ScmModule_Location) Descriptor() ([]byte, []int) {
-	return fileDescriptor_fa79a1cba4dc284c, []int{0, 0}
-}
-
-func (m *ScmModule_Location) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_ScmModule_Location.Unmarshal(m, b)
-}
-func (m *ScmModule_Location) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_ScmModule_Location.Marshal(b, m, deterministic)
-}
-func (m *ScmModule_Location) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScmModule_Location.Merge(m, src)
-}
-func (m *ScmModule_Location) XXX_Size() int {
-	return xxx_messageInfo_ScmModule_Location.Size(m)
-}
-func (m *ScmModule_Location) XXX_DiscardUnknown() {
-	xxx_messageInfo_ScmModule_Location.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_ScmModule_Location proto.InternalMessageInfo
-
-func (m *ScmModule_Location) GetChannel() uint32 {
-	if m != nil {
-		return m.Channel
-	}
-	return 0
-}
-
-func (m *ScmModule_Location) GetChannelpos() uint32 {
-	if m != nil {
-		return m.Channelpos
-	}
-	return 0
-}
-
-func (m *ScmModule_Location) GetMemctrlr() uint32 {
-	if m != nil {
-		return m.Memctrlr
-	}
-	return 0
-}
-
-func (m *ScmModule_Location) GetSocket() uint32 {
-	if m != nil {
-		return m.Socket
-	}
-	return 0
-}
-
-// PmemDevice represents SCM namespace as pmem device files created on a ScmRegion.
-type PmemDevice struct {
+// ScmNamespace represents SCM namespace as pmem device files created on a ScmRegion.
+type ScmNamespace struct {
 	Uuid                 string   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
 	Blockdev             string   `protobuf:"bytes,2,opt,name=blockdev,proto3" json:"blockdev,omitempty"`
 	Dev                  string   `protobuf:"bytes,3,opt,name=dev,proto3" json:"dev,omitempty"`
-	Numanode             uint32   `protobuf:"varint,4,opt,name=numanode,proto3" json:"numanode,omitempty"`
+	NumaNode             uint32   `protobuf:"varint,4,opt,name=numa_node,json=numaNode,proto3" json:"numa_node,omitempty"`
 	Size                 uint64   `protobuf:"varint,5,opt,name=size,proto3" json:"size,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *PmemDevice) Reset()         { *m = PmemDevice{} }
-func (m *PmemDevice) String() string { return proto.CompactTextString(m) }
-func (*PmemDevice) ProtoMessage()    {}
-func (*PmemDevice) Descriptor() ([]byte, []int) {
+func (m *ScmNamespace) Reset()         { *m = ScmNamespace{} }
+func (m *ScmNamespace) String() string { return proto.CompactTextString(m) }
+func (*ScmNamespace) ProtoMessage()    {}
+func (*ScmNamespace) Descriptor() ([]byte, []int) {
 	return fileDescriptor_fa79a1cba4dc284c, []int{1}
 }
 
-func (m *PmemDevice) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_PmemDevice.Unmarshal(m, b)
+func (m *ScmNamespace) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ScmNamespace.Unmarshal(m, b)
 }
-func (m *PmemDevice) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_PmemDevice.Marshal(b, m, deterministic)
+func (m *ScmNamespace) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ScmNamespace.Marshal(b, m, deterministic)
 }
-func (m *PmemDevice) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PmemDevice.Merge(m, src)
+func (m *ScmNamespace) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScmNamespace.Merge(m, src)
 }
-func (m *PmemDevice) XXX_Size() int {
-	return xxx_messageInfo_PmemDevice.Size(m)
+func (m *ScmNamespace) XXX_Size() int {
+	return xxx_messageInfo_ScmNamespace.Size(m)
 }
-func (m *PmemDevice) XXX_DiscardUnknown() {
-	xxx_messageInfo_PmemDevice.DiscardUnknown(m)
+func (m *ScmNamespace) XXX_DiscardUnknown() {
+	xxx_messageInfo_ScmNamespace.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_PmemDevice proto.InternalMessageInfo
+var xxx_messageInfo_ScmNamespace proto.InternalMessageInfo
 
-func (m *PmemDevice) GetUuid() string {
+func (m *ScmNamespace) GetUuid() string {
 	if m != nil {
 		return m.Uuid
 	}
 	return ""
 }
 
-func (m *PmemDevice) GetBlockdev() string {
+func (m *ScmNamespace) GetBlockdev() string {
 	if m != nil {
 		return m.Blockdev
 	}
 	return ""
 }
 
-func (m *PmemDevice) GetDev() string {
+func (m *ScmNamespace) GetDev() string {
 	if m != nil {
 		return m.Dev
 	}
 	return ""
 }
 
-func (m *PmemDevice) GetNumanode() uint32 {
+func (m *ScmNamespace) GetNumaNode() uint32 {
 	if m != nil {
-		return m.Numanode
+		return m.NumaNode
 	}
 	return 0
 }
 
-func (m *PmemDevice) GetSize() uint64 {
+func (m *ScmNamespace) GetSize() uint64 {
 	if m != nil {
 		return m.Size
 	}
@@ -217,12 +174,12 @@ func (m *PmemDevice) GetSize() uint64 {
 
 // ScmMount represents mounted AppDirect region made up of SCM module set.
 type ScmMount struct {
-	Mntpoint             string       `protobuf:"bytes,1,opt,name=mntpoint,proto3" json:"mntpoint,omitempty"`
-	Modules              []*ScmModule `protobuf:"bytes,2,rep,name=modules,proto3" json:"modules,omitempty"`
-	Pmem                 *PmemDevice  `protobuf:"bytes,3,opt,name=pmem,proto3" json:"pmem,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	Mntpoint             string        `protobuf:"bytes,1,opt,name=mntpoint,proto3" json:"mntpoint,omitempty"`
+	Modules              []*ScmModule  `protobuf:"bytes,2,rep,name=modules,proto3" json:"modules,omitempty"`
+	Namespace            *ScmNamespace `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *ScmMount) Reset()         { *m = ScmMount{} }
@@ -264,9 +221,9 @@ func (m *ScmMount) GetModules() []*ScmModule {
 	return nil
 }
 
-func (m *ScmMount) GetPmem() *PmemDevice {
+func (m *ScmMount) GetNamespace() *ScmNamespace {
 	if m != nil {
-		return m.Pmem
+		return m.Namespace
 	}
 	return nil
 }
@@ -275,11 +232,11 @@ func (m *ScmMount) GetPmem() *PmemDevice {
 //
 // TODO: replace identifier with serial when returned in scan
 type ScmModuleResult struct {
-	Loc                  *ScmModule_Location `protobuf:"bytes,1,opt,name=loc,proto3" json:"loc,omitempty"`
-	State                *ResponseState      `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
-	XXX_unrecognized     []byte              `json:"-"`
-	XXX_sizecache        int32               `json:"-"`
+	Physicalid           uint32         `protobuf:"varint,1,opt,name=physicalid,proto3" json:"physicalid,omitempty"`
+	State                *ResponseState `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
+	XXX_unrecognized     []byte         `json:"-"`
+	XXX_sizecache        int32          `json:"-"`
 }
 
 func (m *ScmModuleResult) Reset()         { *m = ScmModuleResult{} }
@@ -307,11 +264,11 @@ func (m *ScmModuleResult) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ScmModuleResult proto.InternalMessageInfo
 
-func (m *ScmModuleResult) GetLoc() *ScmModule_Location {
+func (m *ScmModuleResult) GetPhysicalid() uint32 {
 	if m != nil {
-		return m.Loc
+		return m.Physicalid
 	}
-	return nil
+	return 0
 }
 
 func (m *ScmModuleResult) GetState() *ResponseState {
@@ -409,11 +366,12 @@ func (m *PrepareScmReq) GetReset_() bool {
 }
 
 type PrepareScmResp struct {
-	Pmems                []*PmemDevice  `protobuf:"bytes,1,rep,name=pmems,proto3" json:"pmems,omitempty"`
-	State                *ResponseState `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Namespaces           []*ScmNamespace `protobuf:"bytes,1,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
+	State                *ResponseState  `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	Rebootrequired       bool            `protobuf:"varint,3,opt,name=rebootrequired,proto3" json:"rebootrequired,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
 }
 
 func (m *PrepareScmResp) Reset()         { *m = PrepareScmResp{} }
@@ -441,9 +399,9 @@ func (m *PrepareScmResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_PrepareScmResp proto.InternalMessageInfo
 
-func (m *PrepareScmResp) GetPmems() []*PmemDevice {
+func (m *PrepareScmResp) GetNamespaces() []*ScmNamespace {
 	if m != nil {
-		return m.Pmems
+		return m.Namespaces
 	}
 	return nil
 }
@@ -453,6 +411,13 @@ func (m *PrepareScmResp) GetState() *ResponseState {
 		return m.State
 	}
 	return nil
+}
+
+func (m *PrepareScmResp) GetRebootrequired() bool {
+	if m != nil {
+		return m.Rebootrequired
+	}
+	return false
 }
 
 type ScanScmReq struct {
@@ -487,12 +452,12 @@ func (m *ScanScmReq) XXX_DiscardUnknown() {
 var xxx_messageInfo_ScanScmReq proto.InternalMessageInfo
 
 type ScanScmResp struct {
-	Modules              []*ScmModule   `protobuf:"bytes,1,rep,name=modules,proto3" json:"modules,omitempty"`
-	Pmems                []*PmemDevice  `protobuf:"bytes,2,rep,name=pmems,proto3" json:"pmems,omitempty"`
-	State                *ResponseState `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Modules              []*ScmModule    `protobuf:"bytes,1,rep,name=modules,proto3" json:"modules,omitempty"`
+	Namespaces           []*ScmNamespace `protobuf:"bytes,2,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
+	State                *ResponseState  `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
 }
 
 func (m *ScanScmResp) Reset()         { *m = ScanScmResp{} }
@@ -527,9 +492,9 @@ func (m *ScanScmResp) GetModules() []*ScmModule {
 	return nil
 }
 
-func (m *ScanScmResp) GetPmems() []*PmemDevice {
+func (m *ScanScmResp) GetNamespaces() []*ScmNamespace {
 	if m != nil {
-		return m.Pmems
+		return m.Namespaces
 	}
 	return nil
 }
@@ -574,8 +539,7 @@ var xxx_messageInfo_FormatScmReq proto.InternalMessageInfo
 
 func init() {
 	proto.RegisterType((*ScmModule)(nil), "ctl.ScmModule")
-	proto.RegisterType((*ScmModule_Location)(nil), "ctl.ScmModule.Location")
-	proto.RegisterType((*PmemDevice)(nil), "ctl.PmemDevice")
+	proto.RegisterType((*ScmNamespace)(nil), "ctl.ScmNamespace")
 	proto.RegisterType((*ScmMount)(nil), "ctl.ScmMount")
 	proto.RegisterType((*ScmModuleResult)(nil), "ctl.ScmModuleResult")
 	proto.RegisterType((*ScmMountResult)(nil), "ctl.ScmMountResult")
@@ -586,37 +550,40 @@ func init() {
 	proto.RegisterType((*FormatScmReq)(nil), "ctl.FormatScmReq")
 }
 
-func init() { proto.RegisterFile("storage_scm.proto", fileDescriptor_fa79a1cba4dc284c) }
+func init() {
+	proto.RegisterFile("storage_scm.proto", fileDescriptor_fa79a1cba4dc284c)
+}
 
 var fileDescriptor_fa79a1cba4dc284c = []byte{
-	// 464 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x53, 0xcb, 0x6e, 0x13, 0x41,
-	0x10, 0xd4, 0x64, 0xed, 0xc4, 0x6e, 0x3f, 0x02, 0x23, 0x04, 0x2b, 0x1f, 0x90, 0xb5, 0x28, 0xd2,
-	0x72, 0xf1, 0xc1, 0xfc, 0x02, 0xe2, 0x04, 0x52, 0x34, 0x96, 0xb8, 0xa2, 0xc9, 0xb8, 0x21, 0xab,
-	0xcc, 0x8b, 0x9d, 0xd9, 0x88, 0x70, 0xe0, 0xcc, 0xc7, 0xf2, 0x11, 0x68, 0x7a, 0x1f, 0x31, 0x42,
-	0x4a, 0x9c, 0xdb, 0x54, 0x77, 0x6d, 0x57, 0x75, 0xb5, 0x16, 0x9e, 0x87, 0xe8, 0x6a, 0xf9, 0x0d,
-	0xbf, 0x04, 0x65, 0x36, 0xbe, 0x76, 0xd1, 0xf1, 0x4c, 0x45, 0xbd, 0x9a, 0x2b, 0x67, 0x8c, 0xb3,
-	0x6d, 0xa9, 0xf8, 0xc3, 0x60, 0xba, 0x53, 0xe6, 0x93, 0xdb, 0x37, 0x1a, 0xf9, 0x6b, 0x00, 0x7f,
-	0x7d, 0x17, 0x2a, 0x25, 0x75, 0xb5, 0xcf, 0xd9, 0x9a, 0x95, 0x0b, 0x71, 0x50, 0xe1, 0x2b, 0x98,
-	0x28, 0xe9, 0xa5, 0xaa, 0xe2, 0x5d, 0x7e, 0xb2, 0x66, 0xe5, 0x48, 0x0c, 0x98, 0xbf, 0x85, 0x4c,
-	0x3b, 0x95, 0x67, 0x6b, 0x56, 0xce, 0xb6, 0xaf, 0x36, 0x2a, 0xea, 0xcd, 0x30, 0x78, 0xf3, 0xd1,
-	0x29, 0x19, 0x2b, 0x67, 0x45, 0xe2, 0xac, 0x7e, 0xc0, 0xa4, 0x2f, 0xf0, 0x1c, 0xce, 0xd4, 0xb5,
-	0xb4, 0x16, 0x75, 0xa7, 0xd7, 0xc3, 0x64, 0xa6, 0x7b, 0x7a, 0x17, 0x48, 0x6e, 0x21, 0x0e, 0x2a,
-	0xc9, 0x8c, 0x41, 0xa3, 0x62, 0xad, 0x6b, 0x52, 0x5d, 0x88, 0x01, 0xf3, 0x97, 0x70, 0x1a, 0x9c,
-	0xba, 0xc1, 0x98, 0x8f, 0xa8, 0xd3, 0xa1, 0xe2, 0x17, 0xc0, 0xa5, 0x41, 0xf3, 0x1e, 0x6f, 0x2b,
-	0x85, 0x9c, 0xc3, 0xa8, 0x69, 0xba, 0x45, 0xa7, 0x82, 0xde, 0x69, 0xea, 0x95, 0x76, 0xea, 0x66,
-	0x8f, 0xb7, 0xa4, 0x39, 0x15, 0x03, 0xe6, 0xcf, 0x20, 0x4b, 0xe5, 0x8c, 0xca, 0xe9, 0x99, 0xd8,
-	0xb6, 0x31, 0xd2, 0xba, 0x3d, 0x76, 0x4a, 0x03, 0x4e, 0xd3, 0x43, 0xf5, 0x13, 0xf3, 0x31, 0x05,
-	0x45, 0xef, 0xa2, 0x81, 0x09, 0x85, 0xd2, 0xd8, 0x48, 0xfe, 0x6d, 0xf4, 0xae, 0xb2, 0xb1, 0x73,
-	0x30, 0x60, 0x5e, 0xc2, 0x99, 0xa1, 0xe4, 0xd2, 0xe2, 0x59, 0x39, 0xdb, 0x2e, 0xff, 0x0d, 0x54,
-	0xf4, 0x6d, 0xfe, 0x06, 0x46, 0xde, 0xa0, 0xe9, 0x72, 0x3f, 0x27, 0xda, 0xfd, 0x8a, 0x82, 0x9a,
-	0xc5, 0x57, 0x38, 0xbf, 0xff, 0x14, 0x43, 0xa3, 0x63, 0x7f, 0x2e, 0xf6, 0xf8, 0xb9, 0x78, 0x09,
-	0xe3, 0x10, 0x65, 0x44, 0xca, 0x63, 0xb6, 0xe5, 0x44, 0x16, 0x18, 0xbc, 0xb3, 0x01, 0x77, 0xa9,
-	0x23, 0x5a, 0x42, 0xf1, 0x19, 0x96, 0xfd, 0x7a, 0x9d, 0xcc, 0xc3, 0x4b, 0x1e, 0x3b, 0xf7, 0x02,
-	0x16, 0x97, 0x35, 0x7a, 0x59, 0xe3, 0x4e, 0x19, 0x81, 0xdf, 0xf9, 0x0b, 0x18, 0xd7, 0x18, 0xb0,
-	0x9d, 0x39, 0x11, 0x2d, 0x28, 0x24, 0x2c, 0x0f, 0x69, 0xc1, 0xf3, 0x0b, 0x18, 0xa7, 0x00, 0x42,
-	0xce, 0x28, 0xc5, 0xff, 0xe2, 0x69, 0xbb, 0x4f, 0x70, 0x32, 0x07, 0xd8, 0x29, 0x69, 0x5b, 0x1b,
-	0xc5, 0x6f, 0x06, 0xb3, 0x01, 0x06, 0x7f, 0x78, 0x36, 0xf6, 0xf0, 0xd9, 0x06, 0x63, 0x27, 0xc7,
-	0x19, 0xcb, 0x1e, 0x33, 0xb6, 0x84, 0xf9, 0x07, 0x57, 0x1b, 0x19, 0x5b, 0x6b, 0x57, 0xa7, 0xf4,
-	0x7f, 0xbf, 0xfb, 0x1b, 0x00, 0x00, 0xff, 0xff, 0x19, 0x36, 0x0c, 0x96, 0x07, 0x04, 0x00, 0x00,
+	// 479 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0xdd, 0x6e, 0xd3, 0x30,
+	0x18, 0x95, 0x9b, 0x76, 0x34, 0x5f, 0xbb, 0x8c, 0x59, 0x5c, 0x44, 0x03, 0xa1, 0x2a, 0x12, 0x28,
+	0x57, 0x45, 0x94, 0x77, 0xe0, 0x8e, 0x09, 0x39, 0x12, 0x37, 0x5c, 0x4c, 0xae, 0xf3, 0x89, 0x59,
+	0x8b, 0x7f, 0x66, 0x3b, 0x48, 0xe3, 0x8e, 0x77, 0x80, 0xe7, 0xe2, 0x95, 0x50, 0x9c, 0x26, 0xed,
+	0x0a, 0x1a, 0xe3, 0xce, 0xdf, 0xf9, 0x4e, 0x4e, 0xce, 0x39, 0x8e, 0x02, 0xe7, 0x3e, 0x18, 0xc7,
+	0xbf, 0xe0, 0x95, 0x17, 0x6a, 0x6d, 0x9d, 0x09, 0x86, 0x26, 0x22, 0x34, 0x17, 0x4b, 0x61, 0x94,
+	0x32, 0xba, 0x87, 0x8a, 0x5f, 0x04, 0xd2, 0x4a, 0xa8, 0x0f, 0xa6, 0x6e, 0x1b, 0xa4, 0x2f, 0x20,
+	0x15, 0xd7, 0x5c, 0x6b, 0x6c, 0x64, 0x9d, 0x93, 0x15, 0x29, 0x4f, 0xd9, 0x1e, 0xa0, 0x25, 0x9c,
+	0xed, 0x06, 0x6b, 0xbc, 0x0c, 0xd2, 0xe8, 0x7c, 0x12, 0x39, 0xc7, 0x30, 0x2d, 0x60, 0x29, 0x8c,
+	0x0e, 0xce, 0x34, 0x0d, 0x3a, 0x59, 0xe7, 0x49, 0xa4, 0xdd, 0xc3, 0xe8, 0x05, 0xcc, 0xbd, 0x11,
+	0x37, 0x18, 0x64, 0x9d, 0x4f, 0xe3, 0x7e, 0x9c, 0xe9, 0x4b, 0x00, 0x7b, 0x7d, 0xe7, 0xa5, 0xe0,
+	0x9d, 0x91, 0x59, 0xdc, 0x1e, 0x20, 0xdd, 0xb3, 0x82, 0x5b, 0x2e, 0x64, 0xb8, 0xcb, 0x4f, 0x56,
+	0xa4, 0x9c, 0xb2, 0x71, 0x2e, 0xbe, 0x13, 0x58, 0x56, 0x42, 0x5d, 0x72, 0x85, 0xde, 0x72, 0x81,
+	0x94, 0xc2, 0xb4, 0x6d, 0x77, 0x79, 0x52, 0x16, 0xcf, 0x9d, 0xc0, 0xb6, 0x31, 0xe2, 0xa6, 0xc6,
+	0xaf, 0x31, 0x43, 0xca, 0xc6, 0x99, 0x3e, 0x85, 0xa4, 0x83, 0x93, 0x08, 0x77, 0x47, 0xfa, 0x1c,
+	0x52, 0xdd, 0x2a, 0x7e, 0xa5, 0x4d, 0x8d, 0x83, 0xd7, 0x0e, 0xb8, 0x34, 0x75, 0x94, 0xf7, 0xf2,
+	0x1b, 0x46, 0x97, 0x53, 0x16, 0xcf, 0x9d, 0x87, 0x79, 0x6c, 0xb5, 0xd5, 0xa1, 0x7b, 0x97, 0xd2,
+	0xc1, 0x1a, 0xa9, 0xc3, 0xce, 0xc3, 0x38, 0xd3, 0x12, 0x9e, 0xa8, 0x58, 0xbd, 0xcf, 0x27, 0xab,
+	0xa4, 0x5c, 0x6c, 0xb2, 0xb5, 0x08, 0xcd, 0x7a, 0xbc, 0x11, 0x36, 0xac, 0xe9, 0x1b, 0x48, 0xf5,
+	0x10, 0x29, 0x7a, 0x5b, 0x6c, 0xce, 0x07, 0xee, 0x98, 0x95, 0xed, 0x39, 0xc5, 0x67, 0x38, 0xdb,
+	0xcb, 0xa0, 0x6f, 0x9b, 0x70, 0x54, 0x2b, 0xf9, 0xa3, 0xd6, 0x12, 0x66, 0x3e, 0xf0, 0x80, 0xb1,
+	0x92, 0xc5, 0x86, 0x46, 0x7d, 0x86, 0xde, 0x1a, 0xed, 0xb1, 0xea, 0x36, 0xac, 0x27, 0x14, 0x9f,
+	0x20, 0x1b, 0xf2, 0xed, 0xb4, 0x1f, 0x4e, 0xf9, 0x58, 0xdd, 0x57, 0x70, 0xfa, 0xd1, 0xa1, 0xe5,
+	0x0e, 0x2b, 0xa1, 0x18, 0xde, 0xd2, 0x67, 0x30, 0x73, 0xe8, 0xb1, 0xd7, 0x9c, 0xb3, 0x7e, 0x28,
+	0x7e, 0x12, 0xc8, 0x0e, 0x79, 0xde, 0xd2, 0xb7, 0x00, 0x63, 0x76, 0x9f, 0x93, 0x58, 0xe6, 0x5f,
+	0x0a, 0x3a, 0x20, 0x3d, 0xde, 0x16, 0x7d, 0x0d, 0x99, 0xc3, 0xad, 0x31, 0xc1, 0xe1, 0x6d, 0x2b,
+	0x1d, 0xf6, 0x5f, 0xf4, 0x9c, 0x1d, 0xa1, 0xc5, 0x12, 0xa0, 0x12, 0x5c, 0xf7, 0xde, 0x8b, 0x1f,
+	0x04, 0x16, 0xe3, 0xe8, 0xed, 0xe1, 0x65, 0x93, 0x87, 0x2f, 0xfb, 0x7e, 0x98, 0xc9, 0x7f, 0x85,
+	0x49, 0xfe, 0xd5, 0x71, 0x06, 0xcb, 0xf7, 0xc6, 0x29, 0x1e, 0x7a, 0x9b, 0xdb, 0x93, 0xf8, 0x27,
+	0x78, 0xf7, 0x3b, 0x00, 0x00, 0xff, 0xff, 0x07, 0x5c, 0x2b, 0x61, 0x31, 0x04, 0x00, 0x00,
 }

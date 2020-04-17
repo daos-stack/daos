@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@
 #include <dirent.h>
 
 #include <cmocka.h>
+#ifdef OVERRIDE_CMOCKA_SKIP
 /* redefine cmocka's skip() so it will no longer abort()
  * if CMOCKA_TEST_ABORT=1
  *
@@ -54,6 +55,7 @@
 			_skip(__FILE__, __LINE__); \
 		return; \
 	} while  (0)
+#endif
 
 #include <mpi.h>
 #include <daos/debug.h>
@@ -92,6 +94,7 @@ struct test_pool {
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
 	daos_size_t		pool_size;
+	uint64_t		pool_connect_flags;
 	/* Updated if some ranks are killed during degraged or rebuild
 	 * test, so we know whether some tests is allowed to be run.
 	 */
@@ -126,11 +129,11 @@ typedef struct {
 	const char	       *group;
 	struct test_pool	pool;
 	uuid_t			co_uuid;
-	unsigned int		mode;
 	unsigned int		uid;
 	unsigned int		gid;
 	daos_handle_t		eq;
 	daos_handle_t		coh;
+	uint64_t		cont_open_flags;
 	daos_cont_info_t	co_info;
 	int			setup_state;
 	bool			async;
@@ -181,11 +184,12 @@ enum {
 	SETUP_CONT_CONNECT,
 };
 
-#define DEFAULT_POOL_SIZE	(4ULL << 30)
+#define SMALL_POOL_SIZE		(1ULL << 30)	/* 1GB */
+#define DEFAULT_POOL_SIZE	(4ULL << 30)	/* 4GB */
 
 #define WAIT_ON_ASYNC_ERR(arg, ev, err)			\
 	do {						\
-		int _rc;					\
+		int _rc;				\
 		daos_event_t *evp;			\
 							\
 		if (!arg->async)			\
@@ -203,6 +207,10 @@ enum {
 
 int
 test_teardown(void **state);
+int
+test_teardown_cont_hdl(test_arg_t *arg);
+int
+test_teardown_cont(test_arg_t *arg);
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
 	   daos_size_t pool_size, struct test_pool *pool);
@@ -283,7 +291,8 @@ int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
-int run_daos_checksum_test(int rank, int size);
+int run_daos_checksum_test(int rank, int size, int *sub_tests,
+			   int sub_tests_size);
 int run_daos_fs_test(int rank, int size, int *tests, int test_size);
 int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
@@ -291,8 +300,13 @@ int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
-void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			      const char *grp, d_rank_list_t *svc);
+struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
+daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
+						uint32_t prop_type);
+daos_prop_t *get_daos_prop_with_user_acl_perms(uint64_t perms);
+daos_prop_t *get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
+					      struct daos_acl *acl,
+					      uint32_t acl_type);
 typedef int (*test_setup_cb_t)(void **state);
 typedef int (*test_teardown_cb_t)(void **state);
 
@@ -311,10 +325,12 @@ void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 void daos_add_server(const uuid_t pool_uuid, const char *grp,
 		     const d_rank_list_t *svc, d_rank_t rank);
 
-int run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
-		       daos_size_t pool_size, int *sub_tests,
-		       int sub_tests_size, test_setup_cb_t setup_cb,
-		       test_teardown_cb_t teardown_cb);
+int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
+		       int tests_size, int *sub_tests, int sub_tests_size,
+		       test_setup_cb_t setup_cb, test_setup_cb_t teardown_cb);
+int
+run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
+			int tests_size, int *sub_tests, int sub_tests_size);
 
 void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
@@ -325,6 +341,7 @@ void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
 			   int *failed_tgts, int nr);
 
 int rebuild_sub_setup(void **state);
+int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 
 static inline void
@@ -476,8 +493,10 @@ test_rmdir(const char *path, bool force)
 			continue;   /* skips the dots */
 
 		D_ASPRINTF(fullpath, "%s/%s", path, ent->d_name);
-		if (fullpath == NULL)
-			D_GOTO(out, -DER_NOMEM);
+		if (fullpath == NULL) {
+			closedir(dir);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
 
 		switch (ent->d_type) {
 		case DT_DIR:

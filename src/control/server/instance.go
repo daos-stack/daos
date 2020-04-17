@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -35,6 +36,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -46,9 +48,10 @@ import (
 // IOServerRunner defines an interface for starting and stopping the
 // daos_io_server.
 type IOServerRunner interface {
-	Start(context.Context, chan<- error) error
+	Start(context.Context, chan<- ioserver.InstanceError) error
 	IsRunning() bool
-	Stop(bool) error
+	Signal(os.Signal) error
+	Wait() error
 	GetConfig() *ioserver.Config
 }
 
@@ -65,8 +68,10 @@ type IOServerInstance struct {
 	bdevClassProvider *bdev.ClassProvider
 	scmProvider       *scm.Provider
 	msClient          *mgmtSvcClient
-	instanceReady     chan *srvpb.NotifyReadyReq
+	waitDrpc          atm.Bool
+	drpcReady         chan *srvpb.NotifyReadyReq
 	storageReady      chan struct{}
+	ready             atm.Bool
 	fsRoot            string
 
 	sync.RWMutex
@@ -75,6 +80,7 @@ type IOServerInstance struct {
 	_drpcClient   drpc.DomainSocketClient
 	_scmStorageOk bool // cache positive result of NeedsStorageFormat()
 	_superblock   *Superblock
+	_lastErr      error // populated when harness receives signal
 }
 
 // NewIOServerInstance returns an *IOServerInstance initialized with
@@ -89,9 +95,17 @@ func NewIOServerInstance(log logging.Logger,
 		bdevClassProvider: bcp,
 		scmProvider:       sp,
 		msClient:          msc,
-		instanceReady:     make(chan *srvpb.NotifyReadyReq),
+		drpcReady:         make(chan *srvpb.NotifyReadyReq),
 		storageReady:      make(chan struct{}),
 	}
+}
+
+// IsReady indicates whether the IOServerInstance is in a ready state.
+//
+// If true indicates that the instance is fully setup, distinct from
+// drpc and storage ready states, and currently active.
+func (srv *IOServerInstance) IsReady() bool {
+	return srv.ready.IsTrue() && srv.IsStarted()
 }
 
 // scmConfig returns the scm configuration assigned to this instance.
@@ -203,7 +217,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 // Start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
-func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) error {
+func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- ioserver.InstanceError) error {
 	if !srv.hasSuperblock() {
 		if err := srv.ReadSuperblock(); err != nil {
 			return errors.Wrap(err, "start failed; no superblock")
@@ -223,37 +237,64 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 	return srv.runner.Start(ctx, errChan)
 }
 
-func (srv *IOServerInstance) Stop(force bool) error {
-	return srv.runner.Stop(force)
+// Stop sends signal to stop IOServerInstance runner (but doesn't wait for
+// process to exit).
+func (srv *IOServerInstance) Stop(signal os.Signal) error {
+	if err := srv.runner.Signal(signal); err != nil {
+		return err
+	}
+
+	return nil
 }
 
+// RemoveSocket removes the socket file used for dRPC communication with
+// harness and updates relevant ready states.
+func (srv *IOServerInstance) RemoveSocket() error {
+	fMsg := fmt.Sprintf("removing instance %d socket file", srv.Index())
+
+	dc, err := srv.getDrpcClient()
+	if err != nil {
+		return errors.Wrap(err, fMsg)
+	}
+	srvSock := dc.GetSocketPath()
+
+	if err := checkDrpcClientSocketPath(srvSock); err != nil {
+		return errors.Wrap(err, fMsg)
+	}
+	os.Remove(srvSock)
+
+	srv.ready.SetFalse()
+
+	return nil
+}
+
+// IsStarted indicates whether IOServerInstance is in a running state.
 func (srv *IOServerInstance) IsStarted() bool {
 	return srv.runner.IsRunning()
 }
 
-// NotifyReady receives a ready message from the running IOServer
+// NotifyDrpcReady receives a ready message from the running IOServer
 // instance.
-func (srv *IOServerInstance) NotifyReady(msg *srvpb.NotifyReadyReq) {
-	srv.log.Debugf("%s instance %d ready: %v", DataPlaneName, srv.Index(), msg)
+func (srv *IOServerInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
+	srv.log.Debugf("%s instance %d drpc ready: %v", DataPlaneName, srv.Index(), msg)
 
 	// Activate the dRPC client connection to this iosrv
 	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
 
 	go func() {
-		srv.instanceReady <- msg
+		srv.drpcReady <- msg
 	}()
 }
 
-// AwaitReady returns a channel which receives a ready message
+// AwaitDrpcReady returns a channel which receives a ready message
 // when the started IOServer instance indicates that it is
 // ready to receive dRPC messages.
-func (srv *IOServerInstance) AwaitReady() chan *srvpb.NotifyReadyReq {
-	return srv.instanceReady
+func (srv *IOServerInstance) AwaitDrpcReady() chan *srvpb.NotifyReadyReq {
+	return srv.drpcReady
 }
 
 // NotifyStorageReady releases any blocks on AwaitStorageReady().
 func (srv *IOServerInstance) NotifyStorageReady() {
-	srv.log.Debugf("%s instance %d notifying storage ready", DataPlaneName, srv.Index())
 	go func() {
 		close(srv.storageReady)
 	}()
@@ -277,7 +318,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 		return errors.New("nil superblock in SetRank()")
 	}
 
-	r := ioserver.NilRank
+	r := system.NilRank
 	if superblock.Rank != nil {
 		r = *superblock.Rank
 	}
@@ -295,10 +336,10 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 		} else if resp.State == mgmtpb.JoinResp_OUT {
 			return errors.Errorf("rank %d excluded", resp.Rank)
 		}
-		r = ioserver.Rank(resp.Rank)
+		r = system.Rank(resp.Rank)
 
 		if !superblock.ValidRank {
-			superblock.Rank = new(ioserver.Rank)
+			superblock.Rank = new(system.Rank)
 			*superblock.Rank = r
 			superblock.ValidRank = true
 			srv.setSuperblock(superblock)
@@ -315,7 +356,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 	return nil
 }
 
-func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
+func (srv *IOServerInstance) callSetRank(rank system.Rank) error {
 	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
@@ -330,6 +371,30 @@ func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
 	}
 
 	return nil
+}
+
+// GetRank returns a valid instance rank or error.
+func (srv *IOServerInstance) GetRank() (system.Rank, error) {
+	var err error
+	sb := srv.getSuperblock()
+
+	switch {
+	case sb == nil:
+		err = errors.New("nil superblock")
+	case sb.Rank == nil:
+		err = errors.New("nil rank in superblock")
+	}
+
+	if err != nil {
+		return system.NilRank, err
+	}
+
+	return *sb.Rank, nil
+}
+
+// SetTargetCount updates target count in ioserver config.
+func (srv *IOServerInstance) SetTargetCount(numTargets int) {
+	srv.runner.GetConfig().TargetCount = numTargets
 }
 
 // StartManagementService starts the DAOS management service replica associated
@@ -460,6 +525,35 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	return makeDrpcCall(dc, module, method, body)
 }
 
+// FinishStartup sets up instance once dRPC comms are ready, this includes
+// setting the instance rank, starting management service and loading IO server
+// modules.
+//
+// Instance ready state is set to indicate that all setup is complete.
+func (srv *IOServerInstance) FinishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	if err := srv.SetRank(ctx, ready); err != nil {
+		return err
+	}
+	// update ioserver target count to reflect allocated
+	// number of targets, not number requested when starting
+	srv.SetTargetCount(int(ready.GetNtgts()))
+
+	if srv.IsMSReplica() {
+		if err := srv.StartManagementService(); err != nil {
+			return errors.Wrap(err, "failed to start management service")
+		}
+	}
+
+	if err := srv.LoadModules(); err != nil {
+		return errors.Wrap(err, "failed to load I/O server modules")
+	}
+
+	srv.ready.SetTrue()
+
+	return nil
+}
+
+// BioErrorNotify logs a blob I/O error.
 func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
 	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
@@ -484,6 +578,10 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 		return nil, err
 	}
 
-	return system.NewMember(sb.Rank.Uint32(), sb.UUID, addr,
-		system.MemberStateStarted), nil
+	rank, err := srv.GetRank()
+	if err != nil {
+		return nil, err
+	}
+
+	return system.NewMember(rank, sb.UUID, addr, system.MemberStateStarted), nil
 }

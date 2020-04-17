@@ -31,28 +31,24 @@ import "common.proto";
 
 // ScmModule represent Storage Class Memory modules installed.
 message ScmModule {
-	message Location {
-		uint32 channel = 1;	// The channel id where module is installed.
-		uint32 channelpos = 2;	// The channel position where module is installed.
-		uint32 memctrlr = 3;	// The memory controller id attached to module.
-		uint32 socket = 4;	// The socket id attached to module.
-	}
-
+	uint32 channelid = 1;		// The channel id where module is installed.
+	uint32 channelposition = 2;	// The channel position where module is installed.
+	uint32 controllerid = 3;	// The memory controller id attached to module.
+	uint32 socketid = 4;		// The socket id attached to module.
+	uint32 physicalid = 5;		// The physical id of the module.
+	uint64 capacity = 6;		// The capacity of the module.
 	//string uid = 1; // The uid of the module.
-	uint32 physicalid = 1;	// The physical id of the module.
 	//string handle = 3; // The device handle of the module.
 	//string serial = 8; // The serial number of the module.
-	uint64 capacity = 2;	// The capacity of the module.
 	//string fwrev = 10; // The firmware revision of the module.
-	Location loc = 3;	// The location of the PMM in the hardware platform.
 }
 
-// PmemDevice represents SCM namespace as pmem device files created on a ScmRegion.
-message PmemDevice {
+// ScmNamespace represents SCM namespace as pmem device files created on a ScmRegion.
+message ScmNamespace {
 	string uuid = 1;
 	string blockdev = 2;
 	string dev = 3; // ndctl specific device identifier
-	uint32 numanode = 4;
+	uint32 numa_node = 4;
 	uint64 size = 5; // bytes
 }
 
@@ -60,14 +56,14 @@ message PmemDevice {
 message ScmMount {
 	string mntpoint = 1;
 	repeated ScmModule modules = 2;
-	PmemDevice pmem = 3;
+	ScmNamespace namespace = 3;
 }
 
 // ScmModuleResult represents operation state for specific SCM/PM module.
 //
 // TODO: replace identifier with serial when returned in scan
 message ScmModuleResult {
-	ScmModule.Location loc = 1;	// SCM module identifier
+	uint32 physicalid = 1;		// SCM module identifier
 	ResponseState state = 2;	// state of current operation
 }
 
@@ -82,15 +78,16 @@ message PrepareScmReq {
 }
 
 message PrepareScmResp {
-	repeated PmemDevice pmems = 1;	// Existing pmem devices (new and old)
+	repeated ScmNamespace namespaces = 1;	// Existing namespace devices (new and old)
 	ResponseState state = 2;
+	bool rebootrequired = 3;
 }
 
 message ScanScmReq {}
 
 message ScanScmResp {
 	repeated ScmModule modules = 1;
-	repeated PmemDevice pmems = 2;
+	repeated ScmNamespace namespaces = 2;
 	ResponseState state = 3;
 }
 

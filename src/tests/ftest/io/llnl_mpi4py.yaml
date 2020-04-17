@@ -7,20 +7,16 @@ hosts:
         - boro-D
         - boro-E
 timeout: 300
-server_manager:
-    recreate: true
 server_config:
     name: daos_server
 pool:
-    createmode:
-        mode_RW:
-             mode: 146
-    createset:
-        setname: daos_server
-    createsize:
-        size: 1000000000
-    createsvc:
-        svcn: 1
+    mode: 146
+    name: daos_server
+    scm_size: 1000000000
+    svcn: 1
+    control_method: dmg
+container:
+    type: POSIX
 client_processes:
     np: 8
 test_repo:

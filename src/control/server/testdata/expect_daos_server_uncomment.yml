@@ -24,7 +24,7 @@ servers:
   hostname: ""
 - rank: 1
   targets: 20
-  nr_xs_helpers: 1
+  nr_xs_helpers: 20
   first_core: 22
   fabric_iface: qib1
   fabric_iface_port: 20000

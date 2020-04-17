@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/tse.h>
+#include <daos/task.h>
 #include <daos/placement.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
@@ -140,7 +141,9 @@ struct obj_reasb_req {
 	struct obj_io_desc		*orr_oiods;
 	struct obj_ec_recx_array	*orr_recxs;
 	struct obj_ec_seg_sorter	*orr_sorters;
+	struct dcs_singv_layout		*orr_singv_los;
 	uint32_t			 orr_tgt_nr;
+	struct daos_oclass_attr		*orr_oca;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
@@ -155,19 +158,65 @@ enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
 }
 
 extern struct dss_module_key obj_module_key;
-enum obj_profile_op {
-	OBJ_PF_UPDATE_PREP = 0,
-	OBJ_PF_UPDATE_DISPATCH,
-	OBJ_PF_UPDATE_LOCAL,
-	OBJ_PF_UPDATE_END,
-	OBJ_PF_UPDATE_WAIT,
-	OBJ_PF_UPDATE_REPLY,
-	OBJ_PF_UPDATE,
+
+/* Per pool attached to the migrate tls(per xstream) */
+struct migrate_pool_tls {
+	/* POOL UUID and pool to be migrated */
+	uuid_t			mpt_pool_uuid;
+	struct ds_pool_child	*mpt_pool;
+	unsigned int		mpt_version;
+
+	/* Link to the migrate_pool_tls list */
+	d_list_t		mpt_list;
+
+	/* Pool/Container handle UUID to be migrated, the migrate
+	 * should provide the pool/handle uuid
+	 */
+	uuid_t			mpt_poh_uuid;
+	uuid_t			mpt_coh_uuid;
+	daos_handle_t		mpt_pool_hdl;
+
+	/* Container/objects tobe migrated will be attached to the tree */
+	daos_handle_t		mpt_root_hdl;
+	struct btr_root		mpt_root;
+
+	/* Service rank list for migrate fetch RPC */
+	d_rank_list_t		mpt_svc_list;
+
+	/* Migrate status */
+	uint64_t		mpt_obj_count;
+	uint64_t		mpt_rec_count;
+	uint64_t		mpt_size;
+	int			mpt_status;
+
+	/* Max epoch for the migration, used for migrate fetch RPC */
+	uint64_t		mpt_max_eph;
+
+	/* The ULT number generated on the xstream */
+	uint64_t		mpt_generated_ult;
+
+	/* The ULT number executed on the xstream */
+	uint64_t		mpt_executed_ult;
+
+	/* The ULT number generated for object on the xstream */
+	uint64_t		mpt_obj_generated_ult;
+
+	/* The ULT number executed on the xstream */
+	uint64_t		mpt_obj_executed_ult;
+
+	/* reference count for the structure */
+	uint64_t		mpt_refcount;
+	/* migrate leader ULT */
+	unsigned int		mpt_ult_running:1,
+				mpt_fini:1;
 };
+
+void
+migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
-	struct srv_profile	*ot_sp;
+	d_list_t		ot_pool_list;
 };
 
 struct obj_ec_parity {
@@ -212,7 +261,9 @@ struct shard_rw_args {
 	crt_bulk_t		*bulks;
 	struct obj_io_desc	*oiods;
 	uint64_t		*offs;
+	struct dcs_csum_info	*dkey_csum;
 	struct dcs_iod_csums	*iod_csums;
+	struct obj_reasb_req	*reasb_req;
 };
 
 struct shard_punch_args {
@@ -368,6 +419,7 @@ void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
+void ds_obj_migrate_handler(crt_rpc_t *rpc);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
 static inline uint64_t

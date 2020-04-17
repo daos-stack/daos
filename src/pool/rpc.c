@@ -26,6 +26,7 @@
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos/rpc.h>
+#include <daos/pool.h>
 #include <daos_pool.h>
 #include "rpc.h"
 

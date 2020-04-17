@@ -45,7 +45,7 @@
 #include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
-#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,pool,cont,dtx,obj,rebuild"
+#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -124,7 +124,7 @@ register_dbtree_classes(void)
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
-				   BTR_FEAT_UINT_KEY /* feats */,
+				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
 		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",
@@ -213,21 +213,22 @@ modules_load(uint64_t *facs)
 static int
 dss_tgt_nr_get(int ncores, int nr, bool oversubscribe)
 {
-	int nr_default;
+	int tgt_nr;
 
 	D_ASSERT(ncores >= 1);
-	/* Each system XS uses one core, and each main XS with
-	 * dss_tgt_offload_xs_nr offload XS. Calculate the nr_default
-	 * as the number of main XS based on number of cores.
-	 */
-	if (dss_numa_node == -1)
-		nr_default = (ncores - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
-	else
-		nr_default = (((ncores - dss_sys_xs_nr) - dss_core_offset) /
-			      DSS_XS_NR_PER_TGT);
 
-	if (nr_default == 0)
-		nr_default = 1;
+	/* at most 2 helper XS per target */
+	if (dss_tgt_offload_xs_nr > 2 * nr)
+		dss_tgt_offload_xs_nr = 2 * nr;
+
+	/* Each system XS uses one core, and  with dss_tgt_offload_xs_nr
+	 * offload XS. Calculate the tgt_nr as the number of main XS based
+	 * on number of cores.
+	 */
+retry:
+	tgt_nr = ncores - DAOS_TGT0_OFFSET - dss_tgt_offload_xs_nr;
+	if (tgt_nr <= 0)
+		tgt_nr = 1;
 
 	/* If user requires less target threads then set it as dss_tgt_nr,
 	 * if user oversubscribes, then:
@@ -236,14 +237,23 @@ dss_tgt_nr_get(int ncores, int nr, bool oversubscribe)
 	 *        use the number calculated above
 	 * Note: oversubscribing  may hurt performance.
 	 */
-	if (nr >= 1 && ((nr < nr_default) || oversubscribe))
-		nr_default = nr;
+	if (nr >= 1 && ((nr < tgt_nr) || oversubscribe)) {
+		tgt_nr = nr;
+		if (dss_tgt_offload_xs_nr > 2 * tgt_nr)
+			dss_tgt_offload_xs_nr = 2 * tgt_nr;
+	} else if (dss_tgt_offload_xs_nr > 2 * tgt_nr) {
+		dss_tgt_offload_xs_nr--;
+		goto retry;
+	}
 
-	if (nr_default != nr)
+	if (tgt_nr != nr)
 		D_PRINT("%d target XS(xstream) requested (#cores %d); "
-			"use (%d) target XS\n", nr, ncores, nr_default);
+			"use (%d) target XS\n", nr, ncores, tgt_nr);
 
-	return nr_default;
+	if (dss_tgt_offload_xs_nr % tgt_nr != 0)
+		dss_helper_pool = true;
+
+	return tgt_nr;
 }
 
 static int
@@ -312,12 +322,12 @@ dss_topo_init()
 		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
 		if (corenode == NULL)
 			continue;
-		if (hwloc_bitmap_isincluded(corenode->allowed_cpuset,
-					    numa_obj->allowed_cpuset) != 0) {
+		if (hwloc_bitmap_isincluded(corenode->cpuset,
+					    numa_obj->cpuset) != 0) {
 			if (num_cores_visited++ >= dss_core_offset) {
 				hwloc_bitmap_set(core_allocation_bitmap, k);
 				hwloc_bitmap_asprintf(&cpuset,
-						      corenode->allowed_cpuset);
+						      corenode->cpuset);
 			}
 			dss_num_cores_numa_node++;
 		}
@@ -455,8 +465,9 @@ abt_fini(void)
 static int
 server_init(int argc, char *argv[])
 {
-	int	rc;
-	char	hostname[256] = { 0 };
+	unsigned int	ctx_nr;
+	char		hostname[256] = { 0 };
+	int		rc;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -483,9 +494,10 @@ server_init(int argc, char *argv[])
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
+	ctx_nr = dss_ctx_nr_get();
 	rc = crt_init_opt(daos_sysname,
 			  CRT_FLAG_BIT_SERVER,
-			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
+			  daos_crt_init_opt_get(true, ctx_nr));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
@@ -560,10 +572,9 @@ server_init(int argc, char *argv[])
 
 	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
-		"with %u target, %d helper XS per target, "
-		"firstcore %d, host %s.\n", DAOS_VERSION, getpid(),
-		dss_self_rank(), dss_tgt_nr, dss_tgt_offload_xs_nr,
-		dss_core_offset, hostname);
+		"with %u target, %d helper XS, firstcore %d, host %s.\n",
+		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
+		dss_tgt_offload_xs_nr, dss_core_offset, hostname);
 
 	if (numa_obj)
 		D_PRINT("Using NUMA node: %d", dss_numa_node);
@@ -601,21 +612,32 @@ server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
 	dss_module_cleanup_all();
+	D_INFO("dss_module_cleanup_all() done\n");
 	drpc_fini();
+	D_INFO("drpc_fini() done\n");
 	server_init_state_fini();
+	D_INFO("server_init_state_fini() done\n");
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
 	} else {
 		pl_fini();
 		daos_hhash_fini();
 	}
+	D_INFO("daos_fini() or pl_fini() done\n");
 	dss_srv_fini(force);
+	D_INFO("dss_srv_fini() done\n");
 	dss_module_unload_all();
+	D_INFO("dss_module_unload_all() done\n");
 	ds_iv_fini();
+	D_INFO("ds_iv_fini() done\n");
 	crt_finalize();
+	D_INFO("crt_finalize() done\n");
 	dss_module_fini(force);
+	D_INFO("dss_module_fini() done\n");
 	abt_fini();
+	D_INFO("abt_fini() done\n");
 	daos_debug_fini();
+	D_INFO("daos_debug_fini() done\n");
 }
 
 static void
@@ -712,12 +734,6 @@ parse(int argc, char **argv)
 			nr = strtoul(optarg, &end, 10);
 			if (end == optarg || nr == ULONG_MAX) {
 				rc = -DER_INVAL;
-				break;
-			}
-			if (nr > 2) {
-				printf("invalid xshelpernr %u, should within "
-				       "[0, 2], user default value %u instead",
-				       nr, dss_tgt_offload_xs_nr);
 				break;
 			}
 			dss_tgt_offload_xs_nr = nr;

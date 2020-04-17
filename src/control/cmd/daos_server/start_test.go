@@ -183,13 +183,6 @@ func TestStartOptions(t *testing.T) {
 				return cfg
 			},
 		},
-		"XS Helpers (bad)": {
-			argList: []string{"-x", "42"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].WithHelperStreamCount(2)
-				return cfg
-			},
-		},
 		"XS Helpers (short)": {
 			argList: []string{"-x", "0"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
@@ -317,14 +310,14 @@ func TestStartLoggingOptions(t *testing.T) {
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`hello\n$`),
 		},
-		"JSON (Short)": {
-			argList:   []string{"-j"},
+		"JSON Logs (Short)": {
+			argList:   []string{"-J"},
 			logFnName: "Info",
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`"message":"hello"`),
 		},
-		"JSON (Long)": {
-			argList:   []string{"--json"},
+		"JSON Logs (Long)": {
+			argList:   []string{"--json-logging"},
 			logFnName: "Info",
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`"message":"hello"`),

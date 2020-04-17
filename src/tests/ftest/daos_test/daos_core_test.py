@@ -38,6 +38,6 @@ class DaosCoreTest(DaosCoreBase):
 
         Use Cases: core tests for daos_test
 
-        :avocado: tags=all,pr,medium,daos_test
+        :avocado: tags=all,pr,hw,ib2,medium,daos_test
         """
         DaosCoreBase.run_subtest(self)

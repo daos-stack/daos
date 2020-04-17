@@ -145,11 +145,23 @@ static void
 pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
 		    bool noop)
 {
-	struct umem_tx_stage_item	*txi;
-	int				 i;
+	struct umem_tx_stage_item	*txi, *txi_arr;
+	unsigned int			 i, num = *cnt;
 
-	for (i = 0; i < *cnt; i++) {
-		txi = &vec[i];
+	/* @vec & @cnt could be changed by other ULT while txi_fn yielding */
+	if (num > 0) {
+		D_ALLOC_ARRAY(txi_arr, num);
+		if (txi_arr == NULL) {
+			D_ERROR("Failed to allocate txi array\n");
+			return;
+		}
+		memcpy(txi_arr, vec, sizeof(*txi) * num);
+		*cnt = 0;
+		memset(vec, 0, sizeof(*txi) * num);
+	}
+
+	for (i = 0; i < num; i++) {
+		txi = &txi_arr[i];
 
 		D_ASSERT(txi->txi_magic == UMEM_TX_DATA_MAGIC);
 		D_ASSERT(txi->txi_fn != NULL);
@@ -158,10 +170,8 @@ pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
 		txi->txi_fn(txi->txi_data, noop);
 	}
 
-	if (*cnt != 0) {
-		memset(vec, 0, sizeof(*txi) * (*cnt));
-		*cnt = 0;
-	}
+	if (num > 0)
+		D_FREE(txi_arr);
 }
 
 /*

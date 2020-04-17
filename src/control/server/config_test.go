@@ -24,10 +24,8 @@
 package server
 
 import (
-	"fmt"
-	"io/ioutil"
+	"bufio"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -53,25 +51,48 @@ const (
 // uncommentServerConfig removes leading comment chars from daos_server.yml
 // lines in order to verify parsing of all available params.
 func uncommentServerConfig(t *testing.T, outFile string) {
-	cmd := exec.Command(
-		"bash", "-c", fmt.Sprintf("sed s/^#//g %s > %s", defaultConfig, outFile))
-
-	stderr, err := cmd.StderrPipe()
+	in, err := os.Open(defaultConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer in.Close()
 
-	if err := cmd.Start(); err != nil {
+	out, err := os.Create(outFile)
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer out.Close()
 
-	slurp, _ := ioutil.ReadAll(stderr)
-	if string(slurp) != "" {
-		t.Fatal(errors.New(string(slurp)))
-	}
+	// Keep track of keys we've already seen in order
+	// to avoid writing duplicate parameters.
+	seenKeys := make(map[string]struct{})
 
-	if err := cmd.Wait(); err != nil {
-		t.Fatal(err)
+	scn := bufio.NewScanner(in)
+	for scn.Scan() {
+		line := scn.Text()
+		line = strings.TrimPrefix(line, "#")
+
+		fields := strings.Fields(line)
+		if len(fields) < 1 {
+			continue
+		}
+		key := fields[0]
+
+		// If we're in a server config, reset the
+		// seen map to allow the same params in different
+		// server configs.
+		if line == "-" {
+			seenKeys = make(map[string]struct{})
+		}
+		if _, seen := seenKeys[key]; seen && strings.HasSuffix(key, ":") {
+			continue
+		}
+		seenKeys[key] = struct{}{}
+
+		line += "\n"
+		if _, err := out.WriteString(line); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -117,11 +138,8 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			defer os.RemoveAll(testDir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
 			testFile := filepath.Join(testDir, "test.yml")
 
 			if tt.inPath == "uncommentedDefault" {
@@ -133,7 +151,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			configA.Path = tt.inPath
-			err = configA.Load()
+			err := configA.Load()
 			if err == nil {
 				err = configA.Validate(log)
 			}
@@ -201,6 +219,8 @@ func TestServer_ConstructedConfig(t *testing.T) {
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
+		WithCrtCtxShareAddr(1).
+		WithCrtTimeout(30).
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
@@ -211,7 +231,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 			ioserver.NewConfig().
 				WithRank(0).
 				WithTargetCount(20).
-				WithHelperStreamCount(0).
+				WithHelperStreamCount(20).
 				WithServiceThreadCore(1).
 				WithScmMountPoint("/mnt/daos/1").
 				WithScmClass("ram").
@@ -227,15 +247,15 @@ func TestServer_ConstructedConfig(t *testing.T) {
 			ioserver.NewConfig().
 				WithRank(1).
 				WithTargetCount(20).
-				WithHelperStreamCount(1).
+				WithHelperStreamCount(20).
 				WithServiceThreadCore(22).
 				WithScmMountPoint("/mnt/daos/2").
 				WithScmClass("dcpm").
 				WithScmDeviceList("/dev/pmem0").
-				WithBdevClass("kdev").
-				WithBdevDeviceList("/dev/sdc", "/dev/sdd").
+				WithBdevClass("malloc").
+				WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
 				WithBdevDeviceCount(1).
-				WithBdevFileSize(16).
+				WithBdevFileSize(4).
 				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).
@@ -266,6 +286,13 @@ func TestServer_ConfigValidation(t *testing.T) {
 		"example config": {
 			noopExtra,
 			nil,
+		},
+		"nil server entry": {
+			func(c *Configuration) *Configuration {
+				var nilIOServerConfig *ioserver.Config
+				return c.WithServers(nilIOServerConfig)
+			},
+			errors.New("validation"),
 		},
 		"single access point": {
 			func(c *Configuration) *Configuration {
@@ -309,11 +336,8 @@ func TestServer_ConfigValidation(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			defer os.RemoveAll(testDir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
 
 			// First, load a config based on the server config with all options uncommented.
 			testFile := filepath.Join(testDir, sConfigUncomment)
@@ -337,11 +361,8 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 		"path doesnt exist": {expErrMsg: "no such file or directory"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			defer os.RemoveAll(testDir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
 			testFile := filepath.Join(testDir, "test.yml")
 
 			if tt.inPath == "uncommentedDefault" {
@@ -380,6 +401,30 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestServer_WithServersInheritsMainConfig(t *testing.T) {
+	testFabric := "test-fabric"
+	testModules := "a,b,c"
+	testSystemName := "test-system"
+	testSocketDir := "test-sockets"
+
+	wantCfg := ioserver.NewConfig().
+		WithFabricProvider(testFabric).
+		WithModules(testModules).
+		WithSocketDir(testSocketDir).
+		WithSystemName(testSystemName)
+
+	config := NewConfiguration().
+		WithFabricProvider(testFabric).
+		WithModules(testModules).
+		WithSocketDir(testSocketDir).
+		WithSystemName(testSystemName).
+		WithServers(ioserver.NewConfig())
+
+	if diff := cmp.Diff(wantCfg, config.Servers[0]); diff != "" {
+		t.Fatalf("unexpected server config (-want, +got):\n%s\n", diff)
 	}
 }
 

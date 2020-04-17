@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ rsvc_client_fini(struct rsvc_client *client)
  * \param[in,out]	client	client state
  * \param[out]		ep	crt_endpoint_t for the RPC
  */
-void
+int
 rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 {
 	int chosen = -1;
@@ -98,15 +98,17 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 		client->sc_next %= client->sc_ranks->rl_nr;
 	}
 
-	ep->ep_tag = 0;
 	if (chosen == -1) {
-		ep->ep_rank = -1;
-		D_WARN("No ranks in rank-list");
+		D_WARN("replica list empty\n");
+		/* TODO: Request list of replicas from management service. */
+		return -DER_NOTREPLICA;
 	} else {
 		D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr,
 			  "%d\n", chosen);
 		ep->ep_rank = client->sc_ranks->rl_ranks[chosen];
 	}
+	ep->ep_tag = 0;
+	return 0;
 }
 
 /* Process an error without any leadership hint. */
@@ -116,7 +118,7 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 {
 	int leader_index = client->sc_leader_index;
 
-	if (rc == -DER_NOTREPLICA) {
+	if (rc == -DER_OOG || rc == -DER_NOTREPLICA) {
 		int pos;
 		bool found;
 		d_rank_list_t *rl = client->sc_ranks;
@@ -136,9 +138,8 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 		} else {
 			client->sc_next = 0;
 		}
-
-		/** TODO: Request list of replicas from management service.  **/
-
+		D_ERROR("removed rank %u from replica list due to "DF_RC"\n",
+			ep->ep_rank, DP_RC(rc));
 	} else if (client->sc_leader_known && client->sc_leader_aliveness > 0 &&
 		   ep->ep_rank == client->sc_ranks->rl_ranks[leader_index]) {
 		if (rc == -DER_NOTLEADER)
@@ -238,7 +239,12 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 	 * Enumerate all cases of <rc_crt, rc_svc, hint>. Keep them at the same
 	 * indentation level, please.
 	 */
-	if (rc_crt != 0) {
+	if (rc_crt == -DER_OOG) {
+		D_DEBUG(DB_MD, "rank %u out of group: rc_crt=%d\n",
+			ep->ep_rank, rc_crt);
+		rsvc_client_process_error(client, rc_crt, ep);
+		return RSVC_CLIENT_RECHOOSE;
+	} else if (rc_crt != 0) {
 		D_DEBUG(DB_MD, "no reply from rank %u: rc_crt=%d\n",
 			ep->ep_rank, rc_crt);
 		rsvc_client_process_error(client, rc_crt, ep);
@@ -262,8 +268,7 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 		D_DEBUG(DB_MD, "service not found reply from rank %u: ",
 			ep->ep_rank);
 		rsvc_client_process_error(client, rc_svc, ep);
-		return client->sc_ranks->rl_nr == 0 ?
-			RSVC_CLIENT_PROCEED : RSVC_CLIENT_RECHOOSE;
+		return RSVC_CLIENT_RECHOOSE;
 	} else if (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID)) {
 		/* This may happen if the service wasn't found. */
 		D_DEBUG(DB_MD, "\"leader\" reply without hint from rank %u: "

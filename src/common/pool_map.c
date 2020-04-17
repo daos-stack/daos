@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1120,6 +1120,7 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 				if (!existed)
 					return -DER_INVAL;
 
+				D_ASSERT(parent != NULL);
 				if (parent->do_comp.co_status == PO_COMP_ST_NEW)
 					return -DER_INVAL;
 
@@ -1147,7 +1148,8 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 			}
 
 			nr++;
-			if (parent != NULL && parent->do_child_nr == nr) {
+			D_ASSERT(parent != NULL);
+			if (parent->do_child_nr == nr) {
 				parent++;
 				nr = 0;
 			}
@@ -1897,7 +1899,7 @@ pool_map_update_failed_cnt(struct pool_map *map)
 	struct pool_domain *root;
 	struct pool_fail_comp *fail_cnts = map->po_comp_fail_cnts;
 
-	memset(fail_cnts, 0, sizeof(fail_cnts) * map->po_domain_layers);
+	memset(fail_cnts, 0, sizeof(*fail_cnts) * map->po_domain_layers);
 
 	rc = pool_map_find_domain(map, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 	if (rc == 0)

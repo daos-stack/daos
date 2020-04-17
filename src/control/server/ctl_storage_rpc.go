@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,11 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
+const (
+	msgFormatErr      = "failure formatting storage, check RPC response for details"
+	msgNvmeFormatSkip = "NVMe format skipped on instance %d as SCM format did not complete"
+)
+
 // newState creates, populates and returns ResponseState in addition
 // to logging any err.
 func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, infoMsg string,
@@ -53,39 +58,6 @@ func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, in
 	}
 
 	return state
-}
-
-func scmModulesToPB(mms []storage.ScmModule) (pbMms proto.ScmModules) {
-	for _, c := range mms {
-		pbMms = append(
-			pbMms,
-			&ctlpb.ScmModule{
-				Loc: &ctlpb.ScmModule_Location{
-					Channel:    c.ChannelID,
-					Channelpos: c.ChannelPosition,
-					Memctrlr:   c.ControllerID,
-					Socket:     c.SocketID,
-				},
-				Physicalid: c.PhysicalID,
-				Capacity:   c.Capacity,
-			})
-	}
-	return
-}
-
-func scmNamespacesToPB(nss []storage.ScmNamespace) (pbNss proto.ScmNamespaces) {
-	for _, ns := range nss {
-		pbNss = append(pbNss,
-			&ctlpb.PmemDevice{
-				Uuid:     ns.UUID,
-				Blockdev: ns.BlockDevice,
-				Dev:      ns.Name,
-				Numanode: ns.NumaNode,
-				Size:     ns.Size,
-			})
-	}
-
-	return
 }
 
 func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *ctlpb.PrepareNvmeResp) {
@@ -128,9 +100,14 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 	if resp.RebootRequired {
 		info = scm.MsgScmRebootRequired
 	}
+	pbResp.Rebootrequired = resp.RebootRequired
 
+	pbResp.Namespaces = make(proto.ScmNamespaces, 0, len(resp.Namespaces))
+	if err := (*proto.ScmNamespaces)(&pbResp.Namespaces).FromNative(resp.Namespaces); err != nil {
+		pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg)
+		return
+	}
 	pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", info, msg)
-	pbResp.Pmems = scmNamespacesToPB(resp.Namespaces)
 
 	return
 }
@@ -188,9 +165,19 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg),
 		}
 		if len(ssr.Namespaces) > 0 {
-			resp.Scm.Pmems = scmNamespacesToPB(ssr.Namespaces)
+			resp.Scm.Namespaces = make(proto.ScmNamespaces, 0, len(ssr.Namespaces))
+			err := (*proto.ScmNamespaces)(&resp.Scm.Namespaces).FromNative(ssr.Namespaces)
+			if err != nil {
+				resp.Scm.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM,
+					err.Error(), "", msg+"SCM")
+			}
 		} else {
-			resp.Scm.Modules = scmModulesToPB(ssr.Modules)
+			resp.Scm.Modules = make(proto.ScmModules, 0, len(ssr.Modules))
+			err := (*proto.ScmModules)(&resp.Scm.Modules).FromNative(ssr.Modules)
+			if err != nil {
+				resp.Scm.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM,
+					err.Error(), "", msg+"SCM")
+			}
 		}
 	}
 
@@ -256,9 +243,10 @@ func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ct
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
 func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlpb.StorageFormatResp) error {
-	const msgFormatErr = "failure formatting storage, check RPC response for details"
 	needsSuperblock := true
 	needsScmFormat := reformat
+	skipNvmeResult := newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_SUCCESS, "",
+		fmt.Sprintf(msgNvmeFormatSkip, i.Index()))
 
 	c.log.Infof("formatting storage for %s instance %d (reformat: %t)",
 		DataPlaneName, i.Index(), reformat)
@@ -278,22 +266,29 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 				newMntRet(c.log, "format", scmConfig.MountPoint,
 					ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(),
 					fault.ShowResolutionFor(err)))
+
+			if len(i.bdevConfig().DeviceList) > 0 {
+				resp.Crets = append(resp.Crets, skipNvmeResult)
+			}
+
 			return nil // don't continue if formatted and no reformat opt
 		}
 	}
 
-	// When SCM format is required, format and populate response with result.
+	// When SCM format is required, format and append to response results.
 	if needsScmFormat {
-		results := proto.ScmMountResults{}
 		result, err := c.scmFormat(scmConfig, true)
 		if err != nil {
 			return errors.Wrap(err, "scm format") // return unexpected errors
 		}
-		results = append(results, result)
-		resp.Mrets = results
+		resp.Mrets = append(resp.Mrets, result)
 
-		if results.HasErrors() {
+		if result.State.Status != ctlpb.ResponseStatus_CTL_SUCCESS {
 			c.log.Error(msgFormatErr)
+			if len(i.bdevConfig().DeviceList) > 0 {
+				resp.Crets = append(resp.Crets, skipNvmeResult)
+			}
+
 			return nil // don't continue if we can't format SCM
 		}
 	} else {
@@ -305,10 +300,9 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 		}
 	}
 
-	results := proto.NvmeControllerResults{} // init actual NVMe format results
-
-	// If no superblock exists, populate NVMe response with format results.
+	// If no superblock exists, format NVMe and populate response with results.
 	if needsSuperblock {
+		nvmeResults := proto.NvmeControllerResults{}
 		bdevConfig := i.bdevConfig()
 
 		// A config with SCM and no block devices is valid.
@@ -335,21 +329,22 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 						infoMsg = fault.ShowResolutionFor(status.Error)
 					}
 				}
-				results = append(results,
+				nvmeResults = append(nvmeResults,
 					newCret(c.log, "format", dev, ctlpbStatus, errMsg, infoMsg))
 			}
 
 			c.log.Infof("Finished format of %s block devices (%s)", bdevConfig.Class, bdevListStr)
 		}
+
+		resp.Crets = append(resp.Crets, nvmeResults...) // append this instance's results
+
+		if nvmeResults.HasErrors() {
+			c.log.Error(msgFormatErr)
+			return nil // don't continue if we can't format NVMe
+		}
 	}
 
-	resp.Crets = results // overwrite with actual results
-
-	if results.HasErrors() {
-		c.log.Error(msgFormatErr)
-	} else {
-		i.NotifyStorageReady()
-	}
+	i.NotifyStorageReady()
 
 	return nil
 }
@@ -362,8 +357,10 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 //
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
-func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb.MgmtCtl_StorageFormatServer) error {
+func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq) (*ctlpb.StorageFormatResp, error) {
 	resp := new(ctlpb.StorageFormatResp)
+	resp.Mrets = proto.ScmMountResults{}
+	resp.Crets = proto.NvmeControllerResults{}
 
 	c.log.Debugf("received StorageFormat RPC %v; proceeding to instance storage format", req)
 
@@ -371,26 +368,15 @@ func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb
 	// here for now should help to cut down on shenanigans which might result
 	// in data loss.
 	if c.harness.IsStarted() {
-		return errors.New("cannot format storage with running I/O server instances")
+		return nil, errors.New("cannot format storage with running I/O server instances")
 	}
 
 	// temporary scaffolding
 	for _, i := range c.harness.Instances() {
 		if err := c.doFormat(i, req.Reformat, resp); err != nil {
-			return errors.WithMessage(err, "formatting storage")
+			return nil, errors.WithMessage(err, "formatting storage")
 		}
 	}
 
-	if resp.Crets == nil {
-		// indicate that NVMe not yet formatted
-		resp.Crets = proto.NvmeControllerResults{
-			newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME, msgBdevScmNotReady, ""),
-		}
-	}
-
-	if err := stream.Send(resp); err != nil {
-		return errors.WithMessagef(err, "sending response (%+v)", resp)
-	}
-
-	return nil
+	return resp, nil
 }

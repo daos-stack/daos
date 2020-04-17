@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -364,6 +364,9 @@ dfs_test_short_read(void **state)
 	dfs_obj_share(dfs_mt, O_RDONLY, arg->myrank, &obj);
 
 	/** reading empty file should return 0 */
+	rsgl.sg_nr = 1;
+	d_iov_set(&iov, rbuf[0], buf_size);
+	rsgl.sg_iovs = &iov;
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 0);
@@ -455,12 +458,138 @@ dfs_test_short_read(void **state)
 	assert_int_equal(read_size, buf_size * NUM_SEGS);
 
 	rc = dfs_release(obj);
-	dfs_test_file_del(name);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		dfs_test_file_del(name);
 
 	D_FREE(wbuf);
 	for (i = 0; i < NUM_SEGS; i++)
 		D_FREE(rbuf[i]);
 	D_FREE(rsgl.sg_iovs);
+}
+
+static int
+check_one_success(int rc, int err, MPI_Comm comm)
+{
+	int *rc_arr;
+	int mpi_size, mpi_rank, i;
+	int passed, expect_fail, failed;
+
+	MPI_Comm_size(comm, &mpi_size);
+	MPI_Comm_rank(comm, &mpi_rank);
+
+	D_ALLOC_ARRAY(rc_arr, mpi_size);
+	assert_non_null(rc_arr);
+
+	MPI_Allgather(&rc, 1, MPI_INT, rc_arr, 1, MPI_INT, comm);
+	passed = expect_fail = failed = 0;
+	for (i = 0; i < mpi_size; i++) {
+		if (rc_arr[i] == 0)
+			passed++;
+		else if (rc_arr[i] == err)
+			expect_fail++;
+		else
+			failed++;
+	}
+
+	free(rc_arr);
+
+	if (failed || passed != 1)
+		return -1;
+	if ((expect_fail + passed) != mpi_size)
+		return -1;
+	return 0;
+}
+
+static void
+dfs_test_cond(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*file;
+	char			*filename = "cond_testfile";
+	char			*dirname = "cond_testdir";
+	int			rc, op_rc;
+
+	if (arg->myrank == 0)
+		print_message("All ranks create the same file with O_EXCL\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	op_rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	assert_int_equal(rc, 0);
+	if (op_rc == 0) {
+		rc = dfs_release(file);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks unlink the same file\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_remove(dfs_mt, NULL, filename, true, NULL);
+	rc = check_one_success(rc, ENOENT, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent file unlink\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks create the same directory\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_mkdir(dfs_mt, NULL, dirname, S_IWUSR | S_IRUSR, 0);
+	rc = check_one_success(rc, EEXIST, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent dir creation\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks remove the same directory\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+	rc = check_one_success(rc, ENOENT, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent rmdir\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dfs_test_syml(void **state)
+{
+	dfs_obj_t		*sym;
+	char			*filename = "syml_file";
+	char			*val = "SYMLINK VAL 1";
+	char			tmp_buf[64];
+	struct stat		stbuf;
+	daos_size_t		size = 0;
+	int			rc, op_rc;
+
+	op_rc = dfs_open(dfs_mt, NULL, filename, S_IFLNK | S_IWUSR | S_IRUSR,
+			 O_RDWR | O_CREAT | O_EXCL, 0, 0, val, &sym);
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	assert_int_equal(rc, 0);
+	if (op_rc != 0)
+		goto syml_stat;
+
+	rc = dfs_get_symlink_value(sym, NULL, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(val)+1);
+
+	rc = dfs_get_symlink_value(sym, tmp_buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(val) + 1);
+	assert_string_equal(val, tmp_buf);
+
+	rc = dfs_release(sym);
+	assert_int_equal(rc, 0);
+
+syml_stat:
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, strlen(val));
+
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 static const struct CMUnitTest dfs_tests[] = {
@@ -470,6 +599,10 @@ static const struct CMUnitTest dfs_tests[] = {
 	  dfs_test_short_read, async_disable, test_case_teardown},
 	{ "DFS_TEST3: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
+	{ "DFS_TEST4: Conditional OPs",
+	  dfs_test_cond, async_disable, test_case_teardown},
+	{ "DFS_TEST5: Simple Symlinks",
+	  dfs_test_syml, async_disable, test_case_teardown},
 };
 
 static int

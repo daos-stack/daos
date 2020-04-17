@@ -78,8 +78,6 @@ iov2rec_bundle(d_iov_t *val_iov)
 struct ktr_hkey {
 	/** murmur64 hash */
 	uint64_t		kh_hash[2];
-	/** cacheline alignment */
-	uint64_t		kh_pad_64;
 };
 
 /**
@@ -182,6 +180,7 @@ ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 					   VOS_BTR_MUR_SEED);
 	kkey->kh_hash[1] = d_hash_string_u32(key_iov->iov_buf,
 					     key_iov->iov_len);
+	vos_kh_set(kkey->kh_hash[0]);
 }
 
 /** compare the hashed key */
@@ -227,24 +226,6 @@ ktr_key_cmp_lexical(struct vos_krec_df *krec, d_iov_t *kiov)
 }
 
 static int
-ktr_key_cmp_uint64(struct vos_krec_df *krec, d_iov_t *kiov)
-{
-	uint64_t k1, k2;
-
-	if (krec->kr_size != kiov->iov_len ||
-	    krec->kr_size != sizeof(uint64_t)) {
-		D_ERROR("invalid kr_size %d.\n", krec->kr_size);
-		return BTR_CMP_ERR;
-	}
-
-	k1 = *(uint64_t *)vos_krec2key(krec);
-	k2 = *(uint64_t *)kiov->iov_buf;
-
-	return (k1 > k2) ? BTR_CMP_GT :
-			   ((k1 < k2) ? BTR_CMP_LT : BTR_CMP_EQ);
-}
-
-static int
 ktr_key_cmp_default(struct vos_krec_df *krec, d_iov_t *kiov)
 {
 	/* This only gets called if hash comparison matches. */
@@ -269,9 +250,7 @@ ktr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 
 	krec  = vos_rec2krec(tins, rec);
 
-	if (feats & VOS_KEY_CMP_UINT64)
-		cmp = ktr_key_cmp_uint64(krec, key_iov);
-	else if (feats & VOS_KEY_CMP_LEXICAL)
+	if (feats & VOS_KEY_CMP_LEXICAL)
 		cmp = ktr_key_cmp_lexical(krec, key_iov);
 	else
 		cmp = ktr_key_cmp_default(krec, key_iov);
@@ -361,6 +340,9 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	rc = ilog_destroy(&tins->ti_umm, &cbs, &krec->kr_ilog);
 	if (rc != 0)
 		return rc;
+
+	vos_ilog_ts_evict(&krec->kr_ilog, (krec->kr_bmap & KREC_BF_DKEY) ?
+			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY);
 
 	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
@@ -694,16 +676,16 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 	{
 		.ta_class	= VOS_BTR_DKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_DIRECT_KEY |
-				  BTR_FEAT_DYNAMIC_ROOT,
+		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_UINT_KEY |
+				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_dkey",
 		.ta_ops		= &key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_AKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_DIRECT_KEY |
-				  BTR_FEAT_DYNAMIC_ROOT,
+		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_UINT_KEY |
+				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_akey",
 		.ta_ops		= &key_btr_ops,
 	},
@@ -885,13 +867,19 @@ int
 key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		 enum vos_tree_class tclass, daos_key_t *key, int flags,
 		 uint32_t intent, struct vos_krec_df **krecp,
-		 daos_handle_t *sub_toh)
+		 daos_handle_t *sub_toh, struct vos_ts_set *ts_set)
 {
-	struct vos_krec_df	*krec;
+	struct ilog_df		*ilog = NULL;
+	struct vos_krec_df	*krec = NULL;
 	struct dcs_csum_info	 csum;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 riov;
+	bool			 found;
 	int			 rc;
+	int			 tmprc;
+
+	/** reset the saved hash */
+	vos_kh_set(0);
 
 	if (krecp != NULL)
 		*krecp = NULL;
@@ -921,7 +909,28 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	default:
 		D_ERROR("fetch failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
+	case 0:
+		krec = rbund.rb_krec;
+		ilog = &krec->kr_ilog;
+		found = vos_ilog_ts_lookup(ts_set, ilog);
+		if (found)
+			break;
+		/** fall through to cache re-cache entry */
 	case -DER_NONEXIST:
+		/** Key hash already be calculated by dbtree_fetch so no need
+		 *  to pass in the key here.
+		 */
+		tmprc = vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		if (tmprc != 0) {
+			rc = tmprc;
+			D_ASSERT(tmprc == -DER_NO_PERM);
+			D_ASSERT(tclass == VOS_BTR_AKEY);
+			goto out;
+		}
+		break;
+	}
+
+	if (rc == -DER_NONEXIST) {
 		if (!(flags & SUBTR_CREATE))
 			goto out;
 
@@ -932,16 +941,19 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 			D_ERROR("Failed to upsert: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
-	case 0:
 		krec = rbund.rb_krec;
-		break;
+		vos_ilog_ts_mark(ts_set, &krec->kr_ilog);
 	}
 
-	if (sub_toh)
+	if (sub_toh) {
+		D_ASSERT(krec != NULL);
 		rc = tree_open_create(obj, tclass, flags, krec, sub_toh);
+	}
+
 	if (rc)
 		goto out;
 
+	D_ASSERT(krec != NULL);
 	/* For updates, we need to be able to modify the epoch range */
 	if (krecp != NULL)
 		*krecp = krec;
@@ -968,46 +980,66 @@ key_tree_release(daos_handle_t toh, bool is_array)
  */
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
-	       d_iov_t *key_iov, d_iov_t *val_iov, int flags)
+	       d_iov_t *key_iov, d_iov_t *val_iov, uint64_t flags,
+	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
+	       struct vos_ilog_info *info)
 {
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
-	struct umem_instance	*umm;
-	struct ilog_desc_cbs	 cbs;
-	daos_handle_t		 loh = DAOS_HDL_INVAL;
+	struct ilog_df		*ilog = NULL;
+	daos_epoch_range_t	 epr = {0, epoch};
+	bool			 found = false;
+	bool			 mark = false;
 	int			 rc;
 
 	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
 			  val_iov);
+
+	if (rc == 0 || rc == -DER_NONEXIST) {
+		if (rc == 0) {
+			rbund = iov2rec_bundle(val_iov);
+			krec = rbund->rb_krec;
+			ilog = &krec->kr_ilog;
+			found = vos_ilog_ts_lookup(ts_set, ilog);
+		}
+
+		if (!found)
+			vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+
+		if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH)) {
+			rc = -DER_NONEXIST;
+			goto done;
+		}
+	}
+
 	if (rc != 0) {
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
 				   key_iov, val_iov);
-		if (rc) {
-			D_ERROR("Failed to add new punch, rc="DF_RC"\n",
-				DP_RC(rc));
-			return rc;
-		}
+		if (rc)
+			goto done;
+
+		mark = true;
 	}
 
 	/** Punch always adds a log entry */
 	rbund = iov2rec_bundle(val_iov);
 	krec = rbund->rb_krec;
-	umm = vos_obj2umm(obj);
 
-	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(obj->obj_cont));
-	rc = ilog_open(umm, &krec->kr_ilog, &cbs, &loh);
-	if (rc != 0) {
-		D_ERROR("Failed to open incarnation log: rc = %s\n",
-			d_errstr(rc));
-		return rc;
-	}
-	rc = ilog_update(loh, NULL, epoch, true);
+	if (mark)
+		vos_ilog_ts_mark(ts_set, ilog);
+
+	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, parent,
+			    info, ts_set, true);
+
+	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
+		rc = -DER_AGAIN;
+done:
 	if (rc != 0)
-		D_ERROR("Failed to update incarnation log entry:"
-			" %s\n", d_errstr(rc));
-	ilog_close(loh);
+		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
+			 "Failed to punch key: "DF_RC"\n",
+			 DP_RC(rc));
 
 	return rc;
 }

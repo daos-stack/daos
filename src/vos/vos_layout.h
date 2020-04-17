@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 #define POOL_DF_VER_1				1
-#define POOL_DF_VERSION				2
+#define POOL_DF_VERSION				4
 
 /**
  * Durable format for VOS pool
@@ -251,6 +251,8 @@ struct vos_cont_df {
 	uuid_t				cd_id;
 	uint64_t			cd_nobjs;
 	uint64_t			cd_dtx_resync_gen;
+	uint32_t			cd_ts_idx;
+	uint32_t			cd_pad;
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
 	struct btr_root			cd_obj_root;
