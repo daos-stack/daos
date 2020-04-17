@@ -83,21 +83,12 @@ func (srv *IOServerInstance) MountScmDevice() error {
 // NeedsScmFormat probes the configured instance storage and determines whether
 // or not it requires a format operation before it can be used.
 func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
-	srv.RLock()
-	if srv._scmStorageOk {
-		srv.RUnlock()
-		return false, nil
-	}
-	srv.RUnlock()
-
 	scmCfg := srv.scmConfig()
 
 	srv.log.Debugf("%s: checking formatting", scmCfg.MountPoint)
 
-	// take a lock here to ensure that we can safely set _scmStorageOk
-	// as well as avoiding racy access to stuff in srv.ext.
-	srv.Lock()
-	defer srv.Unlock()
+	srv.RLock()
+	defer srv.RUnlock()
 
 	req, err := scm.CreateFormatRequest(scmCfg, false)
 	if err != nil {
@@ -114,15 +105,15 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	return needsFormat, nil
 }
 
-// NotifyStorageReady releases any blocks on awaitStorageReady().
+// NotifyStorageReady releases any blocks on AwaitStorageReady().
 func (srv *IOServerInstance) NotifyStorageReady() {
 	go func() {
 		close(srv.storageReady)
 	}()
 }
 
-// awaitStorageReady blocks until instance has storage available and ready to be used.
-func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
+// AwaitStorageReady blocks until instance has storage available and ready to be used.
+func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
 	srv.RLock()
 	defer srv.RUnlock()
 
@@ -136,7 +127,7 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 
 	needsScmFormat, err := srv.NeedsScmFormat()
 	if err != nil {
-		srv.log.Errorf("index %d: failed to check storage formatting: %s", idx, err)
+		srv.log.Errorf("instance %d: failed to check storage formatting: %s", idx, err)
 		needsScmFormat = true
 	}
 
@@ -172,9 +163,6 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 
 // createSuperblock creates instance superblock if needed.
 func (srv *IOServerInstance) createSuperblock(recreate bool) error {
-	srv.RLock()
-	defer srv.RUnlock()
-
 	if srv.IsStarted() {
 		return errors.Errorf("can't create superblock: instance %d already started", srv.Index())
 	}

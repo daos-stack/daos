@@ -50,9 +50,10 @@ func (srv *IOServerInstance) IsStarted() bool {
 }
 
 func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
-	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
+	if err = srv.AwaitStorageReady(ctx, recreateSBs); err != nil {
 		return
 	}
+	srv.log.Debugf("instance %d: creating superblock on formatted storage", srv.Index())
 	if err = srv.createSuperblock(recreateSBs); err != nil {
 		return
 	}
@@ -161,14 +162,12 @@ func (srv *IOServerInstance) run(ctx context.Context, errOut chan error, members
 		return
 	}
 
-	return
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 // Start is the main processing loop for an IOServerInstance.
-func (srv *IOServerInstance) Start(parent context.Context, membership *system.Membership, cfg *Configuration) {
-	ctx, cancel := context.WithCancel(parent)
-	defer cancel()
-
+func (srv *IOServerInstance) Start(ctx context.Context, membership *system.Membership, cfg *Configuration) {
 	errChan := make(chan error)
 
 	// spawn instance processing loops and listen for exit

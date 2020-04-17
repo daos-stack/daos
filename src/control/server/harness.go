@@ -47,9 +47,6 @@ type IOServerHarness struct {
 	log              logging.Logger
 	instances        []*IOServerInstance
 	started          atm.Bool
-	startable        atm.Bool
-	restart          chan struct{}
-	errChan          chan error
 	rankReqTimeout   time.Duration
 	rankStartTimeout time.Duration
 }
@@ -60,9 +57,6 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 		log:              log,
 		instances:        make([]*IOServerInstance, 0, maxIOServers),
 		started:          atm.NewBool(false),
-		startable:        atm.NewBool(false),
-		restart:          make(chan struct{}, 1),
-		errChan:          make(chan error, maxIOServers),
 		rankReqTimeout:   defaultRequestTimeout,
 		rankStartTimeout: defaultStartTimeout,
 	}
@@ -123,7 +117,7 @@ func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 // configured instances' processing loops.
 //
 // Run until harness is shutdown.
-func (h *IOServerHarness) Start(parent context.Context, membership *system.Membership, cfg *Configuration) error {
+func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, cfg *Configuration) error {
 	if h.IsStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -133,9 +127,6 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 	// which are using the storage.
 	h.started.SetTrue()
 	defer h.started.SetFalse()
-
-	ctx, shutdown := context.WithCancel(parent)
-	defer shutdown()
 
 	if cfg != nil {
 		// Single daos_server dRPC server to handle all iosrv requests
@@ -153,10 +144,13 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 
 	for _, srv := range h.Instances() {
 		// start first time then relinquish control to instance
-		srv.Start(ctx, membership, cfg)
+		go srv.Start(ctx, membership, cfg)
+		h.log.Debugf("harness spawned instance %d", srv.Index())
 	}
 
 	<-ctx.Done()
+	h.log.Debug("shutting down harness")
+
 	return ctx.Err()
 }
 
@@ -243,7 +237,7 @@ func (h *IOServerHarness) RestartInstances() error {
 		return FaultInstancesNotStopped(startedRanks)
 	}
 
-	h.restart <- struct{}{} // trigger harness to restart its instances
+	//h.restart <- struct{}{} // trigger harness to restart its instances
 
 	return nil
 }

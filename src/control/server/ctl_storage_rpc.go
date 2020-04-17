@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	msgFormatErr      = "failure formatting storage, check RPC response for details"
+	msgFormatErr      = "instance %d: failure formatting storage, check RPC response for details"
 	msgNvmeFormatSkip = "NVMe format skipped on instance %d as SCM format did not complete"
 )
 
@@ -209,7 +209,7 @@ func newCret(log logging.Logger, op, pciAddr string, status ctlpb.ResponseStatus
 	}
 }
 
-func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ctlpb.ScmMountResult, error) {
+func (c *ControlService) scmFormat(srvIdx uint32, scmCfg storage.ScmConfig, reformat bool) (*ctlpb.ScmMountResult, error) {
 	var eMsg, iMsg string
 	status := ctlpb.ResponseStatus_CTL_SUCCESS
 
@@ -219,7 +219,7 @@ func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ct
 	}
 
 	scmStr := fmt.Sprintf("SCM (%s:%s)", scmCfg.Class, scmCfg.MountPoint)
-	c.log.Infof("Starting format of %s", scmStr)
+	c.log.Infof("Instance %d: starting format of %s", srvIdx, scmStr)
 	res, err := c.scm.Format(*req)
 	if err != nil {
 		eMsg = err.Error()
@@ -235,28 +235,34 @@ func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ct
 	if err != nil {
 		c.log.Errorf("  format of %s failed: %s", scmStr, err)
 	}
-	c.log.Infof("Finished format of %s", scmStr)
+	c.log.Infof("Instance %d: finished format of %s", srvIdx, scmStr)
 
 	return newMntRet(c.log, "format", scmCfg.MountPoint, status, eMsg, iMsg), nil
 }
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlpb.StorageFormatResp) error {
+func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool, resp *ctlpb.StorageFormatResp) error {
+	srvIdx := srv.Index()
 	needsSuperblock := true
 	needsScmFormat := reformat
 	skipNvmeResult := newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_SUCCESS, "",
-		fmt.Sprintf(msgNvmeFormatSkip, i.Index()))
+		fmt.Sprintf(msgNvmeFormatSkip, srvIdx))
 
-	c.log.Infof("formatting storage for %s instance %d (reformat: %t)",
-		DataPlaneName, i.Index(), reformat)
+	c.log.Infof("Formatting storage for %s instance %d (reformat: %t)",
+		DataPlaneName, srvIdx, reformat)
 
-	scmConfig := i.scmConfig()
+	scmConfig := srv.scmConfig()
+
+	if srv.IsStarted() {
+		return errors.Errorf("instance %d: can't format storage of running instance",
+			srvIdx)
+	}
 
 	// If not reformatting, check if SCM is already formatted.
 	if !reformat {
 		var err error
-		needsScmFormat, err = i.NeedsScmFormat()
+		needsScmFormat, err = srv.NeedsScmFormat()
 		if err != nil {
 			return errors.Wrap(err, "unable to check storage formatting")
 		}
@@ -267,7 +273,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 					ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(),
 					fault.ShowResolutionFor(err)))
 
-			if len(i.bdevConfig().DeviceList) > 0 {
+			if len(srv.bdevConfig().DeviceList) > 0 {
 				resp.Crets = append(resp.Crets, skipNvmeResult)
 			}
 
@@ -277,15 +283,15 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 
 	// When SCM format is required, format and append to response results.
 	if needsScmFormat {
-		result, err := c.scmFormat(scmConfig, true)
+		result, err := c.scmFormat(srvIdx, scmConfig, true)
 		if err != nil {
 			return errors.Wrap(err, "scm format") // return unexpected errors
 		}
 		resp.Mrets = append(resp.Mrets, result)
 
 		if result.State.Status != ctlpb.ResponseStatus_CTL_SUCCESS {
-			c.log.Error(msgFormatErr)
-			if len(i.bdevConfig().DeviceList) > 0 {
+			c.log.Errorf(msgFormatErr, srvIdx)
+			if len(srv.bdevConfig().DeviceList) > 0 {
 				resp.Crets = append(resp.Crets, skipNvmeResult)
 			}
 
@@ -294,7 +300,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	} else {
 		var err error
 		// If SCM was already formatted, verify if superblock exists.
-		needsSuperblock, err = i.NeedsSuperblock()
+		needsSuperblock, err = srv.NeedsSuperblock()
 		if err != nil {
 			return errors.Wrap(err, "unable to check instance superblock")
 		}
@@ -303,12 +309,13 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	// If no superblock exists, format NVMe and populate response with results.
 	if needsSuperblock {
 		nvmeResults := proto.NvmeControllerResults{}
-		bdevConfig := i.bdevConfig()
+		bdevConfig := srv.bdevConfig()
 
 		// A config with SCM and no block devices is valid.
 		if len(bdevConfig.DeviceList) > 0 {
 			bdevListStr := strings.Join(bdevConfig.DeviceList, ",")
-			c.log.Infof("Starting format of %s block devices (%s)", bdevConfig.Class, bdevListStr)
+			c.log.Infof("Instance %d: starting format of %s block devices (%s)",
+				srvIdx, bdevConfig.Class, bdevListStr)
 
 			res, err := c.bdev.Format(bdev.FormatRequest{
 				Class:      bdevConfig.Class,
@@ -333,18 +340,19 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 					newCret(c.log, "format", dev, ctlpbStatus, errMsg, infoMsg))
 			}
 
-			c.log.Infof("Finished format of %s block devices (%s)", bdevConfig.Class, bdevListStr)
+			c.log.Infof("Instance %d: finished format of %s block devices (%s)",
+				srvIdx, bdevConfig.Class, bdevListStr)
 		}
 
 		resp.Crets = append(resp.Crets, nvmeResults...) // append this instance's results
 
 		if nvmeResults.HasErrors() {
-			c.log.Error(msgFormatErr)
+			c.log.Errorf(msgFormatErr, srvIdx)
 			return nil // don't continue if we can't format NVMe
 		}
 	}
 
-	i.NotifyStorageReady()
+	srv.NotifyStorageReady()
 
 	return nil
 }
@@ -363,13 +371,6 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	resp.Crets = proto.NvmeControllerResults{}
 
 	c.log.Debugf("received StorageFormat RPC %v; proceeding to instance storage format", req)
-
-	// TODO: We may want to ease this restriction at some point, but having this
-	// here for now should help to cut down on shenanigans which might result
-	// in data loss.
-	if c.harness.IsStarted() {
-		return nil, errors.New("cannot format storage with running I/O server instances")
-	}
 
 	// temporary scaffolding
 	for _, i := range c.harness.Instances() {
