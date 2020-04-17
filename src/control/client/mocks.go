@@ -68,12 +68,6 @@ var (
 			State:    &MockState,
 		},
 	}
-	MockACL = &common.MockACLResult{
-		Acl: []string{
-			"A::OWNER@:rw",
-			"A::GROUP@:r",
-		},
-	}
 	MockErr = errors.New("unknown failure")
 )
 
@@ -275,7 +269,7 @@ func newMockConnect(log logging.Logger,
 	state connectivity.State, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems ScmNamespaces, mountResults ScmMountResults,
-	scanRet error, formatRet error, killRet error, connectRet error, ACLRet *common.MockACLResult,
+	scanRet error, formatRet error, killRet error, connectRet error,
 	listPoolsRet *common.MockListPoolsResult) *connList {
 
 	return &connList{
@@ -297,7 +291,6 @@ func newMockConnect(log logging.Logger,
 				formatRet:             formatRet,
 			},
 			svcClientCfg: MockMgmtSvcClientConfig{
-				ACLRet:       ACLRet,
 				ListPoolsRet: listPoolsRet,
 				KillErr:      killRet,
 			},
@@ -309,5 +302,5 @@ func defaultMockConnect(log logging.Logger) Connect {
 	return newMockConnect(
 		log, connectivity.Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
 		MockModuleResults, MockScmNamespaces, MockMountResults,
-		nil, nil, nil, nil, MockACL, nil)
+		nil, nil, nil, nil, nil)
 }
