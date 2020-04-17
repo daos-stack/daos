@@ -91,17 +91,14 @@ class JobManager(ExecutableCommand):
                 host
 
         """
-        hosts = None
-        path = None
-        slots = None
         if isinstance(value, tuple):
-            if len(value) > 1:
-                path = value[1]
-            if len(value) > 2:
-                slots = value[2]
+            self._hosts = list(value[0]) if value else None
+            path = value[1] if len(value) > 1 else None
+            slots = value[2] if len(value) > 2 else None
         else:
-            hosts = list(value)
-        self._hosts = hosts
+            self._hosts = list(value)
+            path = None
+            slots = None
         return (path, slots)
 
     def check_subprocess_status(self, sub_process):
@@ -191,22 +188,32 @@ class Orterun(JobManager):
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
 
-    @hosts.setter
-    def hosts(self, value):
-        """Set the list of hosts associated with this command.
+    def _process_host_value(self, value):
+        """Process the value input for the hosts setter method.
 
-        This method also defines the self.hostfile.value and should be used over
-        directly setting the value to ensure the self._hosts value is set.
+        This method also defines the self.hostfile.value.  Setting self.hosts
+        should be used over directly setting the self.hostfile.value to ensure
+        the self._hosts value is set.
 
         Args:
-            value (tuple): list of hosts, path for hostfile, and number of slots
-                per host to use to assign the hosts/hostfile
+            value (object): a host, list of hosts, or a tuple of list of hosts,
+                optional path for a hostfile, and optional number of slots per
+                host
+
+        Returns:
+            tuple: a tuple of the path for hostfile and the number of slots per
+                host
+
         """
-        path, slots = self._process_host_value(value)
+        path, slots = super(Orterun, self)._process_host_value(value)
+
+        # Use the list of hosts to create a hostfile and set the hostfile param
         kwargs = {"hostlist": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
+
+        return (path, slots)
 
     def assign_processes(self, processes):
         """Assign the number of processes per node (-np).
@@ -282,22 +289,32 @@ class Mpirun(JobManager):
         self.envlist = FormattedParameter("-envlist {}", None)
         self.mpitype = mpitype
 
-    @hosts.setter
-    def hosts(self, value):
-        """Set the list of hosts associated with this command.
+    def _process_host_value(self, value):
+        """Process the value input for the hosts setter method.
 
-        This method also defines the self.hostfile.value and should be used over
-        directly setting the value to ensure the self._hosts value is set.
+        This method also defines the self.hostfile.value.  Setting self.hosts
+        should be used over directly setting the self.hostfile.value to ensure
+        the self._hosts value is set.
 
         Args:
-            value (tuple): list of hosts, path for hostfile, and number of slots
-                per host to use to assign the hosts/hostfile
+            value (object): a host, list of hosts, or a tuple of list of hosts,
+                optional path for a hostfile, and optional number of slots per
+                host
+
+        Returns:
+            tuple: a tuple of the path for hostfile and the number of slots per
+                host
+
         """
-        path, slots = self._process_host_value(value)
+        path, slots = super(Mpirun, self)._process_host_value(value)
+
+        # Use the list of hosts to create a hostfile and set the hostfile param
         kwargs = {"hostlist": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
+
+        return (path, slots)
 
     def assign_processes(self, processes):
         """Assign the number of processes per node (-np).
@@ -378,24 +395,35 @@ class Srun(JobManager):
         self.partition = FormattedParameter("--partition={}", None)
         self.output = FormattedParameter("--output={}", None)
 
-    @hosts.setter
-    def hosts(self, value):
-        """Set the list of hosts associated with this command.
+    def _process_host_value(self, value):
+        """Process the value input for the hosts setter method.
 
         This method also defines the self.nodefile.value and
-        self.ntasks_per_node.value.  It should be used over directly setting
-        these values to ensure the self._hosts value is also set.
+        self.ntasks_per_node.value.  Setting self.hosts should be used over
+        directly setting the self.nodefile.value and self.ntasks_per_node.value
+        to ensure the self._hosts value is set.
 
         Args:
-            value (tuple): list of hosts, path for hostfile, and number of slots
-                per host to use to assign the hosts/hostfile
+            value (object): a host, list of hosts, or a tuple of list of hosts,
+                optional path for a hostfile, and optional number of slots per
+                host
+
+        Returns:
+            tuple: a tuple of the path for hostfile and the number of slots per
+                host
+
         """
-        path, slots = self._process_host_value(value)
+        path, slots = super(Srun, self)._process_host_value(value)
+
+        # Use the list of hosts to create a hostfile and set the nodefile and
+        # ntasks_per_node params
         kwargs = {"hostlist": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
         self.nodefile.value = write_host_file(**kwargs)
         self.ntasks_per_node.value = slots
+
+        return (path, slots)
 
     def assign_processes(self, processes):
         """Assign the number of processes per node (--ntasks).
