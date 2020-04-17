@@ -54,13 +54,11 @@ class DaosServer():
         self._agent = None
         self.agent_dir = None
 
-#        symlink_file('/tmp/dfuse_server.latest.log', '/tmp/server.log')
-
         socket_dir = '/tmp/daos_sockets'
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
-        if os.path.exists('/tmp/server.log'):
-            os.unlink('/tmp/server.log')
+        if os.path.exists('/tmp/daos_server.log'):
+            os.unlink('/tmp/daos_server.log')
 
         self._agent_dir = tempfile.TemporaryDirectory(prefix='daos_agent_')
         self.agent_dir = self._agent_dir.name
@@ -103,7 +101,7 @@ class DaosServer():
                                         '--config-path={}'.format(agent_config),
                                         '-i', '--runtime_dir', self.agent_dir],
                                        env=agent_env)
-        time.sleep(2)
+        time.sleep(10)
 
     def __del__(self):
         """Stop a previously started DAOS server"""
@@ -327,7 +325,7 @@ def make_pool(daos, conf):
 
     try:
         pool_con.create(511, os.geteuid(), os.getegid(), 1024*1014*128, b'daos_server')
-    except pydaos.raw.daos_api.DaosApiError:
+    except daos_raw.daos_api.DaosApiError:
         time.sleep(10)
         pool_con.create(511, os.geteuid(), os.getegid(), 1024*1014*128, b'daos_server')
 

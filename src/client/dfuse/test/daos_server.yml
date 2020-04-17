@@ -14,7 +14,7 @@ servers:
   fabric_iface: eth0
   fabric_iface_port: 31416
   log_mask: DEBUG
-  log_file: /tmp/server.log
+  log_file: /tmp/daos_server.log
   env_vars:
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0

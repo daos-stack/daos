@@ -1129,9 +1129,11 @@ pipeline {
                                                sudo chown root /usr/bin/daos_admin
                                                sudo chmod 4755 /usr/bin/daos_admin
                                                /bin/rm $DAOS_BASE/install/bin/daos_admin
-
                                                cd $DAOS_BASE
-                                               hostname
+                                               . utils/sl/setup_local.sh
+                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh /usr/share/spdk/scripts
+                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
+                                               sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
                                                ./src/client/dfuse/test/local_test.py"''',
                                 junit_files: 'test_results/*.xml'
                         publishValgrind (
@@ -1205,6 +1207,20 @@ pipeline {
                                       true''',
                             label: "Collect artifacts and tear down"
                             archiveArtifacts artifacts: 'vm_test/**'
+                            publishValgrind (
+                                    failBuildOnInvalidReports: true,
+                                    failBuildOnMissingReports: true,
+                                    failThresholdDefinitelyLost: '0',
+                                    failThresholdInvalidReadWrite: '0',
+                                    failThresholdTotal: '0',
+                                    pattern: 'daos_server.memcheck',
+                                    publishResultsForAbortedBuilds: false,
+                                    publishResultsForFailedBuilds: false,
+                                    sourceSubstitutionPaths: '',
+                                    unstableThresholdDefinitelyLost: '',
+                                    unstableThresholdInvalidReadWrite: '',
+                                    unstableThresholdTotal: ''
+                            )
                         }
                     }
                 }
