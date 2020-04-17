@@ -267,7 +267,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
-%{_bindir}/dmg_old
 %{_bindir}/daosctl
 %{_bindir}/dcont
 %{_bindir}/daos_agent

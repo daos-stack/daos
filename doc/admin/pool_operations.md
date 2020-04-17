@@ -195,7 +195,7 @@ will be decided based on the remaining ACL rules.
 ## Pool Query
 The pool query operation retrieves information (i.e., the number of targets,
 space usage, rebuild status, property list, and more) about a created pool. It
-is integrated into the dmg_old utility.
+is integrated into the dmg utility.
 
 **To query a pool:**
 
@@ -248,9 +248,6 @@ the management API and tool and will be documented here once available.
 
 **To exclude a target from a pool:**
 
-```bash
-$ dmg_old exclude --svc=${svcl} --pool=${puuid} --target=${rank}
-```
 ### Target Reintegration
 
 After a target failure an operator can fix the underlying issue and reintegrate the
