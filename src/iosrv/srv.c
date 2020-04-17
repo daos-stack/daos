@@ -301,6 +301,9 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	ABT_pool		 pool;
 	int			 rc;
 
+	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
+		return 0;
+
 	pool = pools[DSS_POOL_IO];
 	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
 			       ABT_THREAD_ATTR_NULL, NULL);
