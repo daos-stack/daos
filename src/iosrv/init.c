@@ -161,12 +161,11 @@ register_dbtree_classes(void)
 }
 
 static int
-modules_load(const char *op, int (*func)(const char *, void *), uint64_t *facs)
+modules_load(void)
 {
 	char		*mod;
 	char		*sep;
 	char		*run;
-	uint64_t	 mod_facs;
 	int		 rc = 0;
 
 	sep = strdup(modules);
@@ -188,16 +187,12 @@ modules_load(const char *op, int (*func)(const char *, void *), uint64_t *facs)
 		else if (strcmp(mod, "vos") == 0)
 			mod = "vos_srv";
 
-		mod_facs = 0;
-		rc = func(mod, (void *)&mod_facs);
+		rc = dss_module_load(mod);
 		if (rc != 0) {
-			D_ERROR("Failed to %s module %s: %d\n",
-				op, mod, rc);
+			D_ERROR("Failed to load module %s: %d\n",
+				mod, rc);
 			break;
 		}
-
-		if (facs != NULL)
-			*facs |= mod_facs;
 
 		mod = strsep(&run, ",");
 	}
@@ -496,7 +491,7 @@ server_init(int argc, char *argv[])
 	/* load modules.  Split load an init so first call to dlopen
 	 * is from the ioserver to avoid DAOS-4557
 	 */
-	rc = modules_load("load", dss_module_load, NULL);
+	rc = modules_load();
 	if (rc)
 		/* Some modules may have been loaded successfully. */
 		D_GOTO(exit_mod_loaded, rc);
@@ -514,7 +509,7 @@ server_init(int argc, char *argv[])
 	ds_iv_init();
 
 	/* init modules */
-	rc = modules_load("init", dss_module_load_init, &dss_mod_facs);
+	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
 		/* Some modules may have been loaded successfully. */
 		D_GOTO(exit_mod_loaded, rc);

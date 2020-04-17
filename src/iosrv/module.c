@@ -85,7 +85,7 @@ dss_module_search(const char *modname)
 #define DSS_MODNAME_MAX_LEN	32
 
 int
-dss_module_load(const char *modname, void *arg)
+dss_module_load(const char *modname)
 {
 	struct loaded_mod	*lmod;
 	struct dss_module	*smod;
@@ -153,29 +153,18 @@ err_hdl:
 	return rc;
 }
 
-int
-dss_module_load_init(const char *modname, void *arg)
+static int
+dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 {
 	struct dss_module	*smod;
-	struct loaded_mod	*lmod;
-	uint64_t		*mod_facs = arg;
 	int			rc = 0;
-
-	/* lookup the module from the loaded module list */
-	D_MUTEX_LOCK(&loaded_mod_list_lock);
-	lmod = dss_module_search(modname);
-	if (lmod == NULL) {
-		D_MUTEX_UNLOCK(&loaded_mod_list_lock);
-		/* module not found ... */
-		return -DER_ENOENT;
-	}
-	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 
 	smod = lmod->lm_dss_mod;
 	/* initialize the module */
 	rc = smod->sm_init();
 	if (rc) {
-		D_ERROR("failed to init %s: "DF_RC"\n", modname, DP_RC(rc));
+		D_ERROR("failed to init %s: "DF_RC"\n", smod->sm_name,
+			DP_RC(rc));
 		D_GOTO(err_lmod, rc = -DER_INVAL);
 	}
 
@@ -187,7 +176,7 @@ dss_module_load_init(const char *modname, void *arg)
 			       smod->sm_handlers, smod->sm_mod_id);
 	if (rc) {
 		D_ERROR("failed to register RPC for %s: "DF_RC"\n",
-			modname, DP_RC(rc));
+			smod->sm_name, DP_RC(rc));
 		D_GOTO(err_mod_init, rc);
 	}
 
@@ -195,7 +184,7 @@ dss_module_load_init(const char *modname, void *arg)
 	rc = drpc_hdlr_register_all(smod->sm_drpc_handlers);
 	if (rc) {
 		D_ERROR("failed to register dRPC for %s: "DF_RC"\n",
-			modname, DP_RC(rc));
+			smod->sm_name, DP_RC(rc));
 		D_GOTO(err_rpc, rc);
 	}
 
@@ -212,9 +201,7 @@ err_mod_init:
 	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
 err_lmod:
-	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_del_init(&lmod->lm_lk);
-	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 	dlclose(lmod->lm_hdl);
 	D_FREE(lmod);
 	return rc;
@@ -224,7 +211,7 @@ static int
 dss_module_unload_internal(struct loaded_mod *lmod)
 {
 	struct dss_module	*smod = lmod->lm_dss_mod;
-	int			 rc;
+	int			 rc = 0;
 
 	if (lmod->lm_init == false)
 		goto close_mod;
@@ -257,6 +244,33 @@ close_mod:
 
 	return rc;
 }
+
+int
+dss_module_init_all(uint64_t *mod_facs)
+{
+	struct loaded_mod	*lmod;
+	struct loaded_mod	*tmp;
+	uint64_t		 fac;
+	int			 rc = 0;
+
+	/* lookup the module from the loaded module list */
+	D_MUTEX_LOCK(&loaded_mod_list_lock);
+	d_list_for_each_entry_safe(lmod, tmp, &loaded_mod_list, lm_lk) {
+		if (rc != 0) {
+			dss_module_unload_internal(lmod);
+			d_list_del_init(&lmod->lm_lk);
+			D_FREE(lmod);
+			continue;
+		}
+		fac = 0;
+		rc = dss_module_init_one(lmod, &fac);
+		*mod_facs |= fac;
+	}
+	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+
+	return rc;
+}
+
 
 int
 dss_module_unload(const char *modname)
