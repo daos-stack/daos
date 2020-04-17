@@ -277,7 +277,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 					trc.Running.SetTrue()
 				}
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
-				srv.SetIndex(uint32(i))
+				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(Rank)
 				*srv._superblock.Rank = Rank(i + 1)
@@ -424,7 +424,7 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 					trc.Running.SetTrue()
 				}
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
-				srv.SetIndex(uint32(i))
+				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(Rank)
 				*srv._superblock.Rank = Rank(i + 1)
@@ -582,7 +582,7 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 					trc.Running.SetTrue()
 				}
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
-				srv.SetIndex(uint32(i))
+				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(Rank)
 				*srv._superblock.Rank = Rank(i + 1)
@@ -693,7 +693,7 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 //					trc.Running.SetTrue()
 //				}
 //				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
-//				srv.SetIndex(uint32(i))
+//				srv.setIndex(uint32(i))
 //
 //				srv._superblock.Rank = new(Rank)
 //				*srv._superblock.Rank = Rank(i + 1)

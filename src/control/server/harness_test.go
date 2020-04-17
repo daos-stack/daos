@@ -714,7 +714,7 @@ func TestHarness_StopInstances(t *testing.T) {
 				}
 
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
-				srv.SetIndex(uint32(i))
+				srv.setIndex(uint32(i))
 
 				if tc.missingSB {
 					srv._superblock = nil

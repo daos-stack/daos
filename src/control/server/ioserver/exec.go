@@ -62,10 +62,10 @@ func (es ExitStatus) Error() string {
 	return string(es)
 }
 
-// Ensure that a monitored subcommand always returns
-// an error of some sort when it exits so that we
-// can respond appropriately.
-func exitStatus(err error) error {
+// GetExitStatus ensure that a monitored subcommand always returns
+// an error of some sort when it exits so that we can respond
+// appropriately.
+func GetExitStatus(err error) error {
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)
 
 	if err := cmd.Start(); err != nil {
-		return errors.Wrapf(exitStatus(err),
+		return errors.Wrapf(GetExitStatus(err),
 			"%s (instance %d) failed to start", binPath, r.Config.Index)
 	}
 	r.cmd = cmd
@@ -125,7 +125,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.running.SetTrue()
 	defer r.running.SetFalse()
 
-	return errors.Wrapf(exitStatus(cmd.Wait()),
+	return errors.Wrapf(GetExitStatus(cmd.Wait()),
 		"%s (instance %d) exited", binPath, r.Config.Index)
 }
 

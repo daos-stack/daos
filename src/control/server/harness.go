@@ -82,7 +82,7 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 
 	h.Lock()
 	defer h.Unlock()
-	srv.SetIndex(uint32(len(h.instances)))
+	srv.setIndex(uint32(len(h.instances)))
 
 	h.instances = append(h.instances, srv)
 	return nil

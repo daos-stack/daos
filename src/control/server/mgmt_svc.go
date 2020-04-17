@@ -188,7 +188,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 // not a Management Service replica.
 func checkIsMSReplica(mi *IOServerInstance) error {
 	msg := "instance is not an access point"
-	if !mi.IsMSReplica() {
+	if !mi.isMSReplica() {
 		leader, err := mi.msClient.LeaderAddress()
 		if err != nil {
 			return err

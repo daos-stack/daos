@@ -49,7 +49,7 @@ func getTestNotifyReadyReqBytes(t *testing.T, sockPath string, idx uint32) []byt
 
 func isIosrvReady(instance *IOServerInstance) bool {
 	select {
-	case <-instance.AwaitDrpcReady():
+	case <-instance.awaitDrpcReady():
 		return true
 	default:
 		return false

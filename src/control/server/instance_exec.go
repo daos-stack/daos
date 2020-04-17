@@ -50,7 +50,7 @@ func (srv *IOServerInstance) IsStarted() bool {
 }
 
 func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
-	if err = srv.AwaitStorageReady(ctx, recreateSBs); err != nil {
+	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
 		return
 	}
 	srv.log.Debugf("instance %d: creating superblock on formatted storage", srv.Index())
@@ -96,7 +96,7 @@ func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) 
 	case err := <-errChan:
 		// TODO: Restart failed instances on unexpected exit.
 		return errors.Wrapf(err, "instance %d exited prematurely", srv.Index())
-	case ready := <-srv.AwaitDrpcReady():
+	case ready := <-srv.awaitDrpcReady():
 		if err := srv.finishStartup(ctx, ready); err != nil {
 			return err
 		}
@@ -111,20 +111,20 @@ func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) 
 //
 // Instance ready state is set to indicate that all setup is complete.
 func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
-	if err := srv.SetRank(ctx, ready); err != nil {
+	if err := srv.setRank(ctx, ready); err != nil {
 		return err
 	}
 	// update ioserver target count to reflect allocated
 	// number of targets, not number requested when starting
-	srv.SetTargetCount(int(ready.GetNtgts()))
+	srv.setTargetCount(int(ready.GetNtgts()))
 
-	if srv.IsMSReplica() {
-		if err := srv.StartManagementService(); err != nil {
+	if srv.isMSReplica() {
+		if err := srv.startMgmtSvc(); err != nil {
 			return errors.Wrap(err, "failed to start management service")
 		}
 	}
 
-	if err := srv.LoadModules(); err != nil {
+	if err := srv.loadModules(); err != nil {
 		return errors.Wrap(err, "failed to load I/O server modules")
 	}
 
@@ -134,10 +134,11 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 }
 
 func (srv *IOServerInstance) exit(exitErr error) {
-	srv.log.Infof("instance %d exited: %s", srv.Index(), exitErr)
+	srv.log.Infof("instance %d exited: %s", srv.Index(),
+		ioserver.GetExitStatus(exitErr))
 
 	srv._lastErr = exitErr
-	if err := srv.RemoveSocket(); err != nil {
+	if err := srv.removeSocket(); err != nil {
 		srv.log.Errorf("removing socket file: %s", err)
 	}
 }
@@ -150,7 +151,7 @@ func (srv *IOServerInstance) run(ctx context.Context, errOut chan error, members
 	if err = srv.start(ctx, errOut); err != nil {
 		return
 	}
-	if srv.IsMSReplica() {
+	if srv.isMSReplica() {
 		// MS bootstrap will not join so register manually
 		if err := srv.registerMember(membership); err != nil {
 			return err

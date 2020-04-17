@@ -95,13 +95,13 @@ func (srv *IOServerInstance) IsReady() bool {
 	return srv.ready.IsTrue() && srv.IsStarted()
 }
 
-// IsMSReplica indicates whether or not this instance is a management service replica.
-func (srv *IOServerInstance) IsMSReplica() bool {
+// isMSReplica indicates whether or not this instance is a management service replica.
+func (srv *IOServerInstance) isMSReplica() bool {
 	return srv.hasSuperblock() && srv.getSuperblock().MS
 }
 
-// SetIndex sets the server index assigned by the harness.
-func (srv *IOServerInstance) SetIndex(idx uint32) {
+// setIndex sets the server index assigned by the harness.
+func (srv *IOServerInstance) setIndex(idx uint32) {
 	srv.runner.GetConfig().Index = idx
 }
 
@@ -110,9 +110,9 @@ func (srv *IOServerInstance) Index() uint32 {
 	return srv.runner.GetConfig().Index
 }
 
-// RemoveSocket removes the socket file used for dRPC communication with
+// removeSocket removes the socket file used for dRPC communication with
 // harness and updates relevant ready states.
-func (srv *IOServerInstance) RemoveSocket() error {
+func (srv *IOServerInstance) removeSocket() error {
 	fMsg := fmt.Sprintf("removing instance %d socket file", srv.Index())
 
 	dc, err := srv.getDrpcClient()
@@ -131,12 +131,12 @@ func (srv *IOServerInstance) RemoveSocket() error {
 	return nil
 }
 
-// SetRank determines the instance rank and sends a SetRank dRPC request
+// setRank determines the instance rank and sends a SetRank dRPC request
 // to the IOServer.
-func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	superblock := srv.getSuperblock()
 	if superblock == nil {
-		return errors.New("nil superblock in SetRank()")
+		return errors.New("nil superblock in setRank()")
 	}
 
 	r := system.NilRank
@@ -213,15 +213,15 @@ func (srv *IOServerInstance) GetRank() (system.Rank, error) {
 	return *sb.Rank, nil
 }
 
-// SetTargetCount updates target count in ioserver config.
-func (srv *IOServerInstance) SetTargetCount(numTargets int) {
+// setTargetCount updates target count in ioserver config.
+func (srv *IOServerInstance) setTargetCount(numTargets int) {
 	srv.runner.GetConfig().TargetCount = numTargets
 }
 
-// StartManagementService starts the DAOS management service replica associated
+// startMgmtSvc starts the DAOS management service replica associated
 // with this instance. If no replica is associated with this instance, this
 // function is a no-op.
-func (srv *IOServerInstance) StartManagementService() error {
+func (srv *IOServerInstance) startMgmtSvc() error {
 	superblock := srv.getSuperblock()
 
 	// should have been loaded by now
@@ -264,8 +264,8 @@ func (srv *IOServerInstance) StartManagementService() error {
 	return nil
 }
 
-// LoadModules initiates the I/O server startup sequence.
-func (srv *IOServerInstance) LoadModules() error {
+// loadModules initiates the I/O server startup sequence.
+func (srv *IOServerInstance) loadModules() error {
 	return srv.callSetUp()
 }
 

@@ -105,15 +105,15 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	return needsFormat, nil
 }
 
-// NotifyStorageReady releases any blocks on AwaitStorageReady().
+// NotifyStorageReady releases any blocks on awaitStorageReady().
 func (srv *IOServerInstance) NotifyStorageReady() {
 	go func() {
 		close(srv.storageReady)
 	}()
 }
 
-// AwaitStorageReady blocks until instance has storage available and ready to be used.
-func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
+// awaitStorageReady blocks until instance has storage available and ready to be used.
+func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
 	srv.RLock()
 	defer srv.RUnlock()
 
