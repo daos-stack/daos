@@ -1157,6 +1157,10 @@ pipeline {
                                                test_tag=pr,-hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           # set BUILD_URL and CHANGE_AUTHOR_EMAIL env here
+                                           echo "Change author:${env.CHANGE_AUTHOR_EMAIL}"
+                                           export BUILD_URL=${env.BUILD_URL}
+                                           export CHANGE_AUTHOR_EMAIL=${env.CHANGE_AUTHOR_EMAIL}
                                            # set DAOS_TARGET_OVERSUBSCRIBE env here
                                            export DAOS_TARGET_OVERSUBSCRIBE=0
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
