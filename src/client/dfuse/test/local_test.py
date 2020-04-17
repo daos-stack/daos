@@ -64,7 +64,7 @@ class DaosServer():
     def start(self):
         """Start a DAOS server"""
 
-        if True:
+        if False:
             for fname in os.listdir('/mnt/daos'):
                 try:
                     shutil.rmtree(os.path.join('/mnt/daos', fname))
@@ -180,13 +180,15 @@ class DFuse():
         if True:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
 
-        if True:
+        if False:
             cmd.extend(['--suppressions={}'.format(os.path.join('src',
                                                                 'cart',
                                                                 'utils',
                                                                 'memcheck-cart.supp')),
                         '--suppressions={}'.format(os.path.join('utils',
                                                                 'memcheck-daos-client.supp'))])
+
+        cmd.extend(['--xml=yes', '--xml-file=daos_server.memcheck'])
 
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
 
@@ -793,7 +795,7 @@ def test_pydaos_kv(server, conf):
         pools = make_pool(daos, conf)
 
     pool = pools[0]
-        
+
     container = show_cont(conf, pool)
 
     print(container)

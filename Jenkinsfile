@@ -1125,16 +1125,32 @@ pipeline {
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
 
                                                # copy daos_admin binary into \$PATH and fix perms
-                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
-                                                   sudo chown root /usr/bin/daos_admin && \
-                                                   sudo chmod 4755 /usr/bin/daos_admin && \
-                                                   mv $DAOS_BASE/install/bin/daos_admin \
-                                                      $DAOS_BASE/install/bin/orig_daos_admin
+                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin
+                                               sudo chown root /usr/bin/daos_admin
+                                               sudo chmod 4755 /usr/bin/daos_admin
+					       sudo mkdir /var/run/daos_agent
+                                               sudo chmod 500 /var/run/daos_agent
+                                               sudo chown jenkins:jenkins /var/run/daos_agent
+                                               /bin/rm $DAOS_BASE/install/bin/daos_admin
 
                                                cd $DAOS_BASE
                                                hostname
                                                ./src/client/dfuse/test/local_test.py"''',
-                              junit_files: 'test_results/*.xml'
+                                junit_files: 'test_results/*.xml'
+                        publishValgrind (
+                                failBuildOnInvalidReports: true,
+                                failBuildOnMissingReports: true,
+                                failThresholdDefinitelyLost: '0',
+                                failThresholdInvalidReadWrite: '0',
+                                failThresholdTotal: '0',
+                                pattern: 'daos_server.memcheck',
+                                publishResultsForAbortedBuilds: false,
+                                publishResultsForFailedBuilds: false,
+                                sourceSubstitutionPaths: '',
+                                unstableThresholdDefinitelyLost: '',
+                                unstableThresholdInvalidReadWrite: '',
+                                unstableThresholdTotal: ''
+                        )
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -1189,9 +1205,7 @@ pipeline {
                                               echo \"Failed to unmount $DAOS_BASE\"
                                               ps axf
                                           fi"
-                                      # Note that we are taking advantage of the NFS mount here and if that
-                                      # should ever go away, we need to pull run_test.sh/ from $NODE
-                                      python utils/fix_cmocka_xml.py''',
+                                      true''',
                             label: "Collect artifacts and tear down"
                         }
                     }
