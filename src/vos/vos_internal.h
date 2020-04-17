@@ -985,8 +985,13 @@ D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
 static inline umem_off_t
 vos_slab_alloc(struct umem_instance *umm, int size, int slab_id)
 {
-	D_ASSERTF(size == umem_slab_usize(umm, slab_id), "%d: %d != %zu\n",
+	/* evtree unit tests may skip slab register in vos_pool_open() */
+	D_ASSERTF(!umem_slab_registered(umm, slab_id) ||
+		  size == umem_slab_usize(umm, slab_id),
+		  "registered: %d, id: %d, size: %d != %zu\n",
+		  umem_slab_registered(umm, slab_id),
 		  slab_id, size, umem_slab_usize(umm, slab_id));
+
 	return umem_alloc_verb(umm, umem_slab_flags(umm, slab_id) |
 					POBJ_FLAG_ZERO, size);
 }

@@ -282,12 +282,17 @@ struct umem_instance {
 	struct pobj_alloc_class_desc	 umm_slabs[UMM_SLABS_CNT];
 };
 
+static inline bool
+umem_slab_registered(struct umem_instance *umm, unsigned int slab_id)
+{
+	D_ASSERT(slab_id < UMM_SLABS_CNT);
+	return umm->umm_slabs[slab_id].class_id != 0;
+}
+
 static inline uint64_t
 umem_slab_flags(struct umem_instance *umm, unsigned int slab_id)
 {
 	D_ASSERT(slab_id < UMM_SLABS_CNT);
-	D_ASSERT(umm->umm_slabs[slab_id].class_id != 0);
-
 	return POBJ_CLASS_ID(umm->umm_slabs[slab_id].class_id);
 }
 
@@ -295,8 +300,6 @@ static inline size_t
 umem_slab_usize(struct umem_instance *umm, unsigned int slab_id)
 {
 	D_ASSERT(slab_id < UMM_SLABS_CNT);
-	D_ASSERT(umm->umm_slabs[slab_id].class_id != 0);
-
 	return umm->umm_slabs[slab_id].unit_size;
 }
 
