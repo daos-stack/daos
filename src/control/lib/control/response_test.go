@@ -26,6 +26,7 @@ package control
 import (
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
@@ -110,6 +111,44 @@ func TestControl_HostErrorsMap(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expErrMap, hem, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected map (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_getMSResponse(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp    *UnaryResponse
+		expResp proto.Message
+		expErr  error
+	}{
+		"nil response": {
+			expErr: errors.New("nil *control.UnaryResponse"),
+		},
+		"not MS response": {
+			resp:   &UnaryResponse{},
+			expErr: errors.New("did not come"),
+		},
+		"empty responses": {
+			resp: &UnaryResponse{
+				fromMS: true,
+			},
+			expErr: errors.New("did not contain"),
+		},
+		"nil response message": {
+			resp:   MockMSResponse("host1", nil, nil),
+			expErr: errors.New("message was nil"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotResp, gotErr := tc.resp.getMSResponse()
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

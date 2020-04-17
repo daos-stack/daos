@@ -39,6 +39,7 @@ type DomainSocketClient interface {
 	Connect() error
 	Close() error
 	SendMsg(call *Call) (*Response, error)
+	GetSocketPath() string
 }
 
 // domainSocketDialer is an interface that connects to a Unix Domain Socket
@@ -143,6 +144,11 @@ func (c *ClientConnection) SendMsg(msg *Call) (*Response, error) {
 	}
 
 	return c.recvResponse()
+}
+
+// GetSocketPath returns client dRPC socket file path.
+func (c *ClientConnection) GetSocketPath() string {
+	return c.socketPath
 }
 
 // NewClientConnection creates a new dRPC client

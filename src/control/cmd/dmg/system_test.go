@@ -25,8 +25,12 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 	"github.com/pkg/errors"
 )
 
@@ -35,79 +39,153 @@ func TestSystemCommands(t *testing.T) {
 		{
 			"system query with no arguments",
 			"system query",
-			"ConnectClients SystemQuery-{[]}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemQueryReq{
+					Ranks: []system.Rank{},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system query with single rank",
 			"system query --ranks 0",
-			"ConnectClients SystemQuery-{[0]}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemQueryReq{
+					Ranks: []system.Rank{0},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system query with multiple ranks",
 			"system query --ranks 0,1,4",
-			"ConnectClients SystemQuery-{[0 1 4]}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemQueryReq{
+					Ranks: []system.Rank{0, 1, 4},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system query verbose",
 			"system query --verbose",
-			"ConnectClients SystemQuery-{[]}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemQueryReq{
+					Ranks: []system.Rank{},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system stop with no arguments",
 			"system stop",
-			"ConnectClients SystemStop-{true true [] false}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemStopReq{
+					Prep:  true,
+					Kill:  true,
+					Ranks: []system.Rank{},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system stop with force",
 			"system stop --force",
-			"ConnectClients SystemStop-{true true [] true}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemStopReq{
+					Prep:  true,
+					Kill:  true,
+					Force: true,
+					Ranks: []system.Rank{},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system stop with single rank",
 			"system stop --ranks 0",
-			"ConnectClients SystemStop-{true true [0] false}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemStopReq{
+					Prep:  true,
+					Kill:  true,
+					Ranks: []system.Rank{0},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system stop with multiple ranks",
 			"system stop --ranks 0,1,4",
-			"ConnectClients SystemStop-{true true [0 1 4] false}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemStopReq{
+					Prep:  true,
+					Kill:  true,
+					Ranks: []system.Rank{0, 1, 4},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system start with no arguments",
 			"system start",
-			"ConnectClients SystemStart-{[]}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemStartReq{
+					Ranks: []system.Rank{},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system start with single rank",
 			"system start --ranks 0",
-			"ConnectClients SystemStart-{[0]}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemStartReq{
+					Ranks: []system.Rank{0},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system start with multiple ranks",
 			"system start --ranks 0,1,4",
-			"ConnectClients SystemStart-{[0 1 4]}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemStartReq{
+					Ranks: []system.Rank{0, 1, 4},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"leader query",
 			"system leader-query",
-			"ConnectClients LeaderQuery-daos_server",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.LeaderQueryReq{
+					System: build.DefaultSystemName,
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"system list-pools with default config",
 			"system list-pools",
-			"ConnectClients ListPools-{daos_server}",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.ListPoolsReq{
+					System: build.DefaultSystemName,
+				}),
+			}, " "),
 			nil,
 		},
 		{

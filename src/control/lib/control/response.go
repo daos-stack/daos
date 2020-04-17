@@ -162,12 +162,16 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 		return nil, msResp.Error
 	}
 
+	if msResp.Message == nil {
+		return nil, errors.New("management service response message was nil")
+	}
+
 	return msResp.Message, nil
 }
 
 // convertMSResponse is a helper function to extract the MS response
 // message from a generic UnaryResponse. The out parameter must be
-// a reference to a concrete type (e.g. PoolQueryResp).
+// a reference to a compatible concrete type (e.g. PoolQueryResp).
 func convertMSResponse(ur *UnaryResponse, out interface{}) error {
 	msResp, err := ur.getMSResponse()
 	if err != nil {
