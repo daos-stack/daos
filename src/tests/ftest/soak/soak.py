@@ -357,7 +357,7 @@ class SoakTestBase(TestWithServers):
         status = True
         # Create container
         container = TestContainer(self.pool[0])
-        container.namespace = "/run/container_reserved"
+        container.namespace = "/run/container_reserved/*"
         container.get_params(self)
         container.create()
         container.open()
@@ -865,7 +865,7 @@ class SoakTestBase(TestWithServers):
         # Create the container and populate with a known data
         # TO-DO: use IOR to write and later read verify the data
         self.container = TestContainer(self.pool[0])
-        self.container.namespace = "/run/container_reserved"
+        self.container.namespace = "/run/container_reserved/*"
         self.container.get_params(self)
         self.container.create()
         self.container.write_objects(rank, obj_class)
