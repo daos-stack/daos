@@ -1,5 +1,5 @@
 server_config:
-   name: scott_server
+   name: daos_server
 hosts:
   test_servers:
     - server-A
@@ -17,12 +17,16 @@ evicttests:
    connectsetnames: !mux
      goodname:
           setname:
-             - scott_server
+             - daos_server
              - PASS
      badname:
           setname:
-             - NULL
+             - badname_server
              - FAIL
+     nullname:
+          setname:
+             - NULL
+             - PASS
    UUID: !mux
      gooduuid:
           uuid:
@@ -39,6 +43,6 @@ evicttests:
    createmode:
      mode: 511
    createset:
-     setname: scott_server
+     setname: daos_server
    createsize:
      size: 1073741824
