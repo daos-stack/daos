@@ -39,7 +39,6 @@ servers:
   - CRT_TIMEOUT=30
   - CRT_CREDIT_EP_CTX=0
   - PSM2_MULTI_EP=1
-  - CRT_CTX_SHARE_ADDR=1
   - FI_PSM2_DISCONNECT=1
   # nvme options
   # - IO_STAT_PERIOD=10
@@ -95,7 +94,6 @@ servers:
   - CRT_TIMEOUT=30
   - CRT_CREDIT_EP_CTX=0
   - PSM2_MULTI_EP=1
-  - CRT_CTX_SHARE_ADDR=1
   - FI_PSM2_DISCONNECT=1
   # nvme options
   # - IO_STAT_PERIOD=10
