@@ -514,6 +514,7 @@ class SoakTestBase(TestWithServers):
 
             pool (obj):   TestPool obj
         """
+        params = {}
         # Get Dfuse params
         self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
                            dfuse_env=self.basepath)
@@ -523,7 +524,7 @@ class SoakTestBase(TestWithServers):
         self.dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
         # create dfuse mount point
         cmd = "mkdir -p {}".format(self.dfuse.mount_dir.value)
-        params = self.srun_params
+        params.update(self.srun_params)
         params["export"] = "all"
         params["ntasks-per-node"] = 1
         result = slurm_utils.srun(
@@ -743,26 +744,20 @@ class SoakTestBase(TestWithServers):
                 # wait for the jobs to complete.
                 # enter tearDown before hitting the avocado timeout
                 if time.time() > self.end_time:
-                    self.log.info("<< SOAK test timeout in Job Completion>>")
-                    break
+                    self.log.info(
+                        "<< SOAK test timeout in Job Completion at %s >>",
+                        time.ctime())
+                    for job in job_id_list:
+                        _ = slurm_utils.cancel_jobs(int(job))
                 time.sleep(5)
-            # check for job COMPLETED and remove it from the job queue
+            # check for JobStatus = COMPLETED or CANCELLED (i.e. TEST TO)
             for job, result in self.soak_results.items():
-                # The queue include status of "COMPLETING"
-                if result == "COMPLETED":
+                if result in ["COMPLETED", "CANCELLED"]:
                     job_id_list.remove(int(job))
                 else:
                     self.log.info(
                         "<< Job %s failed with status %s>>", job, result)
-            if job_id_list:
-                self.log.info(
-                    "<<Cancel jobs in queue with id's %s >>", job_id_list)
-                for job in job_id_list:
-                    status = slurm_utils.cancel_jobs(int(job))
-                    if status == 0:
-                        self.log.info("<<Job %s successfully cancelled>>", job)
-                    else:
-                        self.log.info("<<Job %s could not be killed>>", job)
+
             # gather all the logfiles for this pass and cleanup test nodes
             try:
                 self.get_remote_logs()
