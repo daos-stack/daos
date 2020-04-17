@@ -31,6 +31,7 @@ from itertools import product
 from apricot import TestWithServers
 from write_host_file import write_host_file
 from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 from ior_utils import IorCommand
 from daos_utils import DaosCommand
 from command_utils import Mpirun, CommandFailure
@@ -139,11 +140,51 @@ class NvmePoolCapacity(TestWithServers):
                     else:
                         results.put("FAIL")
 
-    def test_caseA(self, num_pool=1):
+    def test_create_delete(self, num_pool=2, num_cont=5, iter=10):
+        """
+        Test Description:
+            This method is called with 
+            num_pool parameter to run following test case
+            scenario's.
+            Use Cases
+             1. Create Pool/Container and destroy them. Check Space.
+        """
+        pool = {}
+        cont = {}
+
+        for loop_count in range(0, iter):
+            for val in range(0, num_pool):
+                pool[val] = TestPool(self.context,
+                                     dmg_command=self.get_dmg_command())
+                pool[val].get_params(self)
+                pool[val].create()
+                display_string = "pool{} space at the Beginning".format(val)
+                pool[val].display_pool_daos_space(display_string)
+                for cont_val in range(0, num_cont):
+                    cont[cont_val] = TestContainer(pool[val])
+
+            for val in range(0, num_pool):
+                display_string = "Pool{} space at the End".format(val)
+                pool[val].display_pool_daos_space(display_string)
+                pool[val].destroy()
+
+    def test_run(self, test_case, num_pool=1):
+        """
+        Test Description:
+            This method is called with different test_case,
+            num_pool parameter to run differe test case
+            scenario's.
+            Use Cases
+             1: Perform IO less than pool capacity.
+             2: Perform IO beyond pool capacity (ENOSPC)
+             3. Perform step 1 and 2 for entire SSD disk space.
+             4. Multiple Pool/Container testing.
+        """
         no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
         pools = []
         pool = {}
+
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
                                  dmg_command=self.get_dmg_command())
@@ -162,7 +203,8 @@ class NvmePoolCapacity(TestWithServers):
             for thrd in range(no_of_jobs):
                 # Add a thread for these IOR arguments
                 threads.append(threading.Thread(target=self.ior_runner_thread,
-                                                kwargs={"pool_array": pools,
+                                                kwargs={"test_case": test_case,
+                                                        "pool_array": pools,
                                                         "results":
                                                         self.out_queue}))
             # Launch the IOR threads
@@ -191,8 +233,14 @@ class NvmePoolCapacity(TestWithServers):
             report NOSPC when accessing data beyond pool size.
 
         Use case:
-        :avocado: tags=all,hw,medium,nvme,ib2,pr
+        :avocado: tags=all,hw,large,nvme,pr
         :avocado: tags=nvme_pool_capacity
         """
-        self.test_caseA(1)
-        self.test_caseA(2)
+        # Use Case 1,2 and 3
+        self.test_run(1)
+        self.test_run(2)
+
+        # Use Case create/delete pool/container
+        self.test_create_delete()
+        # self.test_create_delete(10, 50, 100)
+        # self.test_create_delete(10, 50, 100)
