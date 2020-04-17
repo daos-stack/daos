@@ -300,7 +300,7 @@ def show_cont(conf, pool):
 
 def make_pool(daos, conf):
 
-    time.sleep(20)
+    time.sleep(2)
 
     daos_raw = __import__('pydaos.raw')
 
@@ -311,7 +311,11 @@ def make_pool(daos, conf):
     createuid = os.geteuid()
     creategid = os.getegid()
 
-    pool_con.create(511, os.geteuid(), os.getegid(), 1024*1014*128, b'daos_server')
+    try:
+        pool_con.create(511, os.geteuid(), os.getegid(), 1024*1014*128, b'daos_server')
+    except pydaos.raw.daos_api.DaosApiError:
+        time.sleep(10)
+        pool_con.create(511, os.geteuid(), os.getegid(), 1024*1014*128, b'daos_server')
 
     return get_pool_list()
 
