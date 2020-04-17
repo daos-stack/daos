@@ -200,6 +200,7 @@ pipeline {
     }
 
     environment {
+        BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         BAHTTPS_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTP_PROXY="' + env.HTTP_PROXY + '" --build-arg http_proxy="' + env.HTTP_PROXY + '"' : ''}"
         BAHTTP_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '" --build-arg https_proxy="' + env.HTTPS_PROXY + '"' : ''}"
@@ -546,7 +547,122 @@ pipeline {
                             node('lightweight') {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
-                                             id: "analysis-centos7",
+                                             id: "analysis-centos7-gcc",
+                                             tools: [ gcc4(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                       excludeFile('_build\\.external\\/.*')]
+                            }
+                            /* when JENKINS-39203 is resolved, can probably use stepResult
+                               here and remove the remaining post conditions
+                               stepResult name: env.STAGE_NAME,
+                                          context: 'build/' + env.STAGE_NAME,
+                                          result: ${currentBuild.currentResult}
+                            */
+                        }
+                        success {
+                            sh "rm -rf _build.external${arch}"
+                            /* temporarily moved into stepResult due to JENKINS-39203
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'build/' + env.STAGE_NAME,
+                                         status: 'SUCCESS'
+                            */
+                        }
+                        unsuccessful {
+                            sh """if [ -f config${arch}.log ]; then
+                                      mv config${arch}.log config.log-centos7-gcc
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                                             allowEmptyArchive: true
+                            /* temporarily moved into stepResult due to JENKINS-39203
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'build/' + env.STAGE_NAME,
+                                         status: 'FAILURE'
+                            */
+                        }
+                    }
+                }
+                stage('Build on CentOS 7 with Bullseye') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { environment name: 'NO_CI_TESTING',
+                                  value: 'true' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-bullseye',
+                                def_val: 'true').contains('true') }
+                        }
+                    }
+                    agent {
+                        dockerfile {
+                          filename 'Dockerfile.centos.7'
+                          dir 'utils/docker'
+                          label 'docker_runner'
+                          additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                              '$BUILDARGS ' +
+                                              ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                              ' --build-arg QUICKBUILD=' + quickbuild +
+                                              ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
+                                              '" --build-arg REPOS="' + component_repos + '"'
+                        }
+                    }
+                    steps {
+                        httpRequest url: env.JENKINS_URL +
+                                         'job/daos-stack/job/tools/job/PR-1' +
+                                         '/lastSuccessfulBuild/artifact/' +
+                                         'bullseyecoverage-linux.tar',
+                                    httpMode: 'GET',
+                                    outputFile: 'bullseye.tar'
+                        sh label: 'test',
+                           script: 'ls -lh artifacts || true'
+                        sconsBuild clean: "_build.external${arch}",
+                                   scons_args: 'COMPILER=covc',
+                                   failure_artifacts: 'config.log-centos7-covc'
+                        stash name: 'CentOS-install-covc',
+                                    includes: 'install/**, test.cov'
+                        stash name: 'CentOS-build-vars-covc',
+                                    includes: ".build_vars${arch}.*"
+                        stash name: 'CentOS-tests-covc',
+                                    includes: '''build/src/cart/src/utest/test_linkage,
+                                                 build/src/cart/src/utest/test_gurt,
+                                                 build/src/cart/src/utest/utest_hlc,
+                                                 build/src/cart/src/utest/utest_swim,
+                                                 build/src/rdb/raft/src/tests_main,
+                                                 build/src/common/tests/btree_direct,
+                                                 build/src/common/tests/btree,
+                                                 build/src/common/tests/sched,
+                                                 build/src/common/tests/drpc_tests,
+                                                 build/src/common/tests/acl_api_tests,
+                                                 build/src/common/tests/acl_valid_tests,
+                                                 build/src/common/tests/acl_util_tests,
+                                                 build/src/common/tests/acl_principal_tests,
+                                                 build/src/common/tests/acl_real_tests,
+                                                 build/src/common/tests/prop_tests,
+                                                 build/src/iosrv/tests/drpc_progress_tests,
+                                                 build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
+                                                 build/src/client/api/tests/eq_tests,
+                                                 build/src/iosrv/tests/drpc_handler_tests,
+                                                 build/src/iosrv/tests/drpc_listener_tests,
+                                                 build/src/mgmt/tests/srv_drpc_tests,
+                                                 build/src/security/tests/cli_security_tests,
+                                                 build/src/security/tests/srv_acl_tests,
+                                                 build/src/vos/vea/tests/vea_ut,
+                                                 build/src/common/tests/umem_test,
+                                                 build/src/bio/smd/tests/smd_ut,
+                                                 utils/sl/build_info/**,
+                                                 src/common/tests/btree.sh,
+                                                 src/control/run_go_tests.sh,
+                                                 src/rdb/raft_tests/raft_tests.py,
+                                                 src/vos/tests/evt_ctl.sh
+                                                 src/control/lib/netdetect/netdetect.go'''
+                    }
+                    post {
+                        always {
+                            node('lightweight') {
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: true,
+                                             id: "analysis-centos7-covc",
                                              tools: [ gcc4(), cppCheck() ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
@@ -668,7 +784,7 @@ pipeline {
                             node('lightweight') {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
-                                             id: "analysis-ubuntu18",
+                                             id: "analysis-ubuntu18-gcc",
                                              tools: [ gcc4(), cppCheck() ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
@@ -704,7 +820,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Ubuntu 18.04 with Clang') {
+ /*               stage('Build on Ubuntu 18.04 with Clang') {
                     when {
                         beforeAgent true
                         allOf {
@@ -735,20 +851,20 @@ pipeline {
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            // when JENKINS-39203 is resolved, can probably use stepResult
+                            //   here and remove the remaining post conditions
+                            //   stepResult name: env.STAGE_NAME,
+                            //              context: 'build/' + env.STAGE_NAME,
+                            //            result: ${currentBuild.currentResult}
+                            //
                         }
                         success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
+                            // temporarily moved into stepResult due to JENKINS-39203
+                            //githubNotify credentialsId: 'daos-jenkins-commit-status',
+                            //             description: env.STAGE_NAME,
+                            //             context: 'build/' + env.STAGE_NAME,
+                            //             status: 'SUCCESS'
+                            //
                             sh "rm -rf _build.external${arch}"
                         }
                         unsuccessful {
@@ -757,15 +873,15 @@ pipeline {
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang',
                                              allowEmptyArchive: true
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
+                            // temporarily moved into stepResult due to JENKINS-39203
+                            //githubNotify credentialsId: 'daos-jenkins-commit-status',
+                            //             description: env.STAGE_NAME,
+                            //             context: 'build/' + env.STAGE_NAME,
+                            //             status: 'FAILURE'
+                            //
                         }
                     }
-                }
+                } */
                 stage('Build on Leap 15') {
                     when {
                         beforeAgent true
@@ -791,7 +907,7 @@ pipeline {
                             node('lightweight') {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
-                                             id: "analysis-leap15",
+                                             id: "analysis-leap15-gcc",
                                              tools: [ gcc4(), cppCheck() ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
@@ -969,7 +1085,11 @@ pipeline {
                 stage('run_test.sh') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('run_test') }
+                      allOf {
+                        expression { ! skip_stage('run_test') }
+                        expression {commitPragma(pragma: 'Skip-bullseye',
+                                    def_val: 'true').contains('true') }
+                      }
                     }
                     agent {
                         label 'ci_vm1'
@@ -1083,10 +1203,179 @@ pipeline {
                             archiveArtifacts artifacts: 'run_test.sh/**'
                         }
                     }
-                }
+                } // stage('run_test.sh')
+                stage('run_test.sh Bullseye') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { environment name: 'NO_CI_TESTING',
+                                  value: 'true' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-bullseye',
+                                def_val: 'true').contains('true') }
+                        }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 1,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
+                                       snapshot: true,
+                                       inst_repos: el7_component_repos + ' ' + component_repos,
+                                       inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
+                                                  "fuse3-libs " +
+                                                  'libisa-l-devel libpmem libpmemobj protobuf-c ' +
+                                                  'spdk-devel libfabric-devel pmix numactl-devel ' +
+                                                  'libipmctl-devel java-1.8.0-openjdk-headless'
+                        httpRequest url: env.JENKINS_URL +
+                                         'job/daos-stack/job/tools/job/PR-1' +
+                                         '/lastSuccessfulBuild/artifact/' +
+                                         'bullseyecoverage-linux.tar',
+                                    httpMode: 'GET',
+                                    outputFile: 'bullseye.tar'
+                        httpRequest url: env.JENKINS_URL +
+                                         'job/daos-stack/job/tools/job/PR-1' +
+                                         '/lastSuccessfulBuild/artifact/' +
+                                         'bullshtml.jar',
+                                    httpMode: 'GET',
+                                    outputFile: 'bullshtml.jar'
+                        runTest stashes: [ 'CentOS-tests-covc',
+                                           'CentOS-install-covc',
+                                           'CentOS-build-vars-covc' ],
+                                script: '''# JENKINS-52781 tar function is breaking symlinks
+                                           rm -rf test_results
+                                           mkdir test_results
+                                           rm -rf test_coverage
+                                           ls -lh artifacts || true
+                                           rm -rf bullseye
+                                           mkdir -p bullseye
+                                           tar -C bullseye \
+                                             --strip-components=1 \
+                                              -xf bullseye.tar
+                                           rm -f build/src/control/src/github.com/daos-stack/daos/src/control
+                                           mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
+                                           ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
+                                           . ./.build_vars.sh
+                                           DAOS_BASE=${SL_PREFIX%/install*}
+                                           NODE=${NODELIST%%,*}
+                                           ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
+                                               set -e
+                                               sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
+                                               if grep /mnt/daos\\  /proc/mounts; then
+                                                   sudo umount /mnt/daos
+                                               else
+                                                   sudo mkdir -p /mnt/daos
+                                               fi
+                                               #curl https://www.bullseye.com/download-archive/BullseyeCoverage-8.18.0-Linux-x64.tar \
+                                               #  --retry 10 --retry-max-time 60 \
+                                               #  --silent --show-error \
+                                               #  -o bullseye.tar
+                                               sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
+                                               sudo mkdir -p $DAOS_BASE
+                                               sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
+                                               pushd $DAOS_BASE/bullseye
+                                                 sudo ./install --quiet \
+                                                   --key \"${BULLSEYE}\" \
+                                                   --prefix /opt/BullseyeCoverage
+                                               popd
+                                               rm -rf bullseye
+                                               # copy daos_admin binary into \$PATH and fix perms
+                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
+                                                   sudo chown root /usr/bin/daos_admin && \
+                                                   sudo chmod 4755 /usr/bin/daos_admin && \
+                                                   mv $DAOS_BASE/install/bin/daos_admin \
+                                                      $DAOS_BASE/install/bin/orig_daos_admin
+
+                                               export COVFILE=$DAOS_BASE/test.cov
+                                               export PATH=\"/opt/BullseyeCoverage/bin:$PATH\"
+                                               # set CMOCKA envs here
+                                               export CMOCKA_MESSAGE_OUTPUT=xml
+                                               export CMOCKA_XML_FILE=\"$DAOS_BASE\"/test_results/%g.xml
+                                               cd $DAOS_BASE
+                                               IS_CI=true OLD_CI=false utils/run_test.sh
+                                               java -jar bullshtml.jar test_coverage"''',
+                              junit_files: 'test_results/*.xml'
+                    }
+                    post {
+                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
+                        success {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'FAILURE'
+                        }
+                        failure {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'ERROR'
+                        }
+                        */
+                        always {
+                            /* https://issues.jenkins-ci.org/browse/JENKINS-58952
+                             * label is at the end
+                            sh label: "Collect artifacts and tear down",
+                               script '''set -ex */
+                            sh script: '''set -ex
+                                      . ./.build_vars.sh
+                                      DAOS_BASE=${SL_PREFIX%/install*}
+                                      NODE=${NODELIST%%,*}
+                                      ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
+                                          cd $DAOS_BASE
+                                          rm -rf run_test.sh/
+                                          mkdir run_test.sh/
+                                          if ls /tmp/daos*.log > /dev/null; then
+                                              mv /tmp/daos*.log run_test.sh/
+                                          fi
+                                          # servers can sometimes take a while to stop when the test is done
+                                          x=0
+                                          while [ \"\\\$x\" -lt \"10\" ] &&
+                                                pgrep '(orterun|daos_server|daos_io_server)'; do
+                                              sleep 1
+                                              let x=\\\$x+1
+                                          done
+                                          if ! sudo umount /mnt/daos; then
+                                              echo \"Failed to unmount $DAOS_BASE\"
+                                              ps axf
+                                          fi
+                                          cd
+                                          if ! sudo umount \"$DAOS_BASE\"; then
+                                              echo \"Failed to unmount $DAOS_BASE\"
+                                              ps axf
+                                          fi"
+                                      # Note that we are taking advantage of the NFS mount here and if that
+                                      # should ever go away, we need to pull run_test.sh/ from $NODE
+                                      python utils/fix_cmocka_xml.py
+                                      find . -name '*.cov' ''',
+                            label: "Collect artifacts and tear down"
+                            junit 'test_results/*.xml'
+                            archiveArtifacts artifacts: 'run_test.sh/**'
+                            step([$class: 'CloverPublisher',
+                                 cloverReportDir: 'test_coverage',
+                                 cloverReportFileName: 'clover.xml'])
+                            // publishHTML target: [
+                            //    allowMissing: true,
+                            //    alwaysLinkToLastBuild: false,
+                            //    keepAll: true,
+                            //    reportDir: 'test_coverage',
+                            //    reportFiles: 'index.html',
+                            //    reportName: 'Bullseye Coverage Report'
+                            //]
+                        }
+                    }
+                } // stage('run_test.sh')
             }
         }
-        stage('Test') {
+/*        stage('Test') {
             when {
                 beforeAgent true
                 allOf {
@@ -1173,8 +1462,8 @@ pipeline {
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
-                                           if [ -z "$test_tag" ]; then
+*/ //                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
+/*                                           if [ -z "$test_tag" ]; then
                                                test_tag=pr,-hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
@@ -1183,20 +1472,20 @@ pipeline {
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
                                            mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
-                                failure_artifacts: 'Functional'
+*/ //                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
+/*                                failure_artifacts: 'Functional'
                     }
                     post {
                         always {
-                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
-                                  # Remove the latest avocado symlink directory to avoid inclusion in the
+*/ //                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
+/*                                  # Remove the latest avocado symlink directory to avoid inclusion in the
                                   # jenkins build artifacts
                                   unlink install/lib/daos/TESTING/ftest/avocado/job-results/latest
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
-                                      lbzip2 $daos_logs
+*/ //                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
+/*                                      lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                   arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
@@ -1204,28 +1493,28 @@ pipeline {
                                       mv $(echo $arts | tr '\n' ' ') "Functional/"
                                   fi'''
                             archiveArtifacts artifacts: 'Functional/**'
-                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
-                        }
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
+*/ //                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+/*                        }
+                        // temporarily moved into runTest->stepResult due to JENKINS-39203
+                        //success {
+                        //    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        //                 description: env.STAGE_NAME,
+                        //                 context: 'test/' + env.STAGE_NAME,
+                        //                 status: 'SUCCESS'
+                        //}
+                        //unstable {
+                        //    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        //                 description: env.STAGE_NAME,
+                        //                 context: 'test/' + env.STAGE_NAME,
+                        //                 status: 'FAILURE'
+                        //}
+                        //failure {
+                        //    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        //                 description: env.STAGE_NAME,
+                        //                 context: 'test/' + env.STAGE_NAME,
+                        //                 status: 'ERROR'
+                        //}
+                        //
                     }
                 }
                 stage('Functional_Hardware_Small') {
@@ -1255,8 +1544,8 @@ pipeline {
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-small:/s/^.*: *//p")
-                                           if [ -z "$test_tag" ]; then
+*/ //                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-small:/s/^.*: *//p")
+/*                                           if [ -z "$test_tag" ]; then
                                                test_tag=pr,hw,small
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-3)
@@ -1282,20 +1571,20 @@ pipeline {
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
                                            mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
                                            ./ftest.sh "$test_tag" $tnodes "auto:Optane"''',
-                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
-                                failure_artifacts: 'Functional'
+*/ //                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
+/*                                failure_artifacts: 'Functional'
                     }
                     post {
                         always {
-                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
-                                  # Remove the latest avocado symlink directory to avoid inclusion in the
+*/ //                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
+/*                                  # Remove the latest avocado symlink directory to avoid inclusion in the
                                   # jenkins build artifacts
                                   unlink install/lib/daos/TESTING/ftest/avocado/job-results/latest
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
-                                      lbzip2 $daos_logs
+*/ //                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
+/*                                      lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                   arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
@@ -1303,28 +1592,27 @@ pipeline {
                                       mv $(echo $arts | tr '\n' ' ') "Functional/"
                                   fi'''
                             archiveArtifacts artifacts: 'Functional/**'
-                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
-                        }
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
+*/ //                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+/*                        }
+                        // temporarily moved into runTest->stepResult due to JENKINS-39203
+                        //success {
+                        //    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        //                 description: env.STAGE_NAME,
+                        //                 context: 'test/' + env.STAGE_NAME,
+                        //                 status: 'SUCCESS'
+                        //}
+                        //unstable {
+                        //    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        //                 description: env.STAGE_NAME,
+                        //                 context: 'test/' + env.STAGE_NAME,
+                        //                 status: 'FAILURE'
+                        //}
+                        //failure {
+                        //    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        //                 description: env.STAGE_NAME,
+                        //                 context: 'test/' + env.STAGE_NAME,
+                        //                 status: 'ERROR'
+                        //}
                     }
                 }
                 stage('Functional_Hardware_Medium') {
@@ -1354,8 +1642,8 @@ pipeline {
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-medium:/s/^.*: *//p")
-                                           if [ -z "$test_tag" ]; then
+*/ //                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-medium:/s/^.*: *//p")
+/*                                           if [ -z "$test_tag" ]; then
                                                test_tag=pr,hw,medium,ib2
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-5)
@@ -1381,20 +1669,20 @@ pipeline {
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
                                            mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
                                            ./ftest.sh "$test_tag" $tnodes "auto:Optane"''',
-                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
-                                failure_artifacts: 'Functional'
+*/ //                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
+/*                                failure_artifacts: 'Functional'
                     }
                     post {
                         always {
-                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
-                                  # Remove the latest avocado symlink directory to avoid inclusion in the
+*/ //                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
+/*                                  # Remove the latest avocado symlink directory to avoid inclusion in the
                                   # jenkins build artifacts
                                   unlink install/lib/daos/TESTING/ftest/avocado/job-results/latest
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
-                                      lbzip2 $daos_logs
+*/ //                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
+/*                                      lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                   arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
@@ -1402,28 +1690,27 @@ pipeline {
                                       mv $(echo $arts | tr '\n' ' ') "Functional/"
                                   fi'''
                             archiveArtifacts artifacts: 'Functional/**'
-                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
-                        }
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
+*/ //                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+/*                        }
+                        // temporarily moved into runTest->stepResult due to JENKINS-39203
+                        //success {
+                        //    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        //                 description: env.STAGE_NAME,
+                        //                 context: 'test/' + env.STAGE_NAME,
+                        //                 status: 'SUCCESS'
+                        //}
+                        //unstable {
+                        //    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        //                 description: env.STAGE_NAME,
+                        //                 context: 'test/' + env.STAGE_NAME,
+                        //                 status: 'FAILURE'
+                        //}
+                        //failure {
+                        //    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        //                 description: env.STAGE_NAME,
+                        //                 context: 'test/' + env.STAGE_NAME,
+                        //                 status: 'ERROR'
+                        //}
                     }
                 }
                 stage('Functional_Hardware_Large') {
@@ -1453,8 +1740,8 @@ pipeline {
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-large:/s/^.*: *//p")
-                                           if [ -z "$test_tag" ]; then
+*/ //                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-large:/s/^.*: *//p")
+/*                                           if [ -z "$test_tag" ]; then
                                                test_tag=pr,hw,large
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
@@ -1480,20 +1767,20 @@ pipeline {
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
                                            mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
                                            ./ftest.sh "$test_tag" $tnodes "auto:Optane"''',
-                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
-                                failure_artifacts: 'Functional'
+*/ //                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
+/*                                failure_artifacts: 'Functional'
                     }
                     post {
                         always {
-                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
-                                  # Remove the latest avocado symlink directory to avoid inclusion in the
+*/ //                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
+/*                                  # Remove the latest avocado symlink directory to avoid inclusion in the
                                   # jenkins build artifacts
                                   unlink install/lib/daos/TESTING/ftest/avocado/job-results/latest
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
-                                      lbzip2 $daos_logs
+*/ //                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -maxdepth 0 -type f -size +1M); then
+/*                                      lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                   arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
@@ -1501,8 +1788,8 @@ pipeline {
                                       mv $(echo $arts | tr '\n' ' ') "Functional/"
                                   fi'''
                             archiveArtifacts artifacts: 'Functional/**'
-                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
-                        }
+*/ //                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+/*                        }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -1523,7 +1810,7 @@ pipeline {
                                          status: 'ERROR'
                         }
                         */
-                    }
+/*                    }
                 }
                 stage('Test CentOS 7 RPMs') {
                     when {
@@ -1607,7 +1894,7 @@ pipeline {
                     }
                 } // stage('Scan CentOS 7 RPMs')
             }
-        }
+        } // stage('Test') */
     }
     post {
         unsuccessful {

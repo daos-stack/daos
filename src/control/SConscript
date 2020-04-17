@@ -122,6 +122,9 @@ def scons():
 
     denv = env.Clone()
 
+    if denv.get("COMPILER") == 'covc':
+        denv.Replace(CC='gcc', CXX='g++')
+
     # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
     # runtime
     prefix = denv.subst("$PREFIX")
