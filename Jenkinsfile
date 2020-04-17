@@ -1133,6 +1133,7 @@ pipeline {
 
                                                cd $DAOS_BASE
                                                ./src/client/dfuse/test/local_test.py"''',
+                              junit_files: 'test_results/*.xml'
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
