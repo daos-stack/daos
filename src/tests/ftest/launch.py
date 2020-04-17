@@ -1011,13 +1011,22 @@ def notify_log_size(args, cur_logs_dir, daos_logs_dir, test_yaml, test_file):
     daos_logs_hosts = get_hosts_from_yaml(test_yaml, args)
     job_log_host = [socket.gethostname().split(".")[0]]
 
+    # Parse sizes from user input
+    daos_log_lim = "1GB"
+    job_log_lim = "5MB"
+    for size_arg in args.size_limit.split(","):
+        if "daos_logs" in size_arg:
+            daos_log_lim = size_arg.split("=")[0]
+        if "job_log" in size_arg:
+            job_log_lim = size_arg.split("=")[0]
+
     # Create dictionary to store info of separate areas
     LOG_SIZE_INFO = {
         "hosts": [job_log_host, daos_logs_hosts],
         "logs_src": [os.path.join(cur_logs_dir, "job.log"), daos_logs_dir],
         "log_size_file": [os.path.join(cur_logs_dir, "job_log_size.log"),
                           os.path.join(daos_logs_dir, "daos_log_size.log")],
-        "size_limit": ["5MB", "1GB"],
+        "size_limit": [job_log_lim, daos_log_lim],
     }
 
     # Check job.log
@@ -1364,7 +1373,8 @@ def main():
         dest="size_limit",
         nargs=1,
         type=str,
-        help="get log file sizes")
+        help="comma-separated list of log areas to collect the size for with "
+             "size specified e.g. daos-logs=1G,job_log=5MB")
     parser.add_argument(
         "-s", "--sparse",
         action="store_true",
