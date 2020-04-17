@@ -492,7 +492,7 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	}
 
 	if (re >= we)
-		expected_wrc = -DER_AGAIN;
+		expected_wrc = -DER_TX_RESTART;
 	if (is_rw(w)) {
 		bool e;
 
