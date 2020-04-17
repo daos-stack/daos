@@ -1173,7 +1173,7 @@ pipeline {
                                               echo \"Failed to unmount $DAOS_BASE\"
                                               ps axf
                                           fi"
-                                      true''',
+				      ''',
                             label: "Collect artifacts and tear down"
                             archiveArtifacts artifacts: 'vm_test/**'
                             publishValgrind (
