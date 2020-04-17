@@ -48,7 +48,7 @@ class JobManager(ExecutableCommand):
         """
         super(JobManager, self).__init__(namespace, command, path, subprocess)
         self.job = job
-        self._hosts = []
+        self._hosts = None
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -59,6 +59,50 @@ class JobManager(ExecutableCommand):
         """
         commands = [super(JobManager, self).__str__(), str(self.job)]
         return " ".join(commands)
+
+    @property
+    def hosts(self):
+        """Get the list of hosts associated with this command."""
+        return self._hosts
+
+    @hosts.setter
+    def hosts(self, value):
+        """Set the list of hosts associated with this command.
+
+        Args:
+            value (object): data to use to assign the hosts/hostfile
+        """
+        self._process_host_value(value)
+
+    def _process_host_value(self, value):
+        """Process the value input for the hosts setter method.
+
+        Obtain the list of hosts and optioanl hostfile information from the
+        value passed into the host setter method.  Assign the self._hosts list
+        and return the hostfile information to be processed by another method.
+
+        Args:
+            value (object): a host, list of hosts, or a tuple of list of hosts,
+                optional path for a hostfile, and optional number of slots per
+                host
+
+        Returns:
+            tuple: a tuple of the path for hostfile and the number of slots per
+                host
+
+        """
+        hosts = None
+        path = None
+        slots = None
+        if isinstance(value, tuple):
+            if len(value) > 1:
+                path = value[1]
+            if len(value) > 2:
+                slots = value[2]
+        else:
+            hosts = list(value)
+        self._hosts = hosts
+        return (path, slots)
 
     def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
@@ -71,20 +115,6 @@ class JobManager(ExecutableCommand):
 
         """
         return self.job.check_subprocess_status(sub_process)
-
-    def assign_hosts(self, hosts, path=None, slots=None):
-        """Assign the hosts to use with the command.
-
-        Set the appropriate command line parameter with the specified value.
-
-        Args:
-            hosts (list): list of hosts to specify on the command line
-            path (str, optional): path to use when specifying the hosts through
-                a hostfile. Defaults to None.
-            slots (int, optional): number of slots per host to specify in the
-                optional hostfile. Defaults to None.
-        """
-        pass
 
     def assign_processes(self, processes):
         """Assign the number of processes per node.
@@ -161,17 +191,18 @@ class Orterun(JobManager):
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
 
-    def assign_hosts(self, hosts, path=None, slots=None):
-        """Assign the hosts to use with the command (--hostfile).
+    @hosts.setter
+    def hosts(self, value):
+        """Set the list of hosts associated with this command.
+
+        This method also defines the self.hostfile.value and should be used over
+        directly setting the value to ensure the self._hosts value is set.
 
         Args:
-            hosts (list): list of hosts to specify in the hostfile
-            path (str, optional): hostfile path. Defaults to None.
-            slots (int, optional): number of slots per host to specify in the
-                hostfile. Defaults to None.
+            value (tuple): list of hosts, path for hostfile, and number of slots
+                per host to use to assign the hosts/hostfile
         """
-        # Create a copy of the hosts to use during stop to display running procs
-        self._hosts = list(hosts)
+        path, slots = self._process_host_value(value)
         kwargs = {"hostlist": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
@@ -251,17 +282,18 @@ class Mpirun(JobManager):
         self.envlist = FormattedParameter("-envlist {}", None)
         self.mpitype = mpitype
 
-    def assign_hosts(self, hosts, path=None, slots=None):
-        """Assign the hosts to use with the command (-f).
+    @hosts.setter
+    def hosts(self, value):
+        """Set the list of hosts associated with this command.
+
+        This method also defines the self.hostfile.value and should be used over
+        directly setting the value to ensure the self._hosts value is set.
 
         Args:
-            hosts (list): list of hosts to specify in the hostfile
-            path (str, optional): hostfile path. Defaults to None.
-            slots (int, optional): number of slots per host to specify in the
-                hostfile. Defaults to None.
+            value (tuple): list of hosts, path for hostfile, and number of slots
+                per host to use to assign the hosts/hostfile
         """
-        # Create a copy of the hosts to use during stop to display running procs
-        self._hosts = list(hosts)
+        path, slots = self._process_host_value(value)
         kwargs = {"hostlist": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
@@ -346,18 +378,20 @@ class Srun(JobManager):
         self.partition = FormattedParameter("--partition={}", None)
         self.output = FormattedParameter("--output={}", None)
 
-    def assign_hosts(self, hosts, path=None, slots=None):
-        """Assign the hosts to use with the command (-f).
+    @hosts.setter
+    def hosts(self, value):
+        """Set the list of hosts associated with this command.
+
+        This method also defines the self.nodefile.value and
+        self.ntasks_per_node.value.  It should be used over directly setting
+        these values to ensure the self._hosts value is also set.
 
         Args:
-            hosts (list): list of hosts to specify in the hostfile
-            path (str, optional): hostfile path. Defaults to None.
-            slots (int, optional): number of slots per host to specify in the
-                hostfile. Defaults to None.
+            value (tuple): list of hosts, path for hostfile, and number of slots
+                per host to use to assign the hosts/hostfile
         """
-        # Create a copy of the hosts to use during stop to display running procs
-        self._hosts = list(hosts)
-        kwargs = {"hostlist": self._hosts, "slots": None}
+        path, slots = self._process_host_value(value)
+        kwargs = {"hostlist": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
         self.nodefile.value = write_host_file(**kwargs)

@@ -174,11 +174,9 @@ class MdtestBase(TestWithServers):
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
-            path = os.path.join(mpio_util.mpichinstall, "bin")
-            return Mpirun(self.mdtest_cmd, path, mpitype="mpich")
+            return Mpirun(self.mdtest_cmd, mpitype="mpich")
 
-        path = os.path.join(self.ompi_prefix, "bin")
-        return Orterun(self.mdtest_cmd, path)
+        return Orterun(self.mdtest_cmd)
 
     def run_mdtest(self, manager, processes):
         """Run the Mdtest command.
@@ -189,7 +187,7 @@ class MdtestBase(TestWithServers):
         """
         env = self.mdtest_cmd.get_default_env(
             str(manager), get_log_file(self.client_log))
-        manager.assign_hosts(
+        manager.hosts = (
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         manager.assign_processes(processes)
         manager.assign_environment(env)

@@ -220,7 +220,7 @@ class ObjectMetadata(TestWithServers):
                 path = os.path.join(self.ompi_prefix, "bin")
                 manager = Orterun(ior_cmd, path)
                 env = ior_cmd.get_default_env(str(manager))
-                manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+                manager.hosts = (self.hostlist_clients, self.workdir, None)
                 manager.assign_processes(processes)
                 manager.assign_environment(env)
 

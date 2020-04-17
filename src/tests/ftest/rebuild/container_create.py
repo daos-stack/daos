@@ -159,7 +159,7 @@ class ContainerCreate(TestWithServers):
             mpirun_path = os.path.join(self.ompi_prefix, "bin")
             mpirun = Mpirun(IorCommand(), mpirun_path)
             mpirun.job.get_params(self)
-            mpirun.assign_hosts(
+            mpirun.hosts = (
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
             mpirun.assign_processes(len(self.hostlist_clients))

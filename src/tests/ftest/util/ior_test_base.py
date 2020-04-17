@@ -208,7 +208,7 @@ class IorTestBase(TestWithServers):
             str(manager), get_log_file(self.client_log))
         if intercept:
             env["LD_PRELOAD"] = intercept
-        manager.assign_hosts(
+        manager.hosts = (
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         manager.assign_processes(processes)
         manager.assign_environment(env)
@@ -310,7 +310,7 @@ class IorTestBase(TestWithServers):
             str(manager), get_log_file(self.client_log))
         if intercept:
             env["LD_PRELOAD"] = intercept
-        manager.assign_hosts(hosts, path, slots)
+        manager.hosts = (hosts, path, slots)
         manager.assign_processes(procs)
         manager.assign_environment(env)
         self.lock.release()

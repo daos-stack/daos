@@ -511,9 +511,8 @@ class ServerManager(ExecutableCommand):
             value (tuple): (list of hosts, workdir, slots)
         """
         self._hosts, workdir, slots = value
-        self.runner.processes.value = len(self._hosts)
-        self.runner.hostfile.value = write_host_file(
-            self._hosts, workdir, slots)
+        self.runner.hosts = (self._hosts, workdir, slots)
+        self.runner.assign_processes(len(self._hosts))
         self.runner.job.server_list = self._hosts
 
     def get_params(self, test):

@@ -70,11 +70,18 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         timeout (int, optional): command timeout in seconds. Defaults to None.
         expect_rc (int, optional): exepcted return code. Defaults to 0.
 
+    Rasises:
+        DaosTestError: if no hosts are specified
+
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
             values indicating which hosts yielded the return code.
 
     """
+    # Prevent calling the command without hosts
+    if not hosts:
+        raise DaosTestError("No hosts defined for pcmd()!")
+
     # Run the command on each host in parallel
     task = run_task(hosts, command, timeout)
 
@@ -178,8 +185,8 @@ def get_file_path(bin_name, dir_path=""):
     if not file_path:
         raise OSError(ENOENT, "File {0} not found inside {1} Directory"
                       .format(bin_name, basepath))
-    else:
-        return file_path
+
+    return file_path
 
 
 def process_host_list(hoststr):
