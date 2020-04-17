@@ -894,7 +894,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { quickbuild }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -1118,10 +1118,11 @@ pipeline {
                                                sudo chown root /usr/bin/daos_admin
                                                sudo chmod 4755 /usr/bin/daos_admin
                                                /bin/rm $DAOS_BASE/install/bin/daos_admin
+                                               cd $DAOS_BASE
+                                               . utils/sl/setup_local.sh
                                                sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh /usr/share/spdk/scripts
                                                sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
                                                sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
-                                               cd $DAOS_BASE
                                                ./src/client/dfuse/test/local_test.py"'''
                     }
                     post {
