@@ -440,6 +440,13 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 }
 
 int
+ds_mgmt_pool_reintegrate(uuid_t pool_uuid, uint32_t reint_rank,
+		struct pool_target_id_list *reint_list)
+{
+	return 0;
+}
+
+int
 ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
 			 char *tgt_id)
 {

@@ -215,13 +215,9 @@ vos_xsctxt_get(void)
 #endif
 }
 
-enum {
-	VOS_KEY_CMP_UINT64	= (1ULL << 63),
-	VOS_KEY_CMP_LEXICAL	= (1ULL << 62),
-	VOS_KEY_CMP_ANY		= (VOS_KEY_CMP_UINT64 | VOS_KEY_CMP_LEXICAL),
-};
+#define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
 
-#define VOS_KEY_CMP_UINT64_SET	(VOS_KEY_CMP_UINT64  | BTR_FEAT_DIRECT_KEY)
+#define VOS_KEY_CMP_UINT64_SET	(BTR_FEAT_UINT_KEY)
 #define VOS_KEY_CMP_LEXICAL_SET	(VOS_KEY_CMP_LEXICAL | BTR_FEAT_DIRECT_KEY)
 #define VOS_OFEAT_SHIFT		48
 #define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
@@ -386,8 +382,11 @@ vos_dtx_cos_register(void);
  * \param xid		[IN]	Pointer to the DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param punch		[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success.
+ * \return		Other negative value if error.
  */
-void
+int
 vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 		struct dtx_id *xid, uint64_t dkey_hash, bool punch);
 

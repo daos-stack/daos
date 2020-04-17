@@ -554,6 +554,44 @@ dfs_test_cond(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static void
+dfs_test_syml(void **state)
+{
+	dfs_obj_t		*sym;
+	char			*filename = "syml_file";
+	char			*val = "SYMLINK VAL 1";
+	char			tmp_buf[64];
+	struct stat		stbuf;
+	daos_size_t		size = 0;
+	int			rc, op_rc;
+
+	op_rc = dfs_open(dfs_mt, NULL, filename, S_IFLNK | S_IWUSR | S_IRUSR,
+			 O_RDWR | O_CREAT | O_EXCL, 0, 0, val, &sym);
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	assert_int_equal(rc, 0);
+	if (op_rc != 0)
+		goto syml_stat;
+
+	rc = dfs_get_symlink_value(sym, NULL, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(val)+1);
+
+	rc = dfs_get_symlink_value(sym, tmp_buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(val) + 1);
+	assert_string_equal(val, tmp_buf);
+
+	rc = dfs_release(sym);
+	assert_int_equal(rc, 0);
+
+syml_stat:
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, strlen(val));
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_tests[] = {
 	{ "DFS_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -563,6 +601,8 @@ static const struct CMUnitTest dfs_tests[] = {
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
 	{ "DFS_TEST4: Conditional OPs",
 	  dfs_test_cond, async_disable, test_case_teardown},
+	{ "DFS_TEST5: Simple Symlinks",
+	  dfs_test_syml, async_disable, test_case_teardown},
 };
 
 static int

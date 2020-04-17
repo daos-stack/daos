@@ -293,15 +293,16 @@ def define_components(reqs):
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX" --with-shared ' \
-                          ' --with-fio="$FIO_SRC"',
-                          'make $JOBS_OPT', 'make install',
+                commands=['./configure --prefix="$SPDK_PREFIX"' \
+                          ' --disable-tests --without-vhost --without-crypto' \
+                          ' --without-pmdk --without-vpp --without-rbd' \
+                          ' --with-rdma --with-shared' \
+                          ' --without-iscsi-initiator --without-isal' \
+                          ' --without-vtune', 'make $JOBS_OPT', 'make install',
                           'cp dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
-                          'cp -r include scripts examples/nvme/fio_plugin ' \
-                          '"$SPDK_PREFIX/share/spdk"'],
-                libs=['spdk'],
-                requires=['fio'])
+                          'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
+                libs=['rte_bus_pci'])
 
     url = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
         'v1.3.0/protobuf-c-1.3.0.tar.gz'

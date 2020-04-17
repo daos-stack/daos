@@ -93,7 +93,7 @@ obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_child *cont,
 			      vos_fetch_end(ioh, status);
 
 		if (rc != 0) {
-			D_ERROR(DF_UOID "%s end failed: %d\n",
+			D_ERROR(DF_UOID " %s end failed: %d\n",
 				DP_UOID(orwi->orw_oid),
 				update ? "Update" : "Fetch", rc);
 			if (status == 0)
@@ -405,7 +405,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 
 	ABT_eventual_free(&arg.eventual);
 	/* After RDMA is done, corrupt the server data */
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_SDATA_CORRUPT)) {
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 		struct obj_rw_in	*orw = crt_req_get(rpc);
 		struct ds_pool		*pool;
 
@@ -814,8 +814,10 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 			&csum_infos[biov_csums_idx],
 			&biov_csums_used, get_iod_csum(iod_csums, i));
 
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("Failed to add csum for iod\n");
 			return rc;
+		}
 		biov_csums_idx += biov_csums_used;
 	}
 
@@ -842,7 +844,7 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 		struct dcs_iod_csums	*csum =
 					&orw->orw_iod_array.oia_iod_csums[i];
 
-		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+		if (!csum_iod_is_supported(iod))
 			continue;
 		rc = daos_csummer_verify_key(csummer,
 					     &iod->iod_name,
@@ -926,7 +928,6 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	uint32_t		tag = dss_get_module_info()->dmi_tgt_id;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	uint64_t		time_start = 0;
-	struct obj_tls		*tls = obj_tls_get();
 	struct bio_desc		*biod;
 	daos_key_t		*dkey;
 	crt_bulk_op_t		bulk_op;
@@ -937,7 +938,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	uint64_t		*offs;
 	int			err, rc = 0;
 
-	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
+	D_TIME_START(time_start, OBJ_PF_UPDATE_LOCAL);
 
 	if (daos_is_zero_dti(&orw->orw_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
@@ -975,6 +976,14 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	if (obj_rpc_is_update(rpc)) {
 		obj_singv_ec_rw_filter(orw, iods, offs, true);
 		bulk_op = CRT_BULK_GET;
+
+		/** Fault injection - corrupt data from network */
+		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE)  && !rma) {
+			D_ERROR("csum: Corrupting data (network)\n");
+			dcf_corrupt(orw->orw_sgls.ca_arrays,
+				    orw->orw_sgls.ca_count);
+		}
+
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
 			      orw->orw_epoch,
 			      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
@@ -1063,8 +1072,19 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		D_GOTO(post, rc);
 	}
 
-	rc = obj_verify_bio_csum(rpc, iods, iod_csums, biod,
-				 cont_hdl->sch_csummer);
+	if (obj_rpc_is_update(rpc)) {
+		rc = obj_verify_bio_csum(rpc, iods, iod_csums, biod,
+					 cont_hdl->sch_csummer);
+		/** CSUM Verified on update, now corrupt to fake corruption
+		 * on disk
+		 */
+		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK) && !rma) {
+			D_ERROR("csum: Corrupting data (DISK)\n");
+			dcf_corrupt(orw->orw_sgls.ca_arrays,
+				    orw->orw_sgls.ca_count);
+		}
+	}
+
 	if (rc == -DER_CSUM)
 		obj_log_csum_err();
 post:
@@ -1072,7 +1092,7 @@ post:
 	rc = rc ? : err;
 out:
 	rc = obj_rw_complete(rpc, cont, ioh, rc, dth);
-	D_TIME_END(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
+	D_TIME_END(time_start, OBJ_PF_UPDATE_LOCAL);
 	return rc;
 }
 
@@ -1390,7 +1410,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 {
 	struct obj_rw_in		*orw = crt_req_get(rpc);
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
-	struct obj_tls			*tls = obj_tls_get();
 	struct dtx_leader_handle	dlh = { 0 };
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc;
@@ -1470,7 +1489,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		goto cleanup;
 	}
 
-	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE);
+	D_TIME_START(time_start, OBJ_PF_UPDATE);
 
 renew:
 	/*
@@ -1536,7 +1555,7 @@ reply:
 	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, NULL, ioc.ioc_coh);
 
 cleanup:
-	D_TIME_END(tls->ot_sp, time_start, OBJ_PF_UPDATE);
+	D_TIME_END(time_start, OBJ_PF_UPDATE);
 	obj_ec_split_req_fini(split_req);
 	obj_ioc_end(&ioc, rc);
 }
@@ -2230,7 +2249,7 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 	else
 		oso->oso_epoch = min(epoch, osi->osi_epoch);
 
-	D_DEBUG(DB_IO, "start: "DF_UOID", epc "DF_U64"\n",
+	D_DEBUG(DB_IO, "obj_sync start: "DF_UOID", epc "DF_U64"\n",
 		DP_UOID(osi->osi_oid), oso->oso_epoch);
 
 	rc = obj_ioc_begin(osi->osi_oid, osi->osi_map_ver,
@@ -2247,7 +2266,7 @@ out:
 	obj_reply_set_status(rpc, rc);
 	obj_ioc_end(&ioc, rc);
 
-	D_DEBUG(DB_IO, "stop: "DF_UOID", epc "DF_U64", rd = %d\n",
+	D_DEBUG(DB_IO, "obj_sync stop: "DF_UOID", epc "DF_U64", rd = %d\n",
 		DP_UOID(osi->osi_oid), oso->oso_epoch, rc);
 
 	rc = crt_reply_send(rpc);
@@ -2256,45 +2275,19 @@ out:
 }
 
 static int
-cont_prop_srv_verify(struct ds_iv_ns *ns, uuid_t co_hdl)
-{
-	int			rc;
-	daos_prop_t		cont_prop = {0};
-	struct daos_prop_entry	entry = {0};
-
-	entry.dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	cont_prop.dpp_entries = &entry;
-	cont_prop.dpp_nr = 1;
-
-	rc = cont_iv_prop_fetch(ns, co_hdl, &cont_prop);
-	if (rc != 0)
-		return false;
-	return daos_cont_prop2serververify(&cont_prop);
-}
-
-static int
 obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
 		    struct daos_csummer *csummer)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
-	struct ds_pool		*pool;
 	uint64_t		 iods_nr = orw->orw_iod_array.oia_iod_nr;
 	unsigned int		 i;
 	int			 rc = 0;
 
-	if (!daos_csummer_initialized(csummer))
-		return 0;
-
-	pool = ds_pool_lookup(orw->orw_pool_uuid);
-	if (pool == NULL)
-		return -DER_NONEXIST;
-
 	if (!obj_rpc_is_update(rpc) ||
-	    !cont_prop_srv_verify(pool->sp_iv_ns, orw->orw_co_hdl)) {
-		ds_pool_put(pool);
+	    !daos_csummer_initialized(csummer) ||
+	    !csummer->dcs_srv_verify)
 		return 0;
-	}
 
 	for (i = 0; i < iods_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
@@ -2316,11 +2309,22 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 		daos_sgl_fini(&sgl, false);
 
 		if (rc != 0) {
-			D_ERROR("Verify failed: %d\n", rc);
+			if (iod->iod_type == DAOS_IOD_SINGLE) {
+				D_ERROR("Data Verification failed (object: "
+					DF_OID"): %d\n",
+					DP_OID(orw->orw_oid.id_pub), rc);
+			}
+			if (iod->iod_type == DAOS_IOD_ARRAY) {
+				D_ERROR("Data Verification failed (object: "
+						DF_OID ", "
+						"extent: "DF_RECX"): %d\n",
+					DP_OID(orw->orw_oid.id_pub),
+					DP_RECX(iod->iod_recxs[i]),
+					rc);
+			}
 			break;
 		}
 	}
 
-	ds_pool_put(pool);
 	return rc;
 }

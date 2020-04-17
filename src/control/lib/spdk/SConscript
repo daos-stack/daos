@@ -13,12 +13,17 @@ def scons():
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
 
-    # Link to DPDK static libs
-    senv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', \
-                                 '-lrte_mempool', '-lrte_mempool_ring', \
-                                 '-lrte_bus_pci', '-lrte_pci', '-lrte_ring', \
-                                 '-lrte_mbuf', '-lrte_eal', '-lrte_kvargs', \
-                                 '-Wl,--no-whole-archive'])
+    # SPDK related libs
+    libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
+    libs += ['rte_mempool', 'rte_mempool_ring', 'rte_bus_pci']
+    libs += ['rte_pci', 'rte_ring', 'rte_mbuf', 'rte_eal', 'rte_kvargs']
+    libs += ['spdk_bdev_aio', 'spdk_bdev_nvme', 'spdk_bdev_malloc']
+    libs += ['spdk_conf', 'spdk_blob', 'spdk_nvme', 'spdk_util']
+    libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
+    libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
+
+    # Other libs
+    libs += ['numa', 'dl', 'isal']
 
     # hack to avoid building this library with cov compiler for the moment
     compiler = senv.get('COMPILER').lower()
@@ -28,9 +33,7 @@ def scons():
     senv.nc = senv.Object("src/nvme_control.c")
     senv.ncc = senv.Object("src/nvme_control_common.c")
     denv.nvmecontrol = senv.StaticLibrary("nvme_control", [senv.nc, senv.ncc],
-                                          CC=compiler, LIBS=['spdk', 'numa',
-                                                             'spdk_env_dpdk',
-                                                             'isal'])
+                                          CC=compiler, LIBS=libs)
 
     senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
 

@@ -13,14 +13,26 @@ def scons():
     unit_env.AppendUnique(CPPPATH=["$SPDK_SRC/lib/nvme",
                                    "$SPDK_SRC/include"])
 
+    # SPDK related libs
+    libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
+    libs += ['rte_mempool', 'rte_mempool_ring', 'rte_bus_pci']
+    libs += ['rte_pci', 'rte_ring', 'rte_mbuf', 'rte_eal', 'rte_kvargs']
+    libs += ['spdk_bdev_aio', 'spdk_bdev_nvme', 'spdk_bdev_malloc']
+    libs += ['spdk_conf', 'spdk_blob', 'spdk_nvme', 'spdk_util']
+    libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
+    libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
+
+    # Other libs
+    libs += ['numa', 'dl', 'isal', 'cmocka', 'pthread']
+
+    if GetOption('help'):
+        return
     config = Configure(unit_env)
 
-    if config.CheckHeader("nvme_internal.h"):
+    if GetOption('clean') or config.CheckHeader("nvme_internal.h"):
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
-                                   unit_env.nc],
-                                  LIBS=['spdk', 'isal', 'spdk_env_dpdk', 'numa',
-                                        'cmocka', 'pthread', 'dl'])
+                                   unit_env.nc], LIBS=libs)
         unit_env.Install("$PREFIX/bin", testbin)
     else:
         print("SPDK nvme_internal.h missing, skipping nvme_control_ut build")
