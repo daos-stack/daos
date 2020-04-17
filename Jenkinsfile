@@ -1044,10 +1044,6 @@ pipeline {
                         }
                         */
                         always {
-                            /* https://issues.jenkins-ci.org/browse/JENKINS-58952
-                             * label is at the end
-                            sh label: "Collect artifacts and tear down",
-                               script '''set -ex */
                             sh script: '''set -ex
                                       . ./.build_vars.sh
                                       DAOS_BASE=${SL_PREFIX%/install*}
@@ -1114,26 +1110,18 @@ pipeline {
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
-                                               sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
-                                               if grep /mnt/daos\\  /proc/mounts; then
-                                                   sudo umount /mnt/daos
-                                               else
-                                                   sudo mkdir -p /mnt/daos
-                                               fi
+                                               sudo mkdir /mnt/daos
                                                sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
                                                sudo mkdir -p $DAOS_BASE
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-
-                                               # copy daos_admin binary into \$PATH and fix perms
                                                sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin
                                                sudo chown root /usr/bin/daos_admin
                                                sudo chmod 4755 /usr/bin/daos_admin
                                                /bin/rm $DAOS_BASE/install/bin/daos_admin
-                                               cd $DAOS_BASE
-                                               . utils/sl/setup_local.sh
                                                sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh /usr/share/spdk/scripts
                                                sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
                                                sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
+                                               cd $DAOS_BASE
                                                ./src/client/dfuse/test/local_test.py"'''
                     }
                     post {
@@ -1158,10 +1146,6 @@ pipeline {
                         }
                         */
                         always {
-                            /* https://issues.jenkins-ci.org/browse/JENKINS-58952
-                             * label is at the end
-                            sh label: "Collect artifacts and tear down",
-                               script '''set -ex */
                             sh script: '''set -ex
                                       . ./.build_vars.sh
                                       DAOS_BASE=${SL_PREFIX%/install*}
