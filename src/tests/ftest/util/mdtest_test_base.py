@@ -25,6 +25,7 @@ from __future__ import print_function
 
 import os
 import subprocess
+import re
 
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers, get_log_file
@@ -33,6 +34,7 @@ from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
 from command_utils import Mpirun, Orterun, CommandFailure
 from dfuse_utils import Dfuse
+from daos_utils import DaosCommand
 import write_host_file
 
 
@@ -49,7 +51,7 @@ class MdtestBase(TestWithServers):
         self.processes = None
         self.hostfile_clients_slots = None
         self.dfuse = None
-        self.container = None
+        self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -57,6 +59,9 @@ class MdtestBase(TestWithServers):
         self.update_log_file_names()
         # Start the servers and agents
         super(MdtestBase, self).setUp()
+
+        # initialise daos_cmd
+        self.daos_cmd = DaosCommand(self.bin)
 
         # Get the parameters for Mdtest
         self.mdtest_cmd = MdtestCommand()
@@ -93,30 +98,30 @@ class MdtestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-    def _create_cont(self):
-        """Create a TestContainer object to be used to create container."""
-        # TO-DO: Enable container using TestContainer object,
-        # once DAOS-3355 is resolved.
-        # Get Container params
-        #self.container = TestContainer(self.pool)
-        #self.container.get_params(self)
+    def _create_cont(self, doas_cmd):
+        """Create a container.
 
-        # create container
-        # self.container.create()
-        env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
-        # command to create container of posix type
-        cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
-            self.mdtest_cmd.dfs_pool_uuid.value, self.mdtest_cmd.dfs_svcl.value)
-        try:
-            container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                         shell=True)
-            (output, err) = container.communicate()
-            self.log.info("Container created with UUID %s", output.split()[3])
+        Args:
+            daos_cmd (DaosCommand): doas command to issue the container
+                create
 
-        except subprocess.CalledProcessError as err:
-            self.fail("Container create failed:{}".format(err))
+        Returns:
+            str: UUID of the created container
 
-        return output.split()[3]
+        """
+        cont_type = self.params.get("type", "/run/container/*")
+        result = self.daos_cmd.container_create(
+            pool=self.pool.uuid, svc=self.pool.svc_ranks,
+            cont_type=cont_type)
+
+        # Extract the container UUID from the daos container create output
+        cont_uuid = re.findall(
+            "created\s+container\s+([0-9a-f-]+)", result.stdout)
+        if not cont_uuid:
+            self.fail(
+                "Error obtaining the container uuid from: {}".format(
+                    result.stdout))
+        return cont_uuid[0]
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -129,7 +134,7 @@ class MdtestBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self._create_cont())
+        self.dfuse.set_dfuse_cont_param(self._create_cont(self.daos_cmd))
 
         try:
             # start dfuse
