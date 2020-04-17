@@ -38,6 +38,8 @@ pool:
   nvme_size: 20000000000
   svcn: 1
   control_method: dmg
+container:
+  type: POSIX
 fio:
   names:
     - global
