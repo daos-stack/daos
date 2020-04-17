@@ -377,3 +377,45 @@ func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropRe
 
 	return pspr, nil
 }
+
+// PoolReintegrateReq struct contains request
+type PoolReintegrateReq struct {
+	unaryRequest
+	msRequest
+	UUID      string
+	Rank      uint32
+	Targetidx []uint32
+}
+
+// ReintegrateResp has no other parameters other than success/failure for now.
+
+// PoolReintegrate will set a pool target for a specific rank back to up.
+// This should automatically start the reintegration process.
+// Returns an error (including any DER code from DAOS).
+func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, &mgmtpb.PoolReintegrateReq{
+			Uuid:      req.UUID,
+			Rank:      req.Rank,
+			Targetidx: req.Targetidx,
+		})
+	})
+
+	rpcClient.Debugf("Reintegrate DAOS pool target request: %v\n", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool reintegrate failed")
+	}
+	rpcClient.Debugf("Reintegrate DAOS pool target response: %s\n", msResp)
+
+	return nil
+}
