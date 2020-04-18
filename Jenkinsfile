@@ -1123,7 +1123,7 @@ pipeline {
                                                sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
                                                cd $DAOS_BASE
                                                export PYTHONPATH=./src/client/pydaos
-                                               ./src/client/dfuse/test/local_test.py all"'''
+                                               ./src/client/dfuse/test/local_test.py all | tee test.out"'''
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -1179,7 +1179,7 @@ pipeline {
                             archiveArtifacts artifacts: 'vm_test/**'
                             publishValgrind (
                                     failBuildOnInvalidReports: true,
-                                    failBuildOnMissingReports: false,
+                                    failBuildOnMissingReports: true,
                                     failThresholdDefinitelyLost: '0',
                                     failThresholdInvalidReadWrite: '0',
                                     failThresholdTotal: '0',
@@ -1196,7 +1196,7 @@ pipeline {
                                          failOnError: true,
                                          name: "VM Testing",
                                          id: "analysis-vm-test",
-                                         tools: [ clang() ]
+                                         tools: [ clang(pattern: 'test.out') ]
                         }
                     }
                 }
