@@ -177,7 +177,7 @@ class DFuse():
         if True:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
 
-        if False:
+        if True:
             cmd.extend(['--suppressions={}'.format(os.path.join('src',
                                                                 'cart',
                                                                 'utils',
@@ -295,11 +295,11 @@ def show_cont(conf, pool):
 
     daos_bin = os.path.join(conf['PREFIX'], 'bin', 'daos')
     cmd = [daos_bin, 'container', 'create', '--svc', '0', '--pool', pool]
-    rc = subprocess.run(cmd, capture_output=True)
+    rc = subprocess.run(cmd)
     print('rc is {}'.format(rc))
 
     cmd = [daos_bin, 'pool', 'list-containers', '--svc', '0', '--pool', pool]
-    rc = subprocess.run(cmd, capture_output=True)
+    rc = subprocess.run(cmd)
     print('rc is {}'.format(rc))
     return rc.stdout.strip()
 
@@ -477,7 +477,6 @@ def run_cmd(pool, cont):
                     s_dir,
                     s_file])
 
-
 EFILES=['src/common/misc.c',
         'src/common/prop.c',
         'src/cart/crt_hg_proc.c',
@@ -624,21 +623,12 @@ def run_dfuse(server, conf):
     dfuse.start()
     print('Running fuse with both')
 
-#    try:
-#        print('Waiting')
-#        dfuse.wait_for_exit()
-#    except KeyboardInterrupt:
-#        pass
-
     stat_and_check(dfuse, pre_stat)
 
     create_and_read_via_il(dfuse, dfuse.dir)
 
     run_tests(dfuse)
 
-#    uns_container = str(uuid.uuid4())
-#    # Make a container for UNS to connect to.
-#    os.mkdir(os.path.join(dfuse.dir, pools[0], uns_container))
     return
 
     daos_bin = os.path.join(conf['PREFIX'], 'bin', 'daos')
@@ -662,8 +652,6 @@ def run_dfuse(server, conf):
     print(os.listdir(dfuse.dir))
 
     dfuse = None
-
-
 
     print('Trying UNS')
     dfuse = DFuse(server, conf)
@@ -820,7 +808,6 @@ def test_pydaos_kv(server, conf):
 
     data['no-key'] = None
 
-#    kv.bget(data, value_size=368870);
     kv.bget(data, value_size=16);
     print("Second iteration")
     failed = False

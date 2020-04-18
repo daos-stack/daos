@@ -892,8 +892,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                            branch target_branch
                             expression { quickbuild != 'true' }
                         }
                     }
@@ -1182,7 +1181,7 @@ pipeline {
                                     failThresholdTotal: '0',
                                     pattern: 'dfuse.*.memcheck',
                                     publishResultsForAbortedBuilds: false,
-                                    publishResultsForFailedBuilds: false,
+                                    publishResultsForFailedBuilds: true,
                                     sourceSubstitutionPaths: '',
                                     unstableThresholdDefinitelyLost: '',
                                     unstableThresholdInvalidReadWrite: '',
@@ -1192,9 +1191,9 @@ pipeline {
                                          aggregatingResults: true,
                                          failOnError: true,
                                          name: "VM Testing",
-                                         tools: [ clang(pattern: 'test.out',
-					                name: 'VM test results',
-							id: 'VM_test') ]
+                                         tool: clang(pattern: 'test.out',
+                                                     name: 'VM test results',
+                                                     id: 'VM_test')
                         }
                     }
                 }
