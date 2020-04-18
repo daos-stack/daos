@@ -386,7 +386,7 @@ func TestStoragePrepare(t *testing.T) {
 
 func TestStorageFormat(t *testing.T) {
 	var (
-		mockNvmeController0 = storage.MockNvmeController()
+		mockNvmeController0 = storage.MockNvmeController(0)
 		mockNvmeController1 = storage.MockNvmeController(1)
 	)
 
@@ -404,7 +404,7 @@ func TestStorageFormat(t *testing.T) {
 		bDevs            [][]string
 		expNvmeFormatted bool
 		bmbc             *bdev.MockBackendConfig
-		expResults       []*StorageFormatResp
+		expResp          *StorageFormatResp
 		isRoot           bool
 		reformat         bool
 	}{
@@ -413,14 +413,12 @@ func TestStorageFormat(t *testing.T) {
 			sClass:           storage.ScmClassRAM,
 			sSize:            6,
 			expNvmeFormatted: true,
-			expResults: []*StorageFormatResp{
-				{
-					Crets: []*NvmeControllerResult{},
-					Mrets: []*ScmMountResult{
-						{
-							Mntpoint: "/mnt/daos",
-							State:    new(ResponseState),
-						},
+			expResp: &StorageFormatResp{
+				Crets: []*NvmeControllerResult{},
+				Mrets: []*ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ResponseState),
 					},
 				},
 			},
@@ -430,14 +428,12 @@ func TestStorageFormat(t *testing.T) {
 			sClass:           storage.ScmClassDCPM,
 			sDevs:            []string{"/dev/pmem1"},
 			expNvmeFormatted: true,
-			expResults: []*StorageFormatResp{
-				{
-					Crets: []*NvmeControllerResult{},
-					Mrets: []*ScmMountResult{
-						{
-							Mntpoint: "/mnt/daos",
-							State:    new(ResponseState),
-						},
+			expResp: &StorageFormatResp{
+				Crets: []*NvmeControllerResult{},
+				Mrets: []*ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ResponseState),
 					},
 				},
 			},
@@ -453,19 +449,17 @@ func TestStorageFormat(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: storage.NvmeControllers{mockNvmeController0},
 			},
-			expResults: []*StorageFormatResp{
-				{
-					Crets: []*NvmeControllerResult{
-						{
-							Pciaddr: mockNvmeController0.PciAddr,
-							State:   new(ResponseState),
-						},
+			expResp: &StorageFormatResp{
+				Crets: []*NvmeControllerResult{
+					{
+						Pciaddr: mockNvmeController0.PciAddr,
+						State:   new(ResponseState),
 					},
-					Mrets: []*ScmMountResult{
-						{
-							Mntpoint: "/mnt/daos",
-							State:    new(ResponseState),
-						},
+				},
+				Mrets: []*ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ResponseState),
 					},
 				},
 			},
@@ -480,19 +474,17 @@ func TestStorageFormat(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: storage.NvmeControllers{mockNvmeController0},
 			},
-			expResults: []*StorageFormatResp{
-				{
-					Crets: []*NvmeControllerResult{
-						{
-							Pciaddr: mockNvmeController0.PciAddr,
-							State:   new(ResponseState),
-						},
+			expResp: &StorageFormatResp{
+				Crets: []*NvmeControllerResult{
+					{
+						Pciaddr: mockNvmeController0.PciAddr,
+						State:   new(ResponseState),
 					},
-					Mrets: []*ScmMountResult{
-						{
-							Mntpoint: "/mnt/daos",
-							State:    new(ResponseState),
-						},
+				},
+				Mrets: []*ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ResponseState),
 					},
 				},
 			},
@@ -507,25 +499,23 @@ func TestStorageFormat(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: storage.NvmeControllers{mockNvmeController0},
 			},
-			expResults: []*StorageFormatResp{
-				{
-					Crets: []*NvmeControllerResult{
-						{
-							Pciaddr: "<nil>",
-							State: &ResponseState{
-								Status: ResponseStatus_CTL_SUCCESS,
-								Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
-							},
+			expResp: &StorageFormatResp{
+				Crets: []*NvmeControllerResult{
+					{
+						Pciaddr: "<nil>",
+						State: &ResponseState{
+							Status: ResponseStatus_CTL_SUCCESS,
+							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
 						},
 					},
-					Mrets: []*ScmMountResult{
-						{
-							Mntpoint: "/mnt/daos",
-							State: &ResponseState{
-								Status: ResponseStatus_CTL_ERR_SCM,
-								Error:  scm.FaultFormatNoReformat.Error(),
-								Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
-							},
+				},
+				Mrets: []*ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ResponseState{
+							Status: ResponseStatus_CTL_ERR_SCM,
+							Error:  scm.FaultFormatNoReformat.Error(),
+							Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
 						},
 					},
 				},
@@ -543,19 +533,17 @@ func TestStorageFormat(t *testing.T) {
 				ScanRes: storage.NvmeControllers{mockNvmeController0},
 			},
 			expNvmeFormatted: true,
-			expResults: []*StorageFormatResp{
-				{
-					Crets: []*NvmeControllerResult{
-						{
-							Pciaddr: mockNvmeController0.PciAddr,
-							State:   new(ResponseState),
-						},
+			expResp: &StorageFormatResp{
+				Crets: []*NvmeControllerResult{
+					{
+						Pciaddr: mockNvmeController0.PciAddr,
+						State:   new(ResponseState),
 					},
-					Mrets: []*ScmMountResult{
-						{
-							Mntpoint: "/mnt/daos",
-							State:    new(ResponseState),
-						},
+				},
+				Mrets: []*ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ResponseState),
 					},
 				},
 			},
@@ -570,25 +558,23 @@ func TestStorageFormat(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: storage.NvmeControllers{mockNvmeController0},
 			},
-			expResults: []*StorageFormatResp{
-				{
-					Crets: []*NvmeControllerResult{
-						{
-							Pciaddr: "<nil>",
-							State: &ResponseState{
-								Status: ResponseStatus_CTL_SUCCESS,
-								Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
-							},
+			expResp: &StorageFormatResp{
+				Crets: []*NvmeControllerResult{
+					{
+						Pciaddr: "<nil>",
+						State: &ResponseState{
+							Status: ResponseStatus_CTL_SUCCESS,
+							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
 						},
 					},
-					Mrets: []*ScmMountResult{
-						{
-							Mntpoint: "/mnt/daos",
-							State: &ResponseState{
-								Status: ResponseStatus_CTL_ERR_SCM,
-								Error:  scm.FaultFormatNoReformat.Error(),
-								Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
-							},
+				},
+				Mrets: []*ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ResponseState{
+							Status: ResponseStatus_CTL_ERR_SCM,
+							Error:  scm.FaultFormatNoReformat.Error(),
+							Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
 						},
 					},
 				},
@@ -606,19 +592,17 @@ func TestStorageFormat(t *testing.T) {
 				ScanRes: storage.NvmeControllers{mockNvmeController0},
 			},
 			expNvmeFormatted: true,
-			expResults: []*StorageFormatResp{
-				{
-					Crets: []*NvmeControllerResult{
-						{
-							Pciaddr: mockNvmeController0.PciAddr,
-							State:   new(ResponseState),
-						},
+			expResp: &StorageFormatResp{
+				Crets: []*NvmeControllerResult{
+					{
+						Pciaddr: mockNvmeController0.PciAddr,
+						State:   new(ResponseState),
 					},
-					Mrets: []*ScmMountResult{
-						{
-							Mntpoint: "/mnt/daos",
-							State:    new(ResponseState),
-						},
+				},
+				Mrets: []*ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ResponseState),
 					},
 				},
 			},
@@ -636,27 +620,25 @@ func TestStorageFormat(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: storage.NvmeControllers{mockNvmeController0, mockNvmeController1},
 			},
-			expResults: []*StorageFormatResp{
-				{
-					Crets: []*NvmeControllerResult{
-						{
-							Pciaddr: mockNvmeController0.PciAddr,
-							State:   new(ResponseState),
-						},
-						{
-							Pciaddr: mockNvmeController1.PciAddr,
-							State:   new(ResponseState),
-						},
+			expResp: &StorageFormatResp{
+				Crets: []*NvmeControllerResult{
+					{
+						Pciaddr: mockNvmeController0.PciAddr,
+						State:   new(ResponseState),
 					},
-					Mrets: []*ScmMountResult{
-						{
-							Mntpoint: "/mnt/daos0",
-							State:    new(ResponseState),
-						},
-						{
-							Mntpoint: "/mnt/daos1",
-							State:    new(ResponseState),
-						},
+					{
+						Pciaddr: mockNvmeController1.PciAddr,
+						State:   new(ResponseState),
+					},
+				},
+				Mrets: []*ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos0",
+						State:    new(ResponseState),
+					},
+					{
+						Mntpoint: "/mnt/daos1",
+						State:    new(ResponseState),
 					},
 				},
 			},
@@ -669,14 +651,14 @@ func TestStorageFormat(t *testing.T) {
 			testDir, cleanup := common.CreateTestDir(t)
 			defer cleanup()
 
-			common.AssertEqual(t, len(tc.sMounts), len(tc.expResults[0].Mrets), name)
-			for i, _ := range tc.sMounts {
+			common.AssertEqual(t, len(tc.sMounts), len(tc.expResp.Mrets), name)
+			for i := range tc.sMounts {
 				// Hack to deal with creating the mountpoint in test.
 				// FIXME (DAOS-3471): The tests in this layer really shouldn't be
 				// reaching down far enough to actually interact with the filesystem.
 				tc.sMounts[i] = filepath.Join(testDir, tc.sMounts[i])
-				if len(tc.expResults) == 1 && len(tc.expResults[0].Mrets) > 0 {
-					mp := &(tc.expResults[0].Mrets[i].Mntpoint)
+				if len(tc.expResp.Mrets) > 0 {
+					mp := &(tc.expResp.Mrets[i].Mntpoint)
 					if *mp != "" {
 						if strings.HasSuffix(tc.sMounts[i], *mp) {
 							*mp = tc.sMounts[i]
@@ -706,6 +688,7 @@ func TestStorageFormat(t *testing.T) {
 			for idx, scmMount := range tc.sMounts {
 				if tc.sClass == storage.ScmClassDCPM {
 					devToMount[tc.sDevs[idx]] = scmMount
+					t.Logf("sDevs[%d]= %v, value= %v", idx, tc.sDevs[idx], scmMount)
 				}
 				iosrv := ioserver.NewConfig().
 					WithScmMountPoint(scmMount).
@@ -777,9 +760,33 @@ func TestStorageFormat(t *testing.T) {
 				t.Fatal(fmtErr)
 			}
 
-			results := []*StorageFormatResp{resp}
-			if diff := cmp.Diff(tc.expResults, results); diff != "" {
-				t.Fatalf("unexpected results: (-want, +got):\n%s\n", diff)
+			common.AssertEqual(t, len(tc.expResp.Crets), len(resp.Crets),
+				"number of controller results")
+			common.AssertEqual(t, len(tc.expResp.Mrets), len(resp.Mrets),
+				"number of mount results")
+			for _, exp := range tc.expResp.Crets {
+				match := false
+				for _, got := range resp.Crets {
+					if diff := cmp.Diff(exp, got); diff == "" {
+						match = true
+					}
+				}
+				if !match {
+					t.Fatalf("unexpected results: (\nwant: %+v\ngot: %+v)",
+						tc.expResp.Crets, resp.Crets)
+				}
+			}
+			for _, exp := range tc.expResp.Mrets {
+				match := false
+				for _, got := range resp.Mrets {
+					if diff := cmp.Diff(exp, got); diff == "" {
+						match = true
+					}
+				}
+				if !match {
+					t.Fatalf("unexpected results: (\nwant: %+v\ngot: %+v)",
+						tc.expResp.Mrets, resp.Mrets)
+				}
 			}
 		})
 	}
