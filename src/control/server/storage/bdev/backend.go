@@ -20,11 +20,13 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package bdev
 
 import (
 	"encoding/json"
 	"os"
+	"sync"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -47,6 +49,8 @@ type (
 		log     logging.Logger
 		binding *spdkWrapper
 		script  *spdkSetupScript
+
+		sync.RWMutex
 	}
 )
 
@@ -181,7 +185,7 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 	}
 
 	if spdkController == nil {
-		return nil, errors.Errorf("unable to resolve %s after format", pciAddr)
+		return nil, FaultFormatBadPciAddr(pciAddr)
 	}
 
 	scs, err := convertControllers([]spdk.Controller{*spdkController})
@@ -200,28 +204,23 @@ func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 		return nil, FaultFormatBadPciAddr("")
 	}
 
-	controllers, err := b.Scan()
+	b.Lock()
+	defer b.Unlock()
+
+	if !b.binding.initialized {
+		return nil, errors.New("spdk not initialised, please run scan")
+	}
+
+	ctrlr, err := getController(pciAddr, b.binding.controllers)
 	if err != nil {
 		return nil, err
-	}
-
-	foundAddr := false
-	for _, c := range controllers {
-		if c.PciAddr == pciAddr {
-			foundAddr = true
-			break
-		}
-	}
-
-	if !foundAddr {
-		return nil, FaultFormatBadPciAddr(pciAddr)
 	}
 
 	if err := b.binding.Format(b.log, pciAddr); err != nil {
 		return nil, err
 	}
 
-	return getController(pciAddr, b.binding.controllers)
+	return ctrlr, nil
 }
 
 func (b *spdkBackend) Prepare(nrHugePages int, targetUser, pciWhiteList string) error {

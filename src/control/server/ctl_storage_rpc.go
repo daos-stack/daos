@@ -242,7 +242,11 @@ func (c *ControlService) scmFormat(srvIdx uint32, scmCfg storage.ScmConfig, refo
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool, resp *ctlpb.StorageFormatResp) error {
+func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool) (resp *ctlpb.StorageFormatResp) {
+	resp = new(ctlpb.StorageFormatResp)
+	resp.Mrets = proto.ScmMountResults{}
+	resp.Crets = proto.NvmeControllerResults{}
+
 	srvIdx := srv.Index()
 	needsSuperblock := true
 	needsScmFormat := reformat
@@ -259,51 +263,58 @@ func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool, resp *ct
 			srvIdx)
 	}
 
-	// If not reformatting, check if SCM is already formatted.
-	if !reformat {
+	scmErrored := false
+	scmErr := func(err error) *ctlpb.ScmMountResult {
+		scmErrored = true
+		return newMntRet(c.log, "format", scmConfig.MountPoint,
+			ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(),
+			fault.ShowResolutionFor(err))
+	}
+
+	if srv.IsStarted() {
+		resp.Mrets = append(resp.Mrets, scmErr(errors.Errorf(
+			"instance %d: can't format storage of running instance", srvIdx)))
+	} else if !reformat {
+		// If not reformatting, check if SCM is already formatted.
 		var err error
 		needsScmFormat, err = srv.NeedsScmFormat()
 		if err != nil {
-			return errors.Wrap(err, "unable to check storage formatting")
+			resp.Mrets = append(resp.Mrets, scmErr(err))
+		} else if !needsScmFormat {
+			resp.Mrets = append(resp.Mrets, scmErr(scm.FaultFormatNoReformat))
 		}
-		if !needsScmFormat {
-			err = scm.FaultFormatNoReformat
-			resp.Mrets = append(resp.Mrets,
-				newMntRet(c.log, "format", scmConfig.MountPoint,
-					ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(),
-					fault.ShowResolutionFor(err)))
+	}
 
-			if len(srv.bdevConfig().DeviceList) > 0 {
-				resp.Crets = append(resp.Crets, skipNvmeResult)
-			}
-
-			return nil // don't continue if formatted and no reformat opt
+	if scmErrored {
+		if len(srv.bdevConfig().DeviceList) > 0 {
+			resp.Crets = append(resp.Crets, skipNvmeResult)
 		}
+		return // don't continue if we can't format SCM
 	}
 
 	// When SCM format is required, format and append to response results.
 	if needsScmFormat {
 		result, err := c.scmFormat(srvIdx, scmConfig, true)
 		if err != nil {
-			return errors.Wrap(err, "scm format") // return unexpected errors
-		}
-		resp.Mrets = append(resp.Mrets, result)
-
-		if result.State.Status != ctlpb.ResponseStatus_CTL_SUCCESS {
-			c.log.Errorf(msgFormatErr, srvIdx)
-			if len(srv.bdevConfig().DeviceList) > 0 {
-				resp.Crets = append(resp.Crets, skipNvmeResult)
-			}
-
-			return nil // don't continue if we can't format SCM
+			resp.Mrets = append(resp.Mrets, scmErr(err))
+		} else {
+			resp.Mrets = append(resp.Mrets, result)
 		}
 	} else {
 		var err error
 		// If SCM was already formatted, verify if superblock exists.
 		needsSuperblock, err = srv.NeedsSuperblock()
 		if err != nil {
-			return errors.Wrap(err, "unable to check instance superblock")
+			resp.Mrets = append(resp.Mrets, scmErr(err))
 		}
+	}
+
+	if scmErrored {
+		c.log.Errorf(msgFormatErr, srvIdx)
+		if len(srv.bdevConfig().DeviceList) > 0 {
+			resp.Crets = append(resp.Crets, skipNvmeResult)
+		}
+		return // don't continue if we can't format SCM
 	}
 
 	// If no superblock exists, format NVMe and populate response with results.
@@ -322,7 +333,10 @@ func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool, resp *ct
 				DeviceList: bdevConfig.DeviceList,
 			})
 			if err != nil {
-				return err
+				nvmeResults = append(nvmeResults,
+					newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME,
+						err.Error(), fault.ShowResolutionFor(err)))
+				return
 			}
 
 			for dev, status := range res.DeviceResponses {
@@ -348,13 +362,13 @@ func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool, resp *ct
 
 		if nvmeResults.HasErrors() {
 			c.log.Errorf(msgFormatErr, srvIdx)
-			return nil // don't continue if we can't format NVMe
+			return // don't continue if we can't format NVMe
 		}
 	}
 
 	srv.NotifyStorageReady()
 
-	return nil
+	return
 }
 
 // StorageFormat delegates to Storage implementation's Format methods to prepare
@@ -366,18 +380,35 @@ func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool, resp *ct
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
 func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq) (*ctlpb.StorageFormatResp, error) {
-	resp := new(ctlpb.StorageFormatResp)
-	resp.Mrets = proto.ScmMountResults{}
-	resp.Crets = proto.NvmeControllerResults{}
+	var resp *ctlpb.StorageFormatResp
+	respChan := make(chan *ctlpb.StorageFormatResp)
 
 	c.log.Debugf("received StorageFormat RPC %v; proceeding to instance storage format", req)
 
-	// temporary scaffolding
-	for _, i := range c.harness.Instances() {
-		if err := c.doFormat(i, req.Reformat, resp); err != nil {
-			return nil, errors.WithMessage(err, "formatting storage")
-		}
+	// TODO: enable per-instance formatting
+	formatting := 0
+	for _, srv := range c.harness.Instances() {
+		formatting++
+		go func(s *IOServerInstance) {
+			respChan <- c.doFormat(s, req.Reformat)
+		}(srv)
 	}
 
-	return resp, nil
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case newResp := <-respChan:
+			formatting--
+			if resp == nil {
+				resp = newResp
+			} else {
+				resp.Mrets = append(resp.Mrets, newResp.Mrets...)
+				resp.Crets = append(resp.Crets, newResp.Crets...)
+			}
+			if formatting == 0 {
+				return resp, nil
+			}
+		}
+	}
 }
