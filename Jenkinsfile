@@ -1122,6 +1122,7 @@ pipeline {
                                                sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
                                                sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
                                                cd $DAOS_BASE
+                                               export PYTHONPATH=./src/client/pydaos
                                                ./src/client/dfuse/test/local_test.py all"'''
                     }
                     post {

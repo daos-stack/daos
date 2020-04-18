@@ -174,6 +174,9 @@ class DFuse():
 
         cmd = ['valgrind', '--quiet']
 
+        # Srip paths above pwd.
+        cmd.append('--realpath-after={}'.format(os.path.realpath('.')))
+
         if True:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
 
@@ -849,8 +852,8 @@ def main():
     elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
         test_pydaos_kv(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'all':
-        test_pydaos_kv(server, conf)
         run_dfuse(server, conf)
+        test_pydaos_kv(server, conf)
     else:
         #run_il_test(server, conf)
         #(pool, cont) = inspect_daos(conf, daos)
