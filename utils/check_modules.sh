@@ -58,6 +58,7 @@ if [ -z "$*" ]; then
   # the functional test code
   flist+=$(find src/tests/ftest/ -name \*.py | sort)
   flist+=$(find src/client/pydaos/ -name \*.py | sort)
+  flist+=$(find src/client/dfuse/test/ -name \*.py | sort)
 else
   flist=$*
 fi

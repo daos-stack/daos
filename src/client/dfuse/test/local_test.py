@@ -8,7 +8,6 @@ import time
 import uuid
 import json
 import shelve
-import shutil
 import signal
 import subprocess
 import tempfile
@@ -301,6 +300,7 @@ def show_cont(conf, pool):
     cmd = [daos_bin, 'pool', 'list-containers', '--svc', '0', '--pool', pool]
     rc = subprocess.run(cmd)
     print('rc is {}'.format(rc))
+    # Needs updating for older python versions.
     return rc.stdout.strip()
 
 def make_pool(daos, conf):
@@ -354,7 +354,7 @@ def inspect_daos2(conf, daos, d):
     CUID = 'b6ac4eb5-0db7-48d8-bd2b-b8bbde3461be'
     pools = get_pool_list()
     if pools:
-        PUID=pools[0]
+        PUID = pools[0]
 
     if True:
         daos_raw = __import__('pydaos.raw')
@@ -414,7 +414,7 @@ def inspect_daos2(conf, daos, d):
     print(v)
     print(dir(kv))
     for (k) in kv:
-        print('{} : {}'.format(k,kv[k]))
+        print('{} : {}'.format(k, kv[k]))
     print(daos)
 
 def run_tests(dfuse):
@@ -477,11 +477,11 @@ def run_cmd(pool, cont):
                     s_dir,
                     s_file])
 
-EFILES=['src/common/misc.c',
-        'src/common/prop.c',
-        'src/cart/crt_hg_proc.c',
-        'src/security/cli_security.c',
-        'src/client/dfuse/dfuse_core.c']
+EFILES = ['src/common/misc.c',
+          'src/common/prop.c',
+          'src/cart/crt_hg_proc.c',
+          'src/security/cli_security.c',
+          'src/client/dfuse/dfuse_core.c']
 
 def log_test(conf, filename):
 
@@ -790,9 +790,9 @@ def test_pydaos_kv(server, conf):
     kv = kvg.get_kv_by_name('Dave')
     kv['a'] = 'a'
     kv['b'] = 'b'
-    kv['list'] = pickle.dumps(list(range(1,100000)))
-    for k in range(1,100):
-        kv[str(k)] = pickle.dumps(list(range(1,10)))
+    kv['list'] = pickle.dumps(list(range(1, 100000)))
+    for k in range(1, 100):
+        kv[str(k)] = pickle.dumps(list(range(1, 10)))
     print(type(kv))
     print(kv)
     print(kv['a'])
@@ -808,7 +808,7 @@ def test_pydaos_kv(server, conf):
 
     data['no-key'] = None
 
-    kv.bget(data, value_size=16);
+    kv.bget(data, value_size=16)
     print("Second iteration")
     failed = False
     for key in data:
@@ -836,7 +836,7 @@ def main():
         test_pydaos_kv(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'all':
         run_dfuse(server, conf)
-        test_pydaos_kv(server, conf)
+        #test_pydaos_kv(server, conf)
     else:
         #run_il_test(server, conf)
         #(pool, cont) = inspect_daos(conf, daos)
