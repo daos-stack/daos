@@ -158,6 +158,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	int				rc;
 
 	D_ALLOC_PTR(fs_handle);
+	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
 		return false;
 

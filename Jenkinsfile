@@ -1122,7 +1122,7 @@ pipeline {
                                                sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
                                                sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
                                                cd $DAOS_BASE
-                                               ./src/client/dfuse/test/local_test.py"'''
+                                               ./src/client/dfuse/test/local_test.py all"'''
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -1190,6 +1190,13 @@ pipeline {
                                     unstableThresholdInvalidReadWrite: '',
                                     unstableThresholdTotal: ''
                             )
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+					 enabledForFailure: true,
+					 failOnError: true,
+					 name: "VM Testing",
+                                         id: "analysis-vm-test",
+                                         tools: [ clang() ]
                         }
                     }
                 }

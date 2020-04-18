@@ -66,12 +66,6 @@ class DaosServer():
     def start(self):
         """Start a DAOS server"""
 
-        if False:
-            for fname in os.listdir('/mnt/daos'):
-                try:
-                    shutil.rmtree(os.path.join('/mnt/daos', fname))
-                except NotADirectoryError:
-                    os.remove(os.path.join('/mnt/daos', fname))
         daos_server = os.path.join(self._conf['PREFIX'], 'bin', 'daos_server')
 
         self_dir = os.path.dirname(os.path.abspath(__file__))
@@ -121,7 +115,7 @@ def il_cmd(dfuse, cmd):
     my_env = os.environ.copy()
     my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     my_env['OFI_INTERFACE'] = 'lo'
-    log_file = tempfile.NamedTemporaryFile(prefix='dfuse_il_', suffix='.log', delete=False)
+    log_file = tempfile.NamedTemporaryFile(prefix='daos_dfuse_il_', suffix='.log', delete=False)
     symlink_file('/tmp/dfuse_il_latest.log', log_file.name)
     my_env['D_LOG_FILE'] = log_file.name
     my_env['LD_PRELOAD'] = os.path.join(dfuse._conf['PREFIX'], 'lib64', 'libioil.so')
@@ -152,7 +146,7 @@ class DFuse():
         self._daos = daos
         self._sp = None
 
-        log_file = tempfile.NamedTemporaryFile(prefix='dfuse_', suffix='.log', delete=False)
+        log_file = tempfile.NamedTemporaryFile(prefix='daos_dfuse_', suffix='.log', delete=False)
         self.log_file = log_file.name
 
         symlink_file('/tmp/dfuse_latest.log', self.log_file)
@@ -496,7 +490,6 @@ def log_test(conf, filename):
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(os.path.dirname(file_self), '../../../src/cart/test/util')
     crt_mod_dir = os.path.realpath(logparse_dir)
-    print('cart dir is', crt_mod_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
 
@@ -546,13 +539,14 @@ def log_test(conf, filename):
     lt.mismatch_free_ok['notify_ready'] = ('req.uri')
     lt.mismatch_free_ok['get_tgt_rank'] = ('tgts')
 
-    lt.memleak_ok.append('dfuse_start')
-    lt.memleak_ok.append('expand_vector')
-    lt.memleak_ok.append('d_rank_list_alloc')
-    lt.memleak_ok.append('get_tpv')
-    lt.memleak_ok.append('get_new_entry')
-    lt.memleak_ok.append('get_attach_info')
-    lt.memleak_ok.append('drpc_call_create')
+    if False:
+        lt.memleak_ok.append('dfuse_start')
+        lt.memleak_ok.append('expand_vector')
+        lt.memleak_ok.append('d_rank_list_alloc')
+        lt.memleak_ok.append('get_tpv')
+        lt.memleak_ok.append('get_new_entry')
+        lt.memleak_ok.append('get_attach_info')
+        lt.memleak_ok.append('drpc_call_create')
 
     log_iter = lp.LogIter(filename)
     lto = lt.LogTest(log_iter)
@@ -854,6 +848,9 @@ def main():
         run_in_fg(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
         test_pydaos_kv(server, conf)
+    elif len(sys.argv) == 2 and sys.argv[1] == 'all':
+        test_pydaos_kv(server, conf)
+        run_dfuse(server, conf)
     else:
         #run_il_test(server, conf)
         #(pool, cont) = inspect_daos(conf, daos)
