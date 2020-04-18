@@ -144,7 +144,7 @@ func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membersh
 
 	for _, srv := range h.Instances() {
 		// start first time then relinquish control to instance
-		go srv.Start(ctx, membership, cfg)
+		go srv.Run(ctx, membership, cfg)
 		h.log.Debugf("harness spawned instance %d", srv.Index())
 	}
 
@@ -224,6 +224,8 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 
 // RestartInstances will signal the harness to start configured instances once
 // stopped.
+//
+// TODO: enable independent restarts of each rank.
 func (h *IOServerHarness) RestartInstances() error {
 	h.RLock()
 	defer h.RUnlock()
@@ -237,7 +239,9 @@ func (h *IOServerHarness) RestartInstances() error {
 		return FaultInstancesNotStopped(startedRanks)
 	}
 
-	//h.restart <- struct{}{} // trigger harness to restart its instances
+	for _, srv := range h.Instances() {
+		srv.startChan <- true
+	}
 
 	return nil
 }
@@ -286,7 +290,7 @@ func (h *IOServerHarness) ReadyRanks() []*system.Rank {
 
 	ranks := make([]*system.Rank, 0, maxIOServers)
 	for _, i := range h.instances {
-		if i.hasSuperblock() && i.IsReady() {
+		if i.hasSuperblock() && i.isReady() {
 			ranks = append(ranks, i.getSuperblock().Rank)
 		}
 	}

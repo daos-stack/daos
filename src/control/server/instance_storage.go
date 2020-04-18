@@ -108,7 +108,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 // NotifyStorageReady releases any blocks on awaitStorageReady().
 func (srv *IOServerInstance) NotifyStorageReady() {
 	go func() {
-		close(srv.storageReady)
+		srv.storageReady <- true
 	}()
 }
 

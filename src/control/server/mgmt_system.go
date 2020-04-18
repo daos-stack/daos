@@ -182,7 +182,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 			continue // filtered out, no result expected
 		}
 
-		if !i.IsReady() {
+		if !i.isReady() {
 			resp.Results = append(resp.Results,
 				NewRankResult(rank, "prep shutdown",
 					system.MemberStateStopped, nil))
@@ -214,7 +214,7 @@ func (svc *mgmtSvc) getStartedResults(rankList []system.Rank, desiredState syste
 		}
 
 		state := system.MemberStateStarted
-		if !i.IsReady() {
+		if !i.isReady() {
 			state = system.MemberStateStopped
 		}
 
@@ -354,7 +354,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			continue // filtered out, no result expected
 		}
 
-		if !i.IsReady() {
+		if !i.isReady() {
 			resp.Results = append(resp.Results,
 				NewRankResult(rank, "ping", system.MemberStateStopped, nil))
 			continue

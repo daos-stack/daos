@@ -58,8 +58,9 @@ type IOServerInstance struct {
 	msClient          *mgmtSvcClient
 	waitDrpc          atm.Bool
 	drpcReady         chan *srvpb.NotifyReadyReq
-	storageReady      chan struct{}
+	storageReady      chan bool
 	ready             atm.Bool
+	startChan         chan bool
 	fsRoot            string
 
 	sync.RWMutex
@@ -83,15 +84,16 @@ func NewIOServerInstance(log logging.Logger,
 		scmProvider:       sp,
 		msClient:          msc,
 		drpcReady:         make(chan *srvpb.NotifyReadyReq),
-		storageReady:      make(chan struct{}),
+		storageReady:      make(chan bool),
+		startChan:         make(chan bool),
 	}
 }
 
-// IsReady indicates whether the IOServerInstance is in a ready state.
+// isReady indicates whether the IOServerInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
-func (srv *IOServerInstance) IsReady() bool {
+func (srv *IOServerInstance) isReady() bool {
 	return srv.ready.IsTrue() && srv.IsStarted()
 }
 

@@ -81,6 +81,7 @@ func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) er
 		srv.log.Errorf("instance %d: unable to log SCM storage stats: %s", srv.Index(), err)
 	}
 
+	// async call returns immediately, runner sends on errChan when ctx.Done()
 	return srv.runner.Start(ctx, errChan)
 }
 
@@ -100,9 +101,8 @@ func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) 
 		if err := srv.finishStartup(ctx, ready); err != nil {
 			return err
 		}
+		return nil
 	}
-
-	return nil
 }
 
 // finishStartup sets up instance once dRPC comms are ready, this includes
@@ -143,12 +143,19 @@ func (srv *IOServerInstance) exit(exitErr error) {
 	}
 }
 
-func (srv *IOServerInstance) run(ctx context.Context, errOut chan error, membership *system.Membership, recreateSBs bool) (err error) {
+// run performs setup of and starts process runner for IO server instance and
+// will only return (if no errors are returned during setup) on IO server
+// process exit (triggered by harness shutdown through context cancellation
+// or abnormal IO server process termination).
+func (srv *IOServerInstance) run(ctx context.Context, membership *system.Membership, recreateSBs bool) (err error) {
+	srv.log.Debugf("instance %d: starting up...")
+	errChan := make(chan error)
+
 	if err = srv.format(ctx, recreateSBs); err != nil {
 		return
 	}
 
-	if err = srv.start(ctx, errOut); err != nil {
+	if err = srv.start(ctx, errChan); err != nil {
 		return
 	}
 	if srv.isMSReplica() {
@@ -159,30 +166,26 @@ func (srv *IOServerInstance) run(ctx context.Context, errOut chan error, members
 	}
 	srv.waitDrpc.SetTrue()
 
-	if err = srv.waitReady(ctx, errOut); err != nil {
+	if err = srv.waitReady(ctx, errChan); err != nil {
 		return
 	}
 
-	<-ctx.Done()
-	return ctx.Err()
+	return <-errChan // receive on runner exit
 }
 
-// Start is the main processing loop for an IOServerInstance.
-func (srv *IOServerInstance) Start(ctx context.Context, membership *system.Membership, cfg *Configuration) {
-	errChan := make(chan error)
+// Run is the processing loop for an IOServerInstance. Starts are triggered by
+// receiving true on instance start channel.
+func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Membership, cfg *Configuration) {
+	for relaunch := range srv.startChan {
+		if !relaunch {
+			return
+		}
 
-	// spawn instance processing loops and listen for exit
-	go func(ctxIn context.Context) {
-		errChan <- srv.run(ctxIn, errChan, membership, cfg.RecreateSuperblocks)
-	}(ctx)
-
-	// error will either be received from instance runner or one of the
-	// setup routines in run()
-	srv.exit(<-errChan)
+		srv.exit(srv.run(ctx, membership, cfg.RecreateSuperblocks))
+	}
 }
 
-// Stop sends signal to stop IOServerInstance runner (but doesn't wait for
-// process to exit).
+// Stop sends signal to stop IOServerInstance runner (nonblocking).
 func (srv *IOServerInstance) Stop(signal os.Signal) error {
 	if err := srv.runner.Signal(signal); err != nil {
 		return err
