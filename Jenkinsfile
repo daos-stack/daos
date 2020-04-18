@@ -57,10 +57,6 @@ def skip_stage(String stage) {
     return commitPragma(pragma: 'Skip-' + stage).contains('true')
 }
 
-def quickbuild() {
-    return commitPragma(pragma: 'Quick-build') == 'true'
-}
-
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -74,8 +70,8 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
-def quickbuild2 = node() { commitPragma(pragma: 'Quick-build').contains('true') }
-if (quickbuild2) {
+def quickbuild = node() { commitPragma(pragma: 'Quick-build').contains('true') }
+if (quickbuild) {
     /* TODO: this is a big fat hack
      * what we should be doing here is installing all of the
      * $(repoquery --requires daos{,-{server,tests}}) dependencies
@@ -501,7 +497,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=' + quickbuild() +
+                                                '--build-arg QUICKBUILD=' + quickbuild +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
                                                 '" --build-arg REPOS="' + component_repos + '"'
                         }
@@ -591,7 +587,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { ! quickbuild() }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -652,7 +648,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { ! quickbuild() }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -714,7 +710,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { ! quickbuild() }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -775,7 +771,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { ! quickbuild() }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -836,7 +832,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { ! quickbuild() }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -898,7 +894,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { ! quickbuild() }
+                            expression { quickbuild != 'true' }
                         }
                     }
                     agent {
@@ -1122,6 +1118,7 @@ pipeline {
                                                sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
                                                sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
                                                cd $DAOS_BASE
+                                               rm -f dfuse.memcheck
                                                export PYTHONPATH=./src/client/pydaos
                                                ./src/client/dfuse/test/local_test.py all | tee test.out"'''
                     }
