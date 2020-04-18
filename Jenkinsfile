@@ -1079,7 +1079,7 @@ pipeline {
                             archiveArtifacts artifacts: 'run_test.sh/**'
                         }
                     }
-		}
+                }
                 stage('VM local test') {
                     when {
                       beforeAgent true
@@ -1173,7 +1173,7 @@ pipeline {
                                               echo \"Failed to unmount $DAOS_BASE\"
                                               ps axf
                                           fi"
-				      ''',
+                                      ''',
                             label: "Collect artifacts and tear down"
                             archiveArtifacts artifacts: 'vm_test/**'
                             publishValgrind (
@@ -1192,9 +1192,8 @@ pipeline {
                             )
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-					 enabledForFailure: true,
-					 failOnError: true,
-					 name: "VM Testing",
+                                         failOnError: true,
+                                         name: "VM Testing",
                                          id: "analysis-vm-test",
                                          tools: [ clang() ]
                         }
