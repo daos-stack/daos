@@ -1183,7 +1183,7 @@ pipeline {
                                     failThresholdDefinitelyLost: '0',
                                     failThresholdInvalidReadWrite: '0',
                                     failThresholdTotal: '0',
-                                    pattern: 'daos_server.memcheck',
+                                    pattern: 'dfuse.memcheck',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: false,
                                     sourceSubstitutionPaths: '',

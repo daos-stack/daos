@@ -175,7 +175,7 @@ class DFuse():
         cmd = ['valgrind', '--quiet']
 
         # Srip paths above pwd.
-        cmd.append('--realpath-after={}'.format(os.path.realpath('.')))
+        cmd.append('--fullpath-after={}'.format(os.path.realpath('.')))
 
         if True:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
@@ -188,7 +188,7 @@ class DFuse():
                         '--suppressions={}'.format(os.path.join('utils',
                                                                 'memcheck-daos-client.supp'))])
 
-        cmd.extend(['--xml=yes', '--xml-file=daos_server.memcheck'])
+        cmd.extend(['--xml=yes', '--xml-file=dfuse.memcheck'])
 
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
 
