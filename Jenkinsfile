@@ -1090,6 +1090,7 @@ pipeline {
                       allOf {
                           expression { ! skip_stage('vm_test') }
                           expression { ! quickbuild() }
+                      }
                     }
                     agent {
                         label 'ci_vm1'
