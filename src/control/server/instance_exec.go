@@ -50,6 +50,7 @@ func (srv *IOServerInstance) IsStarted() bool {
 }
 
 func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
+	srv.log.Debugf("instance %d: checking if storage is formatted", srv.Index())
 	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
 		return
 	}
@@ -89,7 +90,7 @@ func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) er
 // management service on MS replicas immediately so other instances can join.
 // I/O server modules are then loaded.
 func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) error {
-	srv.log.Debugf("waiting for instance %d to start-up", srv.Index())
+	srv.log.Debugf("instance %d: awaiting %s init", srv.Index(), DataPlaneName)
 
 	select {
 	case <-ctx.Done(): // propagated harness exit
@@ -148,7 +149,6 @@ func (srv *IOServerInstance) exit(exitErr error) {
 // process exit (triggered by harness shutdown through context cancellation
 // or abnormal IO server process termination).
 func (srv *IOServerInstance) run(ctx context.Context, membership *system.Membership, recreateSBs bool) (err error) {
-	srv.log.Debugf("instance %d: starting up...")
 	errChan := make(chan error)
 
 	if err = srv.format(ctx, recreateSBs); err != nil {
