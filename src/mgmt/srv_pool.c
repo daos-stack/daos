@@ -42,19 +42,27 @@ struct list_pools_iter_args {
 };
 
 static int
-ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
+ds_mgmt_tgt_pool_destroy(struct mgmt_svc *svc, uuid_t pool_uuid)
 {
 	crt_rpc_t			*td_req;
 	struct mgmt_tgt_destroy_in	*td_in;
 	d_rank_list_t			excluded = { 0 };
 	struct mgmt_tgt_destroy_out	*td_out;
+	struct rdb_tx			tx;
 	unsigned int			opc;
 	int				topo;
 	int				rc;
 
-	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_DOWN, &excluded);
-	if (rc)
+	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	if (rc != 0)
 		return rc;
+
+	ABT_rwlock_rdlock(svc->ms_lock);
+	rc = ds_mgmt_get_ranks(&tx, svc, &excluded, 0);
+	ABT_rwlock_unlock(svc->ms_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0)
+		D_GOTO(fini_ranks, rc);
 
 	/* Collective RPC to destroy the pool on all of targets */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
@@ -241,27 +249,23 @@ pool_create_prepare(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t *tgts_in,
 		goto out_lock;
 	}
 
-	/*
-	 * Determine which servers belong to the pool. This should consult the
-	 * system map in the future.
-	 */
 	if (tgts_in != NULL) {
 		rc = d_rank_list_dup_sort_uniq(tgts_out, tgts_in);
 		if (rc != 0)
 			goto out_lock;
 	} else {
-		uint32_t	n;
-		int		i;
+		d_rank_list_t	*rank_list;
 
-		rc = crt_group_size(NULL, &n);
-		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-		*tgts_out = d_rank_list_alloc(n);
-		if (*tgts_out == NULL) {
-			rc = -DER_NOMEM;
-			goto out_lock;
+		D_ALLOC_PTR(rank_list);
+		if (rank_list == NULL)
+			D_GOTO(out_lock, rc = -DER_NOMEM);
+
+		rc = ds_mgmt_get_ranks(&tx, svc, rank_list, SERVER_IN);
+		if (rc != 0) {
+			D_FREE_PTR(rank_list);
+			D_GOTO(out_lock, rc);
 		}
-		for (i = 0; i < n; i++)
-			(*tgts_out)->rl_ranks[i] = i;
+		*tgts_out = rank_list;
 	}
 
 	/* Add a pool directory entry. */
@@ -480,8 +484,9 @@ out_svcp:
 out_uuids:
 	D_FREE(tgt_uuids);
 tgt_fail:
+	d_rank_list_free(rank_list);
 	if (rc)
-		ds_mgmt_tgt_pool_destroy(pool_uuid);
+		ds_mgmt_tgt_pool_destroy(svc, pool_uuid);
 out_preparation:
 	if (rc != 0)
 		pool_rec_delete(svc, pool_uuid);
@@ -616,7 +621,7 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 		goto out_svc;
 	}
 
-	rc = ds_mgmt_tgt_pool_destroy(pool_uuid);
+	rc = ds_mgmt_tgt_pool_destroy(svc, pool_uuid);
 	if (rc != 0) {
 		D_ERROR("Destroying pool "DF_UUID" failed, rc: "DF_RC".\n",
 			DP_UUID(pool_uuid), DP_RC(rc));

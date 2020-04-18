@@ -256,12 +256,14 @@ struct enum_server_arg {
 	struct server_entry    *esa_servers;
 	int			esa_servers_cap;
 	int			esa_servers_len;
+	int			esa_flag;
 };
 
 static void
-enum_server_arg_init(struct enum_server_arg *arg)
+enum_server_arg_init(struct enum_server_arg *arg, int flag)
 {
 	memset(arg, 0, sizeof(*arg));
+	arg->esa_flag = flag;
 }
 
 static void
@@ -315,14 +317,16 @@ enum_server_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	/* Note that D_REALLOC_ARRAY doesn't zero the new memory region. */
 	entry = &arg->esa_servers[arg->esa_servers_len];
-	entry->se_rank = (uint32_t)*rank_key;
-	entry->se_flags = rec->sr_flags;
-	entry->se_nctxs = rec->sr_nctxs;
-	entry->se_uri = rec->sr_uri;
-	D_STRNDUP(entry->se_uri, rec->sr_uri, ADDR_STR_MAX_LEN - 1);
-	if (entry->se_uri == NULL)
-		return -DER_NOMEM;
-	arg->esa_servers_len++;
+	if (arg->esa_flag == -1 || arg->esa_flag == rec->sr_flags) {
+		entry->se_rank = (uint32_t)*rank_key;
+		entry->se_flags = rec->sr_flags;
+		entry->se_nctxs = rec->sr_nctxs;
+		entry->se_uri = rec->sr_uri;
+		D_STRNDUP(entry->se_uri, rec->sr_uri, ADDR_STR_MAX_LEN - 1);
+		if (entry->se_uri == NULL)
+			return -DER_NOMEM;
+		arg->esa_servers_len++;
+	}
 
 	return 0;
 }
@@ -364,7 +368,7 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (version < svc->ms_map_version) {
 		struct enum_server_arg arg;
 
-		enum_server_arg_init(&arg);
+		enum_server_arg_init(&arg, -1);
 		rc = rdb_tx_iterate(&tx, &svc->ms_servers,
 				    false /* !backward */, enum_server_cb,
 				    &arg);
@@ -380,6 +384,10 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 			goto out_lock;
 	}
 
+	/* Register the mgmt cart event callback */
+	rc = crt_register_event_cb(ds_mgmt_crt_event_cb, NULL);
+	if (rc != 0)
+		goto out_lock;
 	/*
 	 * Just in case the previous leader didn't complete distributing the
 	 * system map before stepping down.
@@ -393,9 +401,38 @@ out:
 	return rc;
 }
 
+int
+ds_mgmt_get_ranks(struct rdb_tx *tx, struct mgmt_svc *svc,
+		  d_rank_list_t *srv_list, unsigned int flags)
+{
+	struct enum_server_arg	arg;
+	int			rc;
+
+	enum_server_arg_init(&arg, flags);
+	rc = rdb_tx_iterate(tx, &svc->ms_servers,
+			    false /* !backward */, enum_server_cb,
+			    &arg);
+	if (rc != 0 || arg.esa_servers_len == 0)
+		D_GOTO(out, rc);
+
+	D_ALLOC(srv_list->rl_ranks, arg.esa_servers_len * sizeof(d_rank_t));
+	if (srv_list->rl_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	srv_list->rl_nr = arg.esa_servers_len;
+out:
+	enum_server_arg_fini(&arg);
+	return rc;
+}
+
 static void
 mgmt_svc_step_down_cb(struct ds_rsvc *rsvc)
 {
+	int rc;
+
+	/* unregister the mgmt cart event callback */
+	rc = crt_unregister_event_cb(ds_mgmt_crt_event_cb, NULL);
+	if (rc)
+		D_ERROR("unregister mgmt_crt_event_cb failed: %d\n", rc);
 }
 
 static void
@@ -461,7 +498,7 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		return rc;
 	ABT_rwlock_rdlock(svc->ms_lock);
-	enum_server_arg_init(&arg);
+	enum_server_arg_init(&arg, -1);
 	rc = rdb_tx_iterate(&tx, &svc->ms_servers, false /* !backward */,
 			    enum_server_cb, &arg);
 	ABT_rwlock_unlock(svc->ms_lock);
@@ -594,6 +631,134 @@ void
 ds_mgmt_svc_put_leader(struct mgmt_svc *svc)
 {
 	ds_rsvc_put_leader(&svc->ms_rsvc);
+}
+
+struct ds_mgmt_evict_arg {
+	struct mgmt_svc *svc;
+	d_rank_t	rank;
+};
+
+void
+ds_mgmt_evict_rank_ult(void *data)
+{
+	struct ds_mgmt_evict_arg *arg = data;
+	struct mgmt_svc		*svc = arg->svc;
+	d_rank_t		rank = arg->rank;
+	struct rdb_tx		tx;
+	struct server_rec	*rec;
+	struct server_entry	entry = {};
+	d_iov_t			key;
+	d_iov_t			value;
+	uint32_t		map_version;
+	int			rc;
+
+	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
+	ABT_rwlock_wrlock(svc->ms_lock);
+	d_iov_set(&key, &rank, sizeof(rank));
+	d_iov_set(&value, NULL, sizeof(*rec));
+	rc = rdb_tx_lookup(&tx, &svc->ms_servers, &key, &value);
+	if (rc != 0) {
+		D_DEBUG(DB_MGMT, "Can not find server rank %u record: %d\n",
+			rank, rc);
+		D_GOTO(unlock, rc);
+	}
+
+	rec = value.iov_buf;
+	if (!(rec->sr_flags & SERVER_IN)) {
+		D_DEBUG(DB_MGMT, "rank %u already excluded\n", rank);
+		D_GOTO(unlock, rc = 0);
+	}
+
+	/* Update ms_server for the rank */
+	rec->sr_flags &= ~SERVER_IN;
+	d_iov_set(&value, rec, sizeof(*rec));
+	rc = rdb_tx_update(&tx, &svc->ms_servers, &key, &value);
+	if (rc != 0)
+		D_GOTO(unlock, rc);
+
+	/* Update the map version */
+	D_DEBUG(DB_MGMT, "upgrade version %u->%u\n", svc->ms_map_version,
+		svc->ms_map_version + 1);
+	map_version = svc->ms_map_version + 1;
+	d_iov_set(&value, &map_version, sizeof(map_version));
+	rc = rdb_tx_update(&tx, &svc->ms_root, &ds_mgmt_prop_map_version,
+			   &value);
+	if (rc != 0) {
+		D_ERROR("failed to increment map version to %u: %d\n",
+			map_version, rc);
+		D_GOTO(unlock, rc);
+	}
+
+	rc = rdb_tx_commit(&tx);
+	if (rc != 0) {
+		D_ERROR("failed to commit map version %u: %d\n", map_version,
+			rc);
+		D_GOTO(unlock, rc);
+	}
+
+	svc->ms_map_version = map_version;
+	entry.se_rank = rank;
+	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REMOVE, &entry,
+				  1 /* nservers */, map_version);
+	if (rc != 0) {
+		rdb_resign(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term);
+		D_GOTO(unlock, rc = 0);
+	}
+
+	ds_rsvc_request_map_dist(&svc->ms_rsvc);
+
+unlock:
+	ABT_rwlock_unlock(svc->ms_lock);
+	rdb_tx_end(&tx);
+out_put:
+	ds_mgmt_svc_put_leader(svc);
+	D_FREE_PTR(arg);
+}
+
+void
+ds_mgmt_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+		     enum crt_event_type type, void *arg)
+{
+	struct ds_mgmt_evict_arg	*ult_arg;
+	struct mgmt_svc			*svc;
+	int				rc = 0;
+
+	/* Only used for evict the rank for the moment */
+	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore src/type %u/%u\n", src, type);
+		return;
+	}
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL);
+	if (rc != 0) {
+		D_ERROR("Can not lookup leader: rc %d\n", rc);
+		return;
+	}
+
+	D_ALLOC_PTR(ult_arg);
+	if (ult_arg == NULL) {
+		ds_mgmt_svc_put_leader(svc);
+		D_ERROR("ult arg allocation failed\n");
+		return;
+	}
+
+	/* Since this is called from swim_progress, let's create another
+	 * ult to do the job asynchronously, so this can return quickly.
+	 */
+	ult_arg->svc = svc;
+	ult_arg->rank = rank;
+	rc = dss_ult_create(ds_mgmt_evict_rank_ult, ult_arg, DSS_ULT_MISC,
+			    DSS_TGT_SELF, 0, NULL);
+	if (rc) {
+		D_ERROR("create evict ult failed: rc %d\n", rc);
+		ds_mgmt_svc_put_leader(svc);
+		D_FREE_PTR(ult_arg);
+		return;
+	}
+
 }
 
 /*

@@ -85,7 +85,10 @@ struct mgmt_join_out {
 };
 int ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out);
 int ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp);
-
+void ds_mgmt_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+			  enum crt_event_type type, void *arg);
+int ds_mgmt_get_ranks(struct rdb_tx *tx, struct mgmt_svc *svc,
+		      d_rank_list_t *srv_list, unsigned int flags);
 /** srv_pool.c */
 int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			d_rank_list_t *targets, size_t scm_size,
