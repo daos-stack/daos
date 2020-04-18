@@ -49,4 +49,4 @@ test/tool/build/
 foo
 foo2
 foo.o
-daos_server.memcheck
+dfuse.*.memcheck

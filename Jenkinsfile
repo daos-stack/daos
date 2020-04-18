@@ -1118,7 +1118,7 @@ pipeline {
                                                sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
                                                sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
                                                cd $DAOS_BASE
-                                               rm -f dfuse.memcheck
+                                               rm -f dfuse.*.memcheck
                                                export PYTHONPATH=./src/client/pydaos
                                                ./src/client/dfuse/test/local_test.py all | tee test.out"'''
                     }
@@ -1180,7 +1180,7 @@ pipeline {
                                     failThresholdDefinitelyLost: '0',
                                     failThresholdInvalidReadWrite: '0',
                                     failThresholdTotal: '0',
-                                    pattern: 'dfuse.memcheck',
+                                    pattern: 'dfuse.*.memcheck',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: false,
                                     sourceSubstitutionPaths: '',
@@ -1192,8 +1192,9 @@ pipeline {
                                          aggregatingResults: true,
                                          failOnError: true,
                                          name: "VM Testing",
-                                         id: "analysis-vm-test",
-                                         tools: [ clang(pattern: 'test.out') ]
+                                         tools: [ clang(pattern: 'test.out',
+					                name: 'VM test results',
+							id: 'VM_test') ]
                         }
                     }
                 }

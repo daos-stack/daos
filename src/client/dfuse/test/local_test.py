@@ -109,7 +109,7 @@ class DaosServer():
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        #log_test(self._conf, '/tmp/server.log')
+        log_test(self._conf, '/tmp/daos_server.log')
 
 def il_cmd(dfuse, cmd):
     my_env = os.environ.copy()
@@ -174,9 +174,6 @@ class DFuse():
 
         cmd = ['valgrind', '--quiet']
 
-        # Srip paths above pwd.
-        cmd.append('--fullpath-after={}'.format(os.path.realpath('.')))
-
         if True:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
 
@@ -188,7 +185,7 @@ class DFuse():
                         '--suppressions={}'.format(os.path.join('utils',
                                                                 'memcheck-daos-client.supp'))])
 
-        cmd.extend(['--xml=yes', '--xml-file=dfuse.memcheck'])
+        cmd.extend(['--xml=yes', '--xml-file=dfuse.%p.memcheck'])
 
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
 
@@ -248,7 +245,6 @@ class DFuse():
         print('rc from dfuse {}'.format(ret))
         self._sp = None
         log_test(self._conf, self.log_file)
-
 
     def wait_for_exit(self):
 
