@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <dlfcn.h>
+#include <regex.h>
 #ifdef LUSTRE_INCLUDE
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_idl.h>
@@ -263,6 +264,25 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 }
 #endif
 
+#define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
+#define DAOS_FORMAT "DAOS~"UUID_REGEX"~"UUID_REGEX"~"
+
+static int
+check_direct_format(const char *path)
+{
+	regex_t regx;
+	int	rc;
+
+	rc = regcomp(&regx, DAOS_FORMAT, REG_EXTENDED);
+	if (rc)
+		return -DER_INVAL;
+
+	rc = regexec(&regx, path, 0, NULL, 0);
+	regfree(&regx);
+
+	return rc;
+}
+
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr)
 {
@@ -271,11 +291,70 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	struct	statfs fs;
 	int	rc;
 
-	rc = statfs(path, &fs);
+	D_STRNDUP(dir, path, PATH_MAX);
+	if (dir == NULL) {
+		D_ERROR("Failed to copy path\n");
+		return -DER_NOMEM;
+	}
+
+	rc = check_direct_format(dir);
+	if (rc == 0) {
+		char *saveptr, *t;
+
+		D_DEBUG(DB_TRACE, "DUNS resolve to direct path: %s\n", dir);
+		t = strtok_r(dir, "~", &saveptr);
+		if (t == NULL) {
+			D_ERROR("Invalid DAOS format (%s).\n", path);
+			D_FREE(dir);
+			return -DER_INVAL;
+		}
+
+		t = strtok_r(NULL, "~", &saveptr);
+		if (t == NULL) {
+			D_ERROR("Invalid DAOS format (%s).\n", path);
+			D_FREE(dir);
+			return -DER_INVAL;
+		}
+		rc = uuid_parse(t, attr->da_puuid);
+		if (rc) {
+			D_ERROR("Invalid format: pool UUID cannot be parsed\n");
+			D_FREE(dir);
+			return -DER_INVAL;
+		}
+
+		t = strtok_r(NULL, "~", &saveptr);
+		if (t == NULL) {
+			D_ERROR("Invalid DAOS format (%s).\n", path);
+			D_FREE(dir);
+			return -DER_INVAL;
+		}
+		rc = uuid_parse(t, attr->da_cuuid);
+		if (rc) {
+			D_ERROR("Invalid format: cont UUID cannot be parsed\n");
+			D_FREE(dir);
+			return -DER_INVAL;
+		}
+
+		t = strtok_r(NULL, "", &saveptr);
+		if (t != NULL) {
+			D_STRNDUP(attr->da_rel_path, t, PATH_MAX);
+			if (!attr->da_rel_path) {
+				D_FREE(dir);
+				return -DER_NOMEM;
+			}
+		}
+
+		D_FREE(dir);
+		return 0;
+	}
+
+	dirp = dirname(dir);
+	rc = statfs(dirp, &fs);
 	if (rc == -1) {
-		int err = errno;
-		D_INFO("Failed to statfs %s: %s\n", path, strerror(errno));
-		return err;
+		D_ERROR("Failed to statfs %s: %s\n", path, strerror(errno));
+		/** TODO - convert errno to rc */
+		D_FREE(dir);
+		return -DER_INVAL;
 	}
 
 #ifdef LUSTRE_INCLUDE
@@ -309,15 +388,16 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		return err;
 	}
 
+	D_FREE(dir);
 	return duns_parse_attr(&str[0], s, attr);
 }
 
 int
 duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 {
-	char *local;
+	char	*local;
 	char	*saveptr = NULL, *t;
-	int rc;
+	int	rc;
 
 	D_STRNDUP(local, str, len);
 	if (!local)
