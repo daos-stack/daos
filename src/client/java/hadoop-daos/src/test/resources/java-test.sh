@@ -16,7 +16,7 @@ then
 
         java -Xmx2048m -cp ./hadoop-daos-0.0.1-SNAPSHOT-shaded.jar:\
 ./hadoop-daos-0.0.1-SNAPSHOT-tests.jar "$props"  \
-com.intel.daos.hadoop.fs.perf.Main "$first" 1>"$out" 2>"$err"
+io.daos.fs.hadoop.perf.Main "$first" 1>"$out" 2>"$err"
 
 else
         props="$*"
@@ -24,6 +24,6 @@ else
 
         java -Xmx2048m -cp ./hadoop-daos-0.0.1-SNAPSHOT-shaded.jar:\
 ./hadoop-daos-0.0.1-SNAPSHOT-tests.jar "$props" \
-com.intel.daos.hadoop.fs.perf.Main "$first" 1>stdout 2>stderr
+io.daos.fs.hadoop.perf.Main "$first" 1>stdout 2>stderr
 
 fi

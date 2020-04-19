@@ -407,8 +407,10 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_CORPC))
 		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
+		D_ERROR(DF_UUID": dss_rpc_send MGMT_TGT_CREATE: %d\n",
+			DP_UUID(pool_uuid), rc);
 		crt_req_decref(tc_req);
-		goto out_preparation;
+		goto tgt_fail;
 	}
 
 	tc_out = crt_reply_get(tc_req);
@@ -653,6 +655,33 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
+}
+
+int
+ds_mgmt_pool_reintegrate(uuid_t pool_uuid, uint32_t reint_rank,
+		struct pool_target_id_list *reint_list)
+{
+	int			rc;
+	d_rank_list_t		*ranks;
+	struct mgmt_svc		*svc;
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	D_DEBUG(DB_MGMT, "Reintegrating targets for pool "DF_UUID"\n",
+			DP_UUID(pool_uuid));
+	rc = ds_pool_reintegrate(pool_uuid, ranks, reint_rank, reint_list);
+
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
 }
 
 /* Free array of pools created in ds_mgmt_list_pools() iteration.
@@ -906,8 +935,10 @@ get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 		new_prop->dpp_entries[i].dpe_type = ACCESS_PROPS[i];
 
 	rc = ds_pool_svc_get_prop(pool_uuid, ranks, new_prop);
-	if (rc != 0)
+	if (rc != 0) {
+		daos_prop_free(new_prop);
 		return rc;
+	}
 
 	*prop = new_prop;
 	return 0;

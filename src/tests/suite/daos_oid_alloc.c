@@ -255,10 +255,10 @@ oid_allocator_checker(void **state)
 			assert_int_equal(rc, 0);
 			if (info.pi_ntargets - info.pi_ndisabled >= 2) {
 				if (arg->myrank == 0)
-					daos_kill_exclude_server(arg,
+					daos_kill_server(arg,
 						arg->pool.pool_uuid,
 						arg->group,
-						&arg->pool.svc);
+						&arg->pool.svc, -1);
 			}
 			MPI_Barrier(MPI_COMM_WORLD);
 		}

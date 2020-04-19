@@ -120,7 +120,7 @@ test_init_and_destroy(void **state)
 	fake_init_called = 0;
 
 	struct daos_csummer *csummer;
-	int rc = daos_csummer_init(&csummer, &fake_algo, 0);
+	int rc = daos_csummer_init(&csummer, &fake_algo, 0, 0);
 
 	assert_int_equal(0, rc);
 	assert_int_equal(1, fake_init_called);
@@ -148,7 +148,7 @@ test_update_reset(void **state)
 	uint32_t csum = 0;
 
 	fake_get_size_result = sizeof(csum);
-	daos_csummer_init(&csummer, &fake_algo, 0);
+	daos_csummer_init(&csummer, &fake_algo, 0, 0);
 	daos_csummer_set_buffer(csummer, (uint8_t *) &csum, sizeof(csum));
 
 	size_t len = 32;
@@ -185,7 +185,7 @@ test_update_with_multiple_buffers(void **state)
 	struct daos_csummer	*csummer;
 
 	fake_get_size_result = sizeof(uint32_t); /** setup fake checksum */
-	daos_csummer_init(&csummer, &fake_algo, 0);
+	daos_csummer_init(&csummer, &fake_algo, 0, 0);
 
 	memset(buf, 0xa, len);
 
@@ -217,7 +217,7 @@ test_daos_checksummer_with_single_iov_single_chunk(void **state)
 	int			 rc = 0;
 
 	fake_get_size_result = 4;
-	daos_csummer_init(&csummer, &fake_algo, 16);
+	daos_csummer_init(&csummer, &fake_algo, 16, 0);
 	fake_algo.cf_get_size = fake_get_size;
 
 	dts_sgl_init_with_strings(&sgl, 1, "abcdef");
@@ -258,7 +258,7 @@ test_daos_checksummer_with_unaligned_recx(void **state)
 	reset_fake_algo();
 
 	fake_get_size_result = 4;
-	daos_csummer_init(&csummer, &fake_algo, 2);
+	daos_csummer_init(&csummer, &fake_algo, 2, 0);
 	fake_algo.cf_get_size = fake_get_size;
 
 	dts_sgl_init_with_strings(&sgl, 1, "ab");
@@ -301,7 +301,7 @@ test_daos_checksummer_with_mult_iov_single_chunk(void **state)
 	int			 rc = 0;
 
 	fake_get_size_result = 4;
-	daos_csummer_init(&csummer, &fake_algo, 16);
+	daos_csummer_init(&csummer, &fake_algo, 16, 0);
 
 	dts_sgl_init_with_strings(&sgl, 3, "ab", "cdef", "gh");
 
@@ -344,7 +344,7 @@ test_daos_checksummer_with_multi_iov_multi_extents(void **state)
 
 	fake_get_size_result = 4;
 
-	daos_csummer_init(&csummer, &fake_algo, 16);
+	daos_csummer_init(&csummer, &fake_algo, 16, 0);
 
 	dts_sgl_init_with_strings(&sgl, 2, "abcdefghijklmnopqrstufwxyz",
 				  "1234");
@@ -396,7 +396,7 @@ test_daos_checksummer_with_multiple_chunks(void **state)
 
 	fake_get_size_result = 4;
 
-	daos_csummer_init(&csummer, &fake_algo, 4);
+	daos_csummer_init(&csummer, &fake_algo, 4, 0);
 
 	dts_sgl_init_with_strings(&sgl, 1, "0123456789");
 
@@ -457,7 +457,7 @@ simple_test_compare_checksums(void **state)
 	struct dcs_csum_info	 one;
 	struct dcs_csum_info	 two;
 
-	daos_csummer_init(&csummer, &fake_algo, 1024);
+	daos_csummer_init(&csummer, &fake_algo, 1024, 0);
 
 	setup_buf_for_test(one, csum_buf);
 	setup_buf_for_test(two, csum_buf_same);
@@ -488,7 +488,7 @@ test_compare_checksums(void **state)
 
 	fake_get_size_result = 4;
 
-	daos_csummer_init(&csummer, &fake_algo, 4);
+	daos_csummer_init(&csummer, &fake_algo, 4, 0);
 	dts_sgl_init_with_strings(&sgl, 1, "0123456789");
 
 	recx.rx_idx = 0;
@@ -528,7 +528,7 @@ test_get_iod_csum_allocation_size(void **state)
 
 	fake_algo.cf_csum_len = csum_size;
 	fake_get_size_result = csum_size;
-	daos_csummer_init(&csummer, &fake_algo, chunksize);
+	daos_csummer_init(&csummer, &fake_algo, chunksize, 0);
 
 	iods[0].iod_nr = 1;
 	iods[0].iod_recxs = recxs;
@@ -639,7 +639,7 @@ test_all_checksum_types(void **state)
 
 	for (type = CSUM_TYPE_UNKNOWN + 1; type < CSUM_TYPE_END; type++) {
 		rc = daos_csummer_init(&csummer,
-			daos_csum_type2algo(type), 128);
+				       daos_csum_type2algo(type), 128, 0);
 		assert_int_equal(0, rc);
 
 		iod.iod_nr = 1;
@@ -1074,14 +1074,14 @@ simple_sv(void **state)
 	int			 rc;
 
 	fake_get_size_result = 4;
-	daos_csummer_init(&csummer, &fake_algo, 16);
+	daos_csummer_init(&csummer, &fake_algo, 16, 0);
 	fake_algo.cf_get_size = fake_get_size;
 
 	dts_sgl_init_with_strings(&sgl, 1, "abcdef");
 
 	iod.iod_nr = 1;
 	iod.iod_recxs = NULL;
-	iod.iod_size = 1; /* [todo-ryon]: this should be bigger than 1 */
+	iod.iod_size = daos_sgl_buf_size(&sgl);
 	iod.iod_type = DAOS_IOD_SINGLE;
 
 	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
@@ -1112,7 +1112,7 @@ test_compare_sv_checksums(void **state)
 
 	fake_get_size_result = 4;
 
-	daos_csummer_init(&csummer, &fake_algo, 4);
+	daos_csummer_init(&csummer, &fake_algo, 4, 0);
 	dts_sgl_init_with_strings(&sgl, 1, "0123456789");
 
 	fake_update_bytes_seen = 0;
@@ -1146,7 +1146,8 @@ test_verify_sv_data(void **state)
 	int			 rc;
 	struct dcs_iod_csums	*iod_csums = NULL;
 
-	daos_csummer_type_init(&csummer, CSUM_TYPE_ISAL_CRC64_REFL, 1024*1024);
+	daos_csummer_type_init(&csummer, CSUM_TYPE_ISAL_CRC64_REFL, 1024 * 1024,
+			       0);
 	dts_sgl_init_with_strings(&sgl, 1, "0123456789");
 
 
@@ -1193,7 +1194,7 @@ test_akey_csum(void **state)
 	int			 rc = 0;
 
 	fake_get_size_result = 4;
-	daos_csummer_init(&csummer, &fake_algo, 16);
+	daos_csummer_init(&csummer, &fake_algo, 16, 0);
 	fake_algo.cf_get_size = fake_get_size;
 
 	dts_sgl_init_with_strings(&sgl, 1, "abcdef");
@@ -1221,6 +1222,24 @@ test_akey_csum(void **state)
 	daos_sgl_fini(&sgl, true);
 	daos_csummer_destroy(&csummer);
 }
+
+static void
+test_calc_rec_chunksize(void **state)
+{
+	/**	expected,	default_chunksize,	rec_size */
+	assert_int_equal(1, csum_record_chunksize(1, 1));
+	assert_int_equal(2, csum_record_chunksize(2, 2));
+	assert_int_equal(2, csum_record_chunksize(2, 1));
+	assert_int_equal(2, csum_record_chunksize(3, 2));
+	assert_int_equal(3, csum_record_chunksize(4, 3));
+	assert_int_equal(10, csum_record_chunksize(4, 10));
+	assert_int_equal(18, csum_record_chunksize(20, 3));
+	assert_int_equal(UINT_MAX,
+		csum_record_chunksize(UINT_MAX - 1, UINT_MAX));
+	assert_int_equal(UINT_MAX - 1,
+		csum_record_chunksize(UINT_MAX, UINT_MAX - 1));
+}
+
 
 static int test_setup(void **state)
 {
@@ -1291,6 +1310,8 @@ static const struct CMUnitTest tests[] = {
 		test_verify_sv_data, test_setup, test_teardown},
 	{"CSUM26: iod csums includes 'a' key csum",
 		test_akey_csum, test_setup, test_teardown},
+	{"CSUM27: Calc record chunk size",
+		test_calc_rec_chunksize, test_setup, test_teardown},
 };
 
 int

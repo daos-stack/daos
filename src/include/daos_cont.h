@@ -494,7 +494,7 @@ daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  * Rollback to a specific persistent snapshot.
  *
  * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch if persistent snapshot to rollback to.
+ * \param[in]	epoch	Epoch of a persistent snapshot to rollback to.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */

@@ -5,12 +5,12 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.intel.daos</groupId>
+    <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
   </parent>
 
-  <groupId>com.intel.daos</groupId>
+  <groupId>io.daos</groupId>
   <artifactId>hadoop-daos</artifactId>
   <packaging>jar</packaging>
 
@@ -34,8 +34,8 @@
       <artifactId>log4j-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.intel.daos</groupId>
-      <artifactId>daos-java-api</artifactId>
+      <groupId>io.daos</groupId>
+      <artifactId>daos-java</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

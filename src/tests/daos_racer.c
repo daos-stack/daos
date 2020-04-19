@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -525,6 +525,22 @@ main(int argc, char **argv)
 			if (rc == -DER_NONEXIST) {
 				rc = 0;
 				continue;
+			}
+
+			if (rc == -DER_NOSPACE) {
+				/* XXX: There is not enough space to sync the
+				 *	object, that may cause some committable
+				 *	DTX entries cannot be committed on some
+				 *	replica(s), then subsequent fetch from
+				 *	related replica(s) for verification
+				 *	against those DTX entries will not get
+				 *	the right data as to the verification
+				 *	logic may report fake inconsistency.
+				 *
+				 *	So let's stop the verification.
+				 */
+				rc = 0;
+				break;
 			}
 
 			if (rc == -DER_MISMATCH) {

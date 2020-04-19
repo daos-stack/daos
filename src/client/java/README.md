@@ -1,8 +1,8 @@
 ## Description
-This module is DAOS DFS Java API and DAOS DFS implementation of Hadoop FileSystem. There are two submodules,
-daos-java-api and hadoop-daos.
+This module is DAOS Java client and DAOS DFS implementation of Hadoop FileSystem. There are two submodules,
+daos-client and hadoop-daos.
 
-### daos-java-api
+### daos-client
 It wraps most of common APIs from daos_fs.h, as well as some pool and container connection related APIs from
 daos_api.h. There are two main classes, DaosFsClient and DaosFile.
 
@@ -23,7 +23,7 @@ object is cached and remain open until being released. Later DFS operations don'
 need to lookup repeatedly for each FS operation.
 
 ### hadoop-daos
-It's DAOS FS implementation of Hadoop FileSystem based on daos-java-api. There are three main classes, DaosFileSystem,
+It's DAOS FS implementation of Hadoop FileSystem based on daos-client. There are three main classes, DaosFileSystem,
 DaosInputStream and DaosOutputStream.
 
 * DaosFileSystem, it provides APIs to create file as DaosOutputStream, open file as DaosInputStream, list file
@@ -38,11 +38,11 @@ for configuration items, defaults and their description.
 
 ## Build
 It's Java module and built by Maven. Java 1.8 and Maven 3 are required to build this module. After they are installed,
-you can change to this <DAOS>/java folder and build by below command line.
+you can change to this <DAOS_INSTALL>/src/client/java folder and build by below command line.
 
     mvn -DskipITs clean install
 
-daos-java-api module depends on DAOS which is assumed being installed under /usr/local/daos. If you have different
+daos-client module depends on DAOS which is assumed being installed under /usr/local/daos. If you have different
 location, you need to set it with '-Ddaos.install.path=<your DAOS install dir>'. For example,
 
     mvn -DskipITs -Ddaos.install.path=/code/daos/install clean install
@@ -70,7 +70,7 @@ When run with Hadoop yarn, you need to add below configuration to core-site.xml.
 ```xml
 <property>
 <name>fs.AbstractFileSystem.daos.impl</name>
-<value>com.intel.daos.hadoop.fs.DaosAbsFsImpl</value>
+<value>io.daos.fs.hadoop.DaosAbsFsImpl</value>
 </property>
   ```
 

@@ -49,7 +49,7 @@ Persistent Memory Development Kit (PMDK)[^1] allows managing
 transactional access to SCM and the Storage Performance Development Kit
 (SPDK)[^2] enables user-space I/O to NVMe devices.
 
-![](./media/image1.png)
+![](../admin/media/image1.png)
 Figure 2-1. DAOS Storage
 
 DAOS aims at delivering:

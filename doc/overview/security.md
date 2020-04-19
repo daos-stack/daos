@@ -1,6 +1,6 @@
 # Security Model
 
-DAOS uses a flexible security model that seperates authentication from
+DAOS uses a flexible security model that separates authentication from
 authorization. It is designed to have a minimal impact on the I/O path.
 
 There are two areas of DAOS that require access control. At the user level,
@@ -10,7 +10,7 @@ authorized components must be able to access the DAOS management network.
 
 ## Authentication
 
-There are different means of authentication depending on whether the caller is
+There are different means of authentication, depending on whether the caller is
 accessing client resources or the DAOS management network.
 
 ### Client Library
@@ -84,7 +84,7 @@ The principal (also called the identity) is specified in the name@domain format.
 The domain should be left off if the name is a UNIX user/group on the local
 domain. Currently, this is the only case supported by DAOS.
 
-There are three special principals, `OWNER@`, `GROUP@` and `EVERYONE@`,
+There are three special principals, `OWNER@`, `GROUP@`, and `EVERYONE@`,
 which align with User, Group, and Other from traditional POSIX permission bits.
 When providing them in the ACE string format, they must be spelled exactly as
 written here, in uppercase with no domain appended. The `GROUP@` entry must
@@ -117,7 +117,7 @@ a resource.
 
 ##### Denying Access
 
-Currently only "Allow" Access Control Entries are supported.
+Currently, only "Allow" Access Control Entries are supported.
 
 However, it is possible to deny access to a specific user by creating an Allow
 entry for them with no permissions. This is fundamentally different from
@@ -130,19 +130,19 @@ It is not possible to deny access to a specific group in this way, due to
 ##### ACE Examples
 
 * `A::daos_user@:rw`
-  * Allow the UNIX user named daos_user to have read-write access.
+    * Allow the UNIX user named daos_user to have read-write access.
 * `A:G:project_users@:tc`
-  * Allow anyone in the UNIX group project_users to access a pool's contents and
+    * Allow anyone in the UNIX group project_users to access a pool's contents and
     create containers.
 * `A::OWNER@:rwdtTaAo`
-  * Allow the UNIX user who owns the container to have full control.
+    * Allow the UNIX user who owns the container to have full control.
 * `A:G:GROUP@:rwdtT`
-  * Allow the UNIX group that owns the container to read and write data, delete
-    the container, and manipulate container properties.
+    * Allow the UNIX group that owns the container to read and write data, delete
+      the container, and manipulate container properties.
 * `A::EVERYONE@:r`
-  * Allow any user not covered by other rules to have read-only access.
+    * Allow any user not covered by other rules to have read-only access.
 * `A::daos_user@:`
-  * Deny the UNIX user named daos_user any access to the resource.
+    * Deny the UNIX user named daos_user any access to the resource.
 
 #### Enforcement
 
@@ -156,7 +156,7 @@ Access Control Entries (ACEs) will be enforced in the following order:
 In general, enforcement will be based on the first match, ignoring
 lower-priority entries.
 
-If the user is the owner of the resource, and there is an OWNER@ entry, they
+If the user is the owner of the resource and there is an OWNER@ entry, they
 will receive the owner permissions only. They will not receive any of the
 permissions in the named user/group entries, even if they would match those
 other entries.

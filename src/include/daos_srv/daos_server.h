@@ -114,22 +114,6 @@ dss_tls_get()
 		pthread_getspecific(dss_tls_key);
 }
 
-#define D_TIME_START(sp, start, op)		\
-do {						\
-	if ((sp) == NULL)			\
-		break;				\
-	start = daos_get_ntime();		\
-} while (0)
-
-#define D_TIME_END(sp, start, op)		\
-do {						\
-	int time_msec;				\
-	if ((sp) == NULL || start == 0)		\
-		break;				\
-	time_msec = (daos_get_ntime() - start)/1000; \
-	srv_profile_count(sp, op, time_msec);	\
-} while (0)
-
 /**
  * Get value from context by the key
  *
@@ -158,6 +142,87 @@ void dss_unregister_key(struct dss_module_key *key);
 
 #define DSS_XS_NAME_LEN		64
 
+struct srv_profile_chunk {
+	d_list_t	spc_chunk_list;
+	uint32_t	spc_chunk_offset;
+	uint32_t	spc_chunk_size;
+	uint64_t	*spc_chunks;
+};
+
+/* The profile structure to record single operation */
+struct srv_profile_op {
+	int		pro_op;			/* operation */
+	char		*pro_op_name;		/* name of the op */
+	int		pro_acc_cnt;		/* total number of val */
+	int		pro_acc_val;		/* current total val */
+	d_list_t	pro_chunk_list;		/* list of all chunks */
+	d_list_t	pro_chunk_idle_list;	/* idle list of profile chunk */
+	int		pro_chunk_total_cnt;	/* Count in idle list & list */
+	int		pro_chunk_cnt;		/* count in list */
+	struct srv_profile_chunk *pro_current_chunk; /* current chunk */
+};
+
+/* Holding the total trunk list for a specific profiling module */
+struct srv_profile {
+	struct srv_profile_op *sp_ops;
+	int		sp_ops_cnt;
+	int		sp_avg;
+	int		sp_id;
+	char		*sp_dir_path;	/* Where to dump the profiling */
+	char		**sp_names;	/* profile name */
+	ABT_thread	sp_dump_thread;	/* dump thread for profile */
+	unsigned int	sp_stop:1,
+			sp_empty:1;
+};
+
+enum profile_op {
+	OBJ_PF_UPDATE_PREP = 0,
+	OBJ_PF_UPDATE_DISPATCH,
+	OBJ_PF_UPDATE_LOCAL,
+	OBJ_PF_UPDATE_END,
+	OBJ_PF_UPDATE_WAIT,
+	OBJ_PF_UPDATE_REPLY,
+	OBJ_PF_UPDATE,
+	VOS_UPDATE_END,
+	PF_MAX_CNT,
+};
+
+#ifndef VOS_STANDALONE
+#define D_TIME_START(start, op)			\
+do {						\
+	struct srv_profile *sp;			\
+						\
+	sp = dss_get_module_info()->dmi_sp;	\
+	if ((sp) == NULL)			\
+		break;				\
+	start = daos_get_ntime();		\
+} while (0)
+
+#define D_TIME_END(start, op)			\
+do {						\
+	struct srv_profile *sp;			\
+						\
+	sp = dss_get_module_info()->dmi_sp;	\
+	int time_msec;				\
+	if ((sp) == NULL || start == 0)		\
+		break;				\
+	time_msec = (daos_get_ntime() - start)/1000; \
+	srv_profile_count(sp, op, time_msec);	\
+} while (0)
+
+#else
+unsigned int tmp_count;
+#define D_TIME_START(start, op)			\
+do {						\
+	start = 1;				\
+} while(0)
+
+#define D_TIME_END(start, op)			\
+do {						\
+	tmp_count += start;			\
+} while(0)
+
+#endif
 /* Opaque xstream configuration data */
 struct dss_xstream;
 
@@ -175,6 +240,8 @@ struct dss_module_info {
 	/* the cart context id */
 	int			dmi_ctx_id;
 	d_list_t		dmi_dtx_batched_list;
+	/* the profile information */
+	struct srv_profile	*dmi_sp;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -216,39 +283,6 @@ struct dss_drpc_handler {
 	drpc_handler_t	handler;	/** dRPC handler for the module */
 };
 
-struct srv_profile_chunk {
-	d_list_t	spc_chunk_list;
-	uint32_t	spc_chunk_offset;
-	uint32_t	spc_chunk_size;
-	uint64_t	*spc_chunks;
-};
-
-/* The profile structure to record single operation */
-struct srv_profile_op {
-	int		pro_op;			/* operation */
-	char		*pro_op_name;		/* name of the op */
-	int		pro_acc_cnt;		/* total number of val */
-	int		pro_acc_val;		/* current total val */
-	d_list_t	pro_chunk_list;		/* list of all chunks */
-	d_list_t	pro_chunk_idle_list;	/* idle list of profile chunk */
-	int		pro_chunk_total_cnt;	/* Count in idle list & list */
-	int		pro_chunk_cnt;		/* count in list */
-	struct srv_profile_chunk *pro_current_chunk; /* current chunk */
-};
-
-/* Holding the total trunk list for a specific profiling module */
-struct srv_profile {
-	struct srv_profile_op *sp_ops;
-	int		sp_ops_cnt;
-	int		sp_avg;
-	int		sp_id;
-	char		*sp_dir_path;	/* Where to dump the profiling */
-	char		**sp_names;	/* profile name */
-	ABT_thread	sp_dump_thread;	/* dump thread for profile */
-	unsigned int	sp_stop:1,
-			sp_empty:1;
-};
-
 struct dss_module_ops {
 	/* The callback for each module will choose ABT pool to handle RPC */
 	ABT_pool (*dms_abt_pool_choose_cb)(crt_rpc_t *rpc, ABT_pool *pools);
@@ -258,10 +292,9 @@ struct dss_module_ops {
 	int	(*dms_profile_stop)(void);
 };
 
-int srv_profile_stop(struct srv_profile *sp);
+int srv_profile_stop();
 int srv_profile_count(struct srv_profile *sp, int id, int time);
-int srv_profile_start(struct srv_profile **sp_p, char *path, int avg,
-		      int op_cnt, char **names);
+int srv_profile_start(char *path, int avg);
 void srv_profile_destroy(struct srv_profile *sp);
 
 /**
@@ -665,7 +698,7 @@ int
 ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
 		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
 		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		  unsigned int *shards, int cnt);
+		  unsigned int *shards, int cnt, int clear_conts);
 void
 ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
 

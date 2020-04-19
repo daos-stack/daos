@@ -18,6 +18,8 @@ pool:
     nvme_size: 40000000000
     svcn: 1
     control_method: dmg
+container:
+    type: POSIX
 client_processes:
     np: 6
 test_repo:
