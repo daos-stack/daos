@@ -892,7 +892,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch target_branch
+                            not { branch 'weekly-testing' }
+                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
                             expression { quickbuild != 'true' }
                         }
                     }
@@ -1080,6 +1081,13 @@ pipeline {
                     }
                 }
                 stage('VM local test') {
+                    when {
+                            beforeAgent true
+                            allOf {
+                                    expression { ! skip_stage('run_test') }
+                                    expression { quickbuild != 'true' }
+                            }
+		    }
                     agent {
                         label 'ci_vm1'
                     }
