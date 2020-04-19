@@ -29,20 +29,6 @@ import (
 	"strings"
 )
 
-// MockACLResult mocks an ACLResult.
-type MockACLResult struct {
-	Acl    []string
-	Status int32
-	Err    error
-}
-
-// ACL returns a properly formed AccessControlList from the mock data
-func (m *MockACLResult) ACL() *AccessControlList {
-	return &AccessControlList{
-		Entries: m.Acl,
-	}
-}
-
 // MockListPoolsResult mocks list pool results.
 type MockListPoolsResult struct {
 	Status int32
