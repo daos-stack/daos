@@ -1669,7 +1669,7 @@ class DaosContainer(object):
         c_tx = ctypes.c_uint64(txn)
 
         func = self.context.get_function('open-tx')
-        ret = func(self.coh, ctypes.byref(c_tx), None)
+        ret = func(self.coh, ctypes.byref(c_tx), 0, None)
         if ret != 0:
             raise DaosApiError("tx open returned non-zero. RC: {0}"
                                .format(ret))
@@ -1714,6 +1714,20 @@ class DaosContainer(object):
         ret = func(c_tx, None)
         if ret != 0:
             raise DaosApiError("TX abort returned non-zero. RC: {0}"
+                               .format(ret))
+
+    def restart_tx(self, txn):
+        """Restart a transaction that is being modified."""
+        # container should be in open state
+        if self.coh == 0:
+            raise DaosApiError("Container needs to be opened.")
+
+        c_tx = ctypes.c_uint64(txn)
+
+        func = self.context.get_function('restart-tx')
+        ret = func(c_tx, None)
+        if ret != 0:
+            raise DaosApiError("TX restart returned non-zero. RC: {0}"
                                .format(ret))
 
     def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
@@ -2303,6 +2317,7 @@ class DaosContext(object):
             'query-obj':       self.libdaos.daos_obj_query,
             'query-pool':      self.libdaos.daos_pool_query,
             'query-target':    self.libdaos.daos_pool_query_target,
+            'restart-tx':      self.libdaos.daos_tx_restart,
             'set-cont-attr':   self.libdaos.daos_cont_set_attr,
             'set-pool-attr':   self.libdaos.daos_pool_set_attr,
             'stop-service':    self.libdaos.daos_pool_stop_svc,
