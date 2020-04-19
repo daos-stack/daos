@@ -927,6 +927,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       unsigned int map_version)
 {
 	struct pool_map *map = NULL;
+	bool		update_map = false;
 	int		rc = 0;
 
 	if (buf != NULL) {
@@ -974,6 +975,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			D_GOTO(out, rc);
 		}
 
+		update_map = true;
 		/* drop the stale map */
 		pool->sp_map = map;
 		map = tmp;
@@ -990,8 +992,33 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		rc = dss_task_collective(update_child_map, pool, 0,
 					 DSS_ULT_IO);
 		D_ASSERT(rc == 0);
+		update_map = true;
 	}
 
+	if (update_map) {
+		struct dtx_resync_arg *arg;
+		int ret;
+
+		/* Since the map has been updated successfully, so let's
+		 * ignore the dtx resync failure for now.
+		 */
+		D_ALLOC_PTR(arg);
+		if (arg == NULL)
+			D_GOTO(out, rc);
+
+		uuid_copy(arg->pool_uuid, pool->sp_uuid);
+		arg->version = pool->sp_map_version;
+		ret = dss_ult_create(dtx_resync_ult, arg, DSS_ULT_POOL_SRV,
+				    0, 0, NULL);
+		if (ret) {
+			D_ERROR("dtx_resync_ult failure %d\n", ret);
+			D_FREE_PTR(arg);
+		}
+	} else {
+		D_WARN("Ignore update pool "DF_UUID" %d -> %d\n",
+			DP_UUID(pool->sp_uuid), pool->sp_map_version,
+			map_version);
+	}
 out:
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (map != NULL)

@@ -210,4 +210,12 @@ dtx_hlc_age2sec(uint64_t hlc)
 	return (crt_hlc_get() - hlc) / NSEC_PER_SEC;
 }
 
+struct dtx_resync_arg {
+	uuid_t		pool_uuid;
+	uint32_t	version;
+};
+
+/* resync all dtx inside the pool */
+void
+dtx_resync_ult(void *arg);
 #endif /* __DAOS_DTX_SRV_H__ */

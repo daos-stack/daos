@@ -17,6 +17,8 @@ github.com/google/go-cmp/cmp/internal/value
 github.com/google/uuid
 # github.com/jessevdk/go-flags v1.4.0
 github.com/jessevdk/go-flags
+# github.com/mitchellh/hashstructure v1.0.0
+github.com/mitchellh/hashstructure
 # github.com/pkg/errors v0.9.1
 github.com/pkg/errors
 # golang.org/x/net v0.0.0-20200301022130-244492dfa37a

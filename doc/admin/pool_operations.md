@@ -251,6 +251,37 @@ the management API and tool and will be documented here once available.
 ```bash
 $ dmg_old exclude --svc=${svcl} --pool=${puuid} --target=${rank}
 ```
+### Target Reintegration
+
+After a target failure an operator can fix the underlying issue and reintegrate the
+affected targets to restore the pool to its original state.
+
+```
+$ dmg pool reintegrate --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
+```
+
+The pool reintegrate command accepts 3 required parameters:
+
+* The pool UUID of the pool that the targets will be reintegrated into.
+* The rank of the affected targets.
+* The target Indices of the targets to be reintegrated on that rank.
+
+When rebuild is triggered it will list the operations and their related targets by their rank ID
+and target index.
+
+```
+Target (rank 5 idx 0) is down.
+Target (rank 5 idx 1) is down.
+...
+(rank 5 idx 0) is excluded.
+(rank 5 idx 1) is excluded.
+```
+
+These should be the same values used when reintegrating the targets.
+
+```
+$ dmg pool reintegrate --pool=${puuid} --rank=5 --target-idx=0,1
+```
 
 ### Pool Extension
 

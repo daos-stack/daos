@@ -390,3 +390,98 @@ out:
 	ds_cont_child_put(cont);
 	return rc;
 }
+
+struct container_scan_arg {
+	uuid_t	co_uuid;
+	struct dtx_resync_arg *arg;
+};
+
+static int
+container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		  vos_iter_type_t type, vos_iter_param_t *iter_param,
+		  void *data, unsigned *acts)
+{
+	struct container_scan_arg	*scan_arg = data;
+	struct dtx_resync_arg		*arg = scan_arg->arg;
+	int				rc;
+
+	if (uuid_compare(scan_arg->co_uuid, entry->ie_couuid) == 0) {
+		D_DEBUG(DB_REBUILD, DF_UUID" already scan\n",
+			DP_UUID(scan_arg->co_uuid));
+		return 0;
+	}
+
+	uuid_copy(scan_arg->co_uuid, entry->ie_couuid);
+	rc = dtx_resync(iter_param->ip_hdl, arg->pool_uuid, entry->ie_couuid,
+			arg->version, true);
+	if (rc)
+		D_ERROR(DF_UUID" dtx resync failed: rc %d\n",
+			DP_UUID(arg->pool_uuid), rc);
+
+	/* Since dtx_resync might yield, let's reprobe anyway */
+	*acts |= VOS_ITER_CB_YIELD;
+
+	return rc;
+}
+
+static int
+dtx_resync_one(void *data)
+{
+	struct dtx_resync_arg	*arg = data;
+	struct ds_pool_child	*child;
+	vos_iter_param_t	param = { 0 };
+	struct vos_iter_anchors	anchor = { 0 };
+	struct container_scan_arg cb_arg = { 0 };
+	int			rc;
+
+	child = ds_pool_child_lookup(arg->pool_uuid);
+	if (child == NULL)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
+	cb_arg.arg = arg;
+	param.ip_hdl = child->spc_hdl;
+	param.ip_flags = VOS_IT_FOR_REBUILD;
+	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+			 container_scan_cb, NULL, &cb_arg);
+
+	ds_pool_child_put(child);
+out:
+	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
+		DP_UUID(arg->pool_uuid), rc);
+
+	return rc;
+}
+
+void
+dtx_resync_ult(void *data)
+{
+	struct dtx_resync_arg	*arg = data;
+	struct ds_pool		*pool;
+	int			rc = 0;
+
+	pool = ds_pool_lookup(arg->pool_uuid);
+	D_ASSERT(pool != NULL);
+	if (pool->sp_dtx_resync_version >= arg->version) {
+		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
+			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
+			arg->version);
+		D_GOTO(out_put, rc);
+	}
+	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
+		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
+		arg->version);
+
+	rc = dss_thread_collective(dtx_resync_one, arg, 0, DSS_ULT_REBUILD);
+	if (rc) {
+		/* If dtx resync fails, then let's still update
+		 * sp_dtx_resync_version, so the rebuild can go ahead,
+		 * though it might fail, instead of hanging here.
+		 */
+		D_ERROR("dtx resync collective "DF_UUID" %d.\n",
+			DP_UUID(arg->pool_uuid), rc);
+	}
+	pool->sp_dtx_resync_version = arg->version;
+out_put:
+	ds_pool_put(pool);
+	D_FREE_PTR(arg);
+}
