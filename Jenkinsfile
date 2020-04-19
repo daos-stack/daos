@@ -1083,10 +1083,7 @@ pipeline {
                 stage('VM local test') {
                     when {
                             beforeAgent true
-                            allOf {
-                                    expression { ! skip_stage('run_test') }
-                                    expression { quickbuild != 'true' }
-                            }
+                            expression { quickbuild != 'true' }
 		    }
                     agent {
                         label 'ci_vm1'
