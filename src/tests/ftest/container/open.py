@@ -92,7 +92,7 @@ class OpenContainerTest(TestWithServers):
                 expected_result = RESULT_FAIL
                 break
 
-        # Prepare the messages for the 3 test cases
+        # Prepare the messages for the 3 test cases.
         # Test Bug! indicates that there's something wrong with the test since
         # it shouldn't reach that point
         messages_case_1 = [
