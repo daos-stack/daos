@@ -23,6 +23,7 @@ def scons():
     denv.Append(CPPPATH=[Dir('suite').srcnode()])
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc')
 
+    daos_build.program(denv, 'simple_pool', 'simple_pool.c', LIBS=libs)
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
     libs += ['vos', 'bio', 'pthread', 'abt', 'daos_tests']
 
