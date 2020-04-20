@@ -1,5 +1,6 @@
 # github.com/dustin/go-humanize v1.0.0
 github.com/dustin/go-humanize
+github.com/dustin/go-humanize/english
 # github.com/golang/protobuf v1.3.5
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes

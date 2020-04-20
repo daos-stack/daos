@@ -46,7 +46,7 @@ var (
 	}
 )
 
-func TestPoolGetACL(t *testing.T) {
+func TestControl_PoolGetACL(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolGetACLReq
@@ -116,7 +116,7 @@ func TestPoolGetACL(t *testing.T) {
 	}
 }
 
-func TestPoolOverwriteACL(t *testing.T) {
+func TestControl_PoolOverwriteACL(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolOverwriteACLReq
@@ -195,7 +195,7 @@ func TestPoolOverwriteACL(t *testing.T) {
 	}
 }
 
-func TestPoolUpdateACL(t *testing.T) {
+func TestControl_PoolUpdateACL(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolUpdateACLReq
@@ -274,7 +274,7 @@ func TestPoolUpdateACL(t *testing.T) {
 	}
 }
 
-func TestPoolDeleteACL(t *testing.T) {
+func TestControl_PoolDeleteACL(t *testing.T) {
 	testPrincipal := "Skinner@"
 
 	for name, tc := range map[string]struct {
