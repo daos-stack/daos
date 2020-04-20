@@ -565,6 +565,10 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			D_DEBUG(DF_DSMS, DF_CONT": container already exists\n",
 				DP_CONT(pool_hdl->sph_pool->sp_uuid,
 					in->cci_op.ci_uuid));
+		else
+			D_ERROR(DF_CONT": container lookup failed: "DF_RC"\n",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid,
+					in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -580,8 +584,10 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, &svc->cs_conts, &key, &attr);
 	if (rc != 0) {
-		D_ERROR("failed to create container attribute KVS: "
-			""DF_RC"\n", DP_RC(rc));
+		D_ERROR(DF_CONT" failed to create container attribute KVS: "
+			""DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -596,42 +602,78 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	/* Create the GHCE and MaxOID properties. */
 	d_iov_set(&value, &ghce, sizeof(ghce));
 	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghce, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_CONT": create ghce property failed: "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out_kvs, rc);
+	}
 	d_iov_set(&value, &max_oid, sizeof(max_oid));
 	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_max_oid, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_CONT": create max_oid property failed: "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out_kvs, rc);
+	}
 
 	/* duplicate the default properties, overwrite it with cont create
 	 * parameter and then write to rdb.
 	 */
 	prop_dup = daos_prop_dup(&cont_prop_default, false);
 	if (prop_dup == NULL) {
-		D_ERROR("daos_prop_dup failed.\n");
+		D_ERROR(DF_CONT" daos_prop_dup failed.\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid));
 		D_GOTO(out_kvs, rc = -DER_NOMEM);
 	}
 	rc = cont_prop_default_copy(prop_dup, in->cci_prop);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_CONT" cont_prop_default_copy failed: "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out_kvs, rc);
+	}
 	rc = cont_prop_write(tx, &kvs, prop_dup);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_CONT" cont_prop_write failed: "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out_kvs, rc);
+	}
 
 	/* Create the snapshot KVS. */
 	attr.dsa_class = RDB_KVS_INTEGER;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_snapshots, &attr);
+	if (rc != 0) {
+		D_ERROR(DF_CONT" failed to create container snapshots KVS: "
+			""DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
+	}
 
 	/* Create the user attribute KVS. */
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_user, &attr);
+	if (rc != 0) {
+		D_ERROR(DF_CONT" failed to create container user attr KVS: "
+			""DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
+	}
 
 	/* Create the handle index KVS. */
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_handles, &attr);
+	if (rc != 0) {
+		D_ERROR(DF_CONT" failed to create container handle index KVS: "
+			""DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
+	}
 
 out_kvs:
 	daos_prop_free(prop_dup);
@@ -2402,6 +2444,12 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		D_GOTO(out_lock, rc);
 
 	rc = rdb_tx_commit(&tx);
+	if (rc != 0)
+		D_ERROR(DF_CONT": rpc=%p opc=%u hdl="DF_UUID" rdb_tx_commit "
+			"failed: "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid),
+			rpc, opc, DP_UUID(in->ci_hdl), DP_RC(rc));
+
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
@@ -2440,8 +2488,12 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	 */
 	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0 /* id */,
 				    &svc, &out->co_hint);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_CONT": rpc %p: hdl="DF_UUID" opc=%u find leader\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid),
+			rpc, DP_UUID(in->ci_hdl), opc);
 		D_GOTO(out_pool_hdl, rc);
+	}
 
 	rc = cont_op_with_svc(pool_hdl, svc, rpc);
 

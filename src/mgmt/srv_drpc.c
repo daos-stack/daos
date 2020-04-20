@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -598,13 +598,13 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
-	rc = pool_target_id_list_alloc(req->n_targets, &reint_list);
+	rc = pool_target_id_list_alloc(req->n_targetidx, &reint_list);
 	if (rc)
 		D_GOTO(out, rc);
 
 	reint_rank = req->rank;
-	for (i = 0; i < req->n_targets; ++i)
-		reint_list.pti_ids[i].pti_id = req->targets[i];
+	for (i = 0; i < req->n_targetidx; ++i)
+		reint_list.pti_ids[i].pti_id = req->targetidx[i];
 
 	rc = ds_mgmt_pool_reintegrate(uuid, reint_rank, &reint_list);
 	if (rc != 0) {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,41 +24,48 @@
 package server
 
 import (
+	"strings"
+
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
-func (c *ControlService) NetworkListProviders(ctx context.Context, in *pb.ProviderListRequest) (*pb.ProviderListReply, error) {
-	var providerList string
-	c.log.Debugf("NetworkListProviders() Received")
-	providers := netdetect.GetSupportedProviders()
-	for _, p := range providers {
-		if len(providerList) == 0 {
-			providerList = p
-		} else {
-			providerList += ", " + p
-		}
+const (
+	defaultExcludeInterfaces = "lo"
+)
+
+func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
+	c.log.Debugf("NetworkScanDevices() Received request: %s", req.GetProvider())
+
+	excludes := req.GetExcludeinterfaces()
+	if excludes == "" {
+		excludes = defaultExcludeInterfaces
+	}
+	excludeMap := make(map[string]struct{})
+	for _, iface := range strings.Split(excludes, ",") {
+		excludeMap[iface] = struct{}{}
 	}
 
-	c.log.Debugf("The DAOS system supports the following providers: %s", providerList)
-	return &pb.ProviderListReply{Provider: providerList}, nil
-}
-
-func (c *ControlService) NetworkScanDevices(in *pb.DeviceScanRequest, stream pb.MgmtCtl_NetworkScanDevicesServer) error {
-	c.log.Debugf("NetworkScanDevices() Received request: %s", in.GetProvider())
-
-	results, err := netdetect.ScanFabric(in.GetProvider())
+	results, err := netdetect.ScanFabric(req.GetProvider())
 	if err != nil {
-		return errors.WithMessage(err, "failed to execute the fabric and device scan")
+		return nil, errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
+
+	resp := new(ctlpb.NetworkScanResp)
 	for _, sr := range results {
-		err := stream.Send(&pb.DeviceScanReply{Provider: sr.Provider, Device: sr.DeviceName, Numanode: uint32(sr.NUMANode)})
-		if err != nil {
-			return err
+		if _, skip := excludeMap[sr.DeviceName]; skip {
+			continue
 		}
+
+		resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
+			Provider: sr.Provider,
+			Device:   sr.DeviceName,
+			Numanode: uint32(sr.NUMANode),
+		})
 	}
-	return nil
+
+	return resp, nil
 }
