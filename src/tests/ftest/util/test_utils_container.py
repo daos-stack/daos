@@ -439,7 +439,8 @@ class TestContainer(TestDaosApiBase):
                     # Destroy the container with the daos command
                     kwargs["pool"] = self.pool.uuid
                     kwargs["sys_name"] = self.pool.name.value
-                    kwargs["svc"] = ",".join(str(self.pool.svc_ranks))
+                    kwargs["svc"] = ",".join(
+                        [str(item) for item in self.pool.svc_ranks])
                     kwargs["cont"] = self.uuid
                     self._log_method("daos.container_destroy", kwargs)
                     self.daos.container_destroy(**kwargs)
