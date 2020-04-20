@@ -116,7 +116,7 @@ func TestRunnerContextExit(t *testing.T) {
 	cfg.Index = 9
 
 	runner := NewRunner(log, cfg)
-	errOut := make(chan InstanceError)
+	errOut := make(chan error)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	if err := runner.Start(ctx, errOut); err != nil {
@@ -155,7 +155,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30)
 	runner := NewRunner(log, cfg)
-	errOut := make(chan InstanceError)
+	errOut := make(chan error)
 
 	if err := runner.Start(context.Background(), errOut); err != nil {
 		t.Fatal(err)

@@ -36,7 +36,7 @@ import (
 // IOServerRunner defines an interface for starting and stopping the
 // daos_io_server.
 type IOServerRunner interface {
-	Start(context.Context, chan<- ioserver.InstanceError) error
+	Start(context.Context, chan<- error) error
 	IsRunning() bool
 	Signal(os.Signal) error
 	Wait() error
@@ -51,7 +51,7 @@ func (srv *IOServerInstance) IsStarted() bool {
 // Start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
-func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- ioserver.InstanceError) error {
+func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) error {
 	if !srv.hasSuperblock() {
 		if err := srv.ReadSuperblock(); err != nil {
 			return errors.Wrap(err, "start failed; no superblock")

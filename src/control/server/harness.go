@@ -25,7 +25,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -34,7 +33,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -51,7 +49,7 @@ type IOServerHarness struct {
 	started          atm.Bool
 	startable        atm.Bool
 	restart          chan struct{}
-	errChan          chan ioserver.InstanceError
+	errChan          chan error
 	rankReqTimeout   time.Duration
 	rankStartTimeout time.Duration
 }
@@ -64,7 +62,7 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 		started:          atm.NewBool(false),
 		startable:        atm.NewBool(false),
 		restart:          make(chan struct{}, 1),
-		errChan:          make(chan ioserver.InstanceError, maxIOServers),
+		errChan:          make(chan error, maxIOServers),
 		rankReqTimeout:   defaultRequestTimeout,
 		rankStartTimeout: defaultStartTimeout,
 	}
