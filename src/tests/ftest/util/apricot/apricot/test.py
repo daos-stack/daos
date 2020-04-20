@@ -512,10 +512,9 @@ class TestWithServers(TestWithoutServers):
         hosts = []
         partiton_name = self.params.get(partition_key, "/run/hosts/*")
         if partiton_name is not None:
-            cmd = "scontrol show partition {}".format(partiton_name)
-
+            cmd = ["scontrol", "show", "partition", partiton_name]
             try:
-                result = process.run(cmd, shell=True, timeout=10)
+                result = process.run(cmd, timeout=10)
             except process.CmdError as error:
                 self.log.warning(
                     "Unable to obtain hosts from the {} slurm "
@@ -533,8 +532,8 @@ class TestWithServers(TestWithoutServers):
 
         if hosts:
             return hosts, partiton_name
-        else:
-            return host_list, None
+
+        return host_list, None
 
     def update_log_file_names(self, test_name=None):
         """Define agent, server, and client log files that include the test id.

@@ -139,15 +139,21 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
 def run_slurm_script(script, logfile=None):
     """Run slurm script.
 
-    script(str) -- script file suitable to by run by slurm
-    logfile(str) -- add -o param and generate logfile
-    returns --the job ID, which is used as a handle for other functions
+    Args:
+        script (str): script file suitable to by run by slurm
+        logfile (str): add -o param and generate logfile
+
+    Returns:
+        str: the job ID, which is used as a handle for other functions
+
     """
+    job_id = None
+    cmd = ["sbatch"]
     if logfile is not None:
-        script = " -o " + logfile + " " + script
-    cmd = "sbatch " + script
+        cmd.extend(["-o", logfile])
+    cmd.append(script)
     try:
-        result = process.run(cmd, shell=True, timeout=10)
+        result = process.run(cmd, timeout=10)
     except process.CmdError as error:
         result = None
         raise SlurmFailed("job failed : {}".format(error))
@@ -155,9 +161,8 @@ def run_slurm_script(script, logfile=None):
         output = result.stdout
         match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", str(output))
         if match is not None:
-            return match.group(1)
-    else:
-        return None
+            job_id = match.group(1)
+    return job_id
 
 
 def check_slurm_job(handle):
@@ -169,8 +174,8 @@ def check_slurm_job(handle):
                 one extra UNKNOWN if the handle doesn't match a known
                 slurm job.
     """
-    cmd = "scontrol show job {}".format(handle)
-    output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+    cmd = ["scontrol", "show", "job", handle]
+    output = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
     match = re.search(r"JobState=([a-zA-Z]+)", str(output))
     if match is not None:
         state = match.group(1)
@@ -231,11 +236,11 @@ def srun(nodes, cmd, srun_params=None):
 
     Args:
         hosts (str): hosts to allocate
-        cmd (str): cmdline to execute
+        cmd (list): cmdline to execute as a list
         srun_params(dict):  additional params for srun
 
     Returns:
-        exit status: int
+        CmdResult: srun command result
 
     """
     params_list = []
@@ -244,9 +249,9 @@ def srun(nodes, cmd, srun_params=None):
         for key, value in srun_params.items():
             params_list.extend(["--{}={}".format(key, value)])
             params = " ".join(params_list)
-    cmd = "srun --nodelist={} {} {}".format(nodes, params, cmd)
+    cmd = ["srun", "--nodelist={}".format(nodes), params] + list(cmd)
     try:
-        result = process.run(cmd, shell=True, timeout=30)
+        result = process.run(cmd, timeout=30)
     except process.CmdError as error:
         result = None
         raise SlurmFailed("srun failed : {}".format(error))
