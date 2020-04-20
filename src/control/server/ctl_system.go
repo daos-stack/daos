@@ -215,7 +215,7 @@ func (svc *ControlService) prepShutdown(ctx context.Context, rankList []system.R
 	}
 
 	// prep MS access point last if in rankList
-	if msRank.InList(rankList) {
+	if len(rankList) == 0 || msRank.InList(rankList) {
 		hResults, err := svc.harnessClient.PrepShutdown(ctx, msAddr, msRank)
 		if err != nil {
 			return nil, err
@@ -268,7 +268,7 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool, rankList []
 	}
 
 	// stop MS access point last if in rankList
-	if msRank.InList(rankList) {
+	if len(rankList) == 0 || msRank.InList(rankList) {
 		hResults, err := svc.harnessClient.Stop(ctx, msAddr, force, msRank)
 		if err != nil {
 			return nil, err
@@ -351,7 +351,7 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 	msRank := msMember.Rank
 
 	// first start harness managing MS member if all host ranks are in rankList
-	if msRank.InList(rankList) {
+	if len(rankList) == 0 || msRank.InList(rankList) {
 		hResults, err := svc.harnessClient.Start(ctx, msAddr, msRank)
 		if err != nil {
 			return nil, err
@@ -360,7 +360,7 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 	}
 
 	for addr, ranks := range hostRanks {
-		if addr == msAddr && msRank.InList(rankList) {
+		if addr == msAddr {
 			ranks = msRank.RemoveFromList(ranks)
 		}
 		if len(ranks) == 0 {

@@ -185,7 +185,7 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 			return nil, err
 		}
 
-		if !rank.InList(rankList) {
+		if len(rankList) != 0 && !rank.InList(rankList) {
 			h.log.Debugf("rank %d not in requested list, skipping...", rank)
 			continue // filtered out, no result expected
 		}
@@ -223,7 +223,12 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 }
 
 // StartInstances will signal previously stopped instances to start.
+//
+// Explicitly specify ranks to start.
 func (h *IOServerHarness) StartInstances(rankList []system.Rank) error {
+	if len(rankList) == 0 {
+		errors.New("no ranks specified")
+	}
 	if !h.isStarted() {
 		return FaultHarnessNotStarted
 	}

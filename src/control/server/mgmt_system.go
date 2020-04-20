@@ -170,6 +170,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 	}
 	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, req:%+v\n", *req)
 
+	rankList := system.RanksFromUint32(req.GetRanks())
 	resp := &mgmtpb.RanksResp{}
 
 	for _, i := range svc.harness.Instances() {
@@ -178,7 +179,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 			return nil, err
 		}
 
-		if !rank.InList(system.RanksFromUint32(req.GetRanks())) {
+		if len(rankList) != 0 && !rank.InList(rankList) {
 			continue // filtered out, no result expected
 		}
 
@@ -209,7 +210,7 @@ func (svc *mgmtSvc) getStartedResults(rankList []system.Rank, desiredState syste
 			return nil, err
 		}
 
-		if !rank.InList(rankList) {
+		if len(rankList) != 0 && !rank.InList(rankList) {
 			continue // filtered out, no result expected
 		}
 
@@ -248,8 +249,6 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 		return nil, errors.New("nil request")
 	}
 	svc.log.Debugf("MgmtSvc.StopRanks dispatch, req:%+v\n", *req)
-
-	resp := &mgmtpb.RanksResp{}
 
 	rankList := system.RanksFromUint32(req.GetRanks())
 
@@ -299,7 +298,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	if err != nil {
 		return nil, err
 	}
-
+	resp := &mgmtpb.RanksResp{}
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
 	}
@@ -350,6 +349,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	}
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
 
+	rankList := system.RanksFromUint32(req.GetRanks())
 	resp := &mgmtpb.RanksResp{}
 
 	for _, i := range svc.harness.Instances() {
@@ -358,7 +358,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			return nil, err
 		}
 
-		if !rank.InList(system.RanksFromUint32(req.GetRanks())) {
+		if len(rankList) != 0 && !rank.InList(rankList) {
 			continue // filtered out, no result expected
 		}
 

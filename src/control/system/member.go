@@ -334,7 +334,7 @@ func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
 	for _, member := range m.members {
 		addr := member.Addr.String()
 
-		if !member.Rank.InList(rankList) {
+		if len(rankList) != 0 && !member.Rank.InList(rankList) {
 			continue
 		}
 
@@ -359,7 +359,7 @@ func (m *Membership) Members(rankList []Rank, excludedStates ...MemberState) (ms
 	defer m.RUnlock()
 
 	for rank := range m.members {
-		if !rank.InList(rankList) {
+		if len(rankList) != 0 && !rank.InList(rankList) {
 			continue
 		}
 
