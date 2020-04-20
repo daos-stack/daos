@@ -1419,6 +1419,9 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 	int	i;
 	int	rc;
 
+	if (iods == NULL)
+		return -DER_INVAL;
+
 	for (i = 0; i < nr; i++) {
 		if (iods[i].iod_name.iov_buf == NULL)
 			/* XXX checksum & eprs should not be mandatory */
