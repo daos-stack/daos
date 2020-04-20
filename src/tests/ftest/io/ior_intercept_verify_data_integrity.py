@@ -57,7 +57,7 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
         """
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         with_intercept = dict()
-        self.run_multiple_ior_with_pool(with_intercept, intercept)
+        self.run_multiple_ior_with_pool(with_intercept, intercept, debug=False)
 
         IorCommand.log_metrics(self.log, "5 clients - with " +
                                "interception library", with_intercept[1])

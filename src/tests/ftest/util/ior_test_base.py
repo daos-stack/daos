@@ -212,7 +212,7 @@ class IorTestBase(TestWithServers):
         finally:
             self.pool.display_pool_daos_space()
 
-    def run_multiple_ior_with_pool(self, results, intercept=None):
+    def run_multiple_ior_with_pool(self, results, intercept=None, debug=True):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -228,16 +228,16 @@ class IorTestBase(TestWithServers):
 
         # start dfuse for POSIX api. This is specific to interception
         # library test requirements.
-        self._start_dfuse()
+        self._start_dfuse(debug)
 
         # Create two jobs and run in parallel.
         # Job1 will have 3 client set up to use dfuse + interception
         # library
         # Job2 will have 1 client set up to use only dfuse.
         job1 = self.get_new_job(self.hostlist_clients[:-1], 1,
-                                results, intercept)
+                                results, intercept, debug)
         job2 = self.get_new_job([self.hostlist_clients[-1]], 2,
-                                results, None)
+                                results, None, debug)
 
         job1.start()
         # Since same ior_cmd is used to trigger the MPIRUN
@@ -250,7 +250,7 @@ class IorTestBase(TestWithServers):
         self.dfuse.stop()
         self.dfuse = None
 
-    def get_new_job(self, clients, job_num, results, intercept=None):
+    def get_new_job(self, clients, job_num, results, intercept=None, debug=True):
         """Create a new thread for ior run.
 
         Args:
@@ -262,11 +262,11 @@ class IorTestBase(TestWithServers):
         hostfile = write_host_file.write_host_file(
             clients, self.workdir, self.hostfile_clients_slots)
         job = threading.Thread(target=self.run_multiple_ior, args=[
-            hostfile, len(clients), results, job_num, intercept])
+            hostfile, len(clients), results, job_num, intercept, debug])
         return job
 
     def run_multiple_ior(self, hostfile, num_clients,
-                         results, job_num, intercept=None):
+                         results, job_num, intercept=None, debug=True):
         # pylint: disable=too-many-arguments
         """Run the IOR command.
 
@@ -288,6 +288,8 @@ class IorTestBase(TestWithServers):
             str(manager), get_log_file(self.client_log))
         if intercept:
             env["LD_PRELOAD"] = intercept
+            if not debug:
+                env["D_LOG_MASK"] = "WARN"
         manager.setup_command(env, hostfile, procs)
         self.lock.release()
         try:
