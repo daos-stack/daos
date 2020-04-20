@@ -114,19 +114,93 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	return needsFormat, nil
 }
 
-// NotifyStorageReady releases any blocks on AwaitStorageReady().
+// NotifyStorageReady releases any blocks on awaitStorageReady().
 func (srv *IOServerInstance) NotifyStorageReady() {
 	go func() {
 		close(srv.storageReady)
 	}()
 }
 
-// AwaitStorageReady blocks until the IOServer's storage is ready.
-func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context) {
+// awaitStorageReady blocks until instance has storage available and ready to be used.
+func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
+	srv.RLock()
+	defer srv.RUnlock()
+
+	idx := srv.Index()
+
+	if srv.IsStarted() {
+		return errors.Errorf("can't wait for storage: instance %d already started", idx)
+	}
+
+	srv.log.Infof("Waiting for %s instance %d storage to be ready...", DataPlaneName, idx)
+
+	needsScmFormat, err := srv.NeedsScmFormat()
+	if err != nil {
+		srv.log.Errorf("index %d: failed to check storage formatting: %s", idx, err)
+		needsScmFormat = true
+	}
+
+	if !needsScmFormat {
+		if skipMissingSuperblock {
+			return nil
+		}
+		srv.log.Debugf("instance %d: no SCM format required; checking for superblock", idx)
+		needsSuperblock, err := srv.NeedsSuperblock()
+		if err != nil {
+			srv.log.Errorf("instance %d: failed to check instance superblock: %s", idx, err)
+		}
+		if !needsSuperblock {
+			return nil
+		}
+	}
+
+	if skipMissingSuperblock {
+		return FaultScmUnmanaged(srv.scmConfig().MountPoint)
+	}
+
+	srv.log.Infof("SCM format required on instance %d", srv.Index())
+
 	select {
 	case <-ctx.Done():
 		srv.log.Infof("%s instance %d storage not ready: %s", DataPlaneName, srv.Index(), ctx.Err())
 	case <-srv.storageReady:
 		srv.log.Infof("%s instance %d storage ready", DataPlaneName, srv.Index())
 	}
+
+	return ctx.Err()
+}
+
+// createSuperblock creates instance superblock if needed.
+func (srv *IOServerInstance) createSuperblock(recreate bool) error {
+	srv.RLock()
+	defer srv.RUnlock()
+
+	if srv.IsStarted() {
+		return errors.Errorf("can't create superblock: instance %d already started", srv.Index())
+	}
+
+	needsSuperblock, err := srv.NeedsSuperblock()
+	if !needsSuperblock {
+		return nil
+	}
+	if err != nil && !recreate {
+		return err
+	}
+
+	// Only the first I/O server can be an MS replica.
+	if srv.Index() == 0 {
+		mInfo, err := getMgmtInfo(srv)
+		if err != nil {
+			return err
+		}
+		if err := srv.CreateSuperblock(mInfo); err != nil {
+			return err
+		}
+	} else {
+		if err := srv.CreateSuperblock(&mgmtInfo{}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

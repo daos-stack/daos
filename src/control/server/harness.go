@@ -114,136 +114,45 @@ func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 	return nil, err
 }
 
-// CreateSuperblocks creates instance superblocks as needed.
-func (h *IOServerHarness) CreateSuperblocks(recreate bool) error {
+// Start starts harness by setting up and starting dRPC before initiating
+// configured instances' processing loops.
+//
+// Run until harness is shutdown.
+func (h *IOServerHarness) Start(parent context.Context, membership *system.Membership, cfg *Configuration) error {
 	if h.IsStarted() {
-		return errors.Errorf("Can't create superblocks with running instances")
+		return errors.New("can't start: harness already started")
 	}
 
-	instances := h.Instances()
-	toCreate := make([]*IOServerInstance, 0, len(instances))
+	// Now we want to block any RPCs that might try to mess with storage
+	// (format, firmware update, etc) before attempting to start I/O servers
+	// which are using the storage.
+	h.started.SetTrue()
+	defer h.started.SetFalse()
 
-	for _, instance := range instances {
-		needsSuperblock, err := instance.NeedsSuperblock()
-		if !needsSuperblock {
-			continue
+	ctx, shutdown := context.WithCancel(parent)
+	defer shutdown()
+
+	if cfg != nil {
+		// Single daos_server dRPC server to handle all iosrv requests
+		if err := drpcServerSetup(ctx, h.log, cfg.SocketDir, h.Instances(),
+			cfg.TransportConfig); err != nil {
+
+			return errors.WithMessage(err, "dRPC server setup")
 		}
-		if err != nil && !recreate {
-			return err
-		}
-		toCreate = append(toCreate, instance)
+		defer func() {
+			if err := drpcCleanup(cfg.SocketDir); err != nil {
+				h.log.Errorf("error during dRPC cleanup: %s", err)
+			}
+		}()
 	}
 
-	if len(toCreate) == 0 {
-		return nil
+	for _, srv := range h.Instances() {
+		// start first time then relinquish control to instance
+		srv.Start(ctx, membership, cfg)
 	}
 
-	for _, instance := range toCreate {
-		// Only the first I/O server can be an MS replica.
-		if instance.Index() == 0 {
-			mInfo, err := getMgmtInfo(instance)
-			if err != nil {
-				return err
-			}
-			if err := instance.CreateSuperblock(mInfo); err != nil {
-				return err
-			}
-		} else {
-			if err := instance.CreateSuperblock(&mgmtInfo{}); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// AwaitStorageReady blocks until all managed IOServer instances have storage
-// available and ready to be used.
-func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
-	h.RLock()
-	defer h.RUnlock()
-
-	if h.IsStarted() {
-		return errors.New("can't wait for storage: harness already started")
-	}
-
-	h.log.Infof("Waiting for %s instance storage to be ready...", DataPlaneName)
-	for _, instance := range h.instances {
-		needsScmFormat, err := instance.NeedsScmFormat()
-		if err != nil {
-			h.log.Error(errors.Wrap(err, "failed to check storage formatting").Error())
-			needsScmFormat = true
-		}
-
-		if !needsScmFormat {
-			if skipMissingSuperblock {
-				continue
-			}
-			h.log.Debug("no SCM format required; checking for superblock")
-			needsSuperblock, err := instance.NeedsSuperblock()
-			if err != nil {
-				h.log.Errorf("failed to check instance superblock: %s", err)
-			}
-			if !needsSuperblock {
-				continue
-			}
-		}
-
-		if skipMissingSuperblock {
-			return FaultScmUnmanaged(instance.scmConfig().MountPoint)
-		}
-
-		h.log.Infof("SCM format required on instance %d", instance.Index())
-		instance.AwaitStorageReady(ctx)
-	}
+	<-ctx.Done()
 	return ctx.Err()
-}
-
-// registerNewMember creates a new system.Member for given instance and adds it
-// to the system membership.
-func (h *IOServerHarness) registerNewMember(membership *system.Membership, instance *IOServerInstance) error {
-	m, err := instance.newMember()
-	if err != nil {
-		return errors.Wrap(err, "failed to get member from instance")
-	}
-
-	created, oldState := membership.AddOrUpdate(m)
-	if created {
-		h.log.Debugf("bootstrapping system member: rank %d, addr %s",
-			m.Rank, m.Addr)
-	} else {
-		h.log.Debugf("updated bootstrapping system member: rank %d, addr %s, %s->%s",
-			m.Rank, m.Addr, *oldState, m.State())
-		if *oldState == m.State() {
-			h.log.Errorf("unexpected same state in rank %d update (%s->%s)",
-				m.Rank, *oldState, m.State())
-		}
-	}
-
-	return nil
-}
-
-// startInstances starts harness instances and registers system membership for
-// any MS replicas (membership is normally recorded when handling join requests
-// but bootstrapping MS replicas will not join).
-func (h *IOServerHarness) startInstances(ctx context.Context, membership *system.Membership) error {
-	h.log.Debug("starting instances")
-	for _, instance := range h.Instances() {
-		if err := instance.Start(ctx, h.errChan); err != nil {
-			return err
-		}
-
-		if instance.IsMSReplica() {
-			if err := h.registerNewMember(membership, instance); err != nil {
-				return err
-			}
-		}
-
-		instance.waitDrpc.SetTrue()
-	}
-
-	return nil
 }
 
 // StopInstances will signal harness-managed instances and return (doesn't wait

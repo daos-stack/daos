@@ -364,3 +364,32 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 
 	return system.NewMember(rank, sb.UUID, addr, system.MemberStateStarted), nil
 }
+
+// registerMember creates a new system.Member for given instance and adds it
+// to the system membership.
+func (srv *IOServerInstance) registerMember(membership *system.Membership) error {
+	srv.RLock()
+	defer srv.RUnlock()
+
+	idx := srv.Index()
+
+	m, err := srv.newMember()
+	if err != nil {
+		return errors.Wrapf(err, "instance %d: failed to extract member details", idx)
+	}
+
+	created, oldState := membership.AddOrUpdate(m)
+	if created {
+		srv.log.Debugf("instance %d: bootstrapping system member: rank %d, addr %s",
+			idx, m.Rank, m.Addr)
+	} else {
+		srv.log.Debugf("instance %d: updated bootstrapping system member: rank %d, addr %s, %s->%s",
+			idx, m.Rank, m.Addr, *oldState, m.State())
+		if *oldState == m.State() {
+			srv.log.Errorf("instance %d: unexpected same state in rank %d update (%s->%s)",
+				idx, m.Rank, *oldState, m.State())
+		}
+	}
+
+	return nil
+}
