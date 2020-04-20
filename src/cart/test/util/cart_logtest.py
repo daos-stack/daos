@@ -255,7 +255,8 @@ class LogTest():
                     if line.parent not in active_desc:
                         show_line(line, 'error', 'add with bad parent')
                         if line.parent in regions:
-                            show_line(regions[line.parent], 'warning', 'used as parent without registering')
+                            show_line(regions[line.parent], 'warning',
+                                      'used as parent without registering')
                         err_count += 1
                     active_desc[desc] = line
                 elif line.is_link():
@@ -296,13 +297,15 @@ class LogTest():
                 if line.is_calloc():
                     pointer = line.get_field(-1).rstrip('.')
                     if pointer in regions:
-                        show_line(regions[pointer], 'error', 'new allocation seen for same pointer')
+                        show_line(regions[pointer], 'error',
+                                  'new allocation seen for same pointer')
                         err_count += 1
                     regions[pointer] = line
                     memsize.add(line.calloc_size())
                 elif line.is_free():
                     pointer = line.get_field(-1).rstrip('.')
-                    # If a pointer is freed then automatically remove the descriptor
+                    # If a pointer is freed then automatically remove the
+                    # descriptor
                     if pointer in active_desc:
                         del active_desc[pointer]
                     if pointer in regions:
@@ -322,7 +325,8 @@ class LogTest():
                                           'mask mismatch in alloc/free')
                                 err_count += 1
                             add_line_count_to_dict(line, mismatch_free_seen)
-                            add_line_count_to_dict(regions[pointer], mismatch_alloc_seen)
+                            add_line_count_to_dict(regions[pointer],
+                                                   mismatch_alloc_seen)
                         if line.level != regions[pointer].level:
                             show_line(regions[pointer], 'warning',
                                       'level mismatch in alloc/free')
@@ -382,10 +386,10 @@ class LogTest():
 
         pp = pprint.PrettyPrinter()
         if mismatch_alloc_seen:
-            print('Mismatched allocations were allocated at the following locations')
+            print('Mismatched allocations were allocated here:')
             print(pp.pformat(mismatch_alloc_seen))
         if mismatch_free_seen:
-            print('Mismatched allocations were freed at the following locations')
+            print('Mismatched allocations were freed here:')
             print(pp.pformat(mismatch_free_seen))
 
         if active_desc:

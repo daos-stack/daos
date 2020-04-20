@@ -49,7 +49,7 @@ class DaosServer():
     def __init__(self, conf):
 
         self._sp = None
-        self._conf = conf
+        self.conf = conf
         self._agent = None
         self.agent_dir = None
 
@@ -65,7 +65,7 @@ class DaosServer():
     def start(self):
         """Start a DAOS server"""
 
-        daos_server = os.path.join(self._conf['PREFIX'], 'bin', 'daos_server')
+        daos_server = os.path.join(self.conf['PREFIX'], 'bin', 'daos_server')
 
         self_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -87,8 +87,8 @@ class DaosServer():
 
         agent_env = os.environ.copy()
         # DAOS-??? Need to set this for agent
-        agent_env['LD_LIBRARY_PATH'] = os.path.join(self._conf['PREFIX'], 'lib64')
-        agent_bin = os.path.join(self._conf['PREFIX'], 'bin', 'daos_agent')
+        agent_env['LD_LIBRARY_PATH'] = os.path.join(self.conf['PREFIX'], 'lib64')
+        agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
         self._agent = subprocess.Popen([agent_bin,
                                         '--config-path={}'.format(agent_config),
@@ -108,16 +108,17 @@ class DaosServer():
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        log_test(self._conf, '/tmp/daos_server.log')
+        log_test('/tmp/daos_server.log')
 
 def il_cmd(dfuse, cmd):
+    """Run a command under the interception library"""
     my_env = os.environ.copy()
     my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     my_env['OFI_INTERFACE'] = 'lo'
     log_file = tempfile.NamedTemporaryFile(prefix='daos_dfuse_il_', suffix='.log', delete=False)
     symlink_file('/tmp/dfuse_il_latest.log', log_file.name)
     my_env['D_LOG_FILE'] = log_file.name
-    my_env['LD_PRELOAD'] = os.path.join(dfuse._conf['PREFIX'], 'lib64', 'libioil.so')
+    my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'], 'lib64', 'libioil.so')
     my_env['D_LOG_MASK'] = 'DEBUG'
     my_env['DD_MASK'] = 'all'
     ret = subprocess.run(cmd, env=my_env)
@@ -125,7 +126,7 @@ def il_cmd(dfuse, cmd):
     print(ret)
     print('Log results for il')
     try:
-        log_test(dfuse._conf, log_file.name)
+        log_test(log_file.name)
     except:
         pass
     return ret
@@ -141,7 +142,7 @@ class DFuse():
         self.dir = '/tmp/dfs_test'
         self.pool = pool
         self.container = container
-        self._conf = conf
+        self.conf = conf
         self._daos = daos
         self._sp = None
 
@@ -155,7 +156,7 @@ class DFuse():
 
     def start(self):
         """Start a dfuse instance"""
-        dfuse_bin = os.path.join(self._conf['PREFIX'], 'bin', 'dfuse')
+        dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
         my_env = os.environ.copy()
 
         single_threaded = False
@@ -243,7 +244,7 @@ class DFuse():
         ret = self._sp.wait(timeout=20)
         print('rc from dfuse {}'.format(ret))
         self._sp = None
-        log_test(self._conf, self.log_file)
+        log_test(self.log_file)
 
     def wait_for_exit(self):
 
@@ -313,9 +314,6 @@ def make_pool(daos, conf):
 
     pool_con = daos.raw.DaosPool(context)
 
-    createuid = os.geteuid()
-    creategid = os.getegid()
-
     try:
         pool_con.create(511, os.geteuid(), os.getegid(), 1024*1014*128, b'daos_server')
     except daos_raw.daos_api.DaosApiError:
@@ -371,9 +369,6 @@ def inspect_daos2(conf, daos, d):
             pool_con.set_group(b'daos_server')
             new_pool = True
         else:
-
-            createuid = os.geteuid()
-            creategid = os.getegid()
 
             pool_con.set_uuid_str(PUID)
             pool_con.create(511, os.geteuid(), os.getegid(), 1024*1014*128, b'daos_server')
@@ -483,7 +478,7 @@ EFILES = ['src/common/misc.c',
           'src/security/cli_security.c',
           'src/client/dfuse/dfuse_core.c']
 
-def log_test(conf, filename):
+def log_test(filename):
 
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(os.path.dirname(file_self), '../../../src/cart/test/util')
@@ -683,7 +678,7 @@ def run_dfuse(server, conf):
     uns_stat = os.stat(os.path.join(uns_path, files[0]))
     print(direct_stat)
     print(uns_stat)
-    assert(uns_stat.st_ino == direct_stat.st_ino)
+    assert uns_stat.st_ino == direct_stat.st_ino
 
 #    return
 
@@ -700,7 +695,7 @@ def run_dfuse(server, conf):
     uns_stat = os.stat(os.path.join(uns_path, files[0]))
     print(direct_stat)
     print(uns_stat)
-    assert(uns_stat.st_ino == direct_stat.st_ino)
+    assert uns_stat.st_ino == direct_stat.st_ino
 
     print('Reached the end, no errors')
 
@@ -725,7 +720,7 @@ def run_il_test(server, conf):
 
     for p in pools:
         for c in containers:
-            d = os.path.join(dfuse.dir, p, p)
+            d = os.path.join(dfuse.dir, p, c)
             try:
                 print('Making directory {}'.format(d))
                 os.mkdir(d)
@@ -736,7 +731,7 @@ def run_il_test(server, conf):
     f = os.path.join(dirs[0], 'file')
     fd = open(f, 'w')
     fd.write('Hello')
-    fd.close
+    fd.close()
     il_cmd(dfuse, ['cp', f, dirs[-1]])
 #    il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]])
 #    il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
@@ -838,7 +833,7 @@ def main():
         run_dfuse(server, conf)
         #test_pydaos_kv(server, conf)
     else:
-        #run_il_test(server, conf)
+        run_il_test(server, conf)
         #(pool, cont) = inspect_daos(conf, daos)
         run_dfuse(server, conf)
 

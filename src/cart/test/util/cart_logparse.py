@@ -365,6 +365,7 @@ class StateIter():
         return line
 
     def next(self):
+        """Python2/3 compat function"""
         return self.__next__()
 
 # pylint: disable=too-many-branches
@@ -518,6 +519,7 @@ class LogIter():
             return line
 
     def next(self):
+        """Python2/3 compat function"""
         return self.__next__()
 
     def get_pids(self):
