@@ -124,14 +124,10 @@ func TestRunnerContextExit(t *testing.T) {
 	}
 	cancel()
 
-	exitErr := <-errOut
-	if errors.Cause(exitErr.Err) == NormalExit {
+	err := <-errOut
+	if errors.Cause(err) == NormalExit {
 		t.Fatal("expected process to not exit normally")
 	}
-	if exitErr.Idx != cfg.Index {
-		t.Fatal("expected exit error to contain instance index")
-	}
-
 }
 
 func TestRunnerNormalExit(t *testing.T) {
@@ -161,9 +157,9 @@ func TestRunnerNormalExit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exitErr := <-errOut
-	if errors.Cause(exitErr.Err).Error() != NormalExit.Error() {
-		t.Fatalf("expected normal exit; got %s", exitErr.Err)
+	err := <-errOut
+	if errors.Cause(err).Error() != NormalExit.Error() {
+		t.Fatalf("expected normal exit; got %s", err)
 	}
 
 	// Light integration testing of arg/env generation; unit tests elsewhere.
