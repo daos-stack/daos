@@ -734,8 +734,8 @@ check_equal(struct ilog_context *lctx, struct ilog_id *id_out,
 			return 0;
 		}
 		D_DEBUG(DB_IO, "Access of incarnation log from multiple DTX"
-			" at same time is not allowed: rc=DER_AGAIN\n");
-		return -DER_AGAIN;
+			" at same time is not allowed: rc=DER_TX_RESTART\n");
+		return -DER_TX_RESTART;
 	}
 
 	return 0;
