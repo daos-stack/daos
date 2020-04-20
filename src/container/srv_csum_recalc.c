@@ -140,6 +140,11 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 {
 	unsigned int	j = 0;
 
+	if (recalc->cr_phy_off && DAOS_FAIL_CHECK(DAOS_VOS_AGG_MW_THRESH)) {
+		D_INFO("CHECKSUM merge window failure injection.\n");
+		return false;
+	}
+
 	/* The index j is used to determine the start offset within
 	 * the prior checksum array (associated with the input physical
 	 * extent). If the array sizes for input and output segments are
