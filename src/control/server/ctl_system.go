@@ -332,37 +332,11 @@ func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemS
 	return resp, nil
 }
 
-// allRanksOnHostInList checks if all ranks managed by a host at "addr" are
-// present in "rankList".
-//
-// Return the list of ranks managed by the host at "addr".
-// If all are present return true, else false.
-func (svc *ControlService) allRanksOnHostInList(addr string, rankList []system.Rank) ([]system.Rank, bool) {
-	var rank system.Rank
-	addrRanks := svc.membership.HostRanks()[addr]
-
-	ok := true
-	for _, rank = range addrRanks {
-		if !rank.InList(rankList) {
-			ok = false
-			break
-		}
-	}
-	if !ok {
-		svc.log.Debugf("skip host %s: rank %d not in rank list %v",
-			addr, rank, rankList)
-	}
-
-	return addrRanks, ok
-}
-
 // start requests registered harnesses to start their instances (system members)
 // after a controlled shutdown using information in the membership registry.
 //
 // Each host address represents a gRPC server associated with a harness managing
 // one or more data-plane instances (DAOS system members).
-//
-// TODO: specify the ranks managed by the harness that should be started.
 func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (system.MemberResults, error) {
 	hostRanks := svc.membership.HostRanks(rankList...)
 	results := make(system.MemberResults, 0, len(hostRanks)*maxIOServers)
@@ -374,19 +348,11 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 		return nil, errors.WithMessage(err, "retrieving MS member")
 	}
 	msAddr := msMember.Addr.String()
+	msRank := msMember.Rank
 
 	// first start harness managing MS member if all host ranks are in rankList
-	//
-	// TODO: when DAOS-4456 lands and ranks can be started independently
-	//       of each other, check only the msRank is in rankList
-	if ranks, ok := svc.allRanksOnHostInList(msAddr, rankList); ok {
-		// Any ranks configured at addr will be started, specify all
-		// ranks so we get relevant results back.
-		//
-		// TODO: when DAOS-4456 lands and ranks can be started independently
-		//       of each other, start only the msRank here
-		//msRank := msMember.Rank
-		hResults, err := svc.harnessClient.Start(ctx, msAddr, ranks...)
+	if msRank.InList(rankList) {
+		hResults, err := svc.harnessClient.Start(ctx, msAddr, msRank)
 		if err != nil {
 			return nil, err
 		}
@@ -394,28 +360,8 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 	}
 
 	for addr, ranks := range hostRanks {
-		// All ranks configured at addr will be started, therefore if
-		// any of the harness ranks are not in rankList then don't start
-		// harness.
-		//
-		// TODO: when DAOS-4456 lands and ranks can be started, remove
-		//       below mitigation/code block
-		newRanks, ok := svc.allRanksOnHostInList(addr, rankList)
-		if !ok {
-			continue
-		}
-		ranks = newRanks
-
-		if addr == msAddr {
-			// harnessClient.Start() will start all ranks on harness
-			// so don't try to start msAddr again
-			//
-			// TODO: when DAOS-4456 lands and ranks can be started
-			//       independently of each other on the same harness,
-			//       remove the MS rank from the list so other rank
-			//       on the MS harness will get started
-			//ranks = msRank.RemoveFromList(ranks)
-			continue
+		if addr == msAddr && msRank.InList(rankList) {
+			ranks = msRank.RemoveFromList(ranks)
 		}
 		if len(ranks) == 0 {
 			continue

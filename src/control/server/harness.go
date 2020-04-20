@@ -222,24 +222,27 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 	}
 }
 
-// RestartInstances will signal the harness to start configured instances once
-// stopped.
-//
-// TODO: enable independent restarts of each rank.
-func (h *IOServerHarness) RestartInstances() error {
-	h.RLock()
-	defer h.RUnlock()
-
+// StartInstances will signal previously stopped instances to start.
+func (h *IOServerHarness) StartInstances(rankList []system.Rank) error {
 	if !h.isStarted() {
 		return FaultHarnessNotStarted
 	}
 
-	startedRanks := h.StartedRanks()
-	if len(startedRanks) > 0 {
-		return FaultInstancesNotStopped(startedRanks)
-	}
-
 	for _, srv := range h.Instances() {
+		if srv.isStarted() {
+			continue
+		}
+
+		rank, err := srv.GetRank()
+		if err != nil {
+			return err
+		}
+
+		if !rank.InList(rankList) {
+			h.log.Debugf("rank %d not in requested list, skipping...", rank)
+			continue
+		}
+
 		srv.startChan <- true
 	}
 

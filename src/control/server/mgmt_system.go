@@ -270,9 +270,17 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	}
 
 	stopped := make(chan struct{})
+	// poll until instances in rank list stop or timeout occurs
+	// (at which point get results of each instance)
 	go func() {
 		for {
-			if len(svc.harness.StartedRanks()) != 0 {
+			success := true
+			for _, rank := range rankList {
+				if rank.InList(svc.harness.startedRanks()) {
+					success = false
+				}
+			}
+			if !success {
 				time.Sleep(instanceUpdateDelay)
 				continue
 			}
@@ -371,28 +379,30 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 // StartRanks implements the method defined for the Management Service.
 //
 // Restart data-plane instances (DAOS system members) managed by harness.
-//
-// TODO: Current implementation sends restart signal to harness, restarting all
-//       ranks managed by harness, future implementations will allow individual
-//       ranks to be restarted. Work out how to start only a subsection of
-//       instances based on ranks supplied in request.
-func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
 
-	resp := &mgmtpb.RanksResp{}
+	rankList := system.RanksFromUint32(req.GetRanks())
 
-	if err := svc.harness.RestartInstances(); err != nil {
+	if err := svc.harness.StartInstances(rankList); err != nil {
 		return nil, err
 	}
 
 	started := make(chan struct{})
-	// select until instances start or timeout occurs (at which point get results of each instance)
+	// select until instances in rank list start or timeout occurs
+	// (at which point get results of each instance)
 	go func() {
 		for {
-			if len(svc.harness.ReadyRanks()) != len(svc.harness.instances) {
+			success := true
+			for _, rank := range rankList {
+				if !rank.InList(svc.harness.readyRanks()) {
+					success = false
+				}
+			}
+			if !success {
 				time.Sleep(instanceUpdateDelay)
 				continue
 			}
@@ -406,11 +416,11 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	case <-time.After(svc.harness.rankStartTimeout):
 	}
 
-	results, err := svc.getStartedResults(system.RanksFromUint32(req.GetRanks()),
-		system.MemberStateStarted, "start", nil)
+	results, err := svc.getStartedResults(rankList, system.MemberStateStarted, "start", nil)
 	if err != nil {
 		return nil, err
 	}
+	resp := &mgmtpb.RanksResp{}
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
 	}
