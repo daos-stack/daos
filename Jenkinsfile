@@ -326,14 +326,15 @@ pipeline {
                         }
                     }
                     steps {
-                         githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        githubNotify credentialsId: 'daos-jenkins-commit-status',
                                       description: env.STAGE_NAME,
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
-                         sh label: env.STAGE_NAME,
-                            script: '''rm -rf artifacts/centos7/
-                                       mkdir -p artifacts/centos7/
-                                       make CHROOT_NAME="epel-7-x86_64" -C utils/rpms chrootbuild'''
+                        checkoutScm withSubmodules: true
+                        sh label: env.STAGE_NAME,
+                           script: '''rm -rf artifacts/centos7/
+                                      mkdir -p artifacts/centos7/
+                                      make CHROOT_NAME="epel-7-x86_64" -C utils/rpms chrootbuild'''
                     }
                     post {
                         success {
