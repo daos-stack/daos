@@ -166,13 +166,15 @@ class ExecutableCommand(CommandWithParameters):
             # running after 5 seconds send a SIGKILL and report an error
             signal_list = [signal.SIGTERM, signal.SIGKILL]
 
-            # # Turn off verbosity to keep the logs clean as the server stops
-            # self._process.verbose = False
+            # Turn off verbosity to keep the logs clean as the server stops
+            self._process.verbose = False
 
             # Send signals while the process is still running
             while self._process.poll() is None and signal_list:
-                self.display_subprocess_state()
-                self._process.send_signal(signal_list.pop(0))
+                signal_to_send = signal_list.pop(0)
+                msg = "before sending signal {}".format(signal_to_send)
+                self.display_subprocess_state(msg)
+                self._process.send_signal(signal_to_send)
                 if signal_list:
                     time.sleep(5)
 
@@ -220,13 +222,19 @@ class ExecutableCommand(CommandWithParameters):
                 "{}() did not return a CmdResult".format(method_name))
         return re.findall(pattern, result.stdout)
 
-    def display_subprocess_state(self):
-        """Display the state of the subprocess."""
+    def display_subprocess_state(self, message=None):
+        """Display the state of the subprocess.
+
+        Args:
+            message (str, optional): additional text to include in output.
+                Defaults to None.
+        """
         if self._process is not None:
             command = "pstree -pls {}".format(self._process.get_pid())
             result = process.run(command, 5, True, True, "combined", True)
             self.log.debug(
-                "Processes still running:\n  %s",
+                "Processes still running%s:\n  %s",
+                " {}".format(message) if message else "",
                 "  \n".join(result.stdout_text.splitlines()))
 
 

@@ -143,11 +143,18 @@ class JobManager(ExecutableCommand):
         """
         pass
 
-    def display_subprocess_state(self):
-        """Display the state of the subprocess."""
+    def display_subprocess_state(self, message=None):
+        """Display the state of the subprocess.
+
+        Args:
+            message (str, optional): additional text to include in output.
+                Defaults to None.
+        """
         if self._process is not None:
             command = "pgrep -a -f '{}'".format(str(self.job))
-            self.log.debug("Processes still running:")
+            self.log.debug(
+                "Processes still running%s:",
+                " {}".format(message) if message else "")
             pcmd(self._hosts, command, True, 5, None)
 
 

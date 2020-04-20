@@ -97,23 +97,16 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         retcode_dict[retcode].add(nodeset)
 
         # Display any errors or requested output
-        if retcode != expect_rc or verbose:
-            msg = "failure running" if retcode != expect_rc else "output from"
-            if not list(task.iter_buffers(rc_nodes)):
-                print(
-                    "{}: {} '{}': rc={}".format(
-                        nodeset, msg, command, retcode))
-            else:
-                for output, nodes in task.iter_buffers(rc_nodes):
-                    nodeset = NodeSet.fromlist(nodes)
-                    lines = str(output).splitlines()
-                    output = "rc={}{}".format(
-                        retcode,
-                        ", {}".format(output) if len(lines) < 2 else
-                        "\n  {}".format("\n  ".join(lines)))
-                    print(
-                        "{}: {} '{}': {}".format(
-                            NodeSet.fromlist(nodes), msg, command, output))
+        if verbose or (expect_rc is not None and expect_rc != retcode):
+            print("Results from '{}':".format(command))
+            msg = "output"
+            if expect_rc is not None:
+                msg = "failure" if expect_rc != retcode else "success"
+            for output, nodes in task.iter_buffers(rc_nodes):
+                nodeset = NodeSet.fromlist(nodes)
+                print("  {}: {} (rc={}):".format(nodeset, msg, retcode))
+                for line in str(output).splitlines():
+                    print("    {}".format(line))
 
     # Report any timeouts
     if timeout and task.num_timeout() > 0:

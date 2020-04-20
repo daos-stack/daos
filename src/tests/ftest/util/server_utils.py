@@ -49,7 +49,6 @@ from command_utils import ExecutableCommand, DaosCommand
 from job_manager_utils import Orterun
 from general_utils import pcmd
 from dmg_utils import storage_format
-from write_host_file import write_host_file
 from env_modules import load_mpi
 
 SESSIONS = {}
@@ -654,7 +653,7 @@ class ServerManager(ExecutableCommand):
         try:
             self.runner.stop()
         except CommandFailure as error:
-            errors.append(error)
+            errors.append(str(error))
 
         if self.runner.job.yaml_params.is_nvme():
             self.storage_reset()
