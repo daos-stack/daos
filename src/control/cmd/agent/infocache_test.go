@@ -89,27 +89,11 @@ func TestInfoCacheInit(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 
-			numDevs := len(aiCache.resmgmtpb[tc.numaNode])
+			numDevs := len(aiCache.numaDeviceResp[tc.numaNode])
 			common.AssertEqual(t, numDevs, tc.numDevs,
 				fmt.Sprintf("initResponseCache error - expected %d cached responses, got %d", tc.numDevs, numDevs))
 		})
 	}
-	/*
-		numaNode := 0
-		numDevs := len(aiCache.resmgmtpb[numaNode])
-
-		common.AssertEqual(t, numDevs, 4, fmt.Sprintf("initResponseCache error - expected %d cached responses, got %d", )
-
-		numaNode = 1
-		numDevs = len(aiCache.resmgmtpb[numaNode])
-
-		common.AssertEqual(t, numDevs, 2, "initResponseCache error - incorrect number of numa node data in the cache")
-
-		numaNode = 2
-		numDevs = len(aiCache.resmgmtpb[numaNode])
-
-		common.AssertEqual(t, numDevs, 4, "initResponseCache error - incorrect number of numa node data in the cache")
-	*/
 }
 
 // TestInfoCacheGetResponse reads an entry from the cache for the specified NUMA node

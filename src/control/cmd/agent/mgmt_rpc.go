@@ -90,12 +90,6 @@ func (mod *mgmtModule) ID() int32 {
 // the client application is bound to a NUMA node that does not have a network
 // device / provider combination with the same NUMA affinity.
 //
-// The client machine may have more than one matching network interface per
-// NUMA node.  In order to load balance the client application's use of multiple
-// network interfaces on a given NUMA node, a round robin resource allocation
-// scheme is used to choose the next device for that node.  See attachInfoCache
-// "loadBalance()" for details.
-//
 // The agent caches the local device data and all possible responses the first
 // time this dRPC is invoked. Subsequent calls receive the cached data.
 // The use of cached data may be disabled by exporting
@@ -111,7 +105,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		}
 	}
 
-	if mod.aiCache.enabled.IsTrue() && mod.aiCache.initialized.IsTrue() {
+	if mod.aiCache.isCached() {
 		return mod.aiCache.getResponse(numaNode)
 	}
 

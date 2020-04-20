@@ -181,7 +181,7 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 		return err
 	}
 
-	enabled := atm.NewBool(!(os.Getenv("DAOS_AGENT_DISABLE_CACHE") == "true"))
+	enabled := atm.NewBool(os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
 	if enabled.IsFalse() {
 		log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}

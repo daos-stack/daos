@@ -49,10 +49,10 @@ type attachInfoCache struct {
 	// is the cache initialized?
 	initialized atm.Bool
 	// maps NUMA affinity and device index to a response
-	resmgmtpb map[int]map[int][]byte
+	numaDeviceResp map[int]map[int][]byte
 	// maps NUMA affinity to a device index
-	devIdx map[int]int
-	mutex  sync.Mutex
+	currentNumaDevIdx map[int]int
+	mutex             sync.Mutex
 }
 
 // loadBalance is a simple round-robin load balancing scheme
@@ -61,10 +61,9 @@ type attachInfoCache struct {
 // to choose from.  Returns the index of the device to use.
 func (aic *attachInfoCache) loadBalance(numaNode int) int {
 	aic.mutex.Lock()
-	numDevs := len(aic.resmgmtpb[numaNode])
-	// keep the deviceIndex in range of the current resmgmtpb map
-	deviceIndex := aic.devIdx[numaNode] % numDevs
-	aic.devIdx[numaNode] = (deviceIndex + 1) % numDevs
+	numDevs := len(aic.numaDeviceResp[numaNode])
+	deviceIndex := aic.currentNumaDevIdx[numaNode]
+	aic.currentNumaDevIdx[numaNode] = (deviceIndex + 1) % numDevs
 	aic.mutex.Unlock()
 	return deviceIndex
 }
@@ -73,12 +72,16 @@ func (aic *attachInfoCache) getResponse(numaNode int) ([]byte, error) {
 	deviceIndex := aic.loadBalance(numaNode)
 	aic.mutex.Lock()
 	defer aic.mutex.Unlock()
-	resmgmtpb, ok := aic.resmgmtpb[numaNode][deviceIndex]
+	numaDeviceResp, ok := aic.numaDeviceResp[numaNode][deviceIndex]
 	if !ok {
 		return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, deviceIndex)
 	}
 	aic.log.Debugf("Retrieved response for NUMA %d with device index %d\n", numaNode, deviceIndex)
-	return resmgmtpb, nil
+	return numaDeviceResp, nil
+}
+
+func (aic *attachInfoCache) isCached() bool {
+	return aic.enabled.IsTrue() && aic.initialized.IsTrue()
 }
 
 // initResponseCache generates a unique dRPC response corresponding to each device specified
@@ -92,12 +95,12 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 	}
 
 	// Make a new map each time the cache is initialized
-	aic.resmgmtpb = make(map[int]map[int][]byte)
+	aic.numaDeviceResp = make(map[int]map[int][]byte)
 
 	// Make a new map just once.
 	// Preserve any previous device index map in order to maintain ability to load balance
-	if len(aic.devIdx) == 0 {
-		aic.devIdx = make(map[int]int)
+	if len(aic.currentNumaDevIdx) == 0 {
+		aic.currentNumaDevIdx = make(map[int]int)
 	}
 
 	netdetect.SetLogger(aic.log)
@@ -120,20 +123,20 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 		}
 		numa := int(fs.NUMANode)
 
-		resmgmtpb, err := proto.Marshal(resp)
+		numaDeviceResp, err := proto.Marshal(resp)
 		if err != nil {
 			return drpc.MarshalingFailure()
 		}
 
-		if _, ok := aic.resmgmtpb[numa]; !ok {
-			aic.resmgmtpb[numa] = make(map[int][]byte)
+		if _, ok := aic.numaDeviceResp[numa]; !ok {
+			aic.numaDeviceResp[numa] = make(map[int][]byte)
 		}
-		aic.resmgmtpb[numa][len(aic.resmgmtpb[numa])] = resmgmtpb
-		aic.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, numa, len(aic.resmgmtpb[numa])-1)
+		aic.numaDeviceResp[numa][len(aic.numaDeviceResp[numa])] = numaDeviceResp
+		aic.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, numa, len(aic.numaDeviceResp[numa])-1)
 	}
 
 	// If there are any entries in the cache and caching is enabled, the cache is 'initialized'
-	if len(aic.resmgmtpb) > 0 && aic.enabled.IsTrue() {
+	if len(aic.numaDeviceResp) > 0 && aic.enabled.IsTrue() {
 		aic.initialized.SetTrue()
 	}
 
