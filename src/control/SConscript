@@ -149,14 +149,12 @@ def scons():
 
     prereqs.require(denv, 'ofi', 'hwloc')
 
-    cgolibdirs = denv.subst("-L$BUILD_DIR/src/cart/src/gurt "
-                            "-L$PREFIX/lib64 "
-                            "-L$OFI_PREFIX/lib "
-                            "$_RPATH")
-    denv.AppendENVPath("CGO_LDFLAGS", cgolibdirs, sep=" ")
+    denv.AppendENVPath("CGO_LDFLAGS",
+                       denv.subst("$_LIBDIRFLAGS "
+                                  "$_RPATH"),
+                       sep=" ")
 
-    denv.AppendENVPath("CGO_CFLAGS", "-I%s " % cartpath +
-                       denv.subst("-I$OFI_PREFIX/include"),
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
                        sep=" ")
 
     agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
