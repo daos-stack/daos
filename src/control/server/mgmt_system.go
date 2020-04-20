@@ -258,7 +258,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 		signal = syscall.SIGKILL
 	}
 
-	ctx, cancel := context.WithTimeout(parent, ioserverShutdownTimeout)
+	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
 	defer cancel()
 
 	stopErrs, err := svc.harness.StopInstances(ctx, signal, rankList...)
@@ -392,7 +392,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	// select until instances start or timeout occurs (at which point get results of each instance)
 	go func() {
 		for {
-			if len(svc.harness.StartedRanks()) != len(svc.harness.instances) {
+			if len(svc.harness.ReadyRanks()) != len(svc.harness.instances) {
 				time.Sleep(instanceUpdateDelay)
 				continue
 			}
@@ -403,7 +403,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 
 	select {
 	case <-started:
-	case <-time.After(svc.harness.rankReqTimeout):
+	case <-time.After(svc.harness.rankStartTimeout):
 	}
 
 	results, err := svc.getStartedResults(system.RanksFromUint32(req.GetRanks()),

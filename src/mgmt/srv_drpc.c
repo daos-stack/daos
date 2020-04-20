@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -563,6 +563,69 @@ out:
 	}
 
 	mgmt__pool_destroy_req__free_unpacked(req, NULL);
+}
+
+void
+ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolReintegrateReq	*req = NULL;
+	Mgmt__PoolReintegrateResp	resp;
+	uuid_t				uuid;
+	struct pool_target_id_list	reint_list;
+	uint32_t			reint_rank;
+	uint8_t				*body;
+	size_t				len;
+	int				rc, i;
+
+	mgmt__pool_reintegrate_resp__init(&resp);
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_reintegrate_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (Reintegrate target)\n");
+		return;
+	}
+
+	rc = uuid_parse(req->uuid, uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
+			DP_RC(rc));
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rc = pool_target_id_list_alloc(req->n_targetidx, &reint_list);
+	if (rc)
+		D_GOTO(out, rc);
+
+	reint_rank = req->rank;
+	for (i = 0; i < req->n_targetidx; ++i)
+		reint_list.pti_ids[i].pti_id = req->targetidx[i];
+
+	rc = ds_mgmt_pool_reintegrate(uuid, reint_rank, &reint_list);
+	if (rc != 0) {
+		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", req->uuid,
+			DP_RC(rc));
+	}
+
+	pool_target_id_list_free(&reint_list);
+out:
+	resp.status = rc;
+	len = mgmt__pool_reintegrate_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_reintegrate_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_reintegrate_req__free_unpacked(req, NULL);
 }
 
 void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)

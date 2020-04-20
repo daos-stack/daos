@@ -38,7 +38,14 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/system"
+	. "github.com/daos-stack/daos/src/control/system"
+)
+
+const (
+	// test aliases for member states
+	msStarted = uint32(MemberStateStarted)
+	msStopped = uint32(MemberStateStopped)
+	msErrored = uint32(MemberStateErrored)
 )
 
 func TestMgmtSvc_LeaderQuery(t *testing.T) {
@@ -107,40 +114,38 @@ func TestMgmtSvc_LeaderQuery(t *testing.T) {
 }
 
 func TestMgmtSvc_DrespToRankResult(t *testing.T) {
-	dRank := system.Rank(1)
-	dStateGood := system.MemberStateStarted
-	dStateBad := system.MemberStateErrored
+	dRank := Rank(1)
 
 	for name, tc := range map[string]struct {
 		daosResp    *mgmtpb.DaosResp
 		inErr       error
-		targetState system.MemberState
+		targetState MemberState
 		junkRPC     bool
 		expResult   *mgmtpb.RanksResp_RankResult
 	}{
 		"rank success": {
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateGood),
+				Rank: dRank.Uint32(), Action: "test", State: msStarted,
 			},
 		},
 		"rank failure": {
 			daosResp: &mgmtpb.DaosResp{Status: -1},
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateBad), Errored: true,
+				Rank: dRank.Uint32(), Action: "test", State: msErrored, Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC returned DER -1", dRank),
 			},
 		},
 		"drpc failure": {
 			inErr: errors.New("returned from CallDrpc"),
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateBad), Errored: true,
+				Rank: dRank.Uint32(), Action: "test", State: msErrored, Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC failed: returned from CallDrpc", dRank),
 			},
 		},
 		"unmarshal failure": {
 			junkRPC: true,
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateBad), Errored: true,
+				Rank: dRank.Uint32(), Action: "test", State: msErrored, Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed: proto: mgmt.DaosResp: illegal tag 0 (wire type 0)", dRank),
 			},
 		},
@@ -152,8 +157,8 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 			if tc.daosResp == nil {
 				tc.daosResp = &mgmtpb.DaosResp{Status: 0}
 			}
-			if tc.targetState == system.MemberStateUnknown {
-				tc.targetState = dStateGood
+			if tc.targetState == MemberStateUnknown {
+				tc.targetState = MemberStateStarted
 			}
 
 			// convert input DaosResp to drpcResponse to test
@@ -166,7 +171,7 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 				Body:   rb,
 			}
 
-			gotResult := drespToRankResult(system.Rank(dRank), "test", resp, tc.inErr, tc.targetState)
+			gotResult := drespToRankResult(Rank(dRank), "test", resp, tc.inErr, tc.targetState)
 			if diff := cmp.Diff(tc.expResult, gotResult, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
@@ -199,8 +204,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			instancesStopped: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "prep shutdown", State: 3},
-					{Rank: 2, Action: "prep shutdown", State: 3},
+					{Rank: 1, Action: "prep shutdown", State: msStopped},
+					{Rank: 2, Action: "prep shutdown", State: msStopped},
 				},
 			},
 		},
@@ -213,8 +218,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "prep shutdown", State: 5, Errored: true},
-					{Rank: 2, Action: "prep shutdown", State: 5, Errored: true},
+					{Rank: 1, Action: "prep shutdown", State: msErrored, Errored: true},
+					{Rank: 2, Action: "prep shutdown", State: msErrored, Errored: true},
 				},
 			},
 		},
@@ -223,8 +228,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			junkResp: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "prep shutdown", State: 5, Errored: true},
-					{Rank: 2, Action: "prep shutdown", State: 5, Errored: true},
+					{Rank: 1, Action: "prep shutdown", State: msErrored, Errored: true},
+					{Rank: 2, Action: "prep shutdown", State: msErrored, Errored: true},
 				},
 			},
 		},
@@ -236,8 +241,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "prep shutdown", State: 5, Errored: true},
-					{Rank: 2, Action: "prep shutdown", State: 5, Errored: true},
+					{Rank: 1, Action: "prep shutdown", State: msErrored, Errored: true},
+					{Rank: 2, Action: "prep shutdown", State: msErrored, Errored: true},
 				},
 			},
 		},
@@ -249,8 +254,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "prep shutdown", State: 2},
-					{Rank: 2, Action: "prep shutdown", State: 2},
+					{Rank: 1, Action: "prep shutdown", State: uint32(MemberStateStopping)},
+					{Rank: 2, Action: "prep shutdown", State: uint32(MemberStateStopping)},
 				},
 			},
 		},
@@ -274,8 +279,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				srv._superblock.Rank = new(Rank)
+				*srv._superblock.Rank = Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -346,8 +351,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "stop", State: 1, Errored: true},
-					{Rank: 2, Action: "stop", State: 1, Errored: true},
+					{Rank: 1, Action: "stop", State: msStarted, Errored: true},
+					{Rank: 2, Action: "stop", State: msStarted, Errored: true},
 				},
 			},
 		},
@@ -356,8 +361,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 			junkResp: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "stop", State: 1, Errored: true},
-					{Rank: 2, Action: "stop", State: 1, Errored: true},
+					{Rank: 1, Action: "stop", State: msStarted, Errored: true},
+					{Rank: 2, Action: "stop", State: msStarted, Errored: true},
 				},
 			},
 		},
@@ -369,8 +374,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "stop", State: 1, Errored: true},
-					{Rank: 2, Action: "stop", State: 1, Errored: true},
+					{Rank: 1, Action: "stop", State: msStarted, Errored: true},
+					{Rank: 2, Action: "stop", State: msStarted, Errored: true},
 				},
 			},
 		},
@@ -382,8 +387,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "stop", State: 1, Errored: true},
-					{Rank: 2, Action: "stop", State: 1, Errored: true},
+					{Rank: 1, Action: "stop", State: msStarted, Errored: true},
+					{Rank: 2, Action: "stop", State: msStarted, Errored: true},
 				},
 			},
 		},
@@ -396,8 +401,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "stop", State: 3},
-					{Rank: 2, Action: "stop", State: 3},
+					{Rank: 1, Action: "stop", State: msStopped},
+					{Rank: 2, Action: "stop", State: msStopped},
 				},
 			},
 		},
@@ -421,8 +426,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				srv._superblock.Rank = new(Rank)
+				*srv._superblock.Rank = Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -490,8 +495,8 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 			instancesStopped: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "ping", State: 3},
-					{Rank: 2, Action: "ping", State: 3},
+					{Rank: 1, Action: "ping", State: msStopped},
+					{Rank: 2, Action: "ping", State: msStopped},
 				},
 			},
 		},
@@ -504,8 +509,8 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "ping", State: 5, Errored: true},
-					{Rank: 2, Action: "ping", State: 5, Errored: true},
+					{Rank: 1, Action: "ping", State: msErrored, Errored: true},
+					{Rank: 2, Action: "ping", State: msErrored, Errored: true},
 				},
 			},
 		},
@@ -514,8 +519,8 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 			junkResp: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "ping", State: 5, Errored: true},
-					{Rank: 2, Action: "ping", State: 5, Errored: true},
+					{Rank: 1, Action: "ping", State: msErrored, Errored: true},
+					{Rank: 2, Action: "ping", State: msErrored, Errored: true},
 				},
 			},
 		},
@@ -527,8 +532,8 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "ping", State: 5, Errored: true},
-					{Rank: 2, Action: "ping", State: 5, Errored: true},
+					{Rank: 1, Action: "ping", State: msErrored, Errored: true},
+					{Rank: 2, Action: "ping", State: msErrored, Errored: true},
 				},
 			},
 		},
@@ -540,8 +545,8 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "ping", State: 1},
-					{Rank: 2, Action: "ping", State: 1},
+					{Rank: 1, Action: "ping", State: msStarted},
+					{Rank: 2, Action: "ping", State: msStarted},
 				},
 			},
 		},
@@ -554,8 +559,8 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "ping", State: 6, Errored: true},
-					{Rank: 2, Action: "ping", State: 6, Errored: true},
+					{Rank: 1, Action: "ping", State: uint32(MemberStateUnresponsive), Errored: true},
+					{Rank: 2, Action: "ping", State: uint32(MemberStateUnresponsive), Errored: true},
 				},
 			},
 		},
@@ -579,8 +584,8 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				srv._superblock.Rank = new(Rank)
+				*srv._superblock.Rank = Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -646,7 +651,7 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 		"instances started": {
 			req: &mgmtpb.RanksReq{},
 			expErr: FaultInstancesNotStopped(
-				[]*system.Rank{system.NewRankPtr(1), system.NewRankPtr(2)}),
+				[]*Rank{NewRankPtr(1), NewRankPtr(2)}),
 		},
 		"instances stopped": { // unsuccessful result for kill
 			req:              &mgmtpb.RanksReq{},
@@ -654,11 +659,11 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
 					{
-						Rank: 1, Action: "start", State: 3,
+						Rank: 1, Action: "start", State: msStopped,
 						Errored: true, Msg: "want Started, got Stopped",
 					},
 					{
-						Rank: 2, Action: "start", State: 3,
+						Rank: 2, Action: "start", State: msStopped,
 						Errored: true, Msg: "want Started, got Stopped",
 					},
 				},
@@ -688,8 +693,8 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				srv._superblock.Rank = new(Rank)
+				*srv._superblock.Rank = Rank(i + 1)
 
 				srv.ready.SetTrue()
 			}

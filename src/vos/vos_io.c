@@ -999,7 +999,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
-	rc = evt_insert(toh, &ent);
+	rc = evt_insert(toh, &ent, NULL);
 
 	return rc;
 }
@@ -1601,7 +1601,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	 * read conflict
 	 */
 	if (ioc->ic_read_conflict) {
-		err = -DER_AGAIN;
+		err = -DER_TX_RESTART;
 		goto abort;
 	}
 
