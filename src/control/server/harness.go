@@ -68,6 +68,11 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	}
 }
 
+// IsStarted indicates whether the IOServerHarness is in a running state.
+func (h *IOServerHarness) IsStarted() bool {
+	return h.started.Load()
+}
+
 // Instances safely returns harness' IOServerInstances.
 func (h *IOServerHarness) Instances() []*IOServerInstance {
 	h.RLock()
@@ -176,12 +181,12 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 	}
 	resChan := make(chan rankRes, len(instances))
 	stopping := 0
-	for _, instance := range instances {
-		if !instance.IsStarted() {
+	for _, srv := range instances {
+		if !srv.IsStarted() {
 			continue
 		}
 
-		rank, err := instance.GetRank()
+		rank, err := srv.GetRank()
 		if err != nil {
 			return nil, err
 		}
@@ -191,14 +196,14 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 			continue // filtered out, no result expected
 		}
 
-		go func(i *IOServerInstance) {
-			err := i.Stop(signal)
+		go func(s *IOServerInstance) {
+			err := s.Stop(signal)
 
 			select {
 			case <-ctx.Done():
 			case resChan <- rankRes{rank: rank, err: err}:
 			}
-		}(instance)
+		}(srv)
 		stopping++
 	}
 
@@ -223,136 +228,6 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 	}
 }
 
-// waitInstancesReady awaits ready signal from I/O server before starting
-// management service on MS replicas immediately so other instances can join.
-// I/O server modules are then loaded.
-func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
-	h.log.Debug("waiting for instances to start-up")
-	for _, instance := range h.Instances() {
-		select {
-		case <-ctx.Done(): // harness exit
-			return ctx.Err()
-		case instanceErr := <-h.errChan:
-			h.log.Errorf("instance %d exited prematurely", instance.Index())
-			// TODO: Restart failed instances on unexpected exit.
-			if instanceErr.Err != nil {
-				return instanceErr.Err
-			}
-		case ready := <-instance.AwaitDrpcReady():
-			if err := instance.FinishStartup(ctx, ready); err != nil {
-				return err
-			}
-		}
-	}
-
-	if len(h.ReadyRanks()) == 0 {
-		return errors.New("no instances made it to the ready state")
-	}
-
-	return nil
-}
-
-// monitor listens for exit results from instances or harness and will
-// return only when all harness instances are stopped and restart
-// signal is received.
-func (h *IOServerHarness) monitor(ctx context.Context) error {
-	h.log.Debug("monitoring instances")
-	for {
-		select {
-		case <-ctx.Done(): // harness exit
-			return ctx.Err()
-		case instanceErr := <-h.errChan: // instance exit
-			// TODO: Restart failed instances on unexpected exit.
-			msg := fmt.Sprintf("instance %d exited: %s",
-				instanceErr.Idx, instanceErr.Err.Error())
-			if len(h.StartedRanks()) == 0 {
-				msg += ", all instances stopped!"
-			}
-			h.log.Info(msg)
-
-			for _, instance := range h.Instances() {
-				if instance.Index() != instanceErr.Idx {
-					continue
-				}
-
-				instance._lastErr = instanceErr.Err
-				if err := instance.RemoveSocket(); err != nil {
-					h.log.Errorf("removing socket file: %s", err)
-				}
-			}
-		case <-h.restart: // harness to restart instances
-			return nil
-		}
-	}
-}
-
-// Start starts all configured instances, waits for them to be ready and then
-// loops monitoring instance exit, harness exit and harness restart signals.
-func (h *IOServerHarness) Start(parentCtx context.Context, membership *system.Membership, cfg *Configuration) error {
-	if h.IsStarted() {
-		return errors.New("can't start: harness already started")
-	}
-
-	// Now we want to block any RPCs that might try to mess with storage
-	// (format, firmware update, etc) before attempting to start I/O servers
-	// which are using the storage.
-	h.started.SetTrue()
-	defer h.started.SetFalse()
-
-	ctx, shutdown := context.WithCancel(parent)
-	defer shutdown()
-
-	if cfg != nil {
-		// Single daos_server dRPC server to handle all iosrv requests
-		if err := drpcServerSetup(ctx, h.log, cfg.SocketDir, h.Instances(),
-			cfg.TransportConfig); err != nil {
-
-			return errors.WithMessage(err, "dRPC server setup")
-		}
-		defer func() {
-			if err := drpcCleanup(cfg.SocketDir); err != nil {
-				h.log.Errorf("error during dRPC cleanup: %s", err)
-			}
-		}()
-	}
-
-	for _, i := range h.Instances() {
-		if startErr := i.Start(ctx, membership, cfg); startErr != nil {
-			return errors.WithMessagef(startErr, "starting instance %d", i.Index())
-		}
-	}
-
-	<-ctx.Done()
-	return ctx.Err()
-}
-
-func (srv *IOServerInstance) Start(ctx context.Context, membership *system.Membership, cfg *Configuration) startErr {
-	// Spawn instance processing loops and listen for exit.
-	go func(errChan chan InstanceError) {
-		if err := i.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
-			errChan <- InstanceError{
-				Idx: i.Index(), Err: err,
-			}
-		}
-		if err := i.CreateSuperblocks(cfg.RecreateSuperblocks); err != nil {
-			errChan <- InstanceError{
-				Idx: i.Index(), Err: err,
-			}
-		}
-	}(h.errChan)
-
-	for {
-		if err := h.startInstances(ctx, membership); err != nil {
-			return err
-		}
-		if err := h.waitInstancesReady(ctx); err != nil {
-			return err
-		}
-		if err := h.monitor(ctx); err != nil {
-			return err
-		}
-	}
-}
 // RestartInstances will signal the harness to start configured instances once
 // stopped.
 func (h *IOServerHarness) RestartInstances() error {
@@ -391,11 +266,6 @@ func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
 	}
 
 	return mi, nil
-}
-
-// IsStarted indicates whether the IOServerHarness is in a running state.
-func (h *IOServerHarness) IsStarted() bool {
-	return h.started.Load()
 }
 
 // StartedRanks returns rank assignment of configured harness instances that are

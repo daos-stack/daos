@@ -31,6 +31,7 @@ import (
 
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // IOServerRunner defines an interface for starting and stopping the
@@ -48,7 +49,18 @@ func (srv *IOServerInstance) IsStarted() bool {
 	return srv.runner.IsRunning()
 }
 
-// Start checks to make sure that the instance has a valid superblock before
+func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
+	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
+		return
+	}
+	if err = srv.createSuperblock(recreateSBs); err != nil {
+		return
+	}
+
+	return
+}
+
+// start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
 func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) error {
@@ -65,28 +77,39 @@ func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) er
 	}
 
 	if err := srv.logScmStorage(); err != nil {
-		srv.log.Errorf("unable to log SCM storage stats: %s", err)
+		srv.log.Errorf("instance %d: unable to log SCM storage stats: %s", srv.Index(), err)
 	}
 
 	return srv.runner.Start(ctx, errChan)
 }
 
-// Stop sends signal to stop IOServerInstance runner (but doesn't wait for
-// process to exit).
-func (srv *IOServerInstance) Stop(signal os.Signal) error {
-	if err := srv.runner.Signal(signal); err != nil {
-		return err
+// waitReady awaits ready signal from I/O server before starting
+// management service on MS replicas immediately so other instances can join.
+// I/O server modules are then loaded.
+func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) error {
+	srv.log.Debugf("waiting for instance %d to start-up", srv.Index())
+
+	select {
+	case <-ctx.Done(): // propagated harness exit
+		return ctx.Err()
+	case err := <-errChan:
+		// TODO: Restart failed instances on unexpected exit.
+		return errors.Wrapf(err, "instance %d exited prematurely", srv.Index())
+	case ready := <-srv.AwaitDrpcReady():
+		if err := srv.finishStartup(ctx, ready); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-// FinishStartup sets up instance once dRPC comms are ready, this includes
+// finishStartup sets up instance once dRPC comms are ready, this includes
 // setting the instance rank, starting management service and loading IO server
 // modules.
 //
 // Instance ready state is set to indicate that all setup is complete.
-func (srv *IOServerInstance) FinishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	if err := srv.SetRank(ctx, ready); err != nil {
 		return err
 	}
@@ -105,6 +128,65 @@ func (srv *IOServerInstance) FinishStartup(ctx context.Context, ready *srvpb.Not
 	}
 
 	srv.ready.SetTrue()
+
+	return nil
+}
+
+func (srv *IOServerInstance) exit(exitErr error) {
+	srv.log.Infof("instance %d exited: %s", srv.Index(), exitErr)
+
+	srv._lastErr = exitErr
+	if err := srv.RemoveSocket(); err != nil {
+		srv.log.Errorf("removing socket file: %s", err)
+	}
+}
+
+func (srv *IOServerInstance) run(ctx context.Context, errOut chan error, membership *system.Membership, recreateSBs bool) (err error) {
+	if err = srv.format(ctx, recreateSBs); err != nil {
+		return
+	}
+
+	if err = srv.start(ctx, errOut); err != nil {
+		return
+	}
+	if srv.IsMSReplica() {
+		// MS bootstrap will not join so register manually
+		if err := srv.registerMember(membership); err != nil {
+			return err
+		}
+	}
+	srv.waitDrpc.SetTrue()
+
+	if err = srv.waitReady(ctx, errOut); err != nil {
+		return
+	}
+
+	return
+}
+
+// Start is the main processing loop for an IOServerInstance.
+func (srv *IOServerInstance) Start(parent context.Context, membership *system.Membership, cfg *Configuration) {
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+
+	errChan := make(chan error)
+
+	// spawn instance processing loops and listen for exit
+	go func(ctxIn context.Context) {
+		errChan <- srv.run(ctxIn, errChan, membership, cfg.RecreateSuperblocks)
+	}(ctx)
+
+	// error will either be received from instance runner or one of the
+	// setup routines in run()
+	srv.exit(<-errChan)
+}
+
+// Stop sends signal to stop IOServerInstance runner (but doesn't wait for
+// process to exit).
+func (srv *IOServerInstance) Stop(signal os.Signal) error {
+	if err := srv.runner.Signal(signal); err != nil {
+		return err
+	}
 
 	return nil
 }
