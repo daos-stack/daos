@@ -33,13 +33,13 @@
 
 
 /*
- * These ops determine whether extra information is calculated during 
+ * These ops determine whether extra information is calculated during
  * placement.
  *
  * PL_PLACE_EXTENDED calculates an extended layout for use when there
  * is a reintegration operation currently ongoing.
  *
- * PL_REINT calculates the post-reintegration layout for use during 
+ * PL_REINT calculates the post-reintegration layout for use during
  * reintegration, it treats the UP status targets as UP_IN.
  *
  * Currently the other OP types calculate a normal layout without extra info.
