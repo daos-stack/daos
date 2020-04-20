@@ -62,8 +62,8 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	}
 }
 
-// IsStarted indicates whether the IOServerHarness is in a running state.
-func (h *IOServerHarness) IsStarted() bool {
+// isStarted indicates whether the IOServerHarness is in a running state.
+func (h *IOServerHarness) isStarted() bool {
 	return h.started.Load()
 }
 
@@ -76,7 +76,7 @@ func (h *IOServerHarness) Instances() []*IOServerInstance {
 
 // AddInstance adds a new IOServer instance to be managed.
 func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
-	if h.IsStarted() {
+	if h.isStarted() {
 		return errors.New("can't add instance to already-started harness")
 	}
 
@@ -91,7 +91,7 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 // GetMSLeaderInstance returns a managed IO Server instance to be used as a
 // management target and fails if selected instance is not MS Leader.
 func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
-	if !h.IsStarted() {
+	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
 	}
 
@@ -118,7 +118,7 @@ func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 //
 // Run until harness is shutdown.
 func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, cfg *Configuration) error {
-	if h.IsStarted() {
+	if h.isStarted() {
 		return errors.New("can't start: harness already started")
 	}
 
@@ -161,7 +161,7 @@ func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membersh
 // have been sent signal. Error map returned for each rank stop attempt failure.
 func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...system.Rank) (map[system.Rank]error, error) {
 	h.log.Debugf("stopping instances %v", rankList)
-	if !h.IsStarted() {
+	if !h.isStarted() {
 		return nil, nil
 	}
 	if signal == nil {
@@ -176,7 +176,7 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 	resChan := make(chan rankRes, len(instances))
 	stopping := 0
 	for _, srv := range instances {
-		if !srv.IsStarted() {
+		if !srv.isStarted() {
 			continue
 		}
 
@@ -230,7 +230,7 @@ func (h *IOServerHarness) RestartInstances() error {
 	h.RLock()
 	defer h.RUnlock()
 
-	if !h.IsStarted() {
+	if !h.isStarted() {
 		return FaultHarnessNotStarted
 	}
 

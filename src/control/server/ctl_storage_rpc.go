@@ -254,7 +254,7 @@ func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool, resp *ct
 
 	scmConfig := srv.scmConfig()
 
-	if srv.IsStarted() {
+	if srv.isStarted() {
 		return errors.Errorf("instance %d: can't format storage of running instance",
 			srvIdx)
 	}

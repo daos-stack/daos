@@ -119,7 +119,7 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 
 	idx := srv.Index()
 
-	if srv.IsStarted() {
+	if srv.isStarted() {
 		return errors.Errorf("can't wait for storage: instance %d already started", idx)
 	}
 
@@ -163,7 +163,7 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 
 // createSuperblock creates instance superblock if needed.
 func (srv *IOServerInstance) createSuperblock(recreate bool) error {
-	if srv.IsStarted() {
+	if srv.isStarted() {
 		return errors.Errorf("can't create superblock: instance %d already started", srv.Index())
 	}
 

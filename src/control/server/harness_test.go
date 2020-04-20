@@ -557,7 +557,7 @@ func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 //			waitReady := make(chan struct{})
 //			go func(ctxIn context.Context) {
 //				for {
-//					if len(harness.ReadyRanks()) == len(instances) {
+//					if len(harness.readyRanks()) == len(instances) {
 //						close(waitReady)
 //						return
 //					}
