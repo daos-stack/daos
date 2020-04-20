@@ -538,7 +538,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 		return result;
 
 	if (dlh->dlh_sub_cnt == 0) {
-		if (result == -DER_AGAIN)
+		if (result == -DER_TX_RESTART)
 			dth->dth_renew = 1;
 
 		if (daos_is_zero_dti(&dth->dth_xid))
@@ -584,7 +584,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 				DP_DTI(&dth->dth_xid));
 			return -DER_AGAIN;
 		}
-	} else if (rc == -DER_AGAIN) {
+	} else if (rc == -DER_TX_RESTART) {
 		dth->dth_renew = 1;
 	}
 
