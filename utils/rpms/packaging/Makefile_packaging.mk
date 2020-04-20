@@ -402,7 +402,8 @@ baseurl=$${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$$repo/
 enabled=1\n\
 gpgcheck=False\n" >> /etc/mock/$(CHROOT_NAME).cfg;                                          \
 	    done;                                                                           \
-	    for repo in $($(DISTRO_BASE)_LOCAL_REPOS); do           \
+	    echo $($(DISTRO_BASE)_LOCAL_REPOS); \
+	    for repo in https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local; do           \
 	        repo_name=$${repo##*://};                                                   \
 	        repo_name=$${repo_name//\//_};                                              \
 	        echo -e "[$$repo_name]\n\
