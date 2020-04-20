@@ -928,9 +928,10 @@ obj_log_csum_err(void)
 static void
 map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t byte_idx)
 {
-	map->iom_recxs[map->iom_nr].rx_idx = byte_idx / map->iom_size;
-	map->iom_recxs[map->iom_nr].rx_nr = biov->bi_data_len / map->iom_size;
-	map->iom_nr++;
+	map->iom_recxs[map->iom_nr_out].rx_idx = byte_idx / map->iom_size;
+	map->iom_recxs[map->iom_nr_out].rx_nr = biov->bi_data_len
+						/ map->iom_size;
+	map->iom_nr_out++;
 }
 
 /** create maps for actually written to extents. */
@@ -947,7 +948,6 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 	uint32_t		 iods_nr;
 	uint32_t		 i, j;
 	uint64_t		 byte_idx;
-	uint32_t		 map_recx_nr;
 
 	/**
 	 * Allocate memory for the maps. There will be 1 per iod
@@ -961,10 +961,10 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 		bsgl = bio_iod_sgl(biod, i); /** 1 bsgl per iod */
 		iod = &orw->orw_iod_array.oia_iods[i];
 		map = &maps[i];
-		map_recx_nr = bsgl->bs_nr_out - bio_sgl_holes(bsgl);
+		map->iom_nr = bsgl->bs_nr_out - bio_sgl_holes(bsgl);
 
 		/** will be freed in obj_rw_reply */
-		D_ALLOC_ARRAY(map->iom_recxs, map_recx_nr);
+		D_ALLOC_ARRAY(map->iom_recxs, map->iom_nr);
 		if (map->iom_recxs == NULL) {
 			D_FREE(maps);
 			return -DER_NOMEM;
@@ -985,7 +985,8 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 
 			byte_idx += biov->bi_data_len;
 		}
-		D_ASSERT(map_recx_nr == map->iom_nr);
+		/** allocated and used should be the same */
+		D_ASSERT(map->iom_nr == map->iom_nr_out);
 		map->iom_recx_lo = map->iom_recxs[0];
 		map->iom_recx_hi = map->iom_recxs[map->iom_nr - 1];
 	}

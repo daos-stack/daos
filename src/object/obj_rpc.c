@@ -338,11 +338,19 @@ static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
 	if (rc)
 		return rc;
 
+	rc = crt_proc_uint64_t(proc, &map->iom_size);
+	if (rc != 0)
+		return -DER_HG;
+
 	rc = crt_proc_memcpy(proc, &map->iom_type, sizeof(map->iom_type));
 	if (rc != 0)
 		return -DER_HG;
 
 	rc = crt_proc_uint32_t(proc, &map->iom_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &map->iom_nr_out);
 	if (rc != 0)
 		return -DER_HG;
 
