@@ -913,6 +913,19 @@ dtx_leader_exec_ops_ult(void *arg)
 	int			  rc = 0;
 
 	D_ASSERT(future != ABT_FUTURE_NULL);
+
+	if (dlh->dlh_sub_cnt != 0) {
+		D_ASSERTF(ult_arg->func != NULL,
+			  "func is NULL, but sub_cnt is %d\n",
+			  dlh->dlh_sub_cnt);
+		D_ASSERTF(ult_arg->func_arg != NULL,
+			  "func_arg is NULL, but sub_cnt is %d\n",
+			  dlh->dlh_sub_cnt);
+		D_ASSERTF(dlh->dlh_subs != NULL,
+			  "dlh_subs is NULL, but sub_cnt is %d\n",
+			  dlh->dlh_sub_cnt);
+	}
+
 	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
 		struct dtx_sub_status *sub = &dlh->dlh_subs[i];
 
