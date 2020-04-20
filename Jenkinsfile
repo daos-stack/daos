@@ -330,13 +330,10 @@ pipeline {
                                       description: env.STAGE_NAME,
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
-                        checkoutScm withSubmodules: true
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            sh label: env.STAGE_NAME,
-                               script: '''rm -rf artifacts/centos7/
-                                          mkdir -p artifacts/centos7/
-                                          make CHROOT_NAME="epel-7-x86_64" -C utils/rpms chrootbuild'''
-                        }
+                         sh label: env.STAGE_NAME,
+                            script: '''rm -rf artifacts/centos7/
+                                       mkdir -p artifacts/centos7/
+                                       make CHROOT_NAME="epel-7-x86_64" -C utils/rpms chrootbuild'''
                     }
                     post {
                         success {
