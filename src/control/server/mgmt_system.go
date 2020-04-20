@@ -292,7 +292,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	select {
 	case <-stopped:
 	case <-time.After(svc.harness.rankReqTimeout):
-		svc.log.Debug("deadline exceeded when waiting for instances to stop")
+		svc.log.Debug("MgmtSvc.StopRanks rank stop timeout exceeded")
 	}
 
 	results, err := svc.getStartedResults(rankList, system.MemberStateStopped, "stop", stopErrs)
@@ -398,7 +398,7 @@ func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*m
 		for {
 			success := true
 			for _, rank := range rankList {
-				if !rank.InList(svc.harness.readyRanks()) {
+				if !rank.InList(svc.harness.startedRanks()) {
 					success = false
 				}
 			}
@@ -414,6 +414,7 @@ func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*m
 	select {
 	case <-started:
 	case <-time.After(svc.harness.rankStartTimeout):
+		svc.log.Debug("MgmtSvc.StartRanks rank start timeout exceeded")
 	}
 
 	results, err := svc.getStartedResults(rankList, system.MemberStateStarted, "start", nil)
