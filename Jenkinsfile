@@ -40,12 +40,6 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-def override_implicit_checkout() {
-    checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                branch: "release/0.9",
-                withSubmodules: true
-}
-
 def daos_branch = "release/0.9"
 def test_tag = "pr"
 def arch = ""
@@ -272,15 +266,11 @@ pipeline {
                 } // stage('checkpatch')
                 stage('Python Bandit check') {
                     when {
-                        beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing*' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing*' }
-                            expression {
-                                ! commitPragma(pragma: 'Skip-python-bandit',
-                                               def_val: 'true').contains('true')
-                            }
-                        }
+                      beforeAgent true
+                      expression {
+                        ! commitPragma(pragma: 'Skip-python-bandit',
+                                def_val: 'true').contains('true')
+                      }
                     }
                     agent {
                         dockerfile {
@@ -340,7 +330,7 @@ pipeline {
                                       description: env.STAGE_NAME,
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
-                        override_implicit_checkout()
+                        checkoutScm withSubmodules: true
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/centos7/
@@ -416,7 +406,7 @@ pipeline {
                                       description: env.STAGE_NAME,
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
-                        override_implicit_checkout()
+                        checkoutScm withSubmodules: true
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/leap15/
@@ -961,7 +951,6 @@ pipeline {
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
                                                   'libipmctl-devel'
-                        override_implicit_checkout()
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
@@ -1075,12 +1064,8 @@ pipeline {
                 stage('Coverity on CentOS 7') {
                     when {
                         beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing*' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing*' }
-                            expression {
-                                ! commitPragma(pragma: 'Skip-coverity-test').contains('true')
-                            }
+                        expression {
+                            ! commitPragma(pragma: 'Skip-coverity-test').contains('true')
                         }
                     }
                     agent {
@@ -1151,7 +1136,6 @@ pipeline {
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
-                        override_implicit_checkout()
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1238,7 +1222,6 @@ pipeline {
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
-                        override_implicit_checkout()
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-small:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1343,7 +1326,6 @@ pipeline {
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
-                        override_implicit_checkout()
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-medium:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1448,7 +1430,6 @@ pipeline {
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
-                        override_implicit_checkout()
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-large:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
