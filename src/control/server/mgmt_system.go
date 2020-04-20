@@ -215,7 +215,7 @@ func (svc *mgmtSvc) getStartedResults(rankList []system.Rank, desiredState syste
 		}
 
 		state := system.MemberStateStarted
-		if !i.isReady() {
+		if !i.isStarted() {
 			state = system.MemberStateStopped
 		}
 
@@ -391,14 +391,19 @@ func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*m
 		return nil, err
 	}
 
+	// instances will update state through join or bootstrap so monitor
+	// membership state
 	started := make(chan struct{})
 	// select until instances in rank list start or timeout occurs
-	// (at which point get results of each instance)
 	go func() {
 		for {
 			success := true
 			for _, rank := range rankList {
-				if !rank.InList(svc.harness.startedRanks()) {
+				m, err := svc.membership.Get(rank)
+				if err != nil {
+					continue
+				}
+				if m.State() != system.MemberStateStarted {
 					success = false
 				}
 			}

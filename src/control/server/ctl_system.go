@@ -380,11 +380,10 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 	}
 
 	// in the case of start, don't manually update member state to "started",
-	// only to "ready". Member state will transition to "sarted" during
-	// join or bootstrap
+	// member state will transition to "sarted" during join or bootstrap
 	filteredResults := make(system.MemberResults, 0, len(results))
 	for _, r := range results {
-		if r.Errored || r.State == system.MemberStateReady {
+		if r.Errored {
 			filteredResults = append(filteredResults, r)
 		}
 	}
