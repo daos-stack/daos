@@ -49,6 +49,8 @@ func mockMember(t *testing.T, idx uint32, state MemberState) *Member {
 func TestMember_Stringify(t *testing.T) {
 	states := []MemberState{
 		MemberStateUnknown,
+		MemberStateStarting,
+		MemberStateReady,
 		MemberStateJoined,
 		MemberStateStopping,
 		MemberStateStopped,
@@ -59,7 +61,9 @@ func TestMember_Stringify(t *testing.T) {
 
 	strs := []string{
 		"Unknown",
-		"Started",
+		"Starting",
+		"Ready",
+		"Joined",
 		"Stopping",
 		"Stopped",
 		"Evicted",
