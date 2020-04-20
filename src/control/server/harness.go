@@ -266,32 +266,32 @@ func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
 	return mi, nil
 }
 
-// StartedRanks returns rank assignment of configured harness instances that are
+// startedRanks returns rank assignment of configured harness instances that are
 // in a running state. Rank assignments can be nil.
-func (h *IOServerHarness) StartedRanks() []*system.Rank {
+func (h *IOServerHarness) startedRanks() []system.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]*system.Rank, 0, maxIOServers)
-	for _, i := range h.instances {
-		if i.hasSuperblock() && i.IsStarted() {
-			ranks = append(ranks, i.getSuperblock().Rank)
+	ranks := make([]system.Rank, 0, maxIOServers)
+	for _, srv := range h.instances {
+		if srv.hasSuperblock() && srv.isStarted() {
+			ranks = append(ranks, *srv.getSuperblock().Rank)
 		}
 	}
 
 	return ranks
 }
 
-// ReadyRanks returns rank assignment of configured harness instances that are
+// readyRanks returns rank assignment of configured harness instances that are
 // in a ready state. Rank assignments can be nil.
-func (h *IOServerHarness) ReadyRanks() []*system.Rank {
+func (h *IOServerHarness) readyRanks() []system.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]*system.Rank, 0, maxIOServers)
-	for _, i := range h.instances {
-		if i.hasSuperblock() && i.isReady() {
-			ranks = append(ranks, i.getSuperblock().Rank)
+	ranks := make([]system.Rank, 0, maxIOServers)
+	for _, srv := range h.instances {
+		if srv.hasSuperblock() && srv.isReady() {
+			ranks = append(ranks, *srv.getSuperblock().Rank)
 		}
 	}
 
