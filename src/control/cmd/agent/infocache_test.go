@@ -89,7 +89,7 @@ func TestInfoCacheInit(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 
-			numDevs := len(aiCache.numaDeviceResp[tc.numaNode])
+			numDevs := len(aiCache.numaDeviceMarshResp[tc.numaNode])
 			common.AssertEqual(t, numDevs, tc.numDevs,
 				fmt.Sprintf("initResponseCache error - expected %d cached responses, got %d", tc.numDevs, numDevs))
 		})

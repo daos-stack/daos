@@ -49,7 +49,7 @@ type attachInfoCache struct {
 	// is the cache initialized?
 	initialized atm.Bool
 	// maps NUMA affinity and device index to a response
-	numaDeviceResp map[int]map[int][]byte
+	numaDeviceMarshResp map[int]map[int][]byte
 	// maps NUMA affinity to a device index
 	currentNumaDevIdx map[int]int
 	mutex             sync.Mutex
@@ -61,7 +61,7 @@ type attachInfoCache struct {
 // to choose from.  Returns the index of the device to use.
 func (aic *attachInfoCache) loadBalance(numaNode int) int {
 	aic.mutex.Lock()
-	numDevs := len(aic.numaDeviceResp[numaNode])
+	numDevs := len(aic.numaDeviceMarshResp[numaNode])
 	deviceIndex := aic.currentNumaDevIdx[numaNode]
 	aic.currentNumaDevIdx[numaNode] = (deviceIndex + 1) % numDevs
 	aic.mutex.Unlock()
@@ -72,12 +72,12 @@ func (aic *attachInfoCache) getResponse(numaNode int) ([]byte, error) {
 	deviceIndex := aic.loadBalance(numaNode)
 	aic.mutex.Lock()
 	defer aic.mutex.Unlock()
-	numaDeviceResp, ok := aic.numaDeviceResp[numaNode][deviceIndex]
+	numaDeviceMarshResp, ok := aic.numaDeviceMarshResp[numaNode][deviceIndex]
 	if !ok {
 		return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, deviceIndex)
 	}
 	aic.log.Debugf("Retrieved response for NUMA %d with device index %d\n", numaNode, deviceIndex)
-	return numaDeviceResp, nil
+	return numaDeviceMarshResp, nil
 }
 
 func (aic *attachInfoCache) isCached() bool {
@@ -95,7 +95,7 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 	}
 
 	// Make a new map each time the cache is initialized
-	aic.numaDeviceResp = make(map[int]map[int][]byte)
+	aic.numaDeviceMarshResp = make(map[int]map[int][]byte)
 
 	// Make a new map just once.
 	// Preserve any previous device index map in order to maintain ability to load balance
@@ -123,20 +123,20 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 		}
 		numa := int(fs.NUMANode)
 
-		numaDeviceResp, err := proto.Marshal(resp)
+		numaDeviceMarshResp, err := proto.Marshal(resp)
 		if err != nil {
 			return drpc.MarshalingFailure()
 		}
 
-		if _, ok := aic.numaDeviceResp[numa]; !ok {
-			aic.numaDeviceResp[numa] = make(map[int][]byte)
+		if _, ok := aic.numaDeviceMarshResp[numa]; !ok {
+			aic.numaDeviceMarshResp[numa] = make(map[int][]byte)
 		}
-		aic.numaDeviceResp[numa][len(aic.numaDeviceResp[numa])] = numaDeviceResp
-		aic.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, numa, len(aic.numaDeviceResp[numa])-1)
+		aic.numaDeviceMarshResp[numa][len(aic.numaDeviceMarshResp[numa])] = numaDeviceMarshResp
+		aic.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, numa, len(aic.numaDeviceMarshResp[numa])-1)
 	}
 
 	// If there are any entries in the cache and caching is enabled, the cache is 'initialized'
-	if len(aic.numaDeviceResp) > 0 && aic.enabled.IsTrue() {
+	if len(aic.numaDeviceMarshResp) > 0 && aic.enabled.IsTrue() {
 		aic.initialized.SetTrue()
 	}
 

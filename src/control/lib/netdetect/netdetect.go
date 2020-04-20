@@ -31,7 +31,6 @@ package netdetect
 #include <stdlib.h>
 #include <hwloc.h>
 #include <stdio.h>
-#include <numa.h>
 #include <rdma/fabric.h>
 #include <rdma/fi_domain.h>
 #include <rdma/fi_endpoint.h>
@@ -137,7 +136,6 @@ func (da *DeviceAffinity) String() string {
 func initLib(flags int) (C.hwloc_topology_t, error) {
 	var topology C.hwloc_topology_t
 	var hwlocFlags C.ulong
-
 	status := C.hwloc_topology_init(&topology)
 	if status != 0 {
 		return nil, errors.Errorf("hwloc_topology_init failure: %v", status)
