@@ -104,31 +104,6 @@ func (tc *testConn) ClearConns() client.ResultMap {
 	return nil
 }
 
-func (tc *testConn) PoolReintegrate(req *client.PoolReintegrateReq) error {
-	tc.appendInvocation(fmt.Sprintf("PoolReintegrate-%+v", req))
-	return nil
-}
-
-func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
-	return &client.PoolGetACLResp{}, nil
-}
-
-func (tc *testConn) PoolOverwriteACL(req client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolOverwriteACL-%+v", req))
-	return &client.PoolOverwriteACLResp{ACL: req.ACL}, nil
-}
-
-func (tc *testConn) PoolUpdateACL(req client.PoolUpdateACLReq) (*client.PoolUpdateACLResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolUpdateACL-%+v", req))
-	return &client.PoolUpdateACLResp{ACL: req.ACL}, nil
-}
-
-func (tc *testConn) PoolDeleteACL(req client.PoolDeleteACLReq) (*client.PoolDeleteACLResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolDeleteACL-%+v", req))
-	return &client.PoolDeleteACLResp{}, nil
-}
-
 func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {
 	tc.appendInvocation(fmt.Sprintf("BioHealthQuery-%s", req))
 	return nil
@@ -156,16 +131,6 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
-}
-
-func (tc *testConn) NetworkListProviders() client.ResultMap {
-	tc.appendInvocation("NetworkListProviders")
-	return nil
-}
-
-func (tc *testConn) NetworkScanDevices(searchProvider string) client.NetworkScanResultMap {
-	tc.appendInvocation(fmt.Sprintf("NetworkScanDevices-%s", searchProvider))
-	return nil
 }
 
 func testExpectedError(t *testing.T, expected, actual error) {
@@ -259,6 +224,11 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.LeaderQueryResp{})
 	case *control.ListPoolsReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ListPoolsResp{})
+	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
+		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
+	case *control.PoolReintegrateReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
 	}
 
 	return resp, nil

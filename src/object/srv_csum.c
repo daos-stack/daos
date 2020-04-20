@@ -507,7 +507,7 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		ci_insert(&iod_csums->ic_data[0], 0,
 			   biov_csums[0].cs_csum, biov_csums[0].cs_len);
 		if (biov_csums_used != NULL)
-			(*biov_csums_used)++;
+			(*biov_csums_used) = 1;
 		return 0;
 	}
 

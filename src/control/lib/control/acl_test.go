@@ -70,7 +70,7 @@ func (r *mockErrorReader) Read(p []byte) (n int, err error) {
 	return 1, errors.New(r.errorMsg)
 }
 
-func TestReadACLFile_FileOpenFailed(t *testing.T) {
+func TestControl_ReadACLFile_FileOpenFailed(t *testing.T) {
 	result, err := ReadACLFile("/some/fake/path/badfile.txt")
 
 	if result != nil {
@@ -95,7 +95,7 @@ func createTestFile(t *testing.T, filePath string, content string) {
 	}
 }
 
-func TestReadACLFile_Success(t *testing.T) {
+func TestControl_ReadACLFile_Success(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "testACLFile.txt")
 	createTestFile(t, path, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
 	defer os.Remove(path)
@@ -132,7 +132,7 @@ func TestReadACLFile_Empty(t *testing.T) {
 	common.ExpectError(t, err, fmt.Sprintf("ACL file '%s' contains no entries", path), "unexpected error")
 }
 
-func TestParseACL_EmptyFile(t *testing.T) {
+func TestControl_ParseACL_EmptyFile(t *testing.T) {
 	mockFile := &mockReader{}
 
 	result, err := ParseACL(mockFile)
@@ -150,7 +150,7 @@ func TestParseACL_EmptyFile(t *testing.T) {
 	}
 }
 
-func TestParseACL_OneValidACE(t *testing.T) {
+func TestControl_ParseACL_OneValidACE(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
 	expectedACL := &AccessControlList{Entries: []string{expectedACE}}
 	mockFile := &mockReader{
@@ -172,7 +172,7 @@ func TestParseACL_OneValidACE(t *testing.T) {
 	}
 }
 
-func TestParseACL_WhitespaceExcluded(t *testing.T) {
+func TestControl_ParseACL_WhitespaceExcluded(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
 	expectedACL := &AccessControlList{Entries: []string{expectedACE}}
 	mockFile := &mockReader{
@@ -194,7 +194,7 @@ func TestParseACL_WhitespaceExcluded(t *testing.T) {
 	}
 }
 
-func TestParseACL_MultiValidACE(t *testing.T) {
+func TestControl_ParseACL_MultiValidACE(t *testing.T) {
 	expectedACEs := []string{
 		"A:g:GROUP@:r",
 		"A::OWNER@:rw",
@@ -225,7 +225,7 @@ func TestParseACL_MultiValidACE(t *testing.T) {
 	}
 }
 
-func TestParseACL_ErrorReadingFile(t *testing.T) {
+func TestControl_ParseACL_ErrorReadingFile(t *testing.T) {
 	expectedError := "mockErrorReader error"
 	mockFile := &mockErrorReader{
 		errorMsg: expectedError,
@@ -247,7 +247,7 @@ func TestParseACL_ErrorReadingFile(t *testing.T) {
 	}
 }
 
-func TestParseACL_MultiValidACEWithComment(t *testing.T) {
+func TestControl_ParseACL_MultiValidACEWithComment(t *testing.T) {
 	expectedACEs := []string{
 		"A:g:readers@:r",
 		"L:f:baduser@:rw",
@@ -282,7 +282,7 @@ func TestParseACL_MultiValidACEWithComment(t *testing.T) {
 	}
 }
 
-func TestFormatACL(t *testing.T) {
+func TestControl_FormatACL(t *testing.T) {
 	for name, tc := range map[string]struct {
 		acl     *AccessControlList
 		verbose bool
@@ -365,7 +365,7 @@ func TestFormatACL(t *testing.T) {
 	}
 }
 
-func TestFormatACLDefault(t *testing.T) {
+func TestControl_FormatACLDefault(t *testing.T) {
 	acl := &AccessControlList{
 		Entries: []string{
 			"A::OWNER@:rw",
@@ -382,7 +382,7 @@ func TestFormatACLDefault(t *testing.T) {
 	common.AssertEqual(t, FormatACLDefault(acl), expStr, "output didn't match non-verbose mode")
 }
 
-func TestGetVerboseACE(t *testing.T) {
+func TestControl_GetVerboseACE(t *testing.T) {
 	for name, tc := range map[string]struct {
 		shortACE string
 		expStr   string
