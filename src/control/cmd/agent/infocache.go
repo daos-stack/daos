@@ -37,7 +37,10 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const defaultNumaNode = 0
+const (
+	defaultNumaNode = 0
+	verbsProvider   = "ofi+verbs"
+)
 
 type attachInfoCache struct {
 	log logging.Logger
@@ -69,8 +72,8 @@ func (aic *attachInfoCache) loadBalance(numaNode int) int {
 func (aic *attachInfoCache) getResponse(numaNode int) ([]byte, error) {
 	deviceIndex := aic.loadBalance(numaNode)
 	aic.mutex.Lock()
+	defer aic.mutex.Unlock()
 	resmgmtpb, ok := aic.resmgmtpb[numaNode][deviceIndex]
-	aic.mutex.Unlock()
 	if !ok {
 		return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, deviceIndex)
 	}
@@ -106,7 +109,7 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 		resp.Interface = fs.DeviceName
 		// by default, the domain is the deviceName
 		resp.Domain = fs.DeviceName
-		if strings.HasPrefix(resp.Provider, "ofi+verbs") {
+		if strings.HasPrefix(resp.Provider, verbsProvider) {
 			deviceAlias, err := netdetect.GetDeviceAlias(resp.Interface)
 			if err != nil {
 				aic.log.Debugf("non-fatal error: %v. unable to determine OFI_DOMAIN for %s", err, resp.Interface)
@@ -122,8 +125,7 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 			return drpc.MarshalingFailure()
 		}
 
-		_, ok := aic.resmgmtpb[numa]
-		if !ok {
+		if _, ok := aic.resmgmtpb[numa]; !ok {
 			aic.resmgmtpb[numa] = make(map[int][]byte)
 		}
 		aic.resmgmtpb[numa][len(aic.resmgmtpb[numa])] = resmgmtpb
