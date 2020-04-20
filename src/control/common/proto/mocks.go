@@ -129,7 +129,6 @@ var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
 }
 
 type MockMgmtSvcClientConfig struct {
-	ACLRet            *common.MockACLResult
 	ListPoolsRet      *common.MockListPoolsResult
 	KillErr           error
 	PoolQueryResult   *mgmtpb.PoolQueryResp
@@ -159,6 +158,12 @@ func (m *MockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDes
 	return &mgmtpb.PoolDestroyResp{}, nil
 }
 
+func (m *MockMgmtSvcClient) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq, o ...grpc.CallOption) (*mgmtpb.PoolReintegrateResp, error) {
+	// return successful pool reintegrate results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.PoolReintegrateResp{}, nil
+}
+
 func (m *MockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq, _ ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
 	if m.Cfg.PoolQueryErr != nil {
 		return nil, m.Cfg.PoolQueryErr
@@ -175,10 +180,7 @@ func (m *MockMgmtSvcClient) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSet
 
 // returnACLResult returns the mock ACL results - either an error or an ACLResp
 func (m *MockMgmtSvcClient) returnACLResult() (*mgmtpb.ACLResp, error) {
-	if m.Cfg.ACLRet.Err != nil {
-		return nil, m.Cfg.ACLRet.Err
-	}
-	return &mgmtpb.ACLResp{ACL: m.Cfg.ACLRet.Acl, Status: m.Cfg.ACLRet.Status}, nil
+	return nil, nil
 }
 
 func (m *MockMgmtSvcClient) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {

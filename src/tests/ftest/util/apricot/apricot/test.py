@@ -182,7 +182,7 @@ class TestWithoutServers(Test):
             os.makedirs(self.tmp)
 
         # setup fault injection, this MUST be before API setup
-        fault_list = self.params.get("fault_list", '/run/faults/*/')
+        fault_list = self.params.get("fault_list", '/run/faults/*')
         if fault_list:
             # not using workdir because the huge path was messing up
             # orterun or something, could re-evaluate this later
@@ -484,6 +484,11 @@ class TestWithServers(TestWithoutServers):
                         self.server_managers[-1].runner.export.value = []
                     self.server_managers[-1].runner.export.value.extend(
                         ["PATH"])
+                if os.getenv("D_FI_CONFIG") is not None:
+                    if self.server_managers[-1].runner.export.value is None:
+                        self.server_managers[-1].runner.export.value = []
+                    self.server_managers[-1].runner.export.value.extend(
+                        ["D_FI_CONFIG"])
                 load_mpi("orterun")
                 yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
 

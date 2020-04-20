@@ -1534,14 +1534,15 @@ out:
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
-	if (rc == -DER_AGAIN) {
-		if (dlh.dlh_handle.dth_renew) {
-			/* epoch conflict, renew it and retry. */
-			orw->orw_epoch = crt_hlc_get();
-			flags &= ~ORF_RESEND;
-			memset(&dlh, 0, sizeof(dlh));
-			D_GOTO(renew, rc);
-		}
+	if (rc == -DER_TX_RESTART) {
+		D_ASSERT(dlh.dlh_handle.dth_renew);
+		/* epoch conflict, renew it and retry. */
+		orw->orw_epoch = crt_hlc_get();
+		flags &= ~ORF_RESEND;
+		memset(&dlh, 0, sizeof(dlh));
+		D_GOTO(renew, rc);
+	} else if (rc == -DER_AGAIN) {
+		D_ASSERT(!dlh.dlh_handle.dth_renew);
 
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
@@ -2156,14 +2157,15 @@ out:
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
-	if (rc == -DER_AGAIN) {
-		if (dlh.dlh_handle.dth_renew) {
-			/* epoch conflict, renew it and retry. */
-			opi->opi_epoch = crt_hlc_get();
-			flags &= ~ORF_RESEND;
-			memset(&dlh, 0, sizeof(dlh));
-			D_GOTO(renew, rc);
-		}
+	if (rc == -DER_TX_RESTART) {
+		D_ASSERT(dlh.dlh_handle.dth_renew);
+		/* epoch conflict, renew it and retry. */
+		opi->opi_epoch = crt_hlc_get();
+		flags &= ~ORF_RESEND;
+		memset(&dlh, 0, sizeof(dlh));
+		D_GOTO(renew, rc);
+	} else if (rc == -DER_AGAIN) {
+		D_ASSERT(!dlh.dlh_handle.dth_renew);
 
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
