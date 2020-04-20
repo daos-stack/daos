@@ -522,9 +522,10 @@ ilog_test_update(void **state)
 	/** Same epoch, different DTX */
 	fake_tx_reset();
 	rc = ilog_update(loh, NULL, epoch, true);
-	if (rc != -DER_AGAIN) {
+	if (rc != -DER_TX_RESTART) {
 		print_message("Epoch entry already exists.  Replacing with"
-			      " different DTX should get -DER_AGAIN: rc=%s\n",
+			      " different DTX should get -DER_TX_RESTART:"
+			      " rc=%s\n",
 			      d_errstr(rc));
 		assert(0);
 	}
