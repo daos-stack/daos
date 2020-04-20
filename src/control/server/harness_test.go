@@ -360,7 +360,7 @@ func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 //				1: system.Rank(1),
 //			},
 //			expMembers: system.Members{ // bootstrap member is added on start
-//				system.NewMember(system.Rank(0), "", defaultAddr, system.MemberStateStarted),
+//				system.NewMember(system.Rank(0), "", defaultAddr, system.MemberStateJoined),
 //			},
 //		},
 //		"fails to start": {

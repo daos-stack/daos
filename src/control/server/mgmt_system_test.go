@@ -43,7 +43,8 @@ import (
 
 const (
 	// test aliases for member states
-	msStarted = uint32(MemberStateStarted)
+	msJoined  = uint32(MemberStateJoined)
+	msReady   = uint32(MemberStateReady)
 	msStopped = uint32(MemberStateStopped)
 	msErrored = uint32(MemberStateErrored)
 )
@@ -125,7 +126,7 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 	}{
 		"rank success": {
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank.Uint32(), Action: "test", State: msStarted,
+				Rank: dRank.Uint32(), Action: "test", State: msJoined,
 			},
 		},
 		"rank failure": {
@@ -158,7 +159,7 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 				tc.daosResp = &mgmtpb.DaosResp{Status: 0}
 			}
 			if tc.targetState == MemberStateUnknown {
-				tc.targetState = MemberStateStarted
+				tc.targetState = MemberStateJoined
 			}
 
 			// convert input DaosResp to drpcResponse to test
@@ -351,8 +352,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "stop", State: msStarted, Errored: true},
-					{Rank: 2, Action: "stop", State: msStarted, Errored: true},
+					{Rank: 1, Action: "stop", State: msReady, Errored: true},
+					{Rank: 2, Action: "stop", State: msReady, Errored: true},
 				},
 			},
 		},
@@ -361,8 +362,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 			junkResp: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "stop", State: msStarted, Errored: true},
-					{Rank: 2, Action: "stop", State: msStarted, Errored: true},
+					{Rank: 1, Action: "stop", State: msReady, Errored: true},
+					{Rank: 2, Action: "stop", State: msReady, Errored: true},
 				},
 			},
 		},
@@ -374,8 +375,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "stop", State: msStarted, Errored: true},
-					{Rank: 2, Action: "stop", State: msStarted, Errored: true},
+					{Rank: 1, Action: "stop", State: msReady, Errored: true},
+					{Rank: 2, Action: "stop", State: msReady, Errored: true},
 				},
 			},
 		},
@@ -387,8 +388,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "stop", State: msStarted, Errored: true},
-					{Rank: 2, Action: "stop", State: msStarted, Errored: true},
+					{Rank: 1, Action: "stop", State: msReady, Errored: true},
+					{Rank: 2, Action: "stop", State: msReady, Errored: true},
 				},
 			},
 		},
@@ -545,8 +546,8 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "ping", State: msStarted},
-					{Rank: 2, Action: "ping", State: msStarted},
+					{Rank: 1, Action: "ping", State: msJoined},
+					{Rank: 2, Action: "ping", State: msJoined},
 				},
 			},
 		},

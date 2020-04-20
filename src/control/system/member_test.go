@@ -49,7 +49,7 @@ func mockMember(t *testing.T, idx uint32, state MemberState) *Member {
 func TestMember_Stringify(t *testing.T) {
 	states := []MemberState{
 		MemberStateUnknown,
-		MemberStateStarted,
+		MemberStateJoined,
 		MemberStateStopping,
 		MemberStateStopped,
 		MemberStateEvicted,
@@ -138,7 +138,7 @@ func TestMember_AddRemove(t *testing.T) {
 }
 
 func TestMember_AddOrUpdate(t *testing.T) {
-	started := MemberStateStarted
+	started := MemberStateJoined
 
 	for name, tc := range map[string]struct {
 		membersToAddOrUpdate Members
@@ -148,7 +148,7 @@ func TestMember_AddOrUpdate(t *testing.T) {
 	}{
 		"add then update": {
 			Members{
-				mockMember(t, 1, MemberStateStarted),
+				mockMember(t, 1, MemberStateJoined),
 				mockMember(t, 1, MemberStateStopped),
 			},
 			Members{mockMember(t, 1, MemberStateStopped)},
@@ -169,10 +169,10 @@ func TestMember_AddOrUpdate(t *testing.T) {
 		},
 		"update same state": {
 			Members{
-				mockMember(t, 1, MemberStateStarted),
-				mockMember(t, 1, MemberStateStarted),
+				mockMember(t, 1, MemberStateJoined),
+				mockMember(t, 1, MemberStateJoined),
 			},
-			Members{mockMember(t, 1, MemberStateStarted)},
+			Members{mockMember(t, 1, MemberStateJoined)},
 			[]bool{true, false},
 			[]*MemberState{nil, &started},
 		},
@@ -222,7 +222,7 @@ func TestMember_HostRanks(t *testing.T) {
 		t.Fatal(err)
 	}
 	members := Members{
-		mockMember(t, 1, MemberStateStarted),
+		mockMember(t, 1, MemberStateJoined),
 		mockMember(t, 2, MemberStateStopped),
 		mockMember(t, 3, MemberStateEvicted),
 		NewMember(Rank(4), "", addr1, MemberStateStopped), // second host rank
@@ -254,7 +254,7 @@ func TestMember_HostRanks(t *testing.T) {
 				"127.0.0.2:10001": {Rank(2)},
 			},
 			expMembers: Members{
-				mockMember(t, 1, MemberStateStarted),
+				mockMember(t, 1, MemberStateJoined),
 				mockMember(t, 2, MemberStateStopped),
 			},
 		},
@@ -296,7 +296,7 @@ func TestMember_HostRanks(t *testing.T) {
 }
 
 func TestMember_Convert(t *testing.T) {
-	membersIn := Members{mockMember(t, 1, MemberStateStarted)}
+	membersIn := Members{mockMember(t, 1, MemberStateJoined)}
 	membersOut := Members{}
 	if err := convert.Types(membersIn, &membersOut); err != nil {
 		t.Fatal(err)
@@ -327,7 +327,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 	ms := NewMembership(log)
 
 	members := Members{
-		mockMember(t, 1, MemberStateStarted),
+		mockMember(t, 1, MemberStateJoined),
 		mockMember(t, 2, MemberStateStopped),
 		mockMember(t, 3, MemberStateEvicted),
 		mockMember(t, 4, MemberStateStopped),
@@ -335,13 +335,13 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 	results := MemberResults{
 		NewMemberResult(1, "query", nil, MemberStateStopped),
 		NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateErrored),
-		NewMemberResult(4, "start", nil, MemberStateStarted),
+		NewMemberResult(4, "start", nil, MemberStateJoined),
 	}
 	expStates := []MemberState{
 		MemberStateStopped,
 		MemberStateErrored,
 		MemberStateEvicted,
-		MemberStateStarted,
+		MemberStateJoined,
 	}
 
 	for _, m := range members {

@@ -363,7 +363,7 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 		return nil, err
 	}
 
-	return system.NewMember(rank, sb.UUID, addr, system.MemberStateStarted), nil
+	return system.NewMember(rank, sb.UUID, addr, system.MemberStateJoined), nil
 }
 
 // registerMember creates a new system.Member for given instance and adds it

@@ -126,7 +126,7 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context, rankList []sy
 		}
 	}
 
-	// only update members in the appropriate state (Started/Stopping)
+	// only update members in the appropriate state (Joined/Stopping)
 	// leave unresponsive members to be updated by a join
 	filteredMembers := svc.membership.Members(rankList, system.MemberStateEvicted,
 		system.MemberStateErrored, system.MemberStateUnknown,
@@ -379,13 +379,23 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 		results = append(results, hResults...)
 	}
 
-	// in the case of start, don't manually update member state to "started",
-	// member state will transition to "sarted" during join or bootstrap
+	// member state will transition to "started" during join or bootstrap
 	filteredResults := make(system.MemberResults, 0, len(results))
 	for _, r := range results {
-		if r.Errored {
-			filteredResults = append(filteredResults, r)
+		if !r.Errored || r.State != system.MemberStateReady {
+			continue
 		}
+		if !r.Errored && r.State == system.MemberStateReady {
+			// don't update members that have already "Joined"
+			m, err := svc.membership.Get(r.Rank)
+			if err != nil {
+				return nil, errors.Wrap(err, "result rank not in membership")
+			}
+			if m.State() == system.MemberStateJoined {
+				continue
+			}
+		}
+		filteredResults = append(filteredResults, r)
 	}
 
 	if err := svc.membership.UpdateMemberStates(filteredResults); err != nil {
