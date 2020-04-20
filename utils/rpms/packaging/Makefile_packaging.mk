@@ -374,6 +374,7 @@ endif
 else
 chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	if [ -w /etc/mock/$(CHROOT_NAME).cfg ]; then                                        \
+	    echo -e '/^\[epel\]/\n/mirrorlist/c\nbaseurl=https://repo.dc.hpdd.intel.com/repository/epel-el-7-x86_64-proxy/\n.\nwq\n" | ed /etc/mock/$(CHROOT_NAME).cfg; \
 	    echo -e "config_opts['yum.conf'] += \"\"\"\n" >> /etc/mock/$(CHROOT_NAME).cfg;  \
 	    case $(DISTRO_ID) in                                            \
 	        el7) distro="centos7";                                      \
