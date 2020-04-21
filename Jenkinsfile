@@ -57,6 +57,10 @@ def skip_stage(String stage) {
     return commitPragma(pragma: 'Skip-' + stage).contains('true')
 }
 
+def quickbuild() {
+    return commitPragma(pragma: 'Quick-build') == 'true'
+}
+
 def component_repos() {
     return commitPragma(pragma: 'PR-repos')
 }
@@ -69,6 +73,7 @@ target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
+def qb_inst_rpms = ""
 def daos_packages_version = ""
 def el7_component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
@@ -76,17 +81,6 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
-def quickbuild = node() { commitPragma(pragma: 'Quick-build').contains('true') }
-if (quickbuild) {
-    /* TODO: this is a big fat hack
-     * what we should be doing here is installing all of the
-     * $(repoquery --requires daos{,-{server,tests}}) dependencies
-     * similar to how we do for QUICKBUILD_DEPS
-     * or just start testing from RPMs instead of continuing to hack
-     * around that :-)
-     */
-    functional_rpms += " spdk-tools"
-}
 
 def rpm_test_pre = '''nodelist=(${NODELIST//,/ })
                       scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
@@ -503,7 +497,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=' + quickbuild +
+                                                '--build-arg QUICKBUILD=' + quickbuild() +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
                                                 '" --build-arg REPOS="' + component_repos() + '"'
                         }
@@ -593,7 +587,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -654,7 +648,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -716,7 +710,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -777,7 +771,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -838,7 +832,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -900,7 +894,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -981,6 +975,15 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
+                        script {
+                            // TODO: these should be gotten from the Requires: of RPMs
+                            if (quickbuild()) {
+                                qb_inst_rpms = " spdk-tools mercury boost-devel"
+                                echo "Doing quickbuild, adding " + qb_inst_rpms
+                            } else {
+                                echo "Not adding " + qb_inst_rpms
+                            }
+                        }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        profile: 'daos_ci',
@@ -991,7 +994,7 @@ pipeline {
                                                   "fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
-                                                  'libipmctl-devel'
+                                                  'libipmctl-devel' + qb_inst_rpms
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
