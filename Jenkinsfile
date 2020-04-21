@@ -982,7 +982,7 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
                                        inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
-                                                  "fuse3-libs " +
+                                                  "fuse3-libs fuse3 " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
                                                   'libipmctl-devel'
@@ -995,31 +995,28 @@ pipeline {
                                            ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
                                            . ./.build_vars.sh
                                            DAOS_BASE=${SL_PREFIX%/install*}
+					   rm -f dfuse.*.memcheck test.out
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
                                                sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
-                                               if grep /mnt/daos\\  /proc/mounts; then
-                                                   sudo umount /mnt/daos
-                                               else
-                                                   sudo mkdir -p /mnt/daos
-                                               fi
+                                               sudo mkdir -p /mnt/daos
                                                sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
                                                sudo mkdir -p $DAOS_BASE
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-
-                                               # copy daos_admin binary into \$PATH and fix perms
-                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
-                                                   sudo chown root /usr/bin/daos_admin && \
-                                                   sudo chmod 4755 /usr/bin/daos_admin && \
-                                                   mv $DAOS_BASE/install/bin/daos_admin \
-                                                      $DAOS_BASE/install/bin/orig_daos_admin
-
+                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin
+                                               sudo chown root /usr/bin/daos_admin
+                                               sudo chmod 4755 /usr/bin/daos_admin
+                                               /bin/rm $DAOS_BASE/install/bin/daos_admin
+                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh /usr/share/spdk/scripts
+                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
+                                               sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
                                                # set CMOCKA envs here
                                                export CMOCKA_MESSAGE_OUTPUT="xml"
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
-                                               IS_CI=true OLD_CI=false utils/run_test.sh"''',
+                                               IS_CI=true OLD_CI=false utils/run_test.sh
+                                               ./src/client/dfuse/test/local_test.py all | tee test.out"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
@@ -1044,6 +1041,10 @@ pipeline {
                         }
                         */
                         always {
+                            /* https://issues.jenkins-ci.org/browse/JENKINS-58952
+                             * label is at the end
+                            sh label: "Collect artifacts and tear down",
+                               script '''set -ex */
                             sh script: '''set -ex
                                       . ./.build_vars.sh
                                       DAOS_BASE=${SL_PREFIX%/install*}
@@ -1077,105 +1078,6 @@ pipeline {
                             label: "Collect artifacts and tear down"
                             junit 'test_results/*.xml'
                             archiveArtifacts artifacts: 'run_test.sh/**'
-                        }
-                    }
-                }
-                stage('VM local test') {
-                    when {
-                            beforeAgent true
-                            expression { quickbuild != 'true' }
-		    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       profile: 'daos_ci',
-                                       distro: 'el7',
-                                       snapshot: true,
-                                       inst_repos: el7_component_repos + ' ' + component_repos,
-                                       inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
-                                                  "fuse3-libs fuse3 " +
-                                                  'libisa-l-devel libpmem libpmemobj protobuf-c ' +
-                                                  'spdk-devel libfabric-devel pmix numactl-devel ' +
-                                                  'libipmctl-devel'
-                        runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''# JENKINS-52781 tar function is breaking symlinks
-                                           rm -f build/src/control/src/github.com/daos-stack/daos/src/control
-                                           mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
-                                           ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
-                                           . ./.build_vars.sh
-                                           DAOS_BASE=${SL_PREFIX%/install*}
-                                           NODE=${NODELIST%%,*}
-                                           ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
-                                               set -e
-                                               sudo mkdir /mnt/daos
-                                               sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-                                               sudo mkdir -p $DAOS_BASE
-                                               sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin
-                                               sudo chown root /usr/bin/daos_admin
-                                               sudo chmod 4755 /usr/bin/daos_admin
-                                               /bin/rm $DAOS_BASE/install/bin/daos_admin
-                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh /usr/share/spdk/scripts
-                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
-                                               sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
-                                               cd $DAOS_BASE
-                                               rm -f dfuse.*.memcheck
-                                               ./src/client/dfuse/test/local_test.py all | tee test.out"'''
-                    }
-                    post {
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
-                        always {
-                            sh script: '''set -ex
-                                      . ./.build_vars.sh
-                                      DAOS_BASE=${SL_PREFIX%/install*}
-                                      NODE=${NODELIST%%,*}
-                                      ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
-                                          cd $DAOS_BASE
-                                          rm -rf vm_test
-                                          mkdir vm_test
-                                          if ls /tmp/daos*.log > /dev/null; then
-                                              mv /tmp/daos*.log vm_test/
-                                          fi
-                                          # servers can sometimes take a while to stop when the test is done
-                                          x=0
-                                          while [ \"\\\$x\" -lt \"10\" ] &&
-                                                pgrep '(orterun|daos_server|daos_io_server)'; do
-                                              sleep 1
-                                              let x=\\\$x+1
-                                          done
-                                          if ! sudo umount /mnt/daos; then
-                                              echo \"Failed to unmount /mnt/daos\"
-                                              ps axf
-                                          fi
-                                          cd
-                                          if ! sudo umount \"$DAOS_BASE\"; then
-                                              echo \"Failed to unmount $DAOS_BASE\"
-                                              ps axf
-                                          fi"
-                                      ''',
-                            label: "Collect artifacts and tear down"
                             archiveArtifacts artifacts: 'vm_test/**'
                             publishValgrind (
                                     failBuildOnInvalidReports: true,
@@ -1186,7 +1088,7 @@ pipeline {
                                     pattern: 'dfuse.*.memcheck',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
-                                    sourceSubstitutionPaths: '$WORKSPACE/src:src,../client:src/client/,$WORKSPACE:,$workspacePath/src/:src/',
+                                    sourceSubstitutionPaths: '',
                                     unstableThresholdDefinitelyLost: '',
                                     unstableThresholdInvalidReadWrite: '',
                                     unstableThresholdTotal: ''

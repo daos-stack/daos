@@ -87,14 +87,66 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'grp_add_to_membs_list': ('tmp'),
                      'grp_regen_linear_list': ('tmp_ptr'),
                      'crt_proc_d_string_t': ('*data'),
-                     'crt_hg_init': ('*addr')}
+                     'crt_hg_init': ('*addr'),
+                     'crt_proc_d_rank_list_t': ('rank_list',
+                                                'rank_list->rl_ranks'),
+                     'path_gen': ('*fpath'),
+                     'get_attach_info': ('reqb'),
+                     'iod_fetch': ('biovs'),
+                     'bio_sgl_init': ('sgl->bs_iovs'),
+                     'process_credential_response': ('bytes'),
+                     'pool_map_find_tgts': ('*tgt_pp'),
+                     'daos_acl_dup': ('acl_copy'),
+                     'dfuse_pool_lookup': ('ie', 'dfs', 'dfp'),
+                     'pool_prop_read': ('prop->dpp_entries[idx].dpe_str',
+                                        'prop->dpp_entries[idx].dpe_val_ptr'),
+                     'cont_prop_read': ('prop->dpp_entries[idx].dpe_str'),
+                     'cont_iv_prop_g2l': ('prop_entry->dpe_str'),
+                     'notify_ready': ('reqb'),
+                     'pack_daos_response': ('body'),
+                     'ds_mgmt_drpc_get_attach_info': ('body'),
+                     'pool_prop_default_copy': ('entry_def->dpe_str'),
+                     'daos_prop_dup': ('entry_dup->dpe_str'),
+                     'auth_cred_to_iov': ('packed')}
+
 mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_group_psr_set': ('uri'),
                     'crt_hdlr_uri_lookup': ('tmp_uri'),
                     'd_rank_list_free': ('rank_list->rl_ranks'),
-                    'crt_rpc_priv_free': ('rpc_priv')}
+                    'crt_rpc_priv_free': ('rpc_priv'),
+                    'd_rank_list_free': ('rank_list',
+                                         'rank_list->rl_ranks'),
+                    'pool_prop_default_copy': ('entry_def->dpe_str'),
+                    'pool_svc_store_uuid_cb': ('path'),
+                    'ds_mgmt_svc_start': ('uri'),
+                    'daos_acl_free': ('acl'),
+                    'drpc_free': ('pointer'),
+                    'pool_child_add_one': ('path'),
+                    'get_tgt_rank': ('tgts'),
+                    'bio_sgl_fini': ('sgl->bs_iovs'),
+                    'daos_iov_free': ('iov->iov_buf'),
+                    'daos_prop_free': ('entry->dpe_str',
+                                       'entry->dpe_val_ptr'),
+                    'main': ('dfs'),
+                    'start_one': ('path'),
+                    'pool_svc_load_uuid_cb': ('path'),
+                    'ie_sclose': ('ie', 'dfs', 'dfp'),
+                    'notify_ready': ('req.uri'),
+                    'get_tgt_rank': ('tgts')}
 
-memleak_ok = []
+memleak_ok = ['dfuse_start',
+              'expand_vector',
+              'd_rank_list_alloc',
+              'get_tpv',
+              'get_new_entry',
+              'get_attach_info',
+              'drpc_call_create']
+
+EFILES = ['src/common/misc.c',
+          'src/common/prop.c',
+          'src/cart/crt_hg_proc.c',
+          'src/security/cli_security.c',
+          'src/client/dfuse/dfuse_core.c']
 
 mismatch_alloc_seen = {}
 mismatch_free_seen = {}
@@ -172,7 +224,6 @@ class LogTest():
     def __init__(self, log_iter):
         self._li = log_iter
         self.strict_functions = {}
-        self.error_files_ok = set()
 
     def set_warning_function(self, function, bug_id):
         """Register functions for known bugs
@@ -180,10 +231,6 @@ class LogTest():
         Add a mapping from functions with errors to known bugs
         """
         self.strict_functions[function] = bug_id
-
-    def set_error_ok(self, file_name):
-        """Register a file as having known errors"""
-        self.error_files_ok.add(file_name)
 
     def check_log_file(self, abort_on_warning):
         """Check a single log file for consistency"""
@@ -282,7 +329,7 @@ class LogTest():
                 else:
                     if desc not in active_desc and \
                        desc not in active_rpcs and \
-                       have_debug and line.filename not in self.error_files_ok:
+                       have_debug and line.filename not in EFILES:
 
                         # There's something about this particular function
                         # that makes it very slow at logging output.

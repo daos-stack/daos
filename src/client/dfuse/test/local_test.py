@@ -378,12 +378,6 @@ def check_no_file(dfuse):
     except FileNotFoundError:
         pass
 
-EFILES = ['src/common/misc.c',
-          'src/common/prop.c',
-          'src/cart/crt_hg_proc.c',
-          'src/security/cli_security.c',
-          'src/client/dfuse/dfuse_core.c']
-
 lp = None
 lt = None
 
@@ -402,55 +396,6 @@ def setup_log_test():
     lp = __import__('cart_logparse')
     lt = __import__('cart_logtest')
 
-    lt.mismatch_alloc_ok['crt_proc_d_rank_list_t'] = ('rank_list',
-                                                      'rank_list->rl_ranks')
-    lt.mismatch_alloc_ok['path_gen'] = ('*fpath')
-    lt.mismatch_alloc_ok['get_attach_info'] = ('reqb')
-    lt.mismatch_alloc_ok['iod_fetch'] = ('biovs')
-    lt.mismatch_alloc_ok['bio_sgl_init'] = ('sgl->bs_iovs')
-    lt.mismatch_alloc_ok['process_credential_response'] = ('bytes')
-    lt.mismatch_alloc_ok['pool_map_find_tgts'] = ('*tgt_pp')
-    lt.mismatch_alloc_ok['daos_acl_dup'] = ('acl_copy')
-    lt.mismatch_alloc_ok['dfuse_pool_lookup'] = ('ie', 'dfs', 'dfp')
-    lt.mismatch_alloc_ok['pool_prop_read'] = ('prop->dpp_entries[idx].dpe_str',
-                                              'prop->dpp_entries[idx].dpe_val_ptr')
-    lt.mismatch_alloc_ok['cont_prop_read'] = ('prop->dpp_entries[idx].dpe_str')
-    lt.mismatch_alloc_ok['cont_iv_prop_g2l'] = ('prop_entry->dpe_str')
-    lt.mismatch_alloc_ok['notify_ready'] = ('reqb')
-    lt.mismatch_alloc_ok['pack_daos_response'] = ('body')
-    lt.mismatch_alloc_ok['ds_mgmt_drpc_get_attach_info'] = ('body')
-    lt.mismatch_alloc_ok['pool_prop_default_copy'] = ('entry_def->dpe_str')
-    lt.mismatch_alloc_ok['daos_prop_dup'] = ('entry_dup->dpe_str')
-    lt.mismatch_alloc_ok['auth_cred_to_iov'] = ('packed')
-
-    lt.mismatch_free_ok['d_rank_list_free'] = ('rank_list',
-                                               'rank_list->rl_ranks')
-    lt.mismatch_free_ok['pool_prop_default_copy'] = ('entry_def->dpe_str')
-    lt.mismatch_free_ok['pool_svc_store_uuid_cb'] = ('path')
-    lt.mismatch_free_ok['ds_mgmt_svc_start'] = ('uri')
-    lt.mismatch_free_ok['daos_acl_free'] = ('acl')
-    lt.mismatch_free_ok['drpc_free'] = ('pointer')
-    lt.mismatch_free_ok['pool_child_add_one'] = ('path')
-    lt.mismatch_free_ok['get_tgt_rank'] = ('tgts')
-    lt.mismatch_free_ok['bio_sgl_fini'] = ('sgl->bs_iovs')
-    lt.mismatch_free_ok['daos_iov_free'] = ('iov->iov_buf'),
-    lt.mismatch_free_ok['daos_prop_free'] = ('entry->dpe_str',
-                                             'entry->dpe_val_ptr')
-    lt.mismatch_free_ok['main'] = ('dfs')
-    lt.mismatch_free_ok['start_one'] = ('path')
-    lt.mismatch_free_ok['pool_svc_load_uuid_cb'] = ('path')
-    lt.mismatch_free_ok['ie_sclose'] = ('ie', 'dfs', 'dfp')
-    lt.mismatch_free_ok['notify_ready'] = ('req.uri')
-    lt.mismatch_free_ok['get_tgt_rank'] = ('tgts')
-
-    lt.memleak_ok.append('dfuse_start')
-    #lt.memleak_ok.append('expand_vector')
-    #lt.memleak_ok.append('d_rank_list_alloc')
-    #lt.memleak_ok.append('get_tpv')
-    #lt.memleak_ok.append('get_new_entry')
-    #lt.memleak_ok.append('get_attach_info')
-    #lt.memleak_ok.append('drpc_call_create')
-
 def log_test(filename):
     """Run the log checker on filename, logging to stdout"""
 
@@ -464,9 +409,6 @@ def log_test(filename):
 
     log_iter = lp.LogIter(filename)
     lto = lt.LogTest(log_iter)
-
-    for efile in EFILES:
-        lto.set_error_ok(efile)
 
     try:
         lto.check_log_file(abort_on_warning=False)
