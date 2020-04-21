@@ -1123,7 +1123,6 @@ pipeline {
                                                sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
                                                cd $DAOS_BASE
                                                rm -f dfuse.*.memcheck
-                                               export PYTHONPATH=./src/client/pydaos
                                                ./src/client/dfuse/test/local_test.py all | tee test.out"'''
                     }
                     post {
@@ -1187,7 +1186,7 @@ pipeline {
                                     pattern: 'dfuse.*.memcheck',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
-                                    sourceSubstitutionPaths: '$WORKSPACE/src:src,../client:src/client/',
+                                    sourceSubstitutionPaths: '$WORKSPACE/src:src,../client:src/client/,$WORKSPACE:,$workspacePath/src/:src/',
                                     unstableThresholdDefinitelyLost: '',
                                     unstableThresholdInvalidReadWrite: '',
                                     unstableThresholdTotal: ''
