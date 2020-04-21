@@ -551,37 +551,18 @@ pool_storage_info(void **state, daos_pool_info_t *pinfo)
 }
 
 /**
- * Disabled Aggrgation for Pool.
+ * Enabled/Disabled Aggrgation strategy for Pool.
  */
 static int
-disable_pool_aggregation(void **state, daos_pool_info_t *pinfo)
+set_pool_reclaim_strategy(void **state, void const *const strategy[])
 {
 	test_arg_t *arg = *state;
 	int rc;
 	char const *const names[] = {"reclaim"};
-	void const *const in_values[] = {"disabled"};
-	size_t const in_sizes[] = {strlen(in_values[0])};
+	size_t const in_sizes[] = {strlen(strategy[0])};
 	int			 n = (int) ARRAY_SIZE(names);
 
-	rc = daos_pool_set_attr(arg->pool.poh, n, names, in_values,
-		in_sizes, NULL);
-	return rc;
-}
-
-/**
- * Enabled time based Aggrgation for Pool.
- */
-static int
-enabled_pool_aggregation(void **state, daos_pool_info_t *pinfo)
-{
-	test_arg_t *arg = *state;
-	int rc;
-	char const *const names[] = {"reclaim"};
-	void const *const in_values[] = {"time"};
-	size_t const in_sizes[] = {strlen(in_values[0])};
-	int			 n = (int) ARRAY_SIZE(names);
-
-	rc = daos_pool_set_attr(arg->pool.poh, n, names, in_values,
+	rc = daos_pool_set_attr(arg->pool.poh, n, names, strategy,
 		in_sizes, NULL);
 	return rc;
 }
@@ -668,12 +649,14 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	daos_pool_info_t pinfo;
 	daos_size_t	 nvme_initial_size;
 	daos_size_t	 nvme_current_size;
+	void const *const aggr_disabled[] = {"disaled"};
+	void const *const aggr_set_time[] = {"time"};
 
 	if (size < OW_IOD_SIZE || (size % OW_IOD_SIZE != 0))
 		return;
 
 	/* Disabled Pool Aggrgation */
-	rc = disable_pool_aggregation(state, &pinfo);
+	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -765,7 +748,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	}
 
 	/* Enabled Pool Aggrgation */
-	rc = enabled_pool_aggregation(state, &pinfo);
+	rc = set_pool_reclaim_strategy(state, aggr_set_time);
 	assert_int_equal(rc, 0);
 
 	D_FREE(fbuf);
@@ -874,6 +857,8 @@ io_rewritten_array_with_mixed_size(void **state)
 	int			rc;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
+	void const *const aggr_disabled[] = {"disaled"};
+	void const *const aggr_set_time[] = {"time"};
 
 	/* choose random object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
@@ -889,7 +874,7 @@ io_rewritten_array_with_mixed_size(void **state)
 	memset(fbuf, 0, size);
 
 	/* Disabled Pool Aggrgation */
-	rc = disable_pool_aggregation(state, &pinfo);
+	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
 
 	/* Get the pool info at the beginning */
@@ -958,7 +943,7 @@ io_rewritten_array_with_mixed_size(void **state)
 	}
 
 	/* Enabled Pool Aggrgation */
-	rc = enabled_pool_aggregation(state, &pinfo);
+	rc = set_pool_reclaim_strategy(state, aggr_set_time);
 	assert_int_equal(rc, 0);
 
 	D_FREE(fbuf);
