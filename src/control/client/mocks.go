@@ -146,12 +146,8 @@ func (m *mgmtCtlNetworkScanDevicesClient) Recv() (*ctlpb.DeviceScanReply, error)
 	return &ctlpb.DeviceScanReply{}, nil
 }
 
-func (m *mockMgmtCtlClient) NetworkScanDevices(ctx context.Context, in *ctlpb.DeviceScanRequest, o ...grpc.CallOption) (ctlpb.MgmtCtl_NetworkScanDevicesClient, error) {
-	return &mgmtCtlNetworkScanDevicesClient{}, nil
-}
-
-func (m *mockMgmtCtlClient) NetworkListProviders(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
-	return &ctlpb.ProviderListReply{}, nil
+func (m *mockMgmtCtlClient) NetworkScan(ctx context.Context, in *ctlpb.NetworkScanReq, o ...grpc.CallOption) (*ctlpb.NetworkScanResp, error) {
+	return &ctlpb.NetworkScanResp{}, nil
 }
 
 func (m *mockMgmtCtlClient) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq, o ...grpc.CallOption) (*ctlpb.SystemQueryResp, error) {
