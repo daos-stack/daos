@@ -136,11 +136,12 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 			return nil
 		}
 		srv.log.Debugf("instance %d: no SCM format required; checking for superblock", idx)
-		needsSuperblock, err := srv.NeedsSuperblock()
+		needsSuperblock, err := srv.NeedsSuperblock(needsScmFormat)
 		if err != nil {
 			srv.log.Errorf("instance %d: failed to check instance superblock: %s", idx, err)
 		}
 		if !needsSuperblock {
+			srv.log.Debugf("instance %d: superblock not needed", idx)
 			return nil
 		}
 	}
@@ -149,6 +150,7 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 		return FaultScmUnmanaged(srv.scmConfig().MountPoint)
 	}
 
+	// by this point we need superblock and possibly scm format
 	srv.log.Infof("SCM format required on instance %d", srv.Index())
 
 	select {
@@ -167,7 +169,7 @@ func (srv *IOServerInstance) createSuperblock(recreate bool) error {
 		return errors.Errorf("can't create superblock: instance %d already started", srv.Index())
 	}
 
-	needsSuperblock, err := srv.NeedsSuperblock()
+	needsSuperblock, err := srv.NeedsSuperblock(false) // scm format completed by now
 	if !needsSuperblock {
 		return nil
 	}

@@ -50,13 +50,19 @@ func (srv *IOServerInstance) isStarted() bool {
 }
 
 func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
-	srv.log.Debugf("instance %d: checking if storage is formatted", srv.Index())
+	idx := srv.Index()
+
+	srv.log.Debugf("instance %d: checking if storage is formatted", idx)
 	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
 		return
 	}
-	srv.log.Debugf("instance %d: creating superblock on formatted storage", srv.Index())
+	srv.log.Debugf("instance %d: creating superblock on formatted storage", idx)
 	if err = srv.createSuperblock(recreateSBs); err != nil {
 		return
+	}
+
+	if !srv.hasSuperblock() {
+		return errors.Errorf("instance %d: no superblock after format", idx)
 	}
 
 	return
@@ -66,11 +72,6 @@ func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err 
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
 func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) error {
-	if !srv.hasSuperblock() {
-		if err := srv.ReadSuperblock(); err != nil {
-			return errors.Wrap(err, "start failed; no superblock")
-		}
-	}
 	if err := srv.bdevClassProvider.PrepareDevices(); err != nil {
 		return errors.Wrap(err, "start failed; unable to prepare NVMe device(s)")
 	}
