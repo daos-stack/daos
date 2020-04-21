@@ -553,7 +553,6 @@ rebuild_drop_scan(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -585,7 +584,6 @@ rebuild_retry_rebuild(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -615,7 +613,6 @@ rebuild_retry_for_stale_pool(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -645,7 +642,6 @@ rebuild_drop_obj(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -709,8 +705,6 @@ rebuild_multiple_pools(void **state)
 	rebuild_io_validate(args[1], oids, OBJ_NR, true);
 
 	reintegrate_pools_ranks(args, 2, ranks_to_kill, 1);
-	rebuild_io_validate(args[0], oids, OBJ_NR, true);
-	rebuild_io_validate(args[1], oids, OBJ_NR, true);
 
 	rebuild_pool_destroy(args[1]);
 }
@@ -940,7 +934,6 @@ rebuild_iv_tgt_fail(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -1343,7 +1336,6 @@ rebuild_nospace(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
