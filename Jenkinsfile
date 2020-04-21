@@ -75,8 +75,8 @@ def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll(
 
 def qb_inst_rpms = ""
 def daos_packages_version = ""
-def el7_component_repos = ""
-def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
+el7_component_repos = ""
+daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
