@@ -369,9 +369,6 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 // registerMember creates a new system.Member for given instance and adds it
 // to the system membership.
 func (srv *IOServerInstance) registerMember(membership *system.Membership) error {
-	srv.RLock()
-	defer srv.RUnlock()
-
 	idx := srv.Index()
 
 	m, err := srv.newMember()

@@ -114,9 +114,6 @@ func (srv *IOServerInstance) NotifyStorageReady() {
 
 // awaitStorageReady blocks until instance has storage available and ready to be used.
 func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
-	srv.RLock()
-	defer srv.RUnlock()
-
 	idx := srv.Index()
 
 	if srv.isStarted() {
@@ -151,7 +148,11 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 	}
 
 	// by this point we need superblock and possibly scm format
-	srv.log.Infof("SCM format required on instance %d", srv.Index())
+	formatType := "SCM"
+	if !needsScmFormat {
+		formatType = "Metadata"
+	}
+	srv.log.Infof("%s format required on instance %d", formatType, srv.Index())
 
 	select {
 	case <-ctx.Done():
