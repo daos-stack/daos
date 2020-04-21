@@ -416,6 +416,7 @@ int
 dc_tx_restart(tse_task_t *task)
 {
 	/* TBD */
+	D_ASSERTF(0, "TX RESTART IS NOT IMPLEMENTED\n");
 	return 0;
 }
 
