@@ -189,6 +189,10 @@ class NvmePoolCapacity(TestWithServers):
             pool[val] = TestPool(self.context,
                                  dmg_command=self.get_dmg_command())
             pool[val].get_params(self)
+            split_pool_scm_size = pool[val].scm_size.value / num_pool
+            split_pool_nvme_size = pool[val].nvme_size.value / num_pool
+            pool[val].scm_size.update(split_pool_scm_size)
+            pool[val].nvme_size.update(split_pool_nvme_size)
             pool[val].create()
             display_string = "pool{} space at the Beginning".format(val)
             pool[val].display_pool_daos_space(display_string)
