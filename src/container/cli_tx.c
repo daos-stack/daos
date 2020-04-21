@@ -412,6 +412,14 @@ err_task:
 	return rc;
 }
 
+int
+dc_tx_restart(tse_task_t *task)
+{
+	/* TBD */
+	D_ASSERTF(0, "TX RESTART TO BE IMPLEMENTED\n");
+	return 0;
+}
+
 /*
  * MSC - this is a temporary special TX for rebuild that needs to use the client
  * stack with a specific epoch.
