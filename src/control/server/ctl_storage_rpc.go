@@ -300,7 +300,7 @@ func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool, resp *ct
 	} else {
 		var err error
 		// If SCM was already formatted, verify if superblock exists.
-		needsSuperblock, err = srv.NeedsSuperblock(needsScmFormat)
+		needsSuperblock, err = srv.NeedsSuperblock()
 		if err != nil {
 			return errors.Wrap(err, "unable to check instance superblock")
 		}

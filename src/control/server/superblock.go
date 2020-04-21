@@ -100,11 +100,9 @@ func (srv *IOServerInstance) hasSuperblock() bool {
 
 // NeedsSuperblock indicates whether or not the instance appears
 // to need a superblock to be created in order to start.
-func (srv *IOServerInstance) NeedsSuperblock(needsScmFormat bool) (bool, error) {
-	if needsScmFormat {
-		return true, errors.New("can't read superblock from unformatted storage")
-	}
-
+//
+// Should not be called if SCM format is required.
+func (srv *IOServerInstance) NeedsSuperblock() (bool, error) {
 	if srv.hasSuperblock() {
 		return false, nil
 	}
