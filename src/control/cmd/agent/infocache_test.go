@@ -288,7 +288,7 @@ func TestInfoCacheConcurrentAccess(t *testing.T) {
 
 	var wg sync.WaitGroup
 	maxNumaNodes := 3
-	rand.Seed(time.Now().UnixNano()) // seed RNG
+	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < maxConcurrent; i++ {
 		wg.Add(1)
 		go func(n int) {
