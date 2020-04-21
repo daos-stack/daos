@@ -153,7 +153,8 @@ class DFuse():
         self._daos = daos
         self._sp = None
 
-        log_file = tempfile.NamedTemporaryFile(prefix='daos_dfuse_', suffix='.log', delete=False)
+        log_file = tempfile.NamedTemporaryFile(prefix='daos_dfuse_',
+                                               suffix='.log', delete=False)
         self.log_file = log_file.name
 
         symlink_file('/tmp/dfuse_latest.log', self.log_file)
@@ -183,13 +184,15 @@ class DFuse():
 
         cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
 
-
-        cmd.extend(['--suppressions={}'.format(os.path.join('src',
-                                                            'cart',
-                                                            'utils',
-                                                            'memcheck-cart.supp')),
-                    '--suppressions={}'.format(os.path.join('utils',
-                                                            'memcheck-daos-client.supp'))])
+        s_arg = '--suppressions='
+        cmd.extend(['{}{}'.format(s_arg,
+                                  os.path.join('src',
+                                               'cart',
+                                               'utils',
+                                               'memcheck-cart.supp')),
+                    '{}{}'.format(s_arg,
+                                  os.path.join('utils',
+                                               'memcheck-daos-client.supp'))])
 
         cmd.extend(['--xml=yes', '--xml-file=dfuse.%p.memcheck'])
 
@@ -286,7 +289,8 @@ def import_daos(server, conf):
     """Return a handle to the pydaos module"""
 
     if sys.version_info.major < 3:
-        pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
+        pydir = 'python{}.{}'.format(sys.version_info.major,
+                                     sys.version_info.minor)
     else:
         pydir = 'python{}'.format(sys.version_info.major)
 
@@ -326,11 +330,12 @@ def make_pool(daos, conf):
     pool_con = daos.raw.DaosPool(context)
 
     try:
-        pool_con.create(511, os.geteuid(), os.getegid(), 1024*1014*128, b'daos_server')
+        pool_con.create(511, os.geteuid(), os.getegid(),
+                        1024*1014*128, b'daos_server')
     except daos_raw.daos_api.DaosApiError:
         time.sleep(10)
-        pool_con.create(511, os.geteuid(), os.getegid(), 1024*1014*128, b'daos_server')
-
+        pool_con.create(511, os.geteuid(), os.getegid(),
+                        1024*1014*128, b'daos_server')
     return get_pool_list()
 
 def run_tests(dfuse):
@@ -385,7 +390,8 @@ lt = None
 def setup_log_test():
     """Setup and import the log tracing code"""
     file_self = os.path.dirname(os.path.abspath(__file__))
-    logparse_dir = os.path.join(os.path.dirname(file_self), '../../../src/cart/test/util')
+    logparse_dir = os.path.join(os.path.dirname(file_self),
+                                '../../../src/cart/test/util')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
@@ -674,8 +680,9 @@ def run_in_fg(server, conf):
     t_dir = os.path.join(dfuse.dir, container)
     os.mkdir(t_dir)
     print('Running at {}'.format(t_dir))
-    print('daos container create --svc 0 --type POSIX --pool {} --path {}/uns-link'.format(
-        pools[0], t_dir))
+    print('daos container create --svc 0 --type POSIX' \
+          '--pool {} --path {}/uns-link'.format(
+              pools[0], t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --svc 0 --path {}/uns-link'.format(t_dir))
     print('daos pool list-containers --svc 0 --pool {}'.format(pools[0]))
@@ -691,7 +698,8 @@ def test_pydaos_kv(server, conf):
     daos = import_daos(server, conf)
 
     file_self = os.path.dirname(os.path.abspath(__file__))
-    mod_dir = os.path.join(os.path.dirname(file_self), '../../../src/client/pydaos')
+    mod_dir = os.path.join(os.path.dirname(file_self),
+                           '../../../src/client/pydaos')
     if mod_dir not in sys.path:
         sys.path.append(mod_dir)
 

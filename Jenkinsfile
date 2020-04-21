@@ -1187,7 +1187,7 @@ pipeline {
                                     pattern: 'dfuse.*.memcheck',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
-                                    sourceSubstitutionPaths: '',
+                                    sourceSubstitutionPaths: '$WORKSPACE/src:src,../client:src/client/',
                                     unstableThresholdDefinitelyLost: '',
                                     unstableThresholdInvalidReadWrite: '',
                                     unstableThresholdTotal: ''
