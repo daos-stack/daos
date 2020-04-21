@@ -523,6 +523,9 @@ lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
 	       req, true);
 }
 
+/**
+ * get the Pool storage info.
+ */
 static int
 pool_storage_info(void **state, daos_pool_info_t *pinfo)
 {
@@ -537,13 +540,49 @@ pool_storage_info(void **state, daos_pool_info_t *pinfo)
 		return rc;
 	}
 
-	print_message("AEP space: Total = %" PRIu64 " Free= %" PRIu64"\t"
+	print_message("SCM space: Total = %" PRIu64 " Free= %" PRIu64"\t"
 	"NVMe space: Total = %" PRIu64 " Free= %" PRIu64"\n",
 	pinfo->pi_space.ps_space.s_total[0],
 	pinfo->pi_space.ps_space.s_free[0],
 	pinfo->pi_space.ps_space.s_total[1],
 	pinfo->pi_space.ps_space.s_free[1]);
 
+	return rc;
+}
+
+/**
+ * Disabled Aggrgation for Pool.
+ */
+static int
+disable_pool_aggregation(void **state, daos_pool_info_t *pinfo)
+{
+	test_arg_t *arg = *state;
+	int rc;
+	char const *const names[] = {"reclaim"};
+	void const *const in_values[] = {"disabled"};
+	size_t const in_sizes[] = {strlen(in_values[0])};
+	int			 n = (int) ARRAY_SIZE(names);
+
+	rc = daos_pool_set_attr(arg->pool.poh, n, names, in_values,
+		in_sizes, NULL);
+	return rc;
+}
+
+/**
+ * Enabled time based Aggrgation for Pool.
+ */
+static int
+enabled_pool_aggregation(void **state, daos_pool_info_t *pinfo)
+{
+	test_arg_t *arg = *state;
+	int rc;
+	char const *const names[] = {"reclaim"};
+	void const *const in_values[] = {"time"};
+	size_t const in_sizes[] = {strlen(in_values[0])};
+	int			 n = (int) ARRAY_SIZE(names);
+
+	rc = daos_pool_set_attr(arg->pool.poh, n, names, in_values,
+		in_sizes, NULL);
 	return rc;
 }
 
@@ -633,6 +672,10 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	if (size < OW_IOD_SIZE || (size % OW_IOD_SIZE != 0))
 		return;
 
+	/* Disabled Pool Aggrgation */
+	rc = disable_pool_aggregation(state, &pinfo);
+	assert_int_equal(rc, 0);
+
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/* Alloc and set buffer to be a sting of all uppercase letters */
@@ -708,7 +751,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 				nvme_current_size, nvme_initial_size);
 			}
 		} else {
-			/*NVMe Size should be increased as overwrite_sz is >4K*/
+		/*NVMe_Free_Size should decrease overwrite_sz is >4K*/
 			if (nvme_current_size > nvme_initial_size -
 				overwrite_sz) {
 				fail_msg("\nNVMe_current_size =%"
@@ -720,6 +763,10 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 		}
 		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 	}
+
+	/* Enabled Pool Aggrgation */
+	rc = enabled_pool_aggregation(state, &pinfo);
+	assert_int_equal(rc, 0);
 
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
@@ -810,7 +857,7 @@ io_overwrite(void **state)
 }
 
 static void
-io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
+io_rewritten_array_with_mixed_size(void **state)
 {
 	test_arg_t		*arg = *state;
 	struct ioreq		req;
@@ -840,6 +887,10 @@ io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
 	D_ALLOC(fbuf, size);
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
+
+	/* Disabled Pool Aggrgation */
+	rc = disable_pool_aggregation(state, &pinfo);
+	assert_int_equal(rc, 0);
 
 	/* Get the pool info at the beginning */
 	rc = pool_storage_info(state, &pinfo);
@@ -905,6 +956,11 @@ io_rewritten_same_array_with_large_small_size_verify_poolsize(void **state)
 		}
 		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 	}
+
+	/* Enabled Pool Aggrgation */
+	rc = enabled_pool_aggregation(state, &pinfo);
+	assert_int_equal(rc, 0);
+
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
 	ioreq_fini(&req);
@@ -4025,8 +4081,8 @@ static const struct CMUnitTest io_tests[] = {
 	  punch_enum_then_verify_record_count, async_disable,
 	  test_case_teardown},
 	{ "IO41: IO Rewritten data fetch and validate pool size",
-	  io_rewritten_same_array_with_large_small_size_verify_poolsize,
-	  async_disable, test_case_teardown},
+	  io_rewritten_array_with_mixed_size, async_disable,
+	  test_case_teardown},
 };
 
 int
