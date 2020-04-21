@@ -25,9 +25,11 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 
@@ -38,7 +40,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const maxConcurrent = 10000
+const maxConcurrent = 100
 
 func TestInfoCacheInitNoScanResults(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -286,9 +288,13 @@ func TestInfoCacheConcurrentAccess(t *testing.T) {
 
 	var wg sync.WaitGroup
 	maxNumaNodes := 3
+	rand.Seed(time.Now().UnixNano()) // seed RNG
 	for i := 0; i < maxConcurrent; i++ {
 		wg.Add(1)
-		getResponse(t, &aiCache, i%maxNumaNodes, &wg)
+		go func(n int) {
+			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
+			getResponse(t, &aiCache, n, &wg)
+		}(i % maxNumaNodes)
 	}
 	wg.Wait()
 }
