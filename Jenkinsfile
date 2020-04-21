@@ -54,7 +54,7 @@ def doc_only_change() {
 }
 
 def skip_stage(String stage) {
-    return commitPragma(pragma: 'Skip-' + stage).contains('true')
+    return commitPragma(pragma: 'Skip-' + stage) == 'true'
 }
 
 def quickbuild() {
@@ -293,7 +293,7 @@ pipeline {
                       beforeAgent true
                       expression {
                         ! commitPragma(pragma: 'Skip-python-bandit',
-                                def_val: 'true').contains('true')
+                                def_val: 'true') == 'true'
                       }
                     }
                     agent {
@@ -1112,7 +1112,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression {
-                            ! commitPragma(pragma: 'Skip-coverity-test').contains('true')
+                            commitPragma(pragma: 'Skip-coverity-test') != 'true'
                         }
                     }
                     agent {
@@ -1577,7 +1577,7 @@ pipeline {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
                             expression {
-                                ! commitPragma(pragma: 'Skip-scan-centos-rpms').contains('true')
+                                commitPragma(pragma: 'Skip-scan-centos-rpms') != 'true'
                             }
                         }
                     }
