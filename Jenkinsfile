@@ -57,15 +57,21 @@ def skip_stage(String stage) {
     return commitPragma(pragma: 'Skip-' + stage).contains('true')
 }
 
+def component_repos() {
+    return commitPragma(pragma: 'PR-repos')
+}
+
+def el7_daos_repos() {
+    return el7_component_repos + ' ' + component_repos() + ' ' + daos_repo
+}
+
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 def daos_packages_version = ""
 def el7_component_repos = ""
-def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
-def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
@@ -499,7 +505,7 @@ pipeline {
                                                 '$BUILDARGS ' +
                                                 '--build-arg QUICKBUILD=' + quickbuild +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
-                                                '" --build-arg REPOS="' + component_repos + '"'
+                                                '" --build-arg REPOS="' + component_repos() + '"'
                         }
                     }
                     steps {
@@ -980,7 +986,7 @@ pipeline {
                                        profile: 'daos_ci',
                                        distro: 'el7',
                                        snapshot: true,
-                                       inst_repos: el7_component_repos + ' ' + component_repos,
+                                       inst_repos: el7_component_repos + ' ' + component_repos(),
                                        inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
                                                   "fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
@@ -1115,7 +1121,7 @@ pipeline {
                                                 '$BUILDARGS ' +
                                                 '--build-arg QUICKBUILD=true' +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
-                                                '" --build-arg REPOS="' + component_repos + '"'
+                                                '" --build-arg REPOS="' + component_repos() + '"'
                         }
                     }
                     steps {
@@ -1168,7 +1174,7 @@ pipeline {
                                        profile: 'daos_ci',
                                        distro: 'el7',
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos,
+                                       inst_repos: el7_daos_repos(),
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
@@ -1250,7 +1256,7 @@ pipeline {
                                        node_count: 3,
                                        profile: 'daos_ci',
                                        distro: 'el7',
-                                       inst_repos: el7_daos_repos,
+                                       inst_repos: el7_daos_repos(),
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
@@ -1349,7 +1355,7 @@ pipeline {
                                        node_count: 5,
                                        profile: 'daos_ci',
                                        distro: 'el7',
-                                       inst_repos: el7_daos_repos,
+                                       inst_repos: el7_daos_repos(),
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
@@ -1448,7 +1454,7 @@ pipeline {
                                        node_count: 9,
                                        profile: 'daos_ci',
                                        distro: 'el7',
-                                       inst_repos: el7_daos_repos,
+                                       inst_repos: el7_daos_repos(),
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
                                                   ' ' + functional_rpms
@@ -1547,7 +1553,7 @@ pipeline {
                                        profile: 'daos_ci',
                                        distro: 'el7',
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos,
+                                       inst_repos: el7_daos_repos(),
                                        inst_rpms: 'environment-modules'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
@@ -1585,7 +1591,7 @@ pipeline {
                                        profile: 'daos_ci',
                                        distro: 'el7',
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos,
+                                       inst_repos: el7_daos_repos(),
                                        inst_rpms: 'environment-modules ' +
                                                   'clamav clamav-devel'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
