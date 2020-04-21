@@ -23,8 +23,6 @@
 '''
 from __future__ import print_function
 
-import subprocess
-import os
 import re
 
 from ClusterShell.NodeSet import NodeSet
@@ -71,7 +69,8 @@ class FioBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            self.dfuse = None
+            if self.dfuse:
+                self.dfuse.stop()
         finally:
             # Stop the servers and agents
             super(FioBase, self).tearDown()
@@ -86,12 +85,8 @@ class FioBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-    def _create_cont(self, doas_cmd):
+    def _create_cont(self):
         """Create a container.
-
-        Args:
-            daos_cmd (DaosCommand): doas command to issue the container
-                create
 
         Returns:
             str: UUID of the created container
@@ -121,7 +116,7 @@ class FioBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self._create_cont(self.daos_cmd))
+        self.dfuse.set_dfuse_cont_param(self._create_cont())
 
         try:
             # start dfuse
@@ -153,3 +148,7 @@ class FioBase(TestWithServers):
         # Run Fio
         self.fio_cmd.hosts = self.hostlist_clients
         self.fio_cmd.run()
+
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None

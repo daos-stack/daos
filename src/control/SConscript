@@ -77,31 +77,10 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     return install_bin
 #pylint: enable=too-many-arguments
 
-def scons():
-    """Execute build"""
-    env.AppendUnique(LIBPATH=[Dir('.')])
-
-    denv = env.Clone()
-
-    # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
-    # runtime
-    prefix = denv.subst("$PREFIX")
-    sprefix = denv.subst("$SPDK_PREFIX")
-    if sprefix not in ["", prefix]:
-        def install_dir(ienv, srcdir, _destdir):
-            """walk a directory and install targets"""
-            for root, _dirs, files in os.walk(srcdir):
-                dest_root = os.path.relpath(root, sprefix)
-                for fname in files:
-                    full_name = os.path.join(root, fname)
-                    dest = os.path.join(prefix, dest_root)
-                    ienv.Install(dest, full_name)
-
-        for _dir in [join("share", "spdk", "scripts"), join("include", "spdk")]:
-            target = join(prefix, _dir)
-            source = join(sprefix, _dir)
-            install_dir(denv, source, target)
-
+def configure_go(denv):
+    """Do Go compiler checks"""
+    if GetOption('help') or GetOption('clean'):
+        return
     def check_go_version(context):
         """Check GO Version"""
         context.Display('Checking for Go compiler in $PATH... ')
@@ -136,10 +115,40 @@ def scons():
     conf.Finish()
     # pylint: enable=no-member
 
+
+def scons():
+    """Execute build"""
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
+    denv = env.Clone()
+
+    # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
+    # runtime
+    prefix = denv.subst("$PREFIX")
+    sprefix = denv.subst("$SPDK_PREFIX")
+    if sprefix not in ["", prefix]:
+        def install_dir(ienv, srcdir, _destdir):
+            """walk a directory and install targets"""
+            for root, _dirs, files in os.walk(srcdir):
+                dest_root = os.path.relpath(root, sprefix)
+                for fname in files:
+                    full_name = os.path.join(root, fname)
+                    dest = os.path.join(prefix, dest_root)
+                    ienv.Install(dest, full_name)
+
+        for _dir in [join("share", "spdk", "scripts"), join("include", "spdk")]:
+            target = join(prefix, _dir)
+            source = join(sprefix, _dir)
+            install_dir(denv, source, target)
+
+    configure_go(denv)
+
     # Version-controlled DAOS Go source directory src/control
     gosrc = Dir('.').srcnode().abspath
     cartpath = Dir('#/src/cart/src/include').srcnode().abspath
 
+    denv.AppendENVPath("CGO_LDFLAGS",
+                       denv.subst("-L$BUILD_DIR/src/cart/src/gurt"), sep=" ")
     denv.AppendENVPath("CGO_CFLAGS", "-I%s" % cartpath, sep=" ")
 
     agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
@@ -154,10 +163,11 @@ def scons():
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
+                            "-L$BUILD_DIR/src/cart/src/gurt "
+                            "-L$BUILD_DIR/src/cart/src/cart "
                             "-L$PREFIX/lib64 -L$SPDK_PREFIX/lib "
-                            "-L$HWLOC_PREFIX/lib -L$OFI_PREFIX/lib "
-                            "-L$ISAL_PREFIX/lib $_RPATH")
-    # Explicitly link RTE & SPDK libs for CGO access.
+                            "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH")
+    # Explicitly link RTE & SPDK libs for CGO access (need for clang build).
     senv.AppendENVPath("CGO_LDFLAGS", cgolibdirs + \
                        " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev" + \
                        " -lspdk_copy -lrte_mempool  -lrte_mempool_ring" + \
@@ -171,7 +181,6 @@ def scons():
 
     senv.AppendENVPath("CGO_CFLAGS",
                        senv.subst("-I$SPDK_PREFIX/include "
-                                  "-I$HWLOC_PREFIX/include "
                                   "-I$OFI_PREFIX/include"),
                        sep=" ")
 

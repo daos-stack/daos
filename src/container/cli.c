@@ -466,7 +466,7 @@ dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
 	chunksize = daos_cont_prop2chunksize(props);
 	daos_csummer_init(&cont->dc_csummer,
 			  daos_csum_type2algo(csum_type),
-			  chunksize);
+			  chunksize, 0);
 }
 
 struct cont_open_args {
@@ -1064,6 +1064,8 @@ dc_cont_query(tse_task_t *task)
 	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
 	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
 	in->cqi_bits = cont_query_bits(args->prop);
+	if (args->info != NULL)
+		in->cqi_bits |= DAOS_CO_QUERY_TGT;
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
@@ -1670,6 +1672,7 @@ struct dc_cont_glob {
 	uint64_t	dcg_capas;
 	uint16_t	dcg_csum_type;
 	uint32_t	dcg_csum_chunksize;
+	bool		dcg_csum_srv_verify;
 };
 
 static inline daos_size_t
@@ -1734,6 +1737,8 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_csum_type = daos_csummer_get_type(cont->dc_csummer);
 	cont_glob->dcg_csum_chunksize =
 		daos_csummer_get_chunksize(cont->dc_csummer);
+	cont_glob->dcg_csum_srv_verify =
+		daos_csummer_get_srv_verify(cont->dc_csummer);
 
 	dc_pool_put(pool);
 out_cont:
@@ -1775,7 +1780,8 @@ csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
 	csum_algo = daos_csum_type2algo(cont_glob->dcg_csum_type);
 	if (csum_algo != NULL)
 		daos_csummer_init(&cont->dc_csummer, csum_algo,
-				  cont_glob->dcg_csum_chunksize);
+				  cont_glob->dcg_csum_chunksize,
+				  cont_glob->dcg_csum_srv_verify);
 	else
 		cont->dc_csummer = NULL;
 }

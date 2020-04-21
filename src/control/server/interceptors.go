@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -132,4 +133,32 @@ func unaryErrorInterceptor(ctx context.Context, req interface{}, info *grpc.Unar
 func streamErrorInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	err := handler(srv, ss)
 	return proto.AnnotateError(err)
+}
+
+type statusGetter interface {
+	GetStatus() int32
+}
+
+// dErrFromStatus converts a numeric DAOS return status code
+// into an error.
+func dErrFromStatus(sg statusGetter) error {
+	dStatus := sg.GetStatus()
+	if dStatus == 0 {
+		return nil
+	}
+
+	return drpc.DaosStatus(dStatus)
+}
+
+func unaryStatusInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	res, err := handler(ctx, req)
+	if err != nil {
+		return res, err
+	}
+
+	if sg, ok := res.(statusGetter); ok {
+		return res, dErrFromStatus(sg)
+	}
+
+	return res, err
 }

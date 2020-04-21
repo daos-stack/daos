@@ -145,6 +145,8 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		return rc;
 	}
 
+	vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
+
 	D_ASSERT(tins->ti_priv);
 	return gc_add_item((struct vos_pool *)tins->ti_priv, GC_OBJ,
 			   rec->rec_off, 0);
@@ -300,7 +302,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 			    info, ts_set, true);
 
 	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
-		rc = -DER_AGAIN;
+		rc = -DER_TX_RESTART;
 
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,

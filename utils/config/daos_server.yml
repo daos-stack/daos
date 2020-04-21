@@ -75,6 +75,13 @@
 #provider: ofi+verbs;ofi_rxm
 #
 #
+## global CRT_CTX_SHARE_ADDR shared with client
+#crt_ctx_share_addr: 1
+#
+#
+## global CRT_TIMEOUT shared with client
+#crt_timeout: 30
+#
 #
 ## NVMe SSD whitelist
 #

@@ -34,8 +34,6 @@
 extern "C" {
 #endif
 
-#include <daos_types.h>
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/types.h>
@@ -50,6 +48,7 @@ extern "C" {
  * terminator.
  */
 #define DAOS_ACL_MAX_PRINCIPAL_LEN	(255)
+/** DAOS_ACL_MAX_PRINCIPAL_LEN including NULL terminator */
 #define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /**
@@ -221,7 +220,7 @@ struct daos_ace {
  *
  * \return	allocated daos_acl pointer, NULL if failed
  */
-DAOS_API struct daos_acl *
+struct daos_acl *
 daos_acl_create(struct daos_ace *aces[], uint16_t num_aces);
 
 /**
@@ -232,7 +231,7 @@ daos_acl_create(struct daos_ace *aces[], uint16_t num_aces);
  * \return	Newly allocated copy of the ACL, or NULL if the ACL can't be
  *		allocated
  */
-DAOS_API struct daos_acl *
+struct daos_acl *
 daos_acl_dup(struct daos_acl *acl);
 
 /**
@@ -240,7 +239,7 @@ daos_acl_dup(struct daos_acl *acl);
  *
  * \param[in]	acl	ACL pointer to be freed
  */
-DAOS_API void
+void
 daos_acl_free(struct daos_acl *acl);
 
 /**
@@ -252,7 +251,7 @@ daos_acl_free(struct daos_acl *acl);
  * \return	Size of ACL in bytes
  *		-DER_INVAL		Invalid input
  */
-DAOS_API ssize_t
+ssize_t
 daos_acl_get_size(struct daos_acl *acl);
 
 /**
@@ -265,7 +264,7 @@ daos_acl_get_size(struct daos_acl *acl);
  *
  * \return	Pointer to the next ACE in the ACL, or NULL if at the end
  */
-DAOS_API struct daos_ace *
+struct daos_ace *
 daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace);
 
 /**
@@ -282,7 +281,7 @@ daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace);
  *		-DER_INVAL	Invalid input
  *		-DER_NONEXIST	Matching ACE not found
  */
-DAOS_API int
+int
 daos_acl_get_ace_for_principal(struct daos_acl *acl,
 			       enum daos_acl_principal_type type,
 			       const char *principal, struct daos_ace **ace);
@@ -304,7 +303,7 @@ daos_acl_get_ace_for_principal(struct daos_acl *acl,
  *		-DER_INVAL	Invalid input
  *		-DER_NOMEM	Failed to allocate required memory
  */
-DAOS_API int
+int
 daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
 
 /**
@@ -317,15 +316,13 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
  * \param[in]	type			Principal type of the ACE to remove
  * \param[in]	principal_name		Principal name of the ACE to remove
  *					(NULL if type isn't user/group)
- * \param[out]	new_acl			Reallocated copy of the ACL with the
- *					ACE removed
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
  *		-DER_NOMEM	Failed to allocate required memory
  *		-DER_NONEXIST	Requested ACE was not in the ACL
  */
-DAOS_API int
+int
 daos_acl_remove_ace(struct daos_acl **acl,
 		    enum daos_acl_principal_type type,
 		    const char *principal_name);
@@ -335,7 +332,7 @@ daos_acl_remove_ace(struct daos_acl **acl,
  *
  * \param	acl	Access Control List to print
  */
-DAOS_API void
+void
 daos_acl_dump(struct daos_acl *acl);
 
 /**
@@ -348,7 +345,7 @@ daos_acl_dump(struct daos_acl *acl);
  *		-DER_INVAL	ACL is not valid
  *		-DER_NOMEM	Ran out of memory while checking
  */
-DAOS_API int
+int
 daos_acl_validate(struct daos_acl *acl);
 
 /**
@@ -362,7 +359,7 @@ daos_acl_validate(struct daos_acl *acl);
  *		-DER_INVAL	ACL is not valid
  *		-DER_NOMEM	Ran out of memory while checking
  */
-DAOS_API int
+int
 daos_acl_pool_validate(struct daos_acl *acl);
 
 /**
@@ -376,7 +373,7 @@ daos_acl_pool_validate(struct daos_acl *acl);
  *		-DER_INVAL	ACL is not valid
  *		-DER_NOMEM	Ran out of memory while checking
  */
-DAOS_API int
+int
 daos_acl_cont_validate(struct daos_acl *acl);
 
 /**
@@ -393,7 +390,7 @@ daos_acl_cont_validate(struct daos_acl *acl);
  * \return	New ACE structure with an appropriately packed principal name,
  *			length, and type set.
  */
-DAOS_API struct daos_ace *
+struct daos_ace *
 daos_ace_create(enum daos_acl_principal_type type, const char *principal_name);
 
 /**
@@ -401,7 +398,7 @@ daos_ace_create(enum daos_acl_principal_type type, const char *principal_name);
  *
  * \param[in]	ace	ACE to be freed
  */
-DAOS_API void
+void
 daos_ace_free(struct daos_ace *ace);
 
 /**
@@ -413,7 +410,7 @@ daos_ace_free(struct daos_ace *ace);
  * \return	Size of ACE in bytes
  *		-DER_INVAL		Invalid input
  */
-DAOS_API ssize_t
+ssize_t
 daos_ace_get_size(struct daos_ace *ace);
 
 /**
@@ -422,7 +419,7 @@ daos_ace_get_size(struct daos_ace *ace);
  * \param	ace	Access Control Entry to print
  * \param	tabs	Number of tabs to indent at top level
  */
-DAOS_API void
+void
 daos_ace_dump(struct daos_ace *ace, uint32_t tabs);
 
 /**
@@ -433,7 +430,7 @@ daos_ace_dump(struct daos_ace *ace, uint32_t tabs);
  *
  * \return	True if the ACE is valid, false otherwise
  */
-DAOS_API bool
+bool
 daos_ace_is_valid(struct daos_ace *ace);
 
 /**
@@ -449,7 +446,7 @@ daos_ace_is_valid(struct daos_ace *ace);
  * \return	true if the name is properly formatted
  *		false otherwise
  */
-DAOS_API bool
+bool
 daos_acl_principal_is_valid(const char *name);
 
 /**
@@ -465,7 +462,7 @@ daos_acl_principal_is_valid(const char *name);
  *		-DER_NONEXIST	UID not found
  *		-DER_NOMEM	Could not allocate memory
  */
-DAOS_API int
+int
 daos_acl_uid_to_principal(uid_t uid, char **name);
 
 /**
@@ -481,7 +478,7 @@ daos_acl_uid_to_principal(uid_t uid, char **name);
  *		-DER_NONEXIST	GID not found
  *		-DER_NOMEM	Could not allocate memory
  */
-DAOS_API int
+int
 daos_acl_gid_to_principal(gid_t gid, char **name);
 
 /**
@@ -496,7 +493,7 @@ daos_acl_gid_to_principal(gid_t gid, char **name);
  *		-DER_NONEXIST	User not found
  *		-DER_NOMEM	Could not allocate memory
  */
-DAOS_API int
+int
 daos_acl_principal_to_uid(const char *principal, uid_t *uid);
 
 /**
@@ -511,7 +508,7 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid);
  *		-DER_NONEXIST	Group not found
  *		-DER_NOMEM	Could not allocate memory
  */
-DAOS_API int
+int
 daos_acl_principal_to_gid(const char *principal, gid_t *gid);
 
 /**
@@ -522,7 +519,7 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid);
  * \return	Either the string from the principal name field, or one of the
  *		special principal names: OWNER@, GROUP@, EVERYONE@
  */
-DAOS_API const char *
+const char *
 daos_ace_get_principal_str(struct daos_ace *ace);
 
 /**
@@ -536,7 +533,7 @@ daos_ace_get_principal_str(struct daos_ace *ace);
  *		-DER_INVAL	Invalid input
  *		-DER_NOMEM	Could not allocate memory
  */
-DAOS_API int
+int
 daos_ace_from_str(const char *str, struct daos_ace **ace);
 
 /**
@@ -553,7 +550,7 @@ daos_ace_from_str(const char *str, struct daos_ace **ace);
  * \return	0		Success
  *		-DER_INVAL	Invalid input
  */
-DAOS_API int
+int
 daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len);
 
 /**
@@ -567,7 +564,7 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len);
  *		-DER_INVAL	Invalid input string
  *		-DER_TRUNC	Output didn't fit in buffer
  */
-DAOS_API int
+int
 daos_ace_str_get_verbose(const char *ace_str, char *buf, size_t buf_len);
 
 /**
@@ -582,7 +579,7 @@ daos_ace_str_get_verbose(const char *ace_str, char *buf, size_t buf_len);
  *		-DER_INVAL	Invalid input
  *		-DER_NOMEM	Could not allocate memory
  */
-DAOS_API int
+int
 daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl);
 
 /**
@@ -600,7 +597,7 @@ daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl);
  *		-DER_INVAL	Invalid input
  *		-DER_NOMEM	Could not allocate memory
  */
-DAOS_API int
+int
 daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr);
 
 /**
@@ -623,7 +620,7 @@ daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr);
  *		-DER_INVAL	Invalid input
  *		-DER_NOMEM	Could not allocate memory
  */
-DAOS_API int
+int
 daos_acl_principal_from_str(const char *principal_str,
 			    enum daos_acl_principal_type *type,
 			    char **name);

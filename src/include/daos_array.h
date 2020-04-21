@@ -146,13 +146,10 @@ daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr,
  *			0		Success
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Cannot find object
- *			-DER_EP_OLD	Epoch is too old and has no data for
- *					this object
+ *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 		  daos_size_t cell_size, daos_size_t chunk_size,
 		  daos_handle_t *oh, daos_event_t *ev);
@@ -180,13 +177,11 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			0		Success
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Cannot find object
- *			-DER_EP_OLD	Epoch is too old and has no data for
- *					this object
+ *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 		unsigned int mode, daos_size_t *cell_size,
 		daos_size_t *chunk_size, daos_handle_t *oh, daos_event_t *ev);
@@ -203,9 +198,9 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			be set to DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT.
  * \param[in]	th	Transaction handle.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW
- * \param[out]	cell_size
+ * \param[in]	cell_size
  *			Record size of the array.
- * \param[out]	chunk_size
+ * \param[in]	chunk_size
  *			Contiguous bytes to store per DKey before moving to a
  *			differen dkey.
  * \param[out]	oh	Returned array object open handle.
@@ -217,13 +212,9 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			0		Success
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Cannot find object
- *			-DER_EP_OLD	Epoch is too old and has no data for
- *					this object
  */
-DAOS_API int
+int
 daos_array_open_with_attr(daos_handle_t coh, daos_obj_id_t oid,
 			  daos_handle_t th, unsigned int mode,
 			  daos_size_t cell_size, daos_size_t chunk_size,
@@ -249,7 +240,7 @@ daos_array_open_with_attr(daos_handle_t coh, daos_obj_id_t oid,
  *					required buffer size is returned through
  *					glob->iov_buf_len.
  */
-DAOS_API int
+int
 daos_array_local2global(daos_handle_t oh, d_iov_t *glob);
 
 /**
@@ -269,7 +260,7 @@ daos_array_local2global(daos_handle_t oh, d_iov_t *glob);
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_HDL	Container handle is nonexistent
  */
-DAOS_API int
+int
 daos_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 			daos_handle_t *oh);
 
@@ -285,7 +276,7 @@ daos_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
  *			0		Success
  *			-DER_NO_HDL	Invalid object open handle
  */
-DAOS_API int
+int
 daos_array_close(daos_handle_t oh, daos_event_t *ev);
 
 /**
@@ -309,9 +300,8 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_REC2BIG	Record is too large and can't be
  *					fit into output buffer
- *			-DER_EP_OLD	Epoch is too old and has no data
  */
-DAOS_API int
+int
 daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		d_sg_list_t *sgl, daos_event_t *ev);
 
@@ -335,9 +325,8 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_REC2BIG	Record is too large and can't be
  *					fit into output buffer
- *			-DER_EP_OLD	Epoch is too old and has no data
  */
-DAOS_API int
+int
 daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		 d_sg_list_t *sgl, daos_event_t *ev);
 
@@ -350,9 +339,14 @@ daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return		0 on Success, negative on failure.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
 		    daos_event_t *ev);
 
@@ -368,9 +362,14 @@ daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return		0 on Success, negative on failure.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
 		    daos_event_t *ev);
 
@@ -388,9 +387,14 @@ daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return		0 on Success, negative on failure.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
 
 /**
@@ -402,9 +406,14 @@ daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return		0 on Success, negative on failure.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		 daos_event_t *ev);
 
@@ -417,9 +426,13 @@ daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  * \param[out]	cell_size
  *			Cell size of the array.
  *
- * \return		0 on Success, negative on failure.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
  */
-DAOS_API int
+int
 daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 		    daos_size_t *cell_size);
 

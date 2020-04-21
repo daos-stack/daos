@@ -23,7 +23,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
@@ -50,7 +49,7 @@ func TestDmg_ManPageIsCurrent(t *testing.T) {
 		return out.Bytes()
 	}
 
-	writeManPage(bufio.NewWriter(&manBytes))
+	writeManPage(&manBytes)
 	if *update {
 		err := ioutil.WriteFile(goldenPath, manBytes.Bytes(), 0644)
 		if err != nil {

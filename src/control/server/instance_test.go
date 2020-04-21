@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,12 +58,12 @@ func waitForIosrvReady(t *testing.T, instance *IOServerInstance) {
 	select {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("IO server never became ready!")
-	case <-instance.AwaitReady():
+	case <-instance.AwaitDrpcReady():
 		return
 	}
 }
 
-func TestIOServerInstance_NotifyReady(t *testing.T) {
+func TestIOServerInstance_NotifyDrpcReady(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
@@ -71,7 +71,7 @@ func TestIOServerInstance_NotifyReady(t *testing.T) {
 
 	req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
 
-	instance.NotifyReady(req)
+	instance.NotifyDrpcReady(req)
 
 	dc, err := instance.getDrpcClient()
 	if err != nil || dc == nil {

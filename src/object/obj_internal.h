@@ -158,16 +158,6 @@ enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
 }
 
 extern struct dss_module_key obj_module_key;
-enum obj_profile_op {
-	OBJ_PF_UPDATE_PREP = 0,
-	OBJ_PF_UPDATE_DISPATCH,
-	OBJ_PF_UPDATE_LOCAL,
-	OBJ_PF_UPDATE_END,
-	OBJ_PF_UPDATE_WAIT,
-	OBJ_PF_UPDATE_REPLY,
-	OBJ_PF_UPDATE,
-	OBJ_PF_MAX,
-};
 
 /* Per pool attached to the migrate tls(per xstream) */
 struct migrate_pool_tls {
@@ -186,9 +176,19 @@ struct migrate_pool_tls {
 	uuid_t			mpt_coh_uuid;
 	daos_handle_t		mpt_pool_hdl;
 
-	/* Container/objects tobe migrated will be attached to the tree */
+	/* Container/objects to be migrated will be attached to the tree */
 	daos_handle_t		mpt_root_hdl;
 	struct btr_root		mpt_root;
+
+	/* Indicates whether containers should be cleared of all contents
+	 * before any data is migrated to them (via destroy & recreate)
+	 */
+	bool			mpt_clear_conts;
+
+	/* Hash table to store the container uuids which have already been
+	 * deleted (used by reintegration)
+	 */
+	struct d_hash_table	mpt_cont_dest_tab;
 
 	/* Service rank list for migrate fetch RPC */
 	d_rank_list_t		mpt_svc_list;
@@ -226,7 +226,6 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
-	struct srv_profile	*ot_sp;
 	d_list_t		ot_pool_list;
 };
 

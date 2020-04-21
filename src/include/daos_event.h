@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015 - 2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ extern "C" {
  *
  * \return		Zero on success, negative value if error
  */
-DAOS_API int
+int
 daos_eq_create(daos_handle_t *eqh);
 
 #define DAOS_EQ_DESTROY_FORCE	1
@@ -79,7 +79,7 @@ daos_eq_create(daos_handle_t *eqh);
  *
  * \return		Zero on success, EBUSY if there is any launched event
  */
-DAOS_API int
+int
 daos_eq_destroy(daos_handle_t eqh, int flags);
 
 /**
@@ -99,7 +99,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags);
  * \return		>= 0	Returned number of events
  *			< 0	negative value if error
  */
-DAOS_API int
+int
 daos_eq_poll(daos_handle_t eqh, int wait_running,
 	     int64_t timeout, unsigned int nevents, daos_event_t **events);
 
@@ -123,7 +123,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running,
  * \return		>= 0	Returned number of events
  *			 < 0	negative value if error
  */
-DAOS_API int
+int
 daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 	      unsigned int nevents, daos_event_t **events);
 
@@ -143,9 +143,12 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
  *			just an easy way to combine multiple events completion
  *			status into 1.
  *
- * \return		Zero on success, negative value if error
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Event Queue does not exist
  */
-DAOS_API int
+int
 daos_event_init(daos_event_t *ev, daos_handle_t eqh, daos_event_t *parent);
 
 /**
@@ -158,9 +161,11 @@ daos_event_init(daos_event_t *ev, daos_handle_t eqh, daos_event_t *parent);
  *
  * \param ev [IN]	Event to finalize
  *
- * \return		Zero on success, negative value if error
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NONEXIST	Event Queue does not exist
  */
-DAOS_API int
+int
 daos_event_fini(daos_event_t *ev);
 
 /**
@@ -173,7 +178,7 @@ daos_event_fini(daos_event_t *ev);
  * \return		The next child event after \a child, or NULL if it's
  *			the last one.
  */
-DAOS_API daos_event_t *
+daos_event_t *
 daos_event_next(daos_event_t *parent, daos_event_t *child);
 
 /**
@@ -188,9 +193,13 @@ daos_event_next(daos_event_t *parent, daos_event_t *child);
  * \param flag [OUT]	returned state of the event. true if the event is
  *			finished (completed or aborted), false if in-flight.
  *
- * \return		Zero on success, negative value if error
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Event Queue does not exist
+ *			negative rc of associated operation of the event.
  */
-DAOS_API int
+int
 daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag);
 
 /**
@@ -208,9 +217,12 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag);
  *
  * \param ev [IN]	Parent event
  *
- * \return		Zero on success, negative value if error
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Event Queue does not exist
  */
-DAOS_API int
+int
 daos_event_parent_barrier(struct daos_event *ev);
 
 /**
@@ -219,9 +231,11 @@ daos_event_parent_barrier(struct daos_event *ev);
  *
  * \param ev [IN]	Event (operation) to abort
  *
- * \return		Zero on success, negative value if error
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
  */
-DAOS_API int
+int
 daos_event_abort(daos_event_t *ev);
 
 #if defined(__cplusplus)

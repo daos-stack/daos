@@ -39,6 +39,7 @@
 #include <dirent.h>
 
 #include <cmocka.h>
+#ifdef OVERRIDE_CMOCKA_SKIP
 /* redefine cmocka's skip() so it will no longer abort()
  * if CMOCKA_TEST_ABORT=1
  *
@@ -54,6 +55,7 @@
 			_skip(__FILE__, __LINE__); \
 		return; \
 	} while  (0)
+#endif
 
 #include <mpi.h>
 #include <daos/debug.h>
@@ -298,8 +300,6 @@ int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
-void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			      const char *grp, d_rank_list_t *svc);
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
@@ -337,6 +337,10 @@ void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			 bool discard);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt);
+
+void reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+				int failed_tgt);
+
 void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
 			   int *failed_tgts, int nr);
 

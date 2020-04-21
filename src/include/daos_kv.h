@@ -36,9 +36,13 @@
 extern "C" {
 #endif
 
+/* Conditional Op: Insert key if it doesn't exist, fail otherwise */
 #define DAOS_COND_KEY_INSERT	DAOS_COND_DKEY_INSERT
+/* Conditional Op: Update key if it exists, fail otherwise */
 #define DAOS_COND_KEY_UPDATE	DAOS_COND_DKEY_UPDATE
+/* Conditional Op: Fetch key if it exists, fail otherwise */
 #define DAOS_COND_KEY_FETCH	DAOS_COND_DKEY_FETCH
+/* Conditional Op: Punch key if it exists, fail otherwise */
 #define DAOS_COND_KEY_PUNCH	DAOS_COND_DKEY_PUNCH
 
 /**
@@ -65,7 +69,7 @@ extern "C" {
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only
  */
-DAOS_API int
+int
 daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
 	    daos_size_t size, const void *buf, daos_event_t *ev);
 
@@ -93,7 +97,7 @@ daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *			-DER_REC2BIG	Record does not fit in buffer
  *			-DER_EP_RO	Epoch is read-only
  */
-DAOS_API int
+int
 daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
 	    daos_size_t *size, void *buf, daos_event_t *ev);
 
@@ -116,7 +120,7 @@ daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only
  */
-DAOS_API int
+int
 daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       const char *key, daos_event_t *ev);
 
@@ -129,8 +133,8 @@ daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *		nr	[in]: number of key descriptors in \a kds. [out]: number
  *			of returned key descriptors.
  * \param[in,out]
- *		kds	[in]: preallocated array of \nr key descriptors. [out]:
- *			size of each individual key.
+ *		kds	[in]: preallocated array of \a nr key descriptors.
+ *			[out]: size of each individual key.
  * \param[in]	sgl	Scatter/gather list to store the dkey list.
  *			All keys are written contiguously, with actual
  *			boundaries that can be calculated using \a kds.
@@ -150,7 +154,7 @@ daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only
  */
-DAOS_API int
+int
 daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 	     daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
 	     daos_event_t *ev);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,8 +45,7 @@ extern "C" {
  * \return		allocated rank list that user is responsible to free
  *			with d_rank_list_free().
  */
-DAOS_API d_rank_list_t *
-daos_rank_list_parse(const char *str, const char *sep);
+d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
 
 /*
  * Transaction API
@@ -64,7 +63,7 @@ daos_rank_list_parse(const char *str, const char *sep);
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_open(daos_handle_t coh, daos_handle_t *th, daos_event_t *ev);
 
 /**
@@ -83,7 +82,7 @@ daos_tx_open(daos_handle_t coh, daos_handle_t *th, daos_event_t *ev);
  *			-DER_INVAL      Invalid parameter
  *			-DER_RESTART	transaction conflict detected.
  */
-DAOS_API int
+int
 daos_tx_commit(daos_handle_t th, daos_event_t *ev);
 
 /**
@@ -101,7 +100,7 @@ daos_tx_commit(daos_handle_t th, daos_event_t *ev);
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
 		  daos_event_t *ev);
 
@@ -115,7 +114,7 @@ daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_abort(daos_handle_t th, daos_event_t *ev);
 
 /**
@@ -123,21 +122,23 @@ daos_tx_abort(daos_handle_t th, daos_event_t *ev);
  * involved.
  *
  * \param[in]	th	Transaction handle to free.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_close(daos_handle_t th, daos_event_t *ev);
 
 /**
  * Return epoch associated with the transaction handle.
  *
  * \param[in]	th	Transaction handle.
- * \param[out]	th	Returned epoch value.
+ * \param[out]	epoch	Returned epoch value.
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 
 #if defined(__cplusplus)
