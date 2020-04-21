@@ -26,6 +26,7 @@
  *
  * Author: Jeff Olivier <jeffrey.v.olivier@intel.com>
  */
+#define D_LOGFAC DD_FAC(vos)
 #include "lru_array.h"
 
 static void
@@ -34,7 +35,9 @@ evict_cb(struct lru_array *array, struct lru_entry *entry, uint32_t idx)
 	if (array->la_cbs.lru_on_evict == NULL)
 		return;
 
+	array->la_evicting++;
 	array->la_cbs.lru_on_evict(entry->le_payload, idx, array->la_arg);
+	array->la_evicting--;
 }
 
 static void
@@ -72,10 +75,11 @@ lrua_evict_lru(struct lru_array *array, struct lru_entry **entryp,
 		evict_cb(array, entry, array->la_lru);
 	}
 
-	*idx = array->la_lru;
+	*idx = array->la_mru = array->la_lru;
 	entry->le_record_idx = idx;
 	array->la_lru = entry->le_next_idx;
-	array->la_mru = *idx;
+
+	D_ASSERT(array->la_lru != array->la_mru);
 
 	*entryp = entry;
 }
@@ -98,25 +102,32 @@ lrua_evict(struct lru_array *array, uint32_t *idx)
 
 	entry->le_record_idx = NULL;
 
-	if (array->la_mru == tidx)
-		array->la_mru = entry->le_prev_idx;
-
-	if (array->la_lru == tidx)
+	if (array->la_lru == tidx) {
+		/** If it's already the lru, nothing to do */
 		return;
+	}
+
+	if (array->la_mru == tidx) {
+		/** Circular ordering doesn't change.  Just need to update the
+		 *  lru and mru indexes.
+		 */
+		array->la_mru = entry->le_prev_idx;
+		goto set_lru;
+	}
 
 	/** Remove from current location */
 	lrua_remove_entry(&array->la_table[0], entry);
 
-	/** Add at the LRU */
-	lrua_insert_entry(&array->la_table[0], entry, tidx, array->la_mru,
-			  array->la_lru);
+	/** Add between MRU and LRU */
+	lrua_insert_mru(array, entry, tidx);
 
+set_lru:
 	array->la_lru = tidx;
 }
 
 int
 lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent,
-		 uint32_t record_size, const struct lru_callbacks *cbs,
+		 uint16_t record_size, const struct lru_callbacks *cbs,
 		 void *arg)
 {
 	struct lru_array	*array;
@@ -126,6 +137,10 @@ lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent,
 	uint32_t		 next_idx;
 	uint32_t		 prev_idx;
 
+	/** The prev != next assertions require the array to have a minimum
+	 *  size of 3.   Just assert this precondition.
+	 */
+	D_ASSERT(nr_ent > 2);
 	aligned_size = (record_size + 7) & ~7;
 
 	*arrayp = NULL;
