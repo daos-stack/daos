@@ -20,11 +20,13 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package bdev
 
 import (
 	"encoding/json"
 	"os"
+	"sync"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -47,6 +49,8 @@ type (
 		log     logging.Logger
 		binding *spdkWrapper
 		script  *spdkSetupScript
+
+		sync.RWMutex
 	}
 )
 
@@ -199,6 +203,9 @@ func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 	if pciAddr == "" {
 		return nil, FaultFormatBadPciAddr("")
 	}
+
+	b.Lock()
+	defer b.Unlock()
 
 	controllers, err := b.Scan()
 	if err != nil {
