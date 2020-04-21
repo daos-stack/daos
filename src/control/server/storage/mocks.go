@@ -24,12 +24,19 @@ package storage
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
 )
 
 func concat(base string, idx int32) string {
 	return fmt.Sprintf("%s-%d", base, idx)
+}
+
+func getRandIdx() int32 {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Int31()
 }
 
 func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
@@ -39,8 +46,10 @@ func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
 		tWarn = true
 	}
 	return &NvmeDeviceHealth{
-		Temp:     uint32(idx),
-		TempWarn: tWarn,
+		Temp:         uint32(getRandIdx()),
+		PowerCycles:  uint64(getRandIdx()),
+		PowerOnHours: uint64(getRandIdx()),
+		TempWarn:     tWarn,
 	}
 }
 
@@ -57,7 +66,7 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 
 	return &NvmeController{
 		Model:       concat("model", idx),
-		Serial:      concat("serial", idx),
+		Serial:      concat("serial", getRandIdx()),
 		PciAddr:     concat("pciAddr", idx),
 		FwRev:       concat("fwRev", idx),
 		SocketID:    idx,
