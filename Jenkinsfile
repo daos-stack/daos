@@ -1048,13 +1048,17 @@ pipeline {
                             sh script: '''set -ex
                                       . ./.build_vars.sh
                                       DAOS_BASE=${SL_PREFIX%/install*}
+                                      rm -rf $DAOS_BASE/run_test.sh $DAOS_BASE/vm_test
                                       NODE=${NODELIST%%,*}
                                       ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                           cd $DAOS_BASE
-                                          rm -rf run_test.sh/
-                                          mkdir run_test.sh/
+                                          mkdir run_test.sh
+                                          mkdir vm_test
                                           if ls /tmp/daos*.log > /dev/null; then
                                               mv /tmp/daos*.log run_test.sh/
+                                          fi
+                                          if ls /tmp/dnt*.log > /dev/null; then
+                                              mv /tmp/dnt*.log vm_test/
                                           fi
                                           # servers can sometimes take a while to stop when the test is done
                                           x=0
@@ -1085,7 +1089,7 @@ pipeline {
                                     failThresholdDefinitelyLost: '0',
                                     failThresholdInvalidReadWrite: '0',
                                     failThresholdTotal: '0',
-                                    pattern: 'dfuse.*.memcheck',
+                                    pattern: 'dfuse.*.memcheck.xml',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
                                     sourceSubstitutionPaths: '',

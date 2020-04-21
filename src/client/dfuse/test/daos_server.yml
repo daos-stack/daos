@@ -1,10 +1,10 @@
 name: daos_server
 port: 10001
 provider: ofi+sockets
-socket_dir: /tmp/daos_sockets
+socket_dir: /tmp/dnt_sockets
 nr_hugepages: 4096
 control_log_mask: DEBUG
-control_log_file: /tmp/daos_control.log
+control_log_file: /tmp/dnt_control.log
 access_points: ['localhost:10001']
 servers:
 -
@@ -14,7 +14,7 @@ servers:
   fabric_iface: eth0
   fabric_iface_port: 31416
   log_mask: DEBUG
-  log_file: /tmp/daos_server.log
+  log_file: /tmp/dnt_server.log
   env_vars:
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0

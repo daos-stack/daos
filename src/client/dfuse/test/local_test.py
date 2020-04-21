@@ -53,13 +53,13 @@ class DaosServer():
         self._agent = None
         self.agent_dir = None
 
-        socket_dir = '/tmp/daos_sockets'
+        socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
-        if os.path.exists('/tmp/daos_server.log'):
-            os.unlink('/tmp/daos_server.log')
+        if os.path.exists('/tmp/dnt_server.log'):
+            os.unlink('/tmp/dnt_server.log')
 
-        self._agent_dir = tempfile.TemporaryDirectory(prefix='daos_agent_')
+        self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
         self.agent_dir = self._agent_dir.name
 
     def __del__(self):
@@ -114,7 +114,7 @@ class DaosServer():
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        log_test('/tmp/daos_server.log')
+        log_test('/tmp/dnt_server.log')
         self.running = False
 
 def il_cmd(dfuse, cmd):
@@ -122,7 +122,7 @@ def il_cmd(dfuse, cmd):
     my_env = os.environ.copy()
     my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     my_env['OFI_INTERFACE'] = 'lo'
-    log_file = tempfile.NamedTemporaryFile(prefix='daos_dfuse_il_',
+    log_file = tempfile.NamedTemporaryFile(prefix='dnt_dfuse_il_',
                                            suffix='.log', delete=False)
     symlink_file('/tmp/dfuse_il_latest.log', log_file.name)
     my_env['D_LOG_FILE'] = log_file.name
@@ -145,15 +145,19 @@ def symlink_file(a, b):
 
 class DFuse():
     """Manage a dfuse instance"""
+
+    instance_num = 0
+
     def __init__(self, daos, conf, pool=None, container=None):
         self.dir = '/tmp/dfs_test'
         self.pool = pool
+        self.valgrind_file = None
         self.container = container
         self.conf = conf
         self._daos = daos
         self._sp = None
 
-        log_file = tempfile.NamedTemporaryFile(prefix='daos_dfuse_',
+        log_file = tempfile.NamedTemporaryFile(prefix='dnt_dfuse_',
                                                suffix='.log', delete=False)
         self.log_file = log_file.name
 
@@ -162,7 +166,12 @@ class DFuse():
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
 
-    def start(self):
+        self.src_dir = '{}/'.format(os.path.realpath(
+            os.path.join(os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__))),
+                         '../../../')))
+
+    def start(self, v_hint=None):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
         my_env = os.environ.copy()
@@ -194,7 +203,14 @@ class DFuse():
                                   os.path.join('utils',
                                                'memcheck-daos-client.supp'))])
 
-        cmd.extend(['--xml=yes', '--xml-file=dfuse.%p.memcheck'])
+        if v_hint:
+            self.valgrind_file = 'dfuse.{}.memcheck'.format(v_hint)
+        else:
+            self.__class__.instance_num += 1
+            instance = self.__class__.instance_num
+            self.valgrind_file = 'dfuse.{}.memcheck'.format(instance)
+        cmd.extend(['--xml=yes',
+                    '--xml-file={}'.format(self.valgrind_file)])
 
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
 
@@ -258,6 +274,16 @@ class DFuse():
         print('rc from dfuse {}'.format(ret))
         self._sp = None
         log_test(self.log_file)
+
+        # Finally, modify the valgrind xml file to remove the
+        # prefix to the src dir.
+        fd = open(self.valgrind_file, 'r')
+        ofd = open('{}.xml'.format(self.valgrind_file), 'w')
+        for line in fd:
+            if self.src_dir in line:
+                ofd.write(line.replace(self.src_dir, ''))
+            else:
+                ofd.write(line)
 
     def wait_for_exit(self):
         """Wait for dfuse to exit"""
@@ -445,7 +471,7 @@ def run_dfuse(server, conf):
         umount(dfuse.dir)
         raise
     container = str(uuid.uuid4())
-    dfuse.start()
+    dfuse.start(v_hint='no_pool')
     print(os.statvfs(dfuse.dir))
     subprocess.run(['df', '-h'])
     subprocess.run(['df', '-i', dfuse.dir])
@@ -466,7 +492,7 @@ def run_dfuse(server, conf):
     container2 = str(uuid.uuid4())
     dfuse = DFuse(server, conf, pool=pools[0])
     pre_stat = os.stat(dfuse.dir)
-    dfuse.start()
+    dfuse.start(v_hint='pool_only')
     print('Running dfuse with pool only')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
@@ -479,7 +505,7 @@ def run_dfuse(server, conf):
 
     dfuse = DFuse(server, conf, pool=pools[0], container=container)
     pre_stat = os.stat(dfuse.dir)
-    dfuse.start()
+    dfuse.start(v_hint='pool_and_cont')
     print('Running fuse with both')
 
     stat_and_check(dfuse, pre_stat)
@@ -493,7 +519,7 @@ def run_dfuse(server, conf):
     dfuse.stop()
 
     dfuse = DFuse(server, conf, pool=pools[0], container=container2)
-    dfuse.start()
+    dfuse.start('uns-0')
 
     uns_path = os.path.join(dfuse.dir, 'ep0')
 
@@ -514,7 +540,7 @@ def run_dfuse(server, conf):
 
     print('Trying UNS')
     dfuse = DFuse(server, conf)
-    dfuse.start()
+    dfuse.start('uns-2')
 
     # List the root container.
     print(os.listdir(os.path.join(dfuse.dir, pools[0], container2)))
@@ -550,7 +576,7 @@ def run_dfuse(server, conf):
     dfuse.stop()
     print('Trying UNS with previous cont')
     dfuse = DFuse(server, conf)
-    dfuse.start()
+    dfuse.start('uns-3')
 
     files = os.listdir(direct_path)
     print(files)
