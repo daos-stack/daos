@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	msgFormatErr      = "failure formatting storage, check RPC response for details"
+	msgFormatErr      = "failure formatting instance %d storage, check RPC response for details"
 	msgNvmeFormatSkip = "NVMe format skipped on instance %d as SCM format did not complete"
 )
 
