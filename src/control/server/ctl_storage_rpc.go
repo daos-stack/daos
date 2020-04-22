@@ -192,17 +192,19 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
 func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq) (*ctlpb.StorageFormatResp, error) {
-	var resp *ctlpb.StorageFormatResp
-	respChan := make(chan *ctlpb.StorageFormatResp, len(c.harness.Instances()))
+	instances := c.harness.Instances()
+	resp := new(ctlpb.StorageFormatResp)
+	resp.Mrets = make([]*ctlpb.ScmMountResult, 0, len(instances))
+	resp.Crets = make([]*ctlpb.NvmeControllerResult, 0, len(instances))
+	scmChan := make(chan *ctlpb.ScmMountResult, len(instances))
 
 	c.log.Debugf("received StorageFormat RPC %v; proceeding to instance storage format", req)
 
 	// TODO: enable per-instance formatting
 	formatting := 0
-	for _, srv := range c.harness.Instances() {
-		formatting++
+	for _, srv := range instances {
 		go func(s *IOServerInstance) {
-			respChan <- s.StorageFormat(req.Reformat, c.bdev)
+			scmChan <- s.StorageFormatSCM(req.Reformat)
 		}(srv)
 	}
 
@@ -210,17 +212,34 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case newResp := <-respChan:
+		case scmResult := <-scmChan:
 			formatting--
-			if resp == nil {
-				resp = newResp
-			} else {
-				resp.Mrets = append(resp.Mrets, newResp.Mrets...)
-				resp.Crets = append(resp.Crets, newResp.Crets...)
-			}
+			resp.Mrets = append(resp.Mrets, scmResult)
 			if formatting == 0 {
-				return resp, nil
+				break
 			}
 		}
 	}
+
+	// format nvme serially
+	// TODO: perform bdev format in parallel
+	for _, srv := range instances {
+		needsScmFormat, err := srv.NeedsScmFormat()
+		if err != nil {
+			return nil, err
+		}
+		if needsScmFormat {
+			if len(srv.bdevConfig().DeviceList) > 0 {
+				resp.Crets = append(resp.Crets,
+					newCret(srv.log, "format", "",
+						ctlpb.ResponseStatus_CTL_SUCCESS, "",
+						fmt.Sprintf(msgNvmeFormatSkip, srv.Index())))
+			}
+			continue
+		}
+		// SCM formatted correctly on this instance, format NVMe
+		resp.Crets = append(resp.Crets, srv.StorageFormatBdev(c.bdev)...)
+	}
+
+	return resp, nil
 }

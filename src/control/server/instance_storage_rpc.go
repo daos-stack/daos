@@ -134,34 +134,22 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 	return
 }
 
-// doFormat performs format on storage subsystems, populates response results
-// in storage subsystem routines and broadcasts (closes channel) if successful.
-func (srv *IOServerInstance) StorageFormat(reformat bool, bdevProvider *bdev.Provider) (resp *ctlpb.StorageFormatResp) {
-	resp = new(ctlpb.StorageFormatResp)
-	resp.Mrets = proto.ScmMountResults{}
-	resp.Crets = proto.NvmeControllerResults{}
-
+// StorageFormatScm performs format on SCM and identifies if superblock needs
+// writing.
+func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMountResult) {
 	srvIdx := srv.Index()
-	needsSuperblock := true
 	needsScmFormat := reformat
 
-	srv.log.Infof("Formatting storage for %s instance %d (reformat: %t)",
+	srv.log.Infof("Formatting SCM storage for %s instance %d (reformat: %t)",
 		DataPlaneName, srvIdx, reformat)
 
 	var scmErr error
 	defer func() {
 		if scmErr != nil {
 			srv.log.Errorf(msgFormatErr, srvIdx)
-			resp.Mrets = append(resp.Mrets,
-				newMntRet(srv.log, "format", srv.scmConfig().MountPoint,
-					ctlpb.ResponseStatus_CTL_ERR_SCM, scmErr.Error(),
-					fault.ShowResolutionFor(scmErr)))
-			if len(srv.bdevConfig().DeviceList) > 0 {
-				resp.Crets = append(resp.Crets,
-					newCret(srv.log, "format", "",
-						ctlpb.ResponseStatus_CTL_SUCCESS, "",
-						fmt.Sprintf(msgNvmeFormatSkip, srvIdx)))
-			}
+			mResult = newMntRet(srv.log, "format", srv.scmConfig().MountPoint,
+				ctlpb.ResponseStatus_CTL_ERR_SCM, scmErr.Error(),
+				fault.ShowResolutionFor(scmErr))
 		}
 	}()
 
@@ -182,31 +170,31 @@ func (srv *IOServerInstance) StorageFormat(reformat bool, bdevProvider *bdev.Pro
 		}
 	}
 
-	// When SCM format is required, format and append to response results.
 	if needsScmFormat {
-		var result *ctlpb.ScmMountResult
-		result, scmErr = srv.scmFormat(true)
-		if scmErr != nil {
-			return
-		}
-		resp.Mrets = append(resp.Mrets, result)
-	} else {
-		// If SCM was already formatted, verify if superblock exists.
-		needsSuperblock, scmErr = srv.NeedsSuperblock()
-		if scmErr != nil {
-			return
+		mResult, scmErr = srv.scmFormat(true)
+	}
+
+	return
+}
+
+func (srv *IOServerInstance) StorageFormatBdev(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
+	srv.log.Infof("Formatting NVMe storage for %s instance %d", DataPlaneName, srv.Index())
+
+	// If no superblock exists, format NVMe and populate response with results.
+	needsSuperblock, err := srv.NeedsSuperblock()
+	if err != nil {
+		return proto.NvmeControllerResults{
+			newCret(srv.log, "format", "",
+				ctlpb.ResponseStatus_CTL_ERR_NVME, err.Error(),
+				fault.ShowResolutionFor(err)),
 		}
 	}
 
-	// If no superblock exists, format NVMe and populate response with results.
 	if needsSuperblock {
-		nvmeResults := srv.bdevFormat(bdevProvider)
-
-		resp.Crets = append(resp.Crets, nvmeResults...) // append this instance's results
-
-		if nvmeResults.HasErrors() {
-			srv.log.Errorf(msgFormatErr, srvIdx)
-			return // don't continue if we can't format NVMe
+		cResults = srv.bdevFormat(bdevProvider)
+		if cResults.HasErrors() {
+			srv.log.Errorf(msgFormatErr, srv.Index())
+			return // don't notify that storage is ready
 		}
 	}
 
