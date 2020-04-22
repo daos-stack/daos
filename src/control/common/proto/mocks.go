@@ -290,3 +290,7 @@ func (m *MockMgmtSvcClient) ListContainers(ctx context.Context, req *mgmtpb.List
 	// return successful list containers results
 	return &mgmtpb.ListContResp{}, nil
 }
+
+func (m *MockMgmtSvcClient) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerReq, o ...grpc.CallOption) (*mgmtpb.ContSetOwnerResp, error) {
+	return nil, nil
+}
