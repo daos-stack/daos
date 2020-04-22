@@ -150,12 +150,13 @@ class JobManager(ExecutableCommand):
             message (str, optional): additional text to include in output.
                 Defaults to None.
         """
+        super(JobManager, self).display_subprocess_state(message)
         if self._process is not None:
             command = "pgrep -a -f '{}'".format(str(self.job))
             self.log.debug(
-                "Processes still running%s:",
+                "Processes still running remotely%s:",
                 " {}".format(message) if message else "")
-            pcmd(self._hosts, command, True, 5, None)
+            pcmd(self._hosts, command, True, 10, None)
 
 
 class Orterun(JobManager):

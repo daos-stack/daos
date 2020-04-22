@@ -174,6 +174,9 @@ class ExecutableCommand(CommandWithParameters):
                 signal_to_send = signal_list.pop(0)
                 msg = "before sending signal {}".format(signal_to_send)
                 self.display_subprocess_state(msg)
+                self.log.info(
+                    "Sending signal %s to %s", str(signal_to_send),
+                    self._command)
                 self._process.send_signal(signal_to_send)
                 if signal_list:
                     time.sleep(5)
@@ -231,7 +234,7 @@ class ExecutableCommand(CommandWithParameters):
         """
         if self._process is not None:
             command = "pstree -pls {}".format(self._process.get_pid())
-            result = process.run(command, 5, True, True, "combined", True)
+            result = process.run(command, 10, True, True, "combined", True)
             self.log.debug(
                 "Processes still running%s:\n  %s",
                 " {}".format(message) if message else "",
