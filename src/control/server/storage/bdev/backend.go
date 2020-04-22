@@ -50,7 +50,7 @@ type (
 		binding *spdkWrapper
 		script  *spdkSetupScript
 
-		sync.RWMutex
+		sync.Mutex
 	}
 )
 

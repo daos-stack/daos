@@ -27,13 +27,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/pkg/errors"
 )
 
 // newMntRet creates and populates NVMe ctrlr result and logs error through newState.
@@ -60,7 +61,7 @@ func newCret(log logging.Logger, op, pciAddr string, status ctlpb.ResponseStatus
 }
 
 // scmFormat will return either successful result or error.
-func (srv *IOServerInstance) scmFormat(p *scm.Provider, reformat bool) (*ctlpb.ScmMountResult, error) {
+func (srv *IOServerInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, error) {
 	var eMsg, iMsg string
 	srvIdx := srv.Index()
 	cfg := srv.scmConfig()
@@ -73,7 +74,7 @@ func (srv *IOServerInstance) scmFormat(p *scm.Provider, reformat bool) (*ctlpb.S
 
 	scmStr := fmt.Sprintf("SCM (%s:%s)", cfg.Class, cfg.MountPoint)
 	srv.log.Infof("Instance %d: starting format of %s", srvIdx, scmStr)
-	res, err := p.Format(*req)
+	res, err := srv.scmProvider.Format(*req)
 	if err == nil && !res.Formatted {
 		err = errors.WithMessage(scm.FaultUnknown, "is still unformatted")
 	}
@@ -135,7 +136,7 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (srv *IOServerInstance) StorageFormat(reformat bool, scmProvider *scm.Provider, bdevProvider *bdev.Provider) (resp *ctlpb.StorageFormatResp) {
+func (srv *IOServerInstance) StorageFormat(reformat bool, bdevProvider *bdev.Provider) (resp *ctlpb.StorageFormatResp) {
 	resp = new(ctlpb.StorageFormatResp)
 	resp.Mrets = proto.ScmMountResults{}
 	resp.Crets = proto.NvmeControllerResults{}
@@ -184,7 +185,7 @@ func (srv *IOServerInstance) StorageFormat(reformat bool, scmProvider *scm.Provi
 	// When SCM format is required, format and append to response results.
 	if needsScmFormat {
 		var result *ctlpb.ScmMountResult
-		result, scmErr = srv.scmFormat(scmProvider, true)
+		result, scmErr = srv.scmFormat(true)
 		if scmErr != nil {
 			return
 		}

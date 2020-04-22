@@ -202,7 +202,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	for _, srv := range c.harness.Instances() {
 		formatting++
 		go func(s *IOServerInstance) {
-			respChan <- s.StorageFormat(req.Reformat, c.scm, c.bdev)
+			respChan <- s.StorageFormat(req.Reformat, c.bdev)
 		}(srv)
 	}
 
