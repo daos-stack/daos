@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,12 @@
 #include "drpc_handler.h"
 #include "srv_internal.h"
 
+enum {
+	LMOD_PHASE_LOADED,
+	LMOD_PHASE_INIT,
+	LMOD_PHASE_SETUP,
+	LMOD_PHASE_CLEANUP,
+};
 /* Loaded module instance */
 struct loaded_mod {
 	/* library handle grabbed with dlopen(3) */
@@ -45,42 +51,12 @@ struct loaded_mod {
 	/* linked list of loaded module */
 	d_list_t		 lm_lk;
 	/** Module is initialized */
-	bool			 lm_init;
+	int			 lm_phase;
 };
 
 /* Track list of loaded modules */
-D_LIST_HEAD(loaded_mod_list);
-pthread_mutex_t loaded_mod_list_lock = PTHREAD_MUTEX_INITIALIZER;
-
-/* Define an array for faster accessing the module by mod_id */
-static struct dss_module	*dss_modules[DAOS_MAX_MODULE];
-
-struct dss_module *
-dss_module_get(int mod_id)
-{
-	/* If the mod_id comes from CART initialized RPC,
-	 * let's return NULL for now.
-	 */
-	if (mod_id >= DAOS_MAX_MODULE)
-		return NULL;
-
-	return dss_modules[mod_id];
-}
-
-static struct loaded_mod *
-dss_module_search(const char *modname)
-{
-	struct loaded_mod *mod;
-
-	/* search for the module in the loaded module list */
-	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
-		if (strcmp(mod->lm_dss_mod->sm_name, modname) == 0)
-			return mod;
-	}
-
-	/* not found */
-	return NULL;
-}
+static D_LIST_HEAD(loaded_mod_list);
+static pthread_mutex_t	loaded_mod_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #define DSS_MODNAME_MAX_LEN	32
 
@@ -142,7 +118,6 @@ dss_module_load(const char *modname)
 	 */
 	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_add_tail(&lmod->lm_lk, &loaded_mod_list);
-	dss_modules[smod->sm_mod_id] = smod;
 	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 
 	return 0;
@@ -191,7 +166,7 @@ dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 	if (mod_facs != NULL)
 		*mod_facs = smod->sm_facs;
 
-	lmod->lm_init = true;
+	lmod->lm_phase = LMOD_PHASE_INIT;
 
 	return 0;
 
@@ -201,7 +176,6 @@ err_mod_init:
 	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
 err_lmod:
-	d_list_del_init(&lmod->lm_lk);
 	dlclose(lmod->lm_hdl);
 	D_FREE(lmod);
 	return rc;
@@ -213,7 +187,7 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	struct dss_module	*smod = lmod->lm_dss_mod;
 	int			 rc = 0;
 
-	if (lmod->lm_init == false)
+	if (lmod->lm_phase == LMOD_PHASE_LOADED)
 		goto close_mod;
 	/* unregister RPC handlers */
 	rc = daos_rpc_unregister(smod->sm_proto_fmt);
@@ -229,7 +203,6 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 
 	dss_unregister_key(smod->sm_key);
 
-	dss_modules[smod->sm_mod_id] = NULL;
 	/* finalize the module */
 	rc = smod->sm_fini();
 	if (rc) {
@@ -245,77 +218,91 @@ close_mod:
 	return rc;
 }
 
+#define dss_checkout_mod_list(checkout_list)				\
+	do {								\
+		D_INIT_LIST_HEAD(checkout_list);			\
+		D_MUTEX_LOCK(&loaded_mod_list_lock);			\
+		D_INFO("Checking out loaded_module_list\n");		\
+		d_list_splice_init(&loaded_mod_list, (checkout_list));	\
+		D_MUTEX_UNLOCK(&loaded_mod_list_lock);			\
+	} while (0)
+
+#define dss_checkin_mod_list(checkout_list)				\
+	do {								\
+		D_INIT_LIST_HEAD(checkout_list);			\
+		D_MUTEX_LOCK(&loaded_mod_list_lock);			\
+		D_INFO("Checking in loaded_module_list\n");		\
+		d_list_splice((checkout_list), &loaded_mod_list);	\
+		D_MUTEX_UNLOCK(&loaded_mod_list_lock);			\
+	} while (0)
+
+
 int
 dss_module_init_all(uint64_t *mod_facs)
 {
 	struct loaded_mod	*lmod;
-	struct loaded_mod	*tmp;
+	struct d_list_head	 checkout_list;
 	uint64_t		 fac;
 	int			 rc = 0;
 
-	/* lookup the module from the loaded module list */
-	D_MUTEX_LOCK(&loaded_mod_list_lock);
-	d_list_for_each_entry_safe(lmod, tmp, &loaded_mod_list, lm_lk) {
-		if (rc != 0) {
-			dss_module_unload_internal(lmod);
-			d_list_del_init(&lmod->lm_lk);
-			D_FREE(lmod);
+	dss_checkout_mod_list(&checkout_list);
+	d_list_for_each_entry(lmod, &checkout_list, lm_lk) {
+		if (lmod->lm_phase != LMOD_PHASE_LOADED) {
+			D_INFO("Skipping init for module %s\n",
+			       lmod->lm_dss_mod->sm_name);
 			continue;
 		}
 		fac = 0;
 		rc = dss_module_init_one(lmod, &fac);
 		*mod_facs |= fac;
+		if (rc != 0)
+			break;
 	}
-	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 
+	if (rc == 0)
+		goto done;
+
+	while ((lmod = d_list_pop_entry(&checkout_list, struct loaded_mod,
+					lm_lk)) != NULL) {
+		dss_module_unload_internal(lmod);
+		D_FREE(lmod);
+	}
+done:
+	dss_checkin_mod_list(&checkout_list);
 	return rc;
-}
-
-
-int
-dss_module_unload(const char *modname)
-{
-	struct loaded_mod	*lmod;
-
-	/* lookup the module from the loaded module list */
-	D_MUTEX_LOCK(&loaded_mod_list_lock);
-	lmod = dss_module_search(modname);
-	if (lmod == NULL) {
-		D_MUTEX_UNLOCK(&loaded_mod_list_lock);
-		/* module not found ... */
-		return -DER_ENOENT;
-	}
-	d_list_del_init(&lmod->lm_lk);
-	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
-
-	dss_module_unload_internal(lmod);
-
-	/* free memory used to track this module instance */
-	D_FREE(lmod);
-
-	return 0;
 }
 
 int
 dss_module_setup_all(void)
 {
 	struct loaded_mod      *mod;
+	struct d_list_head	checkout_list;
 	int			rc = 0;
 
-	D_MUTEX_LOCK(&loaded_mod_list_lock);
-	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
+	dss_checkout_mod_list(&checkout_list);
+	d_list_for_each_entry(mod, &checkout_list, lm_lk) {
 		struct dss_module *m = mod->lm_dss_mod;
 
-		if (m->sm_setup == NULL)
+		if (m->sm_setup == NULL) {
+			mod->lm_phase = LMOD_PHASE_SETUP;
 			continue;
+		}
+		if (mod->lm_phase != LMOD_PHASE_INIT) {
+			D_INFO("Skipping setup for uninitialized module %s\n",
+			       m->sm_name);
+			continue;
+		}
+
 		rc = m->sm_setup();
 		if (rc != 0) {
 			D_ERROR("failed to set up module %s: %d\n", m->sm_name,
 				rc);
 			break;
 		}
+
+		mod->lm_phase = LMOD_PHASE_SETUP;
 	}
-	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+	dss_checkin_mod_list(&checkout_list);
 	return rc;
 }
 
@@ -324,17 +311,25 @@ dss_module_cleanup_all(void)
 {
 	struct loaded_mod      *mod;
 	int			rc = 0;
+	struct d_list_head	checkout_list;
 
 	D_INFO("Cleaning up all loaded modules\n");
-	D_MUTEX_LOCK(&loaded_mod_list_lock);
+	dss_checkout_mod_list(&checkout_list);
 	D_INFO("Iterating through loaded modules list\n");
-	d_list_for_each_entry_reverse(mod, &loaded_mod_list, lm_lk) {
+	d_list_for_each_entry_reverse(mod, &checkout_list, lm_lk) {
 		struct dss_module *m = mod->lm_dss_mod;
 
 		if (m->sm_cleanup == NULL) {
 			D_INFO("Module %s: no sm_cleanup func\n", m->sm_name);
 			continue;
 		}
+
+		if (mod->lm_phase != LMOD_PHASE_SETUP) {
+			D_INFO("Module %s: no sm_cleanup needed, not setup\n",
+			       m->sm_name);
+			continue;
+		}
+
 		D_INFO("Module %s: invoke sm_cleanup func\n", m->sm_name);
 		rc = m->sm_cleanup();
 		if (rc != 0) {
@@ -342,10 +337,11 @@ dss_module_cleanup_all(void)
 				m->sm_name, DP_RC(rc));
 			break;
 		}
+		mod->lm_phase = LMOD_PHASE_CLEANUP;
 		D_INFO("Module %s: cleaned up\n", m->sm_name);
 	}
 	D_INFO("Done iterating through loaded modules list\n");
-	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+	dss_checkin_mod_list(&checkout_list);
 	D_INFO("Done cleaning up all loaded modules\n");
 	return rc;
 }
@@ -369,16 +365,11 @@ dss_module_unload_all(void)
 	struct loaded_mod	*tmp;
 	struct d_list_head	destroy_list;
 
-	D_INIT_LIST_HEAD(&destroy_list);
-	D_MUTEX_LOCK(&loaded_mod_list_lock);
-	d_list_for_each_entry_safe(mod, tmp, &loaded_mod_list, lm_lk) {
-		d_list_del_init(&mod->lm_lk);
-		d_list_add(&mod->lm_lk, &destroy_list);
-	}
-	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+	dss_checkout_mod_list(&destroy_list);
 
 	d_list_for_each_entry_safe(mod, tmp, &destroy_list, lm_lk) {
 		d_list_del_init(&mod->lm_lk);
+		dss_module_unload_internal(mod);
 
 		D_FREE(mod);
 	}

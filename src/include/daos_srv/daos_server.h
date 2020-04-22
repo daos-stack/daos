@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -483,7 +483,6 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 int dss_task_collective(int (*func)(void *), void *arg, int flag, int ult_type);
 int dss_thread_collective(int (*func)(void *), void *arg, int flag,
 			  int ult_type);
-struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
 static inline int
 dss_abterr2der(int abt_errno)
