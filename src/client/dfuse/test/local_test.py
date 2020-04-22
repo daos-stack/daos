@@ -144,6 +144,59 @@ def symlink_file(a, b):
         os.remove(a)
     os.symlink(b, a)
 
+class ValgrindHelper():
+
+    """Class for running valgrind commands
+
+    This helps setup the command line required, and
+    performs log modification after the fact to assist
+    Jenkins in locating the source code.
+    """
+    instance_num = 0
+
+    def __init__(self, logid=None):
+
+        if not logid:
+            self.__class__.instance_num += 1
+            logid = self.__class__.instance_num
+
+        self.xml_file = 'dnt.{}.memcheck'.format(logid)
+
+        self.src_dir = '{}/'.format(os.path.realpath(
+            os.path.join(os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__))),
+                         '../../../')))
+
+    def get_cmd_prefix(self):
+        """Return the command line prefix"""
+        cmd = ['valgrind', '--quiet']
+
+        cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
+
+        s_arg = '--suppressions='
+        cmd.extend(['{}{}'.format(s_arg,
+                                  os.path.join('src',
+                                               'cart',
+                                               'utils',
+                                               'memcheck-cart.supp')),
+                    '{}{}'.format(s_arg,
+                                  os.path.join('utils',
+                                               'memcheck-daos-client.supp'))])
+
+        cmd.extend(['--xml=yes',
+                    '--xml-file={}'.format(self.xml_file)])
+        return cmd
+
+    def convert_xml(self):
+        """Modify the xml file"""
+        fd = open(self.xml_file, 'r')
+        ofd = open('{}.xml'.format(self.xml_file), 'w')
+        for line in fd:
+            if self.src_dir in line:
+                ofd.write(line.replace(self.src_dir, ''))
+            else:
+                ofd.write(line)
+
 class DFuse():
     """Manage a dfuse instance"""
 
@@ -164,13 +217,10 @@ class DFuse():
 
         symlink_file('/tmp/dfuse_latest.log', self.log_file)
 
+        self.valgrind = None
+
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
-
-        self.src_dir = '{}/'.format(os.path.realpath(
-            os.path.join(os.path.dirname(
-                os.path.dirname(os.path.abspath(__file__))),
-                         '../../../')))
 
     def start(self, v_hint=None):
         """Start a dfuse instance"""
@@ -190,28 +240,8 @@ class DFuse():
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
 
-        cmd = ['valgrind', '--quiet']
-
-        cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
-
-        s_arg = '--suppressions='
-        cmd.extend(['{}{}'.format(s_arg,
-                                  os.path.join('src',
-                                               'cart',
-                                               'utils',
-                                               'memcheck-cart.supp')),
-                    '{}{}'.format(s_arg,
-                                  os.path.join('utils',
-                                               'memcheck-daos-client.supp'))])
-
-        if v_hint:
-            self.valgrind_file = 'dfuse.{}.memcheck'.format(v_hint)
-        else:
-            self.__class__.instance_num += 1
-            instance = self.__class__.instance_num
-            self.valgrind_file = 'dfuse.{}.memcheck'.format(instance)
-        cmd.extend(['--xml=yes',
-                    '--xml-file={}'.format(self.valgrind_file)])
+        self.valgrind = ValgrindHelper(v_hint)
+        cmd = self.valgrind.get_cmd_prefix()
 
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
 
@@ -278,13 +308,7 @@ class DFuse():
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
-        fd = open(self.valgrind_file, 'r')
-        ofd = open('{}.xml'.format(self.valgrind_file), 'w')
-        for line in fd:
-            if self.src_dir in line:
-                ofd.write(line.replace(self.src_dir, ''))
-            else:
-                ofd.write(line)
+        self.valgrind.convert_xml()
 
     def wait_for_exit(self):
         """Wait for dfuse to exit"""
@@ -335,7 +359,9 @@ def import_daos(server, conf):
 
 def run_daos_cmd(conf, cmd):
 
-    exec_cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos')]
+    valgrind = ValgrindHelper()
+    exec_cmd = valgrind.get_cmd_prefix()
+    exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
     exec_cmd.extend(cmd)
 
     cmd_env = os.environ.copy()
@@ -353,6 +379,7 @@ def run_daos_cmd(conf, cmd):
                         stdout=subprocess.PIPE,
                         env=cmd_env)
     log_test(log_file.name)
+    valgrind.convert_xml()
     return rc
 
 def show_cont(conf, pool):

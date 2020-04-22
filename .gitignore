@@ -49,4 +49,4 @@ test/tool/build/
 foo
 foo2
 foo.o
-dfuse.*.memcheck
+dnt.*.memcheck
