@@ -210,6 +210,9 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 
+/** container query target bit, to satisfy querying of daos_cont_info_t */
+#define DAOS_CO_QUERY_TGT		(1ULL << 31)
+
 #define DAOS_ISEQ_CONT_QUERY	/* input fields */		 \
 	((struct cont_op_in)	(cqi_op)		CRT_VAR) \
 	((uint64_t)		(cqi_bits)		CRT_VAR)

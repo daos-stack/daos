@@ -8,13 +8,6 @@ MOCK_OPTIONS := --disablerepo=sclo*
 
 # override allows the caller to set a value and the we append to it
 #override PR_REPOS         +=
-ifneq ($(REPOSITORY_URL),)
-ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
-EL_7_REPOS     = https://copr-be.cloud.fedoraproject.org/results/jhli/ipmctl/epel-7-x86_64/   \
-	         https://copr-be.cloud.fedoraproject.org/results/jhli/safeclib/epel-7-x86_64/
-endif
-endif
-
 GIT_SHORT       := $(shell git rev-parse --short HEAD)
 GIT_NUM_COMMITS := $(shell git rev-list HEAD --count)
 ON_TAG          := $(shell if git diff-index --name-only HEAD^ | grep -q TAG; then \
