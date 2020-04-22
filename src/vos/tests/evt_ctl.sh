@@ -93,7 +93,7 @@ EOF
 }
 
 # Sequence
-cmd="$VCMD $EVT_CTL --start-test \"EVT030: testing sequence $*\" $* -C o:4"
+cmd="$VCMD $EVT_CTL --start-test \"evt tests $*\" $* -C o:4"
 
 i=0
 while [ $i -lt 20 ]; do
@@ -165,7 +165,7 @@ if (( result != 0 )); then
 fi
 
 # Internal tests
-cmd="$VCMD $EVT_CTL --start-test \"EVT031: evtree built-in tests $*\" $* -t"
+cmd="$VCMD $EVT_CTL --start-test \"evtree built-in tests $*\" $* -t"
 echo "$cmd"
 eval "$cmd"
 result="${PIPESTATUS[0]}"
@@ -175,7 +175,7 @@ if (( result != 0 )); then
 fi
 
 # Drain tests
-cmd="$VCMD $EVT_CTL --start-test \"EVT032: drain tests $*\" $* -C o:4"
+cmd="$VCMD $EVT_CTL --start-test \"evtree drain tests $*\" $* -C o:4"
 cmd+=" -e s:0,e:128,n:2379 -c"
 echo "$cmd"
 eval "$cmd"

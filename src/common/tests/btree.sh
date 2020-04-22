@@ -95,7 +95,7 @@ run_test()
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
         "${VCMD[@]}" "$BTR" --start-test \
-        "BTR030: functional ${test_conf_pre} ${test_conf} iterate=${IDIR}" \
+        "btree functional ${test_conf_pre} ${test_conf} iterate=${IDIR}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
@@ -115,7 +115,7 @@ run_test()
 
         echo "B+tree batch operations test..."
         "${VCMD[@]}" "$BTR" \
-        --start-test "BTR031: batch operations ${test_conf_pre} ${test_conf}" \
+        --start-test "btree batch operations ${test_conf_pre} ${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
@@ -124,14 +124,14 @@ run_test()
 
         echo "B+tree drain test..."
         "${VCMD[@]}" "$BTR" \
-        --start-test "BTR032: drain ${test_conf_pre} ${test_conf}" \
+        --start-test "btree drain ${test_conf_pre} ${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
     else
         echo "B+tree performance test..."
         "${VCMD[@]}" "$BTR" \
-        --start-test "BTR033: performance ${test_conf_pre} ${test_conf}" \
+        --start-test "btree performance ${test_conf_pre} ${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \
         -D

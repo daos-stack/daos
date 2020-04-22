@@ -2352,7 +2352,7 @@ main(int argc, char **argv)
 
 	/* Capture test_name and pmem args if any */
 	start_idx = 0;
-	test_name = "EVT000: Default test suite name";
+	test_name = "evtree default test suite name";
 	create_pmem = false;
 	if (argc > 1) {
 		/* Get test suite variables */
