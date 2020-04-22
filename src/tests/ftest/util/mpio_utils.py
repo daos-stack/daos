@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2019 Intel Corporation.
+"""
+  (C) Copyright 2019-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 import os
@@ -30,26 +30,32 @@ from command_utils import EnvironmentVariables
 
 
 class MpioFailed(Exception):
-    """Raise if MPIO failed"""
+    """Raise if MPIO failed."""
+
 
 class MpioUtils():
-    """MpioUtils Class"""
+    """MpioUtils Class."""
 
     def __init__(self):
-
+        """Initialize a MpioUtils object."""
         self.mpichinstall = None
 
     def mpich_installed(self, hostlist):
-        """Check if mpich is installed"""
+        """Check if mpich is installed.
 
+        Args:
+            hostlist (list): list of hosts
+
+        Returns:
+            bool: whether mpich is installed on the first host in the list
+
+        """
         load_mpi('mpich')
-
         try:
             # checking mpich install
-            self.mpichinstall = subprocess.check_output(
-                ["ssh", hostlist[0],
-                 "command -v mpichversion"]).rstrip()[:-len('bin/mpichversion')]
-
+            command = ["ssh", hostlist[0], "command -v mpichversion"]
+            output = subprocess.check_output(command)   # nosec
+            self.mpichinstall = output.rstrip()[:-len('bin/mpichversion')]
             return True
 
         except subprocess.CalledProcessError as excep:
@@ -59,14 +65,20 @@ class MpioUtils():
     # pylint: disable=R0913
     def run_mpiio_tests(self, hostfile, pool_uuid, svcl, test_repo,
                         test_name, client_processes, cont_uuid):
-        """
-            Running LLNL, MPI4PY and HDF5 testsuites
-            Function Arguments:
-                hostfile          --client hostfile
-                pool_uuid         --Pool UUID
-                svcl              --Pool SVCL
-                test_repo         --test repo location
-                test_name         --name of test to be tested
+        """Run the LLNL, MPI4PY, and HDF5 testsuites.
+
+        Args:
+            hostfile (str): client hostfile
+            pool_uuid (str): pool UUID
+            svcl (list): pool SVCL
+            test_repo (str): test repo location
+            test_name (str): name of test to be tested
+            client_processes (int): number of client processes
+            cont_uuid (str): container UUID
+
+        Raises:
+            MpioFailed: for an invalid test name or test execution failure
+
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
@@ -78,41 +90,68 @@ class MpioUtils():
 
         if test_name == "romio" and os.path.isfile(
                 os.path.join(test_repo, "runtests")):
-            test_cmd = [env.get_export_str(),
-                        os.path.join(test_repo, 'runtests'),
-                        '-fname=daos:test1',
-                        '-subset']
-            cmd = " ".join(test_cmd)
+            cmds = [
+                [
+                    "runtests",
+                    env.get_export_str(),
+                    os.path.join(test_repo, 'runtests'),
+                    '-fname=daos:test1',
+                    '-subset'
+                ]
+            ]
+
         elif test_name == "llnl" and os.path.isfile(
                 os.path.join(test_repo, "testmpio_daos")):
             env["MPIO_USER_PATH"] = "daos:"
-            test_cmd = [env.get_export_str(),
-                        mpirun,
-                        '-np',
-                        str(client_processes),
-                        '--hostfile',
-                        hostfile,
-                        os.path.join(test_repo, 'testmpio_daos'),
-                        '1']
-            cmd = " ".join(test_cmd)
-        elif test_name == "mpi4py" and \
-             os.path.isfile(os.path.join(test_repo, "test_io_daos.py")):
-            test_cmd = [env.get_export_str(),
-                        mpirun,
-                        '-np',
-                        str(client_processes),
-                        '--hostfile',
-                        hostfile,
-                        'python',
-                        os.path.join(test_repo, 'test_io_daos.py')]
-            cmd = " ".join(test_cmd)
-        elif test_name == "hdf5" and \
-             (os.path.isfile(os.path.join(test_repo, "testphdf5")) and
-              os.path.isfile(os.path.join(test_repo, "t_shapesame"))):
+            cmds = [
+                [
+                    "testmpio_daos",
+                    env.get_export_str(),
+                    mpirun,
+                    '-np',
+                    str(client_processes),
+                    '--hostfile',
+                    hostfile,
+                    os.path.join(test_repo, 'testmpio_daos'),
+                    '1'
+                ]
+            ]
+
+        elif test_name == "mpi4py" and os.path.isfile(
+                os.path.join(test_repo, "test_io_daos.py")):
+            cmds = [
+                [
+                    "test_io_daos.py",
+                    env.get_export_str(),
+                    mpirun,
+                    '-np',
+                    str(client_processes),
+                    '--hostfile',
+                    hostfile,
+                    'python',
+                    os.path.join(test_repo, 'test_io_daos.py')
+                ]
+            ]
+
+        elif test_name == "hdf5" and (
+                os.path.isfile(os.path.join(test_repo, "testphdf5")) and
+                os.path.isfile(os.path.join(test_repo, "t_shapesame"))):
             env["HDF5_PARAPREFIX"] = "daos:"
-            cmd = ''
+            cmds = []
             for test in ["testphdf5", "t_shapesame"]:
                 fqtp = os.path.join(test_repo, test)
+                cmds.append(
+                    [
+                        fqtp,
+                        env.get_export_str(),
+                        mpirun,
+                        '-np',
+                        str(client_processes),
+                        '--hostfile',
+                        hostfile,
+                        fqtp
+                    ]
+                )
                 test_cmd = [env.get_export_str(),
                             'echo ***Running {}*** ;'.format(fqtp),
                             mpirun,
@@ -123,25 +162,29 @@ class MpioUtils():
                             fqtp + ';']
                 cmd += " ".join(test_cmd)
         else:
-            raise MpioFailed("Wrong test name ({}) or test repo location ({}) "
-                             "specified".format(test_name, test_repo))
+            raise MpioFailed(
+                "Wrong test name ({}) or test repo location ({}) "
+                "specified".format(test_name, test_repo))
 
-        print("run command: {}".format(cmd))
+        for cmd in cmds:
+            name = cmd.pop(0)
+            print("run command: {}".format(" ".join(cmd)))
+            print("***Running %s***", name)
+            try:
+                process = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT)  # nosec
+                while True:
+                    output = process.stdout.readline()
+                    if output == '' and process.poll() is not None:
+                        break
+                    if output:
+                        print(output.strip())
+                if process.poll() != 0:
+                    raise MpioFailed(
+                        "{} Run process failed with non zero exit "
+                        "code:{}".format(test_name, process.poll()))
 
-        try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                       stderr=subprocess.STDOUT, shell=True)
-            while True:
-                output = process.stdout.readline()
-                if output == '' and process.poll() is not None:
-                    break
-                if output:
-                    print(output.strip())
-            if process.poll() != 0:
-                raise MpioFailed("{} Run process".format(test_name)
-                                 + " Failed with non zero exit"
-                                 + " code:{}".format(process.poll()))
-
-        except (ValueError, OSError) as excep:
-            raise MpioFailed("<Test FAILED> \nException occurred: {}"\
-                                 .format(str(excep)))
+            except (ValueError, OSError) as excep:
+                raise MpioFailed(
+                    "<Test FAILED> \nException occurred: {}".format(str(excep)))

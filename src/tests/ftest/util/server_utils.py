@@ -874,9 +874,8 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             resource.RLIMIT_CORE,
             (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
 
-        SESSIONS[setname] = subprocess.Popen(server_cmd,
-                                             stdout=subprocess.PIPE,
-                                             stderr=subprocess.PIPE)
+        SESSIONS[setname] = subprocess.Popen(
+            server_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # nosec
         fdesc = SESSIONS[setname].stdout.fileno()
         fstat = fcntl.fcntl(fdesc, fcntl.F_GETFL)
         fcntl.fcntl(fdesc, fcntl.F_SETFL, fstat | os.O_NONBLOCK)
@@ -993,7 +992,7 @@ def stop_server(setname=None, hosts=None):
     # we can also have orphaned ssh processes that started an orted on a
     # remote node but never get cleaned up when that remote node spontaneiously
     # reboots
-    subprocess.call(["pkill", "^ssh$"])
+    subprocess.call(["pkill", "^ssh$"])  # nosec
 
 
 def kill_server(hosts):

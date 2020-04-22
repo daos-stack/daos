@@ -212,7 +212,7 @@ def run_agent(test, server_list, client_list=None):
              "{} -i".format(daos_agent_cmd)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT
-        )
+        )   # nosec
 
     # double check agent launched successfully
     timeout = 15

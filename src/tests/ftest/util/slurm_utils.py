@@ -175,7 +175,7 @@ def check_slurm_job(handle):
                 slurm job.
     """
     cmd = ["scontrol", "show", "job", handle]
-    output = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+    output = subprocess.check_output(cmd, stderr=subprocess.STDOUT)  # nosec
     match = re.search(r"JobState=([a-zA-Z]+)", str(output))
     if match is not None:
         state = match.group(1)

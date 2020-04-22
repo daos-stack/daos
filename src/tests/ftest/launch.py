@@ -235,7 +235,7 @@ def get_output(cmd):
     """
     try:
         print("Running: {}".format(" ".join(cmd)))
-        return subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+        return subprocess.check_output(cmd, stderr=subprocess.STDOUT)  # nosec
 
     except subprocess.CalledProcessError as err:
         print(
@@ -256,7 +256,7 @@ def time_command(cmd):
     """
     print("Running: {}".format(" ".join(cmd)))
     start_time = int(time.time())
-    return_code = subprocess.call(cmd)
+    return_code = subprocess.call(cmd)  # nosec
     end_time = int(time.time())
     print("Total test time: {}s".format(end_time - start_time))
     return return_code

@@ -129,7 +129,7 @@ class CartSelfTest(TestWithoutServers):
             cmd_log_str += elem + " "
         try:
             self.d_log.info("Running cmd {0}".format(cmd_log_str))
-            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT)  # nosec
         except subprocess.CalledProcessError as exc:
             self.d_log.error("CaRT self_test returned non-zero. "
                              "rc {0}:".format(exc.returncode))
