@@ -73,7 +73,7 @@ class DaosServer():
 
         self_dir = os.path.dirname(os.path.abspath(__file__))
 
-        server_config = os.path.join(self_dir, 'daos_server.yml')
+        server_config = os.path.join(self_dir, 'nlt_server.yaml')
 
         cmd = [daos_server, '--config={}'.format(server_config),
                'start', '-t' '4', '--insecure', '-d', self.agent_dir,
@@ -87,7 +87,7 @@ class DaosServer():
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)
 
-        agent_config = os.path.join(self_dir, 'daos_agent.yml')
+        agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
         agent_env = os.environ.copy()
         # DAOS-??? Need to set this for agent
@@ -97,7 +97,8 @@ class DaosServer():
 
         self._agent = subprocess.Popen([agent_bin,
                                         '--config-path', agent_config,
-                                        '--insecure', '--runtime_dir', self.agent_dir,
+                                        '--insecure',
+                                        '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
                                        env=agent_env)
         time.sleep(10)
@@ -163,9 +164,7 @@ class ValgrindHelper():
         self.xml_file = 'dnt.{}.memcheck'.format(logid)
 
         self.src_dir = '{}/'.format(os.path.realpath(
-            os.path.join(os.path.dirname(
-                os.path.dirname(os.path.abspath(__file__))),
-                         '../../../')))
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
     def get_cmd_prefix(self):
         """Return the command line prefix"""
@@ -358,7 +357,12 @@ def import_daos(server, conf):
     return daos
 
 def run_daos_cmd(conf, cmd):
+    """Run a DAOS command
 
+    Run a command, returing what subprocess.run() would.
+
+    Enable logging, and valgrind for the command.
+    """
     valgrind = ValgrindHelper()
     exec_cmd = valgrind.get_cmd_prefix()
     exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
@@ -459,9 +463,10 @@ lt = None
 def setup_log_test():
     """Setup and import the log tracing code"""
     file_self = os.path.dirname(os.path.abspath(__file__))
-    logparse_dir = os.path.join(os.path.dirname(file_self),
-                                '../../../src/cart/test/util')
+    logparse_dir = os.path.join(file_self,
+                                '../src/cart/test/util')
     crt_mod_dir = os.path.realpath(logparse_dir)
+    print(crt_mod_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
 
@@ -713,8 +718,8 @@ def test_pydaos_kv(server, conf):
     daos = import_daos(server, conf)
 
     file_self = os.path.dirname(os.path.abspath(__file__))
-    mod_dir = os.path.join(os.path.dirname(file_self),
-                           '../../../src/client/pydaos')
+    mod_dir = os.path.join(file_self,
+                           '../src/client/pydaos')
     if mod_dir not in sys.path:
         sys.path.append(mod_dir)
 
