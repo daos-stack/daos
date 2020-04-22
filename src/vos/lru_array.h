@@ -43,7 +43,7 @@ struct lru_callbacks {
 
 struct lru_entry {
 	/** The pointer to the index is unique identifier for the entry */
-	uint32_t	*le_record_idx;
+	uint64_t	 le_key;
 	/** Pointer to this entry */
 	void		*le_payload;
 	/** Next index in LRU array */
@@ -78,7 +78,7 @@ struct lru_array {
  */
 void
 lrua_evict_lru(struct lru_array *array, struct lru_entry **entry,
-	       uint32_t *idx, bool evict_lru);
+	       uint32_t *idx, uint64_t key, bool evict_lru);
 
 /** Internal API: Remove an entry from the lru list */
 static inline void
@@ -143,24 +143,51 @@ set_mru:
 
 /** Internal API to lookup entry from index */
 static inline struct lru_entry *
-lrua_lookup_idx(struct lru_array *array, const uint32_t *idx)
+lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key)
 {
 	struct lru_entry	*entry;
-	uint32_t		 tindex = *idx;
 
-	if (tindex >= array->la_count)
+	if (idx >= array->la_count)
 		return NULL;
 
-	entry = &array->la_table[tindex];
-	if (entry->le_record_idx == idx) {
+	entry = &array->la_table[idx];
+	if (entry->le_key == key) {
 		if (!array->la_evicting) {
 			/** Only make mru if we are not evicting it */
-			lrua_move_to_mru(array, entry, tindex);
+			lrua_move_to_mru(array, entry, idx);
 		}
 		return entry;
 	}
 
 	return NULL;
+}
+
+/** Lookup an entry in the lru array with alternative key.
+ *
+ * \param	array[in]	The lru array
+ * \param	idx[in]		The index of the entry
+ * \param	idx[in]		Unique identifier
+ * \param	entryp[in,out]	Valid only if function returns true.
+ *
+ * \return true if the entry is in the array and set \p entryp accordingly
+ */
+static inline bool
+lrua_lookupx(struct lru_array *array, uint32_t idx, uint64_t key,
+	     void **entryp)
+{
+	struct lru_entry	*entry;
+
+	D_ASSERT(array != NULL);
+	D_ASSERT(key != 0);
+
+	*entryp = NULL;
+
+	entry = lrua_lookup_idx(array, idx, key);
+	if (entry == NULL)
+		return false;
+
+	*entryp = entry->le_payload;
+	return true;
 }
 
 /** Lookup an entry in the lru array.
@@ -175,24 +202,43 @@ static inline bool
 lrua_lookup(struct lru_array *array, const uint32_t *idx,
 	    void **entryp)
 {
-	struct lru_entry	*entry;
-
-	D_ASSERT(array != NULL);
-
-	*entryp = NULL;
-
-	entry = lrua_lookup_idx(array, idx);
-	if (entry == NULL)
-		return false;
-
-	*entryp = entry->le_payload;
-	return true;
+	return lrua_lookupx(array, *idx, (uint64_t)idx, entryp);
 }
 
-/** Allocate a new entry lru array.   Lookup should be called first and this
- * should only be called if it returns false.  This will modify idx.  If
- * called within a transaction and the value needs to persist, the old value
- * should be logged before calling this function.
+/** Allocate a new entry lru array with alternate key specifier.
+ *  This should only be called if lookup would return false.  This will
+ *  modify idx.  If called within a transaction and the value needs to
+ *  persist, the old value should be logged before calling this function.
+ *
+ * \param	array[in]	The LRU array
+ * \param	idx[in,out]	Index address in, allocated index out
+ * \param	key[in]		Unique identifier of entry
+ * \param	evict_lru[in]	True if LRU should be evicted
+ *
+ * \return	Returns a pointer to the entry or NULL if evict_lru is false
+ *		and the entry at the LRU is allocated
+ */
+static inline void *
+lrua_allocx(struct lru_array *array, uint32_t *idx, uint64_t key,
+	    bool evict_lru)
+{
+	struct lru_entry	*new_entry;
+
+	D_ASSERT(array != NULL);
+	D_ASSERT(key != 0);
+
+	lrua_evict_lru(array, &new_entry, idx, key, evict_lru);
+
+	if (new_entry == NULL)
+		return NULL;
+
+	return new_entry->le_payload;
+}
+
+/** Allocate a new entry lru array.   This should only be called if lookup
+ *  would return false.  This will modify idx.  If called within a
+ *  transaction and the value needs to persist, the old value should be
+ *  logged before calling this function.
  *
  * \param	array[in]	The LRU array
  * \param	idx[in,out]	Address of the entry index.
@@ -204,17 +250,51 @@ lrua_lookup(struct lru_array *array, const uint32_t *idx,
 static inline void *
 lrua_alloc(struct lru_array *array, uint32_t *idx, bool evict_lru)
 {
-	struct lru_entry	*new_entry;
+	return lrua_allocx(array, idx, (uint64_t)idx, evict_lru);
+}
+
+/** Allocate an entry in place.  Used for recreating an old array.
+ *
+ * \param	array[in]	The LRU array
+ * \param	idx[in]		Index of entry.
+ * \param	key[in]		Address of the entry index.
+ *
+ * \return	Returns a pointer to the entry or NULL on error
+ */
+static inline void *
+lrua_allocx_inplace(struct lru_array *array, uint32_t idx, uint64_t key)
+{
+	struct lru_entry	*entry;
 
 	D_ASSERT(array != NULL);
-
-	lrua_evict_lru(array, &new_entry, idx, evict_lru);
-
-	if (new_entry == NULL)
+	D_ASSERT(key != 0);
+	if (idx >= array->la_count) {
+		D_ERROR("Index %d is out of range\n", idx);
 		return NULL;
+	}
 
-	return new_entry->le_payload;
+	entry = &array->la_table[idx];
+	if (entry->le_key != key && entry->le_key != 0) {
+		D_ERROR("Cannot allocated idx %d in place\n", idx);
+		return NULL;
+	}
+
+	entry->le_key = key;
+	lrua_move_to_mru(array, entry, idx);
+
+	return entry->le_payload;
+
 }
+
+/** If an entry is still in the array, evict it and invoke eviction callback.
+ *  Move the evicted entry to the LRU and mark it as already evicted.
+ *
+ * \param	array[in]	Address of the LRU array.
+ * \param	idx[in]		Index of the entry
+ * \param	key[in]		Unique identifier
+ */
+void
+lrua_evictx(struct lru_array *array, uint32_t idx, uint64_t key);
 
 /** If an entry is still in the array, evict it and invoke eviction callback.
  *  Move the evicted entry to the LRU and mark it as already evicted.
@@ -222,8 +302,11 @@ lrua_alloc(struct lru_array *array, uint32_t *idx, bool evict_lru)
  * \param	array[in]	Address of the LRU array.
  * \param	idx[in]		Address of the entry index.
  */
-void
-lrua_evict(struct lru_array *array, uint32_t *idx);
+static inline void
+lrua_evict(struct lru_array *array, uint32_t *idx)
+{
+	lrua_evictx(array, *idx, (uint64_t)idx);
+}
 
 /** Allocate an LRU array
  *
@@ -240,7 +323,6 @@ int
 lrua_array_alloc(struct lru_array **array, uint32_t nr_ent,
 		 uint16_t record_size, const struct lru_callbacks *cbs,
 		 void *arg);
-
 
 /** Free an LRU array
  *

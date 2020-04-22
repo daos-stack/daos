@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ struct evt_context {
 	umem_off2ptr(evt_umm(tcx), offset)
 
 #define EVT_NODE_MAGIC 0xfefef00d
-#define EVT_DESC_MAGIC 0xbeefdead
+#define EVT_DESC_MAGIC 0xbeef
 
 /** Convert an offset to a evtree node descriptor
  * \param[IN]	tcx	Tree context
@@ -144,7 +144,8 @@ evt_off2desc(struct evt_context *tcx, umem_off_t offset)
 }
 
 int
-evt_desc_log_status(struct evt_context *tcx, struct evt_desc *desc, int intent);
+evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
+		    struct evt_desc *desc, int intent);
 
 /** Helper function for starting a PMDK transaction, if applicable */
 static inline int

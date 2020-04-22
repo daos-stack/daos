@@ -526,7 +526,8 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 	}
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
-		rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch, 0,
+		rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid,
+				    dth ? dth->dth_epoch : epoch, 0,
 				    0, dkey, 1, iod, iod_csums, sgl);
 		if (rc != 0 && verbose)
 			print_error("Failed to update: "DF_RC"\n", DP_RC(rc));

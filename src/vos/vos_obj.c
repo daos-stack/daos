@@ -230,26 +230,26 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
-	daos_epoch_range_t	 epr = {0, epoch};
+	daos_epoch_range_t	 epr = {0, dth ? dth->dth_epoch : epoch};
 	bool			 read_conflict = false;
 	int			 rc = 0;
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
-		DP_UOID(oid), epoch);
+		DP_UOID(oid), epr.epr_hi);
+
+	vos_dth_set(dth);
+	cont = vos_hdl2cont(coh);
 
 	rc = vos_ts_set_allocate(&ts_set, flags, akey_nr);
 	if (rc != 0)
 		goto reset;
-
-	vos_dth_set(dth);
-	cont = vos_hdl2cont(coh);
 
 	if (!vos_ts_lookup(ts_set, cont->vc_ts_idx, false, &entry)) {
 		/** Re-cache the container timestamps */
 		entry = vos_ts_alloc(ts_set, cont->vc_ts_idx, 0);
 	}
 
-	if (vos_ts_check_rl_conflict(ts_set, epoch))
+	if (vos_ts_check_rl_conflict(ts_set, epr.epr_hi))
 		read_conflict = true;
 
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
@@ -269,13 +269,13 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			  false, DAOS_INTENT_PUNCH, true, &obj, ts_set);
 	if (rc == 0) {
 		if (dkey) { /* key punch */
-			if (vos_ts_check_rl_conflict(ts_set, epoch))
+			if (vos_ts_check_rl_conflict(ts_set, epr.epr_hi))
 				read_conflict = true;
 
-			rc = key_punch(obj, epoch, pm_ver, dkey,
+			rc = key_punch(obj, epr.epr_hi, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
 		} else { /* object punch */
-			rc = obj_punch(coh, obj, epoch, flags, ts_set);
+			rc = obj_punch(coh, obj, epr.epr_hi, flags, ts_set);
 		}
 	}
 
@@ -291,13 +291,13 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 reset:
 	if (rc != 0) {
-		vos_dtx_cleanup_dth(dth);
+		vos_dtx_cleanup_dth(cont, dth);
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
 	}
 	vos_dth_set(NULL);
 
-	update_read_timestamps(ts_set, epoch, akey_nr, rc);
+	update_read_timestamps(ts_set, epr.epr_hi, akey_nr, rc);
 	vos_ts_set_free(ts_set);
 
 	return rc;

@@ -32,8 +32,11 @@
 static void
 evict_cb(struct lru_array *array, struct lru_entry *entry, uint32_t idx)
 {
-	if (array->la_cbs.lru_on_evict == NULL)
+	if (array->la_cbs.lru_on_evict == NULL) {
+		/** By default, reset the entry */
+		memset(entry->le_payload, 0, array->la_record_size);
 		return;
+	}
 
 	array->la_evicting++;
 	array->la_cbs.lru_on_evict(entry->le_payload, idx, array->la_arg);
@@ -60,7 +63,7 @@ fini_cb(struct lru_array *array, struct lru_entry *entry, uint32_t idx)
 
 void
 lrua_evict_lru(struct lru_array *array, struct lru_entry **entryp,
-	       uint32_t *idx, bool evict_lru)
+	       uint32_t *idx, uint64_t key, bool evict_lru)
 {
 	struct lru_entry	*entry;
 
@@ -68,7 +71,7 @@ lrua_evict_lru(struct lru_array *array, struct lru_entry **entryp,
 
 	entry = &array->la_table[array->la_lru];
 
-	if (entry->le_record_idx != NULL) {
+	if (entry->le_key != 0) {
 		if (!evict_lru)
 			return; /* Caller has not set eviction flag */
 
@@ -76,7 +79,7 @@ lrua_evict_lru(struct lru_array *array, struct lru_entry **entryp,
 	}
 
 	*idx = array->la_mru = array->la_lru;
-	entry->le_record_idx = idx;
+	entry->le_key = key;
 	array->la_lru = entry->le_next_idx;
 
 	D_ASSERT(array->la_lru != array->la_mru);
@@ -85,29 +88,28 @@ lrua_evict_lru(struct lru_array *array, struct lru_entry **entryp,
 }
 
 void
-lrua_evict(struct lru_array *array, uint32_t *idx)
+lrua_evictx(struct lru_array *array, uint32_t idx, uint64_t key)
 {
 	struct lru_entry	*entry;
-	uint32_t		 tidx;
 
 	D_ASSERT(array != NULL);
-	D_ASSERT(idx != NULL && *idx < array->la_count);
-	tidx = *idx;
+	D_ASSERT(idx < array->la_count);
+	D_ASSERT(key != 0);
 
-	entry = &array->la_table[tidx];
-	if (idx != entry->le_record_idx)
+	entry = &array->la_table[idx];
+	if (key != entry->le_key)
 		return;
 
-	evict_cb(array, entry, tidx);
+	evict_cb(array, entry, idx);
 
-	entry->le_record_idx = NULL;
+	entry->le_key = 0;
 
-	if (array->la_lru == tidx) {
+	if (array->la_lru == idx) {
 		/** If it's already the lru, nothing to do */
 		return;
 	}
 
-	if (array->la_mru == tidx) {
+	if (array->la_mru == idx) {
 		/** Circular ordering doesn't change.  Just need to update the
 		 *  lru and mru indexes.
 		 */
@@ -119,10 +121,10 @@ lrua_evict(struct lru_array *array, uint32_t *idx)
 	lrua_remove_entry(&array->la_table[0], entry);
 
 	/** Add between MRU and LRU */
-	lrua_insert_mru(array, entry, tidx);
+	lrua_insert_mru(array, entry, idx);
 
 set_lru:
-	array->la_lru = tidx;
+	array->la_lru = idx;
 }
 
 int

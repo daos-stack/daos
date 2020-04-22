@@ -33,7 +33,9 @@
 
 struct ilog_id {
 	/** DTX of entry */
-	umem_off_t	id_tx_id;
+	uint16_t	 id_tx_id;
+	uint16_t	 id_pad1;
+	uint32_t	 id_pad2;
 	/** timestamp of entry */
 	daos_epoch_t	id_epoch;
 };
@@ -61,20 +63,22 @@ struct ilog_desc_cbs {
 	/** Retrieve the status of a log entry (See enum ilog_status). On error
 	 *  return error code < 0.
 	 */
-	int (*dc_log_status_cb)(struct umem_instance *umm, umem_off_t tx_id,
-				uint32_t intent, void *args);
+	int (*dc_log_status_cb)(struct umem_instance *umm, uint16_t tx_id,
+				daos_epoch_t epoch, uint32_t intent,
+				void *args);
 	void	*dc_log_status_args;
 	/** Check if the log entry was created by current transaction */
-	int (*dc_is_same_tx_cb)(struct umem_instance *umm, umem_off_t tx_id,
-				bool *same, void *args);
+	int (*dc_is_same_tx_cb)(struct umem_instance *umm, uint16_t tx_id,
+				daos_epoch_t epoch, bool *same, void *args);
 	void	*dc_is_same_tx_args;
 	/** Register the log entry with the transaction log */
 	int (*dc_log_add_cb)(struct umem_instance *umm, umem_off_t ilog_off,
-			     umem_off_t *tx_id, void *args);
+			     uint16_t *tx_id, daos_epoch_t epoch, void *args);
 	void	*dc_log_add_args;
 	/** Remove the log entry from the transaction log */
 	int (*dc_log_del_cb)(struct umem_instance *umm, umem_off_t ilog_off,
-			     umem_off_t tx_id, void *args);
+			     uint16_t tx_id, daos_epoch_t epoch, bool abort,
+			     void *args);
 	void	*dc_log_del_args;
 };
 
