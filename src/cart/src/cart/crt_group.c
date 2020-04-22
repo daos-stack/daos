@@ -112,24 +112,16 @@ li_op_rec_addref(struct d_hash_table *hhtab, d_list_t *rlink)
 	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
 
 	D_ASSERT(li->li_initialized);
-	D_MUTEX_LOCK(&li->li_mutex);
-	li->li_ref++;
-	D_MUTEX_UNLOCK(&li->li_mutex);
+	atomic_fetch_add(&li->li_ref, 1);
 }
 
 static bool
 li_op_rec_decref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
-	uint32_t			 ref;
-	struct crt_lookup_item		*li = crt_li_link2ptr(rlink);
+	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
 
 	D_ASSERT(li->li_initialized);
-	D_MUTEX_LOCK(&li->li_mutex);
-	li->li_ref--;
-	ref = li->li_ref;
-	D_MUTEX_UNLOCK(&li->li_mutex);
-
-	return ref == 0;
+	return atomic_fetch_sub(&li->li_ref, 1) == 0;
 }
 
 static void
@@ -189,23 +181,16 @@ rm_op_rec_addref(struct d_hash_table *hhtab, d_list_t *rlink)
 	struct crt_rank_mapping *rm = crt_rm_link2ptr(rlink);
 
 	D_ASSERT(rm->rm_initialized);
-	D_MUTEX_LOCK(&rm->rm_mutex);
-	rm->rm_ref++;
-	D_MUTEX_UNLOCK(&rm->rm_mutex);
+	atomic_fetch_add(&rm->rm_ref, 1);
 }
 
 static bool
 rm_op_rec_decref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
-	uint32_t		ref;
-	struct crt_rank_mapping	*rm = crt_rm_link2ptr(rlink);
+	struct crt_rank_mapping *rm = crt_rm_link2ptr(rlink);
 
 	D_ASSERT(rm->rm_initialized);
-	D_MUTEX_LOCK(&rm->rm_mutex);
-	ref = --rm->rm_ref;
-	D_MUTEX_UNLOCK(&rm->rm_mutex);
-
-	return ref == 0;
+	return atomic_fetch_sub(&rm->rm_ref, 1) == 0;
 }
 
 static void
@@ -215,7 +200,6 @@ crt_rm_destroy(struct crt_rank_mapping *rm)
 	D_ASSERT(rm->rm_ref == 0);
 	D_ASSERT(rm->rm_initialized == 1);
 
-	D_MUTEX_DESTROY(&rm->rm_mutex);
 	D_FREE(rm);
 }
 
@@ -267,25 +251,16 @@ ui_op_rec_addref(struct d_hash_table *hhtab, d_list_t *rlink)
 	struct crt_uri_item *ui = crt_ui_link2ptr(rlink);
 
 	D_ASSERT(ui->ui_initialized);
-	D_MUTEX_LOCK(&ui->ui_mutex);
-	ui->ui_ref++;
-	D_MUTEX_UNLOCK(&ui->ui_mutex);
+	atomic_fetch_add(&ui->ui_ref, 1);
 }
 
 static bool
 ui_op_rec_decref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
-	uint32_t		ref;
-	struct crt_uri_item	*ui = crt_ui_link2ptr(rlink);
+	struct crt_uri_item *ui = crt_ui_link2ptr(rlink);
 
 	D_ASSERT(ui->ui_initialized);
-	D_MUTEX_LOCK(&ui->ui_mutex);
-	ui->ui_ref--;
-	ref = ui->ui_ref;
-
-	D_MUTEX_UNLOCK(&ui->ui_mutex);
-
-	return ref == 0;
+	return atomic_fetch_sub(&ui->ui_ref, 1) == 0;
 }
 
 static void
@@ -3132,7 +3107,6 @@ static struct crt_rank_mapping *
 crt_rank_mapping_init(d_rank_t key, d_rank_t value)
 {
 	struct crt_rank_mapping *rm;
-	int			rc;
 
 	D_ALLOC_PTR(rm);
 	if (!rm) {
@@ -3141,17 +3115,10 @@ crt_rank_mapping_init(d_rank_t key, d_rank_t value)
 	}
 
 	D_INIT_LIST_HEAD(&rm->rm_link);
-	rm->rm_ref = 0;
-	rm->rm_initialized = 1;
-
-	rc = D_MUTEX_INIT(&rm->rm_mutex, NULL);
-	if (rc != 0) {
-		D_FREE_PTR(rm);
-		D_GOTO(out, rm = NULL);
-	}
-
 	rm->rm_key = key;
 	rm->rm_value = value;
+	rm->rm_ref = 0;
+	rm->rm_initialized = 1;
 
 out:
 	return rm;
