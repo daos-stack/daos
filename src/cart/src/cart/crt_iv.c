@@ -2839,8 +2839,7 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 		/* cb_info is inside of bci_arg */
 		info_dup->bci_arg = info->bci_arg;
 		info_dup->bci_rc = info->bci_rc;
-		crt_bulk_desc_dup(info_dup->bci_bulk_desc,
-				  info->bci_bulk_desc);
+		*info_dup->bci_bulk_desc = *info->bci_bulk_desc;
 		IV_DBG(&input->ivu_key, "Executing ivo_pre_update\n");
 
 		/* Note: cb_info free-ed by the aux_wrapper */

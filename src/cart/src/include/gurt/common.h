@@ -80,7 +80,7 @@ extern "C" {
  * Get the current time using a monotonic timer
  * param[out] ts A timespec structure for the result
  */
-#define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
+#define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC_COARSE, ts)
 
 /* memory allocating macros */
 

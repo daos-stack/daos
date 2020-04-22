@@ -777,11 +777,13 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
 
-	D_ASSERT(crt_ctx != NULL);
+	ts_now = d_timeus_secdiff(0);
+	if (ts_now - crt_ctx->cc_last_toc < 10000) /* 100 times per second */
+		return;
+
+	crt_ctx->cc_last_toc = ts_now;
 
 	D_INIT_LIST_HEAD(&timeout_list);
-	ts_now = d_timeus_secdiff(0);
-
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	while (1) {
 		bh_node = d_binheap_root(&crt_ctx->cc_bh_timeout);
@@ -798,9 +800,9 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
 		RPC_ERROR(rpc_priv,
-			  "ctx_id %d, (status: %#x) timed out, tgt rank %d, tag %d\n",
-			  crt_ctx->cc_idx,
-			  rpc_priv->crp_state,
+			  "ctx_id %d, (status: %#x) timed out, "
+			  "tgt rank %d, tag %d\n",
+			  crt_ctx->cc_idx, rpc_priv->crp_state,
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag);
 	};
