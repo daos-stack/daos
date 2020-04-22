@@ -203,21 +203,19 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// TODO: enable per-instance formatting
 	formatting := 0
 	for _, srv := range instances {
+		formatting++
 		go func(s *IOServerInstance) {
 			scmChan <- s.StorageFormatSCM(req.Reformat)
 		}(srv)
 	}
 
-	for {
+	for formatting > 0 {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case scmResult := <-scmChan:
 			formatting--
 			resp.Mrets = append(resp.Mrets, scmResult)
-			if formatting == 0 {
-				break
-			}
 		}
 	}
 
