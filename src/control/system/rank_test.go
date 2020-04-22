@@ -291,7 +291,7 @@ func TestSystem_RankInList(t *testing.T) {
 		"no list": {
 			r:       Rank(1),
 			rl:      []Rank{},
-			expBool: true,
+			expBool: false,
 		},
 		"present": {
 			r:       Rank(1),
