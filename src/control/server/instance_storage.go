@@ -83,21 +83,12 @@ func (srv *IOServerInstance) MountScmDevice() error {
 // NeedsScmFormat probes the configured instance storage and determines whether
 // or not it requires a format operation before it can be used.
 func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
-	srv.RLock()
-	if srv._scmStorageOk {
-		srv.RUnlock()
-		return false, nil
-	}
-	srv.RUnlock()
-
 	scmCfg := srv.scmConfig()
 
 	srv.log.Debugf("%s: checking formatting", scmCfg.MountPoint)
 
-	// take a lock here to ensure that we can safely set _scmStorageOk
-	// as well as avoiding racy access to stuff in srv.ext.
-	srv.Lock()
-	defer srv.Unlock()
+	srv.RLock()
+	defer srv.RUnlock()
 
 	req, err := scm.CreateFormatRequest(scmCfg, false)
 	if err != nil {
@@ -114,19 +105,93 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	return needsFormat, nil
 }
 
-// NotifyStorageReady releases any blocks on AwaitStorageReady().
+// NotifyStorageReady releases any blocks on awaitStorageReady().
 func (srv *IOServerInstance) NotifyStorageReady() {
 	go func() {
-		close(srv.storageReady)
+		srv.storageReady <- true
 	}()
 }
 
-// AwaitStorageReady blocks until the IOServer's storage is ready.
-func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context) {
+// awaitStorageReady blocks until instance has storage available and ready to be used.
+func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
+	idx := srv.Index()
+
+	if srv.isStarted() {
+		return errors.Errorf("can't wait for storage: instance %d already started", idx)
+	}
+
+	srv.log.Infof("Waiting for %s instance %d storage to be ready...", DataPlaneName, idx)
+
+	needsScmFormat, err := srv.NeedsScmFormat()
+	if err != nil {
+		srv.log.Errorf("instance %d: failed to check storage formatting: %s", idx, err)
+		needsScmFormat = true
+	}
+
+	if !needsScmFormat {
+		if skipMissingSuperblock {
+			return nil
+		}
+		srv.log.Debugf("instance %d: no SCM format required; checking for superblock", idx)
+		needsSuperblock, err := srv.NeedsSuperblock()
+		if err != nil {
+			srv.log.Errorf("instance %d: failed to check instance superblock: %s", idx, err)
+		}
+		if !needsSuperblock {
+			srv.log.Debugf("instance %d: superblock not needed", idx)
+			return nil
+		}
+	}
+
+	if skipMissingSuperblock {
+		return FaultScmUnmanaged(srv.scmConfig().MountPoint)
+	}
+
+	// by this point we need superblock and possibly scm format
+	formatType := "SCM"
+	if !needsScmFormat {
+		formatType = "Metadata"
+	}
+	srv.log.Infof("%s format required on instance %d", formatType, srv.Index())
+
 	select {
 	case <-ctx.Done():
 		srv.log.Infof("%s instance %d storage not ready: %s", DataPlaneName, srv.Index(), ctx.Err())
 	case <-srv.storageReady:
 		srv.log.Infof("%s instance %d storage ready", DataPlaneName, srv.Index())
 	}
+
+	return ctx.Err()
+}
+
+// createSuperblock creates instance superblock if needed.
+func (srv *IOServerInstance) createSuperblock(recreate bool) error {
+	if srv.isStarted() {
+		return errors.Errorf("can't create superblock: instance %d already started", srv.Index())
+	}
+
+	needsSuperblock, err := srv.NeedsSuperblock() // scm format completed by now
+	if !needsSuperblock {
+		return nil
+	}
+	if err != nil && !recreate {
+		return err
+	}
+
+	// Only the first I/O server can be an MS replica.
+	if srv.Index() == 0 {
+		mInfo, err := getMgmtInfo(srv)
+		if err != nil {
+			return err
+		}
+		if err := srv.CreateSuperblock(mInfo); err != nil {
+			return err
+		}
+	} else {
+		if err := srv.CreateSuperblock(&mgmtInfo{}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
