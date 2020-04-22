@@ -3107,7 +3107,6 @@ static struct crt_rank_mapping *
 crt_rank_mapping_init(d_rank_t key, d_rank_t value)
 {
 	struct crt_rank_mapping *rm;
-	int			rc;
 
 	D_ALLOC_PTR(rm);
 	if (!rm) {
