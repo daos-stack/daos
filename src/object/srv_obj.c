@@ -977,7 +977,12 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 			bsgl->bs_nr_out == 0)
 			continue;
 
-		byte_idx = 0;
+		/** start byte_idx at first record of iod.recxs */
+		byte_idx = iod->iod_recxs[0].rx_idx;
+		for (i = 0; i < iods_nr; i++)
+			byte_idx = min(byte_idx, iod->iod_recxs[i].rx_idx);
+		byte_idx *= map->iom_size;
+
 		for (j = 0; j < bsgl->bs_nr_out; j++) {
 			biov = bio_sgl_iov(bsgl, j);
 			if (!bio_addr_is_hole(&biov->bi_addr))

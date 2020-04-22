@@ -1034,6 +1034,158 @@ fetch_array_with_map(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static void
+fetch_array_with_map_2(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t		 sg_iov[SM_BUF_LEN];
+	daos_iod_t	 iod;
+	daos_iom_t	 map = {0};
+	daos_recx_t	 map_recxs[SM_BUF_LEN];
+	daos_recx_t	 update_recxs[SM_BUF_LEN];
+	daos_recx_t	 fetch_recx;
+	char		 buf[SM_BUF_LEN];
+	int		 rc;
+
+	dts_buf_render(buf, SM_BUF_LEN);
+
+	/** open object */
+	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	d_iov_set(&sg_iov[0], buf, SM_BUF_LEN);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = sg_iov;
+
+	/** init map */
+	map.iom_recxs = map_recxs;
+	map.iom_nr = SM_BUF_LEN;
+
+	/** init I/O descriptor */
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	iod.iod_size = 1;
+	iod.iod_recxs = update_recxs;
+	iod.iod_type = DAOS_IOD_ARRAY;
+
+	/** insert 3 extents at location 2, 4 & 6*/
+	iod.iod_nr = 1;
+	update_recxs[0].rx_idx = 10;
+	update_recxs[0].rx_nr = SM_BUF_LEN;
+
+	/** Update */
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(0, rc);
+
+	/** setup for fetch */
+	fetch_recx.rx_idx = 10;
+	fetch_recx.rx_nr = SM_BUF_LEN;
+	iod.iod_nr = 1;
+	iod.iod_recxs = &fetch_recx;
+
+	/** get map */
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			    &map, NULL);
+	assert_int_equal(0, rc);
+
+	assert_int_equal(1, map.iom_nr_out);
+	assert_int_equal(SM_BUF_LEN, map.iom_nr);
+	assert_int_equal(iod.iod_size, map.iom_size);
+	assert_int_equal(iod.iod_type, map.iom_type);
+	assert_recx_equal(fetch_recx, map.iom_recx_lo);
+	assert_recx_equal(fetch_recx, map.iom_recx_hi);
+	assert_recx_equal(fetch_recx, map.iom_recxs[0]);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+fetch_array_with_map_3(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t		 sg_iov[SM_BUF_LEN];
+	daos_iod_t	 iod;
+	daos_iom_t	 map = {0};
+	daos_recx_t	 map_recxs[SM_BUF_LEN];
+	daos_recx_t	 update_recxs[SM_BUF_LEN];
+	daos_recx_t	 fetch_recx;
+	char		 buf[SM_BUF_LEN];
+	int		 rc;
+
+	dts_buf_render(buf, SM_BUF_LEN);
+
+	/** open object */
+	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	d_iov_set(&sg_iov[0], buf, SM_BUF_LEN);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = sg_iov;
+
+	/** init map */
+	map.iom_recxs = map_recxs;
+	map.iom_nr = SM_BUF_LEN;
+
+	/** init I/O descriptor */
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	iod.iod_size = 1;
+	iod.iod_recxs = update_recxs;
+	iod.iod_type = DAOS_IOD_ARRAY;
+
+	/** insert 3 extents at location 2, 4 & 6*/
+	iod.iod_nr = 1;
+	update_recxs[0].rx_idx = 10;
+	update_recxs[0].rx_nr = SM_BUF_LEN;
+
+	/** Update */
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(0, rc);
+
+	/** setup for fetch */
+	fetch_recx.rx_idx = 12;
+	fetch_recx.rx_nr = SM_BUF_LEN - 2;
+	iod.iod_nr = 1;
+	iod.iod_recxs = &fetch_recx;
+
+	/** get map */
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			    &map, NULL);
+	assert_int_equal(0, rc);
+
+	assert_int_equal(1, map.iom_nr_out);
+	assert_int_equal(SM_BUF_LEN, map.iom_nr);
+	assert_int_equal(iod.iod_size, map.iom_size);
+	assert_int_equal(iod.iod_type, map.iom_type);
+	assert_recx_equal(fetch_recx, map.iom_recx_lo);
+	assert_recx_equal(fetch_recx, map.iom_recx_hi);
+	assert_recx_equal(fetch_recx, map.iom_recxs[0]);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest array_tests[] = {
 	{ "ARRAY1: byte array with buffer on stack",
 	  byte_array_simple_stack, NULL, test_case_teardown},
@@ -1065,6 +1217,11 @@ static const struct CMUnitTest array_tests[] = {
 	  array_recx_read_incomplete, NULL, test_case_teardown},
 	{ "ARRAY15: Reading from array with holes",
 		fetch_array_with_map, NULL, test_case_teardown},
+	{ "ARRAY16: Reading from array with holes not starting at idx 0",
+		fetch_array_with_map_2, NULL, test_case_teardown},
+	{ "ARRAY16: Reading from array with holes not starting at idx 0, fetch "
+	  "idx doesn't align with extent",
+		fetch_array_with_map_3, NULL, test_case_teardown},
 };
 
 static int
