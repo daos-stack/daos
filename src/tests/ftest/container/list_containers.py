@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -56,15 +56,14 @@ class ListContainerTest(TestWithServers):
                 It should contain all the container UUIDs for the given pool.
         """
         # Create containers and store the container UUIDs into expected_uuids.
+        kwargs = {"pool": pool_uuid, "svc": sr}
         for _ in range(count):
-            create_stdout = self.daos_cmd.container_create(
-                pool=pool_uuid, svc=sr).stdout
-            expected_uuids.append(create_stdout.split()[3])
+            expected_uuids.append(
+                self.daos_cmd.get_output("container_create", **kwargs)[0])
         expected_uuids.sort()
         # daos pool list-cont returns the date, host name, and container UUID
         # as below:
         # 03/31-21:32:24.53 wolf-3 2f69b198-8478-472e-b6c8-02a451f4de1b
-        kwargs = {"pool": pool_uuid, "svc": sr}
         actual_uuids = self.daos_cmd.get_output("pool_list_cont", **kwargs)
         actual_uuids.sort()
         self.assertEqual(expected_uuids, actual_uuids)
