@@ -698,6 +698,30 @@ class DmgCommand(CommandWithSubCommand):
         self.sub_command_class.set_sub_command("list")
         return self._get_result()
 
+    def pool_disable_aggregation(self, pool, name, value):
+        """Disable aggregation for a given Pool.
+
+        Args:
+            pool (str): Pool uuid for which aggregation is supposed
+                        to be disabled.
+            name (str): Property name to be set
+            value (str): Property value to be set
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool set-prop command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("set-prop")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.name.value = name
+        self.sub_command_class.sub_command_class.value.value = value
+        return self._get_result()
+
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     """Get Pool UUID and Service replicas from stdout.

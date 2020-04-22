@@ -69,6 +69,8 @@ class TestPool(TestDaosApiBase):
         self.target_list = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
+        self.prop_name = BasicParameter(None)      # name of property to be set
+        self.prop_value = BasicParameter(None)     # value of property
 
         self.pool = None
         self.uuid = None
@@ -253,6 +255,30 @@ class TestPool(TestDaosApiBase):
             self.svc_ranks = None
 
         return status
+
+    @fail_on(DaosApiError)
+    def disable_aggregation(self):
+        """Disable Aggregation.
+
+        It disables aggregation for a given pool uuid using
+        dmg.
+
+        """
+        if self.pool:
+            self.log.info("Disabling aggregation for Pool: %s", self.uuid)
+
+            if self.control_method.value == self.USE_DMG and self.dmg:
+                # Disable aggregation using dmg
+                self.dmg.pool_disable_aggregation(self.uuid, self.prop_name,
+                                                  self.prop_value)
+
+            elif self.control_method.value == self.USE_DMG:
+                self.log.error("Error: Undefined dmg command")
+
+            else:
+                self.log.error(
+                    "Error: Undefined control_method: %s",
+                    self.control_method.value)
 
     @fail_on(DaosApiError)
     def get_info(self):

@@ -72,6 +72,9 @@ class NvmeIo(IorTestBase):
                 self.pool.nvme_size.update(ior_param[1])
                 self.pool.create()
 
+                # Disable aggregation
+                self.pool.disable_aggregation()
+
                 # Get the current pool sizes
                 self.pool.get_info()
                 size_before_ior = self.pool.info
