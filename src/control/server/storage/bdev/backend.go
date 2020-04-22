@@ -176,6 +176,10 @@ func (b *spdkBackend) Scan() (storage.NvmeControllers, error) {
 }
 
 func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeController, error) {
+	if pciAddr == "" {
+		return nil, FaultBadPCIAddr("")
+	}
+
 	var spdkController *spdk.Controller
 	for _, bc := range bcs {
 		if bc.PCIAddr == pciAddr {
@@ -185,7 +189,7 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 	}
 
 	if spdkController == nil {
-		return nil, FaultFormatBadPciAddr(pciAddr)
+		return nil, FaultPCIAddrNotFound(pciAddr)
 	}
 
 	scs, err := convertControllers([]spdk.Controller{*spdkController})
@@ -200,10 +204,6 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 }
 
 func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
-	if pciAddr == "" {
-		return nil, FaultFormatBadPciAddr("")
-	}
-
 	b.Lock()
 	defer b.Unlock()
 

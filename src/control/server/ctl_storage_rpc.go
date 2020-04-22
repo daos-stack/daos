@@ -258,11 +258,6 @@ func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool) (resp *c
 
 	scmConfig := srv.scmConfig()
 
-	if srv.isStarted() {
-		return errors.Errorf("instance %d: can't format storage of running instance",
-			srvIdx)
-	}
-
 	scmErrored := false
 	scmErr := func(err error) *ctlpb.ScmMountResult {
 		scmErrored = true
@@ -271,7 +266,7 @@ func (c *ControlService) doFormat(srv *IOServerInstance, reformat bool) (resp *c
 			fault.ShowResolutionFor(err))
 	}
 
-	if srv.IsStarted() {
+	if srv.isStarted() {
 		resp.Mrets = append(resp.Mrets, scmErr(errors.Errorf(
 			"instance %d: can't format storage of running instance", srvIdx)))
 	} else if !reformat {
