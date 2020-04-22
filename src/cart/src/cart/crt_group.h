@@ -213,10 +213,8 @@ struct crt_rank_mapping {
 	d_rank_t	rm_key;
 	d_rank_t	rm_value;
 
-	uint32_t	rm_ref;
-	uint32_t	rm_initialized;
-
-	pthread_mutex_t	rm_mutex;
+	ATOMIC uint32_t	rm_ref;
+	uint32_t	rm_initialized:1;
 };
 
 /* uri info for each remote rank */
@@ -235,10 +233,10 @@ struct crt_uri_item {
 	d_rank_t	ui_rank;
 
 	/* reference count */
-	uint32_t	ui_ref;
+	ATOMIC uint32_t	ui_ref;
 
 	/* flag indicating whether initialized */
-	uint32_t	ui_initialized;
+	uint32_t	ui_initialized:1;
 
 	/* mutex for protection of ui_ref */
 	pthread_mutex_t ui_mutex;
@@ -256,7 +254,7 @@ struct crt_lookup_item {
 	hg_addr_t		 li_tag_addr[CRT_SRV_CONTEXT_NUM];
 
 	/* reference count */
-	uint32_t		 li_ref;
+	ATOMIC uint32_t		 li_ref;
 	uint32_t		 li_initialized:1;
 	pthread_mutex_t		 li_mutex;
 };
