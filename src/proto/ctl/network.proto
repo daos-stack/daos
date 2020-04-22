@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,18 +24,17 @@
 syntax = "proto3";
 package ctl;
 
-message DeviceScanRequest {
+message NetworkScanReq {
   string provider = 1;
+  string excludeinterfaces = 2;
 }
 
-message DeviceScanReply {
+message NetworkScanResp {
+  repeated FabricInterface interfaces = 1;
+}
+
+message FabricInterface {
   string provider = 1;
   string device = 2;
   uint32 numanode = 3;
-}
-
-message ProviderListRequest {}
-
-message ProviderListReply {
-  string provider = 1;
 }
