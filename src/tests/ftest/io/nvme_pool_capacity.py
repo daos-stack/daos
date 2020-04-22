@@ -33,7 +33,6 @@ from write_host_file import write_host_file
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ior_utils import IorCommand
-from daos_utils import DaosCommand
 from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
 
@@ -87,7 +86,7 @@ class NvmePoolCapacity(TestWithServers):
             self.fail("Exiting Test: Mpich not installed")
 
         # Iterate through IOR different value and run in sequence
-        pool_len = len(pool_array) 
+        pool_len = len(pool_array)
         for pool in pool_array:
             self.pool = pool
             for oclass, api, test, flags in product(self.ior_daos_oclass,
@@ -111,7 +110,8 @@ class NvmePoolCapacity(TestWithServers):
                 ior_cmd.api.update(api)
                 ior_cmd.transfer_size.update(test[0])
                 # Update the block size based on no of jobs.
-                actual_block_size = long ((test[1]) / (num_jobs * pool_len))
+                actual_block_size = (round(float(test[1])) /
+                                     (num_jobs * pool_len))
                 ior_cmd.block_size.update(str(actual_block_size))
                 ior_cmd.flags.update(flags)
 
@@ -138,15 +138,16 @@ class NvmePoolCapacity(TestWithServers):
                 except CommandFailure as _error:
                     # If block_size 160G, it is expected to fail due to ENOSPC.
                     self.log.info("Block Size: %s", test[1])
-                    if (test[1] == "214748364800") or (test[1] == "429496729600"):
+                    if ((test[1] == "214748364800") or
+                       (test[1] == "429496729600")):
                         results.put("PASS")
                     else:
                         results.put("FAIL")
 
-    def test_create_delete(self, num_pool=2, num_cont=5, iter=10):
+    def test_create_delete(self, num_pool=2, num_cont=5, total_count=10):
         """
         Test Description:
-            This method is called with 
+            This method is called with
             num_pool parameter to run following test case
             scenario's.
             Use Cases
@@ -155,7 +156,8 @@ class NvmePoolCapacity(TestWithServers):
         pool = {}
         cont = {}
 
-        for loop_count in range(0, iter):
+        for loop_count in range(0, total_count):
+            self.log.info("Running test %s", loop_count)
             for val in range(0, num_pool):
                 pool[val] = TestPool(self.context,
                                      dmg_command=self.get_dmg_command())
