@@ -84,7 +84,6 @@ func (srv *IOServerInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, er
 		return nil, err
 	}
 	srv.log.Infof("Instance %d: finished format of %s", srvIdx, scmStr)
-	srv._scmFormatted.SetTrue()
 
 	return newMntRet(srv.log, "format", cfg.MountPoint, status, eMsg, iMsg), nil
 }
