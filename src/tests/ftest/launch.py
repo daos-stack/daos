@@ -714,8 +714,8 @@ def run_tests(test_files, tag_filter, args):
     # Determine the location of the avocado logs for archiving or renaming
     avocado_logs_dir = None
     if args.archive or args.rename:
-        config = get_output(["avocado", "config"]).strip()
-        avocado_logs_dir = re.findall(r"logs_dir\s+([A-Za-z0-9_/~-]+)", config)
+        data = get_output(["avocado", "config"]).strip()
+        avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
         avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
         print("Avocado logs stored in {}".format(avocado_logs_dir))
 
