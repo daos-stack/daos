@@ -94,8 +94,8 @@ run_test()
 
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
-        "${VCMD[@]}" "$BTR" \
-        --start-test "BTR030: functional ${test_conf_pre} ${test_conf} iterate=${IDIR}" \
+        "${VCMD[@]}" "$BTR" --start-test \
+        "BTR030: functional ${test_conf_pre} ${test_conf} iterate=${IDIR}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
