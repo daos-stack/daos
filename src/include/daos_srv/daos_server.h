@@ -392,6 +392,9 @@ struct dss_sleep_ult {
 	ABT_thread	dsu_thread;
 	uint64_t	dsu_expire_time;
 	d_list_t	dsu_list;
+	bool		dsu_idle;
+	void		*dsu_args;
+	void		(*dsu_func)(void *args);
 };
 
 struct dss_sleep_ult *dss_sleep_ult_create(void);
