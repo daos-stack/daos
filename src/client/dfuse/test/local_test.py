@@ -96,8 +96,9 @@ class DaosServer():
         agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
         self._agent = subprocess.Popen([agent_bin,
-                                        '--config-path={}'.format(agent_config),
-                                        '-i', '--runtime_dir', self.agent_dir],
+                                        '--config-path', agent_config,
+                                        '--insecure', '--runtime_dir', self.agent_dir,
+                                        '--logfile', '/tmp/dnt_agent.log'],
                                        env=agent_env)
         time.sleep(10)
         self.running = True
@@ -332,15 +333,36 @@ def import_daos(server, conf):
     daos = __import__('pydaos')
     return daos
 
+def run_daos_cmd(conf, cmd):
+
+    exec_cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos')]
+    exec_cmd.extend(cmd)
+
+    cmd_env = os.environ.copy()
+
+    cmd_env['D_LOG_MASK'] = 'DEBUG'
+    cmd_env['DD_MASK'] = 'all'
+    cmd_env['DD_SUBSYS'] = 'all'
+
+    log_file = tempfile.NamedTemporaryFile(prefix='dnt_cmd_',
+                                           suffix='.log', delete=False)
+
+    cmd_env['D_LOG_FILE'] = log_file.name
+
+    rc = subprocess.run(exec_cmd,
+                        stdout=subprocess.PIPE,
+                        env=cmd_env)
+    log_test(log_file.name)
+    return rc
+
 def show_cont(conf, pool):
     """Create a container and return a container list"""
-    daos_bin = os.path.join(conf['PREFIX'], 'bin', 'daos')
-    cmd = [daos_bin, 'container', 'create', '--svc', '0', '--pool', pool]
-    rc = subprocess.run(cmd, stdout=subprocess.PIPE)
+    cmd = ['container', 'create', '--svc', '0', '--pool', pool]
+    rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
 
-    cmd = [daos_bin, 'pool', 'list-containers', '--svc', '0', '--pool', pool]
-    rc = subprocess.run(cmd, stdout=subprocess.PIPE)
+    cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+    rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     return rc.stdout.strip()
 
@@ -514,8 +536,6 @@ def run_dfuse(server, conf):
 
     run_tests(dfuse)
 
-    daos_bin = os.path.join(conf['PREFIX'], 'bin', 'daos')
-
     dfuse.stop()
 
     dfuse = DFuse(server, conf, pool=pools[0], container=container2)
@@ -525,12 +545,12 @@ def run_dfuse(server, conf):
 
     uns_container = str(uuid.uuid4())
 
-    cmd = [daos_bin, 'container', 'create', '--svc', '0',
+    cmd = ['container', 'create', '--svc', '0',
            '--pool', pools[0], '--cont', uns_container, '--path', uns_path,
            '--type', 'POSIX']
 
     print('Inserting entry point')
-    rc = subprocess.run(cmd)
+    rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     print(os.stat(uns_path))
     print(os.stat(uns_path))
@@ -551,12 +571,12 @@ def run_dfuse(server, conf):
     uns_container = str(uuid.uuid4())
 
     # Make a link within the new container.
-    cmd = [daos_bin, 'container', 'create', '--svc', '0',
+    cmd = ['container', 'create', '--svc', '0',
            '--pool', pools[0], '--cont', uns_container,
            '--path', uns_path, '--type', 'POSIX']
 
     print('Inserting entry point')
-    rc = subprocess.run(cmd)
+    rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
 
     # List the root container again.
