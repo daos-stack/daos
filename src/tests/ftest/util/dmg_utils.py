@@ -30,10 +30,10 @@ import re
 
 from command_utils import \
     CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand
+    CommandWithSubCommand, YamlCommand, YamlParameters
 
 
-class DmgCommand(CommandWithSubCommand):
+class DmgCommand(YamlCommand):
     """Defines a object representing a dmg command."""
 
     METHOD_REGEX = {
@@ -49,18 +49,23 @@ class DmgCommand(CommandWithSubCommand):
         "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))"
     }
 
-    def __init__(self, path):
+    def __init__(self, path, yaml_cfg=None):
         """Create a dmg Command object.
 
         Args:
             path (str): path to the dmg command
         """
-        super(DmgCommand, self).__init__("/run/dmg/*", "dmg", path)
+        super(DmgCommand, self).__init__("/run/dmg/*", "dmg", path, yaml_cfg)
+
+        # If specified use the configuration file from the YamlParameters object
+        default_yaml_file = None
+        if isinstance(self.yaml, YamlParameters):
+            default_yaml_file = self.yaml.filename
 
         self.hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")
-        self.configpath = FormattedParameter("-o {}")
-        self.insecure = FormattedParameter("-i", True)
+        self.configpath = FormattedParameter("-o {}", default_yaml_file)
+        self.insecure = FormattedParameter("-i", False)
         self.debug = FormattedParameter("-d", False)
         self.json = FormattedParameter("-j", False)
 
@@ -73,8 +78,12 @@ class DmgCommand(CommandWithSubCommand):
         Args:
             manager (SubprocessManager): daos server/agent process manager
         """
-        self.hostlist.update(
-            manager.get_config_value("access_points"), "dmg.hostlist")
+        if self.yaml is not None:
+            self.yaml.hostlist.value = manager.get_config_value("access_points")
+        else:
+            self.hostlist.update(
+                manager.get_config_value("access_points"), "dmg.hostlist")
+
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -472,6 +481,9 @@ class DmgCommand(CommandWithSubCommand):
             CommandFailure: if the dmg command fails.
 
         """
+        if self.yaml is not None:
+            self.create_yaml_file()
+
         result = None
         try:
             result = self.run()

@@ -303,7 +303,7 @@ class DaosServerManager(SubprocessManager):
         "OFI_PORT": "fabric_iface_port",
     }
 
-    def __init__(self, server_command, manager="Orterun"):
+    def __init__(self, server_command, manager="Orterun", dmg_cfg=None):
         """Initialize a DaosServerManager object.
 
         Args:
@@ -318,7 +318,7 @@ class DaosServerManager(SubprocessManager):
 
         # Dmg command to access this group of servers which will be configured
         # to access the doas_servers when they are started
-        self.dmg = DmgCommand(self.manager.job.command_path)
+        self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
 
     def get_interface_envs(self, index=0):
         """Get the environment variable names and values for the interfaces.
@@ -350,11 +350,14 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.create_yaml_file()
 
         # Prepare dmg for running storage format on all server hosts
-        self.dmg.hostlist.update(",".join(self._hosts), "dmg.hostlist")
-        self.dmg.insecure.update(
-            self.get_config_value("allow_insecure"), "dmg.insecure")
+        if self.dmg.yaml is not None:
+            self.dmg.yaml.hostlist.value = self._hosts
+        else:
+            self.dmg.hostlist.update(",".join(self._hosts), "dmg.hostlist")
+            self.dmg.insecure.update(
+                self.get_config_value("allow_insecure"), "dmg.insecure")
 
-        # Kill any doas servers running on the hosts
+        # Kill any daos servers running on the hosts
         self.kill()
 
         # Clean up any files that exist on the hosts
@@ -493,8 +496,11 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Failed to start servers after format")
 
         # Update the dmg command host list to work with pool create/destroy
-        self.dmg.hostlist.update(
-            ",".join(self.get_config_value("access_points")), "dmg.hostlist")
+        hostlist = self.get_config_value("access_points")
+        if self.dmg.yaml is not None:
+            self.dmg.yaml.hostlist.value = hostlist
+        else:
+            self.dmg.hostlist.update(",".join(hostlist), "dmg.hostlist")
 
     def reset_storage(self):
         """Reset the server storage.

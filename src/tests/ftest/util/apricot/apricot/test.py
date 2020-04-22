@@ -43,6 +43,8 @@ from agent_utils_params import \
 from agent_utils import DaosAgentCommand, DaosAgentManager, include_local_host
 from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
+from dmg_utils_params import \
+    DmgYamlParameters, DmgTransportCredentials
 from server_utils import DaosServerCommand, DaosServerManager
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
@@ -407,9 +409,11 @@ class TestWithServers(TestWithoutServers):
                 transport = DaosServerTransportCredentials()
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "server")
+                dmg_config_file = self.get_config_file(group, "dmg")
                 # Setup the access points with the server hosts
                 common_cfg = CommonConfig(group, transport)
-                self.add_server_manager(config_file, common_cfg)
+                self.add_server_manager(
+                    config_file, dmg_config_file, common_cfg)
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
@@ -458,7 +462,8 @@ class TestWithServers(TestWithoutServers):
         self.agent_managers.append(
             DaosAgentManager(agent_cmd, self.manager_class))
 
-    def add_server_manager(self, config_file=None, common_cfg=None, timeout=90):
+    def add_server_manager(self, config_file=None, dmg_config_file=None,
+                           common_cfg=None, timeout=90):
         """Add a new daos server manager object to the server manager list.
 
         When adding multiple server managers unique yaml config file names
@@ -482,11 +487,15 @@ class TestWithServers(TestWithoutServers):
             common_cfg = CommonConfig(
                 self.server_group, DaosServerTransportCredentials())
 
-        # Create an ServerCommand to manage with a new ServerManager object
+        if dmg_config_file is None:
+            dmg_config_file = self.get_config_file("daos", "dmg")
+        dmg_cfg = DmgYamlParameters(
+            dmg_config_file, self.server_group, DmgTransportCredentials())
+        # Create a ServerCommand to manage with a new ServerManager object
         server_cfg = DaosServerYamlParameters(config_file, common_cfg)
         server_cmd = DaosServerCommand(self.bin, server_cfg, timeout)
         self.server_managers.append(
-            DaosServerManager(server_cmd, self.manager_class))
+            DaosServerManager(server_cmd, self.manager_class, dmg_cfg))
 
     def configure_manager(self, name, manager, hosts, slots, access_list=None):
         """Configure the agent/server manager object.
