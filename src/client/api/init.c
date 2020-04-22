@@ -96,7 +96,6 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_tx_abort, sizeof(daos_tx_abort_t)},
 	{dc_tx_open_snap, sizeof(daos_tx_open_snap_t)},
 	{dc_tx_close, sizeof(daos_tx_close_t)},
-	{dc_tx_restart, sizeof(daos_tx_restart_t)},
 
 	/** Object */
 	{dc_obj_register_class, sizeof(daos_obj_register_class_t)},

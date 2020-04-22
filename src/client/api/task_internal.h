@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,6 @@ struct daos_task_args {
 		daos_tx_commit_t	tx_commit;
 		daos_tx_abort_t		tx_abort;
 		daos_tx_close_t		tx_close;
-		daos_tx_restart_t	tx_restart;
 
 		/** Object */
 		daos_obj_register_class_t obj_reg_class;

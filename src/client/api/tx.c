@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,7 @@
 #include "task_internal.h"
 
 int
-daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags,
-	     daos_event_t *ev)
+daos_tx_open(daos_handle_t coh, daos_handle_t *th, daos_event_t *ev)
 {
 	daos_tx_open_t	*args;
 	tse_task_t	*task;
@@ -43,7 +42,6 @@ daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags,
 	args = dc_task_get_args(task);
 	args->coh	= coh;
 	args->th	= th;
-	args->flags	= flags;
 
 	return dc_task_schedule(task, true);
 }
@@ -118,24 +116,6 @@ daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
 	args = dc_task_get_args(task);
 	args->coh	= coh;
 	args->epoch	= epoch;
-	args->th	= th;
-
-	return dc_task_schedule(task, true);
-}
-
-int
-daos_tx_restart(daos_handle_t th, daos_event_t *ev)
-{
-	daos_tx_restart_t	*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, TX_RESTART);
-	rc = dc_task_create(dc_tx_restart, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
 	args->th	= th;
 
 	return dc_task_schedule(task, true);

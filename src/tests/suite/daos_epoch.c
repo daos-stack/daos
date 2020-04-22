@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 		for (i = 0, k = 0; i < gs_dkeys; i++) {
 			daos_size_t		rec_size;
 
-			daos_tx_open(coh, &ths[i], 0, NULL);
+			daos_tx_open(coh, &ths[i], NULL);
 			daos_tx_hdl2epoch(ths[i], &epoch);
 			memset(rec, 0, REC_MAX_LEN);
 			snprintf(rec, REC_MAX_LEN, VAL_FMT, epoch);
