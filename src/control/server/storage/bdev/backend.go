@@ -208,7 +208,7 @@ func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 	defer b.Unlock()
 
 	if !b.binding.initialized {
-		return nil, errors.New("spdk not initialised, please run scan")
+		return nil, errors.New("spdk not initialised, please run 'storage scan' command first")
 	}
 
 	ctrlr, err := getController(pciAddr, b.binding.controllers)
