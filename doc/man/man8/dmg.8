@@ -1,4 +1,4 @@
-.TH dmg 1 "7 April 2020"
+.TH dmg 1 "14 April 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -36,6 +36,28 @@ path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if speci
 \fB\fB\-o\fR, \fB\-\-config-path\fR\fP
 Client config file path
 .SH COMMANDS
+.SS cont
+Perform tasks related to DAOS containers
+
+\fBAliases\fP: c
+
+.SS cont set-owner
+Change the owner for a DAOS container
+
+\fBUsage\fP: cont set-owner [set-owner-OPTIONS]
+.TP
+.TP
+\fB\fB\-g\fR, \fB\-\-group\fR\fP
+New owner-group for the container, format name@domain
+.TP
+\fB\fB\-u\fR, \fB\-\-user\fR\fP
+New owner-user for the container, format name@domain
+.TP
+\fB\fB\-c\fR, \fB\-\-cont\fR (\fIrequired\fR)\fP
+UUID of the DAOS container
+.TP
+\fB\fB\-p\fR, \fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of the DAOS pool for the container
 .SS network
 Perform tasks related to network devices attached to remote servers
 

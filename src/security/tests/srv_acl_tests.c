@@ -2044,6 +2044,13 @@ test_get_rebuild_cont_capas(void **state)
 			 CONT_CAPA_READ_DATA);
 }
 
+static void
+test_get_admin_cont_capas(void **state)
+{
+	assert_int_equal(ds_sec_get_admin_cont_capabilities(),
+			 CONT_CAPAS_ALL);
+}
+
 /* Convenience macro for unit tests */
 #define ACL_UTEST(X)	cmocka_unit_test_setup_teardown(X, srv_acl_setup, \
 							srv_acl_teardown)
@@ -2118,6 +2125,7 @@ main(void)
 		cmocka_unit_test(test_cont_can_write_data),
 		cmocka_unit_test(test_cont_can_read_data),
 		cmocka_unit_test(test_get_rebuild_cont_capas),
+		cmocka_unit_test(test_get_admin_cont_capas),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

@@ -147,9 +147,15 @@ def scons():
     gosrc = Dir('.').srcnode().abspath
     cartpath = Dir('#/src/cart/src/include').srcnode().abspath
 
+    prereqs.require(denv, 'ofi', 'hwloc')
+
     denv.AppendENVPath("CGO_LDFLAGS",
-                       denv.subst("-L$BUILD_DIR/src/cart/src/gurt"), sep=" ")
-    denv.AppendENVPath("CGO_CFLAGS", "-I%s" % cartpath, sep=" ")
+                       denv.subst("$_LIBDIRFLAGS "
+                                  "$_RPATH"),
+                       sep=" ")
+
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
+                       sep=" ")
 
     agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
     dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
