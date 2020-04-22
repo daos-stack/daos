@@ -96,12 +96,7 @@ func checkRank(r Rank) error {
 }
 
 // InList checks rank is present in provided rank list.
-//
-// Empty rank list indicates no filtering.
 func (r *Rank) InList(ranks []Rank) bool {
-	if len(ranks) == 0 {
-		return true
-	}
 	for _, rank := range ranks {
 		if r.Equals(rank) {
 			return true
