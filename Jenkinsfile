@@ -995,7 +995,7 @@ pipeline {
                                            ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
                                            . ./.build_vars.sh
                                            DAOS_BASE=${SL_PREFIX%/install*}
-					   rm -f dnt.*.memcheck.xml test.out
+                                           rm -f dnt.*.memcheck.xml test.out
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
