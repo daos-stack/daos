@@ -38,7 +38,7 @@ def check_for_pool(host, uuid):
 
     """
     cmd = "test -e /mnt/daos/" + uuid
-    resp = subprocess.call(["ssh", host, cmd])  # nosec
+    resp = subprocess.call(["ssh", host, cmd])
     if resp == 0:
         print("{} exists".format(uuid))
     else:
@@ -54,4 +54,4 @@ def cleanup_pools(hosts):
     """
     for host in hosts:
         cmd = "rm -rf /mnt/daos/*"
-        subprocess.call(["ssh", host, cmd])  # nosec
+        subprocess.call(["ssh", host, cmd])

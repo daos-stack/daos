@@ -54,7 +54,7 @@ class MpioUtils():
         try:
             # checking mpich install
             command = ["ssh", hostlist[0], "command -v mpichversion"]
-            output = subprocess.check_output(command)   # nosec
+            output = subprocess.check_output(command)
             self.mpichinstall = output.rstrip()[:-len('bin/mpichversion')]
             return True
 
@@ -173,7 +173,7 @@ class MpioUtils():
             try:
                 process = subprocess.Popen(
                     cmd, stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT)  # nosec
+                    stderr=subprocess.STDOUT)
                 while True:
                     output = process.stdout.readline()
                     if output == '' and process.poll() is not None:

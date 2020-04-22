@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-from re import findall, IGNORECASE
+import re
 
 from apricot import TestWithServers
 from daos_perf_utils import DaosPerfCommand
@@ -65,9 +65,9 @@ class DaosPerfBase(TestWithServers):
 
         # Run the daos_perf command and check for errors
         result = orterun.run()
-        errors = findall(
-            r"(.*(?:non-zero exit code|errors|failed).*", result.stdout_text,
-            IGNORECASE)
+        errors = re.findall(
+            r"(.*(?:non-zero exit code|errors|failed|Failed).*",
+            result.stdout_text)
         if errors:
             self.fail(
                 "Errors detected in daos_perf output:\n{}".format(

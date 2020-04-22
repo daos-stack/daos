@@ -82,14 +82,14 @@ if __name__ == "__main__":
     print("working ")
     for _file in test_files:
         cmd1 = ["avocado", "list", _file]
-        output = subprocess.check_output(cmd1)  # nosec
+        output = subprocess.check_output(cmd1)
         tests += len(output.splitlines())
         yamlfile = yamlforpy(_file)
         cmd2 = [
             "avocado", "variants", "-m", yamlfile, "--summary", "0",
             "--variants", "1"
         ]
-        output = subprocess.check_output(cmd2)  # nosec
+        output = subprocess.check_output(cmd2)
         variants += len(output.splitlines())
         print(".")
         sys.stdout.flush()
