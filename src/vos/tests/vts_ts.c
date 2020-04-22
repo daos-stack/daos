@@ -348,8 +348,7 @@ lru_array_test(void **state)
 	}
 
 	for (i = 0; i < NUM_INDEXES; i++) {
-		entry = lrua_alloc(ts_arg->array, &ts_arg->indexes[i].idx,
-				   true);
+		entry = lrua_alloc(ts_arg->array, &ts_arg->indexes[i].idx);
 		assert_non_null(entry);
 
 		entry->record = &ts_arg->indexes[i];
@@ -385,8 +384,7 @@ lru_array_test(void **state)
 		found = lrua_lookup(ts_arg->array, &ts_arg->indexes[i].idx,
 				    (void **)&entry);
 		assert_false(found);
-		entry = lrua_alloc(ts_arg->array, &ts_arg->indexes[i].idx,
-				   true);
+		entry = lrua_alloc(ts_arg->array, &ts_arg->indexes[i].idx);
 		assert_non_null(entry);
 
 		entry->record = &ts_arg->indexes[i];
@@ -448,7 +446,7 @@ lru_array_stress_test(void **state)
 			if ((i % freq_map[freq_idx]) == 0)
 				continue;
 			entry = lrua_alloc(ts_arg->array,
-					   &ts_arg->indexes[i].idx, true);
+					   &ts_arg->indexes[i].idx);
 			assert_non_null(entry);
 			entry->record = &ts_arg->indexes[i];
 			ts_arg->indexes[i].value = i;
@@ -487,7 +485,7 @@ lru_array_stress_test(void **state)
 
 		if (op < 7) {
 			entry = lrua_alloc(ts_arg->array,
-					   &stress_entries[i].idx, true);
+					   &stress_entries[i].idx);
 			assert_non_null(entry);
 
 			entry->record = &stress_entries[i];
@@ -530,7 +528,7 @@ lru_array_stress_test(void **state)
 
 	for (i = 0; i < LRU_ARRAY_SIZE; i++) {
 		entry = lrua_alloc(ts_arg->array,
-				   &stress_entries[i].idx, true);
+				   &stress_entries[i].idx);
 		assert_non_null(entry);
 		entry->record = &stress_entries[i];
 		stress_entries[i].value = i;
@@ -541,7 +539,7 @@ lru_array_stress_test(void **state)
 	for (i = 0; i < LRU_ARRAY_SIZE; i++) {
 		j = i + LRU_ARRAY_SIZE;
 		entry = lrua_alloc(ts_arg->array,
-				   &stress_entries[j].idx, true);
+				   &stress_entries[j].idx);
 		assert_non_null(entry);
 		entry->record = &stress_entries[j];
 		stress_entries[j].value = j;
@@ -550,7 +548,7 @@ lru_array_stress_test(void **state)
 	for (i = LRU_ARRAY_SIZE - 1; i >= 0; i--) {
 		j = i +  2 * LRU_ARRAY_SIZE;
 		entry = lrua_alloc(ts_arg->array,
-				   &stress_entries[j].idx, true);
+				   &stress_entries[j].idx);
 		assert_non_null(entry);
 		entry->record = &stress_entries[j];
 		stress_entries[j].value = j;
@@ -577,8 +575,8 @@ init_lru_test(void **state)
 	if (ts_arg == NULL)
 		return 1;
 
-	rc = lrua_array_alloc(&ts_arg->array, LRU_ARRAY_SIZE,
-			      sizeof(struct lru_record), &lru_cbs,
+	rc = lrua_array_alloc(&ts_arg->array, LRU_ARRAY_SIZE, 1,
+			      sizeof(struct lru_record), 0, &lru_cbs,
 			      ts_arg);
 
 	*state = ts_arg;
