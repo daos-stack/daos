@@ -70,7 +70,7 @@ class NvmePoolCapacity(TestWithServers):
         self.pool = None
         self.out_queue = queue.Queue()
 
-    def ior_runner_thread(self, test_case, pool_array, results):
+    def ior_runner_thread(self, test_case, pool_array, num_jobs, results):
         """Start threads and wait until all threads are finished.
         Destroy the container at the end of this thread run.
 
@@ -87,6 +87,7 @@ class NvmePoolCapacity(TestWithServers):
             self.fail("Exiting Test: Mpich not installed")
 
         # Iterate through IOR different value and run in sequence
+        pool_len = len(pool_array) 
         for pool in pool_array:
             self.pool = pool
             for oclass, api, test, flags in product(self.ior_daos_oclass,
@@ -94,13 +95,13 @@ class NvmePoolCapacity(TestWithServers):
                                                     self.ior_transfer_size,
                                                     self.ior_flags):
                 # Define the arguments for the ior_runner_thread method
-                if (test_case < 4) and (test[1] == "32M"):
+                if (test_case < 4) and (test[1] == "33554432"):
                     continue
                 # Check for full NVMe size (360G, 800G: ENOSPC)
-                if (test_case == 2) and (test[1] == "180G"):
-                    test[1] = "360G"
-                elif (test_case == 2) and (test[1] == "200G"):
-                    test[1] = "800G"
+                if (test_case == 2) and (test[1] == "193273528320"):
+                    test[1] = "386547056640"
+                elif (test_case == 2) and (test[1] == "214748364800"):
+                    test[1] = "429496729600"
                 else:
                     self.log.info("Using block size : %s", test[1])
                 ior_cmd = IorCommand()
@@ -109,7 +110,9 @@ class NvmePoolCapacity(TestWithServers):
                 ior_cmd.daos_oclass.update(oclass)
                 ior_cmd.api.update(api)
                 ior_cmd.transfer_size.update(test[0])
-                ior_cmd.block_size.update(test[1])
+                # Update the block size based on no of jobs.
+                actual_block_size = long ((test[1]) / (num_jobs * pool_len))
+                ior_cmd.block_size.update(str(actual_block_size))
                 ior_cmd.flags.update(flags)
 
                 container_info["{}{}{}"
@@ -135,7 +138,7 @@ class NvmePoolCapacity(TestWithServers):
                 except CommandFailure as _error:
                     # If block_size 160G, it is expected to fail due to ENOSPC.
                     self.log.info("Block Size: %s", test[1])
-                    if (test[1] == "200G") or (test[1] == "800G"):
+                    if (test[1] == "214748364800") or (test[1] == "429496729600"):
                         results.put("PASS")
                     else:
                         results.put("FAIL")
@@ -189,6 +192,7 @@ class NvmePoolCapacity(TestWithServers):
             pool[val] = TestPool(self.context,
                                  dmg_command=self.get_dmg_command())
             pool[val].get_params(self)
+            # Split the total SCM and NVME size for creating nultiple pools.
             split_pool_scm_size = pool[val].scm_size.value / num_pool
             split_pool_nvme_size = pool[val].nvme_size.value / num_pool
             pool[val].scm_size.update(split_pool_scm_size)
@@ -209,6 +213,7 @@ class NvmePoolCapacity(TestWithServers):
                 threads.append(threading.Thread(target=self.ior_runner_thread,
                                                 kwargs={"test_case": test_case,
                                                         "pool_array": pools,
+                                                        "num_jobs": no_of_jobs,
                                                         "results":
                                                         self.out_queue}))
             # Launch the IOR threads
@@ -242,7 +247,7 @@ class NvmePoolCapacity(TestWithServers):
         """
         # Use Case 1,2 and 3
         self.test_run(1)
-        self.test_run(2)
+        self.test_run(2, 2)
 
         # Use Case create/delete pool/container
         self.test_create_delete()
