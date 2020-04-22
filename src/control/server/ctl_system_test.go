@@ -58,13 +58,13 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 		"no memberss": {
 			clientResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 0, Action: "start", State: uint32(system.MemberStateStarted)},
-					{Rank: 1, Action: "start", State: uint32(system.MemberStateStarted)},
+					{Rank: 0, Action: "start", State: uint32(system.MemberStateJoined)},
+					{Rank: 1, Action: "start", State: uint32(system.MemberStateJoined)},
 				},
 			},
 			expResults: []*ctlpb.RankResult{
-				{Rank: 0, Action: "start", State: uint32(system.MemberStateStarted)},
-				{Rank: 1, Action: "start", State: uint32(system.MemberStateStarted)},
+				{Rank: 0, Action: "start", State: uint32(system.MemberStateJoined)},
+				{Rank: 1, Action: "start", State: uint32(system.MemberStateJoined)},
 			},
 			expErr: errors.Wrap(system.FaultMemberMissing, "retrieving MS member: rank 1"),
 		},
@@ -72,13 +72,13 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			members: system.Members{mockMember},
 			clientResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 0, Action: "start", State: uint32(system.MemberStateStarted)},
-					{Rank: 1, Action: "start", State: uint32(system.MemberStateStarted)},
+					{Rank: 0, Action: "start", State: uint32(system.MemberStateJoined)},
+					{Rank: 1, Action: "start", State: uint32(system.MemberStateJoined)},
 				},
 			},
 			expResults: []*ctlpb.RankResult{
-				{Rank: 0, Action: "start", State: uint32(system.MemberStateStarted)},
-				{Rank: 1, Action: "start", State: uint32(system.MemberStateStarted)},
+				{Rank: 0, Action: "start", State: uint32(system.MemberStateJoined)},
+				{Rank: 1, Action: "start", State: uint32(system.MemberStateJoined)},
 			},
 			expErr: errors.Wrap(system.FaultMemberMissing, "retrieving MS member: rank 1"),
 		},
@@ -103,8 +103,8 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			// create mock that implements MgmtSvcClient
 			mockMSClient := proto.NewMockMgmtSvcClient(
 				proto.MockMgmtSvcClientConfig{
-					StartResp: tc.clientResp,
-					StartErr:  tc.clientErr,
+					//					StartResp: tc.clientResp,
+					//					StartErr:  tc.clientErr,
 				})
 
 			// store for checking calls later
