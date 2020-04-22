@@ -90,7 +90,7 @@ func PoolOverwriteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolOver
 		return nil, err
 	}
 	if req.ACL.Empty() {
-		return nil, errors.New("empty ACL list on modify")
+		return nil, errors.New("empty ACL on modify")
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
@@ -135,7 +135,7 @@ func PoolUpdateACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpdateA
 		return nil, err
 	}
 	if req.ACL.Empty() {
-		return nil, errors.New("empty ACL list on modify")
+		return nil, errors.New("empty ACL on modify")
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
