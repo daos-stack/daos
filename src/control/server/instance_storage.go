@@ -83,6 +83,10 @@ func (srv *IOServerInstance) MountScmDevice() error {
 // NeedsScmFormat probes the configured instance storage and determines whether
 // or not it requires a format operation before it can be used.
 func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
+	if srv._scmFormatted.Load() {
+		return false, nil // cached on successful format
+	}
+
 	scmCfg := srv.scmConfig()
 
 	srv.log.Debugf("%s: checking formatting", scmCfg.MountPoint)
@@ -101,6 +105,9 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	}
 
 	needsFormat := !res.Mounted && !res.Mountable
+	if !needsFormat {
+		srv._scmFormatted.SetTrue()
+	}
 	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, needsFormat)
 	return needsFormat, nil
 }

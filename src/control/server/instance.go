@@ -66,9 +66,10 @@ type IOServerInstance struct {
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
-	_drpcClient drpc.DomainSocketClient
-	_superblock *Superblock
-	_lastErr    error // populated when harness receives signal
+	_drpcClient   drpc.DomainSocketClient
+	_superblock   *Superblock
+	_scmFormatted atm.Bool
+	_lastErr      error // populated when harness receives signal
 }
 
 // NewIOServerInstance returns an *IOServerInstance initialized with
