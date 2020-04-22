@@ -39,19 +39,20 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
-	agentSockName        = "agent.sock"
-	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
-	defaultConfigFile    = "daos_agent.yml"
+	agentSockName     = "agent.sock"
+	defaultConfigFile = "daos_agent.yml"
 )
 
 type cliOptions struct {
 	AllowProxy bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	Debug      bool       `short:"d" long:"debug" description:"Enable debug output"`
-	JSON       bool       `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLog    bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath string     `short:"o" long:"config-path" description:"Path to agent configuration file"`
 	Insecure   bool       `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
 	RuntimeDir string     `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
@@ -115,7 +116,7 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 		common.ScrubProxyVariables()
 	}
 
-	if opts.JSON {
+	if opts.JSONLog {
 		log.WithJSONOutput()
 	}
 
@@ -144,12 +145,6 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 
 	// Override configuration with any commandline values given
 	applyCmdLineOverrides(log, config, opts)
-
-	env := config.Ext.Getenv(daosAgentDrpcSockEnv)
-	if env != config.RuntimeDir {
-		log.Debugf("Environment variable '%s' has value '%s' which does not "+
-			"match '%s'", daosAgentDrpcSockEnv, env, config.RuntimeDir)
-	}
 
 	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
 	log.Debugf("Full socket path is now: %s", sockPath)
@@ -186,12 +181,29 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 		return err
 	}
 
+	enabled := atm.NewBool(os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
+	if enabled.IsFalse() {
+		log.Debugf("GetAttachInfo agent caching has been disabled\n")
+	}
+
+	netdetect.SetLogger(log)
+	numaAware, err := netdetect.NumaAware()
+	if err != nil {
+		return err
+	}
+
+	if !numaAware {
+		log.Debugf("This system is not NUMA aware")
+	}
+
 	drpcServer.RegisterRPCModule(NewSecurityModule(log, config.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
-		log:  log,
-		sys:  config.SystemName,
-		ap:   config.AccessPoints[0],
-		tcfg: config.TransportConfig,
+		log:       log,
+		sys:       config.SystemName,
+		ap:        config.AccessPoints[0],
+		tcfg:      config.TransportConfig,
+		aiCache:   &attachInfoCache{log: log, enabled: enabled},
+		numaAware: numaAware,
 	})
 
 	err = drpcServer.Start()

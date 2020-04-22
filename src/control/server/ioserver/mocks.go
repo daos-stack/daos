@@ -25,7 +25,8 @@ package ioserver
 import (
 	"context"
 	"os"
-	"sync/atomic"
+
+	"github.com/daos-stack/daos/src/control/lib/atm"
 )
 
 type (
@@ -33,10 +34,10 @@ type (
 		StartCb    func()
 		StartErr   error
 		WaitErr    error
-		Running    uint32
+		Running    atm.Bool
 		SignalCb   func(uint32, os.Signal)
 		SignalErr  error
-		ErrChanCb  func() error
+		ErrChanCb  func(uint32) error
 		ErrChanErr error
 	}
 
@@ -61,7 +62,7 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 		tr.runnerCfg.StartCb()
 	}
 	if tr.runnerCfg.ErrChanCb == nil {
-		tr.runnerCfg.ErrChanCb = func() error {
+		tr.runnerCfg.ErrChanCb = func(idx uint32) error {
 			return tr.runnerCfg.ErrChanErr
 		}
 	}
@@ -69,11 +70,15 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 	go func() {
 		select {
 		case <-ctx.Done():
-			return
-		case errChan <- tr.runnerCfg.ErrChanCb():
-			return
+		case errChan <- tr.runnerCfg.ErrChanCb(tr.serverCfg.Index):
 		}
+		tr.runnerCfg.Running.SetFalse()
+		return
 	}()
+
+	if tr.runnerCfg.StartErr == nil {
+		tr.runnerCfg.Running.SetTrue()
+	}
 
 	return tr.runnerCfg.StartErr
 }
@@ -87,13 +92,13 @@ func (tr *TestRunner) Signal(sig os.Signal) error {
 
 func (tr *TestRunner) Wait() error {
 	if tr.runnerCfg.WaitErr == nil {
-		atomic.StoreUint32(&tr.runnerCfg.Running, 0)
+		tr.runnerCfg.Running.SetFalse()
 	}
 	return tr.runnerCfg.WaitErr
 }
 
 func (tr *TestRunner) IsRunning() bool {
-	return atomic.LoadUint32(&tr.runnerCfg.Running) != 0
+	return tr.runnerCfg.Running.IsTrue()
 }
 
 func (tr *TestRunner) GetConfig() *Config {

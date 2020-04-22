@@ -770,19 +770,6 @@ fetch_with_multiple_extents(void **state)
 		.fetch_recx = {.rx_idx = 2, .rx_nr = 800},
 	});
 
-	/** Overwrites after the first chunk */
-	ARRAY_UPDATE_FETCH_TESTCASE(state, {
-		.chunksize = 32,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
-		.server_verify = false,
-		.rec_size = 4,
-		.recx_cfgs = {
-			{.idx = 8, .nr = 2, .data = "B"},
-			{.idx = 9, .nr = 2, .data = "C"},
-		},
-		.fetch_recx = {.rx_idx = 8, .rx_nr = 3},
-	});
-
 	/** Extents with holes */
 	/** TODO: Holes not supported yet */
 #if 0
@@ -798,6 +785,54 @@ ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.fetch_recx = {.rx_idx = 0, .rx_nr = 18},
 	});
 #endif
+}
+
+static void
+overwrites_after_first_chunk(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 32,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 4,
+		.recx_cfgs = {
+			{.idx = 8, .nr = 2, .data = "B"},
+			{.idx = 9, .nr = 2, .data = "C"},
+		},
+		.fetch_recx = {.rx_idx = 8, .rx_nr = 3},
+	});
+
+}
+
+static void
+unaligned_record_size(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 4,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 3,
+		.recx_cfgs = {
+			{.idx = 8, .nr = 5, .data = "B"},
+		},
+		.fetch_recx = {.rx_idx = 8, .rx_nr = 2},
+	});
+}
+
+static void
+record_size_larger_than_chunksize(void **state)
+{
+	/** Overwrites after the first chunk */
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 4,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 20,
+		.recx_cfgs = {
+			{.idx = 0, .nr = 100, .data = "A"},
+		},
+		.fetch_recx = {.rx_idx = 0, .rx_nr = 100},
+	});
 }
 
 static void
@@ -1074,6 +1109,79 @@ key_csum_fetch_update(void **state, int update_fi_flag, int fetch_fi_flag)
 }
 
 static void
+many_iovs_with_single_values(void **state)
+{
+#define	AKEY_NR  5
+	d_sg_list_t		sgls[AKEY_NR];
+	d_iov_t			sg_iovs[AKEY_NR];
+	daos_iod_t		iods[AKEY_NR];
+	uint64_t		value_1 = 1;
+	uint16_t		value_2 = 2;
+	uint16_t		value_3 = 3;
+	daos_size_t		value_4 = 4;
+	daos_oclass_id_t	value_5 = 5;
+	int			i, rc;
+
+	struct csum_test_ctx	ctx;
+	daos_oclass_id_t	oc = dts_csum_oc;
+
+	setup_from_test_args(&ctx, *state);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, oc);
+	setup_simple_data(&ctx);
+
+	i = 0;
+	d_iov_set(&sg_iovs[i], &value_1, sizeof(value_1));
+	d_iov_set(&iods[i].iod_name, "AKEY_1", strlen("AKEY_1"));
+	i++;
+
+	d_iov_set(&sg_iovs[i], &value_2, sizeof(value_2));
+	d_iov_set(&iods[i].iod_name, "AKEY_2", strlen("AKEY_2"));
+	i++;
+
+	d_iov_set(&sg_iovs[i], &value_3, sizeof(value_3));
+	d_iov_set(&iods[i].iod_name, "AKEY_3", strlen("AKEY_3"));
+	i++;
+
+	d_iov_set(&sg_iovs[i], &value_4, sizeof(value_4));
+	d_iov_set(&iods[i].iod_name, "AKEY_4", strlen("AKEY_4"));
+	i++;
+
+	d_iov_set(&sg_iovs[i], &value_5, sizeof(value_5));
+	d_iov_set(&iods[i].iod_name, "AKEY_5", strlen("AKEY_5"));
+	i++;
+
+	iods[0].iod_size = sizeof(value_1);
+	iods[1].iod_size = sizeof(value_2);
+	iods[2].iod_size = sizeof(value_3);
+	iods[3].iod_size = sizeof(value_4);
+	iods[4].iod_size = sizeof(value_5);
+
+	for (i = 0; i < AKEY_NR; i++) {
+		sgls[i].sg_nr		= 1;
+		sgls[i].sg_nr_out	= 0;
+		sgls[i].sg_iovs		= &sg_iovs[i];
+
+		iods[i].iod_nr		= 1;
+		iods[i].iod_recxs	= NULL;
+		iods[i].iod_type	= DAOS_IOD_SINGLE;
+	}
+
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT,
+			     &ctx.dkey, AKEY_NR, iods, sgls, NULL);
+	assert_int_equal(0, rc);
+
+	value_1 = 0;
+	value_2 = 0;
+	value_3 = 0;
+	value_4 = 0;
+	value_5 = 0;
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey,
+			    AKEY_NR, iods, sgls, NULL, NULL);
+	assert_int_equal(0, rc);
+}
+
+static void
 test_update_fetch_a_key(void **state)
 {
 	key_csum_fetch_update(state,
@@ -1223,6 +1331,11 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM02: Fetch Array Type", test_fetch_array),
 	CSUM_TEST("DAOS_CSUM03: Setup multiple overlapping/unaligned extents",
 		  fetch_with_multiple_extents),
+	CSUM_TEST("DAOS_CSUM3.1: Overwrites after first chunk",
+		overwrites_after_first_chunk),
+	CSUM_TEST("DAOS_CSUM3.2: Unaligned record size", unaligned_record_size),
+	CSUM_TEST("DAOS_CSUM3.3: Record size is larger than chunk size",
+		record_size_larger_than_chunksize),
 	CSUM_TEST("DAOS_CSUM04: Server data corrupted after RDMA",
 		  test_server_data_corruption),
 	CSUM_TEST("DAOS_CSUM05: Single Value Checksum", single_value),
@@ -1232,6 +1345,7 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM08: Update/Fetch D Key", test_update_fetch_d_key),
 	CSUM_TEST("DAOS_CSUM09: Enumerate A Keys", test_enumerate_a_key),
 	CSUM_TEST("DAOS_CSUM10: Enumerate D Keys", test_enumerate_d_key),
+	CSUM_TEST("DAOS_CSUM11: Many IODs", many_iovs_with_single_values),
 
 	EC_CSUM_TEST("DAOS_EC_CSUM00: csum disabled", checksum_disabled),
 	EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",
