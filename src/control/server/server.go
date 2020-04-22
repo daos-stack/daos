@@ -285,13 +285,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		shutdown()
 	}()
 
-	if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
-		return err
-	}
-
-	if err := harness.CreateSuperblocks(cfg.RecreateSuperblocks); err != nil {
-		return err
-	}
-
 	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
 }
