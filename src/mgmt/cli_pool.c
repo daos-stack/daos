@@ -553,6 +553,7 @@ dc_mgmt_list_pools(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
+	D_ERROR("dc_mgmt_sys_attach\n");
 	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
 	if (rc != 0) {
 		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
@@ -565,6 +566,7 @@ dc_mgmt_list_pools(tse_task_t *task)
 	opc = DAOS_RPC_OPCODE(MGMT_LIST_POOLS, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
 
+	D_ERROR("crt_req_create\n");
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_LIST_POOLS failed, rc: %d.\n",
@@ -597,15 +599,17 @@ dc_mgmt_list_pools(tse_task_t *task)
 	cb_args.pools = args->pools;
 	cb_args.req_npools = pc_in->lp_npools;
 
+	D_ERROR("tse_task_register_comp_cb\n");
 	rc = tse_task_register_comp_cb(task, mgmt_list_pools_cp, &cb_args,
 				       sizeof(cb_args));
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
-
+	D_ERROR("retrieving list of pools in DAOS system: %s\n", args->grp);
 	D_DEBUG(DB_MGMT, "retrieving list of pools in DAOS system: %s\n",
 		args->grp);
 
 	/** send the request */
+	D_ERROR("daos_rpc_send\n");
 	return daos_rpc_send(rpc_req, task);
 
 out_put_req:

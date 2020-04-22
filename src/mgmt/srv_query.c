@@ -213,6 +213,7 @@ ds_mgmt_hdlr_smd_list_all_devs(crt_rpc_t *rpc_req)
 	devs_len = ndevs;
 
 	ld_out->ld_ndevs = ndevs;
+	ld_out->ld_rc = rc;
 	ld_out->ld_devices.ca_arrays = devs;
 	ld_out->ld_devices.ca_count = devs_len;
 

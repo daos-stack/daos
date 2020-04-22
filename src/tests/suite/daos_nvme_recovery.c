@@ -130,6 +130,7 @@ test_list_devs(void **state)
 	D_ALLOC_ARRAY(devs, 5);
 	assert_ptr_not_equal(devs, NULL);
 
+	ndevs = 10;
 	rc = daos_mgmt_smd_list_all_devs(arg->group, &ndevs, devs, NULL /* ev */);
 	assert_int_equal(rc, 0);
 	print_message("number of devices returned =%zu\n", ndevs);
@@ -138,11 +139,33 @@ test_list_devs(void **state)
 	devs = NULL;
 }
 
+static void
+test_list_pools(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_size_t	npools;
+	daos_mgmt_pool_info_t	*pools = NULL;
+	int			rc;
+
+	D_ALLOC_ARRAY(pools, 5);
+	assert_ptr_not_equal(pools, NULL);
+
+	npools = 10;
+	rc = daos_mgmt_list_pools(arg->group, &npools, pools, NULL /* ev */);
+	assert_int_equal(rc, 0);
+	print_message("number of pools returned =%zu\n", npools);
+
+	D_FREE(pools);
+	pools = NULL;
+}
+
 static const struct CMUnitTest nvme_recov_tests[] = {
 	{"NVMe Recovery 1: Online faulty reaction",
 	 nvme_recov_1, NULL, test_case_teardown},
 	{"Test daos_mgmt_smd_list_all_devs()",
 	 test_list_devs, NULL, test_case_teardown},
+	{"Test daos_mgmt_list_pools()",
+	 test_list_pools, NULL, test_case_teardown},
 };
 
 static int

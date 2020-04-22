@@ -832,6 +832,7 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 
 	npools = pc_in->lp_npools;
 
+	D_ERROR("Calling ds_mgmt_list_pools\n");
 	rc = ds_mgmt_list_pools(pc_in->lp_grp, &npools, &pools,
 				&pools_len);
 
@@ -841,6 +842,7 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	pc_out->lp_pools.ca_count = pools_len;
 
 	/* TODO: bulk transfer for large responses */
+	D_ERROR("crt_reply_send\n");
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
