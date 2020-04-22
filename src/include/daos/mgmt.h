@@ -44,6 +44,7 @@ int dc_mgmt_set_params(tse_task_t *task);
 int dc_mgmt_list_pools(tse_task_t *task);
 int dc_mgmt_profile(char *path, int avg, bool start);
 int dc_mgmt_add_mark(const char *mark);
+int dc_mgmt_smd_list_all_devs(tse_task_t *task);
 
 /** GetAttachInfo system info */
 struct sys_info {

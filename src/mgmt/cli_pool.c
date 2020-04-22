@@ -618,3 +618,142 @@ out:
 	tse_task_complete(task, rc);
 	return rc;
 }
+
+struct mgmt_list_devs_arg {
+	struct dc_mgmt_sys     *sys;
+	crt_rpc_t	       *rpc;
+	daos_mgmt_dev_info_t  *devs;
+	daos_size_t		req_ndevs;
+	daos_size_t	       *ndevs;
+};
+
+static int
+mgmt_list_devs_cp(tse_task_t *task, void *data)
+{
+	struct mgmt_list_devs_arg	*arg;
+	struct mgmt_list_devs_out	*pc_out;
+	struct mgmt_list_devs_in	*pc_in;
+	uint64_t			 didx;
+	int				 rc = task->dt_result;
+
+	arg = (struct mgmt_list_devs_arg *)data;
+
+	if (rc) {
+		D_ERROR("RPC error while listing devices: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	pc_out = crt_reply_get(arg->rpc);
+	D_ASSERT(pc_out != NULL);
+	rc = pc_out->ld_rc;
+	*arg->ndevs = pc_out->ld_ndevs;
+	if (rc) {
+		D_ERROR("MGMT_LIST_DEVS replied failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	pc_in = crt_req_get(arg->rpc);
+	D_ASSERT(pc_in != NULL);
+
+	/* copy RPC response pools info to client buffer, if provided */
+	if (arg->devs) {
+		/* Response ca_count expected <= client-specified npools */
+		for (didx = 0; didx < pc_out->ld_devices.ca_count; didx++) {
+			struct mgmt_list_devs_one	*rpc_dev =
+					&pc_out->ld_devices.ca_arrays[didx];
+			daos_mgmt_dev_info_t		*cli_dev =
+					&arg->devs[didx];
+
+			uuid_copy(cli_dev->mgdi_uuid, rpc_dev->ld_devuuid);
+		}
+	}
+
+out:
+	dc_mgmt_sys_detach(arg->sys);
+	crt_req_decref(arg->rpc);
+
+	return rc;
+}
+
+int
+dc_mgmt_smd_list_all_devs(tse_task_t *task)
+{
+	daos_mgmt_list_devs_t	        *args;
+	crt_endpoint_t			svr_ep;
+	crt_rpc_t		       *rpc_req = NULL;
+	crt_opcode_t			opc;
+	struct mgmt_list_devs_in	*pc_in;
+	struct mgmt_list_devs_arg	cb_args;
+	int				rc = 0;
+
+	args = dc_task_get_args(task);
+
+	D_ERROR("dc_mgmt_sys_attach\n");
+	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
+	if (rc != 0) {
+		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
+		D_GOTO(out, rc);
+	}
+
+	svr_ep.ep_grp = cb_args.sys->sy_group;
+	svr_ep.ep_rank = 0;
+	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_LIST_DEVS, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+
+	D_ERROR("crt_req_create\n");
+	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
+	if (rc != 0) {
+		D_ERROR("crt_req_create(MGMT_LIST_POOLS failed, rc: %d.\n",
+			rc);
+		D_GOTO(out_grp, rc);
+	}
+
+	D_ASSERT(rpc_req != NULL);
+	pc_in = crt_req_get(rpc_req);
+	D_ASSERT(pc_in != NULL);
+
+//	/** fill in request buffer */
+//	pc_in->lp_grp = (d_string_t)args->grp;
+//	/* If provided pools is NULL, caller needs the number of pools
+//	 * to be returned in npools. Set npools=0 in the request in this case
+//	 * (caller value may be uninitialized).
+//	 */
+//	if (args->pools == NULL)
+//		pc_in->lp_npools = 0;
+//	else
+//		pc_in->lp_npools = *args->npools;
+
+//	D_DEBUG(DF_DSMC, "req_npools="DF_U64" (pools=%p, *npools="DF_U64"\n",
+//			 pc_in->lp_npools, args->pools,
+//			 *args->npools);
+
+	crt_req_addref(rpc_req);
+	cb_args.rpc = rpc_req;
+	cb_args.ndevs = args->ndevs;
+	cb_args.devs = args->devs;
+	cb_args.req_ndevs = pc_in->ld_ndevs;
+
+	D_ERROR("tse_task_register_comp_c\n");
+	rc = tse_task_register_comp_cb(task, mgmt_list_devs_cp, &cb_args,
+				       sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
+
+	D_DEBUG(DB_MGMT, "retrieving list of SMD devices in DAOS system: %s\n",
+		args->grp);
+
+	D_ERROR("daos_rpc_send\n");
+	/** send the request */
+	return daos_rpc_send(rpc_req, task);
+
+out_put_req:
+	crt_req_decref(rpc_req);
+	crt_req_decref(rpc_req);
+
+out_grp:
+	dc_mgmt_sys_detach(cb_args.sys);
+out:
+	tse_task_complete(task, rc);
+	return rc;
+}

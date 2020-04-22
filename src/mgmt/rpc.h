@@ -60,7 +60,10 @@
 		ds_mgmt_hdlr_list_pools, NULL),				\
 	X(MGMT_MARK,							\
 		0, &CQF_mgmt_mark,					\
-		ds_mgmt_mark_hdlr, NULL)
+		ds_mgmt_mark_hdlr, NULL),				\
+	X(MGMT_LIST_DEVS,						\
+		0, &CQF_mgmt_list_devs,					\
+		ds_mgmt_hdlr_smd_list_all_devs, NULL)
 #define MGMT_PROTO_SRV_RPC_LIST						\
 	X(MGMT_TGT_CREATE,						\
 		0, &CQF_mgmt_tgt_create,				\
@@ -232,6 +235,24 @@ CRT_GEN_STRUCT(mgmt_list_pools_one, DAOS_SEQ_MGMT_LIST_POOLS_ONE);
 
 CRT_RPC_DECLARE(mgmt_list_pools, DAOS_ISEQ_MGMT_LIST_POOLS,
 		DAOS_OSEQ_MGMT_LIST_POOLS)
+
+
+/* List devices: returns an array of mgmt_list_devs_one */
+#define DAOS_SEQ_MGMT_LIST_DEVS_ONE \
+	((uuid_t)		(ld_devuuid)	CRT_VAR)
+
+CRT_GEN_STRUCT(mgmt_list_devs_one, DAOS_SEQ_MGMT_LIST_DEVS_ONE);
+
+#define DAOS_ISEQ_MGMT_LIST_DEVS /* input fields */		 \
+	((uint64_t)		(ld_ndevs)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_LIST_DEVS /* output fields */			   \
+	((struct mgmt_list_devs_one)		(ld_devices)	CRT_ARRAY) \
+	((uint64_t)				(ld_ndevs)	CRT_VAR)   \
+	((int32_t)				(ld_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_list_devs, DAOS_ISEQ_MGMT_LIST_DEVS,
+		DAOS_OSEQ_MGMT_LIST_DEVS)
 
 #define DAOS_ISEQ_MGMT_MARK /* input fields */	\
 	((d_string_t)		(m_mark)		CRT_VAR)

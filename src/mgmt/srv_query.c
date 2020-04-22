@@ -122,6 +122,112 @@ out:
 }
 
 int
+ds_mgmt_smd_list_all_devs(uint64_t *ndevs, struct mgmt_list_devs_one **devs)
+{
+	struct smd_dev_info	*dev_info = NULL, *tmp;
+	d_list_t		 dev_list;
+	int			 dev_list_cnt = 0;
+	int			 i = 0;
+	int			 rc = 0;
+
+//	D_DEBUG(DB_MGMT, "Querying SMD device list\n");
+	D_ERROR("In ds_mgmt_smd_list_all_devs\n");
+
+	*devs = NULL;
+
+	D_INIT_LIST_HEAD(&dev_list);
+	D_ERROR("Calling smd_dev_list\n");
+	rc = smd_dev_list(&dev_list, &dev_list_cnt);
+	if (rc != 0) {
+		D_ERROR("Failed to get all NVMe devices from SMD\n");
+		return rc;
+	}
+
+	D_ALLOC_ARRAY(devs, dev_list_cnt);
+	if (devs == NULL) {
+		D_ERROR("Failed to allocate devices for resp\n");
+		return -DER_NOMEM;
+	}
+
+	D_ERROR("Going thru returned device list\n");
+	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
+		D_ALLOC(devs[i], sizeof(devs[i]));
+		if (devs[i] == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		uuid_copy(devs[i]->ld_devuuid, dev_info->sdi_id);
+
+		d_list_del(&dev_info->sdi_link);
+		/* Frees sdi_tgts and dev_info */
+		smd_free_dev_info(dev_info);
+		dev_info = NULL;
+
+		i++;
+	}
+	D_ERROR("Done, rc = %d\n", rc);
+
+	/* Free all devices if there was an error allocating any */
+	if (rc != 0) {
+		d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
+			d_list_del(&dev_info->sdi_link);
+			smd_free_dev_info(dev_info);
+		}
+		for (; i >= 0; i--) {
+			if (devs[i] != NULL)
+				D_FREE(devs[i]);
+		}
+		D_FREE(devs);
+		devs = NULL;
+		goto out;
+	}
+	*ndevs = dev_list_cnt;
+//	*devs = devs_tmp;
+	D_ERROR("At the end of ds_mgmt_smd_list_all_devs\n");
+
+out:
+	return rc;
+}
+
+void
+ds_mgmt_hdlr_smd_list_all_devs(crt_rpc_t *rpc_req)
+{
+	struct mgmt_list_devs_in	*ld_in;
+	struct mgmt_list_devs_out	*ld_out;
+	struct mgmt_list_devs_one	*devs = NULL;
+	size_t				 devs_len = 0;
+	uint64_t			 ndevs;
+	int				 rc;
+
+	D_ERROR("In ds_mgmt_hdlr_smd_list_all_devs()\n");
+	ld_in = crt_req_get(rpc_req);
+	D_ASSERT(ld_in != NULL);
+	ld_out = crt_reply_get(rpc_req);
+	D_ASSERT(ld_out != NULL);
+
+	ndevs = ld_in->ld_ndevs;
+
+	D_ERROR("Calling ds_mgmt_smd_list_all_devs\n");
+	rc = ds_mgmt_smd_list_all_devs(&ndevs, &devs);
+
+	devs_len = ndevs;
+
+	ld_out->ld_ndevs = ndevs;
+	ld_out->ld_devices.ca_arrays = devs;
+	ld_out->ld_devices.ca_count = devs_len;
+
+	D_ERROR("crt_reply_send\n");
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
+
+	if (devs) {
+		D_FREE(devs);
+		devs = NULL;
+	}
+}
+
+int
 ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 {
 	struct smd_dev_info	*dev_info = NULL, *tmp;

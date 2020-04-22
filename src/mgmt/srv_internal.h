@@ -113,6 +113,7 @@ int ds_mgmt_pool_list_cont(uuid_t uuid,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
 int ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info);
+void ds_mgmt_hdlr_smd_list_all_devs(crt_rpc_t *rpc_req);
 
 /** srv_query.c */
 
@@ -125,6 +126,8 @@ struct mgmt_bio_health {
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
 			     char *tgt_id);
 int ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp);
+int ds_mgmt_smd_list_all_devs(uint64_t *ndevs, struct mgmt_list_devs_one **devs);
+void ds_mgmt_hdlr_smd_list_all_devs(crt_rpc_t *rpc_req);
 int ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp);
 int ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp);
 int ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp);

@@ -43,6 +43,10 @@ typedef struct {
 	d_rank_list_t			*mgpi_svc;
 } daos_mgmt_pool_info_t;
 
+typedef struct {
+	uuid_t				mgdi_uuid;
+} daos_mgmt_dev_info_t;
+
 /**
  * Create a pool spanning \a tgts in \a grp. Upon successful completion, report
  * back the pool UUID in \a uuid and the pool service rank(s) in \a svc, which
@@ -383,6 +387,14 @@ daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
  */
 int
 daos_mgmt_add_mark(const char *mark);
+
+/**
+ *
+ *
+ */
+int
+daos_mgmt_smd_list_all_devs(const char *group, daos_size_t *ndevs,
+			    daos_mgmt_dev_info_t *devs, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

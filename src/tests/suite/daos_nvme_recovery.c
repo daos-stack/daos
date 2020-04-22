@@ -119,9 +119,30 @@ nvme_recov_1(void **state)
 	print_message("Done\n");
 }
 
+static void
+test_list_devs(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_size_t	ndevs;
+	daos_mgmt_dev_info_t	*devs = NULL;
+	int			rc;
+
+	D_ALLOC_ARRAY(devs, 5);
+	assert_ptr_not_equal(devs, NULL);
+
+	rc = daos_mgmt_smd_list_all_devs(arg->group, &ndevs, devs, NULL /* ev */);
+	assert_int_equal(rc, 0);
+	print_message("number of devices returned =%zu\n", ndevs);
+
+	D_FREE(devs);
+	devs = NULL;
+}
+
 static const struct CMUnitTest nvme_recov_tests[] = {
 	{"NVMe Recovery 1: Online faulty reaction",
 	 nvme_recov_1, NULL, test_case_teardown},
+	{"Test daos_mgmt_smd_list_all_devs()",
+	 test_list_devs, NULL, test_case_teardown},
 };
 
 static int

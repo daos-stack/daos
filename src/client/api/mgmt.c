@@ -326,3 +326,25 @@ daos_mgmt_add_mark(const char *mark)
 {
 	return dc_mgmt_add_mark(mark);
 }
+
+int
+daos_mgmt_smd_list_all_devs(const char *group, daos_size_t *ndevs,
+			    daos_mgmt_dev_info_t *devs, daos_event_t *ev)
+{
+	daos_mgmt_list_devs_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, MGMT_LIST_DEVS);
+
+	D_ERROR("calling dc_mgmt_smd_list_all_devs\n");
+	rc = dc_task_create(dc_mgmt_smd_list_all_devs, NULL, ev, &task);
+	if (rc)
+		return rc;
+	args = dc_task_get_args(task);
+	args->grp = group;
+	args->devs = devs;
+	args->ndevs = ndevs;
+
+	return dc_task_schedule(task, true);
+}

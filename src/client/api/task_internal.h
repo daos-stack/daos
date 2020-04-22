@@ -46,6 +46,7 @@ struct daos_task_args {
 		daos_pool_replicas_t	pool_add_replicas;
 		daos_pool_replicas_t	pool_remove_replicas;
 		daos_mgmt_list_pools_t	mgmt_list_pools;
+		daos_mgmt_list_devs_t	mgmt_list_devs;
 
 		/** Pool */
 		daos_pool_connect_t	pool_connect;
