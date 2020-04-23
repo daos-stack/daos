@@ -478,7 +478,7 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 
 int
 ds_mgmt_pool_target_update(uuid_t pool_uuid, uint32_t rank,
-		struct pool_target_id_list *target_list, 
+		struct pool_target_id_list *target_list,
 		pool_comp_state_t state)
 {
 	return 0;
