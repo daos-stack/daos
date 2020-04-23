@@ -78,8 +78,6 @@ iov2rec_bundle(d_iov_t *val_iov)
 struct ktr_hkey {
 	/** murmur64 hash */
 	uint64_t		kh_hash[2];
-	/** cacheline alignment */
-	uint64_t		kh_pad_64;
 };
 
 /**

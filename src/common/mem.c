@@ -106,25 +106,54 @@ pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 	return 0;
 }
 
+#define PAD_ALLOC
+#ifdef PAD_ALLOC
+/** only define if PAD_ALLOC is defined */
+#define PAD_TX_ADD
+#define PMEM_ALLOC_PAD(size) UMEM_PAD(size)
+#else
+#define PMEM_ALLOC_PAD(size) (size)
+#endif
+
+#ifdef PAD_TX_ADD
+#define PMEM_TX_ADD_PAD(size) UMEM_PAD(size)
+#define PMEM_TX_ADD_ALIGN(size) UMEM_ALIGN(size)
+#else
+#define PMEM_TX_ADD_PAD(size) (size)
+#define PMEM_TX_ADD_ALIGN(off) (off)
+#endif
+
 static umem_off_t
 pmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
 	      unsigned int type_num)
 {
-	return umem_id2off(umm, pmemobj_tx_xalloc(size, type_num, flags));
+	size_t		padded_size = PMEM_ALLOC_PAD(size);
+
+	return umem_id2off(umm, pmemobj_tx_xalloc(padded_size, type_num,
+						  flags));
 }
 
 static int
 pmem_tx_add(struct umem_instance *umm, umem_off_t umoff,
 	    uint64_t offset, size_t size)
 {
-	return pmemobj_tx_add_range(umem_off2id(umm, umoff), offset, size);
+	umem_off_t	aligned_off = PMEM_TX_ADD_ALIGN(umoff + offset);
+	uint64_t	diff = (umoff + offset - aligned_off);
+	size_t		padded_size = PMEM_TX_ADD_PAD(size + diff);
+
+	return pmemobj_tx_add_range(umem_off2id(umm, aligned_off), 0,
+				    padded_size);
 }
 
 
 static int
 pmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 {
-	return pmemobj_tx_add_range_direct(ptr, size);
+	void		*aligned_ptr = PMEM_TX_ADD_ALIGN(ptr);
+	uint64_t	 diff = (uint64_t)ptr - (uint64_t)aligned_ptr;
+	size_t		 padded_size = PMEM_TX_ADD_PAD(size + diff);
+
+	return pmemobj_tx_add_range_direct(aligned_ptr, padded_size);
 }
 
 static int
@@ -259,8 +288,11 @@ static umem_off_t
 pmem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size,
 	     unsigned int type_num)
 {
+	size_t		padded_size = PMEM_ALLOC_PAD(size);
+
 	return umem_id2off(umm,
-			   pmemobj_reserve(umm->umm_pool, act, size, type_num));
+			   pmemobj_reserve(umm->umm_pool, act, padded_size,
+					   type_num));
 }
 
 static void

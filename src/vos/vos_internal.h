@@ -42,9 +42,9 @@
 #include <vos_obj.h>
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */
-#define VOS_OBJ_ORDER		20	/* Order of object tree */
-#define VOS_KTR_ORDER		23	/* order of d/a-key tree */
-#define VOS_SVT_ORDER		5	/* order of single value tree */
+#define VOS_OBJ_ORDER		15	/* Order of object tree */
+#define VOS_KTR_ORDER		20	/* order of d/a-key tree */
+#define VOS_SVT_ORDER		14	/* order of single value tree */
 #define VOS_EVT_ORDER		23	/* evtree order */
 #define DTX_BTREE_ORDER		23	/* Order for DTX tree */
 

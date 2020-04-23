@@ -1198,7 +1198,8 @@ btr_root_resize(struct btr_context *tcx, struct btr_trace *trace,
 	umem_off_t	 old_node = root->tr_node;
 	struct btr_node	*nd = btr_off2ptr(tcx, old_node);
 	daos_size_t	 old_size = btr_node_size(tcx);
-	int		 new_order;
+	daos_size_t	 aligned_new_size;
+	int		 old_order;
 	umem_off_t	 nd_off;
 	int		 rc = 0;
 
@@ -1212,12 +1213,21 @@ btr_root_resize(struct btr_context *tcx, struct btr_trace *trace,
 		}
 	}
 
-	new_order = MIN(root->tr_node_size * 2 + 1, tcx->tc_order);
+	old_order = root->tr_node_size;
+	root->tr_node_size = MIN(root->tr_node_size * 2 + 1, tcx->tc_order);
+
+	aligned_new_size = btr_node_size(tcx);
+	/** Get as close as possible */
+	while (root->tr_node_size < tcx->tc_order) {
+		root->tr_node_size++;
+		if (UMEM_PAD(btr_node_size(tcx)) > aligned_new_size) {
+			root->tr_node_size--;
+			break;
+		}
+	}
 
 	D_DEBUG(DB_TRACE, "Root node size increase from %d to %d\n",
-		root->tr_node_size, new_order);
-
-	root->tr_node_size = new_order;
+		old_order, root->tr_node_size);
 
 	rc = btr_node_alloc(tcx, &nd_off);
 	if (rc != 0) {

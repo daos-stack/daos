@@ -164,7 +164,8 @@ def scons():
 
     prereqs.require(denv, 'cart')
 
-    denv.AppendENVPath("CGO_CFLAGS", denv.subst("-I$CART_PREFIX/include"))
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("-I$CART_PREFIX/include"),
+                       sep=" ")
 
     install_go_bin(denv, gosrc, gopath, None, "agent", "daos_agent")
     install_go_bin(denv, gosrc, gopath, None, "dmg", "dmg")
@@ -194,7 +195,7 @@ def scons():
                        " -lspdk_blob -lspdk_nvme -lspdk_util -lspdk_json" + \
                        " -lspdk_jsonrpc -lspdk_rpc -lspdk_trace" + \
                        " -lspdk_sock -lspdk_log -lspdk_notify" + \
-                       " -lspdk_blob_bdev -lnuma -ldl -lisal")
+                       " -lspdk_blob_bdev -lnuma -ldl -lisal", sep=" ")
 
     senv.AppendENVPath("CGO_CFLAGS",
                        senv.subst("-I$SPDK_PREFIX/include "

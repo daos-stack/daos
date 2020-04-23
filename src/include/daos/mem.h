@@ -331,6 +331,13 @@ umem_has_tx(struct umem_instance *umm)
 	return umm->umm_ops->mo_tx_add != NULL;
 }
 
+/** align an address to 256 bytes */
+#define UMEM_ALIGN_PAD ((1 << 8) - 1)
+#define UMEM_ALIGN_MASK (~UMEM_ALIGN_PAD)
+#define UMEM_ALIGN(off) ((__typeof__(off))((uintptr_t)(off) & UMEM_ALIGN_MASK))
+/** pad a size to 256 bytes */
+#define UMEM_PAD(size) UMEM_ALIGN((size) + UMEM_ALIGN_PAD)
+
 #define umem_alloc_verb(umm, flags, size)				\
 ({									\
 	umem_off_t	__umoff;					\
