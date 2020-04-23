@@ -41,8 +41,6 @@ import (
 // Single gRPC sent over management network per harness (not per rank).
 type HarnessClient interface {
 	Query(context.Context, string, ...system.Rank) (system.MemberResults, error)
-	PrepShutdown(context.Context, string, ...system.Rank) (system.MemberResults, error)
-	Stop(context.Context, string, bool, ...system.Rank) (system.MemberResults, error)
 	Start(context.Context, string, ...system.Rank) (system.MemberResults, error)
 }
 
@@ -119,36 +117,6 @@ func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...system
 	return hc.call(ctx, addr, rpcReq, hc.client.Status)
 }
 
-// PrepShutdown sends PrepShutdown gRPC using the MgmtSvcClient to the control
-// server at the specified address to prepare the specified ranks for a
-// controlled shutdown.
-//
-// Results are returned for the ranks specified in the input parameter
-// if they are being managed by the remote control server.
-func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ...system.Rank) (system.MemberResults, error) {
-	rpcReq, err := hc.prepareRequest(ranks, false)
-	if err != nil {
-		return nil, err
-	}
-
-	return hc.call(ctx, addr, rpcReq, hc.client.PrepShutdown)
-}
-
-// Stop sends Stop gRPC using the MgmtSvcClient to the control server at the
-// specified address to terminate the specified ranks.
-//
-// Results are returned for the ranks specified in the input parameter
-// if they are being managed by the remote control server.
-//
-// Ranks will be forcefully stopped if the force parameter is specified.
-func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, ranks ...system.Rank) (system.MemberResults, error) {
-	return nil, errors.New("not implemented") // moved to server/mgmt_client.go:StopRanks()
-}
-
-// Start sends Start gRPC using the MgmtSvcClient to the control server at the
-// specified address to start the specified ranks.
-//
-// Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
 func (hc *harnessClient) Start(ctx context.Context, addr string, ranks ...system.Rank) (system.MemberResults, error) {
 	rpcReq, err := hc.prepareRequest(ranks, false)

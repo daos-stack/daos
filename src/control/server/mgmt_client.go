@@ -179,24 +179,6 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 	return
 }
 
-// PrepShutdown calls function remotely over gRPC on server listening at destAddr.
-//
-// Shipped function propose ranks for shutdown by sending requests over dRPC
-// to each rank.
-func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, psErr error) {
-	psErr = msc.withConnectionFailOnBadDial(ctx, destAddr,
-		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) (err error) {
-
-			msc.log.Debugf("prep shutdown(%s, %+v)", destAddr, req)
-
-			resp, err = pbClient.PrepShutdownRanks(ctx, &req)
-
-			return
-		})
-
-	return
-}
-
 // Start calls function remotely over gRPC on server listening at destAddr.
 //
 // Shipped function issues StartRanks requests over dRPC to start each
