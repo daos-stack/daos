@@ -58,17 +58,17 @@ type IOServerInstance struct {
 	msClient          *mgmtSvcClient
 	waitDrpc          atm.Bool
 	drpcReady         chan *srvpb.NotifyReadyReq
-	storageReady      chan struct{}
+	storageReady      chan bool
 	ready             atm.Bool
+	startChan         chan bool
 	fsRoot            string
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
-	_drpcClient   drpc.DomainSocketClient
-	_scmStorageOk bool // cache positive result of NeedsStorageFormat()
-	_superblock   *Superblock
-	_lastErr      error // populated when harness receives signal
+	_drpcClient drpc.DomainSocketClient
+	_superblock *Superblock
+	_lastErr    error // populated when harness receives signal
 }
 
 // NewIOServerInstance returns an *IOServerInstance initialized with
@@ -84,25 +84,26 @@ func NewIOServerInstance(log logging.Logger,
 		scmProvider:       sp,
 		msClient:          msc,
 		drpcReady:         make(chan *srvpb.NotifyReadyReq),
-		storageReady:      make(chan struct{}),
+		storageReady:      make(chan bool),
+		startChan:         make(chan bool),
 	}
 }
 
-// IsReady indicates whether the IOServerInstance is in a ready state.
+// isReady indicates whether the IOServerInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
-func (srv *IOServerInstance) IsReady() bool {
-	return srv.ready.IsTrue() && srv.IsStarted()
+func (srv *IOServerInstance) isReady() bool {
+	return srv.ready.IsTrue() && srv.isStarted()
 }
 
-// IsMSReplica indicates whether or not this instance is a management service replica.
-func (srv *IOServerInstance) IsMSReplica() bool {
+// isMSReplica indicates whether or not this instance is a management service replica.
+func (srv *IOServerInstance) isMSReplica() bool {
 	return srv.hasSuperblock() && srv.getSuperblock().MS
 }
 
-// SetIndex sets the server index assigned by the harness.
-func (srv *IOServerInstance) SetIndex(idx uint32) {
+// setIndex sets the server index assigned by the harness.
+func (srv *IOServerInstance) setIndex(idx uint32) {
 	srv.runner.GetConfig().Index = idx
 }
 
@@ -111,9 +112,9 @@ func (srv *IOServerInstance) Index() uint32 {
 	return srv.runner.GetConfig().Index
 }
 
-// RemoveSocket removes the socket file used for dRPC communication with
+// removeSocket removes the socket file used for dRPC communication with
 // harness and updates relevant ready states.
-func (srv *IOServerInstance) RemoveSocket() error {
+func (srv *IOServerInstance) removeSocket() error {
 	fMsg := fmt.Sprintf("removing instance %d socket file", srv.Index())
 
 	dc, err := srv.getDrpcClient()
@@ -132,12 +133,12 @@ func (srv *IOServerInstance) RemoveSocket() error {
 	return nil
 }
 
-// SetRank determines the instance rank and sends a SetRank dRPC request
+// setRank determines the instance rank and sends a SetRank dRPC request
 // to the IOServer.
-func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	superblock := srv.getSuperblock()
 	if superblock == nil {
-		return errors.New("nil superblock in SetRank()")
+		return errors.New("nil superblock in setRank()")
 	}
 
 	r := system.NilRank
@@ -214,15 +215,15 @@ func (srv *IOServerInstance) GetRank() (system.Rank, error) {
 	return *sb.Rank, nil
 }
 
-// SetTargetCount updates target count in ioserver config.
-func (srv *IOServerInstance) SetTargetCount(numTargets int) {
+// setTargetCount updates target count in ioserver config.
+func (srv *IOServerInstance) setTargetCount(numTargets int) {
 	srv.runner.GetConfig().TargetCount = numTargets
 }
 
-// StartManagementService starts the DAOS management service replica associated
+// startMgmtSvc starts the DAOS management service replica associated
 // with this instance. If no replica is associated with this instance, this
 // function is a no-op.
-func (srv *IOServerInstance) StartManagementService() error {
+func (srv *IOServerInstance) startMgmtSvc() error {
 	superblock := srv.getSuperblock()
 
 	// should have been loaded by now
@@ -265,8 +266,8 @@ func (srv *IOServerInstance) StartManagementService() error {
 	return nil
 }
 
-// LoadModules initiates the I/O server startup sequence.
-func (srv *IOServerInstance) LoadModules() error {
+// loadModules initiates the I/O server startup sequence.
+func (srv *IOServerInstance) loadModules() error {
 	return srv.callSetUp()
 }
 
@@ -362,5 +363,31 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 		return nil, err
 	}
 
-	return system.NewMember(rank, sb.UUID, addr, system.MemberStateStarted), nil
+	return system.NewMember(rank, sb.UUID, addr, system.MemberStateJoined), nil
+}
+
+// registerMember creates a new system.Member for given instance and adds it
+// to the system membership.
+func (srv *IOServerInstance) registerMember(membership *system.Membership) error {
+	idx := srv.Index()
+
+	m, err := srv.newMember()
+	if err != nil {
+		return errors.Wrapf(err, "instance %d: failed to extract member details", idx)
+	}
+
+	created, oldState := membership.AddOrUpdate(m)
+	if created {
+		srv.log.Debugf("instance %d: bootstrapping system member: rank %d, addr %s",
+			idx, m.Rank, m.Addr)
+	} else {
+		srv.log.Debugf("instance %d: updated bootstrapping system member: rank %d, addr %s, %s->%s",
+			idx, m.Rank, m.Addr, *oldState, m.State())
+		if *oldState == m.State() {
+			srv.log.Errorf("instance %d: unexpected same state in rank %d update (%s->%s)",
+				idx, m.Rank, *oldState, m.State())
+		}
+	}
+
+	return nil
 }
