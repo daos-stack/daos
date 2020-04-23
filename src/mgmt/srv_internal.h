@@ -92,6 +92,8 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
 			d_rank_list_t **svcp);
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
+int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, uint32_t reint_rank,
+		struct pool_target_id_list *reint_list);
 int ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
 			  daos_prop_t **result);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
@@ -111,6 +113,10 @@ int ds_mgmt_pool_list_cont(uuid_t uuid,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
 int ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info);
+int ds_mgmt_cont_set_owner(uuid_t pool_uuid, uuid_t cont_uuid, const char *user,
+			   const char *group);
+int ds_mgmt_pool_get_svc_ranks(struct mgmt_svc *svc, uuid_t uuid,
+			       d_rank_list_t **ranks);
 
 /** srv_query.c */
 

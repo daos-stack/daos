@@ -25,6 +25,7 @@ package proto
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/grpc"
 
@@ -32,6 +33,8 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/system"
+	"github.com/pkg/errors"
 )
 
 // MockNvmeNamespace is a mock protobuf Namespace message used in tests for
@@ -126,7 +129,6 @@ var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
 }
 
 type MockMgmtSvcClientConfig struct {
-	ACLRet            *common.MockACLResult
 	ListPoolsRet      *common.MockListPoolsResult
 	KillErr           error
 	PoolQueryResult   *mgmtpb.PoolQueryResp
@@ -136,11 +138,12 @@ type MockMgmtSvcClientConfig struct {
 }
 
 type MockMgmtSvcClient struct {
-	Cfg MockMgmtSvcClientConfig
+	Cfg   MockMgmtSvcClientConfig
+	Calls []string
 }
 
 func NewMockMgmtSvcClient(cfg MockMgmtSvcClientConfig) mgmtpb.MgmtSvcClient {
-	return &MockMgmtSvcClient{cfg}
+	return &MockMgmtSvcClient{Cfg: cfg}
 }
 
 func (m *MockMgmtSvcClient) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq, o ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
@@ -153,6 +156,12 @@ func (m *MockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDes
 	// return successful pool destroy results
 	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.PoolDestroyResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq, o ...grpc.CallOption) (*mgmtpb.PoolReintegrateResp, error) {
+	// return successful pool reintegrate results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.PoolReintegrateResp{}, nil
 }
 
 func (m *MockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq, _ ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
@@ -171,10 +180,7 @@ func (m *MockMgmtSvcClient) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSet
 
 // returnACLResult returns the mock ACL results - either an error or an ACLResp
 func (m *MockMgmtSvcClient) returnACLResult() (*mgmtpb.ACLResp, error) {
-	if m.Cfg.ACLRet.Err != nil {
-		return nil, m.Cfg.ACLRet.Err
-	}
-	return &mgmtpb.ACLResp{ACL: m.Cfg.ACLRet.Acl, Status: m.Cfg.ACLRet.Status}, nil
+	return nil, nil
 }
 
 func (m *MockMgmtSvcClient) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
@@ -229,8 +235,24 @@ func (m *MockMgmtSvcClient) StorageSetFaulty(ctx context.Context, req *mgmtpb.De
 }
 
 func (m *MockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...grpc.CallOption) (*mgmtpb.JoinResp, error) {
+	m.Calls = append(m.Calls, fmt.Sprintf("Join %d", req.GetRank()))
 
-	return &mgmtpb.JoinResp{}, nil
+	// if req rank == NilRank, map uuid to rank
+	// otherwise, simulate join where requested rank is valid and returned
+	rank := req.GetRank()
+	nilRank := system.NilRank
+	if nilRank.Uint32() == rank {
+		switch req.GetUuid() {
+		case common.MockUUID(0):
+			rank = 0
+		case common.MockUUID(1):
+			rank = 1
+		default:
+			return nil, errors.New("Mock Join doesn't recognise UUID")
+		}
+	}
+
+	return &mgmtpb.JoinResp{Rank: rank}, nil
 }
 
 func (m *MockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
@@ -267,4 +289,8 @@ func (m *MockMgmtSvcClient) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQ
 func (m *MockMgmtSvcClient) ListContainers(ctx context.Context, req *mgmtpb.ListContReq, o ...grpc.CallOption) (*mgmtpb.ListContResp, error) {
 	// return successful list containers results
 	return &mgmtpb.ListContResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerReq, o ...grpc.CallOption) (*mgmtpb.ContSetOwnerResp, error) {
+	return nil, nil
 }

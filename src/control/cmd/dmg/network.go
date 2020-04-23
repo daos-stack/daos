@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,15 @@
 
 package main
 
+import (
+	"context"
+	"os"
+	"strings"
+
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/lib/control"
+)
+
 // NetCmd is the struct representing the top-level network subcommand.
 type NetCmd struct {
 	Scan networkScanCmd `command:"scan" description:"Scan for network interface devices on remote servers"`
@@ -33,41 +42,73 @@ type NetCmd struct {
 // that match the given fabric provider.
 type networkScanCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is the provider specified in daos_server.yml)"`
 	AllProviders   bool   `short:"a" long:"all" description:"Specify 'all' to see all devices on all providers.  Overrides --provider"`
 }
 
-func (cmd *networkScanCmd) Execute(args []string) error {
-	var provider string
+func (cmd *networkScanCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	req := &control.NetworkScanReq{
+		Provider: cmd.FabricProvider,
+	}
+	req.SetHostList(cmd.hostlist)
 
-	if len(args) > 0 {
-		cmd.log.Debugf("An invalid argument was provided: %+v", args)
-		return nil
+	cmd.log.Debugf("network scan req: %+v", req)
+
+	resp, err := control.NetworkScan(ctx, cmd.ctlClient, req)
+	if err != nil {
+		return err
 	}
 
-	switch {
-	case cmd.AllProviders:
-		cmd.log.Info("Scanning fabric for all providers")
-	case len(cmd.FabricProvider) > 0:
-		provider = cmd.FabricProvider
-		cmd.log.Infof("Scanning fabric for cmdline specified provider: %s", provider)
-	default:
-		// all providers case
-		cmd.log.Info("Scanning fabric for all providers")
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
 	}
 
-	cmd.log.Infof("Network scan results:\n%v\n", cmd.conns.NetworkScanDevices(provider))
-	return nil
+	var bld strings.Builder
+	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+		return err
+	}
+	if err := pretty.PrintHostFabricMap(resp.HostFabrics, &bld, false); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
+
+	return resp.Errors()
 }
 
 type networkListCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 }
 
 // List the supported providers
-func (cmd *networkListCmd) Execute(args []string) error {
-	cmd.log.Infof("Supported Providers:\n%s\n", cmd.conns.NetworkListProviders())
-	return nil
+func (cmd *networkListCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	req := &control.NetworkScanReq{}
+	req.SetHostList(cmd.hostlist)
+
+	cmd.log.Debugf("network scan req: %+v", req)
+
+	resp, err := control.NetworkScan(ctx, cmd.ctlClient, req)
+	if err != nil {
+		return err
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
+	}
+
+	var bld strings.Builder
+	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+		return err
+	}
+	if err := pretty.PrintHostFabricMap(resp.HostFabrics, &bld, true); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
+
+	return resp.Errors()
 }

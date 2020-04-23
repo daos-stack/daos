@@ -39,6 +39,16 @@ class DmgCommand(CommandWithSubCommand):
     METHOD_REGEX = {
         "network_scan": r"""(?:|([A-Za-z0-9-_]+):\d+:(?:\n|\n\r))
             (?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+([a-z0-9+]+))"""
+        "run": r"(.*)",
+        # Sample output of dmg pool list.
+        # wolf-3:10001: connected
+        # Pool UUID                            Svc Replicas
+        # ---------                            ------------
+        # b4a27b5b-688a-4d1e-8c38-363e32eb4f29 1,2,3
+        # Between the first and the second group, use " +"; i.e., one or more
+        # whitespaces. If we use "\s+", it'll pick up the second divider as
+        # UUID since it's made up of hyphens and \s includes new line.
+        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))"
     }
 
     def __init__(self, path):
@@ -691,6 +701,20 @@ class DmgCommand(CommandWithSubCommand):
         self.sub_command_class.set_sub_command("delete-acl")
         self.sub_command_class.sub_command_class.pool.value = pool
         self.sub_command_class.sub_command_class.principal.value = principal
+        return self._get_result()
+
+    def pool_list(self):
+        """List pools.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool delete-acl command fails.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("list")
         return self._get_result()
 
 

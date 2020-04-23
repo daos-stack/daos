@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,15 +21,15 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package client
+package control
 
 import (
-	"github.com/pkg/errors"
-	"golang.org/x/net/context"
+	"context"
+
+	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/system"
@@ -37,9 +37,11 @@ import (
 
 // SystemStopReq contains the inputs for the system stop command.
 type SystemStopReq struct {
+	unaryRequest
+	msRequest
 	Prep  bool
 	Kill  bool
-	Ranks []uint32
+	Ranks []system.Rank
 	Force bool
 }
 
@@ -50,35 +52,32 @@ type SystemStopResp struct {
 
 // SystemStop will perform a controlled shutdown of DAOS system and a list
 // of remaining system members on failure.
-//
-// Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemStop(req SystemStopReq) (*SystemStopResp, error) {
-	mc, err := chooseServiceLeader(c.controllers)
+func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq) (*SystemStopResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).SystemStop(ctx, &ctlpb.SystemStopReq{
+			Prep:  req.Prep,
+			Kill:  req.Kill,
+			Force: req.Force,
+			Ranks: system.RanksToUint32(req.Ranks),
+		})
+	})
+
+	rpcClient.Debugf("DAOS system stop request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemStopReq{Prep: req.Prep, Kill: req.Kill, Force: req.Force}
-
-	c.log.Debugf("DAOS system stop request: %s\n", rpcReq)
-
-	rpcResp, err := mc.getCtlClient().SystemStop(context.Background(), rpcReq)
-	if err != nil {
-		return nil, err
-	}
-
-	c.log.Debugf("DAOS system stop response: %s\n", rpcResp)
-
-	ssr := new(SystemStopResp)
-	if err := convert.Types(rpcResp, ssr); err != nil {
-		return nil, err
-	}
-	return ssr, nil
+	resp := new(SystemStopResp)
+	return resp, convertMSResponse(ur, resp)
 }
 
 // SystemStartReq contains the inputs for the system start request.
 type SystemStartReq struct {
-	Ranks []uint32
+	unaryRequest
+	msRequest
+	Ranks []system.Rank
 }
 
 // SystemStartResp contains the request response.
@@ -87,33 +86,29 @@ type SystemStartResp struct {
 }
 
 // SystemStart will perform a start after a controlled shutdown of DAOS system.
-func (c *connList) SystemStart(req SystemStartReq) (*SystemStartResp, error) {
-	mc, err := chooseServiceLeader(c.controllers)
+func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartReq) (*SystemStartResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).SystemStart(ctx, &ctlpb.SystemStartReq{
+			Ranks: system.RanksToUint32(req.Ranks),
+		})
+	})
+
+	rpcClient.Debugf("DAOS system start request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemStartReq{}
-
-	c.log.Debugf("DAOS system start request: %s\n", rpcReq)
-
-	rpcResp, err := mc.getCtlClient().SystemStart(context.Background(), rpcReq)
-	if err != nil {
-		return nil, err
-	}
-
-	c.log.Debugf("DAOS system start response: %s\n", rpcResp)
-
-	ssr := new(SystemStartResp)
-	if err := convert.Types(rpcResp, ssr); err != nil {
-		return nil, err
-	}
-	return ssr, nil
+	resp := new(SystemStartResp)
+	return resp, convertMSResponse(ur, resp)
 }
 
 // SystemQueryReq contains the inputs for the system query request.
 type SystemQueryReq struct {
-	Ranks []uint32
+	unaryRequest
+	msRequest
+	Ranks []system.Rank
 }
 
 // SystemQueryResp contains the request response.
@@ -122,64 +117,62 @@ type SystemQueryResp struct {
 }
 
 // SystemQuery requests DAOS system status.
-func (c *connList) SystemQuery(req SystemQueryReq) (*SystemQueryResp, error) {
-	mc, err := chooseServiceLeader(c.controllers)
+func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryReq) (*SystemQueryResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).SystemQuery(ctx, &ctlpb.SystemQueryReq{
+			Ranks: system.RanksToUint32(req.Ranks),
+		})
+	})
+
+	rpcClient.Debugf("DAOS system query request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemQueryReq{Ranks: req.Ranks}
-
-	c.log.Debugf("DAOS system query request: %+v", rpcReq)
-
-	rpcResp, err := mc.getCtlClient().SystemQuery(context.Background(), rpcReq)
-	if err != nil {
-		return nil, err
-	}
-
-	c.log.Debugf("DAOS system query response: %+v", rpcResp)
-
-	sqr := new(SystemQueryResp)
-	if err := convert.Types(rpcResp, sqr); err != nil {
-		return nil, err
-	}
-	return sqr, nil
+	resp := new(SystemQueryResp)
+	return resp, convertMSResponse(ur, resp)
 }
 
-// LeaderQueryReq contains the inputs for the leader query command.
 type LeaderQueryReq struct {
+	unaryRequest
+	msRequest
 	System string
 }
 
 // LeaderQueryResp contains the status of the request and, if successful, the
 // MS leader and set of replicas in the system.
 type LeaderQueryResp struct {
-	Leader   string
+	Leader   string `json:"CurrentLeader"`
 	Replicas []string
 }
 
 // LeaderQuery requests the current Management Service leader and the set of
 // MS replicas.
-func (c *connList) LeaderQuery(req LeaderQueryReq) (*LeaderQueryResp, error) {
-	if len(c.controllers) == 0 {
-		return nil, errors.New("no controllers defined")
-	}
+func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryReq) (*LeaderQueryResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, &mgmtpb.LeaderQueryReq{
+			System: req.System,
+		})
+	})
 
-	client := c.controllers[0].getSvcClient()
-	resp, err := client.LeaderQuery(context.TODO(), &mgmtpb.LeaderQueryReq{System: req.System})
+	rpcClient.Debugf("DAOS system leader-query request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &LeaderQueryResp{
-		Leader:   resp.CurrentLeader,
-		Replicas: resp.Replicas,
-	}, nil
+	resp := new(LeaderQueryResp)
+	return resp, convertMSResponse(ur, resp)
 }
 
 // ListPoolsReq contains the inputs for the list pools command.
 type ListPoolsReq struct {
-	SysName string
+	unaryRequest
+	msRequest
+	System string
 }
 
 // ListPoolsResp contains the status of the request and, if successful, the list
@@ -191,29 +184,20 @@ type ListPoolsResp struct {
 
 // ListPools fetches the list of all pools and their service replicas from the
 // system.
-func (c *connList) ListPools(req ListPoolsReq) (*ListPoolsResp, error) {
-	mc, err := chooseServiceLeader(c.controllers)
+func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (*ListPoolsResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).ListPools(ctx, &mgmtpb.ListPoolsReq{
+			Sys: req.System,
+		})
+	})
+
+	rpcClient.Debugf("DAOS system list-pools request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	pbReq := &mgmtpb.ListPoolsReq{Sys: req.SysName}
-
-	c.log.Debugf("List DAOS pools request: %v", pbReq)
-
-	pbResp, err := mc.getSvcClient().ListPools(context.Background(), pbReq)
-	if err != nil {
-		return nil, err
-	}
-
-	c.log.Debugf("List DAOS pools response: %v", pbResp)
-
-	if pbResp.GetStatus() != 0 {
-		return nil, errors.Errorf("DAOS returned error code: %d",
-			pbResp.GetStatus())
-	}
-
-	return &ListPoolsResp{
-		Pools: proto.PoolDiscoveriesFromPB(pbResp.Pools),
-	}, nil
+	resp := new(ListPoolsResp)
+	return resp, convertMSResponse(ur, resp)
 }

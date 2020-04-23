@@ -27,6 +27,7 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/pkg/errors"
 )
 
@@ -66,6 +67,7 @@ func (r *Rank) Uint32() uint32 {
 	return uint32(*r)
 }
 
+// UnmarshalYAML converts YAML representation into a system Rank.
 func (r *Rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var i uint32
 	if err := unmarshal(&i); err != nil {
@@ -94,12 +96,7 @@ func checkRank(r Rank) error {
 }
 
 // InList checks rank is present in provided rank list.
-//
-// Empty rank list indicates no filtering.
 func (r *Rank) InList(ranks []Rank) bool {
-	if len(ranks) == 0 {
-		return true
-	}
 	for _, rank := range ranks {
 		if r.Equals(rank) {
 			return true
@@ -123,4 +120,30 @@ func (r *Rank) RemoveFromList(ranks []Rank) []Rank {
 	}
 
 	return rankList
+}
+
+// RanksToUint32 is a convenience method to convert this
+// slice of system ranks to a slice of uint32 ranks.
+func RanksToUint32(ranks []Rank) (uint32Ranks []uint32) {
+	if ranks == nil {
+		ranks = []Rank{}
+	}
+	if err := convert.Types(ranks, &uint32Ranks); err != nil {
+		return nil
+	}
+
+	return
+}
+
+// RanksFromUint32 is a convenience method to convert this
+// slice of uint32 ranks to a slice of system ranks.
+func RanksFromUint32(ranks []uint32) (sysRanks []Rank) {
+	if ranks == nil {
+		ranks = []uint32{}
+	}
+	if err := convert.Types(ranks, &sysRanks); err != nil {
+		return nil
+	}
+
+	return
 }

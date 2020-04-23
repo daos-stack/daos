@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,10 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 func TestStorageQueryCommands(t *testing.T) {
@@ -33,7 +36,10 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"NVMe health query",
 			"storage query nvme-health",
-			"ConnectClients StorageScan-<nil>",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.StorageScanReq{}),
+			}, " "),
 			nil,
 		},
 		{
