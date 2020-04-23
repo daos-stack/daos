@@ -171,18 +171,21 @@ add_sleep_list(struct dss_xstream *dx, struct dss_sleep_ult *new)
 {
 	struct dss_sleep_ult	*dsu;
 
+	if (new->dsu_expire_time == -1)
+		goto out;
+
 	d_list_for_each_entry(dsu, &dx->dx_sleep_ult_list, dsu_list) {
 		if (dsu->dsu_expire_time > new->dsu_expire_time) {
 			d_list_add_tail(&new->dsu_list, &dsu->dsu_list);
 			return;
 		}
 	}
-
+out:
 	d_list_add_tail(&new->dsu_list, &dx->dx_sleep_ult_list);
 }
 
-struct dss_sleep_ult
-*dss_sleep_ult_create(void)
+struct dss_sleep_ult *
+dss_sleep_ult_create(void)
 {
 	struct dss_sleep_ult *dsu;
 	ABT_thread	     self;
@@ -236,8 +239,12 @@ dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
 	D_ASSERT(thread == dsu->dsu_thread);
 
 	D_ASSERT(d_list_empty(&dsu->dsu_list));
-	daos_gettime_coarse(&now);
-	dsu->dsu_expire_time = now + expire_secs;
+	if (expire_secs == (uint64_t)-1) {
+		dsu->dsu_expire_time = -1;
+	} else {
+		daos_gettime_coarse(&now);
+		dsu->dsu_expire_time = now + expire_secs;
+	}
 	D_DEBUG(DB_TRACE, "dsu %p expire in "DF_U64" secs\n", dsu, expire_secs);
 	add_sleep_list(dx, dsu);
 	ABT_self_suspend();
@@ -304,18 +311,57 @@ dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool error)
 		cntr->rc_errors++;
 }
 
+static void
+dss_rpc_ult(void *args)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct dss_sleep_ult	*ult = args;
+
+	while (1) {
+		D_ASSERT(ult->dsu_func);
+
+		ult->dsu_func(ult->dsu_args);
+		ult->dsu_func = NULL;
+		ult->dsu_idle = 1;
+
+		dss_ult_sleep(ult, -1);
+		if (dss_xstream_exiting(dx))
+			break;
+	}
+	ABT_thread_free(&ult->dsu_thread);
+	dss_sleep_ult_destroy(ult);
+}
+
 static int
 dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	     void (*real_rpc_hdlr)(void *), void *arg)
 {
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct dss_sleep_ult	*ult;
 	ABT_pool	*pools = arg;
-	ABT_pool	 pool;
 	int		 rc;
 
-	pool = pools[DSS_POOL_IO];
+	while (!d_list_empty(&dx->dx_sleep_ult_list)) {
+		ult = d_list_entry(dx->dx_sleep_ult_list.prev, /* last */
+				   struct dss_sleep_ult, dsu_list);
+		if (!ult->dsu_idle)
+			break;
 
-	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
-			       ABT_THREAD_ATTR_NULL, NULL);
+		D_ASSERT(ult->dsu_func == NULL);
+		ult->dsu_idle = false;
+		ult->dsu_func = real_rpc_hdlr;
+		ult->dsu_args = hdlr_arg;
+		dss_ult_wakeup(ult);
+		return 0;
+	}
+
+	ult = dss_sleep_ult_create();
+	D_ASSERT(ult);
+
+	ult->dsu_func = real_rpc_hdlr;
+	ult->dsu_args = hdlr_arg;
+	rc = ABT_thread_create(pools[DSS_POOL_IO], dss_rpc_ult, ult,
+			       ABT_THREAD_ATTR_NULL, &ult->dsu_thread);
 	return dss_abterr2der(rc);
 }
 
