@@ -33,7 +33,8 @@ from write_host_file import write_host_file
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ior_utils import IorCommand
-from command_utils import Mpirun, CommandFailure
+from job_manager_utils import Mpirun
+from command_utils_base import CommandFailure
 from mpio_utils import MpioUtils
 
 try:
