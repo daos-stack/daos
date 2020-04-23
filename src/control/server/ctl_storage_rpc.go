@@ -209,7 +209,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		}(srv)
 	}
 
-	scmErrored := make(map[uint32]bool)
+	instanceErrored := make(map[uint32]bool)
 	for formatting > 0 {
 		select {
 		case <-ctx.Done():
@@ -217,7 +217,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		case scmResult := <-scmChan:
 			formatting--
 			if scmResult.GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-				scmErrored[scmResult.GetInstanceidx()] = true
+				instanceErrored[scmResult.GetInstanceidx()] = true
 			}
 			resp.Mrets = append(resp.Mrets, scmResult)
 		}
@@ -225,8 +225,8 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 	// TODO: perform bdev format in parallel
 	for _, srv := range instances {
-		if scmErrored[srv.Index()] {
-			// if scm eerrored, indicate skipping bdev format
+		if instanceErrored[srv.Index()] {
+			// if scm errored, indicate skipping bdev format
 			if len(srv.bdevConfig().DeviceList) > 0 {
 				resp.Crets = append(resp.Crets,
 					srv.newCret("", ctlpb.ResponseStatus_CTL_SUCCESS, "",
@@ -235,7 +235,23 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 			continue
 		}
 		// SCM formatted correctly on this instance, format NVMe
-		resp.Crets = append(resp.Crets, srv.StorageFormatBdev(c.bdev)...)
+		cResults := srv.StorageFormatNVMe(c.bdev)
+		if cResults.HasErrors() {
+			srv.log.Errorf(msgFormatErr, srv.Index())
+			instanceErrored[srv.Index()] = true
+		}
+		resp.Crets = append(resp.Crets, cResults...)
+	}
+
+	// Notify storage ready for instances formatted without error.
+	// Block until all instances have formatted NVMe to avoid
+	// VFIO device or resource busy when starting IO servers
+	// because devices have already been claimed during format.
+	// TODO: supply whitelist of instance.Devs to init() on format.
+	for _, srv := range instances {
+		if !instanceErrored[srv.Index()] {
+			srv.NotifyStorageReady()
+		}
 	}
 
 	return resp, nil

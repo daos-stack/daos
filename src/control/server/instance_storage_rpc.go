@@ -173,7 +173,7 @@ func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.Scm
 	return
 }
 
-func (srv *IOServerInstance) StorageFormatBdev(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
+func (srv *IOServerInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
 	srv.log.Infof("Formatting NVMe storage for %s instance %d", DataPlaneName, srv.Index())
 
 	// If no superblock exists, format NVMe and populate response with results.
@@ -187,13 +187,7 @@ func (srv *IOServerInstance) StorageFormatBdev(bdevProvider *bdev.Provider) (cRe
 
 	if needsSuperblock {
 		cResults = srv.bdevFormat(bdevProvider)
-		if cResults.HasErrors() {
-			srv.log.Errorf(msgFormatErr, srv.Index())
-			return // don't notify that storage is ready
-		}
 	}
-
-	srv.NotifyStorageReady()
 
 	return
 }
