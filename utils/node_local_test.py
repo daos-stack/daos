@@ -76,7 +76,8 @@ class DaosServer():
         server_config = os.path.join(self_dir, 'nlt_server.yaml')
 
         cmd = [daos_server, '--config={}'.format(server_config),
-               'start', '-t' '4', '--insecure', '-d', self.agent_dir]
+               'start', '-t' '4', '--insecure', '-d', self.agent_dir,
+               '--recreate-superblocks']
 
         server_env = os.environ.copy()
         server_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
@@ -115,7 +116,8 @@ class DaosServer():
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        log_test('/tmp/dnt_server.log')
+        if os.path.exists('/tmp.dnt_server.log'):
+            log_test('/tmp/dnt_server.log')
         self.running = False
 
 def il_cmd(dfuse, cmd):
@@ -410,7 +412,7 @@ def make_pool(daos, conf):
     try:
         pool_con.create(511, os.geteuid(), os.getegid(),
                         1024*1014*128, b'daos_server')
-    except daos_raw.daos_api.DaosApiError:
+    except daos_raw.raw.daos_api.DaosApiError:
         time.sleep(10)
         pool_con.create(511, os.geteuid(), os.getegid(),
                         1024*1014*128, b'daos_server')

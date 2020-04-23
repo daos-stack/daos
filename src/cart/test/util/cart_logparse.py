@@ -390,6 +390,7 @@ class LogIter():
         # Try and open the file as utf-8, but if that doesn't work then
         # find and report the error, then continue with the file open as
         # latin-1
+        self._fd = None
         try:
             self._fd = open(fname, 'r', encoding='utf-8')
             self._fd.read()
