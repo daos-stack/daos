@@ -304,7 +304,10 @@ class Dfuse(DfuseCommand):
                 env['OFI_INTERFACE'] = env.pop('fabric_iface')
                 env['OFI_PORT'] = env.pop('fabric_iface_port')
                 env['CRT_PHY_ADDR_STR'] = env.pop('provider')
-                if not debug:
+                if debug:
+                    env['D_LOG_MASK'] = 'INFO,DFUSE=DEBUG'
+                    env['DD_MASK'] = 'all'
+                else:
                     env['D_LOG_MASK'] = 'WARN'
             except Exception as err:
                 raise CommandFailure("Failed to read yaml file:{}".format(err))

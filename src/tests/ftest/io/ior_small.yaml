@@ -8,17 +8,17 @@ hosts:
     - server-D
   test_clients:
     - client-E
-    - client-F
-    - client-G
-    - client-H
+#    - client-F
+#    - client-G
+#    - client-H
 timeout: 1800
 server_config:
     name: daos_server
     servers:
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
+#        scm_class: dcpm
+#        scm_list: ["/dev/pmem0"]
 pool:
     mode: 146
     name: daos_server

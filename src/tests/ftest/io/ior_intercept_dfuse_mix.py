@@ -110,11 +110,11 @@ class IorInterceptDfuseMix(IorTestBase):
         # failure keeping flat 1.5 x just to set the boundary for the client
         # without interception library
         self.assertTrue(float(with_intercept[2][1][max_mib]) <
-                        1.5 * float(without_intercept[2][1][max_mib]))
+                        1.1 * float(without_intercept[2][1][max_mib]))
         self.assertTrue(float(with_intercept[2][1][min_mib]) <
-                        1.5 * float(without_intercept[2][1][min_mib]))
+                        1.1 * float(without_intercept[2][1][min_mib]))
         self.assertTrue(float(with_intercept[2][1][mean_mib]) <
-                        1.5 * float(without_intercept[2][1][mean_mib]))
+                        1.1 * float(without_intercept[2][1][mean_mib]))
 
     def log_metrics(self, without_intercept, with_intercept):
         """Log the ior metrics because the stdout from ior can be mixed

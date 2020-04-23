@@ -66,7 +66,7 @@ class IorSmall(IorTestBase):
                     self.ior_cmd.transfer_size.update(test[0])
                     self.ior_cmd.block_size.update(test[1])
                     # run ior
-                    self.run_ior_with_pool(debug=False)
+                    self.run_ior_with_pool(debug=True)
 
         # Running a variant for ior fpp
         self.ior_cmd.flags.update(flags[1])
