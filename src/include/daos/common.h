@@ -513,6 +513,7 @@ daos_fail_fini(void);
 #define DAOS_FAIL_SOME		0x2000000
 #define DAOS_FAIL_ALWAYS	0x4000000
 
+#define DAOS_FAIL_ID_MASK    0xffffff
 #define DAOS_FAIL_GROUP_MASK 0xff0000
 #define DAOS_FAIL_GROUP_SHIFT 16
 
@@ -520,6 +521,8 @@ enum {
 	DAOS_FAIL_UNIT_TEST_GROUP = 1,
 	DAOS_FAIL_MAX_GROUP
 };
+
+#define DAOS_FAIL_ID_GET(fail_loc)	(fail_loc & DAOS_FAIL_ID_MASK)
 
 #define DAOS_FAIL_UNIT_TEST_GROUP_LOC	\
 		(DAOS_FAIL_UNIT_TEST_GROUP << DAOS_FAIL_GROUP_SHIFT)
@@ -595,6 +598,8 @@ enum {
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
 #define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
+
+#define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
