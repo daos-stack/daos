@@ -23,7 +23,7 @@
 """
 from apricot import TestWithServers
 from dmg_utils import get_pool_uuid_service_replicas_from_stdout
-from daos_utils import DaosCommand
+from daos_utils import DaosCommand, get_pool_uuid, get_sizes
 
 
 class QueryAttributeTest(TestWithServers):
@@ -70,9 +70,9 @@ class QueryAttributeTest(TestWithServers):
         # against those used when creating the pool.
         query_stdout = daos_cmd.pool_query(
             pool=expected_uuid, svc=service_replicas).stdout
-        actual_uuid = daos_cmd.get_pool_uuid(query_stdout)
+        actual_uuid = get_pool_uuid(query_stdout)
         # First Total size is the SCM size.
-        actual_size = daos_cmd.get_sizes(query_stdout)[0]
+        actual_size = get_sizes(query_stdout)[0]
         self.assertEqual(actual_uuid, expected_uuid)
         self.assertEqual(actual_size, expected_size)
 
@@ -87,7 +87,7 @@ class QueryAttributeTest(TestWithServers):
             sample_val = "val" + str(i)
             sample_attrs.append(sample_attr)
             sample_vals.append(sample_val)
-            daos_cmd.pool_set_attr(
+            _ = daos_cmd.pool_set_attr(
                 pool=actual_uuid, attr=sample_attr, value=sample_val,
                 svc=service_replicas).stdout
             expected_attrs.add(sample_attr)
@@ -108,7 +108,6 @@ class QueryAttributeTest(TestWithServers):
             actual_attrs.add(lines[i].split()[2])
         self.assertEqual(actual_attrs, expected_attrs)
         # Get each attribute's value.
-        actual_attrs_dict = {}
         for i in range(5):
             # Sample get-attr output - no line break.
             # 04/19-21:16:32.66 wolf-3 Pool's attr2 attribute value:

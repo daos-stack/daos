@@ -712,40 +712,40 @@ class DaosCommand(CommandWithSubCommand):
         self.env = env
         return self._get_result()
 
-    def get_pool_uuid(self, query_stdout):
-        """Get pool UUID from pool query output.
+def get_pool_uuid(query_stdout):
+    """Get pool UUID from pool query output.
 
-        Sample pool query output.
-        04/19-18:31:26.90 wolf-3 Pool 3e59b386-fda0-404e-af7e-3ff0a38d1f81,
-            ntarget=8, disabled=0
-        04/19-18:31:26.90 wolf-3 Pool space info:
-        04/19-18:31:26.90 wolf-3 - Target(VOS) count:8
-        04/19-18:31:26.90 wolf-3 - SCM:
-        04/19-18:31:26.90 wolf-3   Total size: 1000000000
-        04/19-18:31:26.90 wolf-3   Free: 999997440, min:124999680,
-            max:124999680, mean:124999680
-        04/19-18:31:26.90 wolf-3 - NVMe:
-        04/19-18:31:26.90 wolf-3   Total size: 0
-        04/19-18:31:26.90 wolf-3   Free: 0, min:0, max:0, mean:0
-        04/19-18:31:26.90 wolf-3 Rebuild idle, 0 objs, 0 recs
+    Sample pool query output.
+    04/19-18:31:26.90 wolf-3 Pool 3e59b386-fda0-404e-af7e-3ff0a38d1f81,
+        ntarget=8, disabled=0
+    04/19-18:31:26.90 wolf-3 Pool space info:
+    04/19-18:31:26.90 wolf-3 - Target(VOS) count:8
+    04/19-18:31:26.90 wolf-3 - SCM:
+    04/19-18:31:26.90 wolf-3   Total size: 1000000000
+    04/19-18:31:26.90 wolf-3   Free: 999997440, min:124999680,
+        max:124999680, mean:124999680
+    04/19-18:31:26.90 wolf-3 - NVMe:
+    04/19-18:31:26.90 wolf-3   Total size: 0
+    04/19-18:31:26.90 wolf-3   Free: 0, min:0, max:0, mean:0
+    04/19-18:31:26.90 wolf-3 Rebuild idle, 0 objs, 0 recs
 
-        Args:
-            stdout (String): daos pool query output.
+    Args:
+        stdout (String): daos pool query output.
 
-        Returns:
-            String: Pool UUID.
-        """
-        uuid_pattern = re.compile('([0-9a-f-]{36})')
-        uuid_match = uuid_pattern.search(query_stdout)
-        return uuid_match.group()
+    Returns:
+        String: Pool UUID.
+    """
+    uuid_pattern = re.compile('([0-9a-f-]{36})')
+    uuid_match = uuid_pattern.search(query_stdout)
+    return uuid_match.group()
 
-    def get_sizes(self, query_stdout):
-        """Get SCM and NVMe size values from pool query output.
+def get_sizes(query_stdout):
+    """Get SCM and NVMe size values from pool query output.
 
-        Args:
-            stdout (String): daos pool query output.
+    Args:
+        stdout (String): daos pool query output.
 
-        Returns:
-            List of string: SCM size (1st element) and NVMe size (2nd element).
-        """
-        return re.findall("Total size: (\d+)", query_stdout)
+    Returns:
+        List of string: SCM size (1st element) and NVMe size (2nd element).
+    """
+    return re.findall(r"Total size: (\d+)", query_stdout)
