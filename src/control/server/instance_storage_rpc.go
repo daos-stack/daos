@@ -32,31 +32,28 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-// newMntRet creates and populates NVMe ctrlr result and logs error through newState.
-func newMntRet(log logging.Logger, op, mntPoint string, status ctlpb.ResponseStatus, errMsg, infoMsg string) *ctlpb.ScmMountResult {
-	if mntPoint == "" {
-		mntPoint = "<nil>"
-	}
+// newMntRet creates and populates SCM mount result.
+// Currently only used for format operations.
+func (srv *IOServerInstance) newMntRet(status ctlpb.ResponseStatus, errMsg, infoMsg string) *ctlpb.ScmMountResult {
 	return &ctlpb.ScmMountResult{
-		Mntpoint: mntPoint,
-		State:    newState(log, status, errMsg, infoMsg, "scm mount "+op),
+		Mntpoint:    srv.scmConfig().MountPoint,
+		State:       newState(srv.log, status, errMsg, infoMsg, "scm mount format"),
+		Instanceidx: srv.Index(),
 	}
 }
 
 // newCret creates and populates NVMe controller result and logs error
-func newCret(log logging.Logger, op, pciAddr string, status ctlpb.ResponseStatus, errMsg, infoMsg string) *ctlpb.NvmeControllerResult {
+func (srv *IOServerInstance) newCret(pciAddr string, status ctlpb.ResponseStatus, errMsg, infoMsg string) *ctlpb.NvmeControllerResult {
 	if pciAddr == "" {
 		pciAddr = "<nil>"
 	}
-
 	return &ctlpb.NvmeControllerResult{
 		Pciaddr: pciAddr,
-		State:   newState(log, status, errMsg, infoMsg, "nvme controller "+op),
+		State:   newState(srv.log, status, errMsg, infoMsg, "nvme controller format"),
 	}
 }
 
@@ -85,7 +82,7 @@ func (srv *IOServerInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, er
 	}
 	srv.log.Infof("Instance %d: finished format of %s", srvIdx, scmStr)
 
-	return newMntRet(srv.log, "format", cfg.MountPoint, status, eMsg, iMsg), nil
+	return srv.newMntRet(status, eMsg, iMsg), nil
 }
 
 func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeControllerResults) {
@@ -108,7 +105,7 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 	})
 	if err != nil {
 		results = append(results,
-			newCret(srv.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME,
+			srv.newCret("", ctlpb.ResponseStatus_CTL_ERR_NVME,
 				err.Error(), fault.ShowResolutionFor(err)))
 		return
 	}
@@ -125,7 +122,7 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 			}
 		}
 		results = append(results,
-			newCret(srv.log, "format", dev, ctlpbStatus, errMsg, infoMsg))
+			srv.newCret(dev, ctlpbStatus, errMsg, infoMsg))
 	}
 
 	srv.log.Infof("Instance %d: finished format of %s block devices (%s)",
@@ -147,9 +144,8 @@ func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.Scm
 	defer func() {
 		if scmErr != nil {
 			srv.log.Errorf(msgFormatErr, srvIdx)
-			mResult = newMntRet(srv.log, "format", srv.scmConfig().MountPoint,
-				ctlpb.ResponseStatus_CTL_ERR_SCM, scmErr.Error(),
-				fault.ShowResolutionFor(scmErr))
+			mResult = srv.newMntRet(ctlpb.ResponseStatus_CTL_ERR_SCM,
+				scmErr.Error(), fault.ShowResolutionFor(scmErr))
 		}
 	}()
 
@@ -184,9 +180,8 @@ func (srv *IOServerInstance) StorageFormatBdev(bdevProvider *bdev.Provider) (cRe
 	needsSuperblock, err := srv.NeedsSuperblock()
 	if err != nil {
 		return proto.NvmeControllerResults{
-			newCret(srv.log, "format", "",
-				ctlpb.ResponseStatus_CTL_ERR_NVME, err.Error(),
-				fault.ShowResolutionFor(err)),
+			srv.newCret("", ctlpb.ResponseStatus_CTL_ERR_NVME,
+				err.Error(), fault.ShowResolutionFor(err)),
 		}
 	}
 

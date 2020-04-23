@@ -209,28 +209,27 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		}(srv)
 	}
 
+	scmErrored := make(map[uint32]bool)
 	for formatting > 0 {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case scmResult := <-scmChan:
 			formatting--
+			if scmResult.GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
+				scmErrored[scmResult.GetInstanceidx()] = true
+			}
 			resp.Mrets = append(resp.Mrets, scmResult)
 		}
 	}
 
-	// format nvme serially
 	// TODO: perform bdev format in parallel
 	for _, srv := range instances {
-		needsScmFormat, err := srv.NeedsScmFormat()
-		if err != nil {
-			return nil, err
-		}
-		if needsScmFormat {
+		if scmErrored[srv.Index()] {
+			// if scm eerrored, indicate skipping bdev format
 			if len(srv.bdevConfig().DeviceList) > 0 {
 				resp.Crets = append(resp.Crets,
-					newCret(srv.log, "format", "",
-						ctlpb.ResponseStatus_CTL_SUCCESS, "",
+					srv.newCret("", ctlpb.ResponseStatus_CTL_SUCCESS, "",
 						fmt.Sprintf(msgNvmeFormatSkip, srv.Index())))
 			}
 			continue
