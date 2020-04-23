@@ -21,6 +21,9 @@ pool:
     nvme_size: 400000000000
     svcn: 1
     control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 ior:
     client_processes:
       np: 16
@@ -34,17 +37,16 @@ ior:
           api: POSIX
           daos_oclass: "SX"
           transfersize_blocksize: !mux
-#         DAOS-3449
-#            512B:
-#              transfer_size: '512B'
-#              block_size: '128M'
-#              write_x: 1
-#              read_x: 1
-#            1K:
-#              transfer_size: '1K'
-#              block_size: '512M'
-#              write_x: 2
-#              read_x: 1
+            512B:
+              transfer_size: '512B'
+              block_size: '128M'
+              write_x: 1
+              read_x: 1
+            1K:
+              transfer_size: '1K'
+              block_size: '512M'
+              write_x: 2
+              read_x: 1
             4K:
               transfer_size: '4K'
               block_size: '512M'

@@ -43,6 +43,9 @@ pool:
   nvme_size: 40000000000
   svcn: 1
   control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 ior:
   client_processes: !mux
     np_1:
