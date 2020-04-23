@@ -1000,6 +1000,11 @@ pipeline {
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
                                                sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
+                                               if grep /mnt/daos\\  /proc/mounts; then
+                                                   sudo umount /mnt/daos
+                                               else
+                                                   sudo mkdir -p /mnt/daos
+                                               fi
                                                sudo mkdir -p /mnt/daos
                                                sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
                                                sudo mkdir -p $DAOS_BASE
