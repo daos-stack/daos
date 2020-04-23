@@ -20,7 +20,7 @@ class DFTestFail(Exception):
 
 def umount(path):
     """Umount dfuse from a given path"""
-    cmd = ['fusermount', '-u', path]
+    cmd = ['fusermount3', '-u', path]
     ret = subprocess.run(cmd)
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
@@ -76,8 +76,7 @@ class DaosServer():
         server_config = os.path.join(self_dir, 'nlt_server.yaml')
 
         cmd = [daos_server, '--config={}'.format(server_config),
-               'start', '-t' '4', '--insecure', '-d', self.agent_dir,
-               '--recreate-superblocks']
+               'start', '-t' '4', '--insecure', '-d', self.agent_dir]
 
         server_env = os.environ.copy()
         server_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
