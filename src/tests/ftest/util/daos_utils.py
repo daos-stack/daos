@@ -31,7 +31,12 @@ class DaosCommand(CommandWithSubCommand):
 
     METHOD_REGEX = {
         "run": r"(.*)",
-        "container_create": r"container ([0-9a-f-]+)"
+        "container_create": r"container ([0-9a-f-]+)",
+        # daos pool list-cont returns the date, host name, and container UUID
+        # as below:
+        # 03/31-21:32:24.53 wolf-3 2f69b198-8478-472e-b6c8-02a451f4de1b
+        # UUID is made up of 36 characters of hex and -.
+        "pool_list_cont": r"([0-9a-f-]{36})"
     }
 
     def __init__(self, path):
@@ -589,4 +594,30 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.svc.value = svc
         self.sub_command_class.sub_command_class.cont.value = cont
         self.sub_command_class.sub_command_class.force.value = force
+        return self._get_result()
+
+    def pool_list_cont(self, pool, svc, sys_name=None, env=None):
+        """List containers in the given pool.
+
+        Args:
+            pool (String): Pool UUID
+            svc (String, optional): Service replicas. If there are multiple,
+                numbers must be separated by comma like 1,2,3
+            sys_name (String, optional): System name. Defaults to None.
+            env (dict, optional): dictionary of environment variable names and
+                values (EnvironmentVariables). Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas pool query command fails.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("list-containers")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        self.env = env
         return self._get_result()

@@ -32,13 +32,13 @@ from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from agent_utils import run_agent
-from command_utils import CommandFailure, Srun
-from dfuse_utils import Dfuse
+from command_utils_base import CommandFailure
 from daos_utils import DaosCommand
-from fio_utils import FioCommand
+from dfuse_utils import Dfuse
 from general_utils import get_random_string
+from fio_utils import FioCommand
 from ior_utils import IorCommand
+from job_manager_utils import Srun
 from pydaos.raw import DaosSnapshot, DaosApiError
 import slurm_utils
 from test_utils_container import TestContainer
@@ -125,7 +125,7 @@ class SoakTestBase(TestWithServers):
         self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
         self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
         # Fail if slurm partition daos_client is not defined
-        if not self.partition_clients:
+        if not self.client_partition:
             raise SoakTestError(
                 "<<FAILED: Partition is not correctly setup for daos "
                 "slurm partition>>")
@@ -138,19 +138,17 @@ class SoakTestBase(TestWithServers):
         self.log.info(
             "<<Updated hostlist_clients %s >>", self.hostlist_clients)
         # include test node for log cleanup; remove from client list
-        test_node = [socket.gethostname().split('.', 1)[0]]
-        if test_node[0] in self.hostlist_clients:
-            self.hostlist_clients.remove(test_node[0])
-            self.exclude_slurm_nodes.append(test_node[0])
-            self.log.info(
-                "<<Updated hostlist_clients %s >>", self.hostlist_clients)
+        self.exclude_slurm_nodes.append(self.hostlist_clients.pop(-1))
+        self.log.info("<<Updated hostlist_clients %s >>", self.hostlist_clients)
         if not self.hostlist_clients:
             self.fail("There are no nodes that are client only;"
                       "check if the partition also contains server nodes")
-        self.node_list = self.hostlist_clients + test_node
-        # Start agent on test node - need daos_agent yaml file
-        self.agent_sessions = run_agent(
-            self, self.hostlist_servers, test_node)
+
+        # Start an agent on the test control host to enable API calls for
+        # reserved pool and containers.  The test control host should be the
+        # last host in the hostlist_clients list.
+        agent_groups = {self.server_group: self.exclude_slurm_nodes[-1:]}
+        self.start_agents(agent_groups)
 
     def pre_tear_down(self):
         """Tear down any test-specific steps prior to running tearDown().
@@ -167,7 +165,7 @@ class SoakTestBase(TestWithServers):
                 "<<Cancel jobs in queue with ids %s >>",
                 self.failed_job_id_list)
             status = process.system("scancel --partition {} -u {}".format(
-                self.partition_clients, self.username))
+                self.client_partition, self.username))
             if status > 0:
                 errors.append("Failed to cancel jobs {}".format(
                     self.failed_job_id_list))
@@ -378,7 +376,7 @@ class SoakTestBase(TestWithServers):
         status = True
         # Create container
         container = TestContainer(self.pool[0])
-        container.namespace = "/run/container_reserved"
+        container.namespace = "/run/container_reserved/*"
         container.get_params(self)
         container.create()
         container.open()
@@ -487,7 +485,7 @@ class SoakTestBase(TestWithServers):
                         ior_cmd.set_daos_params(self.server_group, pool)
                         # srun cmdline
                         nprocs = nodesperjob * ppn
-                        env = ior_cmd.get_default_env("srun", self.tmp)
+                        env = ior_cmd.get_default_env("srun")
                         if ior_cmd.api.value == "MPIIO":
                             env["DAOS_CONT"] = ior_cmd.daos_cont.value
                         cmd = Srun(ior_cmd)
@@ -535,14 +533,15 @@ class SoakTestBase(TestWithServers):
             pool (obj):   TestPool obj
         """
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
-                           dfuse_env=self.basepath)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
         self.dfuse.get_params(self)
         # update dfuse params
         self.dfuse.set_dfuse_params(pool)
         self.dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
+        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
+
         # create dfuse mount point
-        cmd = ["mkdir", "-p", self.dfuse.mount_dir.value]
+        cmd = ["/usr/bin/mkdir", "-p", self.dfuse.mount_dir.value]
         params = self.srun_params
         params["export"] = "all"
         params["ntasks-per-node"] = 1
@@ -626,13 +625,14 @@ class SoakTestBase(TestWithServers):
         """
         self.log.info("<<Build Script>> at %s", time.ctime())
         script_list = []
+
         # Start the daos_agent in the batch script for now
         # TO-DO:  daos_agents start with systemd
-        added_cmd_list = [
-            "srun -l --mpi=pmi2 --ntasks-per-node=1 "
-            "--export=ALL {} -o {} &".format(os.path.join(
-                self.bin, "daos_agent"), os.path.join(
-                    self.tmp, "daos_agent.yaml"))]
+        agent_launch_cmds = [
+            "mkdir -p {}".format(os.environ.get("DAOS_TEST_LOG_DIR"))]
+        agent_launch_cmds.append(
+            " ".join([str(self.agent_managers[0].manager.job), "&"]))
+
         # Create the sbatch script for each cmdline
         used = []
         for cmd, log_name in commands:
@@ -653,7 +653,7 @@ class SoakTestBase(TestWithServers):
             unique = get_random_string(5, used)
             script = slurm_utils.write_slurm_script(
                 self.test_log_dir, job, output, nodesperjob,
-                added_cmd_list + [cmd], unique, sbatch)
+                agent_launch_cmds + [cmd], unique, sbatch)
             script_list.append(script)
             used.append(unique)
         return script_list
@@ -875,8 +875,8 @@ class SoakTestBase(TestWithServers):
         slurm_reservation = self.params.get(
             "reservation", "/run/srun_params/*")
         # Srun params
-        if self.partition_clients is not None:
-            self.srun_params = {"partition": self.partition_clients}
+        if self.client_partition is not None:
+            self.srun_params = {"partition": self.client_partition}
         if slurm_reservation is not None:
             self.srun_params["reservation"] = slurm_reservation
         # Create the reserved pool with data
@@ -887,7 +887,7 @@ class SoakTestBase(TestWithServers):
         # Create the container and populate with a known data
         # TO-DO: use IOR to write and later read verify the data
         self.container = TestContainer(self.pool[0])
-        self.container.namespace = "/run/container_reserved"
+        self.container.namespace = "/run/container_reserved/*"
         self.container.get_params(self)
         self.container.create()
         self.container.write_objects(rank, obj_class)
