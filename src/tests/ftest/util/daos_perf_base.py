@@ -26,10 +26,7 @@ import re
 
 from apricot import TestWithServers
 from daos_perf_utils import DaosPerfCommand
-from command_utils import Orterun
-from write_host_file import write_host_file
-from env_modules import load_mpi
-from distutils.spawn import find_executable
+from job_manager_utils import Orterun
 
 
 class DaosPerfBase(TestWithServers):
@@ -51,16 +48,10 @@ class DaosPerfBase(TestWithServers):
         daos_perf.get_params()
         self.log.info("daos_perf command: %s", str(daos_perf))
 
-        # Get the path and hostfiel for the orterun command
-        load_mpi('openmpi')
-        orterun_bin = find_executable('orterun')
-        if orterun_bin is None:
-            self.fail("No orterun path found!")
-        hostfile = write_host_file(self.hostlist_clients, self.workdir, None)
-
         # Create the orterun command
-        orterun = Orterun(daos_perf, os.path.dirname(orterun_bin))
-        orterun.setup_command(None, hostfile, processes)
+        orterun = Orterun(daos_perf)
+        orterun.assign_hosts(self.hostlist_clients, self.workdir, None)
+        orterun.assign_processes(processes)
         self.log.info("orterun command: %s", str(orterun))
 
         # Run the daos_perf command and check for errors
