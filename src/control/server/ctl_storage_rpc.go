@@ -237,7 +237,6 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		// SCM formatted correctly on this instance, format NVMe
 		cResults := srv.StorageFormatNVMe(c.bdev)
 		if cResults.HasErrors() {
-			srv.log.Errorf(msgFormatErr, srv.Index())
 			instanceErrored[srv.Index()] = true
 		}
 		resp.Crets = append(resp.Crets, cResults...)
@@ -249,9 +248,11 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// because devices have already been claimed during format.
 	// TODO: supply whitelist of instance.Devs to init() on format.
 	for _, srv := range instances {
-		if !instanceErrored[srv.Index()] {
-			srv.NotifyStorageReady()
+		if instanceErrored[srv.Index()] {
+			srv.log.Errorf(msgFormatErr, srv.Index())
+			continue
 		}
+		srv.NotifyStorageReady()
 	}
 
 	return resp, nil
