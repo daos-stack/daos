@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+import re
+
 from command_utils import \
     CommandWithParameters, FormattedParameter, CommandFailure, \
     CommandWithSubCommand
@@ -80,6 +82,8 @@ class DaosCommand(CommandWithSubCommand):
                 self.sub_command_class = self.ListAttrsSubCommand()
             elif self.sub_command.value == "get-attr":
                 self.sub_command_class = self.GetAttrSubCommand()
+            elif self.sub_command.value == "set-attr":
+                self.sub_command_class = self.SetAttrSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -146,6 +150,17 @@ class DaosCommand(CommandWithSubCommand):
                     DaosCommand.PoolSubCommand.GetAttrSubCommand,
                     self).__init__("get-attr")
                 self.attr = FormattedParameter("--attr={}")
+
+        class SetAttrSubCommand(CommonPoolSubCommand):
+            """Defines an object for the daos pool set-attr command."""
+
+            def __init__(self):
+                """Create a daos pool set-attr command object."""
+                super(
+                    DaosCommand.PoolSubCommand.SetAttrSubCommand,
+                    self).__init__("set-attr")
+                self.attr = FormattedParameter("--attr={}")
+                self.value = FormattedParameter("--value={}")
 
     class ContainerSubCommand(CommandWithSubCommand):
         """Defines an object for the daos container sub command."""
@@ -621,3 +636,116 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.sys_name.value = sys_name
         self.env = env
         return self._get_result()
+
+    def pool_set_attr(self, pool, attr, value, svc, env=None):
+        """Set pool attribute.
+
+        Args:
+            pool (String): Pool UUID.
+            attr (String): Attribute name.
+            value (String): Attribute value
+            svc (String): Service replicas.
+            env (dict, optional): dictionary of environment variable names and
+                values (EnvironmentVariables). Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas pool query command fails.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("set-attr")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.attr.value = attr
+        self.sub_command_class.sub_command_class.value.value = value
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.env = env
+        return self._get_result()
+
+    def pool_get_attr(self, pool, attr, svc, env=None):
+        """Set pool attribute.
+
+        Args:
+            pool (String): Pool UUID.
+            attr (String): Pool UUID.
+            svc (String): Service replicas.
+            env (dict, optional): dictionary of environment variable names and
+                values (EnvironmentVariables). Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas pool query command fails.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("get-attr")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.attr.value = attr
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.env = env
+        return self._get_result()
+
+    def pool_list_attrs(self, pool, svc, env=None):
+        """List pool attributes.
+
+        Args:
+            pool (String): Pool UUID.
+            svc (String): Service replicas.
+            env (dict, optional): dictionary of environment variable names and
+                values (EnvironmentVariables). Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas pool query command fails.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("list-attrs")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.env = env
+        return self._get_result()
+
+    def get_pool_uuid(self, query_stdout):
+        """Get pool UUID from pool query output.
+
+        Sample pool query output.
+        04/19-18:31:26.90 wolf-3 Pool 3e59b386-fda0-404e-af7e-3ff0a38d1f81,
+            ntarget=8, disabled=0
+        04/19-18:31:26.90 wolf-3 Pool space info:
+        04/19-18:31:26.90 wolf-3 - Target(VOS) count:8
+        04/19-18:31:26.90 wolf-3 - SCM:
+        04/19-18:31:26.90 wolf-3   Total size: 1000000000
+        04/19-18:31:26.90 wolf-3   Free: 999997440, min:124999680,
+            max:124999680, mean:124999680
+        04/19-18:31:26.90 wolf-3 - NVMe:
+        04/19-18:31:26.90 wolf-3   Total size: 0
+        04/19-18:31:26.90 wolf-3   Free: 0, min:0, max:0, mean:0
+        04/19-18:31:26.90 wolf-3 Rebuild idle, 0 objs, 0 recs
+
+        Args:
+            stdout (String): daos pool query output.
+
+        Returns:
+            String: Pool UUID.
+        """
+        uuid_pattern = re.compile('([0-9a-f-]{36})')
+        uuid_match = uuid_pattern.search(query_stdout)
+        return uuid_match.group()
+
+    def get_sizes(self, query_stdout):
+        """Get SCM and NVMe size values from pool query output.
+
+        Args:
+            stdout (String): daos pool query output.
+
+        Returns:
+            List of string: SCM size (1st element) and NVMe size (2nd element).
+        """
+        return re.findall("Total size: (\d+)", query_stdout)
