@@ -25,6 +25,7 @@ syntax = "proto3";
 package mgmt;
 
 import "pool.proto";
+import "cont.proto";
 import "srv.proto";
 import "storage_query.proto"; // storage query req/resp BIO data and SMD device list
 import "acl.proto"; // ACL-related requests
@@ -105,4 +106,6 @@ service MgmtSvc {
 	rpc PingRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS IO servers on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
+	// Change the owner of a DAOS container
+	rpc ContSetOwner(ContSetOwnerReq) returns (ContSetOwnerResp) {}
 }

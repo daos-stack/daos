@@ -126,4 +126,16 @@ extern daos_pool_info_t	ds_mgmt_pool_query_info_in;
 extern void		*ds_mgmt_pool_query_info_ptr;
 void mock_ds_mgmt_pool_query_setup(void);
 
+/*
+ * Mock ds_mgmt_cont_set_owner
+ */
+extern int	ds_mgmt_cont_set_owner_return;
+extern uuid_t	ds_mgmt_cont_set_owner_pool;
+extern uuid_t	ds_mgmt_cont_set_owner_cont;
+extern char	*ds_mgmt_cont_set_owner_user;
+extern char	*ds_mgmt_cont_set_owner_group;
+void mock_ds_mgmt_cont_set_owner_setup(void);
+void mock_ds_mgmt_cont_set_owner_teardown(void);
+
+
 #endif /* __MGMT_TESTS_MOCKS_H__ */

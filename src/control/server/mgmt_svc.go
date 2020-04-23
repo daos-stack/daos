@@ -369,3 +369,27 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 
 	return resp, nil
 }
+
+// ContSetOwner forwards a gRPC request to the DAOS IO server to change a container's ownership.
+func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerReq) (*mgmtpb.ContSetOwnerResp, error) {
+	svc.log.Debugf("MgmtSvc.ContSetOwner dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodContSetOwner, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.ContSetOwnerResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal ContSetOwner response")
+	}
+
+	svc.log.Debugf("MgmtSvc.ContSetOwner dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
