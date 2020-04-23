@@ -1,143 +1,175 @@
-//
-// (C) Copyright 2020 Intel Corporation.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
-//
+	//
+	// (C) Copyright 2020 Intel Corporation.
+	//
+	// Licensed under the Apache License, Version 2.0 (the "License");
+	// you may not use this file except in compliance with the License.
+	// You may obtain a copy of the License at
+	//
+	//    http://www.apache.org/licenses/LICENSE-2.0
+	//
+	// Unless required by applicable law or agreed to in writing, software
+	// distributed under the License is distributed on an "AS IS" BASIS,
+	// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+	// See the License for the specific language governing permissions and
+	// limitations under the License.
+	//
+	// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+	// The Government's rights to use, modify, reproduce, release, perform, display,
+	// or disclose this software are subject to the terms of the Apache License as
+	// provided in Contract No. 8F-30005.
+	// Any reproduction of computer software, computer software documentation, or
+	// portions thereof marked with this legend must also reproduce the markings.
+	//
 
-package server
+	package server
 
-import (
-	"strings"
+	import (
+		"strings"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
-	"golang.org/x/net/context"
+		"github.com/golang/protobuf/proto"
+		"github.com/pkg/errors"
+		"golang.org/x/net/context"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
-)
+		mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+		"github.com/daos-stack/daos/src/control/drpc"
+		"github.com/daos-stack/daos/src/control/server/ioserver"
+	)
 
-// PoolCreate implements the method defined for the Management Service.
-//
-// Validate minimum SCM/NVMe pool size per VOS target, pool size request params
-// are per-ioserver so need to be larger than (minimum_target_allocation *
-// target_count).
-func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (*mgmtpb.PoolCreateResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	// PoolCreate implements the method defined for the Management Service.
+	//
+	// Validate minimum SCM/NVMe pool size per VOS target, pool size request params
+	// are per-ioserver so need to be larger than (minimum_target_allocation *
+	// target_count).
+	func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (*mgmtpb.PoolCreateResp, error) {
+		if req == nil {
+			return nil, errors.New("nil request")
+		}
+
+		svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
+
+		mi, err := svc.harness.GetMSLeaderInstance()
+		if err != nil {
+			return nil, err
+		}
+
+		targetCount := mi.runner.GetConfig().TargetCount
+		if targetCount == 0 {
+			return nil, errors.New("zero target count")
+		}
+		if req.Scmbytes < ioserver.ScmMinBytesPerTarget*uint64(targetCount) {
+			return nil, FaultPoolScmTooSmall(req.Scmbytes, targetCount)
+		}
+		if req.Nvmebytes != 0 && req.Nvmebytes < ioserver.NvmeMinBytesPerTarget*uint64(targetCount) {
+			return nil, FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
+		}
+
+		dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, req)
+		if err != nil {
+			return nil, err
+		}
+
+		resp := &mgmtpb.PoolCreateResp{}
+		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal PoolCreate response")
+		}
+
+		svc.log.Debugf("MgmtSvc.PoolCreate dispatch, resp:%+v\n", *resp)
+
+		return resp, nil
 	}
 
-	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
+	// PoolDestroy implements the method defined for the Management Service.
+	func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
+		if req == nil {
+			return nil, errors.New("nil request")
+		}
+		if req.GetUuid() == "" {
+			// TODO: do we want to validate pool exists via ListPools?
+			return nil, errors.New("nil UUID")
+		}
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
+		svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
+
+		mi, err := svc.harness.GetMSLeaderInstance()
+		if err != nil {
+			return nil, err
+		}
+
+		dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolDestroy, req)
+		if err != nil {
+			return nil, err
+		}
+
+		resp := &mgmtpb.PoolDestroyResp{}
+		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal PoolDestroy response")
+		}
+
+		svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", *resp)
+
+		return resp, nil
 	}
 
-	targetCount := mi.runner.GetConfig().TargetCount
-	if targetCount == 0 {
-		return nil, errors.New("zero target count")
-	}
-	if req.Scmbytes < ioserver.ScmMinBytesPerTarget*uint64(targetCount) {
-		return nil, FaultPoolScmTooSmall(req.Scmbytes, targetCount)
-	}
-	if req.Nvmebytes != 0 && req.Nvmebytes < ioserver.NvmeMinBytesPerTarget*uint64(targetCount) {
-		return nil, FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
-	}
+	// PoolExclude implements the method defined for the Management Service.
+	func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq) (*mgmtpb.PoolExcludeResp, error) {
+		if req == nil {
+			return nil, errors.New("nil request")
+		}
+		if req.GetUuid() == "" {
+			// TODO: do we want to validate pool exists via ListPools?
+			return nil, errors.New("nil UUID")
+		}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, req)
-	if err != nil {
-		return nil, err
-	}
+		svc.log.Debugf("MgmtSvc.PoolExclude dispatch, req:%+v\n", *req)
 
-	resp := &mgmtpb.PoolCreateResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
-	}
+		mi, err := svc.harness.GetMSLeaderInstance()
+		if err != nil {
+			return nil, err
+		}
 
-	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, resp:%+v\n", *resp)
+		dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolExclude, req)
+		if err != nil {
+			return nil, err
+		}
+
+		resp := &mgmtpb.PoolExcludeResp{}
+		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal PoolExclude response")
+		}
+
+		svc.log.Debugf("MgmtSvc.PoolExclude dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }
 
-// PoolDestroy implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
-	}
-	if req.GetUuid() == "" {
-		// TODO: do we want to validate pool exists via ListPools?
-		return nil, errors.New("nil UUID")
-	}
+	// PoolReintegrate implements the method defined for the Management Service.
+	func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq) (*mgmtpb.PoolReintegrateResp, error) {
+		if req == nil {
+			return nil, errors.New("nil request")
+		}
+		if req.GetUuid() == "" {
+			// TODO: do we want to validate pool exists via ListPools?
+			return nil, errors.New("nil UUID")
+		}
 
-	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
+		svc.log.Debugf("MgmtSvc.PoolReintegrate dispatch, req:%+v\n", *req)
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
+		mi, err := svc.harness.GetMSLeaderInstance()
+		if err != nil {
+			return nil, err
+		}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolDestroy, req)
-	if err != nil {
-		return nil, err
-	}
+		dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolReintegrate, req)
+		if err != nil {
+			return nil, err
+		}
 
-	resp := &mgmtpb.PoolDestroyResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolDestroy response")
-	}
+		resp := &mgmtpb.PoolReintegrateResp{}
+		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal PoolReintegrate response")
+		}
 
-	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", *resp)
-
-	return resp, nil
-}
-
-// PoolReintegrate implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq) (*mgmtpb.PoolReintegrateResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
-	}
-	if req.GetUuid() == "" {
-		// TODO: do we want to validate pool exists via ListPools?
-		return nil, errors.New("nil UUID")
-	}
-
-	svc.log.Debugf("MgmtSvc.PoolReintegrate dispatch, req:%+v\n", *req)
-
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolReintegrate, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.PoolReintegrateResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolReintegrate response")
-	}
-
-	svc.log.Debugf("MgmtSvc.PoolReintegrate dispatch, resp:%+v\n", *resp)
+		svc.log.Debugf("MgmtSvc.PoolReintegrate dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

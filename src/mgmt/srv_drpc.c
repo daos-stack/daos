@@ -565,17 +565,85 @@ out:
 	mgmt__pool_destroy_req__free_unpacked(req, NULL);
 }
 
+int
+ds_mgmt_pool_change_operation(char *id, size_t n_targetidx, uint32_t *targetidx,
+		uint32_t rank, pool_comp_state_t state)
+{
+	uuid_t				uuid;
+	struct pool_target_id_list	reint_list;
+	int				rc, i;
+
+	rc = uuid_parse(id, uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", id,
+			DP_RC(rc));
+		return -DER_INVAL;
+	}
+
+	rc = pool_target_id_list_alloc(n_targetidx, &reint_list);
+	if (rc)
+		return rc;
+
+	for (i = 0; i < n_targetidx; ++i)
+		reint_list.pti_ids[i].pti_id = targetidx[i];
+
+	rc = ds_mgmt_pool_target_update(uuid, rank, &reint_list, state);
+	if (rc != 0) {
+		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", uuid,
+			DP_RC(rc));
+	}
+
+	pool_target_id_list_free(&reint_list);
+	return 0;
+}
+
+void
+ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolExcludeReq	*req = NULL;
+	Mgmt__PoolExcludeResp	resp;
+	uint8_t					*body;
+	size_t					len;
+	int						rc;
+
+	mgmt__pool_exclude_resp__init(&resp);
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_exclude_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (Exclude target)\n");
+		return;
+	}
+
+	rc = ds_mgmt_pool_change_operation(req->uuid, req->n_targetidx,
+			req->targetidx, req->rank, PO_COMP_ST_DOWN);
+
+	resp.status = rc;
+	len = mgmt__pool_exclude_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_exclude_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_exclude_req__free_unpacked(req, NULL);
+}
+
 void
 ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__PoolReintegrateReq	*req = NULL;
 	Mgmt__PoolReintegrateResp	resp;
-	uuid_t				uuid;
-	struct pool_target_id_list	reint_list;
-	uint32_t			reint_rank;
-	uint8_t				*body;
-	size_t				len;
-	int				rc, i;
+	uint8_t						*body;
+	size_t						len;
+	int							rc;
 
 	mgmt__pool_reintegrate_resp__init(&resp);
 
@@ -589,30 +657,9 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = uuid_parse(req->uuid, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
-			DP_RC(rc));
-		rc = -DER_INVAL;
-		goto out;
-	}
+	rc = ds_mgmt_pool_change_operation(req->uuid, req->n_targetidx,
+			req->targetidx, req->rank, PO_COMP_ST_UP);
 
-	rc = pool_target_id_list_alloc(req->n_targetidx, &reint_list);
-	if (rc)
-		D_GOTO(out, rc);
-
-	reint_rank = req->rank;
-	for (i = 0; i < req->n_targetidx; ++i)
-		reint_list.pti_ids[i].pti_id = req->targetidx[i];
-
-	rc = ds_mgmt_pool_reintegrate(uuid, reint_rank, &reint_list);
-	if (rc != 0) {
-		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", req->uuid,
-			DP_RC(rc));
-	}
-
-	pool_target_id_list_free(&reint_list);
-out:
 	resp.status = rc;
 	len = mgmt__pool_reintegrate_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);

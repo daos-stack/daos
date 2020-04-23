@@ -542,6 +542,7 @@ rebuild_drop_scan(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
+	exit(0);
 	/* Set drop scan fail_loc on server 0 */
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
