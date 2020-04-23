@@ -136,13 +136,7 @@ class NvmePoolCapacity(TestWithServers):
                 try:
                     manager.run()
                 except CommandFailure as _error:
-                    # If block_size 160G, it is expected to fail due to ENOSPC.
-                    self.log.info("Block Size: %s", test[1])
-                    if ((test[1] == "214748364800") or
-                       (test[1] == "429496729600")):
-                        results.put("PASS")
-                    else:
-                        results.put("FAIL")
+                    results.put("FAIL")
 
     def test_create_delete(self, num_pool=2, num_cont=5, total_count=10):
         """
@@ -228,8 +222,11 @@ class NvmePoolCapacity(TestWithServers):
                 thrd.join()
 
             # Verify the queue and make sure no FAIL for any IOR run
+            # For 200G/400G, test should fail with ENOSPC.
             while not self.out_queue.empty():
-                if self.out_queue.get() == "FAIL":
+                if ((self.out_queue.get()) == "FAIL" and
+                   (pool[val].nvme_size.value != 214748364800) and
+                   (pool[val].nvme_size.value != 429496729600)):
                     self.fail("FAIL")
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
