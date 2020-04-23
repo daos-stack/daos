@@ -649,6 +649,8 @@ class SoakTestBase(TestWithServers):
 
         # Create the sbatch script for each cmdline
         for cmd, log_name in commands:
+            if isinstance(cmd, str):
+                cmd = [cmd]
             output = os.path.join(self.test_log_dir, "%N_" +
                                   self.test_name + "_" + job + "_%j_%t_" +
                                   str(ppn*nodesperjob) + "_" + log_name + "_")
@@ -666,7 +668,7 @@ class SoakTestBase(TestWithServers):
             unique = get_random_string(5, self.used)
             script = slurm_utils.write_slurm_script(
                 self.test_log_dir, job, output, nodesperjob,
-                agent_launch_cmds + list(cmd), unique, sbatch)
+                agent_launch_cmds + cmd, unique, sbatch)
             script_list.append(script)
             self.used.append(unique)
         return script_list
