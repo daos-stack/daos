@@ -26,7 +26,6 @@ package bdev
 import (
 	"encoding/json"
 	"os"
-	"sync"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -49,8 +48,6 @@ type (
 		log     logging.Logger
 		binding *spdkWrapper
 		script  *spdkSetupScript
-
-		sync.Mutex
 	}
 )
 
@@ -204,11 +201,8 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 }
 
 func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
-	b.Lock()
-	defer b.Unlock()
-
-	if !b.binding.initialized {
-		return nil, errors.New("spdk not initialised, please run 'storage scan' command first")
+	if err := b.Init(); err != nil {
+		return nil, err
 	}
 
 	ctrlr, err := getController(pciAddr, b.binding.controllers)
