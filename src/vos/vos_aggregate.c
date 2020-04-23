@@ -28,7 +28,9 @@
 #include <daos_srv/vos.h>
 #include <daos/object.h>	/* for daos_unit_oid_compare() */
 #include <daos/checksum.h>
+#include <daos/placement.h>
 #include <daos_srv/srv_csum.h>
+#include <daos_srv/pool.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
 
@@ -1876,6 +1878,18 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 }
 
 static int
+commited_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *value, void *arg)
+{
+        struct vos_dtx_cmt_ent	*dce = value->iov_buf;
+	struct pl_obj_layout	*layout;
+
+	D_PRINT("oid: "DF_UOID", epoch: "DF_U64"\n",
+		DP_UOID(dce->dce_base.dce_oid), dce->dce_base.dce_epoch);
+	int rc = ds_pool_check_leader(0, &dce->dce_base.dce_oid, 0, &layout);
+	D_PRINT("rc == %d\nb", rc);
+	return 0;
+}
+static int
 aggregate_enter(struct vos_container *cont, bool discard)
 {
 	if (cont->vc_in_aggregation) {
@@ -1883,6 +1897,8 @@ aggregate_enter(struct vos_container *cont, bool discard)
 			DP_CONT(cont->vc_pool->vp_id, cont->vc_id), discard);
 		return -DER_BUSY;
 	}
+	dbtree_iterate(cont->vc_dtx_committed_hdl, DAOS_INTENT_DEFAULT, false,
+		       commited_dtx_cb, NULL);
 
 	cont->vc_in_aggregation = 1;
 	cont->vc_abort_aggregation = 0;

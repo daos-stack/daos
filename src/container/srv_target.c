@@ -67,6 +67,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	 */
 	if (cont->sc_abort_vos_aggregating)
 		return 1;
+	obj_ec_aggregate(cont);
 	return vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc);
 }
 
