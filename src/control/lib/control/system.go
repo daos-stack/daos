@@ -232,9 +232,6 @@ func (srr *SystemRanksResp) addHostResponse(hr *HostResponse) (err error) {
 		return srr.HostErrors.Add(hr.Addr, err)
 	}
 
-	if srr.RankResults == nil {
-		srr.RankResults = make(system.MemberResults, 0)
-	}
 	srr.RankResults = append(srr.RankResults, memberResults...)
 
 	return

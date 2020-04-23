@@ -237,14 +237,12 @@ func (svc *ControlService) prepShutdown(ctx context.Context, rankList []system.R
 func (svc *ControlService) resultsFromUnreachableHosts(hostRanks map[string][]system.Rank, hostErrors control.HostErrorsMap) system.MemberResults {
 	ranks := make([]system.Rank, 0, len(hostRanks)*maxIOServers)
 
-	// add rank results for any on reachable harness addrs
+	// synthesise "Stopped" rank results for any harness host errors
 	for errMsg, hostSet := range hostErrors {
-		if !strings.Contains(errMsg, "connection refused") {
-			continue
-		}
 		for _, addr := range strings.Split(hostSet.DerangedString(), ",") {
 			ranks = append(ranks, hostRanks[addr]...)
-			svc.log.Debugf("no response from harness %s", addr)
+			svc.log.Debugf("harness %s (ranks %v) host error: %s",
+				addr, hostRanks[addr], errMsg)
 		}
 	}
 
