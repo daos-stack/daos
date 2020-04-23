@@ -32,6 +32,7 @@ from control_test_base import ControlTestBase
 
 
 class NetDevList(object):
+    # pylint: disable=too-few-public-methods
     """ A class that holds a list of NetDev objects."""
     def __init__(self, netdevs=None):
         """ Initialize a list of netdevices."""
@@ -59,6 +60,7 @@ class NetDevList(object):
 
 
 class NetDev(object):
+    # pylint: disable=too-few-public-methods
     """A class to represent the information of a network device"""
     def __init__(self, host=None, f_iface=None, providers=None, numa=None):
         """ Initialize the network device data object."""
@@ -101,6 +103,7 @@ class NetDev(object):
 
 
 class DmgNetworkScanTest(ControlTestBase):
+    # pylint: disable=too-many-ancestors
     """Test Class Description:
     Simple test to verify the network scan function of the dmg tool.
     :avocado: recursive
@@ -112,6 +115,7 @@ class DmgNetworkScanTest(ControlTestBase):
         self.setup_start_agents = False
 
     def get_devs(self):
+        #pylint: disable=no-self-use
         """ Get list of devices."""
         devs = []
         for dev in os.listdir("/sys/class/net/"):
