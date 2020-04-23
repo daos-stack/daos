@@ -152,15 +152,6 @@ class MpioUtils():
                         fqtp
                     ]
                 )
-                test_cmd = [env.get_export_str(),
-                            'echo ***Running {}*** ;'.format(fqtp),
-                            mpirun,
-                            '-np',
-                            str(client_processes),
-                            '--hostfile',
-                            hostfile,
-                            fqtp + ';']
-                cmd += " ".join(test_cmd)
         else:
             raise MpioFailed(
                 "Wrong test name ({}) or test repo location ({}) "
