@@ -31,8 +31,7 @@ from avocado.utils import process
 
 from command_utils_base import \
     CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
-    CommandWithParameters, YamlParameters, FormattedParameter, \
-    EnvironmentVariables
+    CommandWithParameters, YamlParameters, EnvironmentVariables
 from general_utils import check_file_exists, stop_processes, get_log_file
 
 
@@ -183,31 +182,45 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         if self._process is not None:
-            # Use a list to send signals to the process with one second delays:
-            #   Interupt + wait 3 seconds
-            #   Terminate + wait 2 seconds
-            #   Quit + wait 1 second
-            #   Kill
-            signal_list = [
-                signal.SIGINT, None, None, None,
-                signal.SIGTERM, None, None,
-                signal.SIGQUIT, None,
-                signal.SIGKILL]
+            # Send a SIGTERM to the stop the subprocess and if it is still
+            # running after 5 seconds send a SIGKILL and report an error
+            signal_list = [signal.SIGTERM, signal.SIGKILL]
 
             # Turn off verbosity to keep the logs clean as the server stops
             self._process.verbose = False
 
-            # Keep sending signals and or waiting while the process is alive
+            # Send signals while the process is still running
             while self._process.poll() is None and signal_list:
-                signal_type = signal_list.pop(0)
-                if signal_type is not None:
-                    self._process.send_signal(signal_type)
+                signal_to_send = signal_list.pop(0)
+                msg = "before sending signal {}".format(signal_to_send)
+                self.display_subprocess_state(msg)
+                self.log.info(
+                    "Sending signal %s to %s", str(signal_to_send),
+                    self._command)
+                self._process.send_signal(signal_to_send)
                 if signal_list:
-                    time.sleep(1)
+                    time.sleep(5)
+
             if not signal_list:
                 # Indicate an error if the process required a SIGKILL
                 raise CommandFailure("Error stopping '{}'".format(self))
+
             self._process = None
+
+    def display_subprocess_state(self, message=None):
+        """Display the state of the subprocess.
+
+        Args:
+            message (str, optional): additional text to include in output.
+                Defaults to None.
+        """
+        if self._process is not None:
+            command = ["/usr/bin/pstree", "-pls", self._process.get_pid()]
+            result = process.run(command, 10, True, True, "combined", False)
+            self.log.debug(
+                "Processes still running%s:\n  %s",
+                " {}".format(message) if message else "",
+                "  \n".join(result.stdout_text.splitlines()))
 
     def get_output(self, method_name, **kwargs):
         """Get output from the command issued by the specified method.
@@ -391,60 +404,6 @@ class CommandWithSubCommand(ExecutableCommand):
         """
         self.sub_command.value = value
         self.get_sub_command_class()
-
-
-class DaosCommand(ExecutableCommand):
-    """A class for similar daos command line tools."""
-
-    def __init__(self, namespace, command, path=""):
-        """Create DaosCommand object.
-
-        Specific type of command object built so command str returns:
-            <command> <options> <request> <action/subcommand> <options>
-
-        Args:
-            namespace (str): yaml namespace (path to parameters)
-            command (str): string of the command to be executed.
-            path (str): path to location of daos command binary.
-        """
-        super(DaosCommand, self).__init__(namespace, command, path)
-        self.request = BasicParameter(None)
-        self.action = BasicParameter(None)
-        self.action_command = None
-
-    def get_action_command(self):
-        """Assign a command object for the specified request and action."""
-        self.action_command = None
-
-    def get_param_names(self):
-        """Get a sorted list of DaosCommand parameter names."""
-        names = self.get_attribute_names(FormattedParameter)
-        names.extend(["request", "action"])
-        return names
-
-    def get_params(self, test):
-        """Get values for all of the command params from the yaml file.
-
-        Args:
-            test (Test): avocado Test object
-        """
-        super(DaosCommand, self).get_params(test)
-        self.get_action_command()
-        if isinstance(self.action_command, ObjectWithParameters):
-            self.action_command.get_params(test)
-
-    def get_str_param_names(self):
-        """Get a sorted list of the names of the command attributes.
-
-        Returns:
-            list: a list of class attribute names used to define parameters
-                for the command.
-
-        """
-        names = self.get_param_names()
-        if self.action_command is not None:
-            names[-1] = "action_command"
-        return names
 
 
 class SubProcessCommand(CommandWithSubCommand):

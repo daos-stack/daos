@@ -27,8 +27,8 @@ import re
 import uuid
 from enum import IntEnum
 
-from command_utils import FormattedParameter, ExecutableCommand
-from command_utils import CommandFailure
+from command_utils_base import FormattedParameter, CommandFailure
+from command_utils import ExecutableCommand
 
 
 class IorCommand(ExecutableCommand):
@@ -42,8 +42,9 @@ class IorCommand(ExecutableCommand):
         >>> mpirun = Mpirun()
         >>> server_manager = self.server_manager[0]
         >>> env = self.ior_cmd.get_environment(server_manager, self.client_log)
-        >>> processes = len(self.hostlist_clients)
-        >>> mpirun.setup_command(env, self.hostfile_clients, processes)
+        >>> mpirun.assign_hosts(self.hostlist_clients, self.workdir, None)
+        >>> mpirun.assign_processes(len(self.hostlist_clients))
+        >>> mpirun.assign_environment(env)
         >>> mpirun.run()
     """
 

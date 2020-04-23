@@ -156,9 +156,11 @@ class ContainerCreate(TestWithServers):
             # Get ior params
             mpirun = Mpirun(IorCommand())
             mpirun.job.get_params(self)
-            mpirun.setup_command(
-                mpirun.job.get_default_env("mpirun"),
-                self.hostfile_clients, len(self.hostlist_clients))
+            mpirun.assign_hosts(
+                self.hostlist_clients, self.workdir,
+                self.hostfile_clients_slots)
+            mpirun.assign_processes(len(self.hostlist_clients))
+            mpirun.assign_environment(mpirun.job.get_default_env("mpirun"))
 
         # Cancel any tests with tickets already assigned
         if rank in (1, 2):

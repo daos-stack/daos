@@ -33,7 +33,6 @@ from command_utils import CommandFailure
 from job_manager_utils import Mpirun, Orterun
 from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
-import write_host_file
 
 
 class MdtestBase(TestWithServers):
@@ -72,9 +71,6 @@ class MdtestBase(TestWithServers):
         if self.mdtest_cmd.api.value == "POSIX":
             self.log.info("Restricting mdtest to one node")
             self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
 
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
@@ -187,7 +183,10 @@ class MdtestBase(TestWithServers):
             processes (int): number of host processes
         """
         env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
-        manager.setup_command(env, self.hostfile_clients, processes)
+        manager.assign_hosts(
+            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_processes(processes)
+        manager.assign_environment(env)
         try:
             self.pool.display_pool_daos_space()
             manager.run()
