@@ -923,7 +923,7 @@ def archive_config_files(avocado_logs_dir):
         "set -eu",
         "rc=0",
         "copied=()",
-        "for file in $(ls {}/daos_*.yaml)".format(config_file_dir),
+        "for file in $(ls {}/test_*.yaml)".format(config_file_dir),
         "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_logs_dir),
         "then copied+=($file)",
@@ -960,17 +960,16 @@ def rename_logs(avocado_logs_dir, test_file):
 
 USE_DEBUGINFO_INSTALL = True
 
-def install_debuginfos():
-    """Install debuginfo packages"""
 
+def install_debuginfos():
+    """Install debuginfo packages."""
     install_pkgs = [{'name': 'gdb'}, {'name': 'python-magic'}]
     cmds = []
 
     if USE_DEBUGINFO_INSTALL:
-        cmds.append("sudo debuginfo-install -y "                   \
-                    "--exclude ompi-debuginfo,gcc-debuginfo,"      \
-                               "gcc-base-debuginfo "               \
-                    "daos-server libpmemobj python openmpi3")
+        cmds.append(
+            "sudo debuginfo-install -y --exclude ompi-debuginfo,gcc-debuginfo,"
+            "gcc-base-debuginfo daos-server libpmemobj python openmpi3")
     else:
         import yum
 
@@ -984,8 +983,8 @@ def install_debuginfos():
 
         # We're not using the yum API to install packages
         # See the comments below.
-        #kwarg = {'name': 'gdb'}
-        #yum_base.install(**kwarg)
+        # kwarg = {'name': 'gdb'}
+        # yum_base.install(**kwarg)
 
         for pkg in ['python', 'glibc', 'daos', 'systemd', 'ndctl', 'libpmem',
                     'mercury', 'libfabric', 'argobots']:
@@ -1004,10 +1003,10 @@ def install_debuginfos():
                     raise
             # This is how you actually use the API to add a package
             # But since we need sudo to do it, we need to call out to yum
-            #kwarg = {'name': debug_pkg,
+            # kwarg = {'name': debug_pkg,
             #         'version': pkg_data['version'],
             #         'release': pkg_data['release']}
-            #yum_base.install(**kwarg)
+            # yum_base.install(**kwarg)
             install_pkgs.append({'name': debug_pkg,
                                  'version': pkg_data['version'],
                                  'release': pkg_data['release'],
@@ -1015,9 +1014,9 @@ def install_debuginfos():
 
     # This is how you normally finish up a yum transaction, but
     # again, we need to employ sudo
-    #yum_base.resolveDeps()
-    #yum_base.buildTransaction()
-    #yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
+    # yum_base.resolveDeps()
+    # yum_base.buildTransaction()
+    # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
     cmd = "sudo yum -y --enablerepo=\\*debug\\* install"
     for pkg in install_pkgs:
         try:
