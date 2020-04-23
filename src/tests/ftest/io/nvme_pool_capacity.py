@@ -94,21 +94,16 @@ class NvmePoolCapacity(TestWithServers):
                                                     self.ior_transfer_size,
                                                     self.ior_flags):
                 # Define the arguments for the ior_runner_thread method
-                if (test_case < 4) and (test[1] == "33554432"):
-                    continue
-                # Check for full NVMe size (360G, 800G: ENOSPC)
-                if (test_case == 2) and (test[1] == "193273528320"):
-                    test[1] = "386547056640"
-                elif (test_case == 2) and (test[1] == "214748364800"):
-                    test[1] = "429496729600"
-                else:
-                    self.log.info("Using block size : %s", test[1])
                 ior_cmd = IorCommand()
                 ior_cmd.get_params(self)
                 ior_cmd.set_daos_params(self.server_group, self.pool)
                 ior_cmd.daos_oclass.update(oclass)
                 ior_cmd.api.update(api)
                 ior_cmd.transfer_size.update(test[0])
+                # For test case 1, reduce the block size so that
+                # IOR aggregation file size < NVME size.
+                if test_case == 1:
+                    test[1] = test[1] / 4
                 # Update the block size based on no of jobs.
                 actual_block_size = (round(float(test[1])) /
                                      (num_jobs * pool_len))
@@ -138,7 +133,7 @@ class NvmePoolCapacity(TestWithServers):
                 except CommandFailure as _error:
                     results.put("FAIL")
 
-    def test_create_delete(self, num_pool=2, num_cont=5, total_count=10):
+    def test_create_delete(self, num_pool=2, num_cont=5, total_count=100):
         """
         Test Description:
             This method is called with
@@ -156,6 +151,11 @@ class NvmePoolCapacity(TestWithServers):
                 pool[val] = TestPool(self.context,
                                      dmg_command=self.get_dmg_command())
                 pool[val].get_params(self)
+                # Split total SCM and NVME size for creating multiple pools.
+                split_pool_scm_size = pool[val].scm_size.value / num_pool
+                split_pool_nvme_size = pool[val].nvme_size.value / num_pool
+                pool[val].scm_size.update(split_pool_scm_size)
+                pool[val].nvme_size.update(split_pool_nvme_size)
                 pool[val].create()
                 display_string = "pool{} space at the Beginning".format(val)
                 pool[val].display_pool_daos_space(display_string)
@@ -163,11 +163,11 @@ class NvmePoolCapacity(TestWithServers):
                     cont[cont_val] = TestContainer(pool[val])
 
             for val in range(0, num_pool):
+                pool[val].destroy()
                 display_string = "Pool{} space at the End".format(val)
                 pool[val].display_pool_daos_space(display_string)
-                pool[val].destroy()
 
-    def test_run(self, test_case, num_pool=1):
+    def test_run(self, test_case, num_pool=1, full_ssd_test=0):
         """
         Test Description:
             This method is called with different test_case,
@@ -184,7 +184,11 @@ class NvmePoolCapacity(TestWithServers):
             pool[val] = TestPool(self.context,
                                  dmg_command=self.get_dmg_command())
             pool[val].get_params(self)
-            # Split the total SCM and NVME size for creating nultiple pools.
+            # For test case 1, use only half disk space.
+            if (test_case == 1) and (full_ssd_test == 0):
+                pool[val].scm_size.value = pool[val].scm_size.value / 2
+                pool[val].nvme_size.value = pool[val].nvme_size.value / 2
+            # Split the total SCM and NVME size for creating multiple pools.
             split_pool_scm_size = pool[val].scm_size.value / num_pool
             split_pool_nvme_size = pool[val].nvme_size.value / num_pool
             pool[val].scm_size.update(split_pool_scm_size)
@@ -218,11 +222,10 @@ class NvmePoolCapacity(TestWithServers):
                 thrd.join()
 
             # Verify the queue and make sure no FAIL for any IOR run
-            # For 200G/400G, test should fail with ENOSPC.
+            # For 400G/800G, test should fail with ENOSPC.
             while not self.out_queue.empty():
                 if (self.out_queue.get()) == "FAIL" and \
-                   (pool[0].nvme_size.value != 214748364800) and \
-                   (pool[0].nvme_size.value != 429496729600):
+                   (test_case != 2):
                     self.fail("FAIL")
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
@@ -236,20 +239,29 @@ class NvmePoolCapacity(TestWithServers):
             Purpose of this test is to verify whether DAOS stack
             report NOSPC when accessing data beyond pool size.
             Use Cases
-             1: Perform IO less than pool capacity.
-             2: Perform IO beyond pool capacity (ENOSPC)
-             3. Perform step 1 and 2 for entire SSD disk space.
+            Test Case 1:
+             1. Perform IO less than entire SSD disk space.
+            Test Case 2:
+             2. Perform IO beyond entire SSD disk space.
+            Test Case 3:
+             3. Create Pool/Container and destroy them several times.
+            Test Case 4:
              4. Multiple Pool/Container testing.
 
         Use case:
         :avocado: tags=all,hw,large,nvme,pr
         :avocado: tags=nvme_pool_capacity
         """
-        # Use Case 1,2 and 3
+        # Test Case 1 with one pool.
+        self.log.info("Running Test Case 1 with one Pool")
         self.test_run(1)
+        # Test Case 1 with two pools, check full SSD.
+        self.log.info("Running Test Case 1 with two Pools")
+        self.test_run(1, 2, 1)
+        # Test Case 2 : with 2 pools
+        self.log.info("Running Test Case 2 with two Pools")
         self.test_run(2, 2)
-
-        # Use Case create/delete pool/container
+        # Test Case 3: create/delete pool/container
+        self.log.info("Running Test Case 3: Pool/Cont Create/Destroy")
         self.test_create_delete()
-        # self.test_create_delete(10, 50, 100)
-        # self.test_create_delete(10, 50, 100)
+        self.test_create_delete(10, 50, 100)

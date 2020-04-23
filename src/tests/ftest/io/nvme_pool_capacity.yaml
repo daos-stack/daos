@@ -23,7 +23,7 @@ pool:
     mode: 146
     name: daos_server
     scm_size: 214748364800 #200G
-    nvme_size: 429496729600 #400G
+    nvme_size: 805306368000 #750G
     svcn: 1
     control_method: dmg
 ior:
@@ -40,8 +40,6 @@ ior:
             - DAOS
           transfer_block_size:
           # - [tranfersize, blocksize]
-            - [1073741824, 193273528320] # [1G, 180G]
-            - [1073741824, 214748364800] # [1G, 200G]
-#           - [256, 33554432]   # [256B, 32MB]
+            - [1073741824, 816043786240] # [1G, 760G]
           obj_class:
             - "SX"
