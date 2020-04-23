@@ -53,7 +53,7 @@ class MpioUtils():
         load_mpi('mpich')
         try:
             # checking mpich install
-            command = ["ssh", hostlist[0], "command -v mpichversion"]
+            command = ["/usr/bin/ssh", hostlist[0], "command -v mpichversion"]
             output = subprocess.check_output(command)
             self.mpichinstall = output.rstrip()[:-len('bin/mpichversion')]
             return True
