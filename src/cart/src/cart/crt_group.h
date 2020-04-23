@@ -42,6 +42,7 @@
 #ifndef __CRT_GROUP_H__
 #define __CRT_GROUP_H__
 
+#include <gurt/atomic.h>
 #include "crt_swim.h"
 
 
@@ -224,7 +225,7 @@ struct crt_uri_item {
 
 	/* URI string for each remote tag */
 	/* TODO: in phase2 change this to hash table */
-	crt_phy_addr_t	ui_uri[CRT_SRV_CONTEXT_NUM];
+	ATOMIC crt_phy_addr_t ui_uri[CRT_SRV_CONTEXT_NUM];
 
 	/* Primary rank; for secondary groups only  */
 	d_rank_t	ui_pri_rank;
@@ -237,9 +238,6 @@ struct crt_uri_item {
 
 	/* flag indicating whether initialized */
 	uint32_t	ui_initialized:1;
-
-	/* mutex for protection of ui_ref */
-	pthread_mutex_t ui_mutex;
 };
 
 /* lookup cache item for one target */
