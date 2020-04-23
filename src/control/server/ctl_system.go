@@ -233,8 +233,8 @@ func (svc *ControlService) prepShutdown(ctx context.Context, rankList []system.R
 	return results, nil
 }
 
-// resultsFromUnreachableHosts generates member results for ranks on unreachable hosts.
-func (svc *ControlService) resultsFromUnreachableHosts(hostRanks map[string][]system.Rank, hostErrors control.HostErrorsMap) system.MemberResults {
+// resultsFromBadHosts generates member results for ranks on unreachable hosts.
+func (svc *ControlService) resultsFromBadHosts(hostRanks map[string][]system.Rank, hostErrors control.HostErrorsMap) system.MemberResults {
 	ranks := make([]system.Rank, 0, len(hostRanks)*maxIOServers)
 
 	// synthesise "Stopped" rank results for any harness host errors
@@ -247,13 +247,6 @@ func (svc *ControlService) resultsFromUnreachableHosts(hostRanks map[string][]sy
 	}
 
 	return svc.reportStoppedRanks("stop", ranks, nil)
-}
-
-func (svc *ControlService) systemStop(ctx context.Context, rankList []system.Rank, hostList []string) (*control.SystemRanksResp, error) {
-	req := &control.SystemRanksReq{Ranks: rankList}
-	req.SetHostList(hostList)
-
-	return control.SystemStopRanks(ctx, svc.rpcClient, req)
 }
 
 // shutdown requests registered harnesses to stop its instances (system members).
@@ -288,23 +281,26 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool, rankList []
 	}
 
 	// stop all ranks except MS leader
-	resp, err := svc.systemStop(ctx, totalRankList, hostList)
+	req := &control.SystemRanksReq{Ranks: totalRankList}
+	req.SetHostList(hostList)
+	resp, err := control.SystemStopRanks(ctx, svc.rpcClient, req)
 	if err != nil {
 		return nil, err
 	}
 	results = append(results,
-		svc.resultsFromUnreachableHosts(hostRanks, resp.HostErrors)...)
+		svc.resultsFromBadHosts(hostRanks, resp.HostErrors)...)
 	results = append(results, resp.RankResults...)
 
 	// stop MS leader rank last if in rankList
 	if len(rankList) == 0 || msRank.InList(rankList) {
-		msResp, err := svc.systemStop(ctx, []system.Rank{msRank}, []string{msAddr})
+		req.Ranks = []system.Rank{msRank}
+		req.SetHostList([]string{msAddr})
+		msResp, err := control.SystemStopRanks(ctx, svc.rpcClient, req)
 		if err != nil {
 			return nil, err
 		}
-		results = append(results,
-			svc.resultsFromUnreachableHosts(hostRanks, msResp.HostErrors)...)
-		results = append(results, resp.RankResults...)
+		results = append(results, svc.resultsFromBadHosts(hostRanks, msResp.HostErrors)...)
+		results = append(results, msResp.RankResults...)
 	}
 
 	if err := svc.membership.UpdateMemberStates(results); err != nil {
