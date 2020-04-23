@@ -174,10 +174,6 @@ class NvmePoolCapacity(TestWithServers):
             num_pool parameter to run differe test case
             scenario's.
             Use Cases
-             1: Perform IO less than pool capacity.
-             2: Perform IO beyond pool capacity (ENOSPC)
-             3. Perform step 1 and 2 for entire SSD disk space.
-             4. Multiple Pool/Container testing.
         """
         no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
@@ -224,9 +220,9 @@ class NvmePoolCapacity(TestWithServers):
             # Verify the queue and make sure no FAIL for any IOR run
             # For 200G/400G, test should fail with ENOSPC.
             while not self.out_queue.empty():
-                if ((self.out_queue.get()) == "FAIL" and
-                   (pool[val].nvme_size.value != 214748364800) and
-                   (pool[val].nvme_size.value != 429496729600)):
+                if (self.out_queue.get()) == "FAIL" and \
+                   (pool[0].nvme_size.value != 214748364800) and \
+                   (pool[0].nvme_size.value != 429496729600):
                     self.fail("FAIL")
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
@@ -239,6 +235,11 @@ class NvmePoolCapacity(TestWithServers):
         Test Description:
             Purpose of this test is to verify whether DAOS stack
             report NOSPC when accessing data beyond pool size.
+            Use Cases
+             1: Perform IO less than pool capacity.
+             2: Perform IO beyond pool capacity (ENOSPC)
+             3. Perform step 1 and 2 for entire SSD disk space.
+             4. Multiple Pool/Container testing.
 
         Use case:
         :avocado: tags=all,hw,large,nvme,pr
