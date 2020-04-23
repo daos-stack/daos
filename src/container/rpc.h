@@ -90,7 +90,7 @@
 		ds_cont_op_handler, NULL),				\
 	X(CONT_PROP_SET,						\
 		0, &CQF_cont_prop_set,					\
-		ds_cont_op_handler, NULL),				\
+		ds_cont_set_prop_handler, NULL),			\
 	X(CONT_ACL_UPDATE,						\
 		0, &CQF_cont_acl_update,				\
 		ds_cont_op_handler, NULL),				\
@@ -216,6 +216,9 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_BITS_NR	(14)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
+
+/** container query target bit, to satisfy querying of daos_cont_info_t */
+#define DAOS_CO_QUERY_TGT		(1ULL << 31)
 
 #define DAOS_ISEQ_CONT_QUERY	/* input fields */		 \
 	((struct cont_op_in)	(cqi_op)		CRT_VAR) \
@@ -370,7 +373,8 @@ CRT_RPC_DECLARE(cont_tgt_snapshot_notify, DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY,
 
 #define DAOS_ISEQ_CONT_PROP_SET	/* input fields */		 \
 	((struct cont_op_in)	(cpsi_op)		CRT_VAR) \
-	((daos_prop_t)		(cpsi_prop)		CRT_PTR)
+	((daos_prop_t)		(cpsi_prop)		CRT_PTR) \
+	((uuid_t)		(cpsi_pool_uuid)	CRT_VAR)
 
 #define DAOS_OSEQ_CONT_PROP_SET	/* output fields */		 \
 	((struct cont_op_out)	(cpso_op)		CRT_VAR)

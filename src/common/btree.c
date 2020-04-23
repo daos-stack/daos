@@ -606,7 +606,12 @@ btr_node_alloc(struct btr_context *tcx, umem_off_t *nd_off_p)
 	struct btr_node		*nd;
 	umem_off_t		 nd_off;
 
-	nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
+	if (btr_ops(tcx)->to_node_alloc != NULL)
+		nd_off = btr_ops(tcx)->to_node_alloc(&tcx->tc_tins,
+						     btr_node_size(tcx));
+	else
+		nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
+
 	if (UMOFF_IS_NULL(nd_off))
 		return btr_umm(tcx)->umm_nospc_rc;
 

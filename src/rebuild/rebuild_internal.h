@@ -29,9 +29,13 @@
 #define __REBUILD_INTERNAL_H__
 
 #include <stdint.h>
+#include <abt.h>
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
 #include <daos/btree.h>
+#include <daos/pool_map.h>
+#include <daos_srv/daos_server.h>
+#include <daos_srv/rebuild.h>
 
 /* Track the pool rebuild status on each target, which exists on
  * all server targets. Then each target will report its rebuild
@@ -45,6 +49,9 @@ struct rebuild_tgt_pool_tracker {
 
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rt_rebuild_ver;
+
+	/** the current rebuild operation */
+	daos_rebuild_opc_t	rt_rebuild_op;
 
 	/** rebuild pool/container hdl uuid */
 	uuid_t			rt_poh_uuid;
@@ -190,6 +197,7 @@ struct rebuild_task {
 	uuid_t				dst_pool_uuid;
 	struct pool_target_id_list	dst_tgts;
 	uint32_t			dst_map_ver;
+	daos_rebuild_opc_t		dst_rebuild_op;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
@@ -294,7 +302,11 @@ int
 rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt);
 
 bool
-is_current_tgt_up(struct rebuild_tgt_pool_tracker *rpt);
+rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
+		enum pool_comp_state states);
+
+bool
+is_current_tgt_unavail(struct rebuild_tgt_pool_tracker *rpt);
 
 typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
 				       uuid_t co_uuid, daos_unit_oid_t oid,

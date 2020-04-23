@@ -33,7 +33,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -167,7 +166,7 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 // PoolReintegrateCmd is the struct representing the command to Add a DAOS target.
 type PoolReintegrateCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
 	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to start reintegration in"`
 	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
 	Targetidx string `long:"target-idx" required:"1" description:"Comma-seperated list of target idx(s) to be reintegrated into the rank"`
@@ -182,9 +181,10 @@ func (r *PoolReintegrateCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing rank list")
 	}
 
-	req := &client.PoolReintegrateReq{UUID: r.UUID, Rank: r.Rank, Targetidx: idxlist}
+	req := &control.PoolReintegrateReq{UUID: r.UUID, Rank: r.Rank, Targetidx: idxlist}
 
-	err := r.conns.PoolReintegrate(req)
+	ctx := context.Background()
+	err := control.PoolReintegrate(ctx, r.ctlClient, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -231,7 +231,8 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 // PoolSetPropCmd represents the command to set a property on a pool.
 type PoolSetPropCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 	UUID     string `long:"pool" required:"1" description:"UUID of DAOS pool"`
 	Property string `short:"n" long:"name" required:"1" description:"Name of property to be set"`
 	Value    string `short:"v" long:"value" required:"1" description:"Value of property to be set"`
@@ -239,7 +240,7 @@ type PoolSetPropCmd struct {
 
 // Execute is run when PoolSetPropCmd subcommand is activated.
 func (c *PoolSetPropCmd) Execute(_ []string) error {
-	req := client.PoolSetPropReq{
+	req := &control.PoolSetPropReq{
 		UUID:     c.UUID,
 		Property: c.Property,
 	}
@@ -249,9 +250,14 @@ func (c *PoolSetPropCmd) Execute(_ []string) error {
 		req.SetNumber(numVal)
 	}
 
-	resp, err := c.conns.PoolSetProp(req)
+	ctx := context.Background()
+	resp, err := control.PoolSetProp(ctx, c.ctlClient, req)
 	if err != nil {
 		return errors.Wrap(err, "pool set-prop failed")
+	}
+
+	if c.jsonOutputEnabled() {
+		return c.outputJSON(os.Stdout, resp)
 	}
 
 	c.log.Infof("pool set-prop succeeded (%s=%q)", resp.Property, resp.Value)
@@ -262,7 +268,8 @@ func (c *PoolSetPropCmd) Execute(_ []string) error {
 // DAOS pool.
 type PoolGetACLCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 	UUID    string `long:"pool" required:"1" description:"UUID of DAOS pool"`
 	File    string `short:"o" long:"outfile" required:"0" description:"Output ACL to file"`
 	Force   bool   `short:"f" long:"force" required:"0" description:"Allow to clobber output file"`
@@ -271,17 +278,21 @@ type PoolGetACLCmd struct {
 
 // Execute is run when the PoolGetACLCmd subcommand is activated
 func (d *PoolGetACLCmd) Execute(args []string) error {
-	req := client.PoolGetACLReq{UUID: d.UUID}
+	req := &control.PoolGetACLReq{UUID: d.UUID}
 
-	resp, err := d.conns.PoolGetACL(req)
+	ctx := context.Background()
+	resp, err := control.PoolGetACL(ctx, d.ctlClient, req)
 	if err != nil {
-		d.log.Infof("Pool-get-ACL command failed: %s\n", err.Error())
-		return err
+		return errors.Wrap(err, "Pool-get-ACL command failed")
 	}
 
 	d.log.Debugf("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
 
-	acl := formatACL(resp.ACL, d.Verbose)
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(os.Stdout, resp.ACL)
+	}
+
+	acl := control.FormatACL(resp.ACL, d.Verbose)
 
 	if d.File != "" {
 		err = d.writeACLToFile(acl)
@@ -325,31 +336,37 @@ func (d *PoolGetACLCmd) writeACLToFile(acl string) error {
 // List of a DAOS pool.
 type PoolOverwriteACLCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 	UUID    string `long:"pool" required:"1" description:"UUID of DAOS pool"`
 	ACLFile string `short:"a" long:"acl-file" required:"1" description:"Path for new Access Control List file"`
 }
 
 // Execute is run when the PoolOverwriteACLCmd subcommand is activated
 func (d *PoolOverwriteACLCmd) Execute(args []string) error {
-	acl, err := readACLFile(d.ACLFile)
+	acl, err := control.ReadACLFile(d.ACLFile)
 	if err != nil {
 		return err
 	}
 
-	req := client.PoolOverwriteACLReq{
+	req := &control.PoolOverwriteACLReq{
 		UUID: d.UUID,
 		ACL:  acl,
 	}
 
-	resp, err := d.conns.PoolOverwriteACL(req)
+	ctx := context.Background()
+	resp, err := control.PoolOverwriteACL(ctx, d.ctlClient, req)
 	if err != nil {
-		d.log.Infof("Pool-overwrite-ACL command failed: %s\n", err.Error())
-		return err
+		return errors.Wrap(err, "Pool-overwrite-ACL command failed")
 	}
 
 	d.log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACLDefault(resp.ACL))
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(os.Stdout, resp.ACL)
+	}
+
+	d.log.Info(control.FormatACLDefault(resp.ACL))
 
 	return nil
 }
@@ -358,7 +375,8 @@ func (d *PoolOverwriteACLCmd) Execute(args []string) error {
 // a DAOS pool.
 type PoolUpdateACLCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 	UUID    string `long:"pool" required:"1" description:"UUID of DAOS pool"`
 	ACLFile string `short:"a" long:"acl-file" required:"0" description:"Path for new Access Control List file"`
 	Entry   string `short:"e" long:"entry" required:"0" description:"Single Access Control Entry to add or update"`
@@ -370,32 +388,37 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 		return errors.New("either ACL file or entry parameter is required")
 	}
 
-	var acl *common.AccessControlList
+	var acl *control.AccessControlList
 	if d.ACLFile != "" {
-		aclFileResult, err := readACLFile(d.ACLFile)
+		aclFileResult, err := control.ReadACLFile(d.ACLFile)
 		if err != nil {
 			return err
 		}
 		acl = aclFileResult
 	} else {
-		acl = &common.AccessControlList{
+		acl = &control.AccessControlList{
 			Entries: []string{d.Entry},
 		}
 	}
 
-	req := client.PoolUpdateACLReq{
+	req := &control.PoolUpdateACLReq{
 		UUID: d.UUID,
 		ACL:  acl,
 	}
 
-	resp, err := d.conns.PoolUpdateACL(req)
+	ctx := context.Background()
+	resp, err := control.PoolUpdateACL(ctx, d.ctlClient, req)
 	if err != nil {
-		d.log.Infof("Pool-update-ACL command failed: %s\n", err.Error())
-		return err
+		return errors.Wrap(err, "Pool-update-ACL command failed")
 	}
 
 	d.log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACLDefault(resp.ACL))
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(os.Stdout, resp.ACL)
+	}
+
+	d.log.Info(control.FormatACLDefault(resp.ACL))
 
 	return nil
 }
@@ -404,26 +427,32 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 // Control List of a DAOS pool.
 type PoolDeleteACLCmd struct {
 	logCmd
-	connectedCmd
+	ctlClientCmd
+	jsonOutputCmd
 	UUID      string `long:"pool" required:"1" description:"UUID of DAOS pool"`
 	Principal string `short:"p" long:"principal" required:"1" description:"Principal whose entry should be removed"`
 }
 
 // Execute is run when the PoolDeleteACLCmd subcommand is activated
 func (d *PoolDeleteACLCmd) Execute(args []string) error {
-	req := client.PoolDeleteACLReq{
+	req := &control.PoolDeleteACLReq{
 		UUID:      d.UUID,
 		Principal: d.Principal,
 	}
 
-	resp, err := d.conns.PoolDeleteACL(req)
+	ctx := context.Background()
+	resp, err := control.PoolDeleteACL(ctx, d.ctlClient, req)
 	if err != nil {
-		d.log.Infof("Pool-delete-ACL command failed: %s\n", err.Error())
-		return err
+		return errors.Wrap(err, "Pool-delete-ACL command failed")
 	}
 
 	d.log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACLDefault(resp.ACL))
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(os.Stdout, resp.ACL)
+	}
+
+	d.log.Info(control.FormatACLDefault(resp.ACL))
 
 	return nil
 }

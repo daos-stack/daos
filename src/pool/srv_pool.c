@@ -2482,15 +2482,6 @@ out:
 	return rc;
 }
 
-static bool
-is_rpc_from_client(crt_rpc_t *rpc)
-{
-	d_rank_t srcrank;
-
-	crt_req_src_rank_get(rpc, &srcrank);
-	return (srcrank == CRT_NO_RANK);
-}
-
 /* CaRT RPC handler for pool container listing
  * Requires a pool handle (except for rebuild).
  */
@@ -2519,7 +2510,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	/* Verify pool handle only if RPC initiated by a client
 	 * (not for mgmt svc to pool svc RPCs that do not have a handle).
 	 */
-	if (is_rpc_from_client(rpc)) {
+	if (daos_rpc_from_client(rpc)) {
 		rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 		if (rc != 0)
 			D_GOTO(out_svc, rc);
@@ -2626,7 +2617,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	 * the non-rebuild pool. Server-to-server calls also don't have a
 	 * handle.
 	 */
-	if (is_rpc_from_client(rpc) &&
+	if (daos_rpc_from_client(rpc) &&
 	    !is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
 		d_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
 		d_iov_set(&value, &hdl, sizeof(hdl));
@@ -3813,6 +3804,13 @@ ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list)
 				       NULL, NULL, NULL, false);
 }
 
+int
+ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
+{
+	return ds_pool_update_internal(pool_uuid, list, POOL_ADD_IN,
+				       NULL, NULL, NULL, false);
+}
+
 /*
  * Perform a pool map update indicated by opc. If successful, the new pool map
  * version is reported via map_version. Upon -DER_NOTLEADER, a pool service
@@ -3824,9 +3822,11 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	       struct pool_target_addr_list *out_list,
 	       uint32_t *map_version, struct rsvc_hint *hint, bool evict_rank)
 {
+	daos_rebuild_opc_t		op;
 	struct pool_target_id_list	target_list = { 0 };
 	bool				updated;
 	int				rc;
+	char				*env;
 
 	rc = pool_find_all_targets_by_addr(pool_uuid, list, &target_list,
 					   out_list, hint);
@@ -3839,23 +3839,22 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	if (rc)
 		D_GOTO(out, rc);
 
-	if (updated && opc == POOL_EXCLUDE) {
-		char	*env;
-		int	 ret;
+	if (!updated || !(opc == POOL_EXCLUDE || opc == POOL_ADD))
+		D_GOTO(out, rc);
 
-		env = getenv(REBUILD_ENV);
-		if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
-		    daos_fail_check(DAOS_REBUILD_DISABLE)) {
-			D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
-		} else { /* enabled by default */
-			ret = ds_rebuild_schedule(pool_uuid, *map_version,
-						  &target_list);
-			if (ret != 0) {
-				D_ERROR("rebuild fails rc %d\n", ret);
-				if (rc == 0)
-					rc = ret;
-			}
-		}
+	env = getenv(REBUILD_ENV);
+	if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
+	    daos_fail_check(DAOS_REBUILD_DISABLE)) {
+		D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
+		D_GOTO(out, rc);
+	}
+
+	op = (opc == POOL_EXCLUDE ? RB_OP_FAIL : RB_OP_ADD);
+
+	rc = ds_rebuild_schedule(pool_uuid, *map_version, &target_list, op);
+	if (rc != 0) {
+		D_ERROR("rebuild fails rc %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
 out:

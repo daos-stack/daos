@@ -104,66 +104,6 @@ func (tc *testConn) ClearConns() client.ResultMap {
 	return nil
 }
 
-func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) client.ResultMap {
-	tc.appendInvocation("StoragePrepare")
-	return nil
-}
-
-func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanResp {
-	tc.appendInvocation(fmt.Sprintf("StorageScan-%+v", req))
-	return &client.StorageScanResp{}
-}
-
-func (tc *testConn) StorageFormat(reformat bool) client.StorageFormatResults {
-	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
-	return client.StorageFormatResults{}
-}
-
-func (tc *testConn) PoolCreate(req *client.PoolCreateReq) (*client.PoolCreateResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolCreate-%+v", req))
-	return &client.PoolCreateResp{}, nil
-}
-
-func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
-	tc.appendInvocation(fmt.Sprintf("PoolDestroy-%+v", req))
-	return nil
-}
-
-func (tc *testConn) PoolReintegrate(req *client.PoolReintegrateReq) error {
-	tc.appendInvocation(fmt.Sprintf("PoolReintegrate-%+v", req))
-	return nil
-}
-
-func (tc *testConn) PoolQuery(req client.PoolQueryReq) (*client.PoolQueryResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolQuery-%+v", req))
-	return nil, nil
-}
-
-func (tc *testConn) PoolSetProp(req client.PoolSetPropReq) (*client.PoolSetPropResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolSetProp-%+v", req))
-	return &client.PoolSetPropResp{}, nil
-}
-
-func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
-	return &client.PoolGetACLResp{}, nil
-}
-
-func (tc *testConn) PoolOverwriteACL(req client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolOverwriteACL-%+v", req))
-	return &client.PoolOverwriteACLResp{ACL: req.ACL}, nil
-}
-
-func (tc *testConn) PoolUpdateACL(req client.PoolUpdateACLReq) (*client.PoolUpdateACLResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolUpdateACL-%+v", req))
-	return &client.PoolUpdateACLResp{ACL: req.ACL}, nil
-}
-
-func (tc *testConn) PoolDeleteACL(req client.PoolDeleteACLReq) (*client.PoolDeleteACLResp, error) {
-	tc.appendInvocation(fmt.Sprintf("PoolDeleteACL-%+v", req))
-	return &client.PoolDeleteACLResp{}, nil
-}
-
 func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {
 	tc.appendInvocation(fmt.Sprintf("BioHealthQuery-%s", req))
 	return nil
@@ -189,43 +129,8 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 	return nil
 }
 
-func (tc *testConn) SystemQuery(req client.SystemQueryReq) (*client.SystemQueryResp, error) {
-	tc.appendInvocation(fmt.Sprintf("SystemQuery-%v", req))
-	return &client.SystemQueryResp{}, nil
-}
-
-func (tc *testConn) SystemStop(req client.SystemStopReq) (*client.SystemStopResp, error) {
-	tc.appendInvocation(fmt.Sprintf("SystemStop-%v", req))
-	return &client.SystemStopResp{}, nil
-}
-
-func (tc *testConn) SystemStart(req client.SystemStartReq) (*client.SystemStartResp, error) {
-	tc.appendInvocation(fmt.Sprintf("SystemStart-%v", req))
-	return &client.SystemStartResp{}, nil
-}
-
-func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryResp, error) {
-	tc.appendInvocation(fmt.Sprintf("LeaderQuery-%s", req.System))
-	return &client.LeaderQueryResp{}, nil
-}
-
-func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {
-	tc.appendInvocation(fmt.Sprintf("ListPools-%s", req))
-	return &client.ListPoolsResp{}, nil
-}
-
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
-}
-
-func (tc *testConn) NetworkListProviders() client.ResultMap {
-	tc.appendInvocation("NetworkListProviders")
-	return nil
-}
-
-func (tc *testConn) NetworkScanDevices(searchProvider string) client.NetworkScanResultMap {
-	tc.appendInvocation(fmt.Sprintf("NetworkScanDevices-%s", searchProvider))
-	return nil
 }
 
 func testExpectedError(t *testing.T, expected, actual error) {
@@ -290,9 +195,45 @@ type bridgeConnInvoker struct {
 }
 
 func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.UnaryRequest) (*control.UnaryResponse, error) {
+	// Use the testConn to fill out the calls slice for compatiblity
+	// with old-style Connection tests.
 	bci.conn.ConnectClients(nil)
 	bci.conn.appendInvocation(printRequest(bci.t, uReq))
-	return bci.MockInvoker.InvokeUnaryRPC(ctx, uReq)
+
+	// Synthesize a response as necessary. The dmg command tests
+	// that interact with the MS will need a valid-ish MS response
+	// in order to avoid failing response validation.
+	resp := &control.UnaryResponse{}
+	switch uReq.(type) {
+	case *control.PoolCreateReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolCreateResp{})
+	case *control.PoolDestroyReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolDestroyResp{})
+	case *control.PoolSetPropReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolSetPropResp{
+			Property: &mgmtpb.PoolSetPropResp_Name{},
+			Value:    &mgmtpb.PoolSetPropResp_Numval{},
+		})
+	case *control.SystemStopReq:
+		resp = control.MockMSResponse("", nil, &ctlpb.SystemStopResp{})
+	case *control.SystemStartReq:
+		resp = control.MockMSResponse("", nil, &ctlpb.SystemStartResp{})
+	case *control.SystemQueryReq:
+		resp = control.MockMSResponse("", nil, &ctlpb.SystemQueryResp{})
+	case *control.LeaderQueryReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.LeaderQueryResp{})
+	case *control.ListPoolsReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.ListPoolsResp{})
+	case *control.ContSetOwnerReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.ContSetOwnerResp{})
+	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
+		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
+	case *control.PoolReintegrateReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
+	}
+
+	return resp, nil
 }
 
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {

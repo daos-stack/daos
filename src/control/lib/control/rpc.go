@@ -207,8 +207,6 @@ func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (
 					conn, err = grpc.DialContext(ctx, hostAddr, opts...)
 					if err == nil {
 						msg, err = req.getRPC()(ctx, conn)
-					}
-					if conn != nil {
 						conn.Close()
 					}
 				}
