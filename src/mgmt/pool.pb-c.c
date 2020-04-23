@@ -774,7 +774,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[9
     offsetof(Mgmt__PoolCreateReq, ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -904,7 +904,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     offsetof(Mgmt__PoolCreateResp, svcreps),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1050,7 +1050,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descript
   },
   {
     "rank",
-    3,
+    2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -1061,27 +1061,26 @@ static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descript
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "targets",
-    4,
+    "targetidx",
+    3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__PoolReintegrateReq, n_targets),
-    offsetof(Mgmt__PoolReintegrateReq, targets),
+    offsetof(Mgmt__PoolReintegrateReq, n_targetidx),
+    offsetof(Mgmt__PoolReintegrateReq, targetidx),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__pool_reintegrate_req__field_indices_by_name[] = {
   1,   /* field[1] = rank */
-  2,   /* field[2] = targets */
+  2,   /* field[2] = targetidx */
   0,   /* field[0] = uuid */
 };
-static const ProtobufCIntRange mgmt__pool_reintegrate_req__number_ranges[2 + 1] =
+static const ProtobufCIntRange mgmt__pool_reintegrate_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 3, 1 },
   { 0, 3 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor =
@@ -1095,7 +1094,7 @@ const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor =
   3,
   mgmt__pool_reintegrate_req__field_descriptors,
   mgmt__pool_reintegrate_req__field_indices_by_name,
-  2,  mgmt__pool_reintegrate_req__number_ranges,
+  1,  mgmt__pool_reintegrate_req__number_ranges,
   (ProtobufCMessageInit) mgmt__pool_reintegrate_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
@@ -1198,7 +1197,7 @@ static const ProtobufCFieldDescriptor mgmt__list_pools_resp__pool__field_descrip
     offsetof(Mgmt__ListPoolsResp__Pool, svcreps),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

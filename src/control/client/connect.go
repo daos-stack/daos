@@ -57,22 +57,16 @@ func chooseServiceLeader(cs []Control) (Control, error) {
 // Connect is an external interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
-	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
 	ClearConns() ResultMap
 	ConnectClients(Addresses) ResultMap
 	GetActiveConns(ResultMap) ResultMap
-	NetworkListProviders() ResultMap
-	NetworkScanDevices(searchProvider string) NetworkScanResultMap
-	PoolReintegrate(*PoolReintegrateReq) error
-	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
-	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
-	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
-	PoolDeleteACL(PoolDeleteACLReq) (*PoolDeleteACLResp, error)
 	SetTransportConfig(*security.TransportConfig)
+
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
 	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
 	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
+	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
 }
 
 // connList is an implementation of Connect and stores controllers

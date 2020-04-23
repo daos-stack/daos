@@ -176,9 +176,19 @@ struct migrate_pool_tls {
 	uuid_t			mpt_coh_uuid;
 	daos_handle_t		mpt_pool_hdl;
 
-	/* Container/objects tobe migrated will be attached to the tree */
+	/* Container/objects to be migrated will be attached to the tree */
 	daos_handle_t		mpt_root_hdl;
 	struct btr_root		mpt_root;
+
+	/* Indicates whether containers should be cleared of all contents
+	 * before any data is migrated to them (via destroy & recreate)
+	 */
+	bool			mpt_clear_conts;
+
+	/* Hash table to store the container uuids which have already been
+	 * deleted (used by reintegration)
+	 */
+	struct d_hash_table	mpt_cont_dest_tab;
 
 	/* Service rank list for migrate fetch RPC */
 	d_rank_list_t		mpt_svc_list;
