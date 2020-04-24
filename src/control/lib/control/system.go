@@ -272,7 +272,7 @@ func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksRe
 		})
 	})
 
-	rpcClient.Debugf("DAOS system prep shutdown-ranks request: %v", req)
+	rpcClient.Debugf("DAOS system prep shutdown-ranks request: %+v", req)
 
 	return doSystemRanksRPC(ctx, rpcClient, req)
 }
@@ -284,11 +284,12 @@ func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksRe
 func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).StopRanks(ctx, &mgmtpb.RanksReq{
+			Force: req.Force,
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
 
-	rpcClient.Debugf("DAOS system stop-ranks request: %v", req)
+	rpcClient.Debugf("DAOS system stop-ranks request: %+v", req)
 
 	return doSystemRanksRPC(ctx, rpcClient, req)
 }
@@ -304,7 +305,7 @@ func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ra
 		})
 	})
 
-	rpcClient.Debugf("DAOS system start-ranks request: %v", req)
+	rpcClient.Debugf("DAOS system start-ranks request: %+v", req)
 
 	return doSystemRanksRPC(ctx, rpcClient, req)
 }
@@ -320,7 +321,7 @@ func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 		})
 	})
 
-	rpcClient.Debugf("DAOS system ping-ranks request: %v", req)
+	rpcClient.Debugf("DAOS system ping-ranks request: %+v", req)
 
 	return doSystemRanksRPC(ctx, rpcClient, req)
 }

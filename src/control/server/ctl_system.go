@@ -212,8 +212,9 @@ func (svc *ControlService) sendRanksReq(ctx context.Context, force bool, ranks [
 }
 
 func (svc *ControlService) getResultsFromRanks(ctx context.Context, force bool, rankList []system.Rank, fn RanksFunc) (system.MemberResults, error) {
-
 	hostRanks := svc.membership.HostRanks(rankList...)
+	totalRankList := make([]system.Rank, 0, len(hostRanks)*maxIOServers)
+	hostList := make([]string, 0, len(hostRanks))
 
 	svc.log.Debugf("sending requests to hosts/ranks: %v", hostRanks)
 
@@ -224,8 +225,6 @@ func (svc *ControlService) getResultsFromRanks(ctx context.Context, force bool, 
 	msAddr := msMember.Addr.String()
 	msRank := msMember.Rank
 
-	totalRankList := make([]system.Rank, 0, len(hostRanks)*maxIOServers)
-	hostList := make([]string, 0, len(hostRanks))
 	// build the host set and rank list to send unary RPCs to non-MS hosts
 	for addr, ranks := range hostRanks {
 		if addr == msAddr {
