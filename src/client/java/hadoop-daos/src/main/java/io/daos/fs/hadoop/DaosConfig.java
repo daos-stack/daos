@@ -23,7 +23,7 @@
 
 package io.daos.fs.hadoop;
 
-import java.io.*;
+import java.io.InputStream;
 import java.util.Iterator;
 import java.util.Map;
 

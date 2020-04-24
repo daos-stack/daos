@@ -532,8 +532,26 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem mkdirs: Making directory = {} ", f.toUri().getPath());
     }
-    String key = f.toUri().getPath();
-    daos.mkdir(key, io.daos.dfs.Constants.FILE_DEFAULT_FILE_MODE, true);
+
+    DaosFile file = daos.getFile(f.toUri().getPath());
+    if (file.exists()) {
+      // if the thread reaches here, there is something at the path
+      if (file.isDirectory()) {
+        return true;
+      } else {
+        throw new FileAlreadyExistsException("Not a directory: " + f);
+      }
+    } else {
+      try {
+        file.mkdirs();
+      } catch (IOException ioe) {
+        if (ioe instanceof DaosIOException ) {
+          DaosIOException daosIOException = (DaosIOException) ioe;
+          throw HadoopDaosUtils.translateException(daosIOException);
+        }
+        throw ioe;
+      }
+    }
     return true;
   }
 
