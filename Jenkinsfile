@@ -262,9 +262,9 @@ pipeline {
                                          aggregatingResults: true,
                                          failOnError: false,
                                          name: "Python warnings",
-                                         tool: gcc(pattern: 'pylint.log',
-                                                   name: 'Pylint results',
-                                                   id: 'pylint')
+                                         tool: gcc3(pattern: 'pylint.log',
+                                                    name: 'Pylint results',
+                                                    id: 'pylint')
                             archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: false
                             /* when JENKINS-39203 is resolved, can probably use stepResult
                                here and remove the remaining post conditions
