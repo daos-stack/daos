@@ -69,6 +69,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
     assertTrue("Deleted file", this.fs.delete(file, false));
     assertTrue("Parent should exist", this.fs.exists(parentDir));
+
   }
 
   @Test
@@ -167,7 +168,6 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertFalse("Destination changed",
             fs.exists(path("/test/hadoop/dir/subdir/dir")));
   }
-
 
   public void testRenameDirMoveToItSelf() throws Exception {
     if (!renameSupported()) return;

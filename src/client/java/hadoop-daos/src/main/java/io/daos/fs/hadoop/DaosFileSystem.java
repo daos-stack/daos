@@ -137,6 +137,7 @@ public class DaosFileSystem extends FileSystem {
   private int writeBufferSize;
   private int blockSize;
   private int chunkSize;
+  private String bucket;
 
   static {
     if (ShutdownHookManager.removeHook(DaosFsClient.FINALIZER)) {
@@ -180,6 +181,7 @@ public class DaosFileSystem extends FileSystem {
     super.initialize(name, conf);
 
     try {
+      this.bucket = name.getHost();
       this.readBufferSize = conf.getInt(Constants.DAOS_READ_BUFFER_SIZE, Constants.DEFAULT_DAOS_READ_BUFFER_SIZE);
       this.writeBufferSize = conf.getInt(Constants.DAOS_WRITE_BUFFER_SIZE, Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE);
       this.blockSize = conf.getInt(Constants.DAOS_BLOCK_SIZE, Constants.DEFAULT_DAOS_BLOCK_SIZE);
@@ -481,7 +483,66 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem:   delete  path = {} - recursive = {}", f.toUri().getPath(), recursive);
     }
-    return daos.delete(f.toUri().getPath(), recursive);
+    DaosFile file = daos.getFile(f.toUri().getPath());
+
+    FileStatus[] statuses = null;
+
+    // indicating root directory "/".
+    if (f.toUri().getPath().equals("/")) {
+      statuses = listStatus(f);
+      boolean isEmptyDir = statuses.length <= 0;
+      return rejectRootDirectoryDelete(isEmptyDir, recursive);
+    }
+    if (!file.exists()) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(String.format(
+                "Failed to delete %s , path do not exists!", f));
+      }
+      return false;
+    }
+    if (file.isDirectory()) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem: Path is a directory");
+      }
+      if (recursive) {
+        // delete the dir and all files in the dir
+        return file.delete(recursive);
+      } else {
+        statuses = listStatus(f);
+        if (statuses != null && statuses.length > 0) {
+          throw new IOException("DaosFileSystem delete : There are files in dir ");
+        } else if (statuses != null && statuses.length == 0) {
+          // delete empty dir
+          return file.delete(recursive);
+        }
+      }
+    }
+    return file.delete(recursive);
+  }
+
+  /**
+   * Implements the specific logic to reject root directory deletion.
+   * The caller must return the result of this call, rather than
+   * attempt to continue with the delete operation: deleting root
+   * directories is never allowed. This method simply implements
+   * the policy of when to return an exit code versus raise an exception.
+   * @param isEmptyDir empty directory or not
+   * @param recursive recursive flag from command
+   * @return a return code for the operation
+   * @throws PathIOException if the operation was explicitly rejected.
+   */
+  private boolean rejectRootDirectoryDelete(boolean isEmptyDir,
+                                            boolean recursive) throws IOException {
+    LOG.info("oss delete the {} root directory of {}",this.bucket ,recursive);
+    if (isEmptyDir) {
+      return true;
+    }
+    if (recursive) {
+      return false;
+    } else {
+      // reject
+      throw new PathIOException(bucket, "Cannot delete root path");
+    }
   }
 
   @Override
