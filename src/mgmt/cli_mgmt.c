@@ -474,8 +474,8 @@ int dc_network_cfg(const char *name)
 		return errno;
 
 	D_DEBUG(DB_MGMT,
-		"Using server provided parameters for CaRT initialization:\n" \
-		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, " \
+		"Using server provided parameters for CaRT initialization:\n"
+		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
 		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
 		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
 		getenv("CRT_PHY_ADDR_STR"),
