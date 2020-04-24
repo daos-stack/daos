@@ -227,7 +227,7 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Exclude a target with single target idx",
-			"pool Exclude --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			"pool exclude --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
 			strings.Join([]string{
 				"ConnectClients",
 				printRequest(t, &control.PoolExcludeReq{
