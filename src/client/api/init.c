@@ -157,11 +157,21 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_debug, rc);
 
+	/** set up agent */
+	rc = dc_agent_init();
+	if (rc != 0)
+		D_GOTO(out_hhash, rc);
+
+	/** get CaRT configuration */
+	rc = dc_network_cfg(NULL);
+	if (rc != 0)
+		D_GOTO(out_obj, rc);
+
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_hhash, rc);
+		D_GOTO(out_obj, rc);
 	}
 
 	/** set up placement */
@@ -189,16 +199,9 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
-	/** set up agent */
-	rc = dc_agent_init();
-	if (rc != 0)
-		D_GOTO(out_obj, rc);
-
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);
 
-out_obj:
-	dc_obj_fini();
 out_co:
 	dc_cont_fini();
 out_pool:
@@ -209,6 +212,8 @@ out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_obj:
+	dc_obj_fini();
 out_hhash:
 	daos_hhash_fini();
 out_debug:

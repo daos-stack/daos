@@ -37,6 +37,7 @@
 #include <daos/event.h>
 #include "srv.pb-c.h"
 #include "rpc.h"
+#include <errno.h>
 
 struct cp_arg {
 	struct dc_mgmt_sys	*sys;
@@ -280,6 +281,16 @@ struct dc_mgmt_psr {
 	__rc;						\
 })
 
+static void
+put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
+{
+	int i;
+
+	for (i = 0; i < npsrs; i++)
+		D_FREE(psrs[i].uri);
+	D_FREE(psrs);
+}
+
 /*
  * Get the attach info (i.e., the CaRT PSRs) for name. npsrs outputs the number
  * of elements in psrs. psrs outputs the array of struct dc_mgmt_psr objects.
@@ -417,6 +428,65 @@ out:
 	return rc;
 }
 
+/*
+ * Get the CaRT network configuration for this client node
+ * via the get_attach_info() dRPC.
+ * Configure the client's local environment with these parameters
+ */
+int dc_network_cfg(const char *name)
+{
+	int rc;
+	int npsrs;
+	char buf[SYS_INFO_BUF_SIZE];
+	struct sys_info sy_info;
+	struct dc_mgmt_psr *psrs;
+
+	if (name == NULL)
+		name = DAOS_DEFAULT_SYS_NAME;
+
+	// Query the agent for the CaRT network configuration parameters
+	rc = get_attach_info(name, &npsrs, &psrs, &sy_info);
+	if (rc != 0)
+		return rc;
+
+	// These three are always set
+	rc = setenv("CRT_PHY_ADDR_STR", sy_info.provider, 1);
+	if (rc != 0)
+		return errno;
+
+	sprintf(buf, "%d", sy_info.crt_ctx_share_addr);
+	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
+	if (rc != 0)
+		return errno;
+
+	sprintf(buf, "%d", sy_info.crt_timeout);
+	rc = setenv("CRT_TIMEOUT", buf, 1);
+	if (rc != 0)
+		return errno;
+
+	// Allow client env overrides for these two
+	rc = setenv("OFI_INTERFACE", sy_info.interface, 0);
+	if (rc != 0)
+		return errno;
+
+	rc = setenv("OFI_DOMAIN", sy_info.domain, 0);
+	if (rc != 0)
+		return errno;
+
+	D_DEBUG(DB_MGMT,
+		"Using server provided parameters for CaRT initialization:\n" \
+		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, " \
+		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
+		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
+		getenv("CRT_PHY_ADDR_STR"),
+		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
+
+	// free the psrs allocated by get_attach_info()
+	put_attach_info(npsrs, psrs);
+
+	return 0;
+}
+
 #define SYS_BUF_MAGIC 0x98234ad3
 
 struct psr_buf {
@@ -464,16 +534,6 @@ get_attach_info_from_buf(int npsrbs, struct psr_buf *psrbs, int *npsrs,
 	*npsrs = npsrbs;
 	*psrs = p;
 	return 0;
-}
-
-static void
-put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
-{
-	int i;
-
-	for (i = 0; i < npsrs; i++)
-		D_FREE(psrs[i].uri);
-	D_FREE(psrs);
 }
 
 static int
