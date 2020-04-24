@@ -104,9 +104,9 @@ class NvmePoolCapacity(TestWithServers):
                 # For test case 1, reduce the block size so that
                 # IOR aggregation file size < NVME size.
                 if test_case == 1:
-                    test[1] = test[1] / 4
+                    block_size = test[1] / 4
                 # Update the block size based on no of jobs.
-                actual_block_size = (round(float(test[1])) /
+                actual_block_size = ((round(float(block_size))) /
                                      (num_jobs * pool_len))
                 ior_cmd.block_size.update(str(actual_block_size))
                 ior_cmd.flags.update(flags)
@@ -186,12 +186,12 @@ class NvmePoolCapacity(TestWithServers):
                                  dmg_command=self.get_dmg_command())
             pool[val].get_params(self)
             # For test case 1, use only half disk space.
-            if (test_case == 1) and (full_ssd_test == 0):
+            if (test_case == 1) and (val == 0) and (full_ssd_test == 0):
                 pool[val].scm_size.value = pool[val].scm_size.value / 2
                 pool[val].nvme_size.value = pool[val].nvme_size.value / 2
             # Split the total SCM and NVME size for creating multiple pools.
-            split_pool_scm_size = pool[val].scm_size.value / num_pool
-            split_pool_nvme_size = pool[val].nvme_size.value / num_pool
+            split_pool_scm_size = (pool[val].scm_size.value / num_pool)
+            split_pool_nvme_size = (pool[val].nvme_size.value / num_pool)
             pool[val].scm_size.update(split_pool_scm_size)
             pool[val].nvme_size.update(split_pool_nvme_size)
             pool[val].create()
