@@ -444,12 +444,12 @@ int dc_network_cfg(const char *name)
 	if (name == NULL)
 		name = DAOS_DEFAULT_SYS_NAME;
 
-	// Query the agent for the CaRT network configuration parameters
+	/* Query the agent for the CaRT network configuration parameters */
 	rc = get_attach_info(name, &npsrs, &psrs, &sy_info);
 	if (rc != 0)
 		return rc;
 
-	// These three are always set
+	/* These three are always set */
 	rc = setenv("CRT_PHY_ADDR_STR", sy_info.provider, 1);
 	if (rc != 0)
 		return errno;
@@ -464,7 +464,7 @@ int dc_network_cfg(const char *name)
 	if (rc != 0)
 		return errno;
 
-	// Allow client env overrides for these two
+	/* Allow client env overrides for these two */
 	rc = setenv("OFI_INTERFACE", sy_info.interface, 0);
 	if (rc != 0)
 		return errno;
@@ -481,7 +481,7 @@ int dc_network_cfg(const char *name)
 		getenv("CRT_PHY_ADDR_STR"),
 		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
 
-	// free the psrs allocated by get_attach_info()
+	/* free the psrs allocated by get_attach_info() */
 	put_attach_info(npsrs, psrs);
 
 	return 0;
