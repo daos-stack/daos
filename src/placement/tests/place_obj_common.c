@@ -26,10 +26,11 @@
 #include <daos/placement.h>
 #include <daos.h>
 #include "place_obj_common.h"
+#include <daos_obj_class.h>
 
 void
 plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
-		struct pl_map *pl_map)
+		struct pl_map *pl_map, bool print_layout)
 {
 	struct daos_obj_md	 md;
 	int			 i;
@@ -39,19 +40,21 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 	md.omd_id  = oid;
 	md.omd_ver = 1;
 
-	D_PRINT("plt_obj_place\n");
 	rc = pl_obj_place(pl_map, &md, NULL, layout);
 	D_ASSERT(rc == 0);
 
-	D_PRINT("Layout of object "DF_OID"\n", DP_OID(oid));
-	for (i = 0; i < (*layout)->ol_nr; i++)
-		D_PRINT("%d ", (*layout)->ol_shards[i].po_target);
+	if (print_layout) {
+		D_PRINT("Layout of object "DF_OID"\n", DP_OID(oid));
+		for (i = 0; i < (*layout)->ol_nr; i++)
+			printf("%d ", (*layout)->ol_shards[i].po_target);
 
-	D_PRINT("\n");
+		printf("\n");
+	}
 }
 
 void
-plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size)
+plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size,
+		int num_allowed_failures)
 {
 	int i;
 	int target_num;
@@ -63,12 +66,47 @@ plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size)
 	for (i = 0; i < layout->ol_nr; i++) {
 		target_num = layout->ol_shards[i].po_target;
 
-		D_ASSERT(target_num != -1);
-		D_ASSERT(target_set[target_num] != 1);
-		target_set[target_num] = 1;
+		if (target_num == -1)
+			num_allowed_failures--;
+		D_ASSERT(num_allowed_failures >= 0);
+
+		if (target_num != -1) {
+			D_ASSERT(target_set[target_num] != 1);
+			target_set[target_num] = 1;
+		}
+	}
+	D_FREE(target_set);
+}
+
+void
+reint_check(struct pl_obj_layout *layout, struct pl_obj_layout *temp_layout,
+		uint32_t *spare_tgt_ranks, uint32_t *shard_ids, int num_reint,
+		uint32_t curr_fail_tgt)
+{
+	int i;
+	uint32_t original_target;
+	uint32_t reint_target;
+
+	D_ASSERT(num_reint >= 0 && num_reint < 2);
+
+	/* can't rebuild non replicated date */
+	if (temp_layout->ol_grp_size == 1) {
+		D_ASSERT(num_reint == 0);
+		if (layout->ol_shards[0].po_target == curr_fail_tgt)
+			D_ASSERT(temp_layout->ol_shards[0].po_target == -1);
+		return;
 	}
 
-	D_FREE(target_set);
+	for (i = 0; i < temp_layout->ol_nr; ++i) {
+		original_target = layout->ol_shards[i].po_target;
+		reint_target = temp_layout->ol_shards[i].po_target;
+
+		if (original_target == curr_fail_tgt) {
+			D_ASSERT(num_reint == 1);
+			D_ASSERT(original_target == spare_tgt_ranks[0]);
+			D_ASSERT(reint_target != original_target);
+		}
+	}
 }
 
 void
@@ -143,6 +181,7 @@ plt_set_tgt_status(uint32_t id, int status, uint32_t ver,
 			id, target->ta_comp.co_rank, str, ver);
 	target->ta_comp.co_status = status;
 	target->ta_comp.co_fseq = ver;
+	pool_map_update_failed_cnt(po_map);
 	rc = pool_map_set_version(po_map, ver);
 	D_ASSERT(rc == 0);
 }
@@ -156,6 +195,15 @@ plt_fail_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 }
 
 void
+plt_fail_tgt_out(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
+		bool pl_debug_msg)
+{
+	(*po_ver)++;
+	plt_set_tgt_status(id, PO_COMP_ST_DOWNOUT, *po_ver, po_map,
+			   pl_debug_msg);
+}
+
+void
 plt_reint_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 		bool pl_debug_msg)
 {
@@ -164,7 +212,7 @@ plt_reint_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 }
 
 void
-plt_add_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
+plt_reint_tgt_up(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 		bool pl_debug_msg)
 {
 	(*po_ver)++;
@@ -201,7 +249,7 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 
 	pl_map_decref(pl_map);
 	for (i = 0; i < failed_cnt; i++)
-		plt_add_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
+		plt_reint_tgt_up(failed_tgts[i], po_ver, po_map, pl_debug_msg);
 }
 
 void
@@ -325,8 +373,46 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	pl_map_decref(pl_map);
 
 	for (i = 0; i < reint_cnt; i++)
-		plt_add_tgt(reint_tgts[i], po_ver, po_map, pl_debug_msg);
+		plt_reint_tgt_up(reint_tgts[i], po_ver, po_map, pl_debug_msg);
 
 	for (i = 0; i < failed_cnt; i++)
-		plt_add_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
+		plt_reint_tgt_up(failed_tgts[i], po_ver, po_map, pl_debug_msg);
+}
+
+int
+getObjectClasses(daos_oclass_id_t **oclass_id_pp)
+{
+	const uint32_t str_size = 2560;
+	char oclass_names[str_size];
+	char oclass[64];
+	daos_oclass_id_t *oclass_id;
+	uint32_t length = 0;
+	uint32_t num_oclass = 0;
+	uint32_t oclass_str_index = 0;
+	uint32_t i, oclass_index;
+
+	length = daos_oclass_names_list(str_size, oclass_names);
+
+	for (i = 0; i < length; ++i) {
+		if (oclass_names[i] == ',')
+			num_oclass++;
+	}
+
+	D_ALLOC_ARRAY(*oclass_id_pp, num_oclass);
+
+	for (i = 0, oclass_index = 0; i < length; ++i) {
+		if (oclass_names[i] == ',') {
+			oclass_id = &(*oclass_id_pp)[oclass_index];
+			oclass[oclass_str_index] = 0;
+			*oclass_id = daos_oclass_name2id(oclass);
+
+			oclass_index++;
+			oclass_str_index = 0;
+		} else if (oclass_names[i] != ' ') {
+			oclass[oclass_str_index] = oclass_names[i];
+			oclass_str_index++;
+		}
+	}
+
+	return num_oclass;
 }

@@ -152,6 +152,7 @@ type cliOptions struct {
 	System     SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
 	Network    NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
 	Pool       PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
+	Cont       ContCmd    `command:"cont" alias:"c" description:"Perform tasks related to DAOS containers"`
 	Version    versionCmd `command:"version" description:"Print dmg version"`
 }
 

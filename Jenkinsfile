@@ -82,11 +82,13 @@ if (quickbuild) {
     functional_rpms += " spdk-tools"
 }
 
-def rpm_test_pre = '''nodelist=(${NODELIST//,/ })
-                      scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
-                                    jenkins@${nodelist[0]}:/tmp
-                      scp -i ci_key src/tests/ftest/data/daos_agent_baseline.yaml \
-                                    jenkins@${nodelist[0]}:/tmp
+def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
+                          exit 0
+                      fi
+                      nodelist=(${NODELIST//,/ })
+                      src/tests/ftest/config_file_gen.py -n ${nodelist[0]} -a /tmp/daos_agent.yml -s /tmp/daos_server.yml
+                      scp -i ci_key /tmp/daos_agent.yml jenkins@${nodelist[0]}:/tmp
+                      scp -i ci_key /tmp/daos_server.yml jenkins@${nodelist[0]}:/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
 def rpm_test_daos_test = '''me=\\\$(whoami)
@@ -100,10 +102,8 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo chown \\\$me:\\\$me /tmp/daos_sockets
                             sudo mkdir -p /mnt/daos
                             sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
-                            sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_server_baseline.yaml
-                            sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_agent_baseline.yaml
-                            sudo cp /tmp/daos_server_baseline.yaml /etc/daos/daos_server.yml
-                            sudo cp /tmp/daos_agent_baseline.yaml /etc/daos/daos_agent.yml
+                            sudo cp /tmp/daos_server.yml /etc/daos/daos_server.yml
+                            sudo cp /tmp/daos_agent.yml /etc/daos/daos_agent.yml
                             cat /etc/daos/daos_server.yml
                             cat /etc/daos/daos_agent.yml
                             module load mpi/openmpi3-x86_64
@@ -254,7 +254,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go"
+                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go:src/cart/_structures_from_macros_.h"
                     }
                     post {
                         always {

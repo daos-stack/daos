@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -428,6 +428,67 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 
 	log.Debugf("Unable to determine NUMA socket ID.  Using NUMA 0")
 	return 0, nil
+}
+
+// NumaAware verifies that NUMA data is available to process
+func NumaAware() (bool, error) {
+	deviceScanCfg, err := initDeviceScan()
+	if err != nil {
+		return false, err
+	}
+	defer cleanUp(deviceScanCfg.topology)
+
+	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
+	numObj := int(C.hwloc_get_nbobjs_by_depth(deviceScanCfg.topology, C.uint(depth)))
+
+	return numObj > 0, nil
+}
+
+// GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
+// It looks for an intersection between the nodeset or cpuset of this pid and the nodeset or cpuset of each
+// NUMA node looking for a match to identify the corresponding NUMA socket ID.
+func GetNUMASocketIDForPid(pid int32) (int, error) {
+	var i uint
+
+	deviceScanCfg, err := initDeviceScan()
+	if err != nil {
+		return 0, err
+	}
+	defer cleanUp(deviceScanCfg.topology)
+
+	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
+	numObj := uint(C.hwloc_get_nbobjs_by_depth(deviceScanCfg.topology, C.uint(depth)))
+	if numObj == 0 {
+		return 0, errors.Errorf("NUMA Node data is unavailable.")
+	}
+
+	cpuset := C.hwloc_bitmap_alloc()
+	defer C.hwloc_bitmap_free(cpuset)
+	status := C.hwloc_get_proc_cpubind(deviceScanCfg.topology, C.int(pid), cpuset, 0)
+	if status != 0 {
+		return 0, errors.Errorf("NUMA Node data is unavailable.")
+	}
+
+	nodeset := C.hwloc_bitmap_alloc()
+	defer C.hwloc_bitmap_free(nodeset)
+	C.hwloc_cpuset_to_nodeset(deviceScanCfg.topology, cpuset, nodeset)
+
+	for i = 0; i < numObj; i++ {
+		numanode := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(depth), C.uint(i))
+		if numanode == nil {
+			return 0, errors.Errorf("NUMA Node data is unavailable.")
+		}
+
+		if C.hwloc_bitmap_intersects(nodeset, numanode.nodeset) != 0 {
+			return int(numanode.logical_index), nil
+		}
+
+		if C.hwloc_bitmap_intersects(cpuset, numanode.cpuset) != 0 {
+			return int(numanode.logical_index), nil
+		}
+	}
+
+	return 0, errors.Errorf("NUMA Node data is unavailable.")
 }
 
 // GetAffinityForNetworkDevices searches the system topology reported by hwloc
