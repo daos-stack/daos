@@ -31,32 +31,47 @@ import (
 
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // IOServerRunner defines an interface for starting and stopping the
 // daos_io_server.
 type IOServerRunner interface {
-	Start(context.Context, chan<- ioserver.InstanceError) error
+	Start(context.Context, chan<- error) error
 	IsRunning() bool
 	Signal(os.Signal) error
 	Wait() error
 	GetConfig() *ioserver.Config
 }
 
-// IsStarted indicates whether IOServerInstance is in a running state.
-func (srv *IOServerInstance) IsStarted() bool {
+// isStarted indicates whether IOServerInstance is in a running state.
+func (srv *IOServerInstance) isStarted() bool {
 	return srv.runner.IsRunning()
 }
 
-// Start checks to make sure that the instance has a valid superblock before
+func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
+	idx := srv.Index()
+
+	srv.log.Debugf("instance %d: checking if storage is formatted", idx)
+	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
+		return
+	}
+	srv.log.Debugf("instance %d: creating superblock on formatted storage", idx)
+	if err = srv.createSuperblock(recreateSBs); err != nil {
+		return
+	}
+
+	if !srv.hasSuperblock() {
+		return errors.Errorf("instance %d: no superblock after format", idx)
+	}
+
+	return
+}
+
+// start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
-func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- ioserver.InstanceError) error {
-	if !srv.hasSuperblock() {
-		if err := srv.ReadSuperblock(); err != nil {
-			return errors.Wrap(err, "start failed; no superblock")
-		}
-	}
+func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) error {
 	if err := srv.bdevClassProvider.PrepareDevices(); err != nil {
 		return errors.Wrap(err, "start failed; unable to prepare NVMe device(s)")
 	}
@@ -65,46 +80,117 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- ioserver.
 	}
 
 	if err := srv.logScmStorage(); err != nil {
-		srv.log.Errorf("unable to log SCM storage stats: %s", err)
+		srv.log.Errorf("instance %d: unable to log SCM storage stats: %s", srv.Index(), err)
 	}
 
+	// async call returns immediately, runner sends on errChan when ctx.Done()
 	return srv.runner.Start(ctx, errChan)
 }
 
-// Stop sends signal to stop IOServerInstance runner (but doesn't wait for
-// process to exit).
-func (srv *IOServerInstance) Stop(signal os.Signal) error {
-	if err := srv.runner.Signal(signal); err != nil {
-		return err
-	}
+// waitReady awaits ready signal from I/O server before starting
+// management service on MS replicas immediately so other instances can join.
+// I/O server modules are then loaded.
+func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) error {
+	srv.log.Debugf("instance %d: awaiting %s init", srv.Index(), DataPlaneName)
 
-	return nil
+	select {
+	case <-ctx.Done(): // propagated harness exit
+		return ctx.Err()
+	case err := <-errChan:
+		// TODO: Restart failed instances on unexpected exit.
+		return errors.Wrapf(err, "instance %d exited prematurely", srv.Index())
+	case ready := <-srv.awaitDrpcReady():
+		if err := srv.finishStartup(ctx, ready); err != nil {
+			return err
+		}
+		return nil
+	}
 }
 
-// FinishStartup sets up instance once dRPC comms are ready, this includes
+// finishStartup sets up instance once dRPC comms are ready, this includes
 // setting the instance rank, starting management service and loading IO server
 // modules.
 //
 // Instance ready state is set to indicate that all setup is complete.
-func (srv *IOServerInstance) FinishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
-	if err := srv.SetRank(ctx, ready); err != nil {
+func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	if err := srv.setRank(ctx, ready); err != nil {
 		return err
 	}
 	// update ioserver target count to reflect allocated
 	// number of targets, not number requested when starting
-	srv.SetTargetCount(int(ready.GetNtgts()))
+	srv.setTargetCount(int(ready.GetNtgts()))
 
-	if srv.IsMSReplica() {
-		if err := srv.StartManagementService(); err != nil {
+	if srv.isMSReplica() {
+		if err := srv.startMgmtSvc(); err != nil {
 			return errors.Wrap(err, "failed to start management service")
 		}
 	}
 
-	if err := srv.LoadModules(); err != nil {
+	if err := srv.loadModules(); err != nil {
 		return errors.Wrap(err, "failed to load I/O server modules")
 	}
 
 	srv.ready.SetTrue()
+
+	return nil
+}
+
+func (srv *IOServerInstance) exit(exitErr error) {
+	srv.log.Infof("instance %d exited: %s", srv.Index(),
+		ioserver.GetExitStatus(exitErr))
+
+	srv._lastErr = exitErr
+	if err := srv.removeSocket(); err != nil {
+		srv.log.Errorf("removing socket file: %s", err)
+	}
+}
+
+// run performs setup of and starts process runner for IO server instance and
+// will only return (if no errors are returned during setup) on IO server
+// process exit (triggered by harness shutdown through context cancellation
+// or abnormal IO server process termination).
+func (srv *IOServerInstance) run(ctx context.Context, membership *system.Membership, recreateSBs bool) (err error) {
+	errChan := make(chan error)
+
+	if err = srv.format(ctx, recreateSBs); err != nil {
+		return
+	}
+
+	if err = srv.start(ctx, errChan); err != nil {
+		return
+	}
+	if srv.isMSReplica() {
+		// MS bootstrap will not join so register manually
+		if err := srv.registerMember(membership); err != nil {
+			return err
+		}
+	}
+	srv.waitDrpc.SetTrue()
+
+	if err = srv.waitReady(ctx, errChan); err != nil {
+		return
+	}
+
+	return <-errChan // receive on runner exit
+}
+
+// Run is the processing loop for an IOServerInstance. Starts are triggered by
+// receiving true on instance start channel.
+func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Membership, cfg *Configuration) {
+	for relaunch := range srv.startChan {
+		if !relaunch {
+			return
+		}
+
+		srv.exit(srv.run(ctx, membership, cfg.RecreateSuperblocks))
+	}
+}
+
+// Stop sends signal to stop IOServerInstance runner (nonblocking).
+func (srv *IOServerInstance) Stop(signal os.Signal) error {
+	if err := srv.runner.Signal(signal); err != nil {
+		return err
+	}
 
 	return nil
 }

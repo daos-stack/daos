@@ -58,7 +58,7 @@ func waitForIosrvReady(t *testing.T, instance *IOServerInstance) {
 	select {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("IO server never became ready!")
-	case <-instance.AwaitDrpcReady():
+	case <-instance.awaitDrpcReady():
 		return
 	}
 }
