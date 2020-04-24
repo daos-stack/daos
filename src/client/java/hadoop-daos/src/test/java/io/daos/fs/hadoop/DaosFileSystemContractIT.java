@@ -130,7 +130,84 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     }
   }
 
+  public void testRenameDirectoryMoveToExistingDirectory() throws Exception {
+    if (!renameSupported()) return;
+
+    Path src = path("/test/hadoop/dir");
+    this.fs.mkdirs(src);
+    createFile(path("/test/hadoop/dir/file1"));
+    this.fs.mkdirs(new Path("/test/hadoop/dir/subdir"));
+    createFile(path("/test/hadoop/dir/subdir/file2"));
+
+    Path dst = path("/test/new/newdir");
+    fs.mkdirs(dst.getParent());
+    rename(src, dst, true, false, true);
+
+    assertFalse("Nested file1 exists",
+            fs.exists(path("/test/hadoop/dir/file1")));
+    assertFalse("Nested file2 exists",
+            fs.exists(path("/test/hadoop/dir/subdir/file2")));
+    assertTrue("Renamed nested file1 exists",
+            fs.exists(path("/test/new/newdir/file1")));
+    assertTrue("Renamed nested exists",
+            fs.exists(path("/test/new/newdir/subdir/file2")));
+  }
+
   @Override
+  public void testRenameDirectoryAsExistingDirectory() throws Exception {
+    if (!renameSupported()) return;
+
+    Path src = path("/test/hadoop/dir");
+    fs.mkdirs(src);
+    createFile(path("/test/hadoop/dir/file1"));
+    this.fs.mkdirs(new Path("/test/hadoop/dir/subdir"));
+    createFile(path("/test/hadoop/dir/subdir/file2"));
+
+    Path parent = path("/test/new/");
+    Path dst = path("/test/new/dir");
+    fs.mkdirs(parent);
+    rename(src, dst, true, false, true);
+    assertTrue("Destination changed",
+            fs.exists(path("/test/new/dir")));
+    assertFalse("Nested file1 exists",
+            fs.exists(path("/test/hadoop/dir/file1")));
+    assertFalse("Nested file2 exists",
+            fs.exists(path("/test/hadoop/dir/subdir/file2")));
+    assertTrue("Renamed nested file1 exists",
+            fs.exists(path("/test/new/dir")));
+    assertTrue("Renamed nested exists",
+            fs.exists(path("/test/new/dir/subdir/file2")));
+  }
+
+
+  @Override
+  public void testRenameFileAsExistingDirectory() throws Exception {
+    if (!renameSupported()) return;
+
+    Path src = path("/test/hadoop/file");
+    this.fs.mkdirs(new Path("/test/hadoop"));
+    createFile(src);
+    Path parent = new Path("/test/new/");
+    Path dst = path("/test/new/file");
+    this.fs.mkdirs(parent);
+    rename(src, dst, true, false, true);
+    assertTrue("Destination changed",
+            fs.exists(path("/test/new/file")));
+  }
+
+  @Override
+  public void testWriteInNonExistentDirectory() throws IOException {
+    Path path = path("/test/hadoop/file");
+    assertFalse("Parent exists", fs.exists(path.getParent()));
+    this.fs.mkdirs(new Path("/test/hadoop"));
+    createFile(path);
+
+    assertTrue("Exists", fs.exists(path));
+    assertEquals("Length", data.length, fs.getFileStatus(path).getLen());
+    assertTrue("Parent exists", fs.exists(path.getParent()));
+  }
+
+ @Override
   public void testListStatus() throws Exception {
     Path[] testDirs = { path("/test/hadoop/a"),
             path("/test/hadoop/b"),

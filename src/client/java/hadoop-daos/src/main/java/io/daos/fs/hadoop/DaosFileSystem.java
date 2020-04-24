@@ -309,6 +309,10 @@ public class DaosFileSystem extends FileSystem {
       throw new FileNotFoundException(f + " not exist");
     }
 
+    if (file.isDirectory()) {
+      throw  new FileNotFoundException("can't open " + f + " because it is a directory ");
+    }
+
     return new FSDataInputStream(new DaosInputStream(
             file, statistics, bufferSize, preLoadBufferSize));
   }
