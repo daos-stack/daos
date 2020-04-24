@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,10 +36,9 @@ import (
 // ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
-	harness       *IOServerHarness
-	membership    *system.Membership
-	harnessClient HarnessClient // to be replaced by rpcClient
-	rpcClient     control.Invoker
+	harness    *IOServerHarness
+	membership *system.Membership
+	rpcClient  control.Invoker
 }
 
 // NewControlService returns ControlService to be used as gRPC control service
@@ -60,7 +59,6 @@ func NewControlService(l logging.Logger, h *IOServerHarness,
 		StorageControlService: *scs,
 		harness:               h,
 		membership:            m,
-		harnessClient:         NewHarnessClient(l, h),
 		rpcClient:             rc,
 	}, nil
 }
