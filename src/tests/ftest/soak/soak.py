@@ -29,7 +29,6 @@ from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
-# from command_utils import EnvironmentVariables
 from general_utils import get_random_string
 import slurm_utils
 from test_utils_pool import TestPool
@@ -93,7 +92,6 @@ class SoakTestBase(TestWithServers):
         self.srun_params = None
         self.pool = None
         self.container = None
-        self.dfuse = None
         self.test_iteration = None
         self.h_list = None
         self.harasser_joblist = None
@@ -518,7 +516,6 @@ class SoakTestBase(TestWithServers):
         """
         # Get Dfuse params
         dfuse = Dfuse(self.hostlist_clients, self.tmp)
-        self.dfuse.append(dfuse)
         dfuse.get_params(self)
         # update dfuse params; mountpoint for each container
         unique = get_random_string(5, self.used)
@@ -548,7 +545,7 @@ class SoakTestBase(TestWithServers):
     def cleanup_dfuse(self):
         """Cleanup and remove any dfuse mount points."""
         cmd = [
-            "bash -c 'pkill dfuse",
+            "/usr/bin/bash -c 'pkill dfuse",
             "for dir in /tmp/daos_dfuse*",
             "do fusermount3 -u $dir",
             "rm -rf $dir",
@@ -575,8 +572,7 @@ class SoakTestBase(TestWithServers):
 
         """
         commands = []
-        # init dfuse object list for this pass
-        self.dfuse = []
+
         fio_namespace = "/run/{}".format(job_spec)
         # test params
         bs_list = self.params.get("blocksize", fio_namespace + "/soak/*")
