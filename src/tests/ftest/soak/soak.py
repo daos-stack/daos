@@ -29,7 +29,7 @@ from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
-from command_utils import EnvironmentVariables
+# from command_utils import EnvironmentVariables
 from general_utils import get_random_string
 import slurm_utils
 from test_utils_pool import TestPool
@@ -61,20 +61,6 @@ def DDHHMMSS_format(seconds):
     return "{} {} {}".format(
         num_days, 'Day' if num_days == 1 else 'Days', time.strftime(
             "%H:%M:%S", time.gmtime(seconds % 86400)))
-
-
-def stop_dfuse(dfuse):
-    """Create dfuse stop command line for slurm job script.
-
-    Args:
-        dfuse ([obj]): Dfuse obj
-
-    Returns dfuse stop cmd(str):   slurm cmd to stop dfuse
-    """
-    srun_prefix = "srun -l --mpi=pmi2 --ntasks-per-node=1 --export=ALL"
-    dfuse_stop_cmd = "{0} fusermount3 -u {1};rm -rf {1}".format(
-        srun_prefix, dfuse.mount_dir.value)
-    return dfuse_stop_cmd
 
 
 class SoakTestError(Exception):
@@ -171,15 +157,13 @@ class SoakTestBase(TestWithServers):
         errors = []
         # clear out any jobs in squeue;
         if self.failed_job_id_list:
-            self.log.info(
-                "<<Cancel jobs in queue with ids %s >>",
-                self.failed_job_id_list)
-            for job_id in self.failed_job_id_list:
-                status = process.system(
-                    "scancel --partition {} -u {} {}".format(
-                        self.client_partition, self.username, job_id))
-                if status > 0:
-                    errors.append("Failed to cancel job {}".format(job_id))
+            job_id = " ".join(str(job) for job in self.failed_job_id_list)
+            self.log.info("<<Cancel jobs %s >>", job_id)
+            status = process.system(
+                "scancel --partition {} -u {} {}".format(
+                    self.client_partition, self.username, job_id))
+            if status > 0:
+                errors.append("Failed to cancel job(s) {}".format(job_id))
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
@@ -524,7 +508,7 @@ class SoakTestBase(TestWithServers):
         return result.stdout.split()[3]
 
     def start_dfuse(self, pool):
-        """Create a DfuseCommand object to start dfuse.
+        """Create dfuse start command line for job script.
 
         Args:
             pool (obj):             TestPool obj
@@ -544,15 +528,28 @@ class SoakTestBase(TestWithServers):
         dfuse.set_dfuse_params(pool)
         dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
         # create dfuse mount point
-        srun_prefix = "srun -l --mpi=pmi2 --ntasks-per-node=1 --export=ALL"
-        mkdir_cmd = "{} mkdir -p {}".format(srun_prefix, dfuse.mount_dir.value)
-        dfuse_cmd = "{} {}".format(srun_prefix, dfuse.__str__())
+        mkdir_cmd = "mkdir -p {}".format(dfuse.mount_dir.value)
+        dfuse_cmd = "{}".format(dfuse.__str__())
         return dfuse, [mkdir_cmd, dfuse_cmd]
+
+    def stop_dfuse(self, dfuse):
+        """Create dfuse stop command line for slurm job script.
+
+        Args:
+            dfuse ([obj]): Dfuse obj
+
+        Returns dfuse stop cmd(str):   slurm cmd to stop dfuse
+        """
+        self.log.info("\n")
+        dfuse_stop_cmd = "fusermount3 -u {0};rm -rf {0}".format(
+            dfuse.mount_dir.value)
+        return dfuse_stop_cmd
 
     def cleanup_dfuse(self):
         """Cleanup and remove any dfuse mount points."""
         cmd = [
-            "bash -c 'for dir in /tmp/daos_dfuse*",
+            "bash -c 'pkill dfuse",
+            "for dir in /tmp/daos_dfuse*",
             "do fusermount3 -u $dir",
             "rm -rf $dir",
             "done'"]
@@ -565,7 +562,7 @@ class SoakTestBase(TestWithServers):
                 "<<FAILED: Dfuse directories not deleted>>")
 
     def create_fio_cmdline(self, job_spec, pool):
-        """Create the FOI commandline.
+        """Create the FOI commandline for job script.
 
         Args:
 
@@ -611,15 +608,10 @@ class SoakTestBase(TestWithServers):
                             "global", "directory",
                             dfuse.mount_dir.value,
                             "fio --name=global --directory")
-                        # fio command
-                    cmd = Srun(fio_cmd)
-                    env = EnvironmentVariables()
-                    cmd.setup_command(env, None, 1)
-                    cmd.ntasks_per_node.update(1)
                     log_name = "{}_{}_{}".format(blocksize, size, rw)
-                    dfuse_cmd_list.append(str(cmd.__str__()))
+                    dfuse_cmd_list.append(str(fio_cmd.__str__()))
                     if fio_cmd.api.value == "POSIX":
-                        dfuse_cmd_list.append(stop_dfuse(dfuse))
+                        dfuse_cmd_list.append(self.stop_dfuse(dfuse))
                     commands.append([dfuse_cmd_list, log_name])
                     self.log.info(
                         "<<Dfuse cmdlines>>:\n %s", "\n".join(dfuse_cmd_list))
@@ -737,6 +729,7 @@ class SoakTestBase(TestWithServers):
             self.log.info("<< SOAK test timeout in Job Startup>>")
             return job_id_list
         # job_cmdlist is a list of batch script files
+
         for script in job_cmdlist:
             try:
                 job_id = slurm_utils.run_slurm_script(str(script))
@@ -854,6 +847,8 @@ class SoakTestBase(TestWithServers):
                     str(j_id) for j_id in self.failed_job_id_list)))
             # accumulate failing job IDs
             self.all_failed_jobs.extend(self.failed_job_id_list)
+            # clear out the failed jobs for this pass
+            self.failed_job_id_list = []
 
     def run_soak(self, test_param):
         """Run the soak test specified by the test params.
