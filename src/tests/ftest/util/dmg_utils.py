@@ -96,7 +96,7 @@ class DmgCommand(YamlCommand):
             self.yaml.hostlist.update(hostlist, "dmg.yaml.hostlist")
         else:
             if isinstance(hostlist, list):
-                hostlist = hostlist.join(",")
+                hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")
 
 
