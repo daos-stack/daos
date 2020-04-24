@@ -352,31 +352,128 @@ public class DaosFileSystem extends FileSystem {
     throw new IOException("Append is not supported");
   }
 
+  /**
+   * Renames Path src to Path dst. Can take place on remote DAOS.
+   *
+   * @param src path to be renamed
+   * @param dst new path after rename
+   * @return
+   * @throws IOException on IO failure
+   */
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem: rename old path {} to new path {}", src.toUri().getPath(), dst.toUri().getPath());
     }
-    String srcPath = src.toUri().getPath();
-    String destPath = dst.toUri().getPath();
-    // determine  if src is root dir and whether it exits
-    if (src.toUri().getPath().equals("/")) {
+    String srckey = src.toUri().getPath();
+    String dstkey = dst.toUri().getPath();
+    DaosFile srcDaosFile = this.daos.getFile(srckey);
+    DaosFile dstDaosFile = this.daos.getFile(dstkey);
+
+    try {
+      return innerRename(srcDaosFile, dstDaosFile);
+    } catch (FileNotFoundException e) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DaosFileSystem:  can not rename root path {}", src);
+        LOG.debug(e.toString());
+      }
+      return false;
+    } catch (IOException e) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(e.getMessage());
+      }
+      return false;
+    }
+  }
+
+  /**
+   * The inner rename operation. See {@link #rename(Path, Path)} for
+   * the description of the operation.
+   * This operation throws an exception on any failure  which needs to be
+   * reported and downgraded to a failure.
+   * @param srcDaosFile path to be renamed
+   * @param dstDaosFile new path after rename
+   * @return
+   * @throws IOException on IO failure
+   */
+
+  private boolean innerRename(DaosFile srcDaosFile, DaosFile dstDaosFile) throws IOException {
+    // determine  if src is root dir and whether it exits
+    Path src = new Path(srcDaosFile.getPath());
+    Path dst = new Path(dstDaosFile.getPath());
+    if (srcDaosFile.getPath().equals("/")) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem: can not rename root path {}", src);
       }
       throw new IOException("cannot move root / directory");
     }
 
-    if (srcPath.equals(destPath)) {
-      throw new IOException("dest and src paths are same. " + srcPath);
+    if (dst.toUri().getPath().equals("/")) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem: can not rename root path {}", dst);
+      }
+      throw new IOException("cannot move root / directory");
     }
 
-    if (daos.exists(destPath)) {
-      throw new IOException("dest file exists, " + destPath);
+    if (!srcDaosFile.exists()) {
+      throw new FileNotFoundException(String.format(
+              "Failed to rename %s to %s, src dir do not !", src ,dst));
     }
 
-    daos.move(srcPath, destPath);
+    if (!dstDaosFile.exists()) {
+      // if dst not exists and rename src to dst
+      innerMove(srcDaosFile, dst);
+      return true;
+    }
+
+    if (srcDaosFile.isDirectory() && !dstDaosFile.isDirectory()) {
+      // If dst exists and not a directory / not empty
+      throw new FileAlreadyExistsException(String.format(
+              "Failed to rename %s to %s, file already exists or not empty!",
+              src, dst));
+    } else if (srcDaosFile.getPath().equals(dstDaosFile.getPath())) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem:  src and dst refer to the same file or directory ");
+      }
+      return !srcDaosFile.isDirectory();
+    }
+    if (dstDaosFile.isDirectory() &&
+            srcDaosFile.isDirectory() &&
+            dstDaosFile.getPath().contains(srcDaosFile.getPath())) {
+      // If dst exists and not a directory / not empty
+      throw new IOException(String.format(
+                "Failed to rename %s to %s, source dir can't move to a subdirectory of itself!",
+                src, dst));
+    }
+    if (dstDaosFile.isDirectory()) {
+      // If dst is a directory
+      dst = new Path(dst, src.getName());
+    } else {
+      // If dst is not a directory
+      throw new FileAlreadyExistsException(String.format(
+                "Failed to rename %s to %s, file already exists ,%s is not a directory!", src, dst ,dst));
+    }
+    innerMove(srcDaosFile, dst);
     return true;
+  }
+
+  /**
+   * The DAOS move operation.
+   * This operation translate and throws an exception on any failure which
+   *
+   * @param srcDaosFile path to be renamed
+   * @param dst new path after rename
+   * @throws IOException
+   */
+  private void innerMove(DaosFile srcDaosFile, Path  dst) throws IOException {
+    try {
+      srcDaosFile.rename(dst.toUri().getPath());
+    } catch (IOException ioexception) {
+      if (ioexception instanceof DaosIOException ) {
+        DaosIOException daosIOException = (DaosIOException) ioexception;
+        throw HadoopDaosUtils.translateException(daosIOException);
+      }
+      throw ioexception;
+    }
   }
 
   @Override
