@@ -3015,7 +3015,7 @@ out:
 }
 
 int
-ds_pool_target_update(uuid_t pool_uuid, d_rank_list_t *ranks,
+ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 		uint32_t rank, struct pool_target_id_list *target_list,
 		pool_comp_state_t state)
 {

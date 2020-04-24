@@ -82,7 +82,6 @@ message PoolReintegrateResp {
 	int32 status = 1; // DAOS error code
 }
 
-
 // ListPoolsReq represents a request to list pools on a given DAOS system.
 message ListPoolsReq {
 	string sys = 1; // DAOS system identifier

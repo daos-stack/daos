@@ -588,7 +588,7 @@ ds_mgmt_pool_change_operation(char *id, size_t n_targetidx, uint32_t *targetidx,
 	for (i = 0; i < n_targetidx; ++i)
 		reint_list.pti_ids[i].pti_id = targetidx[i];
 
-	rc = ds_mgmt_pool_target_update(uuid, rank, &reint_list, state);
+	rc = ds_mgmt_pool_target_update_state(uuid, rank, &reint_list, state);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", uuid,
 			DP_RC(rc));
