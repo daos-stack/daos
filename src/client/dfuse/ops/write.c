@@ -29,9 +29,13 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	       off_t position, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	const struct fuse_ctx		*fc = fuse_req_ctx(req);
 	d_iov_t				iov = {};
 	d_sg_list_t			sgl = {};
 	int				rc;
+
+	DFUSE_TRA_INFO(oh, "%#zx-%#zx requested pid=%d",
+		       position, position + len - 1, fc->pid);
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);

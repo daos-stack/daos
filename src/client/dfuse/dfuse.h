@@ -307,9 +307,13 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#x dir:%d",	\
+		const struct fuse_ctx *__fc = fuse_req_ctx(req);	\
+		DFUSE_TRA_DEBUG(ie,					\
+				"Returning attr mode %#x size %zi dir:%d pid=%d", \
 				(attr)->st_mode,			\
-				S_ISDIR(((attr)->st_mode)));		\
+				(attr)->st_size,			\
+				S_ISDIR(((attr)->st_mode)),		\
+				__fc->pid);				\
 		__rc = fuse_reply_attr(req, attr,			\
 				(ie)->ie_dfs->dfs_attr_timeout);	\
 		if (__rc != 0)						\
@@ -358,7 +362,8 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_OPEN(oh, req, fi)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(oh, "Returning open");		\
+		DFUSE_TRA_DEBUG(oh, "Returning open direct:%d",		\
+				(fi)->direct_io);			\
 		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
 			(fi)->keep_cache = 1;				\
 			(fi)->cache_readdir = 1;			\
@@ -375,7 +380,8 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_OPEN(oh, req, fi)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(oh, "Returning open");		\
+		DFUSE_TRA_DEBUG(oh, "Returning open direct:%d",		\
+				(fi)->direct_io);			\
 		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
 			(fi)->keep_cache = 1;				\
 		}							\
