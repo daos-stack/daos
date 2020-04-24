@@ -33,20 +33,25 @@ from write_host_file import write_host_file
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from daos_utils import DaosCommand
-from command_utils import Mpirun, CommandFailure
+from command_utils import CommandFailure
+from job_manager_utils import Mpirun
 from mpio_utils import MpioUtils
 
 try:
     # python 3.x
-    import queue as queue
+    import queue
 except ImportError:
     # python 2.7
     import Queue as queue
 
+
 class NvmeFragmentation(TestWithServers):
     # pylint: disable=too-many-ancestors
-    """Test class Description: Verify the drive fragmentation does free
-    the space and do not lead to ENOM_SPACE.
+    """NVMe drive fragmentation test cases.
+
+    Test class Description:
+        Verify the drive fragmentation does free the space and do not lead to
+        ENOM_SPACE.
 
     :avocado: recursive
     """
@@ -69,6 +74,7 @@ class NvmeFragmentation(TestWithServers):
 
     def ior_runner_thread(self, results):
         """Start threads and wait until all threads are finished.
+
         Destroy the container at the end of this thread run.
 
         Args:
@@ -76,6 +82,7 @@ class NvmeFragmentation(TestWithServers):
 
         Returns:
             None
+
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
         container_info = {}
@@ -86,7 +93,7 @@ class NvmeFragmentation(TestWithServers):
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
             self.fail("Exiting Test: Mpich not installed")
 
-        #Iterate through IOR different value and run in sequence
+        # Iterate through IOR different value and run in sequence
         for oclass, api, test, flags in product(self.ior_daos_oclass,
                                                 self.ior_apis,
                                                 self.ior_transfer_size,
@@ -107,30 +114,28 @@ class NvmeFragmentation(TestWithServers):
                                    test[0])] = str(uuid.uuid4())
 
             # Define the job manager for the IOR command
-            manager = Mpirun(ior_cmd,
-                             os.path.join(mpio_util.mpichinstall, "bin"),
-                             mpitype="mpich")
+            manager = Mpirun(ior_cmd, mpitype="mpich")
             manager.job.daos_cont.update(container_info
                                          ["{}{}{}".format(oclass,
                                                           api,
                                                           test[0])])
-            env = ior_cmd.get_default_env(str(manager), self.tmp)
+            env = ior_cmd.get_default_env(str(manager))
             manager.setup_command(env, self.hostfile_clients,
                                   processes)
 
-            #run IOR Command
+            # run IOR Command
             try:
                 manager.run()
             except CommandFailure as _error:
                 results.put("FAIL")
 
-        #Destroy the container created by thread
+        # Destroy the container created by thread
         for key in container_info:
             cmd.sub_command_class.sub_command_class.pool.value = self.pool.uuid
             cmd.sub_command_class.sub_command_class.svc.value = \
-            self.pool.svc_ranks
+                self.pool.svc_ranks
             cmd.sub_command_class.sub_command_class.cont.value = \
-            container_info[key]
+                container_info[key]
 
             try:
                 cmd._get_result()
@@ -160,7 +165,7 @@ class NvmeFragmentation(TestWithServers):
         self.pool.create()
         self.pool.display_pool_daos_space("Pool space at the Beginning")
 
-        #Repeat the test for 30 times which will take ~1 hour
+        # Repeat the test for 30 times which will take ~1 hour
         for test_loop in range(30):
             self.log.info("--Test Repeat for loop %s---", test_loop)
             # Create the IOR threads
@@ -178,7 +183,7 @@ class NvmeFragmentation(TestWithServers):
             for thrd in threads:
                 thrd.join()
 
-            #Verify the queue and make sure no FAIL for any IOR run
+            # Verify the queue and make sure no FAIL for any IOR run
             while not self.out_queue.empty():
                 if self.out_queue.get() == "FAIL":
                     self.fail("FAIL")
