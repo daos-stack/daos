@@ -8,6 +8,7 @@ import org.apache.hadoop.fs.FileSystemContractBaseTest;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 
 import static org.junit.Assume.assumeTrue;
@@ -206,6 +207,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertEquals("Length", data.length, fs.getFileStatus(path).getLen());
     assertTrue("Parent exists", fs.exists(path.getParent()));
   }
+
 
  @Override
   public void testListStatus() throws Exception {

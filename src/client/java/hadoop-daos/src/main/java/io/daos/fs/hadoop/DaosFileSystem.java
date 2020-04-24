@@ -578,14 +578,8 @@ public class DaosFileSystem extends FileSystem {
       } else {
         result.add(getFileStatus(f, file));
       }
-    } catch (IOException e) {
-      if (e instanceof DaosIOException) {
-        DaosIOException de = (DaosIOException) e;
-        if (de.getErrorCode() == io.daos.dfs.Constants.ERROR_CODE_NOT_EXIST) {
-          throw new FileNotFoundException(e.getMessage());
-        }
-      }
-      throw e;
+    } catch (DaosIOException e) {
+      throw HadoopDaosUtils.translateException(e);
     }
     return result.toArray(new FileStatus[result.size()]);
   }
