@@ -29,7 +29,7 @@ from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from avocado.utils import process
-from command_utils import BasicParameter, CommandFailure
+from command_utils_base import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
                         daos_cref)
 from general_utils import check_pool_files, DaosTestError

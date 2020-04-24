@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2019 Intel Corporation.
+"""
+  (C) Copyright 2019-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,28 +20,28 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 import os
 import subprocess
 from env_modules import load_mpi
-from command_utils import EnvironmentVariables
+from command_utils_base import EnvironmentVariables
 
 
 class MpioFailed(Exception):
-    """Raise if MPIO failed"""
+    """Raise if MPIO failed."""
+
 
 class MpioUtils():
-    """MpioUtils Class"""
+    """MpioUtils Class."""
 
     def __init__(self):
-
+        """Initialize a MpioUtils object."""
         self.mpichinstall = None
 
     def mpich_installed(self, hostlist):
-        """Check if mpich is installed"""
-
+        """Check if mpich is installed."""
         load_mpi('mpich')
 
         try:
@@ -59,14 +59,21 @@ class MpioUtils():
     # pylint: disable=R0913
     def run_mpiio_tests(self, hostfile, pool_uuid, svcl, test_repo,
                         test_name, client_processes, cont_uuid):
-        """
-            Running LLNL, MPI4PY and HDF5 testsuites
-            Function Arguments:
-                hostfile          --client hostfile
-                pool_uuid         --Pool UUID
-                svcl              --Pool SVCL
-                test_repo         --test repo location
-                test_name         --name of test to be tested
+        """Run LLNL, MPI4PY and HDF5 testsuites.
+
+        Args:
+            hostfile (str): client hostfile
+            pool_uuid (str): pool UUID
+            svcl (list): pool SVCL
+            test_repo (str): test repo location
+            test_name (str): name of test to be tested
+            client_processes (int): number of client processes per host
+            cont_uuid (str): container UUID
+
+        Raises:
+            MpioFailed: if the test name is invalid or there is an error running
+                the valid test name successfully
+
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
@@ -95,8 +102,8 @@ class MpioUtils():
                         os.path.join(test_repo, 'testmpio_daos'),
                         '1']
             cmd = " ".join(test_cmd)
-        elif test_name == "mpi4py" and \
-             os.path.isfile(os.path.join(test_repo, "test_io_daos.py")):
+        elif test_name == "mpi4py" and os.path.isfile(
+                os.path.join(test_repo, "test_io_daos.py")):
             test_cmd = [env.get_export_str(),
                         mpirun,
                         '-np',
@@ -106,9 +113,9 @@ class MpioUtils():
                         'python',
                         os.path.join(test_repo, 'test_io_daos.py')]
             cmd = " ".join(test_cmd)
-        elif test_name == "hdf5" and \
-             (os.path.isfile(os.path.join(test_repo, "testphdf5")) and
-              os.path.isfile(os.path.join(test_repo, "t_shapesame"))):
+        elif test_name == "hdf5" and (
+                os.path.isfile(os.path.join(test_repo, "testphdf5")) and
+                os.path.isfile(os.path.join(test_repo, "t_shapesame"))):
             env["HDF5_PARAPREFIX"] = "daos:"
             cmd = ''
             for test in ["testphdf5", "t_shapesame"]:
@@ -143,5 +150,5 @@ class MpioUtils():
                                  + " code:{}".format(process.poll()))
 
         except (ValueError, OSError) as excep:
-            raise MpioFailed("<Test FAILED> \nException occurred: {}"\
-                                 .format(str(excep)))
+            raise MpioFailed(
+                "<Test FAILED> \nException occurred: {}".format(str(excep)))

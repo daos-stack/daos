@@ -29,7 +29,7 @@ from apricot import TestWithServers
 from test_utils_pool import TestPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun, Orterun
 from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
