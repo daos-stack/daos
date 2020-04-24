@@ -836,6 +836,22 @@ record_size_larger_than_chunksize(void **state)
 }
 
 static void
+overlapping_after_first_chunk(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 4,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.server_verify = false,
+		.rec_size = 1,
+		.recx_cfgs = {
+			{.idx = 0, .nr = 8, .data = "12345678"},
+			{.idx = 0, .nr = 4, .data = "ABCD"},
+		},
+		.fetch_recx = {.rx_idx = 0, .rx_nr = 8},
+	});
+}
+
+static void
 single_value_test(void **state, bool large_buf)
 {
 	struct csum_test_ctx	ctx = {0};
@@ -1336,6 +1352,8 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM3.2: Unaligned record size", unaligned_record_size),
 	CSUM_TEST("DAOS_CSUM3.3: Record size is larger than chunk size",
 		record_size_larger_than_chunksize),
+	CSUM_TEST("DAOS_CSUM03.4: Setup multiple overlapping/unaligned extents",
+		  overlapping_after_first_chunk),
 	CSUM_TEST("DAOS_CSUM04: Server data corrupted after RDMA",
 		  test_server_data_corruption),
 	CSUM_TEST("DAOS_CSUM05: Single Value Checksum", single_value),
