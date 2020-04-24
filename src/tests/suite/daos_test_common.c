@@ -587,8 +587,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 		if (arg->srv_nnodes - disable_nodes < required_nodes) {
 			if (arg->myrank == 0)
 				print_message("Not enough targets(need %d),"
-					      " skipping "
-					      "(%d/%d)\n",
+					      " skipping (%d/%d)\n",
 					      required_nodes,
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);
@@ -712,9 +711,11 @@ test_rebuild_query(test_arg_t **args, int args_cnt)
 	int i;
 
 	for (i = 0; i < args_cnt; i++) {
-		bool done;
+		bool done = true;
 
-		done = rebuild_pool_wait(args[i]);
+		if (!args[i]->pool.destroyed)
+			done = rebuild_pool_wait(args[i]);
+
 		if (!done)
 			all_done = false;
 	}

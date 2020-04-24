@@ -367,7 +367,7 @@ ts_add_rect(void **state)
 	entry.ei_ver = 0;
 	entry.ei_inob = val == NULL ? 0 : 1;
 
-	rc = evt_insert(ts_toh, &entry);
+	rc = evt_insert(ts_toh, &entry, NULL);
 	if (rc == 0)
 		total_added++;
 	if (should_pass) {
@@ -709,7 +709,7 @@ ts_many_add(void **state)
 		entry.ei_ver = 0;
 		entry.ei_inob = 1;
 
-		rc = evt_insert(ts_toh, &entry);
+		rc = evt_insert(ts_toh, &entry, NULL);
 		if (rc != 0) {
 			D_FATAL("Add rect %d failed "DF_RC"\n", i, DP_RC(rc));
 			fail();
@@ -1083,7 +1083,7 @@ test_evt_iter_flags(void **state)
 			}
 			if (rc != 0)
 				goto finish;
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			if (rc != 0)
 				goto finish;
 		}
@@ -1211,7 +1211,7 @@ test_evt_iter_delete(void **state)
 					    sizeof(sum));
 			assert_int_equal(rc, 0);
 
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			assert_int_equal(rc, 0);
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
@@ -1364,7 +1364,7 @@ test_evt_find_internal(void **state)
 						testdata, sizeof(testdata));
 				assert_int_equal(rc, 0);
 			}
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			assert_int_equal(rc, 0);
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
@@ -1478,7 +1478,7 @@ test_evt_iter_delete_internal(void **state)
 					    &offset, sizeof(offset));
 			assert_int_equal(rc, 0);
 
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			assert_int_equal(rc, 0);
 		}
 	}
@@ -1544,7 +1544,7 @@ test_evt_variable_record_size_internal(void **state)
 			rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
 					    data, data_size);
 			assert_int_equal(rc, 0);
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			if (count > 0)
 				assert_int_not_equal(rc, 0);
 			else
@@ -1616,7 +1616,7 @@ test_evt_various_data_size_internal(void **state)
 				assert_int_equal(rc, -DER_NOSPACE);
 				break;
 			}
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			if (rc != 0) {
 				assert_int_equal(rc, -DER_NOSPACE);
 				break;
@@ -1852,7 +1852,7 @@ test_evt_overlap_split_internal(void **state)
 		rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
 				    data, data_size);
 		assert_int_equal(rc, 0);
-		rc = evt_insert(toh, &entry);
+		rc = evt_insert(toh, &entry, NULL);
 		assert_int_equal(rc, 0);
 		memset(data, 0, data_size);
 	}
@@ -1932,7 +1932,7 @@ insert_and_check(daos_handle_t toh, struct evt_entry_in *entry, int idx, int nr)
 	entry->ei_rect.rc_ex.ex_lo = idx;
 	entry->ei_rect.rc_ex.ex_hi = idx + nr - 1;
 	entry->ei_rect.rc_epc = epoch;
-	rc = evt_insert(toh, entry);
+	rc = evt_insert(toh, entry, NULL);
 	assert_int_equal(rc, 0);
 
 	return epoch++;
@@ -2082,7 +2082,7 @@ test_evt_outer_punch(void **state)
 					    sizeof(sum));
 			assert_int_equal(rc, 0);
 
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			assert_int_equal(rc, 0);
 		}
 	}

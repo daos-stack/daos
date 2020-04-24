@@ -2,7 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0a1-0.7.git.41caa14%{?dist}
+%global mercury_version 2.0.0a1-0.8.git.4871023%{?dist}
 
 Name:          daos
 Version:       1.1.0
@@ -274,7 +274,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/dmg
 %{_bindir}/dmg_old
 %{_bindir}/daosctl
-%{_bindir}/dcont
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
@@ -349,8 +348,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 * Thu Apr 16 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-12
 - Use distro fuse
 
-* Fri Apr 10 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-11
-- Intentionally skipped Release
+* Fri Apr 10 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-11
+- Update to mercury 4871023 to pick na_ofi.c race condition fix for
+  "No route to host" errors.
 
 * Sun Apr 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-10
 - Clean up spdk dependencies

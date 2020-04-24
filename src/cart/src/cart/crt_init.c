@@ -55,7 +55,8 @@ dump_envariables(void)
 		"D_LOG_FILE_APPEND_PID", "D_LOG_MASK", "DD_MASK",
 		"DD_STDERR", "DD_SUBSYS", "CRT_TIMEOUT", "CRT_ATTACH_INFO_PATH",
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
-		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG"};
+		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
+		"FI_UNIVERSE_SIZE"};
 
 	D_DEBUG(DB_ALL, "-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
@@ -71,6 +72,7 @@ static int data_init(crt_init_options_t *opt)
 	uint32_t	credits;
 	bool		share_addr = false;
 	uint32_t	ctx_num = 1;
+	uint32_t	fi_univ_size = 0;
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -121,6 +123,13 @@ static int data_init(crt_init_options_t *opt)
 		d_getenv_int("CRT_CREDIT_EP_CTX", &credits);
 	}
 
+	/* This is a workaround for CART-871 if universe size is not set */
+	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
+	if (fi_univ_size == 0) {
+		D_WARN("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
+		setenv("FI_UNIVERSE_SIZE", "2048", 1);
+	}
+
 	if (credits == 0) {
 		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as 0, flow control "
 			"disabled.\n");
@@ -157,13 +166,6 @@ static int data_init(crt_init_options_t *opt)
 	if (crt_gdata.cg_share_na == false && crt_gdata.cg_ctx_max_num > 1)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
-
-	if (opt) {
-		if (opt->cio_fault_inject)
-			d_fault_inject_enable();
-		else
-			d_fault_inject_disable();
-	}
 
 	gdata_init_flag = 1;
 exit:

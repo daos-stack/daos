@@ -26,6 +26,7 @@ package control
 import (
 	"context"
 	"os/user"
+	"strconv"
 	"strings"
 
 	"github.com/golang/protobuf/proto"
@@ -281,4 +282,140 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 
 	pqr := new(PoolQueryResp)
 	return pqr, convertMSResponse(ur, pqr)
+}
+
+// PoolSetPropReq contains pool set-prop parameters.
+type PoolSetPropReq struct {
+	msRequest
+	unaryRequest
+	// UUID identifies the pool for which this property should be set.
+	UUID string
+	// Property is always a string representation of the pool property.
+	// It will be resolved into the C representation prior to being
+	// forwarded over dRPC.
+	Property string
+	// Value is an approximation of the union in daos_prop_entry.
+	// It can be either a string or a uint64. Struct-based properties
+	// are not supported via this API.
+	Value interface{}
+}
+
+// SetString sets the property value to a string.
+func (pspr *PoolSetPropReq) SetString(strVal string) {
+	pspr.Value = strVal
+}
+
+// SetNumber sets the property value to a uint64 number.
+func (pspr *PoolSetPropReq) SetNumber(numVal uint64) {
+	pspr.Value = numVal
+}
+
+// PoolSetPropResp contains the response to a pool set-prop operation.
+type PoolSetPropResp struct {
+	UUID     string
+	Property string `json:"Name"`
+	Value    string
+}
+
+// PoolSetProp sends a pool set-prop request to the pool service leader.
+func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropReq) (*PoolSetPropResp, error) {
+	if err := checkUUID(req.UUID); err != nil {
+		return nil, err
+	}
+
+	if req.Property == "" {
+		return nil, errors.Errorf("invalid property name %q", req.Property)
+	}
+
+	pbReq := &mgmtpb.PoolSetPropReq{
+		Uuid: req.UUID,
+	}
+	pbReq.SetPropertyName(req.Property)
+
+	switch val := req.Value.(type) {
+	case string:
+		pbReq.SetValueString(val)
+	case uint64:
+		pbReq.SetValueNumber(val)
+	default:
+		return nil, errors.Errorf("unhandled property value: %+v", req.Value)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolSetProp(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("Query DAOS pool set-prop request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, err
+	}
+
+	pbResp, ok := msResp.(*mgmtpb.PoolSetPropResp)
+	if !ok {
+		return nil, errors.New("unable to extract PoolSetPropResp from MS response")
+	}
+
+	pspr := &PoolSetPropResp{
+		UUID:     req.UUID,
+		Property: pbResp.GetName(),
+	}
+
+	switch v := pbResp.GetValue().(type) {
+	case *mgmtpb.PoolSetPropResp_Strval:
+		pspr.Value = v.Strval
+	case *mgmtpb.PoolSetPropResp_Numval:
+		pspr.Value = strconv.FormatUint(v.Numval, 10)
+	default:
+		return nil, errors.Errorf("unable to represent response value %+v", pbResp.Value)
+	}
+
+	return pspr, nil
+}
+
+// PoolReintegrateReq struct contains request
+type PoolReintegrateReq struct {
+	unaryRequest
+	msRequest
+	UUID      string
+	Rank      uint32
+	Targetidx []uint32
+}
+
+// ReintegrateResp has no other parameters other than success/failure for now.
+
+// PoolReintegrate will set a pool target for a specific rank back to up.
+// This should automatically start the reintegration process.
+// Returns an error (including any DER code from DAOS).
+func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, &mgmtpb.PoolReintegrateReq{
+			Uuid:      req.UUID,
+			Rank:      req.Rank,
+			Targetidx: req.Targetidx,
+		})
+	})
+
+	rpcClient.Debugf("Reintegrate DAOS pool target request: %v\n", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool reintegrate failed")
+	}
+	rpcClient.Debugf("Reintegrate DAOS pool target response: %s\n", msResp)
+
+	return nil
 }

@@ -66,8 +66,6 @@ extern unsigned int	d_fault_inject;
 extern unsigned int	d_fault_config_file;
 
 extern struct d_fault_attr_t *d_fault_attr_mem;
-extern int d_fault_id_mem;
-
 struct d_fault_attr_t {
 	/**
 	 * config id, used to select configuration from the fault_inject config
@@ -139,6 +137,7 @@ void d_fault_inject_enable(void);
  */
 void d_fault_inject_disable(void);
 
+bool d_fault_inject_is_enabled(void);
 
 bool d_should_fail(struct d_fault_attr_t *fault_attr_ptr);
 

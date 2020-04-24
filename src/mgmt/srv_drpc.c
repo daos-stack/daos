@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 #include "srv.pb-c.h"
 #include "acl.pb-c.h"
 #include "pool.pb-c.h"
+#include "cont.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -597,13 +598,13 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
-	rc = pool_target_id_list_alloc(req->n_targets, &reint_list);
+	rc = pool_target_id_list_alloc(req->n_targetidx, &reint_list);
 	if (rc)
 		D_GOTO(out, rc);
 
 	reint_rank = req->rank;
-	for (i = 0; i < req->n_targets; ++i)
-		reint_list.pti_ids[i].pti_id = req->targets[i];
+	for (i = 0; i < req->n_targetidx; ++i)
+		reint_list.pti_ids[i].pti_id = req->targetidx[i];
 
 	rc = ds_mgmt_pool_reintegrate(uuid, reint_rank, &reint_list);
 	if (rc != 0) {
@@ -1735,5 +1736,57 @@ ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 
 	pack_daos_response(&resp, drpc_resp);
+}
+
+void
+ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__ContSetOwnerReq	*req = NULL;
+	Mgmt__ContSetOwnerResp	 resp = MGMT__CONT_SET_OWNER_RESP__INIT;
+	uint8_t			*body;
+	size_t			 len;
+	uuid_t			 pool_uuid, cont_uuid;
+	int			 rc = 0;
+
+	req = mgmt__cont_set_owner_req__unpack(NULL, drpc_req->body.len,
+					       drpc_req->body.data);
+
+	if (req == NULL) {
+		D_ERROR("Failed to unpack req (cont set owner)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to change container owner\n");
+
+	if (uuid_parse(req->contuuid, cont_uuid) != 0) {
+		D_ERROR("Container UUID is invalid\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (uuid_parse(req->pooluuid, pool_uuid) != 0) {
+		D_ERROR("Pool UUID is invalid\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = ds_mgmt_cont_set_owner(pool_uuid, cont_uuid, req->owneruser,
+				    req->ownergroup);
+	if (rc != 0)
+		D_ERROR("Set owner failed: %d\n", rc);
+
+out:
+	resp.status = rc;
+	len = mgmt__cont_set_owner_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__cont_set_owner_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__cont_set_owner_req__free_unpacked(req, NULL);
 }
 
