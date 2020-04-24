@@ -222,17 +222,16 @@ class SoakTestBase(TestWithServers):
         # copy the files from the remote
         # TO-DO: change scp
         this_host = socket.gethostname()
-        rsync_str = "rsync -avtr --min-size=1B"
+        command = "/usr/bin/bash -c \"/usr/bin/rsync -avtr --min-size=1B " \
+            "{0} {1}:{0}/.. && rm -rf {0}/*\"".format(
+                self.test_log_dir, this_host)
         result = slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients),
-            "bash -c \"{0} {1} {2}:{1}/.. && rm -rf {1}/*\"".format(
-                rsync_str, self.test_log_dir, this_host),
-            self.srun_params)
+            NodeSet.fromlist(self.hostlist_clients), command, self.srun_params)
         if result.exit_status == 0:
-            cmd = "cp -R -p {0}/ \'{1}\'; rm -rf {0}/*".format(
-                self.test_log_dir, self.outputsoakdir)
+            command = "/usr/bin/bash -c \"cp -R -p {0}/ \'{1}\'; rm -rf " \
+                "{0}/*\"".format(self.test_log_dir, self.outputsoakdir)
             try:
-                result = process.run(cmd, shell=True, timeout=30)
+                result = process.run(command, shell=True, timeout=30)
             except process.CmdError as error:
                 raise SoakTestError(
                     "<<FAILED: Soak remote logfiles not copied"
@@ -496,7 +495,7 @@ class SoakTestBase(TestWithServers):
             pool.uuid, ":".join(
                 [str(item) for item in pool.svc_ranks]))
         try:
-            result = process.run(cmd, shell=True, timeout=30)
+            result = process.run(cmd, timeout=30)
         except process.CmdError as error:
             raise SoakTestError(
                 "<<FAILED: Dfuse container failed {}>>".format(error))
@@ -881,7 +880,7 @@ class SoakTestBase(TestWithServers):
         # cleanup test_node /tmp/soak
         cmd = "rm -rf {}".format(self.log_dir)
         try:
-            result = process.run(cmd, shell=True, timeout=30)
+            result = process.run(cmd, timeout=30)
         except process.CmdError as error:
             raise SoakTestError(
                 "<<FAILED: Soak directory on testnode not removed {}>>".format(

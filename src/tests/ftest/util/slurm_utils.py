@@ -26,10 +26,12 @@ from __future__ import print_function
 import os
 import random
 import time
-import subprocess
 import threading
 import re
+
 from avocado.utils import process
+
+from general_utils import run_command
 
 W_LOCK = threading.Lock()
 
@@ -147,7 +149,7 @@ def run_slurm_script(script, logfile=None):
         script = " -o " + logfile + " " + script
     cmd = "sbatch " + script
     try:
-        result = process.run(cmd, shell=True, timeout=10)
+        result = process.run(cmd, timeout=10)
     except process.CmdError as error:
         result = None
         raise SlurmFailed("job failed : {}".format(error))
@@ -169,9 +171,8 @@ def check_slurm_job(handle):
                 one extra UNKNOWN if the handle doesn't match a known
                 slurm job.
     """
-    cmd = "scontrol show job {}".format(handle)
-    output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-    match = re.search(r"JobState=([a-zA-Z]+)", str(output))
+    result = run_command("scontrol show job {}".format(handle))
+    match = re.search(r"JobState=([a-zA-Z]+)", result.stderr_text)
     if match is not None:
         state = match.group(1)
     else:
@@ -246,7 +247,7 @@ def srun(nodes, cmd, srun_params=None):
             params = " ".join(params_list)
     cmd = "srun --nodelist={} {} {}".format(nodes, params, cmd)
     try:
-        result = process.run(cmd, shell=True, timeout=30)
+        result = process.run(cmd, timeout=30)
     except process.CmdError as error:
         result = None
         raise SlurmFailed("srun failed : {}".format(error))

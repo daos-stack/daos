@@ -12,55 +12,44 @@ hosts:
 timeout: 600
 server_config:
     name: daos_server
-daos_perf:
-  pool_size:
-    scm:
-      size: '20G'
-  client_processes: !mux
-    np_1:
-      np: 1
-      mode: 'vos'
-      value_size:
-        size_1k:
-          size: '1k'
-      value_type: !mux
+doas_perf:
+  pool_scm_size: 20G
+  processes_mux: !mux
+    1_process:
+      processes: 1
+      test_type: vos
+      value_size: 1k
+
+      akey_use_array_mux: !mux
         single_value:
+          akey_use_array: False
           obj: 8
-          dkeys: '1k'
-          akeys: '512'
+          dkeys: 1k
+          akeys: 512
           records: 1
-          flags: !mux
-            with_shuffle:
-              F: "-S"
-            without_shuffle:
-              F: " "
+
         array_value:
+          akey_use_array: True
           obj: 1
           dkeys: 1
           akeys: 1
-          records: '2m'
-          flags: !mux
-            with_shuffle:
-              F: "-A -S"
-            without_shuffle:
-              F: "-A"
-    np_16:
-      np: 16
-      mode: 'daos'
-      value_size:
-       size_1k:
-         size: '1k'
-      value_type:
+          records: 2m
+
+    16_processes:
+      processes: 16
+      test_type: daos
+      value_size: 1k
+
+      akey_use_array_mux: !mux
         single_value:
+          akey_use_array: False
           obj: 8
-          dkeys: '256'
+          dkeys: 256
           akeys: 64
           records: 1
-          flags:
-            for_singlevalue:
-              F: ' '
-      oclass: !mux
-        large:
-          o: 'LARGE'
-        r2:
-          o: 'R2S'
+
+      object_class_mux: !mux
+        SX_oclass:
+          object_class: SX
+        RP_2G1_oclass:
+          object_class: RP_2G1

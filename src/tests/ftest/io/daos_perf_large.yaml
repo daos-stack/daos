@@ -15,36 +15,27 @@ hosts:
 timeout: 2000
 server_config:
     name: daos_server
-daos_perf_large:
-  pool_size:
-    scm:
-      size: '10G'
-    nvme:
-      size: '40G'
-  client_processes:
-    np_64:
-      np: 64
-      mode: 'daos'
-      value_size: !mux
-        size_256:
-          size: 256
-        size_4k:
-          size: '4k'
-      value_type:
-        single_value:
-          objects: !mux
-            obj_1:
-              obj: 1
-            obj_8:
-              obj: 8
-          dkeys: '4k'
-          akeys: '1k'
-          records: 1
-          flags:
-            for_singlevalue:
-              F: ' '
-      oclass: !mux
-        large:
-          o: 'Large'
-        r2:
-          o: 'R2'
+doas_perf:
+  pool_scm_size: 10G
+  pool_nvme_size: 40G
+  processes: 64
+  test_type: daos
+  value_size_mux: !mux
+    value_size_256:
+      value_size: 256
+    value_size_4k:
+      value_size: 4k
+  akey_use_array: False
+  obj_mux: !mux
+    obj_1:
+      obj: 1
+    obj_8:
+      obj: 8
+  dkeys: 4k
+  akeys: 1k
+  records: 1
+  object_class_mux: !mux
+    SX_oclass:
+      object_class: SX
+    RP_2G1_oclass:
+      object_class: RP_2G1
