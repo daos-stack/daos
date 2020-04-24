@@ -310,7 +310,9 @@ class DaosServerManager(SubprocessManager):
             server_command (ServerCommand): server command object
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
-                Defaults to "OpenMpi"
+                Defaults to "OpenMpi".
+            dmg_cfg (DmgYamlParameters, optional): The dmg configuration
+                file parameters used to connect to this group of servers.
         """
         super(DaosServerManager, self).__init__(server_command, manager)
         self.manager.job.sub_command_override = "start"
@@ -350,10 +352,10 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.create_yaml_file()
 
         # Prepare dmg for running storage format on all server hosts
-        if self.dmg.yaml is not None:
-            self.dmg.yaml.hostlist.value = self._hosts
-        else:
-            self.dmg.hostlist.update(",".join(self._hosts), "dmg.hostlist")
+        self.dmg.hostlist = self._hosts
+        if not self.dmg.yaml:
+            # If using a dmg config file, transport security was
+            # already configured.
             self.dmg.insecure.update(
                 self.get_config_value("allow_insecure"), "dmg.insecure")
 
@@ -496,11 +498,7 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Failed to start servers after format")
 
         # Update the dmg command host list to work with pool create/destroy
-        hostlist = self.get_config_value("access_points")
-        if self.dmg.yaml is not None:
-            self.dmg.yaml.hostlist.value = hostlist
-        else:
-            self.dmg.hostlist.update(",".join(hostlist), "dmg.hostlist")
+        self.dmg.hostlist = self.get_config_value("access_points")
 
     def reset_storage(self):
         """Reset the server storage.
@@ -558,7 +556,7 @@ class DaosServerManager(SubprocessManager):
 
         # Format storage and wait for server to change ownership
         self.log.info(
-            "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist.value)
+            "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         self.dmg.storage_format()
 
         # Wait for all the doas_io_servers to start

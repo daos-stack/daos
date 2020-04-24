@@ -43,7 +43,9 @@ class DmgYamlParameters(YamlParameters):
 
         Args:
             filename (str): yaml configuration file name
-            common_yaml (YamlParameters): [description]
+            name (str): The DAOS system name.
+            transport (DmgTransportCredentials): dmg security
+                configuration settings.
         """
         super(DmgYamlParameters, self).__init__(
             "/run/dmg/*", filename, None, transport)

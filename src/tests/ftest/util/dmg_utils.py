@@ -54,6 +54,9 @@ class DmgCommand(YamlCommand):
 
         Args:
             path (str): path to the dmg command
+            yaml_cfg (DmgYamlParameters, optional): dmg config file
+                settings. Defaults to None, in which case settings
+                must be supplied as command-line paramters.
         """
         super(DmgCommand, self).__init__("/run/dmg/*", "dmg", path, yaml_cfg)
 
@@ -62,27 +65,39 @@ class DmgCommand(YamlCommand):
         if isinstance(self.yaml, YamlParameters):
             default_yaml_file = self.yaml.filename
 
-        self.hostlist = FormattedParameter("-l {}")
+        self._hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")
         self.configpath = FormattedParameter("-o {}", default_yaml_file)
         self.insecure = FormattedParameter("-i", False)
         self.debug = FormattedParameter("-d", False)
         self.json = FormattedParameter("-j", False)
 
-    def set_hostlist(self, manager):
-        """Set the dmg hostlist parameter with the daos server/agent info.
+    @property
+    def hostlist(self):
+        """Get the hostlist that was set.
 
-        Use the daos server/agent access points port and list of hosts to define
-        the dmg --hostlist command line parameter.
+        Returns a string list.
+        """
+        if self.yaml:
+            return self.yaml.hostlist.value
+        else:
+            return self._hostlist.value.split(",")
+
+    @hostlist.setter
+    def hostlist(self, hostlist):
+        """Set the hostlist to be used for dmg invocation.
 
         Args:
-            manager (SubprocessManager): daos server/agent process manager
+            hostlist (string list): list of host addresses
         """
-        if self.yaml is not None:
-            self.yaml.hostlist.value = manager.get_config_value("access_points")
+        if self.yaml:
+            if not isinstance(hostlist, list):
+                hostlist = hostlist.split(",")
+            self.yaml.hostlist.update(hostlist, "dmg.yaml.hostlist")
         else:
-            self.hostlist.update(
-                manager.get_config_value("access_points"), "dmg.hostlist")
+            if isinstance(hostlist, list):
+                hostlist = hostlist.join(",")
+            self._hostlist.update(hostlist, "dmg._hostlist")
 
 
     def get_sub_command_class(self):
@@ -481,7 +496,7 @@ class DmgCommand(YamlCommand):
             CommandFailure: if the dmg command fails.
 
         """
-        if self.yaml is not None:
+        if self.yaml:
             self.create_yaml_file()
 
         result = None

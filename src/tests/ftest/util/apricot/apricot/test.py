@@ -472,6 +472,8 @@ class TestWithServers(TestWithoutServers):
         Args:
             config_file (str, optional): daos server config file name. Defaults
                 to None, which will use a default file name.
+            dmg_config_file (str, optional): dmg config file name. Defaults
+                to None, which will use a default file name.
             common_cfg (CommonConfig, optional): daos server config file
                 settings shared between the agent and server. Defaults to None,
                 which uses the class CommonConfig.
