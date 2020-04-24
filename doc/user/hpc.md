@@ -4,23 +4,22 @@ Several HPC I/O middleware libraries have been ported to the native API.
 
 ## MPI-IO
 
-DAOS has its own MPI-IO ROM ADIO driver located in a MPICH fork on
-[GitHub](https://github.com/daos-stack/mpich).
-
-This driver has been submitted upstream for integration.
+DAOS has its own MPI-IO ROMIO ADIO driver located in a MPICH fork on
+[GitHub](https://github.com/daos-stack/mpich). This driver has been merged in
+the upstream MPICH repo.
 
 To build the MPI-IO driver:
 
 -   export MPI_LIB=""
 
--   download the mpich repo from above and switch to daos_adio branch
+-   download the mpich repo from above
 
 -   ./autogen.sh
 
 -   mkdir build; cd build
 
 -   ../configure --prefix=dir --enable-fortran=all --enable-romio
-    --enable-cxx --enable-g=all --enable-debuginfo
+    --enable-cxx --enable-g=all --enable-debuginfo --with-device=ch3:sock
     --with-file-system=ufs+daos --with-daos=dir --with-cart=dir
 
 -   make -j8; make install
@@ -33,27 +32,19 @@ library installed above (see child pages).
 
 To run an example:
 
-1. Launch DAOS server(s) and create a pool as specified in the previous section.
-   This will return a pool uuid "puuid" and service rank list "svcl"
-2.   At the client side, the following environment variables need to be set:
-
-```bash
-        export PATH=/path/to/mpich/install/bin:$PATH
-        export LD_LIBRARY_PATH=/path/to/mpich/install/lib:$LD_LIBRARY_PATH
-        export MPI_LIB=""
-```
-2.  `export DAOS_POOL=puuid; export DAOS_SVCL=svcl`
-    This is just temporary till we have a better way of passing pool
-    connect info to MPI-IO and other middleware over DAOS.
-3.  Run the client application or test.
+1. Launch DAOS server(s) and create a pool.
+   This will return a pool uuid "puuid" and service rank list "svcl".
+2. Create a POSIX type container:
+   daos cont create --pool=puuid --svc=svcl --type=POSIX
+   This will return a container uuid "cuuid".
+3. At the client side, the following environment variables need to be set:
+   `export DAOS_POOL=puuid; export DAOS_SVCL=svcl; export DAOS_CONT=cuuid`
+   Alternatively, the unified namespace mode can be used instead.
+3. Run the client application or test.
 
 Limitations to the current implementation include:
 
--   Incorrect MPI_File_set_size and MPI_File_get_size - This will be fixed in
-    the future when DAOS correctly supports records enumeration after punch or
-    key query for max/min key and recx.
-
--   Reading Holes does not return 0, but leaves the buffer untouched
+-   Reading Holes does not return 0, but leaves the buffer untouched.
 
 -   No support for MPI file atomicity, preallocate, shared file pointers.
 
