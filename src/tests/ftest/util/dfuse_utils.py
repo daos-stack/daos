@@ -91,7 +91,7 @@ class DfuseCommand(ExecutableCommand):
         """
         self.cuuid.update(cont, "cuuid" if display else None)
 
-    def set_dfuse_exports(self, manager, log_file):
+    def set_dfuse_exports(self, manager, log_file, debug=False):
         """Set exports to issue before the dfuse command.
 
         Args:
@@ -102,8 +102,14 @@ class DfuseCommand(ExecutableCommand):
                 DAOS_TEST_LOG_DIR path with which to assign D_LOG_FILE
         """
         env = self.get_environment(manager, log_file)
-        self.set_environment(env)
 
+        if debug:
+            env['D_LOG_MASK'] = 'INFO,DFUSE=DEBUG'
+            env['DD_MASK'] = 'all'
+        else:
+            env['D_LOG_MASK'] = 'WARN'
+
+        self.set_environment(env)
 
 class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand."""
@@ -199,7 +205,7 @@ class Dfuse(DfuseCommand):
                     "following hosts: {}".format(self.mount_dir.value,
                                                  failed_nodes))
 
-    def run(self, debug=True):
+    def run(self):
         """ Run the dfuse command.
         Raises:
             CommandFailure: In case dfuse run command fails
@@ -306,39 +312,3 @@ class Dfuse(DfuseCommand):
                     self.running_hosts))
         time.sleep(2)
         self.remove_mount_point()
-
-    def get_default_env(self, debug=True):
-
-        """Get the default enviroment settings for running Dfuse.
-        Returns:
-            (str):  a single string of all env vars to be
-                                  exported
-        """
-
-        # obtain any env variables to be exported
-        env = EnvironmentVariables()
-        if self.log_file:
-            env["D_LOG_FILE"] = self.log_file
-
-        if self.dfuse_env:
-            try:
-                with open('{}/{}'.format(self.tmp, AVOCADO_FILE),
-                          'r') as read_file:
-                    for line in read_file:
-                        if ("provider" in line) or ("fabric_iface" in line):
-                            items = line.split()
-                            key, values = items[0][:-1], items[1]
-                            env[key] = values
-
-                env['OFI_INTERFACE'] = env.pop('fabric_iface')
-                env['OFI_PORT'] = env.pop('fabric_iface_port')
-                env['CRT_PHY_ADDR_STR'] = env.pop('provider')
-                if debug:
-                    env['D_LOG_MASK'] = 'INFO,DFUSE=DEBUG'
-                    env['DD_MASK'] = 'all'
-                else:
-                    env['D_LOG_MASK'] = 'WARN'
-            except Exception as err:
-                raise CommandFailure("Failed to read yaml file:{}".format(err))
-
-        return env.get_export_str()

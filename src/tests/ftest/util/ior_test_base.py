@@ -107,11 +107,13 @@ class IorTestBase(TestWithServers):
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
         self.dfuse.set_dfuse_cont_param(self.container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
+        self.dfuse.set_dfuse_exports(self.server_managers[0],
+                                     self.client_log,
+                                     debug)
 
         try:
             # start dfuse
-            self.dfuse.run(debug)
+            self.dfuse.run()
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
                            str(self.dfuse),
