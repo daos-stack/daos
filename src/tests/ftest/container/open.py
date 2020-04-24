@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from __future__ import print_function
-
 import traceback
 import uuid
 
@@ -64,7 +62,7 @@ class OpenContainerTest(TestWithServers):
             Open container with valid and invalid pool handle and container
             UUID
 
-        :avocado: tags=all,container,tiny,full_regression,containeropen
+        :avocado: tags=all,container,tiny,full_regression,container_open
         """
         self.pool = []
         self.container = []
@@ -93,7 +91,7 @@ class OpenContainerTest(TestWithServers):
                 expected_result = RESULT_FAIL
                 break
 
-        # Prepare the messages for the 3 test cases
+        # Prepare the messages for the 3 test cases.
         # Test Bug! indicates that there's something wrong with the test since
         # it shouldn't reach that point
         messages_case_1 = [
@@ -125,24 +123,22 @@ class OpenContainerTest(TestWithServers):
         # Create the pool and connect. Then create the container from the pool
         # Add the pool and the container created into a list
         container_uuids = []
-        #for i in range(2):
-        i = 0
-        while i < 2:
+        for _ in range(2):
             self.pool.append(TestPool(
                 self.context, dmg_command=self.get_dmg_command()))
             self.pool[-1].get_params(self)
             self.pool[-1].create()
             self.pool[-1].connect()
-            self.container.append(TestContainer(self.pool[-1]))
+            self.container.append(TestContainer(pool=self.pool[-1]))
             self.container[-1].get_params(self)
             self.container[-1].create()
             container_uuids.append(uuid.UUID(self.container[-1].uuid))
-            i += 1
 
         # Decide which pool handle and container UUID to use. The PASS/FAIL
         # number corresponds to the index for self.pool and container_uuids
         pool_handle_index = poh_state_num
         container_uuid_index = uuid_state_num
+        open_failed = False
 
         # Case 1
         try:
@@ -156,6 +152,8 @@ class OpenContainerTest(TestWithServers):
             print(traceback.format_exc())
             self.assertEqual(expected_result, RESULT_FAIL,
                              result_messages[test_case][1])
+            open_failed = True
+
         # Case 2. Symmetric to Case 1. Use the other handle and UUID
         pool_handle_index = pool_handle_index ^ 1
         container_uuid_index = container_uuid_index ^ 1
@@ -170,3 +168,15 @@ class OpenContainerTest(TestWithServers):
             print(traceback.format_exc())
             self.assertEqual(expected_result, RESULT_FAIL,
                              result_messages[test_case][3])
+            open_failed = True
+
+        # Calling container.open with invalid pool handle or UUID results in
+        # setting them in the underlying DaosContainer's member. When we try to
+        # destroy it with API in tearDown, it'll pass in the invalid
+        # handle/UUID member to the API and causes an error. Set
+        # self.container = None so that container destroy doesn't occur during
+        # tearDown. Note that we shouldn't set None when open succeeds because
+        # in that case, the container needs to be properly destroyed for the
+        # pool destroy process to work during tearDown.
+        if open_failed:
+            self.container = None
