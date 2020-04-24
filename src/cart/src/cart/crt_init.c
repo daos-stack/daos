@@ -167,13 +167,6 @@ static int data_init(crt_init_options_t *opt)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
 
-	if (opt) {
-		if (opt->cio_fault_inject)
-			d_fault_inject_enable();
-		else
-			d_fault_inject_disable();
-	}
-
 	gdata_init_flag = 1;
 exit:
 	return rc;
