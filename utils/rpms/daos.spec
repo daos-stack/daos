@@ -2,11 +2,11 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0a1-0.7.git.41caa14%{?dist}
+%global mercury_version 2.0.0a1-0.8.git.4871023%{?dist}
 
 Name:          daos
 Version:       1.1.0
-Release:       10%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -340,6 +340,10 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Fri Apr 10 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-11
+- Update to mercury 4871023 to pick na_ofi.c race condition fix for
+  "No route to host" errors.
+
 * Sun Apr 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-10
 - Clean up spdk dependencies
 
