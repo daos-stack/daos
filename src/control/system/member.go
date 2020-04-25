@@ -356,6 +356,8 @@ func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
 
 // Members returns slice of references to all system members filtering members
 // with excluded states and those not in rank list. Results ordered by member rank.
+//
+// Empty rank list implies no filtering/include all.
 func (m *Membership) Members(rankList []Rank, excludedStates ...MemberState) (ms Members) {
 	var ranks []Rank
 

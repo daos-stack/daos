@@ -24,11 +24,14 @@
 package server
 
 import (
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
@@ -74,4 +77,65 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	}
 
 	return makeDrpcCall(dc, module, method, body)
+}
+
+// dPing attempts dRPC request to given rank managed by instance and return
+// success or error from call result or timeout encapsulated in result.
+func (srv *IOServerInstance) dPing(ctx context.Context) *system.MemberResult {
+	rank, err := srv.GetRank()
+	if err != nil {
+		return nil
+	}
+
+	if !srv.isReady() {
+		return system.NewMemberResult(rank, "ping", nil, system.MemberStateStopped)
+	}
+
+	resChan := make(chan *system.MemberResult)
+	go func() {
+		dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodPingRank, nil)
+		resChan <- drespToMemberResult(rank, "ping", dresp, err, system.MemberStateReady)
+	}()
+
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			return system.NewMemberResult(rank, "ping", ctx.Err(),
+				system.MemberStateUnresponsive)
+		}
+		return nil // shutdown
+	case result := <-resChan:
+		return result
+	}
+}
+
+// dPrepShutdown attempts dRPC request to given rank managed by instance and return
+// success or error from call result or timeout encapsulated in result.
+func (srv *IOServerInstance) dPrepShutdown(ctx context.Context) *system.MemberResult {
+	rank, err := srv.GetRank()
+	if err != nil {
+		return nil
+	}
+
+	if !srv.isReady() {
+		return system.NewMemberResult(rank, "prep shutdown", nil, system.MemberStateStopped)
+	}
+
+	resChan := make(chan *system.MemberResult)
+	go func() {
+		dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodPrepShutdown, nil)
+		resChan <- drespToMemberResult(rank, "prep shutdown", dresp, err,
+			system.MemberStateStopping)
+	}()
+
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			return system.NewMemberResult(rank, "prep shutdown", ctx.Err(),
+				system.MemberStateUnresponsive)
+		}
+		return nil // shutdown
+	case result := <-resChan:
+		return result
+	}
 }

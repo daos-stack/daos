@@ -79,6 +79,8 @@ func isUnreachableError(err error) bool {
 
 // resultsFromBadHosts generates member results for ranks on unreachable hosts.
 //
+// Provided hostRanks will only contain the ranks of interest on each host,
+// having previously been filtered based on a supplied rank list.
 // Populate result err with supplied resultErr.
 func (svc *ControlService) resultsFromBadHosts(hostRanks map[string][]system.Rank, hostErrors control.HostErrorsMap) system.MemberResults {
 	ranks := make([]system.Rank, 0, len(hostRanks)*maxIOServers)
@@ -103,12 +105,18 @@ func (svc *ControlService) resultsFromBadHosts(hostRanks map[string][]system.Ran
 
 type systemRanksFunc func(context.Context, control.UnaryInvoker, *control.RanksReq) (*control.RanksResp, error)
 
-func (svc *ControlService) sendRanksReq(ctx context.Context, force bool, ranks []system.Rank, hosts []string, fn systemRanksFunc) (system.MemberResults, error) {
-	hostRanks := svc.membership.HostRanks(ranks...)
+func (svc *ControlService) sendRanksReq(ctx context.Context, force bool, hostRanks map[string][]system.Rank, ranks []system.Rank, hosts []string, fn systemRanksFunc) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, len(hostRanks)*maxIOServers)
+	if hostRanks == nil {
+		hostRanks = svc.membership.HostRanks(ranks...) // results filtered by input rank list
+	}
 
 	req := &control.RanksReq{Ranks: ranks, Force: force}
 	req.SetHostList(hosts)
+	// provided ranks should never be empty at this point
+	if len(ranks) == 0 {
+		return nil, errors.Errorf("no ranks specified in the request: %+v", req)
+	}
 	resp, err := fn(ctx, svc.rpcClient, req)
 	if err != nil {
 		return nil, err
@@ -120,11 +128,9 @@ func (svc *ControlService) sendRanksReq(ctx context.Context, force bool, ranks [
 }
 
 func (svc *ControlService) getResultsFromRanks(ctx context.Context, force bool, rankList []system.Rank, fn systemRanksFunc) (system.MemberResults, error) {
-	hostRanks := svc.membership.HostRanks(rankList...)
+	hostRanks := svc.membership.HostRanks(rankList...) // results filtered by input rank list
 	totalRankList := make([]system.Rank, 0, len(hostRanks)*maxIOServers)
 	hostList := make([]string, 0, len(hostRanks))
-
-	svc.log.Debugf("sending requests to hosts/ranks: %v", hostRanks)
 
 	msMember, err := svc.getMSMember()
 	if err != nil {
@@ -145,7 +151,7 @@ func (svc *ControlService) getResultsFromRanks(ctx context.Context, force bool, 
 		hostList = append(hostList, addr)
 	}
 
-	return svc.sendRanksReq(ctx, force, totalRankList, hostList, fn)
+	return svc.sendRanksReq(ctx, force, hostRanks, totalRankList, hostList, fn)
 }
 
 func (svc *ControlService) getResultsFromMSRank(ctx context.Context, force bool, rankList []system.Rank, fn systemRanksFunc) (system.MemberResults, error) {
@@ -160,7 +166,7 @@ func (svc *ControlService) getResultsFromMSRank(ctx context.Context, force bool,
 		return nil, nil
 	}
 
-	return svc.sendRanksReq(ctx, force, []system.Rank{msRank},
+	return svc.sendRanksReq(ctx, force, nil, []system.Rank{msRank},
 		[]string{msMember.Addr.String()}, fn)
 }
 
@@ -171,7 +177,7 @@ func (svc *ControlService) getResultsFromMSRank(ctx context.Context, force bool,
 // Each host address represents a gRPC server associated with a harness managing
 // one or more data-plane instances (DAOS system members).
 func (svc *ControlService) updateMemberStatus(ctx context.Context, rankList []system.Rank) error {
-	hostRanks := svc.membership.HostRanks(rankList...)
+	hostRanks := svc.membership.HostRanks(rankList...) // results filtered by input rank list
 	hostList := make([]string, 0, len(hostRanks))
 	totalRankList := make([]system.Rank, 0, len(hostRanks)*maxIOServers)
 
@@ -180,9 +186,7 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context, rankList []sy
 		totalRankList = append(totalRankList, ranks...)
 	}
 
-	svc.log.Debugf("updating response status for ranks %v", hostRanks)
-
-	results, err := svc.sendRanksReq(ctx, false, totalRankList, hostList, control.PingRanks)
+	results, err := svc.sendRanksReq(ctx, false, hostRanks, totalRankList, hostList, control.PingRanks)
 	if err != nil {
 		return err
 	}

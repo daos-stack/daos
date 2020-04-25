@@ -25,7 +25,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"syscall"
 	"time"
@@ -42,24 +41,11 @@ import (
 
 const instanceUpdateDelay = 500 * time.Millisecond
 
-// NewRankResult returns a reference to a new member result struct.
-func NewRankResult(rank system.Rank, action string, state system.MemberState, err error) *mgmtpb.RanksResp_RankResult {
-	result := mgmtpb.RanksResp_RankResult{
-		Rank: rank.Uint32(), Action: action, State: uint32(state),
-	}
-	if err != nil {
-		result.Errored = true
-		result.Msg = err.Error()
-	}
-
-	return &result
-}
-
-// drespToRankResult converts drpc.Response to proto.RanksResp_RankResult
+// drespToMemberResult converts drpc.Response to system.MemberResult.
 //
-// RankResult is populated with rank, state and error dependent on processing
+// MemberResult is populated with rank, state and error dependent on processing
 // dRPC response. Target state param is populated on success, Errored otherwise.
-func drespToRankResult(rank system.Rank, action string, dresp *drpc.Response, err error, tState system.MemberState) *mgmtpb.RanksResp_RankResult {
+func drespToMemberResult(rank system.Rank, action string, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
 	var outErr error
 	state := system.MemberStateErrored
 
@@ -80,7 +66,7 @@ func drespToRankResult(rank system.Rank, action string, dresp *drpc.Response, er
 		state = tState
 	}
 
-	return NewRankResult(rank, action, state, outErr)
+	return system.NewMemberResult(rank, action, outErr, state)
 }
 
 // getPeerListenAddr combines peer ip from supplied context with input port.
@@ -156,6 +142,27 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	return resp, nil
 }
 
+// getLocalInstances takes slice of uint32 rank identifiers and returns a filtered
+// slice containing any local instances matching the supplied ranks.
+func (svc *mgmtSvc) getLocalInstances(inRanks []uint32) ([]*IOServerInstance, error) {
+	localInstances := make([]*IOServerInstance, 0, maxIOServers)
+
+	for _, rank := range system.RanksFromUint32(inRanks) {
+		for _, instance := range svc.harness.Instances() {
+			instanceRank, err := instance.GetRank()
+			if err != nil {
+				return nil, errors.WithMessage(err, "getLocalInstances()")
+			}
+			if !rank.Equals(instanceRank) {
+				continue // requested rank not local
+			}
+			localInstances = append(localInstances, instance)
+		}
+	}
+
+	return localInstances, nil
+}
+
 // PrepShutdown implements the method defined for the Management Service.
 //
 // Prepare data-plane instance managed by control-plane for a controlled shutdown,
@@ -168,33 +175,42 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, req:%+v\n", *req)
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
+	svc.log.Debugf("MgmtSvc.PrepShutdownRanks dispatch, req:%+v\n", *req)
 
-	rankList := system.RanksFromUint32(req.GetRanks())
+	instances, err := svc.getLocalInstances(req.GetRanks())
+	if err != nil {
+		return nil, err
+	}
+
+	prepping := 0
+	ch := make(chan *system.MemberResult)
+	for _, srv := range instances {
+		prepping++
+		go func(s *IOServerInstance) {
+			ch <- s.dPrepShutdown(ctx)
+		}(srv)
+	}
+
+	results := make(system.MemberResults, 0, prepping)
+	for prepping > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case result := <-ch:
+			prepping--
+			if result == nil {
+				return nil, errors.New("nil result")
+			}
+			results = append(results, result)
+		}
+	}
+
 	resp := &mgmtpb.RanksResp{}
-
-	for _, i := range svc.harness.Instances() {
-		rank, err := i.GetRank()
-		if err != nil {
-			return nil, err
-		}
-
-		if len(rankList) != 0 && !rank.InList(rankList) {
-			continue // filtered out, no result expected
-		}
-
-		if !i.isReady() {
-			resp.Results = append(resp.Results,
-				NewRankResult(rank, "prep shutdown",
-					system.MemberStateStopped, nil))
-			continue
-		}
-
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodPrepShutdown, nil)
-
-		resp.Results = append(resp.Results,
-			drespToRankResult(rank, "prep shutdown", dresp, err,
-				system.MemberStateStopping))
+	if err := convert.Types(results, &resp.Results); err != nil {
+		return nil, err
 	}
 
 	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, resp:%+v\n", *resp)
@@ -202,37 +218,24 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 	return resp, nil
 }
 
-func (svc *mgmtSvc) getStateResults(rankList []system.Rank, desiredState system.MemberState, action string, stopErrs map[system.Rank]error) (system.MemberResults, error) {
-	results := make(system.MemberResults, 0, maxIOServers)
-	for _, i := range svc.harness.Instances() {
-		rank, err := i.GetRank()
+func (svc *mgmtSvc) getStateResults(instances []*IOServerInstance, desiredState system.MemberState, action string) (system.MemberResults, error) {
+	results := make(system.MemberResults, 0, len(instances))
+	for _, srv := range instances {
+		state := system.MemberStateReady
+		switch {
+		case !srv.isStarted():
+			state = system.MemberStateStopped
+		case !srv.isReady():
+			state = system.MemberStateStarting
+		}
+
+		rank, err := srv.GetRank()
 		if err != nil {
 			return nil, err
 		}
 
-		if len(rankList) != 0 && !rank.InList(rankList) {
-			continue // filtered out, no result expected
-		}
-
-		state := system.MemberStateReady
-		switch {
-		case !i.isStarted():
-			state = system.MemberStateStopped
-		case !i.isReady():
-			state = system.MemberStateStarting
-		}
-
-		var extraErrMsg string
-		if len(stopErrs) > 0 {
-			if stopErr, exists := stopErrs[rank]; exists {
-				if stopErr == nil {
-					return nil, errors.New("expected non-nil error in error map")
-				}
-				extraErrMsg = fmt.Sprintf(" (%s)", stopErr.Error())
-			}
-		}
 		if state != desiredState {
-			err = errors.Errorf("want %s, got %s%s", desiredState, state, extraErrMsg)
+			err = errors.Errorf("want %s, got %s", desiredState, state)
 		}
 
 		results = append(results, system.NewMemberResult(rank, action, err, state))
@@ -251,23 +254,26 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
 	svc.log.Debugf("MgmtSvc.StopRanks dispatch, req:%+v\n", *req)
-
-	rankList := system.RanksFromUint32(req.GetRanks())
 
 	signal := syscall.SIGINT
 	if req.Force {
 		signal = syscall.SIGKILL
 	}
 
-	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
-	defer cancel()
-
-	stopErrs, err := svc.harness.StopInstances(ctx, signal, rankList...)
+	instances, err := svc.getLocalInstances(req.GetRanks())
 	if err != nil {
-		if err != context.DeadlineExceeded {
-			// unexpected error, fail without collecting rank results
-			return nil, err
+		return nil, err
+	}
+	for _, srv := range instances {
+		if !srv.isStarted() {
+			continue
+		}
+		if err := srv.Stop(signal); err != nil {
+			return nil, errors.Wrapf(err, "sending %s", signal)
 		}
 	}
 
@@ -277,8 +283,8 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	go func() {
 		for {
 			success := true
-			for _, rank := range rankList {
-				if rank.InList(svc.harness.startedRanks()) {
+			for _, srv := range instances {
+				if srv.isStarted() {
 					success = false
 				}
 			}
@@ -297,7 +303,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 		svc.log.Debug("MgmtSvc.StopRanks rank stop timeout exceeded")
 	}
 
-	results, err := svc.getStateResults(rankList, system.MemberStateStopped, "stop", stopErrs)
+	results, err := svc.getStateResults(instances, system.MemberStateStopped, "stop")
 	if err != nil {
 		return nil, err
 	}
@@ -311,67 +317,52 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	return resp, nil
 }
 
-func ping(i *IOServerInstance, rank system.Rank, timeout time.Duration) *mgmtpb.RanksResp_RankResult {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	resChan := make(chan *mgmtpb.RanksResp_RankResult)
-	go func() {
-		var err error
-		var dresp *drpc.Response
-
-		dresp, err = i.CallDrpc(drpc.ModuleMgmt, drpc.MethodPingRank, nil)
-
-		select {
-		case <-ctx.Done():
-		case resChan <- drespToRankResult(rank, "ping", dresp, err, system.MemberStateJoined):
-		}
-	}()
-
-	select {
-	case result := <-resChan:
-		return result
-	case <-time.After(timeout):
-		return NewRankResult(rank, "ping", system.MemberStateUnresponsive,
-			errors.New("timeout occurred"))
-	}
-}
-
 // PingRanks implements the method defined for the Management Service.
 //
 // Query data-plane all instances (DAOS system members) managed by harness to verify
 // responsiveness.
 //
-// For each instance, call over dRPC and either return error for CallDrpc err or
-// populate a RanksResp_RankResult in response. Result is either populated from
-// return from dRPC which indicates activity and Status == 0, or in the case of a timeout
-// the results status will be pingTimeoutStatus.
+// For each instance, call over dRPC with dPing() async and collect results.
 func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
 
-	rankList := system.RanksFromUint32(req.GetRanks())
+	instances, err := svc.getLocalInstances(req.GetRanks())
+	if err != nil {
+		return nil, err
+	}
+
+	pinging := 0
+	ch := make(chan *system.MemberResult)
+	for _, srv := range instances {
+		pinging++
+		go func(s *IOServerInstance) {
+			ch <- s.dPing(ctx)
+		}(srv)
+	}
+
+	results := make(system.MemberResults, 0, pinging)
+	for pinging > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case result := <-ch:
+			pinging--
+			if result == nil {
+				return nil, errors.New("nil result")
+			}
+			results = append(results, result)
+		}
+	}
+
 	resp := &mgmtpb.RanksResp{}
-
-	for _, i := range svc.harness.Instances() {
-		rank, err := i.GetRank()
-		if err != nil {
-			return nil, err
-		}
-
-		if len(rankList) != 0 && !rank.InList(rankList) {
-			continue // filtered out, no result expected
-		}
-
-		if !i.isReady() {
-			resp.Results = append(resp.Results,
-				NewRankResult(rank, "ping", system.MemberStateStopped, nil))
-			continue
-		}
-
-		resp.Results = append(resp.Results, ping(i, rank, svc.harness.rankReqTimeout))
+	if err := convert.Types(results, &resp.Results); err != nil {
+		return nil, err
 	}
 
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, resp:%+v\n", *resp)
@@ -386,12 +377,20 @@ func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*m
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
 
-	rankList := system.RanksFromUint32(req.GetRanks())
-
-	if err := svc.harness.StartInstances(rankList); err != nil {
+	instances, err := svc.getLocalInstances(req.GetRanks())
+	if err != nil {
 		return nil, err
+	}
+	for _, srv := range instances {
+		if srv.isStarted() {
+			continue
+		}
+		srv.startChan <- true
 	}
 
 	// instances will update state to "Started" through join or
@@ -400,8 +399,8 @@ func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*m
 	go func() {
 		for {
 			success := true
-			for _, rank := range rankList {
-				if !rank.InList(svc.harness.readyRanks()) {
+			for _, srv := range instances {
+				if !srv.isReady() {
 					success = false
 				}
 			}
@@ -421,7 +420,7 @@ func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*m
 	}
 
 	// want to make sure instance is reporting ready at minimum
-	results, err := svc.getStateResults(rankList, system.MemberStateReady, "start", nil)
+	results, err := svc.getStateResults(instances, system.MemberStateReady, "start")
 	if err != nil {
 		return nil, err
 	}
