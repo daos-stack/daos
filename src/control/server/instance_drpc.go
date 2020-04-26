@@ -29,6 +29,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/system"
@@ -77,6 +78,34 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	}
 
 	return makeDrpcCall(dc, module, method, body)
+}
+
+// drespToMemberResult converts drpc.Response to system.MemberResult.
+//
+// MemberResult is populated with rank, state and error dependent on processing
+// dRPC response. Target state param is populated on success, Errored otherwise.
+func drespToMemberResult(rank system.Rank, action string, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
+	var outErr error
+	state := system.MemberStateErrored
+
+	if err != nil {
+		outErr = errors.WithMessagef(err, "rank %s dRPC failed", &rank)
+	} else {
+		resp := &mgmtpb.DaosResp{}
+		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+			outErr = errors.WithMessagef(err, "rank %s dRPC unmarshal failed",
+				&rank)
+		} else if resp.GetStatus() != 0 {
+			outErr = errors.Errorf("rank %s dRPC returned DER %d",
+				&rank, resp.GetStatus())
+		}
+	}
+
+	if outErr == nil {
+		state = tState
+	}
+
+	return system.NewMemberResult(rank, action, outErr, state)
 }
 
 // dPing attempts dRPC request to given rank managed by instance and return

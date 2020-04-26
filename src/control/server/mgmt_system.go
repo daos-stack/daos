@@ -41,34 +41,6 @@ import (
 
 const instanceUpdateDelay = 500 * time.Millisecond
 
-// drespToMemberResult converts drpc.Response to system.MemberResult.
-//
-// MemberResult is populated with rank, state and error dependent on processing
-// dRPC response. Target state param is populated on success, Errored otherwise.
-func drespToMemberResult(rank system.Rank, action string, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
-	var outErr error
-	state := system.MemberStateErrored
-
-	if err != nil {
-		outErr = errors.WithMessagef(err, "rank %s dRPC failed", &rank)
-	} else {
-		resp := &mgmtpb.DaosResp{}
-		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-			outErr = errors.WithMessagef(err, "rank %s dRPC unmarshal failed",
-				&rank)
-		} else if resp.GetStatus() != 0 {
-			outErr = errors.Errorf("rank %s dRPC returned DER %d",
-				&rank, resp.GetStatus())
-		}
-	}
-
-	if outErr == nil {
-		state = tState
-	}
-
-	return system.NewMemberResult(rank, action, outErr, state)
-}
-
 // getPeerListenAddr combines peer ip from supplied context with input port.
 func getPeerListenAddr(ctx context.Context, listenAddrStr string) (net.Addr, error) {
 	p, ok := peer.FromContext(ctx)

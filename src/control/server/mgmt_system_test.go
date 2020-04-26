@@ -25,7 +25,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -114,72 +113,6 @@ func TestMgmtSvc_LeaderQuery(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_DrespToRankResult(t *testing.T) {
-	dRank := Rank(1)
-
-	for name, tc := range map[string]struct {
-		daosResp    *mgmtpb.DaosResp
-		inErr       error
-		targetState MemberState
-		junkRPC     bool
-		expResult   *mgmtpb.RanksResp_RankResult
-	}{
-		"rank success": {
-			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank.Uint32(), Action: "test", State: msJoined,
-			},
-		},
-		"rank failure": {
-			daosResp: &mgmtpb.DaosResp{Status: -1},
-			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank.Uint32(), Action: "test", State: msErrored, Errored: true,
-				Msg: fmt.Sprintf("rank %d dRPC returned DER -1", dRank),
-			},
-		},
-		"drpc failure": {
-			inErr: errors.New("returned from CallDrpc"),
-			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank.Uint32(), Action: "test", State: msErrored, Errored: true,
-				Msg: fmt.Sprintf("rank %d dRPC failed: returned from CallDrpc", dRank),
-			},
-		},
-		"unmarshal failure": {
-			junkRPC: true,
-			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank.Uint32(), Action: "test", State: msErrored, Errored: true,
-				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed: proto: mgmt.DaosResp: illegal tag 0 (wire type 0)", dRank),
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			_, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			if tc.daosResp == nil {
-				tc.daosResp = &mgmtpb.DaosResp{Status: 0}
-			}
-			if tc.targetState == MemberStateUnknown {
-				tc.targetState = MemberStateJoined
-			}
-
-			// convert input DaosResp to drpcResponse to test
-			rb := makeBadBytes(42)
-			if !tc.junkRPC {
-				rb, _ = proto.Marshal(tc.daosResp)
-			}
-			resp := &drpc.Response{
-				Status: drpc.Status_SUCCESS, // this will already have been validated by CallDrpc
-				Body:   rb,
-			}
-
-			gotResult := drespToMemberResult(Rank(dRank), "test", resp, tc.inErr, tc.targetState)
-			if diff := cmp.Diff(tc.expResult, gotResult, common.DefaultCmpOpts()...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
-			}
-		})
-	}
-}
-
 func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP          bool
@@ -195,13 +128,17 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
+		"no ranks specified": {
+			req:    &mgmtpb.RanksReq{},
+			expErr: errors.New("no ranks specified in request"),
+		},
 		"missing superblock": {
+			req:       &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			missingSB: true,
-			req:       &mgmtpb.RanksReq{},
 			expErr:    errors.New("nil superblock"),
 		},
 		"instances stopped": {
-			req:              &mgmtpb.RanksReq{},
+			req:              &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			instancesStopped: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
@@ -211,7 +148,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			},
 		},
 		"dRPC resp fails": {
-			req:     &mgmtpb.RanksReq{},
+			req:     &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			drpcRet: errors.New("call failed"),
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: 0},
@@ -225,7 +162,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			},
 		},
 		"dRPC resp junk": {
-			req:      &mgmtpb.RanksReq{},
+			req:      &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			junkResp: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
@@ -235,7 +172,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			},
 		},
 		"unsuccessful call": {
-			req: &mgmtpb.RanksReq{},
+			req: &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: -1},
 				&mgmtpb.DaosResp{Status: -1},
@@ -248,7 +185,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			},
 		},
 		"successful call": {
-			req: &mgmtpb.RanksReq{},
+			req: &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
@@ -305,7 +242,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 				return
 			}
 
-			// RankResult.Msg generation is tested in
+			// RankResult.Msg generation is already tested in
 			// TestMgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
 				if path.Last().String() == ".Msg" {
@@ -316,8 +253,17 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
 
-			if diff := cmp.Diff(tc.expResp, gotResp, opts...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			for _, exp := range tc.expResp.Results {
+				match := false
+				for _, got := range gotResp.Results {
+					if diff := cmp.Diff(exp, got, opts...); diff == "" {
+						match = true
+					}
+				}
+				if !match {
+					t.Fatalf("unexpected results: (\nwant: %+v\ngot: %+v)",
+						tc.expResp.Results, gotResp.Results)
+				}
 			}
 		})
 	}
