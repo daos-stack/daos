@@ -134,4 +134,7 @@ enum {
 
 extern unsigned int daos_io_bypass;
 
+/* Temporarily bypass DTX client-side modification cache. */
+#define DAOS_TF_BYPASS_CACHE	(1ULL << 62)
+
 #endif /* __DAOS_DEBUG_H__ */

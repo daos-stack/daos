@@ -193,14 +193,18 @@ class Snapshot(TestWithServers):
         thedata = "--->>>Happy Daos Snapshot-Create Negative Testing " + \
                   "<<<---" + rand_str(random.randint(1, data_size))
         try:
+            self.log.info("TX opening...")
             tx_handle = self.container.get_new_tx()
+            self.log.info("TX open succeed.")
             obj = self.container.write_an_obj(thedata,
                                               len(thedata)+1,
                                               dkey,
                                               akey,
                                               obj_cls=obj_cls,
                                               txn=tx_handle)
+            self.log.info("OBJ update succeed.")
             self.container.commit_tx(tx_handle)
+            self.log.info("TX commit succeed.")
         except DaosApiError as error:
             self.fail(
                 "##(1)Test failed during the initial object write: %s"

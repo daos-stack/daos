@@ -58,7 +58,7 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 		for (i = 0, k = 0; i < gs_dkeys; i++) {
 			daos_size_t		rec_size;
 
-			daos_tx_open(coh, &ths[i], 0, NULL);
+			daos_tx_open(coh, &ths[i], DAOS_TF_BYPASS_CACHE, NULL);
 			daos_tx_hdl2epoch(ths[i], &epoch);
 			memset(rec, 0, REC_MAX_LEN);
 			snprintf(rec, REC_MAX_LEN, VAL_FMT, epoch);

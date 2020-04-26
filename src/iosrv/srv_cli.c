@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -236,7 +236,7 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, &th);
+	rc = dc_tx_local_open(coh, epoch, DAOS_TF_RDONLY, &th);
 	if (rc)
 		return rc;
 
@@ -264,7 +264,7 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, &th);
+	rc = dc_tx_local_open(coh, epoch, DAOS_TF_RDONLY, &th);
 	if (rc)
 		return rc;
 
@@ -294,7 +294,7 @@ dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epr->epr_hi, &th);
+	rc = dc_tx_local_open(coh, epr->epr_hi, DAOS_TF_RDONLY, &th);
 	if (rc)
 		return rc;
 

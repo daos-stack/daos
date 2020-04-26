@@ -1680,9 +1680,7 @@ dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 		return -DER_NO_HDL;
 	}
 
-	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
-	*map_ver = pool_map_get_version(pool->dp_map);
-	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+	*map_ver = dc_pool_get_version_lock(pool);
 	dc_pool_put(pool);
 
 	return 0;
