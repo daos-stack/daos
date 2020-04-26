@@ -52,6 +52,8 @@
 
 struct d_fault_attr_t *d_fault_attr_mem;
 
+#if FAULT_INJECTION
+
 static struct d_fault_attr *
 fa_link2ptr(d_list_t *rlink)
 {
@@ -108,12 +110,6 @@ struct d_fi_gdata_t {
 	struct d_hash_table	  dfg_fa_table;
 };
 
-/**
- * global swith for fault injection. zero globally turns off fault injection,
- * non-zero turns on fault injection
- */
-unsigned int			d_fault_inject;
-unsigned int			d_fault_config_file;
 static uint32_t			d_fault_inject_seed;
 static struct d_fi_gdata_t	d_fi_gdata;
 static pthread_once_t		d_fi_gdata_init_once = PTHREAD_ONCE_INIT;
@@ -586,21 +582,23 @@ d_fault_inject_fini()
 }
 
 
-void
+int
 d_fault_inject_enable(void)
 {
 	if (!d_fault_config_file) {
 		D_ERROR("No fault config file.\n");
-		return;
+		return DER_NOSYS;
 	}
 
 	d_fault_inject = 1;
+	return 0;
 }
 
-void
+int
 d_fault_inject_disable(void)
 {
 	d_fault_inject = 0;
+	return 0;
 }
 
 bool
@@ -669,4 +667,53 @@ out:
 	D_SPIN_UNLOCK(&fault_attr->fa_lock);
 	return rc;
 };
+#else
+int d_fault_inject_init(void)
+{
+	D_WARN("Fault Injection not initialized feature not included in build");
+	return DER_NOSYS;
+}
 
+int d_fault_inject_fini(void)
+{
+	D_WARN("Fault Injection not finalized feature not included in build");
+	return DER_NOSYS;
+}
+
+int d_fault_inject_enable(void)
+{
+	D_WARN("Fault Injection not enabled feature not included in build");
+	return DER_NOSYS;
+}
+
+int d_fault_inject_disable(void)
+{
+	D_WARN("Fault Injection not disabled feature not included in build");
+	return DER_NOSYS;
+}
+
+bool
+d_should_fail(struct d_fault_attr_t *fault_attr)
+{
+	return false;
+}
+
+int
+d_fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in)
+{
+	D_WARN("Fault Injection attr not set feature not included in build");
+	return 0;
+}
+
+struct d_fault_attr_t *
+d_fault_attr_lookup(uint32_t fault_id)
+{
+	return NULL;
+}
+
+int
+d_fault_attr_err_code(uint32_t fault_id)
+{
+	return 0;
+}
+#endif

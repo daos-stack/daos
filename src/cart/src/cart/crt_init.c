@@ -239,7 +239,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	/* d_fault_inject_init() is reference counted */
 	rc = d_fault_inject_init();
-	if (rc != DER_SUCCESS) {
+	if (rc != DER_SUCCESS && rc != DER_NOSYS) {
 		D_ERROR("d_fault_inject_init() failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
@@ -547,7 +547,7 @@ crt_finalize(void)
 out:
 	/* d_fault_inject_fini() is reference counted */
 	local_rc = d_fault_inject_fini();
-	if (local_rc != 0)
+	if (local_rc != 0 && local_rc != DER_NOSYS)
 		D_ERROR("d_fault_inject_fini() failed, rc: %d\n", local_rc);
 
 direct_out:
