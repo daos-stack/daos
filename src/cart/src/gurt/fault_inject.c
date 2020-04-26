@@ -50,6 +50,12 @@
 #include <gurt/hash.h>
 #include "fi.h"
 
+/**
+ * global switch for fault injection. zero globally turns off fault injection,
+ * non-zero turns on fault injection
+ */
+unsigned int			d_fault_inject;
+unsigned int			d_fault_config_file;
 struct d_fault_attr_t *d_fault_attr_mem;
 
 #if FAULT_INJECTION
@@ -587,7 +593,7 @@ d_fault_inject_enable(void)
 {
 	if (!d_fault_config_file) {
 		D_ERROR("No fault config file.\n");
-		return DER_NOSYS;
+		return -DER_NOSYS;
 	}
 
 	d_fault_inject = 1;
@@ -671,25 +677,31 @@ out:
 int d_fault_inject_init(void)
 {
 	D_WARN("Fault Injection not initialized feature not included in build");
-	return DER_NOSYS;
+	return -DER_NOSYS;
 }
 
 int d_fault_inject_fini(void)
 {
 	D_WARN("Fault Injection not finalized feature not included in build");
-	return DER_NOSYS;
+	return -DER_NOSYS;
 }
 
 int d_fault_inject_enable(void)
 {
 	D_WARN("Fault Injection not enabled feature not included in build");
-	return DER_NOSYS;
+	return -DER_NOSYS;
 }
 
 int d_fault_inject_disable(void)
 {
 	D_WARN("Fault Injection not disabled feature not included in build");
-	return DER_NOSYS;
+	return -DER_NOSYS;
+}
+
+bool
+d_fault_inject_is_enabled(void)
+{
+	return false;
 }
 
 bool
