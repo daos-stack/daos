@@ -781,3 +781,12 @@ ds_sec_get_rebuild_cont_capabilities(void)
 	 */
 	return CONT_CAPA_READ_DATA;
 }
+
+uint64_t
+ds_sec_get_admin_cont_capabilities(void)
+{
+	/*
+	 * Internally generated admin container handles can do everything.
+	 */
+	return CONT_CAPAS_ALL;
+}

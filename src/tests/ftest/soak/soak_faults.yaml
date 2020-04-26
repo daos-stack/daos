@@ -17,7 +17,7 @@ srun_params:
     reservation:
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 1 hour test
-timeout: 1H15M
+timeout: 24H15M
 logdir: /tmp/soak
 server_config:
     name: daos_server
@@ -39,8 +39,8 @@ server_config:
 pool_ior:
     mode: 146
     name: daos_server
-    scm_size: 40000000000
-    nvme_size: 100000000000
+    scm_size: 80000000000
+    nvme_size: 200000000000
     svcn: 1
     control_method: dmg
 pool_reserved:
@@ -63,7 +63,7 @@ faults:
     #    - DAOS_DTX_LOST_RPC_REPLY
     #    - DAOS_DTX_LONG_TIME_RESEND
        - DAOS_SHARD_OBJ_UPDATE_TIMEOUT
-    #    - DAOS_SHARD_OBJ_FETCH_TIMEOUT
+       - DAOS_SHARD_OBJ_FETCH_TIMEOUT
     #    - DAOS_SHARD_OBJ_FAIL
     #    - DAOS_OBJ_UPDATE_NOSPACE
     #    - DAOS_SHARD_OBJ_RW_CRT_ERROR
@@ -87,14 +87,17 @@ faults:
 soak_faults:
     name: soak_faults
     # harasser test timeout in hours
-    test_timeout: 1
+    test_timeout: 24
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
     nodesperjob:
         - -1
-    # used for perfomance benchmarks
+        - 2
+        - 4
     taskspernode:
+        - 1
         - 16
+        - 32
     poollist:
         - pool_ior
     joblist:

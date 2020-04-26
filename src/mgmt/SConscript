@@ -12,14 +12,15 @@ def scons():
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'srv.pb-c.c',
-                            'storage_query.pb-c.c'])
+                            'storage_query.pb-c.c', 'cont.pb-c.c'])
     common = denv.SharedObject(['rpc.c']) + pb
     # Management server module
     mgmt_srv = daos_build.library(denv, 'mgmt',
                                   [common, 'srv.c', 'srv_layout.c',
                                    'srv_pool.c', 'srv_system.c',
                                    'srv_target.c', 'srv_query.c',
-                                   'srv_drpc.c', 'srv_util.c'])
+                                   'srv_drpc.c', 'srv_util.c',
+                                   'srv_container.c'])
     denv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 
     # Management client library
