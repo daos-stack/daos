@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2019 Intel Corporation
+/* Copyright (C) 2018-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -130,14 +130,14 @@ int d_fault_inject_fini(void);
 /**
  * Start injecting faults.
  *
- * \return                   DER_SUCCESS on success, DER_NOSYS if not supported
+ * \return                   DER_SUCCESS on success, -DER_NOSYS if not supported
  */
 int d_fault_inject_enable(void);
 
 /**
  * Stop injecting faults.
  *
- * \return                   DER_SUCCESS on success, DER_NOSYS if not supported
+ * \return                   DER_SUCCESS on success, -DER_NOSYS if not supported
  */
 int d_fault_inject_disable(void);
 

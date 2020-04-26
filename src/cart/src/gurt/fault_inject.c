@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2019 Intel Corporation
+/* Copyright (C) 2018-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -673,7 +673,7 @@ out:
 	D_SPIN_UNLOCK(&fault_attr->fa_lock);
 	return rc;
 };
-#else
+#else /* FAULT_INJECT */
 int d_fault_inject_init(void)
 {
 	D_WARN("Fault Injection not initialized feature not included in build");
@@ -728,4 +728,4 @@ d_fault_attr_err_code(uint32_t fault_id)
 {
 	return 0;
 }
-#endif
+#endif /* FAULT_INJECT */
