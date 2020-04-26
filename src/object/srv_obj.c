@@ -1001,10 +1001,10 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
 				     orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
 				     dkey, orw->orw_nr, iods, size_fetch, &ioh);
-
 		if (rc) {
-			D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",
-				DP_UOID(orw->orw_oid), DP_RC(rc));
+			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
+				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
 
@@ -1452,11 +1452,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc,
 				  NULL, NULL, NULL, NULL);
-		if (rc != 0) {
-			D_ERROR(DF_UOID": error="DF_RC".\n",
-				DP_UOID(orw->orw_oid), DP_RC(rc));
-			D_GOTO(out, rc);
-		}
 		D_GOTO(out, rc);
 	} else if (orw->orw_iod_array.oia_oiods != NULL) {
 		rc = obj_ec_rw_req_split(orw, &split_req);
@@ -1534,14 +1529,15 @@ out:
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
-	if (rc == -DER_AGAIN) {
-		if (dlh.dlh_handle.dth_renew) {
-			/* epoch conflict, renew it and retry. */
-			orw->orw_epoch = crt_hlc_get();
-			flags &= ~ORF_RESEND;
-			memset(&dlh, 0, sizeof(dlh));
-			D_GOTO(renew, rc);
-		}
+	if (rc == -DER_TX_RESTART) {
+		D_ASSERT(dlh.dlh_handle.dth_renew);
+		/* epoch conflict, renew it and retry. */
+		orw->orw_epoch = crt_hlc_get();
+		flags &= ~ORF_RESEND;
+		memset(&dlh, 0, sizeof(dlh));
+		D_GOTO(renew, rc);
+	} else if (rc == -DER_AGAIN) {
+		D_ASSERT(!dlh.dlh_handle.dth_renew);
 
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
@@ -2156,14 +2152,15 @@ out:
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
-	if (rc == -DER_AGAIN) {
-		if (dlh.dlh_handle.dth_renew) {
-			/* epoch conflict, renew it and retry. */
-			opi->opi_epoch = crt_hlc_get();
-			flags &= ~ORF_RESEND;
-			memset(&dlh, 0, sizeof(dlh));
-			D_GOTO(renew, rc);
-		}
+	if (rc == -DER_TX_RESTART) {
+		D_ASSERT(dlh.dlh_handle.dth_renew);
+		/* epoch conflict, renew it and retry. */
+		opi->opi_epoch = crt_hlc_get();
+		flags &= ~ORF_RESEND;
+		memset(&dlh, 0, sizeof(dlh));
+		D_GOTO(renew, rc);
+	} else if (rc == -DER_AGAIN) {
+		D_ASSERT(!dlh.dlh_handle.dth_renew);
 
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
