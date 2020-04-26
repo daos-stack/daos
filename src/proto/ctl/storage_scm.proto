@@ -71,6 +71,7 @@ message ScmModuleResult {
 message ScmMountResult {
 	string mntpoint = 1;		// Path where device or tmpfs is mounted
 	ResponseState state = 2;	// state of current operation
+	uint32 instanceidx = 3;		// Index of IO server instance
 }
 
 message PrepareScmReq {

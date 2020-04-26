@@ -179,18 +179,14 @@ func (srv *IOServerInstance) createSuperblock(recreate bool) error {
 	}
 
 	// Only the first I/O server can be an MS replica.
+	mInfo := new(mgmtInfo)
 	if srv.Index() == 0 {
-		mInfo, err := getMgmtInfo(srv)
-		if err != nil {
+		if mInfo, err = getMgmtInfo(srv); err != nil {
 			return err
 		}
-		if err := srv.CreateSuperblock(mInfo); err != nil {
-			return err
-		}
-	} else {
-		if err := srv.CreateSuperblock(&mgmtInfo{}); err != nil {
-			return err
-		}
+	}
+	if err := srv.CreateSuperblock(mInfo); err != nil {
+		return err
 	}
 
 	return nil
