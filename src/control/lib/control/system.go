@@ -63,7 +63,6 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
-
 	rpcClient.Debugf("DAOS system stop request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -94,7 +93,6 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
-
 	rpcClient.Debugf("DAOS system start request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -125,7 +123,6 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
-
 	rpcClient.Debugf("DAOS system query request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -137,6 +134,7 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	return resp, convertMSResponse(ur, resp)
 }
 
+// LeaderQueryReq contains the inputs for the leader query request.
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
@@ -158,7 +156,6 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 			System: req.System,
 		})
 	})
-
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -192,7 +189,6 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			Sys: req.System,
 		})
 	})
-
 	rpcClient.Debugf("DAOS system list-pools request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -238,7 +234,7 @@ func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
 	return
 }
 
-func doSystemRanksRPC(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+func rpcToSystemRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -271,10 +267,9 @@ func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksRe
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
-
 	rpcClient.Debugf("DAOS system prep shutdown-ranks request: %+v", req)
 
-	return doSystemRanksRPC(ctx, rpcClient, req)
+	return rpcToSystemRanks(ctx, rpcClient, req)
 }
 
 // StopRanks concurrently performs stop ranks across all hosts
@@ -288,10 +283,9 @@ func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
-
 	rpcClient.Debugf("DAOS system stop-ranks request: %+v", req)
 
-	return doSystemRanksRPC(ctx, rpcClient, req)
+	return rpcToSystemRanks(ctx, rpcClient, req)
 }
 
 // StartRanks concurrently performs start ranks across all hosts
@@ -304,10 +298,9 @@ func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ra
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
-
 	rpcClient.Debugf("DAOS system start-ranks request: %+v", req)
 
-	return doSystemRanksRPC(ctx, rpcClient, req)
+	return rpcToSystemRanks(ctx, rpcClient, req)
 }
 
 // PingRanks concurrently performs ping on ranks across all hosts
@@ -320,8 +313,7 @@ func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
-
 	rpcClient.Debugf("DAOS system ping-ranks request: %+v", req)
 
-	return doSystemRanksRPC(ctx, rpcClient, req)
+	return rpcToSystemRanks(ctx, rpcClient, req)
 }

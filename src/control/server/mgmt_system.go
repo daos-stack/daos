@@ -142,16 +142,16 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	return resp, nil
 }
 
-// getLocalInstances takes slice of uint32 rank identifiers and returns a filtered
-// slice containing any local instances matching the supplied ranks.
-func (svc *mgmtSvc) getLocalInstances(inRanks []uint32) ([]*IOServerInstance, error) {
+// localInstances takes slice of uint32 rank identifiers and returns a slice
+// containing any local instances matching the supplied ranks.
+func (svc *mgmtSvc) localInstances(inRanks []uint32) ([]*IOServerInstance, error) {
 	localInstances := make([]*IOServerInstance, 0, maxIOServers)
 
 	for _, rank := range system.RanksFromUint32(inRanks) {
 		for _, instance := range svc.harness.Instances() {
 			instanceRank, err := instance.GetRank()
 			if err != nil {
-				return nil, errors.WithMessage(err, "getLocalInstances()")
+				return nil, errors.WithMessage(err, "localInstances()")
 			}
 			if !rank.Equals(instanceRank) {
 				continue // requested rank not local
@@ -180,7 +180,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 	}
 	svc.log.Debugf("MgmtSvc.PrepShutdownRanks dispatch, req:%+v\n", *req)
 
-	instances, err := svc.getLocalInstances(req.GetRanks())
+	instances, err := svc.localInstances(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,9 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 	return resp, nil
 }
 
-func (svc *mgmtSvc) getStateResults(instances []*IOServerInstance, desiredState system.MemberState, action string) (system.MemberResults, error) {
+// memberStateResults returns system member results reflecting whether the state
+// of the given member is equivalent to the supplied desired state value.
+func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredState system.MemberState, action string) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, len(instances))
 	for _, srv := range instances {
 		state := system.MemberStateReady
@@ -264,7 +266,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 		signal = syscall.SIGKILL
 	}
 
-	instances, err := svc.getLocalInstances(req.GetRanks())
+	instances, err := svc.localInstances(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +305,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 		svc.log.Debug("MgmtSvc.StopRanks rank stop timeout exceeded")
 	}
 
-	results, err := svc.getStateResults(instances, system.MemberStateStopped, "stop")
+	results, err := svc.memberStateResults(instances, system.MemberStateStopped, "stop")
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +334,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	}
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
 
-	instances, err := svc.getLocalInstances(req.GetRanks())
+	instances, err := svc.localInstances(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +384,7 @@ func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*m
 	}
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
 
-	instances, err := svc.getLocalInstances(req.GetRanks())
+	instances, err := svc.localInstances(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
@@ -420,7 +422,7 @@ func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*m
 	}
 
 	// want to make sure instance is reporting ready at minimum
-	results, err := svc.getStateResults(instances, system.MemberStateReady, "start")
+	results, err := svc.memberStateResults(instances, system.MemberStateReady, "start")
 	if err != nil {
 		return nil, err
 	}
