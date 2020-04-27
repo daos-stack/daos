@@ -57,14 +57,66 @@ type cliOptions struct {
 	Insecure   bool       `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
 	RuntimeDir string     `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
 	LogFile    string     `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	NetworkDbg bool       `short:"n" long:"netdebug" description:"Enable extended network device scan debug output"`
 	Version    versionCmd `command:"version" description:"Print daos_agent version"`
+	NetScan    netScanCmd `command:"scan" description:"Perform local fabric scan"`
 }
 
 type versionCmd struct{}
+type netScanCmd struct {
+	Debug          bool   `short:"d" long:"debug" description:"Enable debug output"`
+	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is all providers)"`
+}
 
 func (cmd *versionCmd) Execute(_ []string) error {
 	fmt.Printf("daos_agent version %s\n", build.DaosVersion)
 	os.Exit(0)
+	return nil
+}
+
+func (cmd *netScanCmd) Execute(args []string) error {
+	var provider string
+	defer os.Exit(0)
+	log := logging.NewCommandLineLogger()
+
+	if cmd.Debug {
+		log.WithLogLevel(logging.LogLevelDebug)
+		netdetect.SetLogger(log)
+	}
+
+	numaAware, err := netdetect.NumaAware()
+	if err != nil {
+		exitWithError(log, err)
+		return nil
+	}
+
+	if !numaAware {
+		fmt.Printf("This system is not NUMA aware")
+	}
+
+	switch {
+	case len(cmd.FabricProvider) > 0:
+		provider = cmd.FabricProvider
+		fmt.Printf("Scanning fabric for provider: %s\n", provider)
+	default:
+		fmt.Printf("Scanning fabric for all providers\n")
+	}
+
+	results, err := netdetect.ScanFabric(provider)
+	if err != nil {
+		exitWithError(log, err)
+		return nil
+	}
+
+	if provider == "" {
+		provider = "All"
+	}
+	fmt.Printf("\nFabric scan found %d devices matching the provider spec: %s\n\n", len(results), provider)
+
+	for _, sr := range results {
+		fmt.Printf("%v\n\n", sr)
+	}
+
 	return nil
 }
 
@@ -123,6 +175,14 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	if opts.Debug {
 		log.WithLogLevel(logging.LogLevelDebug)
 		log.Debug("debug output enabled")
+	}
+
+	if opts.NetworkDbg {
+		if !opts.Debug {
+			log.WithLogLevel(logging.LogLevelDebug)
+		}
+		log.Debug("extended network debug enabled")
+		netdetect.SetLogger(log)
 	}
 
 	ctx, shutdown := context.WithCancel(context.Background())
@@ -186,7 +246,6 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 		log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
-	netdetect.SetLogger(log)
 	numaAware, err := netdetect.NumaAware()
 	if err != nil {
 		return err
