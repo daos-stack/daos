@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import uuid
 from enum import IntEnum
 
 from command_utils import FormattedParameter, ExecutableCommand
-from command_utils import EnvironmentVariables, CommandFailure
+from command_utils import CommandFailure
 
 
 class IorCommand(ExecutableCommand):
@@ -40,8 +40,8 @@ class IorCommand(ExecutableCommand):
         >>> ior_cmd.get_params(self)
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
         >>> mpirun = Mpirun()
-        >>> log = get_log_file(self.client_log)
-        >>> env = self.ior_cmd.get_default_env(log)
+        >>> server_manager = self.server_manager[0]
+        >>> env = self.ior_cmd.get_environment(server_manager, self.client_log)
         >>> processes = len(self.hostlist_clients)
         >>> mpirun.setup_command(env, self.hostfile_clients, processes)
         >>> mpirun.run()
@@ -110,6 +110,9 @@ class IorCommand(ExecutableCommand):
         self.daos_group = FormattedParameter("--daos.group {}")
         self.daos_chunk = FormattedParameter("--daos.chunk_size {}", 1048576)
         self.daos_oclass = FormattedParameter("--daos.oclass {}", "SX")
+
+        # A list of environment variable names to set and export with ior
+        self._env_names = ["D_LOG_FILE"]
 
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
@@ -224,30 +227,29 @@ class IorCommand(ExecutableCommand):
             EnvironmentVariables: a dictionary of environment names and values
 
         """
-        env = EnvironmentVariables()
+        env = self.get_environment(None, log_file)
         env["MPI_LIB"] = "\"\""
         env["FI_PSM2_DISCONNECT"] = 1
-        if log_file:
-            env["D_LOG_FILE"] = log_file
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             env["DAOS_POOL"] = self.daos_pool.value
             env["DAOS_SVCL"] = self.daos_svcl.value
             env["DAOS_CONT"] = self.daos_cont.value
-            env["FI_PSM2_DISCONNECT"] = 1
             env["IOR_HINT__MPI__romio_daos_obj_class"] = self.daos_oclass.value
 
         return env
 
     @staticmethod
     def get_ior_metrics(cmdresult):
-        """Parse the CmdResult (output of the test) and look for
-           the ior stdout and get the read and write metrics.
+        """Get the ior command read and write metrics.
+
+        Parse the CmdResult (output of the test) and look for the ior stdout and
+        get the read and write metrics.
 
         Args:
             cmdresult (CmdResult): output of job manager
 
-       Returns:
+        Returns:
             metrics (tuple) : list of write and read metrics from ior run
 
         """
@@ -265,12 +267,12 @@ class IorCommand(ExecutableCommand):
 
     @staticmethod
     def log_metrics(logger, message, metrics):
-        """Log the ior metrics
+        """Log the ior metrics.
 
-           Args:
-               logger (log): logger object handle
-               message (str) : Message to print before logging metrics
-               metric (lst) : IOR write and read metrics
+        Args:
+            logger (log): logger object handle
+            message (str) : Message to print before logging metrics
+            metric (lst) : IOR write and read metrics
         """
         logger.info("\n")
         logger.info(message)
@@ -280,8 +282,7 @@ class IorCommand(ExecutableCommand):
 
 
 class IorMetrics(IntEnum):
-    """Index Name and Number of each column in IOR result summary.
-    """
+    """Index Name and Number of each column in IOR result summary."""
 
     # Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
