@@ -26,6 +26,8 @@ package control
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path"
 
 	"gopkg.in/yaml.v2"
 
@@ -33,26 +35,23 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
-type ClientConfig struct {
+const (
+	defaultConfigFile = "daos_control.yml"
+)
+
+// Config defines the paramters used to connect to the control API server.
+type Config struct {
 	SystemName      string                    `yaml:"name"`
 	ControlPort     int                       `yaml:"port"`
 	HostList        []string                  `yaml:"hostlist"`
 	TransportConfig *security.TransportConfig `yaml:"transport_config"`
-
-	// NB: The rest of these fields are here only for compatibility
-	// with the old-style unified agent/client config. They are not
-	// used in the control API.
-	// TODO: Split agent config into its own structure.
-	AccessPoints  []string `yaml:"access_points"`
-	RuntimeDir    string   `yaml:"runtime_dir"`
-	HostFile      string   `yaml:"host_file"`
-	LogFile       string   `yaml:"log_file"`
-	LogFileFormat string   `yaml:"log_file_format"`
 }
 
-func DefaultClientConfig() *ClientConfig {
+// DefaultConfig returns a Config populated with default values. Only
+// suitable for single-node configurations.
+func DefaultConfig() *Config {
 	localServer := fmt.Sprintf("localhost:%d", build.DefaultControlPort)
-	return &ClientConfig{
+	return &Config{
 		SystemName:      build.DefaultSystemName,
 		ControlPort:     build.DefaultControlPort,
 		HostList:        []string{localServer},
@@ -60,13 +59,43 @@ func DefaultClientConfig() *ClientConfig {
 	}
 }
 
-func LoadClientConfig(cfgPath string) (*ClientConfig, error) {
+// UserConfigPath returns the computed path to a per-user
+// control configuration file, if it exists.
+func UserConfigPath() string {
+	// If we can't determine $HOME it's weird but not fatal.
+	userHome, _ := os.UserHomeDir()
+	return path.Join(userHome, "."+defaultConfigFile)
+}
+
+// SystemConfigPath returns the computed path to the system
+// control configuration file, if it exists.
+func SystemConfigPath() string {
+	return path.Join(build.ConfigDir, defaultConfigFile)
+}
+
+// LoadConfig attempts to load a configuration by one of the following:
+// 1. If the supplied path is a non-empty string, use it.
+// Otherwise,
+// 2. Try to load the config from the current user's home directory.
+// 3. Finally, try to load the config from the system location.
+func LoadConfig(cfgPath string) (*Config, error) {
+	if cfgPath == "" {
+		// Try to find either a per-user config file or use
+		// the system config file.
+		for _, cp := range []string{UserConfigPath(), SystemConfigPath()} {
+			if _, err := os.Stat(cp); err == nil {
+				cfgPath = cp
+				break
+			}
+		}
+	}
+
 	data, err := ioutil.ReadFile(cfgPath)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg := DefaultClientConfig()
+	cfg := DefaultConfig()
 	if err := yaml.UnmarshalStrict(data, cfg); err != nil {
 		return nil, err
 	}
