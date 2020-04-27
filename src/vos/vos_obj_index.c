@@ -175,6 +175,12 @@ oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static umem_off_t
+oi_node_alloc(struct btr_instance *tins, int size)
+{
+	return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_OBJ_NODE);
+}
+
 static btr_ops_t oi_btr_ops = {
 	.to_rec_msize		= oi_rec_msize,
 	.to_hkey_size		= oi_hkey_size,
@@ -184,6 +190,7 @@ static btr_ops_t oi_btr_ops = {
 	.to_rec_free		= oi_rec_free,
 	.to_rec_fetch		= oi_rec_fetch,
 	.to_rec_update		= oi_rec_update,
+	.to_node_alloc		= oi_node_alloc,
 };
 
 /**

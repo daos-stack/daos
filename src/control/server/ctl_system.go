@@ -379,14 +379,15 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 		results = append(results, hResults...)
 	}
 
-	// member state will transition to "started" during join or bootstrap
+	// member state will transition to "Joined" during join or bootstrap,
+	// here we want to update membership if "Errored" or "Ready"
 	filteredResults := make(system.MemberResults, 0, len(results))
 	for _, r := range results {
-		if !r.Errored || r.State != system.MemberStateReady {
-			continue
-		}
-		if !r.Errored && r.State == system.MemberStateReady {
-			// don't update members that have already "Joined"
+		if !r.Errored {
+			if r.State != system.MemberStateReady {
+				continue
+			}
+			// don't update members to "Ready" if already "Joined"
 			m, err := svc.membership.Get(r.Rank)
 			if err != nil {
 				return nil, errors.Wrap(err, "result rank not in membership")
