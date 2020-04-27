@@ -70,7 +70,7 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 		if (info->ti_type & 1) { /* negative entry */
 			parent_info = info - 1;
 		} else {
-			parent_info = info - 2;
+			parent_info = info - VOS_TS_PER_LEVEL;
 			neg_info = info - 1;
 		}
 		lrua_lookup(parent_info->ti_array, entry->te_parent_ptr,
@@ -297,7 +297,7 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 	if ((flags & VOS_OF_USE_TIMESTAMPS) == 0)
 		return 0;
 
-	size = 3 + akey_nr;
+	size = VOS_TS_TYPE_AKEY / VOS_TS_PER_LEVEL + akey_nr;
 	array_size = size * sizeof((*ts_set)->ts_entries[0]);
 
 	D_ALLOC(*ts_set, sizeof(**ts_set) + array_size);
@@ -343,7 +343,7 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 		hash_idx = set_entry->se_hash & info->ti_cache_mask;
 		vos_ts_evict_lru(ts_table, parent, &entry,
 				 set_entry->se_create_idx, hash_idx,
-				 info->ti_type + 2);
+				 info->ti_type + VOS_TS_PER_LEVEL);
 		set_entry->se_entry = entry;
 	}
 }

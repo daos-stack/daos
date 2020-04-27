@@ -114,6 +114,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 
 	if (!akeys) {
 punch_dkey:
+		propagated = 0; /* Reset so we don't punch the object */
 		rbund.rb_iov = dkey;
 		rbund.rb_tclass	= VOS_BTR_DKEY;
 
@@ -127,7 +128,7 @@ punch_dkey:
 					   VOS_ITER_DKEY);
 			if (rc > 0) {
 				/** dkey tree is now empty, punch the object */
-				propagated++;
+				propagated = 1;
 				vos_ts_set_punch_propagate(ts_set,
 							   VOS_TS_TYPE_OBJ);
 				D_DEBUG(DB_TRACE,
@@ -190,7 +191,7 @@ punch_dkey:
 		if (!read_conflict && rc == 0 && ts_set) {
 			rc = tree_is_empty(obj, toh, &epr, VOS_ITER_AKEY);
 			if (rc > 0) {
-				/** dkey tree is now empty, go punch the dkey */
+				/** akey tree is now empty, go punch the dkey */
 				key_tree_release(toh, 0);
 				vos_ts_set_punch_propagate(ts_set,
 							   VOS_TS_TYPE_DKEY);

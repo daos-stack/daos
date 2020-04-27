@@ -72,7 +72,7 @@ struct vos_ts_entry {
 	uuid_t			 te_tx_rh;
 	/** Hash index in parent */
 	uint32_t		 te_hash_idx;
-	/** Entry punched due to non-empty subtree */
+	/** Entry punched due to empty subtree */
 	bool			 te_punch_propagated;
 };
 
@@ -115,6 +115,11 @@ enum {
 	VOS_TS_TYPE_COUNT,
 };
 
+/** Each level in set has two potential types of entries, for positive and
+ *  negative entries (e.g. VOS_TS_TYPE_OBJ and VOS_TS_TYPE_OBJ_MISS)
+ */
+#define VOS_TS_PER_LEVEL	2
+
 struct vos_ts_table {
 	/** Global read low timestamp for type */
 	daos_epoch_t		tt_ts_rl;
@@ -137,7 +142,8 @@ ts_set_get_parent(struct vos_ts_set *ts_set)
 	D_ASSERT(ts_set->ts_set_size != ts_set->ts_init_count);
 	if (ts_set->ts_init_count > 0) {
 		/** 2 is dkey index in case there are multiple akeys */
-		parent_set_idx = MIN(ts_set->ts_init_count - 1, 2);
+		parent_set_idx = MIN(ts_set->ts_init_count - 1,
+				     VOS_TS_TYPE_DKEY / VOS_TS_PER_LEVEL);
 		set_entry = &ts_set->ts_entries[parent_set_idx];
 		parent = set_entry->se_entry;
 	}
@@ -162,7 +168,7 @@ vos_ts_set_reset(struct vos_ts_set *ts_set, uint32_t type, uint32_t akey_nr)
 
 	D_ASSERT((type == VOS_TS_TYPE_AKEY) || (akey_nr == 0));
 	D_ASSERT((type & 1) == 0);
-	idx = type / 2 + akey_nr;
+	idx = type / VOS_TS_PER_LEVEL + akey_nr;
 	D_ASSERT(idx <= ts_set->ts_init_count);
 	ts_set->ts_init_count = idx;
 }
@@ -213,7 +219,7 @@ vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
 	if (reset)
 		ts_set->ts_init_count--;
 
-	type = MIN(ts_set->ts_init_count * 2, VOS_TS_TYPE_AKEY);
+	type = MIN(ts_set->ts_init_count * VOS_TS_PER_LEVEL, VOS_TS_TYPE_AKEY);
 
 	return vos_ts_lookup_internal(ts_set, type, idx, entryp);
 }
@@ -264,7 +270,7 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 			return NULL;
 		}
 		hash_idx = hash & info->ti_cache_mask;
-		new_type = info->ti_type + 2;
+		new_type = info->ti_type + VOS_TS_PER_LEVEL;
 	}
 
 	D_ASSERT((info->ti_type & 1) == 0);
@@ -310,7 +316,7 @@ vos_ts_set_get_entry_type(struct vos_ts_set *ts_set, uint32_t type,
 			  int akey_idx)
 {
 	struct vos_ts_set_entry	*entry;
-	uint32_t		 idx = (type / 2) + akey_idx;
+	uint32_t		 idx = (type / VOS_TS_PER_LEVEL) + akey_idx;
 
 	D_ASSERT(akey_idx == 0 || type == VOS_TS_TYPE_AKEY);
 
@@ -549,7 +555,8 @@ vos_ts_check_rh_conflict_type(struct vos_ts_set *ts_set, uint32_t type,
 		return false;
 
 	if (type == VOS_TS_TYPE_AKEY)
-		akey_nr = ts_set->ts_init_count - 3;
+		akey_nr = ts_set->ts_init_count -
+			VOS_TS_TYPE_AKEY / VOS_TS_PER_LEVEL;
 
 	entry = vos_ts_set_get_entry_type(ts_set, type, akey_nr);
 	if (entry == NULL || write_time > entry->te_ts_rh)
