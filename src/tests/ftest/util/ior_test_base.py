@@ -155,6 +155,8 @@ class IorTestBase(TestWithServers):
                 return "Skipping the case for transfer_size=256B"
             self._start_dfuse()
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
+        elif self.ior_cmd.api.value == "DFS":
+            test_file = os.path.join("/", "testfile")
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
@@ -188,7 +190,7 @@ class IorTestBase(TestWithServers):
 
         """
         # Initialize MpioUtils if IOR is running in MPIIO or DAOS mode
-        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "POSIX"]:
+        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "POSIX", "DFS"]:
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
