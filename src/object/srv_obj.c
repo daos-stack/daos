@@ -106,14 +106,12 @@ obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_child *cont,
 
 static void
 obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
-	     struct dtx_conflict_entry *dce, struct ds_cont_hdl *cont_hdl)
+	     struct ds_cont_hdl *cont_hdl)
 {
 	int rc;
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
-	if (dce != NULL)
-		obj_reply_dtx_conflict_set(rpc, dce);
 
 	D_DEBUG(DB_TRACE, "rpc %p opc %d send reply, pmv %d, status %d.\n",
 		rpc, opc_get(rpc->cr_opc), map_version, status);
@@ -1274,7 +1272,6 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	daos_key_t			*dkey = &orw->orw_dkey;
 	struct obj_io_context		 ioc;
 	struct dtx_handle                dth = { 0 };
-	struct dtx_conflict_entry	 conflict = { 0 };
 	uint32_t			 opc = opc_get(rpc->cr_opc);
 	int				 rc;
 
@@ -1341,9 +1338,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	rc = dtx_begin(&orw->orw_dti, &orw->orw_oid, ioc.ioc_vos_coh,
 		       orw->orw_epoch, orw->orw_dkey_hash,
-		       &conflict, orw->orw_dti_cos.ca_arrays,
-		       orw->orw_dti_cos.ca_count, orw->orw_map_ver,
-		       DAOS_INTENT_UPDATE, &dth);
+		       orw->orw_dti_cos.ca_arrays, orw->orw_dti_cos.ca_count,
+		       orw->orw_map_ver, DAOS_INTENT_UPDATE, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1363,7 +1359,7 @@ out:
 		rc = -DER_IO;
 
 	rc = dtx_end(&dth, ioc.ioc_coh, ioc.ioc_coc, rc);
-	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, &conflict, ioc.ioc_coh);
+	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coh);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -1530,15 +1526,12 @@ out:
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
 	if (rc == -DER_TX_RESTART) {
-		D_ASSERT(dlh.dlh_handle.dth_renew);
-		/* epoch conflict, renew it and retry. */
+		/* Retry with newer epoch. */
 		orw->orw_epoch = crt_hlc_get();
 		flags &= ~ORF_RESEND;
 		memset(&dlh, 0, sizeof(dlh));
 		D_GOTO(renew, rc);
 	} else if (rc == -DER_AGAIN) {
-		D_ASSERT(!dlh.dlh_handle.dth_renew);
-
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
 	}
@@ -1548,7 +1541,7 @@ out:
 		goto cleanup;
 
 reply:
-	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, NULL, ioc.ioc_coh);
+	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coh);
 
 cleanup:
 	D_TIME_END(time_start, OBJ_PF_UPDATE);
@@ -1870,15 +1863,12 @@ out:
 }
 
 static void
-obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version,
-		   struct dtx_conflict_entry *dce)
+obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 {
 	int rc;
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
-	if (dce != NULL)
-		obj_reply_dtx_conflict_set(rpc, dce);
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
@@ -1935,7 +1925,6 @@ void
 ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 {
 	struct dtx_handle		 dth = { 0 };
-	struct dtx_conflict_entry	 conflict = { 0 };
 	struct obj_io_context		 ioc;
 	struct obj_punch_in		*opi;
 	int				 rc;
@@ -1975,9 +1964,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* Start the local transaction */
 	rc = dtx_begin(&opi->opi_dti, &opi->opi_oid, ioc.ioc_vos_coh,
 		       opi->opi_epoch, opi->opi_dkey_hash,
-		       &conflict, opi->opi_dti_cos.ca_arrays,
-		       opi->opi_dti_cos.ca_count, opi->opi_map_ver,
-		       DAOS_INTENT_PUNCH, &dth);
+		       opi->opi_dti_cos.ca_arrays, opi->opi_dti_cos.ca_count,
+		       opi->opi_map_ver, DAOS_INTENT_PUNCH, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -1998,7 +1986,7 @@ out:
 
 	/* Stop the local transaction */
 	rc = dtx_end(&dth, ioc.ioc_coh, ioc.ioc_coc, rc);
-	obj_punch_complete(rpc, rc, ioc.ioc_map_ver, &conflict);
+	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -2153,15 +2141,12 @@ out:
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
 	if (rc == -DER_TX_RESTART) {
-		D_ASSERT(dlh.dlh_handle.dth_renew);
-		/* epoch conflict, renew it and retry. */
+		/* Retry with newer epoch. */
 		opi->opi_epoch = crt_hlc_get();
 		flags &= ~ORF_RESEND;
 		memset(&dlh, 0, sizeof(dlh));
 		D_GOTO(renew, rc);
 	} else if (rc == -DER_AGAIN) {
-		D_ASSERT(!dlh.dlh_handle.dth_renew);
-
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
 	}
@@ -2170,7 +2155,7 @@ out:
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		goto cleanup;
 
-	obj_punch_complete(rpc, rc, ioc.ioc_map_ver, NULL);
+	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
 cleanup:
 	obj_ioc_end(&ioc, rc);
 }
