@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -212,12 +212,15 @@ dss_ult_wakeup(struct dss_sleep_ult *dsu)
 {
 	ABT_thread thread;
 
-	ABT_thread_self(&thread);
-	/* Only others can force the ULT to exit */
-	D_ASSERT(thread != dsu->dsu_thread);
-	d_list_del_init(&dsu->dsu_list);
-	dsu->dsu_expire_time = 0;
-	ABT_thread_resume(dsu->dsu_thread);
+	/* Wakeup the thread if it was put in the sleep list */
+	if (!d_list_empty(&dsu->dsu_list)) {
+		ABT_thread_self(&thread);
+		/* Only others can force the ULT to exit */
+		D_ASSERT(thread != dsu->dsu_thread);
+		d_list_del_init(&dsu->dsu_list);
+		dsu->dsu_expire_time = 0;
+		ABT_thread_resume(dsu->dsu_thread);
+	}
 }
 
 /* Schedule the ULT(dtu->ult) and reschedule in @expire_secs seconds */
@@ -228,6 +231,7 @@ dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
 	ABT_thread		thread;
 	uint64_t		now = 0;
 
+	D_ASSERT(dsu != NULL);
 	ABT_thread_self(&thread);
 	D_ASSERT(thread == dsu->dsu_thread);
 
@@ -276,12 +280,13 @@ dss_rpc_cntr_enter(enum dss_rpc_cntr_id id)
 {
 	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(id);
 
-	/* TODO: add interface to calculate average workload and reset stime */
-	if (cntr->rc_stime == 0)
-		daos_gettime_coarse(&cntr->rc_stime);
-
+	daos_gettime_coarse(&cntr->rc_active_time);
 	cntr->rc_active++;
 	cntr->rc_total++;
+
+	/* TODO: add interface to calculate average workload and reset stime */
+	if (cntr->rc_stime == 0)
+		cntr->rc_stime = cntr->rc_active_time;
 }
 
 /**
@@ -300,27 +305,20 @@ dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool error)
 }
 
 static int
-dss_rpc_hdlr(crt_context_t *ctx, crt_rpc_t *rpc,
+dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	     void (*real_rpc_hdlr)(void *), void *arg)
 {
-	unsigned int		 mod_id = opc_get_mod_id(rpc->cr_opc);
-	struct dss_module	*module = dss_module_get(mod_id);
-	ABT_pool		*pools = arg;
-	ABT_pool		 pool;
-	int			 rc;
+	ABT_pool	*pools = arg;
+	ABT_pool	 pool;
+	int		 rc;
 
-	/*
-	 * The mod_id for the RPC originated from CART is 0xfe, and 'module'
-	 * will be NULL for this case.
-	 */
-	if (module != NULL && module->sm_mod_ops != NULL &&
-	    module->sm_mod_ops->dms_abt_pool_choose_cb)
-		pool = module->sm_mod_ops->dms_abt_pool_choose_cb(rpc, pools);
-	else
-		pool = pools[DSS_POOL_IO];
+	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
+		return 0;
 
-	rc = ABT_thread_create(pool, real_rpc_hdlr, rpc, ABT_THREAD_ATTR_NULL,
-			       NULL);
+	pool = pools[DSS_POOL_IO];
+
+	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
+			       ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
 
@@ -520,17 +518,20 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		if (dss_xstream_exiting(dx)) {
-			check_sleep_list();
-			break;
-		}
-
 		check_sleep_list();
+
+		if (dss_xstream_exiting(dx))
+			break;
+
 		ABT_thread_yield();
 	}
 	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
 
 	wait_all_exited(dx);
+	if (dmi->dmi_sp) {
+		srv_profile_destroy(dmi->dmi_sp);
+		dmi->dmi_sp = NULL;
+	}
 nvme_fini:
 	if (dx->dx_main_xs)
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
@@ -803,9 +804,12 @@ dss_xstreams_empty(void)
 bool
 dss_xstream_is_busy(void)
 {
-	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(DSS_RC_OBJ);
+	struct dss_rpc_cntr	*cntr = dss_rpc_cntr_get(DSS_RC_OBJ);
+	uint64_t		 cur_sec = 0;
 
-	return cntr->rc_active != 0;
+	daos_gettime_coarse(&cur_sec);
+	/* No IO requests for more than 5 seconds */
+	return cur_sec < (cntr->rc_active_time + 5);
 }
 
 static int

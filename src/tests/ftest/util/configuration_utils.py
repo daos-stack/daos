@@ -219,7 +219,6 @@ class ConfigurationParameters(ObjectWithParameters):
         super(ConfigurationParameters, self).__init__(namespace + name + "/*")
         self.name = name
         self._config_data = data
-        self.log = getLogger(__name__)
 
         # Define the yaml entries that define the configuration
         #  - Make sure to add any new parameter names defined here in the

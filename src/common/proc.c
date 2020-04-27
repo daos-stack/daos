@@ -98,6 +98,9 @@ crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
 			rc = crt_proc_struct_daos_acl(proc,
 						      (struct daos_acl **)
 						      &entry->dpe_val_ptr);
+		else if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST)
+			rc = crt_proc_d_rank_list_t(proc,
+					(d_rank_list_t **)&entry->dpe_val_ptr);
 		else
 			rc = crt_proc_uint64_t(proc, &entry->dpe_val);
 		if (rc)

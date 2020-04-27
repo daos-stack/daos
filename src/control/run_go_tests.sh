@@ -45,19 +45,19 @@ function setup_environment()
 	source "${build_source}"
 
 	# allow cgo to find and link to third-party libs
-	LD_LIBRARY_PATH=${SL_PREFIX}/lib64
-	LD_LIBRARY_PATH+=":${SL_SPDK_PREFIX}/lib"
-	LD_LIBRARY_PATH+=":${SL_OFI_PREFIX}/lib"
-	LD_LIBRARY_PATH+=":${SL_ISAL_PREFIX}/lib"
-	CGO_LDFLAGS=-L${SL_PREFIX}/lib64
-	CGO_LDFLAGS+=" -L${SL_SPDK_PREFIX}/lib"
-	CGO_LDFLAGS+=" -L${SL_OFI_PREFIX}/lib"
-	CGO_LDFLAGS+=" -L${SL_ISAL_PREFIX}/lib"
+	LD_LIBRARY_PATH=${SL_PREFIX+${SL_PREFIX}/lib64}
+	LD_LIBRARY_PATH+="${SL_SPDK_PREFIX+:${SL_SPDK_PREFIX}/lib}"
+	LD_LIBRARY_PATH+="${SL_OFI_PREFIX+:${SL_OFI_PREFIX}/lib}"
+	LD_LIBRARY_PATH+="${SL_ISAL_PREFIX+:${SL_ISAL_PREFIX}/lib}"
+	CGO_LDFLAGS=${SL_PREFIX+-L${SL_PREFIX}/lib64}
+	CGO_LDFLAGS+="${SL_SPDK_PREFIX+ -L${SL_SPDK_PREFIX}/lib}"
+	CGO_LDFLAGS+="${SL_OFI_PREFIX+ -L${SL_OFI_PREFIX}/lib}"
+	CGO_LDFLAGS+="${SL_ISAL_PREFIX+ -L${SL_ISAL_PREFIX}/lib}"
 	CGO_LDFLAGS+=" -lisal"
-	CGO_CFLAGS=-I${SL_PREFIX}/include
-	CGO_CFLAGS+=" -I${SL_SPDK_PREFIX}/include"
-	CGO_CFLAGS+=" -I${SL_OFI_PREFIX}/include"
-	CGO_CFLAGS+=" -I${SL_ISAL_PREFIX}/include"
+	CGO_CFLAGS=${SL_PREFIX+-I${SL_PREFIX}/include}
+	CGO_CFLAGS+="${SL_SPDK_PREFIX+ -I${SL_SPDK_PREFIX}/include}"
+	CGO_CFLAGS+="${SL_OFI_PREFIX+ -I${SL_OFI_PREFIX}/include}"
+	CGO_CFLAGS+="${SL_ISAL_PREFIX+ -I${SL_ISAL_PREFIX}/include}"
 }
 
 function check_formatting()
@@ -78,7 +78,7 @@ function check_formatting()
 
 function get_test_runner()
 {
-	test_args="-race -cover -v ./..."
+	test_args="-mod vendor -race -cover -v ./..."
 	test_runner="go test"
 
 	if which gotestsum >/dev/null; then
@@ -106,10 +106,7 @@ export PATH=$SL_PREFIX/bin:$PATH
 GO_TEST_XML="$DAOS_BASE/test_results/run_go_tests.xml"
 GO_TEST_RUNNER=$(get_test_runner)
 
-DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
-GOPATH="$(readlink -f "$DIR/../../build/src/control")"
-repopath=github.com/daos-stack/daos
-controldir="$GOPATH/src/$repopath/src/control"
+controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 
 check_formatting "$controldir"
 
@@ -119,7 +116,6 @@ echo "  LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 echo "  CGO_LDFLAGS: $CGO_LDFLAGS"
 echo "  CGO_CFLAGS: $CGO_CFLAGS"
 
-echo "  GOPATH: $GOPATH"
 echo
 
 echo "Running all tests under $controldir..."
@@ -128,7 +124,6 @@ set +e
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 CGO_LDFLAGS="$CGO_LDFLAGS" \
 CGO_CFLAGS="$CGO_CFLAGS" \
-GOPATH="$GOPATH" \
 	$GO_TEST_RUNNER
 testrc=$?
 popd >/dev/null

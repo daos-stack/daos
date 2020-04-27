@@ -317,11 +317,11 @@ int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 	      struct vea_stat *stat);
 
 /**
- * Force flushing the free extents in aging buffer and make them available
- * for allocation immediately.
+ * Pause or resume flushing the free extents in aging buffer
  *
  * \param vsi       [IN]	In-memory compund index
+ * \param plug      [IN]	Plug or unplug
  */
-void vea_flush(struct vea_space_info *vsi);
+void vea_flush(struct vea_space_info *vsi, bool plug);
 
 #endif /* __VEA_API_H__ */

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,16 +23,14 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 import threading
 import string
 import random
+
 from apricot import TestWithServers
-
 from general_utils import DaosTestError
-
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosContainer, DaosApiError
 
 # pylint: disable = global-variable-not-assigned, global-statement
 GLOB_SIGNAL = None
@@ -88,16 +86,8 @@ class ContainerAttributeTest(TestWithServers):
 
         self.large_data_set = {}
 
-        self.pool = DaosPool(self.context)
-        self.pool.create(
-            self.params.get("mode", '/run/attrtests/createmode/*'),
-            os.geteuid(),
-            os.getegid(),
-            self.params.get("size", '/run/attrtests/createsize/*'),
-            self.params.get("setname", '/run/attrtests/createset/*'),
-            None)
-        self.pool.connect(1 << 1)
-        poh = self.pool.handle
+        self.prepare_pool()
+        poh = self.pool.pool.handle
         self.container = DaosContainer(self.context)
         self.container.create(poh)
         self.container.open()

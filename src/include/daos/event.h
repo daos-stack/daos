@@ -32,6 +32,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <daos_task.h>
+#include <daos/task.h>
 
 enum daos_ev_flags {
 	/**
@@ -193,10 +194,10 @@ dc_task_get_opc(tse_task_t *task);
 	tse_task_decref(task)
 
 #define dc_task_set_priv(task, priv)				\
-	tse_task_set_priv(task, priv)
+	tse_task_set_priv_internal(task, priv)
 
 #define dc_task_get_priv(task)					\
-	tse_task_get_priv(task)
+	tse_task_get_priv_internal(task)
 
 #define dc_task_list_add(task, head)				\
 	tse_task_list_add(task, head)

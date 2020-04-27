@@ -272,7 +272,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	}
 
 	ph = vos_pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout), scm_sz,
-				0666);
+				0600);
 	if (!ph) {
 		D_ERROR("Failed to create pool %s, size="DF_U64", errno=%d\n",
 			path, scm_sz, errno);
@@ -498,6 +498,82 @@ exit:
 	return rc;
 }
 
+static int
+set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
+{
+	struct daos_tree_overhead	ovhd = { 0 };
+	int				tclass, *size, rc;
+
+	size = &ovhd.to_node_overhead.no_size;
+
+	switch (id) {
+	case VOS_SLAB_OBJ_NODE:
+		tclass = VOS_TC_OBJECT;
+		break;
+	case VOS_SLAB_KEY_NODE:
+		tclass = VOS_TC_DKEY;
+		break;
+	case VOS_SLAB_SV_NODE:
+		tclass = VOS_TC_SV;
+		break;
+	case VOS_SLAB_EVT_NODE:
+		tclass = VOS_TC_ARRAY;
+		break;
+	case VOS_SLAB_EVT_DESC:
+		tclass = VOS_TC_ARRAY;
+		size = &ovhd.to_record_msize;
+		break;
+	default:
+		D_ERROR("Invalid slab ID: %d\n", id);
+		return -DER_INVAL;
+	}
+
+	rc = vos_tree_get_overhead(0, tclass, 0, &ovhd);
+	if (rc)
+		return rc;
+
+	slab->unit_size = *size;
+	D_ASSERT(slab->unit_size > 0);
+	D_DEBUG(DB_MGMT, "Slab ID:%d, Size:%lu\n", id, slab->unit_size);
+
+	slab->alignment = 0;
+	slab->units_per_block = 1000;
+	slab->header_type = POBJ_HEADER_NONE;
+
+	return 0;
+}
+
+static int
+vos_register_slabs(struct umem_attr *uma)
+{
+	struct pobj_alloc_class_desc	*slab;
+	int				 i, rc;
+
+	D_ASSERT(uma->uma_pool != NULL);
+	for (i = 0; i < VOS_SLAB_MAX; i++) {
+		slab = &uma->uma_slabs[i];
+
+		D_ASSERT(slab->class_id == 0);
+		rc = set_slab_prop(i, slab);
+		if (rc) {
+			D_ERROR("Failed to get unit size %d. rc:%d\n", i, rc);
+			return rc;
+		}
+
+		rc = pmemobj_ctl_set(uma->uma_pool, "heap.alloc_class.new.desc",
+				     slab);
+		if (rc) {
+			D_ERROR("Failed to register VOS slab %d. rc:%d\n",
+				i, rc);
+			rc = umem_tx_errno(rc);
+			return rc;
+		}
+		D_ASSERT(slab->class_id != 0);
+	}
+
+	return 0;
+}
+
 /**
  * Open a Versioning Object Storage Pool (VOSP), load its root object
  * and other internal data structures.
@@ -545,6 +621,12 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_ERROR("Error in opening the pool "DF_UUID": %s\n",
 			DP_UUID(uuid), pmemobj_errormsg());
 		D_GOTO(failed, rc = -DER_NO_HDL);
+	}
+
+	rc = vos_register_slabs(uma);
+	if (rc) {
+		D_ERROR("Register slabs failed. rc:%d\n", rc);
+		D_GOTO(failed, rc);
 	}
 
 	/* initialize a umem instance for later btree operations */
@@ -744,10 +826,15 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 	case VOS_PO_CTL_RESET_GC:
 		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
 		break;
-	case VOS_PO_CTL_VEA_FLUSH:
+	case VOS_PO_CTL_VEA_PLUG:
 		if (pool->vp_vea_info != NULL)
-			vea_flush(pool->vp_vea_info);
+			vea_flush(pool->vp_vea_info, true);
+		break;
+	case VOS_PO_CTL_VEA_UNPLUG:
+		if (pool->vp_vea_info != NULL)
+			vea_flush(pool->vp_vea_info, false);
 		break;
 	}
+
 	return 0;
 }

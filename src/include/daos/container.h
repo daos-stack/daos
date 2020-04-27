@@ -61,6 +61,8 @@ int dc_cont_close(tse_task_t *task);
 int dc_cont_destroy(tse_task_t *task);
 int dc_cont_query(tse_task_t *task);
 int dc_cont_set_prop(tse_task_t *task);
+int dc_cont_update_acl(tse_task_t *task);
+int dc_cont_delete_acl(tse_task_t *task);
 int dc_cont_aggregate(tse_task_t *task);
 int dc_cont_rollback(tse_task_t *task);
 int dc_cont_subscribe(tse_task_t *task);
@@ -77,6 +79,7 @@ int dc_tx_commit(tse_task_t *task);
 int dc_tx_abort(tse_task_t *task);
 int dc_tx_open_snap(tse_task_t *task);
 int dc_tx_close(tse_task_t *task);
+int dc_tx_restart(tse_task_t *task);
 int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
 		     daos_handle_t *th);
 int dc_tx_local_close(daos_handle_t th);

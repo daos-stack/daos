@@ -5,8 +5,6 @@ hosts:
     - server-A
     - server-B
 timeout: 120
-server_manager:
-  recreate: true
 server_config:
   name: daos_server
 tests:

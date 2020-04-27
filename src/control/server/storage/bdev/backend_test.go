@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,12 +27,20 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+// defCmpOpts returns a default set of cmp option suitable for this package
+func defCmpOpts() []cmp.Option {
+	return []cmp.Option{
+		// ignore these fields on most tests, as they are intentionally not stable
+		cmpopts.IgnoreFields(storage.NvmeController{}, "HealthStats", "Serial"),
+	}
+}
 
 func convertTypes(in interface{}, out interface{}) error {
 	data, err := json.Marshal(in)
@@ -94,14 +102,14 @@ func TestBdevBackendGetController(t *testing.T) {
 	}{
 		"empty input": {
 			input:  input{},
-			expErr: errors.New("unable to resolve"),
+			expErr: FaultBadPCIAddr(""),
 		},
 		"wrong pciAddr": {
 			input: input{
 				pciAddr:         "abc123",
 				spdkControllers: []spdk.Controller{mockSpdkController()},
 			},
-			expErr: errors.New("unable to resolve"),
+			expErr: FaultPCIAddrNotFound("abc123"),
 		},
 		"correct pciAddr": {
 			input: input{
@@ -139,7 +147,8 @@ func TestBdevBackendGetController(t *testing.T) {
 			if gotErr != nil {
 				return
 			}
-			if diff := cmp.Diff(tc.expSc, gotSc); diff != "" {
+
+			if diff := cmp.Diff(tc.expSc, gotSc, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
 		})

@@ -2,7 +2,7 @@ name: daos_server
 servers:
 - rank: null
   targets: 8
-  nr_xs_helpers: 2
+  nr_xs_helpers: 16
   first_core: 0
   fabric_iface: ib0
   fabric_iface_port: 31416

@@ -47,13 +47,13 @@ tests:
   tgtlist: !mux
     firsttgt:
       tgt:
-        - "0"
+        - [0]
         - PASS
     bothtgt:
       tgt:
-        - "0,1"
+        - [0, 1]
         - PASS
     badtgt:
       tgt:
-        - "0,1,2"
+        - [0, 1, 2]
         - FAIL

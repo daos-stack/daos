@@ -26,6 +26,7 @@
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos/rpc.h>
+#include <daos/pool.h>
 #include <daos_pool.h>
 #include "rpc.h"
 
@@ -167,6 +168,8 @@ CRT_RPC_DEFINE(pool_replicas_add, DAOS_ISEQ_POOL_MEMBERSHIP,
 CRT_RPC_DEFINE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP,
 		DAOS_OSEQ_POOL_MEMBERSHIP)
 CRT_RPC_DEFINE(pool_add, DAOS_ISEQ_POOL_TGT_UPDATE, DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DEFINE(pool_add_in, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DEFINE(pool_exclude, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DEFINE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,

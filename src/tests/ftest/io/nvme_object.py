@@ -33,12 +33,12 @@ from apricot import TestWithServers
 
 
 def container_write(container, record, array_size=None):
-    """Method to write to a container
+    """Write to a container.
 
-       Args:
-         container: instance of TestContainer
-         record: record size to be written
-         array_size (optional): size of array value to be written
+    Args:
+        container: instance of TestContainer
+        record: record size to be written
+        array_size (optional): size of array value to be written
     """
     # update data_array_size to use array value type
     if array_size:
@@ -50,12 +50,13 @@ def container_write(container, record, array_size=None):
     # write multiple objects
     container.write_objects()
 
-def container_read(container, array_size=None):
-    """Method to read and verify the written data
 
-       Args:
-         container: instance of TestContainer
-         array_size (optional): size of array value to be written
+def container_read(container, array_size=None):
+    """Read and verify the written data.
+
+    Args:
+        container: instance of TestContainer
+        array_size (optional): size of array value to be written
     """
     # update data_array_size to use array value type
     if array_size:
@@ -63,19 +64,18 @@ def container_read(container, array_size=None):
     # read written objects and verify
     container.read_objects()
 
+
 def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
-    """Method to perform simultaneous writes of varying
-       record size to a container in a pool
+    """Perform simultaneous writes of varying record size to a container.
 
-       Args:
-         self: avocado test object
-         size: pool size to be created
-         record_size (list): list of different record sizes to be written
-         index (int): pool/container object index
-         array_size (optional): size of array value to be written
-         thread_per_size (int): threads per rec size
+    Args:
+        self: avocado test object
+        size: pool size to be created
+        record_size (list): list of different record sizes to be written
+        index (int): pool/container object index
+        array_size (optional): size of array value to be written
+        thread_per_size (int): threads per rec size
     """
-
     # pool initialization
     self.pool.append(TestPool(
         self.context, dmg_command=self.get_dmg_command()))
@@ -123,7 +123,7 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
     for job in jobs["write"]:
         job.start()
 
-   # wait for all write threads to finish
+    # wait for all write threads to finish
     for job in jobs["write"]:
         job.join()
 
@@ -146,9 +146,11 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
     if self.pool[index] is not None:
         self.pool[index].destroy(1)
 
+
 class NvmeObject(TestWithServers):
-    """Test class for NVMe storage by creating/Updating/Fetching
-       large number of objects simultaneously.
+    """Test class for NVMe storage.
+
+     Creates/Updates/Fetches large number of objects simultaneously.
 
     Test Class Description:
         Test the general functional operations of objects on nvme storage
@@ -158,7 +160,7 @@ class NvmeObject(TestWithServers):
     """
 
     def setUp(self):
-        """Set Up nodes for each test case"""
+        """Set Up nodes for each test case."""
         super(NvmeObject, self).setUp()
 
         # initialise self.pool and self.container as lists
@@ -181,9 +183,9 @@ class NvmeObject(TestWithServers):
         Use Cases:
             Verify the objects are being created and the data is not
             corrupted.
-        :avocado: tags=nvme,pr,hw,nvme_object_single_pool,medium,nvme_object
-        """
 
+        :avocado: tags=all,pr,hw,large,nvme_object_single_pool,nvme_object
+        """
         # perform multiple object writes to a single pool
         test_runner(self, self.pool_size[0], self.record_size[:-1], 0,
                     self.array_size)
@@ -200,10 +202,10 @@ class NvmeObject(TestWithServers):
         Use Cases:
             Verify the objects are being created and the data is not
             corrupted.
-        :avocado: tags=nvme,full_regression,hw,nvme_object_multiple_pools
-        :avocado: tags=medium,nvme_object
-        """
 
+        :avocado: tags=all,full_regression,hw,large,nvme_object_multiple_pools
+        :avocado: tags=nvme_object
+        """
         # thread to perform simulatneous object writes to multiple pools
         threads = []
         index = 0
@@ -226,5 +228,5 @@ class NvmeObject(TestWithServers):
         # very large nvme_pool size
         # Uncomment the below line after DAOS-3339 is resolved
 
-        #test_runner(self, self.pool_size[2], self.record_size, index,
+        # test_runner(self, self.pool_size[2], self.record_size, index,
         #            self.array_size)

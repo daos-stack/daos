@@ -21,24 +21,15 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from __future__ import print_function
+from __future__    import print_function
+from mpio_test_base import MpiioTests
 
-from apricot import TestWithServers
-from mpio_utils import MpioUtils, MpioFailed
-
-class Romio(TestWithServers):
+# pylint: disable=too-many-ancestors
+class Romio(MpiioTests):
     """
     Runs Romio test.
-
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-
-        super(Romio, self).__init__(*args, **kwargs)
-        # Initialize a TestWithServers object.
-        self.hostfile_clients_slots = None
-        self.mpio = None
 
     def test_romio(self):
         """
@@ -48,31 +39,5 @@ class Romio(TestWithServers):
         :avocado: tags=all,mpiio,pr,small,romio
         """
         # setting romio parameters
-        romio_test_repo = self.params.get("romio_repo", '/run/romio/')
-
-        # initialize MpioUtils
-        self.mpio = MpioUtils()
-        if self.mpio.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
-
-        try:
-            # running romio
-            self.mpio.run_romio(self.hostlist_clients, romio_test_repo)
-
-            # Parsing output to look for failures
-            # stderr directed to stdout
-            stdout = self.logdir + "/stdout"
-            searchfile = open(stdout, "r")
-            error_message = ["non-zero exit code", "MPI_Abort", "errors",
-                             "failed to create pool",
-                             "failed to parse pool UUID",
-                             "failed to destroy pool"]
-
-            for line in searchfile:
-                for i, _ in enumerate(error_message):
-                    if error_message[i] in line:
-                        self.fail("Romio Test Failed with error_message: "
-                                  "{}".format(error_message[i]))
-
-        except (MpioFailed) as excep:
-            self.fail("<Romio Test Failed> \n{}".format(excep))
+        test_repo = self.params.get("romio_repo", '/run/romio/')
+        self.run_test(test_repo, "romio")

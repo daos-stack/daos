@@ -63,6 +63,14 @@ echo "start of script: $thisscriptpath/$thisscriptname"
 
 rootdir="$(readlink -f "$(dirname "$0")")"/../..
 scriptpath="$rootdir/spdk/scripts/setup.sh"
+if [ ! -f "$scriptpath" ]; then
+    if [ -f /usr/share/spdk/scripts/setup.sh ]; then
+        scriptpath=/usr/share/spdk/scripts/setup.sh
+	else
+	    echo "Could not find the SPDK setup.sh script" >&2
+		exit 1
+	fi
+fi
 
 echo "calling into script: $scriptpath"
 

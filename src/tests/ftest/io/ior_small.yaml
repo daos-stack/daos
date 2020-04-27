@@ -26,6 +26,11 @@ pool:
     nvme_size: 9000000000
     svcn: 1
     control_method: dmg
+container:
+    type: POSIX
+    # Disabling checksum due to DAOS-4458
+    # properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
 ior:
     client_processes:
         np_16:

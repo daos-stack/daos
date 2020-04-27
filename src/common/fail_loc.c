@@ -44,22 +44,31 @@ daos_fail_loc_reset()
 int
 daos_fail_check(uint64_t fail_loc)
 {
-	struct d_fault_attr_t	*attr;
-	int			grp;
+	struct d_fault_attr_t	*attr = NULL;
+	int			grp = 0;
 
-	if (daos_fail_loc == 0)
-		return 0;
-
-	if ((daos_fail_loc & DAOS_FAIL_MASK_LOC) !=
-		(fail_loc & DAOS_FAIL_MASK_LOC))
+	if ((daos_fail_loc == 0 ||
+	    (daos_fail_loc & DAOS_FAIL_MASK_LOC) !=
+	     (fail_loc & DAOS_FAIL_MASK_LOC)) &&
+	     !d_fault_inject_is_enabled())
 		return 0;
 
 	/**
 	 * TODO reset fail_loc to save some cycles once the
 	 * current fail_loc finish the job.
 	 */
-	grp = DAOS_FAIL_GROUP_GET(fail_loc);
-	attr = d_fault_attr_lookup(grp);
+	/* Search the attr in inject yml first */
+	if (d_fault_inject_is_enabled()) {
+		uint32_t id = DAOS_FAIL_ID_GET(fail_loc);
+
+		attr = d_fault_attr_lookup(id);
+	}
+
+	if (attr == NULL) {
+		grp = DAOS_FAIL_GROUP_GET(fail_loc);
+		attr = d_fault_attr_lookup(grp);
+	}
+
 	if (attr == NULL) {
 		D_DEBUG(DB_ANY, "No attr fail_loc="DF_X64" value="DF_U64
 			", input_loc ="DF_X64" idx %d\n", daos_fail_loc,

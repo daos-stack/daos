@@ -108,26 +108,23 @@ enum {
 };
 
 /** Number of bits reserved in IO flags bitmap for conditional checks.  */
-#define IO_FLAGS_COND_BITS	8
+#define IO_FLAGS_COND_BITS	7
 
 enum {
+	/* Conditional Op: Punch key if it exists, fail otherwise */
+	DAOS_COND_PUNCH		= (1 << 0),
 	/* Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
-	DAOS_COND_DKEY_INSERT	= (1 << 0),
+	DAOS_COND_DKEY_INSERT	= (1 << 1),
 	/* Conditional Op: Update dkey if it exists, fail otherwise */
-	DAOS_COND_DKEY_UPDATE	= (1 << 1),
+	DAOS_COND_DKEY_UPDATE	= (1 << 2),
 	/* Conditional Op: Fetch dkey if it exists, fail otherwise */
-	DAOS_COND_DKEY_FETCH	= (1 << 2),
-	/* Conditional Op: Punch dkey if it exists, fail otherwise */
-	DAOS_COND_DKEY_PUNCH	= (1 << 3),
-
+	DAOS_COND_DKEY_FETCH	= (1 << 3),
 	/* Conditional Op: Insert akey if it doesn't exist, fail otherwise */
 	DAOS_COND_AKEY_INSERT	= (1 << 4),
 	/* Conditional Op: Update akey if it exists, fail otherwise */
 	DAOS_COND_AKEY_UPDATE	= (1 << 5),
 	/* Conditional Op: Fetch akey if it exists, fail otherwise */
 	DAOS_COND_AKEY_FETCH	= (1 << 6),
-	/* Conditional Op: Punch akey if it exists, fail otherwise */
-	DAOS_COND_AKEY_PUNCH	= (1 << 7),
 	/** Mask for convenience */
 	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
 };

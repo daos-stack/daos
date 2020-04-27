@@ -23,7 +23,7 @@
 '''
 from avocado.utils import process
 from general_utils import get_file_path
-from apricot import Test, TestWithServers, skipForTicket
+from apricot import Test
 
 def unittest_runner(self, unit_testname):
     """
@@ -66,7 +66,7 @@ class UnitTestWithoutServers(Test):
                   nvme_get_pool, nvme_set_pool_info, nvme_add_pool,
                   nvme_get_device, nvme_set_device_status,
                   nvme_add_stream_bond, nvme_get_stream_bond
-        :avocado: tags=all,unittest,tiny,regression,vm,smd_ut
+        :avocado: tags=all,unittest,tiny,full_regression,smd_ut
         """
         unittest_runner(self, "smd_ut")
 
@@ -76,7 +76,7 @@ class UnitTestWithoutServers(Test):
         Use Case: This tests vea's following functions: load, format,
                   query, hint_load, reserve, cancel, tx_publish,
                   free, unload, hint_unload
-        :avocado: tags=all,unittest,tiny,regression,vm,vea_ut
+        :avocado: tags=all,unittest,tiny,full_regression,vea_ut
         """
         unittest_runner(self, "vea_ut")
 
@@ -84,7 +84,7 @@ class UnitTestWithoutServers(Test):
         """
         Test Description: Test ring_pl_map unittest.
         Use Case: This tests the ring placement map
-        :avocado: tags=all,unittest,tiny,regression,vm,ring_pl_map
+        :avocado: tags=all,unittest,tiny,full_regression,ring_pl_map
         """
         unittest_runner(self, "ring_pl_map")
 
@@ -92,16 +92,15 @@ class UnitTestWithoutServers(Test):
         """
         Test Description: Test jump_pl_map unittest.
         Use Case: This tests the jump placement map
-        :avocado: tags=all,unittest,tiny,regression,vm,jump_pl_map
+        :avocado: tags=all,unittest,tiny,full_regression,jump_pl_map
         """
         unittest_runner(self, "jump_pl_map")
 
-    @skipForTicket("DAOS-1763")
     def test_eq_tests(self):
         """
         Test Description: Test eq_tests unittest.
         Use Case: This tests Daos Event queue
-        :avocado: tags=all,unittest,tiny,regression,vm,eq_tests
+        :avocado: tags=all,unittest,tiny,full_regression,eq_tests
         """
         unittest_runner(self, "eq_tests")
 
@@ -110,6 +109,14 @@ class UnitTestWithoutServers(Test):
         Test Description: Test vos_tests unittest.
         Use Cases: Performs following set of tests - pool_tests,
                    container_tests, io_tests, dtx_tests, aggregate-tests
-        :avocado: tags=all,unittest,tiny,regression,vm,vos_tests
+        :avocado: tags=all,unittest,tiny,full_regression,vos_tests
         """
         unittest_runner(self, "vos_tests")
+
+    def test_agent_tests(self):
+        """
+        Test Description: Test daos agent unittest.
+        Use Cases: daos_agent tests for connection.
+        :avocado: tags=all,unittest,tiny,full_regression,agent_tests
+        """
+        unittest_runner(self, "agent_tests")

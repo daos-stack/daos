@@ -43,6 +43,13 @@ run_test()
     local in="$*"
     local a="${in// /-}"
     local b="${a////-}"
+
+    if [ -n "${RUN_TEST_FILTER}" ]; then
+        if ! [[ "$*" =~ ${RUN_TEST_FILTER} ]]; then
+            echo "Skipping test: $in"
+            return
+        fi
+    fi
     export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
     echo "Running $* with log file: ${D_LOG_FILE}"
 
@@ -72,6 +79,10 @@ if [ -d "/mnt/daos" ]; then
         SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
     fi
 
+    run_test build/src/cart/src/utest/test_linkage
+    run_test build/src/cart/src/utest/test_gurt
+    run_test build/src/cart/src/utest/utest_hlc
+    run_test build/src/cart/src/utest/utest_swim
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm

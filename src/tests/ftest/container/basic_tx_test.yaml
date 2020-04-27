@@ -18,14 +18,10 @@ faults: !mux
 #        - obj_update_timeout
     no_faults:
       fault_list: []
-server_manager:
-   recreate: true
 server_config:
    name: daos_server
-poolparams:
-   createmode:
-     mode: 511
-   createset:
-     setname: daos_server
-   createsize:
-     size: 1073741824
+pool:
+  mode: 511
+  name: daos_server
+  scm_size: 1073741824
+  control_method: dmg

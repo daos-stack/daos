@@ -25,7 +25,6 @@
 from __future__ import print_function
 import os
 import subprocess
-import json
 from distutils.spawn import find_executable
 
 from env_modules import load_mpi
@@ -150,9 +149,7 @@ class DaosPerfCommand(object):
             orterun_bin,
             "-np {}".format(processes),
             "--hostfile {}".format(hostfile),
-            "--map-by node",
-            "-x DAOS_SINGLETON_CLI=1",
-            "-x CRT_ATTACH_INFO_PATH={}".format(attach_info_path),
+            "--map-by node"
         ]
         command = " ".join(orterun_cmd + [self.__str__()])
 

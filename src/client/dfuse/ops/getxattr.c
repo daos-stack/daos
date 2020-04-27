@@ -29,7 +29,7 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		  const char *name, size_t size)
 {
 	size_t out_size = 0;
-	char *value;
+	char *value = NULL;
 	int rc;
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
@@ -60,5 +60,6 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	D_FREE(value);
 	return;
 err:
+	D_FREE(value);
 	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }

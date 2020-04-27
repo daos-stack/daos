@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,6 +137,7 @@ verify_notify_ready_message(void)
 	assert_int_equal(req->nctxs, DSS_CTX_NR_TOTAL);
 	assert_string_equal(req->drpclistenersock, drpc_listener_socket_path);
 	assert_int_equal(req->instanceidx, dss_instance_idx);
+	assert_int_equal(req->ntgts, dss_tgt_nr);
 
 	/* Cleanup */
 	srv__notify_ready_req__free_unpacked(req, NULL);

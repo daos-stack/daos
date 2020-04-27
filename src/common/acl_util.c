@@ -297,6 +297,7 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 		D_GOTO(error, rc = -DER_INVAL);
 	}
 
+	D_ASSERT(new_ace != NULL);
 	new_ace->dae_access_flags = flags;
 	new_ace->dae_access_types = access_types;
 

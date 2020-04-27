@@ -33,12 +33,28 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
+def run_checks(env):
+    """Run all configure time checks"""
+    if GetOption('help') or GetOption('clean'):
+        return
+    cenv = env.Clone()
+    cenv.Append(CFLAGS='-Werror')
+    if cenv.get("COMPILER") == 'icc':
+        cenv.Replace(CC='gcc', CXX='g++')
+    config = Configure(cenv)
+
+    if config.CheckHeader('stdatomic.h'):
+        env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+
+    config.Finish()
+
 def get_version():
     """ Read version from VERSION file """
     with open("VERSION", "r") as version_file:
         return version_file.read().rstrip()
 
 DAOS_VERSION = get_version()
+API_VERSION = "0.9.0"
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
@@ -53,7 +69,7 @@ def update_rpm_version(version, tag):
                       "spec file has currently ({})".format(version,
                                                             current_version))
                 return False
-            elif version > current_version:
+            if version > current_version:
                 spec[line_num] = "Version:       {}\n".format(version)
         if line.startswith("Release:"):
             if version == current_version:
@@ -109,6 +125,7 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
     env.Append(CCFLAGS=['-D_FORTIFY_SOURCE=2'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
@@ -123,13 +140,14 @@ def preload_prereqs(prereqs):
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
-    reqs = ['cart', 'argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc',
+    reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal'])
     prereqs.load_definitions(prebuild=reqs)
 
-def scons():
+def scons(): # pylint: disable=too-many-locals
+    """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
         try:
             import pygit2
@@ -169,7 +187,7 @@ def scons():
                   "using a previous pre-release such as a release candidate.\n")
             question = "Are you sure you want to continue? (y/N): "
             answer = None
-            while answer != "y" and answer != "n" and answer != "":
+            while answer not in ["y", "n", ""]:
                 answer = input(question).lower().strip()
             if answer != 'y':
                 exit(1)
@@ -225,7 +243,9 @@ def scons():
                   "to clean it up manually.")
             exit(1)
 
-        print("Updating the VERSION and TAG files...")
+        print("Updating the API_VERSION, VERSION and TAG files...")
+        with open("API_VERSION", "w") as version_file:
+            version_file.write(API_VERSION + '\n')
         with open("VERSION", "w") as version_file:
             version_file.write(version + '\n')
         with open("TAG", "w") as version_file:
@@ -245,6 +265,7 @@ def scons():
                                                   repo.default_signature.email)
         # pylint: enable=no-member
         index.add("utils/rpms/daos.spec")
+        index.add("API_VERSION")
         index.add("VERSION")
         index.add("TAG")
         index.write()
@@ -255,9 +276,11 @@ def scons():
         # pylint: enable=no-member
 
         # set up authentication callback
-        class MyCallbacks(pygit2.RemoteCallbacks):
+        class MyCallbacks(pygit2.RemoteCallbacks): # pylint: disable=too-few-public-methods
             """ Callbacks for pygit2 """
-            def credentials(self, url, username_from_url, allowed_types): # pylint: disable=method-hidden
+            @staticmethod
+            def credentials(_url, username_from_url, allowed_types): # pylint: disable=method-hidden
+                """setup credentials"""
                 if allowed_types & pygit2.credentials.GIT_CREDTYPE_SSH_KEY:
                     if "SSH_AUTH_SOCK" in os.environ:
                         # Use ssh agent for authentication
@@ -277,6 +300,7 @@ def scons():
                                     "by remote end.  SSH_AUTH_SOCK not found "
                                     "in your environment.  Are you running an "
                                     "ssh-agent?")
+                return None
 
         # and push it
         print("Pushing the changes to GitHub...")
@@ -314,15 +338,8 @@ def scons():
 
         exit(0)
 
-    """Execute build"""
-    try:
-        sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
-        from prereq_tools import PreReqComponent
-        print ('Using scons_local build')
-    except ImportError:
-        print ('scons_local submodule is needed in order to do DAOS build')
-        print ('Use git submodule update --init')
-        sys.exit(-1)
+    sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
+    from prereq_tools import PreReqComponent
 
     env = Environment(TOOLS=['extra', 'default'])
 
@@ -337,15 +354,24 @@ def scons():
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    daos_build.load_mpi_path(env)
+    if not GetOption('help') and not GetOption('clean'):
+        daos_build.load_mpi_path(env)
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
+
+    run_checks(env)
+
+    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
+
+    CONF_DIR = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
-    Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm')
+    Export('DAOS_VERSION', 'API_VERSION',
+           'env', 'prereqs', 'platform_arm',
+           'CONF_DIR')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
@@ -365,16 +391,20 @@ def scons():
     # also install to $PREFIX/lib to work with existing avocado test code
     daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
     env.Install("$PREFIX/lib64/daos", "VERSION")
+    env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                ['scons_local/env_modules.py'])
+                ['utils/sl/env_modules.py'])
 
     # install the configuration files
     SConscript('utils/config/SConscript')
 
     # install certificate generation files
     SConscript('utils/certs/SConscript')
+
+    # install man pages
+    SConscript('doc/man/SConscript')
 
     Default(build_prefix)
     Depends('install', build_prefix)

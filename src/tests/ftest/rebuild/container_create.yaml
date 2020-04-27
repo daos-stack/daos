@@ -15,6 +15,7 @@ pool:
   name: daos_server
   scm_size: 8589934592
   svcn: 3
+  control_method: dmg
 container:
   object_qty: 1
   record_qty: 1

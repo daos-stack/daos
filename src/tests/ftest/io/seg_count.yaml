@@ -12,8 +12,6 @@ hosts:
     - client-I
     - client-J
 timeout: 2000
-server_manager:
-    recreate: true
 server_config:
     name: daos_server
 pool:

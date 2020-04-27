@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
+from logging import getLogger
 
 import os
 import re
@@ -31,7 +32,8 @@ import string
 from pathlib import Path
 from errno import ENOENT
 from ClusterShell.Task import task_self
-from ClusterShell.NodeSet import NodeSet
+from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+from avocado.utils import process
 
 
 class DaosTestError(Exception):
@@ -90,14 +92,17 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         retcode_dict[retcode].add(nodeset)
 
         # Display any errors or requested output
-        if retcode != expect_rc or verbose:
-            msg = "failure running" if retcode != expect_rc else "output from"
-            if not list(task.iter_buffers(rc_nodes)):
+        if verbose or (expect_rc is not None and expect_rc != retcode):
+            msg = "output from"
+            if expect_rc is not None and expect_rc != retcode:
+                msg = "failure running"
+            buffers = task.iter_buffers(rc_nodes)
+            if not list(buffers):
                 print(
                     "{}: {} '{}': rc={}".format(
                         nodeset, msg, command, retcode))
             else:
-                for output, nodes in task.iter_buffers(rc_nodes):
+                for output, nodes in buffers:
                     nodeset = NodeSet.fromlist(nodes)
                     lines = str(output).splitlines()
                     output = "rc={}{}".format(
@@ -112,9 +117,9 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     if timeout and task.num_timeout() > 0:
         nodes = task.iter_keys_timeout()
         print(
-            "{}: timeout detected running '{}' on {}/{} hosts".format(
+            "{}: timeout detected running '{}' on {}/{} hosts after {}s".format(
                 NodeSet.fromlist(nodes),
-                command, task.num_timeout(), len(hosts)))
+                command, task.num_timeout(), len(hosts), timeout))
         retcode = 255
         if retcode not in retcode_dict:
             retcode_dict[retcode] = NodeSet()
@@ -178,8 +183,8 @@ def get_file_path(bin_name, dir_path=""):
     if not file_path:
         raise OSError(ENOENT, "File {0} not found inside {1} Directory"
                       .format(bin_name, basepath))
-    else:
-        return file_path
+
+    return file_path
 
 
 def process_host_list(hoststr):
@@ -264,3 +269,92 @@ def check_pool_files(log, hosts, uuid):
             log.error("%s: %s not found", result[1], filename)
             status = False
     return status
+
+
+def stop_processes(hosts, pattern, verbose=True, timeout=60):
+    """Stop the processes on each hosts that match the pattern.
+
+    Args:
+        hosts (list): hosts on which to stop the processes
+        pattern (str): regular expression used to find process names to stop
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60
+            seconds.
+
+    Returns:
+        dict: a dictionary of return codes keys and accompanying NodeSet
+            values indicating which hosts yielded the return code.
+            Return code keys:
+                0   No processes matched the criteria / No processes killed.
+                1   One or more processes matched the criteria and a kill was
+                    attempted.
+
+    """
+    result = {}
+    log = getLogger()
+    log.info("Killing any processes on %s that match: %s", hosts, pattern)
+    if hosts is not None:
+        commands = [
+            "rc=0",
+            "if pgrep --list-full {}".format(pattern),
+            "then rc=1",
+            "sudo pkill {}".format(pattern),
+            "if pgrep --list-full {}".format(pattern),
+            "then sleep 5",
+            "pkill --signal KILL {}".format(pattern),
+            "fi",
+            "fi",
+            "exit $rc",
+        ]
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
+    return result
+
+
+def get_partition_hosts(partition):
+    """Get a list of hosts in the specified slurm partition.
+
+    Args:
+        partition (str): name of the partition
+
+    Returns:
+        list: list of hosts in the specified partition
+
+    """
+    log = getLogger()
+    hosts = []
+    if partition is not None:
+        # Get the partition name information
+        cmd = "scontrol show partition {}".format(partition)
+        try:
+            result = process.run(cmd, shell=True, timeout=10)
+        except process.CmdError as error:
+            log.warning(
+                "Unable to obtain hosts from the %s slurm "
+                "partition: %s", partition, error)
+            result = None
+
+        if result:
+            # Get the list of hosts from the partition information
+            output = result.stdout
+            try:
+                hosts = list(NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
+            except (NodeSetParseError, IndexError):
+                log.warning(
+                    "Unable to obtain hosts from the %s slurm partition "
+                    "output: %s", partition, output)
+    return hosts
+
+
+def get_log_file(name):
+    """Get the full log file name and path.
+
+    Prepends the DAOS_TEST_LOG_DIR path (or /tmp) to the specified file name.
+
+    Args:
+        name (str): log file name
+
+    Returns:
+        str: full log file name including path
+
+    """
+    return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)

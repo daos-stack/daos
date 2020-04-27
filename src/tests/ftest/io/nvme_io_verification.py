@@ -61,7 +61,7 @@ class NvmeIoVerification(IorTestBase):
             as transfer size is > 4096.
             (4) Repeat the case(3) with maximum nvme pool size that can be
             created.
-        :avocado: tags=all,daosio,full_regression,hw,nvme_io_verification
+        :avocado: tags=all,full_regression,hw,large,daosio,nvme_io_verification
         """
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')

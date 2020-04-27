@@ -10,8 +10,6 @@ hosts:
     - client-G
     - client-H
 timeout: 600
-server_manager:
-    recreate: true
 server_config:
     name: daos_server
 daos_perf:

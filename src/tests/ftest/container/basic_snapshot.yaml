@@ -8,15 +8,14 @@ hosts:
 server_config:
     name: daos_server
 pool:
-    createmode:
-        mode: 511
-    createset:
-        setname: daos_server
-    createsize: !mux
+    mode: 511
+    name: daos_server
+    control_method: dmg
+    scm_size_mux: !mux
         size1gb:
-            size: 1073741824
+            scm_size: 1073741824
         size8gb:
-            size: 8489934592
+            scm_size: 8489934592
 object_class: !mux
     OC_S1:
         obj_class: OC_S1
