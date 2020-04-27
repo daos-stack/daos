@@ -56,7 +56,7 @@ type IOServerInstance struct {
 	bdevClassProvider *bdev.ClassProvider
 	scmProvider       *scm.Provider
 	msClient          *mgmtSvcClient
-	waitStorage       atm.Bool
+	waitFormat        atm.Bool
 	storageReady      chan bool
 	waitDrpc          atm.Bool
 	drpcReady         chan *srvpb.NotifyReadyReq
@@ -90,12 +90,23 @@ func NewIOServerInstance(log logging.Logger,
 	}
 }
 
+// isAwaitingFormat indicates whether IOServerInstance is waiting
+// for an administrator action to trigger a format.
+func (srv *IOServerInstance) isAwaitingFormat() bool {
+	return srv.waitFormat.Load()
+}
+
+// isStarted indicates whether IOServerInstance is in a running state.
+func (srv *IOServerInstance) isStarted() bool {
+	return srv.runner.IsRunning()
+}
+
 // isReady indicates whether the IOServerInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
 func (srv *IOServerInstance) isReady() bool {
-	return srv.ready.Load()
+	return srv.ready.Load() && srv.isStarted()
 }
 
 // isMSReplica indicates whether or not this instance is a management service replica.

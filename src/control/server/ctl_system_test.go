@@ -150,22 +150,22 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 				{
 					Rank: 4, Action: string(start),
 					Errored: true, Msg: "connection refused",
-					State: system.MemberStateStopped,
+					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 5, Action: string(start),
 					Errored: true, Msg: "connection refused",
-					State: system.MemberStateStopped,
+					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 6, Action: string(start),
 					Errored: true, Msg: "connection refused",
-					State: system.MemberStateStopped,
+					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 7, Action: string(start),
 					Errored: true, Msg: "connection refused",
-					State: system.MemberStateStopped,
+					State: system.MemberStateUnresponsive,
 				},
 			},
 			// all hosts because // of empty rank list
@@ -237,12 +237,12 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 				{
 					Rank: 6, Action: string(start),
 					Errored: true, Msg: "connection refused",
-					State: system.MemberStateStopped,
+					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 7, Action: string(start),
 					Errored: true, Msg: "connection refused",
-					State: system.MemberStateStopped,
+					State: system.MemberStateUnresponsive,
 				},
 			},
 			// hosts containing any of the ranks (filtered by rank list)
@@ -354,12 +354,21 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: string(start), Errored: true,
-					Msg:   "couldn't start",
+					Msg: "couldn't start", Addr: getHostAddr(1).String(),
 					State: uint32(system.MemberStateStopped),
 				},
-				{Rank: 1, Action: string(start), State: uint32(system.MemberStateReady)},
-				{Rank: 2, Action: string(start), State: uint32(system.MemberStateReady)},
-				{Rank: 3, Action: string(start), State: uint32(system.MemberStateReady)},
+				{
+					Rank: 1, Action: string(start), Addr: getHostAddr(1).String(),
+					State: uint32(system.MemberStateReady),
+				},
+				{
+					Rank: 2, Action: string(start), Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateReady),
+				},
+				{
+					Rank: 3, Action: string(start), Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateReady),
+				},
 			},
 
 			expMembers: system.Members{
@@ -398,10 +407,13 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: string(start), Errored: true,
-					Msg:   "couldn't start",
+					Msg: "couldn't start", Addr: getHostAddr(1).String(),
 					State: uint32(system.MemberStateStopped),
 				},
-				{Rank: 1, Action: string(start), State: uint32(system.MemberStateReady)},
+				{
+					Rank: 1, Action: string(start), Addr: getHostAddr(1).String(),
+					State: uint32(system.MemberStateReady),
+				},
 			},
 			expMembers: system.Members{
 				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
@@ -551,12 +563,21 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: string(stop), Errored: true,
-					Msg:   "couldn't stop",
+					Msg: "couldn't stop", Addr: getHostAddr(1).String(),
 					State: uint32(system.MemberStateJoined),
 				},
-				{Rank: 1, Action: string(stop), State: uint32(system.MemberStateStopped)},
-				{Rank: 2, Action: string(stop), State: uint32(system.MemberStateStopped)},
-				{Rank: 3, Action: string(stop), State: uint32(system.MemberStateStopped)},
+				{
+					Rank: 1, Action: string(stop), Addr: getHostAddr(1).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+				{
+					Rank: 2, Action: string(stop), Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+				{
+					Rank: 3, Action: string(stop), Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateStopped),
+				},
 			},
 			expMembers: system.Members{
 				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
@@ -605,11 +626,17 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: string(stop), Errored: true,
-					Msg:   "couldn't stop",
+					Msg: "couldn't stop", Addr: getHostAddr(1).String(),
 					State: uint32(system.MemberStateJoined),
 				},
-				{Rank: 2, Action: string(stop), State: uint32(system.MemberStateStopped)},
-				{Rank: 3, Action: string(stop), State: uint32(system.MemberStateStopped)},
+				{
+					Rank: 2, Action: string(stop), Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+				{
+					Rank: 3, Action: string(stop), Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateStopped),
+				},
 			},
 			expMembers: system.Members{
 				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),

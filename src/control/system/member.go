@@ -154,9 +154,9 @@ func NewMember(rank Rank, uuid string, addr net.Addr, state MemberState) *Member
 // Members is a type alias for a slice of member references
 type Members []*Member
 
-// MemberResult refers to the result of an action on a Member identified
-// its string representation "address/rank".
+// MemberResult refers to the result of an action on a Member.
 type MemberResult struct {
+	Addr    string
 	Rank    Rank
 	Action  string
 	Errored bool
@@ -204,6 +204,8 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 }
 
 // NewMemberResult returns a reference to a new member result struct.
+//
+// Populating the host address field is optional and not provided us param.
 func NewMemberResult(rank Rank, action string, err error, state MemberState) *MemberResult {
 	result := MemberResult{Rank: rank, Action: action, State: state}
 	if err != nil {
@@ -414,17 +416,20 @@ func (m *Membership) UpdateMemberStates(results MemberResults) error {
 	defer m.Unlock()
 
 	for _, result := range results {
-		if result.Errored {
-			continue
-		}
-
 		member, found := m.members[result.Rank]
 		if !found {
 			return FaultMemberMissing(result.Rank)
 		}
 
-		// don't update members to "Ready" if already "Joined"
-		if result.State == MemberStateReady && member.State() == MemberStateJoined {
+		// use opportunity to update host address in result
+		if result.Addr == "" {
+			result.Addr = member.Addr.String()
+		}
+
+		// don't update members if result reports an error or
+		// result state is "Ready" and member is already "Joined"
+		if result.Errored || (result.State == MemberStateReady &&
+			member.State() == MemberStateJoined) {
 			continue
 		}
 		member.SetState(result.State)

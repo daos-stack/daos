@@ -45,8 +45,9 @@ type systemRanksFunc func(context.Context, control.UnaryInvoker, *control.RanksR
 type ranksMethod string
 
 const (
-	stop  ranksMethod = "stop"
 	prep  ranksMethod = "prep shutdown"
+	stop  ranksMethod = "stop"
+	reset ranksMethod = "reset"
 	start ranksMethod = "start"
 	ping  ranksMethod = "ping"
 )
@@ -97,7 +98,7 @@ func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq
 			for _, rank := range hostRanks[addr] {
 				results = append(results,
 					system.NewMemberResult(rank, string(method), errors.New(errMsg),
-						system.MemberStateStopped))
+						system.MemberStateUnresponsive))
 			}
 			svc.log.Debugf("harness %s (ranks %v) host error: %s",
 				addr, hostRanks[addr], errMsg)
@@ -270,6 +271,39 @@ func (svc *ControlService) SystemStart(parent context.Context, pbReq *ctlpb.Syst
 	}
 
 	svc.log.Debug("Responding to SystemStart RPC")
+
+	return pbResp, nil
+}
+
+// SystemResetFormat implements the method defined for the Management Service.
+//
+// Prepare to reformat DAOS system by resetting format state of each rank
+// and await storage format on each relevant instance (system member).
+func (svc *ControlService) SystemResetFormat(parent context.Context, pbReq *ctlpb.SystemResetFormatReq) (*ctlpb.SystemResetFormatResp, error) {
+	svc.log.Debug("Received SystemResetFormat RPC")
+
+	if pbReq == nil {
+		return nil, errors.New("nil request")
+	}
+
+	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)
+	defer cancel()
+
+	req := &control.RanksReq{Ranks: system.RanksFromUint32(pbReq.GetRanks())}
+	results, err := svc.rpcToRanks(ctx, req, reset)
+	if err != nil {
+		return nil, err
+	}
+	if err := svc.membership.UpdateMemberStates(results); err != nil {
+		return nil, err
+	}
+
+	pbResp := &ctlpb.SystemResetFormatResp{}
+	if err := convert.Types(results, &pbResp.Results); err != nil {
+		return nil, err
+	}
+
+	svc.log.Debug("Responding to SystemResetFormat RPC")
 
 	return pbResp, nil
 }

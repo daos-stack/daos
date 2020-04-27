@@ -29,9 +29,13 @@ import (
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestStorageCommands(t *testing.T) {
+	storageFormatReq := &control.StorageFormatReq{Reformat: true}
+	storageFormatReq.SetHostList([]string{})
+
 	runCmdTests(t, []cmdTest{
 		{
 			"Format without reformat",
@@ -48,6 +52,30 @@ func TestStorageCommands(t *testing.T) {
 			strings.Join([]string{
 				"ConnectClients",
 				printRequest(t, &control.StorageFormatReq{Reformat: true}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reformat without ranks filter",
+			"storage reformat",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemResetFormatReq{Ranks: []system.Rank{}}),
+				"ConnectClients",
+				printRequest(t, storageFormatReq),
+			}, " "),
+			nil,
+		},
+		{
+			"Reformat with ranks filter",
+			"storage reformat --ranks 0,1,2,3,4", // TODO DAOS-4454: enable [0-4] syntax
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemResetFormatReq{
+					Ranks: []system.Rank{0, 1, 2, 3, 4},
+				}),
+				"ConnectClients",
+				printRequest(t, storageFormatReq),
 			}, " "),
 			nil,
 		},

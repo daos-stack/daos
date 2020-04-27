@@ -28,6 +28,8 @@ import (
 	"net"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
@@ -239,6 +241,7 @@ func TestMember_HostRanks(t *testing.T) {
 		rankList     []Rank
 		expRanks     []Rank
 		expHostRanks map[string][]Rank
+		expHosts     []string
 		expMembers   Members
 	}{
 		"no rank list": {
@@ -249,6 +252,7 @@ func TestMember_HostRanks(t *testing.T) {
 				"127.0.0.2:10001": {Rank(2)},
 				"127.0.0.3:10001": {Rank(3)},
 			},
+			expHosts:   []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
 			expMembers: members,
 		},
 		"subset rank list": {
@@ -259,6 +263,7 @@ func TestMember_HostRanks(t *testing.T) {
 				"127.0.0.1:10001": {Rank(1)},
 				"127.0.0.2:10001": {Rank(2)},
 			},
+			expHosts: []string{"127.0.0.1:10001", "127.0.0.2:10001"},
 			expMembers: Members{
 				mockMember(t, 1, MemberStateJoined),
 				mockMember(t, 2, MemberStateStopped),
@@ -269,6 +274,7 @@ func TestMember_HostRanks(t *testing.T) {
 			rankList:     []Rank{0, 5},
 			expRanks:     []Rank{1, 2, 3, 4},
 			expHostRanks: map[string][]Rank{},
+			expHosts:     []string{},
 		},
 		"superset rank list": {
 			members:  members,
@@ -279,6 +285,7 @@ func TestMember_HostRanks(t *testing.T) {
 				"127.0.0.2:10001": {Rank(2)},
 				"127.0.0.3:10001": {Rank(3)},
 			},
+			expHosts:   []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
 			expMembers: members,
 		},
 	} {
@@ -296,6 +303,7 @@ func TestMember_HostRanks(t *testing.T) {
 
 			AssertEqual(t, tc.expRanks, ms.Ranks(), "ranks")
 			AssertEqual(t, tc.expHostRanks, ms.HostRanks(tc.rankList...), "host ranks")
+			AssertEqual(t, tc.expHosts, ms.Hosts(tc.rankList...), "hosts")
 			AssertEqual(t, tc.expMembers, ms.Members(tc.rankList), "members")
 		})
 	}
@@ -330,6 +338,11 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer ShowBufferOnFailure(t, buf)
 
+	mrDiffAddr1 := NewMemberResult(6, "stop", nil, MemberStateJoined)
+	mrDiffAddr1.Addr = ""
+	mrDiffAddr2 := NewMemberResult(7, "stop", nil, MemberStateJoined)
+	mrDiffAddr2.Addr = "10.0.0.1"
+
 	ms := NewMembership(log)
 
 	members := Members{
@@ -337,17 +350,26 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 		mockMember(t, 2, MemberStateStopped),
 		mockMember(t, 3, MemberStateEvicted),
 		mockMember(t, 4, MemberStateStopped),
+		mockMember(t, 5, MemberStateJoined),
+		mockMember(t, 6, MemberStateStopped),
+		mockMember(t, 7, MemberStateStopped),
 	}
 	results := MemberResults{
 		NewMemberResult(1, "query", nil, MemberStateStopped),
 		NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateErrored),
-		NewMemberResult(4, "start", nil, MemberStateJoined),
+		NewMemberResult(4, "start", nil, MemberStateReady),
+		NewMemberResult(5, "start", nil, MemberStateReady),
+		mrDiffAddr1, // blank host address should get updated to that of member
+		mrDiffAddr2, // existing host address should not get updated to that of member
 	}
-	expStates := []MemberState{
-		MemberStateStopped,
-		MemberStateStopped, // errored results don't change member state
-		MemberStateEvicted,
-		MemberStateJoined,
+	expMembers := Members{
+		mockMember(t, 1, MemberStateStopped),
+		mockMember(t, 2, MemberStateStopped), // errored results don't change member state
+		mockMember(t, 3, MemberStateEvicted),
+		mockMember(t, 4, MemberStateReady),
+		mockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
+		mockMember(t, 6, MemberStateJoined),
+		mockMember(t, 7, MemberStateJoined),
 	}
 
 	for _, m := range members {
@@ -361,7 +383,17 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(MemberResult{}, Member{})}
 	for i, m := range ms.Members([]Rank{}) {
-		AssertEqual(t, expStates[i], m.State(), "")
+		if diff := cmp.Diff(expMembers[i], m, cmpOpts...); diff != "" {
+			t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+		}
+		AssertEqual(t, expMembers[i].State().String(), m.State().String(), m.Rank.String())
 	}
+
+	// verify result host address is updated to that of member if empty
+	m, _ := ms.Get(Rank(6))
+	AssertEqual(t, m.Addr.String(), mrDiffAddr1.Addr, "result host address update")
+	m, _ = ms.Get(Rank(7))
+	AssertNotEqual(t, m.Addr.String(), mrDiffAddr2.Addr, "result host address not updated")
 }

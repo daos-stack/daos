@@ -158,6 +158,10 @@ func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemSto
 	return &ctlpb.SystemStopResp{}, nil
 }
 
+func (m *mockMgmtCtlClient) SystemResetFormat(ctx context.Context, req *ctlpb.SystemResetFormatReq, o ...grpc.CallOption) (*ctlpb.SystemResetFormatResp, error) {
+	return &ctlpb.SystemResetFormatResp{}, nil
+}
+
 func (m *mockMgmtCtlClient) SystemStart(ctx context.Context, req *ctlpb.SystemStartReq, o ...grpc.CallOption) (*ctlpb.SystemStartResp, error) {
 	return &ctlpb.SystemStartResp{}, nil
 }

@@ -41,6 +41,40 @@ import (
 
 const instanceUpdateDelay = 500 * time.Millisecond
 
+func pollInstanceState(ctx context.Context, instances []*IOServerInstance, validate func(*IOServerInstance) bool, timeout time.Duration) error {
+	ready := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			success := true
+			for _, srv := range instances {
+				if !validate(srv) {
+					success = false
+				}
+			}
+			if success {
+				close(ready)
+				return
+			}
+			time.Sleep(instanceUpdateDelay)
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-ready:
+	case <-time.After(timeout):
+	}
+
+	return nil
+}
+
 // getPeerListenAddr combines peer ip from supplied context with input port.
 func getPeerListenAddr(ctx context.Context, listenAddrStr string) (net.Addr, error) {
 	p, ok := peer.FromContext(ctx)
@@ -200,7 +234,7 @@ func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredSta
 			state = system.MemberStateReady
 		case srv.isStarted():
 			state = system.MemberStateStarting
-		case srv.waitStorage.IsTrue():
+		case srv.isAwaitingFormat():
 			state = system.MemberStateAwaitFormat
 		default:
 			state = system.MemberStateStopped
@@ -208,7 +242,8 @@ func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredSta
 
 		rank, err := srv.GetRank()
 		if err != nil {
-			return nil, err
+			svc.log.Debugf("Instance %d GetRank(): %s", srv.Index(), err)
+			continue
 		}
 
 		if state != desiredState {
@@ -254,32 +289,11 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 		}
 	}
 
-	stopped := make(chan struct{})
-	// poll until instances in rank list stop or timeout occurs
-	// (at which point get results of each instance)
-	go func() {
-		for {
-			success := true
-			for _, srv := range instances {
-				if srv.isStarted() {
-					success = false
-				}
-			}
-			if !success {
-				time.Sleep(instanceUpdateDelay)
-				continue
-			}
-			close(stopped)
-			break
-		}
-	}()
+	if err := pollInstanceState(ctx, instances,
+		func(s *IOServerInstance) bool { return !s.isStarted() },
+		svc.harness.rankReqTimeout); err != nil {
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-stopped:
-	case <-time.After(svc.harness.rankReqTimeout):
-		svc.log.Debug("MgmtSvc.StopRanks rank stop timeout exceeded")
+		return nil, err
 	}
 
 	results, err := svc.memberStateResults(instances, system.MemberStateStopped, "stop")
@@ -348,6 +362,80 @@ func (svc *mgmtSvc) PingRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	return resp, nil
 }
 
+// ResetFormatRanks implements the method defined for the Management Service.
+//
+// Reset storage format of data-plane instances (DAOS system members) managed by harness.
+func (svc *mgmtSvc) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
+	svc.log.Debugf("MgmtSvc.ResetFormatRanks dispatch, req:%+v\n", *req)
+
+	instances, err := svc.localInstances(req.GetRanks())
+	if err != nil {
+		return nil, err
+	}
+
+	savedRanks := make(map[uint32]system.Rank) // instance idx to system rank
+	for _, srv := range instances {
+		rank, err := srv.GetRank()
+		if err != nil {
+			return nil, err
+		}
+		savedRanks[srv.Index()] = rank
+
+		if srv.isStarted() {
+			return nil, FaultInstancesNotStopped("reset format", srv.Index())
+		}
+		if err := srv.RemoveSuperblock(); err != nil {
+			return nil, err
+		}
+		srv.startLoop <- true // proceed to awaiting storage format
+	}
+
+	if err := pollInstanceState(ctx, instances, (*IOServerInstance).isAwaitingFormat,
+		svc.harness.rankStartTimeout); err != nil {
+
+		return nil, err
+	}
+
+	// rank cannot be pulled from superblock so use saved value
+	results := make(system.MemberResults, 0, len(instances))
+	for _, srv := range instances {
+		var err error
+		state := system.MemberStateUnknown
+		switch {
+		case srv.isReady():
+			state = system.MemberStateReady
+		case srv.isStarted():
+			state = system.MemberStateStarting
+		case srv.isAwaitingFormat():
+			state = system.MemberStateAwaitFormat
+		default:
+			state = system.MemberStateStopped
+		}
+
+		if state != system.MemberStateAwaitFormat {
+			err = errors.Errorf("want %s, got %s", system.MemberStateAwaitFormat, state)
+		}
+
+		results = append(results,
+			system.NewMemberResult(savedRanks[srv.Index()], "reset format", err, state))
+	}
+
+	resp := &mgmtpb.RanksResp{}
+	if err := convert.Types(results, &resp.Results); err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.ResetFormatRanks dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // StartRanks implements the method defined for the Management Service.
 //
 // Restart data-plane instances (DAOS system members) managed by harness.
@@ -371,35 +459,14 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 		srv.startLoop <- true
 	}
 
-	// instances will update state to "Started" through join or
-	// bootstrap in membership, here just make sure instances "Ready"
-	ready := make(chan struct{})
-	go func() {
-		for {
-			success := true
-			for _, srv := range instances {
-				if !srv.isReady() {
-					success = false
-				}
-			}
-			if !success {
-				time.Sleep(instanceUpdateDelay)
-				continue
-			}
-			close(ready)
-			break
-		}
-	}()
+	if err := pollInstanceState(ctx, instances, (*IOServerInstance).isReady,
+		svc.harness.rankStartTimeout); err != nil {
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-ready:
-	case <-time.After(svc.harness.rankStartTimeout):
-		svc.log.Debug("MgmtSvc.StartRanks rank start timeout exceeded")
+		return nil, err
 	}
 
-	// want to make sure instance is reporting ready at minimum
+	// instances will update state to "Started" through join or
+	// bootstrap in membership, here just make sure instances "Ready"
 	results, err := svc.memberStateResults(instances, system.MemberStateReady, "start")
 	if err != nil {
 		return nil, err
