@@ -1579,10 +1579,10 @@ pipeline {
                                        inst_rpms: 'environment-modules'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
-                                            "sudo yum -y install daos-client-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos{,-client}-${daos_packages_version}\n" +
                                             "sudo yum -y history rollback last-1\n" +
-                                            "sudo yum -y install daos-server-${daos_packages_version}\n" +
-                                            "sudo yum -y install daos-tests-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos{,-server}-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos{,-tests}-${daos_packages_version}\n" +
                                             "${rpm_test_daos_test}" + '"',
                                     junit_files: null,
                                     failure_artifacts: env.STAGE_NAME, ignore_failure: true
@@ -1619,9 +1619,8 @@ pipeline {
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: rpm_scan_pre +
                                             "sudo yum -y install " +
-                                            "daos-client-${daos_packages_version} " +
-                                            "daos-server-${daos_packages_version} " +
-                                            "daos-tests-${daos_packages_version}\n" +
+                                            "daos{,-{client,server,tests}}-" +
+                                            "${daos_packages_version}\n" +
                                             rpm_scan_test + '"\n' +
                                             rpm_scan_post,
                                     junit_files: 'maldetect.xml',

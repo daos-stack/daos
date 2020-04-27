@@ -28,7 +28,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             libssl-dev libtool-bin libyaml-dev                          \
             locales make meson nasm ninja-build pandoc patch            \
             pylint python-dev python3-dev scons sg3-utils uuid-dev      \
-            yasm valgrind libhwloc-dev man
+            yasm valgrind libhwloc-dev man python-distro
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
