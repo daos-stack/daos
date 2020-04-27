@@ -92,25 +92,27 @@ func (svc *ControlService) resultsFromBadHosts(ranks []system.Rank, hostErrors c
 	return results
 }
 
-// filterRanks filters (and mutates) the slice of system ranks in the
-// provided request reference with or without MS rank.
+// filterRanks filters the slice of system ranks in the provided request
+// reference with or without MS rank and return a new request.
 //
 // Include all ranks if request.Ranks is empty.
-func (svc *ControlService) filterRanks(req *control.RanksReq, excludeMS bool) error {
+func (svc *ControlService) filterRanks(req *control.RanksReq, excludeMS bool) (*control.RanksReq, error) {
 	msMember, err := svc.getMSMember()
 	if err != nil {
-		return errors.WithMessage(err, "retrieving MS member")
+		return nil, errors.WithMessage(err, "retrieving MS member")
 	}
 
+	newReq := *req
+
 	if len(req.Ranks) == 0 {
-		req.Ranks = svc.membership.Ranks() // empty rankList implies update all ranks
+		newReq.Ranks = svc.membership.Ranks() // empty rankList implies update all ranks
 	}
 
 	if excludeMS {
-		req.Ranks = msMember.Rank.RemoveFromList(req.Ranks)
+		newReq.Ranks = msMember.Rank.RemoveFromList(newReq.Ranks)
 	}
 
-	return nil
+	return &newReq, nil
 }
 
 // rpcToRanks sends requests to ranks in list on their respective host
@@ -136,20 +138,22 @@ func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq
 // resultsFromRanks sends RPCs to all ranks except MS leader and returns the
 // relevant system member results.
 func (svc *ControlService) resultsFromRanks(ctx context.Context, req *control.RanksReq, fn systemRanksFunc) (system.MemberResults, error) {
-	if err := svc.filterRanks(req, true); err != nil {
+	newReq, err := svc.filterRanks(req, true)
+	if err != nil {
 		return nil, err
 	}
-	if len(req.Ranks) == 0 {
+	if len(newReq.Ranks) == 0 {
 		return nil, nil
 	}
 
-	return svc.rpcToRanks(ctx, req, fn)
+	return svc.rpcToRanks(ctx, newReq, fn)
 }
 
 // resultsFromMSRanks sends RPCs to MS leader ranks and returns the system
 // member result.
-func (svc *ControlService) getResultsFromMSRank(ctx context.Context, req *control.RanksReq, fn systemRanksFunc) (system.MemberResults, error) {
-	if err := svc.filterRanks(req, false); err != nil {
+func (svc *ControlService) resultsFromMSRank(ctx context.Context, req *control.RanksReq, fn systemRanksFunc) (system.MemberResults, error) {
+	newReq, err := svc.filterRanks(req, false)
+	if err != nil {
 		return nil, err
 	}
 
@@ -158,12 +162,12 @@ func (svc *ControlService) getResultsFromMSRank(ctx context.Context, req *contro
 		return nil, errors.WithMessage(err, "retrieving MS member")
 	}
 
-	if len(req.Ranks) != 0 && !msMember.Rank.InList(req.Ranks) {
+	if !msMember.Rank.InList(newReq.Ranks) {
 		return nil, nil
 	}
-	req.Ranks = []system.Rank{msMember.Rank}
+	newReq.Ranks = []system.Rank{msMember.Rank}
 
-	return svc.rpcToRanks(ctx, req, fn)
+	return svc.rpcToRanks(ctx, newReq, fn)
 }
 
 // pingMembers requests registered harness to ping their instances (system
@@ -173,9 +177,11 @@ func (svc *ControlService) getResultsFromMSRank(ctx context.Context, req *contro
 // Each host address represents a gRPC server associated with a harness managing
 // one or more data-plane instances (DAOS system members).
 func (svc *ControlService) pingMembers(ctx context.Context, req *control.RanksReq) error {
-	if err := svc.filterRanks(req, false); err != nil {
+	newReq, err := svc.filterRanks(req, false)
+	if err != nil {
 		return err
 	}
+	req = newReq
 
 	results, err := svc.rpcToRanks(ctx, req, control.PingRanks)
 	if err != nil {
@@ -258,7 +264,7 @@ func (svc *ControlService) prepShutdown(ctx context.Context, req *control.RanksR
 		return nil, err
 	}
 
-	msResults, err := svc.getResultsFromMSRank(ctx, req, control.PrepShutdownRanks)
+	msResults, err := svc.resultsFromMSRank(ctx, req, control.PrepShutdownRanks)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +293,7 @@ func (svc *ControlService) shutdown(ctx context.Context, req *control.RanksReq) 
 		return nil, err
 	}
 
-	msResults, err := svc.getResultsFromMSRank(ctx, req, control.StopRanks)
+	msResults, err := svc.resultsFromMSRank(ctx, req, control.StopRanks)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +369,7 @@ func (svc *ControlService) SystemStop(parent context.Context, pbReq *ctlpb.Syste
 func (svc *ControlService) start(ctx context.Context, req *control.RanksReq) (system.MemberResults, error) {
 	svc.log.Debug("starting ranks")
 
-	results, err := svc.getResultsFromMSRank(ctx, req, control.StartRanks)
+	results, err := svc.resultsFromMSRank(ctx, req, control.StartRanks)
 	if err != nil {
 		return nil, err
 	}
