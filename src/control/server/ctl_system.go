@@ -194,9 +194,10 @@ func (svc *ControlService) pingMembers(ctx context.Context, req *control.RanksRe
 			// - members unresponsive to ping
 			// - members with stopped processes
 			// - members returning errors e.g. from dRPC ping
-			if r.State != system.MemberStateUnresponsive &&
-				r.State != system.MemberStateStopped &&
-				r.State != system.MemberStateErrored {
+			if !r.Rank.Equals(m.Rank) ||
+				(r.State != system.MemberStateUnresponsive &&
+					r.State != system.MemberStateStopped &&
+					r.State != system.MemberStateErrored) {
 
 				continue
 			}
