@@ -28,7 +28,9 @@ import general_utils
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from command_utils import CommandFailure
+from daos_utils import DaosCommand
 from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 from dfuse_utils import Dfuse
 
 
@@ -62,7 +64,8 @@ class BashCmd(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            self.dfuse = None
+            if self.dfuse:    
+                self.dfuse.stop()
         finally:
             # Stop the servers and agents
             super(BashCmd, self).tearDown()
@@ -70,38 +73,22 @@ class BashCmd(TestWithServers):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(
+            self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool
         self.pool.create()
 
-
     def create_cont(self):
         """Create a TestContainer object to be used to create container."""
-        # TO-DO: Enable container using TestContainer object,
-        # once DAOS-3355 is resolved.
-        # Get Container params
-        #self.container = TestContainer(self.pool)
-        #self.container.get_params(self)
+        # Get container params
+        self.container = TestContainer(
+            self.pool, daos_command=DaosCommand(self.bin))
+        self.container.get_params(self)
 
         # create container
-        # self.container.create()
-        env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
-        # command to create container of posix type
-        cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
-            self.pool.uuid, ":".join(
-                [str(item) for item in self.pool.svc_ranks]))
-        try:
-            container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                         shell=True)
-            (output, err) = container.communicate()
-            self.log.info("Container created with UUID %s", output.split()[3])
-
-        except subprocess.CalledProcessError as err:
-            self.fail("Container create failed:{}".format(err))
-
-        return output.split()[3]
+        self.container.create()
 
     def start_dfuse(self, count):
         """Create a DfuseCommand object to start dfuse.
@@ -111,14 +98,15 @@ class BashCmd(TestWithServers):
         """
 
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients[:-1], self.tmp, True)
+        self.dfuse = Dfuse(self.hostlist_clients[:-1], self.tmp)
         self.dfuse.get_params(self)
 
         # update dfuse params
         self.dfuse.mount_dir.update("/tmp/" + self.pool.uuid + "_daos_dfuse"
                                     + str(count))
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.create_cont())
+        self.dfuse.set_dfuse_cont_param(self.container)
+        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
 
         try:
             # start dfuse
@@ -157,13 +145,13 @@ class BashCmd(TestWithServers):
               Remove a directory
         :avocado: tags=all,hw,daosio,small,full_regression,bashcmd
         """
-        self.cont_count = self.params.get("cont_count", '/run/cont/*')
+        self.cont_count = self.params.get("cont_count", '/run/container/*')
         self.pool_count = self.params.get("pool_count", '/run/pool/*')
 
         # Create a pool if one does not already exist.
         for _ in range(self.pool_count):
             self.create_pool()
-
+            self.create_cont()
             # perform test for multiple containers.
             for count in range(self.cont_count):
                 self.start_dfuse(count)
@@ -220,5 +208,6 @@ class BashCmd(TestWithServers):
                                       "it failed.\n")
                 # stop dfuse
                 self.dfuse.stop()
-            # destroy pool
+            # destroy container and pool
+            self.container.destroy()
             self.pool.destroy()
