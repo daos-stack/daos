@@ -134,6 +134,7 @@ class JobManager(ExecutableCommand):
             self.log.debug(
                 "Processes still running remotely%s:",
                 " {}".format(message) if message else "")
+            self.log.debug("Running: %s", command)
             pcmd(self._hosts, command, True, 10, None)
 
 
