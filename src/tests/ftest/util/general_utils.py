@@ -82,10 +82,8 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
             following properties:
                 command         - command string
                 exit_status     - exit_status of the command
-                stdout          - the raw stdout (bytes)
-                stdout_text     - the stdout as text
-                stderr          - the raw stderr (bytes)
-                stderr_text     - the stderr as text
+                stdout          - the stdout
+                stderr          - the stderr
                 duration        - command execution time
                 interrupted     - whether the command completed within timeout
                 pid             - command's pid

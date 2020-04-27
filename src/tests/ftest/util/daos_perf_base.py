@@ -56,8 +56,7 @@ class DaosPerfBase(TestWithServers):
         # Run the daos_perf command and check for errors
         result = orterun.run()
         errors = re.findall(
-            r"(.*(?:non-zero exit code|errors|failed|Failed).*",
-            result.stdout_text)
+            r"(.*(?:non-zero exit code|errors|failed|Failed).*", result.stdout)
         if errors:
             self.fail(
                 "Errors detected in daos_perf output:\n{}".format(
