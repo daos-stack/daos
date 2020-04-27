@@ -201,7 +201,7 @@ func displaySystemAction(log logging.Logger, results system.MemberResults) error
 			msg = r.Msg
 		}
 
-		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
+		resStr := fmt.Sprintf(" %s%s%s", r.Action, rowFieldSep, msg)
 		if err := groups.AddHost(resStr, addRankPrefix(r.Rank)); err != nil {
 			return errors.Wrap(err, "adding rank result to group")
 		}

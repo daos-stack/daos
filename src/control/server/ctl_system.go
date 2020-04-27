@@ -92,41 +92,42 @@ func (svc *ControlService) resultsFromBadHosts(ranks []system.Rank, hostErrors c
 	return results
 }
 
-// filterRanks takes a slice of system ranks as a filter and returns rank
-// slice with or without MS rank. Include all ranks if input list is empty.
-func (svc *ControlService) filterRanks(ranks []system.Rank, excludeMS bool) ([]system.Rank, error) {
+// filterRanks filters (and mutates) the slice of system ranks in the
+// provided request reference with or without MS rank.
+//
+// Include all ranks if request.Ranks is empty.
+func (svc *ControlService) filterRanks(req *control.RanksReq, excludeMS bool) error {
 	msMember, err := svc.getMSMember()
 	if err != nil {
-		return nil, errors.WithMessage(err, "retrieving MS member")
+		return errors.WithMessage(err, "retrieving MS member")
 	}
 
-	if len(ranks) == 0 {
-		ranks = svc.membership.Ranks() // empty rankList implies update all ranks
+	if len(req.Ranks) == 0 {
+		req.Ranks = svc.membership.Ranks() // empty rankList implies update all ranks
 	}
 
 	if excludeMS {
-		ranks = msMember.Rank.RemoveFromList(ranks)
+		req.Ranks = msMember.Rank.RemoveFromList(req.Ranks)
 	}
 
-	return ranks, nil
+	return nil
 }
 
 // rpcToRanks sends requests to ranks in list on their respective host
 // addresses through functions implementing UnaryInvoker.
-func (svc *ControlService) rpcToRanks(ctx context.Context, force bool, ranks []system.Rank, fn systemRanksFunc) (system.MemberResults, error) {
-	results := make(system.MemberResults, 0, len(ranks))
-
-	req := &control.RanksReq{Ranks: ranks, Force: force}
+func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq, fn systemRanksFunc) (system.MemberResults, error) {
 	// provided ranks should never be empty at this point
-	if len(ranks) == 0 {
+	if len(req.Ranks) == 0 {
 		return nil, errors.Errorf("no ranks specified in the request: %+v", req)
 	}
-	req.SetHostList(svc.membership.Hosts(ranks...))
+	req.SetHostList(svc.membership.Hosts(req.Ranks...))
 	resp, err := fn(ctx, svc.rpcClient, req)
 	if err != nil {
 		return nil, err
 	}
-	results = append(results, svc.resultsFromBadHosts(ranks, resp.HostErrors)...)
+
+	results := make(system.MemberResults, 0, len(req.Ranks))
+	results = append(results, svc.resultsFromBadHosts(req.Ranks, resp.HostErrors)...)
 	results = append(results, resp.RankResults...)
 
 	return results, nil
@@ -134,28 +135,28 @@ func (svc *ControlService) rpcToRanks(ctx context.Context, force bool, ranks []s
 
 // resultsFromRanks sends RPCs to all ranks except MS leader and returns the
 // relevant system member results.
-func (svc *ControlService) resultsFromRanks(ctx context.Context, force bool, rankList []system.Rank, fn systemRanksFunc) (system.MemberResults, error) {
-	ranks, err := svc.filterRanks(rankList, true)
-	if err != nil {
+func (svc *ControlService) resultsFromRanks(ctx context.Context, req *control.RanksReq, fn systemRanksFunc) (system.MemberResults, error) {
+	if err := svc.filterRanks(req, true); err != nil {
 		return nil, err
 	}
 
-	return svc.rpcToRanks(ctx, force, ranks, fn)
+	return svc.rpcToRanks(ctx, req, fn)
 }
 
 // resultsFromMSRanks sends RPCs to MS leader ranks and returns the system
 // member result.
-func (svc *ControlService) getResultsFromMSRank(ctx context.Context, force bool, rankList []system.Rank, fn systemRanksFunc) (system.MemberResults, error) {
+func (svc *ControlService) getResultsFromMSRank(ctx context.Context, req *control.RanksReq, fn systemRanksFunc) (system.MemberResults, error) {
 	msMember, err := svc.getMSMember()
 	if err != nil {
 		return nil, errors.WithMessage(err, "retrieving MS member")
 	}
 
-	if len(rankList) != 0 && !msMember.Rank.InList(rankList) {
+	if len(req.Ranks) != 0 && !msMember.Rank.InList(req.Ranks) {
 		return nil, nil
 	}
+	req.Ranks = []system.Rank{msMember.Rank}
 
-	return svc.rpcToRanks(ctx, force, []system.Rank{msMember.Rank}, fn)
+	return svc.rpcToRanks(ctx, req, fn)
 }
 
 // pingMembers requests registered harness to ping their instances (system
@@ -164,20 +165,19 @@ func (svc *ControlService) getResultsFromMSRank(ctx context.Context, force bool,
 //
 // Each host address represents a gRPC server associated with a harness managing
 // one or more data-plane instances (DAOS system members).
-func (svc *ControlService) pingMembers(ctx context.Context, rankList []system.Rank) error {
-	ranks, err := svc.filterRanks(rankList, false)
-	if err != nil {
+func (svc *ControlService) pingMembers(ctx context.Context, req *control.RanksReq) error {
+	if err := svc.filterRanks(req, false); err != nil {
 		return err
 	}
 
-	results, err := svc.rpcToRanks(ctx, false, ranks, control.PingRanks)
+	results, err := svc.rpcToRanks(ctx, req, control.PingRanks)
 	if err != nil {
 		return err
 	}
 
 	// only update members in the appropriate state (Joined/Stopping)
 	// leave unresponsive members to be updated by a join
-	filteredMembers := svc.membership.Members(rankList, system.MemberStateEvicted,
+	filteredMembers := svc.membership.Members(req.Ranks, system.MemberStateEvicted,
 		system.MemberStateErrored, system.MemberStateUnknown,
 		system.MemberStateStopped, system.MemberStateUnresponsive)
 
@@ -206,8 +206,13 @@ func (svc *ControlService) pingMembers(ctx context.Context, rankList []system.Ra
 //
 // Return status of system members specified in request rank list (or all
 // members if request rank list is empty).
-func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
+func (svc *ControlService) SystemQuery(parent context.Context, pbReq *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
 	svc.log.Debug("Received SystemQuery RPC")
+
+	req := &control.RanksReq{
+		Ranks: system.RanksFromUint32(pbReq.GetRanks()),
+	}
+	pbResp := &ctlpb.SystemQueryResp{}
 
 	_, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
@@ -218,20 +223,18 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 	defer cancel()
 
 	// Update and retrieve status of system members in rank list.
-	rankList := system.RanksFromUint32(req.GetRanks())
-	if err := svc.pingMembers(ctx, rankList); err != nil {
+	if err := svc.pingMembers(ctx, req); err != nil {
 		return nil, err
 	}
-	members := svc.membership.Members(rankList)
+	members := svc.membership.Members(req.Ranks)
 
-	resp := &ctlpb.SystemQueryResp{}
-	if err := convert.Types(members, &resp.Members); err != nil {
+	if err := convert.Types(members, &pbResp.Members); err != nil {
 		return nil, err
 	}
 
 	svc.log.Debug("Responding to SystemQuery RPC")
 
-	return resp, nil
+	return pbResp, nil
 }
 
 // prepShutdown requests registered harness to prepare their instances (system members)
@@ -239,15 +242,15 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 //
 // Each host address represents a gRPC server associated with a harness managing
 // one or more data-plane instances (DAOS system members) present in rankList.
-func (svc *ControlService) prepShutdown(ctx context.Context, rankList []system.Rank) (system.MemberResults, error) {
+func (svc *ControlService) prepShutdown(ctx context.Context, req *control.RanksReq) (system.MemberResults, error) {
 	svc.log.Debug("preparing ranks for shutdown")
 
-	results, err := svc.resultsFromRanks(ctx, false, rankList, control.PrepShutdownRanks)
+	results, err := svc.resultsFromRanks(ctx, req, control.PrepShutdownRanks)
 	if err != nil {
 		return nil, err
 	}
 
-	msResults, err := svc.getResultsFromMSRank(ctx, false, rankList, control.PrepShutdownRanks)
+	msResults, err := svc.getResultsFromMSRank(ctx, req, control.PrepShutdownRanks)
 	if err != nil {
 		return nil, err
 	}
@@ -268,15 +271,15 @@ func (svc *ControlService) prepShutdown(ctx context.Context, rankList []system.R
 //
 // Each host address represents a gRPC server associated with a harness managing
 // one or more data-plane instances (DAOS system members) present in rankList.
-func (svc *ControlService) shutdown(ctx context.Context, force bool, rankList []system.Rank) (system.MemberResults, error) {
+func (svc *ControlService) shutdown(ctx context.Context, req *control.RanksReq) (system.MemberResults, error) {
 	svc.log.Debug("shutting down ranks")
 
-	results, err := svc.resultsFromRanks(ctx, force, rankList, control.StopRanks)
+	results, err := svc.resultsFromRanks(ctx, req, control.StopRanks)
 	if err != nil {
 		return nil, err
 	}
 
-	msResults, err := svc.getResultsFromMSRank(ctx, force, rankList, control.StopRanks)
+	msResults, err := svc.getResultsFromMSRank(ctx, req, control.StopRanks)
 	if err != nil {
 		return nil, err
 	}
@@ -296,50 +299,52 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool, rankList []
 // SystemStop implements the method defined for the Management Service.
 //
 // Initiate controlled shutdown of DAOS system, return results for each rank.
-func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemStopReq) (*ctlpb.SystemStopResp, error) {
+func (svc *ControlService) SystemStop(parent context.Context, pbReq *ctlpb.SystemStopReq) (*ctlpb.SystemStopResp, error) {
 	svc.log.Debug("Received SystemStop RPC")
 
-	resp := &ctlpb.SystemStopResp{}
+	req := &control.RanksReq{
+		Ranks: system.RanksFromUint32(pbReq.GetRanks()),
+		Force: pbReq.GetForce(),
+	}
+	pbResp := &ctlpb.SystemStopResp{}
 
 	// TODO: consider locking to prevent join attempts when shutting down
 
 	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)
 	defer cancel()
 
-	if req.Prep {
+	if pbReq.GetPrep() {
 		// prepare system members for shutdown
-		prepResults, err := svc.prepShutdown(ctx,
-			system.RanksFromUint32(req.GetRanks()))
+		prepResults, err := svc.prepShutdown(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		if err := convert.Types(prepResults, &resp.Results); err != nil {
+		if err := convert.Types(prepResults, &pbResp.Results); err != nil {
 			return nil, err
 		}
 		if !req.Force && prepResults.HasErrors() {
-			return resp, errors.New("PrepShutdown HasErrors")
+			return pbResp, errors.New("PrepShutdown HasErrors")
 		}
 	}
 
-	if req.Kill {
+	if pbReq.GetKill() {
 		// shutdown by stopping system members
-		stopResults, err := svc.shutdown(ctx, req.Force,
-			system.RanksFromUint32(req.GetRanks()))
+		stopResults, err := svc.shutdown(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		if err := convert.Types(stopResults, &resp.Results); err != nil {
+		if err := convert.Types(stopResults, &pbResp.Results); err != nil {
 			return nil, err
 		}
 	}
 
-	if resp.Results == nil {
+	if pbResp.GetResults() == nil {
 		return nil, errors.New("response results not populated")
 	}
 
 	svc.log.Debug("Responding to SystemStop RPC")
 
-	return resp, nil
+	return pbResp, nil
 }
 
 // start requests registered harnesses to start their instances (system members)
@@ -347,15 +352,15 @@ func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemS
 //
 // Each host address represents a gRPC server associated with a harness managing
 // one or more data-plane instances (DAOS system members).
-func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (system.MemberResults, error) {
+func (svc *ControlService) start(ctx context.Context, req *control.RanksReq) (system.MemberResults, error) {
 	svc.log.Debug("starting ranks")
 
-	results, err := svc.getResultsFromMSRank(ctx, false, rankList, control.StartRanks)
+	results, err := svc.getResultsFromMSRank(ctx, req, control.StartRanks)
 	if err != nil {
 		return nil, err
 	}
 
-	otherResults, err := svc.resultsFromRanks(ctx, false, rankList, control.StartRanks)
+	otherResults, err := svc.resultsFromRanks(ctx, req, control.StartRanks)
 	if err != nil {
 		return nil, err
 	}
@@ -395,25 +400,29 @@ func (svc *ControlService) start(ctx context.Context, rankList []system.Rank) (s
 // SystemStart implements the method defined for the Management Service.
 //
 // Initiate controlled start of DAOS system, return results for each rank.
-func (svc *ControlService) SystemStart(parent context.Context, req *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
+func (svc *ControlService) SystemStart(parent context.Context, pbReq *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
 	svc.log.Debug("Received SystemStart RPC")
+
+	req := &control.RanksReq{
+		Ranks: system.RanksFromUint32(pbReq.GetRanks()),
+	}
+	pbResp := &ctlpb.SystemStartResp{}
 
 	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)
 	defer cancel()
 
 	// start any stopped system members, note that instances will only
 	// be started on hosts with all instances stopped
-	startResults, err := svc.start(ctx, system.RanksFromUint32(req.GetRanks()))
+	startResults, err := svc.start(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &ctlpb.SystemStartResp{}
-	if err := convert.Types(startResults, &resp.Results); err != nil {
+	if err := convert.Types(startResults, &pbResp.Results); err != nil {
 		return nil, err
 	}
 
 	svc.log.Debug("Responding to SystemStart RPC")
 
-	return resp, nil
+	return pbResp, nil
 }

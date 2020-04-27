@@ -234,7 +234,7 @@ func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
 	return
 }
 
-func rpcToSystemRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+func rpcToRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -269,7 +269,7 @@ func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksRe
 	})
 	rpcClient.Debugf("DAOS system prep shutdown-ranks request: %+v", req)
 
-	return rpcToSystemRanks(ctx, rpcClient, req)
+	return rpcToRanks(ctx, rpcClient, req)
 }
 
 // StopRanks concurrently performs stop ranks across all hosts
@@ -279,13 +279,13 @@ func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksRe
 func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).StopRanks(ctx, &mgmtpb.RanksReq{
-			Force: req.Force,
 			Ranks: system.RanksToUint32(req.Ranks),
+			Force: req.Force,
 		})
 	})
 	rpcClient.Debugf("DAOS system stop-ranks request: %+v", req)
 
-	return rpcToSystemRanks(ctx, rpcClient, req)
+	return rpcToRanks(ctx, rpcClient, req)
 }
 
 // StartRanks concurrently performs start ranks across all hosts
@@ -300,7 +300,7 @@ func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ra
 	})
 	rpcClient.Debugf("DAOS system start-ranks request: %+v", req)
 
-	return rpcToSystemRanks(ctx, rpcClient, req)
+	return rpcToRanks(ctx, rpcClient, req)
 }
 
 // PingRanks concurrently performs ping on ranks across all hosts
@@ -315,5 +315,5 @@ func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 	})
 	rpcClient.Debugf("DAOS system ping-ranks request: %+v", req)
 
-	return rpcToSystemRanks(ctx, rpcClient, req)
+	return rpcToRanks(ctx, rpcClient, req)
 }

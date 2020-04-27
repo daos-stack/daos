@@ -56,7 +56,6 @@ func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err 
 	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
 		return
 	}
-	srv.log.Debugf("instance %d: creating superblock on formatted storage", idx)
 	if err = srv.createSuperblock(recreateSBs); err != nil {
 		return
 	}
