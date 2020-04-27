@@ -139,6 +139,9 @@ func (svc *ControlService) resultsFromRanks(ctx context.Context, req *control.Ra
 	if err := svc.filterRanks(req, true); err != nil {
 		return nil, err
 	}
+	if len(req.Ranks) == 0 {
+		return nil, nil
+	}
 
 	return svc.rpcToRanks(ctx, req, fn)
 }
