@@ -38,6 +38,12 @@ class ControlTestBase(TestWithServers):
         self.dmg = self.get_dmg_command()
         self.dmg.get_params(self)
 
+        # Update hostlist value for dmg command
+        port = self.params.get("port", "/run/server_config/*")
+        servers_with_ports = [
+            "{}:{}".format(host, port) for host in self.hostlist_servers]
+        self.dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
+
     def get_dmg_output(self, method_name, **kwargs):
         """Run the dmg command."""
         try:
