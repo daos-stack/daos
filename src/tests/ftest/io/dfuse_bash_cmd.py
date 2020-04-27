@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-import subprocess
 import general_utils
 
 from ClusterShell.NodeSet import NodeSet
@@ -64,7 +63,7 @@ class BashCmd(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            if self.dfuse:    
+            if self.dfuse:
                 self.dfuse.stop()
         finally:
             # Stop the servers and agents
@@ -143,7 +142,7 @@ class BashCmd(TestWithServers):
               Rename file
               Verify renamed file exist using list.
               Remove a directory
-        :avocado: tags=all,hw,daosio,small,full_regression,bashcmd
+        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,bashcmd
         """
         self.cont_count = self.params.get("cont_count", '/run/container/*')
         self.pool_count = self.params.get("pool_count", '/run/pool/*')
