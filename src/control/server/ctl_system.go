@@ -149,6 +149,10 @@ func (svc *ControlService) resultsFromRanks(ctx context.Context, req *control.Ra
 // resultsFromMSRanks sends RPCs to MS leader ranks and returns the system
 // member result.
 func (svc *ControlService) getResultsFromMSRank(ctx context.Context, req *control.RanksReq, fn systemRanksFunc) (system.MemberResults, error) {
+	if err := svc.filterRanks(req, false); err != nil {
+		return nil, err
+	}
+
 	msMember, err := svc.getMSMember()
 	if err != nil {
 		return nil, errors.WithMessage(err, "retrieving MS member")
