@@ -42,8 +42,7 @@ def number_of_failures():
     """
     failures = 0
     successes = 0
-    tests_main = os.path.join("build", DIR, "src", "tests_main")
-    if not os.path.isfile(tests_main):
+    if not os.path.isfile(os.path.join("build", DIR, "src", "tests_main")):
         try:
             res = subprocess.check_output(['make', '-C', DIR, 'tests'])
         except Exception as e:
@@ -51,6 +50,7 @@ def number_of_failures():
             return TEST_NOT_RUN
     else:
         os.chdir(os.path.join("build", DIR, "src"))
+        tests_main = os.path.join(os.getcwd(), "tests_main")
         res = subprocess.check_output([tests_main]).decode()
 
     for line in res.split('\n'):
