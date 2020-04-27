@@ -542,6 +542,8 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_pool		= uma->uma_pool;
 	umm->umm_nospc_rc	= umc->umc_id == UMEM_CLASS_VMEM ?
 		-DER_NOMEM : -DER_NOSPACE;
+	memcpy(umm->umm_slabs, uma->uma_slabs,
+	       sizeof(struct pobj_alloc_class_desc) * UMM_SLABS_CNT);
 
 	set_offsets(umm);
 	return 0;
