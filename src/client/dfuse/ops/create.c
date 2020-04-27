@@ -91,7 +91,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	oh->doh_dfs = parent->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
 
-	if (ie->ie_dfs->dfs_attr_timeout == 0) {
+	if (parent->ie_dfs->dfs_attr_timeout == 0) {
 		fi_out.direct_io = 1;
 	} else {
 		if (fi->direct_io)
