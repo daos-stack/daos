@@ -369,16 +369,16 @@ func (svc *ControlService) SystemStop(parent context.Context, pbReq *ctlpb.Syste
 func (svc *ControlService) start(ctx context.Context, req *control.RanksReq) (system.MemberResults, error) {
 	svc.log.Debug("starting ranks")
 
-	results, err := svc.resultsFromMSRank(ctx, req, control.StartRanks)
+	newReq, err := svc.filterRanks(req, false)
 	if err != nil {
 		return nil, err
 	}
+	req = newReq
 
-	otherResults, err := svc.resultsFromRanks(ctx, req, control.StartRanks)
+	results, err := svc.rpcToRanks(ctx, req, control.StartRanks)
 	if err != nil {
 		return nil, err
 	}
-	results = append(results, otherResults...)
 
 	// member state will transition to "Joined" during join or bootstrap,
 	// here we want to update membership only if "Errored" or "Ready"
