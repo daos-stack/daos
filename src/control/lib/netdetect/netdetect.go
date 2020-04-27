@@ -153,7 +153,7 @@ func initLib(flags int) (C.hwloc_topology_t, error) {
 		return nil, errors.Errorf("Invalid flag provided: %v", flags)
 	}
 
-	status = C.hwloc_topology_set_flags(topology, C.HWLOC_TOPOLOGY_FLAG_IO_DEVICES|hwlocFlags)
+	status = C.hwloc_topology_set_flags(topology, C.HWLOC_TYPE_FILTER_KEEP_IMPORTANT|hwlocFlags)
 	if status != 0 {
 		// Call cleanUp because we failed after hwloc_topology_init succeeded.
 		cleanUp(topology)
