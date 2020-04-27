@@ -81,11 +81,6 @@ static struct crt_corpc_ops ds_cont_tgt_query_co_ops = {
 	.co_pre_forward = NULL,
 };
 
-static struct crt_corpc_ops ds_cont_tgt_epoch_discard_co_ops = {
-	.co_aggregate   = ds_cont_tgt_epoch_discard_aggregator,
-	.co_pre_forward = NULL,
-};
-
 static struct crt_corpc_ops ds_cont_tgt_epoch_aggregate_co_ops = {
 	.co_aggregate   = ds_cont_tgt_epoch_aggregate_aggregator,
 	.co_pre_forward = NULL,

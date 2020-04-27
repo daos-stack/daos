@@ -723,8 +723,8 @@ class TestContainer(TestDaosApiBase):
         for data in self.written_data:
             # Close the object
             self.log.info(
-                "Closing object %s (txn: %s) in container %s",
-                data.obj, data.txn, self.uuid)
+                "Closing object %s in container %s",
+                data.obj, self.uuid)
             try:
                 self._call_method(data.obj.close, {})
             except DaosApiError:
