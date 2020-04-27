@@ -54,5 +54,7 @@ def scons():
     # ftest
     SConscript('ftest/SConscript')
 
+    libs += ['dfs']    
+    daos_build.program(denv, 'dfs_256b', 'dfs_256b.c', LIBS=libs)
 if __name__ == "SCons.Script":
     scons()
