@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,111 +99,16 @@ subtree_destroy(const char *path)
 }
 
 int
-ds_mgmt_tgt_init(void)
+tgt_kill_pool(void *args)
 {
-	mode_t	stored_mode, mode;
-	int	rc;
+	struct d_uuid	*id = args;
 
-	/** create the path string */
-	rc = asprintf(&newborns_path, "%s/NEWBORNS", dss_storage_path);
-	if (rc < 0)
-		D_GOTO(err, rc = -DER_NOMEM);
-	rc = asprintf(&zombies_path, "%s/ZOMBIES", dss_storage_path);
-	if (rc < 0)
-		D_GOTO(err_newborns, rc = -DER_NOMEM);
-
-	stored_mode = umask(0);
-	mode = S_IRWXU | S_IRWXG | S_IRWXO;
-	/** create NEWBORNS directory if it does not exist already */
-	rc = mkdir(newborns_path, mode);
-	if (rc < 0 && errno != EEXIST) {
-		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
-		umask(stored_mode);
-		D_GOTO(err_zombies, rc = daos_errno2der(errno));
-	}
-
-	/** create ZOMBIES directory if it does not exist already */
-	rc = mkdir(zombies_path, mode);
-	if (rc < 0 && errno != EEXIST) {
-		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
-		umask(stored_mode);
-		D_GOTO(err_zombies, rc = daos_errno2der(errno));
-	}
-	umask(stored_mode);
-
-	/** remove leftover from previous runs */
-	rc = subtree_destroy(newborns_path);
-	if (rc)
-		/** only log error, will try again next time */
-		D_ERROR("failed to cleanup NEWBORNS dir: %d, will try again\n",
-			rc);
-	rc = subtree_destroy(zombies_path);
-	if (rc)
-		/** only log error, will try again next time */
-		D_ERROR("failed to cleanup ZOMBIES dir: %d, will try again\n",
-			rc);
-	return 0;
-
-err_zombies:
-	D_FREE(zombies_path);
-err_newborns:
-	D_FREE(newborns_path);
-err:
-	return rc;
-}
-
-void
-ds_mgmt_tgt_fini(void)
-{
-	D_FREE(zombies_path);
-	D_FREE(newborns_path);
-}
-
-static int
-path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
-	 char **fpath)
-{
-	int	 size;
-	int	 off;
-
-	/** *fpath = dir + "/" + pool_uuid + "/" + fname + idx */
-
-	/** DAOS_UUID_STR_SIZE includes the trailing '\0' */
-	size = strlen(dir) + 1 /* "/" */ + DAOS_UUID_STR_SIZE;
-	if (fname != NULL || idx != NULL)
-		size += 1 /* "/" */;
-	if (fname)
-		size += strlen(fname);
-	if (idx)
-		size += snprintf(NULL, 0, "%d", *idx);
-
-	D_ALLOC(*fpath, size);
-	if (*fpath == NULL)
-		return -DER_NOMEM;
-
-	off = sprintf(*fpath, "%s", dir);
-	off += sprintf(*fpath + off, "/");
-	uuid_unparse_lower(pool_uuid, *fpath + off);
-	off += DAOS_UUID_STR_SIZE - 1;
-	if (fname != NULL || idx != NULL)
-		off += sprintf(*fpath + off, "/");
-	if (fname)
-		off += sprintf(*fpath + off, "%s", fname);
-	if (idx)
-		sprintf(*fpath + off, "%d", *idx);
-
-	return 0;
-}
-
-/**
- * Generate path to a target file for pool \a pool_uuid with a filename set to
- * \a fname and suffixed by \a idx. \a idx can be NULL.
- */
-int
-ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
-		 char **fpath)
-{
-	return path_gen(pool_uuid, dss_storage_path, fname, idx, fpath);
+	/* XXX: there are a few test cases that leak pool close
+	 * before destroying pool, we have to force the kill to pass
+	 * those tests, but we should try to disable "force" and
+	 * fix those issues in the future.
+	 */
+	return vos_pool_kill(id->uuid, true);
 }
 
 /**
@@ -267,6 +172,209 @@ ds_mgmt_tgt_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
 
 	return rc == 0 ? rc_tmp : rc;
 }
+
+/**
+ * Iterate pools left in the newborns path that have targets on this node
+ * The function \a cb will be called with the UUID of each pool. When \a cb
+ * returns an rc,
+ *
+ *   - if rc == 0, the iteration continues;
+ *   - otherwise, the iteration stops and returns rc.
+ *
+ * \param[in]	cb	callback called for each pool
+ * \param[in]	arg	argument passed to each \a cb call
+ */
+static int
+newborn_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
+{
+	DIR    *storage;
+	int	rc;
+	int	rc_tmp;
+
+	storage = opendir(newborns_path);
+	if (storage == NULL) {
+		D_ERROR("failed to open %s: %d\n", newborns_path, errno);
+		return daos_errno2der(errno);
+	}
+
+	for (;;) {
+		struct dirent  *entry;
+		uuid_t		uuid;
+
+		rc = 0;
+		errno = 0;
+		entry = readdir(storage);
+		if (entry == NULL) {
+			if (errno != 0) {
+				D_ERROR("failed to read %s: %d\n",
+					newborns_path, errno);
+				rc = daos_errno2der(errno);
+			}
+			break;
+		}
+
+		/* A pool directory must have a valid UUID as its name. */
+		rc = uuid_parse(entry->d_name, uuid);
+		if (rc != 0)
+			continue;
+
+		rc = cb(uuid, arg);
+		if (rc != 0) {
+			break;
+		}
+	}
+
+	rc_tmp = closedir(storage);
+	if (rc_tmp != 0) {
+		D_ERROR("failed to close %s: %d\n", newborns_path, errno);
+		rc_tmp = daos_errno2der(errno);
+	}
+
+	return rc == 0 ? rc_tmp : rc;
+}
+
+/* During init, remove leftover SPDK resources from pools not fully created */
+static int
+cleanup_newborn_pool(uuid_t uuid, void *arg)
+{
+	int		rc;
+	struct d_uuid	id;
+
+	/* destroy blobIDs */
+	D_DEBUG(DB_MGMT, "Clear SPDK blobs for NEWBORN pool "DF_UUID"\n",
+		DP_UUID(uuid));
+	uuid_copy(id.uuid, uuid);
+	rc = dss_thread_collective(tgt_kill_pool, &id, 0, DSS_ULT_IO);
+	if (rc != 0) {
+		if (rc > 0)
+			D_ERROR("%d xstreams failed tgt_kill_pool()\n", rc);
+		else
+			D_ERROR("tgt_kill_pool, rc: "DF_RC"\n", DP_RC(rc));
+	}
+
+	return rc;
+}
+
+static int
+cleanup_newborn_pools(void)
+{
+	return newborn_pool_iterate(cleanup_newborn_pool, NULL);
+}
+
+int
+ds_mgmt_tgt_setup(void)
+{
+	mode_t	stored_mode;
+	int	rc;
+
+	/** create the path string */
+	rc = asprintf(&newborns_path, "%s/NEWBORNS", dss_storage_path);
+	if (rc < 0)
+		D_GOTO(err, rc = -DER_NOMEM);
+	rc = asprintf(&zombies_path, "%s/ZOMBIES", dss_storage_path);
+	if (rc < 0)
+		D_GOTO(err_newborns, rc = -DER_NOMEM);
+
+	stored_mode = umask(0);
+	/** create NEWBORNS directory if it does not exist already */
+	rc = mkdir(newborns_path, S_IRWXU);
+	if (rc < 0 && errno != EEXIST) {
+		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
+		umask(stored_mode);
+		D_GOTO(err_zombies, rc = daos_errno2der(errno));
+	}
+
+	/** create ZOMBIES directory if it does not exist already */
+	rc = mkdir(zombies_path, S_IRWXU);
+	if (rc < 0 && errno != EEXIST) {
+		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
+		umask(stored_mode);
+		D_GOTO(err_zombies, rc = daos_errno2der(errno));
+	}
+	umask(stored_mode);
+
+	/** remove leftover from previous runs */
+	rc = cleanup_newborn_pools();
+	if (rc)
+		/** only log error, will try again next time */
+		D_ERROR("failed to delete SPDK blobs for NEWBORNS pools: "
+			"%d, will try again\n", rc);
+
+	rc = subtree_destroy(newborns_path);
+	if (rc)
+		/** only log error, will try again next time */
+		D_ERROR("failed to cleanup NEWBORNS dir: %d, will try again\n",
+			rc);
+	rc = subtree_destroy(zombies_path);
+	if (rc)
+		/** only log error, will try again next time */
+		D_ERROR("failed to cleanup ZOMBIES dir: %d, will try again\n",
+			rc);
+	return 0;
+
+err_zombies:
+	D_FREE(zombies_path);
+err_newborns:
+	D_FREE(newborns_path);
+err:
+	return rc;
+}
+
+void
+ds_mgmt_tgt_cleanup(void)
+{
+	D_FREE(zombies_path);
+	D_FREE(newborns_path);
+}
+
+static int
+path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
+	 char **fpath)
+{
+	int	 size;
+	int	 off;
+
+	/** *fpath = dir + "/" + pool_uuid + "/" + fname + idx */
+
+	/** DAOS_UUID_STR_SIZE includes the trailing '\0' */
+	size = strlen(dir) + 1 /* "/" */ + DAOS_UUID_STR_SIZE;
+	if (fname != NULL || idx != NULL)
+		size += 1 /* "/" */;
+	if (fname)
+		size += strlen(fname);
+	if (idx)
+		size += snprintf(NULL, 0, "%d", *idx);
+
+	D_ALLOC(*fpath, size);
+	if (*fpath == NULL)
+		return -DER_NOMEM;
+
+	off = sprintf(*fpath, "%s", dir);
+	off += sprintf(*fpath + off, "/");
+	uuid_unparse_lower(pool_uuid, *fpath + off);
+	off += DAOS_UUID_STR_SIZE - 1;
+	if (fname != NULL || idx != NULL)
+		off += sprintf(*fpath + off, "/");
+	if (fname)
+		off += sprintf(*fpath + off, "%s", fname);
+	if (idx)
+		sprintf(*fpath + off, "%d", *idx);
+
+	return 0;
+}
+
+/**
+ * Generate path to a target file for pool \a pool_uuid with a filename set to
+ * \a fname and suffixed by \a idx. \a idx can be NULL.
+ */
+int
+ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
+		 char **fpath)
+{
+	return path_gen(pool_uuid, dss_storage_path, fname, idx, fpath);
+}
+
+
 
 struct vos_pool_arg {
 	uuid_t		vpa_uuid;
@@ -617,19 +725,6 @@ out:
 	crt_reply_send(tc_req);
 }
 
-int
-tgt_kill_pool(void *args)
-{
-	struct d_uuid	*id = args;
-
-	/* XXX: there are a few test cases that leak pool close
-	 * before destroying pool, we have to force the kill to pass
-	 * those tests, but we should try to disable "force" and
-	 * fix those issues in the future.
-	 */
-	return vos_pool_kill(id->uuid, true);
-}
-
 static int
 tgt_destroy(uuid_t pool_uuid, char *path)
 {
@@ -756,29 +851,12 @@ static int
 tgt_profile_task(void *arg)
 {
 	struct mgmt_profile_in *in = arg;
-	int mod_id = 0;
 	int rc = 0;
 
-	for (mod_id = 0; mod_id < 64; mod_id++) {
-		uint64_t mask = 1 << mod_id;
-		struct dss_module *module;
-
-		if (!(in->p_module & mask))
-			continue;
-
-		module = dss_module_get(mod_id);
-		if (module == NULL || module->sm_mod_ops == NULL) {
-			D_ERROR("no module sm_mod_ops %d\n", mod_id);
-			continue;
-		}
-
-		if (in->p_op == MGMT_PROFILE_START)
-			rc = module->sm_mod_ops->dms_profile_start(in->p_path);
-		else
-			rc = module->sm_mod_ops->dms_profile_stop();
-		if (rc)
-			break;
-	}
+	if (in->p_op == MGMT_PROFILE_START)
+		rc = srv_profile_start(in->p_path, in->p_avg);
+	else
+		rc = srv_profile_stop();
 
 	D_DEBUG(DB_MGMT, "profile task: rc "DF_RC"\n", DP_RC(rc));
 	return rc;

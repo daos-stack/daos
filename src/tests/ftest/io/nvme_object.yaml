@@ -31,6 +31,7 @@ pool:
    - 800000000000
  createsvc:
   svcn: 1
+ control_method: dmg
 container:
   object_qty: 10
   record_size:

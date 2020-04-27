@@ -11,7 +11,7 @@ pool:
     control_method: dmg
     mode: 146
     name: daos_server
-    scm_size: 1073741
+    scm_size: 134217728
 createtests:
     createsvc: !mux
         svc0:

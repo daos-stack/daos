@@ -65,6 +65,8 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'abt'])
     daos_build.test(tenv, 'acl_real_tests', 'acl_util_real_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
+    daos_build.test(tenv, 'prop_tests', 'prop_tests.c',
+                    LIBS=['daos_common', 'gurt', 'cmocka'])
     define_checksum_timing(daos_build, tenv, prereqs)
 
     unit_env = tenv.Clone()

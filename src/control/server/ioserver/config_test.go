@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 var update = flag.Bool("update", false, "update .golden files")
@@ -93,6 +96,46 @@ func TestMergeEnvVars(t *testing.T) {
 	}
 }
 
+func TestConfigHasEnvVar(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startVars []string
+		addVar    string
+		addVal    string
+		expVars   []string
+	}{
+		"empty": {
+			addVar:  "FOO",
+			addVal:  "BAR",
+			expVars: []string{"FOO=BAR"},
+		},
+		"similar prefix": {
+			startVars: []string{"FOO_BAR=BAZ"},
+			addVar:    "FOO",
+			addVal:    "BAR",
+			expVars:   []string{"FOO_BAR=BAZ", "FOO=BAR"},
+		},
+		"same prefix": {
+			startVars: []string{"FOO=BAZ"},
+			addVar:    "FOO",
+			addVal:    "BAR",
+			expVars:   []string{"FOO=BAZ"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := NewConfig().
+				WithEnvVars(tc.startVars...)
+
+			if !cfg.HasEnvVar(tc.addVar) {
+				cfg.WithEnvVars(tc.addVar + "=" + tc.addVal)
+			}
+
+			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, cmpOpts()...); diff != "" {
+				t.Fatalf("unexpected env vars:\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestConstructedConfig(t *testing.T) {
 	var numaNode uint = 8
 	goldenPath := "testdata/full.golden"
@@ -144,12 +187,93 @@ func TestConstructedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(constructed, fromDisk, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(fromDisk, constructed, cmpOpts()...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }
 
-func TestConfigValidation(t *testing.T) {
+func TestIOServer_SCMConfigValidation(t *testing.T) {
+	baseValidConfig := func() *Config {
+		return NewConfig().
+			WithFabricProvider("test"). // valid enough to pass "not-blank" test
+			WithFabricInterface("test")
+	}
+
+	for name, tc := range map[string]struct {
+		cfg    *Config
+		expErr error
+	}{
+		"missing scm_mount": {
+			cfg:    baseValidConfig(),
+			expErr: errors.New("scm_mount"),
+		},
+		"missing scm_class": {
+			cfg: baseValidConfig().
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_class"),
+		},
+		"ramdisk valid": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(1).
+				WithScmMountPoint("test"),
+		},
+		"ramdisk missing scm_size": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_size"),
+		},
+		"ramdisk scm_size: 0": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(0).
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_size"),
+		},
+		"ramdisk with scm_list": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(1).
+				WithScmDeviceList("foo", "bar").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_list"),
+		},
+		"dcpm valid": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmDeviceList("foo").
+				WithScmMountPoint("test"),
+		},
+		"dcpm scm_list too long": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmDeviceList("foo", "bar").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_list"),
+		},
+		"dcpm scm_list empty": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_list"),
+		},
+		"dcpm with scm_size": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmDeviceList("foo").
+				WithScmRamdiskSize(1).
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_size"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+		})
+	}
+}
+
+func TestIOServer_ConfigValidation(t *testing.T) {
 	bad := NewConfig()
 
 	if err := bad.Validate(); err == nil {
@@ -160,6 +284,7 @@ func TestConfigValidation(t *testing.T) {
 	good := NewConfig().WithFabricProvider("foo").
 		WithFabricInterface("qib0").
 		WithScmClass("ram").
+		WithScmRamdiskSize(1).
 		WithScmMountPoint("/foo/bar")
 
 	if err := good.Validate(); err != nil {
@@ -169,22 +294,24 @@ func TestConfigValidation(t *testing.T) {
 
 func TestConfigToCmdVals(t *testing.T) {
 	var (
-		mountPoint     = "/mnt/test"
-		provider       = "test+foo"
-		interfaceName  = "qib0"
-		modules        = "foo,bar,baz"
-		systemName     = "test-system"
-		socketDir      = "/var/run/foo"
-		logMask        = "LOG_MASK_VALUE"
-		logFile        = "/path/to/log"
-		cfgPath        = "/path/to/nvme.conf"
-		shmId          = 42
-		interfacePort  = 20
-		targetCount    = 4
-		helperCount    = 1
-		serviceCore    = 8
-		index          = 2
-		pinnedNumaNode = uint(1)
+		mountPoint      = "/mnt/test"
+		provider        = "test+foo"
+		interfaceName   = "qib0"
+		modules         = "foo,bar,baz"
+		systemName      = "test-system"
+		socketDir       = "/var/run/foo"
+		logMask         = "LOG_MASK_VALUE"
+		logFile         = "/path/to/log"
+		cfgPath         = "/path/to/nvme.conf"
+		shmId           = 42
+		interfacePort   = 20
+		targetCount     = 4
+		helperCount     = 1
+		serviceCore     = 8
+		index           = 2
+		pinnedNumaNode  = uint(1)
+		crtCtxShareAddr = uint32(1)
+		crtTimeout      = uint32(30)
 	)
 	cfg := NewConfig().
 		WithScmMountPoint(mountPoint).
@@ -201,7 +328,9 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithLogMask(logMask).
 		WithShmID(shmId).
 		WithBdevConfigPath(cfgPath).
-		WithSystemName(systemName)
+		WithSystemName(systemName).
+		WithCrtCtxShareAddr(crtCtxShareAddr).
+		WithCrtTimeout(crtTimeout)
 
 	cfg.Index = uint32(index)
 
@@ -224,13 +353,15 @@ func TestConfigToCmdVals(t *testing.T) {
 		"CRT_PHY_ADDR_STR=" + provider,
 		"D_LOG_FILE=" + logFile,
 		"D_LOG_MASK=" + logMask,
+		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
+		"CRT_CTX_SHARE_ADDR=" + strconv.FormatUint(uint64(crtCtxShareAddr), 10),
 	}
 
 	gotArgs, err := cfg.CmdLineArgs()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(gotArgs, wantArgs, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantArgs, gotArgs, cmpOpts()...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 
@@ -238,7 +369,7 @@ func TestConfigToCmdVals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(gotEnv, wantEnv, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantEnv, gotEnv, cmpOpts()...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }

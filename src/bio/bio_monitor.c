@@ -72,6 +72,22 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
 }
 
+/* Call internal method to increment CSUM media error. */
+void
+bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
+{
+	struct media_error_msg	*mem;
+
+	D_ALLOC_PTR(mem);
+	if (mem == NULL)
+		return;
+	mem->mem_bs		= bxc->bxc_blobstore;
+	mem->mem_err_type	= MET_CSUM;
+	mem->mem_tgt_id		= tgt_id;
+	spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
+}
+
+
 /* Call internal method to get BIO device state from the device owner xstream */
 int
 bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
@@ -81,19 +97,21 @@ bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
 
 	rc = ABT_eventual_create(0, &dsm.eventual);
 	if (rc != ABT_SUCCESS)
-		return rc;
+		return dss_abterr2der(rc);
 
 	dsm.xs = xs;
 
 	spdk_thread_send_msg(owner_thread(xs->bxc_blobstore),
 			     bio_get_dev_state_internal, &dsm);
-	ABT_eventual_wait(dsm.eventual, NULL);
+	rc = ABT_eventual_wait(dsm.eventual, NULL);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
 
 	*dev_state = dsm.devstate;
 
 	rc = ABT_eventual_free(&dsm.eventual);
 	if (rc != ABT_SUCCESS)
-		D_ERROR("BIO get device state ABT future not freed\n");
+		rc = dss_abterr2der(rc);
 
 	return rc;
 }
@@ -111,7 +129,7 @@ bio_dev_set_faulty(struct bio_xs_context *xs)
 
 	rc = ABT_eventual_create(sizeof(*dsm_rc), &dsm.eventual);
 	if (rc != ABT_SUCCESS)
-		return rc;
+		return dss_abterr2der(rc);
 
 	dsm.xs = xs;
 
@@ -124,7 +142,7 @@ bio_dev_set_faulty(struct bio_xs_context *xs)
 		rc = dss_abterr2der(rc);
 
 	if (ABT_eventual_free(&dsm.eventual) != ABT_SUCCESS)
-		D_ERROR("BIO set device state ABT future not freed\n");
+		rc = dss_abterr2der(rc);
 
 	return rc;
 }
@@ -135,11 +153,12 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 {
 	struct bio_dev_health			 *dev_health = cb_arg;
 	int					  sc, sct;
+	uint32_t				  cdw0;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
 	/* Additional NVMe status information */
-	spdk_bdev_io_get_nvme_status(bdev_io, &sct, &sc);
+	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
 	if (sc)
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
 
@@ -162,11 +181,12 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	uint32_t			 numd, numdl, numdu;
 	int				 rc;
 	int				 sc, sct;
+	uint32_t			 cdw0;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
 	/* Additional NVMe status information */
-	spdk_bdev_io_get_nvme_status(bdev_io, &sct, &sc);
+	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
 	if (sc) {
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
 		dev_health->bdh_inflights--;
@@ -230,11 +250,12 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	uint8_t					  crit_warn;
 	int					  rc;
 	int					  sc, sct;
+	uint32_t				  cdw0;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
 	/* Additional NVMe status information */
-	spdk_bdev_io_get_nvme_status(bdev_io, &sct, &sc);
+	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
 	if (sc) {
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
 		dev_health->bdh_inflights--;

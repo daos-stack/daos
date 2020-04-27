@@ -24,18 +24,25 @@
 
 from daos_core_base import DaosCoreBase
 
+
 class DaosCoreTestRebuild(DaosCoreBase):
-    """
-    Runs just the daos_test rebuild tests
+    # pylint: disable=too-many-ancestors
+    """Run just the daos_test rebuild tests.
 
     :avocado: recursive
     """
+
     def test_rebuild(self):
+        """Jira ID: DAOS-2770.
+
+        Test Description:
+            Purpose of this test is to run just the daos_test rebuild tests.
+
+        Use case:
+            Balance testing load betweeen hardware and VM clusters.
+
+        :avocado: tags=all,pr,hw,medium,ib2,unittest,daos_test_rebuild
         """
-        Jira ID: DAOS-2770
-        Test Description: Purpose of this test is to run just the daos_test
-                          rebuild tests.
-        Use case: Balance testing load betweeen hardware and VM clusters.
-        :avocado: tags=all,pr,hw,unittest,medium,daos_test_rebuild
-        """
+        if self.subtest_name == "rebuild_tests_27":
+            self.cancelForTicket("DAOS-4512")
         DaosCoreBase.run_subtest(self)

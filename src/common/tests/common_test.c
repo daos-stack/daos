@@ -73,37 +73,45 @@ int main(int argc, char *argv[])
 {
 	if (show_help(argc, argv)) {
 		print_usage(argv[0]);
-	} else {
-		int opt;
-
-		while ((opt = getopt_long(argc, argv, s_opts, l_opts, &idx)) !=
-		       -1) {
-			switch (opt) {
-			case 'h':
-				/** already handled */
-				break;
-			case 'e':
-#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-				cmocka_set_skip_filter(optarg);
-#else
-				D_PRINT("filter not enabled");
-#endif
-
-				break;
-			case 'f':
-#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-				cmocka_set_test_filter(optarg);
-#else
-				D_PRINT("filter not enabled");
-#endif
-				break;
-			default:
-				break;
-		}
-		}
-		misc_tests_run();
-		daos_checksum_tests_run();
+		return 0;
 	}
+
+	int opt;
+
+	while ((opt = getopt_long(argc, argv, s_opts, l_opts, &idx)) !=
+	       -1) {
+		switch (opt) {
+		case 'h':
+			/** already handled */
+			break;
+		case 'e':
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
+			cmocka_set_skip_filter(optarg);
+#else
+			D_PRINT("filter not enabled");
+#endif
+
+			break;
+		case 'f':
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
+
+		{
+			/** Add wildcards for easier filtering */
+			char filter[sizeof(optarg) + 2];
+
+			sprintf(filter, "*%s*", optarg);
+			cmocka_set_test_filter(filter);
+		}
+#else
+			D_PRINT("filter not enabled");
+#endif
+			break;
+		default:
+			break;
+		}
+	}
+	misc_tests_run();
+	daos_checksum_tests_run();
 
 	return 0;
 }

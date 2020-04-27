@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package bdev
 
 import (
@@ -85,7 +86,7 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
-func (w *spdkWrapper) init(initShmID ...int) (err error) {
+func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 	if w.initialized {
 		return nil
 	}
@@ -105,7 +106,7 @@ func (w *spdkWrapper) init(initShmID ...int) (err error) {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 
-	cs, err := w.Discover()
+	cs, err := w.Discover(log)
 	if err != nil {
 		return errors.Wrap(err, "failed to discover NVMe")
 	}
@@ -141,7 +142,7 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 }
 
 func (b *spdkBackend) Init(shmID ...int) error {
-	if err := b.binding.init(shmID...); err != nil {
+	if err := b.binding.init(b.log, shmID...); err != nil {
 		return err
 	}
 
@@ -172,6 +173,10 @@ func (b *spdkBackend) Scan() (storage.NvmeControllers, error) {
 }
 
 func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeController, error) {
+	if pciAddr == "" {
+		return nil, FaultBadPCIAddr("")
+	}
+
 	var spdkController *spdk.Controller
 	for _, bc := range bcs {
 		if bc.PCIAddr == pciAddr {
@@ -181,7 +186,7 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 	}
 
 	if spdkController == nil {
-		return nil, errors.Errorf("unable to resolve %s after format", pciAddr)
+		return nil, FaultPCIAddrNotFound(pciAddr)
 	}
 
 	scs, err := convertControllers([]spdk.Controller{*spdkController})
@@ -196,32 +201,20 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 }
 
 func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
-	if pciAddr == "" {
-		return nil, FaultFormatBadPciAddr("")
-	}
-
-	controllers, err := b.Scan()
-	if err != nil {
+	if err := b.Init(); err != nil {
 		return nil, err
 	}
 
-	foundAddr := false
-	for _, c := range controllers {
-		if c.PciAddr == pciAddr {
-			foundAddr = true
-			break
-		}
-	}
-
-	if !foundAddr {
-		return nil, FaultFormatBadPciAddr(pciAddr)
+	ctrlr, err := getController(pciAddr, b.binding.controllers)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := b.binding.Format(b.log, pciAddr); err != nil {
 		return nil, err
 	}
 
-	return getController(pciAddr, b.binding.controllers)
+	return ctrlr, nil
 }
 
 func (b *spdkBackend) Prepare(nrHugePages int, targetUser, pciWhiteList string) error {

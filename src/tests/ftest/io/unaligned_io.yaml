@@ -25,4 +25,5 @@ datasize:
     - 300
     - 16000
     - 1048599
-    - 1073741824
+    # Skip this large size until DAOS-2164 resolved.
+    #- 1073741824

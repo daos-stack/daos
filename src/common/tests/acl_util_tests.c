@@ -543,9 +543,15 @@ test_ace_to_str_all_access_types(void **state)
 static void
 test_ace_to_str_no_access_types(void **state)
 {
-	check_valid_ace_to_str(DAOS_ACL_OWNER_GROUP, NULL,
-			       0, 0, 0, 0, 0,
-			       ":G:GROUP@:");
+	struct daos_ace	*ace;
+	char		buf[DAOS_ACL_MAX_ACE_STR_LEN];
+
+	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
+	ace->dae_access_types = 0;
+
+	assert_int_equal(daos_ace_to_str(ace, buf, sizeof(buf)), -DER_INVAL);
+
+	daos_ace_free(ace);
 }
 
 static void
@@ -823,6 +829,181 @@ test_acl_to_strs_success(void **state)
 	daos_acl_free(acl);
 }
 
+static void
+test_ace_str_to_verbose_invalid(void **state)
+{
+	char result[DAOS_ACL_MAX_ACE_STR_LEN];
+
+	printf("NULL ACE string\n");
+	assert_int_equal(daos_ace_str_get_verbose(NULL, result, sizeof(result)),
+			 -DER_INVAL);
+
+	printf("NULL result buffer\n");
+	assert_int_equal(daos_ace_str_get_verbose(TEST_DEFAULT_ACE_STR,
+						 NULL, sizeof(result)),
+			 -DER_INVAL);
+
+	printf("Buffer size == 0\n");
+	assert_int_equal(daos_ace_str_get_verbose(TEST_DEFAULT_ACE_STR,
+						 result, 0),
+			 -DER_INVAL);
+
+	printf("Empty ACE string\n");
+	assert_int_equal(daos_ace_str_get_verbose("", result, sizeof(result)),
+			 -DER_INVAL);
+
+	printf("Not an ACE string\n");
+	assert_int_equal(daos_ace_str_get_verbose("AAa", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+
+	printf("Bad access type\n");
+	assert_int_equal(daos_ace_str_get_verbose("oA::OWNER@:rw", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+
+	printf("No access type\n");
+	assert_int_equal(daos_ace_str_get_verbose("::OWNER@:rw", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+
+	printf("Bad flags\n");
+	assert_int_equal(daos_ace_str_get_verbose("A:xyzG:GROUP@:rw", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+
+	printf("Badly-formatted principal\n");
+	assert_int_equal(daos_ace_str_get_verbose("A::nope:rw", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+
+	printf("No principal\n");
+	assert_int_equal(daos_ace_str_get_verbose("A:::rw", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+
+	printf("Bad permissions\n");
+	assert_int_equal(daos_ace_str_get_verbose("A:G:GROUP@:rwxyz", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+
+	printf("Truncated at access type\n");
+	assert_int_equal(daos_ace_str_get_verbose("A", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+
+	printf("Truncated at flags\n");
+	assert_int_equal(daos_ace_str_get_verbose("A:G", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+
+	printf("Truncated at principal\n");
+	assert_int_equal(daos_ace_str_get_verbose("A:G:GROUP@", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+
+	printf("Too many colons\n");
+	assert_int_equal(daos_ace_str_get_verbose("A:G:GROUP@:rw:", result,
+						  sizeof(result)),
+			 -DER_INVAL);
+}
+
+static void
+expect_ace_str_to_verbose(const char *ace_str, const char *expected)
+{
+	char result[DAOS_ACL_MAX_ACE_STR_LEN];
+
+	printf("Testing: '%s'\n", ace_str);
+	assert_int_equal(daos_ace_str_get_verbose(ace_str, result,
+						  sizeof(result)), 0);
+
+	assert_string_equal(result, expected);
+}
+
+static void
+test_ace_str_to_verbose_valid(void **state)
+{
+	/* Different principals */
+	expect_ace_str_to_verbose("A::myuser@:r", "Allow::myuser@:Read");
+	expect_ace_str_to_verbose("A:G:mygrp@:r", "Allow:Group:mygrp@:Read");
+	expect_ace_str_to_verbose("A::OWNER@:r", "Allow::Owner:Read");
+	expect_ace_str_to_verbose("A:G:GROUP@:r",
+				  "Allow:Group:Owner-Group:Read");
+	expect_ace_str_to_verbose("A::EVERYONE@:r", "Allow::Everyone:Read");
+
+	/* Different access types/flags */
+	expect_ace_str_to_verbose("U:S:myuser@:r",
+				  "Audit:Access-Success:myuser@:Read");
+	expect_ace_str_to_verbose("U:F:myuser@:r",
+				  "Audit:Access-Failure:myuser@:Read");
+	expect_ace_str_to_verbose("L:S:myuser@:r",
+				  "Alarm:Access-Success:myuser@:Read");
+
+	/* Combining access types */
+	expect_ace_str_to_verbose("AL:S:myuser@:r",
+				  "Allow/Alarm:Access-Success:myuser@:Read");
+
+	/* Combining flags */
+	expect_ace_str_to_verbose("L:GF:mygrp@:r",
+				  "Alarm:Group/Access-Failure:mygrp@:Read");
+	expect_ace_str_to_verbose("U:GS:mygrp@:r",
+				  "Audit:Group/Access-Success:mygrp@:Read");
+
+	/* Different perms */
+	expect_ace_str_to_verbose("A::myuser@:w",
+				  "Allow::myuser@:Write");
+	expect_ace_str_to_verbose("A::myuser@:c",
+				  "Allow::myuser@:Create-Container");
+	expect_ace_str_to_verbose("A::myuser@:d",
+				  "Allow::myuser@:Delete-Container");
+	expect_ace_str_to_verbose("A::myuser@:t",
+				  "Allow::myuser@:Get-Prop");
+	expect_ace_str_to_verbose("A::myuser@:T",
+				  "Allow::myuser@:Set-Prop");
+	expect_ace_str_to_verbose("A::myuser@:a",
+				  "Allow::myuser@:Get-ACL");
+	expect_ace_str_to_verbose("A::myuser@:A",
+				  "Allow::myuser@:Set-ACL");
+	expect_ace_str_to_verbose("A::myuser@:o",
+				  "Allow::myuser@:Set-Owner");
+
+	/* Combine perms */
+	expect_ace_str_to_verbose("A::myuser@:rwcdtTaAo",
+				  "Allow::myuser@:Read/Write/Create-Container/"
+				  "Delete-Container/Get-Prop/Set-Prop/Get-ACL/"
+				  "Set-ACL/Set-Owner");
+
+	/* No perms */
+	expect_ace_str_to_verbose("A::myuser@:",
+				  "Allow::myuser@:No-Access");
+}
+
+static void
+test_ace_str_to_verbose_truncated(void **state)
+{
+	char result[DAOS_ACL_MAX_ACE_STR_LEN];
+
+	assert_int_equal(daos_ace_str_get_verbose(TEST_DEFAULT_ACE_STR,
+						  result, 4),
+			 -DER_TRUNC);
+	assert_string_equal(result, "All");
+
+	assert_int_equal(daos_ace_str_get_verbose(TEST_DEFAULT_ACE_STR,
+						  result, 7),
+			 -DER_TRUNC);
+	assert_string_equal(result, "Allow:");
+
+	assert_int_equal(daos_ace_str_get_verbose(TEST_DEFAULT_ACE_STR,
+						  result, 10),
+			 -DER_TRUNC);
+	assert_string_equal(result, "Allow::us");
+
+	assert_int_equal(daos_ace_str_get_verbose(TEST_DEFAULT_ACE_STR,
+						  result, 14),
+			 -DER_TRUNC);
+	assert_string_equal(result, "Allow::user@:");
+}
+
 int
 main(void)
 {
@@ -873,6 +1054,9 @@ main(void)
 		cmocka_unit_test(test_acl_to_strs_bad_input),
 		cmocka_unit_test(test_acl_to_strs_empty),
 		cmocka_unit_test(test_acl_to_strs_success),
+		cmocka_unit_test(test_ace_str_to_verbose_invalid),
+		cmocka_unit_test(test_ace_str_to_verbose_valid),
+		cmocka_unit_test(test_ace_str_to_verbose_truncated),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

@@ -273,32 +273,12 @@ err_task:
 	return rc;
 }
 
-
-static int
-tx_abort_cb(tse_task_t *task, void *data)
-{
-	struct dc_tx		*tx = *((struct dc_tx **)data);
-	int			rc = task->dt_result;
-
-	D_SPIN_LOCK(&tx->tx_spin);
-
-	if (rc != 0)
-		tx->tx_status = TX_FAILED;
-	else
-		tx->tx_status = TX_ABORTED;
-
-	D_SPIN_UNLOCK(&tx->tx_spin);
-
-	tx_decref(tx);
-	return rc;
-}
-
 int
 dc_tx_abort(tse_task_t *task)
 {
 	daos_tx_abort_t		*args;
 	struct dc_tx		*tx;
-	int			rc;
+	int			rc = 0;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
@@ -320,25 +300,14 @@ dc_tx_abort(tse_task_t *task)
 		D_SPIN_UNLOCK(&tx->tx_spin);
 		D_GOTO(err_tx, rc = -DER_INVAL);
 	}
-	tx->tx_status = TX_ABORTING;
+
+	/*
+	 * The TX logic will be reimplemented soon,
+	 * just mark the TX as ABORTED temporarily.
+	 */
+	tx->tx_status = TX_ABORTED;
 	D_SPIN_UNLOCK(&tx->tx_spin);
 
-	rc = dc_epoch_op(tx->tx_coh, CONT_EPOCH_DISCARD, &tx->tx_epoch, task);
-	if (rc != 0) {
-		D_ERROR("Failed to register completion cb\n");
-		D_GOTO(err_tx, rc);
-	}
-
-	/** CB to update TX status */
-	rc = tse_task_register_cbs(task, NULL, NULL, 0, tx_abort_cb, &tx,
-				   sizeof(tx));
-	if (rc != 0) {
-		D_ERROR("Failed to register completion cb\n");
-		D_GOTO(err_tx, rc);
-	}
-
-	/** tx_decref done in tx_abort_cb() */
-	return rc;
 err_tx:
 	tx_decref(tx);
 err_task:
@@ -410,6 +379,14 @@ err_tx:
 err_task:
 	tse_task_complete(task, rc);
 	return rc;
+}
+
+int
+dc_tx_restart(tse_task_t *task)
+{
+	/* TBD */
+	tse_task_complete(task, 0);
+	return 0;
 }
 
 /*

@@ -220,11 +220,13 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, d_sg_list_t *dst_sgl,
 		       src->iv_snap.snap_cnt * sizeof(src->iv_snap.snaps[0]));
 		break;
 	case IV_CONT_CAPA:
-		dst->iv_capa.capas = src->iv_capa.capas;
+		dst->iv_capa.flags = src->iv_capa.flags;
+		dst->iv_capa.sec_capas = src->iv_capa.sec_capas;
 		break;
 	case IV_CONT_PROP:
 		memcpy(&dst->iv_prop, &src->iv_prop,
-		       cont_iv_prop_ent_size(src->iv_prop.cip_acl.dal_len));
+		       offsetof(struct cont_iv_prop,
+				cip_acl.dal_ace[src->iv_prop.cip_acl.dal_len]));
 		break;
 	default:
 		D_ERROR("bad iv_class_id %d.\n", entry->iv_class->iv_class_id);
@@ -340,7 +342,8 @@ cont_iv_capa_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	/* open the container locally */
 	rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid,
 			      civ_key->cont_uuid, civ_ent->cont_uuid,
-			      civ_ent->iv_capa.capas);
+			      civ_ent->iv_capa.flags,
+			      civ_ent->iv_capa.sec_capas);
 	return rc;
 }
 
@@ -754,14 +757,15 @@ out_eventual:
 
 int
 cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-			  uint64_t capas)
+			  uint64_t flags, uint64_t sec_capas)
 {
 	struct cont_iv_entry	iv_entry = { 0 };
 	int			rc;
 
 	/* Only happens on xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	iv_entry.iv_capa.capas = capas;
+	iv_entry.iv_capa.flags = flags;
+	iv_entry.iv_capa.sec_capas = sec_capas;
 	uuid_copy(iv_entry.cont_uuid, cont_uuid);
 
 	rc = cont_iv_update(ns, IV_CONT_CAPA, cont_hdl_uuid, &iv_entry,
@@ -919,7 +923,7 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_ACL:
 			acl = &iv_prop->cip_acl;
-			if (acl->dal_len > 0) {
+			if (acl->dal_ver != 0) {
 				D_ASSERT(daos_acl_validate(acl) == 0);
 				acl_alloc = daos_acl_dup(acl);
 				if (acl_alloc != NULL)
@@ -971,7 +975,7 @@ out:
 }
 
 int
-cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
+cont_iv_prop_update(void *ns, uuid_t iv_key_uuid, uuid_t cont_uuid,
 		    daos_prop_t *prop)
 {
 	struct cont_iv_entry	*iv_entry;
@@ -989,7 +993,7 @@ cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	uuid_copy(iv_entry->cont_uuid, cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
 
-	rc = cont_iv_update(ns, IV_CONT_PROP, cont_hdl_uuid, iv_entry,
+	rc = cont_iv_update(ns, IV_CONT_PROP, iv_key_uuid, iv_entry,
 			    entry_size, CRT_IV_SHORTCUT_TO_ROOT,
 			    CRT_IV_SYNC_EAGER, false /* retry */);
 	D_FREE(iv_entry);

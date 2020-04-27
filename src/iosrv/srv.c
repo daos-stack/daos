@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,6 @@
  *		container open/close.
  *
  * And a set of "offload XS" (dss_tgt_offload_xs_nr)
- * Now dss_tgt_offload_xs_nr can be [0, 2].
  * 1.2) The tasks for offload XS:
  *	ULT server for:
  *		IO request dispatch (TX coordinator, on 1st offload XS),
@@ -87,13 +86,25 @@
  */
 
 /** Number of dRPC xstreams */
-#define	DRPC_XS_NR	(1)
-/** Number of offload XS per target [0, 2] */
-unsigned int	dss_tgt_offload_xs_nr = 2;
-/** number of target (XS set) per server */
+#define DRPC_XS_NR	(1)
+/** Number of offload XS */
+unsigned int	dss_tgt_offload_xs_nr;
+/** Number of target (XS set) per server */
 unsigned int	dss_tgt_nr;
-/** number of system XS */
+/** Number of system XS */
 unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
+/**
+ * Flag of helper XS as a pool.
+ * false - the helper XS is near its main IO service XS. When there is one or
+ *         2 helper XS for each VOS target (dss_tgt_offload_xs_nr % dss_tgt_nr
+ *         == 0), we create each VOS target's IO service XS and then its helper
+ *         XS, and each VOS has its own helper XS.
+ * true  - When there is no enough cores/XS to create one or two helpers for
+ *         VOS target (dss_tgt_offload_xs_nr % dss_tgt_nr != 0), we firstly
+ *         create all VOS targets' IO service XS, and then all helper XS that
+ *         are shared used by all VOS targets.
+ */
+bool		dss_helper_pool;
 
 unsigned int
 dss_ctx_nr_get(void)
@@ -201,12 +212,15 @@ dss_ult_wakeup(struct dss_sleep_ult *dsu)
 {
 	ABT_thread thread;
 
-	ABT_thread_self(&thread);
-	/* Only others can force the ULT to exit */
-	D_ASSERT(thread != dsu->dsu_thread);
-	d_list_del_init(&dsu->dsu_list);
-	dsu->dsu_expire_time = 0;
-	ABT_thread_resume(dsu->dsu_thread);
+	/* Wakeup the thread if it was put in the sleep list */
+	if (!d_list_empty(&dsu->dsu_list)) {
+		ABT_thread_self(&thread);
+		/* Only others can force the ULT to exit */
+		D_ASSERT(thread != dsu->dsu_thread);
+		d_list_del_init(&dsu->dsu_list);
+		dsu->dsu_expire_time = 0;
+		ABT_thread_resume(dsu->dsu_thread);
+	}
 }
 
 /* Schedule the ULT(dtu->ult) and reschedule in @expire_secs seconds */
@@ -217,6 +231,7 @@ dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
 	ABT_thread		thread;
 	uint64_t		now = 0;
 
+	D_ASSERT(dsu != NULL);
 	ABT_thread_self(&thread);
 	D_ASSERT(thread == dsu->dsu_thread);
 
@@ -265,12 +280,13 @@ dss_rpc_cntr_enter(enum dss_rpc_cntr_id id)
 {
 	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(id);
 
-	/* TODO: add interface to calculate average workload and reset stime */
-	if (cntr->rc_stime == 0)
-		daos_gettime_coarse(&cntr->rc_stime);
-
+	daos_gettime_coarse(&cntr->rc_active_time);
 	cntr->rc_active++;
 	cntr->rc_total++;
+
+	/* TODO: add interface to calculate average workload and reset stime */
+	if (cntr->rc_stime == 0)
+		cntr->rc_stime = cntr->rc_active_time;
 }
 
 /**
@@ -289,27 +305,20 @@ dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool error)
 }
 
 static int
-dss_rpc_hdlr(crt_context_t *ctx, crt_rpc_t *rpc,
+dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	     void (*real_rpc_hdlr)(void *), void *arg)
 {
-	unsigned int		 mod_id = opc_get_mod_id(rpc->cr_opc);
-	struct dss_module	*module = dss_module_get(mod_id);
-	ABT_pool		*pools = arg;
-	ABT_pool		 pool;
-	int			 rc;
+	ABT_pool	*pools = arg;
+	ABT_pool	 pool;
+	int		 rc;
 
-	/*
-	 * The mod_id for the RPC originated from CART is 0xfe, and 'module'
-	 * will be NULL for this case.
-	 */
-	if (module != NULL && module->sm_mod_ops != NULL &&
-	    module->sm_mod_ops->dms_abt_pool_choose_cb)
-		pool = module->sm_mod_ops->dms_abt_pool_choose_cb(rpc, pools);
-	else
-		pool = pools[DSS_POOL_IO];
+	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
+		return 0;
 
-	rc = ABT_thread_create(pool, real_rpc_hdlr, rpc, ABT_THREAD_ATTR_NULL,
-			       NULL);
+	pool = pools[DSS_POOL_IO];
+
+	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
+			       ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
 
@@ -326,13 +335,42 @@ dss_nvme_poll_ult(void *args)
 	}
 }
 
-/**
- *
- * The handling process would like
- *
- * 1. The execution stream creates a private CRT context
- *
- * 2. Then polls the request from CRT context
+/*
+ * Wait all other ULTs exited before the srv handler ULT dss_srv_handler()
+ * exits, since the per-xstream TLS, comm context, NVMe context, etc. will
+ * be destroyed on server handler ULT exiting.
+ */
+static void
+wait_all_exited(struct dss_xstream *dx)
+{
+	size_t	total_size = 0, pool_size;
+	int	rc, i;
+
+	D_DEBUG(DB_TRACE, "XS(%d) draining ULTs.\n", dx->dx_xs_id);
+	while (1) {
+		for (i = 0; i < DSS_POOL_CNT; i++) {
+			rc = ABT_pool_get_total_size(dx->dx_pools[i],
+						     &pool_size);
+			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+			total_size += pool_size;
+		}
+		/*
+		 * Current running srv handler ULT is popped, so it's not
+		 * counted in pool size by argobots.
+		 */
+		if (total_size == 0)
+			break;
+
+		ABT_thread_yield();
+	}
+	D_DEBUG(DB_TRACE, "XS(%d) drained ULTs.\n", dx->dx_xs_id);
+}
+
+/*
+ * The server handler ULT first sets CPU affinity, initialize the per-xstream
+ * TLS, CRT(comm) context, NVMe context, creates the long-run ULTs (GC & NVMe
+ * poll), then it starts to poll the network requests in a loop until service
+ * shutdown.
  */
 static void
 dss_srv_handler(void *arg)
@@ -393,18 +431,25 @@ dss_srv_handler(void *arg)
 		if (dx->dx_xs_id < dss_sys_xs_nr) {
 			D_ASSERT(dx->dx_ctx_id == dx->dx_xs_id);
 		} else {
-			if (dx->dx_main_xs)
+			if (dx->dx_main_xs) {
 				D_ASSERTF(dx->dx_ctx_id ==
 					  dx->dx_tgt_id + dss_sys_xs_nr -
 					  DRPC_XS_NR,
 					  "incorrect ctx_id %d for xs_id %d\n",
 					  dx->dx_ctx_id, dx->dx_xs_id);
-			else
-				D_ASSERTF(dx->dx_ctx_id ==
-					  (dss_sys_xs_nr + dss_tgt_nr +
-					   dx->dx_tgt_id - DRPC_XS_NR),
-					  "incorrect ctx_id %d for xs_id %d\n",
-					  dx->dx_ctx_id, dx->dx_xs_id);
+			} else {
+				if (dss_helper_pool)
+					D_ASSERTF(dx->dx_ctx_id ==
+						  (dx->dx_xs_id - DRPC_XS_NR),
+					"incorrect ctx_id %d for xs_id %d\n",
+					dx->dx_ctx_id, dx->dx_xs_id);
+				else
+					D_ASSERTF(dx->dx_ctx_id ==
+						(dss_sys_xs_nr + dss_tgt_nr +
+						 dx->dx_tgt_id - DRPC_XS_NR),
+					"incorrect ctx_id %d for xs_id %d\n",
+					dx->dx_ctx_id, dx->dx_xs_id);
+			}
 		}
 	}
 
@@ -432,15 +477,15 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-		/*
-		 * TODO: This whole dss_srv_handler() needs be revised, it
-		 * should be a pure network poll ULT function, all other
-		 * stuff needs be moved out.
-		 */
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
 				       dss_nvme_poll_ult, NULL,
 				       ABT_THREAD_ATTR_NULL, NULL);
-		D_ASSERT(rc == ABT_SUCCESS);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
+			ABT_future_set(dx->dx_shutdown, dx);
+			wait_all_exited(dx);
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
+		}
 	}
 
 	dmi->dmi_xstream = dx;
@@ -473,35 +518,19 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		if (dss_xstream_exiting(dx)) {
-			check_sleep_list();
-			break;
-		}
-
 		check_sleep_list();
+
+		if (dss_xstream_exiting(dx))
+			break;
+
 		ABT_thread_yield();
 	}
-
 	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
-	/* Let's wait until all of queue ULTs has been executed, in case dmi_ctx
-	 * might be used by some other ULTs.
-	 */
-	while (1) {
-		size_t total_size = 0;
-		int i;
 
-		for (i = 0; i < DSS_POOL_CNT; i++) {
-			size_t pool_size;
-
-			rc = ABT_pool_get_total_size(dx->dx_pools[i],
-						     &pool_size);
-			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-			total_size += pool_size;
-		}
-		if (total_size == 0)
-			break;
-
-		ABT_thread_yield();
+	wait_all_exited(dx);
+	if (dmi->dmi_sp) {
+		srv_profile_destroy(dmi->dmi_sp);
+		dmi->dmi_sp = NULL;
 	}
 nvme_fini:
 	if (dx->dx_main_xs)
@@ -589,7 +618,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	ABT_thread_attr		attr = ABT_THREAD_ATTR_NULL;
 	int			rc = 0;
 	bool			comm; /* true to create cart ctx for RPC */
-	int			xs_offset;
+	int			xs_offset = 0;
 
 	/** allocate & init xstream configuration data */
 	dx = dss_xstream_alloc(cpus);
@@ -601,20 +630,37 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * The 2nd offload XS(if exists) does not need RPC communication
 	 * as it is only for EC/checksum/compress offloading.
 	 */
-	xs_offset = xs_id < dss_sys_xs_nr ? -1 : DSS_XS_OFFSET_IN_TGT(xs_id);
-	comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
+	if (dss_helper_pool) {
+		comm = (xs_id == 0) || (xs_id >= dss_sys_xs_nr &&
+				xs_id < (dss_sys_xs_nr + 2 * dss_tgt_nr));
+	} else {
+		int	helper_per_tgt;
+
+		helper_per_tgt = dss_tgt_offload_xs_nr / dss_tgt_nr;
+		D_ASSERT(helper_per_tgt == 0 || helper_per_tgt == 1 ||
+			 helper_per_tgt == 2);
+		xs_offset = xs_id < dss_sys_xs_nr ? -1 :
+				(((xs_id) - dss_sys_xs_nr) %
+				 (helper_per_tgt + 1));
+		comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
+	}
 	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
 	if (xs_id < dss_sys_xs_nr) {
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
 			 xs_id);
 	} else {
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_TGT_XS_NAME_FMT,
-			 dx->dx_tgt_id, xs_offset + 1);
+			 dx->dx_tgt_id, xs_id);
 	}
 	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
-	dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
+	if (dss_helper_pool) {
+		dx->dx_main_xs	= xs_id >= dss_sys_xs_nr &&
+				  xs_id < (dss_sys_xs_nr + dss_tgt_nr);
+	} else {
+		dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
+	}
 	dx->dx_dsc_started = false;
 	D_INIT_LIST_HEAD(&dx->dx_sleep_ult_list);
 
@@ -758,9 +804,12 @@ dss_xstreams_empty(void)
 bool
 dss_xstream_is_busy(void)
 {
-	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(DSS_RC_OBJ);
+	struct dss_rpc_cntr	*cntr = dss_rpc_cntr_get(DSS_RC_OBJ);
+	uint64_t		 cur_sec = 0;
 
-	return cntr->rc_active != 0;
+	daos_gettime_coarse(&cur_sec);
+	/* No IO requests for more than 5 seconds */
+	return cur_sec < (cntr->rc_active_time + 5);
 }
 
 static int
@@ -777,13 +826,14 @@ dss_start_xs_id(int xs_id)
 	if (numa_obj) {
 		idx = hwloc_bitmap_first(core_allocation_bitmap);
 		if (idx == -1) {
-			D_DEBUG(DB_TRACE,
-				"No core available for XS: %d", xs_id);
+			D_ERROR("No core available for XS: %d", xs_id);
 			return -DER_INVAL;
 		}
 		D_DEBUG(DB_TRACE,
 			"Choosing next available core index %d.", idx);
-		hwloc_bitmap_clr(core_allocation_bitmap, idx);
+		/* the 2nd system XS (drpc XS) will reuse the first XS' core */
+		if (xs_id != 0)
+			hwloc_bitmap_clr(core_allocation_bitmap, idx);
 
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
 		if (obj == NULL) {
@@ -791,7 +841,7 @@ dss_start_xs_id(int xs_id)
 			return -DER_INVAL;
 		}
 
-		hwloc_bitmap_asprintf(&cpuset, obj->allowed_cpuset);
+		hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
 		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
 		free(cpuset);
 	} else {
@@ -814,7 +864,7 @@ dss_start_xs_id(int xs_id)
 		}
 	}
 
-	rc = dss_start_one_xstream(obj->allowed_cpuset, xs_id);
+	rc = dss_start_one_xstream(obj->cpuset, xs_id);
 	if (rc)
 		return rc;
 
@@ -828,8 +878,6 @@ dss_xstreams_init(void)
 	int	i, xs_id;
 
 	D_ASSERT(dss_tgt_nr >= 1);
-	D_ASSERT(dss_tgt_offload_xs_nr == 0 || dss_tgt_offload_xs_nr == 1 ||
-		 dss_tgt_offload_xs_nr == 2);
 
 	/* initialize xstream-local storage */
 	rc = pthread_key_create(&dss_tls_key, NULL);
@@ -870,14 +918,27 @@ dss_xstreams_init(void)
 	/* start offload XS if any */
 	if (dss_tgt_offload_xs_nr == 0)
 		D_GOTO(out, rc);
-	for (i = 0; i < dss_tgt_nr; i++) {
-		int j;
-
-		for (j = 0; j < dss_tgt_offload_xs_nr; j++) {
-			xs_id = DSS_MAIN_XS_ID(i) + j + 1;
+	if (dss_helper_pool) {
+		for (i = 0; i < dss_tgt_offload_xs_nr; i++) {
+			xs_id = dss_sys_xs_nr + dss_tgt_nr + i;
 			rc = dss_start_xs_id(xs_id);
 			if (rc)
 				D_GOTO(out, rc);
+		}
+	} else {
+		D_ASSERTF(dss_tgt_offload_xs_nr % dss_tgt_nr == 0,
+			  "bad dss_tgt_offload_xs_nr %d, dss_tgt_nr %d\n",
+			  dss_tgt_offload_xs_nr, dss_tgt_nr);
+		for (i = 0; i < dss_tgt_nr; i++) {
+			int j;
+
+			for (j = 0; j < dss_tgt_offload_xs_nr / dss_tgt_nr;
+			     j++) {
+				xs_id = DSS_MAIN_XS_ID(i) + j + 1;
+				rc = dss_start_xs_id(xs_id);
+				if (rc)
+					D_GOTO(out, rc);
+			}
 		}
 	}
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -782,7 +782,7 @@ dtx_16(void **state)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = vos_fetch_begin(args->ctx.tc_co_hdl, args->oid, epoch,
-			     &dkey_iov, 1, &iod, false, &ioh);
+			     0, &dkey_iov, 1, &iod, false, &ioh);
 	/* The former DTX is not committed, so need to retry with leader. */
 	assert_int_equal(rc, -DER_INPROGRESS);
 

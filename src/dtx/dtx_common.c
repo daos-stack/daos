@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,7 +96,6 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 {
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 	struct ds_pool_child	*pool = cont->sc_pool;
-	ABT_future		 future = dbca->dbca_deregistering;
 	int			 rc;
 
 	D_ASSERT(dbca->dbca_deregistering != NULL);
@@ -123,7 +122,7 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 	 * flush done, then free the dbca.
 	 */
 	d_list_del_init(&dbca->dbca_link);
-	rc = ABT_future_set(future, NULL);
+	rc = ABT_future_set(dbca->dbca_deregistering, NULL);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed for DTX "
 		  "flush on "DF_UUID": rc = %d\n", DP_UUID(cont->sc_uuid), rc);
 }
@@ -261,11 +260,12 @@ int
 dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
 		 uint32_t intent, struct daos_shard_tgt *tgts, int tgts_cnt,
-		 struct dtx_leader_handle *dlh)
+		 bool cond_check, struct dtx_leader_handle *dlh)
 {
 	struct dtx_handle	*dth = &dlh->dlh_handle;
 	struct dtx_id		*dti_cos = NULL;
 	int			 dti_cos_count = 0;
+	uint32_t		 type = DCLT_PUNCH;
 	int			 i;
 
 	/* Single replica case. */
@@ -297,10 +297,12 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	 *	replicas can commit them before real modifications
 	 *	to avoid availability trouble.
 	 */
-	dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash,
-			intent == DAOS_INTENT_UPDATE ? DCLT_PUNCH :
-						       DCLT_PUNCH | DCLT_UPDATE,
-			DTX_THRESHOLD_COUNT, &dti_cos);
+
+	if (intent == DAOS_INTENT_PUNCH || cond_check)
+		type |= DCLT_UPDATE;
+
+	dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash, type,
+					 DTX_THRESHOLD_COUNT, &dti_cos);
 	if (dti_cos_count < 0) {
 		D_FREE(dlh->dlh_subs);
 		return dti_cos_count;
@@ -536,6 +538,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 		return result;
 
 	if (dlh->dlh_sub_cnt == 0) {
+		if (result == -DER_TX_RESTART)
+			dth->dth_renew = 1;
+
 		if (daos_is_zero_dti(&dth->dth_xid))
 			return result;
 
@@ -579,11 +584,11 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 				DP_DTI(&dth->dth_xid));
 			return -DER_AGAIN;
 		}
-	} else if (rc == -DER_AGAIN) {
+	} else if (rc == -DER_TX_RESTART) {
 		dth->dth_renew = 1;
 	}
 
-	if (result < 0 || rc < 0)
+	if (result < 0 || rc < 0 || !dth->dth_actived)
 		D_GOTO(out, result = result < 0 ? result : rc);
 
 	if (dth->dth_intent == DAOS_INTENT_PUNCH)

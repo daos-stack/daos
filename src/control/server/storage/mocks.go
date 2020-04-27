@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,50 +22,80 @@
 //
 package storage
 
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+	"time"
+
+	"github.com/daos-stack/daos/src/control/common"
+)
 
 func concat(base string, idx int32) string {
 	return fmt.Sprintf("%s-%d", base, idx)
 }
 
-func getIndex(varIdx ...int32) int32 {
-	if len(varIdx) == 0 {
-		varIdx = append(varIdx, 1)
-	}
-
-	return varIdx[0]
+func getRandIdx() int32 {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Int31()
 }
 
 func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
-	idx := getIndex(varIdx...)
+	idx := common.GetIndex(varIdx...)
 	tWarn := false
 	if idx > 0 {
 		tWarn = true
 	}
 	return &NvmeDeviceHealth{
-		Temp:     uint32(idx),
-		TempWarn: tWarn,
+		Temp:         uint32(getRandIdx()),
+		PowerCycles:  uint64(getRandIdx()),
+		PowerOnHours: uint64(getRandIdx()),
+		TempWarn:     tWarn,
 	}
 }
 
 func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
-	idx := getIndex(varIdx...)
+	idx := common.GetIndex(varIdx...)
 	return &NvmeNamespace{
-		ID:   idx,
-		Size: idx,
+		ID:   uint32(idx),
+		Size: uint64(idx),
 	}
 }
 
 func MockNvmeController(varIdx ...int32) *NvmeController {
-	idx := getIndex(varIdx...)
+	idx := common.GetIndex(varIdx...)
 
 	return &NvmeController{
 		Model:       concat("model", idx),
-		Serial:      concat("serial", idx),
+		Serial:      concat("serial", getRandIdx()),
 		PciAddr:     concat("pciAddr", idx),
 		FwRev:       concat("fwRev", idx),
 		SocketID:    idx,
 		HealthStats: MockNvmeDeviceHealth(idx),
 		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(idx)},
+	}
+}
+
+func MockScmModule(varIdx ...int32) *ScmModule {
+	idx := uint32(common.GetIndex(varIdx...))
+
+	return &ScmModule{
+		ChannelID:       idx,
+		ChannelPosition: idx,
+		ControllerID:    idx,
+		SocketID:        idx,
+		PhysicalID:      idx,
+		Capacity:        uint64(idx),
+	}
+}
+
+func MockScmNamespace(varIdx ...int32) *ScmNamespace {
+	idx := common.GetIndex(varIdx...)
+
+	return &ScmNamespace{
+		UUID:        common.MockUUID(varIdx...),
+		BlockDevice: fmt.Sprintf("/dev/pmem%d", idx),
+		Name:        fmt.Sprintf("pmem%d", idx),
+		NumaNode:    uint32(idx),
+		Size:        uint64(idx),
 	}
 }

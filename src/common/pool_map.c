@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -935,7 +935,7 @@ pool_map_finalise(struct pool_map *map)
  *
  * \param map		[IN]	The pool map to be initialised.
  * \param activate	[IN]	Activate pool components.
- * \param tree		[IN]	Componenent tree for the pool map.
+ * \param tree		[IN]	Component tree for the pool map.
  */
 static int
 pool_map_initialise(struct pool_map *map, bool activate,
@@ -1120,6 +1120,7 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 				if (!existed)
 					return -DER_INVAL;
 
+				D_ASSERT(parent != NULL);
 				if (parent->do_comp.co_status == PO_COMP_ST_NEW)
 					return -DER_INVAL;
 
@@ -1147,7 +1148,8 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 			}
 
 			nr++;
-			if (parent != NULL && parent->do_child_nr == nr) {
+			D_ASSERT(parent != NULL);
+			if (parent->do_child_nr == nr) {
 				parent++;
 				nr = 0;
 			}
@@ -1897,7 +1899,7 @@ pool_map_update_failed_cnt(struct pool_map *map)
 	struct pool_domain *root;
 	struct pool_fail_comp *fail_cnts = map->po_comp_fail_cnts;
 
-	memset(fail_cnts, 0, sizeof(fail_cnts) * map->po_domain_layers);
+	memset(fail_cnts, 0, sizeof(*fail_cnts) * map->po_domain_layers);
 
 	rc = pool_map_find_domain(map, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 	if (rc == 0)
@@ -1973,12 +1975,28 @@ pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 
 
 /**
- * Find all targets in DOWN state. Raft leader can use it drive target
- * rebuild one by one.
+ * Find all targets in UP state. (but not included in the pool for active I/O
+ * i.e. UP_IN). Raft leader can use it drive target reintegration/addition.
+ */
+int
+pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+		      unsigned int *tgt_cnt)
+{
+	struct find_tgts_param param;
+
+	memset(&param, 0, sizeof(param));
+	param.ftp_chk_status = 1;
+	param.ftp_status = PO_COMP_ST_UP;
+
+	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp, tgt_cnt);
+}
+
+/**
+ * Find all targets in UPIN state (included in the pool for active I/O).
  */
 int
 pool_map_find_upin_tgts(struct pool_map *map, struct pool_target **tgt_pp,
-		      unsigned int *tgt_cnt)
+			unsigned int *tgt_cnt)
 {
 	struct find_tgts_param param;
 
@@ -1986,8 +2004,7 @@ pool_map_find_upin_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 	param.ftp_chk_status = 1;
 	param.ftp_status = PO_COMP_ST_UPIN;
 
-	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
-				  tgt_cnt);
+	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp, tgt_cnt);
 }
 
 static void
@@ -2079,7 +2096,7 @@ pool_map_get_failed_cnt(struct pool_map *map, pool_comp_type_t type)
 
 	for (i = 0; i < map->po_domain_layers; ++i) {
 		if (map->po_comp_fail_cnts[i].comp_type == type) {
-			fail_cnt = map->po_comp_fail_cnts[i].comp_type;
+			fail_cnt = map->po_comp_fail_cnts[i].fail_cnt;
 			break;
 		}
 	}

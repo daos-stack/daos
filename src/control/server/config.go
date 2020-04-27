@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,9 @@ import (
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -43,14 +45,20 @@ import (
 const (
 	defaultRuntimeDir   = "/var/run/daos_server"
 	defaultConfigPath   = "../etc/daos_server.yml"
-	defaultSystemName   = "daos_server"
-	defaultPort         = 10001
 	configOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
 )
 
 type networkProviderValidation func(string, string) error
 type networkNUMAValidation func(string, uint) error
+
+// ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
+// These settings bring coherence between the client and server network configuration.
+type ClientNetworkCfg struct {
+	Provider        string
+	CrtCtxShareAddr uint32
+	CrtTimeout      uint32
+}
 
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
@@ -67,8 +75,6 @@ type Configuration struct {
 	ControlLogFile      string                    `yaml:"control_log_file"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string                    `yaml:"helper_log_file"`
-	UserName            string                    `yaml:"user_name"`
-	GroupName           string                    `yaml:"group_name"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
 
 	// duplicated in ioserver.Config
@@ -155,11 +161,39 @@ func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 	return c
 }
 
+// WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
+func (c *Configuration) WithCrtCtxShareAddr(addr uint32) *Configuration {
+	c.Fabric.CrtCtxShareAddr = addr
+	for _, srv := range c.Servers {
+		srv.Fabric.Update(c.Fabric)
+	}
+	return c
+}
+
+// WithCrtTimeout sets the top-level CrtTimeout.
+func (c *Configuration) WithCrtTimeout(timeout uint32) *Configuration {
+	c.Fabric.CrtTimeout = timeout
+	for _, srv := range c.Servers {
+		srv.Fabric.Update(c.Fabric)
+	}
+	return c
+}
+
 // NB: In order to ease maintenance, the set of chained config functions
 // which modify nested ioserver configurations should be kept above this
 // one as a reference for which things should be set/updated in the next
 // function.
-func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
+func (c *Configuration) updateServerConfig(cfgPtr **ioserver.Config) {
+	// If we somehow get a nil config, we can't return an error, and
+	// we don't want to cause a segfault. Instead, just create an
+	// empty config and return early, so that it eventually fails
+	// validation.
+	if *cfgPtr == nil {
+		*cfgPtr = &ioserver.Config{}
+		return
+	}
+
+	srvCfg := *cfgPtr
 	srvCfg.Fabric.Update(c.Fabric)
 	srvCfg.SystemName = c.SystemName
 	srvCfg.SocketDir = c.SocketDir
@@ -169,8 +203,8 @@ func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
 // WithServers sets the list of IOServer configurations.
 func (c *Configuration) WithServers(srvList ...*ioserver.Config) *Configuration {
 	c.Servers = srvList
-	for _, srvCfg := range c.Servers {
-		c.updateServerConfig(srvCfg)
+	for i := range c.Servers {
+		c.updateServerConfig(&c.Servers[i])
 	}
 	return c
 }
@@ -265,31 +299,14 @@ func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
 	return c
 }
 
-// WithUserName sets the user to run as.
-func (c *Configuration) WithUserName(name string) *Configuration {
-	c.UserName = name
-	return c
-}
-
-// WithGroupName sets the group to run as.
-func (c *Configuration) WithGroupName(name string) *Configuration {
-	c.GroupName = name
-	return c
-}
-
-// parse decodes YAML representation of configuration
-func (c *Configuration) parse(data []byte) error {
-	return yaml.Unmarshal(data, c)
-}
-
 // newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
-		SystemName:         defaultSystemName,
+		SystemName:         build.DefaultSystemName,
 		SocketDir:          defaultRuntimeDir,
-		AccessPoints:       []string{fmt.Sprintf("localhost:%d", defaultPort)},
-		ControlPort:        defaultPort,
+		AccessPoints:       []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
+		ControlPort:        build.DefaultControlPort,
 		TransportConfig:    security.DefaultServerTransportConfig(),
 		Hyperthreads:       false,
 		Path:               defaultConfigPath,
@@ -317,14 +334,14 @@ func (c *Configuration) Load() error {
 		return errors.WithMessage(err, "reading file")
 	}
 
-	if err = c.parse(bytes); err != nil {
+	if err = yaml.UnmarshalStrict(bytes, c); err != nil {
 		return errors.WithMessage(err, "parse failed; config contains invalid "+
 			"parameters and may be out of date, see server config examples")
 	}
 
 	// propagate top-level settings to server configs
-	for _, srvCfg := range c.Servers {
-		c.updateServerConfig(srvCfg)
+	for i := range c.Servers {
+		c.updateServerConfig(&c.Servers[i])
 	}
 
 	return nil
@@ -380,7 +397,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 	// append the user-friendly message to any error
 	// TODO: use a fault/resolution
 	defer func() {
-		if err != nil {
+		if err != nil && !fault.HasResolution(err) {
 			examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
 			err = errors.WithMessage(FaultBadConfig,
 				err.Error()+", examples: "+examplesPath)
@@ -444,5 +461,75 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 			}
 		}
 	}
+
+	if len(c.Servers) > 1 {
+		if err := validateMultiServerConfig(log, c); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateMultiServerConfig performs an extra level of validation
+// for multi-server configs. The goal is to ensure that each instance
+// has unique values for resources which cannot be shared (e.g. log files,
+// fabric configurations, PCI devices, etc.)
+func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
+	if len(c.Servers) < 2 {
+		return nil
+	}
+
+	seenValues := make(map[string]int)
+	seenScmSet := make(map[string]int)
+	seenBdevSet := make(map[string]int)
+
+	for idx, srv := range c.Servers {
+		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
+			srv.Fabric.Provider,
+			srv.Fabric.Interface,
+			srv.Fabric.InterfacePort)
+
+		if seenIn, exists := seenValues[fabricConfig]; exists {
+			log.Debugf("%s in %d duplicates %d", fabricConfig, idx, seenIn)
+			return FaultConfigDuplicateFabric(idx, seenIn)
+		}
+		seenValues[fabricConfig] = idx
+
+		if srv.LogFile != "" {
+			logConfig := fmt.Sprintf("log_file:%s", srv.LogFile)
+			if seenIn, exists := seenValues[logConfig]; exists {
+				log.Debugf("%s in %d duplicates %d", logConfig, idx, seenIn)
+				return FaultConfigDuplicateLogFile(idx, seenIn)
+			}
+			seenValues[logConfig] = idx
+		}
+
+		scmConf := srv.Storage.SCM
+		mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.MountPoint)
+		if seenIn, exists := seenValues[mountConfig]; exists {
+			log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
+			return FaultConfigDuplicateScmMount(idx, seenIn)
+		}
+		seenValues[mountConfig] = idx
+
+		for _, dev := range scmConf.DeviceList {
+			if seenIn, exists := seenScmSet[dev]; exists {
+				log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
+				return FaultConfigDuplicateScmDeviceList(idx, seenIn)
+			}
+			seenScmSet[dev] = idx
+		}
+
+		bdevConf := srv.Storage.Bdev
+		for _, dev := range bdevConf.DeviceList {
+			if seenIn, exists := seenBdevSet[dev]; exists {
+				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
+				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
+			}
+			seenBdevSet[dev] = idx
+		}
+	}
+
 	return nil
 }

@@ -30,6 +30,8 @@
 #include <gurt/common.h>
 #include <gurt/debug.h>
 
+#define ACE_FIELD_DELIM		':'
+
 /*
  * Characters representing access flags
  */
@@ -39,11 +41,26 @@
 #define FLAG_POOL_INHERIT_CH	'P'
 
 /*
+ * Verbose strings representing access flags
+ */
+#define FLAG_GROUP_STR		"Group"
+#define FLAG_ACCESS_SUCCESS_STR	"Access-Success"
+#define FLAG_ACCESS_FAIL_STR	"Access-Failure"
+#define FLAG_POOL_INHERIT_STR	"Pool-Inherit"
+
+/*
  * Characters representing access types
  */
 #define ACCESS_ALLOW_CH		'A'
 #define ACCESS_AUDIT_CH		'U'
 #define ACCESS_ALARM_CH		'L'
+
+/*
+ * Verbose strings representing access types
+ */
+#define ACCESS_ALLOW_STR	"Allow"
+#define ACCESS_AUDIT_STR	"Audit"
+#define ACCESS_ALARM_STR	"Alarm"
 
 /*
  * Characters representing permissions
@@ -59,15 +76,32 @@
 #define PERM_SET_OWNER_CH	'o'
 
 /*
+ * Verbose strings representing permissions
+ */
+#define PERM_READ_STR		"Read"
+#define PERM_WRITE_STR		"Write"
+#define PERM_CREATE_CONT_STR	"Create-Container"
+#define PERM_DEL_CONT_STR	"Delete-Container"
+#define PERM_GET_PROP_STR	"Get-Prop"
+#define PERM_SET_PROP_STR	"Set-Prop"
+#define PERM_GET_ACL_STR	"Get-ACL"
+#define PERM_SET_ACL_STR	"Set-ACL"
+#define PERM_SET_OWNER_STR	"Set-Owner"
+
+/*
  * States used to parse a formatted ACE string
  */
 enum ace_str_state {
+	ACE_FIRST_ACCESS_TYPE,
 	ACE_ACCESS_TYPES,
+	ACE_FIRST_FLAG,
 	ACE_FLAGS,
 	ACE_IDENTITY,
+	ACE_FIRST_PERM,
 	ACE_PERMS,
 	ACE_DONE,
-	ACE_INVALID
+	ACE_INVALID,
+	ACE_TRUNC,
 };
 
 static enum ace_str_state
@@ -203,12 +237,15 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 	struct daos_ace			*new_ace = NULL;
 	char				*pch;
 	char				*field;
-	char				delimiter[] = ":";
+	char				delimiter[2];
 	enum ace_str_state		state = ACE_ACCESS_TYPES;
 	uint16_t			flags = 0;
 	uint8_t				access_types = 0;
 	uint64_t			perms = 0;
 	int				rc = 0;
+
+	/* delimiter needs to be a string for strtok */
+	snprintf(delimiter, sizeof(delimiter), "%c", ACE_FIELD_DELIM);
 
 	pch = strpbrk(str, delimiter);
 	field = str;
@@ -260,6 +297,7 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 		D_GOTO(error, rc = -DER_INVAL);
 	}
 
+	D_ASSERT(new_ace != NULL);
 	new_ace->dae_access_flags = flags;
 	new_ace->dae_access_types = access_types;
 
@@ -341,7 +379,7 @@ daos_ace_get_principal_str(struct daos_ace *ace)
 }
 
 static int
-write_char(char **pen, char ch, ssize_t *remaining_len)
+write_char(char ch, char **pen, size_t *remaining_len)
 {
 	if (*remaining_len <= 1) /* leave a null termination char in buffer */
 		return -DER_TRUNC;
@@ -390,20 +428,42 @@ perms_unified(struct daos_ace *ace)
 	return true;
 }
 
-#define	WRITE_CH_FOR_BIT(bits, bit_name)				\
+#define	WRITE_BIT(bits, bit_name)					\
 	do {								\
 		if (bits & DAOS_ACL_ ## bit_name)			\
-			rc = write_char(&pen, bit_name ## _CH,		\
+			rc = write_char(bit_name ## _CH, &pen,		\
 					&remaining_len);		\
 	} while (0)
+
+#define	WRITE_DIVIDER(_pen, _remaining_len)				\
+	do {								\
+		rc = write_char(ACE_FIELD_DELIM, _pen, _remaining_len);	\
+	} while (0)
+
+
+static int
+write_str(const char *str, char **pen, size_t *remaining_len)
+{
+	int	written;
+
+	written = snprintf(*pen, *remaining_len, "%s", str);
+	if (written >= *remaining_len) {
+		*remaining_len = 0;
+		return -DER_TRUNC;
+	}
+
+	*pen += written;
+	*remaining_len -= written;
+
+	return 0;
+}
 
 int
 daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 {
-	ssize_t		remaining_len = buf_len;
+	size_t		remaining_len = buf_len;
 	char		*pen = buf;
 	uint64_t	perms;
-	ssize_t		written;
 	int		rc = 0;
 
 	if (ace == NULL || buf == NULL || buf_len == 0) {
@@ -417,7 +477,6 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 		return -DER_INVAL;
 	}
 
-
 	if (!perms_unified(ace)) {
 		D_INFO("Can't create string for ACE with different perms for "
 		       "different access types\n");
@@ -426,38 +485,294 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 
 	memset(buf, 0, buf_len);
 
-	WRITE_CH_FOR_BIT(ace->dae_access_types, ACCESS_ALLOW);
-	WRITE_CH_FOR_BIT(ace->dae_access_types, ACCESS_AUDIT);
-	WRITE_CH_FOR_BIT(ace->dae_access_types, ACCESS_ALARM);
+	/* Access Type */
+	WRITE_BIT(ace->dae_access_types, ACCESS_ALLOW);
+	WRITE_BIT(ace->dae_access_types, ACCESS_AUDIT);
+	WRITE_BIT(ace->dae_access_types, ACCESS_ALARM);
 
-	rc = write_char(&pen, ':', &remaining_len);
+	WRITE_DIVIDER(&pen, &remaining_len);
 
-	WRITE_CH_FOR_BIT(ace->dae_access_flags, FLAG_GROUP);
-	WRITE_CH_FOR_BIT(ace->dae_access_flags, FLAG_ACCESS_SUCCESS);
-	WRITE_CH_FOR_BIT(ace->dae_access_flags, FLAG_ACCESS_FAIL);
-	WRITE_CH_FOR_BIT(ace->dae_access_flags, FLAG_POOL_INHERIT);
+	/* Flags */
+	WRITE_BIT(ace->dae_access_flags, FLAG_GROUP);
+	WRITE_BIT(ace->dae_access_flags, FLAG_ACCESS_SUCCESS);
+	WRITE_BIT(ace->dae_access_flags, FLAG_ACCESS_FAIL);
+	WRITE_BIT(ace->dae_access_flags, FLAG_POOL_INHERIT);
 
-	written = snprintf(pen, remaining_len, ":%s:",
-			   daos_ace_get_principal_str(ace));
-	if (written > remaining_len) {
-		remaining_len = 0;
-	} else {
-		pen += written;
-		remaining_len -= written;
-	}
+	WRITE_DIVIDER(&pen, &remaining_len);
 
+	/* Principal */
+	rc = write_str(daos_ace_get_principal_str(ace), &pen, &remaining_len);
+
+	WRITE_DIVIDER(&pen, &remaining_len);
+
+	/* Permissions */
 	perms = get_perms(ace);
-	WRITE_CH_FOR_BIT(perms, PERM_READ);
-	WRITE_CH_FOR_BIT(perms, PERM_WRITE);
-	WRITE_CH_FOR_BIT(perms, PERM_CREATE_CONT);
-	WRITE_CH_FOR_BIT(perms, PERM_DEL_CONT);
-	WRITE_CH_FOR_BIT(perms, PERM_GET_PROP);
-	WRITE_CH_FOR_BIT(perms, PERM_SET_PROP);
-	WRITE_CH_FOR_BIT(perms, PERM_GET_ACL);
-	WRITE_CH_FOR_BIT(perms, PERM_SET_ACL);
-	WRITE_CH_FOR_BIT(perms, PERM_SET_OWNER);
+	WRITE_BIT(perms, PERM_READ);
+	WRITE_BIT(perms, PERM_WRITE);
+	WRITE_BIT(perms, PERM_CREATE_CONT);
+	WRITE_BIT(perms, PERM_DEL_CONT);
+	WRITE_BIT(perms, PERM_GET_PROP);
+	WRITE_BIT(perms, PERM_SET_PROP);
+	WRITE_BIT(perms, PERM_GET_ACL);
+	WRITE_BIT(perms, PERM_SET_ACL);
+	WRITE_BIT(perms, PERM_SET_OWNER);
 
 	return rc;
+}
+
+static const char *
+get_verbose_principal_str(const char *name)
+{
+	if (strncmp(name, DAOS_ACL_PRINCIPAL_OWNER,
+		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
+		return "Owner";
+	if (strncmp(name, DAOS_ACL_PRINCIPAL_OWNER_GRP,
+		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
+		return "Owner-Group";
+	if (strncmp(name, DAOS_ACL_PRINCIPAL_EVERYONE,
+		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
+		return "Everyone";
+
+	return name;
+}
+
+static enum ace_str_state
+process_verbose_access_ch(const char ch, char **pen, size_t *remaining_len,
+			  bool first)
+{
+	const char	*str;
+	int		rc = 0;
+
+	switch (ch) {
+	case ACCESS_ALLOW_CH:
+		str = ACCESS_ALLOW_STR;
+		break;
+	case ACCESS_AUDIT_CH:
+		str = ACCESS_AUDIT_STR;
+		break;
+	case ACCESS_ALARM_CH:
+		str = ACCESS_ALARM_STR;
+		break;
+	case ACE_FIELD_DELIM:
+		if (first)
+			return ACE_INVALID;
+		WRITE_DIVIDER(pen, remaining_len);
+		if (rc == -DER_TRUNC)
+			return ACE_TRUNC;
+		return ACE_FIRST_FLAG;
+	case '\0':
+	default:
+		return ACE_INVALID;
+	}
+
+	if (!first)
+		write_char('/', pen, remaining_len);
+	rc = write_str(str, pen, remaining_len);
+	if (rc == -DER_TRUNC)
+		return ACE_TRUNC;
+
+	return ACE_ACCESS_TYPES;
+}
+
+static enum ace_str_state
+process_verbose_flag_ch(const char ch, char **pen, size_t *remaining_len,
+			bool first)
+{
+	const char	*str;
+	int		rc = 0;
+
+	switch (ch) {
+	case FLAG_GROUP_CH:
+		str = FLAG_GROUP_STR;
+		break;
+	case FLAG_ACCESS_FAIL_CH:
+		str = FLAG_ACCESS_FAIL_STR;
+		break;
+	case FLAG_ACCESS_SUCCESS_CH:
+		str = FLAG_ACCESS_SUCCESS_STR;
+		break;
+	case ACE_FIELD_DELIM:
+		WRITE_DIVIDER(pen, remaining_len);
+		if (rc == -DER_TRUNC)
+			return ACE_TRUNC;
+		return ACE_IDENTITY;
+	case '\0':
+	default:
+		return ACE_INVALID;
+	}
+
+	if (!first)
+		write_char('/', pen, remaining_len);
+	rc = write_str(str, pen, remaining_len);
+	if (rc == -DER_TRUNC)
+		return ACE_TRUNC;
+
+	return ACE_FLAGS;
+}
+
+static enum ace_str_state
+process_verbose_perms_ch(const char ch, char **pen, size_t *remaining_len,
+			 bool first)
+{
+	const char	*str;
+	int		rc = 0;
+
+	switch (ch) {
+	case PERM_READ_CH:
+		str = PERM_READ_STR;
+		break;
+	case PERM_WRITE_CH:
+		str = PERM_WRITE_STR;
+		break;
+	case PERM_CREATE_CONT_CH:
+		str = PERM_CREATE_CONT_STR;
+		break;
+	case PERM_DEL_CONT_CH:
+		str = PERM_DEL_CONT_STR;
+		break;
+	case PERM_GET_PROP_CH:
+		str = PERM_GET_PROP_STR;
+		break;
+	case PERM_SET_PROP_CH:
+		str = PERM_SET_PROP_STR;
+		break;
+	case PERM_GET_ACL_CH:
+		str = PERM_GET_ACL_STR;
+		break;
+	case PERM_SET_ACL_CH:
+		str = PERM_SET_ACL_STR;
+		break;
+	case PERM_SET_OWNER_CH:
+		str = PERM_SET_OWNER_STR;
+		break;
+	case '\0':
+		if (first) {
+			rc = write_str("No-Access", pen, remaining_len);
+			if (rc == -DER_TRUNC)
+				return ACE_TRUNC;
+		}
+		return ACE_DONE;
+	case ACE_FIELD_DELIM:
+	default:
+		return ACE_INVALID;
+	}
+
+	if (!first)
+		write_char('/', pen, remaining_len);
+	rc = write_str(str, pen, remaining_len);
+	if (rc == -DER_TRUNC)
+		return ACE_TRUNC;
+
+	return ACE_PERMS;
+}
+
+static enum ace_str_state
+process_verbose_identity(const char *pch, char **pen, size_t *remaining_len,
+			 const char **end)
+{
+	char	identity[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
+	size_t	len;
+	char	delim[2];
+	int	rc;
+
+	snprintf(delim, sizeof(delim), "%c", ACE_FIELD_DELIM);
+
+	*end = strpbrk(pch, delim);
+	if (*end == NULL)
+		return ACE_INVALID;
+
+	len = *end - pch;
+	strncpy(identity, pch, len);
+	identity[len] = '\0';
+
+	if (!daos_acl_principal_is_valid(identity))
+		return ACE_INVALID;
+
+	rc = write_str(get_verbose_principal_str(identity), pen, remaining_len);
+	if (rc == -DER_TRUNC)
+		return ACE_TRUNC;
+
+	WRITE_DIVIDER(pen, remaining_len);
+	if (rc == -DER_TRUNC)
+		return ACE_TRUNC;
+
+	return ACE_FIRST_PERM;
+}
+
+int
+daos_ace_str_get_verbose(const char *ace_str, char *buf, size_t buf_len)
+{
+	const char		*pch = ace_str;
+	enum ace_str_state	state = ACE_FIRST_ACCESS_TYPE;
+	char			*pen = buf;
+	size_t			remaining_len = buf_len;
+	bool			first = false;
+
+
+	if (buf == NULL || buf_len == 0) {
+		D_ERROR("Empty or NULL buffer\n");
+		return -DER_INVAL;
+	}
+
+	if (ace_str == NULL) {
+		D_ERROR("NULL ACE string\n");
+		return -DER_INVAL;
+	}
+
+	memset(buf, 0, buf_len);
+
+	while (state != ACE_INVALID &&
+	       state != ACE_DONE &&
+	       state != ACE_TRUNC) {
+		switch (state) {
+		case ACE_FIRST_ACCESS_TYPE:
+			first = true;
+			/* fall through */
+		case ACE_ACCESS_TYPES:
+			state = process_verbose_access_ch(*pch, &pen,
+							  &remaining_len,
+							  first);
+			break;
+		case ACE_FIRST_FLAG:
+			first = true;
+			/* fall through */
+		case ACE_FLAGS:
+			state = process_verbose_flag_ch(*pch, &pen,
+							&remaining_len,
+							first);
+			break;
+		case ACE_IDENTITY:
+			state = process_verbose_identity(pch, &pen,
+							 &remaining_len, &pch);
+			break;
+		case ACE_FIRST_PERM:
+			first = true;
+			/* fall through */
+		case ACE_PERMS:
+			state = process_verbose_perms_ch(*pch,  &pen,
+							 &remaining_len,
+							 first);
+			break;
+		default:
+			D_INFO("Bad state: %u\n", state);
+			state = ACE_INVALID;
+		}
+
+		pch++;
+		first = false;
+	}
+
+	if (state == ACE_INVALID) {
+		D_INFO("Invalid ACE string\n");
+		return -DER_INVAL;
+	}
+
+	if (state == ACE_TRUNC) {
+		D_INFO("String was truncated\n");
+		return -DER_TRUNC;
+	}
+
+	return 0;
 }
 
 int

@@ -12,20 +12,15 @@ server_config:
     servers:
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
-        scm_size: 45
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
-    createmode:
-        mode_RW:
-             mode: 146
-    createset:
-        group: daos_server
-    createsize:
-        scm_size: 40000000000
-        nvme_size: 400000000000
-    createsvc:
-        svcn: 1
+    mode: 146
+    name: daos_server
+    scm_size: 40000000000
+    nvme_size: 400000000000
+    svcn: 1
+    control_method: dmg
 ior:
     client_processes:
       np: 16

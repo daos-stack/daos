@@ -1,16 +1,13 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
  test_servers:
   - server-A
 server_config:
  name: daos_server
+pool:
+ control_method: dmg
+ mode: 511
+ scm_size: 1073741824
 tests:
- modes:
-  modeall:
-   mode:
-    - 511
-    - PASS
  uids: !mux
   validuid:
    uid:
@@ -38,4 +35,3 @@ tests:
    setname:
     - complete_rubbish
     - FAIL
-

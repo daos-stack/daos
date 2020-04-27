@@ -135,60 +135,44 @@ Erasure codes may be used to improve resilience, with lower space overhead. This
 feature is still working in progress.
 
 ### Checksum
-#### Checksum Container Setup
-End-to-end checksums are enabled and configured while creating a
-container using the following container properties.
 
-- `DAOS_PROP_CO_CSUM`: Type of checksum algorithm to use (Default is
-none). The current plan is to support the CRC32 and CRC64 algorithms as
-the different checksum types. These are supported by the ISA-L library
-so that hardware acceleration might be available. Additional checksum
-types can be added later.
+The checksum feature attempts to provide end-to-end data integrity. On an update, the DAOS client calculates checksums for user data and sends with the RPC to the DAOS server. The DAOS server returns the checksum with the data on a fetch so the DAOS client can verify the integrity of the data. See [End-to-end Data Integrity Overiew](../../doc/overview/data_integrity.md) for more information.
 
-- `DAOS_PROP_CO_CSUM_CHUNK_SIZE`: Checksums will be calculated for a
-subset of the data. The size of this subset will be configured as the
-"Chunksize". Special care is required, so that chunk sizes align well
-with record sizes and erasure code alignments.
+Checksums are configured at the container level and when a client opens a container, the checksum properties will be queried automatically, and, if enabled, both the server and client will init and hold a reference to a [daos_csummer](src/common/README.md) in ds_cont_hdl and dc_cont respectively.
 
-- `DAOS_PROP_CO_CSUM_SERVER_VERIFY`: Because of the probable decrease to
-IOPS, in most cases, it is not desired to verify checksums on an object
-update on the server side. It is sufficient for the client to verify on
-a fetch because any data corruption, whether on the object update,
-storage, or fetch, will be caught. However, there is an advantage to
-knowing if corruption happens on an update. The update would fail
-right away, indicating to the client to retry the RPC or report an
-error to upper levels.
-
-When a client opens a container, the checksum properties will be queried
-automatically, and, if enabled, both the server and client will init and
-hold a reference to a [daos_csummer](src/common/README.md) in
-ds_cont_hdl and dc_cont respectively.
+For Array Value Types, the DAOS server might need to calculate new checksums for requested extents. After extents are fetched by the server object layer, the checksums srv_csum
 
 #### Object Update
 On an object update (`dc_obj_update`) the client will calculate checksums
-using the data in the sgl as described by an iod (`daos_csummer_calc`).
-Memory will be allocated for the checksums and the daos_csum_buf_t
-structures that represent the checksums. The checksums will be sent to
-the server as part of the IOD and the server will store in [VOS]
-(src/vos/README.md).
+using the data in the sgl as described by an iod (`daos_csummer_calc_iod`).
+Memory will be allocated for the checksums and the iod checksum
+structures that represent the checksums (`dcs_iod_csums`). The checksums will be sent to the server as part of the IOD and the server will store in [VOS](src/vos/README.md).
 
-#### Object Fetch
-On handling an object fetch (ds_obj_rw_handler), the server will allocate
-memory for the checksums and daos_csum_buf_t structures. Then during the
-`vos_fetch_begin` stage, the checksums will be fetched from [VOS]
-(src/vos/README.md).
+#### Object Fetch - Server
+On handling an object fetch (`ds_obj_rw_handler`), the server will allocate memory for the checksums and iod checksum structures. Then during the `vos_fetch_begin` stage, the checksums will be fetched from [VOS](src/vos/README.md). For Array Value Types, the extents fetched will need to be compared to the requested extent and new checksum might need to be calculated. `ds_csum_add2iod` will look at the fetched bio_sglist and the iod request to determine if the stored checksums for the request are sufficient or if new ones need to be calculated. The function `ds_csum_calc_needed` holds the logic to determine this.
+##### `ds_csum_calc_needed` Logic
+As long as a request includes only chunks for which a checksum is derived, then the server needs only to return the correct checksums with the extent. The following diagrams include examples for which the server needs to only return the correct checksums. In the top example, the request matches the previously written extent exactly. In the bottom example, the server must return the chunks 4-7 and 8-11 from the extent at epoch 2 with its two checksums, and chunk 12-15 from the extent at epoch 1 with its checksum.
 
-In the client RPC callback, the client will calculate checksums for the
-data fetched and compare to the checksums fetched
-(`daos_csummer_verify`).
+![](../../doc/graph/data_integrity/aligned_request_1.png)
+![](../../doc/graph/data_integrity/aligned_request_2.png)
 
-#### Note!
-Currently the I/O Descriptor (`daos_iod_t`), which is part of the public
-API, is used to contain the checksums along with other info about the
-data. It is expected that in the future this will go away, but for now it
-should be understood that the checksum fields are for internal use only.
-If they are set by a caller, a warning will be logged and the values
-will be overwritten.
+In the following diagram the requested extent includes several partial chunks from extents of different epochs. There are several resulting chunks with no appropriate checksums. In this case, the server must calculate new checksums for the chunks requested and use the stored checksums to verify the original chunks.
+
+![](../../doc/graph/data_integrity/unaligned_request.png)
+
+To make the request :
+- Chunk 2-3 will come from epoch 1
+- Chunk 4-7 will be from epoch 2 & 4
+- Chunk 8-11 will be from epoch 3 & 4
+- Chunk 12-13 will come from epoch 3
+For any derived chunk from more than one epoch, the server will calculate a new checksum. For any partial chunk used (chunk 12-13 comes from epoch 3, but the original chunk from epoch 3 is 12-15; therefore the stored checksum is for 12-15), the server will calculate a new checksum.
+
+Anytime the server calculates a new checksum; it will use the stored checksum to verify the original chunks. For example, after calculating the checksum for chunk 12-13, the server will use the stored checksum to verify chunk 12-15 from epoch 3.
+
+</div>
+
+#### Object Fetch - Client
+In the client RPC callback, the client will calculate checksums for the data fetched and compare to the checksums fetched (`daos_csummer_verify`).
 
 ## Object Sharding
 

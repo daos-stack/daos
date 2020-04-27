@@ -30,9 +30,6 @@
 #include "srv_layout.h"
 
 /** Root KVS */
-RDB_STRING_KEY(ds_pool_prop_, uid);
-RDB_STRING_KEY(ds_pool_prop_, gid);
-RDB_STRING_KEY(ds_pool_prop_, mode);
 RDB_STRING_KEY(ds_pool_prop_, map_version);
 RDB_STRING_KEY(ds_pool_prop_, map_buffer);
 RDB_STRING_KEY(ds_pool_prop_, map_uuids);
@@ -76,6 +73,9 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_PO_OWNER_GROUP,
 		.dpe_str	= "NOBODY@",
+	}, {
+		.dpe_type	= DAOS_PROP_PO_SVC_LIST,
+		.dpe_val_ptr	= NULL,
 	}
 };
 

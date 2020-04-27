@@ -26,6 +26,49 @@ to 2000).
 The function d_errstr() is provided in the API to convert an error
 number to an error message.
 
+## Log Files
+
+On the server side, there are three log files created as part of normal
+server operations:
+
+|Component|Config Parameter|Example Config Value|
+|-|-|-|
+|Control Plane|control_log_file|/tmp/daos_control.log|
+|Data Plane|log_file|/tmp/daos_server.log|
+|[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
+|agent|log_file|/tmp/daos_agent.log|
+
+### Control Plane Log
+
+The default log level for the control plane is INFO. The following
+levels may be set using the `control_log_mask` config parameter:
+
+* DEBUG
+* INFO
+* ERROR
+
+### Data Plane Log
+
+Data Plane (`daos_io_server`) logging is configured on a per-instance
+basis. In other words, each section under the `servers:` section must
+have its own logging configuration. The `log_file` config parameter
+is converted to a D_LOG_FILE environment variable value. For more
+detail, please see the [Debugging System](#debugging-system)
+section of this document.
+
+### Privileged Helper Log
+
+By default, the privileged helper only emits ERROR-level logging which
+is captured by the control plane and included in that log. If the
+`helper_log_file` parameter is set in the server config, then
+DEBUG-level logging will be sent to the specified file.
+
+### Daos Agent Log
+
+If the `log_file` config parameter is set in the agent config, then
+DEBUG-level logging will be sent to the specified file.
+
+
 ## Debugging System
 
 DAOS uses the debug system defined in
@@ -160,7 +203,13 @@ This section to be updated in a future revision.
 ## Bug Report
 
 Bugs should be reported through our issue tracker[^1] with a test case
-to reproduce the issue (when applicable) and debug
-logs.
+to reproduce the issue (when applicable) and debug logs.
+
+After creating a ticket, logs should be gathered from the locations
+described in the [Log Files](#log-files) section of this document and
+attached to the ticket.
+
+To avoid problems with attaching large files, please attach the logs
+in a compressed container format, such as .zip or .tar.bz2.
 
 [^1]: https://jira.hpdd.intel.com

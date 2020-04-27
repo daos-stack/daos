@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -261,7 +261,12 @@ dc_pool_create(tse_task_t *task)
 	}
 
 	svr_ep.ep_grp = state->sys->sy_group;
-	rsvc_client_choose(&state->client, &svr_ep);
+	rc = rsvc_client_choose(&state->client, &svr_ep);
+	if (rc != 0) {
+		D_ERROR("%s: cannot find management service: "DF_RC"\n",
+			args->grp, DP_RC(rc));
+		goto out_client;
+	}
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_CREATE, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
@@ -411,7 +416,12 @@ dc_pool_destroy(tse_task_t *task)
 	}
 
 	svr_ep.ep_grp = state->sys->sy_group;
-	rsvc_client_choose(&state->client, &svr_ep);
+	rc = rsvc_client_choose(&state->client, &svr_ep);
+	if (rc != 0) {
+		D_ERROR("%s: cannot find management service: "DF_RC"\n",
+			args->grp, DP_RC(rc));
+		goto out_client;
+	}
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_DESTROY, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);

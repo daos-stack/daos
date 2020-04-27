@@ -161,13 +161,18 @@ simple_put_get(void **state)
 	print_message("Reading and Checking Keys\n");
 	/** read and verify the keys */
 	for (i = 0; i < NUM_KEYS; i++) {
+		size_t	tmp_size = sizeof(int) * 4;
+		int	tmp_buf[4];
+
 		memset(buf_out, 0, buf_size);
 
 		sprintf(key, key_fmt, i);
 
+		/** 1st test: just query the value size */
 		size = DAOS_REC_ANY;
 		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, key, &size, NULL,
 				 arg->async ? &ev : NULL);
+		assert_int_equal(rc, 0);
 		if (arg->async) {
 			bool ev_flag;
 
@@ -176,14 +181,35 @@ simple_put_get(void **state)
 			assert_int_equal(ev_flag, true);
 			assert_int_equal(ev.ev_error, 0);
 		}
-
 		if (i != NUM_KEYS - 1)
 			assert_int_equal(size, buf_size);
 		else
 			assert_int_equal(size, sizeof(int));
 
+		/** 2nd test: get value with small buffer */
+		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, key, &tmp_size, tmp_buf,
+				 arg->async ? &ev : NULL);
+		if (arg->async) {
+			bool ev_flag;
+
+			rc = daos_event_test(&ev, DAOS_EQ_WAIT, &ev_flag);
+			assert_int_equal(rc, 0);
+			assert_int_equal(ev_flag, true);
+			rc = ev.ev_error;
+		}
+		if (i != NUM_KEYS - 1) {
+			assert_int_equal(rc, -DER_REC2BIG);
+			assert_int_equal(tmp_size, buf_size);
+		} else {
+			assert_int_equal(rc, 0);
+			assert_int_equal(tmp_size, sizeof(int));
+			assert_int_equal(NUM_KEYS, tmp_buf[0]);
+		}
+
+		/** 3rd test: get value with exact buffer*/
 		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, key, &size, buf_out,
 				 arg->async ? &ev : NULL);
+		assert_int_equal(rc, 0);
 		if (arg->async) {
 			bool ev_flag;
 
@@ -192,7 +218,6 @@ simple_put_get(void **state)
 			assert_int_equal(ev_flag, true);
 			assert_int_equal(ev.ev_error, 0);
 		}
-
 		if (i != NUM_KEYS - 1) {
 			assert_int_equal(size, buf_size);
 			assert_memory_equal(buf_out, buf, size);

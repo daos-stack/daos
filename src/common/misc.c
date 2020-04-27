@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -280,8 +280,8 @@ daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 		       size_t requested_bytes,
 		       daos_sgl_process_cb process_cb, void *cb_args)
 {
-	uint8_t		*buf;
-	size_t		 len;
+	uint8_t		*buf = NULL;
+	size_t		 len = 0;
 	bool		 end = false;
 	int		 rc  = 0;
 
@@ -292,7 +292,8 @@ daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 	while (requested_bytes > 0 && !end && !rc) {
 		end = daos_sgl_get_bytes(sgl, idx, requested_bytes, &buf, &len);
 		requested_bytes -= len;
-		rc = process_cb(buf, len, cb_args);
+		if (process_cb != NULL)
+			rc = process_cb(buf, len, cb_args);
 	}
 
 	if (requested_bytes)

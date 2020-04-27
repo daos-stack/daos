@@ -209,7 +209,7 @@ A "Checksummer" is used to create checksums from a scatter gather list. The
  algorithm.
  Currently the isa-l and isa-l_crypto libraries are used to support crc16,
  crc32, crc64, and sha1. All of the function tables to support these
- algorithms are in [src/common/checksum.c](src/common/checksum.c).
+ algorithms are in [src/common/checksum.c](checksum.c).
  These function tables
  are not made public, but there is a helper function (daos_csum_type2algo) that
  will return the appropriate function table given a DAOS_CSUM_TYPE. There is

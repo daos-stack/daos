@@ -1,15 +1,13 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
- test_servers:
-   - server-A
+     test_servers:
+          - server-A
 timeout: 100
 server_config:
-   name: daos_server
-pool_params:
-   createmode:
-        mode: 511
-   createset:
-        setname: daos_server
-   createsize:
-        size: 1073741824
+     name: daos_server
+pool:
+     control_method: dmg
+     mode: 511
+     name: daos_server
+     scm_size: 1073741824

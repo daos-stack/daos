@@ -48,6 +48,7 @@ expect_ace_valid(enum daos_acl_principal_type type, const char *principal)
 	struct daos_ace *ace;
 
 	ace = daos_ace_create(type, principal);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 
 	assert_true(daos_ace_is_valid(ace));
 
@@ -323,6 +324,19 @@ test_ace_is_valid_undefined_access_type(void **state)
 
 	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
 	ace->dae_access_types |= (1 << 7); /* nonexistent type */
+
+	assert_false(daos_ace_is_valid(ace));
+
+	daos_ace_free(ace);
+}
+
+static void
+test_ace_is_valid_no_access_type(void **state)
+{
+	struct daos_ace *ace;
+
+	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
+	ace->dae_access_types = 0;
 
 	assert_false(daos_ace_is_valid(ace));
 
@@ -796,7 +810,6 @@ test_acl_is_valid_for_pool_invalid_perms(void **state)
 	expect_pool_acl_invalid_with_perms((uint64_t)-1);
 	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_GET_ACL);
 	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_SET_ACL);
-	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_GET_PROP);
 	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_SET_PROP);
 	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_SET_OWNER);
 }
@@ -813,6 +826,7 @@ static void
 test_acl_is_valid_for_pool_good_perms(void **state)
 {
 	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_READ);
+	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_GET_PROP);
 	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_WRITE);
 	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_CREATE_CONT);
 	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_DEL_CONT);
@@ -897,6 +911,7 @@ main(void)
 		cmocka_unit_test(test_ace_is_valid_undefined_perms),
 		cmocka_unit_test(test_ace_is_valid_valid_perms),
 		cmocka_unit_test(test_ace_is_valid_undefined_access_type),
+		cmocka_unit_test(test_ace_is_valid_no_access_type),
 		cmocka_unit_test(test_ace_is_valid_valid_access_types),
 		cmocka_unit_test(test_ace_is_valid_perms_for_unset_type),
 		cmocka_unit_test(test_ace_is_valid_audit_flags_with_only_allow),

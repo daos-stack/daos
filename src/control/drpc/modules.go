@@ -68,6 +68,8 @@ const (
 	MethodPoolCreate = C.DRPC_METHOD_MGMT_POOL_CREATE
 	// MethodPoolDestroy is a ModuleMgmt method
 	MethodPoolDestroy = C.DRPC_METHOD_MGMT_POOL_DESTROY
+	// MethodPoolReintegrate is a ModuleMgmt method
+	MethodPoolReintegrate = C.DRPC_METHOD_MGMT_REINTEGRATE
 	// MethodBioHealth is a ModuleMgmt method
 	MethodBioHealth = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
 	// MethodSetUp is a ModuleMgmt method
@@ -96,6 +98,8 @@ const (
 	MethodPoolQuery = C.DRPC_METHOD_MGMT_POOL_QUERY
 	// MethodPoolSetProp defines a method for setting a pool property
 	MethodPoolSetProp = C.DRPC_METHOD_MGMT_POOL_SET_PROP
+	// MethodContSetOwner defines a method for setting the container's owner
+	MethodContSetOwner = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
 )
 
 const (

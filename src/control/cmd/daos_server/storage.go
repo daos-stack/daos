@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -40,21 +42,9 @@ type storageCmd struct {
 }
 
 type storagePrepareCmd struct {
+	scs *server.StorageControlService
 	logCmd
 	commands.StoragePrepareCmd
-}
-
-func concatErrors(scanErrors []error, err error) error {
-	if err != nil {
-		scanErrors = append(scanErrors, err)
-	}
-
-	errStr := "scan error(s):\n"
-	for _, err := range scanErrors {
-		errStr += fmt.Sprintf("  %s\n", err.Error())
-	}
-
-	return errors.New(errStr)
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
@@ -63,10 +53,17 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
-	cfg := server.NewConfiguration()
-	svc, err := server.DefaultStorageControlService(cmd.log, cfg)
-	if err != nil {
-		return errors.WithMessage(err, "init control service")
+	// This is a little ugly, but allows for easier unit testing.
+	// FIXME: With the benefit of hindsight, it seems apparent
+	// that we should have made these Execute() methods thin
+	// wrappers around more easily-testable functions.
+	if cmd.scs == nil {
+		cfg := server.NewConfiguration()
+		svc, err := server.DefaultStorageControlService(cmd.log, cfg)
+		if err != nil {
+			return errors.WithMessage(err, "init control service")
+		}
+		cmd.scs = svc
 	}
 
 	op := "Preparing"
@@ -80,7 +77,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		cmd.log.Info(op + " locally-attached NVMe storage...")
 
 		// Prepare NVMe access through SPDK
-		if _, err := svc.NvmePrepare(bdev.PrepareRequest{
+		if _, err := cmd.scs.NvmePrepare(bdev.PrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
 			PCIWhitelist:  cmd.PCIWhiteList,
@@ -90,23 +87,23 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 	}
 
-	if prepScm {
+	scmScan, err := cmd.scs.ScmScan()
+	if err != nil {
+		return common.ConcatErrors(scanErrors, err)
+	}
+
+	if prepScm && len(scmScan.Modules) > 0 {
 		cmd.log.Info(op + " locally-attached SCM...")
 
-		state, err := svc.GetScmState()
-		if err != nil {
-			return concatErrors(scanErrors, err)
-		}
-
-		if err := cmd.CheckWarn(cmd.log, state); err != nil {
-			return concatErrors(scanErrors, err)
+		if err := cmd.CheckWarn(cmd.log, scmScan.State); err != nil {
+			return common.ConcatErrors(scanErrors, err)
 		}
 
 		// Prepare SCM modules to be presented as pmem device files.
 		// Pass evaluated state to avoid running GetScmState() twice.
-		resp, err := svc.ScmPrepare(scm.PrepareRequest{Reset: cmd.Reset})
+		resp, err := cmd.scs.ScmPrepare(scm.PrepareRequest{Reset: cmd.Reset})
 		if err != nil {
-			return concatErrors(scanErrors, err)
+			return common.ConcatErrors(scanErrors, err)
 		}
 		if resp.RebootRequired {
 			cmd.log.Info(scm.MsgScmRebootRequired)
@@ -115,10 +112,12 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		} else {
 			cmd.log.Info("no SCM namespaces")
 		}
+	} else if prepScm {
+		cmd.log.Info("No SCM modules detected; skipping operation")
 	}
 
 	if len(scanErrors) > 0 {
-		return concatErrors(scanErrors, nil)
+		return common.ConcatErrors(scanErrors, nil)
 	}
 
 	return nil
@@ -142,7 +141,12 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		cmd.log.Info(res.Controllers.String())
+		ctrlrs := proto.NvmeControllers{}
+		if err := ctrlrs.FromNative(res.Controllers); err != nil {
+			scanErrors = append(scanErrors, err)
+		} else {
+			cmd.log.Info(ctrlrs.String())
+		}
 	}
 
 	scmResp, err := svc.ScmScan()

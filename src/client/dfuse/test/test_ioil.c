@@ -378,7 +378,7 @@ skip_mmap:
 	CU_ASSERT_EQUAL(status, DFUSE_IO_DIS_STREAM);
 
 	if (fp != NULL) {
-		char buf[16];
+		char buf[9] = {0};
 
 		items = fread(buf, 1, 8, fp);
 		printf("Read %zd items, expected 8\n", items);

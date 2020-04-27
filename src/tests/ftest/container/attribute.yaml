@@ -6,13 +6,12 @@ hosts:
 timeout: 50
 server_config:
   name: daos_server
+pool:
+  control_method: dmg
+  mode: 511
+  scm_size: 1073741824
+  name: daos_server
 attrtests:
-  createmode:
-    mode: 511
-  createset:
-    setname: daos_server
-  createsize:
-    size: 1073741824
   name_handles: !mux
     validlongname:
       name:

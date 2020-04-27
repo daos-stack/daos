@@ -673,6 +673,7 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	rc = alloc_init(class, id, db_uuid, &svc);
 	if (rc != 0)
 		goto err;
+	svc->s_ref++;
 
 	if (create) {
 		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas);
@@ -692,7 +693,6 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 			goto err_db;
 	}
 
-	svc->s_ref = 1;
 	*svcp = svc;
 	return 0;
 
@@ -702,6 +702,7 @@ err_creation:
 	if (create)
 		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:
+	svc->s_ref--;
 	fini_free(svc);
 err:
 	return rc;
@@ -1094,10 +1095,11 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 	out = crt_reply_get(rpc);
 	rc = out->sao_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start%s replicas: "DF_RC"\n",
-			DP_UUID(dbid), create ? "/create" : "", DP_RC(rc));
+		D_ERROR(DF_UUID": failed to start%s %d replicas: "DF_RC"\n",
+			DP_UUID(dbid), create ? "/create" : "", rc,
+			DP_RC(out->sao_rc_errval));
 		ds_rsvc_dist_stop(class, id, ranks, NULL, create);
-		rc = -DER_IO;
+		rc = out->sao_rc_errval;
 	}
 
 out_mem:
@@ -1137,6 +1139,7 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 			   (in->sai_flags & RDB_AF_BOOTSTRAP) ?
 			   in->sai_ranks : NULL, NULL /* arg */);
 out:
+	out->sao_rc_errval = rc;
 	out->sao_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
 }
@@ -1149,7 +1152,14 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 
 	out_source = crt_reply_get(source);
 	out_result = crt_reply_get(result);
+	/* rc is error count, rc_errval first error value */
 	out_result->sao_rc += out_source->sao_rc;
+
+	if (out_result->sao_rc_errval == 0) {
+		if (out_source->sao_rc_errval != 0)
+			out_result->sao_rc_errval = out_source->sao_rc_errval;
+	}
+
 	return 0;
 }
 

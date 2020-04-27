@@ -23,8 +23,15 @@
 package server
 
 import (
+	"fmt"
+
+	"github.com/dustin/go-humanize"
+
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -61,7 +68,117 @@ var (
 		"no DAOS IO Servers specified in configuration",
 		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
 	)
+	FaultIommuDisabled = serverFault(
+		code.ServerIommuDisabled,
+		"no IOMMU detected while running as non-root user with NVMe devices",
+		"enable IOMMU per the DAOS Admin Guide or run daos_server as root",
+	)
+	FaultHarnessNotStarted = serverFault(
+		code.ServerHarnessNotStarted,
+		fmt.Sprintf("%s harness not started", DataPlaneName),
+		"retry the operation or check server logs for more details",
+	)
+	FaultDataPlaneNotStarted = serverFault(
+		code.ServerDataPlaneNotStarted,
+		fmt.Sprintf("%s instance not started or not responding on dRPC", DataPlaneName),
+		"retry the operation or check server logs for more details",
+	)
 )
+
+func FaultInstancesNotStopped(ranks []*system.Rank) *fault.Fault {
+	return serverFault(
+		code.ServerInstancesNotStopped,
+		fmt.Sprintf("harness has running ranks: %v", ranks),
+		"retry the operation after stopping all harness' ranks",
+	)
+}
+
+func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolNvmeTooSmall,
+		fmt.Sprintf("requested NVMe capacity (%s) is too small (min %s)",
+			humanize.IBytes(reqBytes),
+			humanize.IBytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("NVMe capacity should be larger than %s",
+			humanize.IBytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
+	)
+}
+
+func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolScmTooSmall,
+		fmt.Sprintf("requested SCM capacity (%s) is too small (min %s)",
+			humanize.IBytes(reqBytes),
+			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("SCM capacity should be larger than %s",
+			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+	)
+}
+
+func FaultInsufficientFreeHugePages(free, requested int) *fault.Fault {
+	return serverFault(
+		code.ServerInsufficientFreeHugePages,
+		fmt.Sprintf("requested %d hugepages; got %d", requested, free),
+		"reboot the system or manually clear /dev/hugepages as appropriate",
+	)
+}
+
+func FaultScmUnmanaged(mntPoint string) *fault.Fault {
+	return serverFault(
+		code.ServerScmUnmanaged,
+		fmt.Sprintf("the SCM mountpoint at %s is unavailable and can't be created/mounted", mntPoint),
+		fmt.Sprintf("manually create %s or remove --recreate-superblocks from the server arguments", mntPoint),
+	)
+}
+
+func FaultBdevNotFound(bdevs []string) *fault.Fault {
+	return serverFault(
+		code.ServerBdevNotFound,
+		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
+		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
+	)
+}
+
+func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
+	return serverFault(
+		code.ServerConfigDuplicateFabric,
+		fmt.Sprintf("the fabric configuration in IO server %d is a duplicate of server %d", curIdx, seenIdx),
+		"ensure that each IO server has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
+	)
+}
+
+func FaultConfigDuplicateLogFile(curIdx, seenIdx int) *fault.Fault {
+	return dupeValue(
+		code.ServerConfigDuplicateLogFile, "log_file", curIdx, seenIdx,
+	)
+}
+
+func FaultConfigDuplicateScmMount(curIdx, seenIdx int) *fault.Fault {
+	return dupeValue(
+		code.ServerConfigDuplicateScmMount, "scm_mount", curIdx, seenIdx,
+	)
+}
+
+func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
+	return dupeValue(
+		code.ServerConfigDuplicateScmDeviceList, "scm_list", curIdx, seenIdx,
+	)
+}
+
+func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
+	return serverFault(
+		code.ServerConfigOverlappingBdevDeviceList,
+		fmt.Sprintf("the bdev_list value in IO server %d overlaps with entries in server %d", curIdx, seenIdx),
+		"ensure that each IO server has a unique set of bdev_list entries and restart",
+	)
+}
+
+func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
+	return serverFault(code,
+		fmt.Sprintf("the %s value in IO server %d is a duplicate of server %d", name, curIdx, seenIdx),
+		fmt.Sprintf("ensure that each IO server has a unique %s value and restart", name),
+	)
+}
 
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{

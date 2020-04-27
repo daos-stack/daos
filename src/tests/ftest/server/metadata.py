@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2019 Intel Corporation.
+"""
+  (C) Copyright 2019-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,10 +20,9 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
-import os
 import traceback
 import uuid
 import threading
@@ -31,21 +30,20 @@ import avocado
 
 try:
     # python 3.x
-    import queue as queue
+    import queue
 except ImportError:
     # python 2.7
     import Queue as queue
 
 from apricot import TestWithServers, skipForTicket
-from agent_utils import run_agent, stop_agent
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
-from command_utils import Orterun, CommandFailure
-from server_utils import run_server, stop_server
+from command_utils import CommandFailure
+from job_manager_utils import Orterun
 from write_host_file import write_host_file
 from test_utils_pool import TestPool
 
-NO_OF_MAX_CONTAINER = 13180
+NO_OF_MAX_CONTAINER = 13034
 
 
 def ior_runner_thread(manager, uuids, results):
@@ -131,19 +129,20 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=all,metadata,pr,small,metadatafill
+        :avocado: tags=all,metadata,large,metadatafill,hw
+        :avocado: tags=full_regression
         """
         self.pool.pool.connect(2)
         container = DaosContainer(self.context)
 
-        self.d_log.debug("Fillup Metadata....")
+        self.log.info("Fillup Metadata....")
         for _cont in range(NO_OF_MAX_CONTAINER):
             container.create(self.pool.pool.handle)
 
         # This should fail with no Metadata space Error.
-        self.d_log.debug("Metadata Overload...")
+        self.log.info("Metadata Overload...")
         try:
-            for _cont in range(250):
+            for _cont in range(400):
                 container.create(self.pool.pool.handle)
             self.fail("Test expected to fail with a no metadata space error")
 
@@ -153,7 +152,6 @@ class ObjectMetadata(TestWithServers):
 
         self.fail("Test was expected to fail but it passed.\n")
 
-    @skipForTicket("DAOS-1965")
     @avocado.fail_on(DaosApiError)
     def test_metadata_addremove(self):
         """JIRA ID: DAOS-1512.
@@ -164,18 +162,19 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_free_space,nvme,small
+        :avocado: tags=metadata,metadata_free_space,nvme,large,hw
+        :avocado: tags=full_regression
         """
         self.pool.pool.connect(2)
         for k in range(10):
             container_array = []
-            self.d_log.debug("Container Create Iteration {}".format(k))
+            self.log.info("Container Create Iteration %d / 9", k)
             for cont in range(NO_OF_MAX_CONTAINER):
                 container = DaosContainer(self.context)
                 container.create(self.pool.pool.handle)
                 container_array.append(container)
 
-            self.d_log.debug("Container Remove Iteration {} ".format(k))
+            self.log.info("Container Remove Iteration %d / 9", k)
             for cont in container_array:
                 cont.destroy()
 
@@ -194,7 +193,7 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_ior,nvme,small
+        :avocado: tags=metadata,metadata_ior,nvme,large
         """
         files_per_thread = 400
         total_ior_threads = 5
@@ -220,9 +219,8 @@ class ObjectMetadata(TestWithServers):
                     "F", "/run/ior/ior{}flags/".format(operation))
 
                 # Define the job manager for the IOR command
-                path = os.path.join(self.ompi_prefix, "bin")
-                manager = Orterun(ior_cmd, path)
-                env = ior_cmd.get_default_env(str(manager), self.tmp)
+                manager = Orterun(ior_cmd)
+                env = ior_cmd.get_default_env(str(manager))
                 manager.setup_command(env, self.hostfile_clients, processes)
 
                 # Add a thread for these IOR arguments
@@ -245,17 +243,20 @@ class ObjectMetadata(TestWithServers):
 
             # Restart the agents and servers after the write / before the read
             if operation == "write":
-                # Stop the agents and servers
-                if self.agent_sessions:
-                    stop_agent(self.agent_sessions, self.hostlist_clients)
-                stop_server(hosts=self.hostlist_servers)
+                # Stop the agents
+                errors = self.stop_agents()
+                self.assertEqual(
+                    len(errors), 0,
+                    "Error stopping agents:\n  {}".format("\n  ".join(errors)))
+
+                # Stop the servers
+                errors = self.stop_servers()
+                self.assertEqual(
+                    len(errors), 0,
+                    "Error stopping servers:\n  {}".format("\n  ".join(errors)))
 
                 # Start the agents
-                self.agent_sessions = run_agent(
-                    self, self.hostlist_clients,
-                    self.hostlist_servers)
+                self.start_agent_managers()
 
                 # Start the servers
-                run_server(
-                    self, self.hostfile_servers, self.server_group,
-                    clean=False)
+                self.start_server_managers()

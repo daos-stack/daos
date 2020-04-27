@@ -33,6 +33,8 @@
 extern "C" {
 #endif
 
+#include <daos_security.h>
+
 /**
  * DAOS_COO_RO opens the container for reading only. This flag conflicts with
  * DAOS_COO_RW.
@@ -50,6 +52,9 @@ extern "C" {
 #define DAOS_COO_RW	(1U << 1)
 #define DAOS_COO_NOSLIP	(1U << 2)
 #define DAOS_COO_FORCE	(1U << 3)
+
+#define DAOS_COO_NBITS	(4)
+#define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
 
 /** Container information */
 typedef struct {
@@ -259,6 +264,136 @@ daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
 		daos_prop_t *cont_prop, daos_event_t *ev);
 
 /**
+ * Query the container Access Control List and ownership properties.
+ *
+ * \param[in]	coh	Container open handle.
+
+ * \param[out]	acl_prop
+ *			Newly allocated daos_prop_t containing the ACL, owner,
+ *			and owner-group properties of the container.
+ *			Caller must free it with daos_prop_free().
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ */
+int
+daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
+		  daos_event_t *ev);
+/**
+ * Sets the container properties.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	prop	Property entries to update
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ */
+int
+daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
+
+/**
+ * Overwrites the container ACL with a new one.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	acl	New ACL to write
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ */
+int
+daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
+			daos_event_t *ev);
+
+/**
+ * Add new entries and/or update existing entries in a container's ACL.
+ *
+ * If an entry already exists in the container's ACL for a principal in the
+ * passed-in ACL, the entry will be replaced with the new one. Otherwise, a
+ * new entry will be added.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	acl	ACL containing new/updated entries
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ */
+int
+daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev);
+
+/**
+ * Remove a principal's entry from a container's ACL.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	type	Principal type to be removed
+ * \param[in]	name	Name of principal to be removed (if type is user or
+ *			group)
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ *			-DER_NONEXIST	Principal is not in the ACL
+ */
+int
+daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
+		     d_string_t name, daos_event_t *ev);
+
+/**
+ * Update a container's owner user and/or owner group.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	group	New owner group (NULL if not updating)
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
+		    daos_event_t *ev);
+
+/**
  * List the names of all user-defined container attributes.
  *
  * \param[in]	coh	Container handle.
@@ -359,7 +494,7 @@ daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  * Rollback to a specific persistent snapshot.
  *
  * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch if persistent snapshot to rollback to.
+ * \param[in]	epoch	Epoch of a persistent snapshot to rollback to.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */

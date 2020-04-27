@@ -14,15 +14,14 @@ different ways:
     to minimize the number of I/O racks and to optimize floor space,
     this approach usually requires high-density storage servers.
 
--   **Disaggregated Storage Model**: In the disaggregated model, the
+-   **Hyper-converged Storage Model**: In this model, the
     storage nodes are integrated into compute racks and can be either
-    dedicated or shared (e.g., in a hyper-converged infrastructure)
-    nodes. The DAOS servers are thus massively distributed and storage
-    access is non-uniform and must take locality into account.
+    dedicated or shared nodes. The DAOS servers are thus massively distributed,
+    and storage access is non-uniform and must take locality into account.
+    This model is common in hyper-converged infrastructure.
 
-While DAOS is mostly deployed following the pooled model, active
-research is conducted to efficiently support the disaggregated model as
-well.
+While DAOS is mostly deployed following the pooled model, active research is
+conducted to efficiently support the hyper-converged model as well.
 
 ![](./media/image1.png)
 
@@ -30,7 +29,7 @@ well.
 
 DAOS requires a 64-bit processor architecture and is primarily developed
 on Intel 64 architecture. The DAOS software and the libraries it depends
-on (e.g., ISA-L, SPDK, PMDK, and DPDK) can take advantage of Intel® SSE
+on (e.g., ISA-L, SPDK, PMDK, and DPDK) can take advantage of Intel SSE
 and AVX extensions.
 
 DAOS is also regularly tested on 64-bit ARM processors configured in
@@ -42,7 +41,7 @@ systems for ARM platforms.
 ## Network Requirements
 
 The DAOS network layer relies on libfabrics and supports OFI providers
-for Ethernet/sockets, InfiniBand/verbs, RoCE, Cray’s GNI, and the Intel
+for Ethernet/sockets, InfiniBand/verbs, RoCE, Cray's GNI, and the Intel
 Omni-Path Architecture. An RDMA-capable fabric is preferred for better
 performance. DAOS can support multiple rails by binding different
 instances of the DAOS server to individual network cards.
@@ -67,7 +66,7 @@ memory express) SSDs to provide capacity. HDDs, as well as SATA and SAS
 SSDs, are not supported by DAOS. Both NVMe 3D-NAND and Optane SSDs are
 supported. Optane SSDs are preferred for DAOS installation that targets
 a very high IOPS rate. NVMe-oF devices are also supported by the
-userspace storage stack, but have never been tested.
+userspace storage stack but have never been tested.
 
 The minimal recommended ratio between SCM and SSDs capacity is 6% to
 guarantee that DAOS has enough space in SCM to store internal metadata
@@ -83,7 +82,7 @@ On recent Xeon platforms, PCIe slots have a natural affinity to one CPU.
 Although globally accessible from any of the system cores, NVMe SSDs and
 network interface cards connected through the PCIe bus may provide
 different performance characteristics (e.g., higher latency, lower
-bandwidth) to each CPU. Accessing “remote” PCIe devices may involve
+bandwidth) to each CPU. Accessing non-local PCIe devices may involve
 traffic over the UPI (Ultra Path Interconnect) link that might become a
 point of congestion. Similarly, persistent memory is non-uniformly
 accessible (NUMA), and CPU affinity must be respected for maximal
@@ -107,7 +106,7 @@ across storage nodes in different fault domains.
 
 DAOS assumes that fault domains are hierarchical and do not overlap. For
 instance, the first level of a fault domain could be the racks and the
-second one the storage nodes.
+second one, the storage nodes.
 
 For efficient placement and optimal data resilience, more fault
 domains are better. As a result, it is preferable to distribute storage

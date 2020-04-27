@@ -1,0 +1,28 @@
+# Run test on medium cluster
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+    - client-C
+timeout: 600
+server_config:
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0","0000:da:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+    nr_xs_helpers: 1
+    targets: 1
+# Run only checksum tests
+daos_tests:
+  num_clients:
+    num_clients: 1
+  num_replicas:
+    num_replicas: 1
+  Tests:
+    test_z:
+      daos_test: z
+      test_name: Checksum tests
+      test_timeout: 400

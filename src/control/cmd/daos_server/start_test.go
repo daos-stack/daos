@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,6 +60,7 @@ func genMinimalConfig() *server.Configuration {
 		WithServers(
 			ioserver.NewConfig().
 				WithScmClass("ram").
+				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").
 				WithFabricInterface("foo0"),
 		)
@@ -74,6 +75,7 @@ func genDefaultExpected() *server.Configuration {
 			ioserver.NewConfig().
 				WithHostname(hostname).
 				WithScmClass("ram").
+				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").
 				WithFabricInterface("foo0"),
 		)
@@ -178,13 +180,6 @@ func TestStartOptions(t *testing.T) {
 			argList: []string{"--targets=42"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
 				cfg.Servers[0].WithTargetCount(42)
-				return cfg
-			},
-		},
-		"XS Helpers (bad)": {
-			argList: []string{"-x", "42"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].WithHelperStreamCount(2)
 				return cfg
 			},
 		},
@@ -315,14 +310,14 @@ func TestStartLoggingOptions(t *testing.T) {
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`hello\n$`),
 		},
-		"JSON (Short)": {
-			argList:   []string{"-j"},
+		"JSON Logs (Short)": {
+			argList:   []string{"-J"},
 			logFnName: "Info",
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`"message":"hello"`),
 		},
-		"JSON (Long)": {
-			argList:   []string{"--json"},
+		"JSON Logs (Long)": {
+			argList:   []string{"--json-logging"},
 			logFnName: "Info",
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`"message":"hello"`),

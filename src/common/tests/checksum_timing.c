@@ -109,9 +109,11 @@ run_timings(struct csum_ft *fts[], const int types_count,
 			size_t			 csum_size;
 			uint8_t			*csum_buf;
 
-			rc = daos_csummer_init(&csummer, ft, 0);
-			if (rc != 0)
+			rc = daos_csummer_init(&csummer, ft, 0, 0);
+			if (rc != 0) {
+				free(buf);
 				return rc;
+			}
 
 			args.csummer = csummer;
 			args.buf = buf;

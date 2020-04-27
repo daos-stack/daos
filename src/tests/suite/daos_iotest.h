@@ -166,22 +166,19 @@ enum test_op_type {
 	TEST_OP_MIN		= 0,
 	TEST_OP_UPDATE		= 0,
 	TEST_OP_PUNCH		= 1,
-	TEST_OP_EPOCH_DISCARD	= 2,
 	/* above are modification OP, below are read-only OP */
-	TEST_OP_FETCH		= 3,
-	TEST_OP_ENUMERATE	= 4,
-	TEST_OP_ADD		= 5,
-	TEST_OP_EXCLUDE		= 6,
-	TEST_OP_POOL_QUERY	= 7,
-	TEST_OP_MAX		= 7,
+	TEST_OP_FETCH		= 2,
+	TEST_OP_ENUMERATE	= 3,
+	TEST_OP_ADD		= 4,
+	TEST_OP_EXCLUDE		= 5,
+	TEST_OP_POOL_QUERY	= 6,
+	TEST_OP_MAX		= 6,
 };
 
 static inline bool
 test_op_is_modify(int op)
 {
-	return (op == TEST_OP_UPDATE	||
-		op == TEST_OP_PUNCH	||
-		op == TEST_OP_EPOCH_DISCARD);
+	return (op == TEST_OP_UPDATE || op == TEST_OP_PUNCH);
 }
 
 struct test_op_record;
@@ -226,6 +223,7 @@ struct test_add_exclude_arg {
 };
 
 struct test_punch_arg {
+	bool		 pa_singv;
 	daos_recx_t	*pa_recxs;
 	int		 pa_recxs_num;
 };

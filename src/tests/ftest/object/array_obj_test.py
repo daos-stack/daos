@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2017-2019 Intel Corporation.
+  (C) Copyright 2017-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,15 +23,13 @@
 '''
 from __future__ import print_function
 
-import os
 import time
 import traceback
 import logging
-from avocado import main
+
 from apricot import TestWithServers
+from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
 
-
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError, c_uuid_to_str
 
 class ArrayObjTest(TestWithServers):
     """
@@ -52,28 +50,12 @@ class ArrayObjTest(TestWithServers):
 
         :avocado: tags=all,smoke,pr,object,tiny,basicobject
         """
+        self.prepare_pool()
+
         try:
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/pool_params/createmode/')
-            createsetid = self.params.get("setname",
-                                          '/run/pool_params/createset/')
-            createsize = self.params.get("size", '/run/pool_params/createsize/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-            self.plog.info("Pool %s created.", self.pool.get_uuid_str())
-
-            # need a connection to create container
-            self.pool.connect(1 << 1)
-
             # create a container
             container = DaosContainer(self.context)
-            container.create(self.pool.handle)
+            container.create(self.pool.pool.handle)
             self.plog.info("Container %s created.", container.get_uuid_str())
 
             # now open it
@@ -128,6 +110,3 @@ class ArrayObjTest(TestWithServers):
             print(excep)
             print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
-
-if __name__ == "__main__":
-    main()

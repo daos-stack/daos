@@ -1,10 +1,10 @@
 hosts:
 # servers if no server partition is defined
     test_servers:
-      - server-A
-      - server-B
-      - server-C
-      - server-D
+        - server-A
+        - server-B
+        - server-C
+        - server-D
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
@@ -17,7 +17,7 @@ srun_params:
     reservation:
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 2 hour test
-timeout: 8000
+timeout: 2H15M
 logdir: /tmp/soak
 server_config:
     name: daos_server
@@ -35,7 +35,7 @@ server_config:
         scm_class: dcpm
         scm_list: [/dev/pmem0]
         bdev_class: nvme
-        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        bdev_list: ["0000:81:00.0","0000:da:00.0"]
 # pool_params - attributes of the pools to create; Currently only create one
 pool_ior:
     mode: 146
@@ -43,17 +43,20 @@ pool_ior:
     scm_size: 40000000000
     nvme_size: 100000000000
     svcn: 1
+    control_method: dmg
 pool_fio:
     mode: 146
     name: daos_server
     scm_size: 40000000000
     nvme_size: 100000000000
     svcn: 1
+    control_method: dmg
 pool_reserved:
     mode: 511
     name: daos_server
     scm_size: 3000000000
     nvme_size: 50000000000
+    control_method: dmg
 container_reserved:
     akey_size: 5
     dkey_size: 5
@@ -65,8 +68,7 @@ container_reserved:
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
-#               test_timeout:        The overall timeout in secs; soak12 will be
-#                                    changed to 43200 once it is stable
+#               test_timeout:        The overall timeout in hours
 #               test_iteration:      values 1 or -1; -1 is used to cause the
 #                                    IOR -T x to end cmd.  i = 100000000
 #                                    (does not seem to work)
@@ -78,39 +80,59 @@ container_reserved:
 # smoke test_params
 smoke:
     name: soak_smoke
-    test_timeout: 1200
+    # smoke test timeout in hours
+    test_timeout: 0.4
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
-    nodesperjob: 1
+    nodesperjob:
+        - -1
     taskspernode:
-      - 1
+        - 1
     poollist:
-      - pool_ior
-      - pool_fio
+        - pool_ior
+        - pool_fio
     joblist:
-      - ior_smoke
-      - fio_smoke
+        - ior_smoke
+        - fio_smoke
 # SOAK stress test params
-# Test will run for 60 minutes
 soak_stress:
     name: soak_stress
-    test_timeout: 7200
+    # stress test timeout in hours
+    test_timeout: 2
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
-    nodesperjob: -1
+    nodesperjob:
+        - -1
     # used for perfomance benchmarks
     taskspernode:
-      - 1
-      - 16
-      - 32
+        - 1
+        - 16
+        - 32
     poollist:
-      - pool_ior
-      - pool_fio
+        - pool_ior
+        - pool_fio
     joblist:
-      - ior_stress
-      - fio_stress
-      #- dmg_create_destroy
-      #- dfs
+        - ior_stress
+        - fio_stress
+soak_harassers:
+    name: soak_harassers
+    # harasser test timeout in hours
+    test_timeout: 1
+    harasser_timeout: 120
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 20
+    nodesperjob:
+        - 1
+    # used for perfomance benchmarks
+    taskspernode:
+        - 1
+    poollist:
+        - pool_ior
+    joblist:
+        - ior_smoke
+    harasserlist:
+        - snapshot
+        - rebuild
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DAOS and -a MPIIO
@@ -133,8 +155,8 @@ ior_smoke:
         - 'SX'
 fio_smoke:
   names:
-    - global
-    - test
+      - global
+      - test
   global:
     directory: "/tmp/daos_dfuse"
     ioengine: 'libaio'
@@ -147,12 +169,12 @@ fio_smoke:
     numjobs: 1
   soak:
     blocksize:
-      - '1M'
+        - '1M'
     size:
-      - '1G'
+        - '1G'
     rw:
-      - 'rw'
-      - 'randrw'
+        - 'rw'
+        - 'randrw'
 ior_stress:
     api:
         - DAOS
@@ -172,9 +194,6 @@ ior_stress:
         - '64k'
     daos_oclass:
         - "SX"
-        # - "RP_2GX"
-        # - "RP_3GX"
-        # - "RP_4GX"
 fio_stress:
   names:
     - global
@@ -188,20 +207,26 @@ fio_stress:
     verify: 'crc64'
     iodepth: 16
   test:
-    numjobs: 5
+    numjobs: 16
   soak:
     blocksize:
-      - '256B'
-      - '1M'
+        - '64K'
+        - '1M'
     size:
-      - '500M'
-      - '1G'
+        - '500M'
+        - '1G'
     rw:
-      - 'rw'
-      - 'randrw'
+        - 'rw'
+        - 'randrw'
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
-
+rebuild:
+    rebuild_timeout: 30
+    ranks_to_kill:
+        - 2
+    svcl: 1
+    daos_oclass:
+        - "RP_2GX"
 dmg_create_destroy:
     size:
       - 8M

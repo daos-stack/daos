@@ -137,6 +137,17 @@ static d_hash_table_ops_t ir_hops = {
 
 };
 
+void
+dfuse_dfs_init(struct dfuse_dfs *dfs, struct dfuse_dfs *parent)
+{
+	D_MUTEX_INIT(&dfs->dfs_read_mutex, NULL);
+
+	if (!parent)
+		return;
+
+	dfs->dfs_attr_timeout = parent->dfs_attr_timeout;
+}
+
 int
 dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 {

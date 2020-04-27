@@ -31,6 +31,7 @@
 static void
 reconnect(test_arg_t *arg) {
 	int rc;
+	unsigned int flags;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rc = daos_cont_close(arg->coh, NULL);
@@ -40,6 +41,8 @@ reconnect(test_arg_t *arg) {
 	arg->pool.poh = DAOS_HDL_INVAL;
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	flags = (DAOS_COO_RW | DAOS_COO_FORCE);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 				       &arg->pool.svc, DAOS_PC_RW,
@@ -47,7 +50,7 @@ reconnect(test_arg_t *arg) {
 				       NULL /* ev */);
 		if (rc)
 			goto bcast;
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, flags,
 				    &arg->coh, &arg->co_info, NULL);
 	}
 bcast:
@@ -252,10 +255,10 @@ oid_allocator_checker(void **state)
 			assert_int_equal(rc, 0);
 			if (info.pi_ntargets - info.pi_ndisabled >= 2) {
 				if (arg->myrank == 0)
-					daos_kill_exclude_server(arg,
+					daos_kill_server(arg,
 						arg->pool.pool_uuid,
 						arg->group,
-						&arg->pool.svc);
+						&arg->pool.svc, -1);
 			}
 			MPI_Barrier(MPI_COMM_WORLD);
 		}

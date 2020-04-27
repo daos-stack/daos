@@ -6,7 +6,8 @@ FILES = ["evt_iter.c", "vos_common.c", "vos_iterator.c", "vos_io.c",
          "vos_pool.c", "vos_aggregate.c", "vos_container.c", "vos_obj.c",
          "vos_obj_cache.c", "vos_obj_index.c", "vos_tree.c", "evtree.c",
          "vos_dtx.c", "vos_dtx_cos.c", "vos_query.c", "vos_overhead.c",
-         "vos_dtx_iter.c", "vos_gc.c", "vos_ilog.c", "ilog.c"]
+         "vos_dtx_iter.c", "vos_gc.c", "vos_ilog.c", "ilog.c", "vos_ts.c",
+         "lru_array.c"]
 
 def build_vos(env, standalone):
     """build vos"""
@@ -24,8 +25,8 @@ def build_vos(env, standalone):
     files = FILES
     if GetOption("preprocess"):
         #For profileing performance, it can sometimes be useful to preprocess
-        #the files first.   This uses the new scons_local feature to do this
-        #so profiling tools will point at preprocessed file lines.
+        #the files first.   This uses a feature in utils/sl to do this so
+        #profiling tools will point at preprocessed file lines.
         files = denv.Preprocess(FILES)
 
     vos = daos_build.library(denv, libname, files, LIBS=['vea'])
