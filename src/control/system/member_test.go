@@ -49,6 +49,7 @@ func mockMember(t *testing.T, idx uint32, state MemberState) *Member {
 func TestMember_Stringify(t *testing.T) {
 	states := []MemberState{
 		MemberStateUnknown,
+		MemberStateAwaitFormat,
 		MemberStateStarting,
 		MemberStateReady,
 		MemberStateJoined,
@@ -61,6 +62,7 @@ func TestMember_Stringify(t *testing.T) {
 
 	strs := []string{
 		"Unknown",
+		"AwaitFormat",
 		"Starting",
 		"Ready",
 		"Joined",

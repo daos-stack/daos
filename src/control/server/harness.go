@@ -144,7 +144,7 @@ func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membersh
 	for _, srv := range h.Instances() {
 		// start first time then relinquish control to instance
 		go srv.Run(ctx, membership, cfg)
-		srv.startChan <- true
+		srv.startLoop <- true
 	}
 
 	<-ctx.Done()

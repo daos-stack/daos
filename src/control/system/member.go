@@ -41,6 +41,8 @@ type MemberState int
 const (
 	// MemberStateUnknown is the default invalid state.
 	MemberStateUnknown MemberState = iota
+	// MemberStateAwaitFormat indicates the member is waiting for format.
+	MemberStateAwaitFormat
 	// MemberStateStarting indicates the member has started but is not
 	// ready.
 	MemberStateStarting
@@ -63,6 +65,7 @@ const (
 func (ms MemberState) String() string {
 	return [...]string{
 		"Unknown",
+		"AwaitFormat",
 		"Starting",
 		"Ready",
 		"Joined",

@@ -195,12 +195,16 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredState system.MemberState, action string) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, len(instances))
 	for _, srv := range instances {
-		state := system.MemberStateReady
+		state := system.MemberStateUnknown
 		switch {
-		case !srv.isStarted():
-			state = system.MemberStateStopped
-		case !srv.isReady():
+		case srv.isReady():
+			state = system.MemberStateReady
+		case srv.isStarted():
 			state = system.MemberStateStarting
+		case srv.waitStorage.IsTrue():
+			state = system.MemberStateAwaitFormat
+		default:
+			state = system.MemberStateStopped
 		}
 
 		rank, err := srv.GetRank()
@@ -364,7 +368,7 @@ func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*m
 		if srv.isStarted() {
 			continue
 		}
-		srv.startChan <- true
+		srv.startLoop <- true
 	}
 
 	// instances will update state to "Started" through join or

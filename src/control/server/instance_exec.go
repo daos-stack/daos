@@ -176,7 +176,7 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 // Run is the processing loop for an IOServerInstance. Starts are triggered by
 // receiving true on instance start channel.
 func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Membership, cfg *Configuration) {
-	for relaunch := range srv.startChan {
+	for relaunch := range srv.startLoop {
 		if !relaunch {
 			return
 		}

@@ -56,11 +56,12 @@ type IOServerInstance struct {
 	bdevClassProvider *bdev.ClassProvider
 	scmProvider       *scm.Provider
 	msClient          *mgmtSvcClient
+	waitStorage       atm.Bool
+	storageReady      chan bool
 	waitDrpc          atm.Bool
 	drpcReady         chan *srvpb.NotifyReadyReq
-	storageReady      chan bool
 	ready             atm.Bool
-	startChan         chan bool
+	startLoop         chan bool // restart loop
 	fsRoot            string
 
 	sync.RWMutex
@@ -85,7 +86,7 @@ func NewIOServerInstance(log logging.Logger,
 		msClient:          msc,
 		drpcReady:         make(chan *srvpb.NotifyReadyReq),
 		storageReady:      make(chan bool),
-		startChan:         make(chan bool),
+		startLoop:         make(chan bool),
 	}
 }
 
