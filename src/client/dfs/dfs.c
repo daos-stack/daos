@@ -57,7 +57,7 @@
 /** DFS SB Version Value */
 #define DFS_LAYOUT_VERSION	1
 /** Array object stripe size for regular files */
-#define DFS_DEFAULT_CHUNK_SIZE	1048576
+#define DFS_DEFAULT_CHUNK_SIZE	(1024 * 256)
 /** default object class for files & dirs */
 #define DFS_DEFAULT_OBJ_CLASS	OC_SX
 /** Magic value for serializing / deserializing a DFS handle */
