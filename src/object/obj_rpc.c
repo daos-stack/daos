@@ -762,30 +762,3 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	}
 	return 0;
 }
-
-void
-obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce)
-{
-	void *reply = crt_reply_get(rpc);
-
-	switch (opc_get(rpc->cr_opc)) {
-	case DAOS_OBJ_RPC_TGT_UPDATE: {
-		struct obj_rw_out	*orw = reply;
-
-		daos_dti_copy(&orw->orw_dti_conflict, &dce->dce_xid);
-		orw->orw_dkey_conflict = dce->dce_dkey;
-		break;
-	}
-	case DAOS_OBJ_RPC_TGT_PUNCH:
-	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS: {
-		struct obj_punch_out	*opo = reply;
-
-		daos_dti_copy(&opo->opo_dti_conflict, &dce->dce_xid);
-		opo->opo_dkey_conflict = dce->dce_dkey;
-		break;
-	}
-	default:
-		D_ASSERT(0);
-	}
-}

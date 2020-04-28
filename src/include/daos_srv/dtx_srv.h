@@ -80,16 +80,12 @@ struct dtx_handle {
 					 dth_dti_cos_done:1,
 					 /* XXX: touch ilog entry. */
 					 dth_has_ilog:1,
-					 /* epoch conflict, need to renew. */
-					 dth_renew:1,
 					 /* The DTX entry is in active table. */
 					 dth_actived:1;
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
 	/* The array of the DTXs for Commit on Share (conflcit). */
 	struct dtx_id			*dth_dti_cos;
-	/* The identifier of the DTX that conflict with current one. */
-	struct dtx_conflict_entry	*dth_conflict;
 	/** Pointer to the DTX entry in DRAM. */
 	void				*dth_ent;
 	/** The address (offset) of the (new) object to be modified. */
@@ -99,7 +95,6 @@ struct dtx_handle {
 /* Each sub transaction handle to manage each sub thandle */
 struct dtx_sub_status {
 	struct daos_shard_tgt		dss_tgt;
-	struct dtx_conflict_entry	dss_dce;
 	int				dss_result;
 };
 
@@ -158,8 +153,7 @@ int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
 	       uint32_t ver, bool block);
 int
 dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-	  daos_epoch_t epoch, uint64_t dkey_hash,
-	  struct dtx_conflict_entry *conflict, struct dtx_id *dti_cos,
+	  daos_epoch_t epoch, uint64_t dkey_hash, struct dtx_id *dti_cos,
 	  int dti_cos_cnt, uint32_t pm_ver, uint32_t intent,
 	  struct dtx_handle *dth);
 int
