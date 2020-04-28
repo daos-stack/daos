@@ -1022,11 +1022,11 @@ copy_str(char *buf, const char *src, size_t *len)
 
 static void
 obj_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	     daos_epoch_t epoch)
+	     daos_epoch_t epoch, uint64_t flags)
 {
 	int	rc;
 
-	rc = vos_obj_punch(coh, oid, epoch, 0, 0, NULL, 0, NULL, NULL);
+	rc = vos_obj_punch(coh, oid, epoch, 0, flags, NULL, 0, NULL, NULL);
 
 	assert_int_equal(rc, 0);
 }
@@ -1214,7 +1214,7 @@ cond_test(void **state)
 	/** Check the value before, should be empty */
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 4, "a", "b",
 		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxxx", 'x');
-	obj_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++);
+	obj_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, 0);
 	/** Non conditional fetch should not see data anymore */
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxxx", 'x');
@@ -1278,6 +1278,108 @@ cond_test(void **state)
 			"temp");
 }
 
+/** Test rebuild semantics of replaying punches */
+static void
+replay_punch_test(void **state)
+{
+	struct io_test_args	*arg = *state;
+	daos_unit_oid_t		 oid;
+	d_sg_list_t		 sgl[MAX_SGL] = {0};
+	d_iov_t			 iov[MAX_SGL];
+	daos_epoch_t		 epoch = 5;
+	int			 i;
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+
+	for (i = 0; i < MAX_SGL; i++) {
+		sgl[i].sg_iovs = &iov[i];
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 1;
+	}
+
+	for (i = 0; i < 2; i++) {
+		oid = gen_oid(0);
+		if (i == 1) {
+			/* simulate simultaneous I/O */
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid,
+				       epoch + 5, "a", "b", 0, 0, sgl, "bar");
+		}
+		/** replay punch object */
+		obj_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++,
+			     VOS_OF_REPLAY_PC);
+
+		/** Update before the punch */
+		cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
+			       "b", 0, 0, sgl, "foo");
+		/** Now fetch after the punch */
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
+			      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxx", 'x');
+		/** Now fetch before the punch */
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
+			      "b", VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo", 'x');
+		if (i == 1) {
+			/** Check the new I/O */
+			cond_fetch_op(state, arg->ctx.tc_co_hdl, oid,
+				      epoch + 40, "a", "b",
+				      VOS_OF_USE_TIMESTAMPS, 0, sgl, "bar",
+				      'x');
+		}
+
+		oid = gen_oid(0);
+		if (i == 1) {
+			/* simulate simultaneous I/O */
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid,
+				       epoch + 5, "a", "b", 0, 0, sgl, "bar");
+		}
+		/** replay punch dkey */
+		cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
+				   VOS_OF_REPLAY_PC, 0);
+		/** Update before the punch */
+		cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
+			       "b", 0, 0, sgl, "foo");
+		/** Now fetch after the punch */
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
+			      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxx", 'x');
+		/** Now fetch before the punch */
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
+			      "b", VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo", 'x');
+		if (i == 1) {
+			/** Check the new I/O */
+			cond_fetch_op(state, arg->ctx.tc_co_hdl, oid,
+				      epoch + 40, "a", "b",
+				      VOS_OF_USE_TIMESTAMPS, 0, sgl, "bar",
+				      'x');
+		}
+
+		oid = gen_oid(0);
+		if (i == 1) {
+			/* simulate simultaneous I/O */
+			cond_update_op(state, arg->ctx.tc_co_hdl, oid,
+				       epoch + 5, "a", "b", 0, 0, sgl, "bar");
+		}
+		/** replay punch akey */
+		cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
+				   "b", VOS_OF_REPLAY_PC, 0);
+		/** Update before the punch */
+		cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
+			       "b", 0, 0, sgl, "foo");
+		/** Now fetch after the punch */
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
+			      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxx", 'x');
+		/** Now fetch before the punch */
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
+			      "b", VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo", 'x');
+		if (i == 1) {
+			/** Check the new I/O */
+			cond_fetch_op(state, arg->ctx.tc_co_hdl, oid,
+				      epoch + 40, "a", "b",
+				      VOS_OF_USE_TIMESTAMPS, 0, sgl, "bar",
+				      'x');
+		}
+	}
+}
+
 static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS800: VOS punch model array set/get size",
 	  array_set_get_size, pm_setup, pm_teardown },
@@ -1297,6 +1399,7 @@ static const struct CMUnitTest punch_model_tests[] = {
 	  object_punch_and_fetch, NULL, NULL },
 	{ "VOS809: SGL test", sgl_test, NULL, NULL },
 	{ "VOS810: Conditionals test", cond_test, NULL, NULL },
+	{ "VOS811: Replay punch test", replay_punch_test, NULL, NULL },
 };
 
 int
