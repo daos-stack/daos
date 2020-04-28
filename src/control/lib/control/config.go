@@ -39,7 +39,7 @@ const (
 	defaultConfigFile = "daos_control.yml"
 )
 
-// Config defines the paramters used to connect to the control API server.
+// Config defines the parameters used to connect to a control API server.
 type Config struct {
 	SystemName      string                    `yaml:"name"`
 	ControlPort     int                       `yaml:"port"`

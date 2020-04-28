@@ -248,7 +248,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, conns c
 				if hlCmd, ok := cmd.(hostListSetter); ok {
 					hlCmd.setHostList(strings.Split(opts.HostList, ","))
 				} else {
-					return errors.Errorf("MS commands do not accept a hostlist parameter (set it in %s or %s)",
+					return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
 						control.UserConfigPath(), control.SystemConfigPath())
 				}
 			}
