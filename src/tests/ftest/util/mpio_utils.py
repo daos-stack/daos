@@ -121,20 +121,20 @@ class MpioUtils():
         elif test_name == "llnl":
             env["MPIO_USER_PATH"] = "daos:"
             commands.append(
-                "{} -envlist {} -np {} --hostfile {} {} 1".format(
-                    mpirun, ",".join(env.get_list()), client_processes,
+                "{} {} -np {} --hostfile {} {} 1".format(
+                    mpirun, env.get_export_str("", "-x"), client_processes,
                     hostfile, executables[test_name][0]))
         elif test_name == "mpi4py":
             commands.append(
-                "{} -envlist {} -np {} --hostfile {} python {}".format(
-                    mpirun, ",".join(env.get_list()), client_processes,
+                "{} {} -np {} --hostfile {} python {}".format(
+                    mpirun, env.get_export_str("", "-x"), client_processes,
                     hostfile, executables[test_name][0]))
         elif test_name == "hdf5":
             env["HDF5_PARAPREFIX"] = "daos:"
             for exe in executables[test_name]:
                 commands.append(
-                    "{} -envlist {} -np {} --hostfile {} {}".format(
-                        mpirun, ",".join(env.get_list()), client_processes,
+                    "{} {} -np {} --hostfile {} {}".format(
+                        mpirun, env.get_export_str("", "-x"), client_processes,
                         hostfile, exe))
 
         for command in commands:

@@ -568,16 +568,18 @@ class EnvironmentVariables(dict):
             for key, value in self.items()
         ]
 
-    def get_export_str(self, separator=";"):
+    def get_export_str(self, separator=";", export_cmd="export"):
         """Get the command to export all of the environment variables.
 
         Args:
             separator (str, optional): export command separtor.
                 Defaults to ";".
+            export_cmd (str, optional): export command or argument tag.
+                Defaults to "export".
 
         Returns:
             str: a string of export commands for each environment variable
 
         """
-        join_str = "{} export ".format(separator)
+        join_str = "{} {} ".format(separator, export_cmd)
         return "export {}{}".format(join_str.join(self.get_list()), separator)
