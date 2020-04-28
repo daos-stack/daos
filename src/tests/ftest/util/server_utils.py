@@ -303,14 +303,16 @@ class DaosServerManager(SubprocessManager):
         "OFI_PORT": "fabric_iface_port",
     }
 
-    def __init__(self, server_command, manager="Orterun"):
+    def __init__(self, server_command, manager="Orterun", dmg_cfg=None):
         """Initialize a DaosServerManager object.
 
         Args:
             server_command (ServerCommand): server command object
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
-                Defaults to "OpenMpi"
+                Defaults to "OpenMpi".
+            dmg_cfg (DmgYamlParameters, optional): The dmg configuration
+                file parameters used to connect to this group of servers.
         """
         super(DaosServerManager, self).__init__(server_command, manager)
         self.manager.job.sub_command_override = "start"
@@ -318,7 +320,7 @@ class DaosServerManager(SubprocessManager):
 
         # Dmg command to access this group of servers which will be configured
         # to access the doas_servers when they are started
-        self.dmg = DmgCommand(self.manager.job.command_path)
+        self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
 
     def get_interface_envs(self, index=0):
         """Get the environment variable names and values for the interfaces.
@@ -350,11 +352,14 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.create_yaml_file()
 
         # Prepare dmg for running storage format on all server hosts
-        self.dmg.hostlist.update(",".join(self._hosts), "dmg.hostlist")
-        self.dmg.insecure.update(
-            self.get_config_value("allow_insecure"), "dmg.insecure")
+        self.dmg.hostlist = self._hosts
+        if not self.dmg.yaml:
+            # If using a dmg config file, transport security was
+            # already configured.
+            self.dmg.insecure.update(
+                self.get_config_value("allow_insecure"), "dmg.insecure")
 
-        # Kill any doas servers running on the hosts
+        # Kill any daos servers running on the hosts
         self.kill()
 
         # Clean up any files that exist on the hosts
@@ -493,8 +498,7 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Failed to start servers after format")
 
         # Update the dmg command host list to work with pool create/destroy
-        self.dmg.hostlist.update(
-            ",".join(self.get_config_value("access_points")), "dmg.hostlist")
+        self.dmg.hostlist = self.get_config_value("access_points")
 
     def reset_storage(self):
         """Reset the server storage.
@@ -552,7 +556,7 @@ class DaosServerManager(SubprocessManager):
 
         # Format storage and wait for server to change ownership
         self.log.info(
-            "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist.value)
+            "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         self.dmg.storage_format()
 
         # Wait for all the doas_io_servers to start

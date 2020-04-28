@@ -132,7 +132,7 @@ class JobManager(ExecutableCommand):
         if self._process is not None and self._hosts:
             command = "/usr/bin/pgrep -a -f '{}'".format(str(self.job))
             self.log.debug(
-                "Processes still running remotely%s:",
+                "%s processes still running remotely%s:", self.command,
                 " {}".format(message) if message else "")
             self.log.debug("Running: %s", command)
             pcmd(self._hosts, command, True, 10, None)

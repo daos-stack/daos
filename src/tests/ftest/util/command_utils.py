@@ -205,6 +205,7 @@ class ExecutableCommand(CommandWithParameters):
                 # Indicate an error if the process required a SIGKILL
                 raise CommandFailure("Error stopping '{}'".format(self))
 
+            self.log.info("%s stopped successfully", self.command)
             self._process = None
 
     def display_subprocess_state(self, message=None):
@@ -215,14 +216,12 @@ class ExecutableCommand(CommandWithParameters):
                 Defaults to None.
         """
         if self._process is not None:
+            self.log.debug(
+                "%s processes still running%s:", self.command,
+                " {}".format(message) if message else "")
             command = "/usr/bin/ps --forest -o pid,tty,stat,time,cmd {}".format(
                 self._process.get_pid())
-            self.log.debug("Running: %s", command)
-            result = process.run(command, 10, True, True, "combined", False)
-            self.log.debug(
-                "Processes still running%s:\n  %s",
-                " {}".format(message) if message else "",
-                "  \n".join(result.stdout.splitlines()))
+            process.run(command, 10, True, True, "combined")
 
     def get_output(self, method_name, **kwargs):
         """Get output from the command issued by the specified method.
@@ -514,7 +513,7 @@ class SubProcessCommand(CommandWithSubCommand):
 class YamlCommand(SubProcessCommand):
     """Defines a sub-process command that utilizes a yaml configuration file.
 
-    Example commands: daos_agent, daos_server
+    Example commands: daos_agent, daos_server, dmg
     """
 
     def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=60):
