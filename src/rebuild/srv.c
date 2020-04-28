@@ -1111,6 +1111,7 @@ re_dist:
 		} else {
 			D_ERROR("pool map broadcast failed: rc "DF_RC"\n",
 				DP_RC(rc));
+			D_GOTO(out, rc);
 		}
 	}
 
