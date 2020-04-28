@@ -23,9 +23,8 @@
 """
 from cont_security_test_base import ContSecurityTestBase
 
-# pylint: disable=too-many-ancestors
 class CreateContainterACLTest(ContSecurityTestBase):
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Tests container basics including create, destroy, open, query and close.
 
     :avocado: recursive
@@ -47,8 +46,8 @@ class CreateContainterACLTest(ContSecurityTestBase):
             7. Destroy the pool.
             8. Remove all files created
 
-        # pylint: disable=line-too-long
-        :avocado: tags=all,full_regression,security,container_acl,cont_create_acl
+        :avocado: tags=all,full_regression,security,container_acl,
+        :avocado: tags=cont_create_acl,cont_create_acl
         """
         ## Create a pool
         self.log.info("===> Creating a pool with no ACL file passed")
