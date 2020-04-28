@@ -868,7 +868,7 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
 	D_ASSERT(class != NULL);
-	D_DEBUG(DB_TRACE, "class_id %d crt class id %d opc %d\n",
+	D_DEBUG(DB_MD, "class_id %d crt class id %d opc %d\n",
 		key_iv->class_id, class->iv_cart_class_id, opc);
 
 	iv_key_pack(&key_iov, key_iv);
@@ -904,8 +904,7 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 
 	ABT_future_wait(future);
 	rc = cb_info.result;
-	D_DEBUG(DB_TRACE, "class_id %d opc %d rc %d\n", key_iv->class_id, opc,
-		rc);
+	D_DEBUG(DB_MD, "class_id %d opc %d rc %d\n", key_iv->class_id, opc, rc);
 out:
 	ABT_future_free(&future);
 	return rc;
@@ -924,7 +923,8 @@ retry:
 		 * in the mean time, it will rely on others to update the
 		 * ns for it.
 		 */
-		D_WARN("retry upon %d\n", rc);
+		D_WARN("retry upon %d for class %d opc %d\n", rc,
+		       key->class_id, opc);
 		goto retry;
 	}
 	return rc;

@@ -57,10 +57,15 @@ def skip_stage(String stage) {
     return commitPragma(pragma: 'Skip-' + stage).contains('true')
 }
 
+def quickbuild() {
+    return commitPragma(pragma: 'Quick-build') == 'true'
+}
+
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
+def qb_inst_rpms = ""
 def daos_packages_version = ""
 def el7_component_repos = ""
 def component_repos = ""
@@ -70,17 +75,6 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
-def quickbuild = node() { commitPragma(pragma: 'Quick-build').contains('true') }
-if (quickbuild) {
-    /* TODO: this is a big fat hack
-     * what we should be doing here is installing all of the
-     * $(repoquery --requires daos{,-{server,tests}}) dependencies
-     * similar to how we do for QUICKBUILD_DEPS
-     * or just start testing from RPMs instead of continuing to hack
-     * around that :-)
-     */
-    functional_rpms += " spdk-tools"
-}
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -497,7 +491,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=' + quickbuild +
+                                                '--build-arg QUICKBUILD=' + quickbuild() +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
                                                 '" --build-arg REPOS="' + component_repos + '"'
                         }
@@ -587,7 +581,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -648,7 +642,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -710,7 +704,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -771,7 +765,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -832,7 +826,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -894,7 +888,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -975,6 +969,12 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
+                        script {
+                            if (quickbuild()) {
+                                // TODO: these should be gotten from the Requires: of RPMs
+                                qb_inst_rpms = " spdk-tools mercury boost-devel"
+                            }
+                        }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        profile: 'daos_ci',
@@ -985,7 +985,7 @@ pipeline {
                                                   "fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
-                                                  'libipmctl-devel'
+                                                  'libipmctl-devel' + qb_inst_rpms
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
@@ -1102,9 +1102,7 @@ pipeline {
                 stage('Coverity on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression {
-                            ! commitPragma(pragma: 'Skip-coverity-test').contains('true')
-                        }
+                        expression { ! skip_stage('coverity-test') }
                     }
                     agent {
                         dockerfile {
@@ -1553,7 +1551,7 @@ pipeline {
                             runTest script: "${rpm_test_pre}" +
                                             "sudo yum -y install daos{,-client}-${daos_packages_version}\n" +
                                             "sudo yum -y history rollback last-1\n" +
-                                            "sudo yum -y install daos{,-server}-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos{,-{server,client}}-${daos_packages_version}\n" +
                                             "sudo yum -y install daos{,-tests}-${daos_packages_version}\n" +
                                             "${rpm_test_daos_test}" + '"',
                                     junit_files: null,
@@ -1567,9 +1565,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression {
-                                ! commitPragma(pragma: 'Skip-scan-centos-rpms').contains('true')
-                            }
+                            expression { ! skip_stage('scan-centos-rpms') }
                         }
                     }
                     agent {
