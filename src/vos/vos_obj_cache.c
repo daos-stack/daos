@@ -344,7 +344,7 @@ out:
 		       " is not newer than the sync epoch "DF_U64"\n",
 		       intent == DAOS_INTENT_PUNCH ? "punch" : "update",
 		       DP_UOID(oid), epr->epr_hi, obj->obj_sync_epoch);
-		D_GOTO(failed, rc = -DER_INPROGRESS);
+		D_GOTO(failed, rc = -DER_TX_RESTART);
 	}
 
 	*obj_p = obj;
