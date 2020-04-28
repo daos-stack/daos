@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+
 from command_utils import \
     CommandWithParameters, FormattedParameter, CommandFailure, \
     CommandWithSubCommand
@@ -249,6 +250,9 @@ class DaosCommand(CommandWithSubCommand):
                 #               srv_cksum:  on, off
                 #               rf:         [0-4]
                 self.properties = FormattedParameter("--properties={}")
+                #   --acl-file=PATH
+                #           input file containing ACL
+                self.acl_file = FormattedParameter("--acl-file={}", None)
 
         class DestroySubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container destroy command."""
@@ -526,7 +530,7 @@ class DaosCommand(CommandWithSubCommand):
 
     def container_create(self, pool, sys_name=None, svc=None, cont=None,
                          path=None, cont_type=None, oclass=None,
-                         chunk_size=None, properties=None):
+                         chunk_size=None, properties=None,acl_file=None):
         """Create a container.
 
         Args:
@@ -545,6 +549,7 @@ class DaosCommand(CommandWithSubCommand):
                 Defaults to None.
             properties (str, optional): String of comma-separated <name>:<value>
                 pairs defining the container properties. Defaults to None
+            acl_file (str, optional): ACL file. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -565,6 +570,7 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.oclass.value = oclass
         self.sub_command_class.sub_command_class.chunk_size.value = chunk_size
         self.sub_command_class.sub_command_class.properties.value = properties
+        self.sub_command_class.sub_command_class.acl_file.value = acl_file
         return self._get_result()
 
     def container_destroy(self, pool, svc, cont, force=None, sys_name=None):
@@ -621,3 +627,4 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.sys_name.value = sys_name
         self.env = env
         return self._get_result()
+
