@@ -271,7 +271,7 @@ gc_obj_run(struct gc_test_args *args)
 		if (rc) {
 			print_error("failed to delete objects: %s\n",
 				    d_errstr(rc));
-			return rc;
+			goto out;
 		}
 	}
 
