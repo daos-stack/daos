@@ -303,20 +303,26 @@ main(int argc, char **argv)
 	} else if (rc == -DER_ENOENT) {
 		if (dfuse_info->di_pool) {
 
-			if (uuid_parse(dfuse_info->di_pool, dfp->dfp_pool) < 0) {
+			if (uuid_parse(dfuse_info->di_pool,
+					dfp->dfp_pool) < 0) {
 				DFUSE_TRA_ERROR(dfp, "Invalid pool uuid");
 				D_GOTO(out_dfs, ret = -DER_INVAL);
 			}
 			if (dfuse_info->di_cont) {
 
-				if (uuid_parse(dfuse_info->di_cont, dfs->dfs_cont) < 0) {
-					DFUSE_TRA_ERROR(dfp, "Invalid container uuid");
+				if (uuid_parse(dfuse_info->di_cont,
+						dfs->dfs_cont) < 0) {
+					DFUSE_TRA_ERROR(dfp,
+							"Invalid container uuid");
 					D_GOTO(out_dfs, ret = -DER_INVAL);
 				}
 			}
 		}
 	} else if (rc == -DER_BADPATH) {
 		printf("Mount point does not exist\n");
+		D_GOTO(out_dfs, ret = rc);
+	} else {
+		/* Other errors from DUNS, it should have logged them already */
 		D_GOTO(out_dfs, ret = rc);
 	}
 
