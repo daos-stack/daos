@@ -1865,11 +1865,12 @@ static int
 commited_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *value, void *arg)
 {
         struct vos_dtx_cmt_ent	*dce = value->iov_buf;
-	struct pl_obj_layout	*layout;
+	//struct pl_obj_layout	*layout;
 
 	D_PRINT("oid: "DF_UOID", epoch: "DF_U64"\n",
 		DP_UOID(dce->dce_base.dce_oid), dce->dce_base.dce_epoch);
-	int rc = ds_pool_check_leader(0, &dce->dce_base.dce_oid, 0, &layout);
+	int rc = 0;
+       //	ds_pool_check_leader(0, &dce->dce_base.dce_oid, 0, &layout);
 	D_PRINT("rc == %d\nb", rc);
 	return 0;
 }
