@@ -88,13 +88,6 @@ mem_pin_workaround(void)
 		D_GOTO(exit, crt_rc = -DER_MISC);
 	}
 
-	/* Lock all pages */
-	rc = mlockall(MCL_CURRENT | MCL_FUTURE);
-	if (rc) {
-		D_ERROR("Failed to mlockall(): %d\n", errno);
-		D_GOTO(exit, crt_rc = -DER_MISC);
-	}
-
 	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
 exit:
 	return crt_rc;
