@@ -487,6 +487,10 @@ class DmgCommand(CommandWithSubCommand):
     def network_scan(self, provider=None, all_devs=False):
         """Get the result of the dmg network scan command.
 
+        Args:
+            provider (str): name of network provider tied to the device
+            all_devs (bool, optional): Show all devs  info. Defaults to False.
+
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.

@@ -41,26 +41,73 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
-def run_cmd(cmd, verbose=False, sudo=False):
-    """Launch a shell command on the local host.
+def run_command(command, timeout=60, verbose=True, raise_exception=True,
+                output_check="combined", env=None):
+    """Run the command on the local host.
+
+    This method uses the avocado.utils.process.run() method to run the specified
+    command string on the local host using subprocess.Popen(). Even though the
+    command is specified as a string, since shell=False is passed to process.run
+    it will use shlex.spit() to break up the command into a list before it is
+    passed to subprocess.Popen. The shell=False is forced for security.
+
+    As a result typically any command containing ";", "|", "&&", etc. will fail.
+    This can be avoided in command strings like "for x in a b; echo $x; done"
+    by using "/usr/bin/bash -c 'for x in a b; echo $x; done'".
 
     Args:
-        cmd (str): Command to be executed
-        verbose (bool): Show command output to stdout
-        sudo (bool): Run the command under sudo
+        command (str): command to run.
+        timeout (int, optional): command timeout. Defaults to 60 seconds.
+        verbose (bool, optional): whether to log the command run and
+            stdout/stderr. Defaults to True.
+        raise_exception (bool, optional): whether to raise an exception if the
+            command returns a non-zero exit status. Defaults to True.
+        output_check (str, optional): whether to record the output from the
+            command (from stdout and stderr) in the test output record files.
+            Valid values:
+                "stdout"    - standard output *only*
+                "stderr"    - standard error *only*
+                "both"      - both standard output and error in separate files
+                "combined"  - standard output and error in a single file
+                "none"      - disable all recording
+            Defaults to "combined".
+        env (dict, optional): dictionary of environment variable names and
+            values to set when running the command. Defaults to None.
+
+    Raises:
+        DaosTestError: if there is an error running the command
 
     Returns:
-        CmdResult: Avocado command object.
+        CmdResult: an avocado.utils.process CmdResult object containing the
+            result of the command execution.  A CmdResult object has the
+            following properties:
+                command         - command string
+                exit_status     - exit_status of the command
+                stdout          - the stdout
+                stderr          - the stderr
+                duration        - command execution time
+                interrupted     - whether the command completed within timeout
+                pid             - command's pid
 
     """
     kwargs = {
-        "cmd": cmd,
-        "allow_output_check": "combined",
+        "cmd": command,
+        "timeout": timeout,
         "verbose": verbose,
-        "sudo": sudo,
-        "shell": True,
+        "ignore_status": not raise_exception,
+        "allow_output_check": output_check,
+        "shell": False,
+        "env": env,
     }
-    return process.run(**kwargs)
+    try:
+        # Block until the command is complete or times out
+        return process.run(**kwargs)
+
+    except process.CmdError as error:
+        # Command failed or possibly timed out
+        msg = "Error occurred running '{}': {}".format(" ".join(command), error)
+        print(msg)
+        raise DaosTestError(msg)
 
 
 def run_task(hosts, command, timeout=None):
