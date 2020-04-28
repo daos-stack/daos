@@ -427,6 +427,75 @@ rebuild_snap_punch_keys(void **state)
 }
 
 static void
+rebuild_snap_punch_empty(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	int		tgt = DEFAULT_FAIL_TGT;
+	daos_epoch_t	snap_epoch;
+	int		i;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
+	oid = dts_oid_set_tgt(oid, tgt);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/* insert a record */
+	insert_single("d_key", "a_key", 0, "data", 1, DAOS_TX_NONE, &req);
+
+	daos_cont_create_snap(arg->coh, &snap_epoch, NULL, NULL);
+
+	punch_obj(DAOS_TX_NONE, &req);
+
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+
+	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
+	for (i = 0; i < OBJ_REPLICAS; i++) {
+		daos_key_desc_t  kds[10];
+		daos_anchor_t	 anchor;
+		daos_handle_t	 th_open;
+		char		 buf[256];
+		int		 buf_len = 256;
+		uint32_t	 number;
+
+		daos_fail_value_set(i);
+		daos_tx_open_snap(arg->coh, snap_epoch, &th_open, NULL);
+		number = 10;
+		memset(&anchor, 0, sizeof(anchor));
+		enumerate_dkey(th_open, &number, kds, &anchor, buf, buf_len,
+			       &req);
+		assert_int_equal(number, 1);
+
+		number = 10;
+		memset(&anchor, 0, sizeof(anchor));
+		enumerate_akey(th_open, "d_key", &number, kds, &anchor, buf,
+			       buf_len, &req);
+		assert_int_equal(number, 1);
+
+		daos_tx_close(th_open, NULL);
+
+		number = 10;
+		memset(&anchor, 0, sizeof(anchor));
+		enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
+			       buf_len, &req);
+		assert_int_equal(number, 0);
+
+		number = 10;
+		memset(&anchor, 0, sizeof(anchor));
+		enumerate_akey(DAOS_TX_NONE, "d_key", &number, kds, &anchor,
+			       buf, buf_len, &req);
+		assert_int_equal(number, 0);
+	}
+
+	ioreq_fini(&req);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+}
+
+static void
 rebuild_multiple(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -547,6 +616,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_snap_punch_keys, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD10: rebuild multiple objects",
 	 rebuild_objects, rebuild_sub_setup, test_teardown},
+	{"REBUILD11: rebuild snapshotted punched object",
+	 rebuild_snap_punch_empty, rebuild_small_sub_setup, test_teardown},
 };
 
 int
