@@ -31,65 +31,59 @@ from avocado.utils import process
 from control_test_base import ControlTestBase
 
 
-class NetDevList(object):
-    # pylint: disable=too-few-public-methods
-    """ A class that holds a list of NetDev objects."""
-    def __init__(self, netdevs=None):
-        """ Initialize a list of netdevices."""
-        self.netdevs = netdevs
-
-    def __str__(self):
-        for i in self.netdevs:
-            print(i)
-
-    def __eq__(self, other_devs):
-        """Overrides the default implementation to compare devices."""
-        equality = True
-        if isinstance(other_devs, NetDevList):
-            if len(self.netdevs) != len(other_devs.netdevs):
-                equality = False
-            else:
-                for i, _ in enumerate(self.netdevs):
-                    if other_devs.netdevs[i] not in self.netdevs:
-                        equality = False
-        return equality
-
-    def __ne__(self, other_devs):
-        """Overrides the default implementation (unnecessary in Python 3)"""
-        return not self.__eq__(other_devs)
-
-
 class NetDev(object):
     # pylint: disable=too-few-public-methods
     """A class to represent the information of a network device"""
     def __init__(self, host=None, f_iface=None, providers=None, numa=None):
-        """ Initialize the network device data object."""
+        """Initialize the network device data object."""
         self.host = host
         self.f_iface = f_iface
         self.providers = providers
         self.numa = numa
 
     def __repr__(self):
+        """Overwrite to display formated devices."""
         self.__str__()
 
     def __str__(self):
-        return "{}\n{}\n{}\n{}".format(
-            self.host, self.f_iface, self.providers, self.numa)
+        """Overwrite to display formated devices."""
+        return "\n".join("{}: {}".format(key, getattr(self, key, "MISSING"))
+                         for key in self.__dict__.keys())
 
-    def get_dev_info(self, prefix):
-        """ Get all of this devices' information."""
-        self._get_numa()
-        self._get_providers(prefix)
+    def __ne__(self, other):
+        """Override the default not-equal implementation."""
+        return not self.__eq__(other)
 
-    def _get_numa(self):
-        """ Get the numa node information for this device."""
+    def __eq__(self, other):
+        """Override the default implementation to compare devices."""
+        status = isinstance(other, NetDev)
+        for key in self.__dict__.keys():
+            if not status:
+                break
+            try:
+                status &= getattr(self, key) == getattr(other, key)
+            except AttributeError:
+                status = False
+        return status
+
+    def set_dev_info(self, prefix):
+        """Get all of this devices' information.
+
+        Args:
+            prefix (str): prefix path pointing to daos intall path
+        """
+        self.set_numa()
+        self.set_providers(prefix)
+
+    def set_numa(self):
+        """Get the numa node information for this device."""
         if self.f_iface:
             p = "/sys/class/net/{}/device/numa_node".format(self.f_iface)
             if os.path.exists(p):
                 self.numa = ''.join(open(p, 'r').read()).rstrip()
 
-    def _get_providers(self, prefix):
-        """ Get the provider information for this device."""
+    def set_providers(self, prefix):
+        """Get the provider information for this device."""
         if self.f_iface:
             fi_info = os.path.join(
                 prefix, "bin", "fi_info -d {}".format(self.f_iface))
@@ -114,8 +108,8 @@ class DmgNetworkScanTest(ControlTestBase):
         super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
         self.setup_start_agents = False
 
-    def get_devs(self):
-        #pylint: disable=no-self-use
+    @staticmethod
+    def get_devs():
         """ Get list of devices."""
         devs = []
         for dev in os.listdir("/sys/class/net/"):
@@ -132,10 +126,10 @@ class DmgNetworkScanTest(ControlTestBase):
         sys_net_devs = []
         for dev in self.get_devs():
             dev_info = NetDev(host, dev)
-            dev_info.get_dev_info(self.prefix)
+            dev_info.set_dev_info(self.prefix)
             sys_net_devs.append(dev_info)
 
-        return NetDevList(sys_net_devs)
+        return sys_net_devs
 
     def get_dmg_info(self):
         """ Store the information received from dmg output."""
@@ -166,7 +160,7 @@ class DmgNetworkScanTest(ControlTestBase):
                 if i.f_iface != j.f_iface and j not in diff:
                     diff.append(j)
 
-        return NetDevList(conso + diff)
+        return conso + diff
 
     def test_dmg_network_scan_basic(self):
         """
@@ -175,9 +169,14 @@ class DmgNetworkScanTest(ControlTestBase):
         devices on the system.
         :avocado: tags=all,small,pr,hw,dmg,network_scan,basic
         """
-        # Get info, both these functions will return a NetDevList
-        dmg_info = self.get_dmg_info()
-        sys_info = self.get_sys_info()
+        # Get info, both these functions will return a list of NetDev objects
+        dmg_info = sorted(self.get_dmg_info())
+        sys_info = sorted(self.get_sys_info())
+
+        # Create error msg for user
+        dmg_msg = "\n".join("{}".format(i) for i in dmg_info)
+        sys_msg = "\n".join("{}".format(i) for i in sys_info)
+        msg = "Dmg Info:\n{} \nSysInfo:\n{}".format(dmg_msg, sys_msg)
 
         # Validate the output with what we expect.
-        self.assertEqual(sys_info, dmg_info)
+        self.assertEqual(sys_info, dmg_info, msg)
