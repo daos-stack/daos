@@ -1,33 +1,110 @@
 ---
 # Sample conflig file DFS files and directories
 num_pools: 1000
-time_key: &time
-  count: 3
-  size: 5
+
+dfs_magic: &magic
+  type: integer
   overhead: meta
   value_type: single_value
-  values: [{"count": 3, "size": 8}]
+  values: [{"count": 1, "size": 8}]
 
-oid_key: &oid
-  size: 3
+dfs_sb_version: &sb_ver
+  type: integer
   overhead: meta
   value_type: single_value
-  values: [{"size": 16}]
+  values: [{"count": 1, "size": 2}]
 
-mode_key: &mode
+dfs_sb_layout_version: &layout_ver
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 2}]
+
+dfs_sb_feat_compat: &compat
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 8}]
+
+dfs_sb_feat_incompat: &incompat
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 8}]
+
+dfs_sb_mkfs_time: &mkfs
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 8}]
+
+dfs_sb_state: &state
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 8}]
+
+dfs_chunk_size: &def_chunk_size
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 8}]
+
+dfs_obj_class: &obj_class
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 8}]
+
+dfs_sb_metadata: &sb_metadata
+  count: 1
+  type: integer
+  overhead: meta
+  akeys: [*magic, *sb_ver, *layout_ver, *compat, *incompat, *mkfs, *state, *def_chunk_size, *obj_class]
+
+
+mode_t: &mode
+  count: 1
   size: 4
+
+obj_id_t: &oid
+  count: 1
+  size: 16
+
+time_t: &time
+  count: 3
+  size: 8
+
+daos_size_t: &chunk_size
+  count: 1
+  size: 8
+
+symlink_value: &symlink
+  count: 1
+  size: 1
+
+# The dfs_entry struct has a size of 64 bytes
+p_t: &padding
+  count: 1
+  size: 11
+
+dfs_inode: &dfs_inode
+  type: integer
   overhead: meta
-  value_type: single_value
-  values: [{"size": 4}]
+  value_type: array
+  values: [*mode, *oid, *time, *chunk_size, *symlink, *padding]
 
 # Assumes 16 bytes for file name
 dirent_key: &dirent
   count: 1000000
   size: 16
-  akeys: [*mode, *oid, *time]
+  akeys: [*dfs_inode]
 
 dir_obj: &dir
   dkeys: [*dirent]
+
+superblock: &sb
+  dkeys: [*sb_metadata]
 
 array_akey: &file_data
   size: 1
@@ -56,6 +133,6 @@ file_key: &file
   dkeys: [*file_dkey0, *file_dkey]
 
 posix_key: &posix
-  objects: [*file, *dir]
+  objects: [*sb, *file, *dir]
 
 containers: [*posix]
