@@ -130,7 +130,7 @@ class IorCommand(ExecutableCommand):
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
-        self.dfs_prefix = FormattedParameter("--dfs.prefix {}") 
+        self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
 
         # A list of environment variable names to set and export with ior
         self._env_names = ["D_LOG_FILE"]
@@ -145,7 +145,7 @@ class IorCommand(ExecutableCommand):
         param_names = [name for name in all_param_names if ("daos" not in name)
                        and ("dfs" not in name)]
 
-        if self.api.value == "DAOS":        
+        if self.api.value == "DAOS":
             param_names.extend(
                 [name for name in all_param_names if "daos" in name])
         elif self.api.value == "DFS":

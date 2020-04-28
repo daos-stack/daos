@@ -1,26 +1,24 @@
 hosts:
   test_servers:
-    - boro-82
-#    - server-A
-#    - server-B
-#    - server-C
-#    - server-D
-#    - server-E
-#    - server-F
-#    - server-G
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
   test_clients:
-    - boro-14
-#    - client-H
-timeout: 5400
+    - client-F
+    - client-G
+    - client-H
+timeout: 7200
 server_config:
   name: daos_server
   servers:
     scm_size: 50
-#    bdev_class: nvme
-#    bdev_list: ["0000:81:00.0","0000:da:00.0"]
-#    scm_class: dcpm
-#    scm_list: ["/dev/pmem0"]
-#    scm_size: 400
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0","0000:da:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+    scm_size: 400
 
 pool:
   createmode:
@@ -29,44 +27,45 @@ pool:
   createset:
     setname: daos_server
   createsize:
-    scm_size: 39000000000
-#    scm_size: 400000000000   # large scm_size for mdtest file creation
-#    nvme_size: 10000000000
+    scm_size: 400000000000   # large scm_size for mdtest file creation
+    nvme_size: 10000000000
   createsvc:
     svcn: 1
-#container:
-#    type: POSIX
-#    control_method: daos
+container:
+  type: POSIX
+  control_method: daos
 largefilecount:
   api:
-      - DFS
-#      - POSIX
+    - DFS
+    - POSIX
 ior:
-  np: 16
+  np: 30
   dfs_destroy: False
   iorflags:
     sequential:
       flags: "-v -D 300 -W -w -r -R"
   test_file: /testFile
   repetitions: 1
-  transfersize_blocksize: !mux
+  transfersize_blocksize:
     4K:
       transfer_size: '4K'
-      block_size: '500M'
-  objectclass: !mux
+      block_size: '300M'
+  objectclass:
     SX:
       daos_oclass: "SX"
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse/"
 
 mdtest:
   client_processes:
-    np: 16
-  num_of_files_dirs: 625      # creating total of 1 million files
+    np: 30
+  num_of_files_dirs: 834         # creating total of 25K files
+  num_of_files_dirs_rc: 33334    # creating total of 1M files
   test_dir: "/"
   iteration: 1
   dfs_destroy: True
   manager: "MPICH"
-  write_bytes: 0
-  read_bytes: 0
+  flags: "-F -C"
+  write_bytes: 4096
+  read_bytes: 4096
   depth: 0
