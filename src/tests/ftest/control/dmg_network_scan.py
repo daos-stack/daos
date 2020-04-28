@@ -48,7 +48,7 @@ class NetDev(object):
     def __str__(self):
         """Overwrite to display formated devices."""
         return "\n".join("{}: {}".format(key, getattr(self, key, "MISSING"))
-                         for key in self.__dict__.keys())
+                         for key in self.__dict__)
 
     def __ne__(self, other):
         """Override the default not-equal implementation."""
@@ -57,7 +57,7 @@ class NetDev(object):
     def __eq__(self, other):
         """Override the default implementation to compare devices."""
         status = isinstance(other, NetDev)
-        for key in self.__dict__.keys():
+        for key in self.__dict__:
             if not status:
                 break
             try:
