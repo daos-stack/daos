@@ -530,7 +530,7 @@ class DaosCommand(CommandWithSubCommand):
 
     def container_create(self, pool, sys_name=None, svc=None, cont=None,
                          path=None, cont_type=None, oclass=None,
-                         chunk_size=None, properties=None,acl_file=None):
+                         chunk_size=None, properties=None, acl_file=None):
         """Create a container.
 
         Args:
@@ -627,4 +627,3 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.sys_name.value = sys_name
         self.env = env
         return self._get_result()
-

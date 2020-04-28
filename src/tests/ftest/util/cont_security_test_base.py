@@ -28,10 +28,8 @@ import grp
 import random
 from apricot import TestWithServers
 
-import daos_utils
-from daos_utils import DaosCommand
 import dmg_utils
-from dmg_utils import DmgCommand
+from daos_utils import DaosCommand
 
 PERMISSIONS = ["", "r", "w", "rw", "rwc", "rwcd", "rwcdt", "rwcdtT"]
 
@@ -88,7 +86,7 @@ class ContSecurityTestBase(TestWithServers):
         super(ContSecurityTestBase, self).setUp()
         self.user_uid = os.geteuid()
         self.user_gid = os.getegid()
-        self.current_user  = pwd.getpwuid(self.user_uid)[0]
+        self.current_user = pwd.getpwuid(self.user_uid)[0]
         self.current_group = grp.getgrgid(self.user_uid)[0]
         self.co_prop = self.params.get("container_properties",
                                        "/run/container/*")
@@ -98,7 +96,7 @@ class ContSecurityTestBase(TestWithServers):
 
     def generate_acl_file(self, acl_type):
         """Create an acl file for the specified type.
-        
+
         Args:
             acl_type (str): default, invalid, valid
 
@@ -164,7 +162,7 @@ class ContSecurityTestBase(TestWithServers):
 
         Args:
             none.
-        
+
         Returns:
             none.
         """
@@ -196,7 +194,7 @@ class ContSecurityTestBase(TestWithServers):
         file_name = None
         get_acl_file = None
 
-        if acl_type == None:
+        if acl_type is None:
             get_acl_file = ""
         else:
             get_acl_file = "acl_{}.txt".format(acl_type)
@@ -213,15 +211,19 @@ class ContSecurityTestBase(TestWithServers):
         else:
             self.container_uuid = None
         self.daos_tool.exit_status_exception = True
-        self.log.info("    daos = %s",self.daos_tool)
+        self.log.info("    daos = %s", self.daos_tool)
 
         ## Verify the daos container status
         if acl_type == "invalid":
             if self.container_uuid is not None:
-                self.fail("    Container [%s] created when no expecting one.", self.container_uuid)
+                self.fail(
+                    "    Container [%s] created when no expecting "
+                    "one.", self.container_uuid)
         else:
             if self.container_uuid is None:
-                self.fail("    Expecting a container to be created but none was.")
+                self.fail(
+                    "    Expecting a container to be created but "
+                    "none was.")
 
 
     def destroy_container_with_daos(self):
@@ -247,10 +249,10 @@ class ContSecurityTestBase(TestWithServers):
         else:
             self.container_uuid = None
 
-            
+
     def verify_daos_cont_result(self, result, action, expect, err_code):
         """Verify the daos create result.
-        
+
         Args:
             result (CmdResult): handle for daos container action.
             action (str): daos container 'create'.
@@ -263,19 +265,21 @@ class ContSecurityTestBase(TestWithServers):
         if expect.lower() == 'pass':
             if result.exit_status != 0 or result.stderr != "":
                 self.fail(
-                    "    ##Test Fail on verify_daos_cont_result {}, expected Pass, but "
-                    "Failed.".format(action))
+                    "    ##Test Fail on verify_daos_cont_result {}, "
+                    "expected Pass, but Failed.".format(action))
             else:
                 self.log.info(
-                    "    Test Passed on verify_daos_cont_result %s, Succeed.\n", action)
+                    "    Test Passed on verify_daos_cont_result %s, "
+                    "Succeed.\n", action)
         elif err_code not in result.stderr:
             self.fail(
-                "    ##Test Fail on verify_daos_cont_result {}, expected Failure of {}, "
-                "but Passed.".format(action, expect))
+                "    ##Test Fail on verify_daos_cont_result {}, "
+                "expected Failure of {}, but "
+                "Passed.".format(action, expect))
         else:
             self.log.info(
-                "    Test Passed on verify_daos_cont_result %s expected error of '%s'.\n",
-                action, expect)
+                "    Test Passed on verify_daos_cont_result %s "
+                "expected error of '%s'.\n", action, expect)
 
 
     def cleanup(self, types):
@@ -304,4 +308,3 @@ def execute_command(command):
         none.
     """
     os.system(command)
-

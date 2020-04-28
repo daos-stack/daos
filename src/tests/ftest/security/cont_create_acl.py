@@ -21,9 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import cont_security_test_base as contSec
 from cont_security_test_base import ContSecurityTestBase
 
+# pylint: disable=too-many-ancestors
 class CreateContainterACLTest(ContSecurityTestBase):
     # pylint: disable=too-few-public-methods
     """Tests container basics including create, destroy, open, query and close.
@@ -47,6 +47,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
             7. Destroy the pool.
             8. Remove all files created
 
+        # pylint: disable=line-too-long
         :avocado: tags=all,full_regression,security,container_acl,cont_create_acl
         """
         ## Create a pool
@@ -76,17 +77,16 @@ class CreateContainterACLTest(ContSecurityTestBase):
         ## Create an invalid ACL file
         self.log.info("===> Generating an invalid ACL file")
         self.generate_acl_file("invalid")
-        
+
         ## Create a container with an invalid ACL file passed
-        self.log.info("===> Creating a container with an invalid ACL file passed")
+        self.log.info("===> Creating a container with invalid ACL file passed")
         self.create_container_with_daos("invalid")
 
         ## Destroy the pool
         self.log.info("===> Destroying the pool")
         self.destroy_pool_with_dmg()
-        
+
         ## Cleanup environment
         self.log.info("===> Cleaning the environment")
         types = ["valid", "invalid"]
         self.cleanup(types)
-
