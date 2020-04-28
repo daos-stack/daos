@@ -2887,7 +2887,7 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 	}
 
 	grp_priv->gp_size = 0;
-	grp_priv->gp_self = 0;
+	grp_priv->gp_self = CRT_NO_RANK;
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
@@ -3002,7 +3002,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 	}
 
 	grp_priv->gp_size = 0;
-	grp_priv->gp_self = 0;
+	grp_priv->gp_self = CRT_NO_RANK;
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
@@ -3175,6 +3175,12 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
+	/*
+	 * Set the self rank based on my primary group rank. For simplicity,
+	 * assert that my primary group rank must have been set already, since
+	 * this is always the case with daos_io_server today.
+	 */
+	D_ASSERT(grp_priv->gp_priv_prim->gp_self != CRT_NO_RANK);
 	if (prim_rank == grp_priv->gp_priv_prim->gp_self) {
 		D_DEBUG(DB_ALL, "Setting rank %d as self rank for grp %s\n",
 			sec_rank, grp_priv->gp_pub.cg_grpid);

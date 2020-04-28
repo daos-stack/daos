@@ -125,6 +125,8 @@ out:
 		D_ASSERT(tree_type == CRT_TREE_FLAT ||			\
 			 (tree_ratio >= CRT_TREE_MIN_RATIO &&		\
 			  tree_ratio <= CRT_TREE_MAX_RATIO));		\
+		D_ASSERT(root != CRT_NO_RANK);				\
+		D_ASSERT(self != CRT_NO_RANK);				\
 	} while (0)
 
 /*
