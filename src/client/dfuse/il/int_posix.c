@@ -352,7 +352,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 {
 	struct dfuse_il_reply	il_reply;
 	daos_size_t		cell_size = 1;
-	daos_size_t		chunk_size = 1024 * 256;
+	daos_size_t		chunk_size = 1024 * 1024;
 	int			rc;
 
 	if (fd == -1)
