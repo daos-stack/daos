@@ -283,7 +283,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		D_ERROR("Failed to statfs %s: %s\n", path, strerror(errno));
 		/** TODO - convert errno to rc */
 		free(dir);
-		return -DER_INVAL;
+		return -DER_BADPATH;
 	}
 
 #ifdef LUSTRE_INCLUDE
@@ -302,19 +302,21 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	s = lgetxattr(path, DUNS_XATTR_NAME, &str, DUNS_MAX_XATTR_LEN);
 	if (s < 0 || s > DUNS_MAX_XATTR_LEN) {
 		int err = errno;
+		rc = -DER_INVAL;
 
 		if (err == ENOTSUP)
 			D_ERROR("Path is not in a filesystem that supports the"
 				" DAOS unified namespace\n");
-		else if (err == ENODATA)
-			D_ERROR("Path does not represent a DAOS link\n");
-		else if (s > DUNS_MAX_XATTR_LEN)
+		else if (err == ENODATA) {
+			D_WARN("Path does not represent a DAOS link\n");
+			rc = -DER_ENOENT;
+		} else if (s > DUNS_MAX_XATTR_LEN)
 			D_ERROR("Invalid xattr length\n");
 		else
 			D_ERROR("Invalid DAOS unified namespace xattr\n");
 
 		free(dir);
-		return -DER_INVAL;
+		return rc;
 	}
 
 	free(dir);
