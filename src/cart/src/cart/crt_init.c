@@ -88,8 +88,8 @@ mem_pin_workaround(void)
 		D_GOTO(exit, crt_rc = -DER_MISC);
 	}
 
+	/* Lock all pages */
 	rc = mlockall(MCL_CURRENT | MCL_FUTURE);
-
 	if (rc) {
 		D_ERROR("Failed to mlockall(): %d\n", errno);
 		D_GOTO(exit, crt_rc = -DER_MISC);
@@ -142,7 +142,6 @@ static int data_init(int server, crt_init_options_t *opt)
 		d_getenv_int("CRT_DISABLE_MEM_PIN", &mem_pin_disable);
 		if (mem_pin_disable == 0) {
 			rc = mem_pin_workaround();
-
 			if (rc != 0)
 				D_GOTO(exit, rc);
 		}
