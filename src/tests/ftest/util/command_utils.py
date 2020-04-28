@@ -215,7 +215,8 @@ class ExecutableCommand(CommandWithParameters):
                 Defaults to None.
         """
         if self._process is not None:
-            command = "/usr/bin/pstree -pls {}".format(self._process.get_pid())
+            command = "/usr/bin/ps --forest -o pid,tty,stat,time,cmd {}".format(
+                self._process.get_pid())
             self.log.debug("Running: %s", command)
             result = process.run(command, 10, True, True, "combined", False)
             self.log.debug(
