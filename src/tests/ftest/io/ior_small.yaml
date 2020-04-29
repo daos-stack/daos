@@ -1,5 +1,5 @@
 server_manager:
-    srv_timeout: 500
+    srv_timeout: 1000
 hosts:
   test_servers:
     - server-A
