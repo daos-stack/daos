@@ -391,6 +391,21 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	*psrs = p;
 
 	if (sy_info) {
+		if (strnlen(resp->provider, sizeof(sy_info->provider)) == 0) {
+			D_ERROR("GetAttachInfo provider string is empty\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (strnlen(resp->interface, sizeof(sy_info->interface)) == 0) {
+			D_ERROR("GetAttachInfo interface string is empty\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (strnlen(resp->domain, sizeof(sy_info->domain)) == 0) {
+			D_ERROR("GetAttachInfo domain string is empty\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
 		if (copy_str(sy_info->provider, resp->provider)) {
 			D_ERROR("GetAttachInfo provider string too long\n");
 			D_GOTO(out_resp, rc = -DER_INVAL);
@@ -408,6 +423,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
 		sy_info->crt_timeout = resp->crttimeout;
+
 		D_DEBUG(DB_MGMT,
 			"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
 			"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u\n",
@@ -433,7 +449,7 @@ out:
  * via the get_attach_info() dRPC.
  * Configure the client's local environment with these parameters
  */
-int dc_network_cfg(const char *name)
+int dc_mgmt_net_cfg(const char *name)
 {
 	int rc;
 	int npsrs;

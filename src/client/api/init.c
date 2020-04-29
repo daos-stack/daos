@@ -163,7 +163,7 @@ daos_init(void)
 		D_GOTO(out_hhash, rc);
 
 	/** get CaRT configuration */
-	rc = dc_network_cfg(NULL);
+	rc = dc_mgmt_net_cfg(NULL);
 	if (rc != 0)
 		D_GOTO(out_obj, rc);
 

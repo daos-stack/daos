@@ -67,7 +67,7 @@ struct dc_mgmt_sys {
 	struct sys_info		sy_info;
 };
 
-int dc_network_cfg(const char *name);
+int dc_mgmt_net_cfg(const char *name);
 int dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp);
 void dc_mgmt_sys_detach(struct dc_mgmt_sys *sys);
 ssize_t dc_mgmt_sys_encode(struct dc_mgmt_sys *sys, void *buf, size_t cap);
