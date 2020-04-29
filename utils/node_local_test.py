@@ -116,7 +116,7 @@ class DaosServer():
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        if os.path.exists('/tmp.dnt_server.log'):
+        if os.path.exists('/tmp/dnt_server.log'):
             log_test('/tmp/dnt_server.log')
         self.running = False
 
@@ -202,8 +202,11 @@ class DFuse():
 
     instance_num = 0
 
-    def __init__(self, daos, conf, pool=None, container=None):
-        self.dir = '/tmp/dfs_test'
+    def __init__(self, daos, conf, pool=None, container=None, path=None):
+        if path:
+            self.path = path
+        else:
+            self.path = '/tmp/dfs_test'
         self.pool = pool
         self.valgrind_file = None
         self.container = container
@@ -219,8 +222,8 @@ class DFuse():
 
         self.valgrind = None
 
-        if not os.path.exists(self.dir):
-            os.mkdir(self.dir)
+        if not os.path.exists(self.path):
+            os.mkdir(self.path)
 
     def start(self, v_hint=None):
         """Start a dfuse instance"""
@@ -230,7 +233,7 @@ class DFuse():
         single_threaded = False
         caching = False
 
-        pre_inode = os.stat(self.dir).st_ino
+        pre_inode = os.stat(self.path).st_ino
 
         my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
         my_env['OFI_INTERFACE'] = 'eth0'
@@ -243,7 +246,7 @@ class DFuse():
         self.valgrind = ValgrindHelper(v_hint)
         cmd = self.valgrind.get_cmd_prefix()
 
-        cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
+        cmd.extend([dfuse_bin, '-s', '0', '-m', self.path, '-f'])
 
         if single_threaded:
             cmd.append('-S')
@@ -256,11 +259,11 @@ class DFuse():
         if self.container:
             cmd.extend(['--container', self.container])
         self._sp = subprocess.Popen(cmd, env=my_env)
-        print('Started dfuse at {}'.format(self.dir))
+        print('Started dfuse at {}'.format(self.path))
         print('Log file is {}'.format(self.log_file))
 
         total_time = 0
-        while os.stat(self.dir).st_ino == pre_inode:
+        while os.stat(self.path).st_ino == pre_inode:
             print('Dfuse not started, waiting...')
             try:
                 ret = self._sp.wait(timeout=1)
@@ -280,7 +283,7 @@ class DFuse():
                 tfile = os.readlink(os.path.join('/proc/self/fd', fname))
             except FileNotFoundError:
                 continue
-            if tfile.startswith(self.dir):
+            if tfile.startswith(self.path):
                 print('closing file {}'.format(tfile))
                 os.close(int(fname))
                 work_done = True
@@ -296,10 +299,10 @@ class DFuse():
             return
 
         print('Stopping fuse')
-        ret = umount(self.dir)
+        ret = umount(self.path)
         if ret:
             self._close_files()
-            umount(self.dir)
+            umount(self.path)
 
         ret = self._sp.wait(timeout=20)
         print('rc from dfuse {}'.format(ret))
@@ -391,11 +394,13 @@ def show_cont(conf, pool):
     """Create a container and return a container list"""
     cmd = ['container', 'create', '--svc', '0', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
+    assert rc.returncode == 0
     print('rc is {}'.format(rc))
 
     cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
+    assert rc.returncode == 0
     return rc.stdout.strip()
 
 def make_pool(daos, conf):
@@ -420,7 +425,7 @@ def make_pool(daos, conf):
 
 def run_tests(dfuse):
     """Run some tests"""
-    path = dfuse.dir
+    path = dfuse.path
 
     fname = os.path.join(path, 'test_file3')
     ofd = open(fname, 'w')
@@ -444,7 +449,7 @@ def run_tests(dfuse):
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
-    post_stat = os.stat(dfuse.dir)
+    post_stat = os.stat(dfuse.path)
     if pre_stat.st_dev == post_stat.st_dev:
         raise DFTestFail('Device # unchanged')
     if post_stat.st_ino != 1:
@@ -453,7 +458,7 @@ def stat_and_check(dfuse, pre_stat):
 def check_no_file(dfuse):
     """Check that a non-existent file doesn't exist"""
     try:
-        os.stat(os.path.join(dfuse.dir, 'no-file'))
+        os.stat(os.path.join(dfuse.path, 'no-file'))
         raise DFTestFail('file exists')
     except FileNotFoundError:
         pass
@@ -483,8 +488,8 @@ def log_test(filename):
     global lp
     global lt
 
-    lp = __import__('cart_logparse')
-    lt = __import__('cart_logtest')
+#    lp = __import__('cart_logparse')
+#    lt = __import__('cart_logtest')
 
     lt.shown_logs = set()
 
@@ -492,6 +497,7 @@ def log_test(filename):
     lto = lt.LogTest(log_iter)
 
     try:
+        print('Log test from:{}'.format(filename))
         lto.check_log_file(abort_on_warning=False)
     except lt.LogCheckError:
         print('Error detected')
@@ -510,6 +516,42 @@ def create_and_read_via_il(dfuse, path):
     ofd.close()
     il_cmd(dfuse, ['cat', fname])
 
+def run_create_test(server, conf):
+
+    daos = import_daos(server, conf)
+
+    pools = get_pool_list()
+    while len(pools) < 1:
+        pools = make_pool(daos, conf)
+
+    parent_dir = tempfile.TemporaryDirectory(prefix='dnt_uns_')
+
+    uns_dir = os.path.join(parent_dir.name, 'uns_ep')
+
+    if True:
+        rc = run_daos_cmd(conf, ['container',
+                                 'create',
+                                 '--svc',
+                                 '0',
+                                 '--pool',
+                                 pools[0],
+                                 '--type',
+                                 'POSIX',
+                                 '--path',
+                                 uns_dir])
+
+        print('rc is {}'.format(rc))
+
+    dfuse = DFuse(server, conf, path=uns_dir)
+
+    dfuse.start(v_hint='pre-uns')
+    # To show the contents.
+    # getfattr -d <file> 
+
+    create_and_read_via_il(dfuse, uns_dir)
+    
+    dfuse.stop()
+
 def run_dfuse(server, conf):
     """Run several dfuse instances"""
 
@@ -521,23 +563,23 @@ def run_dfuse(server, conf):
 
     dfuse = DFuse(server, conf)
     try:
-        pre_stat = os.stat(dfuse.dir)
+        pre_stat = os.stat(dfuse.path)
     except OSError:
-        umount(dfuse.dir)
+        umount(dfuse.path)
         raise
     container = str(uuid.uuid4())
     dfuse.start(v_hint='no_pool')
-    print(os.statvfs(dfuse.dir))
+    print(os.statvfs(dfuse.path))
     subprocess.run(['df', '-h'])
-    subprocess.run(['df', '-i', dfuse.dir])
+    subprocess.run(['df', '-i', dfuse.path])
     print('Running dfuse with nothing')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
     for pool in pools:
-        pool_stat = os.stat(os.path.join(dfuse.dir, pool))
+        pool_stat = os.stat(os.path.join(dfuse.path, pool))
         print('stat for {}'.format(pool))
         print(pool_stat)
-        cdir = os.path.join(dfuse.dir, pool, container)
+        cdir = os.path.join(dfuse.path, pool, container)
         os.mkdir(cdir)
         #create_and_read_via_il(dfuse, cdir)
     dfuse.stop()
@@ -546,26 +588,26 @@ def run_dfuse(server, conf):
 
     container2 = str(uuid.uuid4())
     dfuse = DFuse(server, conf, pool=pools[0])
-    pre_stat = os.stat(dfuse.dir)
+    pre_stat = os.stat(dfuse.path)
     dfuse.start(v_hint='pool_only')
     print('Running dfuse with pool only')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
-    cpath = os.path.join(dfuse.dir, container2)
+    cpath = os.path.join(dfuse.path, container2)
     os.mkdir(cpath)
-    cdir = os.path.join(dfuse.dir, container)
+    cdir = os.path.join(dfuse.path, container)
     create_and_read_via_il(dfuse, cdir)
 
     dfuse.stop()
 
     dfuse = DFuse(server, conf, pool=pools[0], container=container)
-    pre_stat = os.stat(dfuse.dir)
+    pre_stat = os.stat(dfuse.path)
     dfuse.start(v_hint='pool_and_cont')
     print('Running fuse with both')
 
     stat_and_check(dfuse, pre_stat)
 
-    create_and_read_via_il(dfuse, dfuse.dir)
+    create_and_read_via_il(dfuse, dfuse.path)
 
     run_tests(dfuse)
 
@@ -574,7 +616,7 @@ def run_dfuse(server, conf):
     dfuse = DFuse(server, conf, pool=pools[0], container=container2)
     dfuse.start('uns-0')
 
-    uns_path = os.path.join(dfuse.dir, 'ep0')
+    uns_path = os.path.join(dfuse.path, 'ep0')
 
     uns_container = str(uuid.uuid4())
 
@@ -587,7 +629,7 @@ def run_dfuse(server, conf):
     print('rc is {}'.format(rc))
     print(os.stat(uns_path))
     print(os.stat(uns_path))
-    print(os.listdir(dfuse.dir))
+    print(os.listdir(dfuse.path))
 
     dfuse.stop()
 
@@ -596,10 +638,10 @@ def run_dfuse(server, conf):
     dfuse.start('uns-2')
 
     # List the root container.
-    print(os.listdir(os.path.join(dfuse.dir, pools[0], container2)))
+    print(os.listdir(os.path.join(dfuse.path, pools[0], container2)))
 
-    uns_path = os.path.join(dfuse.dir, pools[0], container2, 'ep0', 'ep')
-    direct_path = os.path.join(dfuse.dir, pools[0], uns_container)
+    uns_path = os.path.join(dfuse.path, pools[0], container2, 'ep0', 'ep')
+    direct_path = os.path.join(dfuse.path, pools[0], uns_container)
 
     uns_container = str(uuid.uuid4())
 
@@ -613,7 +655,7 @@ def run_dfuse(server, conf):
     print('rc is {}'.format(rc))
 
     # List the root container again.
-    print(os.listdir(os.path.join(dfuse.dir, pools[0], container2)))
+    print(os.listdir(os.path.join(dfuse.path, pools[0], container2)))
 
     # List the target container.
     files = os.listdir(direct_path)
@@ -666,7 +708,7 @@ def run_il_test(server, conf):
 
     for p in pools:
         for c in containers:
-            d = os.path.join(dfuse.dir, p, c)
+            d = os.path.join(dfuse.path, p, c)
             try:
                 print('Making directory {}'.format(d))
                 os.mkdir(d)
@@ -698,7 +740,7 @@ def run_in_fg(server, conf):
     dfuse = DFuse(server, conf, pool=pools[0])
     dfuse.start()
     container = str(uuid.uuid4())
-    t_dir = os.path.join(dfuse.dir, container)
+    t_dir = os.path.join(dfuse.path, container)
     os.mkdir(t_dir)
     print('Running at {}'.format(t_dir))
     print('daos container create --svc 0 --type POSIX' \
@@ -787,6 +829,8 @@ def main():
         run_in_fg(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
         test_pydaos_kv(server, conf)
+    elif len(sys.argv) == 2 and sys.argv[1] == 'create_test':
+        run_create_test(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'all':
         run_il_test(server, conf)
         run_dfuse(server, conf)
