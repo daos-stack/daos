@@ -3,65 +3,63 @@
 num_pools: 1000
 
 dfs_magic: &magic
-  type: integer
+  size: 9
   overhead: meta
   value_type: single_value
   values: [{"count": 1, "size": 8}]
 
 dfs_sb_version: &sb_ver
-  type: integer
+  size: 14
   overhead: meta
   value_type: single_value
   values: [{"count": 1, "size": 2}]
 
 dfs_sb_layout_version: &layout_ver
-  type: integer
+  size: 18
   overhead: meta
   value_type: single_value
   values: [{"count": 1, "size": 2}]
 
 dfs_sb_feat_compat: &compat
-  type: integer
+  size: 18
   overhead: meta
   value_type: single_value
   values: [{"count": 1, "size": 8}]
 
 dfs_sb_feat_incompat: &incompat
-  type: integer
+  size: 20
   overhead: meta
   value_type: single_value
   values: [{"count": 1, "size": 8}]
 
 dfs_sb_mkfs_time: &mkfs
-  type: integer
+  size: 16
   overhead: meta
   value_type: single_value
   values: [{"count": 1, "size": 8}]
 
 dfs_sb_state: &state
-  type: integer
+  size: 12
   overhead: meta
   value_type: single_value
   values: [{"count": 1, "size": 8}]
 
 dfs_chunk_size: &def_chunk_size
-  type: integer
+  size: 14
   overhead: meta
   value_type: single_value
   values: [{"count": 1, "size": 8}]
 
 dfs_obj_class: &obj_class
-  type: integer
+  size: 13
   overhead: meta
   value_type: single_value
   values: [{"count": 1, "size": 8}]
 
 dfs_sb_metadata: &sb_metadata
-  count: 1
-  type: integer
+  size: 15
   overhead: meta
   akeys: [*magic, *sb_ver, *layout_ver, *compat, *incompat, *mkfs, *state, *def_chunk_size, *obj_class]
-
 
 mode_t: &mode
   count: 1
