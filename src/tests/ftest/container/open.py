@@ -138,7 +138,6 @@ class OpenContainerTest(TestWithServers):
         # number corresponds to the index for self.pool and container_uuids
         pool_handle_index = poh_state_num
         container_uuid_index = uuid_state_num
-        open_failed = False
 
         # Case 1
         try:
@@ -152,7 +151,6 @@ class OpenContainerTest(TestWithServers):
             print(traceback.format_exc())
             self.assertEqual(expected_result, RESULT_FAIL,
                              result_messages[test_case][1])
-            open_failed = True
 
         # Case 2. Symmetric to Case 1. Use the other handle and UUID
         pool_handle_index = pool_handle_index ^ 1
@@ -168,7 +166,6 @@ class OpenContainerTest(TestWithServers):
             print(traceback.format_exc())
             self.assertEqual(expected_result, RESULT_FAIL,
                              result_messages[test_case][3])
-            open_failed = True
 
         # Calling container.open with invalid pool handle or UUID results in
         # setting them in the underlying DaosContainer's member. When we try to
@@ -178,5 +175,5 @@ class OpenContainerTest(TestWithServers):
         # tearDown. Note that we shouldn't set None when open succeeds because
         # in that case, the container needs to be properly destroyed for the
         # pool destroy process to work during tearDown.
-        if open_failed:
+        if not self.container[0].opened or not self.container[1].opened:
             self.container = None
