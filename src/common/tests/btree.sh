@@ -2,7 +2,8 @@
 
 cwd=$(dirname "$0")
 DAOS_DIR=${DAOS_DIR:-$(cd "$cwd/../../.." && echo "$PWD")}
-BTR=$DAOS_DIR/build/src/common/tests/btree
+source ${DAOS_DIR}/.build_vars.sh
+BTR=${SL_BUILD_DIR}/src/common/tests/btree
 VCMD=()
 if [ "$USE_VALGRIND" = "yes" ]; then
     VCMD=("valgrind" "--tool=pmemcheck")
@@ -61,7 +62,7 @@ while [ $# -gt 0 ]; do
         test_conf_pre="${test_conf_pre} ukey"
         ;;
     direct)
-        BTR=$DAOS_DIR/build/src/common/tests/btree_direct
+        BTR=${SL_BUILD_DIR}/src/common/tests/btree_direct
         KEYS=${KEYS:-"delta,lambda,kappa,omega,beta,alpha,epsilon"}
         RECORDS=${RECORDS:-"omega:loaded,delta:that,kappa:dice,beta:knows,epsilon:the,lambda:are,alpha:Everybody"}
         shift

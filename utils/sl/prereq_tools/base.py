@@ -752,6 +752,8 @@ class PreReqComponent():
                                    'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
+        self._setup_compiler(warning_level)
+        bdir = self._setup_build_type()
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       ('PREBUILT_PREFIX',
@@ -768,10 +770,9 @@ class PreReqComponent():
                       PathVariable('GOPATH',
                                    'Location of your GOPATH for the build',
                                    "%s/go" % self.__build_dir,
-                                   PathVariable.PathIsDirCreate),
-                      PathVariable('BUILD_DIR',
-                                   'Location of temporary build files',
-                                   'build', PathVariable.PathIsDirCreate))
+                                   PathVariable.PathIsDirCreate))
+        self.__env["BUILD_DIR"] = bdir
+        os.makedirs(bdir, exist_ok=True)
         self.setup_path_var('PREFIX')
         self.setup_path_var('BUILD_DIR')
         self.setup_path_var('PREBUILT_PREFIX', True)
@@ -779,9 +780,9 @@ class PreReqComponent():
         self.setup_path_var('SRC_PREFIX', True)
         self.setup_path_var('GOPATH')
         self.__build_info = BuildInfo()
+        self.__build_info.update("BUILD_DIR", self.__env.subst("$BUILD_DIR"))
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
 
-        self._setup_compiler(warning_level)
         self.setup_parallel_build()
 
         self.config_file = config_file
@@ -810,6 +811,15 @@ class PreReqComponent():
         return True
 
 # pylint: enable=too-many-branches
+
+    def _setup_build_type(self):
+        """set build type"""
+        self.add_opts(EnumVariable('BUILD_TYPE', "Set the build type",
+                                   'dev', ['dev', 'debug', 'release'],
+                                   ignorecase=1))
+
+        return self.__env.subst("build/$BUILD_TYPE/$COMPILER")
+
     def _setup_intelc(self):
         """Setup environment to use intel compilers"""
         env = self.__env.Clone(tools=['intelc'])
