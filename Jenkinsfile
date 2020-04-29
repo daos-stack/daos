@@ -1109,7 +1109,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          failOnError: true,
-                                         referenceJobName: 'daos/master',
+                                         referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: false,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'NEW', unstable: true]],
