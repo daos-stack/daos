@@ -95,7 +95,7 @@ func NewIOServerInstance(log logging.Logger,
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
 func (srv *IOServerInstance) isReady() bool {
-	return srv.ready.IsTrue() && srv.isStarted()
+	return srv.ready.Load()
 }
 
 // isMSReplica indicates whether or not this instance is a management service replica.

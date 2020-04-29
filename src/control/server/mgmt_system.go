@@ -143,7 +143,7 @@ func (svc *mgmtSvc) localInstances(inRanks []uint32) ([]*IOServerInstance, error
 // Iterate over instances, issuing PrepShutdown dRPCs and record results.
 // Return error in addition to response if any instance requests not successful
 // so retries can be performed at sender.
-func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+func (svc *mgmtSvc) PrepShutdownRanks(parent context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -151,6 +151,9 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 		return nil, errors.New("no ranks specified in request")
 	}
 	svc.log.Debugf("MgmtSvc.PrepShutdownRanks dispatch, req:%+v\n", *req)
+
+	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
+	defer cancel()
 
 	instances, err := svc.localInstances(req.GetRanks())
 	if err != nil {
@@ -168,16 +171,12 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 
 	results := make(system.MemberResults, 0, prepping)
 	for prepping > 0 {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case result := <-ch:
-			prepping--
-			if result == nil {
-				return nil, errors.New("nil result")
-			}
-			results = append(results, result)
+		result := <-ch
+		prepping--
+		if result == nil {
+			return nil, errors.New("nil result")
 		}
+		results = append(results, result)
 	}
 
 	resp := &mgmtpb.RanksResp{}
@@ -228,7 +227,7 @@ func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredSta
 // After attempting to stop instances through harness (when either all instances
 // are stopped or timeout has occurred, populate response results based on
 // instance started state.
-func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -276,6 +275,8 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	}()
 
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-stopped:
 	case <-time.After(svc.harness.rankReqTimeout):
 		svc.log.Debug("MgmtSvc.StopRanks rank stop timeout exceeded")
@@ -301,7 +302,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 // responsiveness.
 //
 // For each instance, call over dRPC with dPing() async and collect results.
-func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+func (svc *mgmtSvc) PingRanks(parent context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -309,6 +310,9 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 		return nil, errors.New("no ranks specified in request")
 	}
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
+
+	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
+	defer cancel()
 
 	instances, err := svc.localInstances(req.GetRanks())
 	if err != nil {
@@ -326,16 +330,12 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 
 	results := make(system.MemberResults, 0, pinging)
 	for pinging > 0 {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case result := <-ch:
-			pinging--
-			if result == nil {
-				return nil, errors.New("nil result")
-			}
-			results = append(results, result)
+		result := <-ch
+		pinging--
+		if result == nil {
+			return nil, errors.New("nil result")
 		}
+		results = append(results, result)
 	}
 
 	resp := &mgmtpb.RanksResp{}
@@ -351,7 +351,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 // StartRanks implements the method defined for the Management Service.
 //
 // Restart data-plane instances (DAOS system members) managed by harness.
-func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -392,6 +392,8 @@ func (svc *mgmtSvc) StartRanks(parent context.Context, req *mgmtpb.RanksReq) (*m
 	}()
 
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-ready:
 	case <-time.After(svc.harness.rankStartTimeout):
 		svc.log.Debug("MgmtSvc.StartRanks rank start timeout exceeded")

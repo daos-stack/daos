@@ -113,7 +113,7 @@ func drespToMemberResult(rank system.Rank, action string, dresp *drpc.Response, 
 func (srv *IOServerInstance) dPing(ctx context.Context) *system.MemberResult {
 	rank, err := srv.GetRank()
 	if err != nil {
-		return nil
+		return nil // no rank to return result for
 	}
 
 	if !srv.isReady() {
@@ -143,7 +143,7 @@ func (srv *IOServerInstance) dPing(ctx context.Context) *system.MemberResult {
 func (srv *IOServerInstance) dPrepShutdown(ctx context.Context) *system.MemberResult {
 	rank, err := srv.GetRank()
 	if err != nil {
-		return nil
+		return nil // no rank to return result for
 	}
 
 	if !srv.isReady() {
