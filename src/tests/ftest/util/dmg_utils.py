@@ -39,7 +39,7 @@ class DmgCommand(CommandWithSubCommand):
     METHOD_REGEX = {
         "run": r"(.*)",
         "network_scan": r"""
-            (?:|([A-Za-z0-9-_]+):\d+:(?:\n|\n\r))
+            (?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))
             (?:.*\s+(fabric_iface|provider|pinned_numa_node):
             \s+([a-z0-9+]+))""",
         # Sample output of dmg pool list.
