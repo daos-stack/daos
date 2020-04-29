@@ -553,7 +553,7 @@ class SubProcessCommand(CommandWithSubCommand):
 class YamlCommand(SubProcessCommand):
     """Defines a sub-process command that utilizes a yaml configuration file.
 
-    Example commands: daos_agent, daos_server
+    Example commands: daos_agent, daos_server, dmg
     """
 
     def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=60):

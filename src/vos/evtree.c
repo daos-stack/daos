@@ -3101,6 +3101,24 @@ evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size)
 	return result;
 }
 
+void
+evt_entry_csum_update(const struct evt_extent *const ext,
+		      const struct evt_extent *const sel,
+		      struct dcs_csum_info *csum_info)
+{
+	uint32_t csum_to_remove;
+
+	D_ASSERT(csum_info->cs_chunksize > 0);
+	D_ASSERT(sel->ex_lo >= ext->ex_lo);
+
+	csum_to_remove = (sel->ex_lo - ext->ex_lo)
+			 / csum_info->cs_chunksize;
+
+	csum_info->cs_csum += csum_info->cs_len * csum_to_remove;
+	csum_info->cs_nr -= csum_to_remove;
+	csum_info->cs_buf_len -= csum_info->cs_len * csum_to_remove;
+}
+
 int
 evt_overhead_get(int alloc_overhead, int tree_order,
 		 struct daos_tree_overhead *ovhd)

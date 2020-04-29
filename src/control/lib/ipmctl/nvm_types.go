@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,32 +63,4 @@ type DeviceDiscovery struct {
 	Controller_revision_id   uint16
 	Reserved                 [48]uint8
 	Pad_cgo_3                [6]byte
-}
-
-// DeviceStatus struct represents Go equivalent of C.struct_device_status
-// from nvm_management.h (NVM API) as reported by "go tool cgo -godefs nvm.go"
-type DeviceStatus struct {
-	Is_new                       uint8
-	Is_configured                uint8
-	Is_missing                   uint8
-	Package_spares_available     uint8
-	Pad_cgo_0                    [3]byte
-	Last_shutdown_status_details uint32
-	Config_status                uint32
-	Last_shutdown_time           uint64
-	Mixed_sku                    uint8
-	Sku_violation                uint8
-	Viral_state                  uint8
-	Pad_cgo_1                    [1]byte
-	Ars_status                   uint32
-	Overwritedimm_status         uint32
-	New_error_count              uint32
-	Newest_error_log_timestamp   uint64
-	Ait_dram_enabled             uint8
-	Pad_cgo_2                    [7]byte
-	Boot_status                  uint64
-	Injected_media_errors        uint32
-	Injected_non_media_errors    uint32
-	Error_log_status             _Ctype_struct_device_error_log_status
-	Reserved                     [56]uint8
 }
