@@ -2,7 +2,7 @@
 
 cwd=$(dirname "$0")
 DAOS_DIR=${DAOS_DIR:-$(cd "$cwd/../../.." && echo "$PWD")}
-source ${DAOS_DIR}/.build_vars.sh
+source "${DAOS_DIR}/.build_vars.sh"
 BTR=${SL_BUILD_DIR}/src/common/tests/btree
 VCMD=()
 if [ "$USE_VALGRIND" = "yes" ]; then
@@ -81,8 +81,8 @@ set -e
 gen_test_conf_string()
 {
         name=""
-        [ ! -z "$1" ] && name="${name} inplace"
-        [ ! -z "$2" ] && name="${name} pmem"
+        [ -n "$1" ] && name="${name} inplace"
+        [ -n "$2" ] && name="${name} pmem"
         echo "$name"
 }
 

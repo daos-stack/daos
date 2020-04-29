@@ -772,7 +772,8 @@ class PreReqComponent():
                                    "%s/go" % self.__build_dir,
                                    PathVariable.PathIsDirCreate))
         self.__env["BUILD_DIR"] = bdir
-        os.makedirs(bdir, exist_ok=True)
+        if not os.path.exists(bdir):
+            os.makedirs(bdir)
         self.setup_path_var('PREFIX')
         self.setup_path_var('BUILD_DIR')
         self.setup_path_var('PREBUILT_PREFIX', True)
