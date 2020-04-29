@@ -377,7 +377,7 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_GOTO(err, rc = -DER_INVAL);
 	}
 
-	return 0;
+	rc = 0;
 err:
 	D_FREE(local);
 	return rc;
