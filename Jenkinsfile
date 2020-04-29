@@ -986,7 +986,7 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
                                        inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
-                                                  "fuse3-libs " +
+                                                  "fuse3-libs fuse3 " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
                                                   'libipmctl-devel' + qb_inst_rpms
@@ -999,6 +999,7 @@ pipeline {
                                            ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
                                            . ./.build_vars.sh
                                            DAOS_BASE=${SL_PREFIX%/install*}
+                                           rm -f dnt.*.memcheck.xml test.out
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
@@ -1008,22 +1009,23 @@ pipeline {
                                                else
                                                    sudo mkdir -p /mnt/daos
                                                fi
+                                               sudo mkdir -p /mnt/daos
                                                sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
                                                sudo mkdir -p $DAOS_BASE
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-
-                                               # copy daos_admin binary into \$PATH and fix perms
-                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
-                                                   sudo chown root /usr/bin/daos_admin && \
-                                                   sudo chmod 4755 /usr/bin/daos_admin && \
-                                                   mv $DAOS_BASE/install/bin/daos_admin \
-                                                      $DAOS_BASE/install/bin/orig_daos_admin
-
+                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin
+                                               sudo chown root /usr/bin/daos_admin
+                                               sudo chmod 4755 /usr/bin/daos_admin
+                                               /bin/rm $DAOS_BASE/install/bin/daos_admin
+                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh /usr/share/spdk/scripts
+                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
+                                               sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
                                                # set CMOCKA envs here
                                                export CMOCKA_MESSAGE_OUTPUT="xml"
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
-                                               IS_CI=true OLD_CI=false utils/run_test.sh"''',
+                                               IS_CI=true OLD_CI=false utils/run_test.sh
+                                               ./utils/node_local_test.py all | tee test.out"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
@@ -1055,13 +1057,17 @@ pipeline {
                             sh script: '''set -ex
                                       . ./.build_vars.sh
                                       DAOS_BASE=${SL_PREFIX%/install*}
+                                      rm -rf $DAOS_BASE/run_test.sh $DAOS_BASE/vm_test
                                       NODE=${NODELIST%%,*}
                                       ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                           cd $DAOS_BASE
-                                          rm -rf run_test.sh/
-                                          mkdir run_test.sh/
+                                          mkdir run_test.sh
+                                          mkdir vm_test
                                           if ls /tmp/daos*.log > /dev/null; then
                                               mv /tmp/daos*.log run_test.sh/
+                                          fi
+                                          if ls /tmp/dnt*.log > /dev/null; then
+                                              mv /tmp/dnt*.log vm_test/
                                           fi
                                           # servers can sometimes take a while to stop when the test is done
                                           x=0
@@ -1071,7 +1077,7 @@ pipeline {
                                               let x=\\\$x+1
                                           done
                                           if ! sudo umount /mnt/daos; then
-                                              echo \"Failed to unmount $DAOS_BASE\"
+                                              echo \"Failed to unmount /mnt/daos\"
                                               ps axf
                                           fi
                                           cd
@@ -1085,6 +1091,28 @@ pipeline {
                             label: "Collect artifacts and tear down"
                             junit 'test_results/*.xml'
                             archiveArtifacts artifacts: 'run_test.sh/**'
+                            archiveArtifacts artifacts: 'vm_test/**'
+                            publishValgrind (
+                                    failBuildOnInvalidReports: true,
+                                    failBuildOnMissingReports: true,
+                                    failThresholdDefinitelyLost: '',
+                                    failThresholdInvalidReadWrite: '',
+                                    failThresholdTotal: '',
+                                    pattern: 'dnt.*.memcheck.xml',
+                                    publishResultsForAbortedBuilds: false,
+                                    publishResultsForFailedBuilds: true,
+                                    sourceSubstitutionPaths: '',
+                                    unstableThresholdDefinitelyLost: '0',
+                                    unstableThresholdInvalidReadWrite: '0',
+                                    unstableThresholdTotal: '0'
+                            )
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         failOnError: true,
+                                         name: "VM Testing",
+                                         tool: clang(pattern: 'test.out',
+                                                     name: 'VM test results',
+                                                     id: 'VM_test')
                         }
                     }
                 }
