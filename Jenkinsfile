@@ -40,11 +40,23 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
+/* Need to figure out how to pass varargs
+def get_script(String scr, String... args) {
+
+   def script = String.format(readFile(scr, args))
+
+   echo "Got script: " + script
+
+   return script
+}
+*/
+
 def doc_only_change() {
-    def rc = sh script: String.format(readFile('ci/doc_only_change.sh').trim(),
+    def script = String.format(readFile('ci/doc_only_change.sh'),
                                       env.CHANGE_ID,
-                                      target_branch),
-                returnStatus: true
+                                      target_branch)
+    echo "doc_only_change script: " + script
+    def rc = sh script: script, returnStatus: true
 
     return rc == 1
 }
@@ -358,9 +370,8 @@ pipeline {
                         checkoutScm withSubmodules: true
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             sh label: env.STAGE_NAME,
-                               script: '''rm -rf artifacts/centos7/
-                                          mkdir -p artifacts/centos7/
-                                          make CHROOT_NAME="epel-7-x86_64" -C utils/rpms chrootbuild'''
+                               script: String.format(readFile('ci/rpm_build.sh'),
+                                                  'centos7', 'epel-7-x86_64')
                         }
                     }
                     post {
@@ -434,9 +445,8 @@ pipeline {
                         checkoutScm withSubmodules: true
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             sh label: env.STAGE_NAME,
-                               script: '''rm -rf artifacts/leap15/
-                                  mkdir -p artifacts/leap15/
-                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
+                               script: String.format(readFile('ci/rpm_build.sh'),
+                                                  'leap15', 'opensuse-leap-15.1-x86_64')
                         }
                     }
                     post {
@@ -987,40 +997,9 @@ pipeline {
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
                                                   'libipmctl-devel' + qb_inst_rpms
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''# JENKINS-52781 tar function is breaking symlinks
-                                           rm -rf test_results
-                                           mkdir test_results
-                                           rm -f build/src/control/src/github.com/daos-stack/daos/src/control
-                                           mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
-                                           ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
-                                           . ./.build_vars.sh
-                                           DAOS_BASE=${SL_PREFIX%/install*}
-                                           NODE=${NODELIST%%,*}
-                                           ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
-                                               set -e
-                                               sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
-                                               if grep /mnt/daos\\  /proc/mounts; then
-                                                   sudo umount /mnt/daos
-                                               else
-                                                   sudo mkdir -p /mnt/daos
-                                               fi
-                                               sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-                                               sudo mkdir -p $DAOS_BASE
-                                               sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-
-                                               # copy daos_admin binary into \$PATH and fix perms
-                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
-                                                   sudo chown root /usr/bin/daos_admin && \
-                                                   sudo chmod 4755 /usr/bin/daos_admin && \
-                                                   mv $DAOS_BASE/install/bin/daos_admin \
-                                                      $DAOS_BASE/install/bin/orig_daos_admin
-
-                                               # set CMOCKA envs here
-                                               export CMOCKA_MESSAGE_OUTPUT="xml"
-                                               export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
-                                               cd $DAOS_BASE
-                                               IS_CI=true OLD_CI=false utils/run_test.sh"''',
-                              junit_files: 'test_results/*.xml'
+                                script: String.format(readFile('ci/run_test.sh'),
+                                                   env.SSH_KEY_ARGS, env.NODELIST),
+                                junit_files: 'test_results/*.xml'
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
