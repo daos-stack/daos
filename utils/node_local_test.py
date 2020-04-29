@@ -155,7 +155,6 @@ class DaosServer():
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-
         # Show errors from server logs bug supress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
