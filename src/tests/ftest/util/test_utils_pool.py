@@ -605,7 +605,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = (
-            "rs_version", "rs_pad_32", "rs_errno", "rs_done",
+            "rs_version", "rs_padding32", "rs_errno", "rs_done",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
         return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 

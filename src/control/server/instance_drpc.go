@@ -59,10 +59,10 @@ func (srv *IOServerInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
 	}()
 }
 
-// AwaitDrpcReady returns a channel which receives a ready message
+// awaitDrpcReady returns a channel which receives a ready message
 // when the started IOServer instance indicates that it is
 // ready to receive dRPC messages.
-func (srv *IOServerInstance) AwaitDrpcReady() chan *srvpb.NotifyReadyReq {
+func (srv *IOServerInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 	return srv.drpcReady
 }
 

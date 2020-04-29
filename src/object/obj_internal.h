@@ -380,7 +380,8 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      uint32_t fw_cnt, tse_task_t *task);
 
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
-			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
+			   uint32_t flags, struct dc_object *obj,
+			   daos_key_t *dkey, daos_key_t *akey,
 			   daos_recx_t *recx, const uuid_t coh_uuid,
 			   const uuid_t cont_uuid, unsigned int *map_ver,
 			   tse_task_t *task);
@@ -445,35 +446,5 @@ obj_dkey2hash(daos_key_t *dkey)
 
 int  obj_utils_init(void);
 void obj_utils_fini(void);
-
-/* obj_class.c */
-int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
-			   uint32_t *sg_idx, size_t *sg_off,
-			   struct obj_ec_parity *parity, uint32_t p_idx);
-bool
-ec_mult_data_targets(uint32_t fw_cnt, daos_obj_id_t oid);
-
-int
-ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
-	       struct daos_oclass_attr *oca, struct ec_bulk_spec **skip_list);
-
-int
-ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
-		 struct daos_oclass_attr *oca, struct ec_bulk_spec **skip_list);
-
-
-int
-ec_copy_iods(daos_iod_t *in, int nr, daos_iod_t **out);
-
-/* cli_ec.c */
-void
-ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
-	       bool parify_include, uint64_t *tgt_set);
-
-int
-ec_split_recxs(tse_task_t *task, struct daos_oclass_attr *oca);
-
-void
-ec_free_iods(daos_iod_t *iods, int nr);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

@@ -43,8 +43,6 @@
 /** max length of argument string in the yaml config file */
 #define FI_CONFIG_ARG_STR_MAX_LEN 4096
 
-#define FI_MAX_FAULT_ID 8192
-
 /* (1 << D_FA_TABLE_BITS) is the number of buckets of fa hash table */
 #define D_FA_TABLE_BITS		(13)
 
@@ -52,9 +50,7 @@
 #include <gurt/hash.h>
 #include "fi.h"
 
-
 struct d_fault_attr_t *d_fault_attr_mem;
-int d_fault_id_mem;
 
 static struct d_fault_attr *
 fa_link2ptr(d_list_t *rlink)
@@ -133,12 +129,6 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 	struct d_fault_attr	 *rec = NULL;
 	d_list_t		 *rlink = NULL;
 	int			  rc = DER_SUCCESS;
-
-	if (fault_id > FI_MAX_FAULT_ID) {
-		D_ERROR("fault_id (%u) out of range [0, %d]\n", fault_id,
-			FI_MAX_FAULT_ID);
-		return -DER_INVAL;
-	}
 
 	D_ALLOC_PTR(new_rec);
 	if (new_rec == NULL)
@@ -312,7 +302,7 @@ one_fault_attr_parse(yaml_parser_t *parser)
 
 		key_str = (char *) first.data.scalar.value;
 		val_str = (const char *) second.data.scalar.value;
-		val = strtoul(val_str, NULL, 10);
+		val = strtoul(val_str, NULL, 0);
 		if (!strcmp(key_str, id)) {
 			D_DEBUG(DB_ALL, "id: %lu\n", val);
 			attr.fa_id = val;
@@ -563,14 +553,6 @@ d_fault_inject_init(void)
 		D_ERROR("Failed to parse fault config file.\n");
 		D_GOTO(out, rc);
 	}
-
-	d_fault_id_mem = 0;
-	d_fault_attr_mem = d_fault_attr_lookup(d_fault_id_mem);
-	if (!d_fault_attr_mem) {
-		D_ERROR("d_fault_attr_lookup(%d) failed.\n", d_fault_id_mem);
-		D_GOTO(out, rc = -DER_MISC);
-	}
-
 out:
 	if (fp)
 		fclose(fp);
@@ -627,6 +609,14 @@ d_fi_initialized()
 	return d_fi_gdata.dfg_inited == 1;
 }
 
+bool
+d_fault_inject_is_enabled(void)
+{
+	if (d_fault_inject)
+		return true;
+	return false;
+}
+
 /**
  * based on the state of fault_id, decide if a fault should be injected
  *
@@ -651,10 +641,8 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 	 * based on the state of fault_attr, decide if a fault should
 	 * be injected
 	 */
-	if (!fault_attr) {
-		D_DEBUG(DB_ALL, "fault_attr is NULL.\n");
+	if (!fault_attr)
 		return false;
-	}
 
 	D_SPIN_LOCK(&fault_attr->fa_lock);
 	if (fault_attr->fa_probability_x == 0)

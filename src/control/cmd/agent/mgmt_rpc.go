@@ -24,7 +24,8 @@
 package main
 
 import (
-	"os"
+	"net"
+	"syscall"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -33,6 +34,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -44,16 +46,34 @@ type mgmtModule struct {
 	log logging.Logger
 	sys string
 	// The access point
-	ap               string
-	tcfg             *security.TransportConfig
-	cachedAttachInfo bool
-	resmgmtpb        []byte
+	ap        string
+	tcfg      *security.TransportConfig
+	aiCache   *attachInfoCache
+	numaAware bool
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
 	switch method {
 	case drpc.MethodGetAttachInfo:
-		return mod.handleGetAttachInfo(req)
+
+		uc, ok := session.Conn.(*net.UnixConn)
+		if !ok {
+			return nil, errors.Errorf("session.Conn type conversion failed")
+		}
+
+		file, err := uc.File()
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+
+		fd := int(file.Fd())
+		cred, err := syscall.GetsockoptUcred(fd, syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+		if err != nil {
+			return nil, err
+		}
+
+		return mod.handleGetAttachInfo(req, cred.Pid)
 	default:
 		return nil, drpc.UnknownMethodFailure()
 	}
@@ -63,14 +83,30 @@ func (mod *mgmtModule) ID() int32 {
 	return drpc.ModuleMgmt
 }
 
-func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
-	if os.Getenv("DAOS_AGENT_DISABLE_CACHE") == "true" {
-		mod.cachedAttachInfo = false
-		mod.log.Debugf("GetAttachInfo agent caching has been disabled\n")
+// handleGetAttachInfo invokes the GetAttachInfo dRPC.  The agent determines the
+// NUMA node for the client process based on its PID.  Then based on the
+// server's provider, chooses a matching network interface and domain from the
+// client machine that has the same NUMA affinity.  It is considered an error if
+// the client application is bound to a NUMA node that does not have a network
+// device / provider combination with the same NUMA affinity.
+//
+// The agent caches the local device data and all possible responses the first
+// time this dRPC is invoked. Subsequent calls receive the cached data.
+// The use of cached data may be disabled by exporting
+// "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
+func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, error) {
+	var err error
+	numaNode := defaultNumaNode
+
+	if mod.numaAware {
+		numaNode, err = netdetect.GetNUMASocketIDForPid(pid)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	if mod.cachedAttachInfo {
-		return mod.resmgmtpb, nil
+	if mod.aiCache.isCached() {
+		return mod.aiCache.getResponse(numaNode)
 	}
 
 	req := &mgmtpb.GetAttachInfoReq{}
@@ -103,12 +139,20 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 		return nil, errors.Wrapf(err, "GetAttachInfo %s %v", mod.ap, *req)
 	}
 
-	mod.resmgmtpb, err = proto.Marshal(resp)
-	if err != nil {
-		return nil, drpc.MarshalingFailure()
+	if resp.Provider == "" {
+		return nil, errors.Errorf("GetAttachInfo %s %v contained no provider.", mod.ap, *req)
 	}
 
-	mod.cachedAttachInfo = true
+	// Scan the local fabric to determine what devices are available that match our provider
+	scanResults, err := netdetect.ScanFabric(resp.Provider)
+	if err != nil {
+		return nil, err
+	}
 
-	return mod.resmgmtpb, nil
+	err = mod.aiCache.initResponseCache(resp, scanResults)
+	if err != nil {
+		return nil, err
+	}
+
+	return mod.aiCache.getResponse(numaNode)
 }

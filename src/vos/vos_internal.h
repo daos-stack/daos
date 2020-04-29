@@ -971,4 +971,29 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
 
+/* Slab allocation */
+enum {
+	VOS_SLAB_OBJ_NODE	= 0,
+	VOS_SLAB_KEY_NODE	= 1,
+	VOS_SLAB_SV_NODE	= 2,
+	VOS_SLAB_EVT_NODE	= 3,
+	VOS_SLAB_EVT_DESC	= 4,
+	VOS_SLAB_MAX		= 5
+};
+D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
+
+static inline umem_off_t
+vos_slab_alloc(struct umem_instance *umm, int size, int slab_id)
+{
+	/* evtree unit tests may skip slab register in vos_pool_open() */
+	D_ASSERTF(!umem_slab_registered(umm, slab_id) ||
+		  size == umem_slab_usize(umm, slab_id),
+		  "registered: %d, id: %d, size: %d != %zu\n",
+		  umem_slab_registered(umm, slab_id),
+		  slab_id, size, umem_slab_usize(umm, slab_id));
+
+	return umem_alloc_verb(umm, umem_slab_flags(umm, slab_id) |
+					POBJ_FLAG_ZERO, size);
+}
+
 #endif /* __VOS_INTERNAL_H__ */

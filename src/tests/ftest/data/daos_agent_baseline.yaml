@@ -1,5 +1,0 @@
-name: daos_server
-access_points: ['example:10001']
-port: 10001
-transport_config:
-  allow_insecure: true
