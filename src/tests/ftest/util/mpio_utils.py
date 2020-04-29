@@ -115,32 +115,32 @@ class MpioUtils():
         # Setup the commands to run for this test name
         commands = []
         if test_name == "romio":
+            env = None
             commands.append(
                 "{} -fname=daos:test1 -subset".format(
                     executables[test_name][0]))
         elif test_name == "llnl":
             env["MPIO_USER_PATH"] = "daos:"
-            commands.append(
-                "{} -genvlist {} -np {} --hostfile {} {} 1".format(
-                    mpirun, ",".join(env.get_list()), client_processes,
-                    hostfile, executables[test_name][0]))
+            for exe in executables[test_name]:
+                commands.append(
+                    "{} -np {} --hostfile {} {} 1".format(
+                        mpirun, client_processes, hostfile, exe))
         elif test_name == "mpi4py":
-            commands.append(
-                "{} -genvlist {} -np {} --hostfile {} python {}".format(
-                    mpirun, ",".join(env.get_list()), client_processes,
-                    hostfile, executables[test_name][0]))
+            for exe in executables[test_name]:
+                commands.append(
+                    "{} -np {} --hostfile {} python {}".format(
+                        mpirun, client_processes, hostfile, exe))
         elif test_name == "hdf5":
             env["HDF5_PARAPREFIX"] = "daos:"
             for exe in executables[test_name]:
                 commands.append(
-                    "{} -genvlist {} -np {} --hostfile {} {}".format(
-                        mpirun, ",".join(env.get_list()), client_processes,
-                        hostfile, exe))
+                    "{} -np {} --hostfile {} {}".format(
+                        mpirun, client_processes, hostfile, exe))
 
         for command in commands:
             print("run command: {}".format(command))
             try:
-                run_command(command, verbose=True)
+                run_command(command, verbose=True, env=env)
 
             except DaosTestError as excep:
                 raise MpioFailed(
