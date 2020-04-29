@@ -34,7 +34,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	//	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -96,19 +96,20 @@ func (mod *mgmtModule) ID() int32 {
 // "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, error) {
 	var err error
-	numaNode := defaultNumaNode
+	/*
+		numaNode := defaultNumaNode
 
-	if mod.numaAware {
-		numaNode, err = netdetect.GetNUMASocketIDForPid(pid)
-		if err != nil {
-			return nil, err
+		if mod.numaAware {
+			numaNode, err = netdetect.GetNUMASocketIDForPid(pid)
+			if err != nil {
+				return nil, err
+			}
 		}
-	}
 
-	if mod.aiCache.isCached() {
-		return mod.aiCache.getResponse(numaNode)
-	}
-
+		if mod.aiCache.isCached() {
+			return mod.aiCache.getResponse(numaNode)
+		}
+	*/
 	req := &mgmtpb.GetAttachInfoReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
@@ -143,16 +144,24 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, errors.Errorf("GetAttachInfo %s %v contained no provider.", mod.ap, *req)
 	}
 
-	// Scan the local fabric to determine what devices are available that match our provider
-	scanResults, err := netdetect.ScanFabric(resp.Provider)
+	marshResp, err := proto.Marshal(resp)
 	if err != nil {
-		return nil, err
+		return nil, drpc.MarshalingFailure()
 	}
+	return marshResp, err
 
-	err = mod.aiCache.initResponseCache(resp, scanResults)
-	if err != nil {
-		return nil, err
-	}
+	/*
+		// Scan the local fabric to determine what devices are available that match our provider
+		scanResults, err := netdetect.ScanFabric(resp.Provider)
+		if err != nil {
+			return nil, err
+		}
 
-	return mod.aiCache.getResponse(numaNode)
+		err = mod.aiCache.initResponseCache(resp, scanResults)
+		if err != nil {
+			return nil, err
+		}
+
+		return mod.aiCache.getResponse(numaNode)
+	*/
 }
