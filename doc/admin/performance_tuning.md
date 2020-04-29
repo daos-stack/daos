@@ -12,10 +12,10 @@ The CART self_test can run against the DAOS servers in a production environment
 in a non-destructive manner. CART self_test supports different message sizes,
 bulk transfers, multiple targets, and the following test scenarios:
 
--   **Selftest client to servers** where self_test issues RPCs directly
+-   **Selftest client to servers** - where self_test issues RPCs directly
     to a list of servers
 
--   **Cross-servers** where self_test sends instructions to the different
+-   **Cross-servers** - where self_test sends instructions to the different
     servers that will issue cross-server RPCs. This model supports a
     many to many communication model.
 
@@ -32,7 +32,7 @@ $ cd install/TESTING
 
 **Prepare srvhostfile and clihostfile**
 
--   srvhostfile contains list of nodes from which servers will launch
+-   srvhostfile contains a list of nodes from which servers will launch
 
 -   clihostfile contains node from which self_test will launch
 
@@ -96,22 +96,22 @@ IOR (https://github.com/hpc/ior) with the following backends:
 -   HDF5 plugin with the HDF5 DAOS connector (under development). This maps the
     HDF5 data model directly to the DAOS model bypassing POSIX.
 
--   a custom DFS (DAOS File System) plugin integrating IOR directly with libfs
+-   A custom DFS (DAOS File System) plugin, integrating IOR directly with libfs
     without requiring FUSE or an interception library
 
--   a custom DAOS plugin integrating IOR directly with the native DAOS
+-   A custom DAOS plugin, integrating IOR directly with the native DAOS
     array API.
 
-mdtest is released in the same repository as IOR. The same backends that are
+mdtest is released in the same repository as IOR. The corresponding backends that are
 listed above support mdtest, except for the MPI-IO and HDF5 backends that were
 only designed to support IOR.
 
 FIO can also be used to benchmark DAOS performance using dfuse and the
 interception library with all the POSIX based engines like sync and libaio. We
-do however provide a native DFS engine for FIO similar to what we do for
-IOR. That engine is available on github: https://github.com/daos-stack/dfio
+do, however, provide a native DFS engine for FIO similar to what we do for
+IOR. That engine is available on GitHub: https://github.com/daos-stack/dfio
 
-Finally DAOS provides a tool called daos_perf which allows benchmarking to the
+Finally, DAOS provides a tool called daos_perf which allows benchmarking to the
 DAOS object API directly or to the internal VOS API, which bypasses the client
 and network stack and reports performance accessing the storage directy using
 VOS.
