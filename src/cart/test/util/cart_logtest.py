@@ -39,6 +39,7 @@
 This provides consistency checking for CaRT log files.
 """
 
+import pprint
 from collections import OrderedDict
 
 import cart_logparse
@@ -75,21 +76,78 @@ WARN_FUNCTIONS = ['crt_grp_lc_addr_insert',
 # error lines.
 shown_logs = set()
 
-# List of known free locations where there may be a mismatch, this is a
+# List of known locations where there may be a mismatch, this is a
 # dict of functions, each with a unordered list of variables that are
 # freed by the function.
 # Typically this is where memory is allocated in one file, and freed in
 # another.
-mismatch_free_ok = {'crt_plugin_fini': ('timeout_cb_priv',
-                                        'cb_priv',
-                                        'prog_cb_priv',
-                                        'event_cb_priv'),
-                    'crt_finalize': ('crt_gdata.cg_addr'),
-                    'crt_rpc_priv_free': ('rpc_priv'),
-                    'crt_grp_priv_destroy': ('grp_priv->gp_pub.cg_grpid',
-                                             'grp_priv->gp_psr_phy_addr'),
+mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
+                     'crt_rpc_handler_common': ('rpc_priv'),
+                     'crt_proc_d_iov_t': ('div->iov_buf'),
+                     'grp_add_to_membs_list': ('tmp'),
+                     'grp_regen_linear_list': ('tmp_ptr'),
+                     'crt_proc_d_string_t': ('*data'),
+                     'crt_hg_init': ('*addr'),
+                     'crt_proc_d_rank_list_t': ('rank_list',
+                                                'rank_list->rl_ranks'),
+                     'path_gen': ('*fpath'),
+                     'get_attach_info': ('reqb'),
+                     'iod_fetch': ('biovs'),
+                     'bio_sgl_init': ('sgl->bs_iovs'),
+                     'process_credential_response': ('bytes'),
+                     'pool_map_find_tgts': ('*tgt_pp'),
+                     'daos_acl_dup': ('acl_copy'),
+                     'dfuse_pool_lookup': ('ie', 'dfs', 'dfp'),
+                     'pool_prop_read': ('prop->dpp_entries[idx].dpe_str',
+                                        'prop->dpp_entries[idx].dpe_val_ptr'),
+                     'cont_prop_read': ('prop->dpp_entries[idx].dpe_str'),
+                     'cont_iv_prop_g2l': ('prop_entry->dpe_str'),
+                     'notify_ready': ('reqb'),
+                     'pack_daos_response': ('body'),
+                     'ds_mgmt_drpc_get_attach_info': ('body'),
+                     'pool_prop_default_copy': ('entry_def->dpe_str'),
+                     'daos_prop_dup': ('entry_dup->dpe_str'),
+                     'auth_cred_to_iov': ('packed')}
+
+mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
+                    'crt_group_psr_set': ('uri'),
                     'crt_hdlr_uri_lookup': ('tmp_uri'),
-                    'crt_init_opt': ('crt_gdata.cg_addr')}
+                    'crt_rpc_priv_free': ('rpc_priv'),
+                    'd_rank_list_free': ('rank_list',
+                                         'rank_list->rl_ranks'),
+                    'pool_prop_default_copy': ('entry_def->dpe_str'),
+                    'pool_svc_store_uuid_cb': ('path'),
+                    'ds_mgmt_svc_start': ('uri'),
+                    'daos_acl_free': ('acl'),
+                    'drpc_free': ('pointer'),
+                    'pool_child_add_one': ('path'),
+                    'bio_sgl_fini': ('sgl->bs_iovs'),
+                    'daos_iov_free': ('iov->iov_buf'),
+                    'daos_prop_free': ('entry->dpe_str',
+                                       'entry->dpe_val_ptr'),
+                    'main': ('dfs'),
+                    'start_one': ('path'),
+                    'pool_svc_load_uuid_cb': ('path'),
+                    'ie_sclose': ('ie', 'dfs', 'dfp'),
+                    'notify_ready': ('req.uri'),
+                    'get_tgt_rank': ('tgts')}
+
+memleak_ok = ['dfuse_start',
+              'expand_vector',
+              'd_rank_list_alloc',
+              'get_tpv',
+              'get_new_entry',
+              'get_attach_info',
+              'drpc_call_create']
+
+EFILES = ['src/common/misc.c',
+          'src/common/prop.c',
+          'src/cart/crt_hg_proc.c',
+          'src/security/cli_security.c',
+          'src/client/dfuse/dfuse_core.c']
+
+mismatch_alloc_seen = {}
+mismatch_free_seen = {}
 
 def show_line(line, sev, msg):
     """Output a log line in gcc error format"""
@@ -109,6 +167,18 @@ def show_line(line, sev, msg):
 def show_bug(line, bug_id):
     """Mark output with a known bug"""
     show_line(line, 'error', 'Known bug {}'.format(bug_id))
+
+def add_line_count_to_dict(line, target):
+    """Add entry for a output line into a dict"""
+
+    # This is used for keeping tabs on how many allocations/frees there
+    # have been.
+    if line.function not in target:
+        target[line.function] = {}
+    var = line.get_field(3).strip("':")
+    if var not in target[line.function]:
+        target[line.function][var] = 0
+    target[line.function][var] += 1
 
 class hwm_counter():
     """Class to track integer values, with high-water mark"""
@@ -152,7 +222,6 @@ class LogTest():
     def __init__(self, log_iter):
         self._li = log_iter
         self.strict_functions = {}
-        self.error_files_ok = set()
 
     def set_warning_function(self, function, bug_id):
         """Register functions for known bugs
@@ -160,10 +229,6 @@ class LogTest():
         Add a mapping from functions with errors to known bugs
         """
         self.strict_functions[function] = bug_id
-
-    def set_error_ok(self, file_name):
-        """Register a file as having known errors"""
-        self.error_files_ok.add(file_name)
 
     def check_log_file(self, abort_on_warning):
         """Check a single log file for consistency"""
@@ -234,6 +299,9 @@ class LogTest():
                         err_count += 1
                     if line.parent not in active_desc:
                         show_line(line, 'error', 'add with bad parent')
+                        if line.parent in regions:
+                            show_line(regions[line.parent], 'warning',
+                                      'used as parent without registering')
                         err_count += 1
                     active_desc[desc] = line
                 elif line.is_link():
@@ -259,7 +327,7 @@ class LogTest():
                 else:
                     if desc not in active_desc and \
                        desc not in active_rpcs and \
-                       have_debug and line.filename not in self.error_files_ok:
+                       have_debug and line.filename not in EFILES:
 
                         # There's something about this particular function
                         # that makes it very slow at logging output.
@@ -274,20 +342,26 @@ class LogTest():
                 if line.is_calloc():
                     pointer = line.get_field(-1).rstrip('.')
                     if pointer in regions:
-                        show_line(regions[pointer], 'error', 'new allocation seen for same pointer')
+                        show_line(regions[pointer], 'error',
+                                  'new allocation seen for same pointer')
                         err_count += 1
                     regions[pointer] = line
                     memsize.add(line.calloc_size())
                 elif line.is_free():
                     pointer = line.get_field(-1).rstrip('.')
-                    # If a pointer is freed then automatically remove the descriptor
+                    # If a pointer is freed then automatically remove the
+                    # descriptor
                     if pointer in active_desc:
                         del active_desc[pointer]
                     if pointer in regions:
                         if line.mask != regions[pointer].mask:
-                            var = line.get_field(3).strip("'")
+                            fvar = line.get_field(3).strip("'")
+                            afunc = regions[pointer].function
+                            avar = regions[pointer].get_field(3).strip("':")
                             if line.function in mismatch_free_ok and \
-                               var in mismatch_free_ok[line.function]:
+                               fvar in mismatch_free_ok[line.function] and \
+                               afunc in mismatch_alloc_ok and \
+                               avar in mismatch_alloc_ok[afunc]:
                                 pass
                             else:
                                 show_line(regions[pointer], 'warning',
@@ -295,6 +369,9 @@ class LogTest():
                                 show_line(line, 'warning',
                                           'mask mismatch in alloc/free')
                                 err_count += 1
+                            add_line_count_to_dict(line, mismatch_free_seen)
+                            add_line_count_to_dict(regions[pointer],
+                                                   mismatch_alloc_seen)
                         if line.level != regions[pointer].level:
                             show_line(regions[pointer], 'warning',
                                       'level mismatch in alloc/free')
@@ -342,6 +419,8 @@ class LogTest():
         # once this is stable.
         lost_memory = False
         for (_, line) in regions.items():
+            if line.function in memleak_ok:
+                continue
             pointer = line.get_field(-1).rstrip('.')
             if pointer in active_desc:
                 show_line(line, 'error', 'descriptor not freed')
@@ -349,6 +428,14 @@ class LogTest():
             else:
                 show_line(line, 'error', 'memory not freed')
             lost_memory = True
+
+        pp = pprint.PrettyPrinter()
+        if mismatch_alloc_seen:
+            print('Mismatched allocations were allocated here:')
+            print(pp.pformat(mismatch_alloc_seen))
+        if mismatch_free_seen:
+            print('Mismatched allocations were freed here:')
+            print(pp.pformat(mismatch_free_seen))
 
         if active_desc:
             for (_, line) in active_desc.items():
