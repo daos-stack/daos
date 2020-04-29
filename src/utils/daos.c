@@ -1343,6 +1343,7 @@ main(int argc, char *argv[])
 
 	D_FREE(dargs.mdsrv_str);
 	D_FREE(dargs.sysname);
+	D_FREE(dargs.path);
 
 	daos_fini();
 
