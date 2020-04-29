@@ -21,8 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from command_utils import \
-    CommandFailure, BasicParameter, FormattedParameter, ExecutableCommand
+from command_utils_base import \
+    CommandFailure, BasicParameter, FormattedParameter
+from command_utils import ExecutableCommand
 from general_utils import pcmd
 
 

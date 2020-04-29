@@ -21,7 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from command_utils import CommandWithParameters, FormattedParameter
+from command_utils_base import CommandWithParameters, FormattedParameter
 
 
 class DaosPerfCommand(CommandWithParameters):

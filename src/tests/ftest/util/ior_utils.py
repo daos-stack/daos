@@ -27,8 +27,8 @@ import re
 import uuid
 from enum import IntEnum
 
-from command_utils import FormattedParameter, ExecutableCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure, FormattedParameter
+from command_utils import ExecutableCommand
 
 
 class IorCommand(ExecutableCommand):

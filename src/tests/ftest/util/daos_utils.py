@@ -21,9 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand
+from command_utils_base import \
+    CommandWithParameters, FormattedParameter, CommandFailure
+from command_utils import CommandWithSubCommand
 
 
 class DaosCommand(CommandWithSubCommand):
@@ -613,6 +613,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the doas pool query command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list-containers")
