@@ -421,6 +421,23 @@ void mock_ds_mgmt_cont_set_owner_teardown(void)
 	D_FREE(ds_mgmt_cont_set_owner_group);
 }
 
+int	ds_mgmt_exclude_return;
+uuid_t	ds_mgmt_exclude_uuid;
+int
+ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
+				struct pool_target_id_list *target_list,
+				pool_comp_state_t state)
+{
+	uuid_copy(ds_mgmt_exclude_uuid, pool_uuid);
+	return ds_mgmt_exclude_return;
+}
+
+void
+mock_ds_mgmt_exclude_setup(void)
+{
+	ds_mgmt_exclude_return = 0;
+	uuid_clear(ds_mgmt_exclude_uuid);
+}
 /*
  * Stubs, to avoid linker errors
  * TODO: Implement mocks when there is a test that uses these
@@ -472,14 +489,6 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 
 int
 ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
-{
-	return 0;
-}
-
-int
-ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
-		struct pool_target_id_list *target_list,
-		pool_comp_state_t state)
 {
 	return 0;
 }

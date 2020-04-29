@@ -660,8 +660,8 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 
 int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
-		struct pool_target_id_list *target_list,
-		pool_comp_state_t state)
+				 struct pool_target_id_list *target_list,
+				 pool_comp_state_t state)
 {
 	int			rc;
 	d_rank_list_t		*ranks;
@@ -676,7 +676,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 		goto out_svc;
 
 	rc = ds_pool_target_update_state(pool_uuid, ranks, rank, target_list,
-									 state);
+					 state);
 
 	d_rank_list_free(ranks);
 out_svc:

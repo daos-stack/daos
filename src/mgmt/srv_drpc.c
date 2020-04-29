@@ -566,9 +566,9 @@ out:
 	mgmt__pool_destroy_req__free_unpacked(req, NULL);
 }
 
-int
-ds_mgmt_pool_change_operation(char *id, size_t n_targetidx, uint32_t *targetidx,
-		uint32_t rank, pool_comp_state_t state)
+static int
+pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
+			 uint32_t rank, pool_comp_state_t state)
 {
 	uuid_t				uuid;
 	struct pool_target_id_list	reint_list;
@@ -595,7 +595,7 @@ ds_mgmt_pool_change_operation(char *id, size_t n_targetidx, uint32_t *targetidx,
 	}
 
 	pool_target_id_list_free(&reint_list);
-	return 0;
+	return rc;
 }
 
 void
@@ -603,9 +603,9 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__PoolExcludeReq	*req = NULL;
 	Mgmt__PoolExcludeResp	resp;
-	uint8_t					*body;
-	size_t					len;
-	int						rc;
+	uint8_t			*body;
+	size_t			len;
+	int			rc;
 
 	mgmt__pool_exclude_resp__init(&resp);
 
@@ -619,7 +619,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = ds_mgmt_pool_change_operation(req->uuid, req->n_targetidx,
+	rc = pool_change_target_state(req->uuid, req->n_targetidx,
 			req->targetidx, req->rank, PO_COMP_ST_DOWN);
 
 	resp.status = rc;
@@ -642,9 +642,9 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__PoolReintegrateReq	*req = NULL;
 	Mgmt__PoolReintegrateResp	resp;
-	uint8_t						*body;
-	size_t						len;
-	int							rc;
+	uint8_t				*body;
+	size_t				len;
+	int				rc;
 
 	mgmt__pool_reintegrate_resp__init(&resp);
 
@@ -658,7 +658,7 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = ds_mgmt_pool_change_operation(req->uuid, req->n_targetidx,
+	rc = pool_change_target_state(req->uuid, req->n_targetidx,
 			req->targetidx, req->rank, PO_COMP_ST_UP);
 
 	resp.status = rc;
