@@ -256,7 +256,7 @@ class TestPool(TestDaosApiBase):
 
         return status
 
-    @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def set_property(self):
         """Set Property.
 
