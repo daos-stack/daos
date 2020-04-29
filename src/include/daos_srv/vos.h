@@ -60,7 +60,7 @@ vos_dtx_update_resync_gen(daos_handle_t coh);
  * \param flags		[IN]	See dtx_cos_flags.
  *
  * \return		Zero on success.
- * \return		-DER_INPROGRESS	retry with newer epoch.
+ * \return		-DER_TX_RESTART	retry with newer epoch.
  * \return		Other negative value if error.
  */
 int
