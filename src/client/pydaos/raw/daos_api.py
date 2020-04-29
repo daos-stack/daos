@@ -34,6 +34,7 @@ import enum
 
 from . import daos_cref
 from . import conversion
+from .. import DaosClient
 
 # pylint: disable=import-error
 if sys.version_info < (3, 0):
@@ -464,7 +465,7 @@ class DaosPool(object):
         t_size = ctypes.pointer(ctypes.c_size_t(5000))
 
         func = self.context.get_function('list-pool-attr')
-        ret = func(self.handle, sbuf, t_size)
+        ret = func(self.handle, sbuf, t_size, None)
         if ret != 0:
             raise DaosApiError("Pool List-attr returned non-zero. RC:{0}"
                                .format(ret))
@@ -2254,6 +2255,7 @@ class DaosContext(object):
     def __init__(self, path):
         """Set up the DAOS API and MPI."""
         # first find the DAOS version
+        self._dc = None
         with open(os.path.join(path, "daos", "API_VERSION"),
                   "r") as version_file:
             daos_version = version_file.read().rstrip()
@@ -2326,6 +2328,12 @@ class DaosContext(object):
 
     def get_function(self, function):
         """Call a function through the API."""
+        init_not_required = ['d_log']
+        if function not in init_not_required:
+            # For most functions, we need to ensure
+            # that daos_init() has been called before
+            # invoking anything.
+            self._dc = DaosClient()
         return self.ftable[function]
 
 
