@@ -140,7 +140,7 @@ class MpioUtils():
         for command in commands:
             print("run command: {}".format(command))
             try:
-                run_command(command, verbose=True, env=env)
+                run_command(command, timeout=None, verbose=True, env=env)
 
             except DaosTestError as excep:
                 raise MpioFailed(
