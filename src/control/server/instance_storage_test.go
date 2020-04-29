@@ -27,13 +27,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 )
 
 func TestIOServerInstance_MountScmDevice(t *testing.T) {
