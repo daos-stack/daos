@@ -6,7 +6,7 @@ rpc() {
     local rpc="$3"
     shift 3
 
-    clush "$clush_options" -B -S -w "$nodes" "set -e
+    clush $clush_options -B -S -w "$nodes" "set -e
 $(cat ci/rpc_lib.sh)
 # there should be a way to use \"$*\" for the below list, but can't
 # seem to quite work it out yet

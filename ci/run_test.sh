@@ -3,8 +3,10 @@
 # shellcheck source=ci/functions.sh
 . ci/functions.sh
 
-SSH_KEY_ARGS=%s
-NODELIST=%s
+set -ex
+
+SSH_KEY_ARGS="$1"
+NODELIST="$2"
 
 # JENKINS-52781 tar function is breaking symlinks
 rm -rf test_results
