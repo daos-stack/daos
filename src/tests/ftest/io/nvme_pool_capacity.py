@@ -117,9 +117,7 @@ class NvmePoolCapacity(TestWithServers):
                                        test[0])] = str(uuid.uuid4())
 
                 # Define the job manager for the IOR command
-                manager = Mpirun(ior_cmd,
-                                 os.path.join(mpio_util.mpichinstall, "bin"),
-                                 mpitype="mpich")
+                manager = Mpirun(ior_cmd, mpitype="mpich")
                 manager.job.daos_cont.update(container_info
                                              ["{}{}{}".format(oclass,
                                                               api,
