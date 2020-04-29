@@ -320,7 +320,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_REBUILD;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
-			  true /* retry */);
+			  false /* retry */);
 	if (rc)
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
