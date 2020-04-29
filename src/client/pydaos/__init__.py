@@ -74,7 +74,11 @@ class DaosClient(object):
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(DaosClient, cls).__new__(cls)
+<<<<<<< HEAD
 	    # pylint: disable=protected-access
+=======
+            # pylint: disable=protected-access
+>>>>>>> f9a3230... DAOS-4348 pydaos: Make DaosClient a singleton and lazy init
             cls._instance._open()
         return cls._instance
 

@@ -2328,6 +2328,12 @@ class DaosContext(object):
 
     def get_function(self, function):
         """Call a function through the API."""
+        init_not_required = ['d_log']
+        if function not in init_not_required:
+            # For most functions, we need to ensure
+            # that daos_init() has been called before
+            # invoking anything.
+            self._dc = DaosClient()
         return self.ftable[function]
 
 
