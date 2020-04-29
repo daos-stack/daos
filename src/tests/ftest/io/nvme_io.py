@@ -73,7 +73,7 @@ class NvmeIo(IorTestBase):
                 self.pool.create()
 
                 # Disable aggregation
-                self.pool.disable_aggregation()
+                self.pool.set_property()
 
                 # Get the current pool sizes
                 self.pool.get_info()

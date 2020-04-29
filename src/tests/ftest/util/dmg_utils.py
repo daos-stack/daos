@@ -725,12 +725,12 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.set_sub_command("list")
         return self._get_result()
 
-    def pool_disable_aggregation(self, pool, name, value):
-        """Disable aggregation for a given Pool.
+    def pool_set_prop(self, pool, name, value):
+        """Set property for a given Pool.
 
         Args:
-            pool (str): Pool uuid for which aggregation is supposed
-                        to be disabled.
+            pool (str): Pool uuid for which property is supposed
+                        to be set.
             name (str): Property name to be set
             value (str): Property value to be set
 

@@ -257,20 +257,20 @@ class TestPool(TestDaosApiBase):
         return status
 
     @fail_on(DaosApiError)
-    def disable_aggregation(self):
-        """Disable Aggregation.
+    def set_property(self):
+        """Set Property.
 
-        It disables aggregation for a given pool uuid using
+        It sets property for a given pool uuid using
         dmg.
 
         """
         if self.pool:
-            self.log.info("Disabling aggregation for Pool: %s", self.uuid)
+            self.log.info("Set-prop for Pool: %s", self.uuid)
 
             if self.control_method.value == self.USE_DMG and self.dmg:
-                # Disable aggregation using dmg
-                self.dmg.pool_disable_aggregation(self.uuid, self.prop_name,
-                                                  self.prop_value)
+                # set-prop for given pool using dmg
+                self.dmg.pool_set_prop(self.uuid, self.prop_name,
+                                       self.prop_value)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
