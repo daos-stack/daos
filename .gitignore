@@ -49,3 +49,6 @@ test/tool/build/
 foo
 foo2
 foo.o
+src/cart/src/cart/_structures_from_macros_.h
+dnt.*.memcheck
+
