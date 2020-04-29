@@ -537,6 +537,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
 		case 'G':
+			D_FREE(ap->sysname);
 			D_STRNDUP(ap->sysname, optarg, strlen(optarg));
 			if (ap->sysname == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
@@ -1339,6 +1340,9 @@ main(int argc, char *argv[])
 
 	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
 	d_rank_list_free(dargs.mdsrv);
+
+	D_FREE(dargs.mdsrv_str);
+	D_FREE(dargs.sysname);
 
 	daos_fini();
 
