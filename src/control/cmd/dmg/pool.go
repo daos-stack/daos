@@ -113,8 +113,6 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		User: c.UserName, UserGroup: c.GroupName, ACL: acl,
 		UUID: c.UUID,
 	}
-	// FIXME (DAOS-4546): Pool requests should not set the hostlist.
-	req.SetHostList(c.hostlist)
 
 	ctx := context.Background()
 	resp, err := control.PoolCreate(ctx, c.ctlClient, req)
@@ -149,8 +147,6 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 	msg := "succeeded"
 
 	req := &control.PoolDestroyReq{UUID: d.UUID, Force: d.Force}
-	// FIXME (DAOS-4546): Pool requests should not set the hostlist.
-	req.SetHostList(d.hostlist)
 
 	ctx := context.Background()
 	err := control.PoolDestroy(ctx, d.ctlClient, req)
@@ -207,8 +203,6 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 	req := &control.PoolQueryReq{
 		UUID: c.UUID,
 	}
-	// FIXME (DAOS-4546): Pool requests should not set the hostlist.
-	req.SetHostList(c.hostlist)
 
 	ctx := context.Background()
 	resp, err := control.PoolQuery(ctx, c.ctlClient, req)
