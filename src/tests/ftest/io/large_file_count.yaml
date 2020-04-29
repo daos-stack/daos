@@ -13,7 +13,7 @@ timeout: 7200
 server_config:
   name: daos_server
   servers:
-    scm_size: 50
+    log_mask: ERR
     bdev_class: nvme
     bdev_list: ["0000:81:00.0","0000:da:00.0"]
     scm_class: dcpm
@@ -49,7 +49,7 @@ ior:
   transfersize_blocksize:
     4K:
       transfer_size: '4K'
-      block_size: '300M'
+      block_size: '2G'
   objectclass:
     SX:
       daos_oclass: "SX"
@@ -59,7 +59,7 @@ dfuse:
 mdtest:
   client_processes:
     np: 30
-  num_of_files_dirs: 834         # creating total of 25K files
+  num_of_files_dirs: 1667         # creating total of 50K files
   num_of_files_dirs_rc: 33334    # creating total of 1M files
   test_dir: "/"
   iteration: 1
