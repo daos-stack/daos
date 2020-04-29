@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# shellcheck source=ci/functions.sh
 . ci/functions.sh
 
 SSH_KEY_ARGS=%s

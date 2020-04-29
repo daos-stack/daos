@@ -996,9 +996,11 @@ pipeline {
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
                                                   'libipmctl-devel' + qb_inst_rpms
+                        echo String.format(readFile('ci/run_test.sh'),
+                                                   env.SSH_KEY_ARGS, env.NODELIST)
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: String.format(readFile('ci/run_test.sh'),
-                                                   env.SSH_KEY_ARGS, env.NODELIST),
+                                                      env.SSH_KEY_ARGS, env.NODELIST),
                                 junit_files: 'test_results/*.xml'
                     }
                     post {
