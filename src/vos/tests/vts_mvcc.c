@@ -653,7 +653,7 @@ teardown_mvcc(void **state)
 }
 
 int
-run_mvcc_tests(char *cfg)
+run_mvcc_tests(const char *cfg)
 {
 	char	test_name[100];
 

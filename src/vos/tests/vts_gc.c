@@ -429,7 +429,7 @@ static const struct CMUnitTest gc_tests[] = {
 };
 
 int
-run_gc_tests(char *cfg)
+run_gc_tests(const char *cfg)
 {
 	char	test_name[100];
 

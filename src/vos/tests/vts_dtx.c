@@ -1566,7 +1566,7 @@ static const struct CMUnitTest dtx_tests[] = {
 };
 
 int
-run_dtx_tests(char *cfg)
+run_dtx_tests(const char *cfg)
 {
 	char	test_name[100];
 

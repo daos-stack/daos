@@ -1218,7 +1218,7 @@ teardown_ilog(void **state)
 }
 
 int
-run_ilog_tests(char *cfg)
+run_ilog_tests(const char *cfg)
 {
 	char	test_name[100];
 

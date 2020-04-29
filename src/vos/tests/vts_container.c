@@ -374,7 +374,7 @@ static const struct CMUnitTest vos_co_tests[] = {
 };
 
 int
-run_co_test(char *cfg)
+run_co_test(const char *cfg)
 {
 	char	test_name[100];
 

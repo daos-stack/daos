@@ -1300,7 +1300,7 @@ static const struct CMUnitTest punch_model_tests[] = {
 };
 
 int
-run_pm_tests(char *cfg)
+run_pm_tests(const char *cfg)
 {
 	char	test_name[100];
 

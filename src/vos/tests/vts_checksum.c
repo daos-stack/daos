@@ -771,7 +771,7 @@ static const struct CMUnitTest evt_checksums_tests[] = {
 	EVT("03: Test the alignment of entries", test_evt_entry_csum_update),
 };
 
-int run_csum_extent_tests(char *cfg)
+int run_csum_extent_tests(const char *cfg)
 {
 	int rc = 0;
 	char	test_name[130];

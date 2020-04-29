@@ -2018,7 +2018,7 @@ static const struct CMUnitTest aggregate_tests[] = {
 };
 
 int
-run_discard_tests(char *cfg)
+run_discard_tests(const char *cfg)
 {
 	char	test_name[100];
 
@@ -2028,7 +2028,7 @@ run_discard_tests(char *cfg)
 }
 
 int
-run_aggregate_tests(bool slow, char *cfg)
+run_aggregate_tests(bool slow, const char *cfg)
 {
 	char	test_name[100];
 

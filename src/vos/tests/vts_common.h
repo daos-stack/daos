@@ -114,18 +114,19 @@ struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
 /**
  * VOS test suite run tests
  */
-int run_pool_test(char *cfg);
-int run_co_test(char *cfg);
-int run_discard_tests(char *cfg);
-int run_aggregate_tests(bool slow, char *cfg);
-int run_dtx_tests(char *cfg);
-int run_gc_tests(char *cfg);
-int run_pm_tests(char *cfg);
-int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators, char *cfg);
+int run_pool_test(const char *cfg);
+int run_co_test(const char *cfg);
+int run_discard_tests(const char *cfg);
+int run_aggregate_tests(bool slow, const char *cfg);
+int run_dtx_tests(const char *cfg);
+int run_gc_tests(const char *cfg);
+int run_pm_tests(const char *cfg);
+int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators,
+		const char *cfg);
 int run_ts_tests(void);
 
-int run_ilog_tests(char *cfg);
-int run_csum_extent_tests(char *cfg);
-int run_mvcc_tests(char *cfg);
+int run_ilog_tests(const char *cfg);
+int run_csum_extent_tests(const char *cfg);
+int run_mvcc_tests(const char *cfg);
 
 #endif

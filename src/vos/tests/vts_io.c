@@ -2445,7 +2445,7 @@ static const struct CMUnitTest int_tests[] = {
 };
 
 int
-run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators, char *cfg)
+run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators, const char *cfg)
 {
 	char buf[VTS_BUF_SIZE];
 	const char *akey = "hashed";

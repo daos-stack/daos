@@ -419,7 +419,7 @@ static const struct CMUnitTest pool_tests[] = {
 
 
 int
-run_pool_test(char *cfg)
+run_pool_test(const char *cfg)
 {
 	char	test_name[100];
 
