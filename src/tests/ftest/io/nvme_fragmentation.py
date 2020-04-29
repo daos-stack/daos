@@ -33,7 +33,7 @@ from write_host_file import write_host_file
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from daos_utils import DaosCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from mpio_utils import MpioUtils
 

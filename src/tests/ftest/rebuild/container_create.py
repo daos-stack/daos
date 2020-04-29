@@ -22,7 +22,7 @@
 """
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers, skipForTicket
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand
 from test_utils_pool import TestPool

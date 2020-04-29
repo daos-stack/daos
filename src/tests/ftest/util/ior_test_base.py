@@ -28,7 +28,7 @@ import time
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from ior_utils import IorCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils

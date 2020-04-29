@@ -26,7 +26,8 @@ from __future__ import print_function
 
 import uuid
 
-from command_utils import FormattedParameter, ExecutableCommand
+from command_utils_base import FormattedParameter
+from command_utils import ExecutableCommand
 
 
 class MdtestCommand(ExecutableCommand):
