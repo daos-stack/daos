@@ -43,6 +43,7 @@ class daos_named_kv():
                                              pydir,
                                              'site-packages'))
         except Exception:
+            print("Exception in class daos_named_kv.")
             pass
 
         if 'CRT_PHY_ADDR_STR' not in os.environ:
@@ -208,6 +209,7 @@ def main():
         kv.bput(tdata)
 
     except KeyboardInterrupt:
+        print("Exception in Main KeyboardInterrupt.")
         pass
 
     now = time.perf_counter()
