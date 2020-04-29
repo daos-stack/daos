@@ -41,13 +41,9 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 def doc_only_change() {
-    def rc = sh script: 'if [ "' + env.CHANGE_ID + '''" = "null" ]; then
-                              mb_modifier="^"
-                         fi
-                         git diff-tree --no-commit-id --name-only \
-                           $(git merge-base origin/''' + target_branch +
-                      '''$mb_modifier HEAD) HEAD | \
-                           grep -v -e "^doc$"''',
+    def rc = sh script: String.format(readFile('ci/doc_only_change.sh').trim(),
+                                      env.CHANGE_ID,
+                                      target_branch),
                 returnStatus: true
 
     return rc == 1
