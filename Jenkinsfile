@@ -1109,6 +1109,12 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          failOnError: true,
+					 # Compare against the latest master job, and mark as unstable
+					 # if there are any regressions.
+                                         referenceJobName: 'daos/master',
+                                         ignoreFailedBuilds: true,
+                                         ignoreQualityGate: false,
+                                         qualityGates: [[threshold: 1, type: 'NEW', unstable: true]],
                                          name: "VM Testing",
                                          tool: clang(pattern: 'test.out',
                                                      name: 'VM test results',

@@ -52,12 +52,14 @@ class DaosServer():
         self.conf = conf
         self._agent = None
         self.agent_dir = None
+        # Also specified in the yaml file.
+        self._log_file = '/tmp/dnt_server.log'
 
         socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
-        if os.path.exists('/tmp/dnt_server.log'):
-            os.unlink('/tmp/dnt_server.log')
+        if os.path.exists(self._log_file):
+            os.unlink(self._log_file)
 
         self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
         self.agent_dir = self._agent_dir.name
@@ -116,8 +118,8 @@ class DaosServer():
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        if os.path.exists('/tmp.dnt_server.log'):
-            log_test('/tmp/dnt_server.log')
+        if os.path.exists(self._log_file):
+            log_test(self._log_file)
         self.running = False
 
 def il_cmd(dfuse, cmd):

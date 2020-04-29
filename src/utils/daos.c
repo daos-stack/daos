@@ -562,6 +562,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (ap->mdsrv_str == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			ap->mdsrv = daos_rank_list_parse(ap->mdsrv_str, ",");
+			D_FREE(ap->mdsrv_str);
 			break;
 
 		case 'a':
@@ -735,6 +736,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	/* Verify pool svc provided */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
+	D_FREE(cmdname);
 	return 0;
 
 out_free:
