@@ -1231,19 +1231,13 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	 * Invoke the callback once first, in case the condition is met before
 	 * calling progress
 	 */
-	if (cond_cb) {
-		/** execute callback */
-		rc = cond_cb(arg);
-		if (rc > 0)
-			/** exit as per the callback request */
-			return 0;
-		if (unlikely(rc < 0))
-			/**
-			 * something wrong happened during the callback
-			 * execution
-			 */
-			return rc;
-	}
+	rc = cond_cb(arg);
+	if (rc > 0)
+		/** exit as per the callback request */
+		return 0;
+	if (unlikely(rc < 0))
+		/** something wrong happened during the callback execution */
+		return rc;
 
 	ctx = crt_ctx;
 
@@ -1271,16 +1265,22 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	while ((rc = cond_cb(arg)) == 0) {
 		int ret;
 
+		/**
+		 * Call progress once before processing timeouts in case
+		 * in case any replies are pending in the queue
+		 */
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
+		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
+			D_ERROR("crt_hg_progress failed with %d\n", rc);
 
 		crt_context_timeout_check(ctx);
 		crt_exec_progress_cb(ctx);
 
 		ret = crt_hg_progress (&ctx->cc_hg_ctx, hg_timeout);
-                if (unlikely(ret && ret != -DER_TIMEDOUT)) {
-                        D_ERROR("crt_hg_progress failed with %d\n", ret);
-                        return ret;
-                }
+		if (unlikely(ret && ret != -DER_TIMEDOUT)) {
+			D_ERROR("crt_hg_progress failed with %d\n", ret);
+			return ret;
+		}
 
 		/** check for timeout */
 		if (timeout < 0)
@@ -1327,13 +1327,18 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
 
 	ctx = crt_ctx;
 
-	/** call progress once w/o any timeout */
+	/**
+	 * call progress once w/o any timeout before processing timed out
+	 * requests in case any replies are pending in the queue
+	 */
 	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
 	if (unlikely(rc && rc != -DER_TIMEDOUT))
 		D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
 
-	/** process timeout and progress callback after this initial call to
-	 *  progress */
+	/**
+	 * process timeout and progress callback after this initial call to
+	 * progress
+	 */
 	crt_context_timeout_check(ctx);
 	crt_exec_progress_cb(ctx);
 

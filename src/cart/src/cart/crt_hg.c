@@ -1369,8 +1369,10 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 			/** nothing to trigger */
 			return rc;
 
-		/** continue network progress and callback processing, but w/o
-		 * waiting this time */
+		/**
+		 * continue network progress and callback processing, but w/o
+		 * waiting this time
+		 */
 		total -= count;
 		hg_timeout = 0;
 	} while (total > 0);
