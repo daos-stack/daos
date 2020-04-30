@@ -302,9 +302,6 @@ class TestWithServers(TestWithoutServers):
                     "Specifying both a {} partition name and a list of hosts "
                     "is not supported!".format(name))
 
-        # For API calls include running the agent on the local host
-        self.hostlist_clients = include_local_host(self.hostlist_clients)
-
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
         #     self.params, self.hostlist_servers, debug=self.debug)
@@ -373,7 +370,10 @@ class TestWithServers(TestWithoutServers):
 
         """
         if agent_groups is None:
-            agent_groups = {self.server_group: self.hostlist_clients}
+            # Include running the daos_agent on the test control host for API
+            # calls and calling the daos command from this host.
+            agent_groups = {
+                self.server_group: include_local_host(self.hostlist_clients)}
 
         self.log.debug("--- STARTING AGENT GROUPS: %s ---", agent_groups)
 
