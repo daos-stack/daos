@@ -1566,9 +1566,12 @@ static const struct CMUnitTest dtx_tests[] = {
 };
 
 int
-run_dtx_tests(void)
+run_dtx_tests(const char *cfg)
 {
-	return cmocka_run_group_tests_name("VOS DTX Test",
+	char	test_name[100];
+
+	sprintf(test_name, "VOS DTX Test %s", cfg);
+	return cmocka_run_group_tests_name(test_name,
 					   dtx_tests, setup_io,
 					   teardown_io);
 }
