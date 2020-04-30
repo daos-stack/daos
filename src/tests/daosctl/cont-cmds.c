@@ -131,7 +131,7 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cc_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &cc_options);
 
 	/* uuid needs extra parsing */
 	if (!cc_options.pool_uuid ||
@@ -217,7 +217,7 @@ cmd_destroy_container(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cc_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &cc_options);
 
 	/* uuids needs extra parsing */
 	rc = uuid_parse(cc_options.pool_uuid, pool_uuid);
@@ -293,7 +293,7 @@ cmd_query_container(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cc_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &cc_options);
 
 	/* uuids needs extra parsing */
 	rc = uuid_parse(cc_options.pool_uuid, pool_uuid);

@@ -166,7 +166,7 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cp_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &cp_options);
 
 	svc.rl_nr = cp_options.replica_count;
 	D_ALLOC_ARRAY(svc.rl_ranks, svc.rl_nr);
@@ -234,7 +234,7 @@ cmd_destroy_pool(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &dp_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &dp_options);
 
 	printf("destroy_pool uuid:%s server:%s force:%i\n", dp_options.uuid,
 	       dp_options.server_group, dp_options.force);
@@ -289,7 +289,7 @@ cmd_exclude_target(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &et_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &et_options);
 
 	/* turn the uuid string, into a uuid byte array */
 	rc = uuid_parse(et_options.uuid, uuid);
@@ -365,7 +365,7 @@ cmd_evict_pool(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments
 	 * conform to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &ep_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &ep_options);
 
 	/* turn the UUID string into a uuid array */
 	rc = uuid_parse(ep_options.uuid, uuid);
@@ -425,7 +425,7 @@ cmd_query_pool_status(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments
 	 * conform to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &qp_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &qp_options);
 
 	rc = uuid_parse(qp_options.uuid, uuid);
 
@@ -491,7 +491,7 @@ cmd_kill_server(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments
 	 * conform to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &ep_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &ep_options);
 
 	rc = parse_rank_list(ep_options.server_list,
 			     &pool_service_list);
@@ -550,7 +550,7 @@ cmd_kill_pool_leader(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments
 	 * conform to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &killp_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &killp_options);
 
 	/* TODO once we have a way to serialize/deserialize this,
 	 * deserialize it here appropriately
