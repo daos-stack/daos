@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
+
 #include <daos/checksum.h>
 #include <daos/common.h>
 #include <daos/event.h>
@@ -1118,8 +1119,6 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	int			amode, obj_mode;
 	int			rc;
 
-
-
 	amode = (flags & O_ACCMODE);
 	obj_mode = get_daos_obj_mode(flags);
 	if (obj_mode == -1)
@@ -1229,6 +1228,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->mounted = true;
 	*_dfs = dfs;
 
+	DTRACE_PROBE1(dfs, dfs_mount, dfs);
+
 	return rc;
 err_root:
 	daos_obj_close(dfs->root.oh, NULL);
@@ -1244,6 +1245,8 @@ dfs_umount(dfs_t *dfs)
 {
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
+
+	DTRACE_PROBE1(dfs, dfs_umount, dfs);
 
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
@@ -1264,6 +1267,8 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 		return EINVAL;
 
 	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
+
+	DTRACE_PROBE2(dfs, dfs_query, dfs, attr);
 
 	return 0;
 }
@@ -1355,6 +1360,8 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	dfs_params->oclass	= dfs->attr.da_oclass_id;
 	uuid_copy(dfs_params->coh_uuid, coh_uuid);
 	uuid_copy(dfs_params->cont_uuid, cont_uuid);
+
+	DTRACE_PROBE2(dfs, dfs_local2global, dfs, dfs_params);
 
 	return 0;
 }
@@ -1459,6 +1466,8 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	dfs->mounted = true;
 	*_dfs = dfs;
 
+	DTRACE_PROBE2(dfs, dfs_global2local, dfs, dfs_params);
+
 	return rc;
 err_dfs:
 	D_MUTEX_DESTROY(&dfs->lock);
@@ -1473,6 +1482,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 		return EINVAL;
 
 	if (prefix == NULL) {
+		DTRACE_PROBE2(dfs, dfs_clear_prefix, dfs);
 		if (dfs->prefix)
 			D_FREE(dfs->prefix);
 		return 0;
@@ -1488,6 +1498,8 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 	dfs->prefix_len = strlen(dfs->prefix);
 	if (dfs->prefix[dfs->prefix_len-1] == '/')
 		dfs->prefix_len--;
+
+	DTRACE_PROBE2(dfs, dfs_set_prefix, dfs, prefix);
 
 	return 0;
 }
@@ -1518,6 +1530,8 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size)
 	rc = daos_array_get_attr(obj->oh, chunk_size, &cell_size);
 	if (rc)
 		return daos_der2errno(rc);
+
+	DTRACE_PROBE2(dfs, dfs_get_chunk_size, obj, *chunk_size);
 
 	D_ASSERT(cell_size == 1);
 	return 0;
@@ -1565,8 +1579,8 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	DTRACE_PROBE3(dfs, dfs_mkdir, parent, name, new_dir);
 	daos_obj_close(new_dir.oh, NULL);
-
 out:
 	return rc;
 }
@@ -1712,6 +1726,8 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 
 	if (oid)
 		oid_cp(oid, entry.oid);
+
+	DTRACE_PROBE4(dfs, dfs_remove, dfs, parent, name, entry.oid);
 out:
 	return rc;
 }
@@ -1915,6 +1931,7 @@ dfs_lookup_loop:
 
 	obj->flags = flags;
 
+	DTRACE_PROBE4(dfs, dfs_lookup, dfs, path, obj, stbuf);
 out:
 	D_FREE(rem);
 	*_obj = obj;
@@ -1990,6 +2007,7 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 	}
 	*nr = key_nr;
 
+	DTRACE_PROBE4(dfs, dfs_readdir, dfs, obj, key_nr, dirs);
 out:
 	D_FREE(enum_buf);
 	D_FREE(kds);
@@ -2059,6 +2077,8 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 			len = snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
 			D_ASSERT(len >= kds[i].kd_key_len);
 
+			DTRACE_PROBE5(dfs, dfs_iterate, dfs, obj, name, op,
+				      udata);
 			if (op) {
 				rc = op(dfs, obj, name, udata);
 				if (rc)
@@ -2197,6 +2217,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	obj->flags = flags;
 	*_obj = obj;
 
+	DTRACE_PROBE5(dfs, dfs_lookup_rel, dfs, parent, name, obj, stbuf);
+
 	return rc;
 err_obj:
 	D_FREE(obj);
@@ -2273,6 +2295,8 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	*_obj = obj;
 
+	DTRACE_PROBE6(dfs, dfs_open, dfs, parent, name, obj, flags, value);
+
 	return rc;
 out:
 	D_FREE(obj);
@@ -2345,8 +2369,10 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 	oid_cp(&new_obj->oid, obj->oid);
 
 	*_new_obj = new_obj;
-	return 0;
 
+	DTRACE_PROBE3(dfs, dfs_dup, dfs, obj, new_obj);
+
+	return 0;
 err:
 	D_FREE(new_obj);
 	return rc;
@@ -2447,6 +2473,8 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	if (rc)
 		return rc;
 
+	DTRACE_PROBE3(dfs, dfs_obj_local2global, dfs, obj, obj_glob);
+
 	return rc;
 }
 
@@ -2512,6 +2540,8 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	}
 
 	*_obj = obj;
+
+	DTRACE_PROBE3(dfs, dfs_obj_global2local, dfs, obj, obj_glob);
 out:
 	return rc;
 }
@@ -2523,6 +2553,8 @@ dfs_release(dfs_obj_t *obj)
 
 	if (obj == NULL)
 		return EINVAL;
+
+	DTRACE_PROBE1(dfs, dfs_release, obj);
 
 	if (S_ISDIR(obj->mode))
 		rc = daos_obj_close(obj->oh, NULL);
@@ -2578,6 +2610,12 @@ get_size_cb(tse_task_t *task, void *data)
 	else
 		*params->read_size = params->array_size - params->off;
 
+	if (params->iod == NULL)
+		DTRACE_PROBE4(dfs, dfs_read_sized, params->dfs, params->obj,
+			      params->off, params->read_size);
+	else
+		DTRACE_PROBE4(dfs, dfs_readx_sized, params->dfs, params->obj,
+			      params->iod, params->read_size);
 	return 0;
 }
 
@@ -2599,6 +2637,12 @@ read_cb(tse_task_t *task, void *data)
 
 	/** if no short fetch detected, return all the read size */
 	if (params->arr_iod.arr_nr_short_read == 0) {
+		if (params->iod == NULL)
+			DTRACE_PROBE4(dfs, dfs_read, params->dfs, params->obj,
+				      params->off, params->read_size);
+		else
+			DTRACE_PROBE4(dfs, dfs_readx, params->dfs, params->obj,
+				      params->iod, params->read_size);
 		*params->read_size = params->buf_size;
 		return 0;
 	}
@@ -2765,6 +2809,9 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 		return 0;
 	}
 
+	DTRACE_PROBE5(dfs, dfs_readx, obj, iod->iod_nr, iod->iod_rgs, buf_size,
+		      ev);
+
 	rc = dc_task_create(dfs_read_int, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -2821,6 +2868,8 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, ev);
 	if (rc)
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
+	else
+		DTRACE_PROBE4(dfs, dfs_write, dfs, obj, off, buf_size, ev);
 
 	return daos_der2errno(rc);
 }
@@ -2856,6 +2905,8 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
 	if (rc)
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
+	else
+		DTRACE_PROBE4(dfs, dfs_writex, dfs, obj, iod, ev);
 
 	return daos_der2errno(rc);
 }
@@ -2871,6 +2922,8 @@ dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name)
 		strncpy(obj->name, name, DFS_MAX_PATH);
 		obj->name[DFS_MAX_PATH] = '\0';
 	}
+
+	DTRACE_PROBE3(dfs, dfs_update_parent, obj, parent_obj, name);
 
 	return 0;
 }
@@ -2907,7 +2960,13 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, DAOS_TX_NONE, oh, name, stbuf);
+	rc = entry_stat(dfs, DAOS_TX_NONE, oh, name, stbuf);
+	if (rc)
+		return rc;
+
+	DTRACE_PROBE5(dfs, dfs_stat, dfs, obj, parent, name, stbuf);
+
+	return 0;
 }
 
 int
@@ -2926,11 +2985,11 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-
 	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, stbuf);
 	if (rc)
 		D_GOTO(out, rc);
 
+	DTRACE_PROBE3(dfs, dfs_ostat, dfs, obj, stbuf);
 out:
 	daos_obj_close(oh, NULL);
 	return rc;
@@ -2998,6 +3057,8 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 
 	if (mask != F_OK)
 		rc = check_access(dfs, getuid(), getgid(), sym->mode, mask);
+
+	DTRACE_PROBE4(dfs, dfs_access, dfs, parent, name, sym);
 
 	dfs_release(sym);
 	return rc;
@@ -3108,6 +3169,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	if (S_ISLNK(entry.mode))
 		daos_obj_close(oh, NULL);
 
+	DTRACE_PROBE4(dfs, dfs_chmod, dfs, parent, name, mode);
 out:
 	return rc;
 }
@@ -3216,11 +3278,13 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 out_stat:
 	rc = entry_stat(dfs, th, oh, obj->name, stbuf);
+	if (rc)
+		goto out_obj;
 
+	DTRACE_PROBE3(dfs, dfs_osetattr, dfs, obj, stbuf);
 out_obj:
 	daos_obj_close(oh, NULL);
 	return rc;
-
 }
 
 int
@@ -3264,6 +3328,8 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 	/** simple truncate */
 	if (len == DFS_MAX_FSIZE) {
 		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, offset, NULL);
+		if (rc == 0)
+			DTRACE_PROBE3(dfs, dfs_punch_trunc, dfs, obj, offset);
 		return daos_der2errno(rc);
 	}
 
@@ -3278,12 +3344,16 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 	/** if file is smaller than the offset, extend the file */
 	if (size < offset) {
 		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, offset, NULL);
+		if (rc == 0)
+			DTRACE_PROBE3(dfs, dfs_punch_extend, dfs, obj, offset);
 		return daos_der2errno(rc);
 	}
 
 	/** if fsize is between the range to punch, just truncate to offset */
 	if (offset < size && size <= offset + len) {
 		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, offset, NULL);
+		if (rc == 0)
+			DTRACE_PROBE3(dfs, dfs_punch_shrink, dfs, obj, offset);
 		return daos_der2errno(rc);
 	}
 
@@ -3300,6 +3370,8 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 		D_ERROR("daos_array_punch() failed (%d)\n", rc);
 		return daos_der2errno(rc);
 	}
+
+	DTRACE_PROBE4(dfs, dfs_punch_hole, dfs, obj, offset, len);
 
 	return rc;
 }
@@ -3480,6 +3552,8 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DTRACE_PROBE6(dfs, dfs_move, dfs, parent, name, new_parent, new_name,
+		      len);
 out:
 	if (entry.value) {
 		D_ASSERT(S_ISLNK(entry.mode));
@@ -3579,6 +3653,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 		D_GOTO(out, rc);
 	}
 
+	DTRACE_PROBE5(dfs, dfs_exchange, dfs, parent1, name1, parent1, name2);
 out:
 	if (entry1.value) {
 		D_ASSERT(S_ISLNK(entry1.mode));
@@ -3598,8 +3673,6 @@ dfs_sync(dfs_t *dfs)
 		return EINVAL;
 	if (dfs->amode != O_RDWR)
 		return EPERM;
-
-	/** Take a snapshot here and allow rollover to that when supported. */
 
 	return 0;
 }
@@ -3682,6 +3755,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DTRACE_PROBE5(dfs, dfs_setxattr, dfs, obj, name, value, size);
 out:
 	if (xname)
 		D_FREE(xname);
@@ -3750,6 +3824,8 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 
+	DTRACE_PROBE5(dfs, dfs_getxattr, dfs, obj, name, value, iod.iod_size);
+
 	*size = iod.iod_size;
 	if (iod.iod_size == 0)
 		D_GOTO(close, rc = ENODATA);
@@ -3805,6 +3881,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DTRACE_PROBE3(dfs, dfs_removexattr, dfs, obj, name);
 out:
 	if (xname)
 		D_FREE(xname);
@@ -3887,6 +3964,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 	}
 
 	*size = ret_size;
+	DTRACE_PROBE4(dfs, dfs_listxattr, dfs, obj, list, size);
 out:
 	daos_obj_close(oh, NULL);
 	return rc;

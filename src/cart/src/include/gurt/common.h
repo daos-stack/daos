@@ -78,6 +78,20 @@ extern "C" {
 /* Check if bit is set in passed val */
 #define D_BIT_IS_SET(val, bit) (((val) & bit) ? 1 : 0)
 
+#if __has_include(<sys/sdt.h>)
+#include <sys/sdt.h>
+#else
+#define DTRACE_PROBE(prov, ...)		do { } while (0)
+#define DTRACE_PROBE1(prov, ...)	do { } while (0)
+#define DTRACE_PROBE2(prov, ...)	do { } while (0)
+#define DTRACE_PROBE3(prov, ...)	do { } while (0)
+#define DTRACE_PROBE4(prov, ...)	do { } while (0)
+#define DTRACE_PROBE5(prov, ...)	do { } while (0)
+#define DTRACE_PROBE6(prov, ...)	do { } while (0)
+#define DTRACE_PROBE7(prov, ...)	do { } while (0)
+#define DTRACE_PROBE8(prov, ...)	do { } while (0)
+#define DTRACE_PROBE9(prov, ...)	do { } while (0)
+#endif
 
 /**
  * Get the current time using a monotonic timer
