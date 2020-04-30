@@ -117,13 +117,28 @@ class ExecutableCommand(CommandWithParameters):
             "shell": True,
             "env": self.env,
         }
+        if kwargs["env"] and kwargs["verbose"]:
+            self.log.info("Running with env: %s", str(kwargs["env"]))
+
+        msg = None
         try:
             # Block until the command is complete or times out
             return process.run(**kwargs)
 
+        except TypeError as error:
+            # Seen if using self.env with a non-string dictionary value
+            msg = "Error running '{}': {}".format(command, error)
+            if self.env:
+                msg = "\n".join([
+                    msg,
+                    "Verify self.env values are defined as strings: {}".format(
+                        self.env)])
+
         except process.CmdError as error:
             # Command failed or possibly timed out
             msg = "Error occurred running '{}': {}".format(command, error)
+
+        if msg is not None:
             self.log.error(msg)
             raise CommandFailure(msg)
 
