@@ -528,11 +528,13 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		struct statfs fs;
 		char *dir, *dirp;
 
-		dirp = strdup(dir);
-		if (dirp == NULL) {
-			D_ERROR("Failed to allocate copy of path %s\n", path);
+		dir = malloc(PATH_MAX);
+		if (dir == NULL) {
+			D_ERROR("Failed to allocate %d bytes for required "
+				"copy of path %s: %s\n", PATH_MAX, path,
+				strerror(errno));
 			/** TODO - convert errno to rc */
-			return -DER_NOMEM;
+			return -DER_NOSPACE;
 		}
 
 		dirp = strcpy(dir, path);
