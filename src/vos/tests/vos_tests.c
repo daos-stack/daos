@@ -87,21 +87,20 @@ run_all_tests(int keys, bool nest_iterators)
 	int	j;
 	int	length = 0;
 	char	*bypass = getenv("DAOS_IO_BYPASS");
+	char	cfg_desc_io[50];
 
 	length += sprintf(config_description+length, "keys=%d", keys);
 
 	if (bypass)
-		length += sprintf(config_description+length,
-				  " bypass=%s", bypass);
+		sprintf(config_description+length, " bypass=%s", bypass);
 	else
-		length += sprintf(config_description+length,
-				  " bypass=none");
+		sprintf(config_description+length, " bypass=none");
 	if (nest_iterators)
-		length += sprintf(config_description+length,
-				  " iterator=nested");
+		sprintf(cfg_desc_io,
+			"%s iterator=nested", config_description);
 	else
-		length += sprintf(config_description+length,
-				  " iterator=standalone");
+		sprintf(cfg_desc_io,
+			"%s iterator=standalone", config_description);
 
 	failed += run_pm_tests(config_description);
 	failed += run_pool_test(config_description);
@@ -110,7 +109,7 @@ run_all_tests(int keys, bool nest_iterators)
 		for (j = 0; akey_feats[j] >= 0; j++) {
 			feats = dkey_feats[i] | akey_feats[j];
 			failed += run_io_test(feats, keys, nest_iterators,
-					      config_description);
+					      cfg_desc_io);
 		}
 	}
 	failed += run_discard_tests(config_description);
