@@ -45,6 +45,7 @@
 /* crt uri lookup cache info */
 struct crt_uri_cache {
 	struct crt_grp_cache	*grp_cache;
+	size_t			 max_count;
 	int			 idx;
 };
 
