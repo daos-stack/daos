@@ -1056,8 +1056,8 @@ pipeline {
                                script '''set -ex */
                             sh script: '''set -ex
                                       . ./.build_vars.sh
+                                      rm -rf run_test.sh vm_test
                                       DAOS_BASE=${SL_PREFIX%/install*}
-                                      rm -rf $DAOS_BASE/run_test.sh $DAOS_BASE/vm_test
                                       NODE=${NODELIST%%,*}
                                       ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                           cd $DAOS_BASE
@@ -1109,6 +1109,10 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          failOnError: true,
+                                         referenceJobName: 'daos-stack/daos/master',
+                                         ignoreFailedBuilds: true,
+                                         ignoreQualityGate: false,
+                                         qualityGates: [[threshold: 1, type: 'NEW', unstable: true]],
                                          name: "VM Testing",
                                          tool: clang(pattern: 'test.out',
                                                      name: 'VM test results',
