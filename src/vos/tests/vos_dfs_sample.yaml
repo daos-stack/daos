@@ -61,36 +61,11 @@ dfs_sb_metadata: &sb_metadata
   overhead: meta
   akeys: [*magic, *sb_ver, *layout_ver, *compat, *incompat, *mkfs, *state, *def_chunk_size, *obj_class]
 
-mode_t: &mode
-  count: 1
-  size: 4
-
-obj_id_t: &oid
-  count: 1
-  size: 16
-
-time_t: &time
-  count: 3
-  size: 8
-
-daos_size_t: &chunk_size
-  count: 1
-  size: 8
-
-symlink_value: &symlink
-  count: 1
-  size: 1
-
-# The dfs_entry struct has a size of 64 bytes
-p_t: &padding
-  count: 1
-  size: 11
-
 dfs_inode: &dfs_inode
   type: integer
   overhead: meta
   value_type: array
-  values: [*mode, *oid, *time, *chunk_size, *symlink, *padding]
+  values: [{"count": 1, "size": 64}]
 
 # Assumes 16 bytes for file name
 dirent_key: &dirent
