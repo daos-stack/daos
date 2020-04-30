@@ -98,15 +98,18 @@ class NetDev(object):
         out = process.run(fi_info)
 
         # Parse the list and divide the info
+        # pylint: disable=no-member
         prov = re.findall(
             r"(?:provider:|domain:)\s+([A-Za-z0-9;_+]+)", out.stdout, re.M)
+        # pylint: enable=no-member
         info = [prov[i:(i + 2)] for i in range(0, len(prov), 2)]
 
         # Get providers that are supported
         supported = []
         for i in info:
             for sup in self.SUPPORTED_PROV:
-                if sup in i[0] and "rxd" not in i[0]: supported.append(i)
+                if sup in i[0] and "rxd" not in i[0]:
+                    supported.append(i)
 
         # Check that the domain name is in output found.
         providers = []
