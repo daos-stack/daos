@@ -218,25 +218,44 @@ int
 crt_finalize(void);
 
 /**
- * Progress CRT transport layer.
+ * Progress RPC execution on a cart context \a crt_ctx for at most \a timeout
+ * micro-seconds.
+ * The progress call returns when the timeout is reached or any completion has
+ * occurred.
  *
  * \param[in] crt_ctx          CRT transport context
  * \param[in] timeout          how long is caller going to wait (micro-second)
+ *			       at most for a completion to occur.
  *                             if \a timeout > 0 when there is no operation to
  *                             progress. Can return when one or more operation
  *                             progressed.
  *                             zero means no waiting and -1 waits indefinitely.
- * \param[in] cond_cb          optional progress condition callback.
- *                             CRT internally calls this function, when it
- *                             returns non-zero then stops the progressing or
- *                             waiting and returns.
- * \param[in] arg              argument to cond_cb.
  *
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_progress(crt_context_t crt_ctx, int64_t timeout,
-	     crt_progress_cond_cb_t cond_cb, void *arg);
+crt_progress(crt_context_t crt_ctx, int64_t timeout);
+
+/**
+ * Progress RPC execution on a cart context with a callback function.
+ * The callback function is regularly called internally. The progress call
+ * returns when the callback returns a non-zero value or when the timeout
+ * expires.
+ *
+ * \param[in] crt_ctx          CRT transport context
+ * \param[in] timeout          how long is caller going to wait (micro-second)
+ *                             zero means no waiting and -1 waits indefinitely.
+ * \param[in] cond_cb          progress condition callback.
+ *                             CRT internally calls this function, when it
+ *                             returns non-zero then stops the progressing or
+ *                             waiting and returns.
+ * \param[in] arg              optional argument to cond_cb.
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
+		  crt_progress_cond_cb_t cond_cb, void *arg);
 
 /**
  * Create an RPC request.

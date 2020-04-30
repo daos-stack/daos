@@ -72,6 +72,9 @@
 extern "C" {
 #endif
 
+#define likely(x)       __builtin_expect((x),1)
+#define unlikely(x)     __builtin_expect((x),0)
+
 /* Check if bit is set in passed val */
 #define D_BIT_IS_SET(val, bit) (((val) & bit) ? 1 : 0)
 
