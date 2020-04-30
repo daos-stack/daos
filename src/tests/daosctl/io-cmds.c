@@ -31,7 +31,6 @@
 #include <endian.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <mpi.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <argp.h>
