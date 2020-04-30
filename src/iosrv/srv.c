@@ -115,7 +115,8 @@ dss_ctx_nr_get(void)
 static void dss_gc_ult(void *args);
 
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
-#define DSS_TGT_XS_NAME_FMT	"daos_tgt_%d_xs_%d"
+#define DSS_IO_XS_NAME_FMT	"daos_io_%d"
+#define DSS_OFFLOAD_XS_NAME_FMT	"daos_off_%d"
 
 struct dss_xstream_data {
 	/** Initializing step, it is for cleanup of global states */
@@ -384,7 +385,14 @@ dss_srv_handler(void *arg)
 	/** set affinity */
 	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
 	if (rc) {
-		D_ERROR("failed to set affinity: %d\n", errno);
+		D_ERROR("failed to set cpu affinity: %d\n", errno);
+		goto signal;
+	}
+
+	rc = hwloc_set_membind(dss_topo, dx->dx_cpuset, HWLOC_MEMBIND_BIND,
+			       HWLOC_CPUBIND_THREAD);
+	if (rc) {
+		D_ERROR("failed to set memory affinity: %d\n", errno);
 		goto signal;
 	}
 
@@ -401,6 +409,8 @@ dss_srv_handler(void *arg)
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
 	dmi->dmi_ctx_id	= -1;
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_list);
+
+	(void)pthread_setname_np(pthread_self(), dx->dx_name);
 
 	if (dx->dx_comm) {
 		/* create private transport context */
@@ -644,14 +654,6 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 				 (helper_per_tgt + 1));
 		comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
 	}
-	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
-	if (xs_id < dss_sys_xs_nr) {
-		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
-			 xs_id);
-	} else {
-		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_TGT_XS_NAME_FMT,
-			 dx->dx_tgt_id, xs_id);
-	}
 	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
@@ -664,6 +666,26 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	dx->dx_dsc_started = false;
 	D_INIT_LIST_HEAD(&dx->dx_sleep_ult_list);
 
+	/**
+	 * Generate name for each xstreams so that they can be easily identified
+	 * and monitored independently (e.g. via ps(1))
+	 */
+	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
+	if (xs_id < dss_sys_xs_nr) {
+		/** system xtreams are named daos_sys_$num */
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
+			 xs_id);
+	} else if (dx->dx_main_xs) {
+		/** primary I/O xstreams are named daos_io_$tgtid */
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_IO_XS_NAME_FMT,
+			 dx->dx_tgt_id);
+	} else {
+		/** offload xstreams are named daos_off_$num */
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_OFFLOAD_XS_NAME_FMT,
+			 xs_id);
+	}
+
+	/** create ABT scheduler in charge of this xstream */
 	rc = dss_sched_init(dx);
 	if (rc != 0) {
 		D_ERROR("create scheduler fails: "DF_RC"\n", DP_RC(rc));
