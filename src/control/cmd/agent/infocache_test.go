@@ -49,7 +49,40 @@ func TestInfoCacheInitNoScanResults(t *testing.T) {
 	scanResults := []netdetect.FabricScan{}
 	aiCache := attachInfoCache{log: log, enabled: enabled}
 	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
-	common.AssertTrue(t, err != nil, "initResponseCache error")
+	common.AssertTrue(t, err == nil, "initResponseCache error")
+	common.AssertTrue(t, aiCache.isCached() == true, "initResponseCache failed to initialized")
+
+	for name, tc := range map[string]struct {
+		numaNode   int
+		deviceName string
+	}{
+		"info cache response for numa 0": {
+			numaNode:   0,
+			deviceName: "eth0",
+		},
+		"info cache response for numa 1": {
+			numaNode:   1,
+			deviceName: "eth1",
+		},
+		"info cache response for numa 2": {
+			numaNode:   2,
+			deviceName: "eth2",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var res []byte
+			var err error
+			if aiCache.isCached() {
+				res, err = aiCache.getResponse(tc.numaNode)
+				common.AssertEqual(t, err, nil, "getResponse error")
+			}
+			resp := &mgmtpb.GetAttachInfoResp{}
+			if err = proto.Unmarshal(res, resp); err != nil {
+				t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
+			}
+			common.AssertTrue(t, resp.GetInterface() == "", fmt.Sprintf("Expected empty interface name, got %s", resp.GetInterface()))
+		})
+	}
 }
 
 func TestInfoCacheInit(t *testing.T) {

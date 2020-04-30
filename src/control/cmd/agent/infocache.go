@@ -39,6 +39,7 @@ import (
 
 const (
 	defaultNumaNode = 0
+	defaultIndex    = -1
 	verbsProvider   = "ofi+verbs"
 )
 
@@ -50,6 +51,8 @@ type attachInfoCache struct {
 	initialized atm.Bool
 	// maps NUMA affinity and device index to a response
 	numaDeviceMarshResp map[int]map[int][]byte
+	// response given when there is no numa or device data
+	defaultResp []byte
 	// maps NUMA affinity to a device index
 	currentNumaDevIdx map[int]int
 	mutex             sync.Mutex
@@ -61,21 +64,30 @@ type attachInfoCache struct {
 // to choose from.  Returns the index of the device to use.
 func (aic *attachInfoCache) loadBalance(numaNode int) int {
 	aic.mutex.Lock()
+	deviceIndex := defaultIndex
 	numDevs := len(aic.numaDeviceMarshResp[numaNode])
-	deviceIndex := aic.currentNumaDevIdx[numaNode]
-	aic.currentNumaDevIdx[numaNode] = (deviceIndex + 1) % numDevs
+	if numDevs > 0 {
+		deviceIndex = aic.currentNumaDevIdx[numaNode]
+		aic.currentNumaDevIdx[numaNode] = (deviceIndex + 1) % numDevs
+	}
 	aic.mutex.Unlock()
 	return deviceIndex
 }
 
 func (aic *attachInfoCache) getResponse(numaNode int) ([]byte, error) {
 	deviceIndex := aic.loadBalance(numaNode)
+	if deviceIndex == defaultIndex {
+		aic.log.Debugf("No network devices known for NUMA %d.  Retrieved default response\n", numaNode)
+		return aic.defaultResp, nil
+	}
+
 	aic.mutex.Lock()
 	defer aic.mutex.Unlock()
 	numaDeviceMarshResp, ok := aic.numaDeviceMarshResp[numaNode][deviceIndex]
 	if !ok {
 		return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, deviceIndex)
 	}
+
 	aic.log.Debugf("Retrieved response for NUMA %d with device index %d\n", numaNode, deviceIndex)
 	return numaDeviceMarshResp, nil
 }
@@ -90,10 +102,6 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 	aic.mutex.Lock()
 	defer aic.mutex.Unlock()
 
-	if len(scanResults) == 0 {
-		return errors.Errorf("No devices found in the scanResults")
-	}
-
 	// Make a new map each time the cache is initialized
 	aic.numaDeviceMarshResp = make(map[int]map[int][]byte)
 
@@ -104,6 +112,12 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 	}
 
 	netdetect.SetLogger(aic.log)
+
+	var err error
+	aic.defaultResp, err = proto.Marshal(resp)
+	if err != nil {
+		return drpc.MarshalingFailure()
+	}
 
 	for _, fs := range scanResults {
 		if fs.DeviceName == "lo" {
@@ -121,6 +135,7 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 				aic.log.Debugf("OFI_DOMAIN has been detected as: %s", resp.Domain)
 			}
 		}
+
 		numa := int(fs.NUMANode)
 
 		numaDeviceMarshResp, err := proto.Marshal(resp)
@@ -135,8 +150,8 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 		aic.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, numa, len(aic.numaDeviceMarshResp[numa])-1)
 	}
 
-	// If there are any entries in the cache and caching is enabled, the cache is 'initialized'
-	if len(aic.numaDeviceMarshResp) > 0 && aic.enabled.IsTrue() {
+	// If caching is enabled, the cache is now 'initialized'
+	if aic.enabled.IsTrue() {
 		aic.initialized.SetTrue()
 	}
 
