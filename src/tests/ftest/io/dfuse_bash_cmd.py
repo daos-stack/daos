@@ -97,7 +97,7 @@ class BashCmd(TestWithServers):
         """
 
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients[:-1], self.tmp)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
         self.dfuse.get_params(self)
 
         # update dfuse params
@@ -113,7 +113,7 @@ class BashCmd(TestWithServers):
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
                            str(self.dfuse),
-                           str(NodeSet.fromlist(self.dfuse.hosts)),
+                           str(self.dfuse.hosts),
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
@@ -150,63 +150,60 @@ class BashCmd(TestWithServers):
         # Create a pool if one does not already exist.
         for _ in range(self.pool_count):
             self.create_pool()
-            self.create_cont()
             # perform test for multiple containers.
             for count in range(self.cont_count):
+                self.create_cont()
                 self.start_dfuse(count)
                 abs_dir_path = os.path.join(
                     self.dfuse.mount_dir.value, self.dir_name)
                 abs_file_path1 = os.path.join(abs_dir_path, self.file_name1)
                 abs_file_path2 = os.path.join(abs_dir_path, self.file_name2)
-                # check if the dir exists.
-                dir_exists, _ = general_utils.check_file_exists(
-                    self.hostlist_clients[:-1], abs_dir_path, directory=True)
-                # if doesn't exist perform some bash cmds.
-                if not dir_exists:
-                    # list of commands to be executed.
-                    commands = [u"mkdir -p {}".format(abs_dir_path),
-                                u"touch {}".format(abs_file_path1),
-                                u"ls -a {}".format(abs_file_path1),
-                                u"rm {}".format(abs_file_path1),
-                                u"dd if=/dev/zero of={} count={} bs={}".format(
-                                    abs_file_path1, self.dd_count,
-                                    self.dd_blocksize),
-                                u"ls -al {}".format(abs_file_path1),
-                                u"filesize=$(stat -c%s '{}');\
-                                if (( filesize != {}*{} )); then exit 1;\
-                                fi".format(abs_file_path1, self.dd_count,
-                                           self.dd_blocksize),
-                                u"cp -r {} {}".format(abs_file_path1,
-                                                      abs_file_path2),
-                                u"cmp --silent {} {}".format(abs_file_path1,
-                                                             abs_file_path2),
-                                u"rm {}".format(abs_file_path2),
-                                u"mv {} {}".format(abs_file_path1,
-                                                   abs_file_path2),
-                                u"ls -al {}".format(abs_file_path2),
-                                u"rm {}".format(abs_file_path2),
-                                u"rmdir {}".format(abs_dir_path)]
-                    for cmd in commands:
-                        try:
-                            # execute bash cmds
-                            ret_code = general_utils.pcmd(
-                                self.hostlist_clients[:-1], cmd, timeout=30)
-                            if 0 not in ret_code:
-                                error_hosts = NodeSet(
-                                    ",".join(
-                                        [str(node_set) for code, node_set in
-                                         ret_code.items() if code != 0]))
-                                raise CommandFailure(
-                                    "Error running '{}' on the following "
-                                    "hosts: {}".format(cmd, error_hosts))
-                        # report error if any command fails
-                        except CommandFailure as error:
-                            self.log.error("BashCmd Test Failed: %s",
-                                           str(error))
-                            self.fail("Test was expected to pass but "
-                                      "it failed.\n")
+                # list of commands to be executed.
+                commands = [u"mkdir -p {}".format(abs_dir_path),
+                            u"touch {}".format(abs_file_path1),
+                            u"ls -a {}".format(abs_file_path1),
+                            u"rm {}".format(abs_file_path1),
+                            u"dd if=/dev/zero of={} count={} bs={}".format(
+                                abs_file_path1, self.dd_count,
+                                self.dd_blocksize),
+                            u"ls -al {}".format(abs_file_path1),
+                            u"filesize=$(stat -c%s '{}');\
+                            if (( filesize != {}*{} )); then exit 1;\
+                            fi".format(abs_file_path1, self.dd_count,
+                                       self.dd_blocksize),
+                            u"cp -r {} {}".format(abs_file_path1,
+                                                  abs_file_path2),
+                            u"cmp --silent {} {}".format(abs_file_path1,
+                                                         abs_file_path2),
+                            u"rm {}".format(abs_file_path2),
+                            u"mv {} {}".format(abs_file_path1,
+                                               abs_file_path2),
+                            u"ls -al {}".format(abs_file_path2),
+                            u"rm {}".format(abs_file_path2),
+                            u"rmdir {}".format(abs_dir_path)]
+                for cmd in commands:
+                    try:
+                        # execute bash cmds
+                        ret_code = general_utils.pcmd(
+                            self.hostlist_clients[:-1], cmd, timeout=30)
+                        if 0 not in ret_code:
+                            error_hosts = NodeSet(
+                                ",".join(
+                                    [str(node_set) for code, node_set in
+                                     ret_code.items() if code != 0]))
+                            raise CommandFailure(
+                                "Error running '{}' on the following "
+                                "hosts: {}".format(cmd, error_hosts))
+                    # report error if any command fails
+                    except CommandFailure as error:
+                        self.log.error("BashCmd Test Failed: %s",
+                                       str(error))
+                        self.fail("Test was expected to pass but "
+                                  "it failed.\n")
+
                 # stop dfuse
                 self.dfuse.stop()
-            # destroy container and pool
-            self.container.destroy()
+                # destroy container
+                self.container.destroy()
+            # destroy pool
             self.pool.destroy()
