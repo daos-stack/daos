@@ -53,7 +53,6 @@
 /* uri lookup max retry times */
 #define CRT_URI_LOOKUP_RETRY_MAX	(8)
 
-extern struct d_binheap_ops crt_timeout_bh_ops;
 void crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
 extern void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
 
@@ -159,8 +158,6 @@ struct crt_rpc_priv {
 	d_list_t		crp_tmp_link;
 	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */
 	d_list_t		crp_parent_link;
-	/* binheap node for timeout management, in crt_context::cc_bh_timeout */
-	struct d_binheap_node	crp_timeout_bp_node;
 	/* the timeout in seconds set by user */
 	uint32_t		crp_timeout_sec;
 	/* time stamp to be timeout, the key of timeout binheap */
@@ -192,8 +189,6 @@ struct crt_rpc_priv {
 				crp_uri_free:1,
 				/* flag of forwarded rpc for corpc */
 				crp_forward:1,
-				/* flag of in timeout binheap */
-				crp_in_binheap:1,
 				/* set if a call to crt_req_reply pending */
 				crp_reply_pending:1,
 				/* set to 1 if target ep is set */
@@ -577,17 +572,6 @@ int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 int crt_internal_rpc_register(void);
 int crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 int crt_req_send_internal(struct crt_rpc_priv *rpc_priv);
-
-static inline bool
-crt_req_timedout(struct crt_rpc_priv *rpc_priv)
-{
-	return (rpc_priv->crp_state == RPC_STATE_REQ_SENT ||
-		rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
-		rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
-		rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
-		rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) &&
-	       !rpc_priv->crp_in_binheap;
-}
 
 static inline uint64_t
 crt_set_timeout(struct crt_rpc_priv *rpc_priv)

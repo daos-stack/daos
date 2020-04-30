@@ -1116,9 +1116,6 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				     rpc_pub->cr_ep.ep_rank)) {
 			RPC_TRACE(DB_NET, rpc_priv, "request target evicted\n");
 			rc = -DER_EVICTED;
-		} else if (crt_req_timedout(rpc_priv)) {
-			RPC_TRACE(DB_NET, rpc_priv, "request timedout\n");
-			rc = -DER_TIMEDOUT;
 		} else {
 			RPC_TRACE(DB_NET, rpc_priv, "request canceled\n");
 			rc = -DER_CANCELED;
@@ -1214,12 +1211,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 	}
 
 	if (hg_ret == HG_NA_ERROR) {
-		if (!crt_req_timedout(rpc_priv)) {
-			/* error will be reported to the completion callback in
-			 * crt_req_timeout_hdlr()
-			 */
-			crt_req_force_timeout(rpc_priv);
-		}
+		rpc_priv->crp_timeout_ts = 0;
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 	} else if (hg_ret != HG_SUCCESS) {
 		rc = -DER_HG;
