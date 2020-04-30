@@ -753,7 +753,6 @@ class PreReqComponent():
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self._setup_compiler(warning_level)
-        bdir = self._setup_build_type()
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       ('PREBUILT_PREFIX',
@@ -770,7 +769,11 @@ class PreReqComponent():
                       PathVariable('GOPATH',
                                    'Location of your GOPATH for the build',
                                    "%s/go" % self.__build_dir,
-                                   PathVariable.PathIsDirCreate))
+                                   PathVariable.PathIsDirCreate),
+                      PathVariable('BUILD_ROOT',
+                                   'Alternative build root dierctory',
+                                   "build", PathVariable.PathIsDirCreate))
+        bdir = self._setup_build_type()
         self.__env["BUILD_DIR"] = bdir
         if not os.path.exists(bdir):
             os.makedirs(bdir)
@@ -819,7 +822,7 @@ class PreReqComponent():
                                    'dev', ['dev', 'debug', 'release'],
                                    ignorecase=1))
 
-        return self.__env.subst("build/$BUILD_TYPE/$COMPILER")
+        return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
 
     def _setup_intelc(self):
         """Setup environment to use intel compilers"""

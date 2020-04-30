@@ -127,14 +127,14 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
-    if env.get('BUILD_TYPE') == 'release':
-        env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])
     if env.get('BUILD_TYPE') == 'debug':
         if env.get("COMPILER") == 'gcc':
             env.AppendUnique(CCFLAGS=['-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     else:
+        if env.get('BUILD_TYPE') == 'release':
+            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])
         env.AppendUnique(CCFLAGS=['-O2', '-D_FORTIFY_SOURCE=2'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
