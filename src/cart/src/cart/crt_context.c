@@ -1270,7 +1270,7 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 		 * in case any replies are pending in the queue
 		 */
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
-		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
+		if (unlikely(rc && rc != -DER_TIMEDOUT))
 			D_ERROR("crt_hg_progress failed with %d\n", rc);
 
 		crt_context_timeout_check(ctx);
@@ -1345,7 +1345,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
 	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
 		/** call progress once again with the real timeout */
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
-		if (rc && rc != -DER_TIMEDOUT)
+		if (unlikely(rc && rc != -DER_TIMEDOUT))
 			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
 	}
 
