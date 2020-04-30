@@ -34,6 +34,10 @@ from control_test_base import ControlTestBase
 class NetDev(object):
     # pylint: disable=too-few-public-methods
     """A class to represent the information of a network device"""
+
+    SUPPORTED_PROV = [
+        "gni", "psm2", "tcp", "sockets", "verbs", "ofi_rxm"]
+
     def __init__(self, host=None, f_iface=None, providers=None, numa=None):
         """Initialize the network device data object."""
         self.host = host
@@ -43,7 +47,7 @@ class NetDev(object):
 
     def __repr__(self):
         """Overwrite to display formated devices."""
-        self.__str__()
+        return self.__str__()
 
     def __str__(self):
         """Overwrite to display formated devices."""
@@ -66,14 +70,19 @@ class NetDev(object):
                 status = False
         return status
 
-    def set_dev_info(self, prefix):
+    def get_copy(self):
+        """Create a copy instance of this object."""
+        return NetDev(self.host, self.f_iface, self.providers, self.numa)
+
+    def set_dev_info(self, dev_name, prefix):
         """Get all of this devices' information.
 
         Args:
+            dev_name (str): device name or infiniband device name
             prefix (str): prefix path pointing to daos intall path
         """
         self.set_numa()
-        self.set_providers(prefix)
+        self.set_providers(dev_name, prefix)
 
     def set_numa(self):
         """Get the numa node information for this device."""
@@ -82,18 +91,33 @@ class NetDev(object):
             if os.path.exists(p):
                 self.numa = ''.join(open(p, 'r').read()).rstrip()
 
-    def set_providers(self, prefix):
-        """Get the provider information for this device."""
-        if self.f_iface:
-            fi_info = os.path.join(
-                prefix, "bin", "fi_info -d {}".format(self.f_iface))
+    def set_providers(self, dev_name, prefix):
+        """Get the provider information."""
+        # Setup and run command
+        fi_info = os.path.join(prefix, "bin", "fi_info -d {}".format(dev_name))
+        out = process.run(fi_info)
 
-            # Run command
-            out = process.run(fi_info)
+        # Parse the list and divide the info
+        prov = re.findall(
+            r"(?:provider:|domain:)\s+([A-Za-z0-9;_+]+)", out.stdout, re.M)
+        info = [prov[i:(i + 2)] for i in range(0, len(prov), 2)]
 
-            # Parse the list and remove dups
-            dups = re.findall(r"(?:provider):\s+([A-Za-z0-9;_+]+)", out.stdout)
-            self.providers = list(dict.fromkeys(dups))
+        # Get providers that are supported
+        supported = []
+        for i in info:
+            for sup in self.SUPPORTED_PROV:
+                if sup in i[0] and "rxd" not in i[0]: supported.append(i)
+
+        # Check that the domain name is in output found.
+        providers = []
+        for i in supported:
+            if i[1] == dev_name:
+                providers.append(i[0])
+
+        if self.providers:
+            self.providers.extend(providers)
+        else:
+            self.providers = providers
 
 
 class DmgNetworkScanTest(ControlTestBase):
@@ -111,29 +135,69 @@ class DmgNetworkScanTest(ControlTestBase):
     @staticmethod
     def get_devs():
         """ Get list of devices."""
-        devs = []
+        devs = {}
         for dev in os.listdir("/sys/class/net/"):
-            devs.append(dev)
+            devs[dev] = [dev]
             # Check if we need to add infiniband dev to list
             p = "/sys/class/net/{}/device/infiniband".format(dev)
             if os.path.exists(p):
-                devs.extend(os.listdir(p))
+                devs[dev].extend(os.listdir(p))
         return devs
 
+    @staticmethod
+    def clean_info(net_devs):
+        """Clean up the devices found in the system.
+
+        Clean up devices that don't have a numa node and some providers that
+        might be duplicates, also need to attach 'ofi' to provider name.
+
+        Args:
+            net_devs (NetDev): list of NetDev objects.
+
+        Returns:
+            NetDev: list of NetDev objects.
+
+        """
+        idx_l = []
+        for idx, dev in enumerate(net_devs):
+            if dev.f_iface == "lo":
+                idx_l.append(idx)
+            elif not dev.numa:
+                idx_l.append(idx)
+            else:
+                if dev.providers:
+                    no_dups = list(dict.fromkeys(dev.providers))
+                    dev.providers = ["ofi+" + i for i in no_dups]
+        _ = [net_devs.pop(idx - i) for i, idx in enumerate(sorted(idx_l))]
+
+        return net_devs
+
     def get_sys_info(self):
-        """ Get expected values of numa nodes with lstopo."""
+        """Get the system device information."""
         host = socket.gethostname().split(".")[0]
         sys_net_devs = []
-        for dev in self.get_devs():
+
+        # Get device names on this system
+        dev_names = self.get_devs()
+        for dev in dev_names:
             dev_info = NetDev(host, dev)
-            dev_info.set_dev_info(self.prefix)
+            for dev_name in dev_names[dev]:
+                dev_info.set_dev_info(dev_name, self.prefix)
             sys_net_devs.append(dev_info)
 
-        return sys_net_devs
+        # Create NetDev per provider to match dmg output
+        f_net_devs = []
+        for dev in self.clean_info(sys_net_devs):
+            if dev.providers:
+                for provider in dev.providers:
+                    new_dev = dev.get_copy()
+                    new_dev.providers = [provider]
+                    f_net_devs.append(new_dev)
+
+        return f_net_devs
 
     def get_dmg_info(self):
-        """ Store the information received from dmg output."""
-        # Parse the dmg info
+        """Store the information received from dmg output."""
         host = None
         dmg_net_devs = []
         scan_info = self.get_dmg_output("network_scan")
@@ -143,40 +207,24 @@ class DmgNetworkScanTest(ControlTestBase):
         for dev in info:
             if dev[0][0] != "":
                 host = dev[0][0]
-            dev_info = NetDev(host, dev[0][2], [dev[1][2]], dev[2][2])
+            dev_info = NetDev(host, dev[1][2], [dev[0][2]], dev[2][2])
             dmg_net_devs.append(dev_info)
 
-        # Consolidate the dups
-        conso = []
-        diff = []
-        for idx, i in enumerate(dmg_net_devs):
-            for j in dmg_net_devs[idx + 1:]:
-                if i.host == j.host and i.f_iface == j.f_iface and \
-                        i.numa == j.numa and i.providers != j.providers:
-                    providers = list(dict.fromkeys(i.providers + j.providers))
-                    conso.append(NetDev(i.host, i.f_iface, providers, i.numa))
-        for i in conso:
-            for j in dmg_net_devs:
-                if i.f_iface != j.f_iface and j not in diff:
-                    diff.append(j)
-
-        return conso + diff
+        return dmg_net_devs
 
     def test_dmg_network_scan_basic(self):
         """
         JIRA ID: DAOS-2516
         Test Description: Test basic dmg functionality to scan the network
         devices on the system.
-        :avocado: tags=all,small,pr,hw,dmg,network_scan,basic
+        :avocado: tags=all,tiny,pr,hw,dmg,network_scan,basic
         """
         # Get info, both these functions will return a list of NetDev objects
-        dmg_info = sorted(self.get_dmg_info())
-        sys_info = sorted(self.get_sys_info())
-
-        # Create error msg for user
-        dmg_msg = "\n".join("{}".format(i) for i in dmg_info)
-        sys_msg = "\n".join("{}".format(i) for i in sys_info)
-        msg = "Dmg Info:\n{} \nSysInfo:\n{}".format(dmg_msg, sys_msg)
+        dmg_info = sorted(
+            self.get_dmg_info(), key=lambda x: (x.f_iface, x.providers))
+        sys_info = sorted(
+            self.get_sys_info(), key=lambda x: (x.f_iface, x.providers))
 
         # Validate the output with what we expect.
+        msg = "\nDmg Info:\n{} \n\nSysInfo:\n{}".format(dmg_info, sys_info)
         self.assertEqual(sys_info, dmg_info, msg)

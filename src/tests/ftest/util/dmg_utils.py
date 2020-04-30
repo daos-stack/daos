@@ -38,10 +38,9 @@ class DmgCommand(CommandWithSubCommand):
 
     METHOD_REGEX = {
         "run": r"(.*)",
-        "network_scan": r"""
-            (?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))
-            (?:.*\s+(fabric_iface|provider|pinned_numa_node):
-            \s+([a-z0-9+]+))""",
+        "network_scan": r"(?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))"
+                        r"(?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+"
+                        r"([a-z0-9+;_]+))",
         # Sample output of dmg pool list.
         # wolf-3:10001: connected
         # Pool UUID                            Svc Replicas
