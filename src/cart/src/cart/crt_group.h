@@ -137,7 +137,8 @@ struct crt_grp_priv {
 	struct d_hash_table	 gp_s2p_table;
 
 	/* set of variables only valid in primary service groups */
-	uint32_t		 gp_primary:1; /* flag of primary group */
+	uint32_t		 gp_primary:1, /* flag of primary group */
+				 gp_view:1; /* flag to indicate it is a view */
 
 	/* group reference count */
 	uint32_t		 gp_refcount;

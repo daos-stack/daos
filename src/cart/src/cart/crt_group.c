@@ -2487,7 +2487,8 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 
 	D_ASSERT(index >= 0);
 
-	if (grp_priv->gp_primary) {
+	/* Do not populate swim entries for views and secondary groups */
+	if (grp_priv->gp_primary && !grp_priv->gp_view) {
 		rc = crt_swim_rank_add(grp_priv, rank);
 		if (rc) {
 			D_ERROR("crt_swim_rank_add() failed: rc=%d\n", rc);
@@ -2791,7 +2792,7 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank)
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 out:
-	if (rc == 0 && grp_priv->gp_primary)
+	if (rc == 0 && grp_priv->gp_primary && !grp_priv->gp_view)
 		crt_swim_rank_del(grp_priv, rank);
 
 	return rc;
@@ -2860,6 +2861,8 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 		D_ERROR("grp_priv_init_membs() failed; rc=%d\n", rc);
 		D_GOTO(out, rc);
 	}
+
+	grp_priv->gp_view = 1;
 
 	rc = crt_grp_lc_create(grp_priv);
 	if (rc != 0) {
