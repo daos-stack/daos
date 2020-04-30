@@ -41,7 +41,7 @@ import (
 const (
 	defaultRuntimeDir  = "/var/run/daos_agent"
 	defaultLogFile     = "/tmp/daos_agent.log"
-	defaultConfigPath  = "../etc/daos.yml"
+	defaultConfigPath  = "../etc/daos_control.yml"
 	defaultSystemName  = "daos_server"
 	defaultControlPort = 10001
 )
