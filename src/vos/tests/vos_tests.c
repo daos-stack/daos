@@ -95,16 +95,27 @@ run_all_tests(int keys, bool nest_iterators)
 		sprintf(config_description+length, " bypass=%s", bypass);
 	else
 		sprintf(config_description+length, " bypass=none");
-	if (nest_iterators)
-		sprintf(cfg_desc_io,
-			"%s iterator=nested", config_description);
-	else
+
+	if (nest_iterators == false) {
+		failed += run_pm_tests(config_description);
+		failed += run_pool_test(config_description);
+		failed += run_co_test(config_description);
+		failed += run_discard_tests(config_description);
+		failed += run_aggregate_tests(false, config_description);
+		failed += run_gc_tests(config_description);
+		failed += run_dtx_tests(config_description);
+		failed += run_ilog_tests(config_description);
+		failed += run_csum_extent_tests(config_description);
+		failed += run_mvcc_tests(config_description);
+
 		sprintf(cfg_desc_io,
 			"%s iterator=standalone", config_description);
+	} else {
+		sprintf(cfg_desc_io,
+			"%s iterator=nested", config_description);
 
-	failed += run_pm_tests(config_description);
-	failed += run_pool_test(config_description);
-	failed += run_co_test(config_description);
+	}
+
 	for (i = 0; dkey_feats[i] >= 0; i++) {
 		for (j = 0; akey_feats[j] >= 0; j++) {
 			feats = dkey_feats[i] | akey_feats[j];
@@ -112,13 +123,7 @@ run_all_tests(int keys, bool nest_iterators)
 					      cfg_desc_io);
 		}
 	}
-	failed += run_discard_tests(config_description);
-	failed += run_aggregate_tests(false, config_description);
-	failed += run_gc_tests(config_description);
-	failed += run_dtx_tests(config_description);
-	failed += run_ilog_tests(config_description);
-	failed += run_csum_extent_tests(config_description);
-	failed += run_mvcc_tests(config_description);
+
 	return failed;
 }
 
