@@ -42,7 +42,6 @@
 #ifndef __CRT_GROUP_H__
 #define __CRT_GROUP_H__
 
-#include <gurt/atomic.h>
 #include "crt_swim.h"
 
 
@@ -217,8 +216,10 @@ struct crt_rank_mapping {
 	d_rank_t	rm_key;
 	d_rank_t	rm_value;
 
-	ATOMIC uint32_t	rm_ref;
-	uint32_t	rm_initialized:1;
+	uint32_t	rm_ref;
+	uint32_t	rm_initialized;
+
+	pthread_mutex_t	rm_mutex;
 };
 
 /* uri info for each remote rank */
@@ -228,7 +229,7 @@ struct crt_uri_item {
 
 	/* URI string for each remote tag */
 	/* TODO: in phase2 change this to hash table */
-	ATOMIC crt_phy_addr_t ui_uri[CRT_SRV_CONTEXT_NUM];
+	crt_phy_addr_t	ui_uri[CRT_SRV_CONTEXT_NUM];
 
 	/* Primary rank; for secondary groups only  */
 	d_rank_t	ui_pri_rank;
@@ -237,10 +238,13 @@ struct crt_uri_item {
 	d_rank_t	ui_rank;
 
 	/* reference count */
-	ATOMIC uint32_t	ui_ref;
+	uint32_t	ui_ref;
 
 	/* flag indicating whether initialized */
-	uint32_t	ui_initialized:1;
+	uint32_t	ui_initialized;
+
+	/* mutex for protection of ui_ref */
+	pthread_mutex_t ui_mutex;
 };
 
 /* lookup cache item for one target */
@@ -255,7 +259,7 @@ struct crt_lookup_item {
 	hg_addr_t		 li_tag_addr[CRT_SRV_CONTEXT_NUM];
 
 	/* reference count */
-	ATOMIC uint32_t		 li_ref;
+	uint32_t		 li_ref;
 	uint32_t		 li_initialized:1;
 	pthread_mutex_t		 li_mutex;
 };
