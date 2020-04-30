@@ -247,10 +247,16 @@ typedef struct {
 	/** type of akey value (SV or AR)*/
 	daos_iod_type_t		 iom_type;
 	/**
-	 * Number of extents in the mapping, that's the size of all the
-	 * external arrays listed below. 1 for SV.
+	 * Number of elements allocated in iom_recxs.
 	 */
 	unsigned int		 iom_nr;
+	/**
+	 * Number of extents in the mapping. If iom_nr_out is greater than
+	 * iom_nr, iom_recxs will still be populated, but it will be a
+	 * truncated list.
+	 * 1 for SV.
+	 */
+	unsigned int		 iom_nr_out;
 	/** Size of the single value or the record size */
 	daos_size_t		 iom_size;
 	/**
@@ -264,7 +270,9 @@ typedef struct {
 	 * or there is only one returned recx.
 	 */
 	daos_recx_t		 iom_recx_hi;
-	/** All the returned recxs within the requested extents */
+	/** All the returned recxs within the requested extents. Must be
+	 * allocated and freed by caller.
+	 */
 	daos_recx_t		*iom_recxs;
 } daos_iom_t;
 
