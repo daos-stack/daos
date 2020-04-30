@@ -64,7 +64,7 @@ type (
 	Invoker interface {
 		UnaryInvoker
 		//TODO: StreamInvoker
-		SetClientConfig(*ClientConfig)
+		SetConfig(*Config)
 	}
 )
 
@@ -89,7 +89,7 @@ type (
 	// Client implements the Invoker interface and should be provided to
 	// API methods to invoke RPCs.
 	Client struct {
-		config *ClientConfig
+		config *Config
 		log    debugLogger
 	}
 
@@ -104,8 +104,8 @@ func WithClientLogger(log debugLogger) ClientOption {
 	}
 }
 
-// WithClientConfig sets the client's configuration.
-func WithClientConfig(cfg *ClientConfig) ClientOption {
+// WithConfig sets the client's configuration.
+func WithConfig(cfg *Config) ClientOption {
 	return func(c *Client) {
 		c.config = cfg
 	}
@@ -115,7 +115,7 @@ func WithClientConfig(cfg *ClientConfig) ClientOption {
 // parameters set by the provided ClientOption list.
 func NewClient(opts ...ClientOption) *Client {
 	c := &Client{
-		config: DefaultClientConfig(),
+		config: DefaultConfig(),
 	}
 
 	for _, opt := range opts {
@@ -133,14 +133,14 @@ func NewClient(opts ...ClientOption) *Client {
 // parameters set to default values.
 func DefaultClient() *Client {
 	return NewClient(
-		WithClientConfig(DefaultClientConfig()),
+		WithConfig(DefaultConfig()),
 		WithClientLogger(defaultLogger),
 	)
 }
 
-// SetClientConfig sets the client configuration for an
+// SetConfig sets the client configuration for an
 // existing Client.
-func (c *Client) SetClientConfig(cfg *ClientConfig) {
+func (c *Client) SetConfig(cfg *Config) {
 	c.config = cfg
 }
 
