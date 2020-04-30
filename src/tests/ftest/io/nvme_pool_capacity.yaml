@@ -22,8 +22,6 @@ server_config:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 214748364800 #200G
-    nvme_size: 805306368000 #750G
     svcn: 1
     control_method: dmg
 ior:
@@ -38,8 +36,13 @@ ior:
             - "-w -r -R -k -G 1"
           ior_api:
             - DAOS
-          transfer_block_size:
-          # - [tranfersize, blocksize]
-            - [1073741824, 816043786240] # [1G, 760G]
           obj_class:
             - "SX"
+    ior_test_sequence:
+    #   - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
+    #    The values are set to be in the multiples of 10. 
+    #    Values are appx GB.
+        - [4000000000, 18000000000, 1000000, 500000000, PASS]          #[4G, 18G, 1M, 512M, PASS]
+        - [4000000000, 18000000000, 1000000, 3000000000, FAIL]         #[1G, 9G, 1M, 3G, FAIL]
+        - [400000000000, 700000000000, 1000000000, 4000000000, PASS]          #[400G, 700G, 1G, 4G, PASS]
+        - [400000000000, 700000000000, 1000000000, 40000000000, FAIL]         #[400G, 700G, 1G, 40G, FAIL]

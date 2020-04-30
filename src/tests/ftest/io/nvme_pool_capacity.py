@@ -23,9 +23,9 @@
 """
 
 import time
-import os
 import threading
 import uuid
+import math
 from itertools import product
 
 from apricot import TestWithServers
@@ -60,7 +60,7 @@ class NvmePoolCapacity(TestWithServers):
 
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_transfer_size = self.params.get("transfer_block_size",
+        self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         self.ior_daos_oclass = self.params.get("obj_class",
                                                '/run/ior/iorflags/*')
@@ -70,10 +70,8 @@ class NvmePoolCapacity(TestWithServers):
         self.pool = None
         self.out_queue = queue.Queue()
 
-    def ior_runner_thread(self, test_case, pool_array, num_jobs, results):
+    def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
-        Destroy the container at the end of this thread run.
-
         Args:
             results (queue): queue for returning thread results
 
@@ -85,52 +83,37 @@ class NvmePoolCapacity(TestWithServers):
         mpio_util = MpioUtils()
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
             self.fail("Exiting Test: Mpich not installed")
+        self.pool = pool
+        # Define the arguments for the ior_runner_thread method
+        ior_cmd = IorCommand()
+        ior_cmd.get_params(self)
+        ior_cmd.set_daos_params(self.server_group, self.pool)
+        ior_cmd.daos_oclass.update(oclass)
+        ior_cmd.api.update(api)
+        ior_cmd.transfer_size.update(test[2])
+        ior_cmd.block_size.update(test[3])
+        ior_cmd.flags.update(flags)
 
-        # Iterate through IOR different value and run in sequence
-        pool_len = len(pool_array)
-        for pool in pool_array:
-            self.pool = pool
-            for oclass, api, test, flags in product(self.ior_daos_oclass,
-                                                    self.ior_apis,
-                                                    self.ior_transfer_size,
-                                                    self.ior_flags):
-                # Define the arguments for the ior_runner_thread method
-                ior_cmd = IorCommand()
-                ior_cmd.get_params(self)
-                ior_cmd.set_daos_params(self.server_group, self.pool)
-                ior_cmd.daos_oclass.update(oclass)
-                ior_cmd.api.update(api)
-                ior_cmd.transfer_size.update(test[0])
-                # For test case 1, reduce the block size so that
-                # IOR aggregation file size < NVME size.
-                if test_case == 1:
-                    block_size = test[1] / 4
-                # Update the block size based on no of jobs.
-                actual_block_size = ((round(float(block_size))) /
-                                     (num_jobs * pool_len))
-                ior_cmd.block_size.update(str(actual_block_size))
-                ior_cmd.flags.update(flags)
+        container_info["{}{}{}"
+                       .format(oclass,
+                               api,
+                               test[2])] = str(uuid.uuid4())
 
-                container_info["{}{}{}"
-                               .format(oclass,
-                                       api,
-                                       test[0])] = str(uuid.uuid4())
+        # Define the job manager for the IOR command
+        manager = Mpirun(ior_cmd, mpitype="mpich")
+        manager.job.daos_cont.update(container_info
+                                     ["{}{}{}".format(oclass,
+                                                      api,
+                                                      test[2])])
+        env = ior_cmd.get_default_env(str(manager))
+        manager.setup_command(env, self.hostfile_clients,
+                              processes)
 
-                # Define the job manager for the IOR command
-                manager = Mpirun(ior_cmd, mpitype="mpich")
-                manager.job.daos_cont.update(container_info
-                                             ["{}{}{}".format(oclass,
-                                                              api,
-                                                              test[0])])
-                env = ior_cmd.get_default_env(str(manager))
-                manager.setup_command(env, self.hostfile_clients,
-                                      processes)
-
-                # run IOR Command
-                try:
-                    manager.run()
-                except CommandFailure as _error:
-                    results.put("FAIL")
+        # run IOR Command
+        try:
+            manager.run()
+        except CommandFailure as _error:
+            results.put("FAIL")
 
     def test_create_delete(self, num_pool=2, num_cont=5, total_count=100):
         """
@@ -151,10 +134,8 @@ class NvmePoolCapacity(TestWithServers):
                                      dmg_command=self.get_dmg_command())
                 pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
-                split_pool_scm_size = pool[val].scm_size.value / num_pool
-                split_pool_nvme_size = pool[val].nvme_size.value / num_pool
-                pool[val].scm_size.update(split_pool_scm_size)
-                pool[val].nvme_size.update(split_pool_nvme_size)
+                pool[val].scm_size.update(self.ior_test_sequence[0])
+                pool[val].nvme_size.update(self.ior_test_sequence[1])
                 pool[val].create()
                 display_string = "pool{} space at the Beginning".format(val)
                 pool[val].display_pool_daos_space(display_string)
@@ -164,9 +145,10 @@ class NvmePoolCapacity(TestWithServers):
             for val in range(0, num_pool):
                 pool[val].destroy()
                 display_string = "Pool{} space at the End".format(val)
+                self.pool = pool[val]
                 pool[val].display_pool_daos_space(display_string)
 
-    def test_run(self, test_case, num_pool=1, full_ssd_test=0):
+    def test_run(self, num_pool=1):
         """
         Test Description:
             This method is called with different test_case,
@@ -174,43 +156,43 @@ class NvmePoolCapacity(TestWithServers):
             scenario's.
             Use Cases
         """
-        no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
+        num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
-        pools = []
         pool = {}
 
-        for val in range(0, num_pool):
-            pool[val] = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
-            pool[val].get_params(self)
-            # For test case 1, use only half disk space.
-            if (test_case == 1) and (val == 0) and (full_ssd_test == 0):
-                pool[val].scm_size.value = pool[val].scm_size.value / 2
-                pool[val].nvme_size.value = pool[val].nvme_size.value / 2
-            # Split the total SCM and NVME size for creating multiple pools.
-            split_pool_scm_size = (pool[val].scm_size.value / num_pool)
-            split_pool_nvme_size = (pool[val].nvme_size.value / num_pool)
-            pool[val].scm_size.update(split_pool_scm_size)
-            pool[val].nvme_size.update(split_pool_nvme_size)
-            pool[val].create()
-            display_string = "pool{} space at the Beginning".format(val)
-            pool[val].display_pool_daos_space(display_string)
-            pools.append(pool[val])
-
-        self.log.info("Pools : %s", pools)
-
-        for test_loop in range(1):
-            self.log.info("--Test Repeat for loop %s---", test_loop)
+        # Iterate through IOR different value and run in sequence
+        for oclass, api, test, flags in product(self.ior_daos_oclass,
+                                                self.ior_apis,
+                                                self.ior_test_sequence,
+                                                self.ior_flags):
             # Create the IOR threads
             threads = []
-            for thrd in range(no_of_jobs):
-                # Add a thread for these IOR arguments
-                threads.append(threading.Thread(target=self.ior_runner_thread,
-                                                kwargs={"test_case": test_case,
-                                                        "pool_array": pools,
-                                                        "num_jobs": no_of_jobs,
-                                                        "results":
-                                                        self.out_queue}))
+            for val in range(0, num_pool):
+                pool[val] = TestPool(self.context,
+                                     dmg_command=self.get_dmg_command())
+                pool[val].get_params(self)
+                # Split total SCM and NVME size for creating multiple pools.
+                pool[val].scm_size.value = round(float(test[0])) / num_pool
+                pool[val].nvme_size.value = round(float(test[1])) / num_pool
+                pool[val].create()
+                display_string = "pool{} space at the Beginning".format(val)
+                self.pool = pool[val]
+                self.pool.display_pool_daos_space(display_string)
+
+                for thrd in range(0, num_jobs):
+                    # Based on pools/jobs, split block size
+                    if thrd == 0:
+                        tmp = round(float(test[3])) / num_pool
+                        test[3] = str(math.trunc(tmp))
+                    # Add a thread for these IOR arguments
+                    threads.append(threading.Thread(target=self.ior_thread,
+                                                    kwargs={"pool": pool[val],
+                                                            "oclass": oclass,
+                                                            "api": api,
+                                                            "test": test,
+                                                            "flags": flags,
+                                                            "results":
+                                                            self.out_queue}))
             # Launch the IOR threads
             for thrd in threads:
                 self.log.info("Thread : %s", thrd)
@@ -223,13 +205,15 @@ class NvmePoolCapacity(TestWithServers):
             # Verify the queue and make sure no FAIL for any IOR run
             # For 400G/800G, test should fail with ENOSPC.
             while not self.out_queue.empty():
-                if (self.out_queue.get()) == "FAIL" and \
-                   (test_case != 2):
+                if (self.out_queue.get() == "FAIL" and
+                   test[4] == "PASS"):
                     self.fail("FAIL")
-        for val in range(0, num_pool):
-            display_string = "Pool{} space at the End".format(val)
-            pool[val].display_pool_daos_space(display_string)
-            pool[val].destroy()
+
+            for val in range(0, num_pool):
+                display_string = "Pool{} space at the End".format(val)
+                self.pool = pool[val]
+                self.pool.display_pool_daos_space(display_string)
+                self.pool.destroy()
 
     def test_nvme_pool_capacity(self):
         """Jira ID: DAOS-2085.
@@ -251,16 +235,13 @@ class NvmePoolCapacity(TestWithServers):
         :avocado: tags=all,hw,large,nvme,pr
         :avocado: tags=nvme_pool_capacity
         """
-        # Test Case 1 with one pool.
+        # Run test with one pool.
         self.log.info("Running Test Case 1 with one Pool")
         self.test_run(1)
-        # Test Case 1 with two pools, check full SSD.
+        # Run test with two pools.
         self.log.info("Running Test Case 1 with two Pools")
-        self.test_run(1, 2, 1)
-        # Test Case 2 : with 2 pools
-        self.log.info("Running Test Case 2 with two Pools")
-        self.test_run(2, 2)
-        # Test Case 3: create/delete pool/container
+        self.test_run(2)
+        # Run Create/delete pool/container
         self.log.info("Running Test Case 3: Pool/Cont Create/Destroy")
-        self.test_create_delete()
-        self.test_create_delete(10, 50, 100)
+        # self.test_create_delete()
+        # self.test_create_delete(10, 50, 100)
