@@ -42,7 +42,10 @@ class CSumErrorLog(DaosCoreBase):
         super(CSumErrorLog, self).setUp()
         self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         self.dmg.get_params(self)
-        self.dmg.hostlist.value = self.hostlist_servers[0]
+        self.dmg.hostlist = self.hostlist_servers[0]
+        self.dmg.insecure.update(
+            self.server_managers[0].get_config_value("allow_insecure"),
+            "dmg.insecure")
         self.dmg.set_sub_command("storage")
         self.dmg.sub_command_class.set_sub_command("query")
 
