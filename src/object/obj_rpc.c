@@ -329,6 +329,70 @@ free:
 	return rc;
 }
 
+static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
+{
+	crt_proc_op_t		 proc_op;
+	int			 i, rc;
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc)
+		return rc;
+
+	rc = crt_proc_uint64_t(proc, &map->iom_size);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_memcpy(proc, &map->iom_type, sizeof(map->iom_type));
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &map->iom_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &map->iom_nr_out);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &map->iom_size);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_daos_recx_t(proc, &map->iom_recx_lo);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_daos_recx_t(proc, &map->iom_recx_hi);
+	if (rc != 0)
+		return -DER_HG;
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_ARRAY(map->iom_recxs, map->iom_nr);
+		if (map->iom_recxs == NULL)
+			return -DER_NOMEM;
+		for (i = 0; i < map->iom_nr; i++) {
+			rc = crt_proc_daos_recx_t(proc, &map->iom_recxs[i]);
+			if (rc != 0) {
+				D_FREE(map->iom_recxs);
+				return -DER_HG;
+			}
+		}
+	}
+
+	if (ENCODING(proc_op)) {
+		for (i = 0; i < map->iom_nr; i++) {
+			rc = crt_proc_daos_recx_t(proc, &map->iom_recxs[i]);
+			if (rc != 0)
+				return -DER_HG;
+		}
+	}
+
+	if (FREEING(proc_op))
+		D_FREE(map->iom_recxs);
+
+	return 0;
+}
+
 static int
 crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 {
