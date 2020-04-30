@@ -346,7 +346,7 @@ do_init:
 
 			srx_env = getenv("FI_OFI_RXM_USE_SRX");
 			if (srx_env == NULL) {
-				D_WARN("FI_OFI_RXM_USE_SRX not set, setting to 1\n");
+				D_WARN("FI_OFI_RXM_USE_SRX not set, set=1\n");
 				setenv("FI_OFI_RXM_USE_SRX", "1", true);
 			}
 		}
