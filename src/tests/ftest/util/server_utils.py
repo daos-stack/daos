@@ -74,6 +74,9 @@ class DaosServerCommand(YamlCommand):
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
 
+        # Regular expression used to search for the running command.
+        self._regex = "'(daos_server|daos_io_server)'"
+
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
         """Get the daos_server sub command object based upon the sub-command."""

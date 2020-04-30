@@ -71,6 +71,10 @@ class ExecutableCommand(CommandWithParameters):
         # method.
         self._env_names = []
 
+        # Regular expression used to search for the running command. If not
+        # defined the command string will be used.
+        self._regex = None
+
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -87,6 +91,19 @@ class ExecutableCommand(CommandWithParameters):
     def process(self):
         """Getter for process attribute of the ExecutableCommand class."""
         return self._process
+
+    @property
+    def command_regex(self):
+        """Get the regular expression to use to search for the command.
+
+        Typical use would include combining with pgrep to verify a subprocess
+        is running.
+
+        Returns:
+            str: regular expression to use to search for the command
+
+        """
+        return self.command if self._regex is None else self._regex
 
     def run(self):
         """Run the command.
