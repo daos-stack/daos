@@ -1057,10 +1057,10 @@ pipeline {
                             sh script: '''set -ex
                                       . ./.build_vars.sh
                                       DAOS_BASE=${SL_PREFIX%/install*}
-                                      rm -rf $DAOS_BASE/run_test.sh $DAOS_BASE/vm_test
                                       NODE=${NODELIST%%,*}
                                       ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                           cd $DAOS_BASE
+                                          rm -rf $DAOS_BASE/run_test.sh $DAOS_BASE/vm_test
                                           mkdir run_test.sh
                                           mkdir vm_test
                                           if ls /tmp/daos*.log > /dev/null; then

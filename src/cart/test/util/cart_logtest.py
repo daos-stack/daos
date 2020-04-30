@@ -230,14 +230,16 @@ class LogTest():
         """
         self.strict_functions[function] = bug_id
 
-    def check_log_file(self, abort_on_warning):
+    def check_log_file(self, abort_on_warning, show_memleaks=True):
         """Check a single log file for consistency"""
 
         for pid in self._li.get_pids():
-            self._check_pid_from_log_file(pid, abort_on_warning)
+            self._check_pid_from_log_file(pid, abort_on_warning,
+                                          show_memleaks=show_memleaks)
 
 #pylint: disable=too-many-branches,no-self-use,too-many-nested-blocks
-    def _check_pid_from_log_file(self, pid, abort_on_warning):
+    def _check_pid_from_log_file(self, pid, abort_on_warning,
+                                 show_memleaks=True):
         """Check a pid from a single log file for consistency"""
 
         # Dict of active descriptors.
@@ -413,6 +415,17 @@ class LogTest():
 
         print("Memsize: {}".format(memsize))
 
+        pp = pprint.PrettyPrinter()
+        if mismatch_alloc_seen:
+            print('Mismatched allocations were allocated here:')
+            print(pp.pformat(mismatch_alloc_seen))
+        if mismatch_free_seen:
+            print('Mismatched allocations were freed here:')
+            print(pp.pformat(mismatch_free_seen))
+
+        if not show_memleaks:
+            return
+
         # Special case the fuse arg values as these are allocated by IOF
         # but freed by fuse itself.
         # Skip over CaRT issues for now to get this landed, we can enable them
@@ -428,14 +441,6 @@ class LogTest():
             else:
                 show_line(line, 'error', 'memory not freed')
             lost_memory = True
-
-        pp = pprint.PrettyPrinter()
-        if mismatch_alloc_seen:
-            print('Mismatched allocations were allocated here:')
-            print(pp.pformat(mismatch_alloc_seen))
-        if mismatch_free_seen:
-            print('Mismatched allocations were freed here:')
-            print(pp.pformat(mismatch_free_seen))
 
         if active_desc:
             for (_, line) in active_desc.items():
