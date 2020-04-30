@@ -530,7 +530,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		dirp = strdup(dir);
 		if (dirp == NULL) {
-			D_ERROR("Failed to allocate copy of path %s\n", path)
+			D_ERROR("Failed to allocate copy of path %s\n", path);
 			/** TODO - convert errno to rc */
 			return -DER_NOMEM;
 		}
