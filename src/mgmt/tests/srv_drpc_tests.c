@@ -49,10 +49,10 @@
 #define UUID_STR_LEN	37
 #endif
 
+static uint32_t		TEST_IDXS[] = {0, 1, 2};
 static const char	*TEST_ACES[] = {"A::OWNER@:rw",
 					"A::niceuser@:rw",
 					"A:G:GROUP@:r"};
-static uint32_t TEST_IDXS[] = {0, 1, 2};
 
 static Drpc__Call *
 new_drpc_call_with_bad_body(void)
@@ -1552,21 +1552,6 @@ setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 }
 
 static void
-expect_drpc_exclude_resp_success(Drpc__Response *resp)
-{
-	Mgmt__PoolExcludeResp	*exclude_resp = NULL;
-
-	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp->body.data);
-
-	exclude_resp = mgmt__pool_exclude_resp__unpack(NULL, resp->body.len,
-						       resp->body.data);
-	assert_non_null(exclude_resp);
-	assert_int_equal(exclude_resp->status, 0);
-
-	mgmt__pool_exclude_resp__free_unpacked(exclude_resp, NULL);
-}
-static void
 expect_drpc_exclude_resp_with_error(Drpc__Response *resp, int exp_error)
 {
 	Mgmt__PoolExcludeResp	*pc_resp = NULL;
@@ -1605,28 +1590,11 @@ test_drpc_exclude_mgmt_svc_fails(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_exclude_drpc_call(&call, TEST_UUID, 0);
-	ds_mgmt_exclude_return = -DER_UNKNOWN;
+	ds_mgmt_target_update_return = -DER_UNKNOWN;
 
 	ds_mgmt_drpc_pool_exclude(&call, &resp);
 	expect_drpc_exclude_resp_with_error(&resp,
-					       ds_mgmt_exclude_return);
-
-	D_FREE(call.body.data);
-	D_FREE(resp.body.data);
-}
-
-static void
-test_drpc_exclude_invalid_rank(void **state)
-{
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-
-	setup_exclude_drpc_call(&call, TEST_UUID, -1);
-	ds_mgmt_exclude_return = -DER_INVAL;
-
-	ds_mgmt_drpc_pool_exclude(&call, &resp);
-	expect_drpc_exclude_resp_with_error(&resp,
-					       ds_mgmt_exclude_return);
+					       ds_mgmt_target_update_return);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -1641,7 +1609,7 @@ test_drpc_exclude_success(void **state)
 	setup_exclude_drpc_call(&call, TEST_UUID, 0);
 	ds_mgmt_drpc_pool_exclude(&call, &resp);
 
-	expect_drpc_exclude_resp_success(&resp);
+	expect_drpc_exclude_resp_with_error(&resp, 0);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -2036,7 +2004,6 @@ main(void)
 		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_success),
 		EXCLUDE_TEST(test_drpc_exclude_bad_uuid),
 		EXCLUDE_TEST(test_drpc_exclude_mgmt_svc_fails),
-		EXCLUDE_TEST(test_drpc_exclude_invalid_rank),
 		EXCLUDE_TEST(test_drpc_exclude_success),
 		REINTEGRATE_TEST(test_drpc_reintegrate_bad_uuid),
 		QUERY_TEST(test_drpc_pool_query_bad_uuid),

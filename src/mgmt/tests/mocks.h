@@ -129,8 +129,8 @@ void mock_ds_mgmt_pool_query_setup(void);
 /*
  * Mock ds_mgmt_exclude
  */
-extern int		ds_mgmt_exclude_return;
-extern uuid_t		ds_mgmt_exclude_uuid;
+extern int		ds_mgmt_target_update_return;
+extern uuid_t		ds_mgmt_target_update_uuid;
 void mock_ds_mgmt_exclude_setup(void);
 
 /*
