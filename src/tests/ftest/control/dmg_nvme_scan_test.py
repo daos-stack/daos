@@ -56,7 +56,7 @@ class DmgNvmeScanTest(TestWithServers):
         port = self.params.get("port", "/run/server_config/*")
         servers_with_ports = [
             "{}:{}".format(host, port) for host in self.hostlist_servers]
-        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
+        dmg.hostlist = servers_with_ports
 
         try:
             dmg.run()
