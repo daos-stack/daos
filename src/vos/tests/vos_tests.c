@@ -39,6 +39,8 @@
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
 
+static char	config_description[50];
+
 static void
 print_usage()
 {
@@ -83,23 +85,41 @@ run_all_tests(int keys, bool nest_iterators)
 	int	feats;
 	int	i;
 	int	j;
+	int	length = 0;
+	char	*bypass = getenv("DAOS_IO_BYPASS");
 
-	failed += run_pm_tests();
-	failed += run_pool_test();
-	failed += run_co_test();
+	length += sprintf(config_description+length, "keys=%d", keys);
+
+	if (bypass)
+		length += sprintf(config_description+length,
+				  " bypass=%s", bypass);
+	else
+		length += sprintf(config_description+length,
+				  " bypass=none");
+	if (nest_iterators)
+		length += sprintf(config_description+length,
+				  " iterator=nested");
+	else
+		length += sprintf(config_description+length,
+				  " iterator=standalone");
+
+	failed += run_pm_tests(config_description);
+	failed += run_pool_test(config_description);
+	failed += run_co_test(config_description);
 	for (i = 0; dkey_feats[i] >= 0; i++) {
 		for (j = 0; akey_feats[j] >= 0; j++) {
 			feats = dkey_feats[i] | akey_feats[j];
-			failed += run_io_test(feats, keys, nest_iterators);
+			failed += run_io_test(feats, keys, nest_iterators,
+					      config_description);
 		}
 	}
-	failed += run_discard_tests();
-	failed += run_aggregate_tests(false);
-	failed += run_gc_tests();
-	failed += run_dtx_tests();
-	failed += run_ilog_tests();
-	failed += run_csum_extent_tests();
-	failed += run_mvcc_tests();
+	failed += run_discard_tests(config_description);
+	failed += run_aggregate_tests(false, config_description);
+	failed += run_gc_tests(config_description);
+	failed += run_dtx_tests(config_description);
+	failed += run_ilog_tests(config_description);
+	failed += run_csum_extent_tests(config_description);
+	failed += run_mvcc_tests(config_description);
 	return failed;
 }
 
@@ -187,11 +207,11 @@ main(int argc, char **argv)
 				  long_options, &index)) != -1) {
 		switch (opt) {
 		case 'p':
-			nr_failed += run_pool_test();
+			nr_failed += run_pool_test(config_description);
 			test_run = true;
 			break;
 		case 'c':
-			nr_failed += run_co_test();
+			nr_failed += run_co_test(config_description);
 			test_run = true;
 			break;
 		case 'n':
@@ -200,27 +220,29 @@ main(int argc, char **argv)
 		case 'i':
 			ofeats = strtol(optarg, NULL, 16);
 			nr_failed += run_io_test(ofeats, 0,
-						 nest_iterators);
+						 nest_iterators,
+						 config_description);
 			test_run = true;
 			break;
 		case 'a':
-			nr_failed += run_aggregate_tests(true);
+			nr_failed += run_aggregate_tests(true,
+							 config_description);
 			test_run = true;
 			break;
 		case 'd':
-			nr_failed += run_discard_tests();
+			nr_failed += run_discard_tests(config_description);
 			test_run = true;
 			break;
 		case 'g':
-			nr_failed += run_gc_tests();
+			nr_failed += run_gc_tests(config_description);
 			test_run = true;
 			break;
 		case 'X':
-			nr_failed += run_dtx_tests();
+			nr_failed += run_dtx_tests(config_description);
 			test_run = true;
 			break;
 		case 'm':
-			nr_failed += run_pm_tests();
+			nr_failed += run_pm_tests(config_description);
 			test_run = true;
 			break;
 		case 'A':
@@ -229,11 +251,11 @@ main(int argc, char **argv)
 			test_run = true;
 			break;
 		case 'l':
-			nr_failed += run_ilog_tests();
+			nr_failed += run_ilog_tests(config_description);
 			test_run = true;
 			break;
 		case 'z':
-			nr_failed += run_csum_extent_tests();
+			nr_failed += run_csum_extent_tests(config_description);
 			test_run = true;
 			break;
 		case 't':
@@ -241,7 +263,7 @@ main(int argc, char **argv)
 			test_run = true;
 			break;
 		case 'C':
-			nr_failed += run_mvcc_tests();
+			nr_failed += run_mvcc_tests(config_description);
 			test_run = true;
 			break;
 		case 'f':
