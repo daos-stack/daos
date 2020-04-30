@@ -62,11 +62,15 @@ class PunchTest(TestWithServers):
             thedata = "a string that I want to stuff into an object"
             dkey = "this is the dkey"
             akey = "this is the akey"
+            self.log.info("TX opening(1)...")
             tx_handle = self.container.get_new_tx()
+            self.log.info("TX open succeed(1).")
 
             obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
                                               akey, obj_cls=1, txn=tx_handle)
+            self.log.info("OBJ update succeed(1).")
             self.container.commit_tx(tx_handle)
+            self.log.info("TX commit succeed(1).")
 
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
@@ -79,6 +83,9 @@ class PunchTest(TestWithServers):
             # now punch this data, should fail, can't punch committed data
             obj.punch_dkeys(tx_handle, [dkey])
 
+            self.log.info("TX closing(1)...")
+            self.container.close_tx(tx_handle)
+            self.log.info("TX close succeed(1).")
             # expecting punch of commit data above to fail
             self.fail("Punch should have failed but it didn't.\n")
 
@@ -112,10 +119,14 @@ class PunchTest(TestWithServers):
             data1 = [("this is akey 1", "this is data value 1"),
                      ("this is akey 2", "this is data value 2"),
                      ("this is akey 3", "this is data value 3")]
+            self.log.info("TX opening(2)...")
             tx_handle = self.container.get_new_tx()
+            self.log.info("TX open succeed(2).")
             obj = self.container.write_multi_akeys(dkey, data1, obj_cls=1,
                                                    txn=tx_handle)
+            self.log.info("OBJ update succeed(2).")
             self.container.commit_tx(tx_handle)
+            self.log.info("TX commit succeed(2).")
 
             # read back the 1st epoch's data and check 1 value just to make sure
             # everything is on the up and up
@@ -130,6 +141,9 @@ class PunchTest(TestWithServers):
 
             # now punch one akey from this data
             obj.punch_akeys(tx_handle, dkey, [data1[1][0]])
+            self.log.info("TX closing(2)...")
+            self.container.close_tx(tx_handle)
+            self.log.info("TX close succeed(2).")
 
             # expecting punch of commit data above to fail
             self.fail("Punch should have failed but it didn't.\n")
@@ -160,10 +174,14 @@ class PunchTest(TestWithServers):
             thedata = "a string that I want to stuff into an object"
             dkey = "this is the dkey"
             akey = "this is the akey"
+            self.log.info("TX opening(3)...")
             tx_handle = self.container.get_new_tx()
+            self.log.info("TX open succeed(3).")
             obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
                                               akey, obj_cls=1, txn=tx_handle)
+            self.log.info("OBJ update succeed(3).")
             self.container.commit_tx(tx_handle)
+            self.log.info("TX commit succeed(3).")
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
                                                   obj, txn=tx_handle)
@@ -174,6 +192,9 @@ class PunchTest(TestWithServers):
 
             # now punch the object, commited so not expecting it to work
             obj.punch(tx_handle)
+            self.log.info("TX closing(3)...")
+            self.container.close_tx(tx_handle)
+            self.log.info("TX close succeed(3).")
 
             # expecting punch of commit data above to fail
             self.fail("Punch should have failed but it didn't.\n")

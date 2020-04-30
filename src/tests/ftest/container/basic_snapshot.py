@@ -88,18 +88,25 @@ class BasicSnapshot(TestWithServers):
             datasize = len(thedata) + 1
             dkey = "dkey"
             akey = "akey"
+            self.log.info("TX opening...")
             tx_handle = self.container.get_new_tx()
+            self.log.info("TX open succeed.")
             obj = self.container.write_an_obj(thedata,
                                               datasize,
                                               dkey,
                                               akey,
                                               obj_cls=obj_cls,
                                               txn=tx_handle)
+            self.log.info("OBJ update succeed.")
             self.container.commit_tx(tx_handle)
+            self.log.info("TX commit succeed.")
             obj.close()
             # Take a snapshot of the container
             self.snapshot = DaosSnapshot(self.context)
             self.snapshot.create(self.container.coh, tx_handle)
+            self.log.info("TX closing...")
+            self.container.close_tx(tx_handle)
+            self.log.info("TX close succeed.")
             self.log.info("Wrote an object and created a snapshot")
 
         except DaosApiError as error:

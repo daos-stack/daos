@@ -193,14 +193,18 @@ class Snapshot(TestWithServers):
         thedata = "--->>>Happy Daos Snapshot-Create Negative Testing " + \
                   "<<<---" + rand_str(random.randint(1, data_size))
         try:
+            self.log.info("TX opening(1)...")
             tx_handle = self.container.get_new_tx()
+            self.log.info("TX open succeed(1).")
             obj = self.container.write_an_obj(thedata,
                                               len(thedata)+1,
                                               dkey,
                                               akey,
                                               obj_cls=obj_cls,
                                               txn=tx_handle)
+            self.log.info("OBJ update succeed(1).")
             self.container.commit_tx(tx_handle)
+            self.log.info("TX commit succeed(1).")
         except DaosApiError as error:
             self.fail(
                 "##(1)Test failed during the initial object write: %s"
@@ -297,6 +301,10 @@ class Snapshot(TestWithServers):
                 self.fail(
                     "##(7.1)Expecting error RC: -1002  did not show.")
 
+        self.log.info("TX closing(1)...")
+        self.container.close_tx(tx_handle)
+        self.log.info("TX close succeed(1).")
+
     def display_snapshot_test_data(self, test_data, ss_index):
         """Display the snapshot test data.
 
@@ -385,14 +393,18 @@ class Snapshot(TestWithServers):
                 "<<<---" + rand_str(random.randint(1, data_size))
             datasize = len(thedata) + 1
             try:
+                self.log.info("TX opening(2)...")
                 tx_handle = self.container.get_new_tx()
+                self.log.info("TX open succeed(2)...")
                 obj = self.container.write_an_obj(thedata,
                                                   datasize,
                                                   dkey,
                                                   akey,
                                                   obj_cls=obj_cls,
                                                   txn=tx_handle)
+                self.log.info("OBJ update succeed(2)...")
                 self.container.commit_tx(tx_handle)
+                self.log.info("TX commit succeed(2)...")
                 obj.close()
             except DaosApiError as error:
                 self.fail("##(1)Test failed during the initial object "
@@ -541,4 +553,7 @@ class Snapshot(TestWithServers):
         except Exception as error:
             self.fail("##(8)Error on snapshot.destroy. {}"
                       .format(str(error)))
+        self.log.info("TX closing(2)...")
+        self.container.close_tx(tx_handle)
+        self.log.info("TX close succeed(2).")
         self.log.info("===DAOS container Multiple snapshots test passed.")

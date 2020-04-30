@@ -369,10 +369,14 @@ class SoakTestBase(TestWithServers):
         datasize = len(data_pattern) + 1
         dkey = "dkey"
         akey = "akey"
+        self.log.info("TX opening...")
         tx_handle = container.container.get_new_tx()
+        self.log.info("TX open succeed.")
         obj = container.container.write_an_obj(
             data_pattern, datasize, dkey, akey, obj_cls=obj_cls, txn=tx_handle)
+        self.log.info("OBJ update succeed.")
         container.container.commit_tx(tx_handle)
+        self.log.info("TX commit succeed.")
         obj.close()
         # Take a snapshot of the container
         snapshot = DaosSnapshot(self.context)
@@ -407,6 +411,9 @@ class SoakTestBase(TestWithServers):
                 if data_pattern3.value != data_pattern:
                     self.log.error("Snapshot data miscompere")
                     status &= False
+        self.log.info("TX closing...")
+        container.container.close_tx(tx_handle)
+        self.log.info("TX close succeed.")
         # Destroy the snapshot
         try:
             snapshot.destroy(container.container.coh)
