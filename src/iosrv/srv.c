@@ -390,7 +390,7 @@ dss_srv_handler(void *arg)
 	}
 
 	rc = hwloc_set_membind(dss_topo, dx->dx_cpuset, HWLOC_MEMBIND_BIND,
-			       HWLOC_CPUBIND_THREAD);
+			       HWLOC_MEMBIND_THREAD);
 	if (rc) {
 		D_ERROR("failed to set memory affinity: %d\n", errno);
 		goto signal;
