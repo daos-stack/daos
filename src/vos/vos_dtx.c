@@ -60,22 +60,10 @@ dtx_set_aborted(umem_off_t *umoff)
 }
 
 static inline int
-dtx_inprogress(struct dtx_handle *dth, struct vos_dtx_act_ent *dae, int pos)
+dtx_inprogress(struct vos_dtx_act_ent *dae, int pos)
 {
-	if (dae != NULL) {
-		D_DEBUG(DB_IO, "Hit uncommitted DTX "DF_DTI" at %d\n",
-			DP_DTI(&DAE_XID(dae)), pos);
-
-		if (dth != NULL && dth->dth_conflict != NULL) {
-			D_DEBUG(DB_IO, "Record conflict DTX "DF_DTI"\n",
-				DP_DTI(&DAE_XID(dae)));
-			daos_dti_copy(&dth->dth_conflict->dce_xid,
-				      &DAE_XID(dae));
-			dth->dth_conflict->dce_dkey = DAE_DKEY_HASH(dae);
-		}
-	} else {
-		D_DEBUG(DB_IO, "Hit uncommitted (unknown) DTX at %d\n", pos);
-	}
+	D_DEBUG(DB_IO, "Hit uncommitted DTX "DF_DTI" at %d\n",
+		DP_DTI(&DAE_XID(dae)), pos);
 
 	return -DER_INPROGRESS;
 }
@@ -857,56 +845,41 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 			 * -DER_INPROGRESS, then the caller will retry
 			 * the RPC with leader replica.
 			 */
-			return dtx_inprogress(NULL, dae, 1);
+			return dtx_inprogress(dae, 1);
 		}
 
 		/* For leader, non-committed DTX is unavailable. */
 		return ALB_UNAVAILABLE;
 	}
 
-	/* PUNCH DTX cannot be shared by others. */
-	if (DAE_INTENT(dae) == DAOS_INTENT_PUNCH) {
+	D_ASSERTF(intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH,
+		  "Unexpected intent (1) %u\n", intent);
+
+	if (type == DTX_RT_ILOG) {
 		if (dth == NULL)
-			/* XXX: For rebuild case, if some normal IO
-			 *	has generated punch-record (by race)
-			 *	before rebuild logic handling that,
-			 *	then rebuild logic should ignore such
-			 *	punch-record, because the punch epoch
-			 *	will be higher than the rebuild epoch.
+			/* XXX: For rebuild case, if some normal IO has
+			 *	generated related record by race before
+			 *	rebuild logic handling it. Then rebuild
+			 *	logic should ignore such record because
+			 *	its epoch is higher than rebuild epoch.
 			 *	The rebuild logic needs to create the
 			 *	original target record that exists on
 			 *	other healthy replicas before punch.
 			 */
 			return ALB_UNAVAILABLE;
 
-		return dtx_inprogress(dth, dae, 2);
+		return dtx_inprogress(dae, 2);
 	}
 
-	/* PUNCH cannot share with others. */
-	if (intent == DAOS_INTENT_PUNCH) {
-		/* XXX: One corner case: if some DTXs share the same
-		 *	object/key, and the original DTX that create
-		 *	the object/key is aborted, then when we come
-		 *	here, we do not know which DTX conflict with
-		 *	me, so we can NOT set dth::dth_conflict that
-		 *	will be used by DTX conflict handling logic.
-		 */
-		return dtx_inprogress(dth, dae, 3);
-	}
+	D_ASSERTF(intent == DAOS_INTENT_UPDATE,
+		  "Unexpected intent (2) %u\n", intent);
 
-	if (DAE_INTENT(dae) != DAOS_INTENT_UPDATE) {
-		D_ERROR("Unexpected DTX intent %u\n", DAE_INTENT(dae));
-		return -DER_INVAL;
-	}
-
-	D_ASSERT(intent == DAOS_INTENT_UPDATE);
-
-	/* XXX: This seems NOT suitable. Before new punch model introduced,
-	 *	we allow multiple concurrent modifications to update targets
-	 *	under the same object/dkey/akey. That is the DTX share mode.
-	 *	It should not cause any conflict.
+	/*
+	 * We do not share modification between two DTXs for SV/EV value.
+	 * Because the value is epoch based, different DTXs use different
+	 * epochs, then make them to be visible to each other.
 	 */
-	return dtx_inprogress(dth, dae, 4);
+	return ALB_AVAILABLE_CLEAN;
 }
 
 umem_off_t

@@ -1137,7 +1137,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	fprintf(stream, "daos command (v%s)\n", DAOS_VERSION);
 
-	if (argc == 2) {
+	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
 	} else if (strcmp(argv[2], "pool") == 0) {
 		fprintf(stream, "\n"
@@ -1289,13 +1289,17 @@ main(int argc, char *argv[])
 	/* argv[1] is RESOURCE or "help" or "version";
 	 * argv[2] if provided is a resource-specific command
 	 */
-	if (argc < 2 || strcmp(argv[1], "help") == 0) {
+	if (argc == 2 && strcmp(argv[1], "version") == 0) {
+		fprintf(stdout, "daos version %s\n", DAOS_VERSION);
+		return 0;
+	} else if (argc < 2 || strcmp(argv[1], "help") == 0) {
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);
 		return 0;
-	} else if (strcmp(argv[1], "version") == 0) {
-		fprintf(stdout, "daos version %s\n", DAOS_VERSION);
-		return 0;
+	} else if (argc <= 2) {
+		dargs.ostream = stdout;
+		help_hdlr(argc, argv, &dargs);
+		return 2;
 	} else if ((strcmp(argv[1], "container") == 0) ||
 		 (strcmp(argv[1], "cont") == 0))
 		hdlr = cont_op_hdlr;

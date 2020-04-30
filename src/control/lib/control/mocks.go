@@ -103,7 +103,7 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(_ context.Context, _ UnaryRequest) (H
 	return mi.cfg.HostResponses, mi.cfg.UnaryError
 }
 
-func (mi *MockInvoker) SetClientConfig(_ *ClientConfig) {}
+func (mi *MockInvoker) SetConfig(_ *Config) {}
 
 // DefaultMockInvokerConfig returns the default MockInvoker
 // configuration.
