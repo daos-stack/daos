@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       13%{?relval}%{?dist}
+Release:       14%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -314,7 +314,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %endif
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
-%config(noreplace) %{conf_dir}/daos.yml
+%config(noreplace) %{conf_dir}/daos_control.yml
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
 %{_mandir}/man8/dmg.8*
@@ -345,9 +345,12 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Mon Apr 27 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-13
+* Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-14
 - Update permissions of daos_admin to 4755
 - Move fuse dependencies to the client subpackage
+
+* Mon Apr 27 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-13
+- Rename /etc/daos.yml -> /etc/daos_control.yml
 
 * Thu Apr 16 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-12
 - Use distro fuse

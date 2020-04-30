@@ -49,7 +49,8 @@ type storageCmd struct {
 // storagePrepareCmd is the struct representing the prep storage subcommand.
 type storagePrepareCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
+	hostListCmd
 	jsonOutputCmd
 	types.StoragePrepareCmd
 }
@@ -86,7 +87,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		SCM:  sReq,
 	}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StoragePrepare(ctx, cmd.ctlClient, req)
+	resp, err := control.StoragePrepare(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
@@ -110,7 +111,8 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 // storageScanCmd is the struct representing the scan storage subcommand.
 type storageScanCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
+	hostListCmd
 	jsonOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
 }
@@ -122,7 +124,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	req := &control.StorageScanReq{}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageScan(ctx, cmd.ctlClient, req)
+	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
@@ -147,7 +149,8 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 // storageFormatCmd is the struct representing the format storage subcommand.
 type storageFormatCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
+	hostListCmd
 	jsonOutputCmd
 	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
 	Reformat bool `long:"reformat" description:"Always reformat storage (CAUTION: Potentially destructive)"`
@@ -162,7 +165,7 @@ func (cmd *storageFormatCmd) Execute(args []string) error {
 		Reformat: cmd.Reformat,
 	}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageFormat(ctx, cmd.ctlClient, req)
+	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}

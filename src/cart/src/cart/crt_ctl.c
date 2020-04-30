@@ -41,6 +41,7 @@
  */
 
 #include "crt_internal.h"
+#include <gurt/atomic.h>
 
 #define MAX_HOSTNAME_SIZE 1024
 
@@ -81,6 +82,7 @@ crt_ctl_fill_buffer_cb(d_list_t *rlink, void *arg)
 	struct crt_uri_item	*ui;
 	int			*idx;
 	struct crt_uri_cache	*uri_cache = arg;
+	crt_phy_addr_t		 uri;
 	int			 i;
 	int			 rc = 0;
 
@@ -88,23 +90,18 @@ crt_ctl_fill_buffer_cb(d_list_t *rlink, void *arg)
 	D_ASSERT(arg != NULL);
 
 	ui = crt_ui_link2ptr(rlink);
-
-	D_MUTEX_LOCK(&ui->ui_mutex);
-
 	idx = &uri_cache->idx;
-
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		if (ui->ui_uri[i] == NULL)
+		uri = atomic_load_consume(&ui->ui_uri[i]);
+		if (uri == NULL)
 			continue;
 
 		uri_cache->grp_cache[*idx].gc_rank = ui->ui_rank;
 		uri_cache->grp_cache[*idx].gc_tag = i;
-		uri_cache->grp_cache[*idx].gc_uri = ui->ui_uri[i];
+		uri_cache->grp_cache[*idx].gc_uri = uri;
 
 		*idx += 1;
 	}
-
-	D_MUTEX_UNLOCK(&ui->ui_mutex);
 
 	return rc;
 }
@@ -121,15 +118,12 @@ crt_ctl_get_uri_cache_size_cb(d_list_t *rlink, void *arg)
 	D_ASSERT(arg != NULL);
 
 	ui = crt_ui_link2ptr(rlink);
-
-	D_MUTEX_LOCK(&ui->ui_mutex);
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		if (ui->ui_uri[i] == NULL)
+		if (atomic_load_consume(&ui->ui_uri[i]) == NULL)
 			continue;
 
 		*nuri += 1;
 	}
-	D_MUTEX_UNLOCK(&ui->ui_mutex);
 
 	return rc;
 }
