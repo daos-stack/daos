@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020 floatel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@
 import time
 import threading
 import uuid
-import math
 from itertools import product
 
 from apricot import TestWithServers
@@ -46,7 +45,7 @@ except ImportError:
 
 
 class NvmePoolCapacity(TestWithServers):
-    # pylint: disable=too-many-ancestors
+    # pylfloat: disable=too-many-ancestors
     """Test class Description: Verify NOSPC
     condition is reported when accessing data beyond
     pool size.
@@ -115,7 +114,8 @@ class NvmePoolCapacity(TestWithServers):
         except CommandFailure as _error:
             results.put("FAIL")
 
-    def test_create_delete(self, num_pool=2, num_cont=5, total_count=100):
+    def test_create_delete(self, num_pool=2, num_cont=5, total_count=100,
+                           scm_size=400000000000, nvme_size=700000000000):
         """
         Test Description:
             This method is called with
@@ -134,11 +134,12 @@ class NvmePoolCapacity(TestWithServers):
                                      dmg_command=self.get_dmg_command())
                 pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
-                pool[val].scm_size.update(self.ior_test_sequence[0])
-                pool[val].nvme_size.update(self.ior_test_sequence[1])
+                pool[val].scm_size.update(str(scm_size / num_pool))
+                pool[val].nvme_size.update(str(nvme_size / num_pool))
                 pool[val].create()
+                self.pool = pool[val]
                 display_string = "pool{} space at the Beginning".format(val)
-                pool[val].display_pool_daos_space(display_string)
+                self.pool.display_pool_daos_space(display_string)
                 for cont_val in range(0, num_cont):
                     cont[cont_val] = TestContainer(pool[val])
 
@@ -146,7 +147,7 @@ class NvmePoolCapacity(TestWithServers):
                 pool[val].destroy()
                 display_string = "Pool{} space at the End".format(val)
                 self.pool = pool[val]
-                pool[val].display_pool_daos_space(display_string)
+                self.pool.display_pool_daos_space(display_string)
 
     def test_run(self, num_pool=1):
         """
@@ -172,8 +173,8 @@ class NvmePoolCapacity(TestWithServers):
                                      dmg_command=self.get_dmg_command())
                 pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
-                pool[val].scm_size.value = round(float(test[0])) / num_pool
-                pool[val].nvme_size.value = round(float(test[1])) / num_pool
+                pool[val].scm_size.value = int(float(test[0])) / num_pool
+                pool[val].nvme_size.value = int(float(test[1])) / num_pool
                 pool[val].create()
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool = pool[val]
@@ -182,8 +183,8 @@ class NvmePoolCapacity(TestWithServers):
                 for thrd in range(0, num_jobs):
                     # Based on pools/jobs, split block size
                     if thrd == 0:
-                        tmp = round(float(test[3])) / num_pool
-                        test[3] = str(math.trunc(tmp))
+                        tmp = int(float(test[3])) / num_pool
+                        test[3] = str(tmp)
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
                                                     kwargs={"pool": pool[val],
@@ -205,8 +206,8 @@ class NvmePoolCapacity(TestWithServers):
             # Verify the queue and make sure no FAIL for any IOR run
             # For 400G/800G, test should fail with ENOSPC.
             while not self.out_queue.empty():
-                if (self.out_queue.get() == "FAIL" and
-                   test[4] == "PASS"):
+                if self.out_queue.get() == "FAIL" and \
+                   test[4] == "PASS":
                     self.fail("FAIL")
 
             for val in range(0, num_pool):
@@ -243,5 +244,4 @@ class NvmePoolCapacity(TestWithServers):
         self.test_run(2)
         # Run Create/delete pool/container
         self.log.info("Running Test Case 3: Pool/Cont Create/Destroy")
-        # self.test_create_delete()
-        # self.test_create_delete(10, 50, 100)
+        self.test_create_delete(10, 50, 100)
