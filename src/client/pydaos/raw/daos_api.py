@@ -34,6 +34,7 @@ import enum
 
 from . import daos_cref
 from . import conversion
+from .. import DaosClient
 
 # pylint: disable=import-error
 if sys.version_info < (3, 0):
@@ -2253,6 +2254,7 @@ class DaosContext(object):
 
     def __init__(self, path):
         """Set up the DAOS API and MPI."""
+        self._dc = DaosClient()
         # first find the DAOS version
         with open(os.path.join(path, "daos", "API_VERSION"),
                   "r") as version_file:
