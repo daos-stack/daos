@@ -162,6 +162,58 @@ func TestInfoCacheGetResponse(t *testing.T) {
 			numaNode:   2,
 			deviceName: "eth2",
 		},
+		"info cache response for numa 3 with no devices": {
+			numaNode:   3,
+			deviceName: "eth0",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			res, err := aiCache.getResponse(tc.numaNode)
+			common.AssertEqual(t, err, nil, "getResponse error")
+
+			resp := &mgmtpb.GetAttachInfoResp{}
+			if err = proto.Unmarshal(res, resp); err != nil {
+				t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
+			}
+			common.AssertTrue(t, resp.GetInterface() == tc.deviceName, fmt.Sprintf("Expected: %s, got %s", tc.deviceName, resp.GetInterface()))
+		})
+	}
+}
+
+// TestInfoCacheDefaultNumaNode reads an entry from the cache for the specified NUMA node
+// and verifies the default response does not depend specifically on NUMA 0.
+func TestInfoCacheDefaultNumaNode(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+	enabled := atm.NewBool(true)
+	scanResults := []netdetect.FabricScan{
+		{Provider: "ofi+sockets", DeviceName: "eth1", NUMANode: 1},
+		{Provider: "ofi+sockets", DeviceName: "eth2", NUMANode: 2}}
+
+	aiCache := attachInfoCache{log: log, enabled: enabled}
+	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
+	common.AssertEqual(t, err, nil, "initResponseCache error")
+
+	for name, tc := range map[string]struct {
+		numaNode   int
+		deviceName string
+	}{
+		"info cache response for numa 0 with no devices": {
+			numaNode:   0,
+			deviceName: "eth1",
+		},
+		"info cache response for numa 1": {
+			numaNode:   1,
+			deviceName: "eth1",
+		},
+		"info cache response for numa 2": {
+			numaNode:   2,
+			deviceName: "eth2",
+		},
+		"info cache response for numa 3 with no devices": {
+			numaNode:   3,
+			deviceName: "eth1",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			res, err := aiCache.getResponse(tc.numaNode)
