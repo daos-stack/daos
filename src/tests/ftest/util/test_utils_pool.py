@@ -574,7 +574,7 @@ class TestPool(TestDaosApiBase):
         for key in sorted(daos_space.keys()):
             for index, value in enumerate(daos_space[key]):
                 if key == "s_free":
-                    if (index == gindex):
+                    if index == gindex:
                         free_space = value
         return free_space
 
