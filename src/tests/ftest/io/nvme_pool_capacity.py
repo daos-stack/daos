@@ -72,6 +72,11 @@ class NvmePoolCapacity(TestWithServers):
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
         Args:
+            pool: pool handle
+            oclass: IOR object class
+            API : IOR API
+            test : IOR test sequence
+            flags : IOR flags
             results (queue): queue for returning thread results
 
         Returns:
@@ -115,14 +120,20 @@ class NvmePoolCapacity(TestWithServers):
             results.put("FAIL")
 
     def test_create_delete(self, num_pool=2, num_cont=5, total_count=100,
-                           scm_size=400000000000, nvme_size=700000000000):
+                           scm_size=100000000000, nvme_size=300000000000):
         """
         Test Description:
-            This method is called with
-            num_pool parameter to run following test case
-            scenario's.
-            Use Cases
-             1. Create Pool/Container and destroy them. Check Space.
+            This method is used to create/delete pools
+            for a long run. It verifies the NVME free space
+            during this process.
+            Args:
+                num_pool: Total pools for running test
+                num_cont: Total containers created on each pool
+                total_count: Total times the test is run in a loop
+                scm_size: SCM size used in the testing
+                nvme_size: NVME size used in the testing
+            Returns:
+                None
         """
         pool = {}
         cont = {}
@@ -134,34 +145,41 @@ class NvmePoolCapacity(TestWithServers):
                                      dmg_command=self.get_dmg_command())
                 pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
-                pool[val].scm_size.update(str(scm_size / num_pool))
-                pool[val].nvme_size.update(str(nvme_size / num_pool))
+                temp = int(float(scm_size) / num_pool)
+                pool[val].scm_size.update(str(temp))
+                temp = int(float(nvme_size) / num_pool)
+                pool[val].nvme_size.update(str(temp))
                 pool[val].create()
                 self.pool = pool[val]
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool.display_pool_daos_space(display_string)
+                nvme_size_begin = self.pool.get_pool_free_space("NVME")
                 for cont_val in range(0, num_cont):
                     cont[cont_val] = TestContainer(pool[val])
 
             for val in range(0, num_pool):
-                pool[val].destroy()
                 display_string = "Pool{} space at the End".format(val)
                 self.pool = pool[val]
                 self.pool.display_pool_daos_space(display_string)
+                nvme_size_end = self.pool.get_pool_free_space("NVME")
+                pool[val].destroy()
+                if nvme_size_begin != nvme_size_end:
+                    self.fail("FAIL: NVME size not equal")
 
     def test_run(self, num_pool=1):
         """
-        Test Description:
-            This method is called with different test_case,
-            num_pool parameter to run differe test case
-            scenario's.
-            Use Cases
+        Method Descripton:
+            This method is called with different test_cases.
+            Args:
+               num_pool: Total pools for running a test.
+            Returns:
+               None
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
         pool = {}
 
-        # Iterate through IOR different value and run in sequence
+        # Iterate through IOR different ior test sequence
         for oclass, api, test, flags in product(self.ior_daos_oclass,
                                                 self.ior_apis,
                                                 self.ior_test_sequence,
@@ -233,7 +251,7 @@ class NvmePoolCapacity(TestWithServers):
              4. Multiple Pool/Container testing.
 
         Use case:
-        :avocado: tags=all,hw,large,nvme,pr
+        :avocado: tags=all,hw,large,nvme,full_regression
         :avocado: tags=nvme_pool_capacity
         """
         # Run test with one pool.
