@@ -487,13 +487,13 @@ dfuse_open(const char *pathname, int flags, ...)
 		goto finish;
 
 	if (flags & O_CREAT)
-		DFUSE_LOG_INFO("open(pathname=%s, flags=0%o, mode=0%o) = "
+		DFUSE_LOG_INFO("open(flags=0%o, mode=0%o) = "
 			       "%d. intercepted, bypass=%s",
-			       pathname, flags, mode, fd,
+			       flags, mode, fd,
 			       bypass_status[entry.fd_status]);
 	else
-		DFUSE_LOG_INFO("open(pathname=%s, flags=0%o) = %d. intercepted, bypass=%s",
-			       pathname, flags, fd,
+		DFUSE_LOG_INFO("open(flags=0%o) = %d. intercepted, bypass=%s",
+			       flags, fd,
 			       bypass_status[entry.fd_status]);
 
 finish:
@@ -516,8 +516,8 @@ dfuse_creat(const char *pathname, mode_t mode)
 				 DFUSE_IO_BYPASS))
 		goto finish;
 
-	DFUSE_LOG_INFO("creat(pathname=%s, mode=0%o) = %d. intercepted, bypass=%s",
-		       pathname, mode, fd, bypass_status[entry.fd_status]);
+	DFUSE_LOG_INFO("creat(mode=0%o) = %d. intercepted, bypass=%s",
+		       mode, fd, bypass_status[entry.fd_status]);
 
 finish:
 	return fd;
@@ -1060,8 +1060,8 @@ dfuse_fopen(const char *path, const char *mode)
 				 DFUSE_IO_DIS_STREAM))
 		goto finish;
 
-	DFUSE_LOG_INFO("fopen(path=%s, mode=%s) = %p(fd=%d) intercepted, bypass=%s",
-		       path, mode, fp, fd, bypass_status[entry.fd_status]);
+	DFUSE_LOG_INFO("fopen(mode=%s) = %p(fd=%d) intercepted, bypass=%s",
+		       mode, fp, fd, bypass_status[entry.fd_status]);
 
 finish:
 	return fp;
@@ -1095,9 +1095,9 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 	if (newfd == -1 ||
 	    !check_ioctl_on_open(newfd, &new_entry, 0, DFUSE_IO_DIS_STREAM)) {
 		if (rc == 0) {
-			DFUSE_LOG_INFO("freopen(path=%s, mode=%s, stream=%p"
+			DFUSE_LOG_INFO("freopen(mode=%s, stream=%p"
 				       "(fd=%d) = %p(fd=%d) "
-				       "intercepted, bypass=%s", path, mode,
+				       "intercepted, bypass=%s", mode,
 				       stream, oldfd,
 				       newstream, newfd,
 				       bypass_status[DFUSE_IO_DIS_STREAM]);
@@ -1107,15 +1107,15 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 	}
 
 	if (rc == 0) {
-		DFUSE_LOG_INFO("freopen(path=%s, mode=%s, stream=%p(fd=%d) = %p(fd=%d)"
-			       " intercepted, bypass=%s", path, mode, stream,
+		DFUSE_LOG_INFO("freopen(mode=%s, stream=%p(fd=%d) = %p(fd=%d)"
+			       " intercepted, bypass=%s", mode, stream,
 			       oldfd, newstream, newfd,
 			       bypass_status[DFUSE_IO_DIS_STREAM]);
 		vector_decref(&fd_table, old_entry);
 	} else {
-		DFUSE_LOG_INFO("freopen(path=%s, mode=%s, stream=%p(fd=%d)) "
+		DFUSE_LOG_INFO("freopen(mode=%s, stream=%p(fd=%d)) "
 			       "= %p(fd=%d) intercepted, "
-			       "bypass=%s", path, mode, stream, oldfd,
+			       "bypass=%s", mode, stream, oldfd,
 			       newstream, newfd,
 			       bypass_status[DFUSE_IO_DIS_STREAM]);
 	}

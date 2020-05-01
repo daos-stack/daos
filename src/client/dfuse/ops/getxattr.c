@@ -32,8 +32,6 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	char *value = NULL;
 	int rc;
 
-	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
-
 	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, NULL,
 			  &out_size);
 	if (rc != 0)

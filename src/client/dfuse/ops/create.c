@@ -34,8 +34,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct fuse_file_info	        fi_out = {0};
 	int rc;
 
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->ie_stat.st_ino,
-		       name);
+	DFUSE_TRA_INFO(fs_handle, "Parent:%lu", parent->ie_stat.st_ino);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
 	 * defined to 0 so IOF defines LARGEFILE to the value that O_LARGEFILE
@@ -70,8 +69,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_UP(ie, parent, "inode");
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	DFUSE_TRA_INFO(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
-		       mode);
+	DFUSE_TRA_INFO(ie, "flags 0%o mode 0%o", fi->flags, mode);
 
 	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 		      mode, fi->flags, 0, 0, NULL, &ie->ie_obj);
