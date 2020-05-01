@@ -39,6 +39,7 @@ import socket
 import threading
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
+from agent_utils import include_local_host
 
 H_LOCK = threading.Lock()
 
@@ -132,17 +133,18 @@ class SoakTestBase(TestWithServers):
                 self.exclude_slurm_nodes.append(host_server)
         self.log.info(
             "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        # include test node for log cleanup; remove from client list
-        self.exclude_slurm_nodes.append(self.hostlist_clients.pop(-1))
-        self.log.info("<<Updated hostlist_clients %s >>", self.hostlist_clients)
         if not self.hostlist_clients:
             self.fail("There are no nodes that are client only;"
                       "check if the partition also contains server nodes")
 
+        # Include test node for log cleanup; remove from client list
+        local_host_list = include_local_host(None)
+        self.exclude_slurm_nodes.extend(local_host_list)
+
         # Start an agent on the test control host to enable API calls for
         # reserved pool and containers.  The test control host should be the
         # last host in the hostlist_clients list.
-        agent_groups = {self.server_group: self.exclude_slurm_nodes[-1:]}
+        agent_groups = {self.server_group: local_host_list}
         self.start_agents(agent_groups)
 
     def pre_tear_down(self):
