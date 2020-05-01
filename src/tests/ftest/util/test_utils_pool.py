@@ -564,19 +564,14 @@ class TestPool(TestDaosApiBase):
         Returns:
             free_space : Free SCM or NVME space "str"
         """
-        free_space = 0
         dev = device.lower()
-        if dev == "scm":
-            gindex = 0
-        else:
-            gindex = 1
         daos_space = self.get_pool_daos_space()
-        for key in sorted(daos_space.keys()):
-            for index, value in enumerate(daos_space[key]):
-                if key == "s_free":
-                    if index == gindex:
-                        free_space = value
-        return free_space
+        if dev == "scm":
+            return daos_space["s_free"][0]
+        elif dev == "nvme":
+            return daos_space["s_free"][1]
+        else:
+            return 0
 
     def display_pool_daos_space(self, msg=None):
         """Display the pool info daos space attributes.

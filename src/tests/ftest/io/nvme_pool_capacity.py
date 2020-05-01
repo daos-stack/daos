@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 floatel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -72,11 +72,11 @@ class NvmePoolCapacity(TestWithServers):
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
         Args:
-            pool: pool handle
-            oclass: IOR object class
-            API : IOR API
-            test : IOR test sequence
-            flags : IOR flags
+            pool (object): pool handle
+            oclass (str): IOR object class
+            API (str): IOR API
+            test (list): IOR test sequence
+            flags (str): IOR flags
             results (queue): queue for returning thread results
 
         Returns:
@@ -127,11 +127,11 @@ class NvmePoolCapacity(TestWithServers):
             for a long run. It verifies the NVME free space
             during this process.
             Args:
-                num_pool: Total pools for running test
-                num_cont: Total containers created on each pool
-                total_count: Total times the test is run in a loop
-                scm_size: SCM size used in the testing
-                nvme_size: NVME size used in the testing
+                num_pool (int): Total pools for running test
+                num_cont (int): Total containers created on each pool
+                total_count (int): Total times the test is run in a loop
+                scm_size (int): SCM size used in the testing
+                nvme_size (int): NVME size used in the testing
             Returns:
                 None
         """
@@ -174,7 +174,7 @@ class NvmePoolCapacity(TestWithServers):
         Method Descripton:
             This method is called with different test_cases.
             Args:
-               num_pool: Total pools for running a test.
+               num_pool (int): Total pools for running a test.
             Returns:
                None
         """
@@ -252,7 +252,7 @@ class NvmePoolCapacity(TestWithServers):
              3. Create Pool/Container and destroy them several times.
 
         Use case:
-        :avocado: tags=all,hw,large,nvme,full_regression
+        :avocado: tags=all,hw,medium,ib2,nvme,full_regression
         :avocado: tags=nvme_pool_capacity
         """
         # Run test with one pool.
