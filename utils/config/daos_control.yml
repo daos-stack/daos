@@ -1,10 +1,10 @@
-# DAOS client configuration file.
+# DAOS control configuration file.
 #
 # Location of this configuration file is determined by first checking for the
-# path specified through the -o option of the daos_agent and DMG command line.
-# Otherwise, etc/daos.yml is used.
+# path specified through the -o option of the dmg command line.
+# Otherwise, etc/daos_control.yml is used.
 #
-# Section describing the client configuration
+# Section describing the control configuration
 #
 # Although not supported for now, one might want to connect to multiple
 # DAOS installations from the same node in the future.

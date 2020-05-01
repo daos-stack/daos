@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,17 +148,18 @@ pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
 	struct umem_tx_stage_item	*txi, *txi_arr;
 	unsigned int			 i, num = *cnt;
 
+	if (num == 0)
+		return;
+
 	/* @vec & @cnt could be changed by other ULT while txi_fn yielding */
-	if (num > 0) {
-		D_ALLOC_ARRAY(txi_arr, num);
-		if (txi_arr == NULL) {
-			D_ERROR("Failed to allocate txi array\n");
-			return;
-		}
-		memcpy(txi_arr, vec, sizeof(*txi) * num);
-		*cnt = 0;
-		memset(vec, 0, sizeof(*txi) * num);
+	D_ALLOC_ARRAY(txi_arr, num);
+	if (txi_arr == NULL) {
+		D_ERROR("Failed to allocate txi array\n");
+		return;
 	}
+	memcpy(txi_arr, vec, sizeof(*txi) * num);
+	*cnt = 0;
+	memset(vec, 0, sizeof(*txi) * num);
 
 	for (i = 0; i < num; i++) {
 		txi = &txi_arr[i];
@@ -170,8 +171,7 @@ pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
 		txi->txi_fn(txi->txi_data, noop);
 	}
 
-	if (num > 0)
-		D_FREE(txi_arr);
+	D_FREE(txi_arr);
 }
 
 /*

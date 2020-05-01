@@ -42,6 +42,10 @@
 
 #include "obj_ec.h"
 
+#define ENCODING(proc_op) (proc_op == CRT_PROC_ENCODE)
+#define DECODING(proc_op) (proc_op == CRT_PROC_DECODE)
+#define FREEING(proc_op) (proc_op == CRT_PROC_FREE)
+
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.
  */
@@ -132,6 +136,8 @@ enum obj_rpc_flags {
 	 * now only used for single value EC handling.
 	 */
 	ORF_EC			= (1 << 4),
+	/** Include the map on fetch (daos_iom_t) */
+	ORF_CREATE_MAP		= (1 << 5),
 };
 
 struct obj_iod_array {
@@ -178,7 +184,8 @@ struct obj_iod_array {
 	((daos_size_t)		(orw_data_sizes)	CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
-	((struct dcs_iod_csums)	(orw_iod_csums)		CRT_ARRAY)
+	((struct dcs_iod_csums)	(orw_iod_csums)		CRT_ARRAY) \
+	((daos_iom_t)		(orw_maps)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_update,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
