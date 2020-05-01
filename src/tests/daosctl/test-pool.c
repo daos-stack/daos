@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@
 #include <endian.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <mpi.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <argp.h>
@@ -165,7 +164,7 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cp_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &cp_options);
 
 	if (cp_options.read)
 		flag = DAOS_PC_RO;
@@ -265,7 +264,7 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments
 	 * conform to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cp_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &cp_options);
 
 	/* finish parsing connect type */
 	/* TODO: not optimal parsing */
@@ -402,7 +401,7 @@ cmd_test_create_pool(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments
 	 * conform to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cp_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &cp_options);
 
 	/* turn the list of pool service nodes into a rank list */
 	rc = parse_rank_list(cp_options.server_list,
@@ -477,7 +476,7 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments
 	 * conform to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &ep_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &ep_options);
 
 	/* finish parsing connect type */
 	/* TODO: not optimal parsing */
@@ -592,7 +591,7 @@ cmd_test_query_pool(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform to
 	 * GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &qp_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &qp_options);
 
 	/* a handle must be provided */
 	if (qp_options.handle == NULL)
