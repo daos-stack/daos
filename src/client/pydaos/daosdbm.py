@@ -34,7 +34,8 @@ class daos_named_kv():
         try:
             conf = load_conf()
             if sys.version_info.major < 3:
-                pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
+                pydir = 'python{}.{}'.format(
+                    sys.version_info.major, sys.version_info.minor)
             else:
                 pydir = 'python{}'.format(sys.version_info.major)
 
@@ -44,7 +45,6 @@ class daos_named_kv():
                                              'site-packages'))
         except Exception:
             print("Exception in class daos_named_kv.")
-            pass
 
         if 'CRT_PHY_ADDR_STR' not in os.environ:
             os.environ['CRT_PHY_ADDR_STR'] = transport
@@ -136,9 +136,9 @@ def main():
 
     print('Kvs are {}'.format(','.join(sorted(my_kv.get_kv_list()))))
 
-    if True:
-        new_migrate(my_kv)
-        return
+    #if True:
+    new_migrate(my_kv)
+    return
 
     if len(sys.argv) != 5:
         print('Also need directory/file to import')
@@ -174,8 +174,6 @@ def main():
     # CHANGE THIS TO MODIFY REPORTING FREQUENCY
     report_freq = 2
 
-    bytes_total = 0
-
     try:
         tdata = {}
         idx = count
@@ -199,22 +197,20 @@ def main():
                 # Make the remaining time in minutes so it's easier to parse
                 remaining_time = int((time_per_record * (to_copy - copy_count)))
 
-                print('Copied {}/{} records in {:.2f} seconds ({:.0f}) {} seconds remaining.'.format(copy_count,
-                                                                                                     to_copy,
-                                                                                                     now - start_time,
-                                                                                                     copy_count / (now - start_time),
-                                                                                                     remaining_time))
+                print('Copied {}/{} records in {:.2f} seconds ({:.0f}) {} \
+                    seconds remaining.'.format(
+                        copy_count, to_copy, now - start_time,
+                        copy_count / (now - start_time), remaining_time))
                 last_report_time = now
         tdata[LENGTH_KEY] = pickle.dumps(idx)
         kv.bput(tdata)
 
     except KeyboardInterrupt:
         print("Exception in Main KeyboardInterrupt.")
-        pass
 
     now = time.perf_counter()
-    print('Completed, Copied {} records in {:.2f} seconds.'.format(copy_count,
-                                                                   now - start_time))
+    print('Completed, Copied {} records in {:.2f} seconds.'.format(
+        copy_count, now - start_time))
 
 if __name__ == '__main__':
     main()
