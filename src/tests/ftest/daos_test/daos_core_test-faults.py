@@ -39,6 +39,6 @@ class DaosCoreTest(DaosCoreBase):
 
         Use Cases: core tests for daos_test with fault injection
 
-        :avocado: tags=all,pr,hw,ib2,medium,daos_test_faults
+        :avocado: tags=all,pr,hw,ib2,medium,daos_test,faults
         """
         DaosCoreBase.run_subtest(self)
