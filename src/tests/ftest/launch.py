@@ -690,7 +690,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
         # Optionally display the file
         if args.verbose:
-            cmd = ["diff", "-y", orig_yaml_file, yaml_file, ";", "exit", "0"]
+            cmd = ["diff", "-y", orig_yaml_file, yaml_file]
             print(get_output(cmd))
 
     # Return the untouched or modified yaml file
@@ -1105,12 +1105,17 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             exe_name_end = exe_type.find("', platform:")
             exe_name = exe_type[exe_name_start:exe_name_end]
             cmd = [
-                "gdb", "--cd={}".format(daos_cores_dir), "-ex",
-                "\"set paginator off\"", "-ex", "\"detach\"",
-                "-ex", "\"quit\"", exe_name, corefile, ">",
-                "{}.stacktrace".format(corefile)
+                "gdb", "-cd={}".format(daos_cores_dir),
+                "-ex", "\"set paginator off\"",
+                "-ex", "\"thread apply all bt full\""
+                "-ex", "\"detach\"",
+                "-ex", "\"quit\"",
+                exe_name, corefile
             ]
-            get_output(cmd)
+            stack_trace_file = os.path.join(
+                daos_cores_dir, "{}.stacktrace".format(corefile))
+            with open(stack_trace_file, "w") as stack_trace:
+                stack_trace.writelines(get_output(cmd))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 

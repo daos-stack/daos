@@ -226,25 +226,30 @@ class SoakTestBase(TestWithServers):
         # copy the files from the remote
         # TO-DO: change scp
         this_host = socket.gethostname()
-        command = "/usr/bin/bash -c \"/usr/bin/rsync -avtr --min-size=1B " \
-            "{0} {1}:{0}/.. && rm -rf {0}/*\"".format(
-                self.test_log_dir, this_host)
+        command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}:{0}/..".format(
+            self.test_log_dir, this_host)
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), command, self.srun_params)
         if result.exit_status == 0:
-            command = "/usr/bin/bash -c \"cp -R -p {0}/ \'{1}\'; rm -rf " \
-                "{0}/*\"".format(self.test_log_dir, self.outputsoakdir)
+            command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(
+                self.test_log_dir, self.outputsoakdir)
             try:
                 run_command(command, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: Soak remote logfiles not copied"
-                    "to avocado data dir {} - check /tmp/soak "
-                    "on nodes {}>>".format(error, self.hostlist_clients))
+                    "<<FAILED: Soak remote logfiles not copied to avocado data "
+                    "dir {} - check /tmp/soak on nodes {}>>".format(
+                        error, self.hostlist_clients))
+
+            command = "/usr/bin/rm -rf {0}/*".format(self.test_log_dir)
+            slurm_utils.srun(
+                NodeSet.fromlist(self.hostlist_clients), command,
+                self.srun_params)
+            run_command(command)
         else:
             raise SoakTestError(
-                "<<FAILED: Soak remote logfiles not copied "
-                "from clients>>: {}".format(self.hostlist_clients))
+                "<<FAILED: Soak remote logfiles not copied from clients>>: "
+                "{}".format(self.hostlist_clients))
 
     def is_harasser(self, harasser):
         """Check if harasser is defined in yaml.
