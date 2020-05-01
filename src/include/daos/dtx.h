@@ -48,11 +48,6 @@ struct dtx_id {
 	uint64_t		dti_hlc;
 };
 
-struct dtx_conflict_entry {
-	struct dtx_id		dce_xid;
-	uint64_t		dce_dkey;
-};
-
 void daos_dti_gen(struct dtx_id *dti, bool zero);
 
 static inline void

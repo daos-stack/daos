@@ -115,6 +115,8 @@ struct crt_grp_priv {
 	 * logical self rank in this group, only valid for local group.
 	 * the gp_membs->rl_ranks[gp_self] is its rank number in primary group.
 	 * For primary group, gp_self == gp_membs->rl_ranks[gp_self].
+	 * If gp_self is CRT_NO_RANK, it usually means the group version is not
+	 * up to date.
 	 */
 	d_rank_t		 gp_self;
 	/* PSR rank in attached group */
@@ -134,7 +136,8 @@ struct crt_grp_priv {
 	struct d_hash_table	 gp_s2p_table;
 
 	/* set of variables only valid in primary service groups */
-	uint32_t		 gp_primary:1; /* flag of primary group */
+	uint32_t		 gp_primary:1, /* flag of primary group */
+				 gp_view:1; /* flag to indicate it is a view */
 
 	/* group reference count */
 	uint32_t		 gp_refcount;

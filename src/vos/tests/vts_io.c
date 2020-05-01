@@ -2445,7 +2445,7 @@ static const struct CMUnitTest int_tests[] = {
 };
 
 int
-run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators)
+run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators, const char *cfg)
 {
 	char buf[VTS_BUF_SIZE];
 	const char *akey = "hashed";
@@ -2474,8 +2474,8 @@ run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators)
 	if (feats & DAOS_OF_AKEY_LEXICAL)
 		akey = "lex";
 
-	snprintf(buf, VTS_BUF_SIZE, "#. VOS IO tests (dkey=%-6s akey=%s)",
-		 dkey, akey);
+	snprintf(buf, VTS_BUF_SIZE, "#. VOS IO tests (dkey=%-6s akey=%s) %s",
+		 dkey, akey, cfg);
 	init_ofeats = feats;
 	if (keys)
 		init_num_keys = keys;

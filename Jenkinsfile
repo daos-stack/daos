@@ -57,10 +57,15 @@ def skip_stage(String stage) {
     return commitPragma(pragma: 'Skip-' + stage).contains('true')
 }
 
+def quickbuild() {
+    return commitPragma(pragma: 'Quick-build') == 'true'
+}
+
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
+def qb_inst_rpms = ""
 def daos_packages_version = ""
 def el7_component_repos = ""
 def component_repos = ""
@@ -70,24 +75,15 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
-def quickbuild = node() { commitPragma(pragma: 'Quick-build').contains('true') }
-if (quickbuild) {
-    /* TODO: this is a big fat hack
-     * what we should be doing here is installing all of the
-     * $(repoquery --requires daos{,-{server,tests}}) dependencies
-     * similar to how we do for QUICKBUILD_DEPS
-     * or just start testing from RPMs instead of continuing to hack
-     * around that :-)
-     */
-    functional_rpms += " spdk-tools"
-}
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
                       fi
                       nodelist=(${NODELIST//,/ })
                       src/tests/ftest/config_file_gen.py -n ${nodelist[0]} -a /tmp/daos_agent.yml -s /tmp/daos_server.yml
+                      src/tests/ftest/config_file_gen.py -n $nodelist -d /tmp/dmg.yml
                       scp -i ci_key /tmp/daos_agent.yml jenkins@${nodelist[0]}:/tmp
+                      scp -i ci_key /tmp/dmg.yml jenkins@${nodelist[0]}:/tmp
                       scp -i ci_key /tmp/daos_server.yml jenkins@${nodelist[0]}:/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
@@ -104,8 +100,10 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
                             sudo cp /tmp/daos_server.yml /etc/daos/daos_server.yml
                             sudo cp /tmp/daos_agent.yml /etc/daos/daos_agent.yml
+                            sudo cp /tmp/dmg.yml /etc/daos/daos.yml
                             cat /etc/daos/daos_server.yml
                             cat /etc/daos/daos_agent.yml
+                            cat /etc/daos/daos.yml
                             module load mpi/openmpi3-x86_64
                             coproc daos_server --debug start -t 1 --recreate-superblocks
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
@@ -497,7 +495,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=' + quickbuild +
+                                                '--build-arg QUICKBUILD=' + quickbuild() +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
                                                 '" --build-arg REPOS="' + component_repos + '"'
                         }
@@ -508,32 +506,32 @@ pipeline {
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
-                                    includes: '''build/src/cart/src/utest/test_linkage,
-                                                 build/src/cart/src/utest/test_gurt,
-                                                 build/src/cart/src/utest/utest_hlc,
-                                                 build/src/cart/src/utest/utest_swim,
-                                                 build/src/rdb/raft/src/tests_main,
-                                                 build/src/common/tests/btree_direct,
-                                                 build/src/common/tests/btree,
-                                                 build/src/common/tests/sched,
-                                                 build/src/common/tests/drpc_tests,
-                                                 build/src/common/tests/acl_api_tests,
-                                                 build/src/common/tests/acl_valid_tests,
-                                                 build/src/common/tests/acl_util_tests,
-                                                 build/src/common/tests/acl_principal_tests,
-                                                 build/src/common/tests/acl_real_tests,
-                                                 build/src/common/tests/prop_tests,
-                                                 build/src/iosrv/tests/drpc_progress_tests,
-                                                 build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
-                                                 build/src/client/api/tests/eq_tests,
-                                                 build/src/iosrv/tests/drpc_handler_tests,
-                                                 build/src/iosrv/tests/drpc_listener_tests,
-                                                 build/src/mgmt/tests/srv_drpc_tests,
-                                                 build/src/security/tests/cli_security_tests,
-                                                 build/src/security/tests/srv_acl_tests,
-                                                 build/src/vos/vea/tests/vea_ut,
-                                                 build/src/common/tests/umem_test,
-                                                 build/src/bio/smd/tests/smd_ut,
+                                    includes: '''build/*/*/src/cart/src/utest/test_linkage,
+                                                 build/*/*/src/cart/src/utest/test_gurt,
+                                                 build/*/*/src/cart/src/utest/utest_hlc,
+                                                 build/*/*/src/cart/src/utest/utest_swim,
+                                                 build/*/*/src/rdb/raft/src/tests_main,
+                                                 build/*/*/src/common/tests/btree_direct,
+                                                 build/*/*/src/common/tests/btree,
+                                                 build/*/*/src/common/tests/sched,
+                                                 build/*/*/src/common/tests/drpc_tests,
+                                                 build/*/*/src/common/tests/acl_api_tests,
+                                                 build/*/*/src/common/tests/acl_valid_tests,
+                                                 build/*/*/src/common/tests/acl_util_tests,
+                                                 build/*/*/src/common/tests/acl_principal_tests,
+                                                 build/*/*/src/common/tests/acl_real_tests,
+                                                 build/*/*/src/common/tests/prop_tests,
+                                                 build/*/*/src/iosrv/tests/drpc_progress_tests,
+                                                 build/*/*/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
+                                                 build/*/*/src/client/api/tests/eq_tests,
+                                                 build/*/*/src/iosrv/tests/drpc_handler_tests,
+                                                 build/*/*/src/iosrv/tests/drpc_listener_tests,
+                                                 build/*/*/src/mgmt/tests/srv_drpc_tests,
+                                                 build/*/*/src/security/tests/cli_security_tests,
+                                                 build/*/*/src/security/tests/srv_acl_tests,
+                                                 build/*/*/src/vos/vea/tests/vea_ut,
+                                                 build/*/*/src/common/tests/umem_test,
+                                                 build/*/*/src/bio/smd/tests/smd_ut,
                                                  utils/sl/build_info/**,
                                                  src/common/tests/btree.sh,
                                                  src/control/run_go_tests.sh,
@@ -587,7 +585,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -648,7 +646,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -710,7 +708,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -771,7 +769,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -832,7 +830,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch target_branch
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -894,7 +892,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { quickbuild != 'true' }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -975,6 +973,12 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
+                        script {
+                            if (quickbuild()) {
+                                // TODO: these should be gotten from the Requires: of RPMs
+                                qb_inst_rpms = " spdk-tools mercury boost-devel"
+                            }
+                        }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        profile: 'daos_ci',
@@ -982,19 +986,20 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
                                        inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
-                                                  "fuse3-libs " +
+                                                  "fuse3-libs fuse3 " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
-                                                  'libipmctl-devel'
+                                                  'libipmctl-devel' + qb_inst_rpms
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
                                            mkdir test_results
-                                           rm -f build/src/control/src/github.com/daos-stack/daos/src/control
-                                           mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
-                                           ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
                                            . ./.build_vars.sh
+                                           rm -f ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
+                                           mkdir -p ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/
+                                           ln -s ../../../../../../../../src/control ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
                                            DAOS_BASE=${SL_PREFIX%/install*}
+                                           rm -f dnt.*.memcheck.xml test.out
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
@@ -1004,22 +1009,23 @@ pipeline {
                                                else
                                                    sudo mkdir -p /mnt/daos
                                                fi
+                                               sudo mkdir -p /mnt/daos
                                                sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
                                                sudo mkdir -p $DAOS_BASE
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-
-                                               # copy daos_admin binary into \$PATH and fix perms
-                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
-                                                   sudo chown root /usr/bin/daos_admin && \
-                                                   sudo chmod 4755 /usr/bin/daos_admin && \
-                                                   mv $DAOS_BASE/install/bin/daos_admin \
-                                                      $DAOS_BASE/install/bin/orig_daos_admin
-
+                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin
+                                               sudo chown root /usr/bin/daos_admin
+                                               sudo chmod 4755 /usr/bin/daos_admin
+                                               /bin/rm $DAOS_BASE/install/bin/daos_admin
+                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh /usr/share/spdk/scripts
+                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
+                                               sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
                                                # set CMOCKA envs here
                                                export CMOCKA_MESSAGE_OUTPUT="xml"
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
-                                               IS_CI=true OLD_CI=false utils/run_test.sh"''',
+                                               IS_CI=true OLD_CI=false utils/run_test.sh
+                                               ./utils/node_local_test.py all | tee test.out"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
@@ -1051,13 +1057,17 @@ pipeline {
                             sh script: '''set -ex
                                       . ./.build_vars.sh
                                       DAOS_BASE=${SL_PREFIX%/install*}
+                                      rm -rf $DAOS_BASE/run_test.sh $DAOS_BASE/vm_test
                                       NODE=${NODELIST%%,*}
                                       ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                           cd $DAOS_BASE
-                                          rm -rf run_test.sh/
-                                          mkdir run_test.sh/
+                                          mkdir run_test.sh
+                                          mkdir vm_test
                                           if ls /tmp/daos*.log > /dev/null; then
                                               mv /tmp/daos*.log run_test.sh/
+                                          fi
+                                          if ls /tmp/dnt*.log > /dev/null; then
+                                              mv /tmp/dnt*.log vm_test/
                                           fi
                                           # servers can sometimes take a while to stop when the test is done
                                           x=0
@@ -1067,7 +1077,7 @@ pipeline {
                                               let x=\\\$x+1
                                           done
                                           if ! sudo umount /mnt/daos; then
-                                              echo \"Failed to unmount $DAOS_BASE\"
+                                              echo \"Failed to unmount /mnt/daos\"
                                               ps axf
                                           fi
                                           cd
@@ -1081,6 +1091,28 @@ pipeline {
                             label: "Collect artifacts and tear down"
                             junit 'test_results/*.xml'
                             archiveArtifacts artifacts: 'run_test.sh/**'
+                            archiveArtifacts artifacts: 'vm_test/**'
+                            publishValgrind (
+                                    failBuildOnInvalidReports: true,
+                                    failBuildOnMissingReports: true,
+                                    failThresholdDefinitelyLost: '',
+                                    failThresholdInvalidReadWrite: '',
+                                    failThresholdTotal: '',
+                                    pattern: 'dnt.*.memcheck.xml',
+                                    publishResultsForAbortedBuilds: false,
+                                    publishResultsForFailedBuilds: true,
+                                    sourceSubstitutionPaths: '',
+                                    unstableThresholdDefinitelyLost: '0',
+                                    unstableThresholdInvalidReadWrite: '0',
+                                    unstableThresholdTotal: '0'
+                            )
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         failOnError: true,
+                                         name: "VM Testing",
+                                         tool: clang(pattern: 'test.out',
+                                                     name: 'VM test results',
+                                                     id: 'VM_test')
                         }
                     }
                 }
@@ -1102,9 +1134,7 @@ pipeline {
                 stage('Coverity on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression {
-                            ! commitPragma(pragma: 'Skip-coverity-test').contains('true')
-                        }
+                        expression { ! skip_stage('coverity-test') }
                     }
                     agent {
                         dockerfile {
@@ -1551,10 +1581,10 @@ pipeline {
                                        inst_rpms: 'environment-modules'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
-                                            "sudo yum -y install daos-client-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos{,-client}-${daos_packages_version}\n" +
                                             "sudo yum -y history rollback last-1\n" +
-                                            "sudo yum -y install daos-server-${daos_packages_version}\n" +
-                                            "sudo yum -y install daos-tests-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos{,-{server,client}}-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos{,-tests}-${daos_packages_version}\n" +
                                             "${rpm_test_daos_test}" + '"',
                                     junit_files: null,
                                     failure_artifacts: env.STAGE_NAME, ignore_failure: true
@@ -1567,9 +1597,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression {
-                                ! commitPragma(pragma: 'Skip-scan-centos-rpms').contains('true')
-                            }
+                            expression { ! skip_stage('scan-centos-rpms') }
                         }
                     }
                     agent {
@@ -1591,9 +1619,8 @@ pipeline {
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: rpm_scan_pre +
                                             "sudo yum -y install " +
-                                            "daos-client-${daos_packages_version} " +
-                                            "daos-server-${daos_packages_version} " +
-                                            "daos-tests-${daos_packages_version}\n" +
+                                            "daos{,-{client,server,tests}}-" +
+                                            "${daos_packages_version}\n" +
                                             rpm_scan_test + '"\n' +
                                             rpm_scan_post,
                                     junit_files: 'maldetect.xml',
