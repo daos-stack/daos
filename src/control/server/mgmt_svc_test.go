@@ -205,6 +205,19 @@ func TestMgmtSvc_PoolCreate(t *testing.T) {
 			},
 			expErr: errors.New("unmarshal"),
 		},
+		"retries exceed context deadline": {
+			targetCount: 8,
+			req: &mgmtpb.PoolCreateReq{
+				Scmbytes:  100 * humanize.GiByte,
+				Nvmebytes: 10 * humanize.TByte,
+			},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				setupMockDrpcClient(svc, &mgmtpb.PoolCreateResp{
+					Status: int32(drpc.DaosGroupVersionMismatch),
+				}, nil)
+			},
+			expErr: context.DeadlineExceeded,
+		},
 		"successful creation": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
@@ -270,7 +283,9 @@ func TestMgmtSvc_PoolCreate(t *testing.T) {
 				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolCreate(context.TODO(), tc.req)
+			ctx, cancel := context.WithTimeout(context.Background(), poolCreateRetryDelay+10*time.Millisecond)
+			defer cancel()
+			gotResp, gotErr := tc.mgmtSvc.PoolCreate(ctx, tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
