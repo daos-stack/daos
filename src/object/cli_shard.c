@@ -869,13 +869,14 @@ out_put:
 }
 
 struct obj_query_key_cb_args {
-	crt_rpc_t	*rpc;
-	unsigned int	*map_ver;
-	daos_unit_oid_t	oid;
-	uint32_t	flags;
-	daos_key_t	*dkey;
-	daos_key_t	*akey;
-	daos_recx_t	*recx;
+	crt_rpc_t		*rpc;
+	unsigned int		*map_ver;
+	daos_unit_oid_t		oid;
+	uint32_t		flags;
+	daos_key_t		*dkey;
+	daos_key_t		*akey;
+	daos_recx_t		*recx;
+	struct dc_object	*obj;
 };
 
 static int
@@ -920,6 +921,8 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	}
 	*cb_args->map_ver = obj_reply_map_version_get(rpc);
 
+	D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
+
 	bool check = true;
 	bool changed = false;
 	bool first = (cb_args->dkey->iov_len == 0);
@@ -930,6 +933,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 		if (okqo->okqo_dkey.iov_len != sizeof(uint64_t)) {
 			D_ERROR("Invalid Dkey obtained\n");
+			D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
 			D_GOTO(out, rc = -DER_IO);
 		}
 
@@ -980,6 +984,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 			D_ASSERT(0);
 		}
 	}
+	D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
 
 out:
 	crt_req_decref(rpc);
@@ -990,10 +995,10 @@ out:
 
 int
 dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
-		       uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
-		       daos_recx_t *recx, const uuid_t coh_uuid,
-		       const uuid_t cont_uuid, unsigned int *map_ver,
-		       tse_task_t *task)
+		       uint32_t flags, struct dc_object *obj, daos_key_t *dkey,
+		       daos_key_t *akey, daos_recx_t *recx,
+		       const uuid_t coh_uuid, const uuid_t cont_uuid,
+		       unsigned int *map_ver, tse_task_t *task)
 {
 	struct dc_pool			*pool = NULL;
 	struct obj_query_key_in		*okqi;
@@ -1033,6 +1038,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 	cb_args.dkey	= dkey;
 	cb_args.akey	= akey;
 	cb_args.recx	= recx;
+	cb_args.obj	= obj;
 
 	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args,
 				       sizeof(cb_args));
