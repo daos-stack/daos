@@ -79,7 +79,7 @@ class NetDev(object):
 
         Args:
             dev_name (str): device name or infiniband device name
-            prefix (str): prefix path pointing to daos intall path
+            prefix (str): prefix path pointing to daos install path
         """
         self.set_numa()
         self.set_providers(dev_name, prefix)
@@ -220,7 +220,7 @@ class DmgNetworkScanTest(ControlTestBase):
         JIRA ID: DAOS-2516
         Test Description: Test basic dmg functionality to scan the network
         devices on the system.
-        :avocado: tags=all,tiny,pr,hw,dmg,network_scan,basic
+        :avocado: tags=all,small,pr,hw,dmg,network_scan,basic
         """
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(
