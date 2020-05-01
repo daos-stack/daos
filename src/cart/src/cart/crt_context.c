@@ -1276,7 +1276,7 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 		crt_context_timeout_check(ctx);
 		crt_exec_progress_cb(ctx);
 
-		ret = crt_hg_progress (&ctx->cc_hg_ctx, hg_timeout);
+		ret = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
 		if (unlikely(ret && ret != -DER_TIMEDOUT)) {
 			D_ERROR("crt_hg_progress failed with %d\n", ret);
 			return ret;

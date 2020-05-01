@@ -45,7 +45,6 @@ static __thread bool		ev_thpriv_is_init;
 #define crt_finalize()			({0;})
 #define crt_context_create(a, b)	({0;})
 #define crt_context_destroy(a, b)	({0;})
-#define crt_context_progress(a, b)	({0;})
 #define crt_progress_cond(ctx, timeout, cb, args)	\
 ({							\
 	int __rc = cb(args);				\
