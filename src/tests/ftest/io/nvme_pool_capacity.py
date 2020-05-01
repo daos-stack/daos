@@ -156,15 +156,18 @@ class NvmePoolCapacity(TestWithServers):
                 nvme_size_begin = self.pool.get_pool_free_space("NVME")
                 for cont_val in range(0, num_cont):
                     cont[cont_val] = TestContainer(pool[val])
-
+            m_leak = 0
             for val in range(0, num_pool):
                 display_string = "Pool{} space at the End".format(val)
                 self.pool = pool[val]
                 self.pool.display_pool_daos_space(display_string)
                 nvme_size_end = self.pool.get_pool_free_space("NVME")
                 pool[val].destroy()
-                if nvme_size_begin != nvme_size_end:
-                    self.fail("FAIL: NVME size not equal")
+                if (nvme_size_begin != nvme_size_end) and (m_leak == 0):
+                    m_leak = val
+            # After destroying pools, check memory leak for each test loop.
+            if m_leak != 0:
+                self.fail("Memory leak : iteration {0} \n".format(m_leak))
 
     def test_run(self, num_pool=1):
         """
@@ -247,8 +250,6 @@ class NvmePoolCapacity(TestWithServers):
              2. Perform IO beyond entire SSD disk space.
             Test Case 3:
              3. Create Pool/Container and destroy them several times.
-            Test Case 4:
-             4. Multiple Pool/Container testing.
 
         Use case:
         :avocado: tags=all,hw,large,nvme,full_regression
