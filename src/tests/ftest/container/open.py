@@ -28,6 +28,7 @@ from apricot import TestWithServers
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from avocado.core.exceptions import TestFail
+from pydaos.raw import c_uuid
 
 RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
@@ -133,6 +134,7 @@ class OpenContainerTest(TestWithServers):
             self.container[-1].get_params(self)
             self.container[-1].create()
             container_uuids.append(uuid.UUID(self.container[-1].uuid))
+            #container_cuuids.append(self.container[-1].container.uuid)
 
         # Decide which pool handle and container UUID to use. The PASS/FAIL
         # number corresponds to the index for self.pool and container_uuids
@@ -141,39 +143,41 @@ class OpenContainerTest(TestWithServers):
 
         # Case 1
         try:
-            self.container[0].open(self.pool[pool_handle_index].pool
-                                   .handle.value,
-                                   container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS,
-                             result_messages[test_case][0])
+            self.container[0].open(
+                self.pool[pool_handle_index].pool.handle.value,
+                container_uuids[container_uuid_index])
+            self.assertEqual(
+                expected_result, RESULT_PASS, result_messages[test_case][0])
         except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
-            self.assertEqual(expected_result, RESULT_FAIL,
-                             result_messages[test_case][1])
+            self.assertEqual(
+                expected_result, RESULT_FAIL, result_messages[test_case][1])
+            # Calling container.open with invalid pool handle or UUID results
+            # in setting them in the underlying DaosContainer's member. When we
+            # try to destroy it with API in tearDown, it'll pass in the invalid
+            # handle/UUID member to the API and causes an error. Reset them
+            # back to the original values.
+            self.container[0].container.poh = \
+                self.pool[0].pool.handle.value
+            # For some reason, directly setting uuid causes an error during
+            # destroy, so use c_uuid as in DaosContainer class.
+            c_uuid(container_uuids[0], self.container[0].container.uuid)
 
         # Case 2. Symmetric to Case 1. Use the other handle and UUID
         pool_handle_index = pool_handle_index ^ 1
         container_uuid_index = container_uuid_index ^ 1
         try:
-            self.container[1].open(self.pool[pool_handle_index].pool
-                                   .handle.value,
-                                   container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS,
-                             result_messages[test_case][2])
+            self.container[1].open(
+                self.pool[pool_handle_index].pool.handle.value,
+                container_uuids[container_uuid_index])
+            self.assertEqual(
+                expected_result, RESULT_PASS, result_messages[test_case][2])
         except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
-            self.assertEqual(expected_result, RESULT_FAIL,
-                             result_messages[test_case][3])
-
-        # Calling container.open with invalid pool handle or UUID results in
-        # setting them in the underlying DaosContainer's member. When we try to
-        # destroy it with API in tearDown, it'll pass in the invalid
-        # handle/UUID member to the API and causes an error. Set
-        # self.container = None so that container destroy doesn't occur during
-        # tearDown. Note that we shouldn't set None when open succeeds because
-        # in that case, the container needs to be properly destroyed for the
-        # pool destroy process to work during tearDown.
-        if not self.container[0].opened or not self.container[1].opened:
-            self.container = None
+            self.assertEqual(
+                expected_result, RESULT_FAIL, result_messages[test_case][3])
+            self.container[1].container.poh = \
+                self.pool[1].pool.handle.value
+            c_uuid(container_uuids[1], self.container[1].container.uuid)
