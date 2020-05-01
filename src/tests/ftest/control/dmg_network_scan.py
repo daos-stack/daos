@@ -222,6 +222,10 @@ class DmgNetworkScanTest(ControlTestBase):
         devices on the system.
         :avocado: tags=all,small,pr,hw,dmg,network_scan,basic
         """
+        # Run the dmg command locally
+        self.server_managers[-1].dmg.configpath.update(
+            None, "Unset config to run locally")
+
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(
             self.get_dmg_info(), key=lambda x: (x.f_iface, x.providers))
