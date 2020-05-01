@@ -771,16 +771,24 @@ static const struct CMUnitTest evt_checksums_tests[] = {
 	EVT("03: Test the alignment of entries", test_evt_entry_csum_update),
 };
 
-int run_csum_extent_tests(void)
+int run_csum_extent_tests(const char *cfg)
 {
 	int rc = 0;
+	char	test_name[130];
+
+	sprintf(test_name,
+		"Storage and retrieval of checksums for Array Type %s", cfg);
 
 	rc = cmocka_run_group_tests_name(
-		"Storage and retrieval of checksums for Array Type",
+		test_name,
 		update_fetch_checksums_for_array_types, setup_io, teardown_io);
 
+	sprintf(test_name,
+		"evtreen helper functions for alignment, counting, etc for csum  %s",
+		cfg);
+
 	rc += cmocka_run_group_tests_name(
-		"evtree helper functions for alignment, counting, etc for csum",
+		test_name,
 		evt_checksums_tests, setup_io, teardown_io);
 
 	return rc;

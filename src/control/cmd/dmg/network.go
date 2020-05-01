@@ -42,7 +42,8 @@ type NetCmd struct {
 // that match the given fabric provider.
 type networkScanCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
+	hostListCmd
 	jsonOutputCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is the provider specified in daos_server.yml)"`
 	AllProviders   bool   `short:"a" long:"all" description:"Specify 'all' to see all devices on all providers.  Overrides --provider"`
@@ -57,7 +58,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 
 	cmd.log.Debugf("network scan req: %+v", req)
 
-	resp, err := control.NetworkScan(ctx, cmd.ctlClient, req)
+	resp, err := control.NetworkScan(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
@@ -80,7 +81,8 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 
 type networkListCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
+	hostListCmd
 	jsonOutputCmd
 }
 
@@ -92,7 +94,7 @@ func (cmd *networkListCmd) Execute(_ []string) error {
 
 	cmd.log.Debugf("network scan req: %+v", req)
 
-	resp, err := control.NetworkScan(ctx, cmd.ctlClient, req)
+	resp, err := control.NetworkScan(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}

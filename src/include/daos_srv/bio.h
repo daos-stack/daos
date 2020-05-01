@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -297,6 +297,21 @@ bio_sgl_iov(struct bio_sglist *bsgl, uint32_t idx)
 		return NULL;
 
 	return &bsgl->bs_iovs[idx];
+}
+
+/** Count the number of biovs that are 'holes' in a bsgl */
+static inline uint32_t
+bio_sgl_holes(struct bio_sglist *bsgl)
+{
+	uint32_t result = 0;
+	int i;
+
+	for (i = 0; i < bsgl->bs_nr_out; i++) {
+		if (bio_addr_is_hole(&bsgl->bs_iovs[i].bi_addr))
+			result++;
+	}
+
+	return result;
 }
 
 /**

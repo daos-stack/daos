@@ -108,11 +108,17 @@ class Test(avocadoTest):
                 if dhms[index] is not None:
                     self.timeout += multiplier * int(dhms[index])
 
+        # param to add multiple timeouts for different tests under
+        # same test class
+        self.timeouts = self.params.get(self.get_test_name(),
+                                        "/run/timeouts/*")
         # If not specified, set a default timeout of 1 minute.
         # Tests that require a longer timeout should set a "timeout: <int>"
         # entry in their yaml file.  All tests should have a timeout defined.
-        if not self.timeout:
+        if (not self.timeout) and (not self.timeouts):
             self.timeout = 60
+        elif self.timeouts:
+            self.timeout = self.timeouts
         self.log.info("self.timeout: %s", self.timeout)
 
         item_list = self.logdir.split('/')
@@ -130,6 +136,9 @@ class Test(avocadoTest):
         return self.cancel("Skipping until {} is fixed.".format(ticket))
     # pylint: enable=invalid-name
 
+    def get_test_name(self):
+        """Obtain test name from self.__str__() """
+        return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
 
 class TestWithoutServers(Test):
     """Run tests without DAOS servers.
