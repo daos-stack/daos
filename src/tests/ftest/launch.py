@@ -424,7 +424,7 @@ def get_test_list(tags):
         tags (list): a list of tag or test file names
 
     Returns:
-        (str, list): a tuple of the avacado tag filter and lists of tests
+        (list, list): a tuple of an avacado tag filter list and lists of tests
 
     """
     test_tags = []
@@ -435,7 +435,7 @@ def get_test_list(tags):
             test_list.append(tag)
         else:
             # Otherwise it is assumed that this is a tag
-            test_tags.append("--filter-by-tags={}".format(tag))
+            test_tags.extend(["--filter-by-tags", str(tag)])
 
     # Add to the list of tests any test that matches the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
@@ -448,7 +448,7 @@ def get_test_list(tags):
         tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", get_output(command))
         test_list.extend(list(set(tagged_tests)))
 
-    return " ".join(test_tags), test_list
+    return test_tags, test_list
 
 
 def get_test_files(test_list, args, tmp_dir):
@@ -702,7 +702,7 @@ def run_tests(test_files, tag_filter, args):
 
     Args:
         test_files (dict): a list of dictionaries of each test script/yaml file
-        tag_filter (str): the avocado tag filter command line argument
+        tag_filter (list): the avocado tag filter command line argument
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
@@ -723,14 +723,14 @@ def run_tests(test_files, tag_filter, args):
     command_list = [
         "avocado",
         "run",
-        "--ignore-missing-references=on",
-        "--html-job-result=on",
-        "--tap-job-result=off",
+        "--ignore-missing-references", "on",
+        "--html-job-result", "on",
+        "--tap-job-result", "off",
     ]
     if not args.sparse:
         command_list.append("--show-job-log")
     if tag_filter:
-        command_list.append(tag_filter)
+        command_list.extend(tag_filter)
 
     # Run each test
     for test_file in test_files:
@@ -744,9 +744,7 @@ def run_tests(test_files, tag_filter, args):
             # Execute this test
             test_command_list = list(command_list)
             test_command_list.extend([
-                "--mux-yaml={}".format(test_file["yaml"]),
-                test_file["py"]
-            ])
+                "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
             return_code |= time_command(test_command_list)
 
             # Optionally store all of the doas server and client log files
