@@ -59,14 +59,10 @@ type cliOptions struct {
 	LogFile    string     `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
 	NetworkDbg bool       `short:"n" long:"netdebug" description:"Enable extended network device scan debug output"`
 	Version    versionCmd `command:"version" description:"Print daos_agent version"`
-	NetScan    netScanCmd `command:"scan" description:"Perform local fabric scan"`
+	NetScan    netScanCmd `command:"net-scan" description:"Perform local network fabric scan"`
 }
 
 type versionCmd struct{}
-type netScanCmd struct {
-	Debug          bool   `short:"d" long:"debug" description:"Enable debug output"`
-	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is all providers)"`
-}
 
 func (cmd *versionCmd) Execute(_ []string) error {
 	fmt.Printf("daos_agent version %s\n", build.DaosVersion)
@@ -74,10 +70,21 @@ func (cmd *versionCmd) Execute(_ []string) error {
 	return nil
 }
 
+type netScanCmd struct {
+	Debug          bool   `short:"d" long:"debug" description:"Enable debug output"`
+	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is all providers)"`
+}
+
 func (cmd *netScanCmd) Execute(args []string) error {
 	var provider string
+	var JSONLog bool
 	defer os.Exit(0)
+
 	log := logging.NewCommandLineLogger()
+	//	JSONLog = true
+	if JSONLog {
+		log.WithJSONOutput()
+	}
 
 	if cmd.Debug {
 		log.WithLogLevel(logging.LogLevelDebug)
@@ -91,15 +98,15 @@ func (cmd *netScanCmd) Execute(args []string) error {
 	}
 
 	if !numaAware {
-		fmt.Printf("This system is not NUMA aware")
+		log.Info("No NUMA information available.  Any devices found are reported as NUMA node 0.")
 	}
 
 	switch {
 	case len(cmd.FabricProvider) > 0:
 		provider = cmd.FabricProvider
-		fmt.Printf("Scanning fabric for provider: %s\n", provider)
+		log.Infof("Scanning fabric for provider: %s\n", provider)
 	default:
-		fmt.Printf("Scanning fabric for all providers\n")
+		log.Infof("Scanning fabric for all providers\n")
 	}
 
 	results, err := netdetect.ScanFabric(provider)
@@ -114,7 +121,7 @@ func (cmd *netScanCmd) Execute(args []string) error {
 	fmt.Printf("\nFabric scan found %d devices matching the provider spec: %s\n\n", len(results), provider)
 
 	for _, sr := range results {
-		fmt.Printf("%v\n\n", sr)
+		log.Infof("OFI_INTERFACE: %-16sCRT_PHY_ADDR_STR: %-25sNUMA affinity: %d", sr.DeviceName, sr.Provider, sr.NUMANode)
 	}
 
 	return nil
