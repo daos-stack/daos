@@ -51,8 +51,6 @@ daos_tests:
     test_m:
       daos_test: m
       test_name: Management tests
-      #subtests 5 require FAULT_INJECTION=1
-      args: -u subtests="1-4"
     test_p:
       daos_test: p
       test_name: Pool tests
@@ -65,19 +63,13 @@ daos_tests:
     test_X:
       daos_test: X
       test_name: DAOS DTX tests
-      #subtests 3,4,16 require FAULT_INJECTION=1
-      args: -u subtests="1-2,5-15"
     test_V:
       daos_test: V
       test_name: DAOS verify consistency tests
-      #subtests 4-9 require FAULT_INJECTION=1
-      args: -u subtests="1-3"
       test_timeout: 900
     test_i:
       daos_test: i
       test_name: IO test
-      #subtests 19,31 require FAULT_INJECTION=1
-      args: -u subtests="1-18,20-30,32-41"
       test_timeout: 900
     test_A:
       daos_test: A
@@ -111,6 +103,4 @@ daos_tests:
     test_z:
       daos_test: z
       test_name: Checksum tests
-      # subtests 1-16 require FAULT_INJECTION=1
-      args: -u subtests="0,17"
       test_timeout: 900
