@@ -419,8 +419,11 @@ static const struct CMUnitTest pool_tests[] = {
 
 
 int
-run_pool_test(void)
+run_pool_test(const char *cfg)
 {
-	return cmocka_run_group_tests_name("VOS Pool tests", pool_tests,
+	char	test_name[100];
+
+	sprintf(test_name, "VOS Pool tests %s", cfg);
+	return cmocka_run_group_tests_name(test_name, pool_tests,
 					   setup, teardown);
 }
