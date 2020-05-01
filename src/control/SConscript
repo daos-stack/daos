@@ -174,7 +174,7 @@ def scons():
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/cart/src/gurt "
                             "-L$BUILD_DIR/src/cart/src/cart "
-                            "-L$PREFIX/lib64 -L$SPDK_PREFIX/lib "
+                            "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access (need for clang build).
     senv.AppendENVPath("CGO_LDFLAGS", cgolibdirs + \
