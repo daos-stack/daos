@@ -121,21 +121,37 @@ class JobManager(ExecutableCommand):
         """
         pass
 
-    def display_subprocess_state(self, message=None):
+    def get_subprocess_state(self, message=None):
         """Display the state of the subprocess.
 
         Args:
             message (str, optional): additional text to include in output.
                 Defaults to None.
+
+        Returns:
+            list: a list of states for the process found. Multiple states should
+                indicate that the job manager and at least one remote process
+                are still running.
+
         """
-        super(JobManager, self).display_subprocess_state(message)
+        # Get/display the state of the job manager process
+        state = super(JobManager, self).get_subprocess_state(message)
         if self._process is not None and self._hosts:
             command = "/usr/bin/pgrep -a {}".format(self.job.command_regex)
             self.log.debug(
                 "%s processes still running remotely%s:", self.command,
                 " {}".format(message) if message else "")
-            self.log.debug("Running: %s", command)
-            pcmd(self._hosts, command, True, 10, None)
+            self.log.debug("Running (on %s): %s", self._hosts, command)
+            results = pcmd(self._hosts, command, True, 10, None)
+            # pgrep will return {1: <NodeSet>} if there are no remote processes
+            # running on any of the hosts.  If this value is not returned,
+            # indicate there are processes running by adding "R" states to the
+            # list.
+            if 1 not in results or len(results) > 1:
+                if not state:
+                    state = ["?"]
+                state.append("R")
+        return state
 
 
 class Orterun(JobManager):

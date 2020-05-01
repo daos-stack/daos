@@ -71,9 +71,10 @@ class ExecutableCommand(CommandWithParameters):
         # method.
         self._env_names = []
 
-        # Regular expression used to search for the running command. If not
-        # defined the command string will be used.
-        self._regex = None
+        # Define a list of executable names associated with the command. This
+        # list is used to generate the 'command_regex' property, which can be
+        # used to check on the progress or terminate the command.
+        self._exe_names = [self.command]
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -103,7 +104,7 @@ class ExecutableCommand(CommandWithParameters):
             str: regular expression to use to search for the command
 
         """
-        return self.command if self._regex is None else self._regex
+        return "'({})'".format("|".join(self._exe_names))
 
     def run(self):
         """Run the command.
@@ -222,38 +223,54 @@ class ExecutableCommand(CommandWithParameters):
             self._process.verbose = False
 
             # Send signals while the process is still running
+            state = None
             while self._process.poll() is None and signal_list:
                 signal_to_send = signal_list.pop(0)
                 msg = "before sending signal {}".format(signal_to_send)
-                self.display_subprocess_state(msg)
+                state = self.get_subprocess_state(msg)
                 self.log.info(
-                    "Sending signal %s to %s", str(signal_to_send),
-                    self._command)
+                    "Sending signal %s to %s (state=%s)", str(signal_to_send),
+                    self._command, str(state))
                 self._process.send_signal(signal_to_send)
                 if signal_list:
                     time.sleep(5)
 
             if not signal_list:
-                # Indicate an error if the process required a SIGKILL
-                raise CommandFailure("Error stopping '{}'".format(self))
+                if state and len(state) == 1 and state[0] not in ("D", "Z"):
+                    # Indicate an error if the process required a SIGKILL and
+                    # either multiple processes were still found running or the
+                    # parent process was in any state accept uninterruptible
+                    # sleep (D) or zombie (Z).
+                    raise CommandFailure("Error stopping '{}'".format(self))
 
             self.log.info("%s stopped successfully", self.command)
             self._process = None
 
-    def display_subprocess_state(self, message=None):
+    def get_subprocess_state(self, message=None):
         """Display the state of the subprocess.
 
         Args:
             message (str, optional): additional text to include in output.
                 Defaults to None.
+
+        Returns:
+            list: a list of states for the process found (first entry should be
+                the parent process)
+
         """
+        state = None
         if self._process is not None:
             self.log.debug(
                 "%s processes still running%s:", self.command,
                 " {}".format(message) if message else "")
-            command = "/usr/bin/ps --forest -o pid,tty,stat,time,cmd {}".format(
+            command = "/usr/bin/ps --forest -o pid,stat,time,cmd {}".format(
                 self._process.get_pid())
-            process.run(command, 10, True, True, "combined")
+            result = process.run(command, 10, True, True, "combined")
+
+            # Get the state of the process from the output
+            state = re.findall(
+                r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout)
+        return state
 
     def get_output(self, method_name, **kwargs):
         """Get output from the command issued by the specified method.
@@ -646,9 +663,6 @@ class SubprocessManager(object):
         # Define the list of hosts that will execute the daos command
         self._hosts = []
 
-        # Define the list of executable names to terminate in the kill() method
-        self._exe_names = [self.manager.job.command]
-
     def __str__(self):
         """Get the complete manager command string.
 
@@ -728,7 +742,16 @@ class SubprocessManager(object):
 
     def kill(self):
         """Forcably terminate any sub process running on hosts."""
-        stop_processes(self._hosts, "'({})'".format("|".join(self._exe_names)))
+        regex = self.manager.job.command_regex
+        result = stop_processes(self._hosts, regex)
+        if 0 in result and len(result) == 1:
+            print(
+                "No remote {} processes killed (none found), done.".format(
+                    regex))
+        else:
+            print(
+                "***At least one remote {} process needed to be killed! Please "
+                "investigate/report.***".format(regex))
 
     def verify_socket_directory(self, user):
         """Verify the domain socket directory is present and owned by this user.
