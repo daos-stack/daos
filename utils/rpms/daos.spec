@@ -247,7 +247,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %config(noreplace) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
-%attr(4755,root,daos_admins) %{_bindir}/daos_admin
+%attr(4750,root,daos_admins) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_admins in order to invoke daos_admin
 %attr(2755,root,daos_admins) %{_bindir}/daos_server
 %{_bindir}/daos_io_server
@@ -346,7 +346,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 
 %changelog
 * Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-14
-- Update permissions of daos_admin to 4755
 - Move fuse dependencies to the client subpackage
 
 * Mon Apr 27 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-13
