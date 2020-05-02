@@ -49,9 +49,9 @@ class _env_module():
         for arg in args:
             cmd.append(arg)
         output = subprocess.check_output(cmd)
-        # pylint: disable=exec-used
-        exec(output)  #nosec
-        # pylint: enable=exec-used
+        # pylint: disable=eval-used
+        eval(output)
+        # pylint: enable=eval-used
 
     @staticmethod
     def _setup_old(path_init, default_func):
@@ -97,9 +97,9 @@ class _env_module():
         try:
             # if successful, this will define module, a function
             # that invokes module on the command line
-            # pylint: disable=exec-used
-            exec(open(python_init).read(), tmp_globals, tmp_locals)  #nosec
-            # pylint: enable=exec-used
+            # pylint: disable=eval-used
+            eval(open(python_init).read(), tmp_globals, tmp_locals)
+            # pylint: enable=eval-used
         except KeyError:
             return default_func
 
