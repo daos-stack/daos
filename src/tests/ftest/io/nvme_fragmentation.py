@@ -120,9 +120,7 @@ class NvmeFragmentation(TestWithServers):
                                                           api,
                                                           test[0])])
             env = ior_cmd.get_default_env(str(manager))
-            manager.assign_hosts(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
+            manager.assign_hosts(self.hostlist_clients, self.workdir, None)
             manager.assign_processes(processes)
             manager.assign_environment(env, True)
 

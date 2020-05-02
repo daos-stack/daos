@@ -239,7 +239,7 @@ class ExecutableCommand(CommandWithParameters):
                 if state and len(state) == 1 and state[0] not in ("D", "Z"):
                     # Indicate an error if the process required a SIGKILL and
                     # either multiple processes were still found running or the
-                    # parent process was in any state accept uninterruptible
+                    # parent process was in any state except uninterruptible
                     # sleep (D) or zombie (Z).
                     raise CommandFailure("Error stopping '{}'".format(self))
 
@@ -254,8 +254,8 @@ class ExecutableCommand(CommandWithParameters):
                 Defaults to None.
 
         Returns:
-            list: a list of states for the process found (first entry should be
-                the parent process)
+            list: a list of process states for the process found associated with
+                the subprocess pid.
 
         """
         state = None

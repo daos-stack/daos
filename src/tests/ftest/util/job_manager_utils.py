@@ -129,24 +129,31 @@ class JobManager(ExecutableCommand):
                 Defaults to None.
 
         Returns:
-            list: a list of states for the process found. Multiple states should
-                indicate that the job manager and at least one remote process
-                are still running.
+            list: a list of states for the process found. If the local job
+                manager command is running its state will be the first in the
+                list. Additional states in the list can typically indicate that
+                remote processes were also found to be active.  Active remote
+                processes will be indicated by a 'R' state at the end of the
+                list.
 
         """
-        # Get/display the state of the job manager process
+        # Get/display the state of the local job manager process
         state = super(JobManager, self).get_subprocess_state(message)
         if self._process is not None and self._hosts:
+            # Display the status of the remote job processes on each host
             command = "/usr/bin/pgrep -a {}".format(self.job.command_regex)
             self.log.debug(
                 "%s processes still running remotely%s:", self.command,
                 " {}".format(message) if message else "")
             self.log.debug("Running (on %s): %s", self._hosts, command)
             results = pcmd(self._hosts, command, True, 10, None)
-            # pgrep will return {1: <NodeSet>} if there are no remote processes
-            # running on any of the hosts.  If this value is not returned,
-            # indicate there are processes running by adding "R" states to the
-            # list.
+
+            # Add a running state to the list of process states if any remote
+            # process was found to be active.  The pcmd method will return a
+            # dictioanry with a single key, e.g. {1: <NodeSet>}, if there are
+            # no remote processes running on any of the hosts.  If this value
+            # is not returned, indicate there are processes running by adding
+            # the "R" state to the process state list.
             if 1 not in results or len(results) > 1:
                 if not state:
                     state = ["?"]
