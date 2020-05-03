@@ -258,9 +258,11 @@ class NvmePoolCapacity(TestWithServers):
         # Run test with one pool.
         self.log.info("Running Test Case 1 with one Pool")
         self.test_run(1)
+        time.sleep(5)
         # Run test with two pools.
         self.log.info("Running Test Case 1 with two Pools")
         self.test_run(2)
+        time.sleep(5)
         # Run Create/delete pool/container
         self.log.info("Running Test Case 3: Pool/Cont Create/Destroy")
         self.test_create_delete(10, 50, 100)
