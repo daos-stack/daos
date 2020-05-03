@@ -110,9 +110,8 @@ class NvmePoolCapacity(TestWithServers):
                                                       api,
                                                       test[2])])
         env = ior_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir)
-        manager.assign_processes(processes)
-        manager.assign_environment(env, True)
+        manager.setup_command(env, self.hostfile_clients,
+                              processes)
 
         # run IOR Command
         try:
