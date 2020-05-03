@@ -118,6 +118,7 @@ struct rw_cb_args {
 	d_sg_list_t		*rwaa_sgls;
 	struct dc_obj_shard	*dobj;
 	unsigned int		*map_ver;
+	daos_iom_t		*maps;
 	struct shard_rw_args	*shard_args;
 };
 
@@ -220,6 +221,27 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	return rc;
 }
 
+static void
+daos_iom_copy(const daos_iom_t *src, daos_iom_t *dst)
+{
+	uint32_t	i;
+	uint32_t	to_copy;
+
+	dst->iom_type = src->iom_type;
+	dst->iom_size = src->iom_size;
+	dst->iom_recx_hi = src->iom_recx_hi;
+	dst->iom_recx_lo = src->iom_recx_lo;
+	dst->iom_nr_out = src->iom_nr_out;
+
+	if (dst->iom_nr < dst->iom_nr_out)
+		D_WARN("mapped recxs list will be truncated");
+
+	to_copy = min(dst->iom_nr, dst->iom_nr_out);
+
+	for (i = 0; i < to_copy ; i++)
+		dst->iom_recxs[i] = src->iom_recxs[i];
+}
+
 static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
@@ -285,6 +307,15 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	*rw_args->map_ver = obj_reply_map_version_get(rw_args->rpc);
 
 	if (opc == DAOS_OBJ_RPC_FETCH) {
+		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
+			/** Should have 1 map per iod */
+			D_ASSERT(orwo->orw_maps.ca_count == orw->orw_nr);
+			for (i = 0; i < orw->orw_nr; i++) {
+				daos_iom_copy(&orwo->orw_maps.ca_arrays[i],
+					      &rw_args->maps[i]);
+			}
+		}
+
 		bool	is_ec_obj = false;
 
 		iods = orw->orw_iod_array.oia_iods;
@@ -368,7 +399,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				}
 			}
 		}
-		rc = dc_rw_cb_csum_verify(rw_args);
+
+		if (rc == 0)
+			rc = dc_rw_cb_csum_verify(rw_args);
 	}
 out:
 	crt_req_decref(rw_args->rpc);
@@ -528,6 +561,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	rw_args.shard_args = args;
 	/* remember the sgl to copyout the data inline for fetch */
 	rw_args.rwaa_sgls = (opc == DAOS_OBJ_RPC_FETCH) ? sgls : NULL;
+	rw_args.maps = args->api_args->maps;
+	if (rw_args.maps != NULL)
+		orw->orw_flags |= ORF_CREATE_MAP;
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_CRT_ERROR))
 		D_GOTO(out_args, rc = -DER_HG);
