@@ -111,6 +111,27 @@ class IorCommand(ExecutableCommand):
         self.daos_chunk = FormattedParameter("--daos.chunk_size {}", 1048576)
         self.daos_oclass = FormattedParameter("--daos.oclass {}", "SX")
 
+        # Module DFS
+        #   Required arguments
+        #       --dfs.pool=STRING            pool uuid
+        #       --dfs.svcl=STRING            pool SVCL
+        #       --dfs.cont=STRING            container uuid
+        #   Flags
+        #       --daos.destroy               Destroy Container
+        #   Optional arguments
+        #       --dfs.group=STRING           server group
+        #       --dfs.chunk_size=1048576     chunk size
+        #       --dfs.oclass=STRING          object class
+        #       --dfs.prefix=STRING          mount prefix
+        self.dfs_pool = FormattedParameter("--dfs.pool {}")
+        self.dfs_svcl = FormattedParameter("--dfs.svcl {}")
+        self.dfs_cont = FormattedParameter("--dfs.cont {}")
+        self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
+        self.dfs_group = FormattedParameter("--dfs.group {}")
+        self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
+        self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
+        self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
+
         # A list of environment variable names to set and export with ior
         self._env_names = ["D_LOG_FILE"]
 
@@ -120,11 +141,16 @@ class IorCommand(ExecutableCommand):
         all_param_names = super(IorCommand, self).get_param_names()
 
         # List all of the common ior params first followed by any daos-specific
-        # params (except when using MPIIO).
-        param_names = [name for name in all_param_names if "daos" not in name]
-        if self.api.value not in ["MPIIO", "POSIX"]:
+        # and dfs-specific params (except when using MPIIO).
+        param_names = [name for name in all_param_names if ("daos" not in name)
+                       and ("dfs" not in name)]
+
+        if self.api.value == "DAOS":
             param_names.extend(
                 [name for name in all_param_names if "daos" in name])
+        elif self.api.value == "DFS":
+            param_names.extend(
+                [name for name in all_param_names if "dfs" in name])
 
         return param_names
 
@@ -139,10 +165,16 @@ class IorCommand(ExecutableCommand):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.set_daos_pool_params(pool, display)
-        self.daos_group.update(group, "daos_group" if display else None)
-        self.daos_cont.update(
-            cont_uuid if cont_uuid else uuid.uuid4(),
-            "daos_cont" if display else None)
+        if self.api.value == "DAOS":
+            self.daos_group.update(group, "daos_group" if display else None)
+            self.daos_cont.update(
+                cont_uuid if cont_uuid else uuid.uuid4(),
+                "daos_cont" if display else None)
+        else:
+            self.dfs_group.update(group, "daos_group" if display else None)
+            self.dfs_cont.update(
+                cont_uuid if cont_uuid else uuid.uuid4(),
+                "daos_cont" if display else None)
 
     def set_daos_pool_params(self, pool, display=True):
         """Set the IOR parameters that are based on a DAOS pool.
@@ -151,8 +183,12 @@ class IorCommand(ExecutableCommand):
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-        self.daos_pool.update(
-            pool.pool.get_uuid_str(), "daos_pool" if display else None)
+        if self.api.value == "DAOS":
+            self.daos_pool.update(
+                pool.pool.get_uuid_str(), "daos_pool" if display else None)
+        else:
+            self.dfs_pool.update(
+                pool.pool.get_uuid_str(), "dfs_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
 
     def set_daos_svcl_param(self, pool, display=True):
@@ -166,7 +202,10 @@ class IorCommand(ExecutableCommand):
             [str(item) for item in [
                 int(pool.pool.svc.rl_ranks[index])
                 for index in range(pool.pool.svc.rl_nr)]])
-        self.daos_svcl.update(svcl, "daos_svcl" if display else None)
+        if self.api.value == "DAOS":
+            self.daos_svcl.update(svcl, "daos_svcl" if display else None)
+        else:
+            self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
