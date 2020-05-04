@@ -204,7 +204,7 @@ class NvmePoolCapacity(TestWithServers):
                 for thrd in range(0, num_jobs):
                     # Based on pools/jobs, split block size
                     if thrd == 0:
-                        tmp = int(float(test[3])) / num_pool
+                        tmp = int(float(test[3]) / num_pool)
                         test[3] = str(tmp)
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
