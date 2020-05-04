@@ -2255,6 +2255,7 @@ class DaosContext(object):
     def __init__(self, path):
         """Set up the DAOS API and MPI."""
         # first find the DAOS version
+        self._dc = None
         with open(os.path.join(path, "daos", "API_VERSION"),
                   "r") as version_file:
             daos_version = version_file.read().rstrip()
