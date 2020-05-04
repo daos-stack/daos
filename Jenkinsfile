@@ -1106,15 +1106,14 @@ pipeline {
                                     unstableThresholdInvalidReadWrite: '0',
                                     unstableThresholdTotal: '0'
                             )
-			    # Enable this when results are stable.
-			    #  qualityGates: [[threshold: 1, type: 'NEW', unstable: true]],
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          failOnError: true,
                                          referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: true,
                                          ignoreQualityGate: false,
-
+                                         /* Enable this when results are stable.
+                                         #  qualityGates: [[threshold: 1, type: 'NEW', unstable: true]], */
                                          name: "VM Testing",
                                          tool: clang(pattern: 'test.out',
                                                      name: 'VM test results',
