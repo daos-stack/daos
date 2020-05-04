@@ -63,10 +63,10 @@
  */
 #define OBJ_PROTO_CLI_RPC_LIST						\
 	X(DAOS_OBJ_RPC_UPDATE,						\
-		0, &CQF_obj_update,					\
+		0, &CQF_obj_rw,					\
 		ds_obj_rw_handler, NULL),				\
 	X(DAOS_OBJ_RPC_FETCH,						\
-		0, &CQF_obj_fetch,					\
+		0, &CQF_obj_rw,					\
 		ds_obj_rw_handler, NULL),				\
 	X(DAOS_OBJ_DKEY_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
@@ -96,7 +96,7 @@
 		0, &CQF_obj_sync,					\
 		ds_obj_sync_handler, NULL),				\
 	X(DAOS_OBJ_RPC_TGT_UPDATE,					\
-		0, &CQF_obj_update,					\
+		0, &CQF_obj_rw,					\
 		ds_obj_tgt_update_handler, NULL),			\
 	X(DAOS_OBJ_RPC_TGT_PUNCH,					\
 		0, &CQF_obj_punch,					\
@@ -188,8 +188,6 @@ struct obj_iod_array {
 	((daos_iom_t)		(orw_maps)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
-CRT_RPC_DECLARE(obj_update,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
-CRT_RPC_DECLARE(obj_fetch,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 
 /* object Enumerate in/out */
 #define DAOS_ISEQ_OBJ_KEY_ENUM	/* input fields */		 \

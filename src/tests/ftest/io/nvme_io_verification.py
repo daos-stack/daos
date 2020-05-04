@@ -99,7 +99,7 @@ class NvmeIoVerification(IorTestBase):
                 else:
                     self.ior_cmd.block_size.update(block_size)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.run_ior(self.get_job_manager_command(), processes)
+                self.run_ior(self.get_ior_job_manager_command(), processes)
 
                 # Verify IOR consumed the expected amount ofrom the pool
                 self.verify_pool_size(size_before_ior, self.processes)

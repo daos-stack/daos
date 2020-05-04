@@ -1289,9 +1289,16 @@ static int
 crt_iv_parent_get(struct crt_ivns_internal *ivns_internal,
 		  d_rank_t root_node, d_rank_t *ret_node)
 {
-	return crt_iv_ranks_parent_get(ivns_internal,
-				       ivns_internal->cii_grp_priv->gp_self,
-				       root_node, ret_node);
+	d_rank_t self = ivns_internal->cii_grp_priv->gp_self;
+
+	if (self == CRT_NO_RANK) {
+		D_DEBUG(DB_TRACE, "%s: self rank not known yet\n",
+			ivns_internal->cii_grp_priv->gp_pub.cg_grpid);
+		return -DER_GRPVER;
+	}
+
+	return crt_iv_ranks_parent_get(ivns_internal, self, root_node,
+				       ret_node);
 }
 
 static void
@@ -3089,6 +3096,12 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
+	if (ivns_internal->cii_grp_priv->gp_self == CRT_NO_RANK) {
+		IV_DBG(iv_key, "%s: self rank not known yet\n",
+		       ivns_internal->cii_grp_priv->gp_pub.cg_grpid);
+		D_GOTO(exit, rc = -DER_GRPVER);
+	}
+
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {
 		D_ERROR("Invalid class_id specified\n");
@@ -3247,6 +3260,11 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 
 	self_rank = ivns_internal->cii_grp_priv->gp_self;
+	if (self_rank == CRT_NO_RANK) {
+		D_DEBUG(DB_TRACE, "%s: self rank not known yet\n",
+			ivns_internal->cii_grp_priv->gp_pub.cg_grpid);
+		D_GOTO(exit, rc = -DER_GRPVER);
+	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {
