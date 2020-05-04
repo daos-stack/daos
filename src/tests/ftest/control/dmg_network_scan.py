@@ -175,9 +175,8 @@ class DmgNetworkScanTest(ControlTestBase):
 
         return net_devs
 
-    def get_sys_info(self):
+    def get_sys_info(self, host):
         """Get the system device information."""
-        host = socket.gethostname().split(".")[0]
         sys_net_devs = []
 
         # Get device names on this system
@@ -222,15 +221,15 @@ class DmgNetworkScanTest(ControlTestBase):
         devices on the system.
         :avocado: tags=all,small,pr,hw,dmg,network_scan,basic
         """
-        # Run the dmg command locally, Unset config to run locally
-        self.server_managers[-1].dmg.hostlist(
-            socket.gethostname().split(".")[0])
+        # Run the dmg command locally, unset config to run locally
+        host = socket.gethostname().split(".")[0]
+        self.server_managers[-1].dmg.hostlist = host
 
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(
             self.get_dmg_info(), key=lambda x: (x.f_iface, x.providers))
         sys_info = sorted(
-            self.get_sys_info(), key=lambda x: (x.f_iface, x.providers))
+            self.get_sys_info(host), key=lambda x: (x.f_iface, x.providers))
 
         # Validate the output with what we expect.
         msg = "\nDmg Info:\n{} \n\nSysInfo:\n{}".format(dmg_info, sys_info)
