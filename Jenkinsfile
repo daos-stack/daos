@@ -141,9 +141,10 @@ def daos_packages_version(String distro) {
 }
 
 def fault_test_tag() {
-    if !(commitPragma(pragma: 'Skip-fault-test').contains('true'))
-        return ",faults"
-    return ",-faults"
+    if commitPragma(pragma: 'Skip-fault-test').contains('true') {
+        return ",-faults"
+    }
+    return ",faults"
 }
 
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
