@@ -141,7 +141,7 @@ def daos_packages_version(String distro) {
 }
 
 def fault_test_tag() {
-    if (cachedCommitPragma(pragma: 'Skip-fault-test').contains('true')) {
+    if (skip_stage('fault-test')) {
         return ",-faults"
     }
     return ",-nofaults"
@@ -293,7 +293,6 @@ pipeline {
         QUICKBUILD_DEPS = sh script: "rpmspec -q --srpm --requires utils/rpms/daos.spec 2>/dev/null",
                              returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'false')
-        FAULT_TEST_TAG = fault_test_tag()
     }
 
     options {
@@ -1286,7 +1285,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '',
-                                          test_tag: 'pr,-hw' + env.FAULT_TEST_TAG,
+                                          test_tag: 'pr,-hw' + fault_test_tag(),
                                           node_count: 9,
                                           ftest_arg: ''
                     }
@@ -1342,7 +1341,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '-hw-small',
-                                          test_tag: 'pr,hw,small' + env.FAULT_TEST_TAG,
+                                          test_tag: 'pr,hw,small' + fault_test_tag(),
                                           node_count: 3,
                                           ftest_arg: '"auto:Optane"'
                     }
@@ -1398,7 +1397,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '-hw-medium',
-                                          test_tag: 'pr,hw,medium,ib2' + env.FAULT_TEST_TAG,
+                                          test_tag: 'pr,hw,medium,ib2' + fault_test_tag(),
                                           node_count: 5,
                                           ftest_arg: '"auto:Optane"'
                     }
@@ -1454,7 +1453,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '-hw-large',
-                                          test_tag: 'pr,hw,large' + env.FAULT_TEST_TAG,
+                                          test_tag: 'pr,hw,large' + fault_test_tag(),
                                           node_count: 9,
                                           ftest_arg: '"auto:Optane"'
                     }
