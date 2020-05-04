@@ -223,15 +223,15 @@ crt_finalize(void);
  * The progress call returns when the timeout is reached or any completion has
  * occurred.
  *
- * \param[in] crt_ctx          CRT transport context
+ * \param[in] crt_ctx          cart context
  * \param[in] timeout          how long is caller going to wait (micro-second)
- *			       at most for a completion to occur.
- *                             if \a timeout > 0 when there is no operation to
- *                             progress. Can return when one or more operation
- *                             progressed.
- *                             zero means no waiting and -1 waits indefinitely.
+ *                             at most for a completion to occur.
+ *                             Can return when one or more operation progressed.
+ *                             zero means no waiting.
  *
- * \return                     DER_SUCCESS on success, negative value if error
+ * \return                     DER_SUCCESS on success
+ *                             -DER_TIMEDOUT if exited after timeout has expired
+ *                             negative value if other internal error
  */
 int
 crt_progress(crt_context_t crt_ctx, int64_t timeout);
@@ -242,16 +242,19 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout);
  * returns when the callback returns a non-zero value or when the timeout
  * expires.
  *
- * \param[in] crt_ctx          CRT transport context
- * \param[in] timeout          how long is caller going to wait (micro-second)
+ * \param[in] crt_ctx          cart context
+ * \param[in] timeout          how long is the caller going to wait in
+ *                             micro-second.
  *                             zero means no waiting and -1 waits indefinitely.
  * \param[in] cond_cb          progress condition callback.
- *                             CRT internally calls this function, when it
+ *                             cart internally calls this function, when it
  *                             returns non-zero then stops the progressing or
  *                             waiting and returns.
  * \param[in] arg              optional argument to cond_cb.
  *
- * \return                     DER_SUCCESS on success, negative value if error
+ * \return                     DER_SUCCESS on success
+ *                             -DER_TIMEDOUT if exited after timeout has expired
+ *                             negative value if internal and \a conb_cb error
  */
 int
 crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
