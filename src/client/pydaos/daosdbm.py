@@ -198,8 +198,11 @@ def main():
 
                 print('Copied {}/{} records in {:.2f} seconds ({:.0f}) {} \
                     seconds remaining.'.format(
-                        copy_count, to_copy, now - start_time,
-                        copy_count / (now - start_time), remaining_time))
+                        copy_count,
+                        to_copy,
+                        now - start_time,
+                        copy_count / (now - start_time),
+                        remaining_time))
                 last_report_time = now
         tdata[LENGTH_KEY] = pickle.dumps(idx)
         kv.bput(tdata)
