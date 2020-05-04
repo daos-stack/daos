@@ -80,7 +80,7 @@ class NvmeIo(IorTestBase):
                 self.ior_cmd.block_size.update(ior_param[3])
                 self.ior_cmd.daos_oclass.update(obj_type)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.run_ior(self.get_job_manager_command(), ior_param[4])
+                self.run_ior(self.get_ior_job_manager_command(), ior_param[4])
 
                 # Verify IOR consumed the expected amount ofrom the pool
                 self.verify_pool_size(size_before_ior, ior_param[4])

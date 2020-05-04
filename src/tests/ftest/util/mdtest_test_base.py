@@ -157,13 +157,13 @@ class MdtestBase(TestWithServers):
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
         # Run Mdtest
-        self.run_mdtest(self.get_job_manager_command(self.manager),
+        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.processes)
         if self.dfuse:
             self.dfuse.stop()
             self.dfuse = None
 
-    def get_job_manager_command(self, manager):
+    def get_mdtest_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.
 
         Returns:
