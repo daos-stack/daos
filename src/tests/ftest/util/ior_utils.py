@@ -243,16 +243,19 @@ class IorCommand(ExecutableCommand):
                         "Error obtaining the IOR aggregate total from the {}: "
                         "value: {}, split: {}".format(name, item, sub_item))
 
-        # Account for any replicas
-        try:
-            # Extract the replica quantity from the object class string
-            replica_qty = int(re.findall(r"\d+", self.daos_oclass.value)[0])
-        except (TypeError, IndexError):
-            # If the daos object class is undefined (TypeError) or it does not
-            # contain any numbers (IndexError) then there is only one replica
-            replica_qty = 1
-        finally:
-            total *= replica_qty
+        # Account for any replicas, except for the ones with no replication
+        # i.e all object classes starting with "S". Eg: S1,S2,...,SX.
+        if not self.daos_oclass.value.startswith("S"):
+            try:
+                # Extract the replica quantity from the object class string
+                replica_qty = int(re.findall(r"\d+", self.daos_oclass.value)[0])
+            except (TypeError, IndexError):
+                # If the daos object class is undefined (TypeError) or it does
+                # not contain any numbers (IndexError) then there is only one
+                # replica.
+                replica_qty = 1
+            finally:
+                total *= replica_qty
 
         return total
 

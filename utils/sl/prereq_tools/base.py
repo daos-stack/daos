@@ -678,6 +678,7 @@ class PreReqComponent():
         if self.__env['PLATFORM'] == 'darwin':
             libtoolize = 'glibtoolize'
 
+        self.__dry_run = GetOption('no_exec')
         self.add_options()
         self.__setup_unit_test_builders()
         self.__env.AddMethod(append_if_supported, "AppendIfSupported")
@@ -689,7 +690,7 @@ class PreReqComponent():
         self.__parse_build_deps()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
-        warning_level = GetOption('warning_level')
+        warning_level = self.__env.subst("$WARNING_LEVEL")
         pre_path = GetOption('prepend_path')
         if pre_path:
             old_path = self.__env['ENV']['PATH']
@@ -701,7 +702,6 @@ class PreReqComponent():
         if self.__check_only:
             # This is mostly a no_exec request.
             SetOption('no_exec', True)
-        self.__dry_run = GetOption('no_exec')
         if config_file is None:
             config_file = GetOption('build_config')
 
@@ -913,8 +913,7 @@ class PreReqComponent():
         """Retrieve the Config File"""
         return self.config_file
 
-    @staticmethod
-    def add_options():
+    def add_options(self):
         """Add common options to environment"""
 
         AddOption('--require-optional',
@@ -965,15 +964,11 @@ class PreReqComponent():
                   default='en_US.UTF8',
                   help='locale to use for building. [%default]')
 
-        # This option sets a hint as to if -Werror should be used.
-        AddOption('--warning-level',
-                  dest='warning_level',
-                  type='choice',
-                  choices=['warning', 'error'],
-                  default='error',
-                  help='Treatment for a compiler warning.  ' \
-                       '(warning|error} [error]')
         SetOption("implicit_cache", True)
+
+        self.add_opts(EnumVariable('WARNING_LEVEL', "Set default warning level",
+                                   'error', ['warning', 'warn', 'error'],
+                                   ignorecase=1))
 
     def __setup_unit_test_builders(self):
         """Setup unit test builders for general use"""
