@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -402,8 +402,12 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	rpc_priv->crp_grp_priv = grp_priv;
 
 	/* grp_root is logical rank number in this group */
-
 	grp_root = grp_priv->gp_self;
+	if (grp_root == CRT_NO_RANK) {
+		D_DEBUG(DB_NET, "%s: self rank not known yet\n",
+			grp_priv->gp_pub.cg_grpid);
+		D_GOTO(out, rc = -DER_GRPVER);
+	}
 	pri_root = crt_grp_priv_get_primary_rank(grp_priv, grp_root);
 
 	tobe_filter_ranks = filter_ranks;
@@ -772,7 +776,6 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_corpc_info	*co_info;
 	d_rank_list_t		*children_rank_list = NULL;
-	d_rank_t		 grp_rank;
 	struct crt_rpc_priv	*child_rpc_priv;
 	struct crt_opc_info	*opc_info;
 	struct crt_corpc_ops	*co_ops;
@@ -781,8 +784,6 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	co_info = rpc_priv->crp_corpc_info;
 	D_ASSERT(co_info != NULL);
-
-	grp_rank = co_info->co_grp_priv->gp_self;
 
 	/* corresponds to decref in crt_corpc_complete */
 	RPC_ADDREF(rpc_priv);
@@ -802,6 +803,18 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 			crt_corpc_fail_parent_rpc(rpc_priv, rc);
 			D_GOTO(forward_done, rc);
 		}
+	}
+
+	/*
+	 * Check the self rank after calling the pre-forward callback, which
+	 * might have changed the self rank from CRT_NO_RANK to a valid value.
+	 */
+	if (co_info->co_grp_priv->gp_self == CRT_NO_RANK) {
+		RPC_TRACE(DB_NET, rpc_priv, "%s: self rank not known yet\n",
+			  co_info->co_grp_priv->gp_pub.cg_grpid);
+		rc = -DER_GRPVER;
+		crt_corpc_fail_parent_rpc(rpc_priv, rc);
+		D_GOTO(forward_done, rc);
 	}
 
 	rc = crt_tree_get_children(co_info->co_grp_priv, co_info->co_grp_ver,
@@ -825,8 +838,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	co_info->co_child_ack_num = 0;
 
 	D_DEBUG(DB_TRACE, "group %s grp_rank %d, co_info->co_child_num: %d.\n",
-		co_info->co_grp_priv->gp_pub.cg_grpid, grp_rank,
-		co_info->co_child_num);
+		co_info->co_grp_priv->gp_pub.cg_grpid,
+		co_info->co_grp_priv->gp_self, co_info->co_child_num);
 
 	if (!ver_match) {
 		D_INFO("parent version and local version mismatch.\n");
