@@ -74,6 +74,8 @@ class TestPool(TestDaosApiBase):
         self.target_list = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
+        self.prop_name = BasicParameter(None)      # name of property to be set
+        self.prop_value = BasicParameter(None)     # value of property
 
         # Set USE_API to use API or USE_DMG to use dmg. If it's not set, API is
         # used.
@@ -262,6 +264,30 @@ class TestPool(TestDaosApiBase):
             self.svc_ranks = None
 
         return status
+
+    @fail_on(CommandFailure)
+    def set_property(self):
+        """Set Property.
+
+        It sets property for a given pool uuid using
+        dmg.
+
+        """
+        if self.pool:
+            self.log.info("Set-prop for Pool: %s", self.uuid)
+
+            if self.control_method.value == self.USE_DMG and self.dmg:
+                # set-prop for given pool using dmg
+                self.dmg.pool_set_prop(self.uuid, self.prop_name,
+                                       self.prop_value)
+
+            elif self.control_method.value == self.USE_DMG:
+                self.log.error("Error: Undefined dmg command")
+
+            else:
+                self.log.error(
+                    "Error: Undefined control_method: %s",
+                    self.control_method.value)
 
     @fail_on(DaosApiError)
     def get_info(self):
