@@ -39,7 +39,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@jvolivie/skip_clean") _
 
 def doc_only_change() {
     def rc = sh script: 'if [ "' + env.CHANGE_ID + '''" = "null" ]; then
