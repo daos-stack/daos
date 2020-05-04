@@ -28,7 +28,7 @@ import re
 import socket
 
 from avocado.utils import process
-from control_test_base import ControlTestBase
+from apricot import TestWithServers
 
 
 class NetDev(object):
@@ -123,7 +123,7 @@ class NetDev(object):
             self.providers = providers
 
 
-class DmgNetworkScanTest(ControlTestBase):
+class DmgNetworkScanTest(TestWithServers):
     # pylint: disable=too-many-ancestors
     """Test Class Description:
     Simple test to verify the network scan function of the dmg tool.
@@ -134,6 +134,16 @@ class DmgNetworkScanTest(ControlTestBase):
         """Initialize a DmgNetworkScanTest object."""
         super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
         self.setup_start_agents = False
+        self.setup_start_servers = False
+
+    def setUp(self):
+        """Set up each test case."""
+        super(DmgNetworkScanTest, self).setUp()
+
+        # Run the dmg command locally, unset config to run locally
+        self.hostlist_servers = socket.gethostname().split(".")[0].split(",")
+        self.start_servers()
+        self.dmg = self.get_dmg_command()
 
     @staticmethod
     def get_devs():
@@ -175,14 +185,19 @@ class DmgNetworkScanTest(ControlTestBase):
 
         return net_devs
 
-    def get_sys_info(self, host):
-        """Get the system device information."""
+    def get_sys_info(self):
+        """Get the system device information.
+
+        Returns:
+            list: list of NetDev objects.
+
+        """
         sys_net_devs = []
 
         # Get device names on this system
         dev_names = self.get_devs()
         for dev in dev_names:
-            dev_info = NetDev(host, dev)
+            dev_info = NetDev(self.hostlist_servers[-1], dev)
             for dev_name in dev_names[dev]:
                 dev_info.set_dev_info(dev_name, self.prefix)
             sys_net_devs.append(dev_info)
@@ -199,10 +214,15 @@ class DmgNetworkScanTest(ControlTestBase):
         return f_net_devs
 
     def get_dmg_info(self):
-        """Store the information received from dmg output."""
+        """Store the information received from dmg output.
+
+        Returns:
+            list: list of NetDev objects.
+
+        """
         host = None
         dmg_net_devs = []
-        scan_info = self.get_dmg_output("network_scan")
+        scan_info = self.dmg.get_output("network_scan")
 
         # Get devices divided
         info = [scan_info[dev:(dev + 3)] for dev in range(0, len(scan_info), 3)]
@@ -221,15 +241,11 @@ class DmgNetworkScanTest(ControlTestBase):
         devices on the system.
         :avocado: tags=all,small,pr,hw,dmg,network_scan,basic
         """
-        # Run the dmg command locally, unset config to run locally
-        host = socket.gethostname().split(".")[0]
-        self.server_managers[-1].dmg.hostlist = host
-
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(
             self.get_dmg_info(), key=lambda x: (x.f_iface, x.providers))
         sys_info = sorted(
-            self.get_sys_info(host), key=lambda x: (x.f_iface, x.providers))
+            self.get_sys_info(), key=lambda x: (x.f_iface, x.providers))
 
         # Validate the output with what we expect.
         msg = "\nDmg Info:\n{} \n\nSysInfo:\n{}".format(dmg_info, sys_info)
