@@ -146,7 +146,16 @@ that NUMA node.
 If a client is bound to a NUMA node that has no matching network interface, then
 a default NUMA node is used for the purpose of selecting a response.  Provided
 that the DAOS Agent can detect any valid network device on any NUMA node, the
-default response will contain a valid network interface for the client.
+default response will contain a valid network interface for the client.  When a
+default response is provided, a message in the Agent's log is emitted:
+
+```
+No network devices bound to client NUMA node X.  Using response from NUMA Y
+```
+
+To improve performance, it is worth figuring out if the client bound itself to
+the wrong NUMA node, or if expected network devices for that NUMA node are
+missing from the Agent's fabric scan.
 
 In some situations, the Agent may detect no network devices and the response
 cache will be empty.  In such a situation, the GetAttachInfo response will
@@ -157,7 +166,7 @@ the Agent's log:
 No network devices detected in fabric scan; default AttachInfo response may be incorrect
 ```
 
-This is not a normal condition.  The admin can execute the command
+In either situation, the admin may execute the command
 ```'daos_agent net-scan'``` with appropriate debug flags to gain more insight
 into the configuration problem.
 
@@ -165,6 +174,6 @@ into the configuration problem.
 
 The default configuration enables the Agent GetAttachInfo cache.  If it is
 desired, the cache may be disabled prior to DAOS Agent startup by setting the
-environment variable ```DAOS_AGENT_DISABLE_CACHE=true```.  The cache is loaded
-only at Agent startup.  If the network configuration changes while the Agent is
-running, it must be restarted to gain visibility to these changes.
+Agent's environment variable ```DAOS_AGENT_DISABLE_CACHE=true```.  The cache is
+loaded only at Agent startup.  If the network configuration changes while the
+Agent is running, it must be restarted to gain visibility to these changes.
