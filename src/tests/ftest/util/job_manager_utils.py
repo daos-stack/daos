@@ -282,7 +282,7 @@ class Mpirun(JobManager):
             processes (int): number of host processes
         """
         # Setup the env for the job to export with the mpirun command
-        self._pre_command = env.get_export_str()
+        self.envlist.value = ",".join(env.get_list())
 
         # Setup the orterun command
         self.hostfile.value = hostfile

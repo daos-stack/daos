@@ -23,12 +23,12 @@
 """
 import os
 import random
-from avocado.utils import process
 
 from apricot import TestWithServers
 from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
 from command_utils import ExecutableCommand
+from general_utils import run_command, DaosTestError
 from test_utils_pool import TestPool
 
 
@@ -70,24 +70,11 @@ class IoConfGen(ExecutableCommand):
         """
         command = " ".join([os.path.join(self._path, "daos_run_io_conf"),
                             self.filename.value])
-        kwargs = {
-            "cmd": command,
-            "timeout": self.timeout,
-            "verbose": self.verbose,
-            "allow_output_check": "combined",
-            "shell": True,
-            "env": self.env,
-            "sudo": self.sudo,
-        }
         try:
-            # Block until the command is complete or times out
-            return process.run(**kwargs)
-
-        except process.CmdError as error:
-            # Command failed or possibly timed out
-            msg = "Error occurred running '{}': {}".format(command, error)
-            self.log.error(msg)
-            raise CommandFailure(msg)
+            return run_command(
+                command, self.timeout, self.verbose, env=self.env)
+        except DaosTestError as error:
+            raise CommandFailure(error)
 
 
 def gen_unaligned_io_conf(record_size, filename="testfile"):

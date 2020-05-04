@@ -540,7 +540,7 @@ class SoakTestBase(TestWithServers):
         # Run dfuse command
         dfuse_env = self.dfuse.get_environment(
             self.server_managers[0], self.client_log)
-        params.update(dfuse_env)
+        params["export"] = ",".join(["all"] + dfuse_env.get_list())
         cmd = self.dfuse.__str__()
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), cmd, params)

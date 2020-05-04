@@ -33,7 +33,8 @@ from command_utils_base import \
     CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
     CommandWithParameters, YamlParameters, FormattedParameter, \
     EnvironmentVariables
-from general_utils import check_file_exists, stop_processes, get_log_file
+from general_utils import check_file_exists, stop_processes, get_log_file, \
+    run_command, DaosTestError
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -109,24 +110,15 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         command = self.__str__()
-        kwargs = {
-            "cmd": command,
-            "timeout": self.timeout,
-            "verbose": self.verbose,
-            "ignore_status": not self.exit_status_exception,
-            "allow_output_check": "combined",
-            "shell": True,
-            "env": self.env,
-        }
         try:
             # Block until the command is complete or times out
-            return process.run(**kwargs)
+            return run_command(
+                command, self.timeout, self.verbose, self.exit_status_exception,
+                "combined", env=self.env)
 
-        except process.CmdError as error:
+        except DaosTestError as error:
             # Command failed or possibly timed out
-            msg = "Error occurred running '{}': {}".format(command, error)
-            self.log.error(msg)
-            raise CommandFailure(msg)
+            raise CommandFailure(error)
 
     def _run_subprocess(self):
         """Run the command as a sub process.
@@ -141,7 +133,7 @@ class ExecutableCommand(CommandWithParameters):
                 "cmd": self.__str__(),
                 "verbose": self.verbose,
                 "allow_output_check": "combined",
-                "shell": True,
+                "shell": False,
                 "env": self.env,
                 "sudo": self.sudo,
             }
@@ -281,7 +273,7 @@ class ExecutableCommand(CommandWithParameters):
             env (EnvironmentVariables): a dictionary of environment variable
                 names and values to export prior to running the command
         """
-        self._pre_command = env.get_export_str()
+        self.env = env.copy()
 
 
 class CommandWithSubCommand(ExecutableCommand):

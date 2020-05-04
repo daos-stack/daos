@@ -21,10 +21,11 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from command_utils_base import CommandWithParameters, FormattedParameter
+from command_utils_base import FormattedParameter
+from command_utils import ExecutableCommand
 
 
-class DaosPerfCommand(CommandWithParameters):
+class DaosPerfCommand(ExecutableCommand):
     """Defines a object representing the daos_perf command.
 
     The daos_perf utility benchmarks point-to-point I/O performance of different
@@ -150,3 +151,7 @@ class DaosPerfCommand(CommandWithParameters):
         #       Pause after initialization for attaching debugger or analysis
         #       tool.
         self.pause_after_init = FormattedParameter("-w", False)
+
+        # Environment variable names to export when running daos_perf
+        self._env_names = [
+            "OFI_INTERFACE", "OFI_PORT", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]

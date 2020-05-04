@@ -28,11 +28,10 @@ import ctypes
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from avocado.utils import process
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
                         daos_cref)
-from general_utils import check_pool_files, DaosTestError
+from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
 from dmg_utils import get_pool_uuid_service_replicas_from_stdout
@@ -541,7 +540,7 @@ class TestPool(TestDaosApiBase):
         command = "{} --np {} --hostfile {} {} {} testfile".format(
             orterun, processes, hostfile,
             os.path.join(current_path, "write_some_data.py"), size)
-        return process.run(command, timeout, True, False, "both", True, env)
+        return run_command(command, timeout, True, env=env)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.

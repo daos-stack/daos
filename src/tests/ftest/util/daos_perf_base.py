@@ -46,11 +46,13 @@ class DaosPerfBase(TestWithServers):
         daos_perf = DaosPerfCommand(self.bin)
         daos_perf.get_params(self)
         self.log.info("daos_perf command: %s", str(daos_perf))
+        daos_perf_env = daos_perf.get_environment(self.server_managers[0])
 
         # Create the orterun command
         orterun = Orterun(daos_perf)
         orterun.assign_hosts(self.hostlist_clients, self.workdir, None)
         orterun.assign_processes(processes)
+        orterun.assign_environment(daos_perf_env)
         self.log.info("orterun command: %s", str(orterun))
 
         # Run the daos_perf command and check for errors
