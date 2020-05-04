@@ -11,7 +11,7 @@ hosts:
 # (I'm looking at you "rebuild tests")
 timeout: 600
 pool:
-  #This will create 8G of SCM and 16G of NVMe size of pool.
+  #This will create a pool with 8G of SCM.
   scm_size: 8G
 server_config:
   servers_per_host: 2

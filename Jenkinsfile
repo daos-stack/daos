@@ -61,6 +61,12 @@ def quickbuild() {
     return commitPragma(pragma: 'Quick-build') == 'true'
 }
 
+def fault_test_tag() {
+    if !(commitPragma(pragma: 'Skip-fault-test').contains('true'))
+        return ",faults"
+    return ",-faults"
+}
+
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -210,6 +216,7 @@ pipeline {
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         QUICKBUILD_DEPS = sh(script: "rpmspec -q --srpm --requires utils/rpms/daos.spec 2>/dev/null",
                              returnStdout: true)
+        FAULT_TEST_TAG = fault_test_tag()
     }
 
     options {
@@ -1205,7 +1212,7 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=pr,-hw
+                                               test_tag="pr,-hw + $FAULT_TEST_TAG
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            # set DAOS_TARGET_OVERSUBSCRIBE env here
@@ -1287,7 +1294,7 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-small:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=pr,hw,small
+                                               test_tag=pr,hw,small + $FAULT_TEST_TAG
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-3)
                                            clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
@@ -1386,7 +1393,7 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-medium:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=pr,hw,medium,ib2
+                                               test_tag=pr,hw,medium,ib2 + $FAULT_TEST_TAG
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-5)
                                            clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
@@ -1485,7 +1492,7 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-large:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=pr,hw,large
+                                               test_tag=pr,hw,large + $FAULT_TEST_TAG
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
