@@ -516,8 +516,12 @@ def create_and_read_via_il(dfuse, path):
     ofd.close()
     il_cmd(dfuse, ['cat', fname])
 
-def run_create_test(server, conf):
+def run_duns_overlay_test(server, conf):
+    """Create a DUNS entry point, and then start fuse over it
 
+    Fuse should use the pool/container IDs from the entry point,
+    and expose the container.
+    """
     daos = import_daos(server, conf)
 
     pools = get_pool_list()
@@ -528,26 +532,27 @@ def run_create_test(server, conf):
 
     uns_dir = os.path.join(parent_dir.name, 'uns_ep')
 
-    if True:
-        rc = run_daos_cmd(conf, ['container',
-                                 'create',
-                                 '--svc',
-                                 '0',
-                                 '--pool',
-                                 pools[0],
-                                 '--type',
-                                 'POSIX',
-                                 '--path',
-                                 uns_dir])
+    rc = run_daos_cmd(conf, ['container',
+                             'create',
+                             '--svc',
+                             '0',
+                             '--pool',
+                             pools[0],
+                             '--type',
+                             'POSIX',
+                             '--path',
+                             uns_dir])
 
-        print('rc is {}'.format(rc))
+    print('rc is {}'.format(rc))
+    assert(rc.returncode==0)
 
     dfuse = DFuse(server, conf, path=uns_dir)
 
-    dfuse.start(v_hint='pre-uns')
+    dfuse.start(v_hint='uns-overlay')
     # To show the contents.
     # getfattr -d <file> 
 
+    # This should work now if the container was correctly found
     create_and_read_via_il(dfuse, uns_dir)
     
     dfuse.stop()
@@ -829,11 +834,12 @@ def main():
         run_in_fg(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
         test_pydaos_kv(server, conf)
-    elif len(sys.argv) == 2 and sys.argv[1] == 'create_test':
-        run_create_test(server, conf)
+    elif len(sys.argv) == 2 and sys.argv[1] == 'overlay':
+        run_duns_overlay_test(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'all':
         run_il_test(server, conf)
         run_dfuse(server, conf)
+        run_duns_overlay_test(server, conf)
         test_pydaos_kv(server, conf)
     else:
         run_il_test(server, conf)
