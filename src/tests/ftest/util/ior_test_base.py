@@ -151,10 +151,12 @@ class IorTestBase(TestWithServers):
                 return "Skipping the case for transfer_size=256B"
             self._start_dfuse()
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
+        elif self.ior_cmd.api.value == "DFS":
+            test_file = os.path.join("/", "testfile")
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
-        out = self.run_ior(self.get_job_manager_command(), self.processes,
+        out = self.run_ior(self.get_ior_job_manager_command(), self.processes,
                            intercept)
 
         if self.dfuse:
@@ -176,7 +178,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
 
-    def get_job_manager_command(self):
+    def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
 
         Returns:
@@ -184,7 +186,7 @@ class IorTestBase(TestWithServers):
 
         """
         # Initialize MpioUtils if IOR is running in MPIIO or DAOS mode
-        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "POSIX"]:
+        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "POSIX", "DFS"]:
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
@@ -286,7 +288,7 @@ class IorTestBase(TestWithServers):
         if intercept:
             testfile += "intercept"
         self.ior_cmd.test_file.update(testfile)
-        manager = self.get_job_manager_command()
+        manager = self.get_ior_job_manager_command()
         procs = (self.processes // len(self.hostlist_clients)) * len(clients)
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:

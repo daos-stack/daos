@@ -38,7 +38,7 @@ except ImportError:
 from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Orterun
 from test_utils_pool import TestPool
 
