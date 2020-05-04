@@ -325,7 +325,7 @@ int
 duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 {
 	char *local;
-	char	*saveptr, *t;
+	char	*saveptr = NULL, *t;
 	int rc;
 
 	D_STRNDUP(local, str, len);
