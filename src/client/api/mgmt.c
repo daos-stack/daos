@@ -36,27 +36,27 @@ daos_dmg_fork_exec(char *argv[])
 	pid_t pid = fork();
 
 	if (pid == -1) {
-		D_ERROR("fork() failed to create child.\n");
+		D_ERROR("fork() failed to create child\n");
 		return -DER_INVAL;
-	}
-	else if (pid == 0) {
+	} else if (pid == 0) {
 		/* child process */
-		D_INFO("child pid = %d \n", getpid());
+		D_INFO("child pid = %d\n", getpid());
 		execvp(argv[0], argv);
 		exit(DER_SUCCESS);
 	}
-	/* parent process */	
-	D_INFO("parent pid = %d \n", getpid());
+	/* parent process */
+	D_INFO("parent pid = %d\n", getpid());
 
 	int status;
+
 	if (waitpid(pid, &status, 0) == -1) {
-		D_ERROR("waitpid() failed for pid = %d. \n", pid);
+		D_ERROR("waitpid() failed for pid = %d\n", pid);
 		return -DER_INVAL;
 	}
 
-	D_INFO("WEXITSTATUS(status) = %d \n", WEXITSTATUS(status));
+	D_INFO("WEXITSTATUS(status) = %d\n", WEXITSTATUS(status));
 
-        return WEXITSTATUS(status);
+	return WEXITSTATUS(status);
 }
 
 /* grp is depricated in "dmg_old kill"  to --sys which doesn't have
