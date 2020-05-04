@@ -208,7 +208,6 @@ class DestroyTests(TestWithServers):
                 hostlist_servers,
                 "with multiple servers - pass {}".format(counter))
 
-    @skipForTicket("DAOS-2739")
     def test_destroy_invalid_uuid(self):
         """Test destroying a pool uuid that doesn't exist.
 

@@ -34,7 +34,6 @@ class DestroyRebuild(TestWithServers):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-2723")
     def test_destroy_while_rebuilding(self):
         """Jira ID: DAOS-xxxx.
 

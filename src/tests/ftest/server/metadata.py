@@ -35,7 +35,7 @@ except ImportError:
     # python 2.7
     import Queue as queue
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils import CommandFailure
@@ -119,7 +119,6 @@ class ObjectMetadata(TestWithServers):
         self.d_log.debug("IOR {0} Threads Finished -----".format(operation))
         return "PASS"
 
-    @skipForTicket("DAOS-1936/DAOS-1946")
     def test_metadata_fillup(self):
         """JIRA ID: DAOS-1512.
 

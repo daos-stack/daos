@@ -23,7 +23,6 @@
 """
 from __future__ import print_function
 
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
 
 
@@ -37,7 +36,6 @@ class RebuildWithIOR(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-2773")
     def test_rebuild_with_ior(self):
         """Jira ID: DAOS-951.
 
