@@ -136,7 +136,6 @@ def main():
 
     print('Kvs are {}'.format(','.join(sorted(my_kv.get_kv_list()))))
 
-    #if True:
     new_migrate(my_kv)
     return
 
