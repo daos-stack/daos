@@ -110,7 +110,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
 
     except process.CmdError as error:
         # Command failed or possibly timed out
-        msg = "Error occurred running '{}': {}".format(" ".join(command), error)
+        msg = "Error occurred running '{}': {}".format(command, error)
 
     if msg is not None:
         print(msg)

@@ -524,7 +524,6 @@ class SoakTestBase(TestWithServers):
         # update dfuse params
         self.dfuse.set_dfuse_params(pool)
         self.dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
 
         # create dfuse mount point
         cmd = "mkdir -p {}".format(self.dfuse.mount_dir.value)
@@ -537,6 +536,11 @@ class SoakTestBase(TestWithServers):
             raise SoakTestError(
                 "<<FAILED: Dfuse mountpoint {} not created>>".format(
                     self.dfuse.mount_dir.value))
+
+        # Run dfuse command
+        dfuse_env = self.dfuse.get_environment(
+            self.server_managers[0], self.client_log)
+        params.update(dfuse_env)
         cmd = self.dfuse.__str__()
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), cmd, params)

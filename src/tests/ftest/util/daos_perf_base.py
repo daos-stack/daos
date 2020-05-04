@@ -44,7 +44,7 @@ class DaosPerfBase(TestWithServers):
 
         # Create the daos_perf command from the test yaml file
         daos_perf = DaosPerfCommand(self.bin)
-        daos_perf.get_params()
+        daos_perf.get_params(self)
         self.log.info("daos_perf command: %s", str(daos_perf))
 
         # Create the orterun command

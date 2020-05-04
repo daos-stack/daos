@@ -1104,7 +1104,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             exe_name = exe_type[exe_name_start:exe_name_end]
             cmd = [
                 "gdb", "-cd={}".format(daos_cores_dir),
-                "-ex", "\"set paginator off\"",
+                "-ex", "\"set pagination off\"",
                 "-ex", "\"thread apply all bt full\""
                 "-ex", "\"detach\"",
                 "-ex", "\"quit\"",
