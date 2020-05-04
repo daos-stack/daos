@@ -39,6 +39,7 @@
 This provides consistency checking for CaRT log files.
 """
 
+import sys
 import pprint
 from collections import OrderedDict
 
@@ -454,3 +455,13 @@ class LogTest():
         if warnings_mode:
             raise WarningMode()
 #pylint: enable=too-many-branches,no-self-use,too-many-nested-blocks
+
+def trace_one_file(filename):
+    """Trace a single file"""
+    log_iter = cart_logparse.LogIter(filename)
+    test_iter = LogTest(log_iter)
+    test_iter.check_log_file(False)
+
+if __name__ == '__main__':
+    if len(sys.argv) == 2:
+        trace_one_file(sys.argv[1])
