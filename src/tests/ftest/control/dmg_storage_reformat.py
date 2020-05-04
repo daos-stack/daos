@@ -26,13 +26,10 @@ from __future__ import print_function
 import os
 import getpass
 
-from dmg_utils import storage_format
-from server_utils import ServerManager, ServerFailed, storage_prepare
-from command_utils import CommandFailure
-from apricot import TestWithServers
+from control_test_base import ControlTestBase
 
 
-class DmgStorageReformatTest(TestWithServers):
+class DmgStorageReformatTest(ControlTestBase):
     """Test Class Description:
     Test to verify that dmg storage command reformat option.
     :avocado: recursive
@@ -42,9 +39,14 @@ class DmgStorageReformatTest(TestWithServers):
         """
         JIRA ID: DAOS-3854
         Test Description: Test dmg storage reformat functionality.
-        :avocado: tags=all,tiny,pr,hw,control,storage_reformat,dmg,basic
+        :avocado: tags=all,small,full_regression,hw,control,reformat,dmg,basic
         """
 
         # At this point the server has been started, storage has been formatted
+        # We need to get the superblock file information
+        sp_info = {}
+        for server in self.server_managers:
+            scm_mount = server.get_config_value("scm_mount")
+            self.get_superblock_info(scm_mount, "uuid")
 
 
