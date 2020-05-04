@@ -115,3 +115,49 @@ Finally, DAOS provides a tool called daos_perf which allows benchmarking to the
 DAOS object API directly or to the internal VOS API, which bypasses the client
 and network stack and reports performance accessing the storage directy using
 VOS.
+
+## Client Performance Tuning
+
+For best performance, a DAOS client should specifically bind itself to a NUMA
+node instead of leaving core allocation and memory binding to chance.  This
+allows the DAOS Agent to detect the client's NUMA affinity from its PID and
+automatically assign a network interface with a matching NUMA node.
+
+The DAOS Agent scans the client machine on the first GetAttachInfo request to
+determine the set of network interfaces available that support the DAOS Server's
+OFI provider.  The Agent then populates a cache of responses indexed by NUMA
+affinity.  Provided a client application has bound itself to a specific NUMA
+node and that NUMA node has a network device associated with it, the DAOS Agent
+will provide a GetAttachInfo response with a network interface corresponding to
+the client's NUMA node.
+
+When more than one appropriate network interface exists per NUMA node, the agent
+uses a round-robin resource allocation to load balance the responses for that
+NUMA node.
+
+If a client is bound to a NUMA node that has no matching network interface, then
+a default NUMA node is used for the purpose of selecting a response.  Provided
+that the DAOS Agent can detect any valid network device on any NUMA node, the
+default response will contain a valid network interface for the client.
+
+In some situations, the Agent may detect no network devices and the response
+cache will be empty.  In such a situation, the GetAttachInfo response will
+contain no interface assignment.
+
+**When the Agent's log contains the info message:**
+```
+No network devices detected in fabric scan; default AttachInfo response may be incorrect
+```
+
+it indicates that the Agent could not detect any network devices.  This is not
+a normal condition.  The admin can execute the command
+```'daos_agent net-scan'``` with appropriate debug flags to gain more insight
+into the configuration problem.
+
+**Disabling the GetAttachInfo cache:**
+
+The default configuration enables the Agent GetAttachInfo cache.  If it is
+desired, the cache may be disabled prior to DAOS Agent startup by setting the
+environment variable ```DAOS_AGENT_DISABLE_CACHE=true```.  The cache is loaded
+only at Agent startup.  If the network configuration changes while the Agent is
+running, it must be restarted to gain visibility to these changes.

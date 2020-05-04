@@ -83,7 +83,7 @@ func (aic *attachInfoCache) getResponse(numaNode int) ([]byte, error) {
 		if deviceIndex == invalidIndex {
 			return nil, errors.Errorf("No default response found for the default NUMA node %d", aic.defaultNumaNode)
 		}
-		aic.log.Debugf("No network devices bound to client NUMA node %d.  Using response from NUMA %d", numaNode, aic.defaultNumaNode)
+		aic.log.Infof("No network devices bound to client NUMA node %d.  Using response from NUMA %d", numaNode, aic.defaultNumaNode)
 		numaNode = aic.defaultNumaNode
 	}
 
@@ -165,9 +165,7 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 
 	// If there were no network devices found, then add a default response to the default NUMA node entry
 	if _, ok := aic.numaDeviceMarshResp[aic.defaultNumaNode]; !ok {
-		aic.log.Debugf("No valid devices were detected in the fabric scan.\n" +
-			"\tThe default response contains no network interface or domain.\n" +
-			"\tCheck network configuration and run daos_agent net-scan to see network device and NUMA bindings.")
+		aic.log.Info("No network devices detected in fabric scan; default AttachInfo response may be incorrect\n")
 		aic.numaDeviceMarshResp[aic.defaultNumaNode] = make(map[int][]byte)
 		numaDeviceMarshResp, err := proto.Marshal(resp)
 		if err != nil {
