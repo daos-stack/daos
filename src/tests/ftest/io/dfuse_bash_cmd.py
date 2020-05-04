@@ -113,7 +113,7 @@ class BashCmd(TestWithServers):
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
                            str(self.dfuse),
-                           str(self.dfuse.hosts),
+                           self.dfuse.hosts,
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
@@ -185,7 +185,7 @@ class BashCmd(TestWithServers):
                     try:
                         # execute bash cmds
                         ret_code = general_utils.pcmd(
-                            self.hostlist_clients[:-1], cmd, timeout=30)
+                            self.hostlist_clients, cmd, timeout=30)
                         if 0 not in ret_code:
                             error_hosts = NodeSet(
                                 ",".join(
