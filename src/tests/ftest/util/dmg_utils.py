@@ -671,6 +671,30 @@ class DmgCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.principal.value = principal
         return self._get_result()
 
+    def pool_set_prop(self, pool, name, value):
+        """Set property for a given Pool.
+
+        Args:
+            pool (str): Pool uuid for which property is supposed
+                        to be set.
+            name (str): Property name to be set
+            value (str): Property value to be set
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool set-prop command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("set-prop")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.name.value = name
+        self.sub_command_class.sub_command_class.value.value = value
+        return self._get_result()
+
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     """Get Pool UUID and Service replicas from stdout.
