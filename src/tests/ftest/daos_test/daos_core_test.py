@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -25,11 +25,12 @@
 from daos_core_base import DaosCoreBase
 
 class DaosCoreTest(DaosCoreBase):
-    """
-    Runs just the non-rebuild daos_test tests
+    # pylint: disable=too-many-ancestors
+    """Runs the non-rebuild daos_test tests with fault injectors disabled.
 
     :avocado: recursive
     """
+
     def test_subtest(self):
         """
         Test ID: DAOS-1568
@@ -38,6 +39,6 @@ class DaosCoreTest(DaosCoreBase):
 
         Use Cases: core tests for daos_test
 
-        :avocado: tags=all,pr,hw,ib2,medium,daos_test
+        :avocado: tags=all,pr,hw,ib2,medium,daos_test,nofaults
         """
         DaosCoreBase.run_subtest(self)
