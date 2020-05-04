@@ -1286,7 +1286,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '',
-                                          test_tag: 'pr,-hw' + $FAULT_TEST_TAG,
+                                          test_tag: 'pr,-hw' + env.FAULT_TEST_TAG,
                                           node_count: 9,
                                           ftest_arg: ''
                     }
@@ -1342,7 +1342,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '-hw-small',
-                                          test_tag: 'pr,hw,small' + $FAULT_TEST_TAG,
+                                          test_tag: 'pr,hw,small' + env.FAULT_TEST_TAG,
                                           node_count: 3,
                                           ftest_arg: '"auto:Optane"'
                     }
@@ -1398,7 +1398,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '-hw-medium',
-                                          test_tag: 'pr,hw,medium,ib2' + $FAULT_TEST_TAG,
+                                          test_tag: 'pr,hw,medium,ib2' + env.FAULT_TEST_TAG,
                                           node_count: 5,
                                           ftest_arg: '"auto:Optane"'
                     }
@@ -1454,7 +1454,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '-hw-large',
-                                          test_tag: 'pr,hw,large' + $FAULT_TEST_TAG,
+                                          test_tag: 'pr,hw,large' + env.FAULT_TEST_TAG,
                                           node_count: 9,
                                           ftest_arg: '"auto:Optane"'
                     }
