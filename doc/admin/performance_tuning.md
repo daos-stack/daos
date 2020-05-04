@@ -121,19 +121,27 @@ VOS.
 For best performance, a DAOS client should specifically bind itself to a NUMA
 node instead of leaving core allocation and memory binding to chance.  This
 allows the DAOS Agent to detect the client's NUMA affinity from its PID and
-automatically assign a network interface with a matching NUMA node.
+automatically assign a network interface with a matching NUMA node.  The network
+interface provided in the GetAttachInfo response is used to initialize CaRT.
+
+To override the automatically assigned interface, the client should set the
+environment variable ```OFI_INTERFACE``` to match the desired network
+interface.
 
 The DAOS Agent scans the client machine on the first GetAttachInfo request to
 determine the set of network interfaces available that support the DAOS Server's
-OFI provider.  The Agent then populates a cache of responses indexed by NUMA
-affinity.  Provided a client application has bound itself to a specific NUMA
-node and that NUMA node has a network device associated with it, the DAOS Agent
-will provide a GetAttachInfo response with a network interface corresponding to
-the client's NUMA node.
+OFI provider.  This request occurs as part of the initialization sequence in the
+```libdaos daos_init()``` performed by each client.
+
+Upon receipt, the Agent populates a cache of responses indexed by NUMA affinity.
+Provided a client application has bound itself to a specific NUMA node and that
+NUMA node has a network device associated with it, the DAOS Agent will provide a
+GetAttachInfo response with a network interface corresponding to the client's
+NUMA node.
 
 When more than one appropriate network interface exists per NUMA node, the agent
-uses a round-robin resource allocation to load balance the responses for that
-NUMA node.
+uses a round-robin resource allocation scheme to load balance the responses for
+that NUMA node.
 
 If a client is bound to a NUMA node that has no matching network interface, then
 a default NUMA node is used for the purpose of selecting a response.  Provided
@@ -142,15 +150,14 @@ default response will contain a valid network interface for the client.
 
 In some situations, the Agent may detect no network devices and the response
 cache will be empty.  In such a situation, the GetAttachInfo response will
-contain no interface assignment.
+contain no interface assignment and the following info message will be found in
+the Agent's log:
 
-**When the Agent's log contains the info message:**
 ```
 No network devices detected in fabric scan; default AttachInfo response may be incorrect
 ```
 
-it indicates that the Agent could not detect any network devices.  This is not
-a normal condition.  The admin can execute the command
+This is not a normal condition.  The admin can execute the command
 ```'daos_agent net-scan'``` with appropriate debug flags to gain more insight
 into the configuration problem.
 
