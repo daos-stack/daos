@@ -144,7 +144,7 @@ def fault_test_tag() {
     if (skip_stage('fault-test')) {
         return ",-faults"
     }
-    return
+    return ""
 }
 
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
