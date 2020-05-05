@@ -30,8 +30,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -243,7 +241,7 @@ func (m *Membership) Add(member *Member) (int, error) {
 	defer m.Unlock()
 
 	if value, found := m.members[member.Rank]; found {
-		return -1, errors.Wrapf(FaultMemberExists, "member %s", value)
+		return -1, FaultMemberExists(value)
 	}
 
 	m.members[member.Rank] = member
@@ -257,7 +255,7 @@ func (m *Membership) SetMemberState(rank Rank, state MemberState) error {
 	defer m.Unlock()
 
 	if _, found := m.members[rank]; !found {
-		return errors.Wrapf(FaultMemberMissing, "rank %d", rank)
+		return FaultMemberMissing(rank)
 	}
 
 	m.members[rank].SetState(state)
@@ -300,7 +298,7 @@ func (m *Membership) Get(rank Rank) (*Member, error) {
 
 	member, found := m.members[rank]
 	if !found {
-		return nil, errors.Wrapf(FaultMemberMissing, "rank %d", rank)
+		return nil, FaultMemberMissing(rank)
 	}
 
 	return member, nil
@@ -414,7 +412,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults) error {
 
 	for _, result := range results {
 		if _, found := m.members[result.Rank]; !found {
-			return errors.Wrapf(FaultMemberMissing, "rank %d", result.Rank)
+			return FaultMemberMissing(result.Rank)
 		}
 
 		m.members[result.Rank].SetState(result.State)

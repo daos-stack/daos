@@ -211,10 +211,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create rpcClient for inter-server communication.
-	cliCfg := control.DefaultClientConfig()
+	cliCfg := control.DefaultConfig()
 	cliCfg.TransportConfig = cfg.TransportConfig
 	rpcClient := control.NewClient(
-		control.WithClientConfig(cliCfg),
+		control.WithConfig(cliCfg),
 		control.WithClientLogger(log))
 
 	// Create and setup control service.

@@ -101,7 +101,7 @@ func TestMember_AddRemove(t *testing.T) {
 			},
 			nil,
 			nil,
-			[]error{nil, FaultMemberExists},
+			[]error{nil, FaultMemberExists(mockMember(t, 1, MemberStateUnknown))},
 		},
 		"remove non-existent": {
 			Members{

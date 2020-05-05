@@ -240,21 +240,21 @@ func rpcToRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ra
 		return nil, err
 	}
 
-	srr := new(RanksResp)
+	rr := new(RanksResp)
 	for _, hostResp := range ur.Responses {
 		if hostResp.Error != nil {
-			if err := srr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+			if err := rr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
 				return nil, err
 			}
 			continue
 		}
 
-		if err := srr.addHostResponse(hostResp); err != nil {
+		if err := rr.addHostResponse(hostResp); err != nil {
 			return nil, err
 		}
 	}
 
-	return srr, nil
+	return rr, nil
 }
 
 // PrepShutdownRanks concurrently performs prep shutdown ranks across all hosts
