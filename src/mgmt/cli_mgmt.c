@@ -454,6 +454,8 @@ int dc_mgmt_net_cfg(const char *name)
 	int rc;
 	int npsrs;
 	char buf[SYS_INFO_BUF_SIZE];
+	char *ofi_interface;
+	char *ofi_domain;
 	struct sys_info sy_info;
 	struct dc_mgmt_psr *psrs;
 
@@ -481,16 +483,27 @@ int dc_mgmt_net_cfg(const char *name)
 		return errno;
 
 	/* Allow client env overrides for these two */
-	rc = setenv("OFI_INTERFACE", sy_info.interface, 0);
-	if (rc != 0)
-		return errno;
+	ofi_interface = getenv("OFI_INTERFACE");
+	if (!ofi_interface) {
+		rc = setenv("OFI_INTERFACE", sy_info.interface, 1);
+		if (rc != 0)
+			return errno;
+	} else {
+		D_INFO("Using client provided OFI_INTERFACE: %s\n",
+			ofi_interface);
+	}
 
-	rc = setenv("OFI_DOMAIN", sy_info.domain, 0);
-	if (rc != 0)
-		return errno;
+	ofi_domain = getenv("OFI_DOMAIN");
+	if (!ofi_domain) {
+		rc = setenv("OFI_DOMAIN", sy_info.domain, 1);
+		if (rc != 0)
+			return errno;
+	} else {
+		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+	}
 
 	D_DEBUG(DB_MGMT,
-		"Using server provided parameters for CaRT initialization:\n"
+		"CaRT initialization with:\n"
 		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
 		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
 		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
