@@ -134,7 +134,8 @@ class SoakTestBase(TestWithServers):
         # Include test node for log cleanup; remove from client list
         local_host_list = include_local_host(None)
         self.exclude_slurm_nodes.extend(local_host_list)
-        self.hostlist_clients.remove((local_host_list[0]))
+        if local_host_list[0] in self.hostlist_clients:
+            self.hostlist_clients.remove((local_host_list[0]))
         self.log.info(
             "<<Updated hostlist_clients %s >>", self.hostlist_clients)
         if not self.hostlist_clients:
