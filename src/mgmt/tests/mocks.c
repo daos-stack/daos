@@ -438,6 +438,24 @@ mock_ds_mgmt_exclude_setup(void)
 	ds_mgmt_target_update_return = 0;
 	uuid_clear(ds_mgmt_target_update_uuid);
 }
+
+int     ds_mgmt_pool_extend_return;
+uuid_t  ds_mgmt_pool_extend_uuid;
+int
+ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list)
+{
+	uuid_copy(ds_mgmt_pool_extend_uuid, pool_uuid);
+	return ds_mgmt_pool_extend_return;
+	return 0;
+}
+
+void
+mock_ds_mgmt_pool_extend_setup(void)
+{
+	ds_mgmt_pool_extend_return = 0;
+	uuid_clear(ds_mgmt_pool_extend_uuid);
+}
+
 /*
  * Stubs, to avoid linker errors
  * TODO: Implement mocks when there is a test that uses these

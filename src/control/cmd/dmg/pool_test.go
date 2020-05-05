@@ -252,6 +252,30 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Extend a pool with a single rank",
+			"pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.PoolExtendReq{
+					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks: []uint32{1},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Extend a pool with multiple ranks",
+			"pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1,2,3",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.PoolExtendReq{
+					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks: []uint32{1, 2, 3},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Reintegrate a target with single target idx",
 			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
 			strings.Join([]string{
