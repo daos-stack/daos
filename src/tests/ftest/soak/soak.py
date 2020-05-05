@@ -130,15 +130,16 @@ class SoakTestBase(TestWithServers):
             if host_server in self.hostlist_clients:
                 self.hostlist_clients.remove(host_server)
                 self.exclude_slurm_nodes.append(host_server)
+
+        # Include test node for log cleanup; remove from client list
+        local_host_list = include_local_host(None)
+        self.exclude_slurm_nodes.extend(local_host_list)
+        self.hostlist_clients.remove((local_host_list[0]))
         self.log.info(
             "<<Updated hostlist_clients %s >>", self.hostlist_clients)
         if not self.hostlist_clients:
             self.fail("There are no nodes that are client only;"
                       "check if the partition also contains server nodes")
-
-        # Include test node for log cleanup; remove from client list
-        local_host_list = include_local_host(None)
-        self.exclude_slurm_nodes.extend(local_host_list)
 
         # Start an agent on the test control host to enable API calls for
         # reserved pool and containers.  The test control host should be the
@@ -224,12 +225,12 @@ class SoakTestBase(TestWithServers):
         """
         # copy the files from the remote
         # TO-DO: change scp
-        this_host = socket.gethostname()
+        local_host_list = include_local_host(None)
         rsync_str = "rsync -avtr --min-size=1B"
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients),
             "bash -c \"{0} {1} {2}:{1}/.. && rm -rf {1}/*\"".format(
-                rsync_str, self.test_log_dir, this_host),
+                rsync_str, self.test_log_dir, local_host_list[0]),
             self.srun_params)
         if result.exit_status == 0:
             cmd = "cp -R -p {0}/ \'{1}\'; rm -rf {0}/*".format(
