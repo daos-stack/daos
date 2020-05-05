@@ -45,62 +45,30 @@ daos_tests:
   num_replicas:
     num_replicas: 1
   Tests: !mux
-    test_d:
-      daos_test: d
-      test_name: DAOS degraded-mode tests
     test_m:
       daos_test: m
-      test_name: Management tests
-    test_p:
-      daos_test: p
-      test_name: Pool tests
-    test_c:
-      daos_test: c
-      test_name: DAOS container tests
-    test_e:
-      daos_test: e
-      test_name: DAOS epoch tests
+      test_name: Management tests 5
+      #subtests 5 require FAULT_INJECTION=1
+      args: -u subtests="5"
     test_X:
       daos_test: X
-      test_name: DAOS DTX tests
+      test_name: DAOS DTX tests 3,4,16
+      #subtests 3,4,16 require FAULT_INJECTION=1
+      args: -u subtests="3,4,16"
     test_V:
       daos_test: V
-      test_name: DAOS verify consistency tests
+      test_name: DAOS verify consistency tests 4-9
+      #subtests 4-9 require FAULT_INJECTION=1
+      args: -u subtests="4-9"
       test_timeout: 900
     test_i:
       daos_test: i
-      test_name: IO test
-      test_timeout: 900
-    test_A:
-      daos_test: A
-      test_name: DAOS Object Array tests
-    test_D:
-      daos_test: D
-      test_name: DAOS Array tests
-    test_K:
-      daos_test: K
-      test_name: DAOS KV tests
-    test_F:
-      daos_test: F
-      test_name: DAOS File System tests
-    test_C:
-      daos_test: C
-      test_name: DAOS capability tests
-    test_o:
-      daos_test: o
-      test_name: Epoch recovery tests
-    test_R:
-      daos_test: R
-      test_name: DAOS MD replication tests
-    test_v:
-      daos_test: v
-      test_name: DAOS rebuild simple tests
-      test_timeout: 1500
-    test_O:
-      daos_test: O
-      test_name: OID Allocator tests
-      test_timeout: 1350
+      test_name: IO test 19,31
+      #subtests 19,31 require FAULT_INJECTION=1
+      args: -u subtests="19,31"
     test_z:
       daos_test: z
-      test_name: Checksum tests
+      test_name: Checksum tests 1-16
+      # subtests 1-16 require FAULT_INJECTION=1
+      args: -u subtests="1-16"
       test_timeout: 900

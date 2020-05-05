@@ -27,7 +27,7 @@ from daos_core_base import DaosCoreBase
 
 class DaosCoreTest(DaosCoreBase):
     # pylint: disable=too-many-ancestors
-    """Runs the non-rebuild daos_test tests with fault injectors enabled.
+    """Runs only the daos_test tests that require fault injectors enabled.
 
     :avocado: recursive
     """
