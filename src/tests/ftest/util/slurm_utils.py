@@ -186,7 +186,7 @@ def check_slurm_job(handle):
     """
     command = "scontrol show job {}".format(handle)
     result = run_command(command, raise_exception=False)
-    match = re.search(r"JobState=([a-zA-Z]+)", result.stderr_text)
+    match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
     if match is not None:
         state = match.group(1)
     else:

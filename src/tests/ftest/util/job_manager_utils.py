@@ -282,7 +282,7 @@ class Mpirun(JobManager):
             processes (int): number of host processes
         """
         # Setup the env for the job to export with the mpirun command
-        self.envlist.value = ",".join(env.get_list())
+        self.assign_environment(env)
 
         # Setup the orterun command
         self.hostfile.value = hostfile
@@ -319,20 +319,13 @@ class Mpirun(JobManager):
             append (bool): whether to assign (False) or append (True) the
                 specified environment variables
         """
-        if append and self.envlist.value is not None:
-            # Convert the current list of environmental variable assignments
-            # into an EnvironmentVariables (dict) object.  Then update the
-            # dictionary keys with the specified values or add new key value
-            # pairs to the dictionary.  Finally convert the updated dictionary
-            # back to a string for the parameter assignment.
-            original = EnvironmentVariables({
-                item.split("=")[0]: item.split("=")[1] if "=" in item else None
-                for item in self.envlist.value.split(",")})
-            original.update(env_vars)
-            self.envlist.value = ",".join(original.get_list())
+        # Pass the environment variables via the process.run method env argument
+        if append and self.env is not None:
+            # Update the existing dictionary with the new values
+            self.env.update(env_vars)
         else:
-            # Overwrite the environmental variable assignment
-            self.envlist.value = ",".join(env_vars.get_list())
+            # Overwrite/create the dictionary of environment variables
+            self.env = EnvironmentVariables(env_vars)
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
