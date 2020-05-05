@@ -276,7 +276,7 @@ class DFuse():
 
         my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
         my_env['OFI_INTERFACE'] = 'eth0'
-        my_env['D_LOG_MASK'] = 'INFO,dfuse=DEBUG,dfs=DEBUG'
+        my_env['D_LOG_MASK'] = 'DEBUG'
         my_env['DD_MASK'] = 'all'
         my_env['DD_SUBSYS'] = 'all'
         my_env['D_LOG_FILE'] = self.log_file
@@ -312,7 +312,7 @@ class DFuse():
             except subprocess.TimeoutExpired:
                 pass
             total_time += 1
-            if total_time > 10:
+            if total_time > 30:
                 raise Exception('Timeout starting dfuse')
 
     def _close_files(self):
