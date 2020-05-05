@@ -513,7 +513,7 @@ class DaosCommand(CommandWithSubCommand):
                 information.
 
         Raises:
-            CommandFailure: if the doas pool query command fails.
+            CommandFailure: if the daos pool query command fails.
 
         """
         self.set_sub_command("pool")
@@ -551,7 +551,7 @@ class DaosCommand(CommandWithSubCommand):
                 information.
 
         Raises:
-            CommandFailure: if the doas container create command fails.
+            CommandFailure: if the daos container create command fails.
 
         """
         self.set_sub_command("container")
@@ -584,7 +584,7 @@ class DaosCommand(CommandWithSubCommand):
                 information.
 
         Raises:
-            CommandFailure: if the doas container destroy command fails.
+            CommandFailure: if the daos container destroy command fails.
 
         """
         self.set_sub_command("container")
@@ -612,7 +612,7 @@ class DaosCommand(CommandWithSubCommand):
                 information.
 
         Raises:
-            CommandFailure: if the doas pool query command fails.
+            CommandFailure: if the daos pool query command fails.
 
         """
         self.set_sub_command("pool")

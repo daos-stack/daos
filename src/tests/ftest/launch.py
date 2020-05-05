@@ -757,7 +757,7 @@ def run_tests(test_files, tag_filter, args):
                 "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
             return_code |= time_command(test_command_list)
 
-            # Optionally store all of the doas server and client log files
+            # Optionally store all of the daos server and client log files
             # along with the test results
             if args.archive:
                 archive_logs(avocado_logs_dir, test_file["yaml"], args)
