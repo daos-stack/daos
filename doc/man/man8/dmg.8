@@ -1,4 +1,4 @@
-.TH dmg 1 "14 April 2020"
+.TH dmg 1 "24 April 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -144,6 +144,23 @@ UUID of DAOS pool to destroy
 .TP
 \fB\fB\-f\fR, \fB\-\-force\fR\fP
 Force removal of DAOS pool
+.SS pool exclude
+Exclude a list of targets from a rank
+
+\fBUsage\fP: pool exclude [exclude-OPTIONS]
+.TP
+
+\fBAliases\fP: e
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of the DAOS pool to exclude a target from
+.TP
+\fB\fB\-\-rank\fR (\fIrequired\fR)\fP
+Rank of the targets to be excluded
+.TP
+\fB\fB\-\-target-idx\fR (\fIrequired\fR)\fP
+Comma-seperated list of target idx(s) to be excluded from the rank
 .SS pool get-acl
 Get a DAOS pool's Access Control List
 
