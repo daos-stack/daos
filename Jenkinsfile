@@ -675,7 +675,9 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-centos7-clang'
+                                   failure_artifacts: 'config.log-centos7-clang',
+				   scons_args: "BUILD_ROOT=/tmp/jenkins-fastbuild",
+				   prebuild: "df -h ."
                     }
                     post {
                         always {
