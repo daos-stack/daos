@@ -164,6 +164,12 @@ func (m *MockMgmtSvcClient) PoolReintegrate(ctx context.Context, req *mgmtpb.Poo
 	return &mgmtpb.PoolReintegrateResp{}, nil
 }
 
+func (m *MockMgmtSvcClient) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq, o ...grpc.CallOption) (*mgmtpb.PoolExcludeResp, error) {
+	// return successful pool Exclude results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.PoolExcludeResp{}, nil
+}
+
 func (m *MockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq, _ ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
 	if m.Cfg.PoolQueryErr != nil {
 		return nil, m.Cfg.PoolQueryErr
