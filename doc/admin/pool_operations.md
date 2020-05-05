@@ -301,6 +301,22 @@ $ dmg pool reintegrate --pool=${puuid} --rank=5 --target-idx=0,1
 Support for online target addition and automatic space rebalancing is
 planned for DAOS v1.4 and will be documented here once available.
 
+An operator can choose to extend a pool to include ranks not currently in the pool.
+This will automatically trigger a server rebalance operation where objects within the extended
+pool will be rebalanced across the new storage.
+
+```
+$ dmg pool extend --pool=${puuid} --ranks=${rank1},${randk2}...
+```
+
+The pool extend command accepts 2 required parameters:
+
+* The pool UUID of the pool to be extended.
+* A comma separated list of ranks to include in the pool.
+
+The pool rebalance operation will work most efficiently when the pool is extended to it's desired
+size in a single operation, as opposed to multiple, small extensions.
+
 #### Pool Shard Resize
 
 Support for quiescent pool shard resize is currently not supported and

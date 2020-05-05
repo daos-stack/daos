@@ -48,6 +48,7 @@ type PoolCmd struct {
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
 	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
 	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude a list of targets from a rank"`
+	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
 	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate a list of targets for a rank"`
 	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
@@ -187,6 +188,36 @@ func (r *PoolExcludeCmd) Execute(args []string) error {
 	}
 
 	r.log.Infof("Exclude command %s\n", msg)
+
+	return err
+}
+
+// PoolExtendCmd is the struct representing the command to Extend a DAOS pool.
+type PoolExtendCmd struct {
+	logCmd
+	ctlInvokerCmd
+	UUID  string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
+	Ranks string `long:"ranks" required:"1" description:"Comma-seperated list of ranks to add to the pool"`
+}
+
+// Execute is run when PoolExtendCmd subcommand is activated
+func (r *PoolExtendCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	var ranklist []uint32
+	if err := common.ParseNumberList(r.Ranks, &ranklist); err != nil {
+		return errors.WithMessage(err, "parsing ranks list")
+	}
+
+	req := &control.PoolExtendReq{UUID: r.UUID, Ranks: ranklist}
+
+	ctx := context.Background()
+	err := control.PoolExtend(ctx, r.ctlInvoker, req)
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	r.log.Infof("Extend command %s\n", msg)
 
 	return err
 }

@@ -277,6 +277,96 @@ void   mgmt__pool_exclude_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__pool_exclude_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__pool_extend_req__init
+                     (Mgmt__PoolExtendReq         *message)
+{
+  static const Mgmt__PoolExtendReq init_value = MGMT__POOL_EXTEND_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__pool_extend_req__get_packed_size
+                     (const Mgmt__PoolExtendReq *message)
+{
+  assert(message->base.descriptor == &mgmt__pool_extend_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__pool_extend_req__pack
+                     (const Mgmt__PoolExtendReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__pool_extend_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__pool_extend_req__pack_to_buffer
+                     (const Mgmt__PoolExtendReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__pool_extend_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__PoolExtendReq *
+       mgmt__pool_extend_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__PoolExtendReq *)
+     protobuf_c_message_unpack (&mgmt__pool_extend_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__pool_extend_req__free_unpacked
+                     (Mgmt__PoolExtendReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__pool_extend_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__pool_extend_resp__init
+                     (Mgmt__PoolExtendResp         *message)
+{
+  static const Mgmt__PoolExtendResp init_value = MGMT__POOL_EXTEND_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__pool_extend_resp__get_packed_size
+                     (const Mgmt__PoolExtendResp *message)
+{
+  assert(message->base.descriptor == &mgmt__pool_extend_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__pool_extend_resp__pack
+                     (const Mgmt__PoolExtendResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__pool_extend_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__pool_extend_resp__pack_to_buffer
+                     (const Mgmt__PoolExtendResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__pool_extend_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__PoolExtendResp *
+       mgmt__pool_extend_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__PoolExtendResp *)
+     protobuf_c_message_unpack (&mgmt__pool_extend_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__pool_extend_resp__free_unpacked
+                     (Mgmt__PoolExtendResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__pool_extend_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__pool_reintegrate_req__init
                      (Mgmt__PoolReintegrateReq         *message)
 {
@@ -1224,6 +1314,95 @@ const ProtobufCMessageDescriptor mgmt__pool_exclude_resp__descriptor =
   mgmt__pool_exclude_resp__field_indices_by_name,
   1,  mgmt__pool_exclude_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__pool_exclude_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[2] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolExtendReq, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "ranks",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolExtendReq, n_ranks),
+    offsetof(Mgmt__PoolExtendReq, ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__pool_extend_req__field_indices_by_name[] = {
+  1,   /* field[1] = ranks */
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange mgmt__pool_extend_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.PoolExtendReq",
+  "PoolExtendReq",
+  "Mgmt__PoolExtendReq",
+  "mgmt",
+  sizeof(Mgmt__PoolExtendReq),
+  2,
+  mgmt__pool_extend_req__field_descriptors,
+  mgmt__pool_extend_req__field_indices_by_name,
+  1,  mgmt__pool_extend_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__pool_extend_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__pool_extend_resp__field_descriptors[1] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolExtendResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__pool_extend_resp__field_indices_by_name[] = {
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange mgmt__pool_extend_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.PoolExtendResp",
+  "PoolExtendResp",
+  "Mgmt__PoolExtendResp",
+  "mgmt",
+  sizeof(Mgmt__PoolExtendResp),
+  1,
+  mgmt__pool_extend_resp__field_descriptors,
+  mgmt__pool_extend_resp__field_indices_by_name,
+  1,  mgmt__pool_extend_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__pool_extend_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descriptors[3] =

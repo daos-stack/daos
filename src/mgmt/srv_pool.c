@@ -662,6 +662,32 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 }
 
 int
+ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list)
+{
+	int			rc;
+	d_rank_list_t		*ranks;
+	struct mgmt_svc		*svc;
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	D_DEBUG(DB_MGMT, "Extend DAOS pool for "DF_UUID" not supported.\n",
+			DP_UUID(pool_uuid));
+	rc = -DER_NOSYS;
+
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 				 struct pool_target_id_list *target_list,
 				 pool_comp_state_t state)

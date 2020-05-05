@@ -423,6 +423,46 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 	return nil
 }
 
+// PoolExtendReq struct contains request
+type PoolExtendReq struct {
+	unaryRequest
+	msRequest
+	UUID  string
+	Ranks []uint32
+}
+
+// ExtendResp has no other parameters other than success/failure for now.
+
+// PoolExtend will extend the DAOS pool by the specified ranks.
+// This should automatically start the rebalance process.
+// Returns an error (including any DER code from DAOS).
+func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolExtend(ctx, &mgmtpb.PoolExtendReq{
+			Uuid:  req.UUID,
+			Ranks: req.Ranks,
+		})
+	})
+
+	rpcClient.Debugf("Extend DAOS pool request: %v\n", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool extend failed")
+	}
+	rpcClient.Debugf("Extend DAOS pool response: %s\n", msResp)
+
+	return nil
+}
+
 // PoolReintegrateReq struct contains request
 type PoolReintegrateReq struct {
 	unaryRequest
