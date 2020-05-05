@@ -384,19 +384,23 @@ dss_srv_handler(void *arg)
 	int				 rc;
 	bool				 signal_caller = true;
 
-	/** set affinity */
+	/**
+	 * Set cpu affinity
+	 */
 	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
 	if (rc) {
 		D_ERROR("failed to set cpu affinity: %d\n", errno);
 		goto signal;
 	}
 
+	/**
+	 * Set memory affinity, but fail silently if it does not work since some
+	 * systems return ENOSYS.
+	 */
 	rc = hwloc_set_membind(dss_topo, dx->dx_cpuset, HWLOC_MEMBIND_BIND,
 			       HWLOC_MEMBIND_THREAD);
-	if (rc) {
-		D_ERROR("failed to set memory affinity: %d\n", errno);
-		goto signal;
-	}
+	if (rc)
+		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG);
