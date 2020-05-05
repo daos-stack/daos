@@ -87,39 +87,43 @@ run_all_tests(int keys, bool nest_iterators)
 	int	j;
 	int	length = 0;
 	char	*bypass = getenv("DAOS_IO_BYPASS");
+	char	cfg_desc_io[50];
 
 	length += sprintf(config_description+length, "keys=%d", keys);
 
 	if (bypass)
-		length += sprintf(config_description+length,
-				  " bypass=%s", bypass);
+		sprintf(config_description+length, " bypass=%s", bypass);
 	else
-		length += sprintf(config_description+length,
-				  " bypass=none");
-	if (nest_iterators)
-		length += sprintf(config_description+length,
-				  " iterator=nested");
-	else
-		length += sprintf(config_description+length,
-				  " iterator=standalone");
+		sprintf(config_description+length, " bypass=none");
 
-	failed += run_pm_tests(config_description);
-	failed += run_pool_test(config_description);
-	failed += run_co_test(config_description);
+	if (nest_iterators == false) {
+		failed += run_pm_tests(config_description);
+		failed += run_pool_test(config_description);
+		failed += run_co_test(config_description);
+		failed += run_discard_tests(config_description);
+		failed += run_aggregate_tests(false, config_description);
+		failed += run_gc_tests(config_description);
+		failed += run_dtx_tests(config_description);
+		failed += run_ilog_tests(config_description);
+		failed += run_csum_extent_tests(config_description);
+		failed += run_mvcc_tests(config_description);
+
+		sprintf(cfg_desc_io,
+			"%s iterator=standalone", config_description);
+	} else {
+		sprintf(cfg_desc_io,
+			"%s iterator=nested", config_description);
+
+	}
+
 	for (i = 0; dkey_feats[i] >= 0; i++) {
 		for (j = 0; akey_feats[j] >= 0; j++) {
 			feats = dkey_feats[i] | akey_feats[j];
 			failed += run_io_test(feats, keys, nest_iterators,
-					      config_description);
+					      cfg_desc_io);
 		}
 	}
-	failed += run_discard_tests(config_description);
-	failed += run_aggregate_tests(false, config_description);
-	failed += run_gc_tests(config_description);
-	failed += run_dtx_tests(config_description);
-	failed += run_ilog_tests(config_description);
-	failed += run_csum_extent_tests(config_description);
-	failed += run_mvcc_tests(config_description);
+
 	return failed;
 }
 
