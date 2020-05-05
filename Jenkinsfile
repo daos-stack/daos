@@ -1103,9 +1103,9 @@ pipeline {
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
                                     sourceSubstitutionPaths: '',
-                                    unstableThresholdDefinitelyLost: '',
+                                    unstableThresholdDefinitelyLost: '0',
                                     unstableThresholdInvalidReadWrite: '0',
-                                    unstableThresholdTotal: ''
+                                    unstableThresholdTotal: '0'
                             )
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
@@ -1113,8 +1113,7 @@ pipeline {
                                          referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: true,
                                          ignoreQualityGate: false,
-                                         /* Enable this when results are stable.
-                                         #  qualityGates: [[threshold: 1, type: 'NEW', unstable: true]], */
+                                         qualityGates: [[threshold: 1, type: 'NEW', unstable: true]],
                                          name: "VM Testing",
                                          tool: clang(pattern: 'vm_test/vm_test.out',
                                                      name: 'VM test results',
