@@ -465,7 +465,7 @@ class DaosPool(object):
         t_size = ctypes.pointer(ctypes.c_size_t(5000))
 
         func = self.context.get_function('list-pool-attr')
-        ret = func(self.handle, sbuf, t_size)
+        ret = func(self.handle, sbuf, t_size, None)
         if ret != 0:
             raise DaosApiError("Pool List-attr returned non-zero. RC:{0}"
                                .format(ret))
