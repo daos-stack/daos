@@ -55,12 +55,22 @@ class IorSmall(IorTestBase):
                                               '/run/ior/iorflags/*')
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
 
+        long_flags = flags[0]
+        long_flags.append(' -O useO_DIRECT=1')
         # run tests for different variants
-        self.ior_cmd.flags.update(flags[0])
         for oclass in obj_class:
             self.ior_cmd.daos_oclass.update(oclass)
             for api in apis:
                 self.ior_cmd.api.update(api)
+                if api == 'POSIX':
+                    self.ior_cmd.flags.update(long_flags)
+                    for test in transfer_block_size:
+                        # update transfer and block size
+                        self.ior_cmd.transfer_size.update(test[0])
+                        self.ior_cmd.block_size.update(test[1])
+                        # run ior
+                        self.run_ior_with_pool(debug=True)
+                self.ior_cmd.flags.update(flags[0])
                 for test in transfer_block_size:
                     # update transfer and block size
                     self.ior_cmd.transfer_size.update(test[0])
