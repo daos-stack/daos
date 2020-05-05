@@ -579,7 +579,9 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-centos7-gcc'
+                                   failure_artifacts: 'config.log-centos7-gcc',
+                                   scons_args: "BUILD_ROOT=/tmp/jenkins-fastbuild",
+                                   prebuild: "df -h ."
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
@@ -675,9 +677,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-centos7-clang',
-				   scons_args: "BUILD_ROOT=/tmp/jenkins-fastbuild",
-				   prebuild: "df -h ."
+                                   failure_artifacts: 'config.log-centos7-clang'
                     }
                     post {
                         always {
