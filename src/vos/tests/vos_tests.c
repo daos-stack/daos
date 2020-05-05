@@ -87,11 +87,8 @@ run_all_tests(int keys, bool nest_iterators)
 	int		 i;
 	int		 j;
 
-	if (!bypass) {
-		create_config(cfg_desc_io, "keys=%d", keys);
-		failed += run_ts_tests(cfg_desc_io);
+	if (!bypass)
 		bypass = "none";
-	}
 
 	create_config(cfg_desc_io, "keys=%d bypass=%s", keys, bypass);
 
