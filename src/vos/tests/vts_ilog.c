@@ -1218,9 +1218,12 @@ teardown_ilog(void **state)
 }
 
 int
-run_ilog_tests(void)
+run_ilog_tests(const char *cfg)
 {
-	return cmocka_run_group_tests_name("VOS Incarnation log tests",
+	char	test_name[100];
+
+	sprintf(test_name, "VOS Incarnation log tests %s", cfg);
+	return cmocka_run_group_tests_name(test_name,
 					   inc_tests, setup_ilog,
 					   teardown_ilog);
 }

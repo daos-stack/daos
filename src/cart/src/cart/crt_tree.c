@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -125,6 +125,8 @@ out:
 		D_ASSERT(tree_type == CRT_TREE_FLAT ||			\
 			 (tree_ratio >= CRT_TREE_MIN_RATIO &&		\
 			  tree_ratio <= CRT_TREE_MAX_RATIO));		\
+		D_ASSERT(root != CRT_NO_RANK);				\
+		D_ASSERT(self != CRT_NO_RANK);				\
 	} while (0)
 
 /*
