@@ -140,7 +140,8 @@ dss_module_key_get(struct dss_thread_local_storage *dtls,
 void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
-#define DSS_XS_NAME_LEN		64
+/** pthread names are limited to 16 chars */
+#define DSS_XS_NAME_LEN		16
 
 struct srv_profile_chunk {
 	d_list_t	spc_chunk_list;

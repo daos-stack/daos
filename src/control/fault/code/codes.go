@@ -87,7 +87,8 @@ const (
 	BdevUnknown Code = iota + 300
 	BdevFormatUnknownClass
 	BdevFormatFailure
-	BdevFormatBadPciAddress
+	BdevBadPCIAddress
+	BdevPCIAddressNotFound
 
 	// DAOS system fault codes
 	SystemUnknown Code = iota + 400

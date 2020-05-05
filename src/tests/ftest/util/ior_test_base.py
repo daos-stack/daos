@@ -26,9 +26,10 @@ import threading
 import time
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers, get_log_file
+from apricot import TestWithServers
 from ior_utils import IorCommand
-from command_utils import Mpirun, CommandFailure
+from command_utils import CommandFailure
+from job_manager_utils import Mpirun
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
@@ -108,14 +109,13 @@ class IorTestBase(TestWithServers):
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
-                           log_file=get_log_file(self.client_log),
-                           dfuse_env=True)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
         self.dfuse.get_params(self)
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
         self.dfuse.set_dfuse_cont_param(self.container)
+        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
 
         try:
             # start dfuse
@@ -155,10 +155,12 @@ class IorTestBase(TestWithServers):
                 return "Skipping the case for transfer_size=256B"
             self._start_dfuse()
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
+        elif self.ior_cmd.api.value == "DFS":
+            test_file = os.path.join("/", "testfile")
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
-        out = self.run_ior(self.get_job_manager_command(), self.processes,
+        out = self.run_ior(self.get_ior_job_manager_command(), self.processes,
                            intercept)
 
         if self.dfuse:
@@ -180,7 +182,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
 
-    def get_job_manager_command(self):
+    def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
 
         Returns:
@@ -188,15 +190,14 @@ class IorTestBase(TestWithServers):
 
         """
         # Initialize MpioUtils if IOR is running in MPIIO or DAOS mode
-        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "POSIX"]:
+        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "POSIX", "DFS"]:
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
         else:
             self.fail("Unsupported IOR API")
 
-        mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
-        return Mpirun(self.ior_cmd, mpirun_path, mpitype="mpich")
+        return Mpirun(self.ior_cmd, mpitype="mpich")
 
     def run_ior(self, manager, processes, intercept=None):
         """Run the IOR command.
@@ -206,8 +207,7 @@ class IorTestBase(TestWithServers):
             processes (int): number of host processes
             intercept (str): path to interception library.
         """
-        env = self.ior_cmd.get_default_env(
-            str(manager), get_log_file(self.client_log))
+        env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
         manager.setup_command(env, self.hostfile_clients, processes)
@@ -291,10 +291,9 @@ class IorTestBase(TestWithServers):
         if intercept:
             testfile += "intercept"
         self.ior_cmd.test_file.update(testfile)
-        manager = self.get_job_manager_command()
+        manager = self.get_ior_job_manager_command()
         procs = (self.processes // len(self.hostlist_clients)) * num_clients
-        env = self.ior_cmd.get_default_env(
-            str(manager), get_log_file(self.client_log))
+        env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
         manager.setup_command(env, hostfile, procs)

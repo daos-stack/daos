@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,41 +90,6 @@ func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
 	if len(devices) != int(count) {
 		err = fmt.Errorf("expected %d devices but got %d", len(devices), int(count))
 	}
-
-	return
-}
-
-// GetStatuses return status for each device in devices
-func (n *NvmMgmt) GetStatuses(devices []DeviceDiscovery) (
-	statuses []DeviceStatus, err error) {
-
-	// printing for debug
-	for i, d := range devices {
-		fmt.Printf("Device ID: %d, Memory type: %d, Fw Rev: %v, Capacity %d, ",
-			d.Device_id, d.Memory_type, d.Fw_revision, d.Capacity)
-		fmt.Printf("Channel Pos: %d, Channel ID: %d, Memory Ctrlr: %d, Socket ID: %d.\n",
-			d.Channel_pos, d.Channel_id, d.Memory_controller_id, d.Socket_id)
-
-		uidCharPtr := (*C.char)(unsafe.Pointer(&devices[0].Uid))
-		//uidCharPtr := (*C.char)(unsafe.Pointer(&devs[0].uid))
-
-		fmt.Printf("uid of device %d: %s\n", i, C.GoString(uidCharPtr))
-
-		status := C.struct_device_status{}
-		if err = Rc2err(
-			"get_device_status",
-			C.nvm_get_device_status(uidCharPtr, &status)); err != nil {
-			return
-		}
-		statuses = append(statuses, *(*DeviceStatus)(unsafe.Pointer(&status)))
-	}
-
-	// verify api call passing in uid as param
-	// dev := C.struct_device_discovery{}
-	// C.nvm_get_device_discovery(uidCharPtr, &dev)
-	// dd := (*DeviceDiscovery)(unsafe.Pointer(&dev))
-	// fmt.Printf("Device ID: %d, Memory type: %d, Fw Rev: %v, Capacity %d, ",
-	//    dd.Device_id, dd.Memory_type, dd.Fw_revision, dd.Capacity)
 
 	return
 }

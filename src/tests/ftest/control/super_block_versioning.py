@@ -30,25 +30,28 @@ from apricot import TestWithServers
 
 
 class SuperBlockVersioning(TestWithServers):
-    """Test Class Description:
-    Test to verify that super block data structure is versioned.
+    """Superblock data structure test cases.
+
+    Test Class Description:
+        Test to verify that super block data structure is versioned.
+
     :avocado: recursive
     """
 
     def test_super_block_version_basic(self):
-        """
-        JIRA ID: DAOS-3648
-        Test Description: Basic test to verify that superblock file is
-        versioned.
+        """JIRA ID: DAOS-3648.
+
+        Test Description:
+            Basic test to verify that superblock file is versioned.
+
         :avocado: tags=all,tiny,pr,ds_versioning,basic
         """
         # Check that the superblock file exists under the scm_mount dir.
-        params = self.server_managers[-1].runner.job.yaml_params
-        fname = os.path.join(
-            params.server_params[-1].scm_mount.value, "superblock")
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        fname = os.path.join(scm_mount, "superblock")
         check_result = check_file_exists(self.hostlist_servers, fname)
         if not check_result[0]:
-            self.fail("%s: %s not found", check_result[1], fname)
+            self.fail("{}: {} not found".format(check_result[1], fname))
 
         # Make sure that 'version' is in the file, run task to check
         cmd = "cat {} | grep -F \"version\"".format(fname)

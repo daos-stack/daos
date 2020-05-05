@@ -411,6 +411,16 @@ typedef struct {
 	int		(*to_check_availability)(struct btr_instance *tins,
 						 struct btr_record *rec,
 						 uint32_t intent);
+	/**
+	 * Allocate a tree node
+	 *
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
+	 * \param size	[IN]	Node size
+	 * \a return		Allocated node address (offset within the pool)
+	 */
+	umem_off_t	(*to_node_alloc)(struct btr_instance *tins, int size);
+
 } btr_ops_t;
 
 /**

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -430,14 +430,6 @@ struct test_op_dict op_dict[] = {
 		.op_str		= "punch",
 		.op_cb		= {
 			daos_test_cb_punch,
-			test_cb_noop,
-			test_cb_noop,
-		},
-	}, {
-		.op_type	= TEST_OP_EPOCH_DISCARD,
-		.op_str		= "epoch_discard",
-		.op_cb		= {
-			test_cb_noop,
 			test_cb_noop,
 			test_cb_noop,
 		},

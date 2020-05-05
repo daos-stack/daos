@@ -352,6 +352,7 @@ class TestContainer(TestDaosApiBase):
             # Populte the empty DaosContainer object with the properties of the
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)
+            self.container.attached = 1
 
         elif self.control_method.value == self.USE_DAOS:
             self.log.error("Error: Undefined daos command")
@@ -438,7 +439,8 @@ class TestContainer(TestDaosApiBase):
                     # Destroy the container with the daos command
                     kwargs["pool"] = self.pool.uuid
                     kwargs["sys_name"] = self.pool.name.value
-                    kwargs["svc"] = ",".join(self.pool.svc_ranks)
+                    kwargs["svc"] = ",".join(
+                        [str(item) for item in self.pool.svc_ranks])
                     kwargs["cont"] = self.uuid
                     self._log_method("daos.container_destroy", kwargs)
                     self.daos.container_destroy(**kwargs)
@@ -721,8 +723,8 @@ class TestContainer(TestDaosApiBase):
         for data in self.written_data:
             # Close the object
             self.log.info(
-                "Closing object %s (txn: %s) in container %s",
-                data.obj, data.txn, self.uuid)
+                "Closing object %s in container %s",
+                data.obj, self.uuid)
             try:
                 self._call_method(data.obj.close, {})
             except DaosApiError:
