@@ -129,22 +129,14 @@ class ObjFetchBadParam(TestWithServers):
 
         try:
             # now try it with a null sgl (iod_size is not set)
-            # expecting this to fail with -2013
             test_hints = ['sglnull']
             dummy_thedata2 = self.container.read_an_obj(self.datasize,
                                                         self.dkey, self.akey,
                                                         self.obj, test_hints)
-
-            # behavior not as expect so commented out for now
-            # when DAOS-1448 is complete, uncomment and retest
-
-            self.fail("Test was expected to return a -2013 but it has not.\n")
-
         except DaosApiError as excep:
-            if '-2013' not in str(excep):
-                print(excep)
-                print(traceback.format_exc())
-                self.fail("Test was expected to get -2013 but it has not.\n")
+            print(excep)
+            print(traceback.format_exc())
+            self.fail("Test was expected to pass but failed !\n")
 
         try:
             # when DAOS-1449 is complete, uncomment and retest
