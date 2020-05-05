@@ -151,7 +151,7 @@ class IorTestBase(TestWithServers):
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
-        out = self.run_ior(self.get_job_manager_command(), self.processes,
+        out = self.run_ior(self.get_ior_job_manager_command(), self.processes,
                            intercept, debug, intercept)
 
         if self.dfuse:

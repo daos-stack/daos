@@ -60,7 +60,8 @@ class IorInterceptMultiClient(IorTestBase):
         without_intercept = IorCommand.get_ior_metrics(out)
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         suffix = suffix + "intercept"
-        out = self.run_ior_with_pool(intercept, test_file_suffix=suffix, debug=False)
+        out = self.run_ior_with_pool(intercept, test_file_suffix=suffix,
+                                     debug=False)
         with_intercept = IorCommand.get_ior_metrics(out)
         max_mib = int(IorMetrics.Max_MiB)
         min_mib = int(IorMetrics.Min_MiB)
