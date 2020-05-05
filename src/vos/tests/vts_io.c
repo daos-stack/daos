@@ -2474,7 +2474,7 @@ run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators, const char *cfg)
 	if (feats & DAOS_OF_AKEY_LEXICAL)
 		akey = "lex";
 
-	snprintf(buf, VTS_BUF_SIZE, "# VOS IO tests (dkey=%-6s akey=%s) %s",
+	snprintf(buf, VTS_BUF_SIZE, "#  VOS IO tests (dkey=%-6s akey=%s) %s",
 		 dkey, akey, cfg);
 	init_ofeats = feats;
 	if (keys)
