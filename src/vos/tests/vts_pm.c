@@ -1199,7 +1199,7 @@ cond_test(void **state)
 		       -DER_NONEXIST, sgl, "foo");
 	/** Non conditional update should fail due to later read */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 3, "a", "b",
-		       VOS_OF_USE_TIMESTAMPS, -DER_AGAIN, sgl, "foo");
+		       VOS_OF_USE_TIMESTAMPS, -DER_TX_RESTART, sgl, "foo");
 	/** Conditional insert should succeed */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_INSERT, 0, sgl,
@@ -1240,7 +1240,7 @@ cond_test(void **state)
 			"foobar", "d", "value", "e", "abc");
 	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "z",
 			VOS_OF_COND_DKEY_INSERT | VOS_OF_USE_TIMESTAMPS,
-			-DER_AGAIN, sgl, 5, "a", "foo", "b", "bar", "c",
+			-DER_TX_RESTART, sgl, 5, "a", "foo", "b", "bar", "c",
 			"foobar", "d", "value", "e", "abc");
 	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "z",
 			VOS_OF_COND_DKEY_INSERT | VOS_OF_USE_TIMESTAMPS,
@@ -1253,13 +1253,13 @@ cond_test(void **state)
 		      VOS_OF_COND_AKEY_FETCH | VOS_OF_USE_TIMESTAMPS,
 		      -DER_NONEXIST, sgl, "xxx", 'x');
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
-		       "nonexist", VOS_OF_USE_TIMESTAMPS, -DER_AGAIN, sgl,
+		       "nonexist", VOS_OF_USE_TIMESTAMPS, -DER_TX_RESTART, sgl,
 		       "foo");
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "nonexist", "a",
 		      VOS_OF_COND_DKEY_FETCH | VOS_OF_USE_TIMESTAMPS,
 		      -DER_NONEXIST, sgl, "xxx", 'x');
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "nonexist",
-		       "a", VOS_OF_USE_TIMESTAMPS, -DER_AGAIN, sgl,
+		       "a", VOS_OF_USE_TIMESTAMPS, -DER_TX_RESTART, sgl,
 		       "foo");
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "nonexist",
 		       "a", VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo");
@@ -1300,11 +1300,14 @@ static const struct CMUnitTest punch_model_tests[] = {
 };
 
 int
-run_pm_tests(void)
+run_pm_tests(const char *cfg)
 {
+	char	test_name[100];
+
+	sprintf(test_name, "VOS Punch Model tests %s", cfg);
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
-	return cmocka_run_group_tests_name("VOS Punch Model tests",
+	return cmocka_run_group_tests_name(test_name,
 					   punch_model_tests, setup_io,
 					   teardown_io);
 }

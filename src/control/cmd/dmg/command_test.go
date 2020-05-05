@@ -133,16 +133,6 @@ func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }
 
-func (tc *testConn) NetworkListProviders() client.ResultMap {
-	tc.appendInvocation("NetworkListProviders")
-	return nil
-}
-
-func (tc *testConn) NetworkScanDevices(searchProvider string) client.NetworkScanResultMap {
-	tc.appendInvocation(fmt.Sprintf("NetworkScanDevices-%s", searchProvider))
-	return nil
-}
-
 func testExpectedError(t *testing.T, expected, actual error) {
 	t.Helper()
 
@@ -234,6 +224,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.LeaderQueryResp{})
 	case *control.ListPoolsReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ListPoolsResp{})
+	case *control.ContSetOwnerReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.ContSetOwnerResp{})
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})

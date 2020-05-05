@@ -2482,15 +2482,6 @@ out:
 	return rc;
 }
 
-static bool
-is_rpc_from_client(crt_rpc_t *rpc)
-{
-	d_rank_t srcrank;
-
-	crt_req_src_rank_get(rpc, &srcrank);
-	return (srcrank == CRT_NO_RANK);
-}
-
 /* CaRT RPC handler for pool container listing
  * Requires a pool handle (except for rebuild).
  */
@@ -2519,7 +2510,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	/* Verify pool handle only if RPC initiated by a client
 	 * (not for mgmt svc to pool svc RPCs that do not have a handle).
 	 */
-	if (is_rpc_from_client(rpc)) {
+	if (daos_rpc_from_client(rpc)) {
 		rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 		if (rc != 0)
 			D_GOTO(out_svc, rc);
@@ -2626,7 +2617,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	 * the non-rebuild pool. Server-to-server calls also don't have a
 	 * handle.
 	 */
-	if (is_rpc_from_client(rpc) &&
+	if (daos_rpc_from_client(rpc) &&
 	    !is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
 		d_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
 		d_iov_set(&value, &hdl, sizeof(hdl));

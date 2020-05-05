@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"sort"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
@@ -72,7 +73,13 @@ func (her *HostErrorsResp) getHostErrors() HostErrorsMap {
 
 func (her *HostErrorsResp) Errors() error {
 	if len(her.HostErrors) > 0 {
-		return errors.Errorf("%d hosts had errors", len(her.HostErrors))
+		errCount := 0
+		for _, set := range her.HostErrors {
+			errCount += set.Count()
+		}
+
+		return errors.Errorf("%s had errors",
+			english.Plural(errCount, "host", "hosts"))
 	}
 	return nil
 }

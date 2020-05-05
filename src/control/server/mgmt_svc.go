@@ -188,7 +188,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 // not a Management Service replica.
 func checkIsMSReplica(mi *IOServerInstance) error {
 	msg := "instance is not an access point"
-	if !mi.IsMSReplica() {
+	if !mi.isMSReplica() {
 		leader, err := mi.msClient.LeaderAddress()
 		if err != nil {
 			return err
@@ -366,6 +366,30 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 	}
 
 	svc.log.Debugf("MgmtSvc.ListContainers dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// ContSetOwner forwards a gRPC request to the DAOS IO server to change a container's ownership.
+func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerReq) (*mgmtpb.ContSetOwnerResp, error) {
+	svc.log.Debugf("MgmtSvc.ContSetOwner dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodContSetOwner, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.ContSetOwnerResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal ContSetOwner response")
+	}
+
+	svc.log.Debugf("MgmtSvc.ContSetOwner dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

@@ -379,6 +379,15 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static umem_off_t
+ktr_node_alloc(struct btr_instance *tins, int size)
+{
+	/* Dynamic root could have smaller size */
+	if (size == umem_slab_usize(&tins->ti_umm, VOS_SLAB_KEY_NODE))
+		return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_KEY_NODE);
+	return umem_zalloc(&tins->ti_umm, size);
+}
+
 static btr_ops_t key_btr_ops = {
 	.to_rec_msize		= ktr_rec_msize,
 	.to_hkey_size		= ktr_hkey_size,
@@ -391,6 +400,7 @@ static btr_ops_t key_btr_ops = {
 	.to_rec_free		= ktr_rec_free,
 	.to_rec_fetch		= ktr_rec_fetch,
 	.to_rec_update		= ktr_rec_update,
+	.to_node_alloc		= ktr_node_alloc,
 };
 
 /**
@@ -657,6 +667,15 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 					  svt->ir_dtx, intent, DTX_RT_SVT);
 }
 
+static umem_off_t
+svt_node_alloc(struct btr_instance *tins, int size)
+{
+	/* Dynamic root could have smaller size */
+	if (size == umem_slab_usize(&tins->ti_umm, VOS_SLAB_SV_NODE))
+		return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_SV_NODE);
+	return umem_zalloc(&tins->ti_umm, size);
+}
+
 static btr_ops_t singv_btr_ops = {
 	.to_rec_msize		= svt_rec_msize,
 	.to_hkey_size		= svt_hkey_size,
@@ -667,6 +686,7 @@ static btr_ops_t singv_btr_ops = {
 	.to_rec_fetch		= svt_rec_fetch,
 	.to_rec_update		= svt_rec_update,
 	.to_check_availability	= svt_check_availability,
+	.to_node_alloc		= svt_node_alloc,
 };
 
 /**
@@ -1034,7 +1054,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			    info, ts_set, true);
 
 	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
-		rc = -DER_AGAIN;
+		rc = -DER_TX_RESTART;
 done:
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,

@@ -122,6 +122,9 @@ def scons():
 
     denv = env.Clone()
 
+    if denv.get("COMPILER") == 'covc':
+        denv.Replace(CC='gcc', CXX='g++')
+
     # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
     # runtime
     prefix = denv.subst("$PREFIX")
@@ -147,9 +150,15 @@ def scons():
     gosrc = Dir('.').srcnode().abspath
     cartpath = Dir('#/src/cart/src/include').srcnode().abspath
 
+    prereqs.require(denv, 'ofi', 'hwloc')
+
     denv.AppendENVPath("CGO_LDFLAGS",
-                       denv.subst("-L$BUILD_DIR/src/cart/src/gurt"), sep=" ")
-    denv.AppendENVPath("CGO_CFLAGS", "-I%s" % cartpath, sep=" ")
+                       denv.subst("$_LIBDIRFLAGS "
+                                  "$_RPATH"),
+                       sep=" ")
+
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
+                       sep=" ")
 
     agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
     dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
@@ -165,7 +174,7 @@ def scons():
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/cart/src/gurt "
                             "-L$BUILD_DIR/src/cart/src/cart "
-                            "-L$PREFIX/lib64 -L$SPDK_PREFIX/lib "
+                            "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access (need for clang build).
     senv.AppendENVPath("CGO_LDFLAGS", cgolibdirs + \

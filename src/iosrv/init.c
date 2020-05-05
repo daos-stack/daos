@@ -161,12 +161,11 @@ register_dbtree_classes(void)
 }
 
 static int
-modules_load(uint64_t *facs)
+modules_load(void)
 {
 	char		*mod;
 	char		*sep;
 	char		*run;
-	uint64_t	 mod_facs;
 	int		 rc = 0;
 
 	D_STRNDUP(sep, modules, MAX_MODULE_OPTIONS + 1);
@@ -188,16 +187,12 @@ modules_load(uint64_t *facs)
 		else if (strcmp(mod, "vos") == 0)
 			mod = "vos_srv";
 
-		mod_facs = 0;
-		rc = dss_module_load(mod, &mod_facs);
+		rc = dss_module_load(mod);
 		if (rc != 0) {
 			D_ERROR("Failed to load module %s: %d\n",
 				mod, rc);
 			break;
 		}
-
-		if (facs != NULL)
-			*facs |= mod_facs;
 
 		mod = strsep(&run, ",");
 	}
@@ -205,6 +200,7 @@ modules_load(uint64_t *facs)
 	D_FREE(sep);
 	return rc;
 }
+
 
 /**
  * Get the appropriate number of main XS based on the number of cores and
@@ -492,6 +488,14 @@ server_init(int argc, char *argv[])
 		goto exit_abt_init;
 
 	D_INFO("Module interface successfully initialized\n");
+	/* load modules.  Split load an init so first call to dlopen
+	 * is from the ioserver to avoid DAOS-4557
+	 */
+	rc = modules_load();
+	if (rc)
+		/* Some modules may have been loaded successfully. */
+		D_GOTO(exit_mod_loaded, rc);
+	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
@@ -504,12 +508,12 @@ server_init(int argc, char *argv[])
 
 	ds_iv_init();
 
-	/* load modules */
-	rc = modules_load(&dss_mod_facs);
+	/* init modules */
+	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
 		/* Some modules may have been loaded successfully. */
 		D_GOTO(exit_mod_loaded, rc);
-	D_INFO("Module %s successfully loaded\n", modules);
+	D_INFO("Module %s successfully initialized\n", modules);
 
 	/* initialize service */
 	rc = dss_srv_init();
@@ -900,6 +904,8 @@ main(int argc, char **argv)
 	rc = parse(argc, argv);
 	if (rc)
 		exit(EXIT_FAILURE);
+
+	(void)pthread_setname_np(pthread_self(), "daos_main");
 
 	/** block all possible signals but faults */
 	sigfillset(&set);
