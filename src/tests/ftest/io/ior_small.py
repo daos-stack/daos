@@ -55,8 +55,7 @@ class IorSmall(IorTestBase):
                                               '/run/ior/iorflags/*')
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
 
-        long_flags = flags[0]
-        long_flags.append(' -O useO_DIRECT=1')
+        long_flags = "{} {}".format(flags[0], "-O useO_DIRECT=1")
         # run tests for different variants
         for oclass in obj_class:
             self.ior_cmd.daos_oclass.update(oclass)
