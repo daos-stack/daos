@@ -51,13 +51,14 @@ const (
 
 type cliOptions struct {
 	AllowProxy bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      bool       `short:"d" long:"debug" description:"Enable debug output"`
+	//Debug      string     `short:"d" long:"debug" optional:"1" optional-argument:"basic" choice:"basic" choice:"net"`
+	// works Debug      string     `short:"d" long:"debug" optional:"1" optional-value:"basic" choice:"basic" choice:"net"`
+	Debug      string     `short:"d" long:"debug" optional:"basic" optional-value:"basic" choice:"basic" choice:"net"`
 	JSONLog    bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath string     `short:"o" long:"config-path" description:"Path to agent configuration file"`
 	Insecure   bool       `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
 	RuntimeDir string     `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
 	LogFile    string     `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
-	NetworkDbg bool       `short:"n" long:"netdebug" description:"Enable extended network device scan debug output"`
 	Version    versionCmd `command:"version" description:"Print daos_agent version"`
 	NetScan    netScanCmd `command:"net-scan" description:"Perform local network fabric scan"`
 }
@@ -71,7 +72,6 @@ func (cmd *versionCmd) Execute(_ []string) error {
 }
 
 type netScanCmd struct {
-	Debug          bool   `short:"d" long:"debug" description:"Enable debug output"`
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is all providers)"`
 }
 
@@ -86,10 +86,10 @@ func (cmd *netScanCmd) Execute(args []string) error {
 		log.WithJSONOutput()
 	}
 
-	if cmd.Debug {
-		log.WithLogLevel(logging.LogLevelDebug)
-		netdetect.SetLogger(log)
-	}
+//	if cmd.Debug {
+//		log.WithLogLevel(logging.LogLevelDebug)
+//		netdetect.SetLogger(log)
+//	}
 
 	numaAware, err := netdetect.NumaAware()
 	if err != nil {
@@ -179,17 +179,18 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 		log.WithJSONOutput()
 	}
 
-	if opts.Debug {
+	switch opts.Debug {
+	case "net":
 		log.WithLogLevel(logging.LogLevelDebug)
-		log.Debug("debug output enabled")
-	}
-
-	if opts.NetworkDbg {
-		if !opts.Debug {
-			log.WithLogLevel(logging.LogLevelDebug)
-		}
 		log.Debug("extended network debug enabled")
 		netdetect.SetLogger(log)
+	case "basic":
+		log.WithLogLevel(logging.LogLevelDebug)
+		log.Debug("debug output enabled - either basic or no option")
+	case "":
+		log.Info("got the empty string, so no debug")
+	default:
+		log.Info("default no debug enabled")
 	}
 
 	ctx, shutdown := context.WithCancel(context.Background())
