@@ -98,7 +98,7 @@ Additionally, there are several optional command-line options:
 
 When DFuse starts, it will register a single mount with the kernel at the
 location specified by the `--mountpoint` option, and this mount will be
-visable in /proc/mounts, and possibly the output of df.  The contents of
+visible in /proc/mounts, and possibly the output of df.  The contents of
 multiple pools/containers will be accessible via this single kernel
 mountpoint.
 
@@ -204,7 +204,7 @@ library works in conjunction with DFuse and allows the interception of POSIX I/O
 calls and issue the I/O operations directly from the application context through
 libdaos without any application changes.  This provides kernel-bypass for I/O data
 leading to improved performance.
-To use this set the LD_PRELOAD to point to the shared library in the DOAS install
+To use this set the LD_PRELOAD to point to the shared library in the DOES install
 directory:
 
 ```

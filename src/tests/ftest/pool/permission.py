@@ -140,7 +140,7 @@ class Permission(TestWithServers):
 
         try:
             self.container = DaosContainer(self.context)
-            self.test_log.debug("Contianer initialisation successful")
+            self.test_log.debug("Container initialisation successful")
 
             self.container.create(self.pool.pool.handle)
             self.test_log.debug("Container create successful")

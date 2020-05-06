@@ -127,7 +127,7 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	rc = vos_obj_cache_create(LRU_CACHE_BITS,
 				  &imem_inst->vis_ocache);
 	if (rc) {
-		D_ERROR("Error in createing object cache\n");
+		D_ERROR("Error in creating object cache\n");
 		return rc;
 	}
 

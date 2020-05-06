@@ -10,7 +10,7 @@ General Purpose Commands:
 	* create-pool -- create a DAOS pool
 	* destroy-pool -- destroy a DAOS pool
 	* evict-pool -- logout clients that have connected to a pool
-	* help -- more of placeholder than anything truely helpful
+	* help -- more of placeholder than anything truly helpful
 
 Test Commands:
 	* connect-pool -- test connection API arguments

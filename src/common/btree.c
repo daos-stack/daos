@@ -2564,7 +2564,7 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 
 	if (cur_nd->tn_keyn > 1) {
 		/* OK to delete record without doing any extra work */
-		D_DEBUG(DB_TRACE, "Straightaway deletion, no rebalance.\n");
+		D_DEBUG(DB_TRACE, "Straight away deletion, no rebalance.\n");
 		sib_off	= BTR_NODE_NULL;
 		sib_on_right	= false; /* whatever... */
 
@@ -3319,7 +3319,7 @@ dbtree_destroy(daos_handle_t toh, void *args)
 
 /**
  * This function drains key/values from the tree, each time it deletes a KV
- * pair, it consumes a @credits, which is input paramter of this function.
+ * pair, it consumes a @credits, which is input parameter of this function.
  * It returns if all input credits are consumed, or the tree is empty, in
  * the later case, it also destroys the btree.
  *
@@ -3675,7 +3675,7 @@ dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 
 /**
  * Delete the record pointed by the current iterating cursor. This function
- * will reset interator before return, it means that caller should call
+ * will reset iterator before return, it means that caller should call
  * dbtree_iter_probe() again to reinitialize the iterator.
  *
  * \param ih		[IN]	Iterator open handle.
@@ -3816,7 +3816,7 @@ out:
 static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 
 /**
- * Intialise a tree instance from a registerd tree class.
+ * Initialise a tree instance from a registered tree class.
  */
 static int
 btr_class_init(umem_off_t root_off, struct btr_root *root,

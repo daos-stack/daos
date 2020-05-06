@@ -77,7 +77,7 @@ struct evt_desc {
  *   VOS/DTX.
  *
  * - Most part of this function table is about undo log callbacks, we might
- *   want to separate those fuctions to a dedicated function table for undo
+ *   want to separate those functions to a dedicated function table for undo
  *   log in the future. So both evtree & dbtree can share the same definition
  *   of undo log.
  */
@@ -494,7 +494,7 @@ int evt_destroy(daos_handle_t toh);
 
 /**
  * This function drains rectangles from the tree, each time it deletes a
- * rectangle, it consumes a @credits, which is input paramter of this function.
+ * rectangle, it consumes a @credits, which is input parameter of this function.
  * It returns if all input credits are consumed or the tree is empty, in the
  * later case, it also destroys the evtree.
  *
@@ -505,7 +505,7 @@ int evt_destroy(daos_handle_t toh);
 int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
 
 /**
- * Insert a new extented version \a rect and its data memory ID \a addr to
+ * Insert a new extended version \a rect and its data memory ID \a addr to
  * a opened tree.
  *
  * \param toh		[IN]	The tree open handle

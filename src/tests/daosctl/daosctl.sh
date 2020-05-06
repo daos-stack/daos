@@ -3,7 +3,7 @@
 # installation location
 
 
-# if environment indicates PSM2 is in use, add orterun settins
+# if environment indicates PSM2 is in use, add orterun settings
 MESSAGING=
 if [ "$CRT_PHY_ADDR_STR" = "ofi+psm2" ]; then
     MESSAGING="--mca mtl ^psm2,ofi"

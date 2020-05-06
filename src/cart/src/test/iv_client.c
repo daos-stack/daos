@@ -545,7 +545,7 @@ int main(int argc, char **argv)
 	else if (cur_op == OP_SHUTDOWN)
 		test_iv_shutdown();
 	else {
-		print_usage("Unsupported opration");
+		print_usage("Unsupported operation");
 		return -1;
 	}
 

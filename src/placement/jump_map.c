@@ -124,7 +124,7 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	oc_attr = daos_oclass_attr_find(oid);
 
 	if (oc_attr == NULL) {
-		D_ERROR("Can not find obj class, invlaid oid="DF_OID"\n",
+		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
 			DP_OID(oid));
 		return -DER_INVAL;
 	}
@@ -651,14 +651,14 @@ jump_map_destroy(struct pl_map *map)
  *                      placement.
  * \param[in]   mia     placement map initialization values. Part of the
  *                      placement map API but currently not used in this map.
- * \param[in]   mapp    The placement map interface that will be passed out
+ * \param[in]   map    The placement map interface that will be passed out
  *                      and used when placing objects.
  *
  * \return              The error status of the function.
  */
 static int
 jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
-		struct pl_map **mapp)
+		struct pl_map **map)
 {
 	struct pool_domain      *root;
 	struct pl_jump_map   *jmap;
@@ -689,7 +689,7 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	}
 
 	jmap->jmp_domain_nr = rc;
-	*mapp = &jmap->jmp_map;
+	*map = &jmap->jmp_map;
 
 	return DER_SUCCESS;
 

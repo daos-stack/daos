@@ -58,7 +58,7 @@
 #define LIBLUSTRE		"liblustreapi.so"
 
 static bool liblustre_notfound = false;
-/* need to protect against concurent/multi-threaded attempts to bind ? */
+/* need to protect against concurrent/multi-threaded attempts to bind ? */
 static bool liblustre_binded = false;
 static int (*dir_create_foreign)(const char *, mode_t, __u32, __u32,
 				 const char *) = NULL;
@@ -79,7 +79,7 @@ bind_liblustre()
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_TRACE, "%s has been found and dynamicaly binded !\n",
+	D_DEBUG(DB_TRACE, "%s has been found and dynamically binded !\n",
 		LIBLUSTRE);
 
 	/* now try to map the API methods we need */

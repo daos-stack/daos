@@ -235,7 +235,7 @@ dtx_check_replicas_v2(const char *dkey, const char *akey, const char *msg,
 
 		/* Leader replica will return the latest data. Non-leader may
 		 * return -DER_INPROGRESS if not committed, or the latest data
-		 * if related DTX has been committed asychronously for retry.
+		 * if related DTX has been committed asynchronously for retry.
 		 */
 		if (req->result == 0) {
 			count++;
@@ -538,7 +538,7 @@ dtx_handle_resend(void **state, uint64_t fail_loc, uint16_t oclass)
 static void
 dtx_12(void **state)
 {
-	print_message("Resend with lost single replicated obj rquest\n");
+	print_message("Resend with lost single replicated obj request\n");
 	dtx_handle_resend(state, DAOS_DTX_LOST_RPC_REQUEST | DAOS_FAIL_ALWAYS,
 			  OC_S1);
 }
@@ -556,7 +556,7 @@ dtx_14(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	print_message("Resend with lost multiple replicated obj rquest\n");
+	print_message("Resend with lost multiple replicated obj request\n");
 
 	if (!test_runable(arg, dts_dtx_replica_cnt))
 		return;

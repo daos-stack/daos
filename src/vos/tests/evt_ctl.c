@@ -1900,7 +1900,7 @@ test_evt_overlap_split_internal(void **state)
 
 finish:
 	if (tree_depth_fail)
-		fail_msg("Node not splitted\n");
+		fail_msg("Node not split\n");
 	if (mem_cmp_fail) {
 		D_PRINT("Actual Data\n");
 		D_PRINT("===========\n");

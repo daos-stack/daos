@@ -493,7 +493,7 @@ class SoakTestBase(TestWithServers):
 
         """
         # TO-DO: use daos tool when available
-        # This method assumes that doas agent is running on test node
+        # This method assumes that does agent is running on test node
         cmd = "daos cont create --pool={} --svc={} --type=POSIX".format(
             pool.uuid, ":".join(
                 [str(item) for item in pool.svc_ranks]))
@@ -647,7 +647,7 @@ class SoakTestBase(TestWithServers):
 
         Returns:
             job_cmdlist: list cmdline that can be launched
-                         by specifed job manager
+                         by specified job manager
 
         """
         job_cmdlist = []
@@ -931,7 +931,7 @@ class SoakTestBase(TestWithServers):
             self.container.read_objects(),
             "Data verification error on reserved pool"
             "after SOAK completed")
-        # gather the doas logs from the client nodes
+        # gather the does logs from the client nodes
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>", DDHHMMSS_format(
                 time.time() - start_time))

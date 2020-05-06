@@ -113,5 +113,5 @@ IOR. That engine is available on GitHub: https://github.com/daos-stack/dfio
 
 Finally, DAOS provides a tool called daos_perf which allows benchmarking to the
 DAOS object API directly or to the internal VOS API, which bypasses the client
-and network stack and reports performance accessing the storage directy using
+and network stack and reports performance accessing the storage directly using
 VOS.

@@ -39,7 +39,7 @@ static void
 dtx_handler(crt_rpc_t *rpc)
 {
 	struct dtx_in		*din = crt_req_get(rpc);
-	struct dtx_out		*dout = crt_reply_get(rpc);
+	struct dtx_out		*doubt = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dtis;
 	uint32_t		 opc = opc_get(rpc->cr_opc);

@@ -350,7 +350,7 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 		}
 		/* seems to not be implemented yet */
 		/* if (pool_info.pi_space.foo != pool_size) {
-		 * printf("space is %i, shoud be: %i\n",
+		 * printf("space is %i, should be: %i\n",
 		 *	pool_info.pi_space.foo, pool_size);
 		 *	return 1;
 		 *	}

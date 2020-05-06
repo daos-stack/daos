@@ -28,7 +28,7 @@
 #include <stdbool.h>
 
 #include <cmocka.h>
-#include <mimick.h>
+#include <mimic.h>
 
 
 #ifndef UNIT_TEST_H

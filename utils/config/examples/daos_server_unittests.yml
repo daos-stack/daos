@@ -11,7 +11,7 @@ control_log_file: /tmp/daos_control.log
 ## Transport Credentials Specifying certificates to secure communications
 ##
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # Specify to bypass loading certificates and use insecure communications channels
 #  allow_insecure: false
 #  # Location where daos_server will look for Client certificates
 #  client_cert_dir: .daos/clients

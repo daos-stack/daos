@@ -381,7 +381,7 @@ cmd_evict_pool(int argc, const char **argv, void *ctx)
 		printf("Client pool eviction failed with: %d\n",
 		       rc);
 	else
-		printf("Clients evicted from pool successfuly.\n");
+		printf("Clients evicted from pool successfully.\n");
 
 	fflush(stdout);
 
@@ -508,7 +508,7 @@ cmd_kill_server(int argc, const char **argv, void *ctx)
 		printf("Server %s kill failed with: '%s'\n",
 		       ep_options.server_list, d_errstr(rc));
 	else
-		printf("Server %s killed successfuly.\n",
+		printf("Server %s killed successfully.\n",
 		       ep_options.server_list);
 
 	fflush(stdout);

@@ -229,7 +229,7 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	D_ASSERT(vsip != NULL);
 
 	if (md->vsd_magic != VEA_MAGIC) {
-		D_DEBUG(DB_IO, "load unformated blob\n");
+		D_DEBUG(DB_IO, "load unformatted blob\n");
 		return -DER_UNINIT;
 	}
 

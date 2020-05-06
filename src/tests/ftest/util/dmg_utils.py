@@ -56,7 +56,7 @@ class DmgCommand(YamlCommand):
             path (str): path to the dmg command
             yaml_cfg (DmgYamlParameters, optional): dmg config file
                 settings. Defaults to None, in which case settings
-                must be supplied as command-line paramters.
+                must be supplied as command-line parameters.
         """
         super(DmgCommand, self).__init__("/run/dmg/*", "dmg", path, yaml_cfg)
 
@@ -571,7 +571,7 @@ class DmgCommand(YamlCommand):
         Args:
             scm_size (int): SCM pool size to create.
             uid (object, optional): User ID with privileges. Defaults to None.
-            gid (object, otional): Group ID with privileges. Defaults to None.
+            gid (object, optional): Group ID with privileges. Defaults to None.
             nvme_size (str, optional): NVMe size. Defaults to None.
             target_list (list, optional): a list of storage server unique
                 identifiers (ranks) for the DAOS pool

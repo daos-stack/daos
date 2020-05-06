@@ -601,7 +601,7 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 		evt_entry_fill(tcx, node, trace->tr_at, NULL,
 			       evt_iter_intent(iter), entry);
 
-	/* There is no visiblity flag for sorted entries but go ahead and set it
+	/* There is no visibility flag for sorted entries but go ahead and set it
 	 * EVT_COVERED if user has specified a punch epoch in the filter
 	 */
 	if (entry->en_epoch <= iter->it_filter.fr_punch)

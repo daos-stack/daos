@@ -44,7 +44,7 @@ var (
 	FaultConfigEmptyHostList = clientFault(
 		code.ClientConfigEmptyHostList,
 		"empty hostlist parameter in configuration",
-		"specify a non-empty list of DAOS server addresss in configuration ('hostlist' parameter) and retry the client application",
+		"specify a non-empty list of DAOS server address in configuration ('hostlist' parameter) and retry the client application",
 	)
 )
 

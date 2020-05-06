@@ -172,7 +172,7 @@ class PunchTest(TestWithServers):
                 print("data I read back" + thedata2.value)
                 self.fail("Wrote data, read it back, didn't match\n")
 
-            # now punch the object, commited so not expecting it to work
+            # now punch the object, committed so not expecting it to work
             obj.punch(tx_handle)
 
             # expecting punch of commit data above to fail

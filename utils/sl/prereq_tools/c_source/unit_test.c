@@ -41,7 +41,7 @@ static int mocked_fn_cnt;
 bool verbose_unit_test_output = FALSE;
 
 /*
- * Mimick requires some functions setup that are otherwise optional, but doesn't
+ * Mimic requires some functions setup that are otherwise optional, but doesn't
  * see to provide an include file with them in so define them here and
  * initialize them in main below.
  */
@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
 	int opt;
 
 	/*
-	 * Mimick requires some functions setup that are otherwise optional
+	 * Mimic requires some functions setup that are otherwise optional
 	 */
 	mmk_malloc_ = malloc;
 	mmk_realloc_ = realloc;
@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
 			verbose_unit_test_output = TRUE;
 			break;
 		default:
-			print_error("Unkown option\n");
+			print_error("Unknown option\n");
 			print_usage();
 			return 1;
 		}

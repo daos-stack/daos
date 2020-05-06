@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * DAOS pool/container intialization properties
+ * DAOS pool/container initialization properties
  */
 
 #ifndef __DAOS_PROP_H__

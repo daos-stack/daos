@@ -366,7 +366,7 @@ def find_values(obj, keys, key=None, val_type=list):
     """Find dictionary values of a certain type specified with certain keys.
 
     Args:
-        obj (obj): a python object; initailly the dictionary to search
+        obj (obj): a python object; initially the dictionary to search
         keys (list): list of keys to find their matching list values
         key (str, optional): key to check for a match. Defaults to None.
 
@@ -564,11 +564,11 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     Optionally replace the following test yaml file values if specified by the
     user via the command line arguments:
 
-        test_servers:   Use the list sepecified by the --test_servers (-ts)
+        test_servers:   Use the list specified by the --test_servers (-ts)
                         argument to replace any host name placeholders listed
                         under "test_servers:"
 
-        test_clients    Use the list sepecified by the --test_clients (-tc)
+        test_clients    Use the list specified by the --test_clients (-tc)
                         argument (or any remaining names in the --test_servers
                         list argument, if --test_clients is not specified) to
                         replace any host name placeholders listed under
@@ -597,7 +597,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     replacements = {}
 
     if args.test_servers or args.nvme:
-        # Find the test yaml keys and values that match the replacable fields
+        # Find the test yaml keys and values that match the replaceable fields
         yaml_data = get_yaml_data(yaml_file)
         yaml_keys = list(YAML_KEYS.keys())
         yaml_find = find_values(yaml_data, yaml_keys)
@@ -755,7 +755,7 @@ def run_tests(test_files, tag_filter, args):
             return_code |= time_command(
                 " ".join([item for item in test_command_list if item != ""]))
 
-            # Optionally store all of the doas server and client log files
+            # Optionally store all of the does server and client log files
             # along with the test results
             if args.archive:
                 archive_logs(avocado_logs_dir, test_file["yaml"], args)

@@ -326,8 +326,8 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			fprintf(stderr, "'sha1' isn't supported yet, please use one of the CRC option\n");
 			return -DER_INVAL;
 		} else {
-			/* fprintf(stderr, "curently supported checksum types are 'off, crc[16,32,64], sha1'\n"); */
-			fprintf(stderr, "curently supported checksum types are 'off, crc[16,32,64]'\n");
+			/* fprintf(stderr, "currently supported checksum types are 'off, crc[16,32,64], sha1'\n"); */
+			fprintf(stderr, "currently supported checksum types are 'off, crc[16,32,64]'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM;

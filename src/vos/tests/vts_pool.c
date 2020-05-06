@@ -189,7 +189,7 @@ pool_ops_run(void **state)
 				assert_false(pinfo.pif_nvme_free != 0);
 				break;
 			default:
-				fail_msg("Shoudln't be here Unkown ops?\n");
+				fail_msg("Shouldn't be here Unknown ops?\n");
 				break;
 			}
 			if (arg->ops_seq[j][i] != QUERY)

@@ -596,7 +596,7 @@ host's hostname or IP address (don't need to specify port).
 This will be the host which bootstraps the DAOS management service
 (MS).
 
-To illustrate, assume a cluster with homogenous hardware
+To illustrate, assume a cluster with homogeneous hardware
 configurations that returns the following from scan for each host:
 
 ```bash

@@ -798,7 +798,7 @@ dtx_16(void **state)
 	/* The DTX in CoS cache will make related data record as readable. */
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
-	/* Commit the fisrt 4 DTXs. */
+	/* Commit the first 4 DTXs. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1);
 	assert_int_equal(rc, 0);
 
@@ -890,7 +890,7 @@ dtx_17(void **state)
 		vts_dtx_end(dth);
 	}
 
-	/* Commit the fisrt 4 DTXs. */
+	/* Commit the first 4 DTXs. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, xid, 4);
 	assert_int_equal(rc, 0);
 

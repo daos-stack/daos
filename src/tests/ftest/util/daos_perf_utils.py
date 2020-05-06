@@ -164,7 +164,7 @@ class DaosPerfCommand(object):
             display (bool, optional): print daos_perf output to the console.
                 Defaults to True.
         Raises:
-            DaosPerfFailed: if an error occured runnig the daos_perf command
+            DaosPerfFailed: if an error occurred running the daos_perf command
         """
         command = self.get_launch_command(basepath, processes, hostfile, path)
         if display:

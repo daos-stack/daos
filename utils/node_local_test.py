@@ -360,7 +360,7 @@ def import_daos(server, conf):
 def run_daos_cmd(conf, cmd):
     """Run a DAOS command
 
-    Run a command, returing what subprocess.run() would.
+    Run a command, returning what subprocess.run() would.
 
     Enable logging, and valgrind for the command.
     """

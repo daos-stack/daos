@@ -750,7 +750,7 @@ ec_parity_recx_add(daos_recx_t *recx, daos_recx_t *r_recx, uint32_t *r_idx,
  * Add mem segment to seg_sorter, then later can pack to reassemble sgl.
  *
  * \param[in]		recx		User input recx
- * \param[in]		iod_size	recored size
+ * \param[in]		iod_size	recorded size
  * \param[in]		sgl		User input sgl
  * \param[in]		idx		index of sgl iov
  * \param[in]		off		offset of the sgl iov

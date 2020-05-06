@@ -39,7 +39,7 @@ This is the second script to run.
 This is a script that will do the following.
 
 1. Install the DAOS rpms that were previously downloaded.
-1. Find all the ELF executables and shared libaries that were installed.
+1. Find all the ELF executables and shared libraries that were installed.
 1. Find all the shared libraries from other packages that DAOS depends on.
 1. Find all the packages that provide those shared libraries.
 

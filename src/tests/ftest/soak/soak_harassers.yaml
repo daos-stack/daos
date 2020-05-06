@@ -79,7 +79,7 @@ soak_harassers:
     job_timeout: 10
     nodesperjob:
         - -1
-    # used for perfomance benchmarks
+    # used for performance benchmarks
     taskspernode:
         - 16
     poollist:

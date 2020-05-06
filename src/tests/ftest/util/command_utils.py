@@ -37,11 +37,11 @@ from general_utils import check_file_exists, stop_processes, get_log_file
 
 
 class ExecutableCommand(CommandWithParameters):
-    """A class for command with paramaters."""
+    """A class for command with parameters."""
 
     # A list of regular expressions for each class method that produces a
     # CmdResult object.  Used by the self.get_output() method to return specific
-    # values from the standard ouput yielded by the method.
+    # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
     def __init__(self, namespace, command, path="", subprocess=False):
@@ -184,7 +184,7 @@ class ExecutableCommand(CommandWithParameters):
         """
         if self._process is not None:
             # Use a list to send signals to the process with one second delays:
-            #   Interupt + wait 3 seconds
+            #   Interrupt + wait 3 seconds
             #   Terminate + wait 2 seconds
             #   Quit + wait 1 second
             #   Kill
@@ -699,7 +699,7 @@ class SubprocessManager(object):
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
-        Use the yaml file paramter values to assign the server command and
+        Use the yaml file parameter values to assign the server command and
         orterun command parameters.
 
         Args:
@@ -735,7 +735,7 @@ class SubprocessManager(object):
         self.manager.stop()
 
     def kill(self):
-        """Forcably terminate any sub process running on hosts."""
+        """Forcibly terminate any sub process running on hosts."""
         stop_processes(self._hosts, "'({})'".format("|".join(self._exe_names)))
 
     def verify_socket_directory(self, user):

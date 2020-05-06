@@ -319,7 +319,7 @@ int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 /**
  * Pause or resume flushing the free extents in aging buffer
  *
- * \param vsi       [IN]	In-memory compund index
+ * \param vsi       [IN]	In-memory compound index
  * \param plug      [IN]	Plug or unplug
  */
 void vea_flush(struct vea_space_info *vsi, bool plug);

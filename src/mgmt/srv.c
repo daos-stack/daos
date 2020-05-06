@@ -379,7 +379,7 @@ ds_mgmt_init()
 	if (rc != 0)
 		return rc;
 
-	D_DEBUG(DB_MGMT, "successfull init call\n");
+	D_DEBUG(DB_MGMT, "successful init call\n");
 	return 0;
 }
 

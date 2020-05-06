@@ -273,7 +273,7 @@ main(int argc, char **argv)
 			print_usage();
 			goto exit_1;
 		default:
-			print_error("Unkown option\n");
+			print_error("Unknown option\n");
 			print_usage();
 			goto exit_1;
 		}

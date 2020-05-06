@@ -154,7 +154,7 @@ class MissingDefinition(Exception):
 
 
 class MissingPath(Exception):
-    """Exception raised when user speficies a path that doesn't exist
+    """Exception raised when user specifies a path that doesn't exist
 
     Attributes:
         variable    -- Variable specified
@@ -219,7 +219,7 @@ class MissingSystemLibs(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "%s has unmet dependancies required for build" % self.component
+        return "%s has unmet dependencies required for build" % self.component
 
 
 class DownloadRequired(Exception):
@@ -501,7 +501,7 @@ class WebRetriever():
             hexdigest = hashlib.md5(src.read()).hexdigest()
 
         if hexdigest != self.md5:
-            print("Removing exising file %s: md5 %s != %s" % (filename,
+            print("Removing existing file %s: md5 %s != %s" % (filename,
                                                               self.md5,
                                                               hexdigest))
             os.remove(filename)
@@ -549,7 +549,7 @@ class WebRetriever():
 
         if self.url.endswith('.tar.gz') or self.url.endswith('.tgz'):
             if self.__dry_run:
-                print('Would unpack gziped tar file: %s' % basename)
+                print('Would unpack gzipped tar file: %s' % basename)
                 return
             try:
                 tfile = tarfile.open(basename, 'r:gz')

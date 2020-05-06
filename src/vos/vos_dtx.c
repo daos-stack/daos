@@ -832,7 +832,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		return rc;
 	}
 
-	/* The followings are for non-committable cases. */
+	/* The following are for non-committable cases. */
 
 	if (intent == DAOS_INTENT_DEFAULT || intent == DAOS_INTENT_REBUILD) {
 		if (!(DAE_FLAGS(dae) & DTX_EF_LEADER) ||

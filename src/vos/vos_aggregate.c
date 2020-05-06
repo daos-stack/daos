@@ -135,7 +135,7 @@ struct agg_merge_window {
 	struct agg_lgc_ent		*mw_lgc_ents;
 	unsigned int			 mw_lgc_max;
 	unsigned int			 mw_lgc_cnt;
-	/* I/O context for transfering data on flush */
+	/* I/O context for transferring data on flush */
 	struct agg_io_context		 mw_io_ctxt;
 	bool				 mw_csum_support;
 };
@@ -981,7 +981,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	if (added_csum_segs) {
 		/* Additional data requird to verify checksums is read
 		 * into end of read buffer. This allows the write data
-		 * to be placed as a single contiguous range at begining
+		 * to be placed as a single contiguous range at beginning
 		 * of the buffer.
 		 */
 		rc = csum_append_added_segs(&bsgl, added_csum_segs);
@@ -1142,7 +1142,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr)) {
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
-			 * physical entry, in additon to re-assigning address.
+			 * physical entry, in addition to re-assigning address.
 			 */
 			phy_ent->pe_csum_info = ent_in->ei_csum;
 		}

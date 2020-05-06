@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * daos iv tree defination.
+ * daos iv tree definition.
  */
 #ifndef __DAOS_SRV_IV_H__
 #define __DAOS_SRV_IV_H__

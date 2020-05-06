@@ -564,7 +564,7 @@ struct d_ulink_ops {
 struct d_ulink {
 	struct d_rlink		 ul_link;
 	struct d_uuid		 ul_uuid;
-	/** optional agrument for compare callback */
+	/** optional argument for compare callback */
 	void			*ul_cmp_args;
 	struct d_ulink_ops	*ul_ops;
 };

@@ -140,11 +140,11 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	struct dtx_req_rec	*drr = cb_info->cci_arg;
 	struct dtx_req_args	*dra = drr->drr_parent;
 	struct dtx_in		*din = crt_req_get(req);
-	struct dtx_out		*dout;
+	struct dtx_out		*doubt;
 	int			 rc = cb_info->cci_rc;
 
 	if (rc == 0) {
-		dout = crt_reply_get(req);
+		doubt = crt_reply_get(req);
 		rc = dout->do_status;
 	}
 
@@ -305,7 +305,7 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 		rc = dtx_req_send(drr, epoch);
 		if (rc != 0) {
 			/* If the first sub-RPC failed, then break, otherwise
-			 * other remote replicas may have alread received the
+			 * other remote replicas may have already received the
 			 * RPC and executed it, so have to go ahead.
 			 */
 			if (i == 0) {
@@ -561,7 +561,7 @@ out:
  * For each DTX in the given array, classify its shards. It is quite possible
  * that the shards for different DTXs reside on the same server (rank + tag),
  * then they can be sent to remote server via single DTX_COMMIT RPC and then
- * be committed by remote server via signle PMDK transaction.
+ * be committed by remote server via single PMDK transaction.
  *
  * After the DTX classification, send DTX_COMMIT RPC to related servers, and
  * then call DTX commit locally. For a DTX, it is possible that some targets

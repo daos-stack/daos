@@ -150,7 +150,7 @@ struct obj_tgt_oiod {
 };
 
 /**
- * Splitted obj request (only used on leader shard for obj update).
+ * Split obj request (only used on leader shard for obj update).
  * For object update, client sends update request to leader, the leader need to
  * split it for different targets before dispatch.
  */

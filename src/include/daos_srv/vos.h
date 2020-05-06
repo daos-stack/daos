@@ -113,7 +113,7 @@ vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
  *				the specified epoch.
  * \param dtes		[OUT]	The array for DTX entries can be committed.
  *
- * \return		Positve value for the @dtes array size.
+ * \return		Positive value for the @dtes array size.
  *			Negative value on failure.
  */
 int
@@ -482,7 +482,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_iod_t *iods, d_sg_list_t *sgls);
 
 /**
- * Update records for the specfied object.
+ * Update records for the specified object.
  * If input buffer is not provided in \a sgl, then this function returns
  * the new allocated addresses to store the records, upper layer can
  * directly write data into these addresses (rdma mode).

@@ -372,7 +372,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_ENCRYPT:
 			break;
 		default:
-			D_ERROR("invaid dpe_type %d.\n", type);
+			D_ERROR("invalid dpe_type %d.\n", type);
 			return false;
 		}
 	}

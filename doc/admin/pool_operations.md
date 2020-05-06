@@ -259,7 +259,7 @@ $ dmg pool exclude --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},$
 The pool target exclude command accepts 3 required parameters:
 
 * The pool UUID of the pool that the targets will be excluded from.
-* The rank of the target(s) te be excluded.
+* The rank of the target(s) to be excluded.
 * The target Indices of the targets to be excluded from that rank.
 
 ### Target Reintegration

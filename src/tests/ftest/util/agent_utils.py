@@ -57,7 +57,7 @@ class DaosAgentCommand(YamlCommand):
         Args:
             path (str): path to location of daos_agent binary
             yaml_cfg (DaosAgentYamlParameters, optional): agent configuration
-                parameters. Defauts to None.
+                parameters. Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 60 seconds.
         """
@@ -146,7 +146,7 @@ class DaosAgentManager(SubprocessManager):
         """Stop the agent through the job manager.
 
         Raises:
-            CommandFailure: if there was an errror stopping the agents.
+            CommandFailure: if there was an error stopping the agents.
 
         """
         self.log.info("<AGENT> Stopping agent %s command", self.manager.command)

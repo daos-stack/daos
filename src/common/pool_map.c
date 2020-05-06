@@ -1404,10 +1404,10 @@ pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
  *
  * \param buf		[IN]	The buffer to input pool components.
  * \param version	[IN]	Version for the new created pool map.
- * \param mapp		[OUT]	The returned pool map.
+ * \param map		[OUT]	The returned pool map.
  */
 int
-pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
+pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **map)
 {
 	struct pool_domain *tree = NULL;
 	struct pool_map	   *map = NULL;
@@ -1449,7 +1449,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 
 	map->po_version = version;
 	map->po_ref = 1; /* 1 for caller */
-	*mapp = map;
+	*map = map;
 	return 0;
  failed:
 	if (tree != NULL)
@@ -1772,7 +1772,7 @@ matched_criteria(struct find_tgts_param *param,
  * \param sorter  [IN]	Sorter for the output targets array
  * \param tgt_pp  [OUT]	The output target array, if tgt_pp == NULL, it only
  *                      needs to get the tgt count, otherwise it will
- *                      allocate the tgts arrary.
+ *                      allocate the tgts array.
  * \param tgt_cnt [OUT]	The size of target array
  *
  * \return	0 on success, negative values on errors.
@@ -1929,7 +1929,7 @@ pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 
 /**
  * Find all targets with @status in specific rank. Note: &tgt_pp will be
- * allocated and the caller is reponsible to free it.
+ * allocated and the caller is responsible to free it.
  */
 int
 pool_map_find_by_rank_status(struct pool_map *map,
@@ -2046,7 +2046,7 @@ pool_domain_print(struct pool_domain *domain, int dep)
 }
 
 /**
- * Print all componenets of the pool map, this is a debug function.
+ * Print all components of the pool map, this is a debug function.
  */
 void
 pool_map_print(struct pool_map *map)

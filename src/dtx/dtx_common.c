@@ -311,7 +311,7 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		 * background dedicated DTXs batched commit ULT has
 		 * not committed them in time. Let's retry later.
 		 */
-		D_DEBUG(DB_TRACE, "Too many pontential conflict DTXs"
+		D_DEBUG(DB_TRACE, "Too many potential conflict DTXs"
 			" for the given "DF_DTI", let's retry later.\n",
 			DP_DTI(dti));
 		D_FREE(dlh->dlh_subs);
@@ -628,7 +628,7 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 	int	rc;
 
 	if (daos_is_zero_dti(dti))
-		/* If DTX is disabled, then means that the appplication does
+		/* If DTX is disabled, then means that the application does
 		 * not care about the replicas consistency. Under such case,
 		 * if client resends some modification RPC, then just handle
 		 * it as non-resent case, return -DER_NONEXIST.

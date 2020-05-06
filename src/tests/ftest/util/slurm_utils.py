@@ -55,9 +55,9 @@ def cancel_jobs(job_id):
 
 
 def create_slurm_partition(nodelist, name):
-    """Create a slurm partion for soak jobs.
+    """Create a slurm partition for soak jobs.
 
-    client nodes will be allocated for this partiton
+    client nodes will be allocated for this partition
     Args:
         nodelist (list): list of nodes for job allocation
         name (str): partition name
@@ -74,7 +74,7 @@ def create_slurm_partition(nodelist, name):
 
 
 def delete_slurm_partition(name):
-    """Create a slurm partion for soak jobs.
+    """Create a slurm partition for soak jobs.
 
     Remove the partition from slurm
     Args:

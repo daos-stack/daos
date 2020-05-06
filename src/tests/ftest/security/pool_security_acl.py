@@ -85,7 +85,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
                       " user_type: %s, permission: %s, expect_read: %s,"
                       " expect_write: "
                       "%s.", user_type, permission, read, write)
-        #take care of the user_type which have higher priviledge
+        #take care of the user_type which have higher privilege
         for ind in range(5):
             if ind < user_type_ind:
                 test_acl_entries[ind] = ""

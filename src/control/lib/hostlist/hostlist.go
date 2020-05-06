@@ -485,7 +485,7 @@ func (hl *HostList) getNthHostRange(n int) (int, *hostRange, int, error) {
 	return -1, nil, 0, errors.New("unknown error")
 }
 
-// Nth returns the string represenation of the n-th host in
+// Nth returns the string representation of the n-th host in
 // the HostList. Returns an error if the index is invalid.
 func (hl *HostList) Nth(n int) (string, error) {
 	hl.RLock()

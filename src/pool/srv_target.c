@@ -574,7 +574,7 @@ aggregate_pool_space(struct daos_pool_space *agg_ps,
 	D_ASSERT(agg_ps && ps);
 
 	if (ps->ps_ntargets == 0) {
-		D_DEBUG(DB_TRACE, "Skip emtpy space info\n");
+		D_DEBUG(DB_TRACE, "Skip empty space info\n");
 		return;
 	}
 

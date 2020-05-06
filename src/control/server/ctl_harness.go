@@ -106,7 +106,7 @@ func (hc *harnessClient) call(ctx context.Context, addr string, rpcReq *mgmtpb.R
 }
 
 // Query sends Status gRPC using the MgmtSvcClient to the control server at the
-// specified address to guage the responsiveness of the specified ranks.
+// specified address to gauge the responsiveness of the specified ranks.
 //
 // Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
