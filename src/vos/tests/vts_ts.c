@@ -267,8 +267,9 @@ struct index_record {
 	uint32_t value;
 };
 
-#define LRU_ARRAY_SIZE	32
-#define NUM_INDEXES	128
+#define LRU_ARRAY_SIZE		32
+#define LRU_ARRAY_LEVELS	4
+#define NUM_INDEXES		128
 struct lru_arg {
 	struct lru_array	*array;
 	struct index_record	 indexes[NUM_INDEXES];
@@ -565,6 +566,66 @@ lru_array_stress_test(void **state)
 	D_FREE(stress_entries);
 }
 
+static void
+lru_array_multi_test_iter(void **state)
+{
+	struct lru_arg		*ts_arg = *state;
+	struct lru_record	*entry;
+	int			 i;
+	bool			 found;
+
+
+	for (i = 0; i < NUM_INDEXES; i++) {
+		found = lrua_lookup(ts_arg->array, &ts_arg->indexes[i].idx,
+				    (void **)&entry);
+		assert_false(found);
+	}
+
+	for (i = 0; i < NUM_INDEXES; i++) {
+		entry = lrua_alloc(ts_arg->array, &ts_arg->indexes[i].idx);
+		if (entry == NULL) {
+			assert_true(i >= LRU_ARRAY_SIZE);
+			lrua_evict(ts_arg->array,
+				   &ts_arg->indexes[i - LRU_ARRAY_SIZE].idx);
+			entry = lrua_alloc(ts_arg->array,
+					   &ts_arg->indexes[i].idx);
+		}
+		assert_non_null(entry);
+		entry->record = &ts_arg->indexes[i];
+		ts_arg->indexes[i].value = i;
+	}
+
+	for (i = NUM_INDEXES - 1; i >= 0; i--) {
+		found = lrua_lookup(ts_arg->array, &ts_arg->indexes[i].idx,
+				    (void **)&entry);
+		if (found) {
+			assert_true(i >= (NUM_INDEXES - LRU_ARRAY_SIZE));
+			assert_non_null(entry);
+			assert_true(entry->magic1 == MAGIC1);
+			assert_true(entry->magic2 == MAGIC2);
+			assert_true(i == ts_arg->indexes[i].value);
+			assert_true(entry->idx == ts_arg->indexes[i].idx);
+		} else {
+			assert_false(i >= (NUM_INDEXES - LRU_ARRAY_SIZE));
+			assert_null(entry);
+			assert_true(ts_arg->indexes[i].value == 0xdeadbeef);
+		}
+
+		/** Ok to evict entries not in the array */
+		lrua_evict(ts_arg->array, &ts_arg->indexes[i].idx);
+	}
+}
+
+static void
+lru_array_multi_test(void **state)
+{
+	struct lru_arg	*ts_arg = *state;
+
+	lru_array_multi_test_iter(state);
+	lrua_array_aggregate(ts_arg->array);
+	lru_array_multi_test_iter(state);
+}
+
 static int
 init_lru_test(void **state)
 {
@@ -578,6 +639,24 @@ init_lru_test(void **state)
 	rc = lrua_array_alloc(&ts_arg->array, LRU_ARRAY_SIZE, 1,
 			      sizeof(struct lru_record), 0, &lru_cbs,
 			      ts_arg);
+
+	*state = ts_arg;
+	return rc;
+}
+
+static int
+init_lru_multi_test(void **state)
+{
+	struct lru_arg		*ts_arg;
+	int			 rc;
+
+	D_ALLOC_PTR(ts_arg);
+	if (ts_arg == NULL)
+		return 1;
+
+	rc = lrua_array_alloc(&ts_arg->array, LRU_ARRAY_SIZE, LRU_ARRAY_LEVELS,
+			      sizeof(struct lru_record), LRU_FLAG_REUSE_UNIQUE,
+			      &lru_cbs, ts_arg);
 
 	*state = ts_arg;
 	return rc;
@@ -607,6 +686,8 @@ static const struct CMUnitTest ts_tests[] = {
 		finalize_lru_test},
 	{ "VOS600.2: LRU array stress", lru_array_stress_test, init_lru_test,
 		finalize_lru_test},
+	{ "VOS600.4: LRU multi-level array", lru_array_multi_test,
+		init_lru_multi_test, finalize_lru_test},
 	{ "VOS600.3: VOS timestamp allocation test", ilog_test_ts_get,
 		alloc_ts_cache, NULL},
 };

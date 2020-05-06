@@ -205,6 +205,9 @@ lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key)
 	ent_idx = idx & array->la_idx_mask;
 
 	sub = &array->la_sub[sub_idx];
+	if (sub->ls_table == NULL)
+		return NULL;
+
 	entry = &sub->ls_table[ent_idx];
 	if (entry->le_key == key) {
 		if (!array->la_evicting) {
@@ -393,5 +396,13 @@ lrua_array_alloc(struct lru_array **array, uint32_t nr_ent, uint32_t nr_arrays,
  */
 void
 lrua_array_free(struct lru_array *array);
+
+/** Aggregate the LRU array
+ *
+ * Frees up extraneous unused subarrays.   Only applies to arrays with more
+ * than 1 sub arrray.
+ */
+void
+lrua_array_aggregate(struct lru_array *array);
 
 #endif /* __LRU_ARRAY__ */
