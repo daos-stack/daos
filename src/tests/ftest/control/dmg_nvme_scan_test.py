@@ -29,6 +29,7 @@ from dmg_utils import DmgCommand
 from apricot import TestWithServers
 from avocado.utils import process
 
+
 class DmgNvmeScanTest(TestWithServers):
     """Test Class Description:
     Simple test to verify the scan function of the dmg tool.
