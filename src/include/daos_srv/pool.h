@@ -135,8 +135,10 @@ int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
-int ds_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *ranks,
-		uint32_t reint_rank, struct pool_target_id_list *reint_list);
+int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
+				uint32_t rank,
+				struct pool_target_id_list *target_list,
+				pool_comp_state_t state);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,

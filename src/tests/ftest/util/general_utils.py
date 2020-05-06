@@ -31,6 +31,7 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
+from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 from avocado.utils import process

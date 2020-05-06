@@ -47,6 +47,7 @@ type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
 	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
+	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude a list of targets from a rank"`
 	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate a list of targets for a rank"`
 	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
@@ -155,6 +156,37 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-destroy command %s\n", msg)
+
+	return err
+}
+
+// PoolExcludeCmd is the struct representing the command to exclude a DAOS target.
+type PoolExcludeCmd struct {
+	logCmd
+	ctlInvokerCmd
+	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to exclude a target from"`
+	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be excluded"`
+	Targetidx string `long:"target-idx" required:"1" description:"Comma-seperated list of target idx(s) to be excluded from the rank"`
+}
+
+// Execute is run when PoolExcludeCmd subcommand is activated
+func (r *PoolExcludeCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	var idxlist []uint32
+	if err := common.ParseNumberList(r.Targetidx, &idxlist); err != nil {
+		return errors.WithMessage(err, "parsing rank list")
+	}
+
+	req := &control.PoolExcludeReq{UUID: r.UUID, Rank: r.Rank, Targetidx: idxlist}
+
+	ctx := context.Background()
+	err := control.PoolExclude(ctx, r.ctlInvoker, req)
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	r.log.Infof("Exclude command %s\n", msg)
 
 	return err
 }
