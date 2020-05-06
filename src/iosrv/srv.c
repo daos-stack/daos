@@ -344,12 +344,14 @@ dss_nvme_poll_ult(void *args)
 static void
 wait_all_exited(struct dss_xstream *dx)
 {
-	size_t	total_size = 0, pool_size;
-	int	rc, i;
-
 	D_DEBUG(DB_TRACE, "XS(%d) draining ULTs.\n", dx->dx_xs_id);
 	while (1) {
+		size_t	total_size = 0;
+		int	i;
+
 		for (i = 0; i < DSS_POOL_CNT; i++) {
+			size_t	pool_size;
+			int	rc;
 			rc = ABT_pool_get_total_size(dx->dx_pools[i],
 						     &pool_size);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
@@ -382,19 +384,23 @@ dss_srv_handler(void *arg)
 	int				 rc;
 	bool				 signal_caller = true;
 
-	/** set affinity */
+	/**
+	 * Set cpu affinity
+	 */
 	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
 	if (rc) {
 		D_ERROR("failed to set cpu affinity: %d\n", errno);
 		goto signal;
 	}
 
+	/**
+	 * Set memory affinity, but fail silently if it does not work since some
+	 * systems return ENOSYS.
+	 */
 	rc = hwloc_set_membind(dss_topo, dx->dx_cpuset, HWLOC_MEMBIND_BIND,
 			       HWLOC_MEMBIND_THREAD);
-	if (rc) {
-		D_ERROR("failed to set memory affinity: %d\n", errno);
-		goto signal;
-	}
+	if (rc)
+		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG);
