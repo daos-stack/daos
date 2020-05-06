@@ -431,9 +431,9 @@ static const struct CMUnitTest gc_tests[] = {
 int
 run_gc_tests(const char *cfg)
 {
-	char	test_name[100];
+	char	test_name[CFG_MAX];
 
-	sprintf(test_name, "Garbage collector %s", cfg);
+	create_config(test_name, "Garbage collector %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   gc_tests, gc_setup, gc_teardown);
 }
