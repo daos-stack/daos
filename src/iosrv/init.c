@@ -905,8 +905,6 @@ main(int argc, char **argv)
 	if (rc)
 		exit(EXIT_FAILURE);
 
-	(void)pthread_setname_np(pthread_self(), "daos_main");
-
 	/** block all possible signals but faults */
 	sigfillset(&set);
 	sigdelset(&set, SIGILL);
