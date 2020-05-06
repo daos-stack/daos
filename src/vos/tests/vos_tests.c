@@ -39,8 +39,6 @@
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
 
-static char	config_description[50];
-
 static void
 print_usage()
 {
@@ -81,45 +79,46 @@ static int akey_feats[] = {
 static inline int
 run_all_tests(int keys, bool nest_iterators)
 {
-	int	failed = 0;
-	int	feats;
-	int	i;
-	int	j;
-	int	length = 0;
-	char	*bypass = getenv("DAOS_IO_BYPASS");
+	const char	*bypass = getenv("DAOS_IO_BYPASS");
+	const char	*it;
+	char		 cfg_desc_io[CFG_MAX];
+	int		 failed = 0;
+	int		 feats;
+	int		 i;
+	int		 j;
 
-	length += sprintf(config_description+length, "keys=%d", keys);
+	if (!bypass)
+		bypass = "none";
 
-	if (bypass)
-		length += sprintf(config_description+length,
-				  " bypass=%s", bypass);
-	else
-		length += sprintf(config_description+length,
-				  " bypass=none");
-	if (nest_iterators)
-		length += sprintf(config_description+length,
-				  " iterator=nested");
-	else
-		length += sprintf(config_description+length,
-				  " iterator=standalone");
+	create_config(cfg_desc_io, "keys=%d bypass=%s", keys, bypass);
 
-	failed += run_pm_tests(config_description);
-	failed += run_pool_test(config_description);
-	failed += run_co_test(config_description);
+	if (nest_iterators == false) {
+		failed += run_pm_tests(cfg_desc_io);
+		failed += run_pool_test(cfg_desc_io);
+		failed += run_co_test(cfg_desc_io);
+		failed += run_discard_tests(cfg_desc_io);
+		failed += run_aggregate_tests(false, cfg_desc_io);
+		failed += run_gc_tests(cfg_desc_io);
+		failed += run_dtx_tests(cfg_desc_io);
+		failed += run_ilog_tests(cfg_desc_io);
+		failed += run_csum_extent_tests(cfg_desc_io);
+		failed += run_mvcc_tests(cfg_desc_io);
+
+		it = "standalone";
+	} else {
+		it = "nested";
+	}
+	create_config(cfg_desc_io, "keys=%d bypass=%s iterator=%s", keys,
+		      bypass, it);
+
 	for (i = 0; dkey_feats[i] >= 0; i++) {
 		for (j = 0; akey_feats[j] >= 0; j++) {
 			feats = dkey_feats[i] | akey_feats[j];
 			failed += run_io_test(feats, keys, nest_iterators,
-					      config_description);
+					      cfg_desc_io);
 		}
 	}
-	failed += run_discard_tests(config_description);
-	failed += run_aggregate_tests(false, config_description);
-	failed += run_gc_tests(config_description);
-	failed += run_dtx_tests(config_description);
-	failed += run_ilog_tests(config_description);
-	failed += run_csum_extent_tests(config_description);
-	failed += run_mvcc_tests(config_description);
+
 	return failed;
 }
 
@@ -207,11 +206,11 @@ main(int argc, char **argv)
 				  long_options, &index)) != -1) {
 		switch (opt) {
 		case 'p':
-			nr_failed += run_pool_test(config_description);
+			nr_failed += run_pool_test("");
 			test_run = true;
 			break;
 		case 'c':
-			nr_failed += run_co_test(config_description);
+			nr_failed += run_co_test("");
 			test_run = true;
 			break;
 		case 'n':
@@ -221,28 +220,28 @@ main(int argc, char **argv)
 			ofeats = strtol(optarg, NULL, 16);
 			nr_failed += run_io_test(ofeats, 0,
 						 nest_iterators,
-						 config_description);
+						 "");
 			test_run = true;
 			break;
 		case 'a':
 			nr_failed += run_aggregate_tests(true,
-							 config_description);
+							 "");
 			test_run = true;
 			break;
 		case 'd':
-			nr_failed += run_discard_tests(config_description);
+			nr_failed += run_discard_tests("");
 			test_run = true;
 			break;
 		case 'g':
-			nr_failed += run_gc_tests(config_description);
+			nr_failed += run_gc_tests("");
 			test_run = true;
 			break;
 		case 'X':
-			nr_failed += run_dtx_tests(config_description);
+			nr_failed += run_dtx_tests("");
 			test_run = true;
 			break;
 		case 'm':
-			nr_failed += run_pm_tests(config_description);
+			nr_failed += run_pm_tests("");
 			test_run = true;
 			break;
 		case 'A':
@@ -251,19 +250,19 @@ main(int argc, char **argv)
 			test_run = true;
 			break;
 		case 'l':
-			nr_failed += run_ilog_tests(config_description);
+			nr_failed += run_ilog_tests("");
 			test_run = true;
 			break;
 		case 'z':
-			nr_failed += run_csum_extent_tests(config_description);
+			nr_failed += run_csum_extent_tests("");
 			test_run = true;
 			break;
 		case 't':
-			nr_failed += run_ts_tests();
+			nr_failed += run_ts_tests("");
 			test_run = true;
 			break;
 		case 'C':
-			nr_failed += run_mvcc_tests(config_description);
+			nr_failed += run_mvcc_tests("");
 			test_run = true;
 			break;
 		case 'f':
