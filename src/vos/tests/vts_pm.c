@@ -1302,9 +1302,9 @@ static const struct CMUnitTest punch_model_tests[] = {
 int
 run_pm_tests(const char *cfg)
 {
-	char	test_name[100];
+	char	test_name[CFG_MAX];
 
-	sprintf(test_name, "VOS Punch Model tests %s", cfg);
+	create_config(test_name, "VOS Punch Model tests %s", cfg);
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
 	return cmocka_run_group_tests_name(test_name,
