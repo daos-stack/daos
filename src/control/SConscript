@@ -160,7 +160,7 @@ def scons():
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
                        sep=" ")
 
-    agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
+    agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
     dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
     drpcbin = install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
 
