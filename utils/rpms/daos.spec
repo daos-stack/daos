@@ -1,10 +1,10 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 %global spdk_version 19.04.1
-%global cart_version 4.6.1
+%global cart_version 4.7.0
 
 Name:          daos
-Version:       0.9.2
+Version:       0.9.4
 Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -317,8 +317,15 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Thu Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.2-2
+* Thu Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.4-2
 - Move fuse dependencies to the client subpackage
+
+* Mon May 04 2020 Johann Lombardi <johann.lombardi@intel.com> - 0.9.4-1
+- Version bump up to 0.9.4
+
+* Fri May 01 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 0.9.3-1
+- Version bump up to 0.9.3
+- Updated to cart tag v4.7.0
 
 * Fri Apr 17 2020 Johann Lombardi <johann.lombardi@intel.com> - 0.9.2-1
 - Version bump up to 0.9.2

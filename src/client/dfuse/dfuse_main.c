@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,6 +125,7 @@ main(int argc, char **argv)
 	struct dfuse_pool	*dfpn;
 	struct dfuse_dfs	*dfs = NULL;
 	struct dfuse_dfs	*dfsn;
+	uuid_t			tmp_uuid;
 	char			c;
 	int			ret = -DER_SUCCESS;
 	int			rc;
@@ -225,6 +226,20 @@ main(int argc, char **argv)
 		printf("Svcl is required\n");
 		show_help(argv[0]);
 		exit(1);
+	}
+
+	if (dfuse_info->di_pool) {
+		if (uuid_parse(dfuse_info->di_pool, tmp_uuid) < 0) {
+			printf("Invalid pool uuid\n");
+			exit(1);
+		}
+
+		if (dfuse_info->di_cont) {
+			if (uuid_parse(dfuse_info->di_cont, tmp_uuid) < 0) {
+				printf("Invalid container uuid");
+				exit(1);
+			}
+		}
 	}
 
 	if (!dfuse_info->di_foreground) {

@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from __future__ import print_function
-
 import traceback
 import uuid
 
@@ -30,6 +28,7 @@ from apricot import TestWithServers
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from avocado.core.exceptions import TestFail
+from pydaos.raw import c_uuid
 
 RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
@@ -64,7 +63,7 @@ class OpenContainerTest(TestWithServers):
             Open container with valid and invalid pool handle and container
             UUID
 
-        :avocado: tags=all,container,tiny,full_regression,containeropen
+        :avocado: tags=all,container,tiny,full_regression,container_open
         """
         self.pool = []
         self.container = []
@@ -93,7 +92,7 @@ class OpenContainerTest(TestWithServers):
                 expected_result = RESULT_FAIL
                 break
 
-        # Prepare the messages for the 3 test cases
+        # Prepare the messages for the 3 test cases.
         # Test Bug! indicates that there's something wrong with the test since
         # it shouldn't reach that point
         messages_case_1 = [
@@ -125,19 +124,17 @@ class OpenContainerTest(TestWithServers):
         # Create the pool and connect. Then create the container from the pool
         # Add the pool and the container created into a list
         container_uuids = []
-        #for i in range(2):
-        i = 0
-        while i < 2:
+        for _ in range(2):
             self.pool.append(TestPool(
                 self.context, dmg_command=self.get_dmg_command()))
             self.pool[-1].get_params(self)
             self.pool[-1].create()
             self.pool[-1].connect()
-            self.container.append(TestContainer(self.pool[-1]))
+            self.container.append(TestContainer(pool=self.pool[-1]))
             self.container[-1].get_params(self)
             self.container[-1].create()
             container_uuids.append(uuid.UUID(self.container[-1].uuid))
-            i += 1
+            #container_cuuids.append(self.container[-1].container.uuid)
 
         # Decide which pool handle and container UUID to use. The PASS/FAIL
         # number corresponds to the index for self.pool and container_uuids
@@ -146,27 +143,41 @@ class OpenContainerTest(TestWithServers):
 
         # Case 1
         try:
-            self.container[0].open(self.pool[pool_handle_index].pool
-                                   .handle.value,
-                                   container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS,
-                             result_messages[test_case][0])
+            self.container[0].open(
+                self.pool[pool_handle_index].pool.handle.value,
+                container_uuids[container_uuid_index])
+            self.assertEqual(
+                expected_result, RESULT_PASS, result_messages[test_case][0])
         except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
-            self.assertEqual(expected_result, RESULT_FAIL,
-                             result_messages[test_case][1])
+            self.assertEqual(
+                expected_result, RESULT_FAIL, result_messages[test_case][1])
+            # Calling container.open with invalid pool handle or UUID results
+            # in setting them in the underlying DaosContainer's member. When we
+            # try to destroy it with API in tearDown, it'll pass in the invalid
+            # handle/UUID member to the API and causes an error. Reset them
+            # back to the original values.
+            self.container[0].container.poh = \
+                self.pool[0].pool.handle.value
+            # For some reason, directly setting uuid causes an error during
+            # destroy, so use c_uuid as in DaosContainer class.
+            c_uuid(container_uuids[0], self.container[0].container.uuid)
+
         # Case 2. Symmetric to Case 1. Use the other handle and UUID
         pool_handle_index = pool_handle_index ^ 1
         container_uuid_index = container_uuid_index ^ 1
         try:
-            self.container[1].open(self.pool[pool_handle_index].pool
-                                   .handle.value,
-                                   container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS,
-                             result_messages[test_case][2])
+            self.container[1].open(
+                self.pool[pool_handle_index].pool.handle.value,
+                container_uuids[container_uuid_index])
+            self.assertEqual(
+                expected_result, RESULT_PASS, result_messages[test_case][2])
         except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
-            self.assertEqual(expected_result, RESULT_FAIL,
-                             result_messages[test_case][3])
+            self.assertEqual(
+                expected_result, RESULT_FAIL, result_messages[test_case][3])
+            self.container[1].container.poh = \
+                self.pool[1].pool.handle.value
+            c_uuid(container_uuids[1], self.container[1].container.uuid)
