@@ -229,6 +229,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
+	case *control.PoolExcludeReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExcludeResp{})
 	case *control.PoolReintegrateReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
 	}
