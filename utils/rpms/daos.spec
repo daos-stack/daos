@@ -317,7 +317,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Thu Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.4-2
+* Wed May 06 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.4-2
 - Move fuse dependencies to the client subpackage
 
 * Mon May 04 2020 Johann Lombardi <johann.lombardi@intel.com> - 0.9.4-1
