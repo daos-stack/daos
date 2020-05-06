@@ -49,6 +49,7 @@
 #define UUID_STR_LEN	37
 #endif
 
+static uint32_t		TEST_IDXS[] = {0, 1, 2};
 static const char	*TEST_ACES[] = {"A::OWNER@:rw",
 					"A::niceuser@:rw",
 					"A:G:GROUP@:r"};
@@ -109,8 +110,9 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_get_attach_info);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_join);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_create);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_reintegrate);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_destroy);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_exclude);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_reintegrate);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_get_acl);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_overwrite_acl);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_update_acl);
@@ -1509,6 +1511,111 @@ test_drpc_pool_create_invalid_acl(void **state)
 }
 
 /*
+ * Pool exclude test setup
+ */
+static int
+drpc_exclude_setup(void **state)
+{
+	mock_ds_mgmt_exclude_setup();
+	return 0;
+}
+
+/*
+ * dRPC pool exclude tests
+ */
+static void
+pack_pool_exclude_req(Drpc__Call *call, Mgmt__PoolExcludeReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__pool_exclude_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_exclude_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
+{
+	Mgmt__PoolExcludeReq req = MGMT__POOL_EXCLUDE_REQ__INIT;
+
+	req.uuid = uuid;
+	req.n_targetidx = 1;
+	req.rank = rank;
+	req.targetidx = TEST_IDXS;
+	pack_pool_exclude_req(call, &req);
+}
+
+static void
+expect_drpc_exclude_resp_with_error(Drpc__Response *resp, int exp_error)
+{
+	Mgmt__PoolExcludeResp	*pc_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pc_resp = mgmt__pool_exclude_resp__unpack(NULL, resp->body.len,
+						 resp->body.data);
+	assert_non_null(pc_resp);
+	assert_int_equal(pc_resp->status, exp_error);
+
+	mgmt__pool_exclude_resp__free_unpacked(pc_resp, NULL);
+}
+
+static void
+test_drpc_exclude_bad_uuid(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_exclude_drpc_call(&call, "BAD", 0);
+
+	ds_mgmt_drpc_pool_exclude(&call, &resp);
+
+	expect_drpc_exclude_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_exclude_mgmt_svc_fails(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_exclude_drpc_call(&call, TEST_UUID, 0);
+	ds_mgmt_target_update_return = -DER_UNKNOWN;
+
+	ds_mgmt_drpc_pool_exclude(&call, &resp);
+	expect_drpc_exclude_resp_with_error(&resp,
+					       ds_mgmt_target_update_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_exclude_success(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_exclude_drpc_call(&call, TEST_UUID, 0);
+	ds_mgmt_drpc_pool_exclude(&call, &resp);
+
+	expect_drpc_exclude_resp_with_error(&resp, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
  * dRPC pool reintegrate tests
  */
 static void
@@ -1846,6 +1953,9 @@ test_drpc_cont_set_owner_success(void **state)
 #define QUERY_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_pool_query_setup)
 
+#define EXCLUDE_TEST(x)	cmocka_unit_test_setup(x, \
+						drpc_exclude_setup)
+
 #define REINTEGRATE_TEST(x)	cmocka_unit_test(x)
 
 #define POOL_CREATE_TEST(x)	cmocka_unit_test(x)
@@ -1892,6 +2002,9 @@ main(void)
 			test_drpc_pool_set_prop_invalid_value_type),
 		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_uuid),
 		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_success),
+		EXCLUDE_TEST(test_drpc_exclude_bad_uuid),
+		EXCLUDE_TEST(test_drpc_exclude_mgmt_svc_fails),
+		EXCLUDE_TEST(test_drpc_exclude_success),
 		REINTEGRATE_TEST(test_drpc_reintegrate_bad_uuid),
 		QUERY_TEST(test_drpc_pool_query_bad_uuid),
 		QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),

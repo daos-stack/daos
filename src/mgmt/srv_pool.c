@@ -659,8 +659,9 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 }
 
 int
-ds_mgmt_pool_reintegrate(uuid_t pool_uuid, uint32_t reint_rank,
-		struct pool_target_id_list *reint_list)
+ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
+				 struct pool_target_id_list *target_list,
+				 pool_comp_state_t state)
 {
 	int			rc;
 	d_rank_list_t		*ranks;
@@ -674,9 +675,8 @@ ds_mgmt_pool_reintegrate(uuid_t pool_uuid, uint32_t reint_rank,
 	if (rc != 0)
 		goto out_svc;
 
-	D_DEBUG(DB_MGMT, "Reintegrating targets for pool "DF_UUID"\n",
-			DP_UUID(pool_uuid));
-	rc = ds_pool_reintegrate(pool_uuid, ranks, reint_rank, reint_list);
+	rc = ds_pool_target_update_state(pool_uuid, ranks, rank, target_list,
+					 state);
 
 	d_rank_list_free(ranks);
 out_svc:

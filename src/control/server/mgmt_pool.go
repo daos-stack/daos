@@ -25,6 +25,7 @@ package server
 
 import (
 	"strings"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -33,6 +34,13 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+)
+
+const (
+	// poolCreateRetryDelay defines the amount of time between pool create retries.
+	// In the management service, the system map distribution code has a 3s backoff
+	// for distribution errors.
+	poolCreateRetryDelay = 1500 * time.Millisecond
 )
 
 // PoolCreate implements the method defined for the Management Service.
@@ -63,19 +71,42 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, req)
-	if err != nil {
-		return nil, err
+	try := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, req)
+		if err != nil {
+			return nil, err
+		}
+
+		resp := &mgmtpb.PoolCreateResp{}
+		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal PoolCreate response")
+		}
+
+		svc.log.Debugf("MgmtSvc.PoolCreate dispatch, try %d, resp:%+v\n", try, *resp)
+
+		ds := drpc.DaosStatus(resp.GetStatus())
+		switch ds {
+		// retryable errors
+		case drpc.DaosGroupVersionMismatch:
+			svc.log.Infof("MgmtSvc.PoolCreate (try %d), retrying due to %s", try, ds)
+			try++
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(poolCreateRetryDelay):
+				continue
+			}
+		default:
+			return resp, nil
+		}
 	}
-
-	resp := &mgmtpb.PoolCreateResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
-	}
-
-	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, resp:%+v\n", *resp)
-
-	return resp, nil
 }
 
 // PoolDestroy implements the method defined for the Management Service.
@@ -106,6 +137,38 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// PoolExclude implements the method defined for the Management Service.
+func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq) (*mgmtpb.PoolExcludeResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if req.GetUuid() == "" {
+		// TODO: do we want to validate pool exists via ListPools?
+		return nil, errors.New("nil UUID")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolExclude dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolExclude, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolExcludeResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolExclude response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolExclude dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }
