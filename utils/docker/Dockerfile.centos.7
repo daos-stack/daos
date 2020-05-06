@@ -79,7 +79,8 @@ RUN yum -y install \
 #  - excluding mpi4py as it depends on CORCI-635
 RUN pip3 install avocado-framework; \
     pip3 install avocado-framework-plugin-result-html; \
-    pip3 install avocado-framework-plugin-varianter-yaml-to-mux
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux; \
+    pip3 install codespell
 
 # Add DAOS user
 ENV USER daos
