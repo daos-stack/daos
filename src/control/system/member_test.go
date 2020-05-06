@@ -345,7 +345,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 	}
 	expStates := []MemberState{
 		MemberStateStopped,
-		MemberStateErrored,
+		MemberStateStopped, // errored results don't change member state
 		MemberStateEvicted,
 		MemberStateJoined,
 	}

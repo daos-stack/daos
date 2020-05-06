@@ -241,6 +241,10 @@ func (svc *ControlService) pingMembers(ctx context.Context, req *control.RanksRe
 func (svc *ControlService) SystemQuery(parent context.Context, pbReq *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
 	svc.log.Debug("Received SystemQuery RPC")
 
+	if pbReq == nil {
+		return nil, errors.New("nil request")
+	}
+
 	req := &control.RanksReq{
 		Ranks: system.RanksFromUint32(pbReq.GetRanks()),
 	}
@@ -313,6 +317,7 @@ func (svc *ControlService) shutdown(ctx context.Context, req *control.RanksReq) 
 	}
 	results = append(results, msResults...)
 
+	svc.log.Debugf("shutdown: %+v ", results)
 	if err := svc.membership.UpdateMemberStates(results); err != nil {
 		return nil, err
 	}
@@ -325,6 +330,10 @@ func (svc *ControlService) shutdown(ctx context.Context, req *control.RanksReq) 
 // Initiate controlled shutdown of DAOS system, return results for each rank.
 func (svc *ControlService) SystemStop(parent context.Context, pbReq *ctlpb.SystemStopReq) (*ctlpb.SystemStopResp, error) {
 	svc.log.Debug("Received SystemStop RPC")
+
+	if pbReq == nil {
+		return nil, errors.New("nil request")
+	}
 
 	req := &control.RanksReq{
 		Ranks: system.RanksFromUint32(pbReq.GetRanks()),
@@ -394,6 +403,7 @@ func (svc *ControlService) start(ctx context.Context, req *control.RanksReq) (sy
 	for _, r := range results {
 		if !r.Errored {
 			if r.State != system.MemberStateReady {
+				svc.log.Errorf("unexpected results: %v", r)
 				continue
 			}
 			// don't update members to "Ready" if already "Joined"
@@ -420,6 +430,10 @@ func (svc *ControlService) start(ctx context.Context, req *control.RanksReq) (sy
 // Initiate controlled start of DAOS system, return results for each rank.
 func (svc *ControlService) SystemStart(parent context.Context, pbReq *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
 	svc.log.Debug("Received SystemStart RPC")
+
+	if pbReq == nil {
+		return nil, errors.New("nil request")
+	}
 
 	req := &control.RanksReq{
 		Ranks: system.RanksFromUint32(pbReq.GetRanks()),

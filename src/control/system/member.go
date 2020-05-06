@@ -405,6 +405,9 @@ func (m *Membership) Members(rankList []Rank, excludedStates ...MemberState) (ms
 
 // UpdateMemberStates updates member's state according to result state.
 //
+// Only update member state if result is a success, ping will update current
+// member state.
+//
 // TODO: store error message in membership
 func (m *Membership) UpdateMemberStates(results MemberResults) error {
 	m.Lock()
@@ -414,7 +417,9 @@ func (m *Membership) UpdateMemberStates(results MemberResults) error {
 		if _, found := m.members[result.Rank]; !found {
 			return FaultMemberMissing(result.Rank)
 		}
-
+		if result.Errored {
+			continue
+		}
 		m.members[result.Rank].SetState(result.State)
 	}
 
