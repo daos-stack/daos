@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1222,8 +1222,8 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	int			 rc = 0;
 
 	/** validate input parameters */
-	if (unlikely(crt_ctx == CRT_CONTEXT_NULL)) {
-		D_ERROR("invalid parameter (NULL crt_ctx).\n");
+	if (unlikely(crt_ctx == CRT_CONTEXT_NULL || cond_cb == NULL)) {
+		D_ERROR("invalid parameter (%p)\n", cond_cb);
 		return -DER_INVAL;
 	}
 
@@ -1261,46 +1261,41 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 			hg_timeout = timeout;
 	}
 
+	/**
+	 * Call progress once before processing timeouts in case
+	 * any replies are pending in the queue
+	 */
+	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
+	if (unlikely(rc && rc != -DER_TIMEDOUT)) {
+		D_ERROR("crt_hg_progress failed with %d\n", rc);
+		return rc;
+	}
+
 	/** loop until callback returns non-null value */
 	while ((rc = cond_cb(arg)) == 0) {
-		int ret;
-
-		/**
-		 * Call progress once before processing timeouts in case
-		 * in case any replies are pending in the queue
-		 */
-		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
-		if (unlikely(rc && rc != -DER_TIMEDOUT))
-			D_ERROR("crt_hg_progress failed with %d\n", rc);
-
 		crt_context_timeout_check(ctx);
 		crt_exec_progress_cb(ctx);
 
-		ret = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
-		if (unlikely(ret && ret != -DER_TIMEDOUT)) {
-			D_ERROR("crt_hg_progress failed with %d\n", ret);
+		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
+		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
+			D_ERROR("crt_hg_progress failed with %d\n", rc);
 			return ret;
 		}
 
 		/** check for timeout */
 		if (timeout < 0)
 			continue;
-		if (timeout == 0) {
-			/** try callback once last time just in case */
+
+		now = d_timeus_secdiff(0);
+		if (timeout == 0 || now >= end) {
+			/** try callback one last time just in case */
 			rc = cond_cb(arg);
 			if (unlikely(rc != 0))
 				break;
 			return -DER_TIMEDOUT;
 		}
 
-		now = d_timeus_secdiff(0);
-		if (now >= end) {
-			/** try callback once last time just in case */
-			rc = cond_cb(arg);
-			if (unlikely(rc != 0))
-				break;
-			return -DER_TIMEDOUT;
-		}
+		/** adjust timeout */
 		if (end - now > 1000 * 1000)
 			hg_timeout = 1000 * 1000;
 		else
