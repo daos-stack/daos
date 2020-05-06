@@ -414,13 +414,20 @@ func (m *Membership) UpdateMemberStates(results MemberResults) error {
 	defer m.Unlock()
 
 	for _, result := range results {
-		if _, found := m.members[result.Rank]; !found {
-			return FaultMemberMissing(result.Rank)
-		}
 		if result.Errored {
 			continue
 		}
-		m.members[result.Rank].SetState(result.State)
+
+		member, found := m.members[result.Rank]
+		if !found {
+			return FaultMemberMissing(result.Rank)
+		}
+
+		// don't update members to "Ready" if already "Joined"
+		if result.State == MemberStateReady && member.State() == MemberStateJoined {
+			continue
+		}
+		member.SetState(result.State)
 	}
 
 	return nil
