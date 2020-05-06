@@ -91,14 +91,8 @@ array_alloc_one(struct lru_array *array, struct lru_sub *sub)
 	if (sub->ls_table == NULL)
 		return -DER_NOMEM;
 
-	if (sub->ls_array_idx == 0) {
-		/** For index 0, the link field is allocated list head */
-		D_INIT_LIST_HEAD(&sub->ls_link);
-	} else {
-		/** Remove from free list and add to allocated list */
-		d_list_del(&sub->ls_link);
-		d_list_add_tail(&sub->ls_link, &array->la_sub[0].ls_link);
-	}
+	/** Add newly allocated ones to head of list */
+	d_list_add(&sub->ls_link, &array->la_free_sub);
 
 	payload = sub->ls_payload = &sub->ls_table[nr_ents];
 	sub->ls_lru = LRU_NO_IDX;
@@ -149,20 +143,27 @@ static inline void
 manual_find_free(struct lru_array *array, struct lru_entry **entryp,
 		 uint32_t *idx, uint64_t key)
 {
-	struct lru_sub	*sub;
+	struct lru_sub	*sub = NULL;
 	int		 rc;
 
 	/** First search already allocated lists */
-	d_list_for_each_entry(sub, &array->la_sub[0].ls_link, ls_link) {
-		if (sub_find_free(array, sub, entryp, idx, key))
+	d_list_for_each_entry(sub, &array->la_free_sub, ls_link) {
+		if (sub_find_free(array, sub, entryp, idx, key)) {
+			if (sub->ls_free == LRU_NO_IDX) {
+				/** Remove the entry from the free sub list so
+				 * we stop looking in it.
+				 */
+				d_list_del(&sub->ls_link);
+			}
 			return;
+		}
 	}
 
 	/** No free entries */
-	if (d_list_empty(&array->la_free_sub))
+	if (d_list_empty(&array->la_unused_sub))
 		return; /* No free sub arrays either */
 
-	sub = d_list_entry(&array->la_free_sub, struct lru_sub, ls_link);
+	sub = d_list_entry(&array->la_unused_sub, struct lru_sub, ls_link);
 	rc = array_alloc_one(array, sub);
 	if (rc != 0)
 		return;
@@ -174,18 +175,19 @@ void
 lrua_find_free(struct lru_array *array, struct lru_entry **entryp,
 	       uint32_t *idx, uint64_t key)
 {
-	struct lru_sub		*sub = &array->la_sub[0];
+	struct lru_sub		*sub;
 	struct lru_entry	*entry;
 
 	*entryp = NULL;
-
-	if (sub_find_free(array, sub, entryp, idx, key))
-		return;
 
 	if (array->la_flags & LRU_FLAG_EVICT_MANUAL) {
 		manual_find_free(array, entryp, idx, key);
 		return;
 	}
+
+	sub = &array->la_sub[0];
+	if (sub_find_free(array, sub, entryp, idx, key))
+		return;
 
 	entry = &sub->ls_table[sub->ls_lru];
 	/** Key should not be 0, otherwise, it should be in free list */
@@ -229,6 +231,13 @@ lrua_evictx(struct lru_array *array, uint32_t idx, uint64_t key)
 
 	/** Remove from active list */
 	lrua_remove_entry(sub, &sub->ls_lru, entry, ent_idx);
+
+	if (sub->ls_free == LRU_NO_IDX &&
+	    array->la_flags & LRU_FLAG_EVICT_MANUAL) {
+		/** Add the entry back to the free list */
+		d_list_add_tail(&array->la_sub[idx].ls_link,
+				&array->la_free_sub);
+	}
 
 	/** Insert in free list */
 	lrua_insert(sub, &sub->ls_free, entry, ent_idx,
@@ -290,11 +299,12 @@ lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent, uint32_t nr_arrays,
 
 	/** Only allocate one sub array, add the rest to free list */
 	D_INIT_LIST_HEAD(&array->la_free_sub);
+	D_INIT_LIST_HEAD(&array->la_unused_sub);
 	array->la_sub[0].ls_array_idx = 0;
 	for (idx = 1; idx < nr_arrays; idx++) {
 		array->la_sub[idx].ls_array_idx = idx;
 		d_list_add_tail(&array->la_sub[idx].ls_link,
-				&array->la_free_sub);
+				&array->la_unused_sub);
 	}
 
 	rc = array_alloc_one(array, &array->la_sub[0]);

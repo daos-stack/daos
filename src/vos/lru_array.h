@@ -61,8 +61,8 @@ struct lru_sub {
 	uint32_t		 ls_array_idx;
 	/** Padding */
 	uint32_t		 ls_pad;
-	/** For array idx 0, this is the head of the array list
-	 *  Otherwise, it is the link for the entry in the list
+	/** Link in the array free/unused list.  If the subarray has no free
+	 *  entries, it is removed from either list so this field is unused.
 	 */
 	d_list_t		 ls_link;
 	/** Allocated payload entries */
@@ -95,8 +95,10 @@ struct lru_array {
 	uint32_t		 la_array_shift;
 	/** First level mask */
 	uint32_t		 la_idx_mask;
-	/** Free list of sub arrays */
+	/** Subarrays with free entries */
 	d_list_t		 la_free_sub;
+	/** Unallocated subarrays */
+	d_list_t		 la_unused_sub;
 	/** Callbacks for implementation */
 	struct lru_callbacks	 la_cbs;
 	/** User callback argument passed on init */
