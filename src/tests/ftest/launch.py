@@ -33,6 +33,7 @@ import subprocess
 from sys import version_info
 import time
 import yaml
+import errno
 
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
@@ -151,13 +152,22 @@ def set_test_environment(args):
         net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
         for device in sorted(net_list):
             # Get the interface state - only include active (up) interfaces
-            with open(os.path.join(net_path, device, "operstate"), "r") as fh:
-                state = fh.read().strip()
+            with open(os.path.join(net_path, device, "operstate"), "r") as \
+                 fileh:
+                state = fileh.read().strip()
             # Only include interfaces that are up
             if state.lower() == "up":
                 # Get the interface speed - used to select the fastest available
-                with open(os.path.join(net_path, device, "speed"), "r") as fh:
-                    speed = int(fh.read().strip())
+                with open(os.path.join(net_path, device, "speed"), "r") as \
+                    fileh:
+                    try:
+                        speed = int(fileh.read().strip())
+                        # KVM/Qemu/libvirt returns an EINVAL
+                    except IOError as ioerror:
+                        if ioerror.errno == errno.EINVAL:
+                            speed = 1000
+                        else:
+                            raise
                 print(
                     "  - {0:<5} (speed: {1:>6} state: {2})".format(
                         device, speed, state))
@@ -971,7 +981,7 @@ def install_debuginfos():
             "sudo debuginfo-install -y --exclude ompi-debuginfo,gcc-debuginfo,"
             "gcc-base-debuginfo daos-server libpmemobj python openmpi3")
     else:
-        import yum
+        import yum # pylint: disable=import-error
 
         yum_base = yum.YumBase()
         yum_base.conf.assumeyes = True

@@ -38,6 +38,9 @@ class DmgCommand(YamlCommand):
 
     METHOD_REGEX = {
         "run": r"(.*)",
+        "network_scan": r"(?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))"
+                        r"(?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+"
+                        r"([a-z0-9+;_]+))",
         # Sample output of dmg pool list.
         # wolf-3:10001: connected
         # Pool UUID                            Svc Replicas
@@ -507,6 +510,27 @@ class DmgCommand(YamlCommand):
 
         return result
 
+    def network_scan(self, provider=None, all_devs=False):
+        """Get the result of the dmg network scan command.
+
+        Args:
+            provider (str): name of network provider tied to the device
+            all_devs (bool, optional): Show all devs  info. Defaults to False.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage scan command fails.
+
+        """
+        self.set_sub_command("network")
+        self.sub_command_class.set_sub_command("scan")
+        self.sub_command_class.sub_command_class.provider.value = provider
+        self.sub_command_class.sub_command_class.all.value = all_devs
+        return self._get_result()
+
     def storage_scan(self):
         """Get the result of the dmg storage scan command.
 
@@ -723,6 +747,30 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list")
+        return self._get_result()
+
+    def pool_set_prop(self, pool, name, value):
+        """Set property for a given Pool.
+
+        Args:
+            pool (str): Pool uuid for which property is supposed
+                        to be set.
+            name (str): Property name to be set
+            value (str): Property value to be set
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool set-prop command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("set-prop")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.name.value = name
+        self.sub_command_class.sub_command_class.value.value = value
         return self._get_result()
 
 

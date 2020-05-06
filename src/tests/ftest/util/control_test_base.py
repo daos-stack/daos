@@ -24,7 +24,7 @@
 
 from avocado import fail_on
 from apricot import TestWithServers
-from general_utils
+from general_utils import get_host_data
 from command_utils import CommandFailure
 
 

@@ -83,6 +83,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/test_gurt"
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/utest_swim"
+    run_test "${SL_PREFIX}/bin/vos_tests" -t
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm

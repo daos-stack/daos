@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -65,9 +65,6 @@ class ConnectTest(TestWithServers):
             uid = os.geteuid()
             gid = os.getegid()
 
-            # TODO make these params in the yaml
-            daosctl = self.basepath + '/install/bin/daosctl'
-
             host1 = self.hostlist_servers[0]
             host2 = self.hostlist_servers[1]
 
@@ -77,7 +74,7 @@ class ConnectTest(TestWithServers):
                 "-u {2} "
                 "-g {3} "
                 "-s {4} "
-                "-c 1".format(daosctl, "0731", uid, gid, setid))
+                "-c 1".format(self.daosctl, "0731", uid, gid, setid))
             uuid_str = """{0}""".format(process.system_output(create_cmd))
             print("uuid is {0}\n".format(uuid_str))
 
@@ -91,7 +88,7 @@ class ConnectTest(TestWithServers):
                           format(uuid_str, host2))
 
             connect_cmd = ('{0} connect-pool -i {1} '
-                           '-s {2} -r -l 0,1'.format(daosctl,
+                           '-s {2} -r -l 0,1'.format(self.daosctl,
                                                      uuid_str, setid))
             process.system(connect_cmd)
 
