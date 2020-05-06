@@ -581,14 +581,14 @@ pipeline {
                         // cycle through debug, release, and dev builds
                         sconsBuild clean: "_build.external${arch}",
                                    failure_artifacts: 'config.log-centos7-gcc-debug',
-                                   BUILD_TYPE: 'debug'
+                                   BUILD_TYPE: 'debug', scons_args: '-j 4'
                         sconsBuild skip_clean: '1', failure_artifacts: 'config.log-centos7-gcc-release',
-                                   BUILD_TYPE: 'release'
+                                   BUILD_TYPE: 'release', build_deps: 'no'
                         sconsBuild skip_clean: '1', failure_artifacts: 'config.log-centos7-gcc-dev',
-                                   BUILD_TYPE: 'dev'
+                                   BUILD_TYPE: 'dev', build_deps: 'no', scons_args: '-j 4'
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
-                        stash name: 'CentOS-tests',
+                        stash name: 'CentOS-tests', scons_args: '-j 4'
                                     includes: '''build/dev/gcc/src/cart/src/utest/test_linkage,
                                                  build/dev/gcc/src/cart/src/utest/test_gurt,
                                                  build/dev/gcc/src/cart/src/utest/utest_hlc,
