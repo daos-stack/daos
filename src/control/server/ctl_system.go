@@ -70,13 +70,17 @@ func getRanksFunc(method ranksMethod) systemRanksFunc {
 // addresses through functions implementing UnaryInvoker.
 func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq, method ranksMethod) (system.MemberResults, error) {
 	if svc.membership == nil {
-		return nil, errors.New("no system membership found on host")
+		return nil, errors.New("nil system membership")
+	}
+	if len(svc.membership.Ranks()) == 0 {
+		return nil, errors.New("empty system membership")
 	}
 	if len(req.Ranks) == 0 {
-		req.Ranks = svc.membership.Ranks() // empty rankList implies update all ranks
+		req.Ranks = svc.membership.Ranks() // empty rankList implies include all ranks
 	}
 
 	req.SetHostList(svc.membership.Hosts(req.Ranks...))
+	svc.log.Debugf("host list %v", req.HostList)
 	resp, err := getRanksFunc(method)(ctx, svc.rpcClient, req)
 	if err != nil {
 		return nil, err
