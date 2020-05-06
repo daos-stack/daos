@@ -31,7 +31,7 @@
 #include "dfuse_obj_da.h"
 #include "dfuse_vector.h"
 
-#define CASE(valuep, old, new) \
+#define CAS(valuep, old, new) \
 	atomic_compare_exchange(valuep, old, new)
 
 union ptr_lock {
@@ -56,7 +56,7 @@ acquire_ptr_lock(union ptr_lock *lock)
 
 		old_value = new_value;
 		new_value |= 1;
-		if (CASE(&lock->value, old_value, new_value))
+		if (CAS(&lock->value, old_value, new_value))
 			break;
 	}
 

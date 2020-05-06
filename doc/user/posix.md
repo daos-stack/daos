@@ -204,7 +204,7 @@ library works in conjunction with DFuse and allows the interception of POSIX I/O
 calls and issue the I/O operations directly from the application context through
 libdaos without any application changes.  This provides kernel-bypass for I/O data
 leading to improved performance.
-To use this set the LD_PRELOAD to point to the shared library in the DOES install
+To use this set the LD_PRELOAD to point to the shared library in the DAOS install
 directory:
 
 ```
