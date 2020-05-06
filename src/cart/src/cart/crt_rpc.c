@@ -202,7 +202,7 @@ crt_internal_rpc_register(void)
 
 	rc = crt_proto_register(&cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_register_internal() failed. rc %d\n", rc);
+		D_ERROR("crt_proto_register() failed. rc %d\n", rc);
 
 	return rc;
 }
