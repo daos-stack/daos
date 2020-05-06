@@ -34,7 +34,6 @@ from errno import ENOENT
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
-from avocado.utils import process
 
 
 class DaosTestError(Exception):
@@ -49,11 +48,8 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     command string on the local host using subprocess.Popen(). Even though the
     command is specified as a string, since shell=False is passed to process.run
     it will use shlex.spit() to break up the command into a list before it is
-    passed to subprocess.Popen. The shell=False is forced for security.
-
-    As a result typically any command containing ";", "|", "&&", etc. will fail.
-    This can be avoided in command strings like "for x in a b; echo $x; done"
-    by using "/usr/bin/bash -c 'for x in a b; echo $x; done'".
+    passed to subprocess.Popen. The shell=False is forced for security. As a
+    result typically any command containing ";", "|", "&&", etc. will fail.
 
     Args:
         command (str): command to run.
@@ -90,6 +86,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 pid             - command's pid
 
     """
+    msg = None
     kwargs = {
         "cmd": command,
         "timeout": timeout,
@@ -103,9 +100,19 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         # Block until the command is complete or times out
         return process.run(**kwargs)
 
+    except TypeError as error:
+        # Can occur if using env with a non-string dictionary values
+        msg = "Error running '{}': {}".format(command, error)
+        if env is not None:
+            msg = "\n".join([
+                msg,
+                "Verify env values are defined as strings: {}".format(env)])
+
     except process.CmdError as error:
         # Command failed or possibly timed out
-        msg = "Error occurred running '{}': {}".format(" ".join(command), error)
+        msg = "Error occurred running '{}': {}".format(command, error)
+
+    if msg is not None:
         print(msg)
         raise DaosTestError(msg)
 
@@ -168,6 +175,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
 
     # Report command output if requested or errors are detected
     if verbose or errors:
+        print("Command:\n  {}".format(command))
         print("Command return codes:")
         for retcode in sorted(retcode_dict):
             print("  {}: rc={}".format(retcode_dict[retcode], retcode))

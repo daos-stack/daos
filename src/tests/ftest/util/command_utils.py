@@ -236,7 +236,7 @@ class ExecutableCommand(CommandWithParameters):
                     time.sleep(5)
 
             if not signal_list:
-                if state and len(state) == 1 and state[0] not in ("D", "Z"):
+                if state and (len(state) > 1 or state[0] not in ("D", "Z")):
                     # Indicate an error if the process required a SIGKILL and
                     # either multiple processes were still found running or the
                     # parent process was in any state except uninterruptible
