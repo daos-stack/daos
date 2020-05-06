@@ -23,12 +23,15 @@
 """
 from __future__ import print_function
 
-from dmg_utils import pool_query, get_pool_query_info
+import re
+
 from ior_test_base import IorTestBase
+from control_test_base import ControlTestBase
 from test_utils_pool import TestPool
+from general_utils import human_to_bytes
 
 
-class DmgPoolQueryTest(IorTestBase):
+class DmgPoolQueryTest(ControlTestBase, IorTestBase):
     """Test Class Description:
     Simple test to verify the pool query command of dmg tool.
     :avocado: recursive
@@ -39,133 +42,135 @@ class DmgPoolQueryTest(IorTestBase):
         super(DmgPoolQueryTest, self).setUp()
 
         # Init the pool
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, dmg_command=self.dmg)
         self.pool.get_params(self)
         self.pool.create()
         self.uuid = self.pool.pool.get_uuid_str()
 
-        # Get the host list with port to provide the dmg command
-        self.port = self.params.get("port", "/run/server_config/*")
-        self.host_p = ["{}:{}".format(host, self.port)
-                       for host in self.hostlist_servers]
+    def get_pool_query_info(self, uuid):
+        """Get the information from the dmg pool query command."""
+        self.log.info("==>   Running dmg pool query:")
+        kwargs = {"pool": uuid}
+        pool_query = self.get_dmg_output("pool_query", **kwargs)
+
+        # Clean up empty string from each list. 'pool_query' should look like:
+        # [['217afbae-534f-4d8f-9e49-74cbfb8ad155', '8', '0'],
+        # ['8'],
+        # ['2.0 GB', '2.0 GB', '250 MB', '250 MB', '250 MB'],
+        # ['16 GB', '16 GB', '2.0 GB', '2.0 GB', '2.0 GB'],
+        # ['0', '0']]
+        pool_query_info = {}
+        if pool_query:
+            for idx, info in enumerate(pool_query):
+                pool_query[idx] = [i for i in info if i]
+
+            pool_query_info = {
+                "pool_info": pool_query[0],
+                "target_cnt": pool_query[1],
+                "scm_info": pool_query[2],
+                "nvme_info": pool_query[3],
+                "rebuild_info": pool_query[4]
+            }
+        return pool_query_info
 
     def test_pool_query_basic(self):
         """
         JIRA ID: DAOS-2976
+
         Test Description: Test basic dmg functionality to query pool info on
         the system. Provided a valid pool UUID, verify the output received from
         pool query command.
-        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic,poolquerybasic
+
+        :avocado: tags=all,small,pr,hw,dmg,pool_query,basic,poolquerybasic
         """
-        self.log.info("Running dmg pool query")
-        dmg_out = pool_query(self.bin, self.host_p, self.uuid)
+        self.log.info("==>   Verify dmg output against expected output:")
+        dmg_info = self.get_pool_query_info(self.uuid)
+        exp_info = {
+            "pool_info": self.params.get("pool_info", "/run/exp_vals/"),
+            "target_cnt": self.params.get("target_cnt", "/run/exp_vals/"),
+            "scm_info": self.params.get("scm_info", "/run/exp_vals/"),
+            "nvme_info": self.params.get("nvme_info", "/run/exp_vals/"),
+            "rebuild_info": self.params.get("rebuild_info", "/run/exp_vals/"),
+        }
 
-        if dmg_out and dmg_out.exit_status == 0:
-            # Parse output
-            d_info = get_pool_query_info(dmg_out.stdout)
-            self.log.info("dmg values found: %s", d_info)
+        # Add the expected uuid value
+        exp_info["pool_info"].insert(0, self.uuid.upper())
 
-            e_info = self.params.get("exp_vals", "/run/*")
-            self.log.info("Expected values are: %s", e_info)
-
-            # Verify
-            if d_info != e_info:
-                self.fail("dmg pool query expected output: {}".format(e_info))
+        if exp_info != dmg_info:
+            self.log.info("==>   Found difference in dmg output and expected.")
+            self.fail("dmg pool-query: \n{} \nexpected: \n{}".format(
+                dmg_info, exp_info))
         else:
-            self.log.info("dmg pool query failed to execute.")
-            if dmg_out:
-                self.fail("pool-query-failure: {}".format(dmg_out.stderr))
+            self.log.info("==>   Expect values found in dmg pool query output.")
 
     def test_pool_query_inputs(self):
         """
         JIRA ID: DAOS-2976
+
         Test Description: Test basic dmg functionality to query pool info on
         the system. Verify the inputs that can be provided to 'query --pool'
         argument of the dmg pool subcommand.
-        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic,poolqueryinputs
+
+        :avocado: tags=all,small,pr,hw,dmg,pool_query,basic,poolqueryinputs
         """
-        # Get test UUID
-        uuids = self.params.get("uuids", '/run/pool_uuids/*')
+        # Get test UUIDs
         errors_list = []
+        uuids = self.params.get("uuids", '/run/pool_uuids/*')
+
+        # Disable raising an exception if the dmg command fails
+        self.dmg.exit_status_exception = False
+
         for uuid in uuids:
-            self.log.info("Using test UUID: %s", uuid[0])
-            self.log.info("Running dmg pool query")
-            dmg_out = pool_query(self.bin, self.host_p, uuid[0])
+            self.log.info("\n==>   Using test UUID: %s", uuid[0])
+            self.log.info("==>   Test is expected to finish with: %s", uuid[1])
 
             # Verify
-            self.log.info("Test is expected to finish with: %s", uuid[1])
-            if dmg_out is None:
+            if self.get_pool_query_info(uuid[0]):
+                exception = None
+            elif not self.get_pool_query_info(uuid[0]):
                 exception = 1
-            else:
-                if dmg_out.exit_status == 0:
-                    exception = None
-                else:
-                    exception = 1
 
             if uuid[1] == "FAIL" and exception is None:
-                errors_list.append("Command was expected to fail:" + uuid[0])
+                errors_list.append("==>   Test expected to fail:" + uuid[0])
             elif uuid[1] == "PASS" and exception:
-                errors_list.append("Command expected to pass: " + uuid[0])
+                errors_list.append("==>   Test expected to pass: " + uuid[0])
 
+        # Enable exceptions again for dmg.
+        self.dmg.exit_status_exception = True
+
+        # Report errors and fail test if needed.
         if errors_list:
             for err in errors_list:
-                self.log.error("Failure: %s", err)
-            self.fail("Failed dmg pool query input test")
+                self.log.error("==>   Failure: %s", err)
+            self.fail("Failed dmg pool query input test.")
 
     def test_pool_query_ior(self):
         """
         JIRA ID: DAOS-2976
+
         Test Description: Test that pool query command will properly and
         accurately show the size changes once there is content in the pool.
-        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic,poolqueryior
+
+        :avocado: tags=all,small,pr,hw,dmg,pool_query,basic,poolqueryior
         """
-        # Store orignal pool info and run ior
-        self.log.info("Getting pool info before writting data")
-        out_before_ior = pool_query(self.bin, self.host_p, self.uuid)
-        if out_before_ior.exit_status == 1:
-            self.fail("pool-query-failure: {}".format(out_before_ior.stderr))
+        # Store orignal pool info
+        self.log.info("==>   Getting pool info before writting data.")
+        out_b_ior = self.get_pool_query_info(self.uuid)
+        self.log.info("==>   dmg values found: %s", out_b_ior)
+
+        #  Run ior
         self.run_ior_with_pool()
 
         # Check pool written data
-        self.log.info("Getting pool info after ior run")
-        out_after_ior = pool_query(self.bin, self.host_p, self.uuid)
-        if out_after_ior.exit_status == 1:
-            self.fail("pool-query-failure: {}".format(out_after_ior.stderr))
-
-        # Parse output of dmg command before running ior
-        orig_pool_info = get_pool_query_info(out_before_ior.stdout)
-        self.log.info("dmg values found: %s", orig_pool_info)
-
-        # Parse output of dmg command after running ior
-        curr_pool_info = get_pool_query_info(out_after_ior.stdout)
-        self.log.info("dmg values found: %s", curr_pool_info)
+        self.log.info("==>   Getting pool info after ior run.")
+        out_a_ior = self.get_pool_query_info(self.uuid)
+        self.log.info("==>   dmg values found: %s", out_a_ior)
 
         # Compare info
-        for mem in ["s_free", "n_free"]:
-            orig_value, orig_unit = parse_space_value(orig_pool_info[mem])
-            curr_value, curr_unit = parse_space_value(curr_pool_info[mem])
-            if orig_value <= curr_value:
+        for mem in ["scm_info", "nvme_info"]:
+            bytes_orig_val = human_to_bytes(out_b_ior[mem][1])
+            bytes_curr_val = human_to_bytes(out_a_ior[mem][1])
+
+            if bytes_orig_val <= bytes_curr_val:
                 self.fail("Free space should be less than: {}".format(
-                    orig_value))
-            elif orig_unit != curr_unit:
-                self.fail("Free space unit don't seem right: {}".format(
-                    orig_unit))
-
-
-def parse_space_value(space_str):
-    """ Parse a string and return the value and unit individually.
-
-    Args:
-        space_str (str): string representing space information. i.e. 3GB
-
-    Returns:
-        value, unit (int, str): returns to the user the values parsed.
-
-    """
-    value, unit = ""
-    for i in space_str:
-        if i.isdigit():
-            value += i
-        elif i.isalpha():
-            unit += i
-    return int(value), unit
+                    out_b_ior[mem][1]))

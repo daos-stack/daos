@@ -12,9 +12,16 @@ server_config:
   servers:
     targets: 8
     bdev_class: nvme
-    bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
+
+pool:
+  control_method: dmg
+  mode: 146
+  scm_size: "2GB"
+  nvme_size: "16GB"
+  name: daos_server
 
 ior:
   client_processes:
@@ -22,32 +29,13 @@ ior:
   ior_flags: "-w -W -k -G 1"
   transfer_size: "32M"
   block_size: "1G"
-exp_vals:
-  ntarget: "8"
-  s_mem: "3GB"
-  n_mem: "0B"
-  s_free: "3GB"
-  s_free_min: "384MB"
-  s_free_max: "384MB"
-  s_free_mean: "384MB"
-  n_free: "0B"
-  n_free_min: "0B"
-  n_free_max: "0B"
-  n_free_mean: "0B"
-  # n_free: "2GB"
-  # n_free_min: "238MB"
-  # n_free_max: "238MB"
-  # n_free_mean: "238MB"
-  r_status: "idle"
-  r_objs: "0"
-  r_recs: "0"
 
-pool:
-  control_method: dmg
-  mode: 146
-  scm_size: "3G"
-  nvme_size: "2G"
-  name: daos_server
+exp_vals:
+  pool_info: ['8', '0']
+  target_cnt: ['8']
+  scm_info: ['2.0 GB', '2.0 GB', '250 MB', '250 MB', '250 MB']
+  nvme_info: ['16 GB', '16 GB', '2.0 GB', '2.0 GB', '2.0 GB']
+  rebuild_info: ['0', '0']
 
 pool_uuids:
   uuids:
@@ -77,9 +65,9 @@ pool_uuids:
       - "FAIL"
     -
       # special_chars
-      - "! @#$%^&*()_+{}|:<>?-=[];',./"
+      - "! @#$%^&*()_+{}|:<>?-=[];,./"
       - "FAIL"
     -
       # special_aplanumeric_chars
-      - "abc-=*12----1@3c-4%DE-&5_,0789GHij)(+.k"
+      - "abc-=*12----1@3c-4%DE-&5_,0+.k"
       - "FAIL"

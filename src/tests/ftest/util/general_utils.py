@@ -40,6 +40,27 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
+def human_to_bytes(h_size):
+    """Convert human readable size values to respective byte value.
+
+    Args:
+        h_size (str): human readable size value to be converted.
+    """
+    units = {"b": 1, "kb": (2**10), "mb": (2**20), "gb": (2**30)}
+    pattern = r"([0-9.]+|[a-zA-Z]+)"
+    val, unit = re.findall(pattern, h_size)
+
+    # Check if float or int and then convert
+    val = float(val) if "." in val else int(val)
+    if unit.lower() in units:
+        val = val * units[unit.lower()]
+    else:
+        print("Unit not found! Provide a valid unit i.e: b, kb, mb, gb")
+        val = -1
+
+    return val
+
+
 def run_task(hosts, command, timeout=None):
     """Create a task to run a command on each host in parallel.
 
