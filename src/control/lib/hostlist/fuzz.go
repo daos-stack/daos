@@ -34,7 +34,7 @@ package hostlist
 // running the fuzzer.
 //
 // The most recent run:
-// 2019/11/15 07:24:09 workers: 4, corpus: 641 (1h10m ago), crashes: 0, restarts: 1/9998, execs: 134399056 (3727/sec), cover: 1339, uptime: 10h1m
+// 2019/11/15 07:24:09 workers: 4, corpus: 641 (1h10m ago), crashers: 0, restarts: 1/9998, execs: 134399056 (3727/sec), cover: 1339, uptime: 10h1m
 func Fuzz(data []byte) int {
 	hs, err := CreateSet(string(data))
 	if err != nil {

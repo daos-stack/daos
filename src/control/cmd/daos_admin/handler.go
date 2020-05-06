@@ -144,12 +144,12 @@ func handleRequest(log logging.Logger, scmProvider *scm.Provider, bdevProvider *
 			return sendFailure(err, &res, resDest)
 		}
 
-		press, err := scmProvider.Prepare(pReq)
+		pRes, err := scmProvider.Prepare(pReq)
 		if err != nil {
 			return sendFailure(err, &res, resDest)
 		}
 
-		return sendSuccess(press, &res, resDest)
+		return sendSuccess(pRes, &res, resDest)
 	case "BdevInit":
 		var iReq bdev.InitRequest
 		if err := json.Unmarshal(req.Payload, &iReq); err != nil {
@@ -180,12 +180,12 @@ func handleRequest(log logging.Logger, scmProvider *scm.Provider, bdevProvider *
 			return sendFailure(err, &res, resDest)
 		}
 
-		press, err := bdevProvider.Prepare(pReq)
+		pRes, err := bdevProvider.Prepare(pReq)
 		if err != nil {
 			return sendFailure(err, &res, resDest)
 		}
 
-		return sendSuccess(press, &res, resDest)
+		return sendSuccess(pRes, &res, resDest)
 	case "BdevFormat":
 		var fReq bdev.FormatRequest
 		if err := json.Unmarshal(req.Payload, &fReq); err != nil {

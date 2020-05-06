@@ -77,7 +77,7 @@ class SameKeyDifferentValue(TestWithServers):
         array_value_data = []
         array_value_data.append("data string one")
         array_value_data.append("data string two")
-        array_value_data.append("data string tree")
+        array_value_data.append("data string tre")
 
         dkey = "this is the dkey"
         akey = "this is the akey"
@@ -181,7 +181,7 @@ class SameKeyDifferentValue(TestWithServers):
         array_value_data = []
         array_value_data.append("data string one")
         array_value_data.append("data string two")
-        array_value_data.append("data string tree")
+        array_value_data.append("data string tre")
 
         dkey = "this is the dkey"
         akey = "this is the akey"

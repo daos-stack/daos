@@ -140,11 +140,11 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	struct dtx_req_rec	*drr = cb_info->cci_arg;
 	struct dtx_req_args	*dra = drr->drr_parent;
 	struct dtx_in		*din = crt_req_get(req);
-	struct dtx_out		*doubt;
+	struct dtx_out		*dout;
 	int			 rc = cb_info->cci_rc;
 
 	if (rc == 0) {
-		doubt = crt_reply_get(req);
+		dout = crt_reply_get(req);
 		rc = dout->do_status;
 	}
 

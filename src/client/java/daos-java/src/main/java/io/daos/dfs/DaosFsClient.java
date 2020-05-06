@@ -1076,7 +1076,7 @@ public final class DaosFsClient {
    * <p>
    * Please note that new pool and new container will be created if their ids (poolId and containerId) are {@code null}.
    */
-  public static class DaosFsClientBuilder implements Clonable {
+  public static class DaosFsClientBuilder implements Cloneable {
     private String poolId;
     private String contId;
     private String ranks = Constants.POOL_DEFAULT_RANKS;

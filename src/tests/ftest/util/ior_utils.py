@@ -328,7 +328,7 @@ class IorMetrics(IntEnum):
 
     # Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
-    # Test# #Tasks tPN reps fPP record reordoff reordrand seed segcnt
+    # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt
     # blksiz    xsize aggs(MiB)   API RefNum
     Operation = 0
     Max_MiB = 1
@@ -347,7 +347,7 @@ class IorMetrics(IntEnum):
     tPN = 14
     reps = 15
     fPP = 16
-    record = 17
+    reord = 17
     reordoff = 18
     reordrand = 19
     seed = 20
