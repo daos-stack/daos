@@ -168,7 +168,7 @@ class DmgPoolQueryTest(ControlTestBase):
             bytes_orig_val = human_to_bytes(out_b[mem][1])
             bytes_curr_val = human_to_bytes(out_a[mem][1])
             if bytes_orig_val <= bytes_curr_val:
-                exception = 1
+                exception = mem
 
         if exception:
-            self.fail("Free space should be < {}".format(out_b[mem][1]))
+            self.fail("Free space should be < {}".format(out_b[exception][1]))
