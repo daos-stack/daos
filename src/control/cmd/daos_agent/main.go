@@ -38,15 +38,30 @@ import (
 )
 
 type cliOptions struct {
-	AllowProxy bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      bool       `short:"d" long:"debug" description:"Enable debug output"`
-	JSONLogs   bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	ConfigPath string     `short:"o" long:"config-path" description:"Path to agent configuration file"`
-	Insecure   bool       `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
-	RuntimeDir string     `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
-	LogFile    string     `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
-	Start      startCmd   `command:"start" description:"Start daos_agent daemon (default behavior)"`
-	Version    versionCmd `command:"version" description:"Print daos_agent version"`
+	AllowProxy bool              `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	Debug      bool              `short:"d" long:"debug" description:"Enable debug output"`
+	JSONLogs   bool              `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	ConfigPath string            `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	Insecure   bool              `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
+	RuntimeDir string            `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
+	LogFile    string            `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	Start      startCmd          `command:"start" description:"Start daos_agent daemon (default behavior)"`
+	Version    versionCmd        `command:"version" description:"Print daos_agent version"`
+	DumpInfo   dumpAttachInfoCmd `command:"dump-attachinfo" description:"Dump system attachinfo"`
+}
+
+type (
+	ctlInvoker interface {
+		setInvoker(control.Invoker)
+	}
+
+	ctlInvokerCmd struct {
+		ctlInvoker control.Invoker
+	}
+)
+
+func (cmd *ctlInvokerCmd) setInvoker(ctlInvoker control.Invoker) {
+	cmd.ctlInvoker = ctlInvoker
 }
 
 type (
@@ -90,7 +105,7 @@ func exitWithError(log logging.Logger, err error) {
 	os.Exit(1)
 }
 
-func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
+func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.Default)
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.SubcommandsOptional = true
@@ -178,6 +193,18 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 			cfgCmd.setConfig(cfg)
 		}
 
+		if ctlCmd, ok := cmd.(ctlInvoker); ok {
+			// Generate a control config based on the loaded agent config.
+			ctlCfg := control.DefaultConfig()
+			ctlCfg.TransportConfig = cfg.TransportConfig
+			ctlCfg.HostList = cfg.AccessPoints
+			ctlCfg.SystemName = cfg.SystemName
+			ctlCfg.ControlPort = cfg.ControlPort
+
+			invoker.SetConfig(ctlCfg)
+			ctlCmd.setInvoker(invoker)
+		}
+
 		if err := cmd.Execute(args); err != nil {
 			return err
 		}
@@ -193,7 +220,11 @@ func main() {
 	var opts cliOptions
 	log := logging.NewCommandLineLogger()
 
-	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
+	ctlInvoker := control.NewClient(
+		control.WithClientLogger(log),
+	)
+
+	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {
 		exitWithError(log, err)
 	}
 }
