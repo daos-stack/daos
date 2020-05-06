@@ -24,40 +24,57 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"os/signal"
 	"path"
-	"path/filepath"
-	"syscall"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/atm"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
-)
-
-const (
-	agentSockName     = "agent.sock"
-	defaultConfigFile = "daos_agent.yml"
 )
 
 type cliOptions struct {
 	AllowProxy bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	Debug      bool       `short:"d" long:"debug" description:"Enable debug output"`
-	JSONLog    bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	JSONLogs   bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath string     `short:"o" long:"config-path" description:"Path to agent configuration file"`
 	Insecure   bool       `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
 	RuntimeDir string     `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
 	LogFile    string     `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	Start      startCmd   `command:"start" description:"Start daos_agent daemon (default behavior)"`
 	Version    versionCmd `command:"version" description:"Print daos_agent version"`
+}
+
+type (
+	configSetter interface {
+		setConfig(*Config)
+	}
+
+	configCmd struct {
+		cfg *Config
+	}
+)
+
+func (cmd *configCmd) setConfig(cfg *Config) {
+	cmd.cfg = cfg
+}
+
+type (
+	logSetter interface {
+		setLog(logging.Logger)
+	}
+
+	logCmd struct {
+		log logging.Logger
+	}
+)
+
+func (cmd *logCmd) setLog(log logging.Logger) {
+	cmd.log = log
 }
 
 type versionCmd struct{}
@@ -73,158 +90,110 @@ func exitWithError(log logging.Logger, err error) {
 	os.Exit(1)
 }
 
+func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
+	p := flags.NewParser(opts, flags.Default)
+	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
+	p.SubcommandsOptional = true
+
+	p.CommandHandler = func(cmd flags.Commander, args []string) error {
+		if cmd == nil {
+			cmd = &startCmd{}
+		}
+
+		if !opts.AllowProxy {
+			common.ScrubProxyVariables()
+		}
+
+		if opts.Debug {
+			log.WithLogLevel(logging.LogLevelDebug)
+			log.Debug("debug output enabled")
+		}
+
+		if opts.JSONLogs {
+			log.WithJSONOutput()
+		}
+
+		cfgPath := opts.ConfigPath
+		if cfgPath == "" {
+			defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
+			if _, err := os.Stat(defaultConfigPath); err == nil {
+				cfgPath = defaultConfigPath
+			}
+		}
+
+		cfg := DefaultConfig()
+		if cfgPath != "" {
+			var err error
+			if cfg, err = LoadConfig(cfgPath); err != nil {
+				return errors.WithMessage(err, "failed to load agent configuration")
+			}
+			log.Debugf("agent config loaded from %s", cfgPath)
+		}
+
+		if opts.RuntimeDir != "" {
+			log.Debugf("Overriding socket path from config file with %s", opts.RuntimeDir)
+			cfg.RuntimeDir = opts.RuntimeDir
+		}
+
+		if opts.LogFile != "" {
+			log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
+			cfg.LogFile = opts.LogFile
+		}
+
+		if opts.Insecure {
+			log.Debugf("Overriding AllowInsecure from config file with %t", opts.Insecure)
+			cfg.TransportConfig.AllowInsecure = true
+		}
+
+		if cfg.LogFile != "" {
+			f, err := common.AppendFile(cfg.LogFile)
+			if err != nil {
+				log.Errorf("Failure creating log file: %s", err)
+				return err
+			}
+			defer f.Close()
+			log.Infof("Using logfile: %s", cfg.LogFile)
+
+			// Create an additional set of loggers which append everything
+			// to the specified file.
+			log.WithErrorLogger(logging.NewErrorLogger("agent", f)).
+				WithInfoLogger(logging.NewInfoLogger("agent", f)).
+				WithDebugLogger(logging.NewDebugLogger(f))
+		}
+
+		if logCmd, ok := cmd.(logSetter); ok {
+			logCmd.setLog(log)
+		}
+
+		if err := cfg.TransportConfig.PreLoadCertData(); err != nil {
+			return errors.Wrap(err, "Unable to load Certificate Data")
+		}
+
+		var err error
+		if cfg.AccessPoints, err = control.ParseHostList(cfg.AccessPoints, cfg.ControlPort); err != nil {
+			return errors.Wrap(err, "Failed to parse config access_points")
+		}
+
+		if cfgCmd, ok := cmd.(configSetter); ok {
+			cfgCmd.setConfig(cfg)
+		}
+
+		if err := cmd.Execute(args); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	_, err := p.Parse()
+	return err
+}
+
 func main() {
 	var opts cliOptions
 	log := logging.NewCommandLineLogger()
 
-	if err := agentMain(log, &opts); err != nil {
+	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		exitWithError(log, err)
 	}
-}
-
-// applyCmdLineOverrides will overwrite Configuration values with any non empty
-// data provided, usually from the commandline.
-func applyCmdLineOverrides(log logging.Logger, c *client.Configuration, opts *cliOptions) {
-
-	if opts.RuntimeDir != "" {
-		log.Debugf("Overriding socket path from config file with %s", opts.RuntimeDir)
-		c.RuntimeDir = opts.RuntimeDir
-	}
-
-	if opts.LogFile != "" {
-		log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
-		c.LogFile = opts.LogFile
-	}
-	if opts.Insecure {
-		log.Debugf("Overriding AllowInsecure from config file with %t", opts.Insecure)
-		c.TransportConfig.AllowInsecure = true
-	}
-}
-
-func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
-	log.Info("Starting daos_agent:")
-
-	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
-	p.SubcommandsOptional = true
-
-	_, err := p.Parse()
-	if err != nil {
-		return err
-	}
-
-	if !opts.AllowProxy {
-		common.ScrubProxyVariables()
-	}
-
-	if opts.JSONLog {
-		log.WithJSONOutput()
-	}
-
-	if opts.Debug {
-		log.WithLogLevel(logging.LogLevelDebug)
-		log.Debug("debug output enabled")
-	}
-
-	ctx, shutdown := context.WithCancel(context.Background())
-	defer shutdown()
-
-	if opts.ConfigPath == "" {
-		defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
-		if _, err := os.Stat(defaultConfigPath); err == nil {
-			opts.ConfigPath = defaultConfigPath
-		}
-	}
-
-	// Load the configuration file using the supplied path or the
-	// default path if none provided.
-	config, err := client.GetConfig(log, opts.ConfigPath)
-	if err != nil {
-		log.Errorf("An unrecoverable error occurred while processing the configuration file: %s", err)
-		return err
-	}
-
-	// Override configuration with any commandline values given
-	applyCmdLineOverrides(log, config, opts)
-
-	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
-	log.Debugf("Full socket path is now: %s", sockPath)
-
-	if config.LogFile != "" {
-		f, err := common.AppendFile(config.LogFile)
-		if err != nil {
-			log.Errorf("Failure creating log file: %s", err)
-			return err
-		}
-		defer f.Close()
-		log.Infof("Using logfile: %s", config.LogFile)
-
-		// Create an additional set of loggers which append everything
-		// to the specified file.
-		log.WithErrorLogger(logging.NewErrorLogger("agent", f)).
-			WithInfoLogger(logging.NewInfoLogger("agent", f)).
-			WithDebugLogger(logging.NewDebugLogger(f))
-	}
-
-	err = config.TransportConfig.PreLoadCertData()
-	if err != nil {
-		return errors.Wrap(err, "Unable to load Cerificate Data")
-	}
-
-	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
-	signals := make(chan os.Signal, 1)
-	finish := make(chan bool, 1)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
-
-	drpcServer, err := drpc.NewDomainSocketServer(ctx, log, sockPath)
-	if err != nil {
-		log.Errorf("Unable to create socket server: %v", err)
-		return err
-	}
-
-	enabled := atm.NewBool(os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
-	if enabled.IsFalse() {
-		log.Debugf("GetAttachInfo agent caching has been disabled\n")
-	}
-
-	netdetect.SetLogger(log)
-	numaAware, err := netdetect.NumaAware()
-	if err != nil {
-		return err
-	}
-
-	if !numaAware {
-		log.Debugf("This system is not NUMA aware")
-	}
-
-	drpcServer.RegisterRPCModule(NewSecurityModule(log, config.TransportConfig))
-	drpcServer.RegisterRPCModule(&mgmtModule{
-		log:       log,
-		sys:       config.SystemName,
-		ap:        config.AccessPoints[0],
-		tcfg:      config.TransportConfig,
-		aiCache:   &attachInfoCache{log: log, enabled: enabled},
-		numaAware: numaAware,
-	})
-
-	err = drpcServer.Start()
-	if err != nil {
-		log.Errorf("Unable to start socket server on %s: %v", sockPath, err)
-		return err
-	}
-
-	log.Infof("Listening on %s", sockPath)
-
-	// Anonymous goroutine to wait on the signals channel and tell the
-	// program to finish when it receives a signal. Since we only notify on
-	// SIGINT and SIGTERM we should only catch this on a kill or ctrl+c
-	// The syntax looks odd but <- Channel means wait on any input on the
-	// channel.
-	go func() {
-		<-signals
-		finish <- true
-	}()
-	<-finish
-	drpcServer.Shutdown()
-
-	return nil
 }
