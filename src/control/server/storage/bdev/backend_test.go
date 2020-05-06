@@ -28,7 +28,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
@@ -103,14 +102,14 @@ func TestBdevBackendGetController(t *testing.T) {
 	}{
 		"empty input": {
 			input:  input{},
-			expErr: errors.New("unable to resolve"),
+			expErr: FaultBadPCIAddr(""),
 		},
 		"wrong pciAddr": {
 			input: input{
 				pciAddr:         "abc123",
 				spdkControllers: []spdk.Controller{mockSpdkController()},
 			},
-			expErr: errors.New("unable to resolve"),
+			expErr: FaultPCIAddrNotFound("abc123"),
 		},
 		"correct pciAddr": {
 			input: input{

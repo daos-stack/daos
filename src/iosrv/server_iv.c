@@ -965,7 +965,7 @@ ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	     unsigned int shortcut, unsigned int sync_mode,
 	     unsigned int sync_flags, bool retry)
 {
-	crt_iv_sync_t	iv_sync;
+	crt_iv_sync_t	iv_sync = { 0 };
 
 	iv_sync.ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
 	iv_sync.ivs_mode = sync_mode;
@@ -992,7 +992,7 @@ ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		 unsigned int shortcut, unsigned int sync_mode,
 		 unsigned int sync_flags, bool retry)
 {
-	crt_iv_sync_t iv_sync;
+	crt_iv_sync_t iv_sync = { 0 };
 
 	iv_sync.ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
 	iv_sync.ivs_mode = sync_mode;
