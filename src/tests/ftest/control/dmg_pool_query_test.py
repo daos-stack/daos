@@ -23,15 +23,12 @@
 """
 from __future__ import print_function
 
-import re
-
-from ior_test_base import IorTestBase
-from control_test_base import ControlTestBase
 from test_utils_pool import TestPool
+from control_test_base import ControlTestBase
 from general_utils import human_to_bytes
 
 
-class DmgPoolQueryTest(ControlTestBase, IorTestBase):
+class DmgPoolQueryTest(ControlTestBase):
     """Test Class Description:
     Simple test to verify the pool query command of dmg tool.
     :avocado: recursive
@@ -144,33 +141,34 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 self.log.error("==>   Failure: %s", err)
             self.fail("Failed dmg pool query input test.")
 
-    def test_pool_query_ior(self):
+    def test_pool_query_w_pool(self):
         """
         JIRA ID: DAOS-2976
 
         Test Description: Test that pool query command will properly and
         accurately show the size changes once there is content in the pool.
 
-        :avocado: tags=all,small,pr,hw,dmg,pool_query,basic,poolqueryior
+        :avocado: tags=all,small,pr,hw,dmg,pool_query,basic,poolquerywrite
         """
         # Store orignal pool info
-        self.log.info("==>   Getting pool info before writting data.")
-        out_b_ior = self.get_pool_query_info(self.uuid)
-        self.log.info("==>   dmg values found: %s", out_b_ior)
+        out_b = self.get_pool_query_info(self.uuid)
+        self.log.info("==>   Pool info before write: \n%s", out_b)
 
-        #  Run ior
-        self.run_ior_with_pool()
+        self.log.info("==>   Write data to pool.")
+        self.pool.write_file(
+            self.orterun, len(self.hostlist_clients), self.hostfile_clients,
+            self.params.get("size", "/run/data_size/"))
 
         # Check pool written data
-        self.log.info("==>   Getting pool info after ior run.")
-        out_a_ior = self.get_pool_query_info(self.uuid)
-        self.log.info("==>   dmg values found: %s", out_a_ior)
+        out_a = self.get_pool_query_info(self.uuid)
+        self.log.info("==>   Pool info after write: \n%s", out_a)
 
         # Compare info
         for mem in ["scm_info", "nvme_info"]:
-            bytes_orig_val = human_to_bytes(out_b_ior[mem][1])
-            bytes_curr_val = human_to_bytes(out_a_ior[mem][1])
-
+            bytes_orig_val = human_to_bytes(out_b[mem][1])
+            bytes_curr_val = human_to_bytes(out_a[mem][1])
             if bytes_orig_val <= bytes_curr_val:
-                self.fail("Free space should be less than: {}".format(
-                    out_b_ior[mem][1]))
+                exception = 1
+
+        if exception:
+            self.fail("Free space should be < {}".format(out_b[mem][1]))
