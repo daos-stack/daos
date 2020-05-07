@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import re
-
 from command_utils import \
     CommandWithParameters, FormattedParameter, CommandFailure, \
     CommandWithSubCommand
@@ -53,11 +51,11 @@ class DaosCommand(CommandWithSubCommand):
         # 04/19-18:31:26.90 wolf-3   Free: 0, min:0, max:0, mean:0
         # 04/19-18:31:26.90 wolf-3 Rebuild idle, 0 objs, 0 recs
         "pool_query": r"(?:Pool\s*([A-Za-z0-9-]+),\s*ntarget=([0-9])," +
-            "\s*disabled=([0-9])|Target\(VOS\) count:\s*([0-9])|" +
-            "(?:SCM:\s+.*|NVMe:\s+.*)Total\s+size:\s+([0-9]+)\s+.*" +
-            "Free:\s+([0-9]+),\s+min:([0-9]+),\s+max:([0-9]+),\s+" +
-            "mean:([0-9]+)|" +
-            "Rebuild\s*idle,\s*([0-9]+)\s*objs,\s*([0-9]+)\s*recs)",
+                      r"\s*disabled=([0-9])|Target\(VOS\) count:\s*([0-9])|" +
+                      r"(?:SCM:\s+.*|NVMe:\s+.*)Total\s+size:\s+([0-9]+)" +
+                      r"\s+.*Free:\s+([0-9]+),\s+min:([0-9]+),\s+" +
+                      r"max:([0-9]+),\s+mean:([0-9]+)|" +
+                      r"Rebuild\s*idle,\s*([0-9]+)\s*objs,\s*([0-9]+)\s*recs)",
         # Sample list-attrs output.
         # 04/19-21:16:31.62 wolf-3 Pool attributes:
         # 04/19-21:16:31.62 wolf-3 attr0
