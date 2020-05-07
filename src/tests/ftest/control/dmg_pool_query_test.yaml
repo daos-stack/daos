@@ -24,12 +24,12 @@ pool:
   name: daos_server
 
 data_size:
-  size: "5368709120"
+  size: "1073741824"
 
 exp_vals:
   pool_info: ['8', '0']
   target_cnt: ['8']
-  scm_info: ['16.0 GB', '16.0 GB', '2.0 GB', '2.0 GB', '2.0 GB']
+  scm_info: ['16 GB', '16 GB', '2.0 GB', '2.0 GB', '2.0 GB']
   nvme_info: ['32 GB', '32 GB', '4.0 GB', '4.0 GB', '4.0 GB']
   rebuild_info: ['0', '0']
 
