@@ -22,8 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from dmg_utils import get_pool_uuid_service_replicas_from_stdout
-from daos_utils import DaosCommand, get_pool_uuid, get_sizes
+from daos_utils import DaosCommand
 
 
 class QueryAttributeTest(TestWithServers):
@@ -61,23 +60,23 @@ class QueryAttributeTest(TestWithServers):
         # 1. Test pool query.
         # Use the same format as pool query.
         expected_size = "1000000000"
-        stdoutput = self.get_dmg_command().pool_create(
-            scm_size=expected_size).stdout
-        expected_uuid, service_replicas = \
-            get_pool_uuid_service_replicas_from_stdout(stdoutput)
+        kwargs = {"scm_size": expected_size}
+        pool_create_result = self.get_dmg_command().get_output(
+            "pool_create", **kwargs)
+        expected_uuid = pool_create_result[0]
+        sr = pool_create_result[1]
         daos_cmd = DaosCommand(self.bin)
         # Call daos pool query, obtain pool UUID and SCM size, and compare
         # against those used when creating the pool.
-        query_stdout = daos_cmd.pool_query(
-            pool=expected_uuid, svc=service_replicas).stdout
-        actual_uuid = get_pool_uuid(query_stdout)
-        # First Total size is the SCM size.
-        actual_size = get_sizes(query_stdout)[0]
+        kwargs = {"pool": expected_uuid, "svc": sr}
+        query_result = daos_cmd.get_output("pool_query", **kwargs)
+        actual_uuid = query_result[0][0]
+        actual_size = query_result[2][4]
         self.assertEqual(actual_uuid, expected_uuid)
         self.assertEqual(actual_size, expected_size)
 
         # 2. Test pool set-attr, get-attr, and list-attrs.
-        expected_attrs = set()
+        expected_attrs = []
         expected_attrs_dict = {}
         sample_attrs = []
         sample_vals = []
@@ -89,31 +88,17 @@ class QueryAttributeTest(TestWithServers):
             sample_vals.append(sample_val)
             _ = daos_cmd.pool_set_attr(
                 pool=actual_uuid, attr=sample_attr, value=sample_val,
-                svc=service_replicas).stdout
-            expected_attrs.add(sample_attr)
+                svc=sr).stdout
+            expected_attrs.append(sample_attr)
             expected_attrs_dict[sample_attr] = sample_val
-        # List the attribute names.
-        stdoutput = daos_cmd.pool_list_attrs(
-            pool=actual_uuid, svc=service_replicas).stdout
-        actual_attrs = set()
-        # Sample list output.
-        # 04/19-21:16:31.62 wolf-3 Pool attributes:
-        # 04/19-21:16:31.62 wolf-3 attr0
-        # 04/19-21:16:31.62 wolf-3 attr1
-        # 04/19-21:16:31.62 wolf-3 attr4
-        # 04/19-21:16:31.62 wolf-3 attr3
-        # 04/19-21:16:31.62 wolf-3 attr2
-        lines = stdoutput.splitlines()
-        for i in range(1, len(lines)):
-            actual_attrs.add(lines[i].split()[2])
+        # List the attribute names and compare against those set.
+        kwargs = {"pool": actual_uuid, "svc": sr}
+        actual_attrs = daos_cmd.get_output("pool_list_attrs", **kwargs)
+        actual_attrs.sort()
+        expected_attrs.sort()
         self.assertEqual(actual_attrs, expected_attrs)
-        # Get each attribute's value.
+        # Get each attribute's value and compare against those set.
         for i in range(5):
-            # Sample get-attr output - no line break.
-            # 04/19-21:16:32.66 wolf-3 Pool's attr2 attribute value:
-            # 04/19-21:16:32.66 wolf-3 val2
-            stdoutput = daos_cmd.pool_get_attr(
-                pool=actual_uuid, attr=sample_attrs[i],
-                svc=service_replicas).stdout
-            actual_val = stdoutput.split()[-1]
+            kwargs = {"pool": actual_uuid, "attr": sample_attrs[i], "svc": sr}
+            actual_val = daos_cmd.get_output("pool_get_attr", **kwargs)[0]
             self.assertEqual(sample_vals[i], actual_val)
