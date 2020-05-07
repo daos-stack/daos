@@ -898,7 +898,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
-	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
+	rc = exec_dmg_system_stop(grp, rank, true, NULL);
 	assert_int_equal(rc, 0);
 }
 

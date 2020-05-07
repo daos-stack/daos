@@ -190,4 +190,18 @@ void
 dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 	uint32_t count, char *d, ...);
 
+/* dmg cmd wrappers for daos_test */
+/**
+ * Kill a remote server.
+ *
+ * \param grp   [IN]    Process set name of the DAOS servers managing the pool
+ * \param rank  [IN]    Rank to kill
+ * \param force [IN]    Abrupt shutdown, no cleanup
+ * \param ev    [IN]    Completion event, it is optional and can be NULL.
+ *                      The function will run in blocking mode if \a ev is NULL.
+ */
+int
+exec_dmg_system_stop(const char *grp, d_rank_t rank, bool force,
+	daos_event_t *ev);
+
 #endif /* __DAOS_TESTS_LIB_H__ */

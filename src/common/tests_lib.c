@@ -25,6 +25,7 @@
 /**
  * Test suite helper functions.
  */
+#include <sys/wait.h>
 #include <daos/common.h>
 #include <daos/object.h>
 #include <daos/tests_lib.h>
@@ -355,3 +356,73 @@ dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 	v_dts_sgl_init_with_strings_repeat(sgl, repeat, count, d, valist);
 	va_end(valist);
 }
+
+/* dmg cmd wrappers for daos_test */
+static int
+daos_dmg_fork_exec(char *argv[])
+{
+        pid_t pid = fork();
+
+        if (pid == -1) {
+                D_ERROR("fork() failed to create child\n");
+                return -DER_INVAL;
+        } else if (pid == 0) {
+                /* child process */
+                D_INFO("child pid = %d\n", getpid());
+                execvp(argv[0], argv);
+		D_ERROR("execvp %s failed\n", argv[0]);
+                exit(-DER_INVAL);
+        } else {
+	        /* parent process */
+        	D_INFO("parent pid = %d\n", getpid());
+
+	        int status;
+
+        	if (waitpid(pid, &status, 0) == -1) {
+                	D_ERROR("waitpid() failed for pid = %d\n", pid);
+                	return -DER_INVAL;
+        	}
+		if (WIFEXITED(status))
+        		D_INFO("WEXITSTATUS(status) = %d\n",
+				WEXITSTATUS(status));
+	        return DER_SUCCESS;
+	}
+}
+
+/* grp is depricated in "dmg_old kill"  to --sys which doesn't have
+ * a match in "dmg system stop", so not used.
+ */
+int
+exec_dmg_system_stop(const char *grp, d_rank_t rank, bool force,
+                  daos_event_t *ev)
+{
+        char *argv[7];
+        int rc;
+
+
+        argv[0] = "dmg";
+        argv[1] = "system";
+        argv[2] = "stop";
+        argv[3] = "-i";
+        if (asprintf(&argv[4], "--ranks=%d", rank) == -1) {
+                D_ERROR("asprintf failed.\n");
+                rc = -DER_INVAL;
+                goto out;
+        }
+
+        if (force)
+                if (asprintf(&argv[5], "--force") == -1) {
+                        D_ERROR("asprintf failed.\n");
+                        rc = -DER_INVAL;
+                        goto out;
+                }
+        argv[6] = NULL;
+
+        rc = daos_dmg_fork_exec(argv);
+out:
+        free(argv[4]);
+        free(argv[5]);
+
+        return rc;
+}
+

@@ -22,7 +22,6 @@
  */
 #define D_LOGFAC	DD_FAC(client)
 
-#include <sys/wait.h>
 #include <daos/mgmt.h>
 #include <daos/pool.h>
 #include <daos/task.h>
@@ -30,70 +29,25 @@
 #include "client_internal.h"
 #include "task_internal.h"
 
-static int
-daos_dmg_fork_exec(char *argv[])
-{
-	pid_t pid = fork();
-
-	if (pid == -1) {
-		D_ERROR("fork() failed to create child\n");
-		return -DER_INVAL;
-	} else if (pid == 0) {
-		/* child process */
-		D_INFO("child pid = %d\n", getpid());
-		execvp(argv[0], argv);
-		exit(DER_SUCCESS);
-	}
-	/* parent process */
-	D_INFO("parent pid = %d\n", getpid());
-
-	int status;
-
-	if (waitpid(pid, &status, 0) == -1) {
-		D_ERROR("waitpid() failed for pid = %d\n", pid);
-		return -DER_INVAL;
-	}
-
-	D_INFO("WEXITSTATUS(status) = %d\n", WEXITSTATUS(status));
-
-	return WEXITSTATUS(status);
-}
-
-/* grp is depricated in "dmg_old kill"  to --sys which doesn't have
- * a match in "dmg system stop", so not used.
- */
 int
 daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
 		  daos_event_t *ev)
 {
-	char *argv[7];
-	int rc;
+	daos_svc_rip_t		*args;
+	tse_task_t		*task;
+	int			 rc;
 
+	DAOS_API_ARG_ASSERT(*args, SVC_RIP);
+	rc = dc_task_create(dc_mgmt_svc_rip, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	argv[0] = "dmg";
-	argv[1] = "system";
-	argv[2] = "stop";
-	argv[3] = "-i";
-	if (asprintf(&argv[4], "--ranks=%d", rank) == -1) {
-		D_ERROR("asprintf failed.\n");
-		rc = -DER_INVAL;
-		goto out;
-	}
+	args = dc_task_get_args(task);
+	args->grp	= grp;
+	args->rank	= rank;
+	args->force	= force;
 
-	if (force)
-		if (asprintf(&argv[5], "--force") == -1) {
-			D_ERROR("asprintf failed.\n");
-			rc = -DER_INVAL;
-			goto out;
-		}
-	argv[6] = NULL;
-
-	rc = daos_dmg_fork_exec(argv);
-out:
-	free(argv[4]);
-	free(argv[5]);
-
-	return rc;
+	return dc_task_schedule(task, true);
 }
 
 int
