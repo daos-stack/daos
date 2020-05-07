@@ -33,8 +33,7 @@ import dmg_utils
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
 import security_test_base as secTestBase
-# To uncomment 'general_utils' once the PR1484 has landed.
-#import general_utils
+import general_utils
 
 PERMISSIONS = ["r", "w", "rw", "rwc", "rwcd", "rwcdt", "rwcdtT"]
 
@@ -316,7 +315,4 @@ class ContSecurityTestBase(TestWithServers):
             get_acl_file = "acl_{}.txt".format(typ)
             file_name = os.path.join(self.tmp, get_acl_file)
             cmd = "rm -r {}".format(file_name)
-            # To replace the following line with the commented one
-            # once the PR1484 has landed.
-            secTestBase.run_command(cmd)
-            #general_utils.run_command(cmd)
+            general_utils.run_command(cmd)
