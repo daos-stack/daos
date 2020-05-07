@@ -1077,7 +1077,7 @@ pipeline {
                                            mkdir -p ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/
                                            ln -s ../../../../../../../../src/control ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
                                            DAOS_BASE=${SL_PREFIX%/install*}
-                                           rm -f dnt.*.memcheck.xml vm_test.out
+                                           rm -f dnt.*.memcheck.xml vm_test.out nlt-errors.out
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
@@ -1141,7 +1141,7 @@ pipeline {
                                           cd $DAOS_BASE
                                           mkdir run_test.sh
                                           mkdir vm_test
-                                          mv vm_test.out vm_test/
+                                          mv vm_test.out nlt-errors.out vm_test/
                                           if ls /tmp/daos*.log > /dev/null; then
                                               mv /tmp/daos*.log run_test.sh/
                                           fi
@@ -1193,7 +1193,7 @@ pipeline {
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'NEW', unstable: true]],
                                          name: "VM Testing",
-                                         tool: clang(pattern: 'vm_test/vm_test.out',
+                                         tool: clang(pattern: 'vm_test/nlt-errors.out',
                                                      name: 'VM test results',
                                                      id: 'VM_test')
                         }

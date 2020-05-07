@@ -169,6 +169,8 @@ EFILES = ['src/common/misc.c',
 mismatch_alloc_seen = {}
 mismatch_free_seen = {}
 
+output_file = None
+
 def show_line(line, sev, msg):
     """Output a log line in gcc error format"""
 
@@ -182,6 +184,8 @@ def show_line(line, sev, msg):
     if log in shown_logs:
         return
     print(log)
+    if output_file:
+        output_file.write("{}\n".format(log))
     shown_logs.add(log)
 
 def show_bug(line, bug_id):
