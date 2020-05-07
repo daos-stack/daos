@@ -2521,6 +2521,18 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 }
 
+/* TODO: update raft.h in daos-stack/raft repo */
+extern int raft_election_start(raft_server_t *me_);
+
+/* Call new election (campaign to be leader) */
+int
+rdb_raft_campaign(struct rdb *db)
+{
+	D_DEBUG(DB_MD, DF_DB": calling election from current term %d\n",
+		DP_DB(db), raft_get_current_term(db->d_raft));
+	return raft_election_start(db->d_raft);
+}
+
 /* Wait for index to be applied in term. For leaders only. */
 int
 rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)
