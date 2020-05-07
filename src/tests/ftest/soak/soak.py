@@ -101,6 +101,7 @@ class SoakTestBase(TestWithServers):
         self.all_failed_jobs = None
         self.username = None
         self.used = None
+        self.dfuse_list = []
 
     def setUp(self):
         """Define test setup to be done."""
@@ -508,13 +509,12 @@ class SoakTestBase(TestWithServers):
         return result.stdout.split()[3]
 
     def start_dfuse(self, pool):
-        """Create dfuse start command line for job script.
+        """Create dfuse start command line for slurm.
 
         Args:
             pool (obj):             TestPool obj
 
         Returns dfuse(obj):         Dfuse obj
-                dfuse cmds(list):   slurm cmds to start dfuse
         """
         # Get Dfuse params
         dfuse = Dfuse(self.hostlist_clients, self.tmp)
@@ -528,21 +528,34 @@ class SoakTestBase(TestWithServers):
         dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
         # create dfuse mount point
         mkdir_cmd = "mkdir -p {}".format(dfuse.mount_dir.value)
+        result = slurm_utils.srun(NodeSet.fromlist(
+            self.hostlist_clients), "{}".format(mkdir_cmd), self.srun_params)
+        if result.exit_status > 0:
+            raise SoakTestError("<<FAILED: Dfuse directories not created>")
         dfuse_cmd = "{}".format(dfuse.__str__())
-        return dfuse, [mkdir_cmd, dfuse_cmd]
+        result = slurm_utils.srun(NodeSet.fromlist(
+            self.hostlist_clients), "{}".format(dfuse_cmd), self.srun_params)
+        if result.exit_status > 0:
+            raise SoakTestError("<<FAILED: Dfuse cmd failed>>")
+        return dfuse
 
-    def stop_dfuse(self, dfuse):
-        """Create dfuse stop command line for slurm job script.
+    def stop_dfuse(self, dfuse_list):
+        """Create dfuse stop command line for slurm.
 
         Args:
-            dfuse ([obj]): Dfuse obj
+            dfuse_list (list): list of Dfuse obj
 
-        Returns dfuse stop cmd(str):   slurm cmd to stop dfuse
         """
         self.log.info("\n")
-        dfuse_stop_cmd = "fusermount3 -u {0};rm -rf {0}".format(
-            dfuse.mount_dir.value)
-        return dfuse_stop_cmd
+        for dfuse in dfuse_list:
+            dfuse_stop_cmd = "fusermount3 -u {0};rm -rf {0}".format(
+                dfuse.mount_dir.value)
+            result = slurm_utils.srun(NodeSet.fromlist(
+                self.hostlist_clients), "{}".format(
+                    dfuse_stop_cmd), self.srun_params)
+            if result.exit_status > 0:
+                raise SoakTestError(
+                    "<<FAILED: Dfuse directories not destroyed>")
 
     def cleanup_dfuse(self):
         """Cleanup and remove any dfuse mount points."""
@@ -601,18 +614,16 @@ class SoakTestBase(TestWithServers):
                     if fio_cmd.api.value == "POSIX":
                         # Connect to the pool, create container
                         # and then start dfuse
-                        dfuse, dfuse_cmd_list = self.start_dfuse(pool)
+                        dfuse = self.start_dfuse(pool)
                         fio_cmd.update(
                             "global", "directory",
                             dfuse.mount_dir.value,
                             "fio --name=global --directory")
                     log_name = "{}_{}_{}".format(blocksize, size, rw)
-                    dfuse_cmd_list.append(str(fio_cmd.__str__()))
-                    if fio_cmd.api.value == "POSIX":
-                        dfuse_cmd_list.append(self.stop_dfuse(dfuse))
-                    commands.append([dfuse_cmd_list, log_name])
+                    self.dfuse_list.append(dfuse)
+                    commands.append([str(fio_cmd.__str__()), log_name])
                     self.log.info(
-                        "<<Dfuse cmdlines>>:\n %s", "\n".join(dfuse_cmd_list))
+                        "<<Fio cmdlines>>:\n %s", str(fio_cmd.__str__()))
         return commands
 
     def build_job_script(self, commands, job, ppn, nodesperjob):
@@ -637,7 +648,7 @@ class SoakTestBase(TestWithServers):
         agent_launch_cmds.append(
             " ".join([str(self.agent_managers[0].manager.job), "&"]))
 
-        # Create the sbatch script for each cmdline
+        # Create the sbatch script for each list of cmdlines
         for cmd, log_name in commands:
             if isinstance(cmd, str):
                 cmd = [cmd]
@@ -651,7 +662,8 @@ class SoakTestBase(TestWithServers):
             sbatch = {
                 "time": str(self.job_timeout) + ":00",
                 "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
-                "error": str(error)
+                "error": str(error),
+                "export": "ALL"
                 }
             # include the cluster specific params
             sbatch.update(self.srun_params)
@@ -782,13 +794,18 @@ class SoakTestBase(TestWithServers):
                 else:
                     self.log.info(
                         "<< Job %s failed with status %s>>", job, result)
-
             # gather all the logfiles for this pass and cleanup test nodes
             try:
                 self.get_remote_logs()
             except SoakTestError as error:
                 self.log.info("Remote copy failed with %s", error)
             self.soak_results = {}
+        # Check if dfuse obj exists and then cleanup
+        if self.dfuse_list:
+            try:
+                self.stop_dfuse(self.dfuse_list)
+            except SoakTestError as error:
+                self.log.info("Dfuse stop failed with %s", error)
         return job_id_list
 
     def execute_jobs(self, jobs, pools):
