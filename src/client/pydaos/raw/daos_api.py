@@ -1134,6 +1134,7 @@ class IORequest(object):
             self.iod.iod_type = 1
             self.iod.iod_size = size
             self.iod.iod_nr = 1
+            self.iod.iod_recxs = None
 
         # now do it
         if dkey is not None:
