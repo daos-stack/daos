@@ -659,7 +659,9 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 }
 
 int
-ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list)
+ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
+			const char *group, char *tgt_dev,  size_t scm_size,
+			size_t nvme_size, daos_prop_t *prop)
 {
 	int			rc;
 	d_rank_list_t		*ranks;
