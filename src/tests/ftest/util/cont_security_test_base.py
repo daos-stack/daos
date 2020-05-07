@@ -25,37 +25,18 @@
 import os
 import pwd
 import grp
-import random
+import re
 from apricot import TestWithServers
+from avocado import fail_on
 
 import dmg_utils
 from daos_utils import DaosCommand
+from command_utils import CommandFailure
+import security_test_base as secTestBase
+#TODO: Uncomment 'general_utils' once the PR1484 has landed.
+#import general_utils
 
-PERMISSIONS = ["", "r", "w", "rw", "rwc", "rwcd", "rwcdt", "rwcdtT"]
-
-
-def acl_entry(usergroup, name, permission):
-    """Create a daos acl entry for the specified user or group and permission.
-
-    Args:
-        usergroup (str): user or group.
-        name (str): user or group name to be created.
-        permission (str): permission to be created.
-
-    Return:
-        str: daos pool acl entry.
-
-    """
-    if permission == "random":
-        permission = random.choice(PERMISSIONS)
-    if permission == "nonexist":
-        return ""
-    if "group" in usergroup:
-        entry = "A:G:" + name + "@:" + permission
-    else:
-        entry = "A::" + name + "@:" + permission
-    return entry
-
+PERMISSIONS = ["r", "w", "rw", "rwc", "rwcd", "rwcdt", "rwcdtT"]
 
 class ContSecurityTestBase(TestWithServers):
     """Container security test cases.
@@ -101,7 +82,7 @@ class ContSecurityTestBase(TestWithServers):
             acl_type (str): default, invalid, valid
 
         Returns:
-            none.
+            List of permissions of container
         """
         # First we determine the type o acl to be created
         if acl_type == "default":
@@ -109,14 +90,15 @@ class ContSecurityTestBase(TestWithServers):
                            "A:G:GROUP@:rwtT"]
         elif acl_type == "valid":
             acl_entries = ["A::OWNER@:rwdtTaAo",
-                           acl_entry("user", self.current_user, "random"),
+                           secTestBase.acl_entry("user", self.current_user, "random", PERMISSIONS),
                            "A:G:GROUP@:rwtT",
-                           acl_entry("group", self.current_group, "random"),
+                           secTestBase.acl_entry("group", self.current_group, "random", PERMISSIONS),
                            "A::EVERYONE@:"]
         elif acl_type == "invalid":
             acl_entries = ["A::OWNER@:invalid",
                            "A:G:GROUP@:rwtT"]
         else:
+            acl_entries = None
             self.fail("    Invalid acl_type while generating permissions")
 
         # We now write the default acl file
@@ -125,50 +107,44 @@ class ContSecurityTestBase(TestWithServers):
         acl_file = open(file_name, "w")
         acl_file.write("\n".join(acl_entries))
         acl_file.close()
+        return acl_entries
 
 
+    @fail_on(CommandFailure)
     def create_pool_with_dmg(self):
         """Create a pool with the dmg tool and verify its status.
 
         Also, obtains the pool uuid and svc from the operation's
         result
 
-        Args:
-            none.
-
         Returns:
-            none.
+            pool_uuid (str): Pool UUID, randomly generated.
+            pool_svc (str): Pool service replica
         """
         scm_size = self.params.get("scm_size", "/run/pool*")
-        self.dmg.exit_status_exception = False
         result = self.dmg.pool_create(scm_size)
-        self.dmg.exit_status_exception = True
         self.log.info("    dmg = %s", self.dmg)
 
         # Verify the pool create status
         self.log.info("    dmg.run() result =\n%s", result)
         if "ERR" not in result.stderr:
-            self.pool_uuid, self.pool_svc = \
+            pool_uuid, pool_svc = \
                 dmg_utils.get_pool_uuid_service_replicas_from_stdout(
                     result.stdout)
         else:
             self.fail("    Unable to parse the Pool's UUID and SVC.")
-            self.pool_uuid = None
-            self.pool_svc = None
+            pool_uuid = None
+            pool_svc = None
+
+        return pool_uuid, pool_svc
 
 
+    @fail_on(CommandFailure)
     def destroy_pool_with_dmg(self):
         """Destroy a pool with the dmg tool and verify its status.
 
-        Args:
-            none.
-
-        Returns:
-            none.
         """
-        self.dmg.exit_status_exception = False
         result = self.dmg.pool_destroy(pool=self.pool_uuid)
-        self.dmg.exit_status_exception = True
         self.log.info("    dmg = %s", self.dmg)
 
         # Verify the pool destroy status
@@ -180,106 +156,150 @@ class ContSecurityTestBase(TestWithServers):
             self.pool_svc = None
 
 
-    def create_container_with_daos(self, acl_type=None):
+    def create_container_with_daos(self, pool_uuid, pool_svc, acl_type=None):
         """Create a container with the daos tool and verify its status.
 
         Also, obtains the container uuid from the operation's result.
 
         Args:
-            acl_type (str): valid or invalid
+            pool_uuid (str): Pool uuid.
+            pool_svc (str): Pool service replicas.
+            acl_type (str, optional): valid or invalid.
 
         Returns:
-            none.
+            container_uuid: Container UUID created or None.
         """
+        if not secTestBase.check_uuid_format(pool_uuid):
+            self.fail(
+                "    Invalid Pool UUID '%s' provided.", pool_uuid)
+
         file_name = None
         get_acl_file = None
+        expected_acl_types = [None, "valid", "invalid"]
 
-        if acl_type is None:
-            get_acl_file = ""
-        else:
+        if acl_type not in expected_acl_types:
+            self.fail(
+                "    Invalid '%s' acl type passed.", acl_type)
+
+        if acl_type:
             get_acl_file = "acl_{}.txt".format(acl_type)
             file_name = os.path.join(self.tmp, get_acl_file)
+        else:
+            get_acl_file = ""
 
-        self.daos_tool.exit_status_exception = False
-        kwargs = {"pool": self.pool_uuid,
-                  "svc": self.pool_svc,
+        if acl_type == "invalid":
+            self.daos_tool.exit_status_exception = False
+
+        kwargs = {"pool": pool_uuid,
+                  "svc": pool_svc,
                   "acl_file": file_name}
         container = \
             self.daos_tool.get_output("container_create", **kwargs)
         if len(container) == 1:
-            self.container_uuid = container[0]
+            container_uuid = container[0]
         else:
-            self.container_uuid = None
-        self.daos_tool.exit_status_exception = True
+            container_uuid = None
+
+        if acl_type == "invalid":
+            self.daos_tool.exit_status_exception = True
+
         self.log.info("    daos = %s", self.daos_tool)
 
-        ## Verify the daos container status
-        if acl_type == "invalid":
-            if self.container_uuid is not None:
-                self.fail(
-                    "    Container [%s] created when no expecting "
-                    "one.", self.container_uuid)
-        else:
-            if self.container_uuid is None:
-                self.fail(
-                    "    Expecting a container to be created but "
-                    "none was.")
+        return container_uuid
 
 
-    def destroy_container_with_daos(self):
-        """Destroy a container with the daos tool and verify its status
+    @fail_on(CommandFailure)
+    def destroy_container_with_daos(self, container_uuid):
+        """Destroy a container with the daos tool and verify its status.
 
         Args:
-            none
+            container_uuid (str): The UUID of the container to be destroyed.
 
         Returns:
-            none
+            True or False if Container was destroyed or not.
+
         """
-        self.daos_tool.exit_status_exception = False
+        if not secTestBase.check_uuid_format(container_uuid):
+            self.fail(
+                "    Invalid Container UUID '%s' provided.", container_uuid)
+
         result = self.daos_tool.container_destroy(pool=self.pool_uuid,
                                                   svc=self.pool_svc,
                                                   cont=self.container_uuid)
-        self.daos_tool.exit_status_exception = True
+
         self.log.info("    daos = %s", self.daos_tool)
 
         # Verify the container destroy status
         self.log.info("    daos.run() result =\n%s", result)
         if "failed" in result.stdout:
-            self.fail("    Unable to destroy container")
+            self.log.info("    Unable to destroy container")
+            return False
         else:
-            self.container_uuid = None
+            return True
 
 
-    def verify_daos_cont_result(self, result, action, expect, err_code):
-        """Verify the daos create result.
+    def get_container_acl_list(self, pool_uuid, pool_svc, container_uuid,
+                               verbose=False, outfile=None):
+        """Get daos container acl list by daos container get-acl.
 
         Args:
-            result (CmdResult): handle for daos container action.
-            action (str): daos container 'create'.
-            expect (str): pass or fail.
-            err_code (str): expecting error code.
+            pool_uuid (str): Pool uuid.
+            pool_svc (str): Pool service replicas.
+            container_uuid (str): Container uuid.
+            verbose (bool, optional): Verbose mode.
+            outfile (str, optional): Write ACL to file
 
         Return:
-            none.
+            cont_permission_list: daos container acl list.
+
         """
-        if expect.lower() == 'pass':
-            if result.exit_status != 0 or result.stderr != "":
-                self.fail(
-                    "    ##Test Fail on verify_daos_cont_result {}, "
-                    "expected Pass, but Failed.".format(action))
-            else:
-                self.log.info(
-                    "    Test Passed on verify_daos_cont_result %s, "
-                    "Succeed.\n", action)
-        elif err_code not in result.stderr:
+        if not secTestBase.check_uuid_format(pool_uuid):
             self.fail(
-                "    ##Test Fail on verify_daos_cont_result {}, "
-                "expected Failure of {}, but "
-                "Passed.".format(action, expect))
-        else:
-            self.log.info(
-                "    Test Passed on verify_daos_cont_result %s "
-                "expected error of '%s'.\n", action, expect)
+                "    Invalid Pool UUID '%s' provided.", pool_uuid)
+
+        if not secTestBase.check_uuid_format(container_uuid):
+            self.fail(
+                "    Invalid Container UUID '%s' provided.", container_uuid)
+
+        result = self.daos_tool.container_get_acl(pool_uuid, pool_svc,
+                                    container_uuid, verbose, outfile)
+
+        cont_permission_list = []
+        for line in result.stdout.splitlines():
+            if not line.startswith("A:"):
+                continue
+            elif line.startswith("A::"):
+                found_user = re.search(r"A::(.+)@:(.*)", line)
+                if found_user:
+                    cont_permission_list.append(line)
+            elif line.startswith("A:G:"):
+                found_group = re.search(r"A:G:(.+)@:(.*)", line)
+                if found_group:
+                    cont_permission_list.append(line)
+        return cont_permission_list
+
+
+    def compare_acl_lists(self, get_acl_list, expected_list):
+        """Compares two permission lists
+
+        Args:
+            get_acl_list (str list): list of permissions obtained by get-acl
+            expected_list (str list): list of expected permissions
+
+        Returns:
+            True or False if both permission lists are identical or not
+        """
+        self.log.info("    ===> get-acl ACL:  %s", get_acl_list)
+        self.log.info("    ===> Expected ACL: %s", expected_list)
+
+        if len(get_acl_list) == len(expected_list):
+            for element in get_acl_list:
+                if element in expected_list:
+                    continue
+                else:
+                    return False
+            return True
+        return False
 
 
     def cleanup(self, types):
@@ -288,23 +308,12 @@ class ContSecurityTestBase(TestWithServers):
         Args:
             types (list): types of acl files [valid, invalid]
 
-        Returns:
-            none.
         """
         for t in types:
             get_acl_file = "acl_{}.txt".format(t)
             file_name = os.path.join(self.tmp, get_acl_file)
             cmd = "rm -r {}".format(file_name)
-            execute_command(cmd)
-
-
-def execute_command(command):
-    """Executes a command
-
-    Args:
-        command (str): Command to be executed.
-
-    Returns:
-        none.
-    """
-    os.system(command)
+            #TODO: Replace the following line with the commented one
+            #      once the PR1484 has landed.
+            secTestBase.run_command(cmd)
+            #general_utils.run_command(cmd)

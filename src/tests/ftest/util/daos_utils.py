@@ -290,8 +290,13 @@ class DaosCommand(CommandWithSubCommand):
                 super(
                     DaosCommand.ContainerSubCommand.GetAclSubCommand,
                     self).__init__("get-acl")
-                self.outfile = FormattedParameter("--outfile={}")
+                # Additional daos container create parameters:
+                #   --verbose
+                #           verbose mode (get-acl)
                 self.verbose = FormattedParameter("--verbose", False)
+                #   --outfile=PATH
+                #           write ACL to file (get-acl)
+                self.outfile = FormattedParameter("--outfile={}")
 
         class OverwriteAclSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container overwrite-acl cmd."""
@@ -600,6 +605,34 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.svc.value = svc
         self.sub_command_class.sub_command_class.cont.value = cont
         self.sub_command_class.sub_command_class.force.value = force
+        return self._get_result()
+
+    def container_get_acl(self, pool, svc, cont,
+                          verbose=False, outfile=None):
+        """Get the ACL for a given container.
+
+        Args:
+            pool (str): 
+            svc (str):
+            cont (str): Container for which to get the ACL.
+            verbose (bool, optional): 
+            outfile (str, optional): 
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container get-acl command fails.
+
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("get-acl")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.verbose.value = verbose
+        self.sub_command_class.sub_command_class.outfile.value = outfile
         return self._get_result()
 
     def pool_list_cont(self, pool, svc, sys_name=None, env=None):
