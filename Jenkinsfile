@@ -581,7 +581,7 @@ pipeline {
                         sconsBuild clean: "_build.external${arch}",
                                    failure_artifacts: 'config.log-centos7-gcc',
                                    scons_args: "BUILD_ROOT=/mnt/build-area",
-                                   prebuild: "df -h ; sudo mkdir -p /mnt/build-area; sudo mount -t tmpfs tmpfs /mnt/build-area; df -h"
+                                   prebuild: "df -h"
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
