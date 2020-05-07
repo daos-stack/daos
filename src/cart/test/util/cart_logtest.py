@@ -92,6 +92,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'crt_proc_d_rank_list_t': ('rank_list',
                                                 'rank_list->rl_ranks'),
                      'path_gen': ('*fpath'),
+                     'ds_pool_tgt_map_update': ('arg'),
                      'get_attach_info': ('reqb'),
                      'iod_fetch': ('biovs'),
                      'bio_sgl_init': ('sgl->bs_iovs'),
@@ -101,12 +102,20 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'dfuse_pool_lookup': ('ie', 'dfs', 'dfp'),
                      'pool_prop_read': ('prop->dpp_entries[idx].dpe_str',
                                         'prop->dpp_entries[idx].dpe_val_ptr'),
-                     'cont_prop_read': ('prop->dpp_entries[idx].dpe_str'),
+                     'cont_prop_read': ('prop->dpp_entries[idx].dpe_str',
+                                        'prop->dpp_entries[idx].dpe_val_ptr'),
+                     'cont_prop_default_copy': ('entry_def->dpe_str'),
                      'cont_iv_prop_g2l': ('prop_entry->dpe_str'),
+                     'enum_cont_cb': ('ptr'),
+                     'obj_enum_prep_sgls': ('dst_sgls[i].sg_iovs',
+                                            'dst_sgls[i].sg_iovs[j].iov_buf'),
                      'notify_ready': ('reqb'),
+                     'local_name_to_principal_name': ('*name'),
                      'pack_daos_response': ('body'),
                      'ds_mgmt_drpc_get_attach_info': ('body'),
                      'pool_prop_default_copy': ('entry_def->dpe_str'),
+                     'pool_iv_prop_g2l': ('prop_entry->dpe_str'),
+                     'daos_prop_entry_copy': ('entry_dup->dpe_str'),
                      'daos_prop_dup': ('entry_dup->dpe_str'),
                      'auth_cred_to_iov': ('packed')}
 
@@ -114,6 +123,11 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_group_psr_set': ('uri'),
                     'crt_hdlr_uri_lookup': ('tmp_uri'),
                     'crt_rpc_priv_free': ('rpc_priv'),
+                    'cont_prop_default_copy': ('entry_def->dpe_str'),
+                    'ds_pool_list_cont_handler': ('cont_buf'),
+                    'dtx_resync_ult': ('arg'),
+                    'daos_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
+                                      'sgl->sg_iovs'),
                     'd_rank_list_free': ('rank_list',
                                          'rank_list->rl_ranks'),
                     'pool_prop_default_copy': ('entry_def->dpe_str'),
@@ -124,8 +138,8 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'pool_child_add_one': ('path'),
                     'bio_sgl_fini': ('sgl->bs_iovs'),
                     'daos_iov_free': ('iov->iov_buf'),
-                    'daos_prop_free': ('entry->dpe_str',
-                                       'entry->dpe_val_ptr'),
+                    'daos_prop_entry_free_value': ('entry->dpe_str',
+                                                   'entry->dpe_val_ptr'),
                     'main': ('dfs'),
                     'start_one': ('path'),
                     'pool_svc_load_uuid_cb': ('path'),
@@ -231,14 +245,16 @@ class LogTest():
         """
         self.strict_functions[function] = bug_id
 
-    def check_log_file(self, abort_on_warning):
+    def check_log_file(self, abort_on_warning, show_memleaks=True):
         """Check a single log file for consistency"""
 
         for pid in self._li.get_pids():
-            self._check_pid_from_log_file(pid, abort_on_warning)
+            self._check_pid_from_log_file(pid, abort_on_warning,
+                                          show_memleaks=show_memleaks)
 
 #pylint: disable=too-many-branches,no-self-use,too-many-nested-blocks
-    def _check_pid_from_log_file(self, pid, abort_on_warning):
+    def _check_pid_from_log_file(self, pid, abort_on_warning,
+                                 show_memleaks=True):
         """Check a pid from a single log file for consistency"""
 
         # Dict of active descriptors.
@@ -414,6 +430,17 @@ class LogTest():
 
         print("Memsize: {}".format(memsize))
 
+        pp = pprint.PrettyPrinter()
+        if mismatch_alloc_seen:
+            print('Mismatched allocations were allocated here:')
+            print(pp.pformat(mismatch_alloc_seen))
+        if mismatch_free_seen:
+            print('Mismatched allocations were freed here:')
+            print(pp.pformat(mismatch_free_seen))
+
+        if not show_memleaks:
+            return
+
         # Special case the fuse arg values as these are allocated by IOF
         # but freed by fuse itself.
         # Skip over CaRT issues for now to get this landed, we can enable them
@@ -429,14 +456,6 @@ class LogTest():
             else:
                 show_line(line, 'error', 'memory not freed')
             lost_memory = True
-
-        pp = pprint.PrettyPrinter()
-        if mismatch_alloc_seen:
-            print('Mismatched allocations were allocated here:')
-            print(pp.pformat(mismatch_alloc_seen))
-        if mismatch_free_seen:
-            print('Mismatched allocations were freed here:')
-            print(pp.pformat(mismatch_free_seen))
 
         if active_desc:
             for (_, line) in active_desc.items():
