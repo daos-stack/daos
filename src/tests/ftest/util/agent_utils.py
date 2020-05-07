@@ -25,7 +25,7 @@ import socket
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, EnvironmentVariables
-from command_utils import YamlCommand, SubprocessManager
+from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 
 
 def include_local_host(hosts):
@@ -72,7 +72,7 @@ class DaosAgentCommand(YamlCommand):
 
         # Command line parameters:
         # -d, --debug        Enable debug output
-        # -j, --json         Enable JSON output
+        # -J, --json-logging Enable JSON logging
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
         self.json = FormattedParameter("--json", False)
@@ -97,6 +97,45 @@ class DaosAgentCommand(YamlCommand):
         # Run daos_agent with test variant specific log file names if specified
         self.yaml.update_log_file(getattr(test, "agent_log"))
 
+    def get_sub_command_class(self):
+        """Get the daos_agent sub command object based on the sub-command."""
+        if self.sub_command.value == "dump-attachinfo":
+            self.sub_command_class = self.DumpAttachInfoSubCommand()
+        else:
+            self.sub_command_class = None
+
+    class DumpAttachInfoSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_agent dump-attachinfo sub command."""
+
+        def __init__(self):
+            """Create a daos_agent dump-attachinfo subcommand object."""
+            super(DaosAgentCommand.DumpAttachInfoSubCommand, self).__init__(
+                "/run/daos_agent/dump-attachinfo/*", "dump-attachinfo")
+
+            self.output = FormattedParameter("--output {}", None)
+
+    def dump_attachinfo(self, path="uri.txt"):
+        """Write CaRT attachinfo file
+
+        Args:
+            path (str): Path to attachinfo file.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos_agent dump-attachinfo command fails.
+
+        """
+        self.set_sub_command("dump-attachinfo")
+        self.sub_command_class.output.value = path
+        try:
+            return self.run()
+        except CommandFailure as error:
+            raise CommandFailure(
+                "<daos_agent> dump-attachinfo failed: {}".format(error))
+
 
 class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts."""
@@ -118,6 +157,7 @@ class DaosAgentManager(SubprocessManager):
             "DD_MASK": "mgmt,io,md,epc,rebuild"
         }
         self.manager.assign_environment_default(EnvironmentVariables(env_vars))
+        self.daos_agent = agent_command
 
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
