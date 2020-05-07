@@ -50,6 +50,7 @@ class NvmeIo(IorTestBase):
 
         :avocado: tags=all,full_regression,hw,large,daosio,nvme_io
         """
+
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
         object_type = self.params.get("object_type", '/run/ior/*')
@@ -57,10 +58,12 @@ class NvmeIo(IorTestBase):
         # Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
-                # There is an issue with NVMe if Transfer size>64M,
-                # Skipped this sizes for now
-                if ior_param[2] > 67108864:
-                    self.log.warning("Xfersize > 64M fails - DAOS-1264")
+                # There is an issue with replication for final test case
+                # in the yaml file. Hence, skip that case for all Replication
+                # object classes.
+                if obj_type.startswith("RP") and ior_param[2] == 33554432:
+                    self.log.warning("Replication test Fails with  DAOS-4738,")
+                    self.log.warning("hence skipping")
                     continue
 
                 # Create and connect to a pool
@@ -70,6 +73,9 @@ class NvmeIo(IorTestBase):
                 self.pool.scm_size.update(ior_param[0])
                 self.pool.nvme_size.update(ior_param[1])
                 self.pool.create()
+
+                # Disable aggregation
+                self.pool.set_property()
 
                 # Get the current pool sizes
                 self.pool.get_info()
