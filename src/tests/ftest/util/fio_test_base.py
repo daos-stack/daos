@@ -71,7 +71,8 @@ class FioBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            self.dfuse = None
+            if self.dfuse:
+                self.dfuse.stop()
         finally:
             # Stop the servers and agents
             super(FioBase, self).tearDown()
@@ -153,3 +154,7 @@ class FioBase(TestWithServers):
         # Run Fio
         self.fio_cmd.hosts = self.hostlist_clients
         self.fio_cmd.run()
+
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None

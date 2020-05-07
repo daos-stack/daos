@@ -84,7 +84,8 @@ class MdtestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            self.dfuse = None
+            if self.dfuse:
+                self.dfuse.stop()
         finally:
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
@@ -126,6 +127,7 @@ class MdtestBase(TestWithServers):
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
+
         self.dfuse = Dfuse(self.hostlist_clients,
                            self.tmp,
                            log_file=get_log_file(self.client_log),
@@ -141,10 +143,9 @@ class MdtestBase(TestWithServers):
             self.dfuse.run()
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse), str(NodeSet(self.dfuse.hosts)),
+                           str(self.dfuse), self.dfuse.hosts,
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
-
 
     def execute_mdtest(self):
         """Runner method for Mdtest."""
@@ -167,6 +168,9 @@ class MdtestBase(TestWithServers):
        # Run Mdtest
         self.run_mdtest(self.get_job_manager_command(self.manager),
                         self.processes)
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
     def get_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.
