@@ -33,7 +33,7 @@ import dmg_utils
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
 import security_test_base as secTestBase
-#TODO: Uncomment 'general_utils' once the PR1484 has landed.
+# To uncomment 'general_utils' once the PR1484 has landed.
 #import general_utils
 
 PERMISSIONS = ["r", "w", "rw", "rwc", "rwcd", "rwcdt", "rwcdtT"]
@@ -90,9 +90,11 @@ class ContSecurityTestBase(TestWithServers):
                            "A:G:GROUP@:rwtT"]
         elif acl_type == "valid":
             acl_entries = ["A::OWNER@:rwdtTaAo",
-                           secTestBase.acl_entry("user", self.current_user, "random", PERMISSIONS),
+                           secTestBase.acl_entry("user", self.current_user,
+                                                 "random", PERMISSIONS),
                            "A:G:GROUP@:rwtT",
-                           secTestBase.acl_entry("group", self.current_group, "random", PERMISSIONS),
+                           secTestBase.acl_entry("group", self.current_group,
+                                                 "random", PERMISSIONS),
                            "A::EVERYONE@:"]
         elif acl_type == "invalid":
             acl_entries = ["A::OWNER@:invalid",
@@ -262,7 +264,8 @@ class ContSecurityTestBase(TestWithServers):
                 "    Invalid Container UUID '%s' provided.", container_uuid)
 
         result = self.daos_tool.container_get_acl(pool_uuid, pool_svc,
-                                    container_uuid, verbose, outfile)
+                                                  container_uuid, verbose,
+                                                  outfile)
 
         cont_permission_list = []
         for line in result.stdout.splitlines():
@@ -309,11 +312,11 @@ class ContSecurityTestBase(TestWithServers):
             types (list): types of acl files [valid, invalid]
 
         """
-        for t in types:
-            get_acl_file = "acl_{}.txt".format(t)
+        for typ in types:
+            get_acl_file = "acl_{}.txt".format(typ)
             file_name = os.path.join(self.tmp, get_acl_file)
             cmd = "rm -r {}".format(file_name)
-            #TODO: Replace the following line with the commented one
-            #      once the PR1484 has landed.
+            # To replace the following line with the commented one
+            # once the PR1484 has landed.
             secTestBase.run_command(cmd)
             #general_utils.run_command(cmd)

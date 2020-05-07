@@ -26,7 +26,7 @@ import os
 import re
 import random
 from general_utils import pcmd
-#TODO: Remove the following import once the PR1484 has landed.
+# To remove the following import once the PR1484 has landed.
 from avocado.utils import process
 
 def acl_entry(usergroup, name, perm, permissions):
@@ -111,13 +111,10 @@ def check_uuid_format(uuid):
         True or False if uuid is well formed or not.
     """
     pattern = re.compile("([0-9a-f-]+)")
-    if len(uuid) == 36 and pattern.match(uuid):
-        return True
-    else:
-        return False
+    return bool(len(uuid) == 36 and pattern.match(uuid))
 
 
-#TODO: Remove the following function once the PR1484 has landed.
+# To remove the following function once the PR1484 has landed.
 def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 output_check="combined", env=None):
     """Run the command on the local host.

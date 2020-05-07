@@ -536,6 +536,7 @@ class DaosCommand(CommandWithSubCommand):
     def container_create(self, pool, sys_name=None, svc=None, cont=None,
                          path=None, cont_type=None, oclass=None,
                          chunk_size=None, properties=None, acl_file=None):
+        # pylint: disable=too-many-arguments
         """Create a container.
 
         Args:
@@ -612,11 +613,11 @@ class DaosCommand(CommandWithSubCommand):
         """Get the ACL for a given container.
 
         Args:
-            pool (str): 
-            svc (str):
+            pool (str): Pool UUID
+            svc (str): Service replicas
             cont (str): Container for which to get the ACL.
-            verbose (bool, optional): 
-            outfile (str, optional): 
+            verbose (bool, optional): Verbose mode.
+            outfile (str, optional): Write ACL to file.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
