@@ -65,6 +65,5 @@ class ControlTestBase(TestWithServers):
         cmd = r"cat {} | sed -En 's/{}/\1/p'".format(sp_file, pattern)
         text = "superblock"
         error = "Error obtaining superblock info: {}".format(sp_value)
+
         return get_host_data(self.dmg.hostlist, cmd, text, error, 20)
-
-

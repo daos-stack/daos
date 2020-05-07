@@ -30,6 +30,7 @@ from general_utils import pcmd
 
 
 class DmgStorageReformatTest(ControlTestBase):
+    # pylint: disable=too-many-ancestors
     """Test Class Description:
     Test to verify that dmg storage command reformat option.
     :avocado: recursive
@@ -61,7 +62,7 @@ class DmgStorageReformatTest(ControlTestBase):
         # Start servers again
         self.log.info("==>    STARTING SERVERS")
         self.server_managers[-1].prepare()
-        self.detect_format_ready()
+        self.server_managers[-1].detect_format_ready()
 
         # Disable throwing dmg failure here since we expect it to fail
         self.server_managers[-1].dmg.exit_status_exception = False
@@ -70,7 +71,7 @@ class DmgStorageReformatTest(ControlTestBase):
 
         self.log.info("==>    Waiting for the servers to ask for reformat.")
         self.server_managers[-1].manager.job.update_pattern(
-            "reformat", len(self.server_managers[-1]._hosts))
+            "reformat", len(self.server_managers[-1].hosts))
 
         if not self.server_managers[-1].manager.job.check_subprocess_status(
                 self.server_managers[-1].manager.process):

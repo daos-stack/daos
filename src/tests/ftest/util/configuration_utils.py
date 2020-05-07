@@ -27,7 +27,7 @@ import re
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils import ObjectWithParameters, BasicParameter
-from general_utils import run_task, get_host_data
+from general_utils import get_host_data
 
 
 DATA_ERROR = "[ERROR]"
