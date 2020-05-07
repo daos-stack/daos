@@ -89,7 +89,7 @@ run_all_tests(int keys, bool nest_iterators)
 
 	if (!bypass) {
 		if (!nest_iterators) {
-			create_config(cfg_desc_io, "keys=%d", keys, bypass);
+			create_config(cfg_desc_io, "keys=%d", keys);
 			failed += run_ts_tests(cfg_desc_io);
 			failed += run_mvcc_tests(cfg_desc_io);
 		}
