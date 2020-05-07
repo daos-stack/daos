@@ -48,7 +48,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
             8. Remove all files created
 
         :avocado: tags=all,full_regression,security,container_acl,
-        :avocado: tags=cont_create_acl,cont_create_acl
+        :avocado: tags=cont_create_acl
         """
 
         ## Getting the default ACL list
