@@ -268,9 +268,9 @@ struct index_record {
 	uint32_t value;
 };
 
-#define LRU_ARRAY_SIZE		32
-#define LRU_ARRAY_LEVELS	4
-#define NUM_INDEXES		128
+#define LRU_ARRAY_SIZE	32
+#define LRU_ARRAY_NR	4
+#define NUM_INDEXES	128
 struct lru_arg {
 	struct lru_array	*array;
 	struct index_record	 indexes[NUM_INDEXES];
@@ -655,7 +655,7 @@ init_lru_multi_test(void **state)
 	if (ts_arg == NULL)
 		return 1;
 
-	rc = lrua_array_alloc(&ts_arg->array, LRU_ARRAY_SIZE, LRU_ARRAY_LEVELS,
+	rc = lrua_array_alloc(&ts_arg->array, LRU_ARRAY_SIZE, LRU_ARRAY_NR,
 			      sizeof(struct lru_record), LRU_FLAG_REUSE_UNIQUE,
 			      &lru_cbs, ts_arg);
 

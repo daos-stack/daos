@@ -29,6 +29,10 @@
 #define D_LOGFAC DD_FAC(vos)
 #include "lru_array.h"
 
+/** Internal converter for real index to entity index in sub array */
+#define ent2idx(array, sub, ent_idx)	\
+	(((sub)->ls_array_idx << (array)->la_array_shift) + (ent_idx))
+
 static void
 evict_cb(struct lru_array *array, struct lru_sub *sub, struct lru_entry *entry,
 	 uint32_t idx)
@@ -37,11 +41,11 @@ evict_cb(struct lru_array *array, struct lru_sub *sub, struct lru_entry *entry,
 
 	if (array->la_cbs.lru_on_evict == NULL) {
 		/** By default, reset the entry */
-		memset(entry->le_payload, 0, array->la_record_size);
+		memset(entry->le_payload, 0, array->la_payload_size);
 		return;
 	}
 
-	real_idx = (sub->ls_array_idx << array->la_array_shift) + idx;
+	real_idx = ent2idx(array, sub, idx);
 
 	array->la_evicting++;
 	array->la_cbs.lru_on_evict(entry->le_payload, real_idx, array->la_arg);
@@ -57,7 +61,7 @@ init_cb(struct lru_array *array, struct lru_sub *sub, struct lru_entry *entry,
 	if (array->la_cbs.lru_on_init == NULL)
 		return;
 
-	real_idx = (sub->ls_array_idx << array->la_array_shift) + idx;
+	real_idx = ent2idx(array, sub, idx);
 
 	array->la_cbs.lru_on_init(entry->le_payload, real_idx, array->la_arg);
 }
@@ -71,7 +75,7 @@ fini_cb(struct lru_array *array, struct lru_sub *sub, struct lru_entry *entry,
 	if (array->la_cbs.lru_on_fini == NULL)
 		return;
 
-	real_idx = (sub->ls_array_idx << array->la_array_shift) + idx;
+	real_idx = ent2idx(array, sub, idx);
 
 	array->la_cbs.lru_on_fini(entry->le_payload, real_idx, array->la_arg);
 }
@@ -86,7 +90,7 @@ array_alloc_one(struct lru_array *array, struct lru_sub *sub)
 	uint32_t		 prev_idx = nr_ents - 1;
 	uint32_t		 idx;
 
-	rec_size = sizeof(*entry) + array->la_record_size;
+	rec_size = sizeof(*entry) + array->la_payload_size;
 	D_ALLOC(sub->ls_table, rec_size * nr_ents);
 	if (sub->ls_table == NULL)
 		return -DER_NOMEM;
@@ -104,7 +108,7 @@ array_alloc_one(struct lru_array *array, struct lru_sub *sub)
 		entry->le_prev_idx = prev_idx;
 		entry->le_next_idx = (idx + 1) & array->la_idx_mask;
 		init_cb(array, sub, entry, idx);
-		payload += array->la_record_size;
+		payload += array->la_payload_size;
 		prev_idx = idx;
 	}
 
@@ -135,7 +139,7 @@ sub_find_free(struct lru_array *array, struct lru_sub *sub,
 
 	*entryp = entry;
 
-	*idx = (sub->ls_array_idx << array->la_array_shift) + tree_idx;
+	*idx = ent2idx(array, sub, tree_idx);
 
 	return true;
 }
@@ -198,7 +202,7 @@ lrua_find_free(struct lru_array *array, struct lru_entry **entryp,
 
 	evict_cb(array, sub, entry, sub->ls_lru);
 
-	*idx = (sub->ls_array_idx << array->la_array_shift) + sub->ls_lru;
+	*idx = ent2idx(array, sub, sub->ls_lru);
 	entry->le_key = key;
 	sub->ls_lru = entry->le_next_idx;
 
@@ -210,7 +214,6 @@ lrua_evictx(struct lru_array *array, uint32_t idx, uint64_t key)
 {
 	struct lru_entry	*entry;
 	struct lru_sub		*sub;
-	uint32_t		 sub_idx;
 	uint32_t		 ent_idx;
 
 	D_ASSERT(array != NULL);
@@ -219,10 +222,8 @@ lrua_evictx(struct lru_array *array, uint32_t idx, uint64_t key)
 	if (idx >= array->la_count)
 		return;
 
-	sub_idx = (idx & array->la_array_mask) >> array->la_array_shift;
-	ent_idx = idx & array->la_idx_mask;
-
-	sub = &array->la_sub[sub_idx];
+	sub = lrua_idx2sub(array, idx);
+	ent_idx = lrua_idx2ent(array, idx);
 
 	if (sub->ls_table == NULL)
 		return;
@@ -251,7 +252,7 @@ lrua_evictx(struct lru_array *array, uint32_t idx, uint64_t key)
 
 int
 lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent, uint32_t nr_arrays,
-		 uint16_t record_size, uint32_t flags,
+		 uint16_t payload_size, uint32_t flags,
 		 const struct lru_callbacks *cbs, void *arg)
 {
 	struct lru_array	*array;
@@ -281,7 +282,7 @@ lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent, uint32_t nr_arrays,
 		flags |= LRU_FLAG_EVICT_MANUAL;
 	}
 
-	aligned_size = (record_size + 7) & ~7;
+	aligned_size = (payload_size + 7) & ~7;
 
 	*arrayp = NULL;
 
@@ -292,11 +293,11 @@ lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent, uint32_t nr_arrays,
 
 	array->la_count = nr_ent;
 	array->la_idx_mask = (nr_ent / nr_arrays) - 1;
-	array->la_array_mask = (nr_ent - 1) & ~array->la_idx_mask;
+	array->la_array_nr = nr_arrays;
 	array->la_array_shift = 1;
 	while ((1 << array->la_array_shift) < array->la_idx_mask)
 		array->la_array_shift++;
-	array->la_record_size = aligned_size;
+	array->la_payload_size = aligned_size;
 	array->la_flags = flags;
 	array->la_arg = arg;
 	if (cbs != NULL)
@@ -338,14 +339,12 @@ lrua_array_free(struct lru_array *array)
 {
 	struct lru_sub	*sub;
 	uint32_t	 i;
-	uint32_t	 nr_arrays;
 
 	if (array == NULL)
 		return;
 
-	nr_arrays = (array->la_array_mask >> array->la_array_shift) + 1;
 
-	for (i = 0; i < nr_arrays; i++) {
+	for (i = 0; i < array->la_array_nr; i++) {
 		sub = &array->la_sub[i];
 		if (sub->ls_table != NULL)
 			array_free_one(array, sub);
@@ -366,7 +365,11 @@ lrua_array_aggregate(struct lru_array *array)
 	if (d_list_empty(&array->la_free_sub))
 		return; /* Nothing to do */
 
-	sub = d_list_entry(array->la_free_sub.next, struct lru_sub, ls_link);
+	/** Grab the 2nd entry (may be head in which case the loop will  be a
+	 *  noop).   This leaves some free entries in the array.
+	 */
+	sub = d_list_entry(array->la_free_sub.next->next, struct lru_sub,
+			   ls_link);
 
 	d_list_for_each_entry_safe_from(sub, tmp, &array->la_free_sub,
 					ls_link) {

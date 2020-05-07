@@ -42,7 +42,7 @@ struct lru_callbacks {
 };
 
 struct lru_entry {
-	/** The pointer to the index is unique identifier for the entry */
+	/** Unique identifier for this entry */
 	uint64_t	 le_key;
 	/** Pointer to this entry */
 	void		*le_payload;
@@ -74,9 +74,13 @@ struct lru_sub {
 #define LRU_NO_IDX	0xffffffff
 
 enum {
-	/** Free'd entries are added to tail of free list */
+	/** No automatic eviction of the LRU.  Flag is set automatically for
+	 *  arrays with multiple sub arrays
+	 */
 	LRU_FLAG_EVICT_MANUAL		= 1,
-	/** Free'd entries are added to tail of free list */
+	/** Free'd entries are added to tail of free list to avoid frequent
+	 *  reuse of entries
+	 */
 	LRU_FLAG_REUSE_UNIQUE		= 2,
 };
 
@@ -84,13 +88,13 @@ struct lru_array {
 	/** Number of indices */
 	uint32_t		 la_count;
 	/** record size */
-	uint16_t		 la_record_size;
+	uint16_t		 la_payload_size;
 	/** eviction count */
 	uint16_t		 la_evicting;
 	/** Array flags */
 	uint32_t		 la_flags;
-	/** Second level mask */
-	uint32_t		 la_array_mask;
+	/** Number of 2nd level arrays */
+	uint32_t		 la_array_nr;
 	/** Second level bit shift */
 	uint32_t		 la_array_shift;
 	/** First level mask */
@@ -106,6 +110,12 @@ struct lru_array {
 	/** Allocated subarrays */
 	struct lru_sub		 la_sub[0];
 };
+
+/** Internal converter for real index to sub array index */
+#define lrua_idx2sub(array, idx)	\
+	(&(array)->la_sub[((idx) >> (array)->la_array_shift)])
+/** Internal converter for real index to entity index in sub array */
+#define lrua_idx2ent(array, idx) ((idx) & (array)->la_idx_mask)
 
 /** Internal API: Evict the LRU, move it to MRU, invoke eviction callback,
  *  and return the index
@@ -195,16 +205,14 @@ lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key)
 {
 	struct lru_entry	*entry;
 	struct lru_sub		*sub;
-	uint32_t		 sub_idx;
 	uint32_t		 ent_idx;
 
 	if (idx >= array->la_count)
 		return NULL;
 
-	sub_idx = (idx & array->la_array_mask) >> array->la_array_shift;
+	sub = lrua_idx2sub(array, idx);
 	ent_idx = idx & array->la_idx_mask;
 
-	sub = &array->la_sub[sub_idx];
 	if (sub->ls_table == NULL)
 		return NULL;
 
@@ -225,7 +233,7 @@ lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key)
  * \param	array[in]	The lru array
  * \param	idx[in]		The index of the entry
  * \param	idx[in]		Unique identifier
- * \param	entryp[in,out]	Valid only if function returns true.
+ * \param	entryp[out]	Valid only if function returns true.
  *
  * \return true if the entry is in the array and set \p entryp accordingly
  */
@@ -252,7 +260,7 @@ lrua_lookupx(struct lru_array *array, uint32_t idx, uint64_t key,
  *
  * \param	array[in]	The lru array
  * \param	idx[in,out]	Address of the record index.
- * \param	entryp[in,out]	Valid only if function returns true.
+ * \param	entryp[out]	Valid only if function returns true.
  *
  * \return true if the entry is in the array and set \p entryp accordingly
  */
@@ -274,7 +282,7 @@ lrua_lookup(struct lru_array *array, const uint32_t *idx,
  *
  * \return	Returns a pointer to the entry.  It can return NULL if
  *		manual eviction flag is set and either there are no available
- *		entries or no an allocation failed.
+ *		entries or an allocation failed.
  */
 static inline void *
 lrua_allocx(struct lru_array *array, uint32_t *idx, uint64_t key)
@@ -302,7 +310,7 @@ lrua_allocx(struct lru_array *array, uint32_t *idx, uint64_t key)
  *
  * \return	Returns a pointer to the entry.  It can return NULL if
  *		manual eviction flag is set and either there are no available
- *		entries or no an allocation failed.
+ *		entries or an allocation failed.
  */
 static inline void *
 lrua_alloc(struct lru_array *array, uint32_t *idx)
@@ -323,7 +331,6 @@ lrua_allocx_inplace(struct lru_array *array, uint32_t idx, uint64_t key)
 {
 	struct lru_entry	*entry;
 	struct lru_sub		*sub;
-	uint32_t		 sub_idx;
 	uint32_t		 ent_idx;
 
 	D_ASSERT(array != NULL);
@@ -334,9 +341,8 @@ lrua_allocx_inplace(struct lru_array *array, uint32_t idx, uint64_t key)
 		return NULL;
 	}
 
-	sub_idx = (idx & array->la_array_mask) >> array->la_array_shift;
-	ent_idx = idx & array->la_idx_mask;
-	sub = &array->la_sub[sub_idx];
+	sub = lrua_idx2sub(array, idx);
+	ent_idx = lrua_idx2ent(array, idx);
 	entry = &sub->ls_table[ent_idx];
 	if (entry->le_key != key && entry->le_key != 0) {
 		D_ERROR("Cannot allocated idx %d in place\n", idx);
@@ -387,7 +393,7 @@ lrua_evict(struct lru_array *array, uint32_t *idx)
  */
 int
 lrua_array_alloc(struct lru_array **array, uint32_t nr_ent, uint32_t nr_arrays,
-		 uint16_t record_size, uint32_t flags,
+		 uint16_t rec_size, uint32_t flags,
 		 const struct lru_callbacks *cbs, void *arg);
 
 /** Free an LRU array
