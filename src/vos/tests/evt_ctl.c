@@ -102,8 +102,7 @@ struct test_arg {
 
 /* variables for test group */
 static char		**test_group_args;
-static int		test_group_start;
-static int		test_group_stop;
+static int		test_group_argc;
 
 static int
 ts_evt_bio_free(struct umem_instance *umm, struct evt_desc *desc,
@@ -2175,7 +2174,7 @@ test_evt_outer_punch(void **state)
 }
 
 static int
-run_internal_tests(void)
+run_internal_tests(char *test_name)
 {
 	static const struct CMUnitTest evt_builtin[] = {
 		{ "EVT050: evt_iter_delete", test_evt_iter_delete,
@@ -2213,7 +2212,7 @@ run_internal_tests(void)
 		{ NULL, NULL, NULL, NULL }
 	};
 
-	return cmocka_run_group_tests_name("evtree built-in tests", evt_builtin,
+	return cmocka_run_group_tests_name(test_name, evt_builtin,
 					   global_setup, global_teardown);
 }
 
@@ -2305,8 +2304,8 @@ ts_group(void **state)
 
 	int	opc = 0;
 
-	while ((opc = getopt_long(test_group_stop-test_group_start+1,
-				 test_group_args+test_group_start,
+	while ((opc = getopt_long(test_group_argc,
+				 test_group_args,
 				 "C:a:m:e:f:g:d:b:Docl::ts",
 				 ts_ops, NULL)) != -1){
 		ts_cmd_run(opc, optarg);
@@ -2314,7 +2313,7 @@ ts_group(void **state)
 }
 
 static int
-run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
+run_cmd_line_test(char *test_name, char **args, int argc)
 {
 
 	const struct CMUnitTest evt_test[] = {
@@ -2322,10 +2321,9 @@ run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
 	};
 
 	test_group_args = args;
-	test_group_start = start_idx;
-	test_group_stop = stop_idx;
+	test_group_argc = argc;
 
-	return cmocka_run_group_tests_name("Group of tests",
+	return cmocka_run_group_tests_name(test_name,
 					   evt_test,
 					   NULL,
 					   NULL);
@@ -2339,7 +2337,7 @@ main(int argc, char **argv)
 	int		j;
 	int		start_idx;
 	char		*test_name;
-	int		stop_idx;
+	bool		create_pmem;
 
 	d_register_alt_assert(mock_assert);
 
@@ -2352,46 +2350,61 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	optind = 0;
-	if (argc > 1 && strcmp(argv[1], "pmem") == 0) {
-		optind = 1;
+	/* Capture test_name and pmem args if any */
+	start_idx = 0;
+	test_name = "evtree default test suite name";
+	create_pmem = false;
+	if (argc > 1) {
+		/* Get test suite variables */
+		if (strcmp(argv[1], "--start-test") == 0) {
+			start_idx = 2;
+			test_name = argv[start_idx];
+		}
+
+		/* Capture pmem parameter */
+		if (argc > start_idx+1) {
+			if (strcmp(argv[start_idx+1], "pmem") == 0) {
+				create_pmem = true;
+				start_idx++;
+			}
+		}
+	}
+	optind = start_idx;
+	/* Create pool - pmem or vmem */
+	if (create_pmem) {
 		rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*ts_root),
 				       &ts_utx);
 	} else {
 		rc = utest_vmem_create(sizeof(*ts_root), &ts_utx);
 	}
-
-	if (rc != 0)
+	if (rc != 0) {
+		perror("Evtree test couldn't create pool");
 		return rc;
+	}
 
 	ts_root = utest_utx2root(ts_utx);
 	ts_uma = utest_utx2uma(ts_utx);
 
+	/* Start interactive session*/
 	if ((argc - optind) == 1) {
+		print_message("Starting interactive session...\n");
 		rc = dts_cmd_parser(ts_ops, "$ > ", ts_cmd_run);
 		goto out;
 	}
 
-	/* First, execute Internal tests in the command */
+	/* Execute Internal tests in the command */
 	for (j = 0; j < argc; j++) {
 		if (strcmp(argv[j], "-t") == 0) {
-			rc = run_internal_tests();
+			rc = run_internal_tests(test_name);
 			if (rc != 0)
 				D_PRINT("Internal tests failed rc="DF_RC"\n",
 					DP_RC(rc));
+			goto out;
 		}
 	}
 
 	/* Execute the sequence of tests */
-	stop_idx = argc-1;
-	if (strcmp(argv[1], "--start-test") != 0) {
-		start_idx = 0;
-		test_name = "Evt_ctl testing tool";
-	} else {
-		start_idx = 2;
-		test_name = argv[start_idx];
-	}
-	rc = run_cmd_line_test(test_name, argv, start_idx, stop_idx);
+	rc = run_cmd_line_test(test_name, argv, argc);
  out:
 	daos_debug_fini();
 	rc += utest_utx_destroy(ts_utx);

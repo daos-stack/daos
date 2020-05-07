@@ -246,11 +246,22 @@ the management API and tool and will be documented here once available.
 
 ### Target Exclusion and Self-Healing
 
+An operator can exclude one or more targets from a specific DAOS pool using the rank
+the target resides on as well as the target idx on that rank. Excluding a target will
+automatically start the rebuild process.
+
 **To exclude a target from a pool:**
 
 ```bash
-$ dmg_old exclude --svc=${svcl} --pool=${puuid} --target=${rank}
+$ dmg pool exclude --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
 ```
+
+The pool target exclude command accepts 3 required parameters:
+
+* The pool UUID of the pool that the targets will be excluded from.
+* The rank of the target(s) te be excluded.
+* The target Indices of the targets to be excluded from that rank.
+
 ### Target Reintegration
 
 After a target failure an operator can fix the underlying issue and reintegrate the

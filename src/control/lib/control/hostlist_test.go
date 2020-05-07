@@ -51,7 +51,7 @@ func mockHostList(hosts ...string) []string {
 }
 
 func TestControl_ParseHostList(t *testing.T) {
-	defaultCfg := DefaultClientConfig()
+	defaultCfg := DefaultConfig()
 
 	for name, tc := range map[string]struct {
 		in     []string
@@ -112,20 +112,20 @@ func TestControl_ParseHostList(t *testing.T) {
 }
 
 func TestControl_getRequestHosts(t *testing.T) {
-	defaultCfg := DefaultClientConfig()
+	defaultCfg := DefaultConfig()
 	defaultCfg.HostList = mockHostList("a", "b", "c")
 	for i, host := range defaultCfg.HostList {
 		defaultCfg.HostList[i] = fmt.Sprintf("%s:%d", host, defaultCfg.ControlPort)
 	}
 
 	for name, tc := range map[string]struct {
-		cfg    *ClientConfig
+		cfg    *Config
 		req    targetChooser
 		expOut []string
 		expErr error
 	}{
 		"bad hostname in config": {
-			cfg: &ClientConfig{
+			cfg: &Config{
 				ControlPort: 42,
 				HostList:    mockHostList("::"),
 			},
@@ -140,14 +140,14 @@ func TestControl_getRequestHosts(t *testing.T) {
 			expErr: errors.New("invalid host"),
 		},
 		"invalid config control port": {
-			cfg: &ClientConfig{
+			cfg: &Config{
 				HostList: mockHostList("foo"),
 			},
 			req:    &testTgtChooser{},
 			expErr: FaultConfigBadControlPort,
 		},
 		"empty config hostlist": {
-			cfg:    &ClientConfig{},
+			cfg:    &Config{},
 			req:    &testTgtChooser{},
 			expErr: FaultConfigEmptyHostList,
 		},
