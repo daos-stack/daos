@@ -74,6 +74,12 @@ message PoolExcludeResp {
 message PoolExtendReq {
 	string uuid = 1; // uuid of pool to add target up to
 	repeated uint32 ranks = 2; // ranks
+	uint64 scmbytes = 3; // SCM size in bytes
+	uint64 nvmebytes = 4; // NVMe size in bytes
+	string user = 5; // formatted user e.g. "bob@"
+	string usergroup = 6; // formatted group e.g. "builders@"
+	string sys = 7; // DAOS system identifier
+	repeated string acl = 8; // Access Control Entries in short string format
 }
 
 // PoolExtendResp returns resultant state of Extend operation.

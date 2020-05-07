@@ -442,11 +442,12 @@ mock_ds_mgmt_exclude_setup(void)
 int     ds_mgmt_pool_extend_return;
 uuid_t  ds_mgmt_pool_extend_uuid;
 int
-ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list)
+ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
+			const char *group, char *tgt_dev,  size_t scm_size,
+			size_t nvme_size, daos_prop_t *prop)
 {
 	uuid_copy(ds_mgmt_pool_extend_uuid, pool_uuid);
 	return ds_mgmt_pool_extend_return;
-	return 0;
 }
 
 void

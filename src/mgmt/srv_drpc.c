@@ -645,13 +645,14 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 void
 ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__PoolExtendReq		*req = NULL;
-	Mgmt__PoolExtendResp		resp;
-	d_rank_list_t			*rank_list = NULL;
-	uuid_t				uuid;
-	uint8_t				*body;
-	size_t				len;
-	int				rc;
+	Mgmt__PoolExtendReq	*req = NULL;
+	Mgmt__PoolExtendResp	resp;
+	d_rank_list_t		*rank_list = NULL;
+	daos_prop_t		*prop = NULL;
+	uuid_t			uuid;
+	uint8_t			*body;
+	size_t			len;
+	int			rc;
 
 	mgmt__pool_extend_resp__init(&resp);
 
@@ -677,7 +678,14 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rank_list == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_pool_extend(uuid, rank_list);
+	rc = create_pool_props(&prop, req->user, req->usergroup,
+			       (const char **)req->acl, req->n_acl);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_extend(uuid, rank_list, req->sys, "pmem",
+				 req->scmbytes, req->nvmebytes, prop);
+
 	if (rc != 0) {
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));

@@ -423,32 +423,63 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 	return nil
 }
 
+// genPoolExtendRequest takes a *PoolExtendRequest and generates a valid protobuf
+// request, filling in any missing fields with reasonable defaults.
+func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err error) {
+	// ensure pool ownership is set up correctly
+	in.User, in.UserGroup, err = formatNameGroup(in.User, in.UserGroup)
+	if err != nil {
+		return nil, err
+	}
+
+	// ensure we have a system name in the request
+	if in.Sys == "" {
+		in.Sys = build.DefaultSystemName
+	}
+
+	out = new(mgmtpb.PoolExtendReq)
+	if err = convert.Types(in, out); err != nil {
+		return nil, err
+	}
+
+	return
+}
+
 // PoolExtendReq struct contains request
 type PoolExtendReq struct {
 	unaryRequest
 	msRequest
 	UUID  string
 	Ranks []uint32
+	// TEMP SECTION
+	ScmBytes   uint64
+	NvmeBytes  uint64
+	Sys        string
+	User       string
+	UserGroup  string
+	ACL        *AccessControlList
+	// END TEMP SECTION
 }
 
-// ExtendResp has no other parameters other than success/failure for now.
 
 // PoolExtend will extend the DAOS pool by the specified ranks.
 // This should automatically start the rebalance process.
 // Returns an error (including any DER code from DAOS).
 func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq) error {
+	pbReq, err := genPoolExtendRequest(req)
+	if err != nil {
+		return errors.Wrap(err, "failed to generate PoolExtend request")
+	}
+
 	if err := checkUUID(req.UUID); err != nil {
 		return err
 	}
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolExtend(ctx, &mgmtpb.PoolExtendReq{
-			Uuid:  req.UUID,
-			Ranks: req.Ranks,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolExtend(ctx, pbReq)
 	})
 
 	rpcClient.Debugf("Extend DAOS pool request: %v\n", req)
-
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err

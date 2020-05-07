@@ -98,7 +98,9 @@ int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 				     pool_comp_state_t new_state);
 int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, uint32_t reint_rank,
 			     struct pool_target_id_list *reint_list);
-int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list);
+int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list, 
+			const char *group, char *tgt_dev,  size_t scm_size,
+			size_t nvme_size, daos_prop_t *prop);
 int ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
 			  daos_prop_t **result);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
