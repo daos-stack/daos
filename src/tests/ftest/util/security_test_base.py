@@ -28,7 +28,7 @@ import random
 from general_utils import pcmd
 
 def acl_entry(usergroup, name, perm, permissions):
-    """Create a daos acl entry for the specified user or group and permission.
+    """Create a daos acl entry for the specified user or group and permission
 
     Args:
         usergroup (str): user or group.
