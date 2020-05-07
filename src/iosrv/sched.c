@@ -136,6 +136,7 @@ sched_init(ABT_sched sched, ABT_sched_config config)
 				    &data->sd_dx);
 	if (ret != ABT_SUCCESS) {
 		D_ERROR("Failed to read ABT sched config: %d\n", ret);
+		D_FREE(data);
 		return ret;
 	}
 
@@ -210,6 +211,8 @@ sched_pop_net_poll(struct sched_data *data, ABT_pool pool)
 static bool
 need_nvme_poll(struct sched_cycle *cycle)
 {
+	struct dss_module_info	*dmi;
+
 	/* Need net poll to start new cycle */
 	if (!cycle->sc_cycle_started) {
 		D_ASSERT(cycle->sc_ults_tot == 0);
@@ -220,16 +223,9 @@ need_nvme_poll(struct sched_cycle *cycle)
 	if (cycle->sc_ults_tot == 0)
 		return true;
 
-	/*
-	 * Need extra NVMe poll when too many ULTs are processed in
-	 * current cycle.
-	 */
-	if (cycle->sc_age_nvme > cycle->sc_age_nvme_bound[1])
-		return true;
-
-	/* TODO: Take NVMe I/O statistics into account */
-
-	return false;
+	dmi = dss_get_module_info();
+	D_ASSERT(dmi != NULL);
+	return bio_need_nvme_poll(dmi->dmi_nvme_ctxt);
 }
 
 static ABT_unit
@@ -282,9 +278,17 @@ sched_pop_one(struct sched_data *data, ABT_pool pool, int pool_idx)
 		return ABT_UNIT_NULL;
 	}
 
-	/* XXX Need to figure out why it can pop a NULL unit */
+	/*
+	 * When ABT_thread_join() is called to wait for a target ULT to
+	 * terminate, the target ULT could be removed from ABT pool by the
+	 * ABT_thread_join(), so the ABT pool could become empty when our
+	 * scheduler back to control.
+	 *
+	 * This usually happen on pool destroy or server shutdown where
+	 * ABT_thread_join() is called.
+	 */
 	if (unit == ABT_UNIT_NULL)
-		D_ERROR("XS(%d) poped NULL unit for ABT pool(%d)\n",
+		D_DEBUG(DB_TRACE, "XS(%d) poped NULL unit for ABT pool(%d)\n",
 			dx->dx_xs_id, pool_idx);
 
 	cycle->sc_age_net++;
@@ -422,7 +426,7 @@ sched_run(ABT_sched sched)
 		 */
 		goto check_event;
 execute:
-		D_ASSERT(pool != ABT_UNIT_NULL);
+		D_ASSERT(pool != ABT_POOL_NULL);
 		ABT_xstream_run_unit(unit, pool);
 start_cycle:
 		if (cycle->sc_new_cycle) {

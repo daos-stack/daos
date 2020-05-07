@@ -135,7 +135,6 @@ benchmark_graph(double *ydata, const char **const keys,
 	gp_w = popen("gnuplot", "w");
 	if (gp_w == NULL) {
 		perror("popen(gnuplot)");
-		pclose(gp_w);
 		return;
 	}
 

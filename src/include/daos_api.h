@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,16 @@
 extern "C" {
 #endif
 
+enum {
+	/** The transaction is read only. */
+	DAOS_TF_RDONLY		= (1 << 0),
+	/**
+	 * Not copy application buffer (neither key buffer nor value buffer)
+	 * when cache modification on client for the distributed transaction.
+	 */
+	DAOS_TF_ZERO_COPY	= (1 << 1),
+};
+
 /**
  * Generate a rank list from a string with a seprator argument. This is a
  * convenience function to generate the rank list required by
@@ -58,13 +68,15 @@ d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
  *
  * \param[in]	coh	Container handle.
  * \param[out]	th	Returned transaction handle.
+ * \param[in]	flags	Transaction flags.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		0 if Success, negative if failed.
  */
 int
-daos_tx_open(daos_handle_t coh, daos_handle_t *th, daos_event_t *ev);
+daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags,
+	     daos_event_t *ev);
 
 /**
  * Commit the transaction on the container it was created with. The transaction
@@ -122,6 +134,8 @@ daos_tx_abort(daos_handle_t th, daos_event_t *ev);
  * involved.
  *
  * \param[in]	th	Transaction handle to free.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		0 if Success, negative if failed.
  */
@@ -129,10 +143,23 @@ int
 daos_tx_close(daos_handle_t th, daos_event_t *ev);
 
 /**
+ * Restart the transaction handle. It drops all the modifications that have
+ * been issued via the handle. This is a local operation, no RPC involved.
+ *
+ * \param[in]	th	Transaction handle to be restarted.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 if Success, negative if failed.
+ */
+int
+daos_tx_restart(daos_handle_t th, daos_event_t *ev);
+
+/**
  * Return epoch associated with the transaction handle.
  *
  * \param[in]	th	Transaction handle.
- * \param[out]	th	Returned epoch value.
+ * \param[out]	epoch	Returned epoch value.
  *
  * \return		0 if Success, negative if failed.
  */

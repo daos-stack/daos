@@ -25,7 +25,7 @@ syntax = "proto3";
 package ctl;
 
 import "storage.proto";
-import "network_scan.proto";
+import "network.proto";
 import "system.proto";
 
 // Service definitions for communications between gRPC management server and
@@ -41,15 +41,13 @@ service MgmtCtl {
 	// Retrieve details of nonvolatile storage on server, including health info
 	rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
 	// Format nonvolatile storage devices for use with DAOS
-	rpc StorageFormat(StorageFormatReq) returns(stream StorageFormatResp) {};
+	rpc StorageFormat(StorageFormatReq) returns(StorageFormatResp) {};
 	// Query DAOS system status
 	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {};
 	// Stop DAOS system (shutdown data-plane instances)
 	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {};
 	// Start DAOS system (restart data-plane instances)
 	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {};
-	// Retrieve a list of supported fabric providers
-	rpc NetworkListProviders (ProviderListRequest) returns (ProviderListReply) {};
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
-	rpc NetworkScanDevices (DeviceScanRequest) returns (stream DeviceScanReply) {};
+	rpc NetworkScan (NetworkScanReq) returns (NetworkScanResp) {};
 }

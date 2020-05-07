@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -201,12 +201,14 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 int
 vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_range_t *epr, bool no_create,
-	     uint32_t intent, bool visible_only, struct vos_object **obj_p)
+	     uint32_t intent, bool visible_only, struct vos_object **obj_p,
+	     struct vos_ts_set *ts_set)
 {
 	struct vos_object	*obj;
 	struct daos_llink	*lret;
 	struct obj_lru_key	 lkey;
 	int			 rc = 0;
+	bool			 found;
 
 	D_ASSERT(cont != NULL);
 	D_ASSERT(cont->vc_pool);
@@ -245,8 +247,18 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 			goto out; /* Ok to delete */
 	}
 
-	if (obj->obj_df)
+	if (obj->obj_df) {
+		D_DEBUG(DB_TRACE, "looking up object ilog");
+		found = vos_ilog_ts_lookup(ts_set, &obj->obj_df->vo_ilog);
+		if (!found) {
+			int	tmprc;
+
+			tmprc = vos_ilog_ts_cache(ts_set, &obj->obj_df->vo_ilog,
+						  &oid, sizeof(oid));
+			D_ASSERT(tmprc == 0); /* Non-zero only valid for akey */
+		}
 		goto check_object;
+	}
 
 	 /* newly cached object */
 	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_U64"-"DF_U64"\n",
@@ -255,15 +267,16 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	obj->obj_sync_epoch = 0;
 	if (no_create) {
-		rc = vos_oi_find(cont, oid, &obj->obj_df);
+		rc = vos_oi_find(cont, oid, &obj->obj_df, ts_set);
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
 				DP_UOID(oid));
 			goto failed;
 		}
 	} else {
+
 		rc = vos_oi_find_alloc(cont, oid, epr->epr_hi, false,
-				       &obj->obj_df);
+				       &obj->obj_df, ts_set);
 		D_ASSERT(rc || obj->obj_df);
 	}
 
@@ -303,7 +316,7 @@ check_object:
 	}
 
 	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr,
-			     NULL, &obj->obj_ilog_info);
+			     NULL, &obj->obj_ilog_info, 0, ts_set);
 	if (rc != 0) {
 		D_ERROR("Could not update object "DF_UOID" at "DF_U64
 			": "DF_RC"\n", DP_UOID(oid), epr->epr_hi,
@@ -331,7 +344,7 @@ out:
 		       " is not newer than the sync epoch "DF_U64"\n",
 		       intent == DAOS_INTENT_PUNCH ? "punch" : "update",
 		       DP_UOID(oid), epr->epr_hi, obj->obj_sync_epoch);
-		D_GOTO(failed, rc = -DER_INPROGRESS);
+		D_GOTO(failed, rc = -DER_TX_RESTART);
 	}
 
 	*obj_p = obj;

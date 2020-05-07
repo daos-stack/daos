@@ -108,26 +108,23 @@ enum {
 };
 
 /** Number of bits reserved in IO flags bitmap for conditional checks.  */
-#define IO_FLAGS_COND_BITS	8
+#define IO_FLAGS_COND_BITS	7
 
 enum {
+	/* Conditional Op: Punch key if it exists, fail otherwise */
+	DAOS_COND_PUNCH		= (1 << 0),
 	/* Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
-	DAOS_COND_DKEY_INSERT	= (1 << 0),
+	DAOS_COND_DKEY_INSERT	= (1 << 1),
 	/* Conditional Op: Update dkey if it exists, fail otherwise */
-	DAOS_COND_DKEY_UPDATE	= (1 << 1),
+	DAOS_COND_DKEY_UPDATE	= (1 << 2),
 	/* Conditional Op: Fetch dkey if it exists, fail otherwise */
-	DAOS_COND_DKEY_FETCH	= (1 << 2),
-	/* Conditional Op: Punch dkey if it exists, fail otherwise */
-	DAOS_COND_DKEY_PUNCH	= (1 << 3),
-
+	DAOS_COND_DKEY_FETCH	= (1 << 3),
 	/* Conditional Op: Insert akey if it doesn't exist, fail otherwise */
 	DAOS_COND_AKEY_INSERT	= (1 << 4),
 	/* Conditional Op: Update akey if it exists, fail otherwise */
 	DAOS_COND_AKEY_UPDATE	= (1 << 5),
 	/* Conditional Op: Fetch akey if it exists, fail otherwise */
 	DAOS_COND_AKEY_FETCH	= (1 << 6),
-	/* Conditional Op: Punch akey if it exists, fail otherwise */
-	DAOS_COND_AKEY_PUNCH	= (1 << 7),
 	/** Mask for convenience */
 	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
 };
@@ -250,10 +247,16 @@ typedef struct {
 	/** type of akey value (SV or AR)*/
 	daos_iod_type_t		 iom_type;
 	/**
-	 * Number of extents in the mapping, that's the size of all the
-	 * external arrays listed below. 1 for SV.
+	 * Number of elements allocated in iom_recxs.
 	 */
 	unsigned int		 iom_nr;
+	/**
+	 * Number of extents in the mapping. If iom_nr_out is greater than
+	 * iom_nr, iom_recxs will still be populated, but it will be a
+	 * truncated list.
+	 * 1 for SV.
+	 */
+	unsigned int		 iom_nr_out;
 	/** Size of the single value or the record size */
 	daos_size_t		 iom_size;
 	/**
@@ -267,7 +270,9 @@ typedef struct {
 	 * or there is only one returned recx.
 	 */
 	daos_recx_t		 iom_recx_hi;
-	/** All the returned recxs within the requested extents */
+	/** All the returned recxs within the requested extents. Must be
+	 * allocated and freed by caller.
+	 */
 	daos_recx_t		*iom_recxs;
 } daos_iom_t;
 

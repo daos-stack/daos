@@ -86,6 +86,10 @@ obj_tls_init(const struct dss_thread_local_storage *dtls,
 	struct obj_tls *tls;
 
 	D_ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	D_INIT_LIST_HEAD(&tls->ot_pool_list);
 	return tls;
 }
 
@@ -94,55 +98,17 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 	     struct dss_module_key *key, void *data)
 {
 	struct obj_tls *tls = data;
+	struct migrate_pool_tls *pool_tls;
+	struct migrate_pool_tls *tmp;
+
+	d_list_for_each_entry_safe(pool_tls, tmp, &tls->ot_pool_list,
+				   mpt_list)
+		migrate_pool_tls_destroy(pool_tls);
 
 	if (tls->ot_echo_sgl.sg_iovs != NULL)
 		daos_sgl_fini(&tls->ot_echo_sgl, true);
 
-	if (tls->ot_sp)
-		srv_profile_destroy(tls->ot_sp);
-
 	D_FREE(tls);
-}
-
-char *profile_op_names[] = {
-	[OBJ_PF_UPDATE_PREP] = "update_prep",
-	[OBJ_PF_UPDATE_DISPATCH] = "update_dispatch",
-	[OBJ_PF_UPDATE_LOCAL] = "update_local",
-	[OBJ_PF_UPDATE_END] = "update_end",
-	[OBJ_PF_UPDATE_WAIT] = "update_end",
-	[OBJ_PF_UPDATE_REPLY] = "update_repl",
-	[OBJ_PF_UPDATE] = "update",
-};
-
-static int
-ds_obj_profile_start(char *path)
-{
-	struct obj_tls *tls = obj_tls_get();
-	int rc;
-
-	if (tls->ot_sp)
-		return 0;
-
-	rc = srv_profile_start(&tls->ot_sp, path, profile_op_names);
-
-	D_DEBUG(DB_MGMT, "object profile start: "DF_RC"\n", DP_RC(rc));
-	return rc;
-}
-
-static int
-ds_obj_profile_stop(void)
-{
-	struct obj_tls *tls = obj_tls_get();
-	int	rc;
-
-	if (tls->ot_sp == NULL)
-		return 0;
-
-	rc = srv_profile_stop(tls->ot_sp);
-
-	D_DEBUG(DB_MGMT, "object profile stop: "DF_RC"\n", DP_RC(rc));
-	tls->ot_sp = NULL;
-	return rc;
 }
 
 struct dss_module_key obj_module_key = {
@@ -154,8 +120,6 @@ struct dss_module_key obj_module_key = {
 
 static struct dss_module_ops ds_obj_mod_ops = {
 	.dms_abt_pool_choose_cb = NULL,
-	.dms_profile_start = ds_obj_profile_start,
-	.dms_profile_stop = ds_obj_profile_stop,
 };
 
 struct dss_module obj_module =  {

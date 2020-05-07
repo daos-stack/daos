@@ -170,6 +170,7 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 {
 	struct rebuild_iv *dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
+	int rc = 0;
 
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
@@ -181,7 +182,6 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	    dst_iv->riv_stable_epoch) {
 		struct rebuild_tgt_pool_tracker *rpt;
 		d_rank_t	rank;
-		int		rc;
 
 		rpt = rpt_lookup(src_iv->riv_pool_uuid, src_iv->riv_ver);
 		if (rpt == NULL)
@@ -210,35 +210,53 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		 * node changed.
 		 */
 		rc = crt_group_rank(NULL, &rank);
-		if (dst_iv->riv_global_done && rc == 0 &&
-		    d_rank_in_rank_list(rpt->rt_svc_list, rank)) {
+		if (dst_iv->riv_global_done && rc == 0) {
 			struct daos_rebuild_status rs = { 0 };
+			daos_prop_t	*prop = NULL;
+			struct daos_prop_entry *prop_entry;
+			d_rank_list_t	*svc_list;
 
-			rs.rs_version	= src_iv->riv_ver;
-			rs.rs_errno	= src_iv->riv_status;
-			rs.rs_done	= 1;
-			rs.rs_obj_nr	= src_iv->riv_obj_count;
-			rs.rs_rec_nr	= src_iv->riv_rec_count;
-			rs.rs_toberb_obj_nr	=
-				src_iv->riv_toberb_obj_count;
-			rs.rs_size	= src_iv->riv_size;
+			D_ALLOC_PTR(prop);
+			if (prop == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
 
-			rc = rebuild_status_completed_update(
-					src_iv->riv_pool_uuid, &rs);
-			if (rc != 0) {
-				D_ERROR("_status_completed_update, "
-					DF_UUID" failed, rc %d.\n",
-					DP_UUID(src_iv->riv_pool_uuid),
-					rc);
+			rc = ds_pool_iv_prop_fetch(rpt->rt_pool, prop);
+			if (rc)
+				D_GOTO(free, rc);
+
+			prop_entry = daos_prop_entry_get(prop,
+						    DAOS_PROP_PO_SVC_LIST);
+			D_ASSERT(prop_entry != NULL);
+			svc_list = prop_entry->dpe_val_ptr;
+			if (d_rank_in_rank_list(svc_list, rank)) {
+				rs.rs_version	= src_iv->riv_ver;
+				rs.rs_errno	= src_iv->riv_status;
+				rs.rs_done	= 1;
+				rs.rs_obj_nr	= src_iv->riv_obj_count;
+				rs.rs_rec_nr	= src_iv->riv_rec_count;
+				rs.rs_toberb_obj_nr	=
+					src_iv->riv_toberb_obj_count;
+				rs.rs_size	= src_iv->riv_size;
+				rs.rs_seconds   = src_iv->riv_seconds;
+				rc = rebuild_status_completed_update(
+						src_iv->riv_pool_uuid, &rs);
+				if (rc != 0)
+					D_ERROR("_status_completed_update, "
+						DF_UUID" failed, rc %d.\n",
+						DP_UUID(src_iv->riv_pool_uuid),
+						rc);
 			}
+free:
+			if (prop)
+				daos_prop_free(prop);
 		}
-
+out:
 		rpt->rt_global_done = dst_iv->riv_global_done;
 		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
 		rpt_put(rpt);
 	}
 
-	return 0;
+	return rc;
 }
 
 static int
@@ -302,7 +320,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_REBUILD;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
-			  true /* retry */);
+			  false /* retry */);
 	if (rc)
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 

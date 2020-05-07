@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2019 Intel Corporation.
+"""
+  (C) Copyright 2019-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,14 +20,13 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 
 from __future__ import print_function
 
 import uuid
 
 from command_utils import FormattedParameter, ExecutableCommand
-from command_utils import EnvironmentVariables
 
 
 class MdtestCommand(ExecutableCommand):
@@ -125,6 +124,9 @@ class MdtestCommand(ExecutableCommand):
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
 
+        # A list of environment variable names to set and export with ior
+        self._env_names = ["D_LOG_FILE"]
+
     def get_param_names(self):
         """Get a sorted list of the defined MdtestCommand parameters."""
         # Sort the Mdtest parameter names to generate consistent ior commands
@@ -138,7 +140,6 @@ class MdtestCommand(ExecutableCommand):
                 [name for name in all_param_names if "dfs" in name])
 
         return param_names
-
 
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the Mdtest params for the DAOS group, pool, and container uuid.
@@ -180,25 +181,20 @@ class MdtestCommand(ExecutableCommand):
                 for index in range(pool.pool.svc.rl_nr)]])
         self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
-    def get_default_env(self, manager_cmd, attach_info, log_file=None):
+    def get_default_env(self, manager_cmd, log_file=None):
         """Get the default enviroment settings for running mdtest.
 
         Args:
             manager_cmd (str): job manager command
-            attach_info (str): CART attach info path
             log_file (str, optional): log file. Defaults to None.
 
         Returns:
             EnvironmentVariables: a dictionary of environment names and values
 
         """
-        env = EnvironmentVariables()
-        env["CRT_ATTACH_INFO_PATH"] = attach_info
+        env = self.get_environment(None, log_file)
         env["MPI_LIB"] = "\"\""
-        env["DAOS_SINGLETON_CLI"] = 1
         env["FI_PSM2_DISCONNECT"] = 1
-        if log_file:
-            env["D_LOG_FILE"] = log_file
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             env["DAOS_POOL"] = self.dfs_pool_uuid.value

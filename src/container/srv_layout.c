@@ -55,6 +55,7 @@ RDB_STRING_KEY(ds_cont_prop_, lres);
 RDB_STRING_KEY(ds_cont_prop_, lhes);
 RDB_STRING_KEY(ds_cont_prop_, snapshots);
 RDB_STRING_KEY(ds_cont_attr_, user);
+RDB_STRING_KEY(ds_cont_prop_, handles);
 
 /** default properties, should cover all optional container properties */
 struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {

@@ -810,7 +810,6 @@ test_acl_is_valid_for_pool_invalid_perms(void **state)
 	expect_pool_acl_invalid_with_perms((uint64_t)-1);
 	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_GET_ACL);
 	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_SET_ACL);
-	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_GET_PROP);
 	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_SET_PROP);
 	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_SET_OWNER);
 }
@@ -827,6 +826,7 @@ static void
 test_acl_is_valid_for_pool_good_perms(void **state)
 {
 	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_READ);
+	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_GET_PROP);
 	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_WRITE);
 	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_CREATE_CONT);
 	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_DEL_CONT);

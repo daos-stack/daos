@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,12 @@ struct obj_io_desc {
 	 * fetch targeted with only one shard, oiod_siods should be NULL as need
 	 * not carry extra info.
 	 */
-	uint32_t		 oiod_nr;
+	uint16_t		 oiod_nr;
+	/**
+	 * the target index [0, tgt_nr), only used for EC evenly distributed
+	 * single value.
+	 */
+	uint16_t		 oiod_tgt_idx;
 	/**
 	 * Flags, OBJ_SIOD_EVEN_DIST is for a special case that the extends
 	 * only cover full stripe(s), then each target has same number of
@@ -157,6 +162,10 @@ struct obj_ec_split_req {
 	daos_iod_t		*osr_iods;
 	/* leader shard's offsets (one for each iod) */
 	uint64_t		*osr_offs;
+	/* leader shard's iod_csums */
+	struct dcs_iod_csums	*osr_iod_csums;
+	/* csum_info for singvs */
+	struct dcs_csum_info	*osr_singv_cis;
 };
 
 /**

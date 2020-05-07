@@ -27,7 +27,7 @@ servers:
 -
   targets: 1                # count of storage targets per each server
   first_core: 0             # offset of the first core for service xstreams
-  nr_xs_helpers: 0          # count of offload/helper xstreams per target
+  nr_xs_helpers: 0          # count of offload/helper xstreams per server
   fabric_iface: lo          # map to OFI_INTERFACE=lo
   log_mask: DEBUG,RPC=ERR,MEM=ERR
   log_file: /tmp/server0.log # map to D_LOG_FILE=/tmp/server0.log

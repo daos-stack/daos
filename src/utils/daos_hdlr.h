@@ -39,6 +39,9 @@ enum cont_op {
 	CONT_ROLLBACK,
 	CONT_GET_ACL,
 	CONT_OVERWRITE_ACL,
+	CONT_UPDATE_ACL,
+	CONT_DELETE_ACL,
+	CONT_SET_OWNER,
 };
 
 enum pool_op {
@@ -94,7 +97,11 @@ struct cmd_args_s {
 	FILE			*ostream;	/* help_hdlr() stream */
 	char			*outfile;	/* --outfile path */
 	char			*aclfile;	/* --acl-file path */
+	char			*user;		/* --user name */
+	char			*group;		/* --group name */
 	bool			verbose;	/* --verbose mode */
+	char			*entry;		/* --entry for ACL */
+	char			*principal;	/* --principal for ACL */
 };
 
 #define ARGS_VERIFY_PUUID(ap, label, rcexpr)			\
@@ -189,6 +196,7 @@ int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_query_hdlr(struct cmd_args_s *ap);
 int cont_destroy_hdlr(struct cmd_args_s *ap);
 int cont_get_prop_hdlr(struct cmd_args_s *ap);
+int cont_set_prop_hdlr(struct cmd_args_s *ap);
 int cont_list_attrs_hdlr(struct cmd_args_s *ap);
 int cont_set_attr_hdlr(struct cmd_args_s *ap);
 int cont_get_attr_hdlr(struct cmd_args_s *ap);
@@ -197,6 +205,9 @@ int cont_list_snaps_hdlr(struct cmd_args_s *ap);
 int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
 int cont_get_acl_hdlr(struct cmd_args_s *ap);
 int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
+int cont_update_acl_hdlr(struct cmd_args_s *ap);
+int cont_delete_acl_hdlr(struct cmd_args_s *ap);
+int cont_set_owner_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
@@ -204,7 +215,6 @@ int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
  *
  * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_set_prop_hdlr()
  * int cont_del_attr_hdlr()
  * int cont_rollback_hdlr()
  */

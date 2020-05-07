@@ -1,0 +1,463 @@
+//
+// (C) Copyright 2020 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
+package control
+
+import (
+	"context"
+	"os/user"
+	"strconv"
+	"strings"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
+	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+)
+
+const (
+	defaultSvcReps = 1
+)
+
+// checkUUID is a helper function for validating that the supplied
+// UUID string parses as a valid UUID.
+func checkUUID(uuidStr string) error {
+	_, err := uuid.Parse(uuidStr)
+	return errors.Wrapf(err, "invalid UUID %q", uuidStr)
+}
+
+// formatNameGroup converts system names to principal and if both user and group
+// are unspecified, takes effective user name and that user's primary group.
+func formatNameGroup(usr string, grp string) (string, string, error) {
+	if usr == "" && grp == "" {
+		eUsr, err := user.Current()
+		if err != nil {
+			return "", "", err
+		}
+
+		eGrp, err := user.LookupGroupId(eUsr.Gid)
+		if err != nil {
+			return "", "", err
+		}
+
+		usr, grp = eUsr.Username, eGrp.Name
+	}
+
+	if usr != "" && !strings.Contains(usr, "@") {
+		usr += "@"
+	}
+
+	if grp != "" && !strings.Contains(grp, "@") {
+		grp += "@"
+	}
+
+	return usr, grp, nil
+}
+
+// genPoolCreateRequest takes a *PoolCreateRequest and generates a valid protobuf
+// request, filling in any missing fields with reasonable defaults.
+func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
+	// ensure pool ownership is set up correctly
+	in.User, in.UserGroup, err = formatNameGroup(in.User, in.UserGroup)
+	if err != nil {
+		return nil, err
+	}
+
+	if in.NumSvcReps == 0 {
+		in.NumSvcReps = defaultSvcReps
+	}
+
+	// ensure we have a system name in the request
+	if in.Sys == "" {
+		in.Sys = build.DefaultSystemName
+	}
+
+	out = new(mgmtpb.PoolCreateReq)
+	if err = convert.Types(in, out); err != nil {
+		return nil, err
+	}
+
+	// generate a UUID if not supplied in the request
+	if err := checkUUID(out.Uuid); err != nil {
+		if out.Uuid != "" {
+			return nil, err
+		}
+
+		genUUID, err := uuid.NewRandom()
+		if err != nil {
+			return nil, err
+		}
+		out.Uuid = genUUID.String()
+	}
+
+	return
+}
+
+type (
+	// PoolCreateReq contains the parameters for a pool create request.
+	PoolCreateReq struct {
+		msRequest
+		unaryRequest
+		ScmBytes   uint64
+		NvmeBytes  uint64
+		Ranks      []uint32
+		NumSvcReps uint32
+		Sys        string
+		User       string
+		UserGroup  string
+		ACL        *AccessControlList
+		UUID       string
+	}
+
+	// PoolCreateResp contains the response from a pool create request.
+	PoolCreateResp struct {
+		UUID    string
+		SvcReps []uint32
+	}
+)
+
+// PoolCreate performs a pool create operation on a DAOS Management Server instance.
+// Default values for missing request parameters (e.g. owner/group) are generated when
+// appropriate.
+func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq) (*PoolCreateResp, error) {
+	pbReq, err := genPoolCreateRequest(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate PoolCreate request")
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolCreate(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("Create DAOS pool request: %+v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "pool create failed")
+	}
+	rpcClient.Debugf("Create DAOS pool response: %+v\n", msResp)
+
+	pbPcr, ok := msResp.(*mgmtpb.PoolCreateResp)
+	if !ok {
+		return nil, errors.New("unable to extract PoolCreateResp from MS response")
+	}
+
+	return &PoolCreateResp{
+		UUID:    pbReq.Uuid,
+		SvcReps: pbPcr.GetSvcreps(),
+	}, nil
+}
+
+// PoolDestroyReq contains the parameters for a pool destroy request.
+type PoolDestroyReq struct {
+	msRequest
+	unaryRequest
+	UUID  string
+	Force bool
+}
+
+// PoolDestroy performs a pool destroy operation on a DAOS Management Server instance.
+func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, &mgmtpb.PoolDestroyReq{
+			Uuid:  req.UUID,
+			Force: req.Force,
+		})
+	})
+
+	rpcClient.Debugf("Destroy DAOS pool request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool destroy failed")
+	}
+	rpcClient.Debugf("Destroy DAOS pool response: %s\n", msResp)
+
+	return nil
+}
+
+type (
+	// PoolQueryReq contains the parameters for a pool query request.
+	PoolQueryReq struct {
+		msRequest
+		unaryRequest
+		UUID string
+	}
+
+	// StorageUsageStats represents DAOS storage usage statistics.
+	StorageUsageStats struct {
+		Total uint64
+		Free  uint64
+		Min   uint64
+		Max   uint64
+		Mean  uint64
+	}
+
+	// PoolRebuildState indicates the current state of the pool rebuild process.
+	PoolRebuildState uint
+
+	// PoolRebuildStatus contains detailed information about the pool rebuild process.
+	PoolRebuildStatus struct {
+		Status  int32
+		State   PoolRebuildState
+		Objects uint64
+		Records uint64
+	}
+
+	// PoolQueryResp contains the pool query response.
+	PoolQueryResp struct {
+		Status          int32
+		UUID            string
+		TotalTargets    uint32
+		ActiveTargets   uint32
+		DisabledTargets uint32
+		Rebuild         *PoolRebuildStatus
+		Scm             *StorageUsageStats
+		Nvme            *StorageUsageStats
+	}
+)
+
+const (
+	// PoolRebuildStateIdle indicates that the rebuild process is idle.
+	PoolRebuildStateIdle PoolRebuildState = iota
+	// PoolRebuildStateDone indicates that the rebuild process has completed.
+	PoolRebuildStateDone
+	// PoolRebuildStateBusy indicates that the rebuild process is in progress.
+	PoolRebuildStateBusy
+)
+
+func (prs PoolRebuildState) String() string {
+	return [...]string{"idle", "done", "busy"}[prs]
+}
+
+// PoolQuery performs a pool query operation for the specified pool UUID on a
+// DAOS Management Server instance.
+func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (*PoolQueryResp, error) {
+	if err := checkUUID(req.UUID); err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{Uuid: req.UUID})
+	})
+
+	rpcClient.Debugf("Query DAOS pool request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	pqr := new(PoolQueryResp)
+	return pqr, convertMSResponse(ur, pqr)
+}
+
+// PoolSetPropReq contains pool set-prop parameters.
+type PoolSetPropReq struct {
+	msRequest
+	unaryRequest
+	// UUID identifies the pool for which this property should be set.
+	UUID string
+	// Property is always a string representation of the pool property.
+	// It will be resolved into the C representation prior to being
+	// forwarded over dRPC.
+	Property string
+	// Value is an approximation of the union in daos_prop_entry.
+	// It can be either a string or a uint64. Struct-based properties
+	// are not supported via this API.
+	Value interface{}
+}
+
+// SetString sets the property value to a string.
+func (pspr *PoolSetPropReq) SetString(strVal string) {
+	pspr.Value = strVal
+}
+
+// SetNumber sets the property value to a uint64 number.
+func (pspr *PoolSetPropReq) SetNumber(numVal uint64) {
+	pspr.Value = numVal
+}
+
+// PoolSetPropResp contains the response to a pool set-prop operation.
+type PoolSetPropResp struct {
+	UUID     string
+	Property string `json:"Name"`
+	Value    string
+}
+
+// PoolSetProp sends a pool set-prop request to the pool service leader.
+func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropReq) (*PoolSetPropResp, error) {
+	if err := checkUUID(req.UUID); err != nil {
+		return nil, err
+	}
+
+	if req.Property == "" {
+		return nil, errors.Errorf("invalid property name %q", req.Property)
+	}
+
+	pbReq := &mgmtpb.PoolSetPropReq{
+		Uuid: req.UUID,
+	}
+	pbReq.SetPropertyName(req.Property)
+
+	switch val := req.Value.(type) {
+	case string:
+		pbReq.SetValueString(val)
+	case uint64:
+		pbReq.SetValueNumber(val)
+	default:
+		return nil, errors.Errorf("unhandled property value: %+v", req.Value)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolSetProp(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("Query DAOS pool set-prop request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, err
+	}
+
+	pbResp, ok := msResp.(*mgmtpb.PoolSetPropResp)
+	if !ok {
+		return nil, errors.New("unable to extract PoolSetPropResp from MS response")
+	}
+
+	pspr := &PoolSetPropResp{
+		UUID:     req.UUID,
+		Property: pbResp.GetName(),
+	}
+
+	switch v := pbResp.GetValue().(type) {
+	case *mgmtpb.PoolSetPropResp_Strval:
+		pspr.Value = v.Strval
+	case *mgmtpb.PoolSetPropResp_Numval:
+		pspr.Value = strconv.FormatUint(v.Numval, 10)
+	default:
+		return nil, errors.Errorf("unable to represent response value %+v", pbResp.Value)
+	}
+
+	return pspr, nil
+}
+
+// PoolExcludeReq struct contains request
+type PoolExcludeReq struct {
+	unaryRequest
+	msRequest
+	UUID      string
+	Rank      uint32
+	Targetidx []uint32
+}
+
+// ExcludeResp has no other parameters other than success/failure for now.
+
+// PoolExclude will set a pool target for a specific rank to down.
+// This should automatically start the rebuildiing process.
+// Returns an error (including any DER code from DAOS).
+func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, &mgmtpb.PoolExcludeReq{
+			Uuid:      req.UUID,
+			Rank:      req.Rank,
+			Targetidx: req.Targetidx,
+		})
+	})
+
+	rpcClient.Debugf("Exclude DAOS pool target request: %v\n", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool Exclude failed")
+	}
+	rpcClient.Debugf("Exclude DAOS pool target response: %s\n", msResp)
+
+	return nil
+}
+
+// PoolReintegrateReq struct contains request
+type PoolReintegrateReq struct {
+	unaryRequest
+	msRequest
+	UUID      string
+	Rank      uint32
+	Targetidx []uint32
+}
+
+// ReintegrateResp has no other parameters other than success/failure for now.
+
+// PoolReintegrate will set a pool target for a specific rank back to up.
+// This should automatically start the reintegration process.
+// Returns an error (including any DER code from DAOS).
+func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, &mgmtpb.PoolReintegrateReq{
+			Uuid:      req.UUID,
+			Rank:      req.Rank,
+			Targetidx: req.Targetidx,
+		})
+	})
+
+	rpcClient.Debugf("Reintegrate DAOS pool target request: %v\n", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool reintegrate failed")
+	}
+	rpcClient.Debugf("Reintegrate DAOS pool target response: %s\n", msResp)
+
+	return nil
+}

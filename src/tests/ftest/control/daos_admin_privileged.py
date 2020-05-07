@@ -24,18 +24,20 @@
 from __future__ import print_function
 
 import os
+import stat
 import getpass
 
-from dmg_utils import storage_format
-from server_utils import ServerManager, ServerFailed, storage_prepare
-from command_utils import CommandFailure
 from apricot import TestWithServers
+from server_utils import ServerFailed
 
 
 class DaosAdminPrivTest(TestWithServers):
-    """Test Class Description:
-    Test to verify that daos_server when run as normal user, can perform
-    privileged functions.
+    """Test class for daos_admin privilege tests.
+
+    Test Class Description:
+        Test to verify that daos_server when run as normal user, can perform
+        privileged functions.
+
     :avocado: recursive
     """
 
@@ -46,33 +48,34 @@ class DaosAdminPrivTest(TestWithServers):
         self.setup_start_servers = False
 
     def test_daos_admin_format(self):
-        """
-        JIRA ID: DAOS-2895
-        Test Description: Test daso_admin functionality to perform format
-        privileged operations while daos_server is run as normal user.
-        :avocado: tags=all,tiny,pr,hw,daos_admin,basic
+        """JIRA ID: DAOS-2895.
+
+        Test Description:
+            Test daos_admin functionality to perform format privileged
+            operations while daos_server is run as normal user.
+
+        :avocado: tags=all,pr,hw,small,daos_admin,basic
         """
         # Verify that daos_admin has the correct permissions
         self.log.info("Checking daos_admin binary permissions")
         file_stats = os.stat("/usr/bin/daos_admin")
-        file_perms = oct(file_stats.st_mode)[-4:]
-        if file_perms != '4755':
-            self.fail("Incorrect daos_admin permissions: {}".format(file_perms))
+
+        # regular file, mode 4750
+        desired = (stat.S_IFREG|stat.S_ISUID|
+                   stat.S_IRWXU|stat.S_IRGRP|stat.S_IXGRP)
+        actual = file_stats.st_mode & ~stat.S_IRWXO # mask out Other
+                                                    # bits for non-RPM
+        if (actual ^ desired) > 0:
+            self.fail("Incorrect daos_admin permissions: {}".format(
+                oct(actual)))
 
         # Setup server as non-root
-        server = ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin"))
-        server.get_params(self)
-        server.hosts = (
-            self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
-
-        if self.prefix != "/usr":
-            if server.runner.export.value is None:
-                server.runner.export.value = []
-            server.runner.export.value.extend(["PATH"])
-
-        yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
-        server.runner.job.set_config(yamlfile)
-        server.server_clean()
+        self.log.info("Preparing to run daos_server as non-root user")
+        self.add_server_manager()
+        self.configure_manager(
+            "server", self.server_managers[0], self.hostlist_servers,
+            self.hostfile_servers_slots)
+        self.server_managers[0].prepare(False)
 
         # Get user
         user = getpass.getuser()
@@ -80,39 +83,38 @@ class DaosAdminPrivTest(TestWithServers):
         # Prep server for format, run command under non-root user
         self.log.info("Performing SCM storage prepare")
         try:
-            storage_prepare(self.hostlist_servers, user, "dcpm")
-        except ServerFailed as err:
-            self.fail("Failed preparing SCM as non-root user: {}".format(err))
+            self.server_managers[0].prepare_storage(user, True, False)
+        except ServerFailed as error:
+            self.fail("Failed preparing SCM as user {}: {}".format(user, error))
 
-        # Prep server for format, run command under non-root user
-        self.log.info("Performing NVMe storage prepare")
-        try:
-            storage_prepare(self.hostlist_servers, user, "nvme")
-        except ServerFailed as err:
-            self.fail("Failed preparing nvme as non-root user: {}".format(err))
+        # Uncomment the below line after DAOS-4287 is resolved
+        # # Prep server for format, run command under non-root user
+        # self.log.info("Performing NVMe storage prepare")
+        # try:
+        #     self.server_managers[0].prepare_storage(user, False, True)
+        # except ServerFailed as err:
+        #     self.fail(
+        #         "Failed preparing NVMe as user {}: {}".format(user, err))
 
         # Start server
+        self.log.info("Starting server as non-root")
         try:
-            self.log.info("Starting server as non-root")
-            server.run()
-        except CommandFailure as err:
-            # Kill the subprocess, anything that might have started
-            server.kill()
-            self.fail("Failed starting server as non-root user: {}".format(err))
-
-        # Update hostlist value for dmg command
-        port = self.params.get("port", "/run/server_config/*")
-        h_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
+            self.server_managers[0].detect_format_ready()
+        except ServerFailed as error:
+            self.fail(
+                "Failed starting server before format as non-root user: "
+                "{}".format(error))
 
         # Run format command under non-root user
         self.log.info("Performing SCM format")
-        format_res = storage_format(os.path.join(self.prefix, "bin"), h_ports)
-        if format_res is None:
+        result = self.server_managers[0].dmg.storage_format()
+        if result is None:
             self.fail("Failed to format storage")
 
-        # Stop server
+        # Verify format success when all the doas_io_servers start
         try:
-            server.stop()
-        except ServerFailed as err:
-            self.fail("Failed to stop server: {}".format(err))
+            self.server_managers[0].detect_io_server_start()
+        except ServerFailed as error:
+            self.fail(
+                "Failed starting server after format as non-root user: "
+                "{}".format(error))

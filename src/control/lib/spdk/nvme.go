@@ -86,8 +86,8 @@ type Controller struct {
 // TODO: populate implicitly using inner member:
 // +inner C.struct_ns_t
 type Namespace struct {
-	ID   int32
-	Size int32
+	ID   uint32
+	Size uint64
 }
 
 // DeviceHealth struct mirrors C.struct_dev_health_t
@@ -265,8 +265,8 @@ func c2GoDeviceHealth(health *C.struct_dev_health_t) *DeviceHealth {
 // c2GoNamespace is a private translation function
 func c2GoNamespace(ns *C.struct_ns_t) *Namespace {
 	return &Namespace{
-		ID:   int32(ns.id),
-		Size: int32(ns.size),
+		ID:   uint32(ns.id),
+		Size: uint64(ns.size),
 	}
 }
 

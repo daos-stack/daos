@@ -55,6 +55,7 @@ struct ds_pool {
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_iv_refresh_lock;
 	struct ds_iv_ns	       *sp_iv_ns;
+	uint32_t		sp_dtx_resync_version;
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -69,9 +70,11 @@ void ds_pool_put(struct ds_pool *pool);
 struct ds_pool_hdl {
 	d_list_t		sph_entry;
 	uuid_t			sph_uuid;	/* of the pool handle */
-	uint64_t		sph_capas;
+	uint64_t		sph_flags;	/* user-provided flags */
+	uint64_t		sph_sec_capas;	/* access capabilities */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
+	d_iov_t			sph_cred;
 };
 
 struct ds_pool_hdl *ds_pool_hdl_lookup(const uuid_t uuid);
@@ -98,25 +101,11 @@ struct ds_pool_child {
 	uint64_t	spc_rebuild_fence;
 
 	/* The HLC when current rebuild ends, which will be used to compare
-	 * with the aggregation full scan start HLC to know whether the 
+	 * with the aggregation full scan start HLC to know whether the
 	 * aggregation needs to be restarted from 0. */
 	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
-};
-
-/*
- * Pool properties uid/gid/mode
- *
- * Stores per-pool access control information
- *
- * This is only being exposed until the access control attributes are
- * proper encapsulated in the security module.
- */
-struct pool_prop_ugm {
-	uint32_t	pp_uid;
-	uint32_t	pp_gid;
-	uint32_t	pp_mode;
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
@@ -132,6 +121,7 @@ int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
+int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
@@ -145,6 +135,10 @@ int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
+int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
+				uint32_t rank,
+				struct pool_target_id_list *target_list,
+				pool_comp_state_t state);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
@@ -166,6 +160,8 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
 		      daos_pool_info_t *pool_info);
 
+int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
+		       daos_prop_t **prop_out);
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
  * Upon successful completion, "buf" returns an array of handle UUIDs if its
@@ -186,6 +182,11 @@ int ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svc,
 				   struct rsvc_hint *hint);
 
 void ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank);
+
+int ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
+		       uint32_t map_ver);
+int ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop);
+int ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
@@ -214,7 +215,6 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 			       unsigned int *failed_tgts_cnt);
-
 int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 			  struct daos_pool_cont_info **containers,
 			  uint64_t *ncontainers);

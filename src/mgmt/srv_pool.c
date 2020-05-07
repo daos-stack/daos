@@ -168,8 +168,9 @@ pool_rec_lookup(struct rdb_tx *tx, struct mgmt_svc *svc, uuid_t uuid,
 }
 
 /* Caller is responsible for freeing ranks */
-static int
-pool_get_svc_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
+int
+ds_mgmt_pool_get_svc_ranks(struct mgmt_svc *svc, uuid_t uuid,
+			   d_rank_list_t **ranks)
 {
 	struct rdb_tx	tx;
 	struct pool_rec	*rec;
@@ -407,8 +408,10 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_CORPC))
 		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
+		D_ERROR(DF_UUID": dss_rpc_send MGMT_TGT_CREATE: %d\n",
+			DP_UUID(pool_uuid), rc);
 		crt_req_decref(tc_req);
-		goto out_preparation;
+		goto tgt_fail;
 	}
 
 	tc_out = crt_reply_get(tc_req);
@@ -584,7 +587,7 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_svc_ranks(svc, pool_uuid, &psvcranks);
+	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &psvcranks);
 	if (rc != 0) {
 		D_ERROR("Failed to get pool service ranks "DF_UUID" rc: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -653,6 +656,33 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
+}
+
+int
+ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
+				 struct pool_target_id_list *target_list,
+				 pool_comp_state_t state)
+{
+	int			rc;
+	d_rank_list_t		*ranks;
+	struct mgmt_svc		*svc;
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_target_update_state(pool_uuid, ranks, rank, target_list,
+					 state);
+
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
 }
 
 /* Free array of pools created in ds_mgmt_list_pools() iteration.
@@ -835,7 +865,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, struct daos_pool_cont_info **containers,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_svc_ranks(svc, uuid, &ranks);
+	rc = ds_mgmt_pool_get_svc_ranks(svc, uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -877,7 +907,7 @@ ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info)
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
+	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -906,8 +936,10 @@ get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 		new_prop->dpp_entries[i].dpe_type = ACCESS_PROPS[i];
 
 	rc = ds_pool_svc_get_prop(pool_uuid, ranks, new_prop);
-	if (rc != 0)
+	if (rc != 0) {
+		daos_prop_free(new_prop);
 		return rc;
+	}
 
 	*prop = new_prop;
 	return 0;
@@ -927,7 +959,7 @@ ds_mgmt_pool_get_acl(uuid_t pool_uuid, daos_prop_t **access_prop)
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
+	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -959,7 +991,7 @@ ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
+	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -1003,7 +1035,7 @@ ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
+	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -1040,7 +1072,7 @@ ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
+	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -1089,7 +1121,7 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
+	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 

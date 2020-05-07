@@ -5,12 +5,14 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    daos_build.test(denv, 'eq_tests', Glob('eq_tests.c'),
-                    LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                          'pthread', 'cmocka'])
-    daos_build.test(denv, 'agent_tests', Glob('agent_tests.c'),
-                    LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                          'pthread', 'cmocka'])
+    eq_tests = daos_build.test(denv, 'eq_tests', Glob('eq_tests.c'),
+                               LIBS=['daos', 'daos_common', 'gurt', 'cart',
+                                     'pthread', 'cmocka'])
+    agent_tests = daos_build.test(denv, 'agent_tests', Glob('agent_tests.c'),
+                                  LIBS=['daos', 'daos_common', 'gurt', 'cart',
+                                        'pthread', 'cmocka'])
+
+    denv.Install('$PREFIX/bin/', [eq_tests, agent_tests])
 
 if __name__ == "SCons.Script":
     scons()

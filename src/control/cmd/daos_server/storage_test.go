@@ -64,14 +64,14 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 		},
 		"prepared scm; success": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{*storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{*storage.MockScmNamespace()},
+				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
+				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 				StartingState:   storage.ScmStateNoCapacity,
 			},
 		},
 		"unprepared scm; warn": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:   storage.ScmModules{*storage.MockScmModule()},
+				DiscoverRes:   storage.ScmModules{storage.MockScmModule()},
 				StartingState: storage.ScmStateNoRegions,
 			},
 			expErr: errors.New("consent not given"), // prompts for confirmation and gets EOF
@@ -79,7 +79,7 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 		"unprepared scm; force": {
 			force: true,
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{*storage.MockScmModule()},
+				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
 				StartingState:   storage.ScmStateNoRegions,
 				PrepNeedsReboot: true,
 			},
@@ -87,8 +87,8 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 		},
 		"prepare scm; create namespaces": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:      storage.ScmModules{*storage.MockScmModule()},
-				PrepNamespaceRes: storage.ScmNamespaces{*storage.MockScmNamespace()},
+				DiscoverRes:      storage.ScmModules{storage.MockScmModule()},
+				PrepNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 				StartingState:    storage.ScmStateFreeCapacity,
 			},
 			expLogMsg: storage.MockScmNamespace().String(),
@@ -96,8 +96,8 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 		"reset scm": {
 			reset: true,
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:      storage.ScmModules{*storage.MockScmModule()},
-				PrepNamespaceRes: storage.ScmNamespaces{*storage.MockScmNamespace()},
+				DiscoverRes:      storage.ScmModules{storage.MockScmModule()},
+				PrepNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 				StartingState:    storage.ScmStateNoCapacity,
 			},
 			expErr: errors.New("consent not given"), // prompts for confirmation and gets EOF
@@ -110,7 +110,7 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 		},
 		"scm prepare fails": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:   storage.ScmModules{*storage.MockScmModule()},
+				DiscoverRes:   storage.ScmModules{storage.MockScmModule()},
 				StartingState: storage.ScmStateFreeCapacity,
 				PrepErr:       failedErr,
 			},

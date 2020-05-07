@@ -79,6 +79,10 @@ struct ik_rec {
 	umem_off_t	ir_val_off;
 };
 
+static char	**test_group_args;
+static int	test_group_start;
+static int	test_group_stop;
+
 #define IK_TREE_CLASS	100
 #define POOL_NAME "/mnt/daos/btree-test"
 #define POOL_SIZE ((1024 * 1024 * 1024ULL))
@@ -177,7 +181,7 @@ ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		if (val_iov->iov_buf == NULL)
 			val_iov->iov_buf = val;
 		else if (val_iov->iov_buf_len >= val_size)
-			memcpy(key_iov->iov_buf, val, val_size);
+			memcpy(val_iov->iov_buf, val, val_size);
 
 	}
 	return 0;
@@ -758,6 +762,7 @@ ik_btr_batch_oper(void **state)
 		}
 	}
 	ik_btr_query(NULL);
+	D_FREE(arr);
 }
 
 static void
@@ -872,108 +877,8 @@ ik_btr_drain(void **state)
 		if (empty)
 			break;
 	}
-}
 
-static int
-run_btree_open_create_test(void)
-{
-	static const struct CMUnitTest btree_open_create_test[] = {
-		{ "BTR001: btree_open_create test", ik_btr_open_create,
-			NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("btree open create test",
-					btree_open_create_test, NULL, NULL);
-}
-
-static int
-run_btree_close_destroy_test(void)
-{
-	static const struct CMUnitTest btree_close_destroy_test[] = {
-		{ "BTR002: btree_close_destroy test", ik_btr_close_destroy,
-			NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("btree close destroy test",
-					btree_close_destroy_test, NULL, NULL);
-}
-
-static int
-run_btree_query_test(void)
-{
-	static const struct CMUnitTest btree_query_test[] = {
-		{ "BTR003: btree_query test", ik_btr_query,
-			NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("btree query test",
-					btree_query_test, NULL, NULL);
-}
-
-static int
-run_btree_iter_test(void)
-{
-	static const struct CMUnitTest btree_iterate_test[] = {
-		{ "BTR004: btree_iterate test", ik_btr_iterate,
-			NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("btree iterate test",
-					btree_iterate_test, NULL, NULL);
-}
-
-static int
-run_btree_batch_oper_test(void)
-{
-	static const struct CMUnitTest btree_batch_oper_test[] = {
-		{ "BTR005: btree_batch_oper test", ik_btr_batch_oper,
-			NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("btree batch oper test",
-					btree_batch_oper_test, NULL, NULL);
-}
-
-static int
-run_btree_perf_test(void)
-{
-	static const struct CMUnitTest btree_perf_test[] = {
-		{ "BTR006: btree_perf test", ik_btr_perf, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("btree perf test",
-					btree_perf_test, NULL, NULL);
-}
-
-static int
-run_btree_kv_operate_test(void)
-{
-	static const struct CMUnitTest btree_kv_operate_test[] = {
-		{ "BTR007: btree_kv_operate test",
-			ik_btr_kv_operate, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("btree kv operate test",
-				btree_kv_operate_test, NULL, NULL);
-}
-
-static int
-run_btree_drain_test(void)
-{
-	static const struct CMUnitTest btree_drain_test[] = {
-		{ "BTR008: btree_drain test", ik_btr_drain, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("btree drain test",
-				btree_drain_test, NULL, NULL);
+	D_FREE(arr);
 }
 
 static struct option btr_ops[] = {
@@ -994,6 +899,109 @@ static struct option btr_ops[] = {
 	{ NULL,		0,			NULL,	0	},
 };
 
+static int
+use_pmem() {
+
+	int rc;
+
+	D_PRINT("Using pmem\n");
+	rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
+			       sizeof(*ik_root),
+			       &ik_utx);
+	D_ASSERT(rc == 0);
+	return rc;
+}
+
+static void
+ts_group(void **state) {
+
+	int	opt = 0;
+	void	**st = NULL;
+
+	while ((opt = getopt_long(test_group_stop-test_group_start+1,
+				  test_group_args+test_group_start,
+				  "tmC:Deocqu:d:r:f:i:b:p:",
+				  btr_ops,
+				  NULL)) != -1) {
+		tst_fn_val.optval = optarg;
+		tst_fn_val.input = true;
+
+		switch (opt) {
+		case 'C':
+			ik_btr_open_create(st);
+			break;
+		case 'D':
+			tst_fn_val.input = true;
+			ik_btr_close_destroy(st);
+			break;
+		case 'o':
+			tst_fn_val.input = false;
+			tst_fn_val.optval = NULL;
+			ik_btr_open_create(st);
+			break;
+		case 'c':
+			tst_fn_val.input = false;
+			ik_btr_close_destroy(st);
+			break;
+		case 'e':
+			ik_btr_drain(st);
+			break;
+		case 'q':
+			ik_btr_query(st);
+			break;
+		case 'u':
+			tst_fn_val.opc = BTR_OPC_UPDATE;
+			ik_btr_kv_operate(st);
+			break;
+		case 'f':
+			tst_fn_val.opc = BTR_OPC_LOOKUP;
+			ik_btr_kv_operate(st);
+			break;
+		case 'd':
+			tst_fn_val.opc = BTR_OPC_DELETE;
+			ik_btr_kv_operate(st);
+			break;
+		case 'r':
+			tst_fn_val.opc = BTR_OPC_DELETE_RETAIN;
+			ik_btr_kv_operate(st);
+			break;
+		case 'i':
+			ik_btr_iterate(st);
+			break;
+		case 'b':
+			ik_btr_batch_oper(st);
+			break;
+		case 'p':
+			ik_btr_perf(st);
+			break;
+		default:
+			D_PRINT("Unsupported command %c\n", opt);
+		case 'm':
+		case 't':
+			/* handled previously */
+			break;
+		}
+	}
+}
+
+static int
+run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
+{
+
+	const struct CMUnitTest btree_test[] = {
+		{test_name, ts_group, NULL, NULL},
+	};
+
+	test_group_args = args;
+	test_group_start = start_idx;
+	test_group_stop = stop_idx;
+
+	return cmocka_run_group_tests_name(test_name,
+					   btree_test,
+					   NULL,
+					   NULL);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1001,6 +1009,9 @@ main(int argc, char **argv)
 	int		rc = 0;
 	int		opt;
 	int		dynamic_flag = 0;
+	int		start_idx;
+	char		*test_name;
+	int		stop_idx;
 
 	d_register_alt_assert(mock_assert);
 
@@ -1014,24 +1025,44 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	optind = 0;
-
-	/* Check for -m option first */
-	while ((opt = getopt_long(argc, argv, "tmC:Deocqu:d:r:f:i:b:p:",
-				  btr_ops, NULL)) != -1) {
-		if (opt == 'm') {
-			D_PRINT("Using pmem\n");
-			rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
-						   sizeof(*ik_root), &ik_utx);
-			D_ASSERT(rc == 0);
-			break;
-		}
-		if (opt == 't') {
-			D_PRINT("Using dynamic tree order\n");
-			dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
-		}
+	if (argc == 1) {
+		print_message("Invalid format.\n");
+		return -1;
 	}
 
+	stop_idx = argc-1;
+	if (strcmp(argv[1], "--start-test") == 0) {
+		start_idx = 2;
+		test_name = argv[2];
+		if (strcmp(argv[3], "-t") == 0) {
+			D_PRINT("Using dynamic tree order\n");
+			dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
+			if (strcmp(argv[4], "-m") == 0)
+				rc = use_pmem();
+		} else if (strcmp(argv[3], "-m") == 0) {
+			rc = use_pmem();
+			if (strcmp(argv[4], "-t") == 0) {
+				D_PRINT("Using dynamic tree order\n");
+				dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
+			}
+		}
+	} else {
+		start_idx = 0;
+		test_name = "Btree testing tool";
+		optind = 0;
+		/* Check for -m option first */
+		while ((opt = getopt_long(argc, argv, "tmC:Deocqu:d:r:f:i:b:p:",
+					  btr_ops, NULL)) != -1) {
+			if (opt == 'm') {
+				rc = use_pmem();
+				break;
+			}
+			if (opt == 't') {
+				D_PRINT("Using dynamic tree order\n");
+				dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
+			}
+		}
+	}
 
 	rc = dbtree_class_register(IK_TREE_CLASS,
 				   dynamic_flag | BTR_FEAT_UINT_KEY, &ik_ops);
@@ -1048,70 +1079,7 @@ main(int argc, char **argv)
 
 	/* start over */
 	optind = 0;
-
-	while ((opt = getopt_long(argc, argv, "tmC:Deocqu:d:r:f:i:b:p:",
-				  btr_ops, NULL)) != -1) {
-		tst_fn_val.optval = optarg;
-		tst_fn_val.input = true;
-		switch (opt) {
-		case 'C':
-			rc = run_btree_open_create_test();
-			break;
-		case 'D':
-			tst_fn_val.input = true;
-			rc = run_btree_close_destroy_test();
-			break;
-		case 'o':
-			tst_fn_val.input = false;
-			tst_fn_val.optval = NULL;
-			rc = run_btree_open_create_test();
-			break;
-		case 'c':
-			tst_fn_val.input = false;
-			rc = run_btree_close_destroy_test();
-			break;
-		case 'e':
-			rc = run_btree_drain_test();
-			break;
-		case 'q':
-			rc = run_btree_query_test();
-			break;
-		case 'u':
-			tst_fn_val.opc = BTR_OPC_UPDATE;
-			rc = run_btree_kv_operate_test();
-			break;
-		case 'f':
-			tst_fn_val.opc = BTR_OPC_LOOKUP;
-			rc = run_btree_kv_operate_test();
-			break;
-		case 'd':
-			tst_fn_val.opc = BTR_OPC_DELETE;
-			rc = run_btree_kv_operate_test();
-			break;
-		case 'r':
-			tst_fn_val.opc = BTR_OPC_DELETE_RETAIN;
-			rc = run_btree_kv_operate_test();
-			break;
-		case 'i':
-			rc = run_btree_iter_test();
-			break;
-		case 'b':
-			rc = run_btree_batch_oper_test();
-			break;
-		case 'p':
-			rc = run_btree_perf_test();
-			break;
-		default:
-			D_PRINT("Unsupported command %c\n", opt);
-		case 'm':
-		case 't':
-			/* handled previously */
-			rc = 0;
-			break;
-		}
-		if (rc != 0)
-			break;
-	}
+	rc = run_cmd_line_test(test_name, argv, start_idx, stop_idx);
 	daos_debug_fini();
 	rc += utest_utx_destroy(ik_utx);
 	if (rc != 0)

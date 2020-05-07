@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
+from logging import getLogger
 
 import os
 import re
@@ -30,12 +31,83 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
+from avocado.utils import process
 from ClusterShell.Task import task_self
-from ClusterShell.NodeSet import NodeSet
+from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+from avocado.utils import process
 
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
+
+
+def run_command(command, timeout=60, verbose=True, raise_exception=True,
+                output_check="combined", env=None):
+    """Run the command on the local host.
+
+    This method uses the avocado.utils.process.run() method to run the specified
+    command string on the local host using subprocess.Popen(). Even though the
+    command is specified as a string, since shell=False is passed to process.run
+    it will use shlex.spit() to break up the command into a list before it is
+    passed to subprocess.Popen. The shell=False is forced for security.
+
+    As a result typically any command containing ";", "|", "&&", etc. will fail.
+    This can be avoided in command strings like "for x in a b; echo $x; done"
+    by using "/usr/bin/bash -c 'for x in a b; echo $x; done'".
+
+    Args:
+        command (str): command to run.
+        timeout (int, optional): command timeout. Defaults to 60 seconds.
+        verbose (bool, optional): whether to log the command run and
+            stdout/stderr. Defaults to True.
+        raise_exception (bool, optional): whether to raise an exception if the
+            command returns a non-zero exit status. Defaults to True.
+        output_check (str, optional): whether to record the output from the
+            command (from stdout and stderr) in the test output record files.
+            Valid values:
+                "stdout"    - standard output *only*
+                "stderr"    - standard error *only*
+                "both"      - both standard output and error in separate files
+                "combined"  - standard output and error in a single file
+                "none"      - disable all recording
+            Defaults to "combined".
+        env (dict, optional): dictionary of environment variable names and
+            values to set when running the command. Defaults to None.
+
+    Raises:
+        DaosTestError: if there is an error running the command
+
+    Returns:
+        CmdResult: an avocado.utils.process CmdResult object containing the
+            result of the command execution.  A CmdResult object has the
+            following properties:
+                command         - command string
+                exit_status     - exit_status of the command
+                stdout          - the stdout
+                stderr          - the stderr
+                duration        - command execution time
+                interrupted     - whether the command completed within timeout
+                pid             - command's pid
+
+    """
+    kwargs = {
+        "cmd": command,
+        "timeout": timeout,
+        "verbose": verbose,
+        "ignore_status": not raise_exception,
+        "allow_output_check": output_check,
+        "shell": False,
+        "env": env,
+    }
+    try:
+        # Block until the command is complete or times out
+        return process.run(**kwargs)
+
+    except process.CmdError as error:
+        # Command failed or possibly timed out
+        msg = "Error occurred running '{}': {}".format(" ".join(command), error)
+        print(msg)
+        raise DaosTestError(msg)
 
 
 def run_task(hosts, command, timeout=None):
@@ -90,14 +162,17 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         retcode_dict[retcode].add(nodeset)
 
         # Display any errors or requested output
-        if retcode != expect_rc or verbose:
-            msg = "failure running" if retcode != expect_rc else "output from"
-            if not list(task.iter_buffers(rc_nodes)):
+        if verbose or (expect_rc is not None and expect_rc != retcode):
+            msg = "output from"
+            if expect_rc is not None and expect_rc != retcode:
+                msg = "failure running"
+            buffers = task.iter_buffers(rc_nodes)
+            if not list(buffers):
                 print(
                     "{}: {} '{}': rc={}".format(
                         nodeset, msg, command, retcode))
             else:
-                for output, nodes in task.iter_buffers(rc_nodes):
+                for output, nodes in buffers:
                     nodeset = NodeSet.fromlist(nodes)
                     lines = str(output).splitlines()
                     output = "rc={}{}".format(
@@ -112,9 +187,9 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     if timeout and task.num_timeout() > 0:
         nodes = task.iter_keys_timeout()
         print(
-            "{}: timeout detected running '{}' on {}/{} hosts".format(
+            "{}: timeout detected running '{}' on {}/{} hosts after {}s".format(
                 NodeSet.fromlist(nodes),
-                command, task.num_timeout(), len(hosts)))
+                command, task.num_timeout(), len(hosts), timeout))
         retcode = 255
         if retcode not in retcode_dict:
             retcode_dict[retcode] = NodeSet()
@@ -178,8 +253,8 @@ def get_file_path(bin_name, dir_path=""):
     if not file_path:
         raise OSError(ENOENT, "File {0} not found inside {1} Directory"
                       .format(bin_name, basepath))
-    else:
-        return file_path
+
+    return file_path
 
 
 def process_host_list(hoststr):
@@ -264,3 +339,92 @@ def check_pool_files(log, hosts, uuid):
             log.error("%s: %s not found", result[1], filename)
             status = False
     return status
+
+
+def stop_processes(hosts, pattern, verbose=True, timeout=60):
+    """Stop the processes on each hosts that match the pattern.
+
+    Args:
+        hosts (list): hosts on which to stop the processes
+        pattern (str): regular expression used to find process names to stop
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60
+            seconds.
+
+    Returns:
+        dict: a dictionary of return codes keys and accompanying NodeSet
+            values indicating which hosts yielded the return code.
+            Return code keys:
+                0   No processes matched the criteria / No processes killed.
+                1   One or more processes matched the criteria and a kill was
+                    attempted.
+
+    """
+    result = {}
+    log = getLogger()
+    log.info("Killing any processes on %s that match: %s", hosts, pattern)
+    if hosts is not None:
+        commands = [
+            "rc=0",
+            "if pgrep --list-full {}".format(pattern),
+            "then rc=1",
+            "sudo pkill {}".format(pattern),
+            "if pgrep --list-full {}".format(pattern),
+            "then sleep 5",
+            "pkill --signal KILL {}".format(pattern),
+            "fi",
+            "fi",
+            "exit $rc",
+        ]
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
+    return result
+
+
+def get_partition_hosts(partition):
+    """Get a list of hosts in the specified slurm partition.
+
+    Args:
+        partition (str): name of the partition
+
+    Returns:
+        list: list of hosts in the specified partition
+
+    """
+    log = getLogger()
+    hosts = []
+    if partition is not None:
+        # Get the partition name information
+        cmd = "scontrol show partition {}".format(partition)
+        try:
+            result = process.run(cmd, shell=True, timeout=10)
+        except process.CmdError as error:
+            log.warning(
+                "Unable to obtain hosts from the %s slurm "
+                "partition: %s", partition, error)
+            result = None
+
+        if result:
+            # Get the list of hosts from the partition information
+            output = result.stdout
+            try:
+                hosts = list(NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
+            except (NodeSetParseError, IndexError):
+                log.warning(
+                    "Unable to obtain hosts from the %s slurm partition "
+                    "output: %s", partition, output)
+    return hosts
+
+
+def get_log_file(name):
+    """Get the full log file name and path.
+
+    Prepends the DAOS_TEST_LOG_DIR path (or /tmp) to the specified file name.
+
+    Args:
+        name (str): log file name
+
+    Returns:
+        str: full log file name including path
+
+    """
+    return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)

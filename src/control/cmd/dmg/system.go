@@ -24,12 +24,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -48,15 +51,21 @@ type SystemCmd struct {
 type leaderQueryCmd struct {
 	logCmd
 	cfgCmd
-	connectedCmd
+	ctlInvokerCmd
+	jsonOutputCmd
 }
 
 func (cmd *leaderQueryCmd) Execute(_ []string) error {
-	resp, err := cmd.conns.LeaderQuery(client.LeaderQueryReq{
+	ctx := context.Background()
+	resp, err := control.LeaderQuery(ctx, cmd.ctlInvoker, &control.LeaderQueryReq{
 		System: cmd.config.SystemName,
 	})
 	if err != nil {
 		return errors.Wrap(err, "leader query failed")
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
 	}
 
 	cmd.log.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
@@ -66,7 +75,7 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 
 // addRankPrefix is a hack, but don't want to modify the hostlist library to
 // accept invalid hostnames.
-func addRankPrefix(rank uint32) string {
+func addRankPrefix(rank system.Rank) string {
 	return fmt.Sprintf("r-%d", rank)
 }
 
@@ -140,18 +149,29 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) error 
 // systemQueryCmd is the struct representing the command to query system status.
 type systemQueryCmd struct {
 	logCmd
-	connectedCmd
-	Verbose bool  `long:"verbose" short:"v" description:"Display more member details"`
-	Rank    int32 `long:"rank" short:"r" default:"-1" description:"System member rank to query"`
+	ctlInvokerCmd
+	jsonOutputCmd
+	Verbose bool   `long:"verbose" short:"v" description:"Display more member details"`
+	Ranks   string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
 }
 
 // Execute is run when systemQueryCmd activates
 func (cmd *systemQueryCmd) Execute(_ []string) error {
-	req := client.SystemQueryReq{Rank: cmd.Rank}
+	var ranks []uint32
+	if err := common.ParseNumberList(cmd.Ranks, &ranks); err != nil {
+		return errors.Wrap(err, "parsing input ranklist")
+	}
 
-	resp, err := cmd.conns.SystemQuery(req)
+	ctx := context.Background()
+	resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{
+		Ranks: system.RanksFromUint32(ranks),
+	})
 	if err != nil {
 		return errors.Wrap(err, "System-Query command failed")
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
 	}
 
 	cmd.log.Debug("System-Query command succeeded")
@@ -160,7 +180,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return nil
 	}
 
-	if cmd.Rank >= 0 {
+	if len(ranks) == 1 {
 		return displaySystemQuerySingle(cmd.log, resp.Members)
 	}
 
@@ -200,18 +220,34 @@ func displaySystemAction(log logging.Logger, results system.MemberResults) error
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
 type systemStopCmd struct {
 	logCmd
-	connectedCmd
-	Force bool `long:"force" description:"Force stop DAOS system members"`
+	ctlInvokerCmd
+	jsonOutputCmd
+	Force bool   `long:"force" description:"Force stop DAOS system members"`
+	Ranks string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
 }
 
 // Execute is run when systemStopCmd activates
 //
 // Perform prep and kill stages with stop command.
 func (cmd *systemStopCmd) Execute(_ []string) error {
-	req := client.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force}
-	resp, err := cmd.conns.SystemStop(req)
+	var ranks []uint32
+	if err := common.ParseNumberList(cmd.Ranks, &ranks); err != nil {
+		return errors.Wrap(err, "parsing input ranklist")
+	}
+
+	ctx := context.Background()
+	resp, err := control.SystemStop(ctx, cmd.ctlInvoker, &control.SystemStopReq{
+		Prep:  true,
+		Kill:  true,
+		Force: cmd.Force,
+		Ranks: system.RanksFromUint32(ranks),
+	})
 	if err != nil {
 		return errors.Wrap(err, "System-Stop command failed")
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
 	}
 
 	if len(resp.Results) == 0 {
@@ -226,20 +262,32 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 // systemStartCmd is the struct representing the command to start system.
 type systemStartCmd struct {
 	logCmd
-	connectedCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+	Ranks string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
 }
 
 // Execute is run when systemStartCmd activates
 func (cmd *systemStartCmd) Execute(_ []string) error {
-	req := client.SystemStartReq{}
+	var ranks []uint32
+	if err := common.ParseNumberList(cmd.Ranks, &ranks); err != nil {
+		return errors.Wrap(err, "parsing input ranklist")
+	}
 
-	resp, err := cmd.conns.SystemStart(req)
+	ctx := context.Background()
+	resp, err := control.SystemStart(ctx, cmd.ctlInvoker, &control.SystemStartReq{
+		Ranks: system.RanksFromUint32(ranks),
+	})
 	if err != nil {
 		return errors.Wrap(err, "System-Start command failed")
 	}
 
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
+	}
+
 	if len(resp.Results) == 0 {
-		cmd.log.Info("No results returned")
+		cmd.log.Debug("System-Start no results returned")
 		return nil
 	}
 	cmd.log.Debug("System-Start command succeeded")
@@ -250,8 +298,9 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 // systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.
 type systemListPoolsCmd struct {
 	logCmd
-	connectedCmd
 	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
 }
 
 func formatPoolSvcReps(svcReps []uint32) string {
@@ -271,13 +320,19 @@ func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 	if cmd.config == nil {
 		return errors.New("No configuration loaded")
 	}
-	req := client.ListPoolsReq{SysName: cmd.config.SystemName}
-	resp, err := cmd.conns.ListPools(req)
+
+	ctx := context.Background()
+	resp, err := control.ListPools(ctx, cmd.ctlInvoker, &control.ListPoolsReq{
+		System: cmd.config.SystemName,
+	})
 	if err != nil {
 		return errors.Wrap(err, "List-Pools command failed")
 	}
 
-	cmd.log.Debug("List-Pools command succeeded\n")
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
+	}
+
 	if len(resp.Pools) == 0 {
 		cmd.log.Info("No pools in system\n")
 		return nil

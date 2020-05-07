@@ -150,7 +150,8 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	for (i = 0; i < update_recx_nr; i++) {
 		uint64_t csum_buf_len;
 
-		csum_buf_len = csum_size * test.update_recxs[i].csum_count;
+		csum_buf_len = (uint64_t)csum_size *
+				test.update_recxs[i].csum_count;
 		csum_infos[i].cs_type = 1;
 		csum_infos[i].cs_nr = test.update_recxs[i].csum_count;
 		csum_infos[i].cs_chunksize = test.chunksize;
@@ -171,7 +172,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 					 "0123456789ABCDEF");
 
 	/** update with a checksum */
-	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
+	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, 0, &k.dkey, 1,
 			    &iod, &iod_csums, &sgl);
 	if (rc != 0)
 		fail_msg("vos_obj_update failed with error code %d", rc);
@@ -187,7 +188,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	 * have access to the vos io handler to get the checksums (this is
 	 * how the server object layer already interfaces with VOS)
 	 */
-	vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
+	vos_fetch_begin(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
 			false, &ioh);
 
 	biod = vos_ioh2desc(ioh);
@@ -418,97 +419,10 @@ update_fetch_csum_for_array_10(void **state)
 }
 
 /**
- * ------------------------------------------------
- * Fault Injection
- * ------------------------------------------------
- */
-static void
-set_csum_fi(int flag)
-{
-	daos_fail_loc_set(flag | DAOS_FAIL_ALWAYS);
-}
-
-static void
-unset_csum_fi()
-{
-	daos_fail_loc_set(0); /** revert any fi */
-}
-
-void
-csum_fault_injection(void **state)
-{
-	struct extent_key	 k;
-	daos_recx_t		 recx;
-	struct dcs_iod_csums	 iod_csums = {0};
-	struct dcs_csum_info	 info = {0};
-	uint64_t		 csum;
-	daos_iod_t		 iod;
-	d_sg_list_t		 sgl;
-	int			 rc;
-	struct dcs_csum_info	*fetched_csums;
-	daos_handle_t		 ioh = DAOS_HDL_INVAL;
-
-	extent_key_from_test_args(&k, *state);
-
-	dts_sgl_init_with_strings(&sgl, 1, "ABCD");
-	csum = 0xABCD;
-
-	recx.rx_idx = 0;
-	recx.rx_nr = daos_sgl_data_len(&sgl);
-	ci_set(&info, &csum, 8, 8, 1, 8, 0);
-	iod.iod_nr = 1;
-	iod.iod_recxs = &recx;
-	iod.iod_name = k.akey;
-	iod.iod_size = 1;
-	iod.iod_type = DAOS_IOD_ARRAY;
-
-	iod_csums.ic_data = &info;
-
-	set_csum_fi(DAOS_CHECKSUM_UPDATE_FAIL);
-
-	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
-			    &iod, &iod_csums, &sgl);
-	assert_int_equal(0, rc);
-	unset_csum_fi();
-
-	rc = vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
-			false, &ioh);
-	assert_int_equal(0, rc);
-
-	fetched_csums = vos_ioh2ci(ioh);
-	assert_int_not_equal(*(uint64_t *)fetched_csums->cs_csum, 0xABCD);
-
-	rc = vos_fetch_end(ioh, rc);
-	assert_int_equal(0, rc);
-
-	csum = 0xABCD;
-	set_csum_fi(DAOS_CHECKSUM_FETCH_FAIL);
-	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
-			    &iod, NULL, &sgl);
-	assert_int_equal(0, rc);
-
-	rc = vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
-			     false, &ioh);
-	assert_int_equal(0, rc);
-
-	fetched_csums = vos_ioh2ci(ioh);
-	assert_int_not_equal(*(uint64_t *)fetched_csums->cs_csum, 0xABCD);
-
-	rc = vos_fetch_end(ioh, rc);
-	assert_int_equal(0, rc);
-
-	unset_csum_fi();
-
-	/** clean up */
-	d_sgl_fini(&sgl, true);
-}
-
-/**
  * -------------------------------------
  * Helper function tests
  * -------------------------------------
  */
-
 
 struct evt_csum_test_args {
 	uint32_t lo;
@@ -752,6 +666,76 @@ evt_entry_aligned_tests(void **state)
 	});
 }
 
+static void
+test_evt_entry_csum_update(void **state)
+{
+	const uint32_t			csum_buf_len = 32;
+	uint8_t				buf[csum_buf_len];
+	struct dcs_csum_info		actual;
+	const struct dcs_csum_info	expected  = {
+		.cs_buf_len = csum_buf_len,
+		.cs_nr = 4,
+		.cs_csum = buf,
+		.cs_len = 8,
+		.cs_chunksize = 4,
+		.cs_type = 3
+	};
+	struct evt_extent		ext = {.ex_lo = 0, .ex_hi = 31};
+	struct evt_extent		sel = {.ex_lo = 0, .ex_hi = 7};
+
+	actual = expected;
+
+	/** Don't update unnecessarily */
+	evt_entry_csum_update(&ext, &sel, &actual);
+	assert_int_equal(expected.cs_nr, actual.cs_nr);
+	assert_int_equal(expected.cs_buf_len, actual.cs_buf_len);
+	assert_ptr_equal(expected.cs_csum, actual.cs_csum);
+
+	/** Will still need the first checksum to verify the first chunk */
+	actual = expected;
+	sel.ex_lo = 3;
+	evt_entry_csum_update(&ext, &sel, &actual);
+	assert_int_equal(expected.cs_nr, actual.cs_nr);
+	assert_int_equal(expected.cs_buf_len, actual.cs_buf_len);
+	assert_ptr_equal(expected.cs_csum, actual.cs_csum);
+
+	/**
+	 * Because the selected extent doesn't include the first chunk, the
+	 * first checksum should be removed
+	 */
+	actual = expected;
+	sel.ex_lo = 4;
+	evt_entry_csum_update(&ext, &sel, &actual);
+	assert_int_equal(expected.cs_nr - 1, actual.cs_nr);
+	assert_int_equal(expected.cs_buf_len - expected.cs_len,
+		actual.cs_buf_len);
+	assert_ptr_equal(expected.cs_csum + expected.cs_len, actual.cs_csum);
+
+	/**
+	 * Only 1 byte of second chunk, but still keep second checksum
+	 */
+	actual = expected;
+	sel.ex_lo = 7;
+	evt_entry_csum_update(&ext, &sel, &actual);
+	assert_int_equal(expected.cs_nr - 1, actual.cs_nr);
+	assert_int_equal(expected.cs_buf_len - expected.cs_len,
+		actual.cs_buf_len);
+	assert_ptr_equal(expected.cs_csum + expected.cs_len, actual.cs_csum);
+
+	/**
+	 * Only 1 byte of second chunk, but still keep second checksum
+	 */
+	actual = expected;
+	sel.ex_lo = 8;
+	sel.ex_hi = 16;
+	evt_entry_csum_update(&ext, &sel, &actual);
+	assert_int_equal(expected.cs_nr - 2, actual.cs_nr);
+	assert_int_equal(expected.cs_buf_len - expected.cs_len * 2,
+		actual.cs_buf_len);
+	assert_ptr_equal(expected.cs_csum + expected.cs_len * 2,
+			 actual.cs_csum);
+}
+
 int setup(void **state)
 {
 	return 0;
@@ -776,28 +760,35 @@ static const struct CMUnitTest update_fetch_checksums_for_array_types[] = {
 	VOS("08: Partial -> more partial", update_fetch_csum_for_array_8),
 	VOS("09: Many sequential extents", update_fetch_csum_for_array_9),
 	VOS("10: Holes", update_fetch_csum_for_array_10),
-	VOS("11: Checksum fault injection test", csum_fault_injection),
 };
 
 #define	EVT(desc, test_fn) \
 	{ "EVT_CSUM" desc, test_fn, setup, teardown}
 static const struct CMUnitTest evt_checksums_tests[] = {
 	EVT("01: Some EVT Checksum Helper Functions",
-		 evt_csum_helper_functions_tests),
-	EVT("02: Test the alignment of entries",
-		 evt_entry_aligned_tests),
+		evt_csum_helper_functions_tests),
+	EVT("02: Test the alignment of entries", evt_entry_aligned_tests),
+	EVT("03: Test the alignment of entries", test_evt_entry_csum_update),
 };
 
-int run_csum_extent_tests(void)
+int run_csum_extent_tests(const char *cfg)
 {
 	int rc = 0;
+	char	test_name[CFG_MAX];
+
+	create_config(test_name,
+		"Storage and retrieval of checksums for Array Type %s", cfg);
 
 	rc = cmocka_run_group_tests_name(
-		"Storage and retrieval of checksums for Array Type",
+		test_name,
 		update_fetch_checksums_for_array_types, setup_io, teardown_io);
 
+	create_config(test_name,
+		"evtreen helper functions for alignment, counting, etc for csum  %s",
+		cfg);
+
 	rc += cmocka_run_group_tests_name(
-		"evtree helper functions for alignment, counting, etc for csum",
+		test_name,
 		evt_checksums_tests, setup_io, teardown_io);
 
 	return rc;

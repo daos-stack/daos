@@ -27,9 +27,9 @@
 
 #include <daos_srv/pool.h>
 #include <daos/pool_map.h>
-#include "srv_internal.h"
 #include <daos_srv/iv.h>
 #include <daos_prop.h>
+#include "srv_internal.h"
 
 uint32_t
 pool_iv_map_ent_size(int nr)
@@ -39,34 +39,29 @@ pool_iv_map_ent_size(int nr)
 }
 
 static uint32_t
-pool_iv_prop_ent_size(int nr)
+pool_iv_prop_ent_size(int nr_aces, int nr_ranks)
 {
-	return offsetof(struct pool_iv_entry, piv_prop.pip_acl.dal_ace[nr]);
+	uint32_t acl_size;
+	uint32_t svc_size;
+
+	/* Calculate pool_iv_buf size */
+	acl_size = roundup(offsetof(struct daos_acl, dal_ace[nr_aces]), 8);
+	svc_size = roundup(nr_ranks * sizeof(d_rank_t), 8);
+
+	return sizeof(struct pool_iv_entry) + acl_size + svc_size;
 }
 
 static int
-pool_iv_value_alloc_internal(int class_id, d_sg_list_t *sgl)
+pool_iv_value_alloc_internal(struct ds_iv_key *key, d_sg_list_t *sgl)
 {
-	uint32_t	buf_size;
-	uint32_t	nnodes, ndomains, ntgts;
+	struct pool_iv_key *pool_key = (struct pool_iv_key *)key->key_buf;
+	uint32_t	buf_size = pool_key->pik_entry_size;
 	int		rc;
 
+	D_ASSERT(buf_size != 0);
 	rc = daos_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
-
-	if (class_id == IV_POOL_MAP) {
-		crt_group_size(NULL, &nnodes);
-		/* currently with 1 domain per node, see init_pool_metadata */
-		ndomains = nnodes;
-		ntgts = nnodes * dss_tgt_nr;
-		buf_size = pool_iv_map_ent_size(ndomains + nnodes + ntgts);
-	} else if (class_id == IV_POOL_PROP) {
-		buf_size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
-	} else {
-		D_ERROR("bad class id %d\n", class_id);
-		D_GOTO(free, rc = -DER_INVAL);
-	}
 
 	D_ALLOC(sgl->sg_iovs[0].iov_buf, buf_size);
 	if (sgl->sg_iovs[0].iov_buf == NULL)
@@ -80,18 +75,203 @@ free:
 	return rc;
 }
 
+/* FIXME: Need better handling here, for example retry if the size is not
+ * enough.
+ */
+#define PROP_SVC_LIST_MAX_TMP	16
+
+static void
+pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
+{
+	struct daos_prop_entry	*prop_entry;
+	struct daos_acl		*acl;
+	d_rank_list_t		*svc_list;
+	unsigned int		offset = 0;
+	int			i;
+
+	D_ASSERT(prop->dpp_nr == DAOS_PROP_PO_NUM);
+	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
+		prop_entry = &prop->dpp_entries[i];
+		switch (prop_entry->dpe_type) {
+		case DAOS_PROP_PO_LABEL:
+			D_ASSERT(strlen(prop_entry->dpe_str) <=
+				 DAOS_PROP_LABEL_MAX_LEN);
+			strcpy(iv_prop->pip_label, prop_entry->dpe_str);
+			break;
+		case DAOS_PROP_PO_OWNER:
+			D_ASSERT(strlen(prop_entry->dpe_str) <=
+				 DAOS_ACL_MAX_PRINCIPAL_LEN);
+			strcpy(iv_prop->pip_owner, prop_entry->dpe_str);
+			break;
+		case DAOS_PROP_PO_OWNER_GROUP:
+			D_ASSERT(strlen(prop_entry->dpe_str) <=
+				 DAOS_ACL_MAX_PRINCIPAL_LEN);
+			strcpy(iv_prop->pip_owner_grp, prop_entry->dpe_str);
+			break;
+		case DAOS_PROP_PO_SPACE_RB:
+			iv_prop->pip_space_rb = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_SELF_HEAL:
+			iv_prop->pip_self_heal = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_RECLAIM:
+			iv_prop->pip_reclaim = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_ACL:
+			acl = prop_entry->dpe_val_ptr;
+			if (acl != NULL) {
+				ssize_t acl_size = daos_acl_get_size(acl);
+
+				iv_prop->pip_acl_offset = offset;
+				iv_prop->pip_acl =
+						(void *)(iv_prop->pip_iv_buf +
+						roundup(offset, 8));
+				memcpy(iv_prop->pip_acl, acl, acl_size);
+				offset += roundup(acl_size, 8);
+			}
+			break;
+		case DAOS_PROP_PO_SVC_LIST:
+			svc_list = prop_entry->dpe_val_ptr;
+			if (svc_list) {
+				D_ASSERT(svc_list->rl_nr <
+					 PROP_SVC_LIST_MAX_TMP);
+				iv_prop->pip_svc_list.rl_nr = svc_list->rl_nr;
+				iv_prop->pip_svc_list.rl_ranks =
+						(void *)(iv_prop->pip_iv_buf +
+						roundup(offset, 8));
+				iv_prop->pip_svc_list_offset = offset;
+				d_rank_list_copy(&iv_prop->pip_svc_list,
+						 svc_list);
+				offset += roundup(
+					svc_list->rl_nr * sizeof(d_rank_t), 8);
+			}
+			break;
+		default:
+			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
+			break;
+		}
+	}
+}
+
+static int
+pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
+{
+	struct daos_prop_entry	*prop_entry;
+	struct daos_acl		*acl;
+	void			*label_alloc = NULL;
+	void			*owner_alloc = NULL;
+	void			*owner_grp_alloc = NULL;
+	void			*acl_alloc = NULL;
+	d_rank_list_t		*svc_list = NULL;
+	d_rank_list_t		*dst_list;
+	int			i;
+	int			rc = 0;
+
+	D_ASSERT(prop->dpp_nr == DAOS_PROP_PO_NUM);
+	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
+		prop_entry = &prop->dpp_entries[i];
+		prop_entry->dpe_type = DAOS_PROP_PO_MIN + i + 1;
+		switch (prop_entry->dpe_type) {
+		case DAOS_PROP_PO_LABEL:
+			D_ASSERT(strlen(iv_prop->pip_label) <=
+				 DAOS_PROP_LABEL_MAX_LEN);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_label,
+				  DAOS_PROP_LABEL_MAX_LEN);
+			if (prop_entry->dpe_str)
+				label_alloc = prop_entry->dpe_str;
+			else
+				D_GOTO(out, rc = -DER_NOMEM);
+			break;
+		case DAOS_PROP_PO_OWNER:
+			D_ASSERT(strlen(iv_prop->pip_owner) <=
+				 DAOS_ACL_MAX_PRINCIPAL_LEN);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
+			if (prop_entry->dpe_str)
+				owner_alloc = prop_entry->dpe_str;
+			else
+				D_GOTO(out, rc = -DER_NOMEM);
+			break;
+		case DAOS_PROP_PO_OWNER_GROUP:
+			D_ASSERT(strlen(iv_prop->pip_owner_grp) <=
+				 DAOS_ACL_MAX_PRINCIPAL_LEN);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner_grp,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
+			if (prop_entry->dpe_str)
+				owner_grp_alloc = prop_entry->dpe_str;
+			else
+				D_GOTO(out, rc = -DER_NOMEM);
+			break;
+		case DAOS_PROP_PO_SPACE_RB:
+			prop_entry->dpe_val = iv_prop->pip_space_rb;
+			break;
+		case DAOS_PROP_PO_SELF_HEAL:
+			prop_entry->dpe_val = iv_prop->pip_self_heal;
+			break;
+		case DAOS_PROP_PO_RECLAIM:
+			prop_entry->dpe_val = iv_prop->pip_reclaim;
+			break;
+		case DAOS_PROP_PO_ACL:
+			iv_prop->pip_acl =
+				(void *)(iv_prop->pip_iv_buf +
+				 roundup(iv_prop->pip_acl_offset, 8));
+			acl = iv_prop->pip_acl;
+			if (acl->dal_len > 0) {
+				D_ASSERT(daos_acl_validate(acl) == 0);
+				acl_alloc = daos_acl_dup(acl);
+				if (acl_alloc != NULL)
+					prop_entry->dpe_val_ptr = acl_alloc;
+				else
+					D_GOTO(out, rc = -DER_NOMEM);
+			} else {
+				prop_entry->dpe_val_ptr = NULL;
+			}
+			break;
+		case DAOS_PROP_PO_SVC_LIST:
+			iv_prop->pip_svc_list.rl_ranks =
+				(void *)(iv_prop->pip_iv_buf +
+				 roundup(iv_prop->pip_svc_list_offset, 8));
+			svc_list = &iv_prop->pip_svc_list;
+			if (svc_list->rl_nr > 0) {
+				rc = d_rank_list_dup(&dst_list, svc_list);
+				if (rc)
+					D_GOTO(out, rc);
+				prop_entry->dpe_val_ptr = dst_list;
+			}
+			break;
+		default:
+			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
+			break;
+		}
+	}
+
+out:
+	if (rc) {
+		if (acl_alloc)
+			daos_acl_free(acl_alloc);
+		if (label_alloc)
+			D_FREE(label_alloc);
+		if (owner_alloc)
+			D_FREE(owner_alloc);
+		if (owner_grp_alloc)
+			D_FREE(owner_grp_alloc);
+		if (svc_list)
+			d_rank_list_free(dst_list);
+	}
+	return rc;
+}
+
 static int
 pool_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 		 struct ds_iv_entry *entry)
 {
 	int	rc;
 
-	rc = pool_iv_value_alloc_internal(iv_key->class_id, &entry->iv_value);
+	rc = pool_iv_value_alloc_internal(iv_key, &entry->iv_value);
 	if (rc)
 		return rc;
 
-	entry->iv_key.class_id = iv_key->class_id;
-	entry->iv_key.rank = iv_key->rank;
+	memcpy(&entry->iv_key, iv_key, sizeof(*iv_key));
 
 	return rc;
 }
@@ -147,19 +327,32 @@ pool_iv_ent_copy(int class_id, d_sg_list_t *dst, d_sg_list_t *src)
 			memcpy(&dst_iv->piv_map.piv_pool_buf,
 			       &src_iv->piv_map.piv_pool_buf, src_len);
 		}
+		dst->sg_iovs[0].iov_len = src->sg_iovs[0].iov_len;
 		D_DEBUG(DB_TRACE, "pool "DF_UUID" map ver %d\n",
 			DP_UUID(dst_iv->piv_pool_uuid),
 			dst_iv->piv_pool_map_ver);
 	} else if (class_id == IV_POOL_PROP) {
-		memcpy(&dst_iv->piv_prop, &src_iv->piv_prop,
-			offsetof(struct pool_iv_prop,
-			pip_acl.dal_ace[src_iv->piv_prop.pip_acl.dal_len]));
+		daos_prop_t	*prop_fetch;
+		int rc;
+
+		prop_fetch = daos_prop_alloc(DAOS_PROP_PO_NUM);
+		if (prop_fetch == NULL)
+			return -DER_NOMEM;
+
+		rc = pool_iv_prop_g2l(&src_iv->piv_prop, prop_fetch);
+		if (rc) {
+			daos_prop_free(prop_fetch);
+			D_ERROR("prop g2l failed: rc %d\n", rc);
+			return rc;
+		}
+
+		pool_iv_prop_l2g(prop_fetch, &dst_iv->piv_prop);
+		daos_prop_free(prop_fetch);
 	} else {
 		D_ERROR("bad class id %d\n", class_id);
 		return -DER_INVAL;
 	}
 
-	dst->sg_iovs[0].iov_len = src->sg_iovs[0].iov_len;
 	return 0;
 }
 
@@ -254,7 +447,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 static int
 pool_iv_value_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
 {
-	return pool_iv_value_alloc_internal(entry->iv_class->iv_class_id, sgl);
+	return pool_iv_value_alloc_internal(&entry->iv_key, sgl);
 }
 
 static int
@@ -304,8 +497,9 @@ pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv)
 {
 	d_sg_list_t		sgl = { 0 };
 	d_iov_t			iov = { 0 };
-	uint32_t		pool_iv_len;
+	uint32_t		pool_iv_len = 0;
 	struct ds_iv_key	key;
+	struct pool_iv_key	*pool_key;
 	int			rc;
 
 	/* pool_iv == NULL, it means only refreshing local IV cache entry,
@@ -322,6 +516,8 @@ pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv)
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_MAP;
+	pool_key = (struct pool_iv_key *)key.key_buf;
+	pool_key->pik_entry_size = pool_iv_len;
 	rc = ds_iv_fetch(ns, &key, pool_iv == NULL ? NULL : &sgl,
 			 false /* retry */);
 	if (rc)
@@ -333,11 +529,12 @@ pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv)
 static int
 pool_iv_update(void *ns, int class_id, struct pool_iv_entry *pool_iv,
 	       uint32_t pool_iv_len, unsigned int shortcut,
-	       unsigned int sync_mode)
+	       unsigned int sync_mode, bool retry)
 {
 	d_sg_list_t		sgl;
 	d_iov_t			iov;
 	struct ds_iv_key	key;
+	struct pool_iv_key	*pool_key;
 	int			rc;
 
 	iov.iov_buf = pool_iv;
@@ -349,8 +546,9 @@ pool_iv_update(void *ns, int class_id, struct pool_iv_entry *pool_iv,
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = class_id;
-	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
-			  false /* retry */);
+	pool_key = (struct pool_iv_key *)key.key_buf;
+	pool_key->pik_entry_size = pool_iv_len;
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
@@ -358,13 +556,14 @@ pool_iv_update(void *ns, int class_id, struct pool_iv_entry *pool_iv,
 }
 
 int
-pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf, uint32_t map_ver)
+ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
+		      uint32_t map_ver)
 {
 	struct pool_iv_entry	*iv_entry;
 	uint32_t		 size;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, DF_UUID": map_ver=%u\n", DP_UUID(pool->sp_uuid),
+	D_DEBUG(DB_MD, DF_UUID": map_ver=%u\n", DP_UUID(pool->sp_uuid),
 		map_ver);
 
 	size = pool_iv_map_ent_size(buf->pb_nr);
@@ -382,9 +581,9 @@ pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf, uint32_t map_ver)
 	 * to revisit here once pool/cart_group/IV is upgraded.
 	 */
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_MAP, iv_entry, size,
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, false);
 	if (rc != 0)
-		D_DEBUG(DB_TRACE, DF_UUID": map_ver=%u: %d\n",
+		D_DEBUG(DB_MD, DF_UUID": map_ver=%u: %d\n",
 			DP_UUID(pool->sp_uuid), map_ver, rc);
 
 	D_FREE(iv_entry);
@@ -466,154 +665,23 @@ out:
 	D_FREE_PTR(iv_arg);
 }
 
-static void
-pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
-{
-	struct daos_prop_entry	*prop_entry;
-	struct daos_acl		*acl;
-	int			 i;
-
-	D_ASSERT(prop->dpp_nr == DAOS_PROP_PO_NUM);
-	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
-		prop_entry = &prop->dpp_entries[i];
-		switch (prop_entry->dpe_type) {
-		case DAOS_PROP_PO_LABEL:
-			D_ASSERT(strlen(prop_entry->dpe_str) <=
-				 DAOS_PROP_LABEL_MAX_LEN);
-			strcpy(iv_prop->pip_label, prop_entry->dpe_str);
-			break;
-		case DAOS_PROP_PO_OWNER:
-			D_ASSERT(strlen(prop_entry->dpe_str) <=
-				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			strcpy(iv_prop->pip_owner, prop_entry->dpe_str);
-			break;
-		case DAOS_PROP_PO_OWNER_GROUP:
-			D_ASSERT(strlen(prop_entry->dpe_str) <=
-				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			strcpy(iv_prop->pip_owner_grp, prop_entry->dpe_str);
-			break;
-		case DAOS_PROP_PO_SPACE_RB:
-			iv_prop->pip_space_rb = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_PO_SELF_HEAL:
-			iv_prop->pip_self_heal = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_PO_RECLAIM:
-			iv_prop->pip_reclaim = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_PO_ACL:
-			acl = prop_entry->dpe_val_ptr;
-			if (acl != NULL)
-				memcpy(&iv_prop->pip_acl, acl,
-				       daos_acl_get_size(acl));
-			break;
-		default:
-			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
-			break;
-		}
-	}
-}
-
-static int
-pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
-{
-	struct daos_prop_entry	*prop_entry;
-	struct daos_acl		*acl;
-	void			*label_alloc = NULL;
-	void			*owner_alloc = NULL;
-	void			*owner_grp_alloc = NULL;
-	void			*acl_alloc = NULL;
-	int			 i;
-	int			 rc = 0;
-
-	D_ASSERT(prop->dpp_nr == DAOS_PROP_PO_NUM);
-	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
-		prop_entry = &prop->dpp_entries[i];
-		prop_entry->dpe_type = DAOS_PROP_PO_MIN + i + 1;
-		switch (prop_entry->dpe_type) {
-		case DAOS_PROP_PO_LABEL:
-			D_ASSERT(strlen(iv_prop->pip_label) <=
-				 DAOS_PROP_LABEL_MAX_LEN);
-			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_label,
-				  DAOS_PROP_LABEL_MAX_LEN);
-			if (prop_entry->dpe_str)
-				label_alloc = prop_entry->dpe_str;
-			else
-				D_GOTO(out, rc = -DER_NOMEM);
-			break;
-		case DAOS_PROP_PO_OWNER:
-			D_ASSERT(strlen(iv_prop->pip_owner) <=
-				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner,
-				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str)
-				owner_alloc = prop_entry->dpe_str;
-			else
-				D_GOTO(out, rc = -DER_NOMEM);
-			break;
-		case DAOS_PROP_PO_OWNER_GROUP:
-			D_ASSERT(strlen(iv_prop->pip_owner_grp) <=
-				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner_grp,
-				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str)
-				owner_grp_alloc = prop_entry->dpe_str;
-			else
-				D_GOTO(out, rc = -DER_NOMEM);
-			break;
-		case DAOS_PROP_PO_SPACE_RB:
-			prop_entry->dpe_val = iv_prop->pip_space_rb;
-			break;
-		case DAOS_PROP_PO_SELF_HEAL:
-			prop_entry->dpe_val = iv_prop->pip_self_heal;
-			break;
-		case DAOS_PROP_PO_RECLAIM:
-			prop_entry->dpe_val = iv_prop->pip_reclaim;
-			break;
-		case DAOS_PROP_PO_ACL:
-			acl = &iv_prop->pip_acl;
-			if (acl->dal_ver != 0) {
-				D_ASSERT(daos_acl_validate(acl) == 0);
-				acl_alloc = daos_acl_dup(acl);
-				if (acl_alloc != NULL)
-					prop_entry->dpe_val_ptr = acl_alloc;
-				else
-					D_GOTO(out, rc = -DER_NOMEM);
-			} else {
-				prop_entry->dpe_val_ptr = NULL;
-			}
-			break;
-		default:
-			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
-			break;
-		}
-	}
-
-out:
-	if (rc) {
-		if (acl_alloc)
-			daos_acl_free(acl_alloc);
-		if (label_alloc)
-			D_FREE(label_alloc);
-		if (owner_alloc)
-			D_FREE(owner_alloc);
-		if (owner_grp_alloc)
-			D_FREE(owner_grp_alloc);
-	}
-	return rc;
-}
-
 int
-pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
+ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 {
 	struct pool_iv_entry	*iv_entry;
+	struct daos_prop_entry	*prop_entry;
+	d_rank_list_t		*svc_list;
 	uint32_t		 size;
 	int			 rc;
 
 	/* Only happens on xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
+	/* Serialize the prop */
+	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
+	svc_list = prop_entry->dpe_val_ptr;
+
+	size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN, svc_list->rl_nr);
 	D_ALLOC(iv_entry, size);
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -623,7 +691,7 @@ pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 	pool_iv_prop_l2g(prop, &iv_entry->piv_prop);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_PROP, iv_entry, size,
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, false);
 	if (rc)
 		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
 	D_FREE(iv_entry);
@@ -633,7 +701,7 @@ out:
 }
 
 int
-pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
+ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 {
 	daos_prop_t		*prop_fetch = NULL;
 	struct pool_iv_entry	*iv_entry;
@@ -646,7 +714,8 @@ pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 	if (prop == NULL)
 		return -DER_INVAL;
 
-	size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
+	size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN,
+				     PROP_SVC_LIST_MAX_TMP);
 	D_ALLOC(iv_entry, size);
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);

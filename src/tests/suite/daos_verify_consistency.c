@@ -191,7 +191,7 @@ vc_3(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
-	print_message("misc single & array value without inconsistency\n");
+	print_message("misc single and array value without inconsistency\n");
 
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
@@ -364,7 +364,7 @@ static const struct CMUnitTest vc_tests[] = {
 	 vc_1, NULL, test_case_teardown},
 	{"VC2: verify array value without inconsistency",
 	 vc_2, NULL, test_case_teardown},
-	{"VC3: misc single & array value without inconsistency",
+	{"VC3: misc single and array value without inconsistency",
 	 vc_3, NULL, test_case_teardown},
 	{"VC4: verify with different rec",
 	 vc_4, NULL, test_case_teardown},
@@ -380,6 +380,17 @@ static const struct CMUnitTest vc_tests[] = {
 	 vc_9, NULL, test_case_teardown},
 };
 
+static int
+vc_test_setup(void **state)
+{
+	int     rc;
+
+	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			NULL);
+
+	return rc;
+}
+
 int
 run_daos_vc_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
@@ -391,9 +402,9 @@ run_daos_vc_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests(vc_tests, ARRAY_SIZE(vc_tests),
-				DEFAULT_POOL_SIZE, sub_tests, sub_tests_size,
-				NULL, NULL);
+	rc = run_daos_sub_tests("DAOS vc tests", vc_tests, ARRAY_SIZE(vc_tests),
+				sub_tests, sub_tests_size, vc_test_setup,
+				test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

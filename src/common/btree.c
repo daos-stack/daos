@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -606,7 +606,12 @@ btr_node_alloc(struct btr_context *tcx, umem_off_t *nd_off_p)
 	struct btr_node		*nd;
 	umem_off_t		 nd_off;
 
-	nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
+	if (btr_ops(tcx)->to_node_alloc != NULL)
+		nd_off = btr_ops(tcx)->to_node_alloc(&tcx->tc_tins,
+						     btr_node_size(tcx));
+	else
+		nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
+
 	if (UMOFF_IS_NULL(nd_off))
 		return btr_umm(tcx)->umm_nospc_rc;
 
@@ -1824,7 +1829,7 @@ static int
 btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 {
 	struct btr_record *rec;
-	char		  *rec_str;
+	char		  *rec_str = NULL;
 	char		   str[BTR_PRINT_BUF];
 	union btr_rec_buf  rec_buf = {0};
 	int		   rc;

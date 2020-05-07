@@ -24,8 +24,6 @@
 import os
 from time import sleep
 import ctypes
-import getpass
-import grp
 
 from test_utils_base import TestDaosApiBase
 
@@ -42,11 +40,6 @@ from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
-
-    # Constants to define whether to use API or dmg to create and destroy
-    # pool.
-    USE_API = "API"
-    USE_DMG = "dmg"
 
     def __init__(self, context, log=None, cb_handler=None, dmg_command=None):
         # pylint: disable=unused-argument
@@ -76,13 +69,8 @@ class TestPool(TestDaosApiBase):
         self.target_list = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
-        # Set USE_API to use API or USE_DMG to use dmg. If it's not set, API is
-        # used.
-        self.control_method = BasicParameter(self.USE_API, self.USE_API)
-        uname = getpass.getuser()
-        gname = grp.getgrnam(uname)[0]
-        self.username = BasicParameter(uname, uname)
-        self.groupname = BasicParameter(gname, gname)
+        self.prop_name = BasicParameter(None)      # name of property to be set
+        self.prop_value = BasicParameter(None)     # value of property
 
         self.pool = None
         self.uuid = None
@@ -100,14 +88,14 @@ class TestPool(TestDaosApiBase):
         prior to calling this method. The recommended way is to specify the
         pool block in yaml. For example,
 
-        pool:
-            control_method: dmg
+            pool:
+                control_method: dmg
 
         This tells this method to use dmg. The test also needs to set
         dmg_bin_path through the constructor if dmg is used. For example,
 
-        self.pool = TestPool(self.context,
-                             dmg_bin_path=self.basepath + '/install/bin')
+            self.pool = TestPool(
+                self.context, dmg_bin_path=self.basepath + '/install/bin')
 
         If it wants to use --nsvc option, it needs to set the value to
         svcn.value. Otherwise, 1 is used. If it wants to use --group, it needs
@@ -127,90 +115,57 @@ class TestPool(TestDaosApiBase):
                 "Creating a pool on targets %s", self.target_list.value)
         else:
             self.log.info("Creating a pool")
-        self.pool = DaosPool(self.context)
-        if self.control_method.value == self.USE_API:
-            kwargs = {
-                "mode": self.mode.value, "uid": self.uid, "gid": self.gid,
-                "scm_size": self.scm_size.value, "group": self.name.value}
-            for key in ("target_list", "svcn", "nvme_size"):
-                value = getattr(self, key).value
-                if value is not None:
-                    kwargs[key] = value
-            self._call_method(self.pool.create, kwargs)
-        else:
-            if self.dmg is None:
-                raise DaosTestError(
-                    "self.dmg is None. dmg_command needs to be set through "
-                    "the constructor of TestPool to create pool with dmg.")
-            self.dmg.request.value = "pool"
-            # Currently, there is one test that creates the pool over the
-            # subset of the server hosts; pool/evict_test. To do so, the test
-            # needs to set the rank(s) to target_list.value starting from 0.
-            # e.g., if you're using 4 server hosts; wolf-1, wolf-2, wolf-3, and
-            # wolf-4, and want to create a pool over the first two hosts;
-            # wolf-1 and 2, then set the list [0, 1] to target_list.value.
-            # We'll convert it to the comma separated string and set it to dmg.
-            # For instance, [0, 1] will result in dmg pool create -r 0,1. If
-            # you don't set target_list.value, -r won't be used, in which case
-            # the pool is created over all the server hosts.
-            if self.target_list.value is None:
-                ranks_comma_separated = None
-            else:
-                ranks_comma_separated = ""
-                for i in range(len(self.target_list.value)):
-                    ranks_comma_separated += str(self.target_list.value[i])
-                    # If this element is not the last one, append comma
-                    if i < len(self.target_list.value) - 1:
-                        ranks_comma_separated += ","
-            # Call the dmg pool create command
-            self.dmg.action.value = "create"
-            self.dmg.get_action_command()
-            # uid/gid used in API correspond to --user and --group in dmg.
-            # group, or self.name.value, used in API is called server group and
-            # it's different from the group name passed in to --group. Server
-            # group isn't used in dmg. We don't pass it into the command, but
-            # we'll still use it to set self.pool.group
-            self.dmg.action_command.group.value = self.groupname.value
-            self.dmg.action_command.user.value = self.username.value
-            self.dmg.action_command.scm_size.value = self.scm_size.value
-            self.dmg.action_command.ranks.value = ranks_comma_separated
-            self.dmg.action_command.nsvc.value = self.svcn.value
-            create_result = self.dmg.run()
-            self.log.info("Result stdout = %s", create_result.stdout)
-            self.log.info("Result exit status = %s", create_result.exit_status)
-            # Get UUID and service replica from the output
-            uuid_svc = get_pool_uuid_service_replicas_from_stdout(
-                create_result.stdout)
-            new_uuid = uuid_svc[0]
-            service_replica = uuid_svc[1]
 
-            # 3. Create DaosPool object. The process is similar to the one in
-            # DaosPool.create, but there are some modifications
-            if self.name.value is None:
-                self.pool.group = None
-            else:
+        self.pool = DaosPool(self.context)
+        kwargs = {
+            "uid": self.uid,
+            "gid": self.gid,
+            "scm_size": self.scm_size.value,
+            "group": self.name.value}
+        for key in ("target_list", "svcn", "nvme_size"):
+            value = getattr(self, key).value
+            if value is not None:
+                kwargs[key] = value
+
+        if self.control_method.value == self.USE_API:
+            # Create a pool with the API method
+            kwargs["mode"] = self.mode.value
+            self._call_method(self.pool.create, kwargs)
+
+        elif self.control_method.value == self.USE_DMG and self.dmg:
+            # Create a pool with the dmg command
+            self._log_method("dmg.pool_create", kwargs)
+            result = self.dmg.pool_create(**kwargs)
+            uuid, svc = get_pool_uuid_service_replicas_from_stdout(
+                result.stdout)
+
+            # Populte the empty DaosPool object with the properties of the pool
+            # created with dmg pool create.
+            if self.name.value:
                 self.pool.group = ctypes.create_string_buffer(self.name.value)
-            # Modification 1: Use the length of service_replica returned by dmg
-            # to calculate rank_t. Note that we assume we always get a single
-            # number. I'm not sure if we ever get multiple numbers, but in that
-            # case, we need to modify this implementation to create a list out
-            # of the multiple numbers possibly separated by comma
-            service_replicas = [int(service_replica)]
+
+            # Convert the string of service replicas from the dmg command output
+            # into an ctype array for the DaosPool object using the same
+            # technique used in DaosPool.create().
+            service_replicas = [int(value) for value in svc.split(",")]
             rank_t = ctypes.c_uint * len(service_replicas)
-            # Modification 2: Use the service_replicas list to generate rank.
-            # In DaosPool, we first use some garbage 999999 values and let DAOS
-            # set the correct values, but we can't do that here, so we need to
-            # set the correct rank value by ourself
             rank = rank_t(*list([svc for svc in service_replicas]))
             rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
-            # Modification 3: Similar to 1. Use the length of service_replicas
-            # list instead of self.svcn.value
             self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
 
-            # 4. Set UUID and attached to the DaosPool object
-            self.pool.set_uuid_str(new_uuid)
+            # Set UUID and attached to the DaosPool object
+            self.pool.set_uuid_str(uuid)
             self.pool.attached = 1
 
+        elif self.control_method.value == self.USE_DMG:
+            self.log.error("Error: Undefined dmg command")
+
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s",
+                self.control_method.value)
+
+        # Set the TestPool attributes for the created pool
         self.svc_ranks = [
             int(self.pool.svc.rl_ranks[index])
             for index in range(self.pool.svc.rl_nr)]
@@ -270,28 +225,60 @@ class TestPool(TestDaosApiBase):
                 defined.
 
         """
+        status = False
         if self.pool:
             self.disconnect()
-            self.log.info("Destroying pool %s", self.uuid)
-            if self.control_method.value == self.USE_API:
-                if self.pool.attached:
+            if self.pool.attached:
+                self.log.info("Destroying pool %s", self.uuid)
+
+                if self.control_method.value == self.USE_API:
+                    # Destroy the pool with the API method
                     self._call_method(self.pool.destroy, {"force": force})
-            elif self.control_method.value == self.USE_DMG:
-                if self.pool.attached:
-                    self.dmg.action.value = "destroy"
-                    self.dmg.get_action_command()
-                    self.dmg.action_command.pool.value = self.uuid
-                    self.dmg.action_command.force.value = force
-                    self.dmg.run()
-            else:
-                self.log.error("Cannot destroy pool! Use USE_API or USE_DMG")
-                return False
+                    status = True
+
+                elif self.control_method.value == self.USE_DMG and self.dmg:
+                    # Destroy the pool with the dmg command
+                    self.dmg.pool_destroy(pool=self.uuid, force=force)
+                    status = True
+
+                elif self.control_method.value == self.USE_DMG:
+                    self.log.error("Error: Undefined dmg command")
+
+                else:
+                    self.log.error(
+                        "Error: Undefined control_method: %s",
+                        self.control_method.value)
+
             self.pool = None
             self.uuid = None
             self.info = None
             self.svc_ranks = None
-            return True
-        return False
+
+        return status
+
+    @fail_on(CommandFailure)
+    def set_property(self):
+        """Set Property.
+
+        It sets property for a given pool uuid using
+        dmg.
+
+        """
+        if self.pool:
+            self.log.info("Set-prop for Pool: %s", self.uuid)
+
+            if self.control_method.value == self.USE_DMG and self.dmg:
+                # set-prop for given pool using dmg
+                self.dmg.pool_set_prop(self.uuid, self.prop_name,
+                                       self.prop_value)
+
+            elif self.control_method.value == self.USE_DMG:
+                self.log.error("Error: Undefined dmg command")
+
+            else:
+                self.log.error(
+                    "Error: Undefined control_method: %s",
+                    self.control_method.value)
 
     @fail_on(DaosApiError)
     def get_info(self):
@@ -573,8 +560,7 @@ class TestPool(TestDaosApiBase):
         env = {
             "DAOS_POOL": self.uuid,
             "DAOS_SVCL": "1",
-            "DAOS_SINGLETON_CLI": "1",
-            "PYTHONPATH": os.getenv("PYTHONPATH", ""),
+            "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
         load_mpi("openmpi")
         current_path = os.path.dirname(os.path.abspath(__file__))
@@ -619,7 +605,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = (
-            "rs_version", "rs_pad_32", "rs_errno", "rs_done",
+            "rs_version", "rs_padding32", "rs_errno", "rs_done",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
         return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,22 +60,10 @@ dtx_set_aborted(umem_off_t *umoff)
 }
 
 static inline int
-dtx_inprogress(struct dtx_handle *dth, struct vos_dtx_act_ent *dae, int pos)
+dtx_inprogress(struct vos_dtx_act_ent *dae, int pos)
 {
-	if (dae != NULL) {
-		D_DEBUG(DB_TRACE, "Hit uncommitted DTX "DF_DTI" at %d\n",
-			DP_DTI(&DAE_XID(dae)), pos);
-
-		if (dth != NULL && dth->dth_conflict != NULL) {
-			D_DEBUG(DB_TRACE, "Record conflict DTX "DF_DTI"\n",
-				DP_DTI(&DAE_XID(dae)));
-			daos_dti_copy(&dth->dth_conflict->dce_xid,
-				      &DAE_XID(dae));
-			dth->dth_conflict->dce_dkey = DAE_DKEY_HASH(dae);
-		}
-	} else {
-		D_DEBUG(DB_TRACE, "Hit uncommitted (unknown) DTX at %d\n", pos);
-	}
+	D_DEBUG(DB_IO, "Hit uncommitted DTX "DF_DTI" at %d\n",
+		DP_DTI(&DAE_XID(dae)), pos);
 
 	return -DER_INPROGRESS;
 }
@@ -539,8 +527,10 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		goto out;
 
 	dtx_rec_release(cont, dae, false, &offset);
-	vos_dtx_del_cos(cont, &DAE_OID(dae), dti, DAE_DKEY_HASH(dae),
+	rc = vos_dtx_del_cos(cont, &DAE_OID(dae), dti, DAE_DKEY_HASH(dae),
 			DAE_INTENT(dae) == DAOS_INTENT_PUNCH ? true : false);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	/* If dbtree_delete() failed, the @dae will be left in the active DTX
 	 * table until close the container. It is harmless but waste some DRAM.
@@ -551,8 +541,9 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		umem_free(vos_cont2umm(cont), offset);
 
 out:
-	D_DEBUG(DB_TRACE, "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
-		DP_DTI(dti), DP_RC(rc));
+	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_IO,
+		 "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
+		 DP_DTI(dti), DP_RC(rc));
 	if (rc != 0) {
 		if (dce != NULL)
 			D_FREE_PTR(dce);
@@ -590,7 +581,7 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 		dtx_rec_release(cont, dae, true, NULL);
 
 out:
-	D_DEBUG(DB_TRACE, "Abort the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti),
+	D_DEBUG(DB_IO, "Abort the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti),
 		DP_RC(rc));
 
 	return rc;
@@ -854,56 +845,41 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 			 * -DER_INPROGRESS, then the caller will retry
 			 * the RPC with leader replica.
 			 */
-			return dtx_inprogress(NULL, dae, 1);
+			return dtx_inprogress(dae, 1);
 		}
 
 		/* For leader, non-committed DTX is unavailable. */
 		return ALB_UNAVAILABLE;
 	}
 
-	/* PUNCH DTX cannot be shared by others. */
-	if (DAE_INTENT(dae) == DAOS_INTENT_PUNCH) {
+	D_ASSERTF(intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH,
+		  "Unexpected intent (1) %u\n", intent);
+
+	if (type == DTX_RT_ILOG) {
 		if (dth == NULL)
-			/* XXX: For rebuild case, if some normal IO
-			 *	has generated punch-record (by race)
-			 *	before rebuild logic handling that,
-			 *	then rebuild logic should ignore such
-			 *	punch-record, because the punch epoch
-			 *	will be higher than the rebuild epoch.
+			/* XXX: For rebuild case, if some normal IO has
+			 *	generated related record by race before
+			 *	rebuild logic handling it. Then rebuild
+			 *	logic should ignore such record because
+			 *	its epoch is higher than rebuild epoch.
 			 *	The rebuild logic needs to create the
 			 *	original target record that exists on
 			 *	other healthy replicas before punch.
 			 */
 			return ALB_UNAVAILABLE;
 
-		return dtx_inprogress(dth, dae, 2);
+		return dtx_inprogress(dae, 2);
 	}
 
-	/* PUNCH cannot share with others. */
-	if (intent == DAOS_INTENT_PUNCH) {
-		/* XXX: One corner case: if some DTXs share the same
-		 *	object/key, and the original DTX that create
-		 *	the object/key is aborted, then when we come
-		 *	here, we do not know which DTX conflict with
-		 *	me, so we can NOT set dth::dth_conflict that
-		 *	will be used by DTX conflict handling logic.
-		 */
-		return dtx_inprogress(dth, dae, 3);
-	}
+	D_ASSERTF(intent == DAOS_INTENT_UPDATE,
+		  "Unexpected intent (2) %u\n", intent);
 
-	if (DAE_INTENT(dae) != DAOS_INTENT_UPDATE) {
-		D_ERROR("Unexpected DTX intent %u\n", DAE_INTENT(dae));
-		return -DER_INVAL;
-	}
-
-	D_ASSERT(intent == DAOS_INTENT_UPDATE);
-
-	/* XXX: This seems NOT suitable. Before new punch model introduced,
-	 *	we allow multiple concurrent modifications to update targets
-	 *	under the same object/dkey/akey. That is the DTX share mode.
-	 *	It should not cause any conflict.
+	/*
+	 * We do not share modification between two DTXs for SV/EV value.
+	 * Because the value is epoch based, different DTXs use different
+	 * epochs, then make them to be visible to each other.
 	 */
-	return dtx_inprogress(dth, dae, 4);
+	return ALB_AVAILABLE_CLEAN;
 }
 
 umem_off_t
@@ -928,10 +904,16 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct dtx_handle	*dth = vos_dth_get();
 	int			 rc = 0;
 
+	if (dth == NULL) {
+		*tx_id = UMOFF_NULL;
+		return 0;
+	}
+
 	/* For single participator case, we only need committed DTX
 	 * entry for handling resend case, nothing for active table.
 	 */
-	if (dth == NULL || dth->dth_solo) {
+	if (dth->dth_solo) {
+		dth->dth_actived = 1;
 		*tx_id = UMOFF_NULL;
 		return 0;
 	}
@@ -952,7 +934,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			dth->dth_has_ilog = 1;
 	}
 
-	D_DEBUG(DB_TRACE, "Register DTX record for "DF_DTI
+	D_DEBUG(DB_IO, "Register DTX record for "DF_DTI
 		": entry %p, type %d, %s ilog entry, rc %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ent, type,
 		dth->dth_has_ilog ? "has" : "has not", rc);
@@ -1054,12 +1036,12 @@ handle_df:
 int
 vos_dtx_prepared(struct dtx_handle *dth)
 {
-	struct vos_dtx_act_ent		*dae = dth->dth_ent;
+	struct vos_dtx_act_ent		*dae;
 	struct vos_container		*cont;
 	struct umem_instance		*umm;
 	struct vos_dtx_blob_df		*dbd;
 
-	if (dae == NULL)
+	if (!dth->dth_actived)
 		return 0;
 
 	cont = vos_hdl2cont(dth->dth_coh);
@@ -1070,11 +1052,15 @@ vos_dtx_prepared(struct dtx_handle *dth)
 
 		rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
 					     dth->dth_epoch);
+		dth->dth_actived = 0;
 		if (rc == 0)
 			dth->dth_sync = 1;
 
 		return rc;
 	}
+
+	dae = dth->dth_ent;
+	D_ASSERT(dae != NULL);
 
 	umm = vos_cont2umm(cont);
 	dbd = dae->dae_dbd;
@@ -1250,12 +1236,15 @@ again:
 		dce_df = &dbd->dbd_commmitted_data[dbd->dbd_count];
 	}
 
-	for (i = 0, j = 0; i < slots; i++, cur++) {
+	for (i = 0, j = 0; i < slots && rc1 == 0; i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
 		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce);
 		if (rc == 0 && dce != NULL)
 			committed++;
+
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 
 		if (rc1 == 0)
 			rc1 = rc;
@@ -1282,7 +1271,7 @@ again:
 	if (j > 0)
 		dbd->dbd_count += j;
 
-	if (count == 0)
+	if (count == 0 || rc1 != 0)
 		return committed > 0 ? 0 : rc1;
 
 	if (j < slots) {
@@ -1342,12 +1331,15 @@ new_blob:
 
 	cont_df->cd_dtx_committed_tail = dbd_off;
 
-	for (i = 0, j = 0; i < count; i++, cur++) {
+	for (i = 0, j = 0; i < count && rc1 == 0; i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
 		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce);
 		if (rc == 0 && dce != NULL)
 			committed++;
+
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 
 		if (rc1 == 0)
 			rc1 = rc;
@@ -1521,7 +1513,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	cont = vos_hdl2cont(coh);
 	occ = vos_obj_cache_current();
 	rc = vos_obj_hold(occ, cont, oid, &epr, true,
-			  DAOS_INTENT_DEFAULT, true, &obj);
+			  DAOS_INTENT_DEFAULT, true, &obj, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));
@@ -1568,6 +1560,14 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			int				 count;
 
 			dae_df = &dbd->dbd_active_data[i];
+			if (dae_df->dae_flags & DTX_EF_INVALID)
+				continue;
+
+			if (daos_is_zero_dti(&dae_df->dae_xid)) {
+				D_WARN("Hit zero active DTX entry.\n");
+				continue;
+			}
+
 			D_ALLOC_PTR(dae);
 			if (dae == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1701,12 +1701,16 @@ vos_dtx_cleanup_dth(struct dtx_handle *dth)
 	if (dth == NULL || !dth->dth_actived)
 		return;
 
-	d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
-	rc = dbtree_delete(vos_hdl2cont(dth->dth_coh)->vc_dtx_active_hdl,
-			   BTR_PROBE_EQ, &kiov, NULL);
-	if (rc != 0)
-		D_ERROR(DF_UOID" failed to remove DTX entry "DF_DTI": %d\n",
-			DP_UOID(dth->dth_oid), DP_DTI(&dth->dth_xid), rc);
-	else
-		dth->dth_actived = 0;
+	if (!dth->dth_solo) {
+		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
+		rc = dbtree_delete(
+				vos_hdl2cont(dth->dth_coh)->vc_dtx_active_hdl,
+				BTR_PROBE_EQ, &kiov, NULL);
+		if (rc != 0)
+			D_ERROR(DF_UOID" failed to remove DTX entry "
+				DF_DTI": rc = "DF_RC"\n", DP_UOID(dth->dth_oid),
+				DP_DTI(&dth->dth_xid), DP_RC(rc));
+	}
+
+	dth->dth_actived = 0;
 }

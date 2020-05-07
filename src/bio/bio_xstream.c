@@ -39,9 +39,6 @@
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
-/* FIXME: remove it once SPDK being upgraded */
-void spdk_set_thread(struct spdk_thread *thread);
-
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
 /* SPDK blob parameters */
@@ -52,6 +49,11 @@ void spdk_set_thread(struct spdk_thread *thread);
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
 #define DAOS_NVME_MAX_CTRLRS	1024		/* Max read from nvme_conf */
+
+/* Max inflight blob IOs per io channel */
+#define BIO_BS_MAX_CHANNEL_OPS	(4096)
+/* Schedule a NVMe poll when so many blob IOs queued for an io channel */
+#define BIO_BS_POLL_WATERMARK	(2048)
 
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
@@ -82,7 +84,7 @@ struct bio_nvme_data {
 	struct spdk_bs_opts	 bd_bs_opts;
 	/* All bdevs can be used by DAOS server */
 	d_list_t		 bd_bdevs;
-	char			*bd_nvme_conf;
+	struct spdk_conf	*bd_nvme_conf;
 	int			 bd_shm_id;
 	/* When using SPDK primary mode, specifies memory allocation in MB */
 	int			 bd_mem_size;
@@ -90,6 +92,139 @@ struct bio_nvme_data {
 
 static struct bio_nvme_data nvme_glb;
 uint64_t io_stat_period;
+
+static int
+opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
+		  char *traddr)
+{
+	struct spdk_pci_addr *tmp = *list;
+	size_t count = opts->num_pci_addr;
+
+	tmp = realloc(tmp, sizeof(struct spdk_pci_addr) * (count + 1));
+	if (tmp == NULL) {
+		D_ERROR("realloc error\n");
+		return -DER_NOMEM;
+	}
+
+	*list = tmp;
+	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
+		D_ERROR("Invalid address %s\n", traddr);
+		return -DER_INVAL;
+	}
+
+	opts->num_pci_addr++;
+	return 0;
+}
+
+static int
+populate_whitelist(struct spdk_env_opts *opts)
+{
+	struct spdk_nvme_transport_id	*trid;
+	struct spdk_conf_section	*sp;
+	const char			*val;
+	size_t				 i;
+	int				 rc = 0;
+
+	/* Don't need to pass whitelist for non-NVMe devices */
+	if (nvme_glb.bd_bdev_class != BDEV_CLASS_NVME)
+		return 0;
+
+	sp = spdk_conf_find_section(NULL, "Nvme");
+	if (sp == NULL) {
+		D_ERROR("unexpected empty config\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC_PTR(trid);
+	if (trid == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < DAOS_NVME_MAX_CTRLRS; i++) {
+		memset(trid, 0, sizeof(struct spdk_nvme_transport_id));
+
+		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
+		if (val == NULL) {
+			break;
+		}
+
+		rc = spdk_nvme_transport_id_parse(trid, val);
+		if (rc < 0) {
+			D_ERROR("Unable to parse TransportID: %s\n", val);
+			rc = -DER_INVAL;
+			break;
+		}
+
+		if (trid->trtype != SPDK_NVME_TRANSPORT_PCIE) {
+			D_ERROR("unexpected non-PCIE transport\n");
+			rc = -DER_INVAL;
+			break;
+		}
+
+		rc = opts_add_pci_addr(opts, &opts->pci_whitelist,
+				       trid->traddr);
+		if (rc < 0) {
+			D_ERROR("Invalid traddr=%s\n", trid->traddr);
+			rc = -DER_INVAL;
+			break;
+		}
+	}
+
+	D_FREE(trid);
+	if (rc && opts->pci_whitelist != NULL) {
+		D_FREE(opts->pci_whitelist);
+		opts->pci_whitelist = NULL;
+	}
+
+	return rc;
+}
+
+static int
+bio_spdk_env_init(void)
+{
+	struct spdk_env_opts	 opts;
+	int			 rc;
+
+	D_ASSERT(nvme_glb.bd_nvme_conf != NULL);
+	if (spdk_conf_first_section(nvme_glb.bd_nvme_conf) == NULL) {
+		D_ERROR("Invalid NVMe conf format\n");
+		return -DER_INVAL;
+	}
+
+	spdk_conf_set_as_default(nvme_glb.bd_nvme_conf);
+
+	spdk_env_opts_init(&opts);
+	opts.name = "daos";
+	if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY)
+		opts.mem_size = nvme_glb.bd_mem_size;
+
+	rc = populate_whitelist(&opts);
+	if (rc != 0)
+		return rc;
+
+	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
+		opts.shm_id = nvme_glb.bd_shm_id;
+
+	rc = spdk_env_init(&opts);
+	if (opts.pci_whitelist != NULL)
+		D_FREE(opts.pci_whitelist);
+	if (rc != 0) {
+		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
+		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	spdk_unaffinitize_thread();
+
+	rc = spdk_thread_lib_init(NULL, 0);
+	if (rc != 0) {
+		rc = -DER_INVAL;
+		D_ERROR("Failed to init SPDK thread lib, "DF_RC"\n", DP_RC(rc));
+		spdk_env_fini();
+		return rc;
+	}
+
+	return rc;
+}
 
 int
 bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
@@ -130,15 +265,24 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	}
 	close(fd);
 
-	nvme_glb.bd_nvme_conf = strdup(nvme_conf);
+	nvme_glb.bd_nvme_conf = spdk_conf_allocate();
 	if (nvme_glb.bd_nvme_conf == NULL) {
+		D_ERROR("Failed to alloc SPDK config\n");
 		rc = -DER_NOMEM;
 		goto free_cond;
+	}
+
+	rc = spdk_conf_read(nvme_glb.bd_nvme_conf, nvme_conf);
+	if (rc != 0) {
+		rc = -DER_INVAL; /* spdk_conf_read() returns -1 */
+		D_ERROR("Failed to read %s, "DF_RC"\n", nvme_conf, DP_RC(rc));
+		goto free_conf;
 	}
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts);
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
+	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
 	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
@@ -164,8 +308,16 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 
 	nvme_glb.bd_shm_id = shm_id;
 	nvme_glb.bd_mem_size = mem_size;
+
+	rc = bio_spdk_env_init();
+	if (rc)
+		goto free_conf;
+
 	return 0;
 
+free_conf:
+	spdk_conf_free(nvme_glb.bd_nvme_conf);
+	nvme_glb.bd_nvme_conf = NULL;
 free_cond:
 	ABT_cond_free(&nvme_glb.bd_barrier);
 free_mutex:
@@ -175,15 +327,22 @@ fini_smd:
 	return rc;
 }
 
+static void
+bio_spdk_env_fini(void)
+{
+	if (nvme_glb.bd_nvme_conf != NULL) {
+		spdk_thread_lib_fini();
+		spdk_env_fini();
+		spdk_conf_free(nvme_glb.bd_nvme_conf);
+	}
+}
+
 void
 bio_nvme_fini(void)
 {
+	bio_spdk_env_fini();
 	ABT_cond_free(&nvme_glb.bd_barrier);
 	ABT_mutex_free(&nvme_glb.bd_mutex);
-	if (nvme_glb.bd_nvme_conf != NULL) {
-		D_FREE(nvme_glb.bd_nvme_conf);
-		nvme_glb.bd_nvme_conf = NULL;
-	}
 	D_ASSERT(nvme_glb.bd_xstream_cnt == 0);
 	D_ASSERT(nvme_glb.bd_init_thread == NULL);
 	D_ASSERT(d_list_empty(&nvme_glb.bd_bdevs));
@@ -230,6 +389,14 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 		bio_bs_monitor(ctxt, now);
 
 	return rc;
+}
+
+bool
+bio_need_nvme_poll(struct bio_xs_context *ctxt)
+{
+	if (ctxt == NULL)
+		return false;
+	return ctxt->bxc_blob_rw > BIO_BS_POLL_WATERMARK;
 }
 
 struct common_cp_arg {
@@ -780,8 +947,6 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 void
 bio_xsctxt_free(struct bio_xs_context *ctxt)
 {
-	bool	init_thread = true;
-
 	/* NVMe context setup was skipped */
 	if (ctxt == NULL)
 		return;
@@ -832,10 +997,8 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 
 			nvme_glb.bd_init_thread = NULL;
 
-		} else {
-			init_thread = false;
-			if (nvme_glb.bd_xstream_cnt == 0)
-				ABT_cond_broadcast(nvme_glb.bd_barrier);
+		} else if (nvme_glb.bd_xstream_cnt == 0) {
+			ABT_cond_broadcast(nvme_glb.bd_barrier);
 		}
 	}
 
@@ -845,11 +1008,6 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		xs_poll_completion(ctxt, NULL);
 		spdk_thread_exit(ctxt->bxc_thread);
 		ctxt->bxc_thread = NULL;
-
-		if (init_thread) {
-			spdk_thread_lib_fini();
-			spdk_env_fini();
-		}
 	}
 
 	if (ctxt->bxc_dma_buf != NULL) {
@@ -860,82 +1018,9 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	D_FREE(ctxt);
 }
 
-static int
-opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
-		  char *traddr)
-{
-	struct spdk_pci_addr *tmp = *list;
-	size_t count = opts->num_pci_addr;
-
-	tmp = realloc(tmp, sizeof(struct spdk_pci_addr) * (count + 1));
-	if (tmp == NULL) {
-		D_ERROR("realloc error\n");
-		return -DER_NOMEM;
-	}
-
-	*list = tmp;
-	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
-		D_ERROR("Invalid address %s\n", traddr);
-		return -DER_INVAL;
-	}
-
-	opts->num_pci_addr++;
-	return 0;
-}
-
-static int
-populate_whitelist(struct spdk_env_opts *opts)
-{
-	struct spdk_nvme_transport_id	*trid;
-	struct spdk_conf_section	*sp;
-	const char			*val;
-	size_t				 i;
-	int				 rc = 0;
-
-	sp = spdk_conf_find_section(NULL, "Nvme");
-	if (sp == NULL) {
-		D_ERROR("unexpected empty config\n");
-		return -1;
-	}
-
-	D_ALLOC_PTR(trid);
-	if (trid == NULL)
-		return -DER_NOMEM;
-
-	for (i = 0; i < DAOS_NVME_MAX_CTRLRS; i++) {
-		memset(trid, 0, sizeof(struct spdk_nvme_transport_id));
-
-		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
-		if (val == NULL) {
-			break;
-		}
-
-		rc = spdk_nvme_transport_id_parse(trid, val);
-		if (rc < 0) {
-			D_ERROR("Unable to parse TransportID: %s\n", val);
-			return -1;
-		}
-
-		if (trid->trtype != SPDK_NVME_TRANSPORT_PCIE) {
-			D_ERROR("unexpected non-PCIE transport\n");
-			return -DER_INVAL;
-		}
-
-		rc = opts_add_pci_addr(opts, &opts->pci_whitelist,
-				       trid->traddr);
-		if (rc < 0) {
-			D_ERROR("Invalid traddr=%s\n", trid->traddr);
-			return -DER_INVAL;
-		}
-	}
-
-	return 0;
-}
-
 int
 bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 {
-	struct spdk_conf	*config = NULL;
 	struct bio_xs_context	*ctxt;
 	char			 th_name[32];
 	int			 rc;
@@ -960,68 +1045,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	D_INFO("Initialize NVMe context, tgt_id:%d, init_thread:%p\n",
 	       tgt_id, nvme_glb.bd_init_thread);
 
-	/* Initialize SPDK env in first started xstream */
-	if (nvme_glb.bd_init_thread == NULL) {
-		struct spdk_env_opts opts;
-
-		D_ASSERTF(nvme_glb.bd_xstream_cnt == 1, "%d",
-			  nvme_glb.bd_xstream_cnt);
-
-		config = spdk_conf_allocate();
-		if (config == NULL) {
-			D_ERROR("failed to alloc SPDK config\n");
-			rc = -DER_NOMEM;
-			goto out;
-		}
-
-		rc = spdk_conf_read(config, nvme_glb.bd_nvme_conf);
-		if (rc != 0) {
-			rc = -DER_INVAL; /* spdk_conf_read() returns -1 */
-			D_ERROR("failed to read %s, "DF_RC"\n",
-				nvme_glb.bd_nvme_conf, DP_RC(rc));
-			goto out;
-		}
-
-		if (spdk_conf_first_section(config) == NULL) {
-			D_ERROR("invalid format %s\n", nvme_glb.bd_nvme_conf);
-			rc = -DER_INVAL;
-			goto out;
-		}
-
-		spdk_conf_set_as_default(config);
-
-		spdk_env_opts_init(&opts);
-		opts.name = "daos";
-		if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY) {
-			opts.mem_size = nvme_glb.bd_mem_size;
-		}
-		rc = populate_whitelist(&opts);
-		if (rc != 0) {
-			D_FREE(opts.pci_whitelist);
-			goto out;
-		}
-		if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
-			opts.shm_id = nvme_glb.bd_shm_id;
-
-		rc = spdk_env_init(&opts);
-		D_FREE(opts.pci_whitelist);
-		if (rc != 0) {
-			rc = -DER_INVAL; /* spdk_env_init() returns -1 */
-			D_ERROR("failed to initialize SPDK env, "DF_RC"\n",
-				DP_RC(rc));
-			goto out;
-		}
-
-		rc = spdk_thread_lib_init(NULL, 0);
-		if (rc != 0) {
-			rc = -DER_INVAL;
-			D_ERROR("failed to init SPDK thread lib, "DF_RC"\n",
-				DP_RC(rc));
-			spdk_env_fini();
-			goto out;
-		}
-	}
-
 	/*
 	 * Register SPDK thread beforehand, it could be used for poll device
 	 * admin commands completions and hotplugged events in following
@@ -1033,10 +1056,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	if (ctxt->bxc_thread == NULL) {
 		D_ERROR("failed to alloc SPDK thread\n");
 		rc = -DER_NOMEM;
-		if (nvme_glb.bd_init_thread == NULL) {
-			spdk_thread_lib_fini();
-			spdk_env_fini();
-		}
 		goto out;
 	}
 	spdk_set_thread(ctxt->bxc_thread);
@@ -1047,6 +1066,9 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	 */
 	if (nvme_glb.bd_init_thread == NULL) {
 		struct common_cp_arg cp_arg;
+
+		D_ASSERTF(nvme_glb.bd_xstream_cnt == 1, "%d",
+			  nvme_glb.bd_xstream_cnt);
 
 		/* The SPDK 'Malloc' device relies on copy engine. */
 		rc = spdk_copy_engine_initialize();
@@ -1084,13 +1106,16 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		goto out;
 
 	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+	if (ctxt->bxc_dma_buf == NULL) {
+		D_ERROR("failed to initialize dma buffer\n");
+		rc = -DER_NOMEM;
+		goto out;
+	}
 out:
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
-	spdk_conf_free(config);
 	if (rc != 0)
 		bio_xsctxt_free(ctxt);
 
 	*pctxt = (rc != 0) ? NULL : ctxt;
 	return rc;
 }
-

@@ -1,7 +1,7 @@
 ## DAOS server configuration file.
 #
 ## Location of this configuration file is determined by first checking for the
-## path specified through the -f option of the daos_server command line.
+## path specified through the -o option of the daos_server command line.
 ## Otherwise, /etc/daos_server.conf is used.
 #
 #
@@ -34,8 +34,10 @@
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
 #  allow_insecure: false
+#
 #  # Location where daos_server will look for Client certificates
 #  client_cert_dir: .daos/clients
 #  # Custom CA Root certificate for generated certs
@@ -62,17 +64,6 @@
 #fault_cb: ./.daos/fd_callback
 #
 #
-## Use specific OFI interfaces
-#
-## Specify either a single fabric interface that will be used by all
-## spawned servers or a comma-seperated list of fabric interfaces to be
-## assigned individually.
-## By default, the DAOS server will auto-detect and use all fabric
-## interfaces if any and fall back to socket on the first eth card
-## otherwise.
-#
-#fabric_ifaces: [qib0,qib1]
-#
 #
 ## Use specific OFI provider
 #
@@ -84,18 +75,12 @@
 #provider: ofi+verbs;ofi_rxm
 #
 #
-## Storage mount directory
+## global CRT_CTX_SHARE_ADDR shared with client
+#crt_ctx_share_addr: 1
 #
-## TODO: If no pre-configured mountpoints are specified, DAOS will auto-detect
-## NVDIMMs, configure them in interleave mode, format with ext4 and
-## mount with the DAX extension creating a subdirectory within scm_mount_path.
 #
-## This option allows to specify a preferred path where the mountpoints will
-## be created. Either the specified directory or its parent must be a mount
-## point.
-#
-## default: /mnt/daos
-#scm_mount_path: /mnt/daosa
+## global CRT_TIMEOUT shared with client
+#crt_timeout: 30
 #
 #
 ## NVMe SSD whitelist
@@ -140,11 +125,11 @@
 ## Number of hugepages to allocate for use by NVMe SSDs
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
-## through SPDK. This indicates the total number to be used by any spawned
-## servers. Default system hugepage size will be used and hugepages will be
-## evenly distributed between CPU nodes.
+## through SPDK. This indicates the number to be used for each spawned
+## I/O server, so the total will be this number * number of I/O servers.
+## Default system hugepage size will be used.
 #
-## default: 1024
+## default: 4096
 #nr_hugepages: 4096
 #
 #
@@ -189,11 +174,10 @@
 #
 #  targets: 20
 #
-#  # Count of offload/helper xstreams per target. (allowed values: 0-2)
+#  # Count of offload/helper xstreams per server.
 #  # Immutable after reformat.
 #
-#  # default: 2
-#  nr_xs_helpers: 0
+#  nr_xs_helpers: 20
 #
 #  # Offset of the first core for service xstreams.
 #  # Immutable after reformat.
@@ -283,11 +267,10 @@
 #
 #  targets: 20
 #
-#  # Number of helper XStreams per VOS target. (allowed values: 0-2)
+#  # Number of helper XStreams per VOS server.
 #  # Immutable after reformat.
 #
-#  # default: 2
-#  nr_xs_helpers: 1
+#  nr_xs_helpers: 20
 #
 #  # Index of first core for service thread.
 #  # Immutable after reformat.

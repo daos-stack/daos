@@ -73,9 +73,6 @@ class BadEvictTest(TestWithServers):
         excludeuuid = uuidlist[0]
         expected_for_param.append(uuidlist[1])
 
-        if svc == 'VALID' and evictset is None and excludeuuid == 'VALID':
-            self.cancelForTicket("DAOS-3224")
-
         # if any parameter is FAIL then the test should FAIL, in this test
         # virtually everyone should FAIL since we are testing bad parameters
         expected_result = 'PASS'
@@ -103,9 +100,11 @@ class BadEvictTest(TestWithServers):
                 pool.svc = RankList(rl_ranks, 1)
 
             # trash the pool group value
+            savedgroup = pool.group
             if evictset is None:
-                savedgroup = pool.group
                 pool.group = None
+            else:
+                pool.set_group(evictset)
 
             # trash the UUID value in various ways
             if excludeuuid is None:
@@ -133,12 +132,10 @@ class BadEvictTest(TestWithServers):
             if pool is not None:
                 # if the test trashed some pool parameter, put it back the
                 # way it was
-                if savedgroup is not None:
-                    pool.group = savedgroup
+                pool.group = savedgroup
                 if saveduuid is not None:
                     for item in range(0, len(saveduuid)):
                         pool.uuid[item] = saveduuid[item]
                 if savedsvc is not None:
                     pool.svc = savedsvc
-                pool.disconnect()
-                pool.destroy(1)
+                pool.destroy(0)

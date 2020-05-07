@@ -77,6 +77,8 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_destroy, sizeof(daos_cont_destroy_t)},
 	{dc_cont_query, sizeof(daos_cont_query_t)},
 	{dc_cont_set_prop, sizeof(daos_cont_set_prop_t)},
+	{dc_cont_update_acl, sizeof(daos_cont_update_acl_t)},
+	{dc_cont_delete_acl, sizeof(daos_cont_delete_acl_t)},
 	{dc_cont_aggregate, sizeof(daos_cont_aggregate_t)},
 	{dc_cont_rollback, sizeof(daos_cont_rollback_t)},
 	{dc_cont_subscribe, sizeof(daos_cont_subscribe_t)},
@@ -94,6 +96,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_tx_abort, sizeof(daos_tx_abort_t)},
 	{dc_tx_open_snap, sizeof(daos_tx_open_snap_t)},
 	{dc_tx_close, sizeof(daos_tx_close_t)},
+	{dc_tx_restart, sizeof(daos_tx_restart_t)},
 
 	/** Object */
 	{dc_obj_register_class, sizeof(daos_obj_register_class_t)},

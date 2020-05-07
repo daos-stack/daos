@@ -36,6 +36,7 @@ server operations:
 |Control Plane|control_log_file|/tmp/daos_control.log|
 |Data Plane|log_file|/tmp/daos_server.log|
 |[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
+|agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
 
@@ -61,6 +62,12 @@ By default, the privileged helper only emits ERROR-level logging which
 is captured by the control plane and included in that log. If the
 `helper_log_file` parameter is set in the server config, then
 DEBUG-level logging will be sent to the specified file.
+
+### Daos Agent Log
+
+If the `log_file` config parameter is set in the agent config, then
+DEBUG-level logging will be sent to the specified file.
+
 
 ## Debugging System
 

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,12 +20,10 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
-
 from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers, skipForTicket
-from command_utils import CommandFailure, Mpirun
+from command_utils import CommandFailure
+from job_manager_utils import Mpirun
 from ior_utils import IorCommand
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -150,20 +148,20 @@ class ContainerCreate(TestWithServers):
         # Get pool params
         self.pool = []
         for index in range(pool_qty):
-            self.pool.append(TestPool(self.context, self.log))
+            self.pool.append(
+                TestPool(self.context, dmg_command=self.get_dmg_command()))
             self.pool[-1].get_params(self)
 
         if use_ior:
             # Get ior params
-            mpirun_path = os.path.join(self.ompi_prefix, "bin")
-            mpirun = Mpirun(IorCommand(), mpirun_path)
+            mpirun = Mpirun(IorCommand())
             mpirun.job.get_params(self)
             mpirun.setup_command(
-                mpirun.job.get_default_env("mpirun", self.tmp),
+                mpirun.job.get_default_env("mpirun"),
                 self.hostfile_clients, len(self.hostlist_clients))
 
         # Cancel any tests with tickets already assigned
-        if rank == 1 or rank == 2:
+        if rank in (1, 2):
             self.cancelForTicket("DAOS-2434")
 
         errors = [0 for _ in range(loop_qty)]
@@ -291,7 +289,6 @@ class ContainerCreate(TestWithServers):
 
             # Destroy the pools
             for pool in self.pool:
-                pool.disconnect()
                 pool.destroy(1)
 
             self.log.info(

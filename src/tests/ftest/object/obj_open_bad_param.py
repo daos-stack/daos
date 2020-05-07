@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@
 """
 from __future__ import print_function
 
-import os
 import traceback
-from apricot import TestWithServers
 
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError, DaosObjId
+from apricot import TestWithServers
+from pydaos.raw import DaosContainer, DaosApiError, DaosObjId
+
 
 class ObjOpenBadParam(TestWithServers):
     """
@@ -38,26 +38,12 @@ class ObjOpenBadParam(TestWithServers):
     """
     def setUp(self):
         super(ObjOpenBadParam, self).setUp()
+        self.prepare_pool()
+
         try:
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/pool/createmode/')
-            createsetid = self.params.get("setname", '/run/pool/createset/')
-            createsize = self.params.get("size", '/run/pool/createsize/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-
-            # need a connection to create container
-            self.pool.connect(1 << 1)
-
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
 
             # now open it
             self.container.open()
@@ -166,7 +152,7 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=all,object,full_regression,tiny,objopenbadpool
         """
         saved_oh = self.obj.obj_handle
-        self.obj.obj_handle = self.pool.handle
+        self.obj.obj_handle = self.pool.pool.handle
 
         try:
             dummy_obj = self.obj.open()

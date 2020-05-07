@@ -18,3 +18,5 @@ UnitTest:
     testname: eq_tests
   vos_tests:
     testname: vos_tests
+  agent_tests:
+    testname: agent_tests
