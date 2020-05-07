@@ -1670,7 +1670,8 @@ class DaosContainer(object):
         c_tx = ctypes.c_uint64(txn)
 
         func = self.context.get_function('open-tx')
-        ret = func(self.coh, ctypes.byref(c_tx), 0, None)
+        # open TX with zero copy flag: 1 << 1
+        ret = func(self.coh, ctypes.byref(c_tx), 2, None)
         if ret != 0:
             raise DaosApiError("tx open returned non-zero. RC: {0}"
                                .format(ret))
