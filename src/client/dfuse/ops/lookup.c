@@ -256,7 +256,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
 
-	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
+	rc = dfuse_lookup_inode(fs_handle, dfs, NULL,
 				&ie->ie_stat.st_ino);
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
