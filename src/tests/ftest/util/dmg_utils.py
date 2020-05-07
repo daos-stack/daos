@@ -546,7 +546,7 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.set_sub_command("scan")
         return self._get_result()
 
-    def storage_format(self):
+    def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
 
         Returns:
@@ -559,6 +559,7 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("format")
+        self.sub_command_class.set_sub_command.reformat.value = reformat
         return self._get_result()
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,

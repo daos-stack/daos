@@ -39,6 +39,7 @@ class DaosServerCommand(YamlCommand):
 
     NORMAL_PATTERN = "DAOS I/O server.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
+    REFORMAT_PATTERN = "format.*reformat not specified"
 
     def __init__(self, path="", yaml_cfg=None, timeout=90):
         """Create a daos_server command object.
@@ -121,6 +122,9 @@ class DaosServerCommand(YamlCommand):
         """
         if mode == "format":
             self.pattern = self.FORMAT_PATTERN
+            self.pattern_count = host_qty
+        elif mode == "reformat":
+            self.pattern = self.REFORMAT_PATTERN
             self.pattern_count = host_qty
         else:
             self.pattern = self.NORMAL_PATTERN
