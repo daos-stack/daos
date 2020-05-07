@@ -1190,7 +1190,7 @@ pipeline {
                                          failOnError: true,
                                          referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: true,
-                                         ignoreQualityGate: false,
+                                         ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'NEW', unstable: true]],
                                          name: "VM Testing",
                                          tool: clang(pattern: 'vm_test/vm_test.out',
