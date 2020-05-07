@@ -559,7 +559,7 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("format")
-        self.sub_command_class.set_sub_command.reformat.value = reformat
+        self.sub_command_class.sub_command_class.reformat.value = reformat
         return self._get_result()
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
