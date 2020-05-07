@@ -25,7 +25,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path"
@@ -49,11 +51,51 @@ const (
 	defaultConfigFile = "daos_agent.yml"
 )
 
+type cmdLogger interface {
+	setLog(*logging.LeveledLogger)
+}
+
+type logCmd struct {
+	log *logging.LeveledLogger
+}
+
+func (c *logCmd) setLog(log *logging.LeveledLogger) {
+	c.log = log
+}
+
+type (
+	jsonOutputter interface {
+		enableJsonOutput(bool)
+		jsonOutputEnabled() bool
+		outputJSON(io.Writer, interface{}) error
+	}
+
+	jsonOutputCmd struct {
+		shouldEmitJSON bool
+	}
+)
+
+func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool) {
+	cmd.shouldEmitJSON = emitJson
+}
+
+func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
+	return cmd.shouldEmitJSON
+}
+
+func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+
+	_, err = out.Write(data)
+	return err
+}
+
 type cliOptions struct {
 	AllowProxy bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	//Debug      string     `short:"d" long:"debug" optional:"1" optional-argument:"basic" choice:"basic" choice:"net"`
-	// works Debug      string     `short:"d" long:"debug" optional:"1" optional-value:"basic" choice:"basic" choice:"net"`
-	Debug      string     `short:"d" long:"debug" optional:"basic" optional-value:"basic" choice:"basic" choice:"net"`
+	Debug      string     `short:"d" long:"debug" optional:"1" optional-value:"basic" choice:"basic" choice:"net" description:"Enable basic or enhanced network debug"`
 	JSONLog    bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath string     `short:"o" long:"config-path" description:"Path to agent configuration file"`
 	Insecure   bool       `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
@@ -71,62 +113,6 @@ func (cmd *versionCmd) Execute(_ []string) error {
 	return nil
 }
 
-type netScanCmd struct {
-	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is all providers)"`
-}
-
-func (cmd *netScanCmd) Execute(args []string) error {
-	var provider string
-	var JSONLog bool
-	defer os.Exit(0)
-
-	log := logging.NewCommandLineLogger()
-	//	JSONLog = true
-	if JSONLog {
-		log.WithJSONOutput()
-	}
-
-//	if cmd.Debug {
-//		log.WithLogLevel(logging.LogLevelDebug)
-//		netdetect.SetLogger(log)
-//	}
-
-	numaAware, err := netdetect.NumaAware()
-	if err != nil {
-		exitWithError(log, err)
-		return nil
-	}
-
-	if !numaAware {
-		log.Info("No NUMA information available.  Any devices found are reported as NUMA node 0.")
-	}
-
-	switch {
-	case len(cmd.FabricProvider) > 0:
-		provider = cmd.FabricProvider
-		log.Infof("Scanning fabric for provider: %s\n", provider)
-	default:
-		log.Infof("Scanning fabric for all providers\n")
-	}
-
-	results, err := netdetect.ScanFabric(provider)
-	if err != nil {
-		exitWithError(log, err)
-		return nil
-	}
-
-	if provider == "" {
-		provider = "All"
-	}
-	fmt.Printf("\nFabric scan found %d devices matching the provider spec: %s\n\n", len(results), provider)
-
-	for _, sr := range results {
-		log.Infof("OFI_INTERFACE: %-16sCRT_PHY_ADDR_STR: %-25sNUMA affinity: %d", sr.DeviceName, sr.Provider, sr.NUMANode)
-	}
-
-	return nil
-}
-
 func exitWithError(log logging.Logger, err error) {
 	log.Errorf("%s: %v", path.Base(os.Args[0]), err)
 	os.Exit(1)
@@ -135,7 +121,6 @@ func exitWithError(log logging.Logger, err error) {
 func main() {
 	var opts cliOptions
 	log := logging.NewCommandLineLogger()
-
 	if err := agentMain(log, &opts); err != nil {
 		exitWithError(log, err)
 	}
@@ -160,11 +145,45 @@ func applyCmdLineOverrides(log logging.Logger, c *client.Configuration, opts *cl
 	}
 }
 
+func setLogOptions(log *logging.LeveledLogger, opts *cliOptions) {
+	if opts.JSONLog {
+		log.WithJSONOutput()
+	}
+
+	switch opts.Debug {
+	case "net":
+		log.WithLogLevel(logging.LogLevelDebug)
+		netdetect.SetLogger(log)
+
+	case "basic":
+		log.WithLogLevel(logging.LogLevelDebug)
+	default:
+	}
+}
+
 func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	log.Info("Starting daos_agent:")
-
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = true
+	p.CommandHandler = func(cmd flags.Commander, args []string) error {
+		if cmd == nil {
+			return nil
+		}
+		setLogOptions(log, opts)
+
+		if jsonCmd, ok := cmd.(jsonOutputter); ok {
+			jsonCmd.enableJsonOutput(opts.JSONLog)
+		}
+
+		if logCmd, ok := cmd.(cmdLogger); ok {
+			logCmd.setLog(log)
+		}
+
+		if err := cmd.Execute(args); err != nil {
+			return err
+		}
+		return nil
+	}
 
 	_, err := p.Parse()
 	if err != nil {
@@ -175,23 +194,7 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 		common.ScrubProxyVariables()
 	}
 
-	if opts.JSONLog {
-		log.WithJSONOutput()
-	}
-
-	switch opts.Debug {
-	case "net":
-		log.WithLogLevel(logging.LogLevelDebug)
-		log.Debug("extended network debug enabled")
-		netdetect.SetLogger(log)
-	case "basic":
-		log.WithLogLevel(logging.LogLevelDebug)
-		log.Debug("debug output enabled - either basic or no option")
-	case "":
-		log.Info("got the empty string, so no debug")
-	default:
-		log.Info("default no debug enabled")
-	}
+	setLogOptions(log, opts)
 
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
@@ -260,7 +263,7 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	}
 
 	if !numaAware {
-		log.Debugf("This system is not NUMA aware")
+		log.Info("No NUMA information available.  Any devices found are reported as NUMA node 0.")
 	}
 
 	drpcServer.RegisterRPCModule(NewSecurityModule(log, config.TransportConfig))
