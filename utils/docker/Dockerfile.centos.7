@@ -130,7 +130,7 @@ ARG CACHEBUST=1
 RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury
 
 RUN mkdir -p /mnt/build-area
-RUN mount -t tmpfs /mnt/build-area
+RUN mount -t tmpfs tmpfs /mnt/build-area
 
 # Switch to new user
 #USER $USER
