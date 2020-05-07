@@ -528,16 +528,14 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		struct statfs fs;
 		char *dir, *dirp;
 
-		dir = malloc(PATH_MAX);
+		dir = strdup(path);
 		if (dir == NULL) {
-			D_ERROR("Failed to allocate %d bytes for required "
-				"copy of path %s: %s\n", PATH_MAX, path,
+			D_ERROR("Failed copy path %s: %s\n", path,
 				strerror(errno));
 			/** TODO - convert errno to rc */
-			return -DER_NOSPACE;
+			return -DER_NOMEM;
 		}
 
-		dirp = strcpy(dir, path);
 		/* dirname() may modify dir content or not, so use an
 		 * alternate pointer (see dirname() man page)
 		 */
@@ -547,8 +545,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			D_ERROR("Failed to statfs dir %s: %s\n",
 				dirp, strerror(errno));
 			/** TODO - convert errno to rc */
+			free(dir);
 			return -DER_INVAL;
 		}
+		free(dir);
 
 		if (fs.f_type == FUSE_SUPER_MAGIC) {
 			backend_dfuse = true;
