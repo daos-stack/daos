@@ -39,6 +39,7 @@
 #define NUM_EXTRA	4
 struct ts_test_arg {
 	uint32_t		 ta_records[VOS_TS_TYPE_COUNT][VOS_TS_SIZE];
+	void			*old_table;
 	struct vos_ts_set	*ta_ts_set;
 	uint32_t		 ta_counts[VOS_TS_TYPE_COUNT];
 	uint32_t		 ta_extra_records[NUM_EXTRA];
@@ -237,13 +238,13 @@ static int
 alloc_ts_cache(void **state)
 {
 	struct vos_ts_table	*ts_table;
-	struct ts_test_arg	*ts_arg;
+	struct ts_test_arg	*ts_arg = *state;
 	int			 rc;
 
 	/** Free already allocated table */
 	ts_table = vos_ts_table_get();
 	if (ts_table != NULL)
-		vos_ts_table_free(&ts_table);
+		ts_arg->old_table = ts_table;
 
 	rc = vos_ts_table_alloc(&ts_table);
 	if (rc != 0) {
@@ -603,16 +604,6 @@ finalize_lru_test(void **state)
 	return 0;
 }
 
-
-static const struct CMUnitTest ts_tests[] = {
-	{ "VOS600.1: LRU array test", lru_array_test, init_lru_test,
-		finalize_lru_test},
-	{ "VOS600.2: LRU array stress", lru_array_stress_test, init_lru_test,
-		finalize_lru_test},
-	{ "VOS600.3: VOS timestamp allocation test", ilog_test_ts_get,
-		alloc_ts_cache, NULL},
-};
-
 static int
 ts_test_init(void **state)
 {
@@ -649,10 +640,22 @@ ts_test_fini(void **state)
 	struct ts_test_arg	*ts_arg = *state;
 
 	vos_ts_set_free(ts_arg->ta_ts_set);
+	vos_ts_table_set(ts_arg->old_table);
 	D_FREE(ts_arg);
 
 	return 0;
 }
+
+
+
+static const struct CMUnitTest ts_tests[] = {
+	{ "VOS600.1: LRU array test", lru_array_test, init_lru_test,
+		finalize_lru_test},
+	{ "VOS600.2: LRU array stress", lru_array_stress_test, init_lru_test,
+		finalize_lru_test},
+	{ "VOS600.3: VOS timestamp allocation test", ilog_test_ts_get,
+		ts_test_init, ts_test_fini},
+};
 
 int
 run_ts_tests(const char *cfg)
@@ -661,6 +664,5 @@ run_ts_tests(const char *cfg)
 
 	create_config(suite, "VOS Timestamp table tests %s", cfg);
 
-	return cmocka_run_group_tests_name(suite, ts_tests, ts_test_init,
-					   ts_test_fini);
+	return cmocka_run_group_tests_name(suite, ts_tests, NULL, NULL);
 }
