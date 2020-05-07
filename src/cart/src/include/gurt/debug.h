@@ -310,7 +310,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 #define D_ASSERT(e)							\
 	do {								\
 		if (!(e))						\
-			D_FATAL("Assertion '" #e "' failed\n");		\
+			D_FATAL("Assertion '%s' failed\n", #e);	\
 		if (d_alt_assert != NULL)				\
 			d_alt_assert((int64_t)(e), #e, __FILE__, __LINE__);\
 		assert(e);						\
