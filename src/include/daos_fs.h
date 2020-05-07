@@ -538,6 +538,17 @@ int
 dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
 
 /**
+ * Retrieve the number of shards of an open file or directory.
+ *
+ * \param[in]	obj		Open object to query.
+ * \param[out]	num_shards	Number of shards.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_get_num_shards(dfs_obj_t *obj, uint32_t *num_shards);
+
+/**
  * Retrieve the DAOS open handle of a DFS file object. User should not close
  * this handle. This is used in cases like MPI-IO where 1 rank creates the file
  * with dfs, but wants to access the file with the array API directly rather

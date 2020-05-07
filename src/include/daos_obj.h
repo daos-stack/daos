@@ -841,6 +841,18 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 int
 daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch);
 
+/**
+ * Set an anchor for enumeration for one shard only.
+ *
+ * \param[in]	oh	Object open handle.
+ * \param[in/out]
+ *		anchor	Anchor modified for 1 shard only
+ *
+ * \return		0		Success and consistent
+ */
+int
+daos_obj_anchor_split(uint32_t shard, daos_anchor_t *anchor);
+
 #if defined(__cplusplus)
 }
 #endif

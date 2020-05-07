@@ -269,3 +269,9 @@ daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
 
 	return dc_task_schedule(task, true);
 } /* end daos_array_set_size */
+
+int
+daos_array_get_num_shards(daos_handle_t oh, uint32_t *num_shards)
+{
+	return dc_array_get_num_shards(oh, num_shards);
+}

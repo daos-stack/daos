@@ -2152,7 +2152,8 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 
 	if (!daos_anchor_is_eof(anchor)) {
 		D_DEBUG(DB_IO, "More keys in shard %d\n", shard);
-	} else if ((shard < obj->cob_shards_nr - grp_size)) {
+	} else if (!(daos_anchor_get_flags(anchor) & DIOF_TO_SPEC_SHARD) &&
+		   (shard < obj->cob_shards_nr - grp_size)) {
 		shard += grp_size;
 		D_DEBUG(DB_IO, "next shard %d grp %d nr %u\n",
 			shard, grp_size, obj->cob_shards_nr);
@@ -3488,4 +3489,12 @@ out:
 	obj_decref(obj);
 
 	return rc;
+}
+
+int
+dc_obj_anchor_split(uint32_t shard, daos_anchor_t *anchor) {
+	daos_anchor_set_zero(anchor);
+	dc_obj_shard2anchor(anchor, shard);
+	daos_anchor_set_flags(anchor, DIOF_TO_SPEC_SHARD);
+	return 0;
 }

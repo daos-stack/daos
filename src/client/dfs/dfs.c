@@ -30,6 +30,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/container.h>
+#include <daos/object.h>
 #include <daos/array.h>
 
 #include "daos.h"
@@ -3955,4 +3956,31 @@ dfs_umount_root_cont(dfs_t *dfs)
 
 	rc = daos_cont_close(coh, NULL);
 	return daos_der2errno(rc);
+}
+
+int
+dfs_obj_get_num_shards(dfs_obj_t *obj, uint32_t *num_shards)
+{
+	struct daos_obj_layout	*layout;
+	int			rc;
+
+	if (obj == NULL || num_shards == NULL)
+		return EINVAL;
+
+	if (S_ISDIR(obj->mode)) {
+		rc = dc_obj_layout_get(obj->oh, &layout);
+		if (rc)
+			return rc;
+
+		*num_shards = layout->ol_nr;
+		daos_obj_layout_free(layout);
+		return 0;
+	}
+
+	if (S_ISREG(obj->mode)) {
+		rc = daos_array_get_num_shards(obj->oh, num_shards);
+		return daos_der2errno(rc);
+	}
+
+	return EINVAL;
 }
