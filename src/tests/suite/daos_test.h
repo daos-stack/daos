@@ -243,6 +243,7 @@ async_disable(void **state)
 	return 0;
 }
 
+#if 0
 static inline int
 async_overlap(void **state)
 {
@@ -252,6 +253,7 @@ async_overlap(void **state)
 	arg->async   = true;
 	return 0;
 }
+#endif
 
 static inline int
 test_case_teardown(void **state)
