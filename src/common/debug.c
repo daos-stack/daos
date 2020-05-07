@@ -242,37 +242,3 @@ DP_UUID(const void *uuid)
 #define DF_KEY_MAX		8
 #define DF_KEY_STR_SIZE		64
 
-static __thread int thread_key_buf_idx;
-static __thread char thread_key_buf[DF_KEY_MAX][DF_KEY_STR_SIZE];
-
-char *
-daos_key2str(daos_key_t *key)
-{
-	char *buf = thread_key_buf[thread_key_buf_idx];
-
-	if (!key->iov_buf || key->iov_len == 0) {
-		strcpy(buf, "<NULL>");
-	} else {
-		int len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
-		int i;
-		char *akey = key->iov_buf;
-		bool can_print = true;
-
-		for (i = 0 ; i < len ; i++) {
-			if (akey[i] == '\0')
-				break;
-			if (!isprint(akey[i])) {
-				can_print = false;
-				break;
-			}
-		}
-		if (can_print) {
-			strncpy(buf, key->iov_buf, len);
-			buf[len] = 0;
-		} else {
-			strcpy(buf, "????");
-		}
-	}
-	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;
-	return buf;
-}

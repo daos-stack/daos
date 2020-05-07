@@ -105,10 +105,8 @@ char *DP_UUID(const void *uuid);
 
 char *daos_key2str(daos_key_t *key);
 
-#define DF_KEY			"[%d] %.*s"
-#define DP_KEY(key)		(int)(key)->iov_len,	\
-		                (int)(key)->iov_len,	\
-		                daos_key2str(key)
+#define DF_KEY			"[%d]"
+#define DP_KEY(key)		(int)(key)->iov_len
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
