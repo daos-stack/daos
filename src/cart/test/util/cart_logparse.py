@@ -546,7 +546,7 @@ class LogIter():
             if self._pid:
                 if line.pid != self._pid:
                     continue
-                
+
                 if isinstance(line, LogRaw):
                     continue
 
