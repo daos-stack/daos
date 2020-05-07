@@ -199,12 +199,12 @@ type PoolExtendCmd struct {
 	UUID  string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
 	Ranks string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
 	// Everything after this needs to be removed when pool info can be fetched
-	GroupName string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
-	UserName  string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
-	ACLFile   string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
-	ScmSize   string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
-	NVMeSize  string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
-	Sys       string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
+	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
+	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
+	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
+	ScmSize    string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
+	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
+	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
 	// END TEMPORARY SECTION
 }
 

@@ -107,6 +107,7 @@ void ds_pool_prop_set_handler(crt_rpc_t *rpc);
 void ds_pool_acl_update_handler(crt_rpc_t *rpc);
 void ds_pool_acl_delete_handler(crt_rpc_t *rpc);
 void ds_pool_update_handler(crt_rpc_t *rpc);
+void ds_pool_extend_handler(crt_rpc_t *rpc);
 void ds_pool_evict_handler(crt_rpc_t *rpc);
 void ds_pool_svc_stop_handler(crt_rpc_t *rpc);
 void ds_pool_attr_list_handler(crt_rpc_t *rpc);
@@ -138,6 +139,7 @@ int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 /*
  * srv_util.c
  */
+
 int ds_pool_map_tgts_update(struct pool_map *map,
 			    struct pool_target_id_list *tgts, int opc,
 			    bool evict_rank);

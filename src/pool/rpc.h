@@ -66,7 +66,7 @@
 		ds_pool_update_handler, NULL),				\
 	X(POOL_EXTEND,							\
 		0, &CQF_pool_extend,					\
-		ds_pool_update_handler, NULL),				\
+		ds_pool_extend_handler, NULL),				\
 	X(POOL_EVICT,							\
 		0, &CQF_pool_evict,					\
 		ds_pool_evict_handler, NULL),				\
@@ -276,10 +276,22 @@ struct pool_target_addr_list {
 	((struct pool_op_out)	(pto_op)		CRT_VAR) \
 	((struct pool_target_addr) (pto_addr_list)	CRT_ARRAY)
 
+#define DAOS_ISEQ_POOL_EXTEND /* input fields */		 \
+	((struct pool_op_in)	(pei_op)		CRT_VAR) \
+	((uint32_t)		(pei_ntgts)		CRT_VAR) \
+	((uuid_t)		(pei_tgt_uuids)		CRT_ARRAY) \
+	((d_rank_list_t)	(pei_tgt_ranks)		CRT_PTR) \
+	((uint32_t)		(pei_ndomains)		CRT_VAR) \
+	((int32_t)		(pei_domains)		CRT_ARRAY)
+
+
+#define DAOS_OSEQ_POOL_EXTEND /* output fields */		 \
+	((struct pool_op_out)	(peo_op)		CRT_VAR) \
+
 CRT_RPC_DECLARE(pool_tgt_update, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
-CRT_RPC_DECLARE(pool_extend, DAOS_ISEQ_POOL_TGT_UPDATE,
-		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DECLARE(pool_extend, DAOS_ISEQ_POOL_EXTEND,
+		DAOS_OSEQ_POOL_EXTEND)
 CRT_RPC_DECLARE(pool_add, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_add_in, DAOS_ISEQ_POOL_TGT_UPDATE,

@@ -1212,7 +1212,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 		rc = pool_map_find_domain(map, tree[0].do_comp.co_type,
 					  PO_COMP_ID_ALL, &cur_doms);
 	}
-	if (rc != 0)
+	if (rc == 0)
 		goto failed;
 
 	dst_doms = dst_tree;
@@ -1372,7 +1372,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 int
 pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
 {
-	struct pool_domain *tree; /* root of the new component tree */
+	struct pool_domain *tree = NULL;
 	int		    rc;
 
 	rc = pool_buf_parse(buf, &tree);
@@ -1394,7 +1394,6 @@ pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
 	D_DEBUG(DB_TRACE, "Merge buffer with already existent pool map\n");
 	rc = pool_map_merge(map, version, tree);
  out:
-	pool_tree_free(tree);
 	return rc;
 }
 
@@ -2062,6 +2061,7 @@ unsigned int
 pool_map_get_version(struct pool_map *map)
 {
 	D_DEBUG(DB_TRACE, "Fetch pool map version %u\n", map->po_version);
+	D_ASSERT(map != NULL);
 	return map->po_version;
 }
 

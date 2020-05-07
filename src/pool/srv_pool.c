@@ -444,6 +444,85 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 }
 
 static int
+pool_buf_fill_extend(struct pool_map *map, struct pool_buf *map_buf,
+		int nnodes, int map_version, int ndomains,
+		const int32_t *domains, uuid_t target_uuids[],
+		const d_rank_list_t *target_addrs, uuid_t *uuids, bool *updated)
+{
+	struct pool_component	map_comp;
+	uint32_t 		num_comps;
+	struct pool_domain	*found_dom;
+	int i, rc;
+
+	num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK, PO_COMP_ID_ALL, NULL);
+	/* fill domains */
+	for (i = 0; i < ndomains; i++) {
+		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
+		map_comp.co_status = PO_COMP_ST_NEW;
+		map_comp.co_index = i;
+		map_comp.co_id = i + num_comps;
+		map_comp.co_rank = 0;
+		map_comp.co_ver = map_version;
+		map_comp.co_fseq = 1;
+		map_comp.co_nr = domains[i];
+
+		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		if (rc != 0)
+			return rc;
+	}
+
+	num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE, PO_COMP_ID_ALL, NULL);
+	/* fill nodes */
+	for (i = 0; i < nnodes; i++) {
+		uuid_t *p = bsearch(target_uuids[i], uuids, nnodes,
+				    sizeof(uuid_t), uuid_compare_cb);
+
+		found_dom = pool_map_find_node_by_rank(map, domains[i]);
+		if (found_dom)
+			continue;
+
+		*updated = true;
+		map_comp.co_type = PO_COMP_TP_NODE;
+		map_comp.co_status = PO_COMP_ST_NEW;
+		map_comp.co_index = i;
+		map_comp.co_id = (p - uuids) + num_comps;
+		map_comp.co_rank = target_addrs->rl_ranks[i];
+		map_comp.co_ver = map_version;
+		map_comp.co_fseq = 1;
+		map_comp.co_nr = dss_tgt_nr;
+
+		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		if (rc != 0)
+			return rc;
+	}
+
+	if(!updated)
+		return 0;
+
+	num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
+	/* fill targets */
+	for (i = 0; i < nnodes; i++) {
+		int j;
+
+		for (j = 0; j < dss_tgt_nr; j++) {
+			map_comp.co_type = PO_COMP_TP_TARGET;
+			map_comp.co_status = PO_COMP_ST_NEW;
+			map_comp.co_index = j;
+			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
+			map_comp.co_rank = target_addrs->rl_ranks[i];
+			map_comp.co_ver = map_version;
+			map_comp.co_fseq = 1;
+			map_comp.co_nr = 1;
+
+			rc = pool_buf_attach(map_buf, &map_comp, 1);
+			if (rc != 0)
+				return rc;
+		}
+	}
+	return 0;
+}
+
+static int
 init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		   uint32_t nnodes, uuid_t target_uuids[], const char *group,
 		   const d_rank_list_t *target_addrs, daos_prop_t *prop,
@@ -476,7 +555,6 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
 
 	/* Fill the pool_buf out. */
-	/* fill domains */
 	for (i = 0; i < ndomains; i++) {
 		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
 		map_comp.co_status = PO_COMP_ST_UPIN;
@@ -3019,6 +3097,72 @@ out:
 }
 
 int
+ds_pool_add(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
+		const d_rank_list_t *rank_list, int ndomains,
+		const int *domains, d_rank_list_t *svc_ranks)
+{
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	struct pool_extend_in		*in;
+	struct pool_extend_out		*out;
+
+	rc = rsvc_client_init(&client, svc_ranks);
+	if (rc != 0)
+		return rc;
+
+rechoose:
+
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_EXTEND, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool extend rpc: "
+			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pei_op.pi_uuid, pool_uuid);
+	in->pei_ntgts = ntargets;
+	in->pei_ndomains = ndomains;
+	in->pei_tgt_uuids.ca_count = 1;
+	in->pei_tgt_uuids.ca_arrays = target_uuids;
+	in->pei_tgt_ranks = (d_rank_list_t *)rank_list;
+	in->pei_domains.ca_count = ndomains;
+	in->pei_domains.ca_arrays = (int *)domains;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+		out->peo_op.po_rc, &out->peo_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->peo_op.po_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": Failed to set targets to UP state for "
+				"reintegration: "DF_RC"\n", DP_UUID(pool_uuid),
+				DP_RC(rc));
+		D_GOTO(out_rpc, rc);
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+	return rc;
+}
+
+int
 ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 		uint32_t rank, struct pool_target_id_list *target_list,
 		pool_comp_state_t state)
@@ -3647,7 +3791,6 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	struct pool_buf	       *map_buf = NULL;
 	bool			updated = false;
 	int			rc;
-
 	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -3668,8 +3811,10 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	 */
 	map_version_before = pool_map_get_version(map);
 	rc = ds_pool_map_tgts_update(map, tgts, opc, evict_rank);
+
 	if (rc != 0)
 		D_GOTO(out_map, rc);
+
 	map_version = pool_map_get_version(map);
 
 	D_DEBUG(DF_DSMS, DF_UUID": version=%u->%u\n",
@@ -3877,6 +4022,188 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 out:
 	pool_target_id_list_free(&target_list);
 	return rc;
+}
+
+static int
+ds_pool_extend_internal(struct rdb_tx *tx, struct pool_svc *svc,
+		uint32_t nnodes, uuid_t target_uuids[],
+		d_rank_list_t *rank_list, uint32_t ndomains,
+		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
+		struct rsvc_hint *hint)
+{
+	struct pool_buf		*map_buf;
+	struct pool_map		*map = NULL;
+	uint32_t 		map_version;
+	uuid_t			*uuids = NULL;
+	bool			updated = false;
+	int			ntargets;
+	int			rc;
+
+	ntargets = nnodes * dss_tgt_nr;
+
+	/* Create a temporary pool map based on the last committed version. */
+	rc = read_map(tx, &svc->ps_root, &map);
+	if (rc != 0)
+		return rc;
+
+	map_version = pool_map_get_version(map) + 1;
+
+	/* Prepare the pool map attribute buffers. */
+	map_buf = pool_buf_alloc(ndomains + nnodes + ntargets);
+	if (map_buf == NULL)
+		return -DER_NOMEM;
+
+	/* Make a sorted target UUID array to determine target IDs. */
+	D_ALLOC_ARRAY(uuids, nnodes);
+	if (uuids == NULL)
+		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
+	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
+
+	/* Fill the pool_buf out. */
+	rc = pool_buf_fill_extend(map, map_buf, nnodes, map_version, ndomains,
+			    domains, target_uuids, rank_list, uuids, &updated);
+	if (rc != 0)
+		D_GOTO(out_uuids, rc);
+	if(!updated)
+		D_GOTO(out_map_buf, rc);
+
+	/* Extend the current pool map */
+	rc = pool_map_extend(map, map_version, map_buf);
+	if(rc != 0)
+		D_GOTO(out_map, rc);
+
+ 	/* Write the new pool map. */
+	rc = pool_buf_extract(map, &map_buf);
+	if (rc != 0)
+		D_GOTO(out_map, rc);
+
+	rc = write_map_buf(tx, &svc->ps_root, map_buf, map_version);
+	if (rc != 0)
+		D_GOTO(out_map, rc);
+
+	rc = rdb_tx_commit(tx);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID": failed to commit: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+			D_GOTO(out_map, rc);
+	}
+
+	updated = true;
+
+	/* Update svc->ps_pool to match the new pool map. */
+	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, map_version);
+	if (rc != 0) {
+		/*
+		* We must resign to avoid handling future requests with a
+		* stale pool map cache.
+		*/
+		rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
+		rc = 0;
+		goto out_map;
+	}
+
+	ds_rsvc_request_map_dist(&svc->ps_rsvc);
+
+out_map:
+	if (map_version_p != NULL)
+		*map_version_p = pool_map_get_version((map == NULL || rc != 0) ?
+						      svc->ps_pool->sp_map :
+						      map);
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(tx);
+
+out_uuids:
+	D_FREE(uuids);
+
+out_map_buf:
+	pool_buf_free(map_buf);
+
+	if (updated_p)
+		*updated_p = updated;
+	if (map)
+		pool_map_decref(map);
+
+	return rc;
+}
+
+int
+ds_pool_extend(uuid_t pool_uuid, struct rsvc_hint *hint,uint32_t nnodes,
+		uuid_t target_uuids[], d_rank_list_t *rank_list,
+		uint32_t ndomains, int32_t *domains, uint32_t *map_version_p)
+
+{
+	struct pool_svc		*svc;
+	struct rdb_tx		tx;
+	bool			updated;
+	int rc;
+
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	rc = ds_pool_extend_internal(&tx, svc, ndomains, target_uuids,
+		rank_list, ndomains, domains,
+		&updated, map_version_p, hint);
+
+	if(!updated)
+		D_GOTO(out_svc, rc);
+
+	/* Do rebuild stuff here */
+	/* Do rebuild stuff here */
+	/* Do rebuild stuff here */
+	/* Do rebuild stuff here */
+
+out_svc:
+	if (hint != NULL)
+		ds_rsvc_set_hint(&svc->ps_rsvc, hint);
+	pool_svc_put_leader(svc);
+	return rc;
+}
+
+void
+ds_pool_extend_handler(crt_rpc_t *rpc)
+{
+	struct pool_extend_in	*in = crt_req_get(rpc);
+	struct pool_extend_out	*out = crt_reply_get(rpc);
+	uuid_t			pool_uuid;
+	uuid_t			*target_uuids;
+	d_rank_list_t		rank_list;
+	uint32_t		ndomains;
+	int32_t			*domains;
+	int rc = 0;
+
+
+/*	if (in->pei_ntgts != in->pei_tgt_uuids.ca_count ||
+	    in->pei_ntgts != in->pei_tgt_ranks->rl_nr)
+		D_GOTO(out, rc = -DER_PROTO);
+	if (in->pei_ndomains != in->pei_domains.ca_count)
+		D_GOTO(out, rc = -DER_PROTO);
+*/
+
+	uuid_copy(pool_uuid, in->pei_op.pi_uuid);
+	target_uuids = in->pei_tgt_uuids.ca_arrays;
+	rank_list.rl_nr = in->pei_tgt_ranks->rl_nr;
+	rank_list.rl_ranks = in->pei_tgt_ranks->rl_ranks;
+	ndomains = in->pei_ndomains;
+	domains = in->pei_domains.ca_arrays;
+
+	rc = ds_pool_extend(pool_uuid, &out->peo_op.po_hint, ndomains,
+		       target_uuids, &rank_list, ndomains, domains,
+		       &out->peo_op.po_map_version);
+
+	if(target_uuids == NULL || ndomains || domains || rank_list.rl_nr > 0)
+		goto out;
+out:
+	out->peo_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pei_op.pi_uuid), rpc, DP_RC(rc));
+	crt_reply_send(rpc);
 }
 
 void
