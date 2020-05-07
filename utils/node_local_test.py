@@ -535,9 +535,6 @@ def log_test(filename, show_memleaks=True):
     global lp
     global lt
 
-#    lp = __import__('cart_logparse')
-#    lt = __import__('cart_logtest')
-
     lt.shown_logs = set()
 
     log_iter = lp.LogIter(filename)
@@ -593,17 +590,17 @@ def run_duns_overlay_test(server, conf):
                              uns_dir])
 
     print('rc is {}'.format(rc))
-    assert(rc.returncode==0)
+    assert rc.returncode == 0
 
     dfuse = DFuse(server, conf, path=uns_dir)
 
     dfuse.start(v_hint='uns-overlay')
     # To show the contents.
-    # getfattr -d <file> 
+    # getfattr -d <file>
 
     # This should work now if the container was correctly found
     create_and_read_via_il(dfuse, uns_dir)
-    
+
     dfuse.stop()
 
 def run_dfuse(server, conf):
