@@ -655,9 +655,12 @@ ts_test_fini(void **state)
 }
 
 int
-run_ts_tests(void)
+run_ts_tests(const char *cfg)
 {
-	return cmocka_run_group_tests_name("VOS Timestamp table tests",
-					   ts_tests, ts_test_init,
+	char	suite[CFG_MAX];
+
+	create_config(suite, "VOS Timestamp table tests %s", cfg);
+
+	return cmocka_run_group_tests_name(suite, ts_tests, ts_test_init,
 					   ts_test_fini);
 }
