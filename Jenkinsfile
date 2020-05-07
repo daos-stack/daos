@@ -1174,9 +1174,9 @@ pipeline {
                             publishValgrind (
                                     failBuildOnInvalidReports: true,
                                     failBuildOnMissingReports: true,
-                                    failThresholdDefinitelyLost: '',
-                                    failThresholdInvalidReadWrite: '',
-                                    failThresholdTotal: '',
+                                    failThresholdDefinitelyLost: '0',
+                                    failThresholdInvalidReadWrite: '0',
+                                    failThresholdTotal: '0',
                                     pattern: 'dnt.*.memcheck.xml',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
