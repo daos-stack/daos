@@ -2838,7 +2838,7 @@ tx_commit(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 #endif
 }
-
+#if FAULT_INJECT
 static void
 io_nospace(void **state)
 {
@@ -2869,6 +2869,7 @@ io_nospace(void **state)
 	D_FREE(large_buf);
 	ioreq_fini(&req);
 }
+#endif
 
 static void
 write_record_multiple_times(void **state)
@@ -4030,7 +4031,9 @@ static const struct CMUnitTest io_tests[] = {
 	  tx_discard, async_disable, test_case_teardown},
 	{ "IO18: transaction commit",
 	  tx_commit, async_disable, test_case_teardown},
+#if FAULT_INJECT
 	{ "IO19: no space", io_nospace, async_disable, test_case_teardown},
+#endif
 	{ "IO20: fetch size with NULL sgl",
 	  fetch_size, async_disable, test_case_teardown},
 	{ "IO21: io crt error",

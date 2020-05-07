@@ -146,8 +146,15 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS checksum tests..");
 			daos_test_print(rank, "=================");
+#ifdef FAULT_INJECT
 			nr_failed += run_daos_checksum_test(rank, size,
 						sub_tests, sub_tests_size);
+#else
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "Skipping DAOS checksum tests..");
+			daos_test_print(rank, "Build does not have FI support");
+			daos_test_print(rank, "=================");
+#endif
 			break;
 		case 'x':
 			daos_test_print(rank, "\n\n=================");
