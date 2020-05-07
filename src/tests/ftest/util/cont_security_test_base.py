@@ -35,7 +35,8 @@ from command_utils import CommandFailure
 import security_test_base as secTestBase
 import general_utils
 
-PERMISSIONS = ["r", "w", "rw", "rwc", "rwcd", "rwcdt", "rwcdtT"]
+PERMISSIONS = ["r", "w", "rw", "rwd", "rwdt", "rwdtT",
+               "rwdtTa", "rwdtTaA", "rwdtTaAo"]
 
 class ContSecurityTestBase(TestWithServers):
     """Container security test cases.
