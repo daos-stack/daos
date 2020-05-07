@@ -54,6 +54,7 @@ class SelfTest(ExecutableCommand):
         self.message_sizes = FormattedParameter("--message-sizes {0}")
         self.max_inflight_rpcs = FormattedParameter("--max-inflight-rpcs {0}")
         self.repetitions = FormattedParameter("--repetitions {0}")
+        self.attach_info = FormattedParameter("--path {0}")
 
 
 class CartSelfTest(TestWithServers):
@@ -70,6 +71,7 @@ class CartSelfTest(TestWithServers):
         self.setup_start_servers = False
         self.uri_file = None
         self.cart_env = EnvironmentVariables()
+        self.test_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -85,14 +87,9 @@ class CartSelfTest(TestWithServers):
             self.hostfile_servers_slots,
             self.hostlist_servers)
 
-        # Configure the daos server to use a uri file - if supported by the
-        # daos_server job manager
-        if hasattr(self.server_managers[0].manager, "report_uri"):
-            self.uri_file = os.path.join(self.tmp, "uri.txt")
-            self.server_managers[0].manager.report_uri.value = self.uri_file
-
         # Setup additional environment variables for the server orterun command
-        share_addr = self.params.get("share_addr", "/run/test/*")
+        share_addr = self.params.get("val",
+            "/run/muxtestparams/share_addr/*")[0]
         self.cart_env["CRT_CTX_SHARE_ADDR"] = str(share_addr)
         self.cart_env["CRT_CTX_NUM"] = "8"
         self.cart_env["CRT_PHY_ADDR_STR"] = \
@@ -104,21 +101,30 @@ class CartSelfTest(TestWithServers):
         # Start the daos server
         self.start_server_managers()
 
+        # Generate a uri file using daos_agent dump-attachinfo
+        attachinfo_file = "{}.attach_info_tmp".format(self.server_group)
+        self.uri_file = os.path.join(self.tmp, attachinfo_file)
+        agent_cmd = self.agent_managers[0].daos_agent
+        agent_cmd.dump_attachinfo(self.uri_file)
+
+
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.
 
-        :avocado: tags=all,smoke,unittest,tiny,cartselftest
+        :avocado: tags=all,pr,smoke,unittest,tiny,cartselftest
         """
         # Setup the orterun command
-        orterun = Orterun(SelfTest(self.cart_bin))
-        orterun.ompi_server.update(
-            "file:{}".format(self.uri_file), "orterun/ompi_server")
+        self_test = SelfTest(os.path.join(self.prefix, "bin"))
+        orterun = Orterun(self_test)
         orterun.map_by.update(None, "orterun/map_by")
         orterun.enable_recovery.update(False, "orterun/enable_recovery")
 
         # Get the self_test command line parameters
         orterun.job.get_params(self)
-        orterun.job.group_name.value = self.server_group
+        orterun.job.group_name.update(self.server_group)
+        orterun.job.message_sizes.update(
+            self.params.get("size", "/run/muxtestparams/message_size/*")[0])
+        orterun.job.attach_info.update(self.tmp)
 
         # Setup the environment variables for the self_test orterun command
         orterun.assign_environment(self.cart_env)
