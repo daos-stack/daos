@@ -361,31 +361,31 @@ dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 static int
 daos_dmg_fork_exec(char *argv[])
 {
-        pid_t pid = fork();
+	pid_t pid = fork();
 
-        if (pid == -1) {
-                D_ERROR("fork() failed to create child\n");
-                return -DER_INVAL;
-        } else if (pid == 0) {
-                /* child process */
-                D_INFO("child pid = %d\n", getpid());
-                execvp(argv[0], argv);
+	if (pid == -1) {
+		D_ERROR("fork() failed to create child\n");
+		return -DER_INVAL;
+	} else if (pid == 0) {
+		/* child process */
+		D_INFO("child pid = %d\n", getpid());
+		execvp(argv[0], argv);
 		D_ERROR("execvp %s failed\n", argv[0]);
-                exit(-DER_INVAL);
-        } else {
-	        /* parent process */
-        	D_INFO("parent pid = %d\n", getpid());
+		exit(-DER_INVAL);
+	} else {
+		/* parent process */
+		D_INFO("parent pid = %d\n", getpid());
 
-	        int status;
+		int status;
 
-        	if (waitpid(pid, &status, 0) == -1) {
-                	D_ERROR("waitpid() failed for pid = %d\n", pid);
-                	return -DER_INVAL;
-        	}
+		if (waitpid(pid, &status, 0) == -1) {
+			D_ERROR("waitpid() failed for pid = %d\n", pid);
+			return -DER_INVAL;
+		}
 		if (WIFEXITED(status))
-        		D_INFO("WEXITSTATUS(status) = %d\n",
+			D_INFO("WEXITSTATUS(status) = %d\n",
 				WEXITSTATUS(status));
-	        return DER_SUCCESS;
+		return DER_SUCCESS;
 	}
 }
 
@@ -394,35 +394,33 @@ daos_dmg_fork_exec(char *argv[])
  */
 int
 exec_dmg_system_stop(const char *grp, d_rank_t rank, bool force,
-                  daos_event_t *ev)
+	daos_event_t *ev)
 {
-        char *argv[7];
-        int rc;
+	char *argv[7];
+	int rc;
 
+	argv[0] = "dmg";
+	argv[1] = "system";
+	argv[2] = "stop";
+	argv[3] = "-i";
+	if (asprintf(&argv[4], "--ranks=%d", rank) == -1) {
+		D_ERROR("asprintf failed.\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
 
-        argv[0] = "dmg";
-        argv[1] = "system";
-        argv[2] = "stop";
-        argv[3] = "-i";
-        if (asprintf(&argv[4], "--ranks=%d", rank) == -1) {
-                D_ERROR("asprintf failed.\n");
-                rc = -DER_INVAL;
-                goto out;
-        }
+	if (force && asprintf(&argv[5], "--force") == -1) {
+		D_ERROR("asprintf failed.\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+	argv[6] = NULL;
 
-        if (force)
-                if (asprintf(&argv[5], "--force") == -1) {
-                        D_ERROR("asprintf failed.\n");
-                        rc = -DER_INVAL;
-                        goto out;
-                }
-        argv[6] = NULL;
-
-        rc = daos_dmg_fork_exec(argv);
+	rc = daos_dmg_fork_exec(argv);
 out:
-        free(argv[4]);
-        free(argv[5]);
+	free(argv[4]);
+	free(argv[5]);
 
-        return rc;
+	return rc;
 }
 
