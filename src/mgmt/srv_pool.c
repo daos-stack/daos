@@ -394,7 +394,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			      DAOS_MGMT_VERSION);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
 				  rank_list, opc, NULL, NULL,
-				  CRT_RPC_FLAG_EXCLUSIVE, topo, &tc_req);
+				  CRT_RPC_FLAG_FILTER_INVERT, topo, &tc_req);
 	if (rc)
 		goto out_preparation;
 

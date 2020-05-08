@@ -81,8 +81,7 @@ CRT_RPC_DECLARE(rsvc_start, DAOS_ISEQ_RSVC_START, DAOS_OSEQ_RSVC_START)
 #define DAOS_ISEQ_RSVC_STOP /* input fields */			 \
 	((d_iov_t)		(soi_svc_id)		CRT_VAR) \
 	((uint32_t)		(soi_class)		CRT_VAR) \
-	((uint32_t)		(soi_flags)		CRT_VAR) \
-	((d_rank_list_t)	(soi_ranks)		CRT_PTR)
+	((uint32_t)		(soi_flags)		CRT_VAR)
 
 #define DAOS_OSEQ_RSVC_STOP /* output fields */			 \
 	((int32_t)		(soo_rc)		CRT_VAR)
