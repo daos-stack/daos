@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestStorageCommands(t *testing.T) {
@@ -54,17 +55,17 @@ func TestStorageCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
-		//		{
-		//			"Reformat system without ranks filter",
-		//			"storage format --system",
-		//			strings.Join([]string{
-		//				"ConnectClients",
-		//				printRequest(t, &control.SystemResetFormatReq{Ranks: []system.Rank{}}),
-		//				"ConnectClients",
-		//				printRequest(t, storageFormatReq),
-		//			}, " "),
-		//			nil,
-		//		},
+		{
+			"Reformat system without ranks filter",
+			"storage format --system",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemResetFormatReq{Ranks: []system.Rank{}}),
+				"ConnectClients",
+				printRequest(t, storageFormatReq),
+			}, " "),
+			nil,
+		},
 		//		{
 		//			"Reformat system with ranks filter",
 		//			"storage format --system --ranks 0,1,2,3,4", // TODO DAOS-4454: enable [0-4] syntax

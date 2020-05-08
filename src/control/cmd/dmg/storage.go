@@ -167,9 +167,8 @@ type storageFormatCmd struct {
 // Execute is run when storageFormatCmd activates
 //
 // run NVMe and SCM storage format on all connected servers
-func (cmd *storageFormatCmd) Execute(args []string) error {
-	var resp *control.StorageFormatResp
-	var err error
+func (cmd *storageFormatCmd) Execute(args []string) (err error) {
+	resp := &control.StorageFormatResp{}
 	ctx := context.Background()
 
 	if cmd.Group.System {
@@ -190,7 +189,7 @@ func (cmd *storageFormatCmd) Execute(args []string) error {
 			return err
 		}
 		if err = convert.Types(sysResp, resp); err != nil {
-			return err
+			return errors.WithMessage(err, "converting system-reformat response")
 		}
 
 		return cmd.printResp(resp)

@@ -54,10 +54,12 @@ const (
 
 func getRanksFunc(method ranksMethod) systemRanksFunc {
 	switch method {
-	case stop:
-		return control.StopRanks
 	case prep:
 		return control.PrepShutdownRanks
+	case stop:
+		return control.StopRanks
+	case reset:
+		return control.ResetFormatRanks
 	case start:
 		return control.StartRanks
 	case ping:
