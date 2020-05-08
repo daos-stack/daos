@@ -42,8 +42,8 @@ class OpenClose(TestWithServers):
         self.container = []
         saved_coh = None
 
-        coh_params = self.params.get("coh",
-                                     '/run/container/container_handle/*/')
+        coh_params = self.params.get(
+            "coh", '/run/container/container_handle/*/')
 
         expected_result = coh_params[1]
 
