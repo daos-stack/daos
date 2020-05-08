@@ -45,6 +45,7 @@ Environment variables in this section only apply to the server-side.
 |DAOS\_START\_POOL\_SVC|Determines whether to start existing pool services when starting a daos\_server. BOOL. Default to true.|
 |DAOS\_IMPLICIT\_PURGE|Whether to aggregate unreferenced epochs. BOOL. Default to false.|
 |DAOS\_PURGE\_CREDITS|The number of credits for probing object trees when aggregating unreferenced epochs. INTEGER. Default to 1000.|
+|CRT\_DISABLE\_MEM\_PIN|Disable memory pinning workaround on a server side. BOOL. Default to 0.|
 
   --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
