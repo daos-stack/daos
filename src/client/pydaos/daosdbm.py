@@ -34,7 +34,8 @@ class daos_named_kv():
         try:
             conf = load_conf()
             if sys.version_info.major < 3:
-                pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
+                pydir = 'python{}.{}'.format(
+                    sys.version_info.major, sys.version_info.minor)
             else:
                 pydir = 'python{}'.format(sys.version_info.major)
 
@@ -43,7 +44,7 @@ class daos_named_kv():
                                              pydir,
                                              'site-packages'))
         except Exception:
-            pass
+            print("Exception in class daos_named_kv.")
 
         if 'CRT_PHY_ADDR_STR' not in os.environ:
             os.environ['CRT_PHY_ADDR_STR'] = transport
@@ -135,84 +136,8 @@ def main():
 
     print('Kvs are {}'.format(','.join(sorted(my_kv.get_kv_list()))))
 
-    if True:
-        new_migrate(my_kv)
-        return
-
-    if len(sys.argv) != 5:
-        print('Also need directory/file to import')
-        return
-
-    src_dir = sys.argv[3]
-    src_file = sys.argv[4]
-
-    filename = os.path.join(src_dir, src_file)
-    if not os.path.exists(filename):
-        print('Input file {} does not exist'.format(filename))
-        return
-
-    db = dbm.gnu.open(filename, 'c')
-
-    kv = my_kv.get_kv_by_name(src_file)
-
-    count = pickle.loads(db[LENGTH_KEY])
-
-    try:
-        start_count = pickle.loads(kv[LENGTH_KEY])
-        start_count += 1
-    except KeyError:
-        start_count = 0
-
-    print('Copying records from {} to {}'.format(start_count, count))
-
-    start_time = time.perf_counter()
-
-    copy_count = 0
-    last_report_time = start_time
-    to_copy = count - start_count + 1
-    # CHANGE THIS TO MODIFY REPORTING FREQUENCY
-    report_freq = 2
-
-    bytes_total = 0
-
-    try:
-        tdata = {}
-        idx = count
-        for idx in range(start_count, count):
-            key = str(idx)
-            value = db[key]
-            tdata[key] = value
-
-            copy_count += 1
-            now = time.perf_counter()
-
-            if idx % 400 == 0:
-                tdata[LENGTH_KEY] = pickle.dumps(idx)
-                kv.bput(tdata)
-                tdata = {}
-
-            if now - last_report_time > report_freq:
-
-                time_per_record = (now - start_time) / copy_count
-
-                # Make the remaining time in minutes so it's easier to parse
-                remaining_time = int((time_per_record * (to_copy - copy_count)))
-
-                print('Copied {}/{} records in {:.2f} seconds ({:.0f}) {} seconds remaining.'.format(copy_count,
-                                                                                                     to_copy,
-                                                                                                     now - start_time,
-                                                                                                     copy_count / (now - start_time),
-                                                                                                     remaining_time))
-                last_report_time = now
-        tdata[LENGTH_KEY] = pickle.dumps(idx)
-        kv.bput(tdata)
-
-    except KeyboardInterrupt:
-        pass
-
-    now = time.perf_counter()
-    print('Completed, Copied {} records in {:.2f} seconds.'.format(copy_count,
-                                                                   now - start_time))
+    new_migrate(my_kv)
+    return
 
 if __name__ == '__main__':
     main()
