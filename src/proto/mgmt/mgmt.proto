@@ -68,6 +68,8 @@ service MgmtSvc {
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
 	// Exclude a pool target.
 	rpc PoolExclude(PoolExcludeReq) returns (PoolExcludeResp) {}
+	// Extend a pool.
+	rpc PoolExtend(PoolExtendReq) returns (PoolExtendResp) {}
 	// Reintegrate a pool target.
 	rpc PoolReintegrate(PoolReintegrateReq) returns (PoolReintegrateResp) {}
 	// PoolQuery queries a DAOS pool.

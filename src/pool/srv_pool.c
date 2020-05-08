@@ -3019,15 +3019,15 @@ ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 		uint32_t rank, struct pool_target_id_list *target_list,
 		pool_comp_state_t state)
 {
-	int							rc;
-	struct rsvc_client			client;
-	crt_endpoint_t				ep;
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
 	struct dss_module_info		*info = dss_get_module_info();
-	crt_rpc_t					*rpc;
+	crt_rpc_t			*rpc;
 	struct pool_target_addr_list	list;
-	struct pool_add_in			*in;
-	struct pool_add_out			*out;
-	crt_opcode_t				opcode;
+	struct pool_add_in		*in;
+	struct pool_add_out		*out;
+	crt_opcode_t			opcode;
 	int i = 0;
 
 	rc = rsvc_client_init(&client, ranks);

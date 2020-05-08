@@ -48,6 +48,7 @@ type PoolCmd struct {
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
 	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
 	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude a list of targets from a rank"`
+	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
 	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate a list of targets for a rank"`
 	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
@@ -187,6 +188,74 @@ func (r *PoolExcludeCmd) Execute(args []string) error {
 	}
 
 	r.log.Infof("Exclude command %s\n", msg)
+
+	return err
+}
+
+// PoolExtendCmd is the struct representing the command to Extend a DAOS pool.
+type PoolExtendCmd struct {
+	logCmd
+	ctlInvokerCmd
+	UUID  string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
+	Ranks string `long:"ranks" required:"1" description:"Comma-seperated list of ranks to add to the pool"`
+	// Everything after this needs to be removed when pool info can be fetched
+	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
+	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
+	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
+	ScmSize    string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
+	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
+	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
+	// END TEMPORARY SECTION
+}
+
+// Execute is run when PoolExtendCmd subcommand is activated
+func (e *PoolExtendCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	var ranklist []uint32
+	if err := common.ParseNumberList(e.Ranks, &ranklist); err != nil {
+		return errors.WithMessage(err, "parsing ranks list")
+	}
+
+	// Everything below this needs to be removed once Pool Info can be fetched
+
+	scmBytes, err := humanize.ParseBytes(e.ScmSize)
+	if err != nil {
+		return errors.Wrap(err, "pool SCM size")
+	}
+
+	var nvmeBytes uint64
+	if e.NVMeSize != "" {
+		nvmeBytes, err = humanize.ParseBytes(e.NVMeSize)
+		if err != nil {
+			return errors.Wrap(err, "pool NVMe size")
+		}
+	}
+
+	var acl *control.AccessControlList
+	if e.ACLFile != "" {
+		acl, err = control.ReadACLFile(e.ACLFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	req := &control.PoolExtendReq{
+		UUID: e.UUID, Ranks: ranklist,
+		ScmBytes: scmBytes, NvmeBytes: nvmeBytes, Sys: e.Sys,
+		User: e.UserName, UserGroup: e.GroupName, ACL: acl,
+	}
+	// END TEMP SECTION
+
+	ctx := context.Background()
+	err = control.PoolExtend(ctx, e.ctlInvoker, req)
+
+
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	e.log.Infof("Extend command %s\n", msg)
 
 	return err
 }
