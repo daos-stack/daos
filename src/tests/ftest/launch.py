@@ -445,7 +445,7 @@ def get_test_list(tags):
             test_list.append(tag)
         else:
             # Otherwise it is assumed that this is a tag
-            test_tags.extend([" --filter-by-tags", str(tag)])
+            test_tags.extend(["--filter-by-tags", str(tag)])
 
     # Add to the list of tests any test that matches the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
