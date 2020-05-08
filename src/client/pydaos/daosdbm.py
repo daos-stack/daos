@@ -5,9 +5,7 @@
 import os
 import sys
 import json
-import time
 import pickle
-import dbm.gnu
 
 def load_conf():
     """Load the build config file"""
@@ -31,20 +29,16 @@ class daos_named_kv():
     """Named KV generator"""
 
     def __init__(self, transport, interface, puid, cuid):
-        try:
-            conf = load_conf()
-            if sys.version_info.major < 3:
-                pydir = 'python{}.{}'.format(
-                    sys.version_info.major, sys.version_info.minor)
-            else:
-                pydir = 'python{}'.format(sys.version_info.major)
-
-                sys.path.append(os.path.join(conf['PREFIX'],
-                                             'lib64',
-                                             pydir,
-                                             'site-packages'))
-        except Exception:
-            print("Exception in class daos_named_kv.")
+        conf = load_conf()
+        if sys.version_info.major < 3:
+            pydir = 'python{}.{}'.format(
+                sys.version_info.major, sys.version_info.minor)
+        else:
+            pydir = 'python{}'.format(sys.version_info.major)
+            sys.path.append(os.path.join(conf['PREFIX'],
+                                         'lib64',
+                                         pydir,
+                                         'site-packages'))
 
         if 'CRT_PHY_ADDR_STR' not in os.environ:
             os.environ['CRT_PHY_ADDR_STR'] = transport
