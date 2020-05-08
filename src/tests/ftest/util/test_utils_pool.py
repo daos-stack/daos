@@ -41,11 +41,6 @@ from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
-    # Constants to define whether to use API or dmg to create and destroy
-    # pool.
-    USE_API = "API"
-    USE_DMG = "dmg"
-
     def __init__(self, context, log=None, cb_handler=None, dmg_command=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
@@ -76,10 +71,6 @@ class TestPool(TestDaosApiBase):
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)      # name of property to be set
         self.prop_value = BasicParameter(None)     # value of property
-
-        # Set USE_API to use API or USE_DMG to use dmg. If it's not set, API is
-        # used.
-        self.control_method = BasicParameter(self.USE_API, self.USE_API)
 
         self.pool = None
         self.uuid = None
