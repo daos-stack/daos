@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.9.4
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -75,10 +75,6 @@ BuildRequires: libcurl4
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1, libpmemobj1
 %endif
-Requires: fuse3 >= 3.4.2
-# because our repo has a deprecated fuse-3.x RPM, make sure we don't
-# get it when fuse3 Requires: /etc/fuse.conf
-Requires: fuse < 3, fuse3-libs >= 3.4.2
 Requires: protobuf-c
 Requires: spdk >= %{spdk_version}, spdk < 20
 Requires: openssl
@@ -118,6 +114,10 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
+Requires: fuse3 >= 3.4.2
+# because our repo has a deprecated fuse-3.x RPM, make sure we don't
+# get it when fuse3 Requires: /etc/fuse.conf
+Requires: fuse < 3, fuse3-libs >= 3.4.2
 
 %description client
 This is the package needed to run a DAOS client
@@ -317,6 +317,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Wed May 06 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.4-2
+- Move fuse dependencies to the client subpackage
+
 * Mon May 04 2020 Johann Lombardi <johann.lombardi@intel.com> - 0.9.4-1
 - Version bump up to 0.9.4
 
