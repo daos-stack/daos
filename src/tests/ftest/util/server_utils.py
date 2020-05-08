@@ -666,7 +666,7 @@ class ServerManager(ExecutableCommand):
 
     def server_clean(self):
         """Prepare the hosts before starting daos server."""
-        # Kill any doas servers running on the hosts
+        # Kill any daos servers running on the hosts
         self.kill()
         # Clean up any files that exist on the hosts
         self.clean_files()

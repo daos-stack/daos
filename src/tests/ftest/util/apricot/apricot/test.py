@@ -32,7 +32,6 @@ import re
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail
-from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
 import fault_config_utils
@@ -45,6 +44,7 @@ from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from env_modules import load_mpi
 from distutils.spawn import find_executable
 from dmg_utils import DmgCommand
+from general_utils import DaosTestError, run_command
 from test_utils_pool import TestPool
 
 
@@ -513,10 +513,9 @@ class TestWithServers(TestWithoutServers):
         partiton_name = self.params.get(partition_key, "/run/hosts/*")
         if partiton_name is not None:
             cmd = "scontrol show partition {}".format(partiton_name)
-
             try:
-                result = process.run(cmd, shell=True, timeout=10)
-            except process.CmdError as error:
+                result = run_command(cmd, timeout=10)
+            except DaosTestError as error:
                 self.log.warning(
                     "Unable to obtain hosts from the {} slurm "
                     "partition: {}".format(partiton_name, error))
