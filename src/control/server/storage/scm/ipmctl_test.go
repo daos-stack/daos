@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,10 +73,21 @@ func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
 type mockIpmctl struct {
 	discoverModulesRet error
 	modules            []ipmctl.DeviceDiscovery
+	getFWInfoRet       error
+	fwInfo             ipmctl.DeviceFirmwareInfo
+	updateFirmwareRet  error
 }
 
 func (m *mockIpmctl) Discover() ([]ipmctl.DeviceDiscovery, error) {
 	return m.modules, m.discoverModulesRet
+}
+
+func (m *mockIpmctl) GetFirmwareInfo(uid ipmctl.DeviceUID) (ipmctl.DeviceFirmwareInfo, error) {
+	return m.fwInfo, m.getFWInfoRet
+}
+
+func (m *mockIpmctl) UpdateFirmware(uid ipmctl.DeviceUID, fwPath string, force bool) error {
+	return m.updateFirmwareRet
 }
 
 // TestGetState tests the internals of ipmCtlRunner, pass in mock runCmd to verify

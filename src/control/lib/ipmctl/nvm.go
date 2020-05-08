@@ -50,8 +50,10 @@ type IpmCtl interface {
 	//SetRegion(...)
 	// Discover persistent memory modules
 	Discover() ([]DeviceDiscovery, error)
+	// Get firmware information from persistent memory modules
+	GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error)
 	// Update persistent memory module firmware
-	//Update(...)
+	UpdateFirmware(uid DeviceUID, fwPath string, force bool) error
 	// Cleanup persistent memory references
 	//Cleanup()
 }
@@ -99,21 +101,41 @@ func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
 // TODO: print human readable error with provided lib macros
 func Rc2err(label string, rc C.int) error {
 	if rc != C.NVM_SUCCESS {
-		// e := errors.Error(C.NVDIMM_ERR_W(FORMAT_STR_NL, rc))
-		return fmt.Errorf("%s: rc=%d", label, int(rc)) // e
+		return fmt.Errorf("%s: rc=%d", label, int(rc))
 	}
 	return nil
 }
 
-// example unit test from NVM API source
-//TEST_F(NvmApi_Tests, GetDeviceStatus)
-//{
-//  unsigned int dimm_cnt = 0;
-//  nvm_get_number_of_devices(&dimm_cnt);
-//  device_discovery *p_devices = (device_discovery *)malloc(sizeof(device_discovery) * dimm_cnt);
-//  nvm_get_devices(p_devices, dimm_cnt);
-//  device_status *p_status = (device_status *)malloc(sizeof(device_status));
-//  EXPECT_EQ(nvm_get_device_status(p_devices->uid, p_status), NVM_SUCCESS);
-//  free(p_status);
-//  free(p_devices);
-//}
+// GetFirmwareInfo fetches the firmware revision and other information from the device
+func (n *NvmMgmt) GetFirmwareInfo(uid DeviceUID) (fw DeviceFirmwareInfo, err error) {
+	cUID := C.CString(uid.String())
+	cInfo := new(C.struct_device_fw_info)
+
+	if err = Rc2err(
+		"get_device_fw_info",
+		C.nvm_get_device_fw_image_info(cUID, cInfo)); err != nil {
+		return
+	}
+
+	fw = *(*DeviceFirmwareInfo)(unsafe.Pointer(cInfo))
+	return
+}
+
+// UpdateFirmware updates the firmware on the device
+func (n *NvmMgmt) UpdateFirmware(uid DeviceUID, fwPath string, force bool) error {
+	cUID := C.CString(uid.String())
+	cPath := C.CString(fwPath)
+	cPathLen := C.ulong(len(fwPath))
+	var cForce C.uchar
+	if force {
+		cForce = 1
+	}
+
+	if err := Rc2err(
+		"update_device_fw",
+		C.nvm_update_device_fw(cUID, cPath, cPathLen, cForce)); err != nil {
+		return err
+	}
+
+	return nil
+}

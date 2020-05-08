@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,36 +25,75 @@ package ipmctl
 
 import (
 	"fmt"
+	"os/user"
 	"testing"
 )
 
-func checkFailure(shouldSucceed bool, err error) (rErr error) {
-	switch {
-	case err != nil && shouldSucceed:
-		rErr = fmt.Errorf("expected test to succeed, failed unexpectedly: %v", err)
-	case err == nil && !shouldSucceed:
-		rErr = fmt.Errorf("expected test to fail, succeeded unexpectedly")
+// NVM API calls will fail if not run as root. We should just skip the tests.
+func skipNoPerms(t *testing.T) {
+	t.Helper()
+	u, err := user.Current()
+	if err != nil {
+		t.Fatalf("can't determine current user: %v", err)
 	}
-
-	return
+	if u.Uid != "0" {
+		// Alert the user even if they're not running the tests in verbose mode
+		fmt.Printf("%s must be run as root\n", t.Name())
+		t.Skip("test doesn't have NVM API permissions")
+	}
 }
 
-func TestNvm(t *testing.T) {
-	tests := []struct {
-		lib           string
-		shouldSucceed bool
-	}{
-		{
-			shouldSucceed: true,
-		},
+// Fetch all devices in the system - and skip the test if there are none
+func getDevices(t *testing.T, mgmt NvmMgmt) []DeviceDiscovery {
+	t.Helper()
+
+	devs, err := mgmt.Discover()
+	if err != nil {
+		t.Fatalf("Discovery failed: %s", err.Error())
 	}
 
-	for range tests {
-		_ = NvmMgmt{}
-		// TODO
-		//_, err := nm.Discover()
-		//if err != nil {
-		//	t.Fatal(err.Error())
-		//}
+	if len(devs) == 0 {
+		t.Skip("no NVM devices on system")
+	}
+
+	return devs
+}
+
+func TestNvmDiscovery(t *testing.T) {
+	skipNoPerms(t)
+
+	mgmt := NvmMgmt{}
+	_, err := mgmt.Discover()
+	if err != nil {
+		t.Fatalf("Discovery failed: %s", err.Error())
+	}
+}
+
+func TestNvmFwInfo(t *testing.T) {
+	skipNoPerms(t)
+
+	mgmt := NvmMgmt{}
+	devs := getDevices(t, mgmt)
+
+	for _, d := range devs {
+		fwInfo, err := mgmt.GetFirmwareInfo(d.Uid)
+		if err != nil {
+			t.Errorf("Failed to get FW info for device %s: %v", d.Uid.String(), err)
+			continue
+		}
+
+		fmt.Printf("Device %s: %+v\n", d.Uid.String(), fwInfo)
+	}
+}
+
+func TestNvmFwUpdate(t *testing.T) {
+	skipNoPerms(t)
+
+	mgmt := NvmMgmt{}
+	devs := getDevices(t, mgmt)
+
+	for _, d := range devs {
+		err := mgmt.UpdateFirmware(d.Uid, "", false)
+		fmt.Printf("Update firmware for device %s: %v\n", d.Uid.String(), err)
 	}
 }
