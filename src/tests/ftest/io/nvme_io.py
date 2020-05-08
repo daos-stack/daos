@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
+import time
 
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
@@ -92,6 +93,7 @@ class NvmeIo(IorTestBase):
                 self.verify_pool_size(size_before_ior, ior_param[4])
 
                 errors = self.destroy_pools(self.pool)
+                time.sleep(20)
                 if errors:
                     self.fail(
                         "Errors detected during destroy pool:\n  - {}".format(
