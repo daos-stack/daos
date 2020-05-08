@@ -1364,6 +1364,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.totaltargets = pool_info.pi_ntargets;
 	resp.disabledtargets = pool_info.pi_ndisabled;
 	resp.activetargets = pool_info.pi_space.ps_ntargets;
+	resp.totalnodes = pool_info.pi_nnodes;
+	resp.leader = pool_info.pi_leader;
+	resp.version = pool_info.pi_map_ver;
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
 					    DAOS_MEDIA_SCM);
