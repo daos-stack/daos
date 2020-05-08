@@ -23,8 +23,6 @@
 """
 from __future__ import print_function
 
-import os
-
 from apricot import TestWithServers
 from agent_utils import include_local_host
 from command_utils_base import CommandFailure
@@ -67,7 +65,7 @@ class DaosAgentConfigTest(TestWithServers):
         self.log.info("Starting agent with %s = %s", c_val[0], c_val[1])
 
         try:
-            self.start_agent_managers[-1].start()
+            self.agent_managers[-1].start()
             exception = None
         except CommandFailure as err:
             exception = err
