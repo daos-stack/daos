@@ -2142,16 +2142,15 @@ class DaosSnapshot(object):
         self.name = name            # currently unused
         self.epoch = 0
 
-    def create(self, coh, epoch):
+    def create(self, coh):
         """Send a snapshot creation request.
 
         Store the info in the DaosSnapshot object.
 
         coh     --ctype.u_long handle on an open container
-        epoch   --the epoch number of the obj to be snapshotted
         """
         func = self.context.get_function('create-snap')
-        epoch = ctypes.c_uint64(epoch)
+        epoch = ctypes.c_uint64(self.epoch)
         retcode = func(coh, ctypes.byref(epoch), None, None)
         self.epoch = epoch.value
         if retcode != 0:
