@@ -427,7 +427,8 @@ class ExecutableCommand(CommandWithParameters):
                     self._process.send_signal(signal_type)
                 if signal_list:
                     time.sleep(1)
-            if not signal_list:
+            # Do not consider a lingering orterun process to be a test error.
+            if not signal_list and self._command != "orterun":
                 # Indicate an error if the process required a SIGKILL
                 raise CommandFailure("Error stopping '{}'".format(self))
             self._process = None
