@@ -64,7 +64,7 @@ class DaosServerCommand(YamlCommand):
         # -J, --json-logging Enable JSON logging
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
-        self.json = FormattedParameter("--json", False)
+        self.json_logs = FormattedParameter("--json-logging", False)
         self.config = FormattedParameter("--config={}", default_yaml_file)
 
         # Additional daos_server command line parameters:

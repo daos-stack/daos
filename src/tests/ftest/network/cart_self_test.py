@@ -29,6 +29,7 @@ from command_utils_base import \
     EnvironmentVariables, FormattedParameter, CommandFailure
 from command_utils import ExecutableCommand
 from job_manager_utils import Orterun
+from general_utils import get_log_file
 
 
 class SelfTest(ExecutableCommand):
@@ -102,8 +103,8 @@ class CartSelfTest(TestWithServers):
 
         # Generate a uri file using daos_agent dump-attachinfo
         attachinfo_file = "{}.attach_info_tmp".format(self.server_group)
-        self.uri_file = os.path.join(self.tmp, attachinfo_file)
-        agent_cmd = self.agent_managers[0].daos_agent
+        self.uri_file = get_log_file(attachinfo_file)
+        agent_cmd = self.agent_managers[0].manager.job
         agent_cmd.dump_attachinfo(self.uri_file)
 
 
@@ -113,17 +114,18 @@ class CartSelfTest(TestWithServers):
         :avocado: tags=all,pr,smoke,unittest,tiny,cartselftest
         """
         # Setup the orterun command
-        self_test = SelfTest(os.path.join(self.prefix, "bin"))
-        orterun = Orterun(self_test)
+        orterun = Orterun(SelfTest(self.bin))
         orterun.map_by.update(None, "orterun/map_by")
         orterun.enable_recovery.update(False, "orterun/enable_recovery")
 
         # Get the self_test command line parameters
         orterun.job.get_params(self)
-        orterun.job.group_name.update(self.server_group)
+        orterun.job.group_name.update(self.server_group, "group_name")
         orterun.job.message_sizes.update(
-            self.params.get("size", "/run/muxtestparams/message_size/*")[0])
-        orterun.job.attach_info.update(self.tmp)
+            self.params.get("size", "/run/muxtestparams/message_size/*")[0],
+            "message_sizes")
+        orterun.job.attach_info.update(
+            os.path.dirname(self.uri_file), "attach_info")
 
         # Setup the environment variables for the self_test orterun command
         orterun.assign_environment(self.cart_env)

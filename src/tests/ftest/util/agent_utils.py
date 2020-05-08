@@ -49,7 +49,7 @@ def include_local_host(hosts):
 
 
 class DaosAgentCommand(YamlCommand):
-    """Defines an object representing a daso_agent command."""
+    """Defines an object representing a daos_agent command."""
 
     def __init__(self, path="", yaml_cfg=None, timeout=30):
         """Create a daos_agent command object.
@@ -75,7 +75,7 @@ class DaosAgentCommand(YamlCommand):
         # -J, --json-logging Enable JSON logging
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
-        self.json = FormattedParameter("--json", False)
+        self.json_logs = FormattedParameter("--json-logging", False)
         self.config = FormattedParameter("--config-path={}", default_yaml_file)
 
         # Additional daos_agent command line parameters:
@@ -114,11 +114,11 @@ class DaosAgentCommand(YamlCommand):
 
             self.output = FormattedParameter("--output {}", None)
 
-    def dump_attachinfo(self, path="uri.txt"):
+    def dump_attachinfo(self, output="uri.txt"):
         """Write CaRT attachinfo file
 
         Args:
-            path (str): Path to attachinfo file.
+            output (str): File to which attachinfo dump should be written.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -129,12 +129,8 @@ class DaosAgentCommand(YamlCommand):
 
         """
         self.set_sub_command("dump-attachinfo")
-        self.sub_command_class.output.value = path
-        try:
-            return self.run()
-        except CommandFailure as error:
-            raise CommandFailure(
-                "<daos_agent> dump-attachinfo failed: {}".format(error))
+        self.sub_command_class.output.value = output
+        return self._get_result()
 
 
 class DaosAgentManager(SubprocessManager):
@@ -157,7 +153,6 @@ class DaosAgentManager(SubprocessManager):
             "DD_MASK": "mgmt,io,md,epc,rebuild"
         }
         self.manager.assign_environment_default(EnvironmentVariables(env_vars))
-        self.daos_agent = agent_command
 
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
