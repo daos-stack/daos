@@ -113,8 +113,7 @@ fake_tx_status_get(struct umem_instance *umm, uint32_t tx_id,
 
 	assert_true(tx_id >= DTX_LID_RESERVED);
 
-	found = lrua_lookupx(array, tx_id - DTX_LID_RESERVED, epoch,
-			     (void **)&entry);
+	found = lrua_lookupx(array, tx_id - DTX_LID_RESERVED, epoch, &entry);
 
 	if (found == false)
 		return ILOG_COMMITTED;
@@ -169,8 +168,10 @@ fake_tx_log_add(struct umem_instance *umm, umem_off_t offset, uint32_t *tx_id,
 	struct lru_array	*array = args;
 	struct fake_tx_entry	*entry;
 	uint32_t		 idx;
+	int			 rc;
 
-	entry = lrua_allocx(array, &idx, epoch);
+	rc = lrua_allocx(array, &idx, epoch, &entry);
+	assert_int_equal(rc, 0);
 	assert_non_null(entry);
 
 	entry->tx_id = idx;
@@ -195,8 +196,7 @@ fake_tx_log_del(struct umem_instance *umm, umem_off_t offset, uint32_t tx_id,
 	if (tx_id < DTX_LID_RESERVED)
 		return 0;
 
-	found = lrua_lookupx(array, tx_id - DTX_LID_RESERVED, epoch,
-			     (void **)&entry);
+	found = lrua_lookupx(array, tx_id - DTX_LID_RESERVED, epoch, &entry);
 	assert_true(found);
 	if (entry->root_off != offset) {
 		print_message("Mismatched ilog root "DF_U64"!="

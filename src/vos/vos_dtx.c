@@ -672,10 +672,12 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 	cont_df = cont->vc_cont_df;
 	dth->dth_gen = cont->vc_dtx_resync_gen;
 
-	dae = lrua_allocx(cont->vc_dtx_array, &idx, dth->dth_epoch);
-	if (dae == NULL) {
+	rc = lrua_allocx(cont->vc_dtx_array, &idx, dth->dth_epoch, &dae);
+	if (rc != 0) {
 		/** The array is full, need to commit some transactions first */
-		return -DER_INPROGRESS;
+		if (rc == -DER_BUSY)
+			return -DER_INPROGRESS;
+		return rc;
 	}
 
 	dbd = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
@@ -827,7 +829,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 	D_ASSERT(cont != NULL);
 
 	found = lrua_lookupx(cont->vc_dtx_array, entry - DTX_LID_RESERVED,
-			     epoch, (void **)&dae);
+			     epoch, &dae);
 
 	if (!found) {
 		/** If we move to not marking entries explicitly, this
@@ -985,7 +987,7 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 		return;
 
 	found = lrua_lookupx(cont->vc_dtx_array, entry - DTX_LID_RESERVED,
-			     epoch, (void **)&dae);
+			     epoch, &dae);
 	if (!found) {
 		D_WARN("Could not find active DTX record for lid=%d, epoch="
 		       DF_U64"\n", entry, epoch);
@@ -1594,13 +1596,21 @@ vos_dtx_act_reindex(struct vos_container *cont)
 					" is invalid\n", dae_df->dae_lid);
 				D_GOTO(out, rc = -DER_IO);
 			}
-			dae = lrua_allocx_inplace(cont->vc_dtx_array,
-					  dae_df->dae_lid - DTX_LID_RESERVED,
-					  dae_df->dae_epoch);
-			if (dae == NULL) {
-				D_ERROR("Corruption in DTX table found, lid=%d"
-					" is invalid\n", dae_df->dae_lid);
-				D_GOTO(out, rc = -DER_IO);
+			rc = lrua_allocx_inplace(cont->vc_dtx_array,
+					 dae_df->dae_lid - DTX_LID_RESERVED,
+					 dae_df->dae_epoch, &dae);
+			if (rc != 0) {
+				if (rc == -DER_NOMEM) {
+					D_ERROR("Not enough memory for DTX "
+						"table\n");
+				} else {
+					D_ERROR("Corruption in DTX table found,"
+						" lid=%d is invalid rc="DF_RC
+						"\n", dae_df->dae_lid,
+						DP_RC(rc));
+					rc = -DER_IO;
+				}
+				D_GOTO(out, rc);
 			}
 			D_ASSERT(dae != NULL);
 
@@ -1729,8 +1739,9 @@ out:
 }
 
 void
-vos_dtx_cleanup_dth(struct vos_container *cont, struct dtx_handle *dth)
+vos_dtx_cleanup_dth(struct dtx_handle *dth)
 {
+	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae;
 	d_iov_t			 kiov;
 	int			 rc;
@@ -1738,11 +1749,12 @@ vos_dtx_cleanup_dth(struct vos_container *cont, struct dtx_handle *dth)
 	if (dth == NULL || !dth->dth_actived)
 		return;
 
+	cont = vos_hdl2cont(dth->dth_coh);
+
 	if (!dth->dth_solo) {
 		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
-		rc = dbtree_delete(
-				vos_hdl2cont(dth->dth_coh)->vc_dtx_active_hdl,
-				BTR_PROBE_EQ, &kiov, &dae);
+		rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov,
+				   &dae);
 		if (rc != 0)
 			D_ERROR(DF_UOID" failed to remove DTX entry "
 				DF_DTI": rc = "DF_RC"\n", DP_UOID(dth->dth_oid),

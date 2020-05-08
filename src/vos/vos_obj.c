@@ -291,7 +291,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 reset:
 	if (rc != 0) {
-		vos_dtx_cleanup_dth(cont, dth);
+		vos_dtx_cleanup_dth(dth);
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
 	}

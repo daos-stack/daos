@@ -351,7 +351,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
  * Cleanup DTX handle (in DRAM things) when related PMDK transaction failed.
  */
 void
-vos_dtx_cleanup_dth(struct vos_container *cont, struct dtx_handle *dth);
+vos_dtx_cleanup_dth(struct dtx_handle *dth);
 
 /** Return the already active dtx id, if any */
 uint32_t

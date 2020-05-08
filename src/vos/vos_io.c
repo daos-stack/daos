@@ -1623,7 +1623,7 @@ abort:
 	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
 out:
 	if (err != 0) {
-		vos_dtx_cleanup_dth(ioc->ic_cont, dth);
+		vos_dtx_cleanup_dth(dth);
 		update_cancel(ioc);
 	}
 
