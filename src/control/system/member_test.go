@@ -49,6 +49,7 @@ func mockMember(t *testing.T, idx uint32, state MemberState) *Member {
 func TestMember_Stringify(t *testing.T) {
 	states := []MemberState{
 		MemberStateUnknown,
+		MemberStateAwaitFormat,
 		MemberStateStarting,
 		MemberStateReady,
 		MemberStateJoined,
@@ -61,6 +62,7 @@ func TestMember_Stringify(t *testing.T) {
 
 	strs := []string{
 		"Unknown",
+		"AwaitFormat",
 		"Starting",
 		"Ready",
 		"Joined",
@@ -99,7 +101,7 @@ func TestMember_AddRemove(t *testing.T) {
 			},
 			nil,
 			nil,
-			[]error{nil, FaultMemberExists},
+			[]error{nil, FaultMemberExists(mockMember(t, 1, MemberStateUnknown))},
 		},
 		"remove non-existent": {
 			Members{
@@ -343,7 +345,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 	}
 	expStates := []MemberState{
 		MemberStateStopped,
-		MemberStateErrored,
+		MemberStateStopped, // errored results don't change member state
 		MemberStateEvicted,
 		MemberStateJoined,
 	}
