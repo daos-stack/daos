@@ -767,6 +767,7 @@ dss_xstreams_fini(bool force)
 	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
+	dss_xstreams_open_barrier();
 
 	/** Stop & free progress ULTs */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
