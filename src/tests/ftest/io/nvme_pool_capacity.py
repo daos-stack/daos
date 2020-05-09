@@ -225,10 +225,10 @@ class NvmePoolCapacity(TestWithServers):
                 thrd.join()
 
             # Verify the queue and make sure no FAIL for any IOR run
-            # For 400G/800G, test should fail with ENOSPC.
+            # Test should fail with ENOSPC.
             while not self.out_queue.empty():
-                if self.out_queue.get() == "FAIL" and \
-                   test[4] == "PASS":
+                if (self.out_queue.get() == "FAIL" and test[4] == "PASS") \
+                     or (self.out_queue.get() != "FAIL" and test[4] == "FAIL"):
                     self.fail("FAIL")
 
             for val in range(0, num_pool):
