@@ -186,6 +186,8 @@ test_args_init(struct io_test_args *args,
 	}
 	snprintf(args->fname, VTS_BUF_SIZE, "/mnt/daos/vpool.test_%x",
 		 init_ofeats);
+
+
 }
 
 void
@@ -200,8 +202,14 @@ static struct io_test_args	test_args;
 int
 setup_io(void **state)
 {
+	struct vos_ts_table	*table;
+
 	srand(time(NULL));
 	test_args_init(&test_args, VPOOL_SIZE);
+
+	table = vos_ts_table_get();
+	if (table == NULL)
+		return -1;
 
 	*state = &test_args;
 	return 0;
@@ -210,7 +218,19 @@ setup_io(void **state)
 int
 teardown_io(void **state)
 {
-	struct io_test_args *arg = *state;
+	struct io_test_args	*arg = *state;
+	struct vos_ts_table	*table = vos_ts_table_get();
+	int			 rc;
+
+	if (table) {
+		vos_ts_table_free(&table);
+		rc = vos_ts_table_alloc(&table);
+		if (rc != 0) {
+			printf("Fatal error, table couldn't be reallocated\n");
+			exit(rc);
+		}
+		vos_ts_table_set(table);
+	}
 
 	if (arg == NULL) {
 		print_message("state not set, likely due to group-setup"
@@ -2445,7 +2465,7 @@ static const struct CMUnitTest int_tests[] = {
 };
 
 int
-run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators)
+run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators, const char *cfg)
 {
 	char buf[VTS_BUF_SIZE];
 	const char *akey = "hashed";
@@ -2474,8 +2494,8 @@ run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators)
 	if (feats & DAOS_OF_AKEY_LEXICAL)
 		akey = "lex";
 
-	snprintf(buf, VTS_BUF_SIZE, "#. VOS IO tests (dkey=%-6s akey=%s)",
-		 dkey, akey);
+	snprintf(buf, VTS_BUF_SIZE, "# VOS IO tests (dkey=%-6s akey=%s) %s",
+		 dkey, akey, cfg);
 	init_ofeats = feats;
 	if (keys)
 		init_num_keys = keys;

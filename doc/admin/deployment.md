@@ -318,7 +318,7 @@ transport_config:
 ```
 
 ```yaml
-# /etc/daos/daos.yml (dmg/admin)
+# /etc/daos/daos_control.yml (dmg/admin)
 
 transport_config:
   # Custom CA Root certificate for generated certs
