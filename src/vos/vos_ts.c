@@ -206,8 +206,8 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 			miss_cursor += info->ti_count * miss_size;
 		}
 
-		rc = lrua_array_alloc(&info->ti_array, info->ti_count,
-				      sizeof(struct vos_ts_entry), &lru_cbs,
+		rc = lrua_array_alloc(&info->ti_array, info->ti_count, 1,
+				      sizeof(struct vos_ts_entry), 0, &lru_cbs,
 				      info);
 		if (rc != 0)
 			goto cleanup;
@@ -252,8 +252,7 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
 	uint32_t		*neg_idx;
 
-	entry = lrua_alloc(ts_table->tt_type_info[type].ti_array, idx,
-			   true);
+	entry = lrua_alloc(ts_table->tt_type_info[type].ti_array, idx);
 
 	if (parent == NULL) {
 		/** Use global timestamps for the type to initialize it */

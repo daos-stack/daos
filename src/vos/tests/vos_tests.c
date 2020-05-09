@@ -87,8 +87,14 @@ run_all_tests(int keys, bool nest_iterators)
 	int		 i;
 	int		 j;
 
-	if (!bypass)
+	if (!bypass) {
+		if (!nest_iterators) {
+			create_config(cfg_desc_io, "keys=%d", keys);
+			failed += run_ts_tests(cfg_desc_io);
+			failed += run_mvcc_tests(cfg_desc_io);
+		}
 		bypass = "none";
+	}
 
 	create_config(cfg_desc_io, "keys=%d bypass=%s", keys, bypass);
 
@@ -102,7 +108,6 @@ run_all_tests(int keys, bool nest_iterators)
 		failed += run_dtx_tests(cfg_desc_io);
 		failed += run_ilog_tests(cfg_desc_io);
 		failed += run_csum_extent_tests(cfg_desc_io);
-		failed += run_mvcc_tests(cfg_desc_io);
 
 		it = "standalone";
 	} else {
