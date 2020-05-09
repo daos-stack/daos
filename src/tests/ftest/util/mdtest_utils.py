@@ -195,11 +195,10 @@ class MdtestCommand(ExecutableCommand):
         """
         env = self.get_environment(None, log_file)
         env["MPI_LIB"] = "\"\""
-        env["FI_PSM2_DISCONNECT"] = 1
+        env["FI_PSM2_DISCONNECT"] = "1"
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             env["DAOS_POOL"] = self.dfs_pool_uuid.value
             env["DAOS_SVCL"] = self.dfs_svcl.value
-            env["FI_PSM2_DISCONNECT"] = 1
 
         return env
