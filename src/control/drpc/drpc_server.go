@@ -89,6 +89,7 @@ func (d *DomainSocketServer) Listen() {
 	for {
 		conn, err := d.listener.Accept()
 		if err != nil {
+			// If we're shutting down anyhow, don't print connection errors.
 			if d.ctx.Err() == nil {
 				d.log.Errorf("%s: failed to accept connection: %v", d.sockFile, err)
 			}

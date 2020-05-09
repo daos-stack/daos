@@ -364,7 +364,7 @@ func TestControl_GetAttachInfo(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
-				t.Fatalf("unexpected ACL (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected AttachInfo (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

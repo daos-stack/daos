@@ -167,7 +167,6 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 				return err
 			}
 			defer f.Close()
-			log.Infof("Using logfile: %s", cfg.LogFile)
 
 			// Create an additional set of loggers which append everything
 			// to the specified file.
