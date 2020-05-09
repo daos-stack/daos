@@ -377,15 +377,13 @@ class SoakTestBase(TestWithServers):
         datasize = len(data_pattern) + 1
         dkey = "dkey"
         akey = "akey"
-        tx_handle = container.container.get_new_tx()
         obj = container.container.write_an_obj(
-            data_pattern, datasize, dkey, akey, obj_cls=obj_cls, txn=tx_handle)
-        container.container.commit_tx(tx_handle)
+            data_pattern, datasize, dkey, akey, obj_cls=obj_cls)
         obj.close()
         # Take a snapshot of the container
         snapshot = DaosSnapshot(self.context)
         try:
-            snapshot.create(container.container.coh, tx_handle)
+            snapshot.create(container.container.coh)
         except (RuntimeError, TestFail, DaosApiError) as error:
             self.log.error("Snapshot failed", exc_info=error)
             status &= False

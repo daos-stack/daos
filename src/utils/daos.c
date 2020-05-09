@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -537,6 +537,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
 		case 'G':
+			D_FREE(ap->sysname);
 			D_STRNDUP(ap->sysname, optarg, strlen(optarg));
 			if (ap->sysname == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
@@ -735,6 +736,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	/* Verify pool svc provided */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
+	D_FREE(cmdname);
 	return 0;
 
 out_free:
@@ -1338,6 +1340,10 @@ main(int argc, char *argv[])
 
 	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
 	d_rank_list_free(dargs.mdsrv);
+
+	D_FREE(dargs.mdsrv_str);
+	D_FREE(dargs.sysname);
+	D_FREE(dargs.path);
 
 	daos_fini();
 
