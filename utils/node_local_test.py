@@ -32,6 +32,11 @@ class NLT_Conf():
         self.output_fd = None
 
     def set_output_file(self, filename):
+        """Set the name of a output file for error logging
+
+        This is used to save the lines or src that report issues
+        for use with the Jenkins warnings-ng plugin
+        """
         self.output_fd = open(filename, 'w')
 
     def __getitem__(self, key):
