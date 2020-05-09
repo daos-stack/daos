@@ -178,7 +178,7 @@ class DaosServer():
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
             # TODO: Enable memleak checking when server shutdown works.
-            log_test(self.conf, self._log_file, show_memleaks=False)
+            log_test(self._log_file, show_memleaks=False)
         self.running = False
 
 def il_cmd(dfuse, cmd):
@@ -194,7 +194,7 @@ def il_cmd(dfuse, cmd):
     print('Logged il to {}'.format(log_file.name))
     print(ret)
     print('Log results for il')
-    log_test(dfuse.conf, log_file.name)
+    log_test(log_file.name)
     return ret
 
 def symlink_file(a, b):
@@ -369,7 +369,7 @@ class DFuse():
         except subprocess.TimeoutExpired:
             self._sp.send_signal(signal.SIGTERM)
         self._sp = None
-        log_test(self.conf, self.log_file)
+        log_test(self.log_file)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -444,7 +444,7 @@ def run_daos_cmd(conf, cmd):
     rc = subprocess.run(exec_cmd,
                         stdout=subprocess.PIPE,
                         env=cmd_env)
-    log_test(conf, log_file.name)
+    log_test(log_file.name)
     valgrind.convert_xml()
     return rc
 
@@ -540,7 +540,7 @@ def setup_log_test(conf):
 
     lt.output_file = conf.output_fd
 
-def log_test(conf, filename, show_memleaks=True):
+def log_test(filename, show_memleaks=True):
     """Run the log checker on filename, logging to stdout"""
 
     print('Running log_test on {}'.format(filename))
