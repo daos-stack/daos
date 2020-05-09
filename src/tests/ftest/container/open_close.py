@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from __future__ import print_function
-
 import traceback
 import uuid
 from apricot import TestWithServers
@@ -44,8 +42,8 @@ class OpenClose(TestWithServers):
         self.container = []
         saved_coh = None
 
-        coh_params = self.params.get("coh",
-                                     '/run/container/container_handle/*/')
+        coh_params = self.params.get(
+            "coh", '/run/container/container_handle/*/')
 
         expected_result = coh_params[1]
 
@@ -71,6 +69,8 @@ class OpenClose(TestWithServers):
                 # then close & destroy so handle is invalid
                 self.container.append(DaosContainer(self.context))
                 self.container[1].create(poh)
+                str_cuuid = self.container[1].get_uuid_str()
+                cuuid = uuid.UUID(str_cuuid)
                 self.container[1].open(poh, cuuid, 2, None)
                 coh = self.container[1].coh
                 self.container[1].close()
