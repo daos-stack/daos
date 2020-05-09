@@ -1191,7 +1191,13 @@ pipeline {
                                          referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
-                                         qualityGates: [[threshold: 1, type: 'NEW', unstable: true]],
+					 /* TODO: master is currently not determanistic and
+					 there is one message which appears occasionally
+					 so set the threshold to 2, which will not warn for
+					 stable builds against master, but might miss some
+					 individual issues.
+					 */
+                                         qualityGates: [[threshold: 2, type: 'NEW', unstable: true]],
                                          name: "VM Testing",
                                          tool: clang(pattern: 'vm_test/nlt-errors.out',
                                                      name: 'VM test results',
