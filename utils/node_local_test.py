@@ -52,12 +52,14 @@ class DaosServer():
         self.conf = conf
         self._agent = None
         self.agent_dir = None
+        # Also specified in the yaml file.
+        self._log_file = '/tmp/dnt_server.log'
 
         socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
-        if os.path.exists('/tmp/dnt_server.log'):
-            os.unlink('/tmp/dnt_server.log')
+        if os.path.exists(self._log_file):
+            os.unlink(self._log_file)
 
         self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
         self.agent_dir = self._agent_dir.name
@@ -82,7 +84,6 @@ class DaosServer():
         server_env = os.environ.copy()
         server_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
         server_env['OFI_INTERFACE'] = 'lo'
-        server_env['D_LOG_MASK'] = 'INFO'
         server_env['DD_MASK'] = 'all'
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)
@@ -101,7 +102,7 @@ class DaosServer():
                                         '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
                                        env=agent_env)
-        time.sleep(10)
+        time.sleep(2)
         self.running = True
 
     def stop(self):
@@ -113,11 +114,52 @@ class DaosServer():
 
         if not self._sp:
             return
+
+
+        # daos_server does not correctly shutdown daos_io_server yet
+        # so find and kill daos_io_server directly.  This may cause
+        # a assert in daos_io_server, but at least we can check that.
+        # call daos_io_server, wait, and then call daos_server.
+        # When parsing the server logs do not report on memory leaks
+        # yet, as if it fails then lots of memory won't be freed and
+        # it's not helpful at this stage to report that.
+        # TODO: Remove this block when daos_server shutdown works.
+        parent_pid = self._sp.pid
+        for proc_id in os.listdir('/proc/'):
+            if proc_id == 'self':
+                continue
+            status_file = '/proc/{}/status'.format(proc_id)
+            if not os.path.exists(status_file):
+                continue
+            fd = open(status_file, 'r')
+            this_proc = False
+            for line in fd.readlines():
+                try:
+                    key, v = line.split(':', maxsplit=2)
+                except ValueError:
+                    continue
+                value = v.strip()
+                if key == 'Name' and value != 'daos_io_server':
+                    break
+                if key != 'PPid':
+                    continue
+                if int(value) == parent_pid:
+                    this_proc = True
+                    break
+            if not this_proc:
+                continue
+            print('Target pid is {}'.format(proc_id))
+            os.kill(int(proc_id), signal.SIGTERM)
+            time.sleep(5)
+
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        if os.path.exists('/tmp.dnt_server.log'):
-            log_test('/tmp/dnt_server.log')
+        # Show errors from server logs bug supress memory leaks as the server
+        # often segfaults at shutdown.
+        if os.path.exists(self._log_file):
+            # TODO: Enable memleak checking when server shutdown works.
+            log_test(self._log_file, show_memleaks=False)
         self.running = False
 
 def il_cmd(dfuse, cmd):
@@ -234,7 +276,7 @@ class DFuse():
 
         my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
         my_env['OFI_INTERFACE'] = 'eth0'
-        my_env['D_LOG_MASK'] = 'INFO,dfuse=DEBUG,dfs=DEBUG'
+        my_env['D_LOG_MASK'] = 'DEBUG'
         my_env['DD_MASK'] = 'all'
         my_env['DD_SUBSYS'] = 'all'
         my_env['D_LOG_FILE'] = self.log_file
@@ -270,7 +312,7 @@ class DFuse():
             except subprocess.TimeoutExpired:
                 pass
             total_time += 1
-            if total_time > 10:
+            if total_time > 30:
                 raise Exception('Timeout starting dfuse')
 
     def _close_files(self):
@@ -301,8 +343,11 @@ class DFuse():
             self._close_files()
             umount(self.dir)
 
-        ret = self._sp.wait(timeout=20)
-        print('rc from dfuse {}'.format(ret))
+        try:
+            ret = self._sp.wait(timeout=20)
+            print('rc from dfuse {}'.format(ret))
+        except subprocess.TimeoutExpired:
+            self._sp.send_signal(signal.SIGTERM)
         self._sp = None
         log_test(self.log_file)
 
@@ -477,8 +522,10 @@ def setup_log_test():
     lp = __import__('cart_logparse')
     lt = __import__('cart_logtest')
 
-def log_test(filename):
+def log_test(filename, show_memleaks=True):
     """Run the log checker on filename, logging to stdout"""
+
+    print('Running log_test on {}'.format(filename))
 
     global lp
     global lt
@@ -492,7 +539,8 @@ def log_test(filename):
     lto = lt.LogTest(log_iter)
 
     try:
-        lto.check_log_file(abort_on_warning=False)
+        lto.check_log_file(abort_on_warning=True,
+                           show_memleaks=show_memleaks)
     except lt.LogCheckError:
         print('Error detected')
 
@@ -640,6 +688,7 @@ def run_dfuse(server, conf):
     print(direct_stat)
     print(uns_stat)
     assert uns_stat.st_ino == direct_stat.st_ino
+    dfuse.stop()
 
     print('Reached the end, no errors')
 
@@ -794,6 +843,7 @@ def main():
     else:
         run_il_test(server, conf)
         run_dfuse(server, conf)
+    server.stop()
 
 if __name__ == '__main__':
     main()
