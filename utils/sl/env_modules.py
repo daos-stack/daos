@@ -87,8 +87,8 @@ class _env_module():
             return default_func
 
         try:
-            subprocess.check_call(['/bin/sh', '-l', '-c', 'module -V'],
-                                  stdout=DEVNULL, stderr=DEVNULL)
+            subprocess.check_call(['sh', '-l', '-c', 'module -V'], \
+                                  stdout=DEVNULL, stderr=DEVNULL)  #nosec
         except subprocess.CalledProcessError:
             return self._setup_old(path_init, default_func)
 
@@ -110,8 +110,8 @@ class _env_module():
     def _init_mpi_module(self):
         """init mpi module function"""
         try:
-            subprocess.check_call(['/bin/sh', '-l', '-c', 'module -V'],
-                                  stdout=DEVNULL, stderr=DEVNULL)
+            subprocess.check_call(['sh', '-l', '-c', 'module -V'], \
+                                  stdout=DEVNULL, stderr=DEVNULL]  #nosec
         except subprocess.CalledProcessError:
             # older version of module return -1
             return self._mpi_module_old
