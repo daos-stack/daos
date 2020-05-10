@@ -239,6 +239,3 @@ DP_UUID(const void *uuid)
 	return buf;
 }
 
-#define DF_KEY_MAX		8
-#define DF_KEY_STR_SIZE		64
-
