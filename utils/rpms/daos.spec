@@ -1,11 +1,11 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 %global spdk_version 19.04.1
-%global cart_version 4.7.0
+%global cart_version 4.7.1
 
 Name:          daos
 Version:       0.9.4
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -317,6 +317,10 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Mon May 11 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.4-3
+- Use new properly pre-release tagged mercury RPM by updating
+  cart to 4.7.1
+
 * Wed May 06 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.4-2
 - Move fuse dependencies to the client subpackage
 
