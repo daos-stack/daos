@@ -2018,17 +2018,24 @@ static const struct CMUnitTest aggregate_tests[] = {
 };
 
 int
-run_discard_tests(void)
+run_discard_tests(const char *cfg)
 {
-	return cmocka_run_group_tests_name("VOS Discard Test", discard_tests,
+	char	test_name[CFG_MAX];
+
+	create_config(test_name, "VOS Discard Tests %s", cfg);
+	return cmocka_run_group_tests_name(test_name, discard_tests,
 					   setup_io, teardown_io);
 }
 
 int
-run_aggregate_tests(bool slow)
+run_aggregate_tests(bool slow, const char *cfg)
 {
+	char	test_name[CFG_MAX];
+
+	create_config(test_name, "VOS Aggregate Tests %s", cfg);
+
 	slow_test = slow;
-	return cmocka_run_group_tests_name("VOS Aggregate Test",
+	return cmocka_run_group_tests_name(test_name,
 					   aggregate_tests, setup_io,
 					   teardown_io);
 }

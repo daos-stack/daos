@@ -23,22 +23,27 @@
 package system
 
 import (
+	"fmt"
+
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
-var (
-	FaultMemberExists = systemFault(
+func FaultMemberExists(m *Member) *fault.Fault {
+	return systemFault(
 		code.SystemMemberExists,
-		"system member with given rank already exists",
+		fmt.Sprintf("system member with rank %d already exists (%v)", m.Rank, m),
 		"update system member instead of adding",
 	)
-	FaultMemberMissing = systemFault(
+}
+
+func FaultMemberMissing(rank Rank) *fault.Fault {
+	return systemFault(
 		code.SystemMemberMissing,
-		"system member with given rank doesn't exists",
+		fmt.Sprintf("system member with rank %d doesn't exists", rank),
 		"",
 	)
-)
+}
 
 func systemFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{

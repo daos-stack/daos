@@ -1723,7 +1723,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	dfs_obj_t		parent;
 	dfs_obj_t		*obj = NULL;
 	char			*token;
-	char			*rem, *sptr;
+	char			*rem, *sptr = NULL; /* bogus compiler warning */
 	bool			exists;
 	int			daos_mode;
 	struct dfs_entry	entry = {0};

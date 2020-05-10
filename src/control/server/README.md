@@ -84,16 +84,15 @@ Management service RPC handler code is contained in
 
 Some control service RPC handlers will trigger fanout to multiple
 remote harnesses over gRPC, in order to send these fanout requests
-the `mgmtClient` is used as defined in
-[`mgmt_client.go`](/src/control/server/mgmt_client.go).
+the `rpcClient` is used.
 
 An example of a management tool command that executes gRPC fanout
 over multiple remote harnesses is `dmg system query`, the server side
 handler for which is `SystemQuery` in
 [`ctl_system.go`](/src/control/server/ctl_system.go) which issues
-requests to remote harnesses using the `HarnessClient` abstraction in
-[`ctl_harness.go`](/src/control/server/ctl_harness.go) which in turn
-sends requests with the `mgmtClient` as described above.
+requests to remote harnesses using the `rpcClient` functions in
+[`system.go`](/src/control/lib/control/system.go) which implement
+the UnaryInvoker interface.
 
 ### Storage
 
