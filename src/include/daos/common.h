@@ -104,7 +104,7 @@ char *DP_UUID(const void *uuid);
 #define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
 #define DF_KEY			"[%d]"
-#define DP_KEY(key)		(int)(key)->iov_len
+#define DP_KEY(key)		(int)((key)->iov_len)
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
