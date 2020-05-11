@@ -1068,7 +1068,7 @@ pipeline {
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
                                                   'libipmctl-devel' + qb_inst_rpms
-                        timeout(time:3, unit:'MINUTES') {
+                        timeout(time:60, unit:'MINUTES') {
                             runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                     script: '''# JENKINS-52781 tar function is breaking symlinks
                                                rm -rf test_results
