@@ -111,7 +111,7 @@ class _env_module():
         """init mpi module function"""
         try:
             subprocess.check_call(['sh', '-l', '-c', 'module -V'],
-                                  stdout=DEVNULL, stderr=DEVNULL]  #nosec
+                                  stdout=DEVNULL, stderr=DEVNULL])  #nosec
         except subprocess.CalledProcessError:
             # older version of module return -1
             return self._mpi_module_old
