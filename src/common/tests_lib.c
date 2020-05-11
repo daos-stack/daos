@@ -25,7 +25,6 @@
 /**
  * Test suite helper functions.
  */
-#include <sys/wait.h>
 #include <daos/common.h>
 #include <daos/object.h>
 #include <daos/tests_lib.h>
