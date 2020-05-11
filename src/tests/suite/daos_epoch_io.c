@@ -230,7 +230,8 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 			rc = daos_tx_open_snap(arg->coh, *op->snap_epoch,
 					       &th_open, NULL);
 			D_ASSERT(rc == 0);
-			}
+		}
+
 		if (array)
 			lookup_recxs(dkey, akey, iod_size, th_open,
 				uf_arg->ua_recxs,
@@ -239,6 +240,11 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		else
 			lookup_single(dkey, akey, 0, buf, buf_size, th_open,
 				      &req);
+
+		if (uf_arg->snap == true) {
+			rc = daos_tx_close(th_open, NULL);
+			D_ASSERT(rc == 0);
+		}
 	}
 
 	if (uf_arg->ua_verify)

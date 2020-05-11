@@ -30,8 +30,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -41,6 +39,8 @@ type MemberState int
 const (
 	// MemberStateUnknown is the default invalid state.
 	MemberStateUnknown MemberState = iota
+	// MemberStateAwaitFormat indicates the member is waiting for format.
+	MemberStateAwaitFormat
 	// MemberStateStarting indicates the member has started but is not
 	// ready.
 	MemberStateStarting
@@ -63,6 +63,7 @@ const (
 func (ms MemberState) String() string {
 	return [...]string{
 		"Unknown",
+		"AwaitFormat",
 		"Starting",
 		"Ready",
 		"Joined",
@@ -240,7 +241,7 @@ func (m *Membership) Add(member *Member) (int, error) {
 	defer m.Unlock()
 
 	if value, found := m.members[member.Rank]; found {
-		return -1, errors.Wrapf(FaultMemberExists, "member %s", value)
+		return -1, FaultMemberExists(value)
 	}
 
 	m.members[member.Rank] = member
@@ -254,7 +255,7 @@ func (m *Membership) SetMemberState(rank Rank, state MemberState) error {
 	defer m.Unlock()
 
 	if _, found := m.members[rank]; !found {
-		return errors.Wrapf(FaultMemberMissing, "rank %d", rank)
+		return FaultMemberMissing(rank)
 	}
 
 	m.members[rank].SetState(state)
@@ -297,7 +298,7 @@ func (m *Membership) Get(rank Rank) (*Member, error) {
 
 	member, found := m.members[rank]
 	if !found {
-		return nil, errors.Wrapf(FaultMemberMissing, "rank %d", rank)
+		return nil, FaultMemberMissing(rank)
 	}
 
 	return member, nil
@@ -354,8 +355,26 @@ func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
 	return hostRanks
 }
 
+// Hosts returns slice of control addresses that contain any of the ranks
+// in the input rank list.
+//
+// If input rank list is empty, return all hosts in membership.
+func (m *Membership) Hosts(rankList ...Rank) []string {
+	hostRanks := m.HostRanks(rankList...)
+	hosts := make([]string, 0, len(hostRanks))
+
+	for host := range hostRanks {
+		hosts = append(hosts, host)
+	}
+	sort.Strings(hosts)
+
+	return hosts
+}
+
 // Members returns slice of references to all system members filtering members
 // with excluded states and those not in rank list. Results ordered by member rank.
+//
+// Empty rank list implies no filtering/include all.
 func (m *Membership) Members(rankList []Rank, excludedStates ...MemberState) (ms Members) {
 	var ranks []Rank
 
@@ -386,17 +405,29 @@ func (m *Membership) Members(rankList []Rank, excludedStates ...MemberState) (ms
 
 // UpdateMemberStates updates member's state according to result state.
 //
+// Only update member state if result is a success, ping will update current
+// member state.
+//
 // TODO: store error message in membership
 func (m *Membership) UpdateMemberStates(results MemberResults) error {
 	m.Lock()
 	defer m.Unlock()
 
 	for _, result := range results {
-		if _, found := m.members[result.Rank]; !found {
-			return errors.Wrapf(FaultMemberMissing, "rank %d", result.Rank)
+		if result.Errored {
+			continue
 		}
 
-		m.members[result.Rank].SetState(result.State)
+		member, found := m.members[result.Rank]
+		if !found {
+			return FaultMemberMissing(result.Rank)
+		}
+
+		// don't update members to "Ready" if already "Joined"
+		if result.State == MemberStateReady && member.State() == MemberStateJoined {
+			continue
+		}
+		member.SetState(result.State)
 	}
 
 	return nil

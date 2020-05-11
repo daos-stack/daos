@@ -230,7 +230,7 @@ static void
 	D_ASSERTF(p_ctx != NULL, "p_ctx:=%p\n", p_ctx);
 
 	while (rpc_srv.shutdown == 0) {
-		rc = crt_progress(*p_ctx, 1000, NULL, NULL);
+		rc = crt_progress(*p_ctx, 1000);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed %d", rc);
 			break;

@@ -523,8 +523,7 @@ dss_srv_handler(void *arg)
 	/* main service progress loop */
 	for (;;) {
 		if (dx->dx_comm) {
-			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */, NULL,
-					  NULL);
+			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("failed to progress CART context: %d\n",
 					rc);
@@ -767,6 +766,7 @@ dss_xstreams_fini(bool force)
 	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
+	dss_xstreams_open_barrier();
 
 	/** Stop & free progress ULTs */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
