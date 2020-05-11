@@ -43,6 +43,7 @@ This provides a way of querying CaRT logfiles for processing.
 """
 
 import os
+import re
 
 class InvalidPid(Exception):
     """Exception to be raised when invalid pid is requested"""
@@ -183,14 +184,26 @@ class LogLine():
 
         fields = []
         for entry in self._fields[2:]:
-            if entry.startswith('Gah('):
-                (root, _, _) = entry[4:-1].split('.')
-                fields.append('Gah({}.-.-)'.format(root))
-            elif entry.startswith('0x') and len(entry) > 5:
+            field = None
+            if entry.startswith('0x') and len(entry) > 5:
                 if entry.endswith(')'):
-                    fields.append('0x...)')
+                    field = '0x...)'
                 else:
-                    fields.append('0x...')
+                    field = '0x...'
+            if not field:
+                r = re.search("^[0-9,a-f]{8}$", entry)
+                if r:
+                    field = 'uuid'
+            if not field:
+                r = re.search("^[0-9,a-f]{8}\[\d+\]\:$", entry)
+                if r:
+                    field = 'uuid/rank'
+            if not field:
+                r = re.search("^\d+.\d+.\d+\:*$", entry)
+                if r:
+                    field = 'low/high/shard'
+            if field:
+                fields.append(field)
             else:
                 fields.append(entry)
 
