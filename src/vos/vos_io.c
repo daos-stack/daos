@@ -1075,8 +1075,6 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		uint64_t	gsize;
 
-		D_DEBUG(DB_IO, "Single update eph "DF_X64"\n",
-			ioc->ic_epr.epr_hi);
 		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
 						   (uintptr_t)iod->iod_recxs;
 		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc);
@@ -1085,9 +1083,6 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 
 	for (i = 0; i < iod->iod_nr; i++) {
 		umem_off_t	umoff = iod_update_umoff(ioc);
-
-		D_DEBUG(DB_IO, "Array update %d eph "DF_X64"\n", i,
-			ioc->ic_epr.epr_hi);
 
 		if (iod->iod_recxs[i].rx_nr == 0) {
 			D_ASSERT(UMOFF_IS_NULL(umoff));
@@ -1269,7 +1264,7 @@ iod_reserve(struct vos_io_context *ioc, struct bio_iov *biov)
 	ioc->ic_iov_at++;
 	bsgl->bs_nr_out++;
 
-	D_DEBUG(DB_IO, "media %hu offset "DF_U64" size %zd\n",
+	D_DEBUG(DB_TRACE, "media %hu offset "DF_U64" size %zd\n",
 		biov->bi_addr.ba_type, biov->bi_addr.ba_off,
 		bio_iov2len(biov));
 	return 0;
@@ -1645,8 +1640,8 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_io_context	*ioc;
 	int			 rc;
 
-	D_DEBUG(DB_IO, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64"\n",
-		DP_UOID(oid), iod_nr, dth ? dth->dth_epoch :  epoch);
+	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
+		"\n", DP_UOID(oid), iod_nr, dth ? dth->dth_epoch :  epoch);
 
 	rc = vos_ioc_create(coh, oid, false, dth ? dth->dth_epoch : epoch,
 			    flags, iod_nr, iods, iods_csums, false, &ioc);
