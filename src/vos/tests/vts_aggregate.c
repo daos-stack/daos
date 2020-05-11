@@ -2020,9 +2020,9 @@ static const struct CMUnitTest aggregate_tests[] = {
 int
 run_discard_tests(const char *cfg)
 {
-	char	test_name[100];
+	char	test_name[CFG_MAX];
 
-	sprintf(test_name, "VOS Discard Tests %s", cfg);
+	create_config(test_name, "VOS Discard Tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name, discard_tests,
 					   setup_io, teardown_io);
 }
@@ -2030,9 +2030,10 @@ run_discard_tests(const char *cfg)
 int
 run_aggregate_tests(bool slow, const char *cfg)
 {
-	char	test_name[100];
+	char	test_name[CFG_MAX];
 
-	sprintf(test_name, "VOS Aggregate Tests %s", cfg);
+	create_config(test_name, "VOS Aggregate Tests %s", cfg);
+
 	slow_test = slow;
 	return cmocka_run_group_tests_name(test_name,
 					   aggregate_tests, setup_io,

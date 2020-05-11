@@ -38,6 +38,9 @@ class DmgCommand(YamlCommand):
 
     METHOD_REGEX = {
         "run": r"(.*)",
+        "network_scan": r"(?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))"
+                        r"(?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+"
+                        r"([a-z0-9+;_]+))",
         # Sample output of dmg pool list.
         # wolf-3:10001: connected
         # Pool UUID                            Svc Replicas
@@ -46,7 +49,8 @@ class DmgCommand(YamlCommand):
         # Between the first and the second group, use " +"; i.e., one or more
         # whitespaces. If we use "\s+", it'll pick up the second divider as
         # UUID since it's made up of hyphens and \s includes new line.
-        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))"
+        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
+        "pool_create": r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)"
     }
 
     def __init__(self, path, yaml_cfg=None):
@@ -506,6 +510,27 @@ class DmgCommand(YamlCommand):
             raise CommandFailure("<dmg> command failed: {}".format(error))
 
         return result
+
+    def network_scan(self, provider=None, all_devs=False):
+        """Get the result of the dmg network scan command.
+
+        Args:
+            provider (str): name of network provider tied to the device
+            all_devs (bool, optional): Show all devs  info. Defaults to False.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage scan command fails.
+
+        """
+        self.set_sub_command("network")
+        self.sub_command_class.set_sub_command("scan")
+        self.sub_command_class.sub_command_class.provider.value = provider
+        self.sub_command_class.sub_command_class.all.value = all_devs
+        return self._get_result()
 
     def storage_scan(self):
         """Get the result of the dmg storage scan command.

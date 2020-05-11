@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -376,9 +376,9 @@ static const struct CMUnitTest vos_co_tests[] = {
 int
 run_co_test(const char *cfg)
 {
-	char	test_name[100];
+	char	test_name[CFG_MAX];
 
-	sprintf(test_name, "VOS container tests %s", cfg);
+	create_config(test_name, "VOS container tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   vos_co_tests,
 					   setup, teardown);
