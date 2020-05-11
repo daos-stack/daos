@@ -331,36 +331,56 @@ func TestMemberResult_Convert(t *testing.T) {
 }
 
 func TestMember_UpdateMemberStates(t *testing.T) {
-	mrDiffAddr1 := NewMemberResult(6, nil, MemberStateStopped)
+	// blank host address should get updated to that of member
+	mrDiffAddr1 := NewMemberResult(1, nil, MemberStateReady)
 	mrDiffAddr1.Addr = ""
-	mrDiffAddr2 := NewMemberResult(7, nil, MemberStateStopped)
+	// existing host address should not get updated to that of member
+	mrDiffAddr2 := NewMemberResult(2, errors.New("can't stop"), MemberStateErrored)
 	mrDiffAddr2.Addr = "10.0.0.1"
-
-	members := Members{
-		mockMember(t, 1, MemberStateJoined),
-		mockMember(t, 2, MemberStateStopped),
-		mockMember(t, 3, MemberStateEvicted),
-		mockMember(t, 4, MemberStateStopped),
-		mockMember(t, 5, MemberStateJoined),
-		mockMember(t, 6, MemberStateStopped),
-		mockMember(t, 7, MemberStateStopped),
-	}
+	expMrDiffAddr1 := mrDiffAddr1
+	expMrDiffAddr1.Addr = "192.168.1.1:10001"
+	expMrDiffAddr2 := mrDiffAddr2
 
 	for name, tc := range map[string]struct {
 		ignoreErrs bool
+		members    Members
 		results    MemberResults
 		expMembers Members
+		expResults MemberResults
 		expErrMsg  string
 	}{
+		"update result address from member": {
+			members: Members{
+				mockMember(t, 1, MemberStateJoined),
+				mockMember(t, 2, MemberStateStopped),
+			},
+			results: MemberResults{
+				mrDiffAddr1,
+				mrDiffAddr2,
+			},
+			expMembers: Members{
+				mockMember(t, 1, MemberStateJoined),
+				mockMember(t, 2, MemberStateErrored),
+			},
+			expResults: MemberResults{
+				expMrDiffAddr1,
+				expMrDiffAddr2,
+			},
+		},
 		"ignore errored results": {
 			ignoreErrs: true,
+			members: Members{
+				mockMember(t, 1, MemberStateJoined),
+				mockMember(t, 2, MemberStateStopped),
+				mockMember(t, 3, MemberStateEvicted),
+				mockMember(t, 4, MemberStateStopped),
+				mockMember(t, 5, MemberStateJoined),
+			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
 				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
 				NewMemberResult(4, nil, MemberStateReady),
 				NewMemberResult(5, nil, MemberStateReady),
-				mrDiffAddr1, // blank host address should get updated to that of member
-				mrDiffAddr2, // existing host address should not get updated to that of member
 			},
 			expMembers: Members{
 				mockMember(t, 1, MemberStateStopped),
@@ -368,11 +388,16 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateReady),
 				mockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
-				mockMember(t, 6, MemberStateStopped),
-				mockMember(t, 7, MemberStateStopped),
 			},
 		},
 		"dont ignore errored results": {
+			members: Members{
+				mockMember(t, 1, MemberStateJoined),
+				mockMember(t, 2, MemberStateStopped),
+				mockMember(t, 3, MemberStateEvicted),
+				mockMember(t, 4, MemberStateStopped),
+				mockMember(t, 5, MemberStateJoined),
+			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
 				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
@@ -385,17 +410,18 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateReady),
 				mockMember(t, 5, MemberStateJoined),
-				mockMember(t, 6, MemberStateStopped),
-				mockMember(t, 7, MemberStateStopped),
 			},
 		},
 		"errored result with nonerrored state": {
+			members: Members{
+				mockMember(t, 1, MemberStateJoined),
+				mockMember(t, 2, MemberStateStopped),
+				mockMember(t, 3, MemberStateEvicted),
+			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
 				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
 				NewMemberResult(3, errors.New("can't stop"), MemberStateJoined),
-				NewMemberResult(4, nil, MemberStateReady),
-				NewMemberResult(5, nil, MemberStateReady),
 			},
 			expErrMsg: "errored result for rank 3 has conflicting state 'Joined'",
 		},
@@ -406,7 +432,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 
 			ms := NewMembership(log)
 
-			for _, m := range members {
+			for _, m := range tc.members {
 				if _, err := ms.Add(m); err != nil {
 					t.Fatal(err)
 				}
@@ -428,10 +454,9 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 			}
 
 			// verify result host address is updated to that of member if empty
-			m, _ := ms.Get(Rank(6))
-			AssertEqual(t, m.Addr.String(), mrDiffAddr1.Addr, "result host address update")
-			m, _ = ms.Get(Rank(7))
-			AssertNotEqual(t, m.Addr.String(), mrDiffAddr2.Addr, "result host address not updated")
+			for i, r := range tc.expResults {
+				AssertEqual(t, tc.expResults[i].Addr, tc.results[i].Addr, r.Rank.String())
+			}
 		})
 	}
 }
