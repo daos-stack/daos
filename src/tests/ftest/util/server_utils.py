@@ -121,7 +121,7 @@ class DaosServerCommand(YamlCommand):
         """
         if mode == "format":
             self.pattern = self.FORMAT_PATTERN
-            self.pattern_count = host_qty
+            self.pattern_count = host_qty * len(self.yaml.server_params)
         else:
             self.pattern = self.NORMAL_PATTERN
             self.pattern_count = host_qty * len(self.yaml.server_params)
