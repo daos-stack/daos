@@ -57,6 +57,7 @@ SWIM_TESTS = ['test_swim.c', 'test_swim_net.c']
 HLC_TESTS = ['test_hlc_net.c']
 TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
                        'no_pmix_group_version.c']
+FI_TEST = ['fault_status.c']
 
 def scons():
     """scons function"""
@@ -100,9 +101,15 @@ def scons():
         target = tenv.Program(test)
         tenv.Requires(target, [cart_lib, gurt_lib])
         tenv.Install(tests_dir, target)
+
+    target = tenv.Program(FI_TEST)
+    tenv.Requires(target, [cart_lib, gurt_lib])
+    tenv.Install(os.path.join("$PREFIX", 'bin'), target)
+
 #    test_rpc_err = tenv.Program([TEST_RPC_ERR_SRC])
 #    tenv.Requires(test_rpc_err, [cart_lib, gurt_lib])
 #    tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), test_rpc_err)
+
 
     benv = tenv.Clone()
 

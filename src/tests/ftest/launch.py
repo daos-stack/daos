@@ -438,12 +438,17 @@ def get_test_list(tags):
     """
     test_tags = []
     test_list = []
+
     for tag in tags:
         if ".py" in tag:
             # Assume '.py' indicates a test and just add it to the list
             test_list.append(tag)
         else:
             # Otherwise it is assumed that this is a tag
+            # Check if fault injection is enabled;
+            # fault_status = 0; fault injection enabled
+            if time_command("fault_status"):
+                tag = ",".join((tag, "-faults"))
             test_tags.append(" --filter-by-tags={}".format(tag))
 
     # Add to the list of tests any test that matches the specified tags.  If no
