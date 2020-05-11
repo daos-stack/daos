@@ -20,7 +20,7 @@ def scons():
     denv.Install('$PREFIX/lib64/daos_srv', ds_cont)
 
     # dc_cont: Container Client
-    dc_co_tgts = denv.SharedObject(['cli.c', 'cli_tx.c']) + common
+    dc_co_tgts = denv.SharedObject(['cli.c']) + common
     Export('dc_co_tgts')
 
 if __name__ == "SCons.Script":
