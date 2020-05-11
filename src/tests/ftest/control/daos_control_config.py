@@ -24,62 +24,47 @@
 from __future__ import print_function
 
 from apricot import TestWithServers
-from agent_utils import include_local_host
 from command_utils_base import CommandFailure
 
 
-class DaosAgentConfigTest(TestWithServers):
+class DaosControlConfigTest(TestWithServers):
     """Test Class Description:
-    Simple test to verify that the daos_agent starts/stops properly given
+    Simple test to verify that the daos_control starts/stops properly given
     positive and negative values to its configuration file.
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a DaosAgentConfigTest object."""
-        super(DaosAgentConfigTest, self).__init__(*args, **kwargs)
-        self.setup_start_agents = False
-        self.setup_start_servers = False
-
-    def test_daos_agent_config_basic(self):
+    def test_daos_control_config_basic(self):
         """
         JIRA ID: DAOS-1508
 
-        Test Description: Test daos_agent start/stops properly.
+        Test Description: Test daos_control start/stops properly.
         on the system.
 
-        :avocado: tags=all,small,control,pr,agent_start,basic
+        :avocado: tags=all,small,control,pr,control_start,basic
         """
-        # Setup the agents
-        self.add_agent_manager()
-        self.configure_manager(
-            "agent",
-            self.agent_managers[-1],
-            include_local_host(self.hostlist_clients),
-            self.hostfile_clients_slots)
-
         # Get the input to verify
-        c_val = self.params.get("config_val", "/run/agent_config_val/*/")
+        c_val = self.params.get("config_val", "/run/control_config_val/*/")
 
         # Identify the attribute and modify its value to test value
         self.assertTrue(
-            self.agent_managers[-1].set_config_value(c_val[0], c_val[1]),
+            self.server_managers[-1].dmg.set_config_value(c_val[0], c_val[1]),
             "Error setting the '{}' config file parameter to '{}'".format(
                 c_val[0], c_val[1]))
 
         # Setup the access points with the server hosts
-        self.log.info("Starting agent with %s = %s", c_val[0], c_val[1])
+        self.log.info("Starting dmg config with %s = %s", c_val[0], c_val[1])
 
         try:
-            self.agent_managers[-1].start()
+            self.server_managers[-1].dmg.storage_scan()
             exception = None
         except CommandFailure as err:
             exception = err
 
         # Verify
         if c_val[2] == "FAIL" and exception is None:
-            self.log.error("Agent was expected to fail")
+            self.log.error("dmg was expected to fail")
             self.fail("{}".format(exception))
         elif c_val[2] == "PASS" and exception is not None:
-            self.log.error("Agent was expected to start")
+            self.log.error("dmg was expected to start")
             self.fail("{}".format(exception))

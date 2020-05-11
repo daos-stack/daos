@@ -15,42 +15,22 @@ server_config:
 # - name of the config attribute, used to look for the attribute object
 # - test value that will be inserted into the agent config for the attribute
 # - PASS or FAIL value, specifying how the agent is expected to function
-agent_config_val: !mux
+control_config_val: !mux
   name_special_chars:
     config_val:
       - "name"
       - "! @#$%^&*()_+{}|:<>?-=[];',./"
-      - "PASS"
-  name_alphanumeric:
-    config_val:
-      - "name"
-      - "ABCD1234abcd"
       - "PASS"
   name_numeric:
     config_val:
       - "name"
       - "12345678"
       - "PASS"
-  name_combo:
-    config_val:
-      - "name"
-      - "AB-C&__dal1234"
-      - "PASS"
   name_list:
     config_val:
       - "name"
       - [amjustin, 12345, abcdef]
       - "FAIl"
-  access_point_noport:
-    config_val:
-      - "access_points"
-      - [localhost]
-      - "PASS"
-  port_str:
-    config_val:
-      - "port"
-      - "ABCdef"
-      - "FAIL"
   port_special_str:
     config_val:
       - "port"
@@ -86,11 +66,6 @@ agent_config_val: !mux
        - "ca_cert"
        - "! @#$%^&*()_+{}|:<>?-=[];',./"
        - "PASS"
-  ca_cert_num:
-    config_val:
-       - "ca_cert"
-       - 12345678
-       - "PASS"
   ca_cert_file_does_not_exist:
     config_val:
        - "ca_cert"
@@ -100,11 +75,6 @@ agent_config_val: !mux
     config_val:
        - "cert"
        - "! @#$%^&*()_+{}|:<>?-=[];',./"
-       - "PASS"
-  cert_num:
-    config_val:
-       - "cert"
-       - 12345678
        - "PASS"
   cert_file_does_not_exist:
     config_val:
@@ -116,38 +86,8 @@ agent_config_val: !mux
        - "key"
        - "! @#$%^&*()_+{}|:<>?-=[];',./"
        - "PASS"
-  key_num:
-    config_val:
-       - "key"
-       - 12345678
-       - "PASS"
   key_file_does_not_exist:
     config_val:
        - "key"
        - /tmp/does_not_exist.ext
        - "PASS"
-  server_name_junk:
-    config_val:
-       - "server_name"
-       - "! @#$%^&*()_+{}|:<>?-=[];',./"
-       - "PASS"
-  server_name_list:
-    config_val:
-      - "server_name"
-      - [12345, "ABDCD"]
-      - "FAIL"
-  runtime_dir_wrong_path:
-    config_val:
-      - "runtime_dir"
-      - /wrong/path
-      - "FAIL"
-  runtime_dir_list:
-    config_val:
-      - "runtime_dir"
-      - [12345, ABDCD]
-      - "FAIL"
-  log_file_does_not_exist:
-    config_val:
-      - "log_file"
-      - /does/not/exist.log
-      - "PASS"

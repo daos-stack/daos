@@ -102,7 +102,6 @@ class DmgCommand(YamlCommand):
                 hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")
 
-
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
         """Get the dmg sub command object based upon the sub-command."""
