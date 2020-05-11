@@ -405,13 +405,17 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	struct pl_obj_shard	*new_shards;
 	struct failed_shard	*f_shard;
 	d_list_t		*current;
+	uint8_t                 *grp_map;
 	uint32_t                *grp_count;
 	uint32_t                max_fail_grp;
-	uint8_t                 *grp_map;
 	uint32_t		new_group_size;
 	uint32_t		grp;
 	uint32_t		grp_idx;
 	int i, j, k = 0;
+	int rc = 0;
+
+	grp_map = NULL;
+	grp_count = NULL;
 
 	/* Empty list, no extension needed */
 	if (extended_list == extended_list->next || layout->ol_grp_size == 1)
@@ -419,6 +423,9 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 
 	D_ALLOC_ARRAY(grp_map, (layout->ol_nr / 8) + 1);
 	D_ALLOC_ARRAY(grp_count, layout->ol_grp_nr);
+	if (grp_count == NULL || grp_map == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	i = 0;
 	max_fail_grp = 0;
 
@@ -477,9 +484,9 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	D_FREE(layout->ol_shards);
 	layout->ol_shards = new_shards;
 
-	D_FREE(grp_count);
-	D_FREE(grp_map);
 out:
+	D_FREE(grp_map);
+	D_FREE(grp_count);
 	remap_list_free_all(extended_list);
-	return 0;
+	return rc;
 }

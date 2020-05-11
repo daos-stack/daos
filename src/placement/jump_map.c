@@ -445,17 +445,22 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		}
 
 		if (op_type == PL_PLACE_EXTENDED && spare_avail &&
-		   spare_tgt->ta_comp.co_status == PO_COMP_ST_UP)
-			remap_alloc_one(extend_list, shard_id, spare_tgt, true);
-
+		   spare_tgt->ta_comp.co_status == PO_COMP_ST_UP) {
+			rc = remap_alloc_one(extend_list, shard_id, spare_tgt,
+					     true);
+			if (rc)
+				return rc;
+		}
 		determine_valid_spares(spare_tgt, md, spare_avail,
 				&current, remap_list, for_reint, f_shard,
 				l_shard);
 	}
 
-	if (op_type == PL_PLACE_EXTENDED)
-		pl_map_extend(layout, extend_list);
-
+	if (op_type == PL_PLACE_EXTENDED) {
+		rc = pl_map_extend(layout, extend_list);
+		if (rc != 0)
+			return rc;
+	}
 	remap_dump(remap_list, md, "after remap:");
 	return 0;
 }
@@ -607,7 +612,10 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 				D_GOTO(out, rc);
 			if (op_type == PL_PLACE_EXTENDED &&
 			   target->ta_comp.co_status == PO_COMP_ST_UP) {
-				remap_alloc_one(&extend_list, k, target, true);
+				rc = remap_alloc_one(&extend_list, k, target,
+						     true);
+				if (rc != 0)
+					D_GOTO(out, rc);
 			}
 		}
 
