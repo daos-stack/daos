@@ -98,7 +98,7 @@ func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq
 			// TODO: should annotate member state with "harness unresponsive" err
 			for _, rank := range hostRanks[addr] {
 				results = append(results,
-					system.NewMemberResult(rank, string(method), errors.New(errMsg),
+					system.NewMemberResult(rank, errors.New(errMsg),
 						system.MemberStateUnresponsive))
 			}
 			svc.log.Debugf("harness %s (ranks %v) host error: %s",
@@ -181,6 +181,10 @@ func (svc *ControlService) SystemStop(parent context.Context, pbReq *ctlpb.Syste
 		if err = convert.Types(results, &pbResp.Results); err != nil {
 			return nil, err
 		}
+		action := string(prep)
+		for _, result := range pbResp.Results {
+			result.Action = action
+		}
 		if !req.Force && results.HasErrors() {
 			return pbResp, errors.New("PrepShutdown HasErrors")
 		}
@@ -198,6 +202,10 @@ func (svc *ControlService) SystemStop(parent context.Context, pbReq *ctlpb.Syste
 		}
 		if err = convert.Types(results, &pbResp.Results); err != nil {
 			return nil, err
+		}
+		action := string(stop)
+		for _, result := range pbResp.Results {
+			result.Action = action
 		}
 	}
 
@@ -238,6 +246,10 @@ func (svc *ControlService) SystemStart(parent context.Context, pbReq *ctlpb.Syst
 	if err := convert.Types(results, &pbResp.Results); err != nil {
 		return nil, err
 	}
+	action := string(start)
+	for _, result := range pbResp.Results {
+		result.Action = action
+	}
 
 	svc.log.Debug("Responding to SystemStart RPC")
 
@@ -270,6 +282,10 @@ func (svc *ControlService) SystemResetFormat(parent context.Context, pbReq *ctlp
 	pbResp := &ctlpb.SystemResetFormatResp{}
 	if err := convert.Types(results, &pbResp.Results); err != nil {
 		return nil, err
+	}
+	action := string(reset)
+	for _, result := range pbResp.Results {
+		result.Action = action
 	}
 
 	svc.log.Debug("Responding to SystemResetFormat RPC")

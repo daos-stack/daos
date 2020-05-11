@@ -296,7 +296,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 		return nil, err
 	}
 
-	results, err := svc.memberStateResults(instances, system.MemberStateStopped, "stop")
+	results, err := svc.memberStateResults(instances, system.MemberStateStopped)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +390,7 @@ func (svc *mgmtSvc) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq) 
 		}
 
 		results = append(results,
-			system.NewMemberResult(savedRanks[srv.Index()], "reset format", err, state))
+			system.NewMemberResult(savedRanks[srv.Index()], err, state))
 	}
 
 	resp := &mgmtpb.RanksResp{}
@@ -434,7 +434,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 
 	// instances will update state to "Started" through join or
 	// bootstrap in membership, here just make sure instances "Ready"
-	results, err := svc.memberStateResults(instances, system.MemberStateReady, "start")
+	results, err := svc.memberStateResults(instances, system.MemberStateReady)
 	if err != nil {
 		return nil, err
 	}

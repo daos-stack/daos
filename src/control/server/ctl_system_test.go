@@ -92,14 +92,10 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 0, Action: string(start),
-								Errored: true, Msg: "fatality",
+								Rank: 0, Errored: true, Msg: "fatality",
 								State: uint32(system.MemberStateErrored),
 							},
-							{
-								Rank: 3, Action: string(start),
-								State: uint32(system.MemberStateJoined),
-							},
+							{Rank: 3, State: uint32(system.MemberStateJoined)},
 						},
 					},
 				},
@@ -108,11 +104,11 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 1, Action: string(start),
+								Rank:  1,
 								State: uint32(system.MemberStateJoined),
 							},
 							{
-								Rank: 2, Action: string(start),
+								Rank:  2,
 								State: uint32(system.MemberStateJoined),
 							},
 						},
@@ -131,40 +127,26 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 			// results from host responses amalgamated
 			expResults: system.MemberResults{
 				{
-					Rank: 0, Action: string(start),
-					Errored: true, Msg: "fatality",
+					Rank: 0, Errored: true, Msg: "fatality",
 					State: system.MemberStateErrored,
 				},
+				{Rank: 3, State: system.MemberStateJoined},
+				{Rank: 1, State: system.MemberStateJoined},
+				{Rank: 2, State: system.MemberStateJoined},
 				{
-					Rank: 3, Action: string(start),
-					State: system.MemberStateJoined,
-				},
-				{
-					Rank: 1, Action: string(start),
-					State: system.MemberStateJoined,
-				},
-				{
-					Rank: 2, Action: string(start),
-					State: system.MemberStateJoined,
-				},
-				{
-					Rank: 4, Action: string(start),
-					Errored: true, Msg: "connection refused",
+					Rank: 4, Errored: true, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 5, Action: string(start),
-					Errored: true, Msg: "connection refused",
+					Rank: 5, Errored: true, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 6, Action: string(start),
-					Errored: true, Msg: "connection refused",
+					Rank: 6, Errored: true, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 7, Action: string(start),
-					Errored: true, Msg: "connection refused",
+					Rank: 7, Errored: true, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 			},
@@ -182,12 +164,11 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 0, Action: string(start),
-								Errored: true, Msg: "fatality",
+								Rank: 0, Errored: true, Msg: "fatality",
 								State: uint32(system.MemberStateErrored),
 							},
 							{
-								Rank: 3, Action: string(start),
+								Rank:  3,
 								State: uint32(system.MemberStateJoined),
 							},
 						},
@@ -197,14 +178,8 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 					Addr: getHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
-							{
-								Rank: 1, Action: string(start),
-								State: uint32(system.MemberStateJoined),
-							},
-							{
-								Rank: 2, Action: string(start),
-								State: uint32(system.MemberStateJoined),
-							},
+							{Rank: 1, State: uint32(system.MemberStateJoined)},
+							{Rank: 2, State: uint32(system.MemberStateJoined)},
 						},
 					},
 				},
@@ -218,30 +193,18 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 			// results from ranks outside rank list absent
 			expResults: system.MemberResults{
 				{
-					Rank: 0, Action: string(start),
-					Errored: true, Msg: "fatality",
+					Rank: 0, Errored: true, Msg: "fatality",
 					State: system.MemberStateErrored,
 				},
+				{Rank: 3, State: system.MemberStateJoined},
+				{Rank: 1, State: system.MemberStateJoined},
+				{Rank: 2, State: system.MemberStateJoined},
 				{
-					Rank: 3, Action: string(start),
-					State: system.MemberStateJoined,
-				},
-				{
-					Rank: 1, Action: string(start),
-					State: system.MemberStateJoined,
-				},
-				{
-					Rank: 2, Action: string(start),
-					State: system.MemberStateJoined,
-				},
-				{
-					Rank: 6, Action: string(start),
-					Errored: true, Msg: "connection refused",
+					Rank: 6, Errored: true, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 7, Action: string(start),
-					Errored: true, Msg: "connection refused",
+					Rank: 7, Errored: true, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 			},
@@ -279,8 +242,6 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 			cs.rpcClient = mi
 
 			req := &control.RanksReq{Ranks: tc.ranks}
-			// use StartRanks as an example control API RPC, applies
-			// to {Stop,Ping,PrepShutdown}Ranks
 			gotResults, gotErr := cs.rpcToRanks(ctx, req, start)
 			common.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
@@ -317,7 +278,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 				system.NewMember(2, "", getHostAddr(2), system.MemberStateReady),
 				system.NewMember(3, "", getHostAddr(2), system.MemberStateJoined),
 				system.NewMember(4, "", getHostAddr(3), system.MemberStateAwaitFormat),
-				system.NewMember(5, "", getHostAddr(3), system.MemberStateAwaitFormat),
+				system.NewMember(5, "", getHostAddr(3), system.MemberStateStopping),
 			},
 			mResps: []*control.HostResponse{
 				{
@@ -325,13 +286,78 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 0, Action: string(ping),
-								Errored: true, Msg: "couldn't ping",
-								State: uint32(system.MemberStateStopped),
+								Rank: 0, Errored: true, Msg: "couldn't ping",
+								State: uint32(system.MemberStateErrored),
 							},
+							{Rank: 1, State: uint32(system.MemberStateReady)},
+						},
+					},
+				},
+				{
+					Addr: getHostAddr(2).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
+							{Rank: 3, State: uint32(system.MemberStateReady)},
+						},
+					},
+				},
+				{
+					Addr: getHostAddr(3).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{Rank: 4, State: uint32(system.MemberStateStarting)},
+							{Rank: 5, State: uint32(system.MemberStateStopped)},
+						},
+					},
+				},
+			},
+			expMembers: []*ctlpb.SystemMember{
+				&ctlpb.SystemMember{
+					Rank: 0, Addr: getHostAddr(1).String(),
+					State: uint32(system.MemberStateErrored),
+				},
+				&ctlpb.SystemMember{
+					Rank: 1, Addr: getHostAddr(1).String(),
+					// transition to "ready" illegal
+					State: uint32(system.MemberStateStopping),
+				},
+				&ctlpb.SystemMember{
+					Rank: 2, Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateUnresponsive),
+				},
+				&ctlpb.SystemMember{
+					Rank: 3, Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateJoined),
+				},
+				&ctlpb.SystemMember{
+					Rank: 4, Addr: getHostAddr(3).String(),
+					State: uint32(system.MemberStateStarting),
+				},
+				&ctlpb.SystemMember{
+					Rank: 5, Addr: getHostAddr(3).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+			},
+		},
+		"filtered rank results": {
+			ranks: []uint32{0, 2, 3},
+			members: system.Members{
+				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopping),
+				system.NewMember(2, "", getHostAddr(2), system.MemberStateReady),
+				system.NewMember(3, "", getHostAddr(2), system.MemberStateJoined),
+				system.NewMember(4, "", getHostAddr(3), system.MemberStateAwaitFormat),
+				system.NewMember(5, "", getHostAddr(3), system.MemberStateStopping),
+			},
+			mResps: []*control.HostResponse{
+				{
+					Addr: getHostAddr(1).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 1, Action: string(ping),
-								State: uint32(system.MemberStateReady),
+								Rank: 0, Errored: true, Msg: "couldn't ping",
+								State: uint32(system.MemberStateErrored),
 							},
 						},
 					},
@@ -340,14 +366,8 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 					Addr: getHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
-							{
-								Rank: 2, Action: string(ping),
-								State: uint32(system.MemberStateReady),
-							},
-							{
-								Rank: 3, Action: string(ping),
-								State: uint32(system.MemberStateReady),
-							},
+							{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
+							{Rank: 3, State: uint32(system.MemberStateReady)},
 						},
 					},
 				},
@@ -355,15 +375,16 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			expMembers: []*ctlpb.SystemMember{
 				&ctlpb.SystemMember{
 					Rank: 0, Addr: getHostAddr(1).String(),
-					State: uint32(system.MemberStateStopped),
+					State: uint32(system.MemberStateErrored),
 				},
 				&ctlpb.SystemMember{
-					Rank: 1, Addr: getHostAddr(1).String(),
-					State: uint32(system.MemberStateStopped),
+					Rank: 2, Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateUnresponsive),
 				},
-				//				system.NewMember(1, "", getHostAddr(1), system.MemberStateReady),
-				//				system.NewMember(2, "", getHostAddr(2), system.MemberStateReady),
-				//				system.NewMember(3, "", getHostAddr(2), system.MemberStateReady),
+				&ctlpb.SystemMember{
+					Rank: 3, Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateJoined),
+				},
 			},
 		},
 	} {
@@ -446,13 +467,11 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 0, Action: string(start),
-								Errored: true, Msg: "couldn't start",
+								Rank: 0, Errored: true, Msg: "couldn't start",
 								State: uint32(system.MemberStateStopped),
 							},
 							{
-								Rank: 1, Action: string(start),
-								State: uint32(system.MemberStateReady),
+								Rank: 1, State: uint32(system.MemberStateReady),
 							},
 						},
 					},
@@ -462,12 +481,10 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 2, Action: string(start),
-								State: uint32(system.MemberStateReady),
+								Rank: 2, State: uint32(system.MemberStateReady),
 							},
 							{
-								Rank: 3, Action: string(start),
-								State: uint32(system.MemberStateReady),
+								Rank: 3, State: uint32(system.MemberStateReady),
 							},
 						},
 					},
@@ -514,13 +531,11 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 0, Action: string(start),
-								Errored: true, Msg: "couldn't start",
+								Rank: 0, Errored: true, Msg: "couldn't start",
 								State: uint32(system.MemberStateStopped),
 							},
 							{
-								Rank: 1, Action: string(start),
-								State: uint32(system.MemberStateReady),
+								Rank: 1, State: uint32(system.MemberStateReady),
 							},
 						},
 					},
@@ -627,13 +642,11 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 0, Action: string(prep),
-								Errored: true, Msg: "prep shutdown failed",
+								Rank: 0, Errored: true, Msg: "prep shutdown failed",
 								State: uint32(system.MemberStateJoined),
 							},
 							{
-								Rank: 1, Action: string(prep),
-								State: uint32(system.MemberStateStopping),
+								Rank: 1, State: uint32(system.MemberStateStopping),
 							},
 						},
 					},
@@ -655,13 +668,11 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 0, Action: string(stop),
-								Errored: true, Msg: "couldn't stop",
+								Rank: 0, Errored: true, Msg: "couldn't stop",
 								State: uint32(system.MemberStateJoined),
 							},
 							{
-								Rank: 1, Action: string(stop),
-								State: uint32(system.MemberStateStopped),
+								Rank: 1, State: uint32(system.MemberStateStopped),
 							},
 						},
 					},
@@ -671,12 +682,10 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 2, Action: string(stop),
-								State: uint32(system.MemberStateStopped),
+								Rank: 2, State: uint32(system.MemberStateStopped),
 							},
 							{
-								Rank: 3, Action: string(stop),
-								State: uint32(system.MemberStateStopped),
+								Rank: 3, State: uint32(system.MemberStateStopped),
 							},
 						},
 					},
@@ -722,8 +731,7 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 0, Action: string(stop),
-								Errored: true, Msg: "couldn't stop",
+								Rank: 0, Errored: true, Msg: "couldn't stop",
 								State: uint32(system.MemberStateJoined),
 							},
 						},
@@ -734,12 +742,10 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
-								Rank: 2, Action: string(stop),
-								State: uint32(system.MemberStateStopped),
+								Rank: 2, State: uint32(system.MemberStateStopped),
 							},
 							{
-								Rank: 3, Action: string(stop),
-								State: uint32(system.MemberStateStopped),
+								Rank: 3, State: uint32(system.MemberStateStopped),
 							},
 						},
 					},
@@ -821,6 +827,180 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 				common.AssertEqual(t, m.State().String(), member.State().String(),
 					name+": compare state rank"+m.Rank.String())
 			}
+
+			common.AssertEqual(t, tc.expMembers, cs.membership.Members(), name)
+		})
+	}
+}
+
+func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilReq     bool
+		ranks      []uint32
+		members    system.Members
+		mResps     []*control.HostResponse
+		expMembers system.Members
+		expResults []*ctlpb.RankResult
+		expErrMsg  string
+	}{
+		"nil req": {
+			nilReq:    true,
+			expErrMsg: "nil request",
+		},
+		"unfiltered rank results": {
+			members: system.Members{
+				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopped),
+				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+			},
+			mResps: []*control.HostResponse{
+				{
+					Addr: getHostAddr(1).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{
+								Rank: 0, Errored: true, Msg: "something bad",
+								State: uint32(system.MemberStateStopped),
+							},
+							{
+								Rank: 1, State: uint32(system.MemberStateAwaitFormat),
+							},
+						},
+					},
+				},
+				{
+					Addr: getHostAddr(2).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{
+								Rank: 2, State: uint32(system.MemberStateAwaitFormat),
+							},
+							{
+								Rank: 3, State: uint32(system.MemberStateAwaitFormat),
+							},
+						},
+					},
+				},
+			},
+			expResults: []*ctlpb.RankResult{
+				{
+					Rank: 0, Action: string(reset), Errored: true,
+					Msg: "something bad", Addr: getHostAddr(1).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+				{
+					Rank: 1, Action: string(reset), Addr: getHostAddr(1).String(),
+					State: uint32(system.MemberStateAwaitFormat),
+				},
+				{
+					Rank: 2, Action: string(reset), Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateAwaitFormat),
+				},
+				{
+					Rank: 3, Action: string(reset), Addr: getHostAddr(2).String(),
+					State: uint32(system.MemberStateAwaitFormat),
+				},
+			},
+
+			expMembers: system.Members{
+				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", getHostAddr(1), system.MemberStateAwaitFormat),
+				system.NewMember(2, "", getHostAddr(2), system.MemberStateAwaitFormat),
+				system.NewMember(3, "", getHostAddr(2), system.MemberStateAwaitFormat),
+			},
+		},
+		"filtered rank results": {
+			members: system.Members{
+				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+			},
+			ranks: []uint32{0, 1},
+			mResps: []*control.HostResponse{
+				{
+					Addr: getHostAddr(1).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{
+								Rank: 0, Errored: true, Msg: "couldn't reset",
+								State: uint32(system.MemberStateStopped),
+							},
+							{
+								Rank: 1, State: uint32(system.MemberStateAwaitFormat),
+							},
+						},
+					},
+				},
+			},
+			expResults: []*ctlpb.RankResult{
+				{
+					Rank: 0, Action: string(reset), Errored: true,
+					Msg: "couldn't reset", Addr: getHostAddr(1).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+				{
+					Rank: 1, Action: string(reset), Addr: getHostAddr(1).String(),
+					State: uint32(system.MemberStateAwaitFormat),
+				},
+			},
+			expMembers: system.Members{
+				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", getHostAddr(1), system.MemberStateAwaitFormat),
+				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			emptyCfg := emptyMockConfig(t)
+			cs := mockControlService(t, log, emptyCfg, nil, nil, nil)
+			cs.membership = system.NewMembership(log)
+			for _, m := range tc.members {
+				if _, err := cs.membership.Add(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			mgmtSvc := newTestMgmtSvcMulti(log, maxIOServers, false)
+			cs.harness = mgmtSvc.harness
+			cs.harness.started.SetTrue()
+			m := newMgmtSvcClient(
+				context.Background(), log, mgmtSvcClientCfg{
+					AccessPoints: []string{defaultAP},
+				},
+			)
+			cs.harness.instances[0].msClient = m
+			cs.harness.instances[0]._superblock.MS = true
+			cs.harness.instances[0]._superblock.Rank = system.NewRankPtr(0)
+
+			ctx := context.TODO()
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: tc.mResps,
+				},
+			})
+			cs.rpcClient = mi
+
+			req := &ctlpb.SystemResetFormatReq{Ranks: tc.ranks}
+			if tc.nilReq {
+				req = nil
+			}
+
+			gotResp, gotErr := cs.SystemResetFormat(ctx, req)
+			common.ExpectError(t, gotErr, tc.expErrMsg, name)
+			if tc.expErrMsg != "" {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, common.DefaultCmpOpts()...); diff != "" {
+				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
+			}
+			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
 
 			common.AssertEqual(t, tc.expMembers, cs.membership.Members(), name)
 		})

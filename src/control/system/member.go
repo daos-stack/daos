@@ -243,9 +243,9 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 
 // NewMemberResult returns a reference to a new member result struct.
 //
-// Populating the host address field is optional and not provided us param.
-func NewMemberResult(rank Rank, action string, err error, state MemberState) *MemberResult {
-	result := MemberResult{Rank: rank, Action: action, State: state}
+// Host address and action fields are not always used so not populated here.
+func NewMemberResult(rank Rank, err error, state MemberState) *MemberResult {
+	result := MemberResult{Rank: rank, State: state}
 	if err != nil {
 		result.Errored = true
 		result.Msg = err.Error()

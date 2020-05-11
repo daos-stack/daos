@@ -316,8 +316,8 @@ func TestMember_Convert(t *testing.T) {
 
 func TestMemberResult_Convert(t *testing.T) {
 	mrsIn := MemberResults{
-		NewMemberResult(1, "query", nil, MemberStateStopped),
-		NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateUnknown),
+		NewMemberResult(1, nil, MemberStateStopped),
+		NewMemberResult(2, errors.New("can't stop"), MemberStateUnknown),
 	}
 	mrsOut := MemberResults{}
 
@@ -331,9 +331,9 @@ func TestMemberResult_Convert(t *testing.T) {
 }
 
 func TestMember_UpdateMemberStates(t *testing.T) {
-	mrDiffAddr1 := NewMemberResult(6, "start", nil, MemberStateJoined)
+	mrDiffAddr1 := NewMemberResult(6, nil, MemberStateStopped)
 	mrDiffAddr1.Addr = ""
-	mrDiffAddr2 := NewMemberResult(7, "start", nil, MemberStateJoined)
+	mrDiffAddr2 := NewMemberResult(7, nil, MemberStateStopped)
 	mrDiffAddr2.Addr = "10.0.0.1"
 
 	members := Members{
@@ -355,10 +355,10 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 		"ignore errored results": {
 			ignoreErrs: true,
 			results: MemberResults{
-				NewMemberResult(1, "query", nil, MemberStateStopped),
-				NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateErrored),
-				NewMemberResult(4, "start", nil, MemberStateReady),
-				NewMemberResult(5, "start", nil, MemberStateReady),
+				NewMemberResult(1, nil, MemberStateStopped),
+				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
+				NewMemberResult(4, nil, MemberStateReady),
+				NewMemberResult(5, nil, MemberStateReady),
 				mrDiffAddr1, // blank host address should get updated to that of member
 				mrDiffAddr2, // existing host address should not get updated to that of member
 			},
@@ -368,16 +368,16 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateReady),
 				mockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
-				mockMember(t, 6, MemberStateJoined),
-				mockMember(t, 7, MemberStateJoined),
+				mockMember(t, 6, MemberStateStopped),
+				mockMember(t, 7, MemberStateStopped),
 			},
 		},
 		"dont ignore errored results": {
 			results: MemberResults{
-				NewMemberResult(1, "query", nil, MemberStateStopped),
-				NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateErrored),
-				NewMemberResult(4, "start", nil, MemberStateReady),
-				NewMemberResult(5, "start", nil, MemberStateReady),
+				NewMemberResult(1, nil, MemberStateStopped),
+				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
+				NewMemberResult(4, nil, MemberStateReady),
+				NewMemberResult(5, nil, MemberStateReady),
 			},
 			expMembers: Members{
 				mockMember(t, 1, MemberStateStopped),
@@ -385,17 +385,17 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateReady),
 				mockMember(t, 5, MemberStateJoined),
-				mockMember(t, 6, MemberStateJoined),
-				mockMember(t, 7, MemberStateJoined),
+				mockMember(t, 6, MemberStateStopped),
+				mockMember(t, 7, MemberStateStopped),
 			},
 		},
 		"errored result with nonerrored state": {
 			results: MemberResults{
-				NewMemberResult(1, "query", nil, MemberStateStopped),
-				NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateErrored),
-				NewMemberResult(3, "stop", errors.New("can't stop"), MemberStateJoined),
-				NewMemberResult(4, "start", nil, MemberStateReady),
-				NewMemberResult(5, "start", nil, MemberStateReady),
+				NewMemberResult(1, nil, MemberStateStopped),
+				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
+				NewMemberResult(3, errors.New("can't stop"), MemberStateJoined),
+				NewMemberResult(4, nil, MemberStateReady),
+				NewMemberResult(5, nil, MemberStateReady),
 			},
 			expErrMsg: "errored result for rank 3 has conflicting state 'Joined'",
 		},

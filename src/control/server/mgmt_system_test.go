@@ -122,6 +122,8 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 // regardless of order. Ignore result "Msg" field as RankResult.Msg generation
 // is tested separately in TestServer_MgmtSvc_DrespToRankResult unit tests.
 func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*mgmtpb.RanksResp_RankResult) {
+	t.Helper()
+
 	isMsgField := func(path cmp.Path) bool {
 		if path.Last().String() == ".Msg" {
 			return true
@@ -140,8 +142,7 @@ func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*mgmtpb.Ra
 			}
 		}
 		if !match {
-			t.Fatalf("unexpected results: (\nwant: %+v\ngot: %+v)",
-				expResults, gotResults)
+			t.Fatalf("unexpected results: %s", cmp.Diff(expResults, gotResults, opts...))
 		}
 	}
 }
@@ -177,8 +178,8 @@ func TestServer_MgmtSvc_PrepShutdownRanks(t *testing.T) {
 			req:              &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			instancesStopped: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "prep shutdown", State: msStopped},
-				{Rank: 2, Action: "prep shutdown", State: msStopped},
+				{Rank: 1, State: msStopped},
+				{Rank: 2, State: msStopped},
 			},
 		},
 		"dRPC resp fails": {
@@ -189,16 +190,16 @@ func TestServer_MgmtSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "prep shutdown", State: msErrored, Errored: true},
-				{Rank: 2, Action: "prep shutdown", State: msErrored, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 		"dRPC resp junk": {
 			req:      &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			junkResp: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "prep shutdown", State: msErrored, Errored: true},
-				{Rank: 2, Action: "prep shutdown", State: msErrored, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 		"prep shutdown timeout": { // dRPC req-resp duration > rankReqTime
@@ -209,8 +210,8 @@ func TestServer_MgmtSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "prep shutdown", State: uint32(MemberStateUnresponsive), Errored: true},
-				{Rank: 2, Action: "prep shutdown", State: uint32(MemberStateUnresponsive), Errored: true},
+				{Rank: 1, State: uint32(MemberStateUnresponsive)},
+				{Rank: 2, State: uint32(MemberStateUnresponsive)},
 			},
 		},
 		"context timeout": { // dRPC req-resp duration > parent context timeout
@@ -222,8 +223,8 @@ func TestServer_MgmtSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "prep shutdown", State: uint32(MemberStateUnresponsive), Errored: true},
-				{Rank: 2, Action: "prep shutdown", State: uint32(MemberStateUnresponsive), Errored: true},
+				{Rank: 1, State: uint32(MemberStateUnresponsive)},
+				{Rank: 2, State: uint32(MemberStateUnresponsive)},
 			},
 		},
 		"context cancel": { // dRPC req-resp duration > when parent context is cancelled
@@ -243,8 +244,8 @@ func TestServer_MgmtSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: -1},
 			},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "prep shutdown", State: msErrored, Errored: true},
-				{Rank: 2, Action: "prep shutdown", State: msErrored, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 		"successful call": {
@@ -254,8 +255,8 @@ func TestServer_MgmtSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "prep shutdown", State: uint32(MemberStateStopping)},
-				{Rank: 2, Action: "prep shutdown", State: uint32(MemberStateStopping)},
+				{Rank: 1, State: uint32(MemberStateStopping)},
+				{Rank: 2, State: uint32(MemberStateStopping)},
 			},
 		},
 	} {
@@ -371,38 +372,38 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 			req:            &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "stop", State: msReady, Errored: true},
-				{Rank: 2, Action: "stop", State: msReady, Errored: true},
+				{Rank: 1, State: msReady, Errored: true},
+				{Rank: 2, State: msReady, Errored: true},
 			},
 		},
 		"force stop instances started": { // unsuccessful result for kill
 			req:            &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}, Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "stop", State: msReady, Errored: true},
-				{Rank: 2, Action: "stop", State: msReady, Errored: true},
+				{Rank: 1, State: msReady, Errored: true},
+				{Rank: 2, State: msReady, Errored: true},
 			},
 		},
 		"instances stopped": { // successful result for kill
 			req:              &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			instancesStopped: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "stop", State: msStopped},
-				{Rank: 2, Action: "stop", State: msStopped},
+				{Rank: 1, State: msStopped},
+				{Rank: 2, State: msStopped},
 			},
 		},
 		"force stop single instance started": {
 			req:            &mgmtpb.RanksReq{Ranks: []uint32{1}, Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "stop", State: msReady, Errored: true},
+				{Rank: 1, State: msReady, Errored: true},
 			},
 		},
 		"single instance stopped": {
 			req:              &mgmtpb.RanksReq{Ranks: []uint32{1}},
 			instancesStopped: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "stop", State: msStopped},
+				{Rank: 1, State: msStopped},
 			},
 		},
 	} {
@@ -518,8 +519,8 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 			req:              &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			instancesStopped: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "ping", State: msStopped},
-				{Rank: 2, Action: "ping", State: msStopped},
+				{Rank: 1, State: msStopped},
+				{Rank: 2, State: msStopped},
 			},
 		},
 		"dRPC resp fails": {
@@ -530,16 +531,16 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "ping", State: msErrored, Errored: true},
-				{Rank: 2, Action: "ping", State: msErrored, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 		"dRPC resp junk": {
 			req:      &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			junkResp: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "ping", State: msErrored, Errored: true},
-				{Rank: 2, Action: "ping", State: msErrored, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 		"ping timeout": { // dRPC req-resp duration > rankReqTimeout
@@ -550,8 +551,8 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "ping", State: uint32(MemberStateUnresponsive), Errored: true},
-				{Rank: 2, Action: "ping", State: uint32(MemberStateUnresponsive), Errored: true},
+				{Rank: 1, State: uint32(MemberStateUnresponsive)},
+				{Rank: 2, State: uint32(MemberStateUnresponsive)},
 			},
 		},
 		"context timeout": { // dRPC req-resp duration > parent context Timeout
@@ -563,8 +564,8 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "ping", State: uint32(MemberStateUnresponsive), Errored: true},
-				{Rank: 2, Action: "ping", State: uint32(MemberStateUnresponsive), Errored: true},
+				{Rank: 1, State: uint32(MemberStateUnresponsive)},
+				{Rank: 2, State: uint32(MemberStateUnresponsive)},
 			},
 		},
 		"context cancel": { // dRPC req-resp duration > when parent context is cancelled
@@ -584,8 +585,8 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: -1},
 			},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "ping", State: msErrored, Errored: true},
-				{Rank: 2, Action: "ping", State: msErrored, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 		"successful call": {
@@ -595,8 +596,18 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "ping", State: msReady},
-				{Rank: 2, Action: "ping", State: msReady},
+				{Rank: 1, State: msReady},
+				{Rank: 2, State: msReady},
+			},
+		},
+		"filtered ranks": {
+			req: &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 3}},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResults: []*mgmtpb.RanksResp_RankResult{
+				{Rank: 1, State: msReady},
 			},
 		},
 	} {
@@ -707,16 +718,16 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 		"instances reach wait format": {
 			req: &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "reset format", State: msWaitFormat},
-				{Rank: 2, Action: "reset format", State: msWaitFormat},
+				{Rank: 1, State: msWaitFormat},
+				{Rank: 2, State: msWaitFormat},
 			},
 		},
 		"instances stay stopped": {
 			req:        &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			startFails: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "reset format", State: msStopped, Errored: true},
-				{Rank: 2, Action: "reset format", State: msStopped, Errored: true},
+				{Rank: 1, State: msStopped, Errored: true},
+				{Rank: 2, State: msStopped, Errored: true},
 			},
 		},
 	} {
@@ -841,16 +852,16 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 		"instances already started": {
 			req: &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "start", State: msReady},
-				{Rank: 2, Action: "start", State: msReady},
+				{Rank: 1, State: msReady},
+				{Rank: 2, State: msReady},
 			},
 		},
 		"instances get started": {
 			req:              &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			instancesStopped: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "start", State: msReady},
-				{Rank: 2, Action: "start", State: msReady},
+				{Rank: 1, State: msReady},
+				{Rank: 2, State: msReady},
 			},
 		},
 		"instances stay stopped": {
@@ -858,8 +869,8 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 			instancesStopped: true,
 			startFails:       true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
-				{Rank: 1, Action: "start", State: msStopped, Errored: true},
-				{Rank: 2, Action: "start", State: msStopped, Errored: true},
+				{Rank: 1, State: msStopped, Errored: true},
+				{Rank: 2, State: msStopped, Errored: true},
 			},
 		},
 	} {
