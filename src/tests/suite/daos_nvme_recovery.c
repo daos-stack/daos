@@ -119,9 +119,60 @@ nvme_recov_1(void **state)
 	print_message("Done\n");
 }
 
+#define MAX_DEVICES_FOR_QUERY 10
+static void
+nvme_dmg_storage_query(void **state)
+{
+	struct dmg_storage_query_output *out;
+	int i = 0;
+	int rc = 0;
+
+	/** Need to manually set hostlist in install/etc/daos_control.yml */
+
+	D_ALLOC_ARRAY(out, MAX_DEVICES_FOR_QUERY);
+	if (out == NULL) {
+		print_message("Error allocating dmg output struct\n");
+		return;
+	}
+
+	/** Query SMD device list */
+	print_message("Device/Blobstore List:\n");
+	rc = exec_dmg_storage_query_smd(/*devices*/true, out);
+	if (rc != 0)
+		goto out;
+
+	for (i = 0; i < MAX_DEVICES_FOR_QUERY; i++) {
+		if (out[i].device_uuid[0] == '\0')
+			break; /** end of device list */
+		print_message("Device UUID: %s\n", out[i].device_uuid);
+	}
+
+	/**
+	 * Query blobstore health data for each device. This mainly includes
+	 * querying the I/O error counters.
+	 */
+	for (i = 0; i < MAX_DEVICES_FOR_QUERY; i++) {
+		if (out[i].device_uuid[0] == '\0')
+			break; /** end of device list */
+		print_message("Blobstore health data for UUID: %s\n",
+			      out[i].device_uuid);
+		rc = exec_dmg_storage_query_blobstore_health(&out[i]);
+		if (rc != 0)
+			goto out;
+		print_message("Read errors: %d\n", out[i].read_errs);
+		print_message("Write errors: %d\n", out[i].write_errs);
+		print_message("Unmap errors: %d\n", out[i].unmap_errs);
+		print_message("Checksum errors: %d\n", out[i].cs_errs);
+	}
+out:
+	D_FREE(out);
+}
+
 static const struct CMUnitTest nvme_recov_tests[] = {
 	{"NVMe Recovery 1: Online faulty reaction",
 	 nvme_recov_1, NULL, test_case_teardown},
+	{"Test dmg storage query commands",
+	 nvme_dmg_storage_query, NULL, test_case_teardown},
 };
 
 static int

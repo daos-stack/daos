@@ -33,6 +33,93 @@
 
 #define DTS_OCLASS_DEF		OC_RP_XSF
 
+#define DMG_STORAGE_QUERY_SMD	"dmg storage query smd -i %s"
+#define DMG_STORAGE_QUERY_BS	"dmg storage query blobstore-health --devuuid=%s"
+
+int
+exec_dmg_storage_query_blobstore_health(struct dmg_storage_query_output *out)
+{
+	char cmd[100];
+	FILE *bs_health;
+	char *ptr;
+	char buf[256];
+	char read_errs[5];
+	char write_errs[5];
+	char unmap_errs[5];
+	char cs_errs[5];
+
+	if (out->device_uuid[0] == '\0') {
+		printf("Device UUID is unknown\n");
+		return -1;
+	}
+
+	snprintf(cmd, sizeof(cmd), DMG_STORAGE_QUERY_BS, out->device_uuid);
+	bs_health = popen(cmd, "r");
+
+	if (bs_health == NULL)
+		return -1;
+
+	while (fgets(buf, sizeof(buf), bs_health) != 0) {
+		//printf("%s\n", buf);
+		ptr = strstr(buf, "Read errors:");
+		if (ptr != NULL) {
+			memcpy(read_errs, &ptr[13], sizeof(read_errs));
+			out->read_errs = atoi(read_errs);
+		}
+		ptr = strstr(buf, "Write errors:");
+		if (ptr != NULL) {
+			memcpy(write_errs, &ptr[14], sizeof(write_errs));
+			out->write_errs = atoi(write_errs);
+		}
+		ptr = strstr(buf, "Unmap errors:");
+		if (ptr != NULL) {
+			memcpy(unmap_errs, &ptr[14], sizeof(unmap_errs));
+			out->unmap_errs = atoi(unmap_errs);
+		}
+		ptr = strstr(buf, "Checksum errors:");
+		if (ptr != NULL) {
+			memcpy(cs_errs, &ptr[17], sizeof(cs_errs));
+			out->cs_errs = atoi(cs_errs);
+		}
+	}
+
+	pclose(bs_health);
+
+	return 0;
+}
+
+int
+exec_dmg_storage_query_smd(bool device_table,
+			   struct dmg_storage_query_output *out)
+{
+	char cmd[100];
+	FILE *devices;
+	char buf[256];
+	char *ptr;
+	int rc = 0;
+	int i = 0;
+
+	snprintf(cmd, sizeof(cmd), DMG_STORAGE_QUERY_SMD,
+		 device_table ? "--devices" : "");
+	devices = popen(cmd, "r");
+
+	if (devices == NULL)
+		return -1;
+
+	while (fgets(buf, sizeof(buf), devices) != 0) {
+		ptr = strstr(buf, "UUID:");
+		if (ptr != NULL) {
+			memcpy(out[i].device_uuid, &ptr[6],
+			       sizeof(out[i].device_uuid));
+			i++;
+		}
+	}
+
+	pclose(devices);
+
+	return rc;
+}
+
 static uint32_t obj_id_gen	= 1;
 static uint64_t int_key_gen	= 1;
 

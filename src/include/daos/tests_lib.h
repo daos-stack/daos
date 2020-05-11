@@ -190,4 +190,20 @@ void
 dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 	uint32_t count, char *d, ...);
 
+struct dmg_storage_query_output {
+	char	device_uuid[36];
+	int	read_errs;
+	int	write_errs;
+	int	unmap_errs;
+	int	cs_errs;
+};
+
+/** dmg cmg for listing per-server metadata (device and pool list) */
+int
+exec_dmg_storage_query_smd(bool device, struct dmg_storage_query_output *out);
+
+/** dmg storage query blobstore-health --device_uuid=DEVUUID */
+int
+exec_dmg_storage_query_blobstore_health(struct dmg_storage_query_output *out);
+
 #endif /* __DAOS_TESTS_LIB_H__ */
