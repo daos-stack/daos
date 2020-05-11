@@ -31,6 +31,7 @@ class daosdm():
     """dbm.gnu() like interface to daos"""
 
     def __init__(self, kv):
+        self._dc = pydaos.DaosClient()
         self._kv = kv
         self._prevkey = None
         self._iter_obj = None
