@@ -553,7 +553,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		umem_free(vos_cont2umm(cont), offset);
 
 out:
-	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_IO,
+	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_TRACE,
 		 "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
 		 DP_DTI(dti), DP_RC(rc));
 	if (rc != 0) {
@@ -955,7 +955,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			dth->dth_has_ilog = 1;
 	}
 
-	D_DEBUG(DB_IO, "Register DTX record for "DF_DTI
+	D_DEBUG(DB_TRACE, "Register DTX record for "DF_DTI
 		": entry %p, type %d, %s ilog entry, rc %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ent, type,
 		dth->dth_has_ilog ? "has" : "has not", rc);
