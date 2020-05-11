@@ -54,7 +54,8 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 
 	ctx := context.Background()
 	resp, err := control.GetAttachInfo(ctx, cmd.ctlInvoker, &control.GetAttachInfoReq{
-		System: cmd.cfg.SystemName,
+		System:   cmd.cfg.SystemName,
+		AllRanks: true,
 	})
 	if err != nil {
 		return errors.Wrap(err, "GetAttachInfo failed")

@@ -213,7 +213,8 @@ type (
 	GetAttachInfoReq struct {
 		unaryRequest
 		msRequest
-		System string
+		System   string
+		AllRanks bool
 	}
 
 	// PrimaryServiceRank provides a rank->uri mapping for a DAOS
@@ -255,7 +256,8 @@ func (gair *GetAttachInfoResp) String() string {
 func GetAttachInfo(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachInfoReq) (*GetAttachInfoResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).GetAttachInfo(ctx, &mgmtpb.GetAttachInfoReq{
-			Sys: req.System,
+			Sys:      req.System,
+			AllRanks: req.AllRanks,
 		})
 	})
 
