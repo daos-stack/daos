@@ -768,7 +768,7 @@ class DaosCommand(CommandWithSubCommand):
         return self._get_result()
 
     def container_set_attr(
-        self, pool, cont, attr, val, svc=None, sys_name=None):
+            self, pool, cont, attr, val, svc=None, sys_name=None):
         """Call daos container set-attr.
 
         Args:
