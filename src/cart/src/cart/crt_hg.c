@@ -520,7 +520,6 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		D_GOTO(out, rc);
 
 	init_info.na_init_info.progress_mode = 0;
-	init_info.na_init_info.max_contexts = 1;
 	if (crt_gdata.cg_share_na == false)
 		/* one context per NA class */
 		init_info.na_init_info.max_contexts = 1;
@@ -1325,41 +1324,14 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	rpc_priv->crp_reply_pending = 0;
 }
 
-static int
-crt_hg_trigger(struct crt_hg_context *hg_ctx)
-{
-	hg_context_t		*hg_context;
-	hg_return_t		hg_ret = HG_SUCCESS;
-	unsigned int		count = 0;
-
-	D_ASSERT(hg_ctx != NULL);
-	hg_context = hg_ctx->chc_hgctx;
-
-	do {
-		hg_ret = HG_Trigger(hg_context, 0, UINT32_MAX, &count);
-	} while (hg_ret == HG_SUCCESS && count > 0);
-
-	if (hg_ret != HG_TIMEOUT) {
-		D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
-		return -DER_HG;
-	}
-
-	return 0;
-}
-
 int
 crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 {
 	hg_context_t		*hg_context;
-	hg_class_t		*hg_class;
-	hg_return_t		hg_ret = HG_SUCCESS;
 	unsigned int		hg_timeout;
-	int			rc;
+	unsigned int		total = 256;
 
-	D_ASSERT(hg_ctx != NULL);
 	hg_context = hg_ctx->chc_hgctx;
-	hg_class = hg_ctx->chc_hgcla;
-	D_ASSERT(hg_context != NULL && hg_class != NULL);
 
 	/**
 	 * Mercury only supports milli-second timeout and uses an unsigned int
@@ -1369,24 +1341,43 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 	else
 		hg_timeout = timeout / 1000;
 
-	rc = crt_hg_trigger(hg_ctx);
-	if (rc != 0)
-		return rc;
+	do {
+		hg_return_t     hg_ret = HG_SUCCESS;
+		int             rc = 0;
+		unsigned int count = 0;
 
-	/** progress RPC execution */
-	hg_ret = HG_Progress(hg_context, hg_timeout);
-	if (hg_ret == HG_TIMEOUT)
-		D_GOTO(out, rc = -DER_TIMEDOUT);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Progress failed, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
+		/** progress RPC execution */
+		hg_ret = HG_Progress(hg_context, hg_timeout);
+		if (hg_ret == HG_TIMEOUT) {
+			rc = -DER_TIMEDOUT;
+		} else if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Progress failed, hg_ret: %d.\n", hg_ret);
+			return -DER_HG;
+		}
 
-	/* some RPCs have progressed, call Trigger again */
-	rc = crt_hg_trigger(hg_ctx);
+		/** some RPCs have progressed, call Trigger */
+		hg_ret = HG_Trigger(hg_context, 0, total, &count);
+		if (hg_ret == HG_TIMEOUT) {
+			/** nothing to trigger */
+			return rc;
+		} else if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
+			return -DER_HG;
+		}
 
-out:
-	return rc;
+		if (count == 0 || rc)
+			/** nothing to trigger */
+			return rc;
+
+		/**
+		 * continue network progress and callback processing, but w/o
+		 * waiting this time
+		 */
+		total -= count;
+		hg_timeout = 0;
+	} while (total > 0);
+
+	return 0;
 }
 
 #define CRT_HG_IOVN_STACK	(8)
