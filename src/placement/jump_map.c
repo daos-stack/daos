@@ -651,14 +651,14 @@ jump_map_destroy(struct pl_map *map)
  *                      placement.
  * \param[in]   mia     placement map initialization values. Part of the
  *                      placement map API but currently not used in this map.
- * \param[in]   mmap    The placement map interface that will be passed out
+ * \param[in]   mapp    The placement map interface that will be passed out
  *                      and used when placing objects.
  *
  * \return              The error status of the function.
  */
 static int
 jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
-		struct pl_map **mmap)
+		struct pl_map **mapp)
 {
 	struct pool_domain      *root;
 	struct pl_jump_map      *jmap;
@@ -689,7 +689,7 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	}
 
 	jmap->jmp_domain_nr = rc;
-	*mmap = &jmap->jmp_map;
+	*mapp = &jmap->jmp_map;
 
 	return DER_SUCCESS;
 

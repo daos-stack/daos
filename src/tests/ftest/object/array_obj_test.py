@@ -73,7 +73,7 @@ class ArrayObjTest(TestWithServers):
             thedata = []
             thedata.append("data string one")
             thedata.append("data string two")
-            thedata.append("data string tree")
+            thedata.append("data string tre")
             dkey = "this is the dkey"
             akey = "this is the akey"
 

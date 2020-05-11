@@ -502,8 +502,8 @@ class WebRetriever():
 
         if hexdigest != self.md5:
             print("Removing existing file %s: md5 %s != %s" % (filename,
-                                                              self.md5,
-                                                              hexdigest))
+                                                               self.md5,
+                                                               hexdigest))
             os.remove(filename)
             return False
 

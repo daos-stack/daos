@@ -1404,10 +1404,10 @@ pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
  *
  * \param buf		[IN]	The buffer to input pool components.
  * \param version	[IN]	Version for the new created pool map.
- * \param mmap		[OUT]	The returned pool map.
+ * \param mapp		[OUT]	The returned pool map.
  */
 int
-pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mmap)
+pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 {
 	struct pool_domain *tree = NULL;
 	struct pool_map	   *map = NULL;
@@ -1449,7 +1449,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mmap)
 
 	map->po_version = version;
 	map->po_ref = 1; /* 1 for caller */
-	*mmap = map;
+	*mapp = map;
 	return 0;
  failed:
 	if (tree != NULL)
