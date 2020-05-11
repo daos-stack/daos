@@ -65,7 +65,8 @@ static void *progress(void *arg)
 	__sync_fetch_and_add(status, -1);
 
 	do {
-		rc = crt_progress(crt_ctx, 1000*1000, check_status, status);
+		rc = crt_progress_cond(crt_ctx, 1000*1000, check_status,
+				       status);
 		if (rc == -DER_TIMEDOUT)
 			sched_yield();
 		else if (rc != 0)

@@ -35,7 +35,7 @@ else:
 
 from . import DAOS_MAGIC
 from . import PyDError
-from . import dc
+from . import DaosClient
 
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(
@@ -102,6 +102,7 @@ class Cont(object):
         print pool and container UUIDs
     """
     def __init__(self, puuid=None, cuuid=None, path=None, svc='0'):
+        self._dc = DaosClient()
         self.coh = None
         if path is None and (puuid is None or cuuid is None):
             raise PyDError("invalid pool or container UUID",
@@ -120,7 +121,6 @@ class Cont(object):
             raise PyDError("failed to access container", ret)
         self.poh = poh
         self.coh = coh
-        self._dc = dc
 
     def __del__(self):
         if not self.coh:
@@ -161,6 +161,7 @@ class _Obj(object):
     oh = None
 
     def __init__(self, coh, oid, cont):
+        self._dc = DaosClient()
         self.oid = oid
         # Set self.oh to Null here so it's defined in __dell__ if there's
         # a problem with the obj_open() call.
@@ -193,6 +194,7 @@ class KVIter():
     """Iterator class for KVOjb"""
 
     def __init__(self, kv):
+        self._dc = DaosClient()
         self._entries = []
         self._nr = 256
         self._size = 4096 # optimized for 16-char strings
