@@ -1,0 +1,8 @@
+hosts:
+  test_servers:
+    - server-A
+timeout: 80
+server_config:
+  name: daos_server
+  servers:
+    targets: 8

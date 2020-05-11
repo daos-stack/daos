@@ -64,7 +64,22 @@ class DaosCommand(CommandWithSubCommand):
         # Sample get-attr output - no line break.
         # 04/19-21:16:32.66 wolf-3 Pool's attr2 attribute value:
         # 04/19-21:16:32.66 wolf-3 val2
-        "pool_get_attr": r"\b(\S+)$"
+        "pool_get_attr": r"\b(\S+)$",
+        "container_query":
+            r"Pool UUID:\s+([0-9a-f-]+)\n" +
+            r"Container UUID:\s+([0-9a-f-]+)\n" +
+            r"Number of snapshots:\s+(\d+)\n" +
+            r"Latest Persistent Snapshot:\s+(\d+)\n" +
+            r"Highest Aggregated Epoch:\s+(\d+)",
+        # Sample get-attr output - no line break.
+        # 04/20-17:47:07.86 wolf-3 Container's attr1 attribute value:  04
+        # /20-17:47:07.86 wolf-3 val1
+        "container_get_attr": r"\b(\S+)$",
+        # Sample list output.
+        #  04/20-17:52:33.63 wolf-3 Container attributes:
+        #  04/20-17:52:33.63 wolf-3 attr1
+        #  04/20-17:52:33.63 wolf-3 attr2
+        "container_list_attrs": r"\b([^:\s]+)\n"
     }
 
     def __init__(self, path):
@@ -724,4 +739,115 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.set_sub_command("list-attrs")
         self.sub_command_class.sub_command_class.pool.value = pool
         self.sub_command_class.sub_command_class.svc.value = svc
+        return self._get_result()
+
+    def container_query(self, pool, cont, svc=None, sys_name=None):
+        """Query a container.
+
+        Args:
+            pool (String): Pool UUID.
+            cont (String): Container UUID.
+            svc (String): pool service replicas, e.g., '1,2,3'. Defaults to
+                None.
+            sys_name (String, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas pool query command fails.
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        return self._get_result()
+
+    def container_set_attr(
+        self, pool, cont, attr, val, svc=None, sys_name=None):
+        """Call daos container set-attr.
+
+        Args:
+            pool (String): Pool UUID.
+            cont (String): Container UUID.
+            attr (String): Attribute name.
+            val (String): Attribute value.
+            svc (String): Pool service replicas, e.g., '1,2,3'. Defaults to
+                None.
+            sys_name (String, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas pool query command fails.
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("set-attr")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.attr.value = attr
+        self.sub_command_class.sub_command_class.value.value = val
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        return self._get_result()
+
+    def container_get_attr(self, pool, cont, attr, svc=None, sys_name=None):
+        """Call daos container get-attr.
+
+        Args:
+            pool (String): Pool UUID.
+            cont (String): Container UUID.
+            attr (String): Attribute name.
+            svc (String): Pool service replicas, e.g., '1,2,3'. Defaults to
+                None.
+            sys_name (String, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas pool query command fails.
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("get-attr")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.attr.value = attr
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        return self._get_result()
+
+    def container_list_attrs(self, pool, cont, svc=None, sys_name=None):
+        """Call daos container list-attrs.
+
+        Args:
+            pool (String): Pool UUID.
+            cont (String): Container UUID.
+            svc (String): Pool service replicas, e.g., '1,2,3'. Defaults to
+                None.
+            sys_name (String, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas pool query command fails.
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("list-attrs")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
         return self._get_result()
