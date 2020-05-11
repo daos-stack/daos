@@ -357,7 +357,7 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 		inPath    string
 		expErrMsg string
 	}{
-		"path exists":       {inPath: "uncommentedDefault"},
+		"path exists":         {inPath: "uncommentedDefault"},
 		"path does not exist": {expErrMsg: "no such file or directory"},
 	} {
 		t.Run(name, func(t *testing.T) {
