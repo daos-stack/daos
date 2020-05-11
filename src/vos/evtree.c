@@ -238,9 +238,9 @@ ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		D_FREE(ent_array->ea_ents);
 	ent_array->ea_ents = ents;
 	ent_array->ea_size = new_size;
+
 	return 0;
 }
-
 static inline struct evt_list_entry *
 evt_array_entry2le(struct evt_entry *ent)
 {
@@ -594,6 +594,7 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 			continue;
 		}
 
+		evt_array_entry2le(this_ent)->le_prev = NULL;
 		d_list_add_tail(next, &covered);
 	}
 
