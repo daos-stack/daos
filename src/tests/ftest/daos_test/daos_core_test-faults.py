@@ -27,22 +27,18 @@ from daos_core_base import DaosCoreBase
 
 class DaosCoreTest(DaosCoreBase):
     # pylint: disable=too-many-ancestors
-    """Runs the daos_test tests that do not require fault injection enabled.
+    """Runs only the daos_test tests that require fault injectors enabled.
 
     :avocado: recursive
     """
 
-    def test_subtest(self):
-        """Run daos_test tests/subtests.
+    def test_faults(self):
+        """Jira ID: DAOS-4693.
 
-        Test ID: DAOS-1568
-        Test Description: Run daos_test tests/subtests that do not require
-                          fault injection enabled. Tests/subtests that require
-                          fault injection enabled should be defined in
-                          daos_core_test-faults yaml.
+        Test Description: Run daos_test with fault injection enabled
 
-        Use Cases: core tests for daos_test
+        Use Cases: core tests for daos_test with fault injection
 
-        :avocado: tags=all,pr,hw,ib2,medium,daos_test
+        :avocado: tags=all,pr,hw,ib2,medium,daos_test,faults
         """
         DaosCoreBase.run_subtest(self)

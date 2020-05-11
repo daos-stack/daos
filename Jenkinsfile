@@ -140,6 +140,13 @@ def daos_packages_version(String distro) {
     error "Don't know how to determine package version for " + distro
 }
 
+def fault_test_tag() {
+    if (skip_stage('fault-test')) {
+        return ",-faults"
+    }
+    return ""
+}
+
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -1289,7 +1296,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '',
-                                          test_tag: 'pr,-hw',
+                                          test_tag: 'pr,-hw' + fault_test_tag(),
                                           node_count: 9,
                                           ftest_arg: ''
                     }
@@ -1345,7 +1352,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '-hw-small',
-                                          test_tag: 'pr,hw,small',
+                                          test_tag: 'pr,hw,small' + fault_test_tag(),
                                           node_count: 3,
                                           ftest_arg: '"auto:Optane"'
                     }
@@ -1401,7 +1408,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '-hw-medium',
-                                          test_tag: 'pr,hw,medium,ib2',
+                                          test_tag: 'pr,hw,medium,ib2' + fault_test_tag(),
                                           node_count: 5,
                                           ftest_arg: '"auto:Optane"'
                     }
@@ -1457,7 +1464,7 @@ pipeline {
                         runTestFunctional stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '-hw-large',
-                                          test_tag: 'pr,hw,large',
+                                          test_tag: 'pr,hw,large' + fault_test_tag(),
                                           node_count: 9,
                                           ftest_arg: '"auto:Optane"'
                     }
