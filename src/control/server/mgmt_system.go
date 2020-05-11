@@ -169,23 +169,9 @@ func (svc *mgmtSvc) localInstances(inRanks []uint32) ([]*IOServerInstance, error
 	return localInstances, nil
 }
 
-// PrepShutdown implements the method defined for the Management Service.
-//
-// Prepare data-plane instance managed by control-plane for a controlled shutdown,
-// identified by unique rank.
-//
-// Iterate over instances, issuing PrepShutdown dRPCs and record results.
-// Return error in addition to response if any instance requests not successful
-// so retries can be performed at sender.
-func (svc *mgmtSvc) PrepShutdownRanks(parent context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
-	}
-	if len(req.GetRanks()) == 0 {
-		return nil, errors.New("no ranks specified in request")
-	}
-	svc.log.Debugf("MgmtSvc.PrepShutdownRanks dispatch, req:%+v\n", *req)
-
+// drpcOnLocalRanks iterates over local instances issuing dRPC requests
+// concurrently and returning system member results.
+func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksReq, method int32) ([]*system.MemberResult, error) {
 	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
 	defer cancel()
 
@@ -194,23 +180,48 @@ func (svc *mgmtSvc) PrepShutdownRanks(parent context.Context, req *mgmtpb.RanksR
 		return nil, err
 	}
 
-	prepping := 0
+	inflight := 0
 	ch := make(chan *system.MemberResult)
 	for _, srv := range instances {
-		prepping++
+		inflight++
 		go func(s *IOServerInstance) {
-			ch <- s.dPrepShutdown(ctx)
+			ch <- s.TryDrpc(ctx, method)
 		}(srv)
 	}
 
-	results := make(system.MemberResults, 0, prepping)
-	for prepping > 0 {
+	results := make(system.MemberResults, 0, inflight)
+	for inflight > 0 {
 		result := <-ch
-		prepping--
+		inflight--
 		if result == nil {
 			return nil, errors.New("nil result")
 		}
 		results = append(results, result)
+	}
+
+	return results, nil
+}
+
+// PrepShutdown implements the method defined for the Management Service.
+//
+// Prepare data-plane instance managed by control-plane for a controlled shutdown,
+// identified by unique rank.
+//
+// Iterate over instances, issuing PrepShutdown dRPCs and record results.
+// Return error in addition to response if any instance requests not successful
+// so retries can be performed at sender.
+func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
+	svc.log.Debugf("MgmtSvc.PrepShutdownRanks dispatch, req:%+v\n", *req)
+
+	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPrepShutdown)
+	if err != nil {
+		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
 	}
 
 	resp := &mgmtpb.RanksResp{}
@@ -225,32 +236,21 @@ func (svc *mgmtSvc) PrepShutdownRanks(parent context.Context, req *mgmtpb.RanksR
 
 // memberStateResults returns system member results reflecting whether the state
 // of the given member is equivalent to the supplied desired state value.
-func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredState system.MemberState, action string) (system.MemberResults, error) {
+func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredState system.MemberState) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, len(instances))
 	for _, srv := range instances {
-		state := system.MemberStateUnknown
-		switch {
-		case srv.isReady():
-			state = system.MemberStateReady
-		case srv.isStarted():
-			state = system.MemberStateStarting
-		case srv.isAwaitingFormat():
-			state = system.MemberStateAwaitFormat
-		default:
-			state = system.MemberStateStopped
-		}
-
 		rank, err := srv.GetRank()
 		if err != nil {
 			svc.log.Debugf("Instance %d GetRank(): %s", srv.Index(), err)
 			continue
 		}
 
+		state := srv.LocalState()
 		if state != desiredState {
 			err = errors.Errorf("want %s, got %s", desiredState, state)
 		}
 
-		results = append(results, system.NewMemberResult(rank, action, err, state))
+		results = append(results, system.NewMemberResult(rank, err, state))
 	}
 
 	return results, nil
@@ -316,7 +316,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 // responsiveness.
 //
 // For each instance, call over dRPC with dPing() async and collect results.
-func (svc *mgmtSvc) PingRanks(parent context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -325,31 +325,9 @@ func (svc *mgmtSvc) PingRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	}
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
 
-	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
-	defer cancel()
-
-	instances, err := svc.localInstances(req.GetRanks())
+	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPingRank)
 	if err != nil {
-		return nil, err
-	}
-
-	pinging := 0
-	ch := make(chan *system.MemberResult)
-	for _, srv := range instances {
-		pinging++
-		go func(s *IOServerInstance) {
-			ch <- s.dPing(ctx)
-		}(srv)
-	}
-
-	results := make(system.MemberResults, 0, pinging)
-	for pinging > 0 {
-		result := <-ch
-		pinging--
-		if result == nil {
-			return nil, errors.New("nil result")
-		}
-		results = append(results, result)
+		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
 	}
 
 	resp := &mgmtpb.RanksResp{}
@@ -406,18 +384,7 @@ func (svc *mgmtSvc) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq) 
 	results := make(system.MemberResults, 0, len(instances))
 	for _, srv := range instances {
 		var err error
-		state := system.MemberStateUnknown
-		switch {
-		case srv.isReady():
-			state = system.MemberStateReady
-		case srv.isStarted():
-			state = system.MemberStateStarting
-		case srv.isAwaitingFormat():
-			state = system.MemberStateAwaitFormat
-		default:
-			state = system.MemberStateStopped
-		}
-
+		state := srv.LocalState()
 		if state != system.MemberStateAwaitFormat {
 			err = errors.Errorf("want %s, got %s", system.MemberStateAwaitFormat, state)
 		}

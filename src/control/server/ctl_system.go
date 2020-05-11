@@ -83,7 +83,6 @@ func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq
 	}
 
 	req.SetHostList(svc.membership.Hosts(req.Ranks...))
-	svc.log.Debugf("host list %v", req.HostList)
 	resp, err := getRanksFunc(method)(ctx, svc.rpcClient, req)
 	if err != nil {
 		return nil, err
@@ -110,50 +109,13 @@ func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq
 	return results, nil
 }
 
-// pingMembers requests registered harness to ping their instances (system
-// members) in order to determine IO Server process responsiveness. Update membership
-// appropriately.
-//
-// Each host address represents a gRPC server associated with a harness managing
-// one or more data-plane instances (DAOS system members).
-func (svc *ControlService) pingMembers(ctx context.Context, req *control.RanksReq) error {
-	results, err := svc.rpcToRanks(ctx, req, ping)
-	if err != nil {
-		return err
-	}
-
-	// only update members in the appropriate state (Joined/Stopping)
-	// leave unresponsive members to be updated by a join
-	filteredMembers := svc.membership.Members(req.Ranks, system.MemberStateEvicted,
-		system.MemberStateErrored, system.MemberStateUnknown,
-		system.MemberStateStopped, system.MemberStateUnresponsive)
-
-	for _, m := range filteredMembers {
-		for _, r := range results {
-			// Update either:
-			// - members unresponsive to ping
-			// - members with stopped processes
-			// - members returning errors e.g. from dRPC ping
-			if !r.Rank.Equals(m.Rank) ||
-				(r.State != system.MemberStateUnresponsive &&
-					r.State != system.MemberStateStopped &&
-					r.State != system.MemberStateErrored) {
-
-				continue
-			}
-			if err := svc.membership.SetMemberState(m.Rank, r.State); err != nil {
-				return errors.Wrapf(err, "setting state of rank %d", m.Rank)
-			}
-		}
-	}
-
-	return nil
-}
-
 // SystemQuery implements the method defined for the Management Service.
 //
 // Return status of system members specified in request rank list (or all
 // members if request rank list is empty).
+//
+// Request harnesses to ping their instances (system members) to determine
+// IO Server process responsiveness. Update membership appropriately.
 func (svc *ControlService) SystemQuery(parent context.Context, pbReq *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
 	svc.log.Debug("Received SystemQuery RPC")
 
@@ -165,10 +127,15 @@ func (svc *ControlService) SystemQuery(parent context.Context, pbReq *ctlpb.Syst
 	defer cancel()
 
 	req := &control.RanksReq{Ranks: system.RanksFromUint32(pbReq.GetRanks())}
-	if err := svc.pingMembers(ctx, req); err != nil {
+	results, err := svc.rpcToRanks(ctx, req, ping)
+	if err != nil {
 		return nil, err
 	}
-	members := svc.membership.Members(req.Ranks)
+	// pass ignoreErrored == false to update member state when failing ping
+	if err = svc.membership.UpdateMemberStates(results, false); err != nil {
+		return nil, err
+	}
+	members := svc.membership.Members(req.Ranks...)
 
 	pbResp := &ctlpb.SystemQueryResp{}
 	if err := convert.Types(members, &pbResp.Members); err != nil {
@@ -208,7 +175,7 @@ func (svc *ControlService) SystemStop(parent context.Context, pbReq *ctlpb.Syste
 		if err != nil {
 			return nil, err
 		}
-		if err = svc.membership.UpdateMemberStates(results); err != nil {
+		if err = svc.membership.UpdateMemberStates(results, true); err != nil {
 			return nil, err
 		}
 		if err = convert.Types(results, &pbResp.Results); err != nil {
@@ -226,7 +193,7 @@ func (svc *ControlService) SystemStop(parent context.Context, pbReq *ctlpb.Syste
 		if err != nil {
 			return nil, err
 		}
-		if err = svc.membership.UpdateMemberStates(results); err != nil {
+		if err = svc.membership.UpdateMemberStates(results, true); err != nil {
 			return nil, err
 		}
 		if err = convert.Types(results, &pbResp.Results); err != nil {
@@ -263,7 +230,7 @@ func (svc *ControlService) SystemStart(parent context.Context, pbReq *ctlpb.Syst
 	if err != nil {
 		return nil, err
 	}
-	if err := svc.membership.UpdateMemberStates(results); err != nil {
+	if err := svc.membership.UpdateMemberStates(results, true); err != nil {
 		return nil, err
 	}
 
@@ -296,7 +263,7 @@ func (svc *ControlService) SystemResetFormat(parent context.Context, pbReq *ctlp
 	if err != nil {
 		return nil, err
 	}
-	if err := svc.membership.UpdateMemberStates(results); err != nil {
+	if err := svc.membership.UpdateMemberStates(results, true); err != nil {
 		return nil, err
 	}
 

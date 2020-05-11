@@ -114,6 +114,21 @@ func (srv *IOServerInstance) isMSReplica() bool {
 	return srv.hasSuperblock() && srv.getSuperblock().MS
 }
 
+// LocalState returns local perspective of the current instance state
+// (doesn't consider state info held by the global system membership).
+func (srv *IOServerInstance) LocalState() system.MemberState {
+	switch {
+	case srv.isReady():
+		return system.MemberStateReady
+	case srv.isStarted():
+		return system.MemberStateStarting
+	case srv.isAwaitingFormat():
+		return system.MemberStateAwaitFormat
+	default:
+		return system.MemberStateStopped
+	}
+}
+
 // setIndex sets the server index assigned by the harness.
 func (srv *IOServerInstance) setIndex(idx uint32) {
 	srv.runner.GetConfig().Index = idx

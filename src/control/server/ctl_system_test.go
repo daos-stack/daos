@@ -297,6 +297,128 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 	}
 }
 
+func TestServer_CtlSvc_SystemQuery(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilReq     bool
+		ranks      []uint32
+		members    system.Members
+		mResps     []*control.HostResponse
+		expMembers []*ctlpb.SystemMember
+		expErrMsg  string
+	}{
+		"nil req": {
+			nilReq:    true,
+			expErrMsg: "nil request",
+		},
+		"unfiltered rank results": {
+			members: system.Members{
+				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopping),
+				system.NewMember(2, "", getHostAddr(2), system.MemberStateReady),
+				system.NewMember(3, "", getHostAddr(2), system.MemberStateJoined),
+				system.NewMember(4, "", getHostAddr(3), system.MemberStateAwaitFormat),
+				system.NewMember(5, "", getHostAddr(3), system.MemberStateAwaitFormat),
+			},
+			mResps: []*control.HostResponse{
+				{
+					Addr: getHostAddr(1).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{
+								Rank: 0, Action: string(ping),
+								Errored: true, Msg: "couldn't ping",
+								State: uint32(system.MemberStateStopped),
+							},
+							{
+								Rank: 1, Action: string(ping),
+								State: uint32(system.MemberStateReady),
+							},
+						},
+					},
+				},
+				{
+					Addr: getHostAddr(2).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{
+								Rank: 2, Action: string(ping),
+								State: uint32(system.MemberStateReady),
+							},
+							{
+								Rank: 3, Action: string(ping),
+								State: uint32(system.MemberStateReady),
+							},
+						},
+					},
+				},
+			},
+			expMembers: []*ctlpb.SystemMember{
+				&ctlpb.SystemMember{
+					Rank: 0, Addr: getHostAddr(1).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+				&ctlpb.SystemMember{
+					Rank: 1, Addr: getHostAddr(1).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+				//				system.NewMember(1, "", getHostAddr(1), system.MemberStateReady),
+				//				system.NewMember(2, "", getHostAddr(2), system.MemberStateReady),
+				//				system.NewMember(3, "", getHostAddr(2), system.MemberStateReady),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			emptyCfg := emptyMockConfig(t)
+			cs := mockControlService(t, log, emptyCfg, nil, nil, nil)
+			cs.membership = system.NewMembership(log)
+			for _, m := range tc.members {
+				if _, err := cs.membership.Add(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			mgmtSvc := newTestMgmtSvcMulti(log, maxIOServers, false)
+			cs.harness = mgmtSvc.harness
+			cs.harness.started.SetTrue()
+			m := newMgmtSvcClient(
+				context.Background(), log, mgmtSvcClientCfg{
+					AccessPoints: []string{defaultAP},
+				},
+			)
+			cs.harness.instances[0].msClient = m
+			cs.harness.instances[0]._superblock.MS = true
+			cs.harness.instances[0]._superblock.Rank = system.NewRankPtr(0)
+
+			ctx := context.TODO()
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: tc.mResps,
+				},
+			})
+			cs.rpcClient = mi
+
+			req := &ctlpb.SystemQueryReq{Ranks: tc.ranks}
+			if tc.nilReq {
+				req = nil
+			}
+
+			gotResp, gotErr := cs.SystemQuery(ctx, req)
+			common.ExpectError(t, gotErr, tc.expErrMsg, name)
+			if tc.expErrMsg != "" {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expMembers, gotResp.Members, common.DefaultCmpOpts()...); diff != "" {
+				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
+			}
+			common.AssertEqual(t, tc.expMembers, gotResp.Members, name)
+		})
+	}
+}
+
 func TestServer_CtlSvc_SystemStart(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilReq     bool
@@ -472,7 +594,7 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
 
-			common.AssertEqual(t, tc.expMembers, cs.membership.Members([]system.Rank{}), name)
+			common.AssertEqual(t, tc.expMembers, cs.membership.Members(), name)
 		})
 	}
 }
@@ -700,7 +822,7 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 					name+": compare state rank"+m.Rank.String())
 			}
 
-			common.AssertEqual(t, tc.expMembers, cs.membership.Members([]system.Rank{}), name)
+			common.AssertEqual(t, tc.expMembers, cs.membership.Members(), name)
 		})
 	}
 }

@@ -208,15 +208,11 @@ func TestMember_AddOrUpdate(t *testing.T) {
 				AssertEqual(t, em.Rank, m.Rank, name)
 				AssertEqual(t, em.State(), m.State(), name)
 
-				// verify UpdateState works as expected
-				if err := ms.SetMemberState(m.Rank, MemberStateEvicted); err != nil {
-					t.Fatal(err)
-				}
-
 				m, err = ms.Get(em.Rank)
 				if err != nil {
 					t.Fatal(err)
 				}
+				m.state = MemberStateEvicted
 				AssertEqual(t, em.Rank, m.Rank, name)
 				AssertEqual(t, MemberStateEvicted, m.State(), name)
 			}
@@ -304,7 +300,7 @@ func TestMember_HostRanks(t *testing.T) {
 			AssertEqual(t, tc.expRanks, ms.Ranks(), "ranks")
 			AssertEqual(t, tc.expHostRanks, ms.HostRanks(tc.rankList...), "host ranks")
 			AssertEqual(t, tc.expHosts, ms.Hosts(tc.rankList...), "hosts")
-			AssertEqual(t, tc.expMembers, ms.Members(tc.rankList), "members")
+			AssertEqual(t, tc.expMembers, ms.Members(tc.rankList...), "members")
 		})
 	}
 }
@@ -335,15 +331,10 @@ func TestMemberResult_Convert(t *testing.T) {
 }
 
 func TestMember_UpdateMemberStates(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
-
-	mrDiffAddr1 := NewMemberResult(6, "stop", nil, MemberStateJoined)
+	mrDiffAddr1 := NewMemberResult(6, "start", nil, MemberStateJoined)
 	mrDiffAddr1.Addr = ""
-	mrDiffAddr2 := NewMemberResult(7, "stop", nil, MemberStateJoined)
+	mrDiffAddr2 := NewMemberResult(7, "start", nil, MemberStateJoined)
 	mrDiffAddr2.Addr = "10.0.0.1"
-
-	ms := NewMembership(log)
 
 	members := Members{
 		mockMember(t, 1, MemberStateJoined),
@@ -354,46 +345,93 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 		mockMember(t, 6, MemberStateStopped),
 		mockMember(t, 7, MemberStateStopped),
 	}
-	results := MemberResults{
-		NewMemberResult(1, "query", nil, MemberStateStopped),
-		NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateErrored),
-		NewMemberResult(4, "start", nil, MemberStateReady),
-		NewMemberResult(5, "start", nil, MemberStateReady),
-		mrDiffAddr1, // blank host address should get updated to that of member
-		mrDiffAddr2, // existing host address should not get updated to that of member
-	}
-	expMembers := Members{
-		mockMember(t, 1, MemberStateStopped),
-		mockMember(t, 2, MemberStateStopped), // errored results don't change member state
-		mockMember(t, 3, MemberStateEvicted),
-		mockMember(t, 4, MemberStateReady),
-		mockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
-		mockMember(t, 6, MemberStateJoined),
-		mockMember(t, 7, MemberStateJoined),
-	}
 
-	for _, m := range members {
-		if _, err := ms.Add(m); err != nil {
-			t.Fatal(err)
-		}
-	}
+	for name, tc := range map[string]struct {
+		ignoreErrs bool
+		results    MemberResults
+		expMembers Members
+		expErrMsg  string
+	}{
+		"ignore errored results": {
+			ignoreErrs: true,
+			results: MemberResults{
+				NewMemberResult(1, "query", nil, MemberStateStopped),
+				NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateErrored),
+				NewMemberResult(4, "start", nil, MemberStateReady),
+				NewMemberResult(5, "start", nil, MemberStateReady),
+				mrDiffAddr1, // blank host address should get updated to that of member
+				mrDiffAddr2, // existing host address should not get updated to that of member
+			},
+			expMembers: Members{
+				mockMember(t, 1, MemberStateStopped),
+				mockMember(t, 2, MemberStateStopped), // errored results don't change member state
+				mockMember(t, 3, MemberStateEvicted),
+				mockMember(t, 4, MemberStateReady),
+				mockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
+				mockMember(t, 6, MemberStateJoined),
+				mockMember(t, 7, MemberStateJoined),
+			},
+		},
+		"dont ignore errored results": {
+			results: MemberResults{
+				NewMemberResult(1, "query", nil, MemberStateStopped),
+				NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateErrored),
+				NewMemberResult(4, "start", nil, MemberStateReady),
+				NewMemberResult(5, "start", nil, MemberStateReady),
+			},
+			expMembers: Members{
+				mockMember(t, 1, MemberStateStopped),
+				mockMember(t, 2, MemberStateErrored),
+				mockMember(t, 3, MemberStateEvicted),
+				mockMember(t, 4, MemberStateReady),
+				mockMember(t, 5, MemberStateJoined),
+				mockMember(t, 6, MemberStateJoined),
+				mockMember(t, 7, MemberStateJoined),
+			},
+		},
+		"errored result with nonerrored state": {
+			results: MemberResults{
+				NewMemberResult(1, "query", nil, MemberStateStopped),
+				NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateErrored),
+				NewMemberResult(3, "stop", errors.New("can't stop"), MemberStateJoined),
+				NewMemberResult(4, "start", nil, MemberStateReady),
+				NewMemberResult(5, "start", nil, MemberStateReady),
+			},
+			expErrMsg: "errored result for rank 3 has conflicting state 'Joined'",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
 
-	// members should be updated with result state
-	if err := ms.UpdateMemberStates(results); err != nil {
-		t.Fatal(err)
-	}
+			ms := NewMembership(log)
 
-	cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(MemberResult{}, Member{})}
-	for i, m := range ms.Members([]Rank{}) {
-		if diff := cmp.Diff(expMembers[i], m, cmpOpts...); diff != "" {
-			t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
-		}
-		AssertEqual(t, expMembers[i].State().String(), m.State().String(), m.Rank.String())
-	}
+			for _, m := range members {
+				if _, err := ms.Add(m); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	// verify result host address is updated to that of member if empty
-	m, _ := ms.Get(Rank(6))
-	AssertEqual(t, m.Addr.String(), mrDiffAddr1.Addr, "result host address update")
-	m, _ = ms.Get(Rank(7))
-	AssertNotEqual(t, m.Addr.String(), mrDiffAddr2.Addr, "result host address not updated")
+			// members should be updated with result state
+			if err := ms.UpdateMemberStates(tc.results, tc.ignoreErrs); err != nil {
+				ExpectError(t, err, tc.expErrMsg, name)
+				return
+			}
+
+			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(MemberResult{}, Member{})}
+			for i, m := range ms.Members() {
+				if diff := cmp.Diff(tc.expMembers[i], m, cmpOpts...); diff != "" {
+					t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+				}
+				AssertEqual(t, tc.expMembers[i].State().String(), m.State().String(),
+					m.Rank.String())
+			}
+
+			// verify result host address is updated to that of member if empty
+			m, _ := ms.Get(Rank(6))
+			AssertEqual(t, m.Addr.String(), mrDiffAddr1.Addr, "result host address update")
+			m, _ = ms.Get(Rank(7))
+			AssertNotEqual(t, m.Addr.String(), mrDiffAddr2.Addr, "result host address not updated")
+		})
+	}
 }
