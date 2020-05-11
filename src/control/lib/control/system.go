@@ -27,9 +27,11 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/system"
@@ -61,7 +63,6 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
-
 	rpcClient.Debugf("DAOS system stop request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -92,7 +93,6 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
-
 	rpcClient.Debugf("DAOS system start request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -123,7 +123,6 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 			Ranks: system.RanksToUint32(req.Ranks),
 		})
 	})
-
 	rpcClient.Debugf("DAOS system query request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -135,6 +134,7 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	return resp, convertMSResponse(ur, resp)
 }
 
+// LeaderQueryReq contains the inputs for the leader query request.
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
@@ -156,7 +156,6 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 			System: req.System,
 		})
 	})
-
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -190,7 +189,6 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			Sys: req.System,
 		})
 	})
-
 	rpcClient.Debugf("DAOS system list-pools request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -200,4 +198,122 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 
 	resp := new(ListPoolsResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+// RanksReq contains the parameters for a system ranks request.
+type RanksReq struct {
+	unaryRequest
+	Ranks []system.Rank
+	Force bool
+}
+
+// RanksResp contains the response from a system ranks request.
+type RanksResp struct {
+	HostErrorsResp // record unresponsive hosts
+	RankResults    system.MemberResults
+}
+
+// addHostResponse is responsible for validating the given HostResponse
+// and adding it's results to the RanksResp.
+func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
+	pbResp, ok := hr.Message.(*mgmtpb.RanksResp)
+	if !ok {
+		return errors.Errorf("unable to unpack message: %+v", hr.Message)
+	}
+
+	memberResults := make(system.MemberResults, 0)
+	if err := convert.Types(pbResp.GetResults(), &memberResults); err != nil {
+		if srr.HostErrors == nil {
+			srr.HostErrors = make(HostErrorsMap)
+		}
+		return srr.HostErrors.Add(hr.Addr, err)
+	}
+
+	srr.RankResults = append(srr.RankResults, memberResults...)
+
+	return
+}
+
+func rpcToRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	rr := new(RanksResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := rr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if err := rr.addHostResponse(hostResp); err != nil {
+			return nil, err
+		}
+	}
+
+	return rr, nil
+}
+
+// PrepShutdownRanks concurrently performs prep shutdown ranks across all hosts
+// supplied in the request's hostlist. The function blocks until all
+// results (successful or otherwise) are received, and returns a
+// single response structure containing results for all host operations.
+func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PrepShutdownRanks(ctx, &mgmtpb.RanksReq{
+			Ranks: system.RanksToUint32(req.Ranks),
+		})
+	})
+	rpcClient.Debugf("DAOS system prep shutdown-ranks request: %+v", req)
+
+	return rpcToRanks(ctx, rpcClient, req)
+}
+
+// StopRanks concurrently performs stop ranks across all hosts
+// supplied in the request's hostlist. The function blocks until all
+// results (successful or otherwise) are received, and returns a
+// single response structure containing results for all host operations.
+func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).StopRanks(ctx, &mgmtpb.RanksReq{
+			Ranks: system.RanksToUint32(req.Ranks),
+			Force: req.Force,
+		})
+	})
+	rpcClient.Debugf("DAOS system stop-ranks request: %+v", req)
+
+	return rpcToRanks(ctx, rpcClient, req)
+}
+
+// StartRanks concurrently performs start ranks across all hosts
+// supplied in the request's hostlist. The function blocks until all
+// results (successful or otherwise) are received, and returns a
+// single response structure containing results for all host operations.
+func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).StartRanks(ctx, &mgmtpb.RanksReq{
+			Ranks: system.RanksToUint32(req.Ranks),
+		})
+	})
+	rpcClient.Debugf("DAOS system start-ranks request: %+v", req)
+
+	return rpcToRanks(ctx, rpcClient, req)
+}
+
+// PingRanks concurrently performs ping on ranks across all hosts
+// supplied in the request's hostlist. The function blocks until all
+// results (successful or otherwise) are received, and returns a
+// single response structure containing results for all host operations.
+func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PingRanks(ctx, &mgmtpb.RanksReq{
+			Ranks: system.RanksToUint32(req.Ranks),
+		})
+	})
+	rpcClient.Debugf("DAOS system ping-ranks request: %+v", req)
+
+	return rpcToRanks(ctx, rpcClient, req)
 }

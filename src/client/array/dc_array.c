@@ -2244,26 +2244,3 @@ err_task:
 	tse_task_complete(task, rc);
 	return rc;
 } /* end daos_array_set_size */
-
-int
-dc_array_get_num_shards(daos_handle_t oh, uint32_t *num_shards)
-{
-	struct dc_array		*array;
-	struct daos_obj_layout	*layout;
-	int			rc;
-
-	if (num_shards == NULL)
-		return -DER_INVAL;
-
-	array = array_hdl2ptr(oh);
-	if (array == NULL)
-		return -DER_NO_HDL;
-
-	rc = dc_obj_layout_get(array->daos_oh, &layout);
-	if (rc)
-		return rc;
-
-	*num_shards = layout->ol_nr;
-	daos_obj_layout_free(layout);
-	return 0;
-}

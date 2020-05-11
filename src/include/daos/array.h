@@ -42,6 +42,5 @@ int dc_array_set_size(tse_task_t *task);
 int dc_array_local2global(daos_handle_t oh, d_iov_t *glob);
 int dc_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 			  daos_handle_t *oh);
-int dc_array_get_num_shards(daos_handle_t oh, uint32_t *num_shards);
 
 #endif /* __DAOS_ARRAYX_H__ */

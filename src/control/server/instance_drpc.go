@@ -24,11 +24,15 @@
 package server
 
 import (
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
@@ -74,4 +78,93 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	}
 
 	return makeDrpcCall(dc, module, method, body)
+}
+
+// drespToMemberResult converts drpc.Response to system.MemberResult.
+//
+// MemberResult is populated with rank, state and error dependent on processing
+// dRPC response. Target state param is populated on success, Errored otherwise.
+func drespToMemberResult(rank system.Rank, action string, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
+	var outErr error
+	state := system.MemberStateErrored
+
+	if err != nil {
+		outErr = errors.WithMessagef(err, "rank %s dRPC failed", &rank)
+	} else {
+		resp := &mgmtpb.DaosResp{}
+		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+			outErr = errors.WithMessagef(err, "rank %s dRPC unmarshal failed",
+				&rank)
+		} else if resp.GetStatus() != 0 {
+			outErr = errors.Errorf("rank %s dRPC returned DER %d",
+				&rank, resp.GetStatus())
+		}
+	}
+
+	if outErr == nil {
+		state = tState
+	}
+
+	return system.NewMemberResult(rank, action, outErr, state)
+}
+
+// dPing attempts dRPC request to given rank managed by instance and return
+// success or error from call result or timeout encapsulated in result.
+func (srv *IOServerInstance) dPing(ctx context.Context) *system.MemberResult {
+	rank, err := srv.GetRank()
+	if err != nil {
+		return nil // no rank to return result for
+	}
+
+	if !srv.isReady() {
+		return system.NewMemberResult(rank, "ping", nil, system.MemberStateStopped)
+	}
+
+	resChan := make(chan *system.MemberResult)
+	go func() {
+		dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodPingRank, nil)
+		resChan <- drespToMemberResult(rank, "ping", dresp, err, system.MemberStateReady)
+	}()
+
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			return system.NewMemberResult(rank, "ping", ctx.Err(),
+				system.MemberStateUnresponsive)
+		}
+		return nil // shutdown
+	case result := <-resChan:
+		return result
+	}
+}
+
+// dPrepShutdown attempts dRPC request to given rank managed by instance and return
+// success or error from call result or timeout encapsulated in result.
+func (srv *IOServerInstance) dPrepShutdown(ctx context.Context) *system.MemberResult {
+	rank, err := srv.GetRank()
+	if err != nil {
+		return nil // no rank to return result for
+	}
+
+	if !srv.isReady() {
+		return system.NewMemberResult(rank, "prep shutdown", nil, system.MemberStateStopped)
+	}
+
+	resChan := make(chan *system.MemberResult)
+	go func() {
+		dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodPrepShutdown, nil)
+		resChan <- drespToMemberResult(rank, "prep shutdown", dresp, err,
+			system.MemberStateStopping)
+	}()
+
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			return system.NewMemberResult(rank, "prep shutdown", ctx.Err(),
+				system.MemberStateUnresponsive)
+		}
+		return nil // shutdown
+	case result := <-resChan:
+		return result
+	}
 }

@@ -283,8 +283,3 @@ daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch)
 	daos_obj_close(oh, NULL);
 	return rc;
 }
-
-int
-daos_obj_anchor_split(uint32_t shard, daos_anchor_t *anchor) {
-	return dc_obj_anchor_split(shard, anchor);
-}

@@ -436,22 +436,6 @@ int
 daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 		    daos_size_t *cell_size);
 
-/**
- * Retrieve array number of shards.
- *
- * \param[in]	oh	Array object open handle.
- * \param[out]	num_shards
- *			Number of shards.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- */
-int
-daos_array_get_num_shards(daos_handle_t oh, uint32_t *num_shards);
-
 #if defined(__cplusplus)
 }
 #endif

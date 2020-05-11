@@ -348,7 +348,17 @@ int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
-int dc_obj_anchor_split(uint32_t shard, daos_anchor_t *anchor);
+
+int dc_tx_open(tse_task_t *task);
+int dc_tx_commit(tse_task_t *task);
+int dc_tx_abort(tse_task_t *task);
+int dc_tx_open_snap(tse_task_t *task);
+int dc_tx_close(tse_task_t *task);
+int dc_tx_restart(tse_task_t *task);
+int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
+		     uint32_t flags, daos_handle_t *th);
+int dc_tx_local_close(daos_handle_t th);
+int dc_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 
 /** Decode shard number from enumeration anchor */
 static inline uint32_t
