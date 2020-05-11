@@ -678,7 +678,6 @@ int crt_na_ofi_config_init(void)
 
 	D_STRNDUP(crt_na_ofi_conf.noc_domain, domain, 64);
 	if (!crt_na_ofi_conf.noc_domain) {
-		D_ERROR("Failed to stdndup domain name\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 

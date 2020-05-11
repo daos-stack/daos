@@ -352,7 +352,6 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	if (rlink == NULL) {
 		D_ALLOC_PTR(ui);
 		if (!ui) {
-			D_ERROR("Failed to allocate uri item\n");
 			D_GOTO(exit, rc = -DER_NOMEM);
 		}
 
@@ -392,7 +391,6 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		}
 
 		if (!ui->ui_uri[tag]) {
-			D_ERROR("Failed to strndup uri string\n");
 			rc = -DER_NOMEM;
 		}
 
@@ -475,6 +473,7 @@ free_htables:
 			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
 	}
 	D_FREE(htables);
+	grp_priv->gp_lookup_cache = NULL;
 
 out:
 	if (rc != 0)
@@ -670,7 +669,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 		rc = grp_lc_uri_insert_internal_locked(grp_priv, ctx_idx, rank,
 						tag, uri);
 		if (rc != 0) {
-			D_ERROR("Insertion failed for ctx_idx=%d\n", ctx_idx);
+			D_ERROR("Insertion failed: rc %d\n", rc);
 			D_GOTO(unlock, rc);
 		}
 	}
@@ -2677,7 +2676,6 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 
 	D_STRNDUP(*uri_str, uri, strlen(uri) + 1);
 	if (!(*uri_str)) {
-		D_ERROR("Failed to allocate uri string\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -3035,7 +3033,6 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 	/* Record secondary group in the primary group */
 	D_ALLOC_PTR(entry);
 	if (entry == NULL) {
-		D_ERROR("Failed to allocate entry for group\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -3339,7 +3336,6 @@ crt_group_mod_get(d_rank_list_t *grp_membs, d_rank_list_t *mod_membs,
 	/* Array will have at most 'mod_membs' elements */
 	D_ALLOC_ARRAY(idx_to_add, mod_membs->rl_nr);
 	if (!idx_to_add) {
-		D_ERROR("Failed to allocate array\n");
 		D_GOTO(cleanup, rc = -DER_NOMEM);
 	}
 
