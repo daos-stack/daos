@@ -12,3 +12,14 @@
    fun:start_thread
    fun:clone
 }
+{
+   cont-open-leak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:dc_cont_alloc
+   fun:dc_cont_open
+   fun:tse_task_schedule
+   fun:dc_task_schedule
+   fun:daos_cont_open
+}
