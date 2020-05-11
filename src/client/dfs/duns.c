@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -325,7 +325,7 @@ int
 duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 {
 	char *local;
-	char	*saveptr, *t;
+	char	*saveptr = NULL, *t;
 	int rc;
 
 	D_STRNDUP(local, str, len);
@@ -375,7 +375,7 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_GOTO(err, rc = -DER_INVAL);
 	}
 
-	return 0;
+	rc = 0;
 err:
 	D_FREE(local);
 	return rc;
@@ -528,16 +528,14 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		struct statfs fs;
 		char *dir, *dirp;
 
-		dir = malloc(PATH_MAX);
+		dir = strdup(path);
 		if (dir == NULL) {
-			D_ERROR("Failed to allocate %d bytes for required "
-				"copy of path %s: %s\n", PATH_MAX, path,
+			D_ERROR("Failed copy path %s: %s\n", path,
 				strerror(errno));
 			/** TODO - convert errno to rc */
-			return -DER_NOSPACE;
+			return -DER_NOMEM;
 		}
 
-		dirp = strcpy(dir, path);
 		/* dirname() may modify dir content or not, so use an
 		 * alternate pointer (see dirname() man page)
 		 */
@@ -547,8 +545,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			D_ERROR("Failed to statfs dir %s: %s\n",
 				dirp, strerror(errno));
 			/** TODO - convert errno to rc */
+			free(dir);
 			return -DER_INVAL;
 		}
+		free(dir);
 
 		if (fs.f_type == FUSE_SUPER_MAGIC) {
 			backend_dfuse = true;

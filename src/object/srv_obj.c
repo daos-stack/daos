@@ -109,6 +109,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 	     struct ds_cont_hdl *cont_hdl)
 {
 	int rc;
+	int i;
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
@@ -136,6 +137,14 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 		if (orwo->orw_iod_csums.ca_arrays != NULL) {
 			D_FREE(orwo->orw_iod_csums.ca_arrays);
 			orwo->orw_iod_csums.ca_count = 0;
+		}
+
+		if (orwo->orw_maps.ca_arrays != NULL) {
+			for (i = 0; i < orwo->orw_maps.ca_count; i++)
+				D_FREE(orwo->orw_maps.ca_arrays[i].iom_recxs);
+
+			D_FREE(orwo->orw_maps.ca_arrays);
+			orwo->orw_maps.ca_count = 0;
 		}
 
 		if (cont_hdl) {
@@ -914,6 +923,83 @@ obj_log_csum_err(void)
 	bio_log_csum_err(bxc, info->dmi_tgt_id);
 }
 
+static void
+map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t byte_idx)
+{
+	map->iom_recxs[map->iom_nr_out].rx_idx = byte_idx / map->iom_size;
+	map->iom_recxs[map->iom_nr_out].rx_nr = biov->bi_data_len
+						/ map->iom_size;
+	map->iom_nr_out++;
+}
+
+/** create maps for actually written to extents. */
+static int
+obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
+{
+	struct obj_rw_in	*orw = crt_req_get(rpc);
+	struct obj_rw_out	*orwo = crt_reply_get(rpc);
+	daos_iom_t		*maps;
+	daos_iom_t		*map;
+	struct bio_sglist	*bsgl;
+	daos_iod_t		*iod;
+	struct bio_iov		*biov;
+	uint32_t		 iods_nr;
+	uint32_t		 i, j;
+	uint64_t		 byte_idx;
+
+	/**
+	 * Allocate memory for the maps. There will be 1 per iod
+	 * Will be freed in obj_rw_reply
+	 */
+	iods_nr = orw->orw_iod_array.oia_iod_nr;
+	D_ALLOC_ARRAY(maps, iods_nr);
+	if (maps == NULL)
+		return -DER_NOMEM;
+	for (i = 0; i <  iods_nr; i++) {
+		bsgl = bio_iod_sgl(biod, i); /** 1 bsgl per iod */
+		iod = &orw->orw_iod_array.oia_iods[i];
+		map = &maps[i];
+		map->iom_nr = bsgl->bs_nr_out - bio_sgl_holes(bsgl);
+
+		/** will be freed in obj_rw_reply */
+		D_ALLOC_ARRAY(map->iom_recxs, map->iom_nr);
+		if (map->iom_recxs == NULL) {
+			D_FREE(maps);
+			return -DER_NOMEM;
+		}
+
+		map->iom_size = iod->iod_size;
+		map->iom_type = iod->iod_type;
+
+		if (map->iom_type != DAOS_IOD_ARRAY ||
+			bsgl->bs_nr_out == 0)
+			continue;
+
+		/** start byte_idx at first record of iod.recxs */
+		byte_idx = iod->iod_recxs[0].rx_idx;
+		for (i = 0; i < iods_nr; i++)
+			byte_idx = min(byte_idx, iod->iod_recxs[i].rx_idx);
+		byte_idx *= map->iom_size;
+
+		for (j = 0; j < bsgl->bs_nr_out; j++) {
+			biov = bio_sgl_iov(bsgl, j);
+			if (!bio_addr_is_hole(&biov->bi_addr))
+				map_add_recx(map, biov, byte_idx);
+
+			byte_idx += biov->bi_data_len;
+		}
+		/** allocated and used should be the same */
+		D_ASSERT(map->iom_nr == map->iom_nr_out);
+		map->iom_recx_lo = map->iom_recxs[0];
+		map->iom_recx_hi = map->iom_recxs[map->iom_nr - 1];
+	}
+
+	orwo->orw_maps.ca_count = iods_nr;
+	orwo->orw_maps.ca_arrays = maps;
+
+	return 0;
+}
+
 static int
 obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	     struct ds_cont_child *cont, daos_iod_t *split_iods,
@@ -931,12 +1017,15 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	crt_bulk_op_t		bulk_op;
 	bool			rma;
 	bool			bulk_bind;
+	bool			create_map;
 	bool			size_fetch = false;
 	daos_iod_t		*iods;
 	uint64_t		*offs;
 	int			err, rc = 0;
 
 	D_TIME_START(time_start, OBJ_PF_UPDATE_LOCAL);
+
+	create_map = orw->orw_flags & ORF_CREATE_MAP;
 
 	if (daos_is_zero_dti(&orw->orw_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
@@ -1082,6 +1171,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				    orw->orw_sgls.ca_count);
 		}
 	}
+	if (obj_rpc_is_fetch(rpc) && create_map)
+		rc = obj_fetch_create_maps(rpc, biod);
 
 	if (rc == -DER_CSUM)
 		obj_log_csum_err();
@@ -1434,8 +1525,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
 		orw->orw_map_ver, ioc.ioc_map_ver, DP_DTI(&orw->orw_dti));
 
-	/* FIXME: until distributed transaction. */
-	if (orw->orw_epoch == DAOS_EPOCH_MAX) {
+	if (orw->orw_epoch == DAOS_EPOCH_MAX || orw->orw_epoch == 0) {
 		orw->orw_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
 	}
@@ -2057,8 +2147,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 			opi->opi_map_ver, ioc.ioc_map_ver,
 			DP_DTI(&opi->opi_dti));
 
-	/* FIXME: until distributed transaction. */
-	if (opi->opi_epoch == DAOS_EPOCH_MAX) {
+	if (opi->opi_epoch == DAOS_EPOCH_MAX || opi->opi_epoch == 0) {
 		opi->opi_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
@@ -2177,8 +2266,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_IO, "flags = %d\n", okqi->okqi_flags);
 
-	/* FIXME: until distributed transaction. */
-	if (okqi->okqi_epoch == DAOS_EPOCH_MAX) {
+	if (okqi->okqi_epoch == DAOS_EPOCH_MAX || okqi->okqi_epoch == 0) {
 		okqi->okqi_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", okqi->okqi_epoch);
 	}

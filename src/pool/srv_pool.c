@@ -1871,7 +1871,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_connect_in	       *in = crt_req_get(rpc);
 	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
-	struct pool_buf		       *map_buf;
+	struct pool_buf		       *map_buf = NULL;
 	uint32_t			map_version;
 	uint32_t			connectable;
 	struct rdb_tx			tx;
@@ -2000,7 +2000,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 * completes, then we simply return the error and the client will throw
 	 * its pool_buf away.
 	 */
-	rc = locate_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -2079,6 +2079,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 out_map_version:
 	out->pco_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
+	if (map_buf)
+		D_FREE(map_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -2583,7 +2585,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct pool_query_in   *in = crt_req_get(rpc);
 	struct pool_query_out  *out = crt_reply_get(rpc);
 	daos_prop_t	       *prop = NULL;
-	struct pool_buf		*map_buf;
+	struct pool_buf		*map_buf = NULL;
 	uint32_t		map_version;
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
@@ -2713,7 +2715,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	rc = locate_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -2727,6 +2729,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 
 out_map_version:
 	out->pqo_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
+	if (map_buf)
+		D_FREE(map_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -3015,17 +3019,19 @@ out:
 }
 
 int
-ds_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *ranks,
-		uint32_t reint_rank, struct pool_target_id_list *reint_list)
+ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
+		uint32_t rank, struct pool_target_id_list *target_list,
+		pool_comp_state_t state)
 {
-	int				rc;
-	struct rsvc_client		client;
-	crt_endpoint_t			ep;
+	int							rc;
+	struct rsvc_client			client;
+	crt_endpoint_t				ep;
 	struct dss_module_info		*info = dss_get_module_info();
-	crt_rpc_t			*rpc;
+	crt_rpc_t					*rpc;
 	struct pool_target_addr_list	list;
-	struct pool_add_in		*in;
-	struct pool_add_out		*out;
+	struct pool_add_in			*in;
+	struct pool_add_out			*out;
+	crt_opcode_t				opcode;
 	int i = 0;
 
 	rc = rsvc_client_init(&client, ranks);
@@ -3037,7 +3043,18 @@ rechoose:
 	ep.ep_grp = NULL; /* primary group */
 	rsvc_client_choose(&client, &ep);
 
-	rc = pool_req_create(info->dmi_ctx, &ep, POOL_ADD, &rpc);
+	switch (state) {
+	case PO_COMP_ST_DOWN:
+		opcode = POOL_EXCLUDE;
+		break;
+	case PO_COMP_ST_UP:
+		opcode = POOL_ADD;
+		break;
+	default:
+		D_GOTO(out_client, rc = -DER_INVAL);
+	}
+
+	rc = pool_req_create(info->dmi_ctx, &ep, opcode, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool add rpc: "
 			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
@@ -3047,7 +3064,7 @@ rechoose:
 	in = crt_req_get(rpc);
 	uuid_copy(in->pti_op.pi_uuid, pool_uuid);
 
-	rc = pool_target_addr_list_alloc(reint_list->pti_number, &list);
+	rc = pool_target_addr_list_alloc(target_list->pti_number, &list);
 	if (rc) {
 		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
 			DP_UUID(pool_uuid), rc);
@@ -3055,9 +3072,9 @@ rechoose:
 	}
 
 	/* pool_update rpc requires an addr list. */
-	for (i = 0; i < reint_list->pti_number; i++) {
-		list.pta_addrs[i].pta_target = reint_list->pti_ids[i].pti_id;
-		list.pta_addrs[i].pta_rank = reint_rank;
+	for (i = 0; i < target_list->pti_number; i++) {
+		list.pta_addrs[i].pta_target = target_list->pti_ids[i].pti_id;
+		list.pta_addrs[i].pta_rank = rank;
 	}
 
 	in->pti_addr_list.ca_arrays = list.pta_addrs;
