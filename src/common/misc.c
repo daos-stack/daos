@@ -56,7 +56,7 @@ daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 {
 	int	i;
 
-	if (sgl->sg_iovs == NULL)
+	if (sgl == NULL || sgl->sg_iovs == NULL)
 		return;
 
 	for (i = 0; free_iovs && i < sgl->sg_nr; i++) {
@@ -147,10 +147,17 @@ daos_sgl_copy_ptr(d_sg_list_t *dst, d_sg_list_t *src)
 
 int
 daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
-		       int src_nr)
+			int src_nr)
 {
 	return daos_sgls_copy_internal(dst, dst_nr, src, src_nr, true, true,
 				       false);
+}
+
+int
+daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src, int src_nr)
+{
+	return daos_sgls_copy_internal(dst, dst_nr, src, src_nr, true, false,
+				       true);
 }
 
 int
@@ -337,6 +344,10 @@ daos_str_trimwhite(char *str)
 int
 daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 {
+	if (src == NULL || src->iov_buf == NULL)
+		return 0;
+	D_ASSERT(src->iov_buf_len > 0);
+
 	D_ALLOC(dst->iov_buf, src->iov_buf_len);
 	if (dst->iov_buf == NULL)
 		return -DER_NOMEM;
@@ -350,7 +361,7 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 void
 daos_iov_free(d_iov_t *iov)
 {
-	if (iov->iov_buf == NULL)
+	if (iov == NULL || iov->iov_buf == NULL)
 		return;
 	D_ASSERT(iov->iov_buf_len > 0);
 
