@@ -1068,43 +1068,45 @@ pipeline {
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
                                                   'libipmctl-devel' + qb_inst_rpms
-                        runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''# JENKINS-52781 tar function is breaking symlinks
-                                           rm -rf test_results
-                                           mkdir test_results
-                                           . ./.build_vars.sh
-                                           rm -f ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
-                                           mkdir -p ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/
-                                           ln -s ../../../../../../../../src/control ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
-                                           DAOS_BASE=${SL_PREFIX%/install*}
-                                           rm -f dnt.*.memcheck.xml vm_test.out
-                                           NODE=${NODELIST%%,*}
-                                           ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
-                                               set -e
-                                               sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
-                                               if grep /mnt/daos\\  /proc/mounts; then
-                                                   sudo umount /mnt/daos
-                                               else
+                        timeout(time:3, unit:'MINUTES') {
+                            runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
+                                    script: '''# JENKINS-52781 tar function is breaking symlinks
+                                               rm -rf test_results
+                                               mkdir test_results
+                                               . ./.build_vars.sh
+                                               rm -f ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
+                                               mkdir -p ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/
+                                               ln -s ../../../../../../../../src/control ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
+                                               DAOS_BASE=${SL_PREFIX%/install*}
+                                               rm -f dnt.*.memcheck.xml vm_test.out
+                                               NODE=${NODELIST%%,*}
+                                               ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
+                                                   set -e
+                                                   sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
+                                                   if grep /mnt/daos\\  /proc/mounts; then
+                                                       sudo umount /mnt/daos
+                                                   else
+                                                       sudo mkdir -p /mnt/daos
+                                                   fi
                                                    sudo mkdir -p /mnt/daos
-                                               fi
-                                               sudo mkdir -p /mnt/daos
-                                               sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-                                               sudo mkdir -p $DAOS_BASE
-                                               sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin
-                                               sudo chown root /usr/bin/daos_admin
-                                               sudo chmod 4755 /usr/bin/daos_admin
-                                               /bin/rm $DAOS_BASE/install/bin/daos_admin
-                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh /usr/share/spdk/scripts
-                                               sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
-                                               sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
-                                               # set CMOCKA envs here
-                                               export CMOCKA_MESSAGE_OUTPUT="xml"
-                                               export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
-                                               cd $DAOS_BASE
-                                               IS_CI=true OLD_CI=false utils/run_test.sh
-                                               ./utils/node_local_test.py all | tee vm_test.out"''',
-                              junit_files: 'test_results/*.xml'
+                                                   sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
+                                                   sudo mkdir -p $DAOS_BASE
+                                                   sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
+                                                   sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin
+                                                   sudo chown root /usr/bin/daos_admin
+                                                   sudo chmod 4755 /usr/bin/daos_admin
+                                                   /bin/rm $DAOS_BASE/install/bin/daos_admin
+                                                   sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh /usr/share/spdk/scripts
+                                                   sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh /usr/share/spdk/scripts
+                                                   sudo ln -s $SL_PREFIX/include  /usr/share/spdk/include
+                                                   # set CMOCKA envs here
+                                                   export CMOCKA_MESSAGE_OUTPUT="xml"
+                                                   export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
+                                                   cd $DAOS_BASE
+                                                   IS_CI=true OLD_CI=false utils/run_test.sh
+                                                   ./utils/node_local_test.py all | tee vm_test.out"''',
+                                  junit_files: 'test_results/*.xml'
+                        }
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
