@@ -774,16 +774,16 @@ static const struct CMUnitTest evt_checksums_tests[] = {
 int run_csum_extent_tests(const char *cfg)
 {
 	int rc = 0;
-	char	test_name[130];
+	char	test_name[CFG_MAX];
 
-	sprintf(test_name,
+	create_config(test_name,
 		"Storage and retrieval of checksums for Array Type %s", cfg);
 
 	rc = cmocka_run_group_tests_name(
 		test_name,
 		update_fetch_checksums_for_array_types, setup_io, teardown_io);
 
-	sprintf(test_name,
+	create_config(test_name,
 		"evtreen helper functions for alignment, counting, etc for csum  %s",
 		cfg);
 

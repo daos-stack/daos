@@ -25,22 +25,16 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"net"
-	"os"
 	"strconv"
-	"sync"
-	"syscall"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -629,133 +623,3 @@ func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 //		})
 //	}
 //}
-
-func TestHarness_StopInstances(t *testing.T) {
-	for name, tc := range map[string]struct {
-		ioserverCount     int
-		missingSB         bool
-		signal            os.Signal
-		ranks             []system.Rank
-		harnessNotStarted bool
-		signalErr         error
-		ctxTimeout        time.Duration
-		expRankErrs       map[system.Rank]error
-		expSignalsSent    map[uint32]os.Signal
-		expErr            error
-	}{
-		"nil signal": {
-			expErr: errors.New("nil signal"),
-		},
-		"missing superblock": {
-			missingSB: true,
-			signal:    syscall.SIGKILL,
-			expErr:    errors.New("nil superblock"),
-		},
-		"harness not started": {
-			harnessNotStarted: true,
-			signal:            syscall.SIGKILL,
-			expSignalsSent:    map[uint32]os.Signal{},
-		},
-		"rank not in list": {
-			ranks:          []system.Rank{system.Rank(2), system.Rank(3)},
-			signal:         syscall.SIGKILL,
-			expRankErrs:    map[system.Rank]error{},
-			expSignalsSent: map[uint32]os.Signal{1: syscall.SIGKILL}, // instance 1 has rank 2
-		},
-		"signal send error": {
-			signal:    syscall.SIGKILL,
-			signalErr: errors.New("sending signal failed"),
-			expRankErrs: map[system.Rank]error{
-				1: errors.New("sending signal failed"),
-				2: errors.New("sending signal failed"),
-			},
-			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
-		},
-		"context timeout": {
-			signal:     syscall.SIGKILL,
-			ctxTimeout: 1 * time.Nanosecond,
-			expErr:     context.DeadlineExceeded,
-		},
-		"normal stop single-io": {
-			ioserverCount:  1,
-			signal:         syscall.SIGINT,
-			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT},
-		},
-		"normal stop multi-io": {
-			signal:         syscall.SIGTERM,
-			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGTERM, 1: syscall.SIGTERM},
-		},
-		"force stop multi-io": {
-			signal:         syscall.SIGKILL,
-			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			var signalsSent sync.Map
-			if tc.ioserverCount == 0 {
-				tc.ioserverCount = maxIOServers
-			}
-			if tc.ranks == nil {
-				tc.ranks = []system.Rank{}
-			}
-			svc := newTestMgmtSvcMulti(log, tc.ioserverCount, false)
-			if !tc.harnessNotStarted {
-				svc.harness.started.SetTrue()
-			}
-			for i, srv := range svc.harness.Instances() {
-				trc := &ioserver.TestRunnerConfig{}
-				trc.SignalCb = func(idx uint32, sig os.Signal) { signalsSent.Store(idx, sig) }
-				trc.SignalErr = tc.signalErr
-				if !tc.harnessNotStarted {
-					trc.Running.SetTrue()
-				}
-
-				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
-				srv.setIndex(uint32(i))
-
-				if tc.missingSB {
-					srv._superblock = nil
-					continue
-				}
-
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
-			}
-
-			if tc.ctxTimeout == 0 {
-				tc.ctxTimeout = 100 * time.Millisecond
-			}
-			ctx, shutdown := context.WithTimeout(context.Background(), tc.ctxTimeout)
-			defer shutdown()
-			gotRankErrs, gotErr := svc.harness.StopInstances(ctx, tc.signal, tc.ranks...)
-			CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-			if diff := cmp.Diff(
-				fmt.Sprintf("%v", tc.expRankErrs), fmt.Sprintf("%v", gotRankErrs)); diff != "" {
-				t.Fatalf("unexpected rank errors (-want, +got):\n%s\n", diff)
-			}
-
-			var numSignalsSent int
-			signalsSent.Range(func(_, _ interface{}) bool {
-				numSignalsSent++
-				return true
-			})
-			AssertEqual(t, len(tc.expSignalsSent), numSignalsSent, "number of signals sent")
-
-			for expKey, expValue := range tc.expSignalsSent {
-				value, found := signalsSent.Load(expKey)
-				if !found {
-					t.Fatalf("rank %d was not sent %s signal", expKey, expValue)
-				}
-				if diff := cmp.Diff(expValue, value); diff != "" {
-					t.Fatalf("unexpected signals sent (-want, +got):\n%s\n", diff)
-				}
-			}
-		})
-	}
-}
