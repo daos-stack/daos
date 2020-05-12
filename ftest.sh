@@ -404,7 +404,7 @@ enabled=0
 EOF\"
 
 # now run it!
-if ! ./launch.py -crispav -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -crispa -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
