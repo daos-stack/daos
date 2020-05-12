@@ -71,7 +71,6 @@ class DmgStorageReformatTest(ControlTestBase):
 
         # Start servers again
         self.log.info("==>    STARTING SERVERS")
-        # self.server_managers[-1].prepare()
         self.server_managers[-1].detect_format_ready(reformat=True)
 
         # Disable throwing dmg failure here since we expect it to fail
