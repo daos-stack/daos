@@ -72,9 +72,6 @@ dump_envariables(void)
 static int
 mem_pin_workaround(void)
 {
-	D_DEBUG(DB_ALL, "Memory pinning workaround disabled\n");
-	return 0;
-#if 0
 	int crt_rc = 0;
 	int rc;
 
@@ -95,7 +92,6 @@ mem_pin_workaround(void)
 	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
 exit:
 	return crt_rc;
-#endif
 }
 
 

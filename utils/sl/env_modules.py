@@ -50,7 +50,7 @@ class _env_module():
             cmd.append(arg)
         output = subprocess.check_output(cmd)
         # pylint: disable=exec-used
-        exec(output)
+        exec(output)  #nosec
         # pylint: enable=exec-used
 
     @staticmethod
@@ -87,7 +87,7 @@ class _env_module():
             return default_func
 
         try:
-            subprocess.check_call(['sh', '-l', '-c', 'module -V'],
+            subprocess.check_call(['/bin/sh', '-l', '-c', 'module -V'],
                                   stdout=DEVNULL, stderr=DEVNULL)
         except subprocess.CalledProcessError:
             return self._setup_old(path_init, default_func)
@@ -98,7 +98,7 @@ class _env_module():
             # if successful, this will define module, a function
             # that invokes module on the command line
             # pylint: disable=exec-used
-            exec(open(python_init).read(), tmp_globals, tmp_locals)
+            exec(open(python_init).read(), tmp_globals, tmp_locals)  #nosec
             # pylint: enable=exec-used
         except KeyError:
             return default_func
@@ -110,7 +110,7 @@ class _env_module():
     def _init_mpi_module(self):
         """init mpi module function"""
         try:
-            subprocess.check_call(['sh', '-l', '-c', 'module -V'],
+            subprocess.check_call(['/bin/sh', '-l', '-c', 'module -V'],
                                   stdout=DEVNULL, stderr=DEVNULL)
         except subprocess.CalledProcessError:
             # older version of module return -1
