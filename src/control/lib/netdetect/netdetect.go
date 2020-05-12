@@ -39,28 +39,28 @@ package netdetect
 #include <rdma/fi_errno.h>
 
 #if HWLOC_API_VERSION >= 0x00020000
-int setFlags(hwloc_topology_t topology) {
+int cmpt_setFlags(hwloc_topology_t topology) {
 	return hwloc_topology_set_all_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_ALL);
 }
 
-hwloc_obj_t get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx) {
+hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx) {
 	return hwloc_get_obj_by_depth(topology, depth, idx);
 }
 
-uint get_nbobjs_by_depth(hwloc_topology_t topology, int depth) {
+uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth) {
 	return (uint)hwloc_get_nbobjs_by_depth(topology, depth);
 }
 
-int get_parent_arity(hwloc_obj_t node) {
+int cmpt_get_parent_arity(hwloc_obj_t node) {
 	return node->parent->io_arity;
 }
 
-hwloc_obj_t get_child(hwloc_obj_t node, int idx) {
+hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx) {
 	hwloc_obj_t child;
 	int i;
 
 	child = node->parent->io_first_child;
-	for (i = 0; i <= idx; i++) {
+	for (i = 0; i < idx; i++) {
 		child = child->next_sibling;
 	}
 	return child;
@@ -68,23 +68,23 @@ hwloc_obj_t get_child(hwloc_obj_t node, int idx) {
 
 #else
 
-int setFlags(hwloc_topology_t topology) {
+int cmpt_setFlags(hwloc_topology_t topology) {
 	return hwloc_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
 }
 
-hwloc_obj_t get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx) {
+hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx) {
 	return hwloc_get_obj_by_depth(topology, (uint)depth, idx);
 }
 
-uint get_nbobjs_by_depth(hwloc_topology_t topology, int depth) {
+uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth) {
 	return (uint)hwloc_get_nbobjs_by_depth(topology, (uint)depth);
 }
 
-int get_parent_arity(hwloc_obj_t node) {
+int cmpt_get_parent_arity(hwloc_obj_t node) {
 	return node->parent->arity;
 }
 
-hwloc_obj_t get_child(hwloc_obj_t node, int idx) {
+hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx) {
 	return node->parent->children[idx];
 }
 
@@ -194,7 +194,7 @@ func initLib() (C.hwloc_topology_t, error) {
 		return nil, errors.Errorf("hwloc_topology_init failure: %v", status)
 	}
 
-	status = C.setFlags(topology)
+	status = C.cmpt_setFlags(topology)
 	if status != 0 {
 		// Call cleanUp because we failed after hwloc_topology_init succeeded.
 		cleanUp(topology)
@@ -227,7 +227,7 @@ func getHwlocDeviceNames(deviceScanCfg DeviceScan) ([]string, error) {
 	}
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
-		node := C.get_obj_by_depth(deviceScanCfg.topology, C.int(deviceScanCfg.depth), C.uint(i))
+		node := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(deviceScanCfg.depth), C.uint(i))
 		if node == nil {
 			continue
 		}
@@ -258,7 +258,7 @@ func initDeviceScan() (DeviceScan, error) {
 	}
 	deviceScanCfg.depth = int(depth)
 
-	deviceScanCfg.numObj = uint(C.get_nbobjs_by_depth(topology, C.int(depth)))
+	deviceScanCfg.numObj = uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
 	if deviceScanCfg.numObj == 0 {
 		defer cleanUp(deviceScanCfg.topology)
 		return deviceScanCfg,
@@ -321,7 +321,7 @@ func getNodeDirect(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	var i uint
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
-		node := C.get_obj_by_depth(deviceScanCfg.topology, C.int(deviceScanCfg.depth), C.uint(i))
+		node := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(deviceScanCfg.depth), C.uint(i))
 		if node == nil {
 			continue
 		}
@@ -347,10 +347,10 @@ func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	// The sibling of hfi1_0 is ib0, and ib0 *is* found on the systemDeviceNameMap.
 	// The sibling device has the same non-I/O ancestor and shares the same NUMA Node, so we want that.
 
-	count := C.get_parent_arity(node)
+	count := C.cmpt_get_parent_arity(node)
 	if count > 0 {
 		for i = 0; i < count; i++ {
-			child := C.get_child(node, C.int(i))
+			child := C.cmpt_get_child(node, C.int(i))
 			if _, found := deviceScanCfg.systemDeviceNamesMap[C.GoString(child.name)]; found {
 				return child
 			}
@@ -373,10 +373,10 @@ func getNodeAlias(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	// This node will have a sibling if its parent has more than one child (arity > 0)
 	// Search for the first sibling node that has a different name than the search node name
 	// and is not found on the systemDeviceNames map.
-	count := C.get_parent_arity(node)
+	count := C.cmpt_get_parent_arity(node)
 	if count > 0 {
 		for i = 0; i < count; i++ {
-			child := C.get_child(node, C.int(i))
+			child := C.cmpt_get_child(node, C.int(i))
 			if _, found := deviceScanCfg.systemDeviceNamesMap[C.GoString(child.name)]; !found {
 				return child
 			}
@@ -445,7 +445,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	}
 
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.get_nbobjs_by_depth(topology, C.int(depth)))
+	numObj := uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
 	if numObj == 0 {
 		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 		return 0, nil
@@ -454,7 +454,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	log.Debugf("There are %d NUMA nodes.", numObj)
 
 	for i = 0; i < numObj; i++ {
-		numanode := C.get_obj_by_depth(topology, C.int(depth), C.uint(i))
+		numanode := C.cmpt_get_obj_by_depth(topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			// We don't want the lack of NUMA information to be an error.
 			// If we get this far and can't access the NUMA topology data,
@@ -481,7 +481,7 @@ func NumaAware() (bool, error) {
 	defer cleanUp(deviceScanCfg.topology)
 
 	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := int(C.get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
+	numObj := int(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
 
 	return numObj > 0, nil
 }
@@ -499,7 +499,7 @@ func GetNUMASocketIDForPid(pid int32) (int, error) {
 	defer cleanUp(deviceScanCfg.topology)
 
 	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
+	numObj := uint(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
 	if numObj == 0 {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
@@ -516,7 +516,7 @@ func GetNUMASocketIDForPid(pid int32) (int, error) {
 	C.hwloc_cpuset_to_nodeset(deviceScanCfg.topology, cpuset, nodeset)
 
 	for i = 0; i < numObj; i++ {
-		numanode := C.get_obj_by_depth(deviceScanCfg.topology, C.int(depth), C.uint(i))
+		numanode := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			return 0, errors.Errorf("NUMA Node data is unavailable.")
 		}
@@ -572,12 +572,12 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 		netNames[deviceName] = struct{}{}
 	}
 
-	numObj := uint(C.get_nbobjs_by_depth(topology, C.int(depth)))
+	numObj := uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
 	// for any OS object found in the network device list,
 	// detect and store the cpuset and nodeset of the ancestor node
 	// containing this object
 	for i = 0; i < numObj; i++ {
-		node := C.get_obj_by_depth(topology, C.int(depth), C.uint(i))
+		node := C.cmpt_get_obj_by_depth(topology, C.int(depth), C.uint(i))
 		if node == nil {
 			continue
 		}
