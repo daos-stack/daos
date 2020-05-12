@@ -39,7 +39,7 @@ class SCMConfigTest(TestWithServers):
 
         Test Description: Test basic SCM configurations of storage devices.
 
-        :avocado: tags=all,small,pr,hw,scm_config,basic
+        :avocado: tags=all,small,full_regression,hw,scm_config,basic
         """
 
 
