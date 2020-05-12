@@ -592,8 +592,8 @@ key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 
 	rc = vos_ilog_check(info, &epr, epr_out, true);
 out:
-	D_DEBUG(DB_TRACE, "ilog check returned "DF_RC" epr_in="DF_U64"-"DF_U64
-		" punch="DF_U64" epr_out="DF_U64"-"DF_U64"\n", DP_RC(rc),
+	D_DEBUG(DB_TRACE, "ilog check returned "DF_RC" epr_in="DF_X64"-"DF_X64
+		" punch="DF_X64" epr_out="DF_X64"-"DF_X64"\n", DP_RC(rc),
 		epr.epr_lo, epr.epr_hi, info->ii_prior_punch,
 		epr_out ? epr_out->epr_lo : 0,
 		epr_out ? epr_out->epr_hi : 0);
@@ -611,7 +611,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	int			 flags = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 
-	D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s epr "DF_U64"-"DF_U64"\n",
+	D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s epr "DF_X64"-"DF_X64"\n",
 		DP_KEY(&iod->iod_name),
 		iod->iod_type == DAOS_IOD_ARRAY ? "array" : "single",
 		ioc->ic_epr.epr_lo, ioc->ic_epr.epr_hi);
@@ -857,7 +857,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_ts_entry	*entry;
 	int i, rc;
 
-	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
+	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_X64"\n",
 		DP_UOID(oid), iod_nr, epoch);
 
 	rc = vos_ioc_create(coh, oid, true, epoch, flags, iod_nr, iods, NULL,
@@ -1026,7 +1026,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	int			 i;
 	int			 rc = 0;
 
-	D_DEBUG(DB_TRACE, "akey "DF_KEY" update %s value eph "DF_U64"\n",
+	D_DEBUG(DB_TRACE, "akey "DF_KEY" update %s value eph "DF_X64"\n",
 		DP_KEY(&iod->iod_name), is_array ? "array" : "single",
 		ioc->ic_epr.epr_hi);
 
@@ -1640,12 +1640,11 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_io_context	*ioc;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE,
-		"Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_U64"\n",
-		DP_UOID(oid), iod_nr, epoch);
+	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
+		"\n", DP_UOID(oid), iod_nr, dth ? dth->dth_epoch :  epoch);
 
-	rc = vos_ioc_create(coh, oid, false, epoch, flags, iod_nr, iods,
-			    iods_csums, false, &ioc);
+	rc = vos_ioc_create(coh, oid, false, dth ? dth->dth_epoch : epoch,
+			    flags, iod_nr, iods, iods_csums, false, &ioc);
 	if (rc != 0)
 		goto done;
 

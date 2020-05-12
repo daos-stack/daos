@@ -963,8 +963,8 @@ evt_desc_bio_free(struct evt_context *tcx, struct evt_desc *desc,
 }
 
 int
-evt_desc_log_status(struct evt_context *tcx, struct evt_desc *desc,
-		  int intent)
+evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
+		    struct evt_desc *desc, int intent)
 {
 	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
 
@@ -972,7 +972,7 @@ evt_desc_log_status(struct evt_context *tcx, struct evt_desc *desc,
 	if (!cbs->dc_log_status_cb) {
 		return ALB_AVAILABLE_CLEAN;
 	} else {
-		return cbs->dc_log_status_cb(evt_umm(tcx), desc, intent,
+		return cbs->dc_log_status_cb(evt_umm(tcx), epoch, desc, intent,
 					     cbs->dc_log_status_args);
 	}
 }
@@ -988,13 +988,15 @@ evt_desc_log_add(struct evt_context *tcx, struct evt_desc *desc)
 }
 
 int
-evt_desc_log_del(struct evt_context *tcx, struct evt_desc *desc)
+evt_desc_log_del(struct evt_context *tcx, daos_epoch_t epoch,
+		 struct evt_desc *desc)
 {
 	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
 
 	D_ASSERT(cbs);
 	return cbs->dc_log_del_cb ?
-	       cbs->dc_log_del_cb(evt_umm(tcx), desc, cbs->dc_log_del_args) : 0;
+	       cbs->dc_log_del_cb(evt_umm(tcx), epoch, desc,
+				  cbs->dc_log_del_args) : 0;
 }
 
 static int
@@ -1007,7 +1009,7 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 		return 0;
 
 	desc = evt_off2desc(tcx, ne->ne_child);
-	rc = evt_desc_log_del(tcx, desc);
+	rc = evt_desc_log_del(tcx, ne->ne_rect.rc_epc, desc);
 	if (rc)
 		goto out;
 
@@ -1905,7 +1907,8 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node, unsigned int at,
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
 	evt_entry_csum_fill(tcx, desc, entry);
-	entry->en_avail_rc = evt_desc_log_status(tcx, desc, intent);
+	entry->en_avail_rc = evt_desc_log_status(tcx, entry->en_epoch, desc,
+						 intent);
 
 	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
@@ -2009,7 +2012,8 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				"\n", DP_RECT(rtmp));
 
 			desc = evt_node_desc_at(tcx, node, i);
-			rc = evt_desc_log_status(tcx, desc, intent);
+			rc = evt_desc_log_status(tcx, ne->ne_rect.rc_epc,
+						 desc, intent);
 			/* Skip the unavailable record. */
 			if (rc == ALB_UNAVAILABLE)
 				continue;
@@ -2449,7 +2453,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		}
 
 		desc = evt_off2desc(tcx, ne->ne_child);
-		rc = evt_desc_log_status(tcx, desc, DAOS_INTENT_CHECK);
+		rc = evt_desc_log_status(tcx, ne->ne_rect.rc_epc, desc,
+					 DAOS_INTENT_CHECK);
 		if (rc != ALB_UNAVAILABLE) {
 			nr = nd->tn_nr - i;
 			memmove(ne + 1, ne, nr * sizeof(*ne));
@@ -2479,7 +2484,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		if (i != 0 && leaf) {
 			ne = evt_node_entry_at(tcx, nd, i - 1);
 			desc = evt_off2desc(tcx, ne->ne_child);
-			rc = evt_desc_log_status(tcx, desc, DAOS_INTENT_CHECK);
+			rc = evt_desc_log_status(tcx, ne->ne_rect.rc_epc,
+						 desc, DAOS_INTENT_CHECK);
 			if (rc == ALB_UNAVAILABLE) {
 				umem_off_t	off = ne->ne_child;
 
