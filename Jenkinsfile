@@ -1078,7 +1078,7 @@ pipeline {
                                                mkdir -p ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/
                                                ln -s ../../../../../../../../src/control ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
                                                DAOS_BASE=${SL_PREFIX%/install*}
-                                               rm -f dnt.*.memcheck.xml vm_test.out
+                                               rm -f dnt.*.memcheck.xml vm_test.out nlt-errors.out
                                                NODE=${NODELIST%%,*}
                                                ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                    set -e
@@ -1143,7 +1143,7 @@ pipeline {
                                           cd $DAOS_BASE
                                           mkdir run_test.sh
                                           mkdir vm_test
-                                          mv vm_test.out vm_test/
+                                          mv vm_test.out nlt-errors.out vm_test/
                                           if ls /tmp/daos*.log > /dev/null; then
                                               mv /tmp/daos*.log run_test.sh/
                                           fi
@@ -1176,9 +1176,9 @@ pipeline {
                             publishValgrind (
                                     failBuildOnInvalidReports: true,
                                     failBuildOnMissingReports: true,
-                                    failThresholdDefinitelyLost: '',
-                                    failThresholdInvalidReadWrite: '',
-                                    failThresholdTotal: '',
+                                    failThresholdDefinitelyLost: '0',
+                                    failThresholdInvalidReadWrite: '0',
+                                    failThresholdTotal: '0',
                                     pattern: 'dnt.*.memcheck.xml',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
@@ -1192,10 +1192,16 @@ pipeline {
                                          failOnError: true,
                                          referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: true,
-                                         ignoreQualityGate: false,
-                                         qualityGates: [[threshold: 1, type: 'NEW', unstable: true]],
+                                         ignoreQualityGate: true,
+					 /* TODO: master is currently not determanistic and
+					 there is one message which appears occasionally
+					 so set the threshold to 2, which will not warn for
+					 stable builds against master, but might miss some
+					 individual issues.
+					 */
+                                         qualityGates: [[threshold: 2, type: 'NEW', unstable: true]],
                                          name: "VM Testing",
-                                         tool: clang(pattern: 'vm_test/vm_test.out',
+                                         tool: clang(pattern: 'vm_test/nlt-errors.out',
                                                      name: 'VM test results',
                                                      id: 'VM_test')
                         }
