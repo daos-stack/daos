@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,7 +99,7 @@ invoke_rpc(crt_rpc_t *rpc)
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	/* Sloppy... */
 	while (rpc_rc == rpc_rc_uninitialized)
-		crt_progress(context, 0, NULL, NULL);
+		crt_progress(context, 0);
 	return rpc_rc;
 }
 

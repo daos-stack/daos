@@ -392,6 +392,26 @@ class CommandWithSubCommand(ExecutableCommand):
         self.sub_command.value = value
         self.get_sub_command_class()
 
+    def _get_result(self):
+        """Get the result from running the configured command.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        result = None
+        try:
+            result = self.run()
+        except CommandFailure as error:
+            raise CommandFailure(
+                "<{}> command failed: {}".format(self.command, error))
+
+        return result
+
 
 class DaosCommand(ExecutableCommand):
     """A class for similar daos command line tools."""
@@ -625,8 +645,24 @@ class YamlCommand(SubProcessCommand):
         value = None
         if isinstance(self.yaml, YamlParameters):
             value = self.yaml.get_value(name)
+
         return value
 
+    def _get_result(self):
+        """Generate the yaml config if defined, then call the parent method.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        if self.yaml:
+            self.create_yaml_file()
+
+        return super(YamlCommand, self)._get_result()
 
 class SubprocessManager(object):
     """Defines an object that manages a sub process launched with orterun."""

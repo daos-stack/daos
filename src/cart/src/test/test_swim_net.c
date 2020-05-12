@@ -287,7 +287,7 @@ static void *srv_progress(void *data)
 	D_ASSERTF(ctx != NULL, "ctx=%p\n", ctx);
 
 	while (global_srv.shutdown == 0) {
-		rc = crt_progress(*ctx, 1, NULL, NULL);
+		rc = crt_progress(*ctx, 1);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress() failed rc=%d\n", rc);
 			break;

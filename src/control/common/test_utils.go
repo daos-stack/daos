@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ func AssertFalse(t *testing.T, b bool, message string) {
 //
 // Whilst suitable in most situations, reflect.DeepEqual() may not be
 // suitable for nontrivial struct element comparisons, go-cmp should
-// then be used but will introduce a third party dep.
+// then be used.
 func AssertEqual(
 	t *testing.T, a interface{}, b interface{}, message string) {
 	t.Helper()
@@ -73,6 +73,25 @@ func AssertEqual(
 	}
 
 	t.Fatalf(message+"%#v != %#v", a, b)
+}
+
+// AssertNotEqual asserts b is not equal to a
+//
+// Whilst suitable in most situations, reflect.DeepEqual() may not be
+// suitable for nontrivial struct element comparisons, go-cmp should
+// then be used.
+func AssertNotEqual(
+	t *testing.T, a interface{}, b interface{}, message string) {
+	t.Helper()
+
+	if !reflect.DeepEqual(a, b) {
+		return
+	}
+	if len(message) > 0 {
+		message += ", "
+	}
+
+	t.Fatalf(message+"%#v == %#v", a, b)
 }
 
 // AssertStringsEqual sorts string slices before comparing.
