@@ -389,7 +389,7 @@ def find_values(obj, keys, key=None, val_type=list):
             [A, B, C]   [A, B, C, D]    [A, B, C, D]
 
         Args:
-            found (list): list of matches found
+            found (dict): dictionary of matches found for each key
         """
         for found_key in found:
             if found_key not in matches:
@@ -402,9 +402,9 @@ def find_values(obj, keys, key=None, val_type=list):
                     matches[found_key] = [matches[found_key]]
                 if isinstance(found[found_key], list):
                     for found_item in found[found_key]:
-                        if found_key not in matches:
+                        if found_item not in matches[found_key]:
                             matches[found_key].append(found_item)
-                elif found_key not in matches:
+                elif found[found_key] not in matches[found_key]:
                     matches[found_key].append(found[found_key])
 
                 if not is_list and len(matches[found_key]) == 1:
