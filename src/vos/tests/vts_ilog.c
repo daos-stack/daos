@@ -88,24 +88,37 @@ enum {
 };
 
 static int		current_status;
-static umem_off_t	current_tx_id;
+static struct ilog_id	current_tx_id;
 
 struct fake_tx_entry {
 	umem_off_t	root_off;
 	d_list_t	link;
+	daos_epoch_t	epoch;
 	int		status;
+	uint32_t	tx_id;
 };
 
 static D_LIST_HEAD(fake_tx_list);
 
 static int
-fake_tx_status_get(struct umem_instance *umm, umem_off_t tx_id, uint32_t intent,
-		   void *args)
+fake_tx_status_get(struct umem_instance *umm, uint32_t tx_id,
+		   daos_epoch_t epoch, uint32_t intent, void *args)
 {
-	struct fake_tx_entry	*entry = (struct fake_tx_entry *)tx_id;
+	struct lru_array	*array = args;
+	struct fake_tx_entry	*entry;
+	bool			 found;
 
-	if (entry == NULL)
+	if (tx_id == 0)
 		return ILOG_COMMITTED;
+
+	assert_true(tx_id >= DTX_LID_RESERVED);
+
+	found = lrua_lookupx(array, tx_id - DTX_LID_RESERVED, epoch, &entry);
+
+	if (found == false)
+		return ILOG_COMMITTED;
+
+	assert_non_null(entry);
 
 	switch (entry->status) {
 	case COMMITTED:
@@ -124,23 +137,23 @@ void
 fake_tx_reset(void)
 {
 	/** Just set it so it doesn't match anything */
-	current_tx_id = 0xbaadbeef;
+	current_tx_id.id_tx_id = 0xbeef;
+	current_tx_id.id_epoch = 0;
 }
 
-void
-fake_tx_remove(void)
+static void
+fake_tx_evict(void *payload, uint32_t idx, void *arg)
 {
-	struct fake_tx_entry	*entry = (struct fake_tx_entry *)current_tx_id;
+	struct fake_tx_entry	*entry = payload;
 
 	d_list_del(&entry->link);
-	D_FREE(entry);
 }
 
 static int
-fake_tx_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same,
-		   void *args)
+fake_tx_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
+		   daos_epoch_t epoch, bool *same, void *args)
 {
-	if (tx_id == current_tx_id)
+	if (tx_id == current_tx_id.id_tx_id)
 		*same = true;
 	else
 		*same = false;
@@ -149,44 +162,49 @@ fake_tx_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same,
 }
 
 static int
-fake_tx_log_add(struct umem_instance *umm, umem_off_t offset, umem_off_t *tx_id,
-		void *args)
+fake_tx_log_add(struct umem_instance *umm, umem_off_t offset, uint32_t *tx_id,
+		daos_epoch_t epoch, void *args)
 {
+	struct lru_array	*array = args;
 	struct fake_tx_entry	*entry;
+	uint32_t		 idx;
+	int			 rc;
 
-	D_ALLOC_PTR(entry);
-	if (entry == NULL)
-		return -DER_NOMEM;
+	rc = lrua_allocx(array, &idx, epoch, &entry);
+	assert_int_equal(rc, 0);
+	assert_non_null(entry);
 
+	entry->tx_id = idx;
 	entry->root_off = offset;
 	entry->status = current_status;
 	d_list_add_tail(&entry->link, &fake_tx_list);
 
-	current_tx_id = *tx_id = (umem_off_t)entry;
+	entry->tx_id = current_tx_id.id_tx_id = *tx_id = idx + DTX_LID_RESERVED;
+	entry->epoch = current_tx_id.id_epoch = epoch;
 
 	return 0;
 }
 
 static int
-fake_tx_log_del(struct umem_instance *umm, umem_off_t offset, umem_off_t tx_id,
-		void *args)
+fake_tx_log_del(struct umem_instance *umm, umem_off_t offset, uint32_t tx_id,
+		daos_epoch_t epoch, bool deregister, void *args)
 {
+	struct lru_array	*array = args;
 	struct fake_tx_entry	*entry;
+	bool			 found;
 
-	d_list_for_each_entry(entry, &fake_tx_list, link) {
-		if (entry == (struct fake_tx_entry *)tx_id) {
-			if (entry->root_off != offset) {
-				print_message("Mismatched ilog root "DF_U64"!="
-					      DF_U64"\n", entry->root_off,
-					      offset);
-				return -DER_INVAL;
-			}
-			d_list_del(&entry->link);
-			D_FREE(entry);
-			return 0;
-		}
+	if (tx_id < DTX_LID_RESERVED)
+		return 0;
+
+	found = lrua_lookupx(array, tx_id - DTX_LID_RESERVED, epoch, &entry);
+	assert_true(found);
+	if (entry->root_off != offset) {
+		print_message("Mismatched ilog root "DF_U64"!="
+			      DF_U64"\n", entry->root_off,
+			      offset);
+		return -DER_INVAL;
 	}
-
+	lrua_evictx(array, tx_id - DTX_LID_RESERVED, epoch);
 	return 0;
 }
 
@@ -215,15 +233,21 @@ struct desc {
 };
 
 struct entries {
-	struct desc	*entries;
-	int		 entry_count;
-	int		 alloc_count;
+	struct lru_array	*array;
+	struct desc		*entries;
+	int			 entry_count;
+	int			 alloc_count;
 };
 
 #define MAX_ILOG_LEN 2000
 static int
 entries_init(struct entries *entries)
 {
+	struct lru_callbacks	cbs = {
+		.lru_on_evict = fake_tx_evict,
+	};
+	int			rc;
+
 	D_ALLOC_ARRAY(entries->entries, MAX_ILOG_LEN);
 	if (entries->entries == NULL)
 		return -DER_NOMEM;
@@ -231,12 +255,23 @@ entries_init(struct entries *entries)
 	entries->entry_count = 0;
 	entries->alloc_count = MAX_ILOG_LEN;
 
-	return 0;
+	rc = lrua_array_alloc(&entries->array, DTX_ARRAY_LEN, 1,
+			      sizeof(struct fake_tx_entry), 0, &cbs, NULL);
+	if (rc != 0)
+		D_FREE(entries->entries);
+
+	ilog_callbacks.dc_log_status_args = entries->array;
+	ilog_callbacks.dc_is_same_tx_args = entries->array;
+	ilog_callbacks.dc_log_add_args = entries->array;
+	ilog_callbacks.dc_log_del_args = entries->array;
+
+	return rc;
 }
 
 static void
 entries_fini(struct entries *entries)
 {
+	lrua_array_free(entries->array);
 	D_FREE(entries->entries);
 }
 
@@ -334,7 +369,7 @@ entries_check(struct umem_instance *umm, struct ilog_df *root,
 		}
 
 		if (verbose) {
-			print_message("epoch="DF_U64" tx_id="DF_U64" punch="
+			print_message("epoch="DF_U64" tx_id=%d punch="
 				      DF_BOOL "\n",
 				      entry->ie_id.id_epoch,
 				      entry->ie_id.id_tx_id,
@@ -658,13 +693,12 @@ ilog_test_abort(void **state)
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
-	id.id_tx_id = current_tx_id;
+	id = current_tx_id;
 	rc = ilog_abort(loh, &id);
 	if (rc != 0) {
 		print_message("Failed to delete log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
-	fake_tx_remove();
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
@@ -721,7 +755,8 @@ ilog_test_abort(void **state)
 				first = false; /* skip first */
 				continue;
 			}
-			id.id_tx_id = (umem_off_t)entry;
+			id.id_tx_id = entry->tx_id;
+			id.id_epoch = entry->epoch;
 			rc = ilog_abort(loh, &id);
 			id.id_epoch++;
 			if (rc != 0) {
@@ -730,8 +765,6 @@ ilog_test_abort(void **state)
 				assert(0);
 			}
 			version_cache_fetch(&version_cache, loh, true);
-			current_tx_id = id.id_tx_id;
-			fake_tx_remove();
 		}
 	}
 
@@ -759,7 +792,7 @@ ilog_test_persist(void **state)
 	struct version_cache	 version_cache;
 	struct ilog_id		 id;
 	daos_handle_t		 loh;
-	umem_off_t		 saved_tx_id1, saved_tx_id2;
+	struct ilog_id		 saved_tx_id1, saved_tx_id2;
 	int			 rc;
 
 	assert_non_null(entries);
@@ -821,15 +854,12 @@ ilog_test_persist(void **state)
 	}
 	version_cache_fetch(&version_cache, loh, true);
 
-	id.id_epoch = 2;
-	id.id_tx_id = saved_tx_id2;
+	id = saved_tx_id2;
 	rc = ilog_persist(loh, &id);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
-	current_tx_id = saved_tx_id2;
-	fake_tx_remove();
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, 2, false, 3, false,
@@ -838,16 +868,13 @@ ilog_test_persist(void **state)
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
-	id.id_epoch = 1;
-	id.id_tx_id = saved_tx_id1;
+	id = saved_tx_id1;
 	rc = ilog_persist(loh, &id);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
 	version_cache_fetch(&version_cache, loh, true);
-	current_tx_id = saved_tx_id1;
-	fake_tx_remove();
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, 2, false, 3, false, 4,
 			 true, ENTRIES_END);
