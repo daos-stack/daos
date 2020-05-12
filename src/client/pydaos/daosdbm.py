@@ -5,9 +5,7 @@
 import os
 import sys
 import json
-import time
 import pickle
-import dbm.gnu
 
 def load_conf():
     """Load the build config file"""
@@ -31,23 +29,21 @@ class daos_named_kv():
     """Named KV generator"""
 
     def __init__(self, transport, interface, puid, cuid):
-        try:
-            conf = load_conf()
-            if sys.version_info.major < 3:
-                pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
-            else:
-                pydir = 'python{}'.format(sys.version_info.major)
+        conf = load_conf()
+        if sys.version_info.major < 3:
+            pydir = 'python{}.{}'.format(
+                sys.version_info.major, sys.version_info.minor)
+        else:
+            pydir = 'python{}'.format(sys.version_info.major)
+            sys.path.append(os.path.join(conf['PREFIX'],
+                                         'lib64',
+                                         pydir,
+                                         'site-packages'))
 
-                sys.path.append(os.path.join(conf['PREFIX'],
-                                             'lib64',
-                                             pydir,
-                                             'site-packages'))
-        except Exception:
-            pass
-
-        os.environ['CRT_PHY_ADDR_STR'] = transport
-        os.environ['OFI_INTERFACE'] = interface
-        os.environ['DAOS_SINGLETON_CLI'] = '1'
+        if 'CRT_PHY_ADDR_STR' not in os.environ:
+            os.environ['CRT_PHY_ADDR_STR'] = transport
+        if interface and 'OFI_INTERFACE' not in os.environ:
+            os.environ['OFI_INTERFACE'] = interface
 
         self.daos = __import__('pydaos')
 
@@ -70,6 +66,54 @@ class daos_named_kv():
         for kv in self.root_kv:
             yield kv
 
+LENGTH_KEY = '__length'
+
+def new_migrate(root):
+    """Migrate data from multiple KVs to a single KV"""
+
+    batch_size = 200
+
+    files = sorted(root.get_kv_list())
+
+    if 'root' in files:
+        files.remove('root')
+
+    target = root.get_kv_by_name('root')
+
+    target_offset = 0
+
+    for ifile in files:
+
+        index = 0
+
+        source = root.get_kv_by_name(ifile)
+
+        at_end = False
+
+        while not at_end:
+            data = {}
+            for i in range(index, index + batch_size):
+
+                index += 1
+
+                data[str(i)] = None
+
+            source.bget(data)
+            tdata = {}
+
+            for key in data:
+                if data[key] is None:
+                    at_end = True
+                else:
+                    i = int(key)
+                    tdata[str(i+target_offset)] = data[key]
+
+            target.bput(tdata)
+
+        target_offset += pickle.loads(source[LENGTH_KEY])
+
+        target[LENGTH_KEY] = pickle.dumps(target_offset)
+
 def main():
     """Migrate data from dbm file to named DAOS KV"""
 
@@ -86,77 +130,8 @@ def main():
 
     print('Kvs are {}'.format(','.join(sorted(my_kv.get_kv_list()))))
 
-    if len(sys.argv) != 5:
-        print('Also need directory/file to import')
-        return
-
-    src_dir = sys.argv[3]
-    src_file = sys.argv[4]
-
-    filename = os.path.join(src_dir, src_file)
-    if not os.path.exists(filename):
-        print('Input file {} does not exist'.format(filename))
-        return
-
-    db = dbm.gnu.open(filename, 'c')
-
-    kv = my_kv.get_kv_by_name(src_file)
-
-    LENGTH_KEY = '__length'
-
-    count = pickle.loads(db[LENGTH_KEY])
-
-    try:
-        start_count = pickle.loads(kv[LENGTH_KEY])
-        start_count += 1
-    except KeyError:
-        start_count = 0
-
-    start_count = 0
-
-    print('Copying records from {} to {}'.format(start_count, count))
-
-    start_time = time.perf_counter()
-
-    copy_count = 0
-    last_report_time = start_time
-    to_copy = count - start_count + 1
-    # CHANGE THIS TO MODIFY REPORTING FREQUENCY
-    report_freq = 0.1
-
-    bytes_total = 0
-
-    try:
-        for idx in range(start_count, count + 1):
-            key = str(idx)
-            value = db[key]
-            value_len = len(value)
-            bytes_total += value_len
-            kv[key] = value
-            kv[LENGTH_KEY] = pickle.dumps(idx)
-
-            copy_count += 1
-            now = time.perf_counter()
-
-            if now - last_report_time > report_freq:
-
-                time_per_record = (now - start_time) / copy_count
-
-                # Make the remaining time in minutes so it's easier to parse
-                remaining_time = int((time_per_record * (to_copy - copy_count)/60))
-
-                print('Copied {}/{} records in {:.2f} seconds {} minutes remaining.'.format(copy_count,
-                                                                                            to_copy,
-                                                                                            now - start_time,
-                                                                                            remaining_time))
-                last_report_time = now
-    except KeyboardInterrupt:
-        pass
-
-    now = time.perf_counter()
-    print('Completed, Copied {} records in {:.2f} seconds.'.format(copy_count,
-                                                                   now - start_time))
-    print('Copied {} bytes'.format(bytes_total))
+    new_migrate(my_kv)
+    return
 
 if __name__ == '__main__':
     main()
