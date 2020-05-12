@@ -1072,7 +1072,7 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 
 	rc = duns_create_path(ap->pool, ap->path, &dattr);
 	if (rc) {
-		fprintf(stderr, "duns_create_path() error: rc=%d\n", rc);
+		fprintf(stderr, "duns_create_path() error: %s\n", strerror(rc));
 		D_GOTO(err_rc, rc);
 	}
 
@@ -1156,8 +1156,8 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 	if (ap->path) {
 		rc = duns_destroy_path(ap->pool, ap->path);
 		if (rc)
-			fprintf(stderr, "duns_destroy_path() failed %s (%d)\n",
-				ap->path, rc);
+			fprintf(stderr, "duns_destroy_path() failed %s (%s)\n",
+				ap->path, strerror(rc));
 		else
 			fprintf(stdout, "Successfully destroyed path %s\n",
 				ap->path);
