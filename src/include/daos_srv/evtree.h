@@ -62,7 +62,9 @@ struct evt_desc {
 	/** Magic number for validation */
 	uint32_t			dc_magic;
 	/** The DTX entry in SCM. */
-	umem_off_t			dc_dtx;
+	uint32_t			dc_dtx;
+	/** padding */
+	uint32_t			dc_pad;
 	/** placeholder for csum array buffer */
 	/** csum_count * csum_len (from tree root) is length of csum buf */
 	uint8_t				pt_csum[0];
@@ -97,8 +99,9 @@ struct evt_desc_cbs {
 	 * this method is absent.
 	 */
 	int		(*dc_log_status_cb)(struct umem_instance *umm,
-					    struct evt_desc *desc,
-					    int intent, void *args);
+					    daos_epoch_t epoch,
+					    struct evt_desc *desc, int intent,
+					    void *args);
 	void		 *dc_log_status_args;
 	/** Add a descriptor to undo log */
 	int		(*dc_log_add_cb)(struct umem_instance *umm,
@@ -106,6 +109,7 @@ struct evt_desc_cbs {
 	void		 *dc_log_add_args;
 	/** remove a descriptor to undo log */
 	int		(*dc_log_del_cb)(struct umem_instance *umm,
+					 daos_epoch_t epoch,
 					 struct evt_desc *desc, void *args);
 	void		 *dc_log_del_args;
 };

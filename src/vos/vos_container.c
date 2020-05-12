@@ -203,6 +203,9 @@ cont_free(struct d_ulink *ulink)
 	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
 		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
 
+	if (cont->vc_dtx_array)
+		lrua_array_free(cont->vc_dtx_array);
+
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committable_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_tmp_list));
@@ -393,6 +396,16 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
+
+	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
+			      sizeof(struct vos_dtx_act_ent),
+			      LRU_FLAG_REUSE_UNIQUE,
+			      NULL, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX active array: rc = "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(exit, rc);
+	}
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACT_TABLE, 0,
 				      DTX_BTREE_ORDER, &uma,
