@@ -25,6 +25,23 @@ def umount(path):
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
 
+class NLT_Conf():
+    """Helper class for configuration"""
+    def __init__(self, bc):
+        self.bc = bc
+        self.output_fd = None
+
+    def set_output_file(self, filename):
+        """Set the name of a output file for error logging
+
+        This is used to save the lines or src that report issues
+        for use with the Jenkins warnings-ng plugin
+        """
+        self.output_fd = open(filename, 'w')
+
+    def __getitem__(self, key):
+        return self.bc[key]
+
 def load_conf():
     """Load the build config file"""
     file_self = os.path.dirname(os.path.abspath(__file__))
@@ -40,7 +57,18 @@ def load_conf():
     ofh = open(json_file, 'r')
     conf = json.load(ofh)
     ofh.close()
-    return conf
+    return NLT_Conf(conf)
+
+def get_base_env():
+    """Return the base set of env vars needed for DAOS"""
+
+    env = os.environ.copy()
+    env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
+    env['DD_MASK'] = 'all'
+    env['DD_SUBSYS'] = 'all'
+    env['D_LOG_MASK'] = 'DEBUG'
+    env['FI_UNIVERSE_SIZE'] = '128'
+    return env
 
 class DaosServer():
     """Manage a DAOS server instance"""
@@ -81,10 +109,7 @@ class DaosServer():
                'start', '-t' '4', '--insecure', '-d', self.agent_dir,
                '--recreate-superblocks']
 
-        server_env = os.environ.copy()
-        server_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-        server_env['OFI_INTERFACE'] = 'lo'
-        server_env['DD_MASK'] = 'all'
+        server_env = get_base_env()
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)
 
@@ -114,7 +139,6 @@ class DaosServer():
 
         if not self._sp:
             return
-
 
         # daos_server does not correctly shutdown daos_io_server yet
         # so find and kill daos_io_server directly.  This may cause
@@ -164,17 +188,13 @@ class DaosServer():
 
 def il_cmd(dfuse, cmd):
     """Run a command under the interception library"""
-    my_env = os.environ.copy()
-    my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-    my_env['OFI_INTERFACE'] = 'lo'
+    my_env = get_base_env()
     log_file = tempfile.NamedTemporaryFile(prefix='dnt_dfuse_il_',
                                            suffix='.log', delete=False)
     symlink_file('/tmp/dfuse_il_latest.log', log_file.name)
     my_env['D_LOG_FILE'] = log_file.name
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
-    my_env['D_LOG_MASK'] = 'DEBUG'
-    my_env['DD_MASK'] = 'all'
     ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
@@ -200,6 +220,9 @@ class ValgrindHelper():
 
     def __init__(self, logid=None):
 
+        # Set this to False to disable valgrind, which will run faster.
+        self.use_valgrind = True
+
         if not logid:
             self.__class__.instance_num += 1
             logid = self.__class__.instance_num
@@ -211,6 +234,9 @@ class ValgrindHelper():
 
     def get_cmd_prefix(self):
         """Return the command line prefix"""
+
+        if not self.use_valgrind:
+            return []
         cmd = ['valgrind', '--quiet']
 
         cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
@@ -231,6 +257,9 @@ class ValgrindHelper():
 
     def convert_xml(self):
         """Modify the xml file"""
+
+        if not self.use_valgrind:
+            return
         fd = open(self.xml_file, 'r')
         ofd = open('{}.xml'.format(self.xml_file), 'w')
         for line in fd:
@@ -270,18 +299,14 @@ class DFuse():
     def start(self, v_hint=None):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
-        my_env = os.environ.copy()
 
         single_threaded = False
         caching = False
 
         pre_inode = os.stat(self.path).st_ino
 
-        my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-        my_env['OFI_INTERFACE'] = 'eth0'
-        my_env['D_LOG_MASK'] = 'DEBUG'
-        my_env['DD_MASK'] = 'all'
-        my_env['DD_SUBSYS'] = 'all'
+        my_env = get_base_env()
+
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
 
@@ -417,11 +442,7 @@ def run_daos_cmd(conf, cmd):
     exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
     exec_cmd.extend(cmd)
 
-    cmd_env = os.environ.copy()
-
-    cmd_env['D_LOG_MASK'] = 'DEBUG'
-    cmd_env['DD_MASK'] = 'all'
-    cmd_env['DD_SUBSYS'] = 'all'
+    cmd_env = get_base_env()
 
     log_file = tempfile.NamedTemporaryFile(prefix='dnt_cmd_',
                                            suffix='.log', delete=False)
@@ -511,7 +532,7 @@ def check_no_file(dfuse):
 lp = None
 lt = None
 
-def setup_log_test():
+def setup_log_test(conf):
     """Setup and import the log tracing code"""
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
@@ -527,6 +548,8 @@ def setup_log_test():
     lp = __import__('cart_logparse')
     lt = __import__('cart_logtest')
 
+    lt.output_file = conf.output_fd
+
 def log_test(filename, show_memleaks=True):
     """Run the log checker on filename, logging to stdout"""
 
@@ -534,8 +557,6 @@ def log_test(filename, show_memleaks=True):
 
     global lp
     global lt
-
-    lt.shown_logs = set()
 
     log_iter = lp.LogIter(filename)
     lto = lt.LogTest(log_iter)
@@ -872,8 +893,12 @@ def test_pydaos_kv(server, conf):
 def main():
     """Main entry point"""
 
-    setup_log_test()
     conf = load_conf()
+
+    conf.set_output_file('nlt-errors.out')
+
+    setup_log_test(conf)
+
     server = DaosServer(conf)
     server.start()
 
