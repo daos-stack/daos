@@ -330,7 +330,7 @@ pipeline {
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go:src/cart/_structures_from_macros_.h"
                         sh label: "codespell",
-			   script: "codespell --ignore-words-list nd,uint,ths,ba,creat,te,cas,mapp,pres,crashers,dout,tre,reord,mimick,cloneable --skip .git,*.png,*.PNG,*.pyc,./src/rdb/raft/*,./src/control/vendor/*,./.sconf_temp/*,.sconsign.dblite,RSA.golden,./code_review/*"
+			   script: "codespell --ignore-words-list nd,uint,ths,ba,creat,te,cas,mapp,pres,crashers,dout,tre,reord,mimick,cloneable --skip .git,*.png,*.PNG,*.pyc,./src/rdb/raft/*,./src/control/vendor/*,./.sconf_temp/*,.sconsign.dblite,RSA.golden,./code_review/* `git ls-tree --full-tree --name-only HEAD`"
                     }
                     post {
                         always {
