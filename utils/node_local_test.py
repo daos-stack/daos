@@ -229,7 +229,7 @@ class ValgrindHelper():
     def __init__(self, logid=None):
 
         # Set this to False to disable valgrind, which will run faster.
-        self.use_valgrind = False
+        self.use_valgrind = True
 
         if not logid:
             self.__class__.instance_num += 1
