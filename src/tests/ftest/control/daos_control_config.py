@@ -29,8 +29,8 @@ from command_utils_base import CommandFailure
 
 class DaosControlConfigTest(TestWithServers):
     """Test Class Description:
-    Simple test to verify that the daos_control starts/stops properly given
-    positive and negative values to its configuration file.
+    Simple test to verify dmg execution given positive and negative values
+    to its configuration file.
     :avocado: recursive
     """
 
@@ -38,8 +38,8 @@ class DaosControlConfigTest(TestWithServers):
         """
         JIRA ID: DAOS-1508
 
-        Test Description: Test daos_control start/stops properly.
-        on the system.
+        Test Description: Test dmg tool executes with variant positive and
+        negative inputs to its configuration file.
 
         :avocado: tags=all,small,control,pr,control_start,basic
         """
@@ -53,7 +53,7 @@ class DaosControlConfigTest(TestWithServers):
                 c_val[0], c_val[1]))
 
         # Setup the access points with the server hosts
-        self.log.info("Starting dmg config with %s = %s", c_val[0], c_val[1])
+        self.log.info("Executing dmg config with %s = %s", c_val[0], c_val[1])
 
         try:
             self.server_managers[-1].dmg.storage_scan()
