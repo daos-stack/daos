@@ -43,6 +43,7 @@ var methodAuthorizations = map[string]Component{
 	"/ctl.MgmtCtl/StorageScan":          ComponentAdmin,
 	"/ctl.MgmtCtl/SystemQuery":          ComponentAdmin,
 	"/ctl.MgmtCtl/SystemStop":           ComponentAdmin,
+	"/ctl.MgmtCtl/SystemResetFormat":    ComponentAdmin,
 	"/ctl.MgmtCtl/SystemStart":          ComponentAdmin,
 	"/ctl.MgmtCtl/NetworkListProviders": ComponentAdmin,
 	"/ctl.MgmtCtl/StorageFormat":        ComponentAdmin,
@@ -68,6 +69,7 @@ var methodAuthorizations = map[string]Component{
 	"/mgmt.MgmtSvc/PrepShutdownRanks":   ComponentServer,
 	"/mgmt.MgmtSvc/StopRanks":           ComponentServer,
 	"/mgmt.MgmtSvc/PingRanks":           ComponentServer,
+	"/mgmt.MgmtSvc/ResetFormatRanks":    ComponentServer,
 	"/mgmt.MgmtSvc/StartRanks":          ComponentServer,
 }
 

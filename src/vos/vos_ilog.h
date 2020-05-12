@@ -210,13 +210,13 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	int __rc;							\
 									\
 	D_DEBUG(DB_TRACE, "vos_ilog_fetch: log="DF_X64" intent=%d"	\
-		" epoch="DF_U64" punched="DF_U64"\n",			\
+		" epoch="DF_X64" punched="DF_X64"\n",			\
 		umem_ptr2off(umm, ilog), intent, epoch,			\
 		(uint64_t)punched);					\
 	__rc = vos_ilog_fetch_(umm, coh, intent, ilog, epoch, punched,	\
 			       parent, info);				\
 	D_DEBUG(DB_TRACE, "vos_ilog_fetch: returned "DF_RC" create="	\
-		DF_U64" pp="DF_U64" pap="DF_U64" np="DF_U64" %s\n",	\
+		DF_X64" pp="DF_X64" pap="DF_X64" np="DF_X64" %s\n",	\
 		DP_RC(__rc), (info)->ii_create, (info)->ii_prior_punch,	\
 		(info)->ii_prior_any_punch, (info)->ii_next_punch,	\
 		(info)->ii_empty ? "is empty" : "");			\
@@ -229,12 +229,12 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	int			 __rc;					\
 									\
 	D_DEBUG(DB_TRACE, "vos_ilog_update: log="DF_X64" epr="		\
-		DF_U64"-"DF_U64" cond=%d\n", umem_ptr2off(__umm, ilog),	\
+		DF_X64"-"DF_X64" cond=%d\n", umem_ptr2off(__umm, ilog),	\
 		(epr)->epr_lo, (epr)->epr_hi, (cond));			\
 	__rc = vos_ilog_update_(cont, ilog, epr, parent, info,		\
 				cond, ts_set);				\
 	D_DEBUG(DB_TRACE, "vos_ilog_update: returned "DF_RC" create="	\
-		DF_U64" pap="DF_U64"\n", DP_RC(__rc), (info)->ii_create,\
+		DF_X64" pap="DF_X64"\n", DP_RC(__rc), (info)->ii_create,\
 		(info)->ii_prior_any_punch);				\
 	__rc;								\
 })
@@ -245,7 +245,7 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	int			 __rc;					\
 									\
 	D_DEBUG(DB_TRACE, "vos_ilog_punch: log="DF_X64" epr="		\
-		DF_U64"-"DF_U64" leaf=%d\n", umem_ptr2off(__umm, ilog),	\
+		DF_X64"-"DF_X64" leaf=%d\n", umem_ptr2off(__umm, ilog),	\
 		(epr)->epr_lo, (epr)->epr_hi, (leaf));			\
 	__rc = vos_ilog_punch_(cont, ilog, epr, parent, info, ts_set,	\
 			       leaf);					\
@@ -260,12 +260,12 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 									\
 	_Pragma("GCC diagnostic push")					\
 	_Pragma("GCC diagnostic ignored \"-Waddress\"")			\
-	D_DEBUG(DB_TRACE, "vos_ilog_check: epr_in="DF_U64"-"DF_U64	\
+	D_DEBUG(DB_TRACE, "vos_ilog_check: epr_in="DF_X64"-"DF_X64	\
 		" %s\n", (epr_in)->epr_lo, (epr_in)->epr_hi,		\
 		(visible_only) ? "visible" : "all");			\
 	__rc = vos_ilog_check_(info, epr_in, epr_out, visible_only);	\
 	D_DEBUG(DB_TRACE, "vos_ilog_check: returned "DF_RC" %s"		\
-		DF_U64"-"DF_U64"\n", DP_RC(__rc),			\
+		DF_X64"-"DF_X64"\n", DP_RC(__rc),			\
 		((epr_out) != NULL) ? " epr_out=" : " #",		\
 		((epr_out) != NULL) ? (epr_out)->epr_lo : 0,		\
 		((epr_out) != NULL) ? (epr_out)->epr_hi : 0);		\
