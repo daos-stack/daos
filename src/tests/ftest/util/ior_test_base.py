@@ -86,7 +86,7 @@ class IorTestBase(TestWithServers):
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
 
-    def create_pool(self):
+    def _create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
         self.pool = TestPool(
@@ -96,15 +96,26 @@ class IorTestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-    def create_cont(self):
-        """Create a TestContainer object to be used to create container."""
-        # Get container params
-        self.container = TestContainer(
-            self.pool, daos_command=DaosCommand(self.bin))
-        self.container.get_params(self)
+    def _create_cont(self):
+        """Create a container.
 
-        # create container
-        self.container.create()
+        Returns:
+            str: UUID of the created container
+
+        """
+        cont_type = self.params.get("type", "/run/container/*")
+        result = self.daos_cmd.container_create(
+            pool=self.pool.uuid, svc=self.pool.svc_ranks,
+            cont_type=cont_type)
+
+        # Extract the container UUID from the daos container create output
+        cont_uuid = re.findall(
+            r"created\s+container\s+([0-9a-f-]+)", result.stdout)
+        if not cont_uuid:
+            self.fail(
+                "Error obtaining the container uuid from: {}".format(
+                    result.stdout))
+        return cont_uuid[0]
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -172,15 +183,14 @@ class IorTestBase(TestWithServers):
         """Update ior_cmd with pool."""
         # Create a pool if one does not already exist
         if self.pool is None:
-            self.create_pool()
+            self._create_pool()
         # Always create a container
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
         self.pool.connect()
-        self.create_cont()
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
-                                     self.container.uuid)
+                                     self._create_cont())
 
     def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
