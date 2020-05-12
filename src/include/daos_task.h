@@ -644,10 +644,10 @@ typedef struct {
  *   to allocate multiple instances of this data structure.
  */
 typedef struct {
-	/** Object open handle */
-	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
+	/** Object open handle */
+	daos_handle_t		oh;
 	/** Distribution Key. */
 	daos_key_t		*dkey;
 	/** Array of attribute keys. */
@@ -694,10 +694,10 @@ typedef struct {
 
 /** Object fetch/update args */
 typedef struct {
-	/** Object open handle */
-	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
+	/** Object open handle */
+	daos_handle_t		oh;
 	/** Operation flags. */
 	uint64_t		flags;
 	/** Distribution Key. */

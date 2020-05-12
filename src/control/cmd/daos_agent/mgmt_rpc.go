@@ -94,7 +94,7 @@ func (mod *mgmtModule) ID() int32 {
 // "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, error) {
 	var err error
-	numaNode := defaultNumaNode
+	numaNode := mod.aiCache.defaultNumaNode
 
 	if mod.numaAware {
 		numaNode, err = netdetect.GetNUMASocketIDForPid(pid)
