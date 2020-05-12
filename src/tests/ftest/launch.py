@@ -159,7 +159,7 @@ def set_test_environment(args):
             if state.lower() == "up":
                 # Get the interface speed - used to select the fastest available
                 with open(os.path.join(net_path, device, "speed"), "r") as \
-                    fileh:
+                     fileh:
                     try:
                         speed = int(fileh.read().strip())
                         # KVM/Qemu/libvirt returns an EINVAL
@@ -233,25 +233,30 @@ def set_test_environment(args):
         os.environ["PYTHONPATH"] = python_path
 
 
-def get_output(cmd):
+def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
 
     Args:
         cmd (list): command from which to obtain the output
+        check (bool, optional): whether to raise an exception and exit the
+            program if the exit status of the comamnd is non-zero. Defaults
+            to True.
 
     Returns:
         str: command output
 
     """
-    try:
-        print("Running {}".format(" ".join(cmd)))
-        return subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-
-    except subprocess.CalledProcessError as err:
+    print("Running {}".format(" ".join(cmd)))
+    process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    stdout, _ = process.communicate()
+    retcode = process.poll()
+    if check and retcode:
         print(
-            "Error executing '{}':\n\t{}\n\tOutput:\n{}".format(
-                " ".join(cmd), err, err.output))
+            "Error executing '{}':\n\tOutput:\n{}".format(
+                " ".join(cmd), stdout))
         exit(1)
+    return stdout
 
 
 def time_command(cmd):
@@ -700,9 +705,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
         # Optionally display the file
         if args.verbose:
-            print(
-                get_output(
-                    "diff -y {} {}; exit 0".format(orig_yaml_file, yaml_file)))
+            print(get_output(["diff", "-y", orig_yaml_file, yaml_file], False))
 
     # Return the untouched or modified yaml file
     return yaml_file
@@ -985,7 +988,7 @@ def install_debuginfos():
             "--exclude", "ompi-debuginfo,gcc-debuginfo,gcc-base-debuginfo",
             "daos-server", "cart", "libpmemobj", "python", "openmpi3"])
     else:
-        import yum # pylint: disable=import-error
+        import yum  # pylint: disable=import-error
 
         yum_base = yum.YumBase()
         yum_base.conf.assumeyes = True
