@@ -549,6 +549,9 @@ class DmgCommand(YamlCommand):
     def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
 
+        Args:
+            reformat (bool): always reformat storage, could be destructive.
+
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.

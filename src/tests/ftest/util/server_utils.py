@@ -39,7 +39,7 @@ class DaosServerCommand(YamlCommand):
 
     NORMAL_PATTERN = "DAOS I/O server.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
-    REFORMAT_PATTERN = "format.*reformat not specified"
+    REFORMAT_PATTERN = "Metadata format required"
 
     def __init__(self, path="", yaml_cfg=None, timeout=90):
         """Create a daos_server command object.
@@ -482,10 +482,11 @@ class DaosServerManager(SubprocessManager):
                 dev_type = "dcpm"
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
-    def detect_format_ready(self):
+    def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format."""
+        f_type = "format" if not reformat else "reformat"
         self.log.info("<SERVER> Waiting for servers to be ready for format")
-        self.manager.job.update_pattern("format", len(self._hosts))
+        self.manager.job.update_pattern(f_type, len(self._hosts))
         try:
             self.manager.run()
         except CommandFailure as error:

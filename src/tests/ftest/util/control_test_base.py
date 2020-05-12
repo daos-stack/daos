@@ -61,8 +61,8 @@ class ControlTestBase(TestWithServers):
             dict: a dictionary of data values for each NodeSet key
 
         """
-        pattern = r"^{}:\s+([a-z0-9-_]+).*".format(sp_value)
-        cmd = r"cat {} | sed -En 's/{}/\1/p'".format(sp_file, pattern)
+        pattern = r"^{}:\s+([_a-z0-9-]+).*".format(sp_value)
+        cmd = r"cat {} | sed -En 's/{}/\1 /gp'".format(sp_file, pattern)
         text = "superblock"
         error = "Error obtaining superblock info: {}".format(sp_value)
 
