@@ -636,7 +636,7 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.outfile.value = outfile
         return self._get_result()
 
-    def pool_list_cont(self, pool, svc, sys_name=None, env=None):
+    def pool_list_cont(self, pool, svc, sys_name=None):
         """List containers in the given pool.
 
         Args:
