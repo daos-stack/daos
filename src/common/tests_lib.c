@@ -355,16 +355,3 @@ dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 	v_dts_sgl_init_with_strings_repeat(sgl, repeat, count, d, valist);
 	va_end(valist);
 }
-
-/* dmg cmd wrappers for daos_test */
-#define DMG_SYSTEM_STOP_CMD "dmg system stop -i --ranks=%d %s"
-
-int
-exec_dmg_system_stop(const char *grp, d_rank_t rank, bool force,
-			daos_event_t *ev)
-{
-	char cmd[100];
-	snprintf(cmd, sizeof(cmd), DMG_SYSTEM_STOP_CMD, rank, force ? "--force":"");
-	return system(cmd);
-}
-

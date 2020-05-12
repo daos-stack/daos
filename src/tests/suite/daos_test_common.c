@@ -870,6 +870,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	int		max_failure;
 	int		i;
 	int		rc;
+	char		dmg_cmd[100];
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -898,7 +899,10 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
-	rc = exec_dmg_system_stop(grp, rank, true, NULL);
+	/* build and invoke dmg cmd to stop the server */
+	snprintf(dmg_cmd, sizeof(dmg_cmd),
+		 "dmg system stop -i --ranks=%d --force", rank);
+	rc = system(dmg_cmd);
 	assert_int_equal(rc, 0);
 }
 
