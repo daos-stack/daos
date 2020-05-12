@@ -51,6 +51,7 @@
 #include "fi.h"
 
 struct d_fault_attr_t *d_fault_attr_mem;
+int d_fault_id_mem;
 
 static struct d_fault_attr *
 fa_link2ptr(d_list_t *rlink)
@@ -553,6 +554,10 @@ d_fault_inject_init(void)
 		D_ERROR("Failed to parse fault config file.\n");
 		D_GOTO(out, rc);
 	}
+
+	d_fault_id_mem = 0;
+	d_fault_attr_mem = d_fault_attr_lookup(d_fault_id_mem);
+
 out:
 	if (fp)
 		fclose(fp);

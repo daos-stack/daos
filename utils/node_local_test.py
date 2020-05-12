@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import uuid
+import yaml
 import json
 import signal
 import subprocess
@@ -16,6 +17,10 @@ from collections import OrderedDict
 
 class DFTestFail(Exception):
     """Used to indicate test failure"""
+    pass
+
+class DFTestNoFi(DFTestFail):
+    """Used to indicate Fault injection didn't work"""
     pass
 
 def umount(path):
@@ -30,6 +35,7 @@ class NLT_Conf():
     def __init__(self, bc):
         self.bc = bc
         self.output_fd = None
+        self.agent_dir = None
 
     def set_output_file(self, filename):
         """Set the name of a output file for error logging
@@ -65,6 +71,7 @@ def get_base_env():
     env = os.environ.copy()
     env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     env['DD_MASK'] = 'all'
+    env['OFI_INTERFACE'] = 'lo'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
     env['FI_UNIVERSE_SIZE'] = '128'
@@ -127,6 +134,7 @@ class DaosServer():
                                         '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
                                        env=agent_env)
+        self.conf.agent_dir = self.agent_dir
         time.sleep(2)
         self.running = True
 
@@ -221,7 +229,7 @@ class ValgrindHelper():
     def __init__(self, logid=None):
 
         # Set this to False to disable valgrind, which will run faster.
-        self.use_valgrind = True
+        self.use_valgrind = False
 
         if not logid:
             self.__class__.instance_num += 1
@@ -427,7 +435,7 @@ def import_daos(server, conf):
     daos = __import__('pydaos')
     return daos
 
-def run_daos_cmd(conf, cmd):
+def run_daos_cmd(conf, cmd, fi_file=None):
     """Run a DAOS command
 
     Run a command, returing what subprocess.run() would.
@@ -444,12 +452,19 @@ def run_daos_cmd(conf, cmd):
     log_file = tempfile.NamedTemporaryFile(prefix='dnt_cmd_',
                                            suffix='.log', delete=False)
 
+    if fi_file:
+        cmd_env['D_FI_CONFIG'] = fi_file
     cmd_env['D_LOG_FILE'] = log_file.name
+    if conf.agent_dir:
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
     rc = subprocess.run(exec_cmd,
                         stdout=subprocess.PIPE,
                         env=cmd_env)
-    log_test(log_file.name)
+    if fi_file:
+        log_test(log_file.name, skip_fi=True)
+    else:
+        log_test(log_file.name, skip_fi=True)
     valgrind.convert_xml()
     return rc
 
@@ -545,7 +560,7 @@ def setup_log_test(conf):
 
     lt.output_file = conf.output_fd
 
-def log_test(filename, show_memleaks=True):
+def log_test(filename, show_memleaks=True, skip_fi=False):
     """Run the log checker on filename, logging to stdout"""
 
     print('Running log_test on {}'.format(filename))
@@ -556,16 +571,19 @@ def log_test(filename, show_memleaks=True):
     lp = __import__('cart_logparse')
     lt = __import__('cart_logtest')
 
-
-
     log_iter = lp.LogIter(filename)
     lto = lt.LogTest(log_iter)
+
+    lto.hide_fi_calls = skip_fi
 
     try:
         lto.check_log_file(abort_on_warning=True,
                            show_memleaks=show_memleaks)
     except lt.LogCheckError:
         print('Error detected')
+
+    if skip_fi and not lto.fi_triggered:
+            raise DFTestNoFi
 
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and and read
@@ -847,6 +865,39 @@ def test_pydaos_kv(server, conf):
     if failed:
         print("That's not good")
 
+def test_alloc_fail(server, conf):
+
+    pools = get_pool_list()
+
+    fid = 1
+
+    while True:
+        fc = {}
+        fc['fault_config'] = [{'id': 0,
+                               'probability_x': 1,
+                               'probability_y': 1,
+                               'interval': fid,
+                               'max_faults': 1}]
+
+        fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
+                                              suffix='.yaml')
+
+        fi_file.write(yaml.dump(fc, encoding='utf=8'))
+        fi_file.flush()
+
+        cmd = ['pool', 'list-containers', '--svc', '0', '--pool', '5848df55-a97c-46e3-8eca-45adf85591d6']
+
+        try:
+            rc = run_daos_cmd(conf, cmd, fi_file = fi_file.name)
+        except DFTestNoFi:
+            print('Fault injection did not trigger, returning')
+            break
+
+        print(rc)
+        fid += 1
+        if rc.returncode not in (1, 255):
+            break
+
 def main():
     """Main entry point"""
 
@@ -863,10 +914,13 @@ def main():
         run_in_fg(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
         test_pydaos_kv(server, conf)
+    elif len(sys.argv) == 2 and sys.argv[1] == 'fi':
+        test_alloc_fail(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'all':
         run_il_test(server, conf)
         run_dfuse(server, conf)
         test_pydaos_kv(server, conf)
+        test_alloc_fail(server, conf)
     else:
         run_il_test(server, conf)
         run_dfuse(server, conf)

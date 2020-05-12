@@ -65,14 +65,6 @@ class ActiveDescriptors(LogCheckError):
 class LogError(LogCheckError):
     """Errors detected in log file"""
 
-WARN_FUNCTIONS = ['crt_grp_lc_addr_insert',
-                  'crt_ctx_epi_abort',
-                  'crt_rpc_complete',
-                  'crt_req_timeout_hdlr',
-                  'crt_req_hg_addr_lookup_cb',
-                  'crt_progress',
-                  'crt_context_timeout_check']
-
 # Use a global variable here so show_line can remember previously reported
 # error lines.
 shown_logs = set()
@@ -126,6 +118,7 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_group_psr_set': ('uri'),
                     'crt_hdlr_uri_lookup': ('tmp_uri'),
                     'crt_rpc_priv_free': ('rpc_priv'),
+                    'crt_init_opt': ('crt_gdata.cg_addr'),
                     'cont_prop_default_copy': ('entry_def->dpe_str'),
                     'ds_pool_list_cont_handler': ('cont_buf'),
                     'dtx_resync_ult': ('arg'),
@@ -186,11 +179,8 @@ def show_line(line, sev, msg):
     print(log)
     if output_file:
         output_file.write("{}\n".format(log))
+        output_file.flush()
     shown_logs.add(log)
-
-def show_bug(line, bug_id):
-    """Mark output with a known bug"""
-    show_line(line, 'error', 'Known bug {}'.format(bug_id))
 
 def add_line_count_to_dict(line, target):
     """Add entry for a output line into a dict"""
@@ -245,14 +235,8 @@ class LogTest():
 
     def __init__(self, log_iter):
         self._li = log_iter
-        self.strict_functions = {}
-
-    def set_warning_function(self, function, bug_id):
-        """Register functions for known bugs
-
-        Add a mapping from functions with errors to known bugs
-        """
-        self.strict_functions[function] = bug_id
+        self.hide_fi_calls = False
+        self.fi_triggered = False
 
     def check_log_file(self, abort_on_warning, show_memleaks=True):
         """Check a single log file for consistency"""
@@ -288,20 +272,8 @@ class LogTest():
         non_trace_lines = 0
 
         for line in self._li.new_iter(pid=pid, stateful=True):
-            try:
-                # Not all log lines contain a function so catch that case
-                # here and do not abort.
-                if line.function in self.strict_functions and \
-                   line.level <= cart_logparse.LOG_LEVELS['WARN']:
-                    show_line(line, 'error', 'warning in strict file')
-                    show_bug(line, self.strict_functions[line.function])
-                    warnings_strict = True
-            except AttributeError:
-                pass
             if abort_on_warning:
-                if line.level <= cart_logparse.LOG_LEVELS['WARN'] and \
-                   line.mask.lower() != 'hg' and \
-                   line.function not in WARN_FUNCTIONS:
+                if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     if line.rpc:
                         # Ignore the SWIM RPC opcode, as this often sends RPCs
                         # that fail during shutdown.
@@ -309,8 +281,16 @@ class LogTest():
                             show_line(line, 'error', 'warning in strict mode')
                             warnings_mode = True
                     else:
-                        show_line(line, 'error', 'warning in strict mode')
-                        warnings_mode = True
+                        show = True
+                        if self.hide_fi_calls:
+                            if line.is_fi_site():
+                                show = False
+                                self.fi_triggered = True
+                            elif line.is_fi_alloc_fail():
+                                show = False
+                        if show:
+                            show_line(line, 'error', 'warning in strict mode')
+                            warnings_mode = True
             if line.trace:
                 trace_lines += 1
                 if not have_debug and \
@@ -426,8 +406,9 @@ class LogTest():
 
         del active_desc['root']
 
-        if not have_debug:
-            print('DEBUG not enabled, No log consistency checking possible')
+        # This isn't currently used anyway.
+        #if not have_debug:
+        #    print('DEBUG not enabled, No log consistency checking possible')
 
         total_lines = trace_lines + non_trace_lines
         p_trace = trace_lines * 1.0 / total_lines * 100
@@ -439,13 +420,14 @@ class LogTest():
 
         print("Memsize: {}".format(memsize))
 
-        pp = pprint.PrettyPrinter()
-        if mismatch_alloc_seen:
-            print('Mismatched allocations were allocated here:')
-            print(pp.pformat(mismatch_alloc_seen))
-        if mismatch_free_seen:
-            print('Mismatched allocations were freed here:')
-            print(pp.pformat(mismatch_free_seen))
+        if False:
+            pp = pprint.PrettyPrinter()
+            if mismatch_alloc_seen:
+                print('Mismatched allocations were allocated here:')
+                print(pp.pformat(mismatch_alloc_seen))
+            if mismatch_free_seen:
+                print('Mismatched allocations were freed here:')
+                print(pp.pformat(mismatch_free_seen))
 
         if not show_memleaks:
             return

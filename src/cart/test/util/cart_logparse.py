@@ -165,10 +165,10 @@ class LogLine():
                 pass
         raise AttributeError
 
-    def get_msg(self):
-        """Return the message part of a line, stripping up to and
-        including the filename"""
-        return ' '.join(self._fields[1:])
+#    def get_msg(self):
+#        """Return the message part of a line, stripping up to and
+#        including the filename"""
+#        return ' '.join(self._fields[2:])
 
     def get_anon_msg(self):
         """Return the message part of a line, stripping up to and
@@ -279,6 +279,12 @@ class LogLine():
         """Returns True if line is Link descriptor"""
 
         return self._is_type(['Link'])
+
+    def is_fi_site(self):
+        return self._is_type(['fault_id'], trace=False)
+
+    def is_fi_alloc_fail(self):
+        return self._is_type(['out', 'of', 'memory'], trace=False)
 
     def is_calloc(self):
         """Returns True if line is a allocation point"""
