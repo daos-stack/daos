@@ -438,16 +438,18 @@ def get_test_list(tags):
     """
     test_tags = []
     test_list = []
-
+    # Check if fault injection is enabled ( 0 return status)
+    faults_disabled = time_command("fault_status")
     for tag in tags:
         if ".py" in tag:
             # Assume '.py' indicates a test and just add it to the list
             test_list.append(tag)
+            fault_filter = " --filter-by-tags=-faults"
+            if faults_disabled and fault_filter not in test_tags:
+                test_tags.append(fault_filter)
         else:
             # Otherwise it is assumed that this is a tag
-            # Check if fault injection is enabled;
-            # fault_status = 0; fault injection enabled
-            if time_command("fault_status"):
+            if faults_disabled:
                 tag = ",".join((tag, "-faults"))
             test_tags.append(" --filter-by-tags={}".format(tag))
 
@@ -455,11 +457,13 @@ def get_test_list(tags):
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
+        files = "./" if not test_list else " ".join(test_list)
         command = " | ".join([
-            "avocado list --paginator off{} ./".format(" ".join(test_tags)),
+            "avocado list --paginator off{} {}".format(
+                " ".join(test_tags), files),
             r"sed -ne '/INSTRUMENTED/s/.* \([^:]*\):.*/\1/p'",
             "uniq"])
-        test_list.extend(get_output(command).splitlines())
+        test_list = get_output(command).splitlines()
 
     return " ".join(test_tags), test_list
 
