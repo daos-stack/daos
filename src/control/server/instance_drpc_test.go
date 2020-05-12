@@ -122,7 +122,7 @@ func TestIOServerInstance_DrespToRankResult(t *testing.T) {
 			daosResp: &mgmtpb.DaosResp{Status: int32(drpc.DaosNoSpace)},
 			expResult: &MemberResult{
 				Rank: dRank, State: MemberStateErrored, Errored: true,
-				Msg: fmt.Sprintf("rank %d: DAOS error (-1007): DER_NOSPACE", dRank),
+				Msg: fmt.Sprintf("rank %d: %s", dRank, drpc.DaosNoSpace),
 			},
 		},
 		"drpc failure": {

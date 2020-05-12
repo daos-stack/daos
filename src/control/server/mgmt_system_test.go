@@ -713,7 +713,7 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 		"instances already started": {
 			req:              &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			instancesStarted: true,
-			expErr:           FaultInstancesNotStopped("reset format", 0),
+			expErr:           FaultInstancesNotStopped("reset format", 1),
 		},
 		"instances reach wait format": {
 			req: &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},

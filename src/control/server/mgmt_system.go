@@ -366,7 +366,7 @@ func (svc *mgmtSvc) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq) 
 		savedRanks[srv.Index()] = rank
 
 		if srv.isStarted() {
-			return nil, FaultInstancesNotStopped("reset format", srv.Index())
+			return nil, FaultInstancesNotStopped("reset format", rank)
 		}
 		if err := srv.RemoveSuperblock(); err != nil {
 			return nil, err

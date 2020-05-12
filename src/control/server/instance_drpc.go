@@ -127,7 +127,9 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method int32) *system.
 	case drpc.MethodPrepShutdown:
 		tgtState = system.MemberStateStopping
 	default:
-		panic("unrecognised fanout method")
+		return system.NewMemberResult(rank,
+			errors.Errorf("unsupported dRPC method (%d) for fanout", method),
+			system.MemberStateErrored)
 	}
 
 	resChan := make(chan *system.MemberResult)
