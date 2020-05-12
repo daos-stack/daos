@@ -464,7 +464,7 @@ def run_daos_cmd(conf, cmd, fi_file=None):
     if fi_file:
         log_test(log_file.name, skip_fi=True)
     else:
-        log_test(log_file.name, skip_fi=True)
+        log_test(log_file.name, skip_fi=False)
     valgrind.convert_xml()
     return rc
 
@@ -583,7 +583,7 @@ def log_test(filename, show_memleaks=True, skip_fi=False):
         print('Error detected')
 
     if skip_fi and not lto.fi_triggered:
-            raise DFTestNoFi
+        raise DFTestNoFi
 
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and and read
@@ -869,6 +869,13 @@ def test_alloc_fail(server, conf):
 
     pools = get_pool_list()
 
+    if len(pools) > 1:
+        pool = pools[0]
+    else:
+        pool = '5848df55-a97c-46e3-8eca-45adf85591d6'
+
+    cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+
     fid = 1
 
     while True:
@@ -885,10 +892,8 @@ def test_alloc_fail(server, conf):
         fi_file.write(yaml.dump(fc, encoding='utf=8'))
         fi_file.flush()
 
-        cmd = ['pool', 'list-containers', '--svc', '0', '--pool', '5848df55-a97c-46e3-8eca-45adf85591d6']
-
         try:
-            rc = run_daos_cmd(conf, cmd, fi_file = fi_file.name)
+            rc = run_daos_cmd(conf, cmd, fi_file=fi_file.name)
         except DFTestNoFi:
             print('Fault injection did not trigger, returning')
             break
