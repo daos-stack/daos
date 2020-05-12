@@ -49,7 +49,8 @@ class DmgCommand(YamlCommand):
         # Between the first and the second group, use " +"; i.e., one or more
         # whitespaces. If we use "\s+", it'll pick up the second divider as
         # UUID since it's made up of hyphens and \s includes new line.
-        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))"
+        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
+        "pool_create": r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)"
     }
 
     def __init__(self, path, yaml_cfg=None):
