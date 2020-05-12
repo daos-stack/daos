@@ -92,7 +92,6 @@ func TestNvmFwInfo(t *testing.T) {
 	}
 }
 
-
 func TestNvmFwUpdate_BadFile(t *testing.T) {
 	for _, tt := range []struct {
 		desc      string
@@ -108,7 +107,7 @@ func TestNvmFwUpdate_BadFile(t *testing.T) {
 			inputPath: "/not/a/real/path.bin",
 			expErr:    errors.New("unable to access firmware file"),
 		},
-	}{
+	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			var devUID DeviceUID // don't care - this test shouldn't reach the API
 
@@ -128,18 +127,19 @@ func TestNvmFwUpdate(t *testing.T) {
 
 	// Actual DIMM will reject this junk file.
 	// We just need it to get down to the API.
-	f, err := os.Create(path.Join(dir, "fake.bin"))
+	filename := path.Join(dir, "fake.bin")
+	f, err := os.Create(filename)
 	if err != nil {
 		t.Fatal("Failed to create a fake FW file")
 	}
-	f.WriteString("notrealFW");
+	f.WriteString("notrealFW")
 	f.Close()
 
 	mgmt := NvmMgmt{}
 	devs := getDevices(t, mgmt)
 
 	for _, d := range devs {
-		err := mgmt.UpdateFirmware(d.Uid, "", false)
+		err := mgmt.UpdateFirmware(d.Uid, filename, false)
 
 		// Got down to NVM API
 		common.CmpErr(t, errors.New("update_device_fw"), err)
