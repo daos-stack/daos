@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2017-2019 Intel Corporation.
+"""
+  (C) Copyright 2017-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,36 +20,39 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
-import subprocess
+from general_utils import run_command
+
 
 def check_for_pool(host, uuid):
-    """
-    Function to check if pool folder exist on server
+    """Check if pool folder exist on server.
+
     Args:
-        host: Server host name
-        uuid: Pool uuid to check if exists
-    return:
-        resp: subprocess return code
+        host (str): Server host name
+        uuid (str): Pool uuid to check if exists
+
+    Returns:
+        int: subprocess return code
+
     """
-    cmd = "test -e /mnt/daos/" + uuid
-    resp = subprocess.call(["ssh", host, cmd])
-    if resp == 0:
-        print ('%s exists' %uuid)
+    cmd = "/usr/bin/ssh {} test -e /mnt/daos/{}".format(host, uuid)
+    result = run_command(cmd, raise_exception=False)
+    if result.exit_status == 0:
+        print("{} exists".format(uuid))
     else:
-        print ('%s does not exist' %uuid)
-    return resp
+        print("{} does not exist".format(uuid))
+    return result.exit_status
+
 
 def cleanup_pools(hosts):
-    """
-    To cleanup the pool and content from /mnt/daps/
+    """Cleanup the pool and content from /mnt/daos/.
+
     Args:
         hosts[list]: Lists of servers name
     return"
         None
     """
     for host in hosts:
-        cmd = "rm -rf /mnt/daos/*"
-        subprocess.call(["ssh", host, cmd])
+        run_command("/usr/bin/ssh {} rm -rf /mnt/daos/*".format(host))

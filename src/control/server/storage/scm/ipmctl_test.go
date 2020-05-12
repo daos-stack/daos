@@ -126,8 +126,9 @@ func TestGetState(t *testing.T) {
 
 	tests := []struct {
 		desc              string
-		errMsg            string
 		showRegionOut     string
+		expGetStateErrMsg string
+		expErrMsg         string
 		expRebootRequired bool
 		expNamespaces     storage.ScmNamespaces
 		expCommands       []string
@@ -181,6 +182,25 @@ func TestGetState(t *testing.T) {
 			expCommands:   []string{cmdScmShowRegions, cmdScmListNamespaces},
 			expNamespaces: twoNs,
 		},
+		{
+			desc: "v2 regions with no capacity",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=0.000 GiB\n" +
+				"---ISetID=0x81187f4881f02ccb---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=0.000 GiB\n" +
+				"\n",
+			expCommands:   []string{cmdScmShowRegions, cmdScmListNamespaces},
+			expNamespaces: twoNs,
+		},
+		{
+			desc: "unexpected output",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n",
+			expGetStateErrMsg: "expecting at least 4 lines, got 3",
+		},
 	}
 
 	for _, tt := range tests {
@@ -206,13 +226,14 @@ func TestGetState(t *testing.T) {
 			commands = nil
 
 			scmState, err := cr.GetState()
-			if err != nil {
-				t.Fatal(tt.desc + ": GetState: " + err.Error())
+			ExpectError(t, err, tt.expGetStateErrMsg, tt.desc)
+			if tt.expGetStateErrMsg != "" {
+				return
 			}
 
 			needsReboot, namespaces, err := cr.Prep(scmState)
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, tt.desc)
+			if tt.expErrMsg != "" {
+				ExpectError(t, err, tt.expErrMsg, tt.desc)
 				return
 			}
 			if err != nil {
@@ -320,7 +341,7 @@ func TestGetNamespaces(t *testing.T) {
 
 	tests := []struct {
 		desc           string
-		errMsg         string
+		expErrMsg      string
 		cmdOut         string
 		expNamespaces  storage.ScmNamespaces
 		expCommands    []string
@@ -347,7 +368,7 @@ func TestGetNamespaces(t *testing.T) {
 		{
 			desc:           "ndctl not installed",
 			lookPathErrMsg: FaultMissingNdctl.Error(),
-			errMsg:         FaultMissingNdctl.Error(),
+			expErrMsg:      FaultMissingNdctl.Error(),
 		},
 	}
 

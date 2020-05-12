@@ -666,7 +666,7 @@ class ServerManager(ExecutableCommand):
 
     def server_clean(self):
         """Prepare the hosts before starting daos server."""
-        # Kill any doas servers running on the hosts
+        # Kill any daos servers running on the hosts
         self.kill()
         # Clean up any files that exist on the hosts
         self.clean_files()
@@ -993,7 +993,7 @@ def stop_server(setname=None, hosts=None):
     # we can also have orphaned ssh processes that started an orted on a
     # remote node but never get cleaned up when that remote node spontaneiously
     # reboots
-    subprocess.call(["pkill", "^ssh$"])
+    subprocess.call(["/usr/bin/pkill", "^ssh$"])
 
 
 def kill_server(hosts):

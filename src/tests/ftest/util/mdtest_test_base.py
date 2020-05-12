@@ -69,15 +69,6 @@ class MdtestBase(TestWithServers):
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
 
-        # Until DAOS-3320 is resolved run IOR for POSIX
-        # with single client node
-        if self.mdtest_cmd.api.value == "POSIX":
-            self.log.info("Restricting mdtest to one node")
-            self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
-
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
@@ -103,7 +94,7 @@ class MdtestBase(TestWithServers):
         """Create a container.
 
         Args:
-            daos_cmd (DaosCommand): doas command to issue the container
+            daos_cmd (DaosCommand): daos command to issue the container
                 create
 
         Returns:

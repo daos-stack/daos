@@ -594,6 +594,7 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 			continue;
 		}
 
+		evt_array_entry2le(this_ent)->le_prev = NULL;
 		d_list_add_tail(next, &covered);
 	}
 
