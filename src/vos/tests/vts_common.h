@@ -112,6 +112,7 @@ void dts_ctx_fini(struct dts_context *tsc);
 struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
 
 #define CFG_MAX 128
+__attribute__ ((__format__(__printf__, 2, 3)))
 static inline void
 create_config(char buf[CFG_MAX], const char *format, ...)
 {
