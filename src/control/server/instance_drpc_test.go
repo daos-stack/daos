@@ -116,26 +116,26 @@ func TestIOServerInstance_DrespToRankResult(t *testing.T) {
 		expResult   *MemberResult
 	}{
 		"rank success": {
-			expResult: &MemberResult{Rank: dRank, Action: "test", State: MemberStateJoined},
+			expResult: &MemberResult{Rank: dRank, State: MemberStateJoined},
 		},
 		"rank failure": {
-			daosResp: &mgmtpb.DaosResp{Status: -1},
+			daosResp: &mgmtpb.DaosResp{Status: int32(drpc.DaosNoSpace)},
 			expResult: &MemberResult{
-				Rank: dRank, Action: "test", State: MemberStateErrored, Errored: true,
-				Msg: fmt.Sprintf("rank %d dRPC returned DER -1", dRank),
+				Rank: dRank, State: MemberStateErrored, Errored: true,
+				Msg: fmt.Sprintf("rank %d: DAOS error (-1007): DER_NOSPACE", dRank),
 			},
 		},
 		"drpc failure": {
 			inErr: errors.New("returned from CallDrpc"),
 			expResult: &MemberResult{
-				Rank: dRank, Action: "test", State: MemberStateErrored, Errored: true,
+				Rank: dRank, State: MemberStateErrored, Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC failed: returned from CallDrpc", dRank),
 			},
 		},
 		"unmarshal failure": {
 			junkRPC: true,
 			expResult: &MemberResult{
-				Rank: dRank, Action: "test", State: MemberStateErrored, Errored: true,
+				Rank: dRank, State: MemberStateErrored, Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed: proto: mgmt.DaosResp: illegal tag 0 (wire type 0)", dRank),
 			},
 		},
@@ -161,7 +161,7 @@ func TestIOServerInstance_DrespToRankResult(t *testing.T) {
 				Body:   rb,
 			}
 
-			gotResult := drespToMemberResult(Rank(dRank), "test", resp, tc.inErr, tc.targetState)
+			gotResult := drespToMemberResult(Rank(dRank), resp, tc.inErr, tc.targetState)
 			if diff := cmp.Diff(tc.expResult, gotResult, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}

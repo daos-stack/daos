@@ -64,6 +64,7 @@ func TestHasAccess(t *testing.T) {
 		{"StorageScan", ComponentAdmin, "/ctl.MgmtCtl/StorageScan"},
 		{"SystemQuery", ComponentAdmin, "/ctl.MgmtCtl/SystemQuery"},
 		{"SystemStop", ComponentAdmin, "/ctl.MgmtCtl/SystemStop"},
+		{"SystemResetFormat", ComponentAdmin, "/ctl.MgmtCtl/SystemResetFormat"},
 		{"SystemStart", ComponentAdmin, "/ctl.MgmtCtl/SystemStart"},
 		{"NetworkListProviders", ComponentAdmin, "/ctl.MgmtCtl/NetworkListProviders"},
 		{"StorageFormat", ComponentAdmin, "/ctl.MgmtCtl/StorageFormat"},
@@ -89,6 +90,7 @@ func TestHasAccess(t *testing.T) {
 		{"PrepShutdownRanks", ComponentServer, "/mgmt.MgmtSvc/PrepShutdownRanks"},
 		{"StopRanks", ComponentServer, "/mgmt.MgmtSvc/StopRanks"},
 		{"PingRanks", ComponentServer, "/mgmt.MgmtSvc/PingRanks"},
+		{"ResetFormatRanks", ComponentServer, "/mgmt.MgmtSvc/ResetFormatRanks"},
 		{"StartRanks", ComponentServer, "/mgmt.MgmtSvc/StartRanks"},
 	}
 
