@@ -85,11 +85,23 @@ type DeviceDiscovery struct {
 	Pad_cgo_3                [6]byte
 }
 
+// FWUpdateStatus values represent the ipmctl fw_update_status enum
+const (
+	// FWUpdateStatusUnknown represents unknown status
+	FWUpdateStatusUnknown = 0
+	// FWUpdateStatusStaged represents a staged FW update to be loaded on reboot
+	FWUpdateStatusStaged = 1
+	// FWUpdateStatusSuccess represents a successfully applied FW update
+	FWUpdateStatusSuccess = 2
+	// FWUpdateStatusFailed represents a failed FW update
+	FWUpdateStatusFailed = 3
+)
+
 // DeviceFirmwareInfo represents an ipmctl device_fw_info structure
 type DeviceFirmwareInfo struct {
-	ActiveFWVersion Version
-	StagedFWVersion Version
-	FWImageMaxSize  uint32
-	FWUpdateStatus  uint32
+	ActiveFWVersion Version // currently running FW version
+	StagedFWVersion Version // FW version to be applied on next reboot
+	FWImageMaxSize  uint32  // maximum FW image size in bytes
+	FWUpdateStatus  uint32  // current status
 	Reserved        [4]uint8
 }

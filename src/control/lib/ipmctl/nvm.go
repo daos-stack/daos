@@ -40,22 +40,20 @@ import "C"
 
 import (
 	"fmt"
+	"os"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 // IpmCtl is the interface that provides access to libipmctl.
 type IpmCtl interface {
-	// SetInterleaved mode for app-direct regions
-	// process referred to as "set goal" in NVM API
-	//SetRegion(...)
 	// Discover persistent memory modules
 	Discover() ([]DeviceDiscovery, error)
 	// Get firmware information from persistent memory modules
 	GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error)
 	// Update persistent memory module firmware
 	UpdateFirmware(uid DeviceUID, fwPath string, force bool) error
-	// Cleanup persistent memory references
-	//Cleanup()
 }
 
 // NvmMgmt is an implementation of the IpmCtl interface which exercises
@@ -100,7 +98,7 @@ func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
 //
 // TODO: print human readable error with provided lib macros
 func Rc2err(label string, rc C.int) error {
-	if rc != C.NVM_SUCCESS {
+	if rc != C.NVM_SUCCESS && rc != C.NVM_SUCCESS_FW_RESET_REQUIRED {
 		return fmt.Errorf("%s: rc=%d", label, int(rc))
 	}
 	return nil
@@ -123,6 +121,14 @@ func (n *NvmMgmt) GetFirmwareInfo(uid DeviceUID) (fw DeviceFirmwareInfo, err err
 
 // UpdateFirmware updates the firmware on the device
 func (n *NvmMgmt) UpdateFirmware(uid DeviceUID, fwPath string, force bool) error {
+	if len(fwPath) == 0 {
+		return errors.New("firmware path is required")
+	}
+
+	if _, err := os.Stat(fwPath); err != nil {
+		return errors.Wrap(err, "unable to access firmware file")
+	}
+
 	cUID := C.CString(uid.String())
 	cPath := C.CString(fwPath)
 	cPathLen := C.ulong(len(fwPath))

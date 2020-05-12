@@ -25,8 +25,14 @@ package ipmctl
 
 import (
 	"fmt"
+	"os"
 	"os/user"
+	"path"
 	"testing"
+
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 // NVM API calls will fail if not run as root. We should just skip the tests.
@@ -86,14 +92,57 @@ func TestNvmFwInfo(t *testing.T) {
 	}
 }
 
+
+func TestNvmFwUpdate_BadFile(t *testing.T) {
+	for _, tt := range []struct {
+		desc      string
+		inputPath string
+		expErr    error
+	}{
+		{
+			desc:   "empty path",
+			expErr: errors.New("firmware path is required"),
+		},
+		{
+			desc:      "non-existent path",
+			inputPath: "/not/a/real/path.bin",
+			expErr:    errors.New("unable to access firmware file"),
+		},
+	}{
+		t.Run(tt.desc, func(t *testing.T) {
+			var devUID DeviceUID // don't care - this test shouldn't reach the API
+
+			mgmt := NvmMgmt{}
+			err := mgmt.UpdateFirmware(devUID, tt.inputPath, false)
+
+			common.CmpErr(t, tt.expErr, err)
+		})
+	}
+}
+
 func TestNvmFwUpdate(t *testing.T) {
 	skipNoPerms(t)
+
+	dir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+
+	// Actual DIMM will reject this junk file.
+	// We just need it to get down to the API.
+	f, err := os.Create(path.Join(dir, "fake.bin"))
+	if err != nil {
+		t.Fatal("Failed to create a fake FW file")
+	}
+	f.WriteString("notrealFW");
+	f.Close()
 
 	mgmt := NvmMgmt{}
 	devs := getDevices(t, mgmt)
 
 	for _, d := range devs {
 		err := mgmt.UpdateFirmware(d.Uid, "", false)
+
+		// Got down to NVM API
+		common.CmpErr(t, errors.New("update_device_fw"), err)
 		fmt.Printf("Update firmware for device %s: %v\n", d.Uid.String(), err)
 	}
 }

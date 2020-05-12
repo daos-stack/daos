@@ -70,24 +70,44 @@ func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
 	}
 }
 
-type mockIpmctl struct {
-	discoverModulesRet error
-	modules            []ipmctl.DeviceDiscovery
-	getFWInfoRet       error
-	fwInfo             ipmctl.DeviceFirmwareInfo
-	updateFirmwareRet  error
-}
+type (
+	mockIpmctlCfg struct {
+		discoverModulesRet error
+		modules            []ipmctl.DeviceDiscovery
+		getFWInfoRet       error
+		fwInfo             ipmctl.DeviceFirmwareInfo
+		updateFirmwareRet  error
+	}
+
+	mockIpmctl struct {
+		cfg mockIpmctlCfg
+	}
+)
 
 func (m *mockIpmctl) Discover() ([]ipmctl.DeviceDiscovery, error) {
-	return m.modules, m.discoverModulesRet
+	return m.cfg.modules, m.cfg.discoverModulesRet
 }
 
 func (m *mockIpmctl) GetFirmwareInfo(uid ipmctl.DeviceUID) (ipmctl.DeviceFirmwareInfo, error) {
-	return m.fwInfo, m.getFWInfoRet
+	return m.cfg.fwInfo, m.cfg.getFWInfoRet
 }
 
 func (m *mockIpmctl) UpdateFirmware(uid ipmctl.DeviceUID, fwPath string, force bool) error {
-	return m.updateFirmwareRet
+	return m.cfg.updateFirmwareRet
+}
+
+func newMockIpmctl(cfg *mockIpmctlCfg) *mockIpmctl {
+	if cfg == nil {
+		cfg = &mockIpmctlCfg{}
+	}
+
+	return &mockIpmctl{
+		cfg: *cfg,
+	}
+}
+
+func defaultMockIpmctl() *mockIpmctl {
+	return newMockIpmctl(nil)
 }
 
 // TestGetState tests the internals of ipmCtlRunner, pass in mock runCmd to verify
@@ -202,10 +222,10 @@ func TestGetState(t *testing.T) {
 			mockLookPath := func(string) (s string, err error) {
 				return
 			}
-			mockBinding := &mockIpmctl{
+			mockBinding := newMockIpmctl(&mockIpmctlCfg{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
-			}
+			})
 			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
 			if _, err := cr.Discover(); err != nil {
 				t.Fatal(err)
@@ -381,10 +401,10 @@ func TestGetNamespaces(t *testing.T) {
 
 			commands = nil // reset to initial values between tests
 
-			mockBinding := &mockIpmctl{
+			mockBinding := newMockIpmctl(&mockIpmctlCfg{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
-			}
+			})
 			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
 
 			if _, err := cr.Discover(); err != nil {
