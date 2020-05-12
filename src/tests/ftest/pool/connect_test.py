@@ -30,6 +30,7 @@ from avocado.utils import process
 from apricot import TestWithServers
 
 import check_for_pool
+import dmg_utils
 
 # pylint: disable=fixme, broad-except
 class ConnectTest(TestWithServers):
@@ -68,14 +69,24 @@ class ConnectTest(TestWithServers):
             host1 = self.hostlist_servers[0]
             host2 = self.hostlist_servers[1]
 
-            create_cmd = (
-                "{0} create-pool "
-                "-m {1} "
-                "-u {2} "
-                "-g {3} "
-                "-s {4} "
-                "-c 1".format(self.daosctl, "0731", uid, gid, setid))
-            uuid_str = """{0}""".format(process.system_output(create_cmd))
+            #create_cmd = (
+            #    "{0} create-pool "
+            #    "-m {1} "
+            #    "-u {2} "
+            #    "-g {3} "
+            #    "-s {4} "
+            #    "-c 1".format(self.daosctl, "0731", uid, gid, setid))
+            #uuid_str = """{0}""".format(process.system_output(create_cmd))
+            self.dmg = self.get_dmg_command()
+            scm_size = self.params.get("scm_size", "/run/pool*")
+            result = self.dmg.pool_create(scm_size=scm_size,uid=uid, gid=gid, group=setid, svcn=1)
+            if "ERR" not in result.stderr:
+                uuid_str, pool_svc = \
+                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
+                        result.stdout)
+            else:
+                self.fail("    Unable to parse the Pool's UUID and SVC.")
+
             print("uuid is {0}\n".format(uuid_str))
 
             exists = check_for_pool.check_for_pool(host1, uuid_str)
@@ -90,7 +101,8 @@ class ConnectTest(TestWithServers):
             connect_cmd = ('{0} connect-pool -i {1} '
                            '-s {2} -r -l 0,1'.format(self.daosctl,
                                                      uuid_str, setid))
-            process.system(connect_cmd)
+            #process.system(connect_cmd)
+            result = self.dmg.pool_query(uuid_str)
 
 
             if expected_result == 'FAIL':

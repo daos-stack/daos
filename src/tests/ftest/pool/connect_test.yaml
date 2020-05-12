@@ -2,11 +2,13 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - server-A
-    - server-B
+    - wolf-21
+    - wolf-22
 timeout: 120
 server_config:
   name: daos_server
+pool:
+    scm_size: 1073741824
 tests:
   setnames: !mux
     validsetname:
