@@ -291,9 +291,11 @@ ch_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	unsigned int idx;
 
+#if 0
 	if (htable->ht_ops->hop_key_hash)
 		idx = htable->ht_ops->hop_key_hash(htable, key, ksize);
 	else
+#endif
 		idx = d_hash_string_u32((const char *)key, ksize);
 
 	return idx & ((1U << htable->ht_bits) - 1);
