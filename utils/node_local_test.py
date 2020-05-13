@@ -879,7 +879,19 @@ def test_pydaos_kv(server, conf):
     if failed:
         print("That's not good")
 
-def test_alloc_fail(server, conf):
+def test_alloc_fail(conf):
+    """run 'daos' client binary with fault injection
+
+    Enable the fault injection for the daos binary, injecting
+    allocation failures at different locations.  Keep going until
+    the client runs with no faults injected (about 800 iterations).
+
+    Disable valgrind for this test as it takes a long time to run
+    with valgrind enabled, use purely the log analysis to find issues.
+
+    Ignore new error messages containing the numeric value of -DER_NOMEM
+    but warn on all other warnings generated.
+    """
 
     pools = get_pool_list()
 
@@ -934,12 +946,12 @@ def main():
     elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
         test_pydaos_kv(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'fi':
-        test_alloc_fail(server, conf)
+        test_alloc_fail(conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'all':
         run_il_test(server, conf)
         run_dfuse(server, conf)
         test_pydaos_kv(server, conf)
-        test_alloc_fail(server, conf)
+        test_alloc_fail(conf)
     else:
         run_il_test(server, conf)
         run_dfuse(server, conf)
