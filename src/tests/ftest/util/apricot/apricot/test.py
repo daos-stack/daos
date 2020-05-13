@@ -361,7 +361,7 @@ class TestWithServers(TestWithoutServers):
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos agents on all client
                 hosts specified in the test's yaml file.
-            servers (list): list of hosts running the doas servers to be used to
+            servers (list): list of hosts running the daos servers to be used to
                 define the access points in the agent yaml config file
 
         Raises:

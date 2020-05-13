@@ -117,10 +117,14 @@ struct lru_array {
 /** Internal converter for real index to entity index in sub array */
 #define lrua_idx2ent(array, idx) ((idx) & (array)->la_idx_mask)
 
+/** Internal API: Allocate one sub array */
+int
+lrua_array_alloc_one(struct lru_array *array, struct lru_sub *sub);
+
 /** Internal API: Evict the LRU, move it to MRU, invoke eviction callback,
  *  and return the index
  */
-void
+int
 lrua_find_free(struct lru_array *array, struct lru_entry **entry,
 	       uint32_t *idx, uint64_t key);
 
@@ -237,9 +241,11 @@ lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key)
  *
  * \return true if the entry is in the array and set \p entryp accordingly
  */
+#define lrua_lookupx(array, idx, key, entryp)	\
+	lrua_lookupx_(array, idx, key, (void **)entryp)
 static inline bool
-lrua_lookupx(struct lru_array *array, uint32_t idx, uint64_t key,
-	     void **entryp)
+lrua_lookupx_(struct lru_array *array, uint32_t idx, uint64_t key,
+	      void **entryp)
 {
 	struct lru_entry	*entry;
 
@@ -264,11 +270,12 @@ lrua_lookupx(struct lru_array *array, uint32_t idx, uint64_t key,
  *
  * \return true if the entry is in the array and set \p entryp accordingly
  */
+#define lrua_lookup(array, idx, entryp)	\
+	lrua_lookup_(array, idx, (void **)entryp)
 static inline bool
-lrua_lookup(struct lru_array *array, const uint32_t *idx,
-	    void **entryp)
+lrua_lookup_(struct lru_array *array, const uint32_t *idx, void **entryp)
 {
-	return lrua_lookupx(array, *idx, (uint64_t)idx, entryp);
+	return lrua_lookupx_(array, *idx, (uint64_t)idx, entryp);
 }
 
 /** Allocate a new entry lru array with alternate key specifier.
@@ -279,25 +286,36 @@ lrua_lookup(struct lru_array *array, const uint32_t *idx,
  * \param	array[in]	The LRU array
  * \param	idx[in,out]	Index address in, allocated index out
  * \param	key[in]		Unique identifier of entry
+ * \param	entryp[out]	Valid only if function returns success.
  *
- * \return	Returns a pointer to the entry.  It can return NULL if
- *		manual eviction flag is set and either there are no available
- *		entries or an allocation failed.
+ * \return	0		Success, entryp points to new entry
+ *		-DER_NOMEM	Memory allocation needed but no memory is
+ *				available.
+ *		-DER_BUSY	Entries need to be evicted to free up
+ *				entries in the table
  */
-static inline void *
-lrua_allocx(struct lru_array *array, uint32_t *idx, uint64_t key)
+#define lrua_allocx(array, idx, key, entryp)	\
+	lrua_allocx_(array, idx, key, (void **)(entryp))
+static inline int
+lrua_allocx_(struct lru_array *array, uint32_t *idx, uint64_t key,
+	     void **entryp)
 {
 	struct lru_entry	*new_entry;
+	int			 rc;
 
+	D_ASSERT(entryp != NULL);
 	D_ASSERT(array != NULL);
 	D_ASSERT(key != 0);
+	*entryp = NULL;
 
-	lrua_find_free(array, &new_entry, idx, key);
+	rc = lrua_find_free(array, &new_entry, idx, key);
 
-	if (new_entry == NULL)
-		return NULL;
+	if (rc != 0)
+		return rc;
 
-	return new_entry->le_payload;
+	*entryp = new_entry->le_payload;
+
+	return 0;
 }
 
 /** Allocate a new entry lru array.   This should only be called if lookup
@@ -307,15 +325,20 @@ lrua_allocx(struct lru_array *array, uint32_t *idx, uint64_t key)
  *
  * \param	array[in]	The LRU array
  * \param	idx[in,out]	Address of the entry index.
+ * \param	entryp[out]	Valid only if function returns success.
  *
- * \return	Returns a pointer to the entry.  It can return NULL if
- *		manual eviction flag is set and either there are no available
- *		entries or an allocation failed.
+ * \return	0		Success, entryp points to new entry
+ *		-DER_NOMEM	Memory allocation needed but no memory is
+ *				available.
+ *		-DER_BUSY	Entries need to be evicted to free up
+ *				entries in the table
  */
-static inline void *
-lrua_alloc(struct lru_array *array, uint32_t *idx)
+#define lrua_alloc(array, idx, entryp)	\
+	lrua_alloc_(array, idx, (void **)(entryp))
+static inline int
+lrua_alloc_(struct lru_array *array, uint32_t *idx, void **entryp)
 {
-	return lrua_allocx(array, idx, (uint64_t)idx);
+	return lrua_allocx_(array, idx, (uint64_t)idx, entryp);
 }
 
 /** Allocate an entry in place.  Used for recreating an old array.
@@ -324,36 +347,59 @@ lrua_alloc(struct lru_array *array, uint32_t *idx)
  * \param	idx[in]		Index of entry.
  * \param	key[in]		Address of the entry index.
  *
- * \return	Returns a pointer to the entry or NULL on error
+ * \return	0		Success, entryp points to new entry
+ *		-DER_NOMEM	Memory allocation needed but no memory is
+ *				available.
+ *		-DER_NO_PERM	Attempted to overwrite existing entry
+ *		-DER_INVAL	Index is not in range of array
  */
-static inline void *
-lrua_allocx_inplace(struct lru_array *array, uint32_t idx, uint64_t key)
+#define lrua_allocx_inplace(array, idx, key, entryp)	\
+	lrua_allocx_inplace_(array, idx, key, (void **)(entryp))
+static inline int
+lrua_allocx_inplace_(struct lru_array *array, uint32_t idx, uint64_t key,
+		     void **entryp)
 {
 	struct lru_entry	*entry;
 	struct lru_sub		*sub;
 	uint32_t		 ent_idx;
+	int			 rc;
 
+	D_ASSERT(entryp != NULL);
 	D_ASSERT(array != NULL);
 	D_ASSERT(key != 0);
 
+	*entryp = NULL;
+
 	if (idx >= array->la_count) {
 		D_ERROR("Index %d is out of range\n", idx);
-		return NULL;
+		return -DER_INVAL;
 	}
 
 	sub = lrua_idx2sub(array, idx);
 	ent_idx = lrua_idx2ent(array, idx);
+	if (sub->ls_table == NULL) {
+		rc = lrua_array_alloc_one(array, sub);
+		if (rc != 0)
+			return rc;
+		D_ASSERT(sub->ls_table != NULL);
+	}
+
 	entry = &sub->ls_table[ent_idx];
 	if (entry->le_key != key && entry->le_key != 0) {
 		D_ERROR("Cannot allocated idx %d in place\n", idx);
-		return NULL;
+		return -DER_NO_PERM;
 	}
 
 	entry->le_key = key;
-	lrua_move_to_mru(sub, entry, ent_idx);
 
-	return entry->le_payload;
+	/** First remove */
+	lrua_remove_entry(sub, &sub->ls_free, entry, ent_idx);
 
+	/** Insert at mru */
+	lrua_insert(sub, &sub->ls_lru, entry, ent_idx, true);
+
+	*entryp = entry->le_payload;
+	return 0;
 }
 
 /** If an entry is still in the array, evict it and invoke eviction callback.
