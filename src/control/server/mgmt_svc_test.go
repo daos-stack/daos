@@ -241,7 +241,7 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_SmdListDevs(t *testing.T) {
+func TestServer_MgmtSvc_SmdListDevs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
 		numIO     int
@@ -373,7 +373,7 @@ func TestMgmtSvc_SmdListDevs(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_SmdListPools(t *testing.T) {
+func TestServer_MgmtSvc_SmdListPools(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
 		numIO     int
@@ -505,7 +505,7 @@ func TestMgmtSvc_SmdListPools(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_BioHealthQuery(t *testing.T) {
+func TestServer_MgmtSvc_BioHealthQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
 		numIO     int
@@ -628,7 +628,7 @@ func TestMgmtSvc_BioHealthQuery(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_DevStateQuery(t *testing.T) {
+func TestServer_MgmtSvc_DevStateQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
 		numIO     int
@@ -735,7 +735,7 @@ func TestMgmtSvc_DevStateQuery(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_StorageSetFaulty(t *testing.T) {
+func TestServer_MgmtSvc_StorageSetFaulty(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
 		numIO     int

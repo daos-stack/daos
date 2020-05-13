@@ -27,8 +27,8 @@ import re
 import uuid
 from enum import IntEnum
 
-from command_utils import FormattedParameter, ExecutableCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure, FormattedParameter
+from command_utils import ExecutableCommand
 
 
 class IorCommand(ExecutableCommand):
@@ -271,7 +271,7 @@ class IorCommand(ExecutableCommand):
         """
         env = self.get_environment(None, log_file)
         env["MPI_LIB"] = "\"\""
-        env["FI_PSM2_DISCONNECT"] = 1
+        env["FI_PSM2_DISCONNECT"] = "1"
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             env["DAOS_POOL"] = self.daos_pool.value

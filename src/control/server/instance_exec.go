@@ -44,11 +44,6 @@ type IOServerRunner interface {
 	GetConfig() *ioserver.Config
 }
 
-// isStarted indicates whether IOServerInstance is in a running state.
-func (srv *IOServerInstance) isStarted() bool {
-	return srv.runner.IsRunning()
-}
-
 func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
 	idx := srv.Index()
 
