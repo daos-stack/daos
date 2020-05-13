@@ -79,11 +79,7 @@ def create_slurm_partition(nodelist, name):
 
 
 def delete_slurm_partition(name):
-<<<<<<< HEAD
-    """Create a slurm partition for soak jobs.
-=======
     """Remove the partition from slurm.
->>>>>>> master
 
     Args:
         name (str): partition name
