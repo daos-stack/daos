@@ -390,7 +390,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
 			},
 		},
-		"dont ignore errored results": {
+		"don't ignore errored results": {
 			members: Members{
 				mockMember(t, 1, MemberStateJoined),
 				mockMember(t, 2, MemberStateStopped),
