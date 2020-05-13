@@ -335,6 +335,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
 %{_prefix}/etc/fault-inject-cart.yaml
+%{_bindir}/fault_status
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
