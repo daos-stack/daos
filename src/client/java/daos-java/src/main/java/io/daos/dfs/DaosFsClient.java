@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1013,6 +1013,58 @@ public final class DaosFsClient {
    * {@link DaosIOException}
    */
   static native void dfsUnmountFs(long dfsPtr) throws IOException;
+
+  /**
+   * create UNS path with given data in <code>bufferAddress</code> in pool <code>poolHandle</code>.
+   * A new container will be created with some properties from <code>attribute</code>.
+   * Object type, pool UUID and container UUID are set to extended attribute of <code>path</code>.
+   *
+   * @param poolHandle
+   * handle of pool
+   * @param path
+   * OS file path to set duns attributes
+   * @param bufferAddress
+   * buffer memory address of direct buffer which holds <code>DunsAttribute</code> data serialized by
+   * protocol buffer
+   * @param buffLen
+   * length of buffer
+   * @return UUID of container
+   * @throws IOException
+   */
+  static native String dunsCreatePath(long poolHandle, String path, long bufferAddress, int buffLen) throws IOException;
+
+  /**
+   * extract and parse extended attribute from given <code>path</code>.
+   *
+   * @param path
+   * OS file path
+   * @return UNS attribute info in binary get from path, including object type, pool UUID and container UUID.
+   * user should deserialize the data by {@link io.daos.dfs.uns.DunsAttribute}
+   * @throws IOException
+   */
+  static native byte[] dunsResolvePath(String path) throws IOException;
+
+  /**
+   * Destroy a container and remove the path associated with it in the UNS.
+   *
+   * @param poolHandle
+   * pool handle
+   * @param path
+   * OS file path
+   * @throws IOException
+   */
+  static native void dunsDestroyPath(long poolHandle, String path) throws IOException;
+
+  /**
+   * Convert input string to UNS attribute.
+   *
+   * @param input
+   * input string
+   * @return UNS attribute info in binary.
+   * user should deserialize the data by {@link io.daos.dfs.uns.DunsAttribute}
+   * @throws IOException
+   */
+  static native byte[] dunsParseAttribute(String input) throws IOException;
 
   /**
    * finalize DAOS client.
