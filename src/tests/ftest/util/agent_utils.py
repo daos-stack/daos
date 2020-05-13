@@ -25,7 +25,7 @@ import socket
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, EnvironmentVariables
-from command_utils import YamlCommand, SubprocessManager
+from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 
 
 def include_local_host(hosts):
@@ -49,7 +49,7 @@ def include_local_host(hosts):
 
 
 class DaosAgentCommand(YamlCommand):
-    """Defines an object representing a daso_agent command."""
+    """Defines an object representing a daos_agent command."""
 
     def __init__(self, path="", yaml_cfg=None, timeout=30):
         """Create a daos_agent command object.
@@ -72,10 +72,10 @@ class DaosAgentCommand(YamlCommand):
 
         # Command line parameters:
         # -d, --debug        Enable debug output
-        # -j, --json         Enable JSON output
+        # -J, --json-logging Enable JSON logging
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
-        self.json = FormattedParameter("--json", False)
+        self.json_logs = FormattedParameter("--json-logging", False)
         self.config = FormattedParameter("--config-path={}", default_yaml_file)
 
         # Additional daos_agent command line parameters:
@@ -96,6 +96,41 @@ class DaosAgentCommand(YamlCommand):
 
         # Run daos_agent with test variant specific log file names if specified
         self.yaml.update_log_file(getattr(test, "agent_log"))
+
+    def get_sub_command_class(self):
+        """Get the daos_agent sub command object based on the sub-command."""
+        if self.sub_command.value == "dump-attachinfo":
+            self.sub_command_class = self.DumpAttachInfoSubCommand()
+        else:
+            self.sub_command_class = None
+
+    class DumpAttachInfoSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_agent dump-attachinfo sub command."""
+
+        def __init__(self):
+            """Create a daos_agent dump-attachinfo subcommand object."""
+            super(DaosAgentCommand.DumpAttachInfoSubCommand, self).__init__(
+                "/run/daos_agent/dump-attachinfo/*", "dump-attachinfo")
+
+            self.output = FormattedParameter("--output {}", None)
+
+    def dump_attachinfo(self, output="uri.txt"):
+        """Write CaRT attachinfo file
+
+        Args:
+            output (str): File to which attachinfo dump should be written.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos_agent dump-attachinfo command fails.
+
+        """
+        self.set_sub_command("dump-attachinfo")
+        self.sub_command_class.output.value = output
+        return self._get_result()
 
 
 class DaosAgentManager(SubprocessManager):

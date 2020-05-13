@@ -202,6 +202,13 @@ func (srv *IOServerInstance) ReadSuperblock() error {
 	return nil
 }
 
+// RemoveSuperblock removes a Superblock from storage.
+func (srv *IOServerInstance) RemoveSuperblock() error {
+	srv.setSuperblock(nil)
+
+	return os.Remove(srv.superblockPath())
+}
+
 // WriteSuperblock writes a Superblock to storage.
 func WriteSuperblock(sbPath string, sb *Superblock) error {
 	data, err := sb.Marshal()

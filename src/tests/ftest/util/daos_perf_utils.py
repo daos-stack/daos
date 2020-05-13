@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2019 Intel Corporation.
+"""
+  (C) Copyright 2019-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,143 +20,21 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
+from command_utils_base import FormattedParameter
+from command_utils import ExecutableCommand
 
-from __future__ import print_function
-import os
-import subprocess
-from distutils.spawn import find_executable
 
-from env_modules import load_mpi
+class DaosPerfCommand(ExecutableCommand):
+    """Defines a object representing the daos_perf command.
 
-class DaosPerfFailed(Exception):
-    """Raise if daos_perf failed"""
-
-#pylint: disable=R0903
-class DaosPerfParam(object):
-    """
-    Defines a object representing a single daos_perf command line parameter.
+    The daos_perf utility benchmarks point-to-point I/O performance of different
+    layers of the DAOS stack.
     """
 
-    def __init__(self, str_format, default=None):
-        """Create a DaosPerfParam object.
-        Args:
-            str_format (str): format string used to convert the value into an
-                daos_perf command line argument string
-            default (object): default value for the param
-        """
-        self.str_format = str_format
-        self.default = default
-        self.value = default
+    def __init__(self, path):
+        """Create a daos_perf command object.
 
-    def __str__(self):
-        """Return a DaosPerfParam object as a string.
-        Returns:
-            str: if defined, the DaosPerf parameter, otherwise an empty string
-        """
-        if isinstance(self.default, bool) and self.value:
-            return self.str_format
-        elif not isinstance(self.default, bool) and self.value:
-            return self.str_format.format(self.value)
-        else:
-            return ""
-
-    def set_yaml_value(self, name, test, path="/run/daos_perf/*"):
-        """Set the value of the parameter using the test's yaml file value.
-        Args:
-            name (str): name associated with the value in the yaml file
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/daos_perf/*"
-        """
-        self.value = test.params.get(name, path, self.default)
-
-
-class DaosPerfCommand(object):
-    """Defines a object representing a daos_perf command."""
-
-    def __init__(self):
-        """Create an DaosPerfCommand object."""
-        self.flags = DaosPerfParam("{}")                 # daos_perf flags
-        self.pool_size_scm = DaosPerfParam("-P {}")      # Pool SCM partition
-                                                         # size
-        self.pool_size_nvme = DaosPerfParam("-N {}")     # Pool NVMe partition
-                                                         # size
-        self.test_mode = DaosPerfParam("-T {}")          # Type of test, it can
-                                                         # be 'vos', 'echo' and
-                                                         # 'daos'
-        self.credits = DaosPerfParam("-C {}")            # Credits for
-                                                         # concurrently
-                                                         # asynchronous I/O.
-                                                         # It can be value
-                                                         # between 1 and 64.
-        self.oclass = DaosPerfParam("-c {}")             # Object class for
-                                                         # DAOS full stack test
-        self.num_of_objects = DaosPerfParam("-o {}")     # Number of objects
-                                                         # are used by the
-                                                         # utility
-        self.dkeys = DaosPerfParam("-d {}")              # Number of dkeys per
-                                                         # object
-        self.akeys = DaosPerfParam("-a {}")              # Number of akeys per
-                                                         # dkey
-        self.records = DaosPerfParam("-r {}")            # Number of records per
-                                                         # akey
-        self.single_value_size = DaosPerfParam("-s {}")  # Size of single value
-        self.specify_seed = DaosPerfParam("-G {}")       # -G x to specify a
-                                                         # seed vs using a
-                                                         # random one if not
-                                                         # specified
-        self.pathname = DaosPerfParam("-f {}")           # Full path name of the
-                                                         # VOS file
-
-    def __str__(self):
-        """Return a DaosPerfCommand object as a string.
-        Returns:
-            str: the daos_perf command with all the defined parameters
-        """
-        params = []
-        for value in self.__dict__.values():
-            value_str = str(value)
-            if value_str != "":
-                params.append(value_str)
-        return " ".join(["daos_perf"] + sorted(params))
-
-    def set_params(self, test, path="/run/daos_perf/*"):
-        """Set values for all of the daos_perf command params using a yaml file.
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/daos_perf/*"
-        """
-        for name, daos_perf_param in self.__dict__.items():
-            daos_perf_param.set_yaml_value(name, test, path)
-
-    def get_launch_command(self, basepath, processes, hostfile, runpath=None):
-        """Get the process launch command used to run daos_perf
-        Args:
-            basepath (str): DAOS base path
-            processes (int): number of host processes
-            hostfile (str): file defining host names and slots
-        Returns:
-            str: returns daos_perf command
-        """
-        attach_info_path = os.path.join(basepath, "install/tmp")
-
-        load_mpi('openmpi')
-        orterun_bin = find_executable('orterun')
-        if orterun_bin is None:
-            raise DaosPerfFailed("orterun not found")
-
-        orterun_cmd = [
-            orterun_bin,
-            "-np {}".format(processes),
-            "--hostfile {}".format(hostfile),
-            "--map-by node"
-        ]
-        command = " ".join(orterun_cmd + [self.__str__()])
-
-        return command
-
-    def run(self, basepath, processes, hostfile, display=True, path=None):
-        """Run the daos_perf command.
         Args:
             basepath (str): DAOS base path
             processes (int): number of host processes
@@ -166,29 +44,120 @@ class DaosPerfCommand(object):
         Raises:
             DaosPerfFailed: if an error occurred running the daos_perf command
         """
-        command = self.get_launch_command(basepath, processes, hostfile, path)
-        if display:
-            print("<daos_perf CMD>: {}".format(command))
+        super(DaosPerfCommand, self).__init__(
+            "/run/daos_perf/*", "daos_perf", path)
 
-        # Run daos_perf
-        try:
-            process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                shell=True)
-            while True:
-                output = process.stdout.readline()
-                if output == "" and process.poll() is not None:
-                    break
-                if output and display:
-                    print(output.strip())
-            if process.poll() != 0:
-                print("process.poll: {}".format(process.poll()))
-                raise DaosPerfFailed(
-                    "Daos_Perf run process failed: {}".format(
-                        process.poll()))
+        # daos_perf command line options:
+        #
+        #   -P <number/string>
+        #       Pool SCM partition size, which can have M(megatbytes) or
+        #       G(gigabytes) as postfix of number. E.g. -P 512M, -P 8G.
+        self.pool_scm_size = FormattedParameter("-P {}")
 
-        except (OSError, ValueError) as error:
-            print("<DaosPerfRunFailed> Exception occurred: {0}".
-                  format(str(error)))
-            raise DaosPerfFailed("Daos_Perf Run process Failed: {}".
-                                 format(error))
+        #   -N <number/string>
+        #       Pool NVMe partition size.
+        self.pool_nvme_size = FormattedParameter("-N {}")
+
+        #   -T <vos|echo|daos>
+        #       Type of test, it can be 'vos' and 'daos'.
+        #           vos  : run directly on top of Versioning Object Store (VOS).
+        #           echo : I/O traffic generated by the utility only goes
+        #               through the network stack and never lands to storage.
+        #           daos : I/O traffic goes through the full DAOS stack,
+        #               including both network and storage.
+        #       The default value is 'vos'.
+        self.test_type = FormattedParameter("-T {}", "vos")
+
+        #   -C <number>
+        #       Credits for concurrently asynchronous I/O. It can be value
+        #       between 1 and 64. The utility runs in synchronous mode if
+        #       credits is set to 0. This option is ignored for mode 'vos'.
+        self.credits = FormattedParameter("-C {}")
+
+        #   -c <TINY|LARGE|R2S|R3S|R4S|EC2P2|EC4P2|EC8P2>
+        #       Object class for DAOS full stack test.
+        self.object_class = FormattedParameter("-c {}")
+
+        #   -o <number>
+        #       Number of objects are used by the utility.
+        self.objects = FormattedParameter("-o {}")
+
+        #   -d <number/string>
+        #       Number of dkeys per object. The number can have 'k' or 'm' as
+        #       postfix which stands for kilo or million.
+        self.dkeys = FormattedParameter("-d {}")
+
+        #   -a <number/string>
+        #       Number of akeys per dkey. The number can have 'k' or 'm' as
+        #       postfix which stands for kilo or million.
+        self.akeys = FormattedParameter("-a {}")
+
+        #   -r <number/string>
+        #       Number of records per akey. The number can have 'k' or 'm' as
+        #       postfix which stands for kilo or million.
+        self.records = FormattedParameter("-r {}")
+
+        #   -A
+        #       Use array value of akey, single value is selected by default.
+        self.akey_use_array = FormattedParameter("-A", False)
+
+        #   -s <number/string>
+        #       Size of single value, or extent size of array value. The number
+        #       can have 'K' or 'M' as postfix which stands for kilobyte or
+        #       megabytes.
+        self.value_size = FormattedParameter("-s {}")
+
+        #   -z
+        #       Use zero copy API, this option is only valid for 'vos'
+        self.zero_copy_api = FormattedParameter("-z", False)
+
+        #   -t
+        #       Instead of using different indices and epochs, all I/Os land to
+        #       the same extent in the same epoch. This option can reduce usage
+        #       of storage space.
+        self.same_extent = FormattedParameter("-t", False)
+
+        #   -U
+        #       Only run update performance test.
+        self.update_test_only = FormattedParameter("-U", False)
+
+        #   -F
+        #       Only run fetch performance test. This does an update first, but
+        #       only measures the time for the fetch portion.
+        self.fetch_test_only = FormattedParameter("-F", False)
+
+        #   -v
+        #       Verify fetch. Checks that what was read from the filesystem is
+        #       what was written to it. This verifcation is not part of timed
+        #       performance measurement. This is turned off by default.
+        self.verify_fetch = FormattedParameter("-v", False)
+
+        #   -R
+        #       Only run rebuild performance test.
+        self.rebuild_test_only = FormattedParameter("-R", False)
+
+        #   -B
+        #       Profile performance of both update and fetch.
+        self.profile_performance = FormattedParameter("-B", False)
+
+        #   -I
+        #       Only run iterate performance test. Only runs in vos mode.
+        self.iterate_test_only = FormattedParameter("-I", False)
+
+        #   -n
+        #       Only run iterate performance test but with nesting iterator
+        #       enable.  This can only run in vos mode.
+        self.nesting_iterate_test_only = FormattedParameter("-n", False)
+
+        #   -f <pathname>
+        #       Full path name of the VOS file.
+        self.pathname = FormattedParameter("-f {}")
+
+        #   -w
+        #       Pause after initialization for attaching debugger or analysis
+        #       tool.
+        self.pause_after_init = FormattedParameter("-w", False)
+
+        # Environment variable names to export when running daos_perf
+        self._env_names = [
+            "OFI_INTERFACE", "OFI_PORT", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]

@@ -21,9 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand
+from command_utils_base import \
+    CommandWithParameters, FormattedParameter, CommandFailure
+from command_utils import CommandWithSubCommand
 
 
 class DaosCommand(CommandWithSubCommand):
@@ -554,7 +554,7 @@ class DaosCommand(CommandWithSubCommand):
                 information.
 
         Raises:
-            CommandFailure: if the does pool query command fails.
+            CommandFailure: if the daos pool query command fails.
 
         """
         self.set_sub_command("pool")
@@ -592,7 +592,7 @@ class DaosCommand(CommandWithSubCommand):
                 information.
 
         Raises:
-            CommandFailure: if the does container create command fails.
+            CommandFailure: if the daos container create command fails.
 
         """
         self.set_sub_command("container")
@@ -625,7 +625,7 @@ class DaosCommand(CommandWithSubCommand):
                 information.
 
         Raises:
-            CommandFailure: if the does container destroy command fails.
+            CommandFailure: if the daos container destroy command fails.
 
         """
         self.set_sub_command("container")
@@ -651,7 +651,8 @@ class DaosCommand(CommandWithSubCommand):
                 information.
 
         Raises:
-            CommandFailure: if the does pool query command fails.
+            CommandFailure: if the daos pool query command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list-containers")

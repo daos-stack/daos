@@ -26,10 +26,10 @@ from __future__ import print_function
 import os
 import random
 import time
-import subprocess
 import threading
 import re
-from avocado.utils import process
+
+from general_utils import run_command, DaosTestError
 
 W_LOCK = threading.Lock()
 
@@ -41,50 +41,61 @@ class SlurmFailed(Exception):
 def cancel_jobs(job_id):
     """Cancel slurms jobs.
 
-    :param job_id: slurm job id
-    :type job_id: int
-    :return: status
-    :rtype: bool
+    Args:
+        job_id (int): slurm job id
+
+    Returns:
+        int: return status from scancel command
 
     """
-    status = process.system("scancel {}".format(job_id))
-    if status > 0:
+    result = run_command("scancel {}".format(job_id), raise_exception=False)
+    if result.exit_status > 0:
         raise SlurmFailed(
             "Slurm: scancel failed to kill job {}".format(job_id))
-    return status
+    return result.exit_status
 
 
 def create_slurm_partition(nodelist, name):
     """Create a slurm partition for soak jobs.
 
-    client nodes will be allocated for this partition
+    Client nodes will be allocated for this partiton.
+
     Args:
         nodelist (list): list of nodes for job allocation
         name (str): partition name
-    Returns: status bool
+
+    Returns:
+        int: return status from scontrol command
+
     """
     # If the partition exists; delete it because if may have wrong nodes
-    status = process.system(
-        "scontrol delete PartitionName={}".format(name))
-    if status == 0:
-        status = process.system(
-            "scontrol create PartitionName={} Nodes={}".format(
-                name, ",".join(nodelist)))
-    return status
+    command = "scontrol delete PartitionName={}".format(name)
+    result = run_command(command, raise_exception=False)
+    if result.exit_status == 0:
+        command = "scontrol create PartitionName={} Nodes={}".format(
+            name, ",".join(nodelist))
+        result = run_command(command, raise_exception=False)
+    return result.exit_status
 
 
 def delete_slurm_partition(name):
+<<<<<<< HEAD
     """Create a slurm partition for soak jobs.
+=======
+    """Remove the partition from slurm.
+>>>>>>> master
 
-    Remove the partition from slurm
     Args:
         name (str): partition name
-    Returns: status bool
+
+    Returns:
+        int: return status from scontrol command
+
     """
     # If the partition exists; delete it because if may have wrong nodes
-    status = process.system(
-        "scontrol delete PartitionName={}".format(name))
-    return status
+    command = "scontrol delete PartitionName={}".format(name)
+    result = run_command(command, raise_exception=False)
+    return result.exit_status
 
 
 def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
@@ -139,39 +150,47 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
 def run_slurm_script(script, logfile=None):
     """Run slurm script.
 
-    script(str) -- script file suitable to by run by slurm
-    logfile(str) -- add -o param and generate logfile
-    returns --the job ID, which is used as a handle for other functions
+    Args:
+        script (str): script file suitable to by run by slurm
+        logfile (str, optional): logfile to generate. Defaults to None.
+
+    Raises:
+        SlurmFailed: if there is an error obtaining the slurm job id
+
+    Returns:
+        str: the job ID, which is used as a handle for other functions
+
     """
+    job_id = None
     if logfile is not None:
         script = " -o " + logfile + " " + script
     cmd = "sbatch " + script
     try:
-        result = process.run(cmd, shell=True, timeout=10)
-    except process.CmdError as error:
-        result = None
+        result = run_command(cmd, timeout=10)
+    except DaosTestError as error:
         raise SlurmFailed("job failed : {}".format(error))
     if result:
         output = result.stdout
         match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", str(output))
         if match is not None:
-            return match.group(1)
-    else:
-        return None
+            job_id = match.group(1)
+    return job_id
 
 
 def check_slurm_job(handle):
     """Get the state of a job initiated via slurm.
 
-    handle   --slurm job id
+    Args:
+        handle (str): slurm job id
 
-    returns  --one of the slurm defined JOB_STATE_CODES strings plus
-                one extra UNKNOWN if the handle doesn't match a known
-                slurm job.
+    Returns:
+        str: one of the slurm defined JOB_STATE_CODES strings plus one extra
+            UNKNOWN if the handle doesn't match a known slurm job.
+
     """
-    cmd = "scontrol show job {}".format(handle)
-    output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-    match = re.search(r"JobState=([a-zA-Z]+)", str(output))
+    command = "scontrol show job {}".format(handle)
+    result = run_command(command, raise_exception=False)
+    match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
     if match is not None:
         state = match.group(1)
     else:
@@ -232,10 +251,11 @@ def srun(nodes, cmd, srun_params=None):
     Args:
         hosts (str): hosts to allocate
         cmd (str): cmdline to execute
-        srun_params(dict):  additional params for srun
+        srun_params(dict): additional params for srun
 
     Returns:
-        exit status: int
+        CmdResult: object containing the result (exit status, stdout, etc.) of
+            the srun command
 
     """
     params_list = []
@@ -246,8 +266,8 @@ def srun(nodes, cmd, srun_params=None):
             params = " ".join(params_list)
     cmd = "srun --nodelist={} {} {}".format(nodes, params, cmd)
     try:
-        result = process.run(cmd, shell=True, timeout=30)
-    except process.CmdError as error:
+        result = run_command(cmd, timeout=30)
+    except DaosTestError as error:
         result = None
         raise SlurmFailed("srun failed : {}".format(error))
     return result

@@ -42,9 +42,9 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...c
 	}
 	w := txtfmt.NewErrWriter(out)
 
-	// Maintain output compatibility with the `daos pool query` output.
-	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d\n",
-		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets)
+	// Maintain output compability with the `daos pool query` output.
+	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
+		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
 	fmt.Fprintln(w, "Pool space info:")
 	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
 	if pqr.Scm != nil {
