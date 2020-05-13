@@ -102,10 +102,10 @@ ARG REPO_URL=""
 ARG REPO_EL7=""
 RUN if $QUICKBUILD; then                                                      \
         MY_REPO="${REPO_URL}${REPO_EL7}";                                     \
-        MY_NAME1="${MY_REPO#*//}";                                            \
-        MY_NAME="${MY_NAME1//\//_}";                                          \
+        MY_NAME="${MY_REPO#*//}";                                             \
+        MY_NAME="${MY_NAME//\//_}";                                           \
         echo -e "[${MY_NAME}]\n\
-name=created by dnf config-manager from ${MY_REPO}\n\
+name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \

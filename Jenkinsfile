@@ -2,7 +2,12 @@
 /* Copyright (C) 2019-2020 Intel Corporation
  * All rights reserved.
  *
- * See LICENSE file for licensing details.
+ * This file is part of the DAOS Project. It is subject to the license terms
+ * in the LICENSE file found in the top-level directory of this distribution
+ * and at https://img.shields.io/badge/License-Apache%202.0-blue.svg.
+ * No part of the DAOS Project, including this file, may be copied, modified,
+ * propagated, or distributed except according to the terms contained in the
+ * LICENSE file.
  */
 
 // To use a test branch (i.e. PR) until it lands to master
@@ -12,7 +17,7 @@
 def doc_only_change() {
     def rc = sh label: "Determine if doc-only change",
                 script: "CHANGE_ID=${env.CHANGE_ID} " +
-                        "target_branch=${target_branch} " +
+                        "TARGET_BRANCH=${target_branch} " +
                         'ci/doc_only_change.sh',
                 returnStatus: true
     return rc == 1
@@ -220,18 +225,10 @@ if (!env.CHANGE_ID &&
 cached_uid = 0
 def getuid() {
     if (cached_uid == 0)
-        cached_uid = sh script: "id -u", returnStdout: true
-    return cached_uid
-}
-
-cached_qbd = ''
-// Need to cache the quickbuild dependencies
-def get_quickbuild_defs() {
-    if (cached_qbd == '') {
-        cached_qbd = sh script: 'ci/daos_rpm_depends.sh',
+        cached_uid = sh label: 'getuid()',
+                        script: "id -u",
                         returnStdout: true
-    }
-    return cached_qbd
+    return cached_uid
 }
 
 // This sets up the additinal build arguments for setting up a docker
@@ -290,7 +287,8 @@ pipeline {
         BUILDARGS = docker_build_args()
         BUILDARGS_QB_CHECK = docker_build_args(qb: quickbuild)
         BUILDARGS_QB_TRUE = docker_build_args(qb: true)
-        QUICKBUILD_DEPS = sh script: 'rpmspec -q --srpm --requires' +
+        QUICKBUILD_DEPS = sh label: 'Get Quickbuild dependencies',
+                             script: 'rpmspec -q --srpm --requires' +
                                      ' utils/rpms/daos.spec 2>/dev/null',
                              returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'false')
@@ -482,7 +480,7 @@ pipeline {
                         }
                     }
                 }
-                stage('leap15 RPM') {
+                stage('Build RPM on Leap 15') {
                     when {
                         beforeAgent true
                         allOf {
@@ -954,7 +952,7 @@ pipeline {
                             // sh label: "Collect artifacts and tear down",
                             //   script '''set -ex
                             sh script: 'ci/run_test/run_test_post_always.sh',
-                            label: "Collect artifacts and tear down"
+                               label: "Collect artifacts and tear down"
                             junit 'test_results/*.xml'
                             archiveArtifacts artifacts: 'run_test.sh/**'
                             archiveArtifacts artifacts: 'vm_test/**'
@@ -1099,7 +1097,7 @@ pipeline {
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label 'ci_nvme3x'
+                        label 'ci_nvme3'
                     }
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
@@ -1136,7 +1134,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label 'ci_nvme5x'
+                        label 'ci_nvme5'
                     }
                     steps {
                         provisionNodes NODELIST: env.NODELIST,

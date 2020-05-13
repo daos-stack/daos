@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -ex
+set -uex
 
 sudo yum -y install daos{,-{client,server,tests}}-"${DAOS_PKG_VERSION}"
 

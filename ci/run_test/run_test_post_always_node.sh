@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -x
+set -uex
 
 cd "$DAOS_BASE"
 mkdir run_test.sh

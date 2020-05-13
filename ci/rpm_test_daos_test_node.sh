@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -ex
+set -uex
 sudo yum -y install daos{,-client}-"${DAOS_PKG_VERSION}"
 sudo yum -y history rollback last-1
 sudo yum -y install daos{,-{server,client}}-"${DAOS_PKG_VERSION}"

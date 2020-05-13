@@ -3,7 +3,7 @@
 # This is a post test processing script for post processing the
 # run_test.sh stage CI run
 
-set -ex
+set -uex
 
 # shellcheck disable=SC1091
 source ./.build_vars.sh
