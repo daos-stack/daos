@@ -26,10 +26,10 @@ from __future__ import print_function
 import os
 import traceback
 
-from avocado.utils import process
 from apricot import TestWithServers
 
 import check_for_pool
+import dmg_utils
 
 # pylint: disable = broad-except
 class MultipleCreatesTest(TestWithServers):
@@ -52,12 +52,13 @@ class MultipleCreatesTest(TestWithServers):
         expected_for_param = []
 
         modelist = self.params.get("mode", '/run/tests/modes/*')
-        mode = modelist[0]
         expected_for_param.append(modelist[1])
 
         setidlist = self.params.get("setname", '/run/tests/setnames/*')
         setid = setidlist[0]
         expected_for_param.append(setidlist[1])
+
+        scm_size = self.params.get("scm_size", "/run/pool*")
 
         uid = os.geteuid()
         gid = os.getegid()
@@ -69,15 +70,15 @@ class MultipleCreatesTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
         try:
-            cmd = (
-                "{0} create-pool "
-                "-m {1} "
-                "-u {2} "
-                "-g {3} "
-                "-s {4} "
-                "-c 1".format(self.daosctl, mode, uid, gid, setid))
+            dmg = self.get_dmg_command()
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            if "ERR" not in result.stderr:
+                uuid_str, _ = \
+                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
+                        result.stdout)
+            else:
+                self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            uuid_str = """{0}""".format(process.system_output(cmd))
             print("uuid is {0}\n".format(uuid_str))
 
             host = self.hostlist_servers[0]
@@ -86,13 +87,9 @@ class MultipleCreatesTest(TestWithServers):
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str,
                                                                      host))
 
-            delete_cmd = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str, setid))
-
-            process.system(delete_cmd)
+            result = dmg.pool_destroy(pool=uuid_str)
+            if "failed" in result.stdout:
+                self.log.info("Unable to destroy pool %s", uuid_str)
 
             exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists == 0:
@@ -110,6 +107,7 @@ class MultipleCreatesTest(TestWithServers):
 
 
     def test_create_two(self):
+        # pylint: disable=too-many-statements
         """
         Test issuing multiple pool create commands at once.
 
@@ -122,12 +120,13 @@ class MultipleCreatesTest(TestWithServers):
         expected_for_param = []
 
         modelist = self.params.get("mode", '/run/tests/modes/*')
-        mode = modelist[0]
         expected_for_param.append(modelist[1])
 
         setidlist = self.params.get("setname", '/run/tests/setnames/*')
         setid = setidlist[0]
         expected_for_param.append(setidlist[1])
+
+        scm_size = self.params.get("scm_size", "/run/pool*")
 
         uid = os.geteuid()
         gid = os.getegid()
@@ -139,16 +138,22 @@ class MultipleCreatesTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
         try:
-            cmd = (
-                "{0} create-pool "
-                "-m {1} "
-                "-u {2} "
-                "-g {3} "
-                "-s {4} "
-                "-c 1".format(self.daosctl, mode, uid, gid, setid))
+            dmg = self.get_dmg_command()
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            if "ERR" not in result.stderr:
+                uuid_str_1, _ = \
+                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
+                        result.stdout)
+            else:
+                self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            uuid_str_1 = """{0}""".format(process.system_output(cmd))
-            uuid_str_2 = """{0}""".format(process.system_output(cmd))
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            if "ERR" not in result.stderr:
+                uuid_str_2, _ = \
+                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
+                        result.stdout)
+            else:
+                self.fail("    Unable to parse the Pool's UUID and SVC.")
 
             host = self.hostlist_servers[0]
             exists = check_for_pool.check_for_pool(host, uuid_str_1)
@@ -160,20 +165,14 @@ class MultipleCreatesTest(TestWithServers):
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2,
                                                                      host))
 
-            delete_cmd_1 = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str_1, setid))
+            result = dmg.pool_destroy(pool=uuid_str_1)
+            if "failed" in result.stdout:
+                self.log.info("Unable to destroy pool %s", uuid_str_1)
 
-            delete_cmd_2 = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str_2, setid))
+            result = dmg.pool_destroy(pool=uuid_str_2)
+            if "failed" in result.stdout:
+                self.log.info("Unable to destroy pool %s", uuid_str_2)
 
-            process.system(delete_cmd_1)
-            process.system(delete_cmd_2)
 
             exists = check_for_pool.check_for_pool(host, uuid_str_1)
             if exists == 0:
@@ -195,6 +194,7 @@ class MultipleCreatesTest(TestWithServers):
 
 
     def test_create_three(self):
+        # pylint: disable=too-many-statements
         """
         Test issuing multiple pool create commands at once.
 
@@ -207,12 +207,13 @@ class MultipleCreatesTest(TestWithServers):
         expected_for_param = []
 
         modelist = self.params.get("mode", '/run/tests/modes/*')
-        mode = modelist[0]
         expected_for_param.append(modelist[1])
 
         setidlist = self.params.get("setname", '/run/tests/setnames/*')
         setid = setidlist[0]
         expected_for_param.append(setidlist[1])
+
+        scm_size = self.params.get("scm_size", "/run/pool*")
 
         uid = os.geteuid()
         gid = os.getegid()
@@ -224,17 +225,31 @@ class MultipleCreatesTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
         try:
-            cmd = (
-                "{0} create-pool "
-                "-m {1} "
-                "-u {2} "
-                "-g {3} "
-                "-s {4} "
-                "-c 1".format(self.daosctl, mode, uid, gid, setid))
+            dmg = self.get_dmg_command()
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            if "ERR" not in result.stderr:
+                uuid_str_1, _ = \
+                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
+                        result.stdout)
+            else:
+                self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            uuid_str_1 = """{0}""".format(process.system_output(cmd))
-            uuid_str_2 = """{0}""".format(process.system_output(cmd))
-            uuid_str_3 = """{0}""".format(process.system_output(cmd))
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            if "ERR" not in result.stderr:
+                uuid_str_2, _ = \
+                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
+                        result.stdout)
+            else:
+                self.fail("    Unable to parse the Pool's UUID and SVC.")
+
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            if "ERR" not in result.stderr:
+                uuid_str_3, _ = \
+                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
+                        result.stdout)
+            else:
+                self.fail("    Unable to parse the Pool's UUID and SVC.")
+
 
             host = self.hostlist_servers[0]
             exists = check_for_pool.check_for_pool(host, uuid_str_1)
@@ -250,27 +265,18 @@ class MultipleCreatesTest(TestWithServers):
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_3,
                                                                      host))
 
-            delete_cmd_1 = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str_1, setid))
+            result = dmg.pool_destroy(pool=uuid_str_1)
+            if "failed" in result.stdout:
+                self.log.info("Unable to destroy pool %s", uuid_str_1)
 
-            delete_cmd_2 = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str_2, setid))
+            result = dmg.pool_destroy(pool=uuid_str_2)
+            if "failed" in result.stdout:
+                self.log.info("Unable to destroy pool %s", uuid_str_2)
 
-            delete_cmd_3 = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str_3, setid))
+            result = dmg.pool_destroy(pool=uuid_str_3)
+            if "failed" in result.stdout:
+                self.log.info("Unable to destroy pool %s", uuid_str_3)
 
-            process.system(delete_cmd_1)
-            process.system(delete_cmd_2)
-            process.system(delete_cmd_3)
 
             exists = check_for_pool.check_for_pool(host, uuid_str_1)
             if exists == 0:

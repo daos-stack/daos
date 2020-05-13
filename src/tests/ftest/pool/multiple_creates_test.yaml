@@ -7,6 +7,8 @@ hosts:
 server_config:
    name: daos_server
 timeout: 240
+pool:
+    scm_size: 1073741824
 tests:
    modes:
       modeall:
