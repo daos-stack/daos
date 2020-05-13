@@ -595,11 +595,11 @@ calc_csum_recx_with_no_map(struct daos_csummer *obj, size_t csum_nr,
 			   uint32_t rec_chunksize,
 			   struct daos_sgl_idx *idx)
 {
-	uint32_t		 i;
-	uint8_t			*buf;
 	struct daos_csum_range	 chunk;
-	int			 rc;
 	daos_size_t		 bytes_for_csum;
+	uint8_t			*buf;
+	uint32_t		 i;
+	int			 rc;
 
 	for (i = 0; i < csum_nr; i++) {
 		buf = ci_idx2csum(csum_info, i);
