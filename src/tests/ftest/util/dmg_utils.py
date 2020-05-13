@@ -28,9 +28,9 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand, YamlCommand, YamlParameters
+from command_utils_base import \
+    CommandFailure, FormattedParameter, CommandWithParameters, YamlParameters
+from command_utils import CommandWithSubCommand, YamlCommand
 
 
 class DmgCommand(YamlCommand):
@@ -102,7 +102,6 @@ class DmgCommand(YamlCommand):
             if isinstance(hostlist, list):
                 hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")
-
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -489,28 +488,6 @@ class DmgCommand(YamlCommand):
                         "/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
 
-    def _get_result(self):
-        """Get the result from running the configured dmg command.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg command fails.
-
-        """
-        if self.yaml:
-            self.create_yaml_file()
-
-        result = None
-        try:
-            result = self.run()
-        except CommandFailure as error:
-            raise CommandFailure("<dmg> command failed: {}".format(error))
-
-        return result
-
     def network_scan(self, provider=None, all_devs=False):
         """Get the result of the dmg network scan command.
 
@@ -745,6 +722,7 @@ class DmgCommand(YamlCommand):
 
         Raises:
             CommandFailure: if the dmg pool delete-acl command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list")
