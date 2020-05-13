@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,11 +29,14 @@
 #include <libgen.h>
 #include <stdio.h>
 #include <daos.h>
+#include <daos_security.h>
 #include <daos_fs.h>
+#include <daos_uns.h>
 #include <daos_jni_common.h>
 #include <fcntl.h>
 #include <pwd.h>
 #include <grp.h>
+#include "DunsAttribute.pb-c.h"
 
 static jclass daos_io_exception_class;
 
@@ -74,7 +77,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"<init>",
 			"(Ljava/lang/String;)V");
 
-	new_exception_msg = (*env)->NewGlobalRef(env, m1);
+	new_exception_msg = (jmethodID)(*env)->NewGlobalRef(env, (jobject)m1);
 	if(new_exception_msg == NULL){
 		printf("failed to get constructor msg\n");
 		return JNI_ERR;
@@ -83,7 +86,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"<init>",
 			"(Ljava/lang/Throwable;)V");
 
-	new_exception_cause = (*env)->NewGlobalRef(env, m2);
+	new_exception_cause = (jmethodID)(*env)->NewGlobalRef(env, (jobject)m2);
 	if(new_exception_cause == NULL){
 		printf("failed to get constructor cause\n");
 		return JNI_ERR;
@@ -92,7 +95,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"<init>",
 			"(Ljava/lang/String;ILjava/lang/String;)V");
 
-	new_exception_msg_code_msg = (*env)->NewGlobalRef(env, m3);
+	new_exception_msg_code_msg = (jmethodID)(*env)->NewGlobalRef(env, (jobject)m3);
 	if(new_exception_msg_code_msg == NULL){
 		printf("failed to get constructor msg, code and daos msg\n");
 		return JNI_ERR;
@@ -101,11 +104,12 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"<init>",
 			"(Ljava/lang/String;ILjava/lang/Throwable;)V");
 
-	new_exception_msg_code_cause = (*env)->NewGlobalRef(env, m4);
+	new_exception_msg_code_cause = (jmethodID)(*env)->NewGlobalRef(env, (jobject)m4);
 	if(new_exception_msg_code_cause == NULL){
 		printf("failed to get constructor msg, code and cause\n");
 		return JNI_ERR;
 	}
+
 	int rc = daos_init();
 
 	if (rc) {
@@ -133,11 +137,11 @@ static int
 throw_exception_base(JNIEnv *env, char *msg, int error_code,
 			int release_msg, int posix_error)
 {
-	char *daos_msg;
+	const char *daos_msg;
 	jstring jmsg = (*env)->NewStringUTF(env, strdup(msg));
 
 	if (error_code > CUSTOM_ERROR_CODE_BASE) {
-		const char* temp = posix_error ?
+		const char *temp = posix_error ?
 				strerror(error_code) : d_errstr(error_code);
 
 		daos_msg = temp;
@@ -558,14 +562,14 @@ Java_io_daos_dfs_DaosFsClient_move__JJLjava_lang_String_2JLjava_lang_String_2(
 		JNIEnv *env, jobject obj, jlong dfsPtr, jlong srcPrtObjId,
 		jstring srcName, jlong destPrtObjId, jstring destName)
 {
-	char *src_base = (*env)->GetStringUTFChars(env, srcName, NULL);
-	char *dest_base = (*env)->GetStringUTFChars(env, destName, NULL);
+	const char *src_base = (*env)->GetStringUTFChars(env, srcName, NULL);
+	const char *dest_base = (*env)->GetStringUTFChars(env, destName, NULL);
 	dfs_obj_t *src_dir_handle = *(dfs_obj_t **)&srcPrtObjId;
 	dfs_obj_t *dest_dir_handle = *(dfs_obj_t **)&destPrtObjId;
 	mode_t tmp_mode;
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
-	int rc = dfs_move(dfs, src_dir_handle, src_base, dest_dir_handle,
-			dest_base, NULL);
+	int rc = dfs_move(dfs, src_dir_handle, (char *)src_base, dest_dir_handle,
+			(char *)dest_base, NULL);
 
 	if (rc) {
 		char *tmp = "Failed to move source file (%s) under dir (%ld)" \
@@ -594,7 +598,8 @@ out:
  *
  * \return	0 for success, non-zero for failure
  */
-static int mkdirs(dfs_t *dfs, char *path, int mode, unsigned char recursive,
+static int mkdirs(dfs_t *dfs, const char *path, int mode,
+        unsigned char recursive,
 		dfs_obj_t **handle, char *msg)
 {
 	char *dirs = NULL;
@@ -767,7 +772,6 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 	dfs_obj_t *file = NULL;
 	dfs_obj_t *parent = NULL;
 	mode_t tmp_mode;
-
 	int rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent, &tmp_mode, NULL);
 
 	if (rc) {
@@ -777,7 +781,7 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 			rc = mkdirs(dfs, parent_path, mode, 1, &parent,
 					parentError);
 			if (rc) {
-				char *dir_msg = parent_path;
+				const char *dir_msg = parent_path;
 
 				if (parentError[0] != '\0') {
 					dir_msg = parentError;
@@ -1197,7 +1201,8 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 	return result;
 }
 
-static void cpyfield(JNIEnv *env, char *buffer, int *value,
+static inline void
+cpyfield(JNIEnv *env, char *buffer, void *value,
 		int valueLen, int expLen)
 {
 	if (valueLen != expLen) {
@@ -1211,7 +1216,8 @@ static void cpyfield(JNIEnv *env, char *buffer, int *value,
 	memcpy(buffer, value, valueLen);
 }
 
-static void set_user_group_name(JNIEnv *env, char *buffer, struct stat *stat)
+static void
+set_user_group_name(JNIEnv *env, char *buffer, struct stat *stat)
 {
 	struct passwd *uentry = getpwuid(stat->st_uid);
 	struct group *gentry = getgrgid(stat->st_gid);
@@ -1477,6 +1483,387 @@ Java_io_daos_dfs_DaosFsClient_dfsIsDirectory(JNIEnv *env,
 	return S_ISDIR(mode) ? 1 : 0;
 }
 
+static int
+set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
+{
+    int i;
+    int index = 0;
+    int total_ace_size = 0;
+    int ace_struct_size = sizeof(struct daos_ace);
+    int ace_size;
+
+    switch (e->type) {
+    case UNS__PROP_TYPE__DAOS_PROP_PO_ACL:
+    case UNS__PROP_TYPE__DAOS_PROP_CO_ACL:;
+        Uns__DaosAcl *a = e->pval;
+
+        for (i = 0; i < a->n_aces; i++) {
+            total_ace_size += (ace_struct_size +
+                        strlen(a->aces[i]->principal) + 1);
+        }
+        struct daos_acl *acl = (struct daos_acl *)calloc(1,
+                sizeof(struct daos_acl) + total_ace_size);
+
+        acl->dal_ver = a->ver;
+        acl->dal_reserv = a->reserv;
+        acl->dal_len = a->len;
+        if (a->n_aces > 0) {
+            for (i = 0; i < a->n_aces; i++) {
+                Uns__DaosAce *ace = a->aces[i];
+
+                ace_size = sizeof(struct daos_ace) +
+                            strlen(ace->principal) + 1;
+                struct daos_ace *d_ace = (struct daos_ace *)calloc(1,
+                                            ace_size);
+
+                d_ace->dae_access_types = ace->access_types;
+                d_ace->dae_principal_type = ace->principal_type;
+                d_ace->dae_principal_len = ace->principal_len;
+                d_ace->dae_access_flags = ace->access_flags;
+                d_ace->dae_reserv = ace->reserved;
+                d_ace->dae_allow_perms = ace->allow_perms;
+                d_ace->dae_audit_perms = ace->audit_perms;
+                d_ace->dae_alarm_perms = ace->alarm_perms;
+                memcpy(d_ace->dae_principal, ace->principal,
+                        strlen(ace->principal) + 1);
+
+                memcpy(acl->dal_ace + index, &d_ace, ace_size);
+                index += ace_size;
+
+                free(d_ace);
+            }
+            entry->dpe_val_ptr = acl;
+        }
+        return 0;
+    default: return 7;
+    }
+}
+
+static int
+set_attr_properties(Uns__Properties *properties, daos_prop_t *da_props)
+{
+    int i;
+    int rc = 0;
+    Uns__Entry *entry;
+    struct daos_prop_entry *da_entry;
+
+    da_props->dpp_nr = properties->n_entries;
+    da_props->dpp_reserv = properties->reserved;
+    if (da_props->dpp_nr > 0) {
+        da_props->dpp_entries = (struct daos_prop_entry*)calloc(
+                                    da_props->dpp_nr,
+                                    sizeof(struct daos_prop_entry));
+        for (i = 0; i < da_props->dpp_nr; i++) {
+            entry = properties->entries[i];
+            da_entry = &da_props->dpp_entries[i];
+            da_entry->dpe_type = entry->type;
+            switch (entry->type) {
+            case UNS__PROP_TYPE__DAOS_PROP_PO_MIN:
+            case UNS__PROP_TYPE__DAOS_PROP_PO_MAX:
+            case UNS__PROP_TYPE__DAOS_PROP_CO_MIN:
+            case UNS__PROP_TYPE__DAOS_PROP_CO_MAX:
+                return 6;
+            }
+            da_entry->dpe_reserv = entry->reserved;
+            switch (entry->value_case) {
+            case UNS__ENTRY__VALUE__NOT_SET: return 5;
+            case UNS__ENTRY__VALUE_VAL:
+                da_entry->dpe_val = entry->val; break;
+            case UNS__ENTRY__VALUE_STR:
+                da_entry->dpe_str = entry->str; break;
+            case UNS__ENTRY__VALUE_PVAL:
+                if ((rc = set_entry_value(entry, da_entry))) {
+                    return rc;
+                }
+                break;
+            }
+        }
+    }
+    return rc;
+}
+
+static int
+set_duns_attr(Uns__DunsAttribute *attribute, struct duns_attr_t *attr)
+{
+    int rc = 0;
+    if (attribute->puuid == NULL || strlen(attribute->puuid) == 0) {
+        return 1;
+    }
+    if (attribute->layout_type == UNS__LAYOUT__UNKNOWN) {
+        return 2;
+    }
+    if (attribute->object_type == NULL ||
+        strlen(attribute->object_type) == 0) {
+        return 3;
+    }
+    const char *pool = attribute->puuid;
+    const char *cont = attribute->cuuid;
+    const char *obj_type = attribute->object_type;
+
+    uuid_parse(pool, attr->da_puuid);
+    if (cont != NULL && strlen(cont) > 0) {
+        uuid_parse(cont, attr->da_cuuid);
+    }
+    if (attribute->layout_type == UNS__LAYOUT__POSIX) {
+        attr->da_type = DAOS_PROP_CO_LAYOUT_POSIX;
+    } else if (attribute->layout_type == UNS__LAYOUT__HDF5) {
+        attr->da_type = DAOS_PROP_CO_LAYOUT_HDF5;
+    } else {
+        rc = 4;
+        goto out;
+    }
+    attr->da_oclass_id = daos_oclass_name2id(attribute->object_type);
+    attr->da_chunk_size = attribute->chunk_size;
+    attr->da_on_lustre = attribute->on_lustre;
+    if (attribute->properties != NULL) {
+        /* will be released outside of this function */
+        attr->da_props = (daos_prop_t *)calloc(1, sizeof(daos_prop_t));
+        rc = set_attr_properties(attribute->properties, attr->da_props);
+    }
+
+out:
+    return rc;
+}
+
+JNIEXPORT jstring JNICALL
+Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
+        jclass clientClass, jlong poolHandle, jstring pathStr,
+        jlong bufferAddress, jint bufferLen)
+{
+    daos_handle_t poh;
+    const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
+    uint8_t *buffer = (uint8_t *)bufferAddress;
+    Uns__DunsAttribute *attribute;
+    struct duns_attr_t attr = {0};
+    int i;
+    int rc;
+
+    memcpy(&poh, &poolHandle, sizeof(poh));
+    attribute = uns__duns_attribute__unpack(NULL, bufferLen, buffer);
+    rc = set_duns_attr(attribute, &attr);
+    if (rc) {
+        char *msg;
+
+        switch(rc)
+        {
+            case 1:     msg = "need pool id"; break;
+            case 2:     msg = "need layout (POSIX | HDF5)";  break;
+            case 3:     msg = "need object type"; break;
+            case 4:     msg = "unknown layout"; break;
+            case 5:     msg = "missing entry value"; break;
+            case 6:     msg = "bad entry type"; break;
+            case 7:     msg = "unknown entry type other than ACLs"; break;
+            default:    msg = "unknown error";
+        }
+        throw_exception_const_msg(env, msg, CUSTOM_ERR5);
+        goto out;
+    }
+    rc = duns_create_path(poh, path, &attr);
+    if (rc) {
+        char *tmp = "Failed to create UNS path, %s, in container %s and " \
+                    "pool %s";
+        char pool_str[37] = "";
+        char cont_str[37] = "";
+        char *msg;
+
+        if (strlen(attr.da_puuid) > 0) {
+            uuid_unparse(attr.da_puuid, pool_str);
+        }
+        if (strlen(attr.da_cuuid) > 0) {
+            uuid_unparse(attr.da_cuuid, cont_str);
+        }
+        msg = (char *)malloc(strlen(tmp) + strlen(path)
+                            + strlen(cont_str) + strlen(pool_str));
+        sprintf(msg, tmp, path, cont_str, pool_str);
+        throw_exception(env, msg, rc);
+        goto out;
+    }
+    char cont_str[37] = "";
+    uuid_unparse(attr.da_cuuid, cont_str);
+
+out:
+    (*env)->ReleaseStringUTFChars(env, pathStr, path);
+    if (attr.da_props) {
+        if ((attr.da_props)->dpp_entries) {
+            for (i = 0; i < (attr.da_props)->dpp_nr; i++) {
+                switch(((attr.da_props)->dpp_entries[i]).dpe_type) {
+                case UNS__PROP_TYPE__DAOS_PROP_PO_ACL:
+                case UNS__PROP_TYPE__DAOS_PROP_CO_ACL:
+                    free(((attr.da_props)->dpp_entries[i]).dpe_val_ptr);
+                    break;
+                }
+            }
+            free((attr.da_props)->dpp_entries);
+        }
+        free(attr.da_props);
+    }
+    if (attribute) {
+        uns__duns_attribute__free_unpacked(attribute, NULL);
+    }
+    return (*env)->NewStringUTF(env, cont_str);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
+        jstring pathStr)
+{
+    const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
+    struct duns_attr_t attr = {0};
+    Uns__DunsAttribute attribute = UNS__DUNS_ATTRIBUTE__INIT;
+    char pool_str[37] = "";
+    char cont_str[37] = "";
+    char object_type[40] = "";
+    int len;
+    void *buf = NULL;
+    jbyteArray barray = NULL;
+    jbyte *bytes = NULL;
+
+    int rc = duns_resolve_path(path, &attr);
+
+    if (rc) {
+        char *tmp = "Failed to resolve UNS path, %s";
+        char *msg;
+
+        msg = (char *)malloc(strlen(tmp) + strlen(path));
+        sprintf(msg, tmp, path);
+        throw_exception(env, msg, rc);
+        goto out;
+    }
+
+    if (strlen(attr.da_puuid) > 0) {
+        uuid_unparse(attr.da_puuid, pool_str);
+        attribute.puuid = pool_str;
+    } else {
+        attribute.puuid = NULL;
+    }
+    if (strlen(attr.da_cuuid) > 0) {
+        uuid_unparse(attr.da_cuuid, cont_str);
+        attribute.cuuid = cont_str;
+    } else {
+        attribute.cuuid = NULL;
+    }
+
+    if (attr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+        attribute.layout_type = UNS__LAYOUT__POSIX;
+    } else if (attr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
+        attribute.layout_type = UNS__LAYOUT__HDF5;
+    }
+    daos_oclass_id2name(attr.da_oclass_id, object_type);
+    attribute.object_type = object_type;
+    attribute.chunk_size = attr.da_chunk_size;
+    attribute.on_lustre = attr.da_on_lustre;
+    /* copy back in binary */
+    len = uns__duns_attribute__get_packed_size(&attribute);
+    buf = malloc(len);
+    uns__duns_attribute__pack(&attribute, buf);
+    barray = (*env)->NewByteArray(env, len);
+    bytes = (*env)->GetByteArrayElements(env, barray, 0);
+    memcpy(bytes, buf, len);
+
+out:
+    (*env)->ReleaseStringUTFChars(env, pathStr, path);
+    if (bytes != NULL) {
+        (*env)->ReleaseByteArrayElements(env, barray, bytes, 0);
+    }
+    if (buf != NULL) {
+        free(buf);
+    }
+
+    return barray;
+}
+
+JNIEXPORT void JNICALL
+Java_io_daos_dfs_DaosFsClient_dunsDestroyPath(JNIEnv *env, jclass clientClass,
+        jlong poolHandle, jstring pathStr)
+{
+    daos_handle_t poh;
+    const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
+    int rc;
+
+    memcpy(&poh, &poolHandle, sizeof(poh));
+    rc = duns_destroy_path(poh, path);
+    if (rc) {
+        char *tmp = "Failed to destroy UNS path, %s";
+        char *msg;
+
+        msg = (char *)malloc(strlen(tmp) + strlen(path));
+        sprintf(msg, tmp, path);
+        throw_exception(env, msg, rc);
+    }
+
+out:
+    (*env)->ReleaseStringUTFChars(env, pathStr, path);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
+        jclass clientClass, jstring inputStr)
+{
+    const char *input = (*env)->GetStringUTFChars(env, inputStr, NULL);
+    int len = strlen(input);
+    struct duns_attr_t attr = {0};
+    Uns__DunsAttribute attribute = UNS__DUNS_ATTRIBUTE__INIT;;
+    char pool_str[37] = "";
+    char cont_str[37] = "";
+    char object_type[40] = "";
+    void *buf = NULL;
+    jbyteArray barray = NULL;
+    jbyte *bytes = NULL;
+
+    int rc = duns_parse_attr((char *)input, len, &attr);
+
+    if (rc) {
+        char *tmp = "Failed to parse UNS string, %s";
+        char *msg;
+
+        msg = (char *)malloc(strlen(tmp) + len);
+        sprintf(msg, tmp, input);
+        throw_exception(env, msg, rc);
+        goto out;
+    }
+
+    if (strlen(attr.da_puuid)) {
+        uuid_unparse(attr.da_puuid, pool_str);
+        attribute.puuid = pool_str;
+    } else {
+        attribute.puuid = NULL;
+    }
+    if (strlen(attr.da_cuuid)) {
+        uuid_unparse(attr.da_cuuid, cont_str);
+        attribute.cuuid = cont_str;
+    } else {
+        attribute.cuuid = NULL;
+    }
+
+    if (attr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+        attribute.layout_type = UNS__LAYOUT__POSIX;
+    } else if (attr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
+        attribute.layout_type = UNS__LAYOUT__HDF5;
+    }
+    daos_oclass_id2name(attr.da_oclass_id, object_type);
+    attribute.object_type = object_type;
+    attribute.chunk_size = attr.da_chunk_size;
+    attribute.on_lustre = attr.da_on_lustre;
+    /* copy back in binary */
+    len = uns__duns_attribute__get_packed_size(&attribute);
+    buf = malloc(len);
+    uns__duns_attribute__pack_to_buffer(&attribute, buf);
+    barray = (*env)->NewByteArray(env, len);
+    bytes = (*env)->GetByteArrayElements(env, barray, 0);
+    memcpy(bytes, buf, len);
+
+out:
+    (*env)->ReleaseStringUTFChars(env, inputStr, input);
+    if (bytes) {
+        (*env)->ReleaseByteArrayElements(env, barray, bytes, 0);
+    }
+    if (buf) {
+        free(buf);
+    }
+
+    return barray;
+}
+
 /**
  * This function is called when JVM unload native library.
  *
@@ -1492,9 +1879,10 @@ JNI_OnUnload(JavaVM* vm, void *reserved)
 		return;
 	}
 	(*env)->DeleteGlobalRef(env, daos_io_exception_class);
-	(*env)->DeleteGlobalRef(env, new_exception_msg);
-	(*env)->DeleteGlobalRef(env, new_exception_cause);
-	(*env)->DeleteGlobalRef(env, new_exception_msg_code_msg);
-	(*env)->DeleteGlobalRef(env, new_exception_msg_code_cause);
+	(*env)->DeleteGlobalRef(env, (jobject)new_exception_msg);
+	(*env)->DeleteGlobalRef(env, (jobject)new_exception_cause);
+	(*env)->DeleteGlobalRef(env, (jobject)new_exception_msg_code_msg);
+	(*env)->DeleteGlobalRef(env, (jobject)new_exception_msg_code_cause);
+
 	daos_fini();
 }

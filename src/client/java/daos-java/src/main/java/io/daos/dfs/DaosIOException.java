@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,6 +144,7 @@ public class DaosIOException extends IOException {
     if (parsedMsg != null) {
       return parsedMsg;
     }
+    boolean needSuperMsg = false;
     StringBuilder sb = new StringBuilder(super.getMessage());
     sb.append(" error code: ");
     if (errorCode == Integer.MIN_VALUE) {
@@ -151,10 +152,14 @@ public class DaosIOException extends IOException {
     } else {
       sb.append(errorCode);
       if (errorCode < Constants.CUSTOM_ERROR_BASE) {
+        needSuperMsg = true;
         daosMsg = errorMap.get(errorCode);
       }
     }
     sb.append(" error msg: ").append(daosMsg == null ? "" : daosMsg);
+    if (needSuperMsg && super.getMessage() != null) {
+      sb.append(". more msg: ").append(super.getMessage());
+    }
     parsedMsg = sb.toString();
     return parsedMsg;
   }
