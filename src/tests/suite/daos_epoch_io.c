@@ -1457,8 +1457,6 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 		print_message("invalid io_conf.\n");
 		return -DER_INVAL;
 	}
-	if (arg->myrank != 0)
-		return 0;
 
 	fp = fopen(io_conf, "r");
 	if (fp == NULL) {
@@ -1549,14 +1547,22 @@ epoch_io_setup(void **state)
 	char			*tmp_str;
 	int			 rc;
 
+	obj_setup(state);
+	arg = *state;
+	eio_arg = &arg->eio_args;
+	D_INIT_LIST_HEAD(&eio_arg->op_list);
+	eio_arg->op_lvl = TEST_LVL_DAOS;
+	eio_arg->op_iod_size = 1;
+	eio_arg->op_oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+
 	/* generate the temporary IO dir for epoch IO test */
 	if (test_io_dir == NULL) {
 		D_STRNDUP(test_io_dir, "/tmp", 5);
 		if (test_io_dir == NULL)
 			return -DER_NOMEM;
 	}
-	D_ASPRINTF(tmp_str, "%s/daos_epoch_io_test/%d/", test_io_dir,
-		   geteuid());
+	D_ASPRINTF(tmp_str, "%s/daos_epoch_io_test/%d_%d/", test_io_dir,
+		   geteuid(), arg->myrank);
 	if (tmp_str == NULL)
 		return -DER_NOMEM;
 	D_FREE(test_io_dir);
@@ -1585,14 +1591,6 @@ epoch_io_setup(void **state)
 		D_GOTO(error, rc);
 	print_message("created test_io_dir %s, and subdirs %s, %s.\n",
 		      test_io_dir, test_io_work_dir, test_io_fail_dir);
-
-	obj_setup(state);
-	arg = *state;
-	eio_arg = &arg->eio_args;
-	D_INIT_LIST_HEAD(&eio_arg->op_list);
-	eio_arg->op_lvl = TEST_LVL_DAOS;
-	eio_arg->op_iod_size = 1;
-	eio_arg->op_oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 
 	return 0;
 
