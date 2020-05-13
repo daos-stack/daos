@@ -104,7 +104,10 @@ class ContainerQueryAttributeTest(TestWithServers):
         actual_attrs.sort()
         self.assertEqual(actual_attrs, expected_attrs)
         # Verify each attribute's value.
+        errors = []
         for i in range(5):
             kwargs["attr"] = sample_attrs[i]
             actual_val = daos_cmd.get_output("container_get_attr", **kwargs)[0]
-            self.assertEqual(sample_vals[i], actual_val)
+            if sample_vals[i] != actual_val:
+                errors.append("{} != {}".format(sample_vals[i], actual_val))
+        self.assertEqual(len(errors), 0, '\n'.join(errors))
