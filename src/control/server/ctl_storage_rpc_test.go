@@ -730,7 +730,7 @@ func TestStoragePrepare(t *testing.T) {
 //
 //				// if the instance is expected to have a valid superblock, create one
 //				if tc.superblockExists {
-//					if err := instance.CreateSuperblock(&mgmtInfo{}); err != nil {
+//					if err := instance.createSuperblock(&mgmtInfo{}); err != nil {
 //						t.Fatal(err)
 //					}
 //				}

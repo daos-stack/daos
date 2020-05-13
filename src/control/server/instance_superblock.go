@@ -124,8 +124,28 @@ func (srv *IOServerInstance) NeedsSuperblock() (bool, error) {
 	return false, nil
 }
 
-// CreateSuperblock creates the superblock for this instance.
-func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
+// createSuperblock creates instance superblock if needed.
+func (srv *IOServerInstance) createSuperblock(recreate bool) error {
+	if srv.isStarted() {
+		return errors.Errorf("can't create superblock: instance %d already started", srv.Index())
+	}
+
+	needsSuperblock, err := srv.NeedsSuperblock() // scm format completed by now
+	if !needsSuperblock {
+		return nil
+	}
+	if err != nil && !recreate {
+		return err
+	}
+
+	// Only the first I/O server can be an MS replica.
+	msInfo := new(mgmtInfo)
+	if srv.Index() == 0 {
+		if msInfo, err = getMgmtInfo(srv); err != nil {
+			return err
+		}
+	}
+
 	if err := srv.MountScmDevice(); err != nil {
 		return err
 	}

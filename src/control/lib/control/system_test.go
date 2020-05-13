@@ -717,7 +717,7 @@ func TestControl_SystemReformat(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemReformat(context.TODO(), mi, &SystemReformatReq{})
+			gotResp, gotErr := SystemReformat(context.TODO(), mi, &SystemResetFormatReq{})
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
