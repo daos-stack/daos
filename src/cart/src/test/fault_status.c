@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-int main(void) 
+int main(void)
 {
 #if FAULT_INJECTION
     return 0;
