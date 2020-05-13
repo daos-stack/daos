@@ -579,5 +579,5 @@ class EnvironmentVariables(dict):
             str: a string of export commands for each environment variable
 
         """
-        join_str = "{} export ".format(separator)
+        join_str = "{} export  ".format(separator)
         return "export {}{}".format(join_str.join(self.get_list()), separator)
