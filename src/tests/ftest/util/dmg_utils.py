@@ -28,9 +28,9 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand, YamlCommand, YamlParameters
+from command_utils_base import \
+    CommandFailure, FormattedParameter, CommandWithParameters, YamlParameters
+from command_utils import CommandWithSubCommand, YamlCommand
 
 
 class DmgCommand(YamlCommand):
@@ -102,7 +102,6 @@ class DmgCommand(YamlCommand):
             if isinstance(hostlist, list):
                 hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")
-
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -723,6 +722,7 @@ class DmgCommand(YamlCommand):
 
         Raises:
             CommandFailure: if the dmg pool delete-acl command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list")
