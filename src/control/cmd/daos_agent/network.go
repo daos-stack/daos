@@ -46,7 +46,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 	}
 
 	if !numaAware {
-		cmd.log.Info("No NUMA information available.  Any devices found are reported as NUMA node 0.")
+		cmd.log.Info("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
 	switch {
