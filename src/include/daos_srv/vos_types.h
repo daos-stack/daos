@@ -194,7 +194,7 @@ enum {
 #define VOS_COND_UPDATE_MASK					\
 	(VOS_COND_DKEY_UPDATE_MASK | VOS_COND_AKEY_UPDATE_MASK)
 
-/** Mask for if the update has any conditional insert */
+/** Mask for if the update has any conditional update */
 #define VOS_COND_UPDATE_OP_MASK					\
 	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
 
