@@ -38,6 +38,36 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+// SystemJoinReq contains the inputs for the system join request.
+type SystemJoinReq struct {
+	unaryRequest
+	msRequest
+	Ranks []system.Rank
+}
+
+// SystemJoinResp contains the request response.
+type SystemJoinResp struct {
+	Results system.MemberResults // resulting from harness starts
+}
+
+// SystemJoin will attempt to join a new member to the DAOS system.
+//
+// TODO: replace the method in mgmt_client.go with this one
+func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq) (*SystemJoinResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, &mgmtpb.JoinReq{})
+	})
+	rpcClient.Debugf("DAOS system join request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemJoinResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
 // SystemStopReq contains the inputs for the system stop command.
 type SystemStopReq struct {
 	unaryRequest

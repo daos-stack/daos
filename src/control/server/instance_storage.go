@@ -26,7 +26,10 @@ package server
 import (
 	"context"
 	"os"
+	"path"
+	"syscall"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -166,4 +169,20 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 	srv.waitFormat.SetFalse()
 
 	return ctx.Err()
+}
+
+func (srv *IOServerInstance) logScmStorage() error {
+	scmMount := path.Dir(srv.superblockPath())
+	stBuf := new(syscall.Statfs_t)
+
+	if err := syscall.Statfs(scmMount, stBuf); err != nil {
+		return err
+	}
+
+	frSize := uint64(stBuf.Frsize)
+	totalBytes := frSize * stBuf.Blocks
+	availBytes := frSize * stBuf.Bavail
+	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
+		humanize.Bytes(totalBytes), humanize.Bytes(availBytes))
+	return nil
 }

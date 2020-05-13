@@ -26,11 +26,8 @@ package server
 import (
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
-	"syscall"
 
-	"github.com/dustin/go-humanize"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -182,22 +179,6 @@ func (srv *IOServerInstance) createSuperblock(recreate bool) error {
 		srv.superblockPath(), superblock.Rank, superblock.UUID)
 
 	return srv.WriteSuperblock()
-}
-
-func (srv *IOServerInstance) logScmStorage() error {
-	scmMount := path.Dir(srv.superblockPath())
-	stBuf := new(syscall.Statfs_t)
-
-	if err := syscall.Statfs(scmMount, stBuf); err != nil {
-		return err
-	}
-
-	frSize := uint64(stBuf.Frsize)
-	totalBytes := frSize * stBuf.Blocks
-	availBytes := frSize * stBuf.Bavail
-	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
-		humanize.Bytes(totalBytes), humanize.Bytes(availBytes))
-	return nil
 }
 
 // WriteSuperblock writes the instance's superblock
