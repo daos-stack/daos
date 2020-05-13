@@ -144,7 +144,8 @@ evt_off2desc(struct evt_context *tcx, umem_off_t offset)
 }
 
 int
-evt_desc_log_status(struct evt_context *tcx, struct evt_desc *desc, int intent);
+evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
+		    struct evt_desc *desc, int intent);
 
 /** Helper function for starting a PMDK transaction, if applicable */
 static inline int
