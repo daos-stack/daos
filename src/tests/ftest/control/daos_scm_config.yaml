@@ -6,5 +6,6 @@ hosts:
 timeout: 100
 server_config:
   name: daos_server
-  port: 10001
-  control_log_mask: INFO
+  servers:
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
