@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,8 @@ const (
 	defaultServerKey     = ".daos/daos_server.key"
 	defaultClientCert    = ".daos/client.crt"
 	defaultClientKey     = ".daos/client.key"
+	defaultAgentCert     = ".daos/agent.crt"
+	defaultAgentKey      = ".daos/agent.key"
 	defaultServer        = "server"
 	defaultClientCertDir = ".daos/clients"
 	defaultInsecure      = false
@@ -65,6 +67,23 @@ type CertificateConfig struct {
 	PrivateKeyPath  string           `yaml:"key"`
 	tlsKeypair      *tls.Certificate `yaml:"-"`
 	caPool          *x509.CertPool   `yaml:"-"`
+}
+
+// DefaultAgentTransportConfig provides a default transport config disabling
+// certificate usage and specifying certificates located under .daos.
+func DefaultAgentTransportConfig() *TransportConfig {
+	return &TransportConfig{
+		AllowInsecure: defaultInsecure,
+		CertificateConfig: CertificateConfig{
+			ServerName:      defaultServer,
+			ClientCertDir:   "",
+			CARootPath:      defaultCACert,
+			CertificatePath: defaultAgentCert,
+			PrivateKeyPath:  defaultAgentKey,
+			tlsKeypair:      nil,
+			caPool:          nil,
+		},
+	}
 }
 
 //DefaultClientTransportConfig provides a default transport config disabling
