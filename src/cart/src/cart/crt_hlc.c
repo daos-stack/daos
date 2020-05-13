@@ -1,4 +1,4 @@
-/* Copyright (C) 2019 Intel Corporation
+/* Copyright (C) 2019-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,9 @@
 #define CRT_HLC_MASK 0xFFFFULL
 
 static ATOMIC uint64_t crt_hlc;
+
+/** See crt_hlc_epsilon_set's API doc */
+static uint64_t crt_hlc_epsilon = 100 * 1000 * 1000;
 
 /** Get local physical time */
 static inline uint64_t crt_hlc_localtime_get(void)
@@ -100,4 +103,15 @@ uint64_t crt_hlc_get_msg(uint64_t msg)
 uint64_t crt_hlc2sec(uint64_t hlc)
 {
 	return (hlc & ~CRT_HLC_MASK) / NSEC_PER_SEC;
+}
+
+void crt_hlc_epsilon_set(uint64_t epsilon)
+{
+	D_INFO("setting maximum system clock offset to "DF_U64" ns\n", epsilon);
+	crt_hlc_epsilon = epsilon;
+}
+
+uint64_t crt_hlc_epsilon_get(void)
+{
+	return crt_hlc_epsilon;
 }
