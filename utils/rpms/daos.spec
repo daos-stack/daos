@@ -2,11 +2,11 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0a1-0.8.git.4871023%{?dist}
+%global mercury_version 2.0.0~a1-1.git.4871023%{?dist}
 
 Name:          daos
 Version:       1.1.0
-Release:       14%{?relval}%{?dist}
+Release:       15%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -346,6 +346,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-15
+- Use new properly pre-release tagged mercury RPM
+
 * Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-14
 - Move fuse dependencies to the client subpackage
 
