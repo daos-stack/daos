@@ -23,8 +23,9 @@
 """
 from general_utils import pcmd
 
-from command_utils import ExecutableCommand, CommandWithParameters
-from command_utils import CommandFailure, FormattedParameter, BasicParameter
+from command_utils_base import \
+    CommandFailure, BasicParameter, FormattedParameter, CommandWithParameters
+from command_utils import ExecutableCommand
 
 
 class FioCommand(ExecutableCommand):
