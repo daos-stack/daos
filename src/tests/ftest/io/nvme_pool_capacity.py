@@ -145,9 +145,9 @@ class NvmePoolCapacity(TestWithServers):
                                      dmg_command=self.get_dmg_command())
                 pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
-                temp = int(float(scm_size) / num_pool)
+                temp = int(scm_size) / num_pool
                 pool[val].scm_size.update(str(temp))
-                temp = int(float(nvme_size) / num_pool)
+                temp = int(nvme_size) / num_pool
                 pool[val].nvme_size.update(str(temp))
                 pool[val].create()
                 self.pool = pool[val]
@@ -164,7 +164,7 @@ class NvmePoolCapacity(TestWithServers):
                 nvme_size_end = self.pool.get_pool_free_space("NVME")
                 pool[val].destroy()
                 if (nvme_size_begin != nvme_size_end) and (m_leak == 0):
-                    m_leak = val
+                    m_leak = val + 1
             # After destroying pools, check memory leak for each test loop.
             if m_leak != 0:
                 self.fail("Memory leak : iteration {0} \n".format(m_leak))
@@ -194,18 +194,14 @@ class NvmePoolCapacity(TestWithServers):
                                      dmg_command=self.get_dmg_command())
                 pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
-                pool[val].scm_size.value = int(float(test[0])) / num_pool
-                pool[val].nvme_size.value = int(float(test[1])) / num_pool
+                pool[val].scm_size.value = int(test[0]) / num_pool
+                pool[val].nvme_size.value = int(test[1]) / num_pool
                 pool[val].create()
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool = pool[val]
                 self.pool.display_pool_daos_space(display_string)
 
                 for thrd in range(0, num_jobs):
-                    # Based on pools/jobs, split block size
-                    # if thrd == 0:
-                    #    tmp = int(float(test[3]) / num_pool)
-                    #    test[3] = str(tmp)
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
                                                     kwargs={"pool": pool[val],
@@ -244,9 +240,8 @@ class NvmePoolCapacity(TestWithServers):
             Purpose of this test is to verify whether DAOS stack
             report NOSPC when accessing data beyond pool size.
             Use Cases
-            Test Case 1:
+            Test Case 1 or 2:
              1. Perform IO less than entire SSD disk space.
-            Test Case 2:
              2. Perform IO beyond entire SSD disk space.
             Test Case 3:
              3. Create Pool/Container and destroy them several times.
