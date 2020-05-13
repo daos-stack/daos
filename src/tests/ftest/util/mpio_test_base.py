@@ -62,7 +62,7 @@ class MpiioTests(TestWithServers):
         """Create a container.
 
         Args:
-            daos_cmd (DaosCommand): doas command to issue the container
+            daos_cmd (DaosCommand): daos command to issue the container
                 create
 
         Returns:

@@ -277,6 +277,10 @@ func (m *MockMgmtSvcClient) PingRanks(ctx context.Context, req *mgmtpb.RanksReq,
 	return &mgmtpb.RanksResp{}, nil
 }
 
+func (m *MockMgmtSvcClient) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
+}
+
 func (m *MockMgmtSvcClient) StartRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
 	return &mgmtpb.RanksResp{}, nil
 }
