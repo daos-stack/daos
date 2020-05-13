@@ -486,7 +486,7 @@ dfs_obj_anchor_split(dfs_obj_t *obj, uint32_t *nr, daos_anchor_t *anchors);
 /**
  * Set an anchor with an index based on split done with dfs_obj_anchor_split.
  * The anchor passed will be re-intialized and set to start and finish iteration
- * based on the specified index. 
+ * based on the specified index.
  *
  * \param[in]   obj     Dir object to split anchor for.
  * \param[in]	index	Index of set this anchor for iteration.
@@ -497,7 +497,7 @@ dfs_obj_anchor_split(dfs_obj_t *obj, uint32_t *nr, daos_anchor_t *anchors);
  */
 int
 dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor);
- 
+
 /**
  * Create a directory.
  *

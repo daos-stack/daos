@@ -3972,10 +3972,10 @@ dfs_obj_anchor_split(dfs_obj_t *obj, uint32_t *nr, daos_anchor_t *anchors)
 		return rc;
 
 	/** TBD - support more than per shard iteration */
-	if (*nr !=0 && *nr != layout->ol_nr) {
+	if (*nr != 0 && *nr != layout->ol_nr) {
 		D_ERROR("For now, num anchors should be the same as what is"
-			"reported as optimal\n");
-		D_GOTO(out, rc = ENOSYS);
+			" reported as optimal\n");
+		D_GOTO(out, rc = EINVAL);
 	}
 
 	*nr = layout->ol_nr;
