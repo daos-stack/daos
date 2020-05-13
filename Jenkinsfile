@@ -38,7 +38,7 @@
  */
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@ampittma-codespell") _
 
 def doc_only_change() {
     def rc = sh script: 'if [ "' + env.CHANGE_ID + '''" = "null" ]; then
@@ -328,6 +328,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
+				   codespell_file: "/usr/local/lib/python3.6/site-packages/codespell_lib/data/dictionary.txt",
                                    ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go:src/cart/_structures_from_macros_.h"
                     }
                     post {
