@@ -98,7 +98,7 @@ static void *progress_fn(void *arg)
 	D_ASSERT(*crt_ctx != NULL);
 
 	while (!g_shutdown_flag) {
-		ret = crt_progress(*crt_ctx, 1, NULL, NULL);
+		ret = crt_progress(*crt_ctx, 1);
 		if (ret != 0 && ret != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed; ret = %d\n", ret);
 			break;

@@ -209,7 +209,7 @@ class Dfuse(DfuseCommand):
         self.log.info('Starting dfuse at %s', self.mount_dir.value)
 
         # A log file must be defined to ensure logs are captured
-        if "D_LOG_FILE" not in self._pre_command:
+        if "D_LOG_FILE" not in self.env:
             raise CommandFailure(
                 "Dfuse missing environment varaibles for D_LOG_FILE")
 
