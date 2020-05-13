@@ -48,6 +48,8 @@ def run_checks(env):
 
     config.Finish()
 
+# This line dont have a typo
+
 def get_version():
     """ Read version from VERSION file """
     with open("VERSION", "r") as version_file:
