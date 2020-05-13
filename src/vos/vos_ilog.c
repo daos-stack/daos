@@ -334,11 +334,10 @@ update:
 
 	ilog_close(loh);
 
-	if (rc != 0) {
-		D_ERROR("Could not update incarnation log: "DF_RC"\n",
+	if (rc == -DER_ALREADY) /* operation had no effect */
+		rc = 0;
+	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
 			DP_RC(rc));
-		return rc;
-	}
 
 	/* No need to refetch the log.  The only field that is used by update
 	 * is prior_any_punch.   This field will not be changed by ilog_update
@@ -420,11 +419,10 @@ punch_log:
 
 	ilog_close(loh);
 
-	if (rc != 0) {
-		D_ERROR("Could not update incarnation log: "DF_RC"\n",
+	if (rc == -DER_ALREADY) /* operation had no effect */
+		rc = 0;
+	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
 			DP_RC(rc));
-		return rc;
-	}
 
 	return rc;
 }

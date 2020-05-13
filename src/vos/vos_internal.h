@@ -42,6 +42,24 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
+#define VOS_TX_LOG_FAIL(rc, ...)			\
+	do {						\
+		bool	__is_err = true;		\
+							\
+		if (rc == 0)				\
+			break;				\
+		switch (rc) {				\
+		case -DER_TX_RESTART:			\
+		case -DER_INPROGRESS:			\
+		case -DER_EXIST:			\
+		case -DER_NONEXIST:			\
+			__is_err = false;		\
+			break;				\
+		}					\
+		D_CDEBUG(__is_err, DLOG_ERR, DB_IO,	\
+			 __VA_ARGS__);			\
+	} while (0)
+
 #define VOS_CONT_ORDER		20	/* Order of container tree */
 #define VOS_OBJ_ORDER		20	/* Order of object tree */
 #define VOS_KTR_ORDER		23	/* order of d/a-key tree */

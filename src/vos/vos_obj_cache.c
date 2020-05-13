@@ -326,9 +326,9 @@ check_object:
 	if (rc == -DER_NONEXIST && cond_mask)
 		goto out;
 	if (rc != 0) {
-		D_ERROR("Could not update object "DF_UOID" at "DF_U64
-			": "DF_RC"\n", DP_UOID(oid), epr->epr_hi,
-			DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Could not update object "DF_UOID" at "
+				DF_U64 ": "DF_RC"\n", DP_UOID(oid), epr->epr_hi,
+				DP_RC(rc));
 		goto failed;
 	}
 
@@ -360,9 +360,7 @@ out:
 failed:
 	vos_obj_release(occ, obj, true);
 failed_2:
-	if (rc != -DER_NONEXIST)
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,
-			 "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
 	return	rc;
 }
 

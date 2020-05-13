@@ -1068,7 +1068,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	}
 
 	if (rc != 0) {
-		D_ERROR("Failed to update akey ilog: "DF_RC"\n", DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Failed to update akey ilog: "DF_RC"\n",
+				DP_RC(rc));
 		goto out;
 	}
 
@@ -1152,7 +1153,8 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 		goto out;
 	}
 	if (rc != 0) {
-		D_ERROR("Failed to update dkey ilog: "DF_RC"\n", DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Failed to update dkey ilog: "DF_RC"\n",
+				DP_RC(rc));
 		goto out;
 	}
 
@@ -1598,9 +1600,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	/* Update tree index */
 	err = dkey_update(ioc, pm_ver, dkey);
 	if (err) {
-		D_CDEBUG(err == -DER_EXIST || err == -DER_NONEXIST, DB_IO,
-			 DLOG_ERR, "Failed to update tree index: "DF_RC"\n",
-			 DP_RC(err));
+		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
+				DP_RC(err));
 		goto abort;
 	}
 

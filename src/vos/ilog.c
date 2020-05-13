@@ -709,6 +709,22 @@ check_equal(struct ilog_context *lctx, daos_epoch_t *epoch_out,
 			D_DEBUG(DB_IO, "No entry found, done\n");
 			return 0;
 		}
+		if (id_in->id_tx_id == DTX_LID_COMMITTED) {
+			/** Need to differentiate between updates that are
+			 * overwrites and others that are conflicts.  Return
+			 * a different error code in this case if the result
+			 * would be the same (e.g. not mixing update with
+			 * punch
+			 */
+			if (id_in->id_punch_minor_eph &&
+			    prec_out->p_punch_minor_eph >
+			    prec_out->p_update_minor_eph)
+				return -DER_ALREADY;
+			if (id_in->id_update_minor_eph &&
+			    prec_out->p_update_minor_eph >
+			    prec_out->p_punch_minor_eph)
+				return -DER_ALREADY;
+		}
 		D_DEBUG(DB_IO, "Access of incarnation log from multiple DTX"
 			" at same time is not allowed: rc=DER_TX_RESTART\n");
 		return -DER_TX_RESTART;
@@ -744,9 +760,16 @@ update_inplace(struct ilog_context *lctx, daos_epoch_t *epoch_out,
 		goto set_prec;
 	}
 
-	if (prec_out->p_punch_minor_eph < id_in->id_punch_minor_eph)
+	if (saved_prec.p_punch_minor_eph > saved_prec.p_update_minor_eph &&
+	    id_in->id_punch_minor_eph)
+		return 0; /** Already a punch */
+	if (saved_prec.p_update_minor_eph > saved_prec.p_punch_minor_eph &&
+	    id_in->id_update_minor_eph)
+		return 0; /** Already an update */
+
+	if (saved_prec.p_punch_minor_eph < id_in->id_punch_minor_eph)
 		saved_prec.p_punch_minor_eph = id_in->id_punch_minor_eph;
-	else if (prec_out->p_update_minor_eph < id_in->id_update_minor_eph)
+	else if (saved_prec.p_update_minor_eph < id_in->id_update_minor_eph)
 		saved_prec.p_update_minor_eph = id_in->id_update_minor_eph;
 
 	if (saved_prec.p_value == prec_out->p_value)
