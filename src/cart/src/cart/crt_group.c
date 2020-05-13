@@ -473,11 +473,7 @@ free_htables:
 			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
 	}
 	D_FREE(htables);
-	/*
-	 * We do want this fix in, but try without for now to see how
-	 * double-frees are reported
 	grp_priv->gp_lookup_cache = NULL;
-	*/
 
 out:
 	if (rc != 0)
@@ -673,7 +669,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 		rc = grp_lc_uri_insert_internal_locked(grp_priv, ctx_idx, rank,
 						tag, uri);
 		if (rc != 0) {
-			D_ERROR("Insertion failed for ctx_idx=%d\n", ctx_idx);
+			D_ERROR("Insertion failed: rc %d\n", rc);
 			D_GOTO(unlock, rc);
 		}
 	}

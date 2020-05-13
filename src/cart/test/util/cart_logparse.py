@@ -165,10 +165,10 @@ class LogLine():
                 pass
         raise AttributeError
 
-#    def get_msg(self):
-#        """Return the message part of a line, stripping up to and
-#        including the filename"""
-#        return ' '.join(self._fields[2:])
+    def get_msg(self):
+        """Return the message part of a line, stripping up to and
+        including the filename"""
+        return ' '.join(self._fields[1:])
 
     def get_anon_msg(self):
         """Return the message part of a line, stripping up to and

@@ -276,23 +276,27 @@ class LogTest():
         for line in self._li.new_iter(pid=pid, stateful=True):
             if abort_on_warning:
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
-                    if line.rpc:
+                    show = True
+                    if self.hide_fi_calls:
+                        if line.is_fi_site():
+                            show = False
+                            self.fi_triggered = True
+                        elif line.is_fi_alloc_fail():
+                            show = False
+                        elif '-1009' in line.get_msg():
+                            # For the fault injection test do not report
+                            # errors for lines that print -DER_NOMEM, as
+                            # this highlights other errors and lines which
+                            # report an error, but not a fault code.
+                            show = False
+                    elif line.rpc:
                         # Ignore the SWIM RPC opcode, as this often sends RPCs
                         # that fail during shutdown.
-                        if line.rpc_opcode != '0xfe000000':
-                            show_line(line, 'error', 'warning in strict mode')
-                            warnings_mode = True
-                    else:
-                        show = True
-                        if self.hide_fi_calls:
-                            if line.is_fi_site():
-                                show = False
-                                self.fi_triggered = True
-                            elif line.is_fi_alloc_fail():
-                                show = False
-                        if show:
-                            show_line(line, 'error', 'warning in strict mode')
-                            warnings_mode = True
+                        if line.rpc_opcode == '0xfe000000':
+                            show = False
+                    if show:
+                        show_line(line, 'error', 'warning in strict mode')
+                        warnings_mode = True
             if line.trace:
                 trace_lines += 1
                 if not have_debug and \
