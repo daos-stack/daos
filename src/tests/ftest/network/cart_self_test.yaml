@@ -6,7 +6,7 @@ hosts:
 timeout: 180
 server_config:
   name: daos_server
-testparams:
+self_test:
   repetitions: 1000
   endpoint: 0:0
   max_inflight_rpcs: 16
