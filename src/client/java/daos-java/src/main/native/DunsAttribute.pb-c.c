@@ -374,7 +374,7 @@ const ProtobufCMessageDescriptor uns__daos_ace__descriptor =
   (ProtobufCMessageInit) uns__daos_ace__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor uns__daos_acl__field_descriptors[4] =
+static const ProtobufCFieldDescriptor uns__daos_acl__field_descriptors[3] =
 {
   {
     "ver",
@@ -401,18 +401,6 @@ static const ProtobufCFieldDescriptor uns__daos_acl__field_descriptors[4] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "len",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Uns__DaosAcl, len),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "aces",
     4,
     PROTOBUF_C_LABEL_REPEATED,
@@ -426,15 +414,15 @@ static const ProtobufCFieldDescriptor uns__daos_acl__field_descriptors[4] =
   },
 };
 static const unsigned uns__daos_acl__field_indices_by_name[] = {
-  3,   /* field[3] = aces */
-  2,   /* field[2] = len */
+  2,   /* field[2] = aces */
   1,   /* field[1] = reserv */
   0,   /* field[0] = ver */
 };
-static const ProtobufCIntRange uns__daos_acl__number_ranges[1 + 1] =
+static const ProtobufCIntRange uns__daos_acl__number_ranges[2 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 4, 2 },
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor uns__daos_acl__descriptor =
 {
@@ -444,10 +432,10 @@ const ProtobufCMessageDescriptor uns__daos_acl__descriptor =
   "Uns__DaosAcl",
   "uns",
   sizeof(Uns__DaosAcl),
-  4,
+  3,
   uns__daos_acl__field_descriptors,
   uns__daos_acl__field_indices_by_name,
-  1,  uns__daos_acl__number_ranges,
+  2,  uns__daos_acl__number_ranges,
   (ProtobufCMessageInit) uns__daos_acl__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

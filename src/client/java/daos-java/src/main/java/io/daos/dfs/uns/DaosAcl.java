@@ -60,11 +60,6 @@ private static final long serialVersionUID = 0L;
             reserv_ = input.readUInt32();
             break;
           }
-          case 24: {
-
-            len_ = input.readUInt32();
-            break;
-          }
           case 34: {
             if (!((mutable_bitField0_ & 0x00000001) != 0)) {
               aces_ = new java.util.ArrayList<io.daos.dfs.uns.DaosAce>();
@@ -131,17 +126,6 @@ private static final long serialVersionUID = 0L;
     return reserv_;
   }
 
-  public static final int LEN_FIELD_NUMBER = 3;
-  private int len_;
-  /**
-   * <code>uint32 len = 3;</code>
-   * @return The len.
-   */
-  @java.lang.Override
-  public int getLen() {
-    return len_;
-  }
-
   public static final int ACES_FIELD_NUMBER = 4;
   private java.util.List<io.daos.dfs.uns.DaosAce> aces_;
   /**
@@ -202,9 +186,6 @@ private static final long serialVersionUID = 0L;
     if (reserv_ != 0) {
       output.writeUInt32(2, reserv_);
     }
-    if (len_ != 0) {
-      output.writeUInt32(3, len_);
-    }
     for (int i = 0; i < aces_.size(); i++) {
       output.writeMessage(4, aces_.get(i));
     }
@@ -224,10 +205,6 @@ private static final long serialVersionUID = 0L;
     if (reserv_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(2, reserv_);
-    }
-    if (len_ != 0) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeUInt32Size(3, len_);
     }
     for (int i = 0; i < aces_.size(); i++) {
       size += com.google.protobuf.CodedOutputStream
@@ -252,8 +229,6 @@ private static final long serialVersionUID = 0L;
         != other.getVer()) return false;
     if (getReserv()
         != other.getReserv()) return false;
-    if (getLen()
-        != other.getLen()) return false;
     if (!getAcesList()
         .equals(other.getAcesList())) return false;
     if (!unknownFields.equals(other.unknownFields)) return false;
@@ -271,8 +246,6 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getVer();
     hash = (37 * hash) + RESERV_FIELD_NUMBER;
     hash = (53 * hash) + getReserv();
-    hash = (37 * hash) + LEN_FIELD_NUMBER;
-    hash = (53 * hash) + getLen();
     if (getAcesCount() > 0) {
       hash = (37 * hash) + ACES_FIELD_NUMBER;
       hash = (53 * hash) + getAcesList().hashCode();
@@ -415,8 +388,6 @@ private static final long serialVersionUID = 0L;
 
       reserv_ = 0;
 
-      len_ = 0;
-
       if (acesBuilder_ == null) {
         aces_ = java.util.Collections.emptyList();
         bitField0_ = (bitField0_ & ~0x00000001);
@@ -452,7 +423,6 @@ private static final long serialVersionUID = 0L;
       int from_bitField0_ = bitField0_;
       result.ver_ = ver_;
       result.reserv_ = reserv_;
-      result.len_ = len_;
       if (acesBuilder_ == null) {
         if (((bitField0_ & 0x00000001) != 0)) {
           aces_ = java.util.Collections.unmodifiableList(aces_);
@@ -515,9 +485,6 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getReserv() != 0) {
         setReserv(other.getReserv());
-      }
-      if (other.getLen() != 0) {
-        setLen(other.getLen());
       }
       if (acesBuilder_ == null) {
         if (!other.aces_.isEmpty()) {
@@ -633,37 +600,6 @@ private static final long serialVersionUID = 0L;
     public Builder clearReserv() {
       
       reserv_ = 0;
-      onChanged();
-      return this;
-    }
-
-    private int len_ ;
-    /**
-     * <code>uint32 len = 3;</code>
-     * @return The len.
-     */
-    @java.lang.Override
-    public int getLen() {
-      return len_;
-    }
-    /**
-     * <code>uint32 len = 3;</code>
-     * @param value The len to set.
-     * @return This builder for chaining.
-     */
-    public Builder setLen(int value) {
-      
-      len_ = value;
-      onChanged();
-      return this;
-    }
-    /**
-     * <code>uint32 len = 3;</code>
-     * @return This builder for chaining.
-     */
-    public Builder clearLen() {
-      
-      len_ = 0;
       onChanged();
       return this;
     }

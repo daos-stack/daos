@@ -30,9 +30,9 @@ public class DaosUnsIT {
         }
         DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
         builder.path(file.getAbsolutePath());
-        builder.poolUuid(poolId);
+        builder.poolId(poolId);
         if (contId != null) {
-            builder.contUuid(contId);
+            builder.containerId(contId);
         }
         if (layout != null) {
             builder.layout(layout);
@@ -109,21 +109,81 @@ public class DaosUnsIT {
         Assert.assertTrue(cid.length() > 0);
     }
 
-    @Test
-    public void testCreatePathWithPropertiesAcl() throws Exception {
+    private void createPathWithAcls(boolean inOrder) throws Exception {
         Map<PropType, DaosUns.PropValue> propMap = new HashMap<>();
+        /* extracted from daos_container.c */
+        int aclOwner = 0;
+        int aclUser = 1;
+        String user = new com.sun.security.auth.module.UnixSystem().getUsername() + "@";
+        int accessAllow = 1;
+        int permDel = 1 << 3;
+        int permGet = 1 << 6;
+        int permSet = 1 << 7;
+        int perms =  permGet | permDel | permSet;
         DaosAce ace = DaosAce.newBuilder()
-                        .setAccessTypes(1)
-                        .setPrincipalType(0)
-                        .setPrincipalLen(10)
-                        .setAccessFlags(2)
-                        .setPrincipal("1234567890").build();
-        byte[] bytes = ace.toByteArray();
-        DaosAcl acl = DaosAcl.newBuilder()
-                        .setLen(bytes.length)
-                        .addAces(ace).build();
+                .setAccessTypes(accessAllow)
+                .setPrincipal(user)
+                .setPrincipalType(aclUser)
+                .setPrincipalLen(user.length())
+                .setAllowPerms(perms)
+                .build();
+        DaosAce ace2 = DaosAce.newBuilder()
+                .setAccessTypes(accessAllow)
+                .setPrincipalType(aclOwner)
+                .setAllowPerms(perms)
+                .setPrincipalLen(0)
+                .build();
+        DaosAcl.Builder aclBuilder = DaosAcl.newBuilder()
+                .setVer(1);
+        if (inOrder) {
+            aclBuilder.addAces(ace2).addAces(ace);
+        } else {
+            aclBuilder.addAces(ace).addAces(ace2);
+        }
+
+        DaosAcl acl = aclBuilder.build();
         propMap.put(PropType.DAOS_PROP_CO_ACL, new DaosUns.PropValue(acl, 0));
-        String cid = createPath(propMap);
+        String cid = createPath(null, Layout.HDF5, propMap);
+        Assert.assertTrue(cid.length() > 0);
+    }
+
+    @Test
+    public void testCreatePathWithPropertiesAclWrongOrder() throws Exception {
+        Exception ee = null;
+        try {
+            createPathWithAcls(false);
+        } catch (IOException e) {
+            ee = e;
+        }
+        Assert.assertNotNull(ee);
+        Assert.assertTrue(ee.getMessage().contains("ACEs out of order"));
+    }
+
+    @Test
+    public void testCreatePathWithPropertiesAclUserAndAclOwner() throws Exception {
+        createPathWithAcls(true);
+    }
+
+    @Test
+    public void testCreatePathWithPropertiesAclOwner() throws Exception {
+        Map<PropType, DaosUns.PropValue> propMap = new HashMap<>();
+        /* extracted from daos_container.c */
+        int aclOwner = 0;
+        int accessAllow = 1;
+        int permDel = 1 << 3;
+        int permGet = 1 << 6;
+        int permSet = 1 << 7;
+        int perms =  permGet | permDel | permSet;
+        DaosAce ace = DaosAce.newBuilder()
+                .setAccessTypes(accessAllow)
+                .setPrincipalType(aclOwner)
+                .setAllowPerms(perms)
+                .build();
+        DaosAcl acl = DaosAcl.newBuilder()
+                .setVer(1)
+                .addAces(ace).build();
+        propMap.put(PropType.DAOS_PROP_CO_ACL, new DaosUns.PropValue(acl, 0));
+        String cid = createPath(null, Layout.HDF5, propMap);
         Assert.assertTrue(cid.length() > 0);
     }
 
@@ -152,7 +212,7 @@ public class DaosUnsIT {
 
             DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
             builder.path(file.getAbsolutePath());
-            builder.poolUuid(poolId);
+            builder.poolId(poolId);
             DaosUns uns = builder.build();
             uns.destroyPath();
 
@@ -161,5 +221,25 @@ public class DaosUnsIT {
             file.delete();
             dir.delete();
         }
+    }
+
+    @Test
+    public void testParseAttribute() throws Exception {
+        String attrFmt = "DAOS.%s://%36s/%36s";
+        String type = "POSIX";
+        String attr = String.format(attrFmt, type, DaosFsClientTestBase.DEFAULT_POOL_ID,
+                DaosFsClientTestBase.DEFAULT_CONT_ID);
+        DunsAttribute attribute = DaosUns.parseAttribute(attr);
+        Assert.assertEquals(Layout.POSIX, attribute.getLayoutType());
+        Assert.assertEquals(DaosFsClientTestBase.DEFAULT_POOL_ID, attribute.getPuuid());
+        Assert.assertEquals(DaosFsClientTestBase.DEFAULT_CONT_ID, attribute.getCuuid());
+
+        type = "HDF5";
+        attr = String.format(attrFmt, type, DaosFsClientTestBase.DEFAULT_POOL_ID,
+                DaosFsClientTestBase.DEFAULT_CONT_ID);
+        attribute = DaosUns.parseAttribute(attr);
+        Assert.assertEquals(Layout.HDF5, attribute.getLayoutType());
+        Assert.assertEquals(DaosFsClientTestBase.DEFAULT_POOL_ID, attribute.getPuuid());
+        Assert.assertEquals(DaosFsClientTestBase.DEFAULT_CONT_ID, attribute.getCuuid());
     }
 }
