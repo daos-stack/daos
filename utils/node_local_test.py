@@ -443,6 +443,10 @@ def run_daos_cmd(conf, cmd, fi_file=None):
     Enable logging, and valgrind for the command.
     """
     valgrind = ValgrindHelper()
+
+    if fi_file:
+        valgrind.use_valgrind = False
+
     exec_cmd = valgrind.get_cmd_prefix()
     exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
     exec_cmd.extend(cmd)
@@ -461,10 +465,20 @@ def run_daos_cmd(conf, cmd, fi_file=None):
     rc = subprocess.run(exec_cmd,
                         stdout=subprocess.PIPE,
                         env=cmd_env)
+
+    show_memleaks = True
+    skip_fi = False
+
     if fi_file:
-        log_test(log_file.name, skip_fi=True)
-    else:
-        log_test(log_file.name, skip_fi=False)
+        skip_fi = True
+
+    # A negative return code means the process exited with a signal so do not
+    # check for memory leaks in this case as it adds noise, right when it's
+    # least wanted.
+    if rc.returncode < 0:
+        show_memleaks = False
+
+    log_test(log_file.name, show_memleaks=show_memleaks, skip_fi=skip_fi)
     valgrind.convert_xml()
     return rc
 

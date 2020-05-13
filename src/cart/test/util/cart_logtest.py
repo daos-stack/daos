@@ -264,6 +264,8 @@ class LogTest():
         regions = OrderedDict()
         memsize = hwm_counter()
 
+        old_regions = {}
+
         error_files = set()
 
         have_debug = False
@@ -385,9 +387,15 @@ class LogTest():
                                       'level mismatch in alloc/free')
                             err_count += 1
                         memsize.subtract(regions[pointer].calloc_size())
+                        old_regions[pointer] = [regions[pointer], line]
                         del regions[pointer]
                     elif pointer != '(nil)':
-                        show_line(line, 'error', 'free of unknown memory')
+                        if pointer in old_regions:
+                            show_line(old_regions[pointer][0], 'error', 'double-free allocation point')
+                            show_line(old_regions[pointer][1], 'error', '1st double-free location')
+                            show_line(line, 'error', '2nd double-free location')
+                        else:
+                            show_line(line, 'error', 'free of unknown memory')
                         err_count += 1
                 elif line.is_realloc():
                     new_pointer = line.get_field(-3)

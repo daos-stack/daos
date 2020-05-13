@@ -51,7 +51,6 @@
 #include "fi.h"
 
 struct d_fault_attr_t *d_fault_attr_mem;
-int d_fault_id_mem;
 
 static struct d_fault_attr *
 fa_link2ptr(d_list_t *rlink)
@@ -555,8 +554,10 @@ d_fault_inject_init(void)
 		D_GOTO(out, rc);
 	}
 
-	d_fault_id_mem = 0;
-	d_fault_attr_mem = d_fault_attr_lookup(d_fault_id_mem);
+	/* Register D_ALLOC() hook as fault ID zero, but do not check
+	 * for failure as it will fail if no config file is provided
+	 */
+	d_fault_attr_mem = d_fault_attr_lookup(0);
 
 out:
 	if (fp)

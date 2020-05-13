@@ -473,7 +473,11 @@ free_htables:
 			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
 	}
 	D_FREE(htables);
+	/*
+	 * We do want this fix in, but try without for now to see how
+	 * double-frees are reported
 	grp_priv->gp_lookup_cache = NULL;
+	*/
 
 out:
 	if (rc != 0)
