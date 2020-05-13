@@ -553,9 +553,20 @@ ilog_test_update(void **state)
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
-	/** Same epoch, different DTX */
+	/** Same epoch, different DTX, same operation */
 	fake_tx_reset();
 	rc = ilog_update(loh, NULL, epoch, 3, true);
+	if (rc != -DER_ALREADY) {
+		print_message("Epoch entry already exists.  Replacing with"
+			      " different DTX should get -DER_ALREADY:"
+			      " rc=%s\n",
+			      d_errstr(rc));
+		assert(0);
+	}
+
+	/** Same epoch, different DTX, different operation operation */
+	fake_tx_reset();
+	rc = ilog_update(loh, NULL, epoch, 3, false);
 	if (rc != -DER_TX_RESTART) {
 		print_message("Epoch entry already exists.  Replacing with"
 			      " different DTX should get -DER_TX_RESTART:"
