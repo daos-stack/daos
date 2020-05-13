@@ -86,7 +86,8 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"<init>",
 			"(Ljava/lang/Throwable;)V");
 
-	new_exception_cause = (jmethodID)(*env)->NewGlobalRef(env, (jobject)m2);
+	new_exception_cause = (jmethodID)(*env)->NewGlobalRef(env,
+	                        (jobject)m2);
 	if(new_exception_cause == NULL){
 		printf("failed to get constructor cause\n");
 		return JNI_ERR;
@@ -95,7 +96,8 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"<init>",
 			"(Ljava/lang/String;ILjava/lang/String;)V");
 
-	new_exception_msg_code_msg = (jmethodID)(*env)->NewGlobalRef(env, (jobject)m3);
+	new_exception_msg_code_msg = (jmethodID)(*env)->NewGlobalRef(env,
+	                        (jobject)m3);
 	if(new_exception_msg_code_msg == NULL){
 		printf("failed to get constructor msg, code and daos msg\n");
 		return JNI_ERR;
@@ -104,7 +106,8 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"<init>",
 			"(Ljava/lang/String;ILjava/lang/Throwable;)V");
 
-	new_exception_msg_code_cause = (jmethodID)(*env)->NewGlobalRef(env, (jobject)m4);
+	new_exception_msg_code_cause = (jmethodID)(*env)->NewGlobalRef(env,
+	                        (jobject)m4);
 	if(new_exception_msg_code_cause == NULL){
 		printf("failed to get constructor msg, code and cause\n");
 		return JNI_ERR;
@@ -1483,14 +1486,34 @@ Java_io_daos_dfs_DaosFsClient_dfsIsDirectory(JNIEnv *env,
 	return S_ISDIR(mode) ? 1 : 0;
 }
 
+/**
+ * pad with zero to make len multiples of 8.
+ * And last byte is '\0' as string terminator.
+ */
+static int
+make_8_multiples(uint16_t plen)
+{
+    if (plen == 0) {
+        return 0;
+    }
+    int len = plen + 1; /* null terminator */
+
+    if (len % 8 != 0) {
+        len += (8 - (len % 8));
+    }
+    return len;
+}
+
 static int
 set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
 {
     int i;
+    int rc = 0;
     int index = 0;
     int total_ace_size = 0;
     int ace_struct_size = sizeof(struct daos_ace);
     int ace_size;
+    int last_type = -1;
 
     switch (e->type) {
     case UNS__PROP_TYPE__DAOS_PROP_PO_ACL:
@@ -1499,40 +1522,65 @@ set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
 
         for (i = 0; i < a->n_aces; i++) {
             total_ace_size += (ace_struct_size +
-                        strlen(a->aces[i]->principal) + 1);
+                        (make_8_multiples(a->aces[i]->principal_len)));
         }
         struct daos_acl *acl = (struct daos_acl *)calloc(1,
                 sizeof(struct daos_acl) + total_ace_size);
 
         acl->dal_ver = a->ver;
         acl->dal_reserv = a->reserv;
-        acl->dal_len = a->len;
+        acl->dal_len = total_ace_size;
         if (a->n_aces > 0) {
             for (i = 0; i < a->n_aces; i++) {
                 Uns__DaosAce *ace = a->aces[i];
 
                 ace_size = sizeof(struct daos_ace) +
-                            strlen(ace->principal) + 1;
+                        make_8_multiples(ace->principal_len);
                 struct daos_ace *d_ace = (struct daos_ace *)calloc(1,
                                             ace_size);
 
                 d_ace->dae_access_types = ace->access_types;
+                if ((int)ace->principal_type <= last_type) {
+                    rc = 10;
+                    goto out;
+                }
+                last_type = ace->principal_type;
                 d_ace->dae_principal_type = ace->principal_type;
-                d_ace->dae_principal_len = ace->principal_len;
+                d_ace->dae_principal_len =
+                        make_8_multiples(ace->principal_len);
                 d_ace->dae_access_flags = ace->access_flags;
                 d_ace->dae_reserv = ace->reserved;
                 d_ace->dae_allow_perms = ace->allow_perms;
                 d_ace->dae_audit_perms = ace->audit_perms;
                 d_ace->dae_alarm_perms = ace->alarm_perms;
-                memcpy(d_ace->dae_principal, ace->principal,
-                        strlen(ace->principal) + 1);
 
-                memcpy(acl->dal_ace + index, &d_ace, ace_size);
+                if (ace->principal_len > 0) {
+                    memcpy(d_ace->dae_principal, ace->principal,
+                        ace->principal_len + 1);
+                    if (d_ace->dae_principal_len > (ace->principal_len + 1)) {
+                        memset(d_ace->dae_principal + ace->principal_len + 1,
+                             0,
+                             d_ace->dae_principal_len - ace->principal_len - 1
+                             );
+                    }
+                }
+
+                memcpy(acl->dal_ace + index, d_ace, ace_size);
                 index += ace_size;
-
+                if (!daos_ace_is_valid(d_ace)) {
+                    rc = 9;
+                    goto out;
+                }
+            out:
                 free(d_ace);
+                if (rc) {
+                    return rc;
+                }
             }
             entry->dpe_val_ptr = acl;
+            if (daos_acl_validate(acl)) {
+                return 8;
+            }
         }
         return 0;
     default: return 7;
@@ -1625,6 +1673,21 @@ out:
     return rc;
 }
 
+/**
+ * create UNS path with given data in \a bufferAddress in pool \a poolHandle.
+ * A new container will be created with some properties from \a attribute.
+ * Object type, pool UUID and container UUID are set to extended attribute
+ * of \a pathStr.
+ *
+ * \param[in]	env		        JNI environment
+ * \param[in]	clientClass	    DaosFsClient class
+ * \param[in]	poolHandle		pool handle
+ * \param[in]   pathStr         file path to be created
+ * \param[in]   bufferAddress   memory address of serialized duns_attribute_t
+ * \param[in]   bufferLen       lenght of buffer
+ *
+ * \return	container UUID
+ */
 JNIEXPORT jstring JNICALL
 Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
         jclass clientClass, jlong poolHandle, jstring pathStr,
@@ -1653,6 +1716,9 @@ Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
             case 5:     msg = "missing entry value"; break;
             case 6:     msg = "bad entry type"; break;
             case 7:     msg = "unknown entry type other than ACLs"; break;
+            case 8:     msg = "invalid ACL parameters"; break;
+            case 9:     msg = "invalid ACE parameters"; break;
+            case 10:    msg = "duplicate ACEs or ACEs out of order"; break;
             default:    msg = "unknown error";
         }
         throw_exception_const_msg(env, msg, CUSTOM_ERR5);
@@ -1703,6 +1769,15 @@ out:
     return (*env)->NewStringUTF(env, cont_str);
 }
 
+/**
+ * extract and parse extended attributes from given \a pathStr.
+ *
+ * \param[in]	env		        JNI environment
+ * \param[in]	clientClass	    DaosFsClient class
+ * \param[in]   pathStr         file path to resolve
+ *
+ * \return	duns_attribute_t serialized in binary by protobuf-c
+ */
 JNIEXPORT jbyteArray JNICALL
 Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
         jstring pathStr)
@@ -1772,6 +1847,14 @@ out:
     return barray;
 }
 
+/**
+ * Destroy a container and remove the path associated with it in the UNS.
+ *
+ * \param[in]	env		        JNI environment
+ * \param[in]	clientClass	    DaosFsClient class
+ * \param[in]	poolHandle		pool handle
+ * \param[in]   pathStr         file path to be created
+ */
 JNIEXPORT void JNICALL
 Java_io_daos_dfs_DaosFsClient_dunsDestroyPath(JNIEnv *env, jclass clientClass,
         jlong poolHandle, jstring pathStr)
@@ -1795,6 +1878,15 @@ out:
     (*env)->ReleaseStringUTFChars(env, pathStr, path);
 }
 
+/**
+ * Parse input string to UNS attribute.
+ *
+ * \param[in]	env		        JNI environment
+ * \param[in]	clientClass	    DaosFsClient class
+ * \param[in]   inputStr        attribute string
+ *
+ * \return	duns_attribute_t serialized in binary by protobuf-c
+ */
 JNIEXPORT jbyteArray JNICALL
 Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
         jclass clientClass, jstring inputStr)
@@ -1847,7 +1939,7 @@ Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
     /* copy back in binary */
     len = uns__duns_attribute__get_packed_size(&attribute);
     buf = malloc(len);
-    uns__duns_attribute__pack_to_buffer(&attribute, buf);
+    uns__duns_attribute__pack(&attribute, buf);
     barray = (*env)->NewByteArray(env, len);
     bytes = (*env)->GetByteArrayElements(env, barray, 0);
     memcpy(bytes, buf, len);

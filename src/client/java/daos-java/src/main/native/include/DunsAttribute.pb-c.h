@@ -206,13 +206,12 @@ struct  _Uns__DaosAcl
   ProtobufCMessage base;
   uint32_t ver;
   uint32_t reserv;
-  uint32_t len;
   size_t n_aces;
   Uns__DaosAce **aces;
 };
 #define UNS__DAOS_ACL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&uns__daos_acl__descriptor) \
-    , 0, 0, 0, 0,NULL }
+    , 0, 0, 0,NULL }
 
 
 typedef enum {

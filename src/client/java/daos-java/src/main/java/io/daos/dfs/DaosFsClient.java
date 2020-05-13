@@ -1022,7 +1022,7 @@ public final class DaosFsClient {
    * @param poolHandle
    * handle of pool
    * @param path
-   * OS file path to set duns attributes
+   * OS file path to set duns attributes. make file not existing
    * @param bufferAddress
    * buffer memory address of direct buffer which holds <code>DunsAttribute</code> data serialized by
    * protocol buffer
@@ -1034,7 +1034,7 @@ public final class DaosFsClient {
   static native String dunsCreatePath(long poolHandle, String path, long bufferAddress, int buffLen) throws IOException;
 
   /**
-   * extract and parse extended attribute from given <code>path</code>.
+   * extract and parse extended attributes from given <code>path</code>.
    *
    * @param path
    * OS file path
@@ -1056,10 +1056,10 @@ public final class DaosFsClient {
   static native void dunsDestroyPath(long poolHandle, String path) throws IOException;
 
   /**
-   * Convert input string to UNS attribute.
+   * parse input string to UNS attribute.
    *
    * @param input
-   * input string
+   * attribute string
    * @return UNS attribute info in binary.
    * user should deserialize the data by {@link io.daos.dfs.uns.DunsAttribute}
    * @throws IOException

@@ -23,7 +23,7 @@ public class DaosUnsTest {
     public void testBuilderWithWrongLayout() throws Exception {
         DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
         builder.path("/abc");
-        builder.poolUuid("4567-rty-456");
+        builder.poolId("4567-rty-456");
         builder.layout(Layout.UNKNOWN);
         builder.build();
     }
@@ -32,7 +32,7 @@ public class DaosUnsTest {
     public void testBuilderWithWrongLayout2() throws Exception {
         DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
         builder.path("/abc");
-        builder.poolUuid("4567-rty-456");
+        builder.poolId("4567-rty-456");
         builder.layout(Layout.UNRECOGNIZED);
         builder.build();
     }
@@ -41,7 +41,7 @@ public class DaosUnsTest {
     public void testBuilderSimple() throws Exception {
         DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
         builder.path("/abc");
-        builder.poolUuid("4567-rty-456");
+        builder.poolId("4567-rty-456");
         DaosUns uns = builder.build();
         Assert.assertEquals("/abc", uns.getPath());
         Assert.assertEquals("4567-rty-456", uns.getPoolUuid());
@@ -51,7 +51,7 @@ public class DaosUnsTest {
     public void testBuilderWithProperties() throws Exception {
         DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
         builder.path("/abc");
-        builder.poolUuid("4567-rty-456");
+        builder.poolId("4567-rty-456");
         builder.putEntry(PropType.DAOS_PROP_CO_LAYOUT_TYPE, new DaosUns.PropValue(1L, 0));
         builder.putEntry(PropType.DAOS_PROP_CO_ACL, new DaosUns.PropValue(DaosAcl.newBuilder().build(), 0));
         DaosUns uns = builder.build();
@@ -65,7 +65,7 @@ public class DaosUnsTest {
     public void testBuilderWithBadPropValue() throws Exception {
         DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
         builder.path("/abc");
-        builder.poolUuid("4567-rty-456");
+        builder.poolId("4567-rty-456");
         builder.putEntry(PropType.DAOS_PROP_CO_LABEL, new DaosUns.PropValue(1L, 0));
         builder.build();
     }

@@ -34,6 +34,34 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * A wrapper class of DAOS Unified Namespace. There are four DAOS UNS methods,
+ * {@link #createPath()}, {@link #resolvePath(String)}, {@link #destroyPath()} and
+ * {@link #parseAttribute(String)}, wrapped in this class.
+ *
+ * Due to complexity of DAOS UNS attribute, duns_attr_t, protobuf and c plugin, protobuf-c, are introduced to
+ * pass parameters accurately and efficiently. check DunsAttribute.proto and its auto-generated classes under
+ * package io.daos.dfs.uns.
+ *
+ * The typical usage is,
+ * 1, create path
+ * <code>
+ *     DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
+ *     builder.path(file.getAbsolutePath());
+ *     builder.poolId(poolId);
+ *     // set more parameters
+ *     ...
+ *     DaosUns uns = builder.build();
+ *     String cid = uns.createPath();
+ * </code>
+ *
+ * 2, resolve path
+ * <code>
+ *     DunsAttribute attribute = DaosUns.resolvePath(file.getAbsolutePath());
+ * </code>
+ *
+ * 3, check DaosUnsIT for more complex usage
+ */
 public class DaosUns {
 
     private DaosUnsBuilder builder;
@@ -44,6 +72,13 @@ public class DaosUns {
 
     private DaosUns () {}
 
+    /**
+     * create UNS path with info of type, pool UUID and container UUID set.
+     * A new container will be created with some properties from {@link DaosUnsBuilder}.
+     *
+     * @return container UUID
+     * @throws IOException
+     */
     public String createPath() throws IOException {
         long poolHandle = 0;
 
@@ -68,11 +103,24 @@ public class DaosUns {
         }
     }
 
+    /**
+     * extract and parse extended attributes from given <code>path</code>.
+     *
+     * @param path
+     * OS file path
+     * @return UNS attribute
+     * @throws IOException
+     */
     public static DunsAttribute resolvePath(String path) throws IOException{
         byte[] bytes = DaosFsClient.dunsResolvePath(path);
         return DunsAttribute.parseFrom(bytes);
     }
 
+    /**
+     * Destroy a container and remove the path associated with it in the UNS.
+     *
+     * @throws IOException
+     */
     public void destroyPath() throws IOException {
         long poolHandle = 0;
 
@@ -88,6 +136,14 @@ public class DaosUns {
         }
     }
 
+    /**
+     * parse input string to UNS attribute.
+     *
+     * @param input
+     * attribute string
+     * @return UNS attribute
+     * @throws IOException
+     */
     public static DunsAttribute parseAttribute(String input) throws IOException {
         byte[] bytes = DaosFsClient.dunsParseAttribute(input);
         return DunsAttribute.parseFrom(bytes);
@@ -129,6 +185,15 @@ public class DaosUns {
         return builder.propMap.get(type);
     }
 
+    /**
+     * A builder class to build {@link DaosUns} instance. Most of methods are same as ones
+     * in {@link io.daos.dfs.DaosFsClient.DaosFsClientBuilder}, like {@link #ranks(String)},
+     * {@link #serverGroup(String)}, {@link #poolFlags(int)}.
+     *
+     * For other methods, they are specific for DAOS UNS, like {@link #layout(Layout)} and
+     * {@link #putEntry(PropType, PropValue)}. Some parameters are of types auto-generated
+     * by protobuf-c.
+     */
     public static class DaosUnsBuilder implements Cloneable {
         private String path;
         private String poolUuid;
@@ -138,24 +203,30 @@ public class DaosUns {
         private long chunkSize = Constants.FILE_DEFAULT_CHUNK_SIZE;
         private boolean onLustre;
         private Map<PropType, PropValue> propMap = new HashMap<>();
-        private Properties properties;
         private int propReserved;
 
         private String ranks = Constants.POOL_DEFAULT_RANKS;
         private String serverGroup = Constants.POOL_DEFAULT_SERVER_GROUP;
         private int poolFlags = Constants.ACCESS_FLAG_POOL_READWRITE;
 
+        /**
+         * file denoted by <code>path</code> should not exist.
+         *
+         * @param path
+         * OS file path extended attributes associated with
+         * @return this object
+         */
         public DaosUnsBuilder path(String path) {
             this.path = path;
             return this;
         }
 
-        public DaosUnsBuilder poolUuid(String poolUuid) {
+        public DaosUnsBuilder poolId(String poolUuid) {
             this.poolUuid = poolUuid;
             return this;
         }
 
-        public DaosUnsBuilder contUuid(String contUuid) {
+        public DaosUnsBuilder containerId(String contUuid) {
             this.contUuid = contUuid;
             return this;
         }
@@ -183,6 +254,16 @@ public class DaosUns {
             return this;
         }
 
+        /**
+         * put entry as type-value pair. For <code>value</code>, there is method
+         * {@link PropValue#getValueClass(PropType)} for you to get correct value class.
+         *
+         * @param propType
+         * enum values of {@link PropType}
+         * @param value
+         * value object
+         * @return
+         */
         public DaosUnsBuilder putEntry(PropType propType, PropValue value) {
             switch (propType) {
                 case DAOS_PROP_PO_MIN:
@@ -220,6 +301,13 @@ public class DaosUns {
             return (DaosUnsBuilder) super.clone();
         }
 
+        /**
+         * verify and map parameters to UNS attribute objects whose classes are auto-generated by protobuf-c.
+         * Then, create {@link DaosUns} object with the UNS attribute, which is to be serialized when interact
+         * with native code.
+         *
+         * @return {@link DaosUns} object
+         */
         public DaosUns build() {
             if (path == null) {
                 throw new IllegalArgumentException("need path");
@@ -258,35 +346,13 @@ public class DaosUns {
                 for (Map.Entry<PropType, PropValue> entry : propMap.entrySet()) {
                     eb.clear();
                     eb.setType(entry.getKey()).setReserved(entry.getValue().getReserved());
-                    switch (entry.getKey()) {
-                        case DAOS_PROP_PO_SPACE_RB:
-                        case DAOS_PROP_CO_LAYOUT_VER:
-                        case DAOS_PROP_CO_LAYOUT_TYPE:
-                        case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
-                        case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
-                        case DAOS_PROP_CO_CSUM:
-                        case DAOS_PROP_CO_REDUN_FAC:
-                        case DAOS_PROP_CO_REDUN_LVL:
-                        case DAOS_PROP_CO_SNAPSHOT_MAX:
-                            eb.setVal((Long)entry.getValue().getValue());
-                            break;
-                        case DAOS_PROP_PO_LABEL:
-                        case DAOS_PROP_PO_SELF_HEAL:
-                        case DAOS_PROP_PO_RECLAIM:
-                        case DAOS_PROP_PO_OWNER:
-                        case DAOS_PROP_PO_OWNER_GROUP:
-                        case DAOS_PROP_PO_SVC_LIST:
-                        case DAOS_PROP_CO_LABEL:
-                        case DAOS_PROP_CO_COMPRESS:
-                        case DAOS_PROP_CO_ENCRYPT:
-                        case DAOS_PROP_CO_OWNER:
-                        case DAOS_PROP_CO_OWNER_GROUP:
-                            eb.setStr((String)entry.getValue().getValue());
-                            break;
-                        case DAOS_PROP_PO_ACL:
-                        case DAOS_PROP_CO_ACL:
-                            eb.setPval((DaosAcl)entry.getValue().getValue());
-                            break;
+                    Class<?> valueClass = PropValue.getValueClass(entry.getKey());
+                    if (valueClass == Long.class) {
+                        eb.setVal((Long)entry.getValue().getValue());
+                    } else if (valueClass == String.class) {
+                        eb.setStr((String)entry.getValue().getValue());
+                    } else {
+                        eb.setPval((DaosAcl)entry.getValue().getValue());
                     }
                     builder.addEntries(eb.build());
                 }
@@ -295,6 +361,11 @@ public class DaosUns {
         }
     }
 
+    /**
+     * A property value class of corresponding {@link PropType}.
+     * The actual value classes can be determined by call {@link #getValueClass(PropType)}.
+     * Currently, there are three value classes, {@link Long}, {@link String} and {@link DaosAcl}.
+     */
     public static class PropValue {
         private int reserved;
         private Object value;
@@ -310,6 +381,37 @@ public class DaosUns {
 
         public int getReserved() {
             return reserved;
+        }
+
+        public static Class<?> getValueClass(PropType propType) {
+            switch (propType) {
+                case DAOS_PROP_PO_SPACE_RB:
+                case DAOS_PROP_CO_LAYOUT_VER:
+                case DAOS_PROP_CO_LAYOUT_TYPE:
+                case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
+                case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
+                case DAOS_PROP_CO_CSUM:
+                case DAOS_PROP_CO_REDUN_FAC:
+                case DAOS_PROP_CO_REDUN_LVL:
+                case DAOS_PROP_CO_SNAPSHOT_MAX:
+                    return Long.class;
+                case DAOS_PROP_PO_LABEL:
+                case DAOS_PROP_PO_SELF_HEAL:
+                case DAOS_PROP_PO_RECLAIM:
+                case DAOS_PROP_PO_OWNER:
+                case DAOS_PROP_PO_OWNER_GROUP:
+                case DAOS_PROP_PO_SVC_LIST:
+                case DAOS_PROP_CO_LABEL:
+                case DAOS_PROP_CO_COMPRESS:
+                case DAOS_PROP_CO_ENCRYPT:
+                case DAOS_PROP_CO_OWNER:
+                case DAOS_PROP_CO_OWNER_GROUP:
+                    return String.class;
+                case DAOS_PROP_PO_ACL:
+                case DAOS_PROP_CO_ACL:
+                    return DaosAcl.class;
+                default: throw new IllegalArgumentException("no value class for " + propType);
+            }
         }
     }
 }

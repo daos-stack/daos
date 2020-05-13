@@ -20,12 +20,6 @@ public interface DaosAclOrBuilder extends
   int getReserv();
 
   /**
-   * <code>uint32 len = 3;</code>
-   * @return The len.
-   */
-  int getLen();
-
-  /**
    * <code>repeated .uns.DaosAce aces = 4;</code>
    */
   java.util.List<io.daos.dfs.uns.DaosAce> 
