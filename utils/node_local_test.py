@@ -230,6 +230,7 @@ class ValgrindHelper():
 
         # Set this to False to disable valgrind, which will run faster.
         self.use_valgrind = True
+        self.full_check = True
 
         if not logid:
             self.__class__.instance_num += 1
@@ -247,7 +248,8 @@ class ValgrindHelper():
             return []
         cmd = ['valgrind', '--quiet']
 
-        cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
+        if self.full_check:
+            cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
 
         s_arg = '--suppressions='
         cmd.extend(['{}{}'.format(s_arg,
@@ -435,7 +437,7 @@ def import_daos(server, conf):
     daos = __import__('pydaos')
     return daos
 
-def run_daos_cmd(conf, cmd, fi_file=None):
+def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
     """Run a DAOS command
 
     Run a command, returing what subprocess.run() would.
@@ -445,7 +447,12 @@ def run_daos_cmd(conf, cmd, fi_file=None):
     valgrind = ValgrindHelper()
 
     if fi_file:
-        valgrind.use_valgrind = False
+        # Turn off Valgrind for the fault injection testing unless it's
+        # specifically requested (typically if a fault injection results
+        # in a SEGV/assert), and then if it is turned on then just check
+        # memory access, not memory leaks.
+        valgrind.use_valgrind = fi_valgrind
+        valgrind.full_check = False
 
     exec_cmd = valgrind.get_cmd_prefix()
     exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
@@ -596,8 +603,11 @@ def log_test(filename, show_memleaks=True, skip_fi=False):
     except lt.LogCheckError:
         print('Error detected')
 
-    if skip_fi and not lto.fi_triggered:
-        raise DFTestNoFi
+    if skip_fi:
+        if not show_memleaks:
+            lt.show_line(lto.fi_location, 'error', 'Fault injected here caused error')
+        if not lto.fi_triggered:
+            raise DFTestNoFi
 
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and and read
@@ -904,6 +914,8 @@ def test_alloc_fail(conf):
 
     fid = 1
 
+    fatal_errors = False
+
     while True:
         fc = {}
         fc['fault_config'] = [{'id': 0,
@@ -920,14 +932,22 @@ def test_alloc_fail(conf):
 
         try:
             rc = run_daos_cmd(conf, cmd, fi_file=fi_file.name)
+            if rc.returncode < 0:
+                print(rc)
+                rc = run_daos_cmd(conf, cmd, fi_file=fi_file.name, fi_valgrind=True)
+                fatal_errors = True
         except DFTestNoFi:
             print('Fault injection did not trigger, returning')
             break
 
         print(rc)
         fid += 1
-        if rc.returncode not in (1, 255):
-            break
+        # Keep going until program runs to completion.  We should add checking
+        # of exit code at some point, but it would need to be reported properly
+        # through Jenkins.
+        # if rc.returncode not in (1, 255):
+        #   break
+    return fatal_errors
 
 def main():
     """Main entry point"""
@@ -941,21 +961,25 @@ def main():
     server = DaosServer(conf)
     server.start()
 
+    fatal_errors = False
+
     if len(sys.argv) == 2 and sys.argv[1] == 'launch':
         run_in_fg(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
         test_pydaos_kv(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'fi':
-        test_alloc_fail(conf)
+        fatal_errors = test_alloc_fail(conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'all':
         run_il_test(server, conf)
         run_dfuse(server, conf)
         test_pydaos_kv(server, conf)
-        test_alloc_fail(conf)
+        fatal_errors = test_alloc_fail(conf)
     else:
         run_il_test(server, conf)
         run_dfuse(server, conf)
     server.stop()
+    if fatal_errors:
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

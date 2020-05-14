@@ -237,6 +237,7 @@ class LogTest():
         self._li = log_iter
         self.hide_fi_calls = False
         self.fi_triggered = False
+        self.fi_location = None
 
     def check_log_file(self, abort_on_warning, show_memleaks=True):
         """Check a single log file for consistency"""
@@ -283,6 +284,7 @@ class LogTest():
                             self.fi_triggered = True
                         elif line.is_fi_alloc_fail():
                             show = False
+                            self.fi_location = line
                         elif '-1009' in line.get_msg():
                             # For the fault injection test do not report
                             # errors for lines that print -DER_NOMEM, as
