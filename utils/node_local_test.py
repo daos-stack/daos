@@ -25,6 +25,23 @@ def umount(path):
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
 
+class NLT_Conf():
+    """Helper class for configuration"""
+    def __init__(self, bc):
+        self.bc = bc
+        self.output_fd = None
+
+    def set_output_file(self, filename):
+        """Set the name of a output file for error logging
+
+        This is used to save the lines or src that report issues
+        for use with the Jenkins warnings-ng plugin
+        """
+        self.output_fd = open(filename, 'w')
+
+    def __getitem__(self, key):
+        return self.bc[key]
+
 def load_conf():
     """Load the build config file"""
     file_self = os.path.dirname(os.path.abspath(__file__))
@@ -40,7 +57,18 @@ def load_conf():
     ofh = open(json_file, 'r')
     conf = json.load(ofh)
     ofh.close()
-    return conf
+    return NLT_Conf(conf)
+
+def get_base_env():
+    """Return the base set of env vars needed for DAOS"""
+
+    env = os.environ.copy()
+    env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
+    env['DD_MASK'] = 'all'
+    env['DD_SUBSYS'] = 'all'
+    env['D_LOG_MASK'] = 'DEBUG'
+    env['FI_UNIVERSE_SIZE'] = '128'
+    return env
 
 class DaosServer():
     """Manage a DAOS server instance"""
@@ -52,12 +80,14 @@ class DaosServer():
         self.conf = conf
         self._agent = None
         self.agent_dir = None
+        # Also specified in the yaml file.
+        self._log_file = '/tmp/dnt_server.log'
 
         socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
-        if os.path.exists('/tmp/dnt_server.log'):
-            os.unlink('/tmp/dnt_server.log')
+        if os.path.exists(self._log_file):
+            os.unlink(self._log_file)
 
         self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
         self.agent_dir = self._agent_dir.name
@@ -79,11 +109,7 @@ class DaosServer():
                'start', '-t' '4', '--insecure', '-d', self.agent_dir,
                '--recreate-superblocks']
 
-        server_env = os.environ.copy()
-        server_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-        server_env['OFI_INTERFACE'] = 'lo'
-        server_env['D_LOG_MASK'] = 'INFO'
-        server_env['DD_MASK'] = 'all'
+        server_env = get_base_env()
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)
 
@@ -101,7 +127,7 @@ class DaosServer():
                                         '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
                                        env=agent_env)
-        time.sleep(10)
+        time.sleep(2)
         self.running = True
 
     def stop(self):
@@ -113,26 +139,62 @@ class DaosServer():
 
         if not self._sp:
             return
+
+        # daos_server does not correctly shutdown daos_io_server yet
+        # so find and kill daos_io_server directly.  This may cause
+        # a assert in daos_io_server, but at least we can check that.
+        # call daos_io_server, wait, and then call daos_server.
+        # When parsing the server logs do not report on memory leaks
+        # yet, as if it fails then lots of memory won't be freed and
+        # it's not helpful at this stage to report that.
+        # TODO: Remove this block when daos_server shutdown works.
+        parent_pid = self._sp.pid
+        for proc_id in os.listdir('/proc/'):
+            if proc_id == 'self':
+                continue
+            status_file = '/proc/{}/status'.format(proc_id)
+            if not os.path.exists(status_file):
+                continue
+            fd = open(status_file, 'r')
+            this_proc = False
+            for line in fd.readlines():
+                try:
+                    key, v = line.split(':', maxsplit=2)
+                except ValueError:
+                    continue
+                value = v.strip()
+                if key == 'Name' and value != 'daos_io_server':
+                    break
+                if key != 'PPid':
+                    continue
+                if int(value) == parent_pid:
+                    this_proc = True
+                    break
+            if not this_proc:
+                continue
+            print('Target pid is {}'.format(proc_id))
+            os.kill(int(proc_id), signal.SIGTERM)
+            time.sleep(5)
+
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        if os.path.exists('/tmp.dnt_server.log'):
-            log_test('/tmp/dnt_server.log')
+        # Show errors from server logs bug supress memory leaks as the server
+        # often segfaults at shutdown.
+        if os.path.exists(self._log_file):
+            # TODO: Enable memleak checking when server shutdown works.
+            log_test(self._log_file, show_memleaks=False)
         self.running = False
 
 def il_cmd(dfuse, cmd):
     """Run a command under the interception library"""
-    my_env = os.environ.copy()
-    my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-    my_env['OFI_INTERFACE'] = 'lo'
+    my_env = get_base_env()
     log_file = tempfile.NamedTemporaryFile(prefix='dnt_dfuse_il_',
                                            suffix='.log', delete=False)
     symlink_file('/tmp/dfuse_il_latest.log', log_file.name)
     my_env['D_LOG_FILE'] = log_file.name
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
-    my_env['D_LOG_MASK'] = 'DEBUG'
-    my_env['DD_MASK'] = 'all'
     ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
@@ -158,6 +220,9 @@ class ValgrindHelper():
 
     def __init__(self, logid=None):
 
+        # Set this to False to disable valgrind, which will run faster.
+        self.use_valgrind = True
+
         if not logid:
             self.__class__.instance_num += 1
             logid = self.__class__.instance_num
@@ -169,6 +234,9 @@ class ValgrindHelper():
 
     def get_cmd_prefix(self):
         """Return the command line prefix"""
+
+        if not self.use_valgrind:
+            return []
         cmd = ['valgrind', '--quiet']
 
         cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
@@ -189,6 +257,9 @@ class ValgrindHelper():
 
     def convert_xml(self):
         """Modify the xml file"""
+
+        if not self.use_valgrind:
+            return
         fd = open(self.xml_file, 'r')
         ofd = open('{}.xml'.format(self.xml_file), 'w')
         for line in fd:
@@ -225,18 +296,14 @@ class DFuse():
     def start(self, v_hint=None):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
-        my_env = os.environ.copy()
 
         single_threaded = False
         caching = False
 
         pre_inode = os.stat(self.dir).st_ino
 
-        my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-        my_env['OFI_INTERFACE'] = 'eth0'
-        my_env['D_LOG_MASK'] = 'INFO,dfuse=DEBUG,dfs=DEBUG'
-        my_env['DD_MASK'] = 'all'
-        my_env['DD_SUBSYS'] = 'all'
+        my_env = get_base_env()
+
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
 
@@ -270,7 +337,7 @@ class DFuse():
             except subprocess.TimeoutExpired:
                 pass
             total_time += 1
-            if total_time > 10:
+            if total_time > 30:
                 raise Exception('Timeout starting dfuse')
 
     def _close_files(self):
@@ -301,8 +368,11 @@ class DFuse():
             self._close_files()
             umount(self.dir)
 
-        ret = self._sp.wait(timeout=20)
-        print('rc from dfuse {}'.format(ret))
+        try:
+            ret = self._sp.wait(timeout=20)
+            print('rc from dfuse {}'.format(ret))
+        except subprocess.TimeoutExpired:
+            self._sp.send_signal(signal.SIGTERM)
         self._sp = None
         log_test(self.log_file)
 
@@ -369,11 +439,7 @@ def run_daos_cmd(conf, cmd):
     exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
     exec_cmd.extend(cmd)
 
-    cmd_env = os.environ.copy()
-
-    cmd_env['D_LOG_MASK'] = 'DEBUG'
-    cmd_env['DD_MASK'] = 'all'
-    cmd_env['DD_SUBSYS'] = 'all'
+    cmd_env = get_base_env()
 
     log_file = tempfile.NamedTemporaryFile(prefix='dnt_cmd_',
                                            suffix='.log', delete=False)
@@ -461,7 +527,7 @@ def check_no_file(dfuse):
 lp = None
 lt = None
 
-def setup_log_test():
+def setup_log_test(conf):
     """Setup and import the log tracing code"""
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
@@ -477,8 +543,12 @@ def setup_log_test():
     lp = __import__('cart_logparse')
     lt = __import__('cart_logtest')
 
-def log_test(filename):
+    lt.output_file = conf.output_fd
+
+def log_test(filename, show_memleaks=True):
     """Run the log checker on filename, logging to stdout"""
+
+    print('Running log_test on {}'.format(filename))
 
     global lp
     global lt
@@ -486,13 +556,14 @@ def log_test(filename):
     lp = __import__('cart_logparse')
     lt = __import__('cart_logtest')
 
-    lt.shown_logs = set()
+
 
     log_iter = lp.LogIter(filename)
     lto = lt.LogTest(log_iter)
 
     try:
-        lto.check_log_file(abort_on_warning=False)
+        lto.check_log_file(abort_on_warning=True,
+                           show_memleaks=show_memleaks)
     except lt.LogCheckError:
         print('Error detected')
 
@@ -640,6 +711,7 @@ def run_dfuse(server, conf):
     print(direct_stat)
     print(uns_stat)
     assert uns_stat.st_ino == direct_stat.st_ino
+    dfuse.stop()
 
     print('Reached the end, no errors')
 
@@ -778,8 +850,12 @@ def test_pydaos_kv(server, conf):
 def main():
     """Main entry point"""
 
-    setup_log_test()
     conf = load_conf()
+
+    conf.set_output_file('nlt-errors.out')
+
+    setup_log_test(conf)
+
     server = DaosServer(conf)
     server.start()
 
@@ -794,6 +870,7 @@ def main():
     else:
         run_il_test(server, conf)
         run_dfuse(server, conf)
+    server.stop()
 
 if __name__ == '__main__':
     main()

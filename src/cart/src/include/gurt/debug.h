@@ -311,7 +311,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 #define D_ASSERT(e)							\
 	do {								\
 		if (!(e)) {						\
-			D_FATAL("Assertion failed " #e "\n");		\
+			D_FATAL("Assertion '%s' failed\n", #e);		\
 			d_log_sync();					\
 		}							\
 		if (d_alt_assert != NULL)				\
@@ -322,7 +322,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 #define D_ASSERTF(cond, fmt, ...)					\
 do {									\
 	if (!(cond))							\
-		D_FATAL(fmt, ## __VA_ARGS__);				\
+		D_FATAL("Assertion '%s' failed: " fmt, #cond, ## __VA_ARGS__); \
 	if (d_alt_assert != NULL)					\
 		d_alt_assert((int64_t)(cond), #cond, __FILE__, __LINE__);\
 	assert(cond);							\
