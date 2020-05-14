@@ -2,8 +2,8 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - wolf-21
-    - wolf-22
+    - server-A
+    - server-B
 timeout: 120
 server_config:
   name: daos_server
