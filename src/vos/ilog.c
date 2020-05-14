@@ -137,6 +137,7 @@ ilog_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 {
 	union prec		*prec = rec2prec(rec);
 
+	D_ASSERT(val_iov->iov_len == sizeof(*prec));
 	*prec = *(union prec *)val_iov->iov_buf;
 
 	return 0;
