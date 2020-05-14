@@ -557,9 +557,8 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 
 	rc = key_iter_fetch(oiter, ent, NULL, true);
 	if (rc != 0) {
-		if (rc < 0)
-			D_ERROR("Failed to fetch the entry: "DF_RC"\n",
-				DP_RC(rc));
+		VOS_TX_TRACE_FAIL(rc, "Failed to fetch the entry: "DF_RC"\n",
+				  DP_RC(rc));
 		return rc;
 	}
 
@@ -615,7 +614,8 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 		switch (rc) {
 		default:
 			D_ASSERT(rc < 0);
-			D_ERROR("match failed, rc="DF_RC"\n", DP_RC(rc));
+			VOS_TX_TRACE_FAIL(rc, "match failed, rc="DF_RC"\n",
+					  DP_RC(rc));
 			goto out;
 
 		case IT_OPC_NOOP:
@@ -1161,14 +1161,9 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 			  (oiter->it_flags & VOS_IT_PUNCHED) == 0,
 			  &oiter->it_obj, NULL);
 
-	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_IO, "Empty object, nothing to iterate\n");
-		D_GOTO(failed, rc);
-	}
-
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
-			 "Could not hold object: "DF_RC"\n", DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Could not hold object to iterate: "DF_RC
+				"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 
