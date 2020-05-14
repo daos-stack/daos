@@ -154,7 +154,7 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 	}
 	srv.log.Infof("%s format required on instance %d", formatType, srv.Index())
 
-	srv.waitStorage.SetTrue()
+	srv.waitFormat.SetTrue()
 
 	select {
 	case <-ctx.Done():
@@ -163,7 +163,7 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 		srv.log.Infof("%s instance %d storage ready", DataPlaneName, srv.Index())
 	}
 
-	srv.waitStorage.SetFalse()
+	srv.waitFormat.SetFalse()
 
 	return ctx.Err()
 }
