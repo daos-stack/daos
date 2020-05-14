@@ -45,6 +45,6 @@ pool:
     - ['91G', '1200G', 'PASS'] #SCM Size ratio is greater than 6%
     - ['10G', '1G', 'FAIL']    #Low NVMe Size
     - ['16', '100G', 'FAIL']   #Low SCM Size
-    # Skip below Tests because of issue DAOS-4814
+    # Skip below Tests because of issue DAOS-4814.
     #- ['1G', '100G', 'FAIL']   #SCM Size ratio is less than 6%
     #- ['89G', '1500G', 'FAIL'] #SCM Size ratio is less than 6%
