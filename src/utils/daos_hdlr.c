@@ -436,9 +436,9 @@ pool_query_hdlr(struct cmd_args_s *ap)
 		fprintf(stderr, "pool query failed: %d\n", rc);
 		D_GOTO(out_disconnect, rc);
 	}
-	D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
+	D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u, version=%u\n",
 		DP_UUID(pinfo.pi_uuid), pinfo.pi_ntargets,
-		pinfo.pi_ndisabled);
+		pinfo.pi_ndisabled, pinfo.pi_map_ver);
 
 	D_PRINT("Pool space info:\n");
 	D_PRINT("- Target(VOS) count:%d\n", ps->ps_ntargets);
