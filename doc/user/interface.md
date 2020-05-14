@@ -9,9 +9,7 @@ available under src/tests.
 ## DAOS API Reference
 
 libdaos is written in C and uses Doxygen comments that are added to C header
-files.
-
-\[TODO] Generate Doxygen document and add a link here.
+files. The Doxygen documentation is available [here](api/index.html).
 
 ## Python Bindings
 
