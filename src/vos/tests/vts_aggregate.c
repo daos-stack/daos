@@ -86,7 +86,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 			arg->ta_flags |= TF_ZERO_COPY;
 	}
 
-	rc = io_test_obj_update(arg, epoch, 0, &dkey_iov, &iod, &sgl, NULL,
+	rc = io_test_obj_update(arg, epoch, flags, &dkey_iov, &iod, &sgl, NULL,
 				true);
 	assert_int_equal(rc, 0);
 
