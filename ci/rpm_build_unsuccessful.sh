@@ -11,8 +11,8 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-: "${CHROOT_NAME:='epel-7-x86_64'}"
-: "${TARGET:='centos7'}"
+: "${CHROOT_NAME:=epel-7-x86_64}"
+: "${TARGET:=centos7}"
 
 mockroot=/var/lib/mock/${CHROOT_NAME}
 cat "$mockroot"/result/{root,build}.log 2>/dev/null || true
