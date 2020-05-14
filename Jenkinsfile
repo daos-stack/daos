@@ -328,7 +328,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-				   branch 'ampittma-codespell',
+				   branch: 'ampittma-codespell',
 				   /*
 				   */   codespell_file: "/usr/local/lib/python3.6/site-packages/codespell_lib/data/dictionary.txt",
 				   */
