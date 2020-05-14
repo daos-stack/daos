@@ -47,11 +47,11 @@ class SCMConfigTest(TestWithServers):
         """
         try:
             # create an object and write some data into it
-            self.obj = self.container.write_an_obj(data,
-                                                   len(data) + 1,
-                                                   "dkey",
-                                                   "akey",
-                                                   obj_cls="OC_S1")
+            self.obj = self.container.container.write_an_obj(data,
+                                                             len(data) + 1,
+                                                             "dkey",
+                                                             "akey",
+                                                             obj_cls="OC_S1")
             self.obj.close()
             self.log.info("==>    Wrote an object to the container")
         except DaosApiError as error:
@@ -90,7 +90,7 @@ class SCMConfigTest(TestWithServers):
         # Check that after storage prepare we still have container data
         try:
             self.obj.open()
-            data_r = self.container.read_an_obj(
+            data_r = self.container.container.read_an_obj(
                 len(data_w) + 1, "dkey", "akey", self.obj)
         except DaosApiError as error:
             self.fail(
