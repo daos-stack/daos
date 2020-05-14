@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2019 Intel Corporation.
+"""
+  (C) Copyright 2019-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 import os
@@ -208,7 +208,7 @@ def run_agent(test, server_list, client_list=None):
 
     for client in client_list:
         sessions[client] = subprocess.Popen(
-            ["ssh", client, "-o ConnectTimeout=10",
+            ["/usr/bin/ssh", client, "-o ConnectTimeout=10",
              "{} -i".format(daos_agent_cmd)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT

@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2019 Intel Corporation.
+"""
+  (C) Copyright 2019-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,27 +20,27 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-
+"""
 from __future__ import print_function
-import os
-import subprocess
-import json
-from distutils.spawn import find_executable
 
+import os
+
+from distutils.spawn import find_executable
 from env_modules import load_mpi
+from general_utils import DaosTestError, run_command
+
 
 class DaosPerfFailed(Exception):
-    """Raise if daos_perf failed"""
+    """Raise if daos_perf failed."""
 
-#pylint: disable=R0903
+
+# pylint: disable=R0903
 class DaosPerfParam(object):
-    """
-    Defines a object representing a single daos_perf command line parameter.
-    """
+    """Defines a single daos_perf command line parameter."""
 
     def __init__(self, str_format, default=None):
         """Create a DaosPerfParam object.
+
         Args:
             str_format (str): format string used to convert the value into an
                 daos_perf command line argument string
@@ -52,8 +52,10 @@ class DaosPerfParam(object):
 
     def __str__(self):
         """Return a DaosPerfParam object as a string.
+
         Returns:
             str: if defined, the DaosPerf parameter, otherwise an empty string
+
         """
         if isinstance(self.default, bool) and self.value:
             return self.str_format
@@ -64,6 +66,7 @@ class DaosPerfParam(object):
 
     def set_yaml_value(self, name, test, path="/run/daos_perf/*"):
         """Set the value of the parameter using the test's yaml file value.
+
         Args:
             name (str): name associated with the value in the yaml file
             test (Test): avocado Test object
@@ -111,8 +114,10 @@ class DaosPerfCommand(object):
 
     def __str__(self):
         """Return a DaosPerfCommand object as a string.
+
         Returns:
             str: the daos_perf command with all the defined parameters
+
         """
         params = []
         for value in self.__dict__.values():
@@ -123,6 +128,7 @@ class DaosPerfCommand(object):
 
     def set_params(self, test, path="/run/daos_perf/*"):
         """Set values for all of the daos_perf command params using a yaml file.
+
         Args:
             test (Test): avocado Test object
             path (str, optional): yaml namespace. Defaults to "/run/daos_perf/*"
@@ -131,13 +137,16 @@ class DaosPerfCommand(object):
             daos_perf_param.set_yaml_value(name, test, path)
 
     def get_launch_command(self, basepath, processes, hostfile, runpath=None):
-        """Get the process launch command used to run daos_perf
+        """Get the process launch command used to run daos_perf.
+
         Args:
             basepath (str): DAOS base path
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
+
         Returns:
             str: returns daos_perf command
+
         """
         attach_info_path = os.path.join(basepath, "install/tmp")
 
@@ -160,14 +169,17 @@ class DaosPerfCommand(object):
 
     def run(self, basepath, processes, hostfile, display=True, path=None):
         """Run the daos_perf command.
+
         Args:
             basepath (str): DAOS base path
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
             display (bool, optional): print daos_perf output to the console.
                 Defaults to True.
+
         Raises:
             DaosPerfFailed: if an error occured runnig the daos_perf command
+
         """
         command = self.get_launch_command(basepath, processes, hostfile, path)
         if display:
@@ -175,23 +187,14 @@ class DaosPerfCommand(object):
 
         # Run daos_perf
         try:
-            process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                shell=True)
-            while True:
-                output = process.stdout.readline()
-                if output == "" and process.poll() is not None:
-                    break
-                if output and display:
-                    print(output.strip())
-            if process.poll() != 0:
-                print("process.poll: {}".format(process.poll()))
-                raise DaosPerfFailed(
-                    "Daos_Perf run process failed: {}".format(
-                        process.poll()))
+            result = run_command(command, verbose=display)
+        except DaosTestError as error:
+            print(
+                "<DaosPerfRunFailed> Exception occurred: {0}".format(
+                    str(error)))
+            raise DaosPerfFailed(
+                "Daos_Perf Run process Failed: {}".format(error))
 
-        except (OSError, ValueError) as error:
-            print("<DaosPerfRunFailed> Exception occurred: {0}".
-                  format(str(error)))
-            raise DaosPerfFailed("Daos_Perf Run process Failed: {}".
-                                 format(error))
+        if result.exit_status != 0:
+            raise DaosPerfFailed(
+                "Daos_Perf run process failed: {}".format(result.exit_status))

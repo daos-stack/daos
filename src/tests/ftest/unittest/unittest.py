@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2018-2019 Intel Corporation.
+"""
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,37 +20,34 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from avocado.utils import process
-from general_utils import get_file_path
-from apricot import Test, TestWithServers, skipForTicket
+"""
+from general_utils import get_file_path, run_command
+from apricot import Test, skipForTicket
+
 
 def unittest_runner(self, unit_testname):
-    """
-    Common unitetest runner function.
+    """Run a unit test.
 
     Unit tests needs to be run on local machine incase of server start required
     For other unit tests, which does not required to start server,it needs to be
     run on server where /mnt/daos mounted.
 
     Args:
-        unit_testname: unittest name.
-    return:
-        None
+        unit_testname (str): unittest name.
     """
     name = self.params.get("testname", '/run/UnitTest/{0}/'
                            .format(unit_testname))
     server = self.params.get("test_servers", "/run/hosts/*")
     bin_path = get_file_path(name, "install/bin")
 
-    cmd = ("ssh {} {}".format(server[0], bin_path[0]))
+    cmd = ("/usr/bin/ssh {} {}".format(server[0], bin_path[0]))
 
-    return_code = process.system(cmd, ignore_status=True,
-                                 allow_output_check="both")
+    result = run_command(cmd, raise_exception=False, output_check="both")
 
-    if return_code != 0:
+    if result.exit_status != 0:
         self.fail("{0} unittest failed with return code={1}.\n"
-                  .format(unit_testname, return_code))
+                  .format(unit_testname, result.exit_status))
+
 
 class UnitTestWithoutServers(Test):
     """
