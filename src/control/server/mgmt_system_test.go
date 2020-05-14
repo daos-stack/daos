@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"os"
 	"sync"
 	"syscall"
@@ -948,3 +949,52 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctx     context.Context
+		addr    string
+		expAddr net.Addr
+		expErr  error
+	}{
+		"nil request": {
+			ctx:    context.Background(),
+			expErr: errors.New("peer details not found in context"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotAddr, gotErr := getPeerListenAddr(tc.ctx, tc.addr)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expAddr, gotAddr); diff != "" {
+				t.Fatalf("unexpected address (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+// getPeerListenAddr combines peer ip from supplied context with input port.
+//func getPeerListenAddr(ctx context.Context, listenAddrStr string) (net.Addr, error) {
+//	p, ok := peer.FromContext(ctx)
+//	if !ok {
+//		return nil, errors.New("peer details not found in context")
+//	}
+//
+//	tcpAddr, ok := p.Addr.(*net.TCPAddr)
+//	if !ok {
+//		return nil, errors.Errorf("peer address (%s) not tcp", p.Addr)
+//	}
+//
+//	// what port is the input address listening on?
+//	_, portStr, err := net.SplitHostPort(listenAddrStr)
+//	if err != nil {
+//		return nil, errors.Wrap(err, "get listening port")
+//	}
+//
+//	// resolve combined IP/port address
+//	return net.ResolveTCPAddr(p.Addr.Network(),
+//		net.JoinHostPort(tcpAddr.IP.String(), portStr))
+//}

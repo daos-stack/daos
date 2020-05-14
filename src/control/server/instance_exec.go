@@ -171,12 +171,16 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 // Run is the processing loop for an IOServerInstance. Starts are triggered by
 // receiving true on instance start channel.
 func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Membership, cfg *Configuration) {
-	for relaunch := range srv.startLoop {
-		if !relaunch {
+	for {
+		select {
+		case <-ctx.Done():
 			return
+		case relaunch := <-srv.startLoop:
+			if !relaunch {
+				return
+			}
+			srv.exit(srv.run(ctx, membership, cfg.RecreateSuperblocks))
 		}
-
-		srv.exit(srv.run(ctx, membership, cfg.RecreateSuperblocks))
 	}
 }
 
