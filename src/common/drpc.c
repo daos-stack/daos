@@ -409,10 +409,8 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 	}
 	response = drpc_unmarshal_response(responseBuf, recv);
 	D_FREE(responseBuf);
-#if 0
 	if (!response)
 		return -DER_MISC;
-#endif
 
 	*resp = response;
 	return 0;
