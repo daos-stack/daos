@@ -315,6 +315,7 @@ class DaosServerYamlParameters(YamlParameters):
             # Use environment variables to get default parameters
             default_interface = os.environ.get("OFI_INTERFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
+            default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
 
             # All log files should be placed in the same directory on each host
             # to enable easy log file archiving by launch.py
@@ -348,12 +349,15 @@ class DaosServerYamlParameters(YamlParameters):
                 ["ABT_ENV_MAX_NUM_XSTREAMS=100",
                  "ABT_MAX_NUM_XSTREAMS=100",
                  "DAOS_MD_CAP=1024",
-                 "CRT_CTX_SHARE_ADDR=0",
-                 "CRT_TIMEOUT=30",
                  "FI_SOCKETS_MAX_CONN_RETRY=1",
                  "FI_SOCKETS_CONN_TIMEOUT=2000",
                  "DD_MASK=mgmt,io,md,epc,rebuild"]
             )
+            # global CRT_CTX_SHARE_ADDR shared with client
+            self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
+
+            # global CRT_TIMEOUT shared with client
+            self.crt_timeout = BasicParameter(None, 30)
 
             # Storage definition parameters:
             #
