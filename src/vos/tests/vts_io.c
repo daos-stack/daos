@@ -610,7 +610,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_fetch(arg->ctx.tc_co_hdl,
-				   arg->oid, epoch, 0, dkey, 1, iod,
+				   arg->oid, epoch, flags, dkey, 1, iod,
 				   sgl);
 		if (rc != 0 && verbose)
 			print_error("Failed to fetch: "DF_RC"\n", DP_RC(rc));
