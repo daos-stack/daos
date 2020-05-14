@@ -22,10 +22,9 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
-
-from general_utils import check_file_exists
-from pydaos.raw import IORequest
 from apricot import TestWithServers
+from pydaos.raw import DaosApiError
+from command_utils import CommandFailure
 
 
 class SCMConfigTest(TestWithServers):
@@ -34,6 +33,29 @@ class SCMConfigTest(TestWithServers):
     Simple test to verify the SCM storage config.
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a SCMConfigTest object."""
+        super(SCMConfigTest, self).__init__(*args, **kwargs)
+        self.obj = None
+
+    def write_data(self, data):
+        """Write data obj to a container.
+
+        Args:
+            data (str): string of data to be written.
+        """
+        try:
+            # create an object and write some data into it
+            self.obj = self.container.write_an_obj(data,
+                                                   len(data) + 1,
+                                                   "dkey",
+                                                   "akey",
+                                                   obj_cls="OC_S1")
+            self.obj.close()
+            self.log.info("==>    Wrote an object to the container")
+        except DaosApiError as error:
+            self.fail("Test failed during the object write.\n{0}".format(error))
 
     def test_scm_in_use_basic(self):
         """
@@ -44,36 +66,40 @@ class SCMConfigTest(TestWithServers):
 
         :avocado: tags=all,small,pr,hw,scm_in_use,basic
         """
-        # Check that pmem is mounted
-        self.log.info(
-            "==>    Verifying pmem is mounted: <%s>", self.hostlist_servers)
+        # Create pool and container
+        self.prepare_pool()
+        self.add_container(self.pool)
+
+        # now open the container and write some data
+        self.container.open()
+        data_w = "Ehrm... Testing... Testing"
+        self.write_data(data_w)
+
+        # Run storage prepare
         if self.server_managers[-1].manager.job.using_dcpm:
-            scm_list = self.server_managers[-1].get_config_value("scm_list")
-            errors = []
-            for pmem in scm_list:
-                check_result = check_file_exists(self.hostlist_servers, pmem)
-                if not check_result[0]:
-                    errors.append("{}: {}".format(pmem, check_result[1]))
-            if errors:
-                self.fail("pmems not found: \n{}".format(errors))
+            # Storage prepare should return error
+            self.log.info("==>    Verifying storage prepare is done")
+            kwargs = {"scm": True, "force": True}
+            try:
+                self.server_managers[-1].dmg.storage_prepare(**kwargs)
+            except CommandFailure as error:
+                self.fail("Storage prepare failure: {}".format(error))
         else:
             self.fail("Detected dcpm not specified")
 
-        # Storage prepare should return error
-        self.log.info("==>    Verifying storage prepare is done")
-        self.server_managers[-1].dmg.exit_status_exception = False
+        # Check that after storage prepare we still have container data
+        try:
+            self.obj.open()
+            data_r = self.container.read_an_obj(
+                len(data_w) + 1, "dkey", "akey", self.obj)
+        except DaosApiError as error:
+            self.fail(
+                "Error retrieving the container data:\n{0}".format(error))
 
-        result = self.server_managers[-1].dmg.storage_prepare(scm=True)
-        if result.exit_status == 0:
-            self.fail("Storage prepare expected to fail: {}".format(
-                result.stdout))
+        # Compare the writen data and read data
+        msg = "Written and read data not equal"
+        self.assertEqual(data_w, data_r, msg)
 
-    def test_scm_mock_media_error(self):
-        """
-        JIRA ID: DAOS-2972
-
-        Test Description: Using ipmctl tool, inject an error into DIMMs to
-        verify that we handle cases of bad devices.
-
-        :avocado: tags=all,small,full_regression,hw,scm_media_error,basic
-        """
+        # Lets make sure we can still write data after preparing.
+        data_w2 = "Almost done testing... just this last thing."
+        self.write_data(data_w2)
