@@ -99,7 +99,7 @@ invoke_rpc(crt_rpc_t *rpc)
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	/* Sloppy... */
 	while (rpc_rc == rpc_rc_uninitialized)
-		crt_progress(context, 0, NULL, NULL);
+		crt_progress(context, 0);
 	return rpc_rc;
 }
 

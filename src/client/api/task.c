@@ -265,8 +265,8 @@ daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty)
 	args.sched = sched;
 	args.is_empty = is_empty;
 
-	rc = crt_progress((crt_context_t *)sched->ds_udata, timeout,
-			  sched_progress_cb, &args);
+	rc = crt_progress_cond((crt_context_t *)sched->ds_udata, timeout,
+			       sched_progress_cb, &args);
 	if (rc != 0 && rc != -DER_TIMEDOUT)
 		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
 

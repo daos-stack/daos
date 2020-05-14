@@ -60,6 +60,19 @@ extern struct dss_module_key vos_module_key;
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
 
+/** Up to 1 million lid entries split into 16 expansion slots */
+#define DTX_ARRAY_LEN		(1 << 20) /* Total array slots for DTX lid */
+#define DTX_ARRAY_NR		(1 << 4)  /* Number of expansion arrays */
+
+enum {
+	/** Used for marking an in-tree record committed */
+	DTX_LID_COMMITTED = 0,
+	/** Used for marking an in-tree record aborted */
+	DTX_LID_ABORTED,
+	/** Reserved local ids */
+	DTX_LID_RESERVED,
+};
+
 /** hash seed for murmur hash */
 #define VOS_BTR_MUR_SEED	0xC0FFEE
 /*
@@ -126,6 +139,8 @@ struct vos_container {
 	uuid_t			vc_id;
 	/* DAOS handle for object index btree */
 	daos_handle_t		vc_btr_hdl;
+	/** Array for active DTX records */
+	struct lru_array	*vc_dtx_array;
 	/* The handle for active DTX table */
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
@@ -188,6 +203,7 @@ struct vos_dtx_act_ent {
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
 #define DAE_LAYOUT_GEN(dae)	((dae)->dae_base.dae_layout_gen)
+#define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_INTENT(dae)		((dae)->dae_base.dae_intent)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
@@ -300,7 +316,8 @@ vos_dtx_table_register(void);
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
- * \param entry		[IN]	Address (offset) of the DTX to be checked.
+ * \param entry		[IN]	DTX local id
+ * \param epoch		[IN]	Epoch of update
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  *
@@ -316,7 +333,8 @@ vos_dtx_table_register(void);
  */
 int
 vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   umem_off_t entry, uint32_t intent, uint32_t type);
+			   uint32_t entry, daos_epoch_t epoch,
+			   uint32_t intent, uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -332,7 +350,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
  */
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
-			uint32_t type, umem_off_t *tx_id);
+			uint32_t type, uint32_t *tx_id);
 
 /**
  * Cleanup DTX handle (in DRAM things) when related PMDK transaction failed.
@@ -341,7 +359,7 @@ void
 vos_dtx_cleanup_dth(struct dtx_handle *dth);
 
 /** Return the already active dtx id, if any */
-umem_off_t
+uint32_t
 vos_dtx_get(void);
 
 /**
@@ -349,13 +367,15 @@ vos_dtx_get(void);
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
- * \param entry		[IN]	The DTX entry address (offset).
+ * \param entry		[IN]	The local DTX id.
+ * \param epoch		[IN]	Epoch for the DTX.
  * \param record	[IN]	Address (offset) of the record to be
  *				deregistered.
  */
 void
 vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
-			  umem_off_t entry, umem_off_t record);
+			  uint32_t entry, daos_epoch_t epoch,
+			  umem_off_t record);
 
 /**
  * Mark the DTX as prepared locally.
