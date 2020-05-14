@@ -23,6 +23,14 @@ class DFTestNoFi(DFTestFail):
     """Used to indicate Fault injection didn't work"""
     pass
 
+instance_num = 0
+
+def get_inc_id():
+    """Return a unique character"""
+    global instance_num
+    instance_num += 1
+    return str(instance_num)
+
 def umount(path):
     """Umount dfuse from a given path"""
     cmd = ['fusermount3', '-u', path]
@@ -197,8 +205,10 @@ class DaosServer():
 def il_cmd(dfuse, cmd):
     """Run a command under the interception library"""
     my_env = get_base_env()
-    log_file = tempfile.NamedTemporaryFile(prefix='dnt_dfuse_il_',
-                                           suffix='.log', delete=False)
+    prefix = 'dnt_dfuse_il_{}_'.format(get_inc_id())
+    log_file = tempfile.NamedTemporaryFile(prefix=prefix,
+                                           suffix='.log',
+                                           delete=False)
     symlink_file('/tmp/dfuse_il_latest.log', log_file.name)
     my_env['D_LOG_FILE'] = log_file.name
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
@@ -224,19 +234,14 @@ class ValgrindHelper():
     performs log modification after the fact to assist
     Jenkins in locating the source code.
     """
-    instance_num = 0
 
     def __init__(self, logid=None):
 
         # Set this to False to disable valgrind, which will run faster.
         self.use_valgrind = True
         self.full_check = True
-
-        if not logid:
-            self.__class__.instance_num += 1
-            logid = self.__class__.instance_num
-
-        self.xml_file = 'dnt.{}.memcheck'.format(logid)
+        self._xml_file = None
+        self._logid = logid
 
         self.src_dir = '{}/'.format(os.path.realpath(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -246,10 +251,18 @@ class ValgrindHelper():
 
         if not self.use_valgrind:
             return []
+
+        if not self._logid:
+            self._logid = get_inc_id()
+
+        self._xml_file = 'dnt.{}.memcheck'.format(self._logid)
+
         cmd = ['valgrind', '--quiet']
 
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
+        else:
+            cmd.extend(['--leak-check=no'])
 
         s_arg = '--suppressions='
         cmd.extend(['{}{}'.format(s_arg,
@@ -262,7 +275,7 @@ class ValgrindHelper():
                                                'memcheck-daos-client.supp'))])
 
         cmd.extend(['--xml=yes',
-                    '--xml-file={}'.format(self.xml_file)])
+                    '--xml-file={}'.format(self._xml_file)])
         return cmd
 
     def convert_xml(self):
@@ -270,13 +283,14 @@ class ValgrindHelper():
 
         if not self.use_valgrind:
             return
-        fd = open(self.xml_file, 'r')
-        ofd = open('{}.xml'.format(self.xml_file), 'w')
+        fd = open(self._xml_file, 'r')
+        ofd = open('{}.xml'.format(self._xml_file), 'w')
         for line in fd:
             if self.src_dir in line:
                 ofd.write(line.replace(self.src_dir, ''))
             else:
                 ofd.write(line)
+        os.unlink(self._xml_file)
 
 class DFuse():
     """Manage a dfuse instance"""
@@ -292,8 +306,10 @@ class DFuse():
         self._daos = daos
         self._sp = None
 
-        log_file = tempfile.NamedTemporaryFile(prefix='dnt_dfuse_',
-                                               suffix='.log', delete=False)
+        prefix = 'dnt_dfuse_{}_'.format(get_inc_id())
+        log_file = tempfile.NamedTemporaryFile(prefix=prefix,
+                                               suffix='.log',
+                                               delete=False)
         self.log_file = log_file.name
 
         symlink_file('/tmp/dfuse_latest.log', self.log_file)
@@ -460,8 +476,10 @@ def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
 
     cmd_env = get_base_env()
 
-    log_file = tempfile.NamedTemporaryFile(prefix='dnt_cmd_',
-                                           suffix='.log', delete=False)
+    prefix = 'dnt_cmd_{}_'.format(get_inc_id())
+    log_file = tempfile.NamedTemporaryFile(prefix=prefix,
+                                           suffix='.log',
+                                           delete=False)
 
     if fi_file:
         cmd_env['D_FI_CONFIG'] = fi_file
@@ -934,6 +952,7 @@ def test_alloc_fail(conf):
             rc = run_daos_cmd(conf, cmd, fi_file=fi_file.name)
             if rc.returncode < 0:
                 print(rc)
+                print('Rerunning test under valgrind, fid={}'.format(fid))
                 rc = run_daos_cmd(conf, cmd, fi_file=fi_file.name, fi_valgrind=True)
                 fatal_errors = True
         except DFTestNoFi:
