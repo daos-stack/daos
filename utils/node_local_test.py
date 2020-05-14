@@ -619,6 +619,8 @@ def log_test(filename, show_memleaks=True, skip_fi=False):
         lto.check_log_file(abort_on_warning=True,
                            show_memleaks=show_memleaks)
     except lt.LogCheckError:
+        lt.show_line(lto.fi_location, 'error',
+                     'Fault injected here caused error')
         print('Error detected')
 
     if skip_fi:
