@@ -37,6 +37,25 @@
 
 static int unixcomm_close(struct unixcomm *handle);
 
+static void *drpc_alloc(void *allocator_date, size_t size)
+{
+	void *buf;
+
+	D_ALLOC(buf, size);
+	return buf;
+}
+
+static void drpc_free(void *allocater_data, void *pointer)
+{
+	D_FREE(pointer);
+}
+
+/* Define a custom allocator so we can log and use fault injection
+ * in the DPRC code.
+ */
+static ProtobufCAllocator alloc = {.alloc = drpc_alloc,
+				   .free = drpc_free};
+
 /**
  * Allocate and initialize a new dRPC call Protobuf structure for a given dRPC
  * context.
@@ -77,7 +96,7 @@ drpc_call_create(struct drpc *ctx, int32_t module, int32_t method)
 void
 drpc_call_free(Drpc__Call *call)
 {
-	drpc__call__free_unpacked(call, NULL);
+	drpc__call__free_unpacked(call, &alloc);
 }
 
 /**
@@ -114,7 +133,7 @@ drpc_response_create(Drpc__Call *call)
 void
 drpc_response_free(Drpc__Response *resp)
 {
-	drpc__response__free_unpacked(resp, NULL);
+	drpc__response__free_unpacked(resp, &alloc);
 }
 
 static struct unixcomm *
@@ -335,7 +354,7 @@ drpc_unmarshal_response(uint8_t *buff, size_t buflen)
 {
 	Drpc__Response *resp;
 
-	resp = drpc__response__unpack(NULL, buflen, buff);
+	resp = drpc__response__unpack(&alloc, buflen, buff);
 	return resp;
 }
 
@@ -557,7 +576,7 @@ get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 		return rc;
 	}
 
-	*call = drpc__call__unpack(NULL, message_len, buffer);
+	*call = drpc__call__unpack(&alloc, message_len, buffer);
 	D_FREE(buffer);
 	if (*call == NULL) {
 		D_ERROR("Couldn't unpack message into Drpc__Call\n");
