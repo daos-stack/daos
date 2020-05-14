@@ -95,25 +95,6 @@ int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 
-#if HWLOC_API_VERSION >= 0x00020000
-hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx) {
-	return hwloc_get_obj_by_depth(topology, depth, idx);
-}
-
-uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth) {
-	return (uint)hwloc_get_nbobjs_by_depth(topology, depth);
-}
-
-#else
-hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx) {
-	return hwloc_get_obj_by_depth(topology, (uint)depth, idx);
-}
-
-uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth) {
-	return (uint)hwloc_get_nbobjs_by_depth(topology, (uint)depth);
-}
-#endif
-
 d_rank_t
 dss_self_rank(void)
 {
@@ -277,7 +258,6 @@ dss_topo_init()
 	int		depth;
 	int		numa_node_nr;
 	int		num_cores_visited;
-	int		numObj;
 	char		*cpuset;
 	int		k;
 	hwloc_obj_t	corenode;
@@ -315,25 +295,8 @@ dss_topo_init()
 			numa_node_nr);
 		return -DER_INVAL;
 	}
-/*
-	hwloc v1.x only
-	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
-	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology",
-			dss_numa_node);
-		return -DER_INVAL;
-	}
-*/
-/* v1 and v2 safe */
-	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
-	numObj = cmpt_get_nbobjs_by_depth(dss_topo, depth);
-	if (numObj == 0) {
-		D_ERROR("NUMA node %d was not found in the topology",
-			dss_numa_node);
-		return -DER_INVAL;
-	}
 
-	numa_obj = cmpt_get_obj_by_depth(dss_topo, depth, (uint)dss_numa_node);
+	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
 	if (numa_obj == NULL) {
 		D_ERROR("NUMA node %d was not found in the topology",
 			dss_numa_node);
