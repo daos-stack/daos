@@ -5,6 +5,7 @@
 
 set -uex
 
+mb_modifier=
 if [ "$CHANGE_ID" = "null" ]; then
     mb_modifier=^
 fi
