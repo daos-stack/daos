@@ -623,7 +623,8 @@ def log_test(filename, show_memleaks=True, skip_fi=False):
 
     if skip_fi:
         if not show_memleaks:
-            lt.show_line(lto.fi_location, 'error', 'Fault injected here caused error')
+            lt.show_line(lto.fi_location, 'error',
+                         'Fault injected here caused error')
         if not lto.fi_triggered:
             raise DFTestNoFi
 
@@ -953,7 +954,10 @@ def test_alloc_fail(conf):
             if rc.returncode < 0:
                 print(rc)
                 print('Rerunning test under valgrind, fid={}'.format(fid))
-                rc = run_daos_cmd(conf, cmd, fi_file=fi_file.name, fi_valgrind=True)
+                rc = run_daos_cmd(conf,
+                                  cmd,
+                                  fi_file=fi_file.name,
+                                  fi_valgrind=True)
                 fatal_errors = True
         except DFTestNoFi:
             print('Fault injection did not trigger, returning')
