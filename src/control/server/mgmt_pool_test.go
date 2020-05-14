@@ -40,7 +40,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
-func TestMgmtSvc_PoolCreate(t *testing.T) {
+func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 	missingSB := newTestMgmtSvc(nil)
 	missingSB.harness.instances[0]._superblock = nil
 	notAP := newTestMgmtSvc(nil)
@@ -199,7 +199,7 @@ func TestMgmtSvc_PoolCreate(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_PoolDestroy(t *testing.T) {
+func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 	missingSB := newTestMgmtSvc(nil)
 	missingSB.harness.instances[0]._superblock = nil
 	notAP := newTestMgmtSvc(nil)
@@ -690,7 +690,7 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_PoolQuery(t *testing.T) {
+func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	missingSB := newTestMgmtSvc(nil)
 	missingSB.harness.instances[0]._superblock = nil
 
@@ -769,7 +769,7 @@ func TestMgmtSvc_PoolQuery(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_PoolSetProp(t *testing.T) {
+func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 	withName := func(r *mgmtpb.PoolSetPropReq, n string) *mgmtpb.PoolSetPropReq {
 		r.SetPropertyName(n)
 		return r

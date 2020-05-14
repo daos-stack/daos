@@ -1077,7 +1077,7 @@ pipeline {
                                            mkdir -p ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/
                                            ln -s ../../../../../../../../src/control ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
                                            DAOS_BASE=${SL_PREFIX%/install*}
-                                           rm -f dnt.*.memcheck.xml test.out
+                                           rm -f dnt.*.memcheck.xml vm_test.out nlt-errors.out
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
@@ -1103,7 +1103,7 @@ pipeline {
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
                                                IS_CI=true OLD_CI=false utils/run_test.sh
-                                               ./utils/node_local_test.py all | tee test.out"''',
+                                               ./utils/node_local_test.py all | tee vm_test.out"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
@@ -1134,13 +1134,14 @@ pipeline {
                                script '''set -ex */
                             sh script: '''set -ex
                                       . ./.build_vars.sh
+                                      rm -rf run_test.sh vm_test
                                       DAOS_BASE=${SL_PREFIX%/install*}
-                                      rm -rf $DAOS_BASE/run_test.sh $DAOS_BASE/vm_test
                                       NODE=${NODELIST%%,*}
                                       ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                           cd $DAOS_BASE
                                           mkdir run_test.sh
                                           mkdir vm_test
+                                          mv vm_test.out nlt-errors.out vm_test/
                                           if ls /tmp/daos*.log > /dev/null; then
                                               mv /tmp/daos*.log run_test.sh/
                                           fi
@@ -1173,9 +1174,9 @@ pipeline {
                             publishValgrind (
                                     failBuildOnInvalidReports: true,
                                     failBuildOnMissingReports: true,
-                                    failThresholdDefinitelyLost: '',
-                                    failThresholdInvalidReadWrite: '',
-                                    failThresholdTotal: '',
+                                    failThresholdDefinitelyLost: '0',
+                                    failThresholdInvalidReadWrite: '0',
+                                    failThresholdTotal: '0',
                                     pattern: 'dnt.*.memcheck.xml',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
@@ -1187,8 +1188,18 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          failOnError: true,
+                                         referenceJobName: 'daos-stack/daos/master',
+                                         ignoreFailedBuilds: true,
+                                         ignoreQualityGate: true,
+					 /* TODO: master is currently not determanistic and
+					 there is one message which appears occasionally
+					 so set the threshold to 2, which will not warn for
+					 stable builds against master, but might miss some
+					 individual issues.
+					 */
+                                         qualityGates: [[threshold: 2, type: 'NEW', unstable: true]],
                                          name: "VM Testing",
-                                         tool: clang(pattern: 'test.out',
+                                         tool: clang(pattern: 'vm_test/nlt-errors.out',
                                                      name: 'VM test results',
                                                      id: 'VM_test')
                         }

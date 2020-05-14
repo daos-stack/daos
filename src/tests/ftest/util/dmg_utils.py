@@ -28,9 +28,9 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand, YamlCommand, YamlParameters
+from command_utils_base import \
+    CommandFailure, FormattedParameter, CommandWithParameters, YamlParameters
+from command_utils import CommandWithSubCommand, YamlCommand
 
 
 class DmgCommand(YamlCommand):
@@ -494,28 +494,6 @@ class DmgCommand(YamlCommand):
                         "/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
 
-    def _get_result(self):
-        """Get the result from running the configured dmg command.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg command fails.
-
-        """
-        if self.yaml:
-            self.create_yaml_file()
-
-        result = None
-        try:
-            result = self.run()
-        except CommandFailure as error:
-            raise CommandFailure("<dmg> command failed: {}".format(error))
-
-        return result
-
     def network_scan(self, provider=None, all_devs=False):
         """Get the result of the dmg network scan command.
 
@@ -552,8 +530,14 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.set_sub_command("scan")
         return self._get_result()
 
-    def storage_format(self):
+    def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
+
+        Args:
+            reformat (bool): always reformat storage, could be destructive.
+                This will create control-plane related metadata i.e. superblock
+                file and reformat if the storage media is available and
+                formattable.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -565,6 +549,7 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("format")
+        self.sub_command_class.sub_command_class.reformat.value = reformat
         return self._get_result()
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
@@ -769,6 +754,7 @@ class DmgCommand(YamlCommand):
 
         Raises:
             CommandFailure: if the dmg pool delete-acl command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list")

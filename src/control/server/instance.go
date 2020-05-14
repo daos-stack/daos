@@ -56,11 +56,12 @@ type IOServerInstance struct {
 	bdevClassProvider *bdev.ClassProvider
 	scmProvider       *scm.Provider
 	msClient          *mgmtSvcClient
+	waitFormat        atm.Bool
+	storageReady      chan bool
 	waitDrpc          atm.Bool
 	drpcReady         chan *srvpb.NotifyReadyReq
-	storageReady      chan bool
 	ready             atm.Bool
-	startChan         chan bool
+	startLoop         chan bool // restart loop
 	fsRoot            string
 
 	sync.RWMutex
@@ -85,8 +86,19 @@ func NewIOServerInstance(log logging.Logger,
 		msClient:          msc,
 		drpcReady:         make(chan *srvpb.NotifyReadyReq),
 		storageReady:      make(chan bool),
-		startChan:         make(chan bool),
+		startLoop:         make(chan bool),
 	}
+}
+
+// isAwaitingFormat indicates whether IOServerInstance is waiting
+// for an administrator action to trigger a format.
+func (srv *IOServerInstance) isAwaitingFormat() bool {
+	return srv.waitFormat.Load()
+}
+
+// isStarted indicates whether IOServerInstance is in a running state.
+func (srv *IOServerInstance) isStarted() bool {
+	return srv.runner.IsRunning()
 }
 
 // isReady indicates whether the IOServerInstance is in a ready state.
@@ -94,12 +106,27 @@ func NewIOServerInstance(log logging.Logger,
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
 func (srv *IOServerInstance) isReady() bool {
-	return srv.ready.IsTrue() && srv.isStarted()
+	return srv.ready.Load() && srv.isStarted()
 }
 
 // isMSReplica indicates whether or not this instance is a management service replica.
 func (srv *IOServerInstance) isMSReplica() bool {
 	return srv.hasSuperblock() && srv.getSuperblock().MS
+}
+
+// LocalState returns local perspective of the current instance state
+// (doesn't consider state info held by the global system membership).
+func (srv *IOServerInstance) LocalState() system.MemberState {
+	switch {
+	case srv.isReady():
+		return system.MemberStateReady
+	case srv.isStarted():
+		return system.MemberStateStarting
+	case srv.isAwaitingFormat():
+		return system.MemberStateAwaitFormat
+	default:
+		return system.MemberStateStopped
+	}
 }
 
 // setIndex sets the server index assigned by the harness.
