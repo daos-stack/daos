@@ -23,4 +23,3 @@ if [ -n "${STAGE_NAME:?}" ]; then
 fi
 export CHROOT_NAME
 export TARGET
-config['context'] + "/" + config['name']
