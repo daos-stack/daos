@@ -1265,7 +1265,7 @@ rebuild_scheduled_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 				unsigned int *cnt, int ref)
 {
 	struct rebuilt_oid	*roid;
-	struct rebuilt_oid	roid_tmp;
+	struct rebuilt_oid	roid_tmp = {0};
 	struct rebuild_obj_key	key = { 0 };
 	uint32_t		req_cnt;
 	d_iov_t		key_iov;

@@ -723,7 +723,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 				   struct rebuild_global_pool_tracker **p_rgt)
 {
 	struct rebuild_global_pool_tracker *rgt;
-	unsigned int node_nr;
+	int node_nr;
 	struct pool_domain *doms;
 	int i;
 	int rc = 0;
