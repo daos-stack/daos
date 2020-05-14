@@ -333,7 +333,7 @@ pipeline {
                     }
                     post {
                         always {
-                            archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: false
                             /* when JENKINS-39203 is resolved, can probably use stepResult
                                here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
