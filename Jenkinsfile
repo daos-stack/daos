@@ -328,10 +328,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-				   branch: 'ampittma-codespell',
-				   /*
-				   */   codespell_file: "/usr/local/lib/python3.6/site-packages/codespell_lib/data/dictionary.txt",
-				   */
+                                   branch: "ampittma-codespell",
                                    ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go"
                     }
                     post {
