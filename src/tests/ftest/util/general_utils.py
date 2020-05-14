@@ -140,6 +140,86 @@ def run_task(hosts, command, timeout=None):
     return task
 
 
+def get_host_data(hosts, command, text, error, timeout=None):
+    """Get the data requested for each host using the specified command.
+
+    Args:
+        hosts (list): list of hosts
+        command (str): command used to obtain the data on each server
+        text (str): data identification string
+        error (str): data error string
+
+    Returns:
+        dict: a dictionary of data values for each NodeSet key
+
+    """
+    # Find the data for each specified servers
+    print("  Obtaining {} data on {}".format(text, hosts))
+    task = run_task(hosts, command, timeout)
+    host_data = {}
+    DATA_ERROR = "[ERROR]"
+
+    # Create a list of NodeSets with the same return code
+    data = {code: hosts for code, hosts in task.iter_retcodes()}
+
+    # Multiple return codes or a single non-zero return code
+    # indicate at least one error obtaining the data
+    if len(data) > 1 or 0 not in data:
+        # Report the errors
+        messages = []
+        for code, hosts in data.items():
+            if code != 0:
+                output_data = list(task.iter_buffers(hosts))
+                if len(output_data) == 0:
+                    messages.append(
+                        "{}: rc={}, command=\"{}\"".format(
+                            NodeSet.fromlist(hosts), code, command))
+                else:
+                    for output, o_hosts in output_data:
+                        lines = str(output).splitlines()
+                        info = "rc={}{}".format(
+                            code,
+                            ", {}".format(output) if len(lines) < 2 else
+                            "\n  {}".format("\n  ".join(lines)))
+                        messages.append(
+                            "{}: {}".format(
+                                NodeSet.fromlist(o_hosts), info))
+        print("    {} on the following hosts:\n      {}".format(
+            error, "\n      ".join(messages)))
+
+        # Return an error data set for all of the hosts
+        host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
+
+    else:
+        # The command completed successfully on all servers.
+        for output, hosts in task.iter_buffers(data[0]):
+            # Find the maximum size of the all the devices reported by
+            # this group of hosts as only one needs to meet the minimum
+            nodes = NodeSet.fromlist(hosts)
+            try:
+                # The assumption here is that each line of command output
+                # will begin with a number and that for the purposes of
+                # checking this requirement the maximum of these numbers is
+                # needed
+                int_host_values = [
+                    int(line.split()[0])
+                    for line in str(output).splitlines()]
+                host_data[nodes] = max(int_host_values)
+
+            except (IndexError, ValueError):
+                # Log the error
+                print(
+                    "    {}: Unable to obtain the maximum {} size due to "
+                    "unexpected output:\n      {}".format(
+                        nodes, text, "\n      ".join(str(output).splitlines())))
+
+                # Return an error data set for all of the hosts
+                host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
+                break
+
+    return host_data
+
+
 def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the return codes.
 
