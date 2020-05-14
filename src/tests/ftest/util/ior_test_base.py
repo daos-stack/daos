@@ -67,13 +67,6 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
 
-        # Until DAOS-3320 is resolved run IOR for POSIX
-        # with single client node
-        if self.ior_cmd.api.value == "POSIX":
-            self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
         # lock is needed for run_multiple_ior method.
         self.lock = threading.Lock()
 
@@ -151,9 +144,6 @@ class IorTestBase(TestWithServers):
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
-            # Uncomment below two lines once DAOS-3355 is resolved
-            if self.ior_cmd.transfer_size.value == "256B":
-                return "Skipping the case for transfer_size=256B"
             self._start_dfuse()
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
 
