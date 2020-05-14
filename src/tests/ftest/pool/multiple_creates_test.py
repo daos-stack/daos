@@ -71,7 +71,8 @@ class MultipleCreatesTest(TestWithServers):
                 break
         try:
             dmg = self.get_dmg_command()
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
+                                     group=setid, svcn=1)
             if "ERR" not in result.stderr:
                 uuid_str, _ = \
                     dmg_utils.get_pool_uuid_service_replicas_from_stdout(
@@ -139,7 +140,8 @@ class MultipleCreatesTest(TestWithServers):
                 break
         try:
             dmg = self.get_dmg_command()
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
+                                     group=setid, svcn=1)
             if "ERR" not in result.stderr:
                 uuid_str_1, _ = \
                     dmg_utils.get_pool_uuid_service_replicas_from_stdout(
@@ -147,7 +149,8 @@ class MultipleCreatesTest(TestWithServers):
             else:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
+                                     group=setid, svcn=1)
             if "ERR" not in result.stderr:
                 uuid_str_2, _ = \
                     dmg_utils.get_pool_uuid_service_replicas_from_stdout(
@@ -226,7 +229,8 @@ class MultipleCreatesTest(TestWithServers):
                 break
         try:
             dmg = self.get_dmg_command()
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
+                                     group=setid, svcn=1)
             if "ERR" not in result.stderr:
                 uuid_str_1, _ = \
                     dmg_utils.get_pool_uuid_service_replicas_from_stdout(
@@ -234,7 +238,8 @@ class MultipleCreatesTest(TestWithServers):
             else:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
+                                     group=setid, svcn=1)
             if "ERR" not in result.stderr:
                 uuid_str_2, _ = \
                     dmg_utils.get_pool_uuid_service_replicas_from_stdout(
@@ -242,7 +247,8 @@ class MultipleCreatesTest(TestWithServers):
             else:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
+                                     group=setid, svcn=1)
             if "ERR" not in result.stderr:
                 uuid_str_3, _ = \
                     dmg_utils.get_pool_uuid_service_replicas_from_stdout(

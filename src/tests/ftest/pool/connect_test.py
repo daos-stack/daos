@@ -70,7 +70,8 @@ class ConnectTest(TestWithServers):
 
             dmg = self.get_dmg_command()
             scm_size = self.params.get("scm_size", "/run/pool*")
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid, group=setid, svcn=1)
+            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
+                                     group=setid, svcn=1)
             if "ERR" not in result.stderr:
                 uuid_str, _ = \
                     dmg_utils.get_pool_uuid_service_replicas_from_stdout(
