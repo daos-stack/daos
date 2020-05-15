@@ -79,11 +79,11 @@ out:
 static int
 crt_ctl_fill_buffer_cb(d_list_t *rlink, void *arg)
 {
-	struct crt_uri_item	*ui;
-	int			*idx;
-	struct crt_uri_cache	*uri_cache = arg;
 	crt_phy_addr_t		 uri;
-	int			 i;
+	struct crt_uri_cache	*uri_cache = arg;
+	struct crt_uri_item	*ui;
+	uint32_t		*idx;
+	uint32_t		 i;
 	int			 rc = 0;
 
 	D_ASSERT(rlink != NULL);
@@ -97,7 +97,7 @@ crt_ctl_fill_buffer_cb(d_list_t *rlink, void *arg)
 			continue;
 
 		if (*idx >= uri_cache->max_count) {
-			D_ERROR("grp_cache index %d out of range [0, %zu].\n",
+			D_ERROR("grp_cache index %u out of range [0, %u].\n",
 				*idx, uri_cache->max_count);
 			D_GOTO(out, rc = -DER_OVERFLOW);
 		}
@@ -116,9 +116,9 @@ out:
 void
 crt_hdlr_ctl_get_uri_cache(crt_rpc_t *rpc_req)
 {
+	struct crt_uri_cache			 uri_cache = {0};
 	struct crt_ctl_get_uri_cache_out	*out_args;
 	struct crt_grp_priv			*grp_priv = NULL;
-	struct crt_uri_cache			 uri_cache = {0};
 	int					 rc = 0;
 
 	D_ASSERTF(crt_is_service(), "Must be called in a service process\n");
