@@ -268,23 +268,13 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 {
 	ssize_t	s;
 	char	str[DUNS_MAX_XATTR_LEN];
-	struct statfs fs;
-	char	*dir, *dirp;
+	struct	statfs fs;
 	int	rc;
 
-	dir = strdup(path);
-	if (dir == NULL) {
-		D_ERROR("Failed to copy path\n");
-		return ENOMEM;
-	}
-
-	dirp = dirname(dir);
-	rc = statfs(dirp, &fs);
+	rc = statfs(path, &fs);
 	if (rc == -1) {
 		int err = errno;
-
 		D_ERROR("Failed to statfs %s: %s\n", path, strerror(errno));
-		free(dir);
 		return err;
 	}
 
@@ -310,16 +300,16 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 				" DAOS unified namespace\n");
 		else if (err == ENODATA) {
 			D_WARN("Path does not represent a DAOS link\n");
-		} else if (s > DUNS_MAX_XATTR_LEN)
+		} else if (s > DUNS_MAX_XATTR_LEN) {
+			err = EIO;
 			D_ERROR("Invalid xattr length\n");
+		}
 		else
 			D_ERROR("Invalid DAOS unified namespace xattr\n");
 
-		free(dir);
 		return err;
 	}
 
-	free(dir);
 	return duns_parse_attr(&str[0], s, attr);
 }
 

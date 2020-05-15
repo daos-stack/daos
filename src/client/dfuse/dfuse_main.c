@@ -293,14 +293,14 @@ main(int argc, char **argv)
 
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
 	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d", rc);
-	if (rc == -DER_SUCCESS) {
+	if (rc == 0) {
 		if (dfuse_info->di_pool) {
 			printf("UNS configured on mount point but pool provided\n");
 			exit(1);
 		}
 		uuid_copy(dfp->dfp_pool, duns_attr.da_puuid);
 		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
-	} else if (rc == -DER_ENOENT) {
+	} else if (rc == ENODATA) {
 		if (dfuse_info->di_pool) {
 
 			if (uuid_parse(dfuse_info->di_pool,
@@ -318,7 +318,7 @@ main(int argc, char **argv)
 				}
 			}
 		}
-	} else if (rc == -DER_BADPATH) {
+	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
 		D_GOTO(out_dfs, ret = rc);
 	} else {

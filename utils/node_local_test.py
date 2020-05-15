@@ -217,7 +217,6 @@ def il_cmd(dfuse, cmd):
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                            suffix='.log',
                                            delete=False)
-    symlink_file('/tmp/dfuse_il_latest.log', log_file.name)
     my_env['D_LOG_FILE'] = log_file.name
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
@@ -227,12 +226,6 @@ def il_cmd(dfuse, cmd):
     print('Log results for il')
     log_test(log_file.name)
     return ret
-
-def symlink_file(a, b):
-    """Create a symlink from a to b"""
-    if os.path.exists(a):
-        os.remove(a)
-    os.symlink(b, a)
 
 class ValgrindHelper():
 
@@ -323,10 +316,7 @@ class DFuse():
                                                delete=False)
         self.log_file = log_file.name
 
-        symlink_file('/tmp/dfuse_latest.log', self.log_file)
-
         self.valgrind = None
-
         if not os.path.exists(self.path):
             os.mkdir(self.path)
 
@@ -370,6 +360,8 @@ class DFuse():
                 ret = self._sp.wait(timeout=1)
                 print('dfuse command exited with {}'.format(ret))
                 self._sp = None
+                if os.path.exists(self.log_file):
+                    log_test(self.log_file)
                 raise Exception('dfuse died waiting for start')
             except subprocess.TimeoutExpired:
                 pass
