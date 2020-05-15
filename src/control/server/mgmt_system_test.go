@@ -35,6 +35,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/peer"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -951,15 +952,41 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
+	defaultAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ipAddr, err := net.ResolveIPAddr("ip", "localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	combinedAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:15001")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	for name, tc := range map[string]struct {
 		ctx     context.Context
 		addr    string
 		expAddr net.Addr
 		expErr  error
 	}{
-		"nil request": {
+		"no peer": {
 			ctx:    context.Background(),
 			expErr: errors.New("peer details not found in context"),
+		},
+		"bad input address": {
+			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
+			expErr: errors.New("get listening port: missing port in address"),
+		},
+		"non tcp address": {
+			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: ipAddr}),
+			expErr: errors.New("peer address (127.0.0.1) not tcp"),
+		},
+		"normal operation": {
+			ctx:     peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
+			addr:    "0.0.0.0:15001",
+			expAddr: combinedAddr,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -975,26 +1002,3 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 		})
 	}
 }
-
-// getPeerListenAddr combines peer ip from supplied context with input port.
-//func getPeerListenAddr(ctx context.Context, listenAddrStr string) (net.Addr, error) {
-//	p, ok := peer.FromContext(ctx)
-//	if !ok {
-//		return nil, errors.New("peer details not found in context")
-//	}
-//
-//	tcpAddr, ok := p.Addr.(*net.TCPAddr)
-//	if !ok {
-//		return nil, errors.Errorf("peer address (%s) not tcp", p.Addr)
-//	}
-//
-//	// what port is the input address listening on?
-//	_, portStr, err := net.SplitHostPort(listenAddrStr)
-//	if err != nil {
-//		return nil, errors.Wrap(err, "get listening port")
-//	}
-//
-//	// resolve combined IP/port address
-//	return net.ResolveTCPAddr(p.Addr.Network(),
-//		net.JoinHostPort(tcpAddr.IP.String(), portStr))
-//}

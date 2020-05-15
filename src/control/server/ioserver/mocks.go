@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package ioserver
 
 import (
@@ -33,7 +34,6 @@ type (
 	TestRunnerConfig struct {
 		StartCb    func()
 		StartErr   error
-		WaitErr    error
 		Running    atm.Bool
 		SignalCb   func(uint32, os.Signal)
 		SignalErr  error
@@ -89,13 +89,6 @@ func (tr *TestRunner) Signal(sig os.Signal) error {
 		tr.runnerCfg.SignalCb(tr.serverCfg.Index, sig)
 	}
 	return tr.runnerCfg.SignalErr
-}
-
-func (tr *TestRunner) Wait() error {
-	if tr.runnerCfg.WaitErr == nil {
-		tr.runnerCfg.Running.SetFalse()
-	}
-	return tr.runnerCfg.WaitErr
 }
 
 func (tr *TestRunner) IsRunning() bool {

@@ -40,7 +40,6 @@ type IOServerRunner interface {
 	Start(context.Context, chan<- error) error
 	IsRunning() bool
 	Signal(os.Signal) error
-	Wait() error
 	GetConfig() *ioserver.Config
 }
 
