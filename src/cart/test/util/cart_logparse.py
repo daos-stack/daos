@@ -278,6 +278,12 @@ class LogLine():
 
         return self._is_type(['Link'])
 
+    def is_fi_site(self):
+        return self._is_type(['fault_id'], trace=False)
+
+    def is_fi_alloc_fail(self):
+        return self._is_type(['out', 'of', 'memory'], trace=False)
+
     def is_calloc(self):
         """Returns True if line is a allocation point"""
         return self.get_field(2).startswith('alloc(')

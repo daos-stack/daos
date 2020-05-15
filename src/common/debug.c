@@ -194,7 +194,7 @@ daos_debug_init(char *logfile)
 
 	rc = daos_fail_init();
 	if (rc) {
-		D_PRINT_ERR("Failed to init DAOS fail injection: "DF_RC"\n",
+		D_PRINT_ERR("Failed to init DAOS fault injection: "DF_RC"\n",
 			DP_RC(rc));
 		goto failed_unlock;
 	}

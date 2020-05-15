@@ -175,5 +175,8 @@ message PoolQueryResp {
 	PoolRebuildStatus rebuild = 6; // pool rebuild status
 	StorageUsageStats scm = 7; // SCM storage usage stats
 	StorageUsageStats nvme = 8; // NVMe storage usage stats
+	uint32 totalnodes = 9; // total nodes in pool
+	uint32 version = 10; // latest pool map version
+	uint32 leader = 11; // current raft leader
 }
 

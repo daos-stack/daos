@@ -31,7 +31,6 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -85,11 +84,11 @@ var (
 	)
 )
 
-func FaultInstancesNotStopped(ranks []*system.Rank) *fault.Fault {
+func FaultInstancesNotStopped(action string, idx uint32) *fault.Fault {
 	return serverFault(
 		code.ServerInstancesNotStopped,
-		fmt.Sprintf("harness has running ranks: %v", ranks),
-		"retry the operation after stopping all harness' ranks",
+		fmt.Sprintf("%s not supported when instance %d is running", action, idx),
+		"retry the operation after stopping instance",
 	)
 }
 
