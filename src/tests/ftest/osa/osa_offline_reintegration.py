@@ -52,8 +52,7 @@ class OSAOfflineReintegration(TestWithServers):
         """Test ID: DAOS-4749
         Test Description: Validate Offline Reintegration
 
-        :avocado: tags=all,hw,large,osa,pr
-        :avocado: tags=offline_reintegration
+        :avocado: tags=all,pr,hw,large,osa,offline_reintegration
         """
         # Create a pool
         self.pool = TestPool(self.context, dmg_command=self.dmg_command)
