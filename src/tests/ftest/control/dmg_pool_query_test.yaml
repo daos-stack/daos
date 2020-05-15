@@ -25,8 +25,9 @@ pool:
 
 ior:
   flags: "-k -w -r"
-  transfer_size: "32M"
-  block_size: "1G"
+  transfer_size: "64M"
+  block_size: "2G"
+  daos_destroy: False
 
 exp_vals:
   pool_info: ['8', '0']
