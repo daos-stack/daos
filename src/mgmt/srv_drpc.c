@@ -218,6 +218,7 @@ ds_mgmt_drpc_get_attach_info(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc;
+	bool			 all_ranks = false;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__get_attach_info_req__unpack(
@@ -229,9 +230,13 @@ ds_mgmt_drpc_get_attach_info(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to get attach info\n");
+	D_INFO("Received request to get attach info (allranks=%d)\n",
+		req->allranks);
 
-	rc = ds_mgmt_get_attach_info_handler(&resp);
+	if (req->allranks)
+		all_ranks = true;
+
+	rc = ds_mgmt_get_attach_info_handler(&resp, all_ranks);
 	if (rc != 0)
 		D_ERROR("Failed to get attach info: "DF_RC"\n", DP_RC(rc));
 
@@ -1364,6 +1369,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.totaltargets = pool_info.pi_ntargets;
 	resp.disabledtargets = pool_info.pi_ndisabled;
 	resp.activetargets = pool_info.pi_space.ps_ntargets;
+	resp.totalnodes = pool_info.pi_nnodes;
+	resp.leader = pool_info.pi_leader;
+	resp.version = pool_info.pi_map_ver;
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
 					    DAOS_MEDIA_SCM);

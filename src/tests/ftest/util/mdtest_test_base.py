@@ -66,12 +66,6 @@ class MdtestBase(TestWithServers):
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
 
-        # Until DAOS-3320 is resolved run IOR for POSIX
-        # with single client node
-        if self.mdtest_cmd.api.value == "POSIX":
-            self.log.info("Restricting mdtest to one node")
-            self.hostlist_clients = [self.hostlist_clients[0]]
-
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 

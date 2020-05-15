@@ -27,11 +27,12 @@ import re
 import uuid
 from enum import IntEnum
 
-from command_utils_base import FormattedParameter, CommandFailure
+from command_utils_base import CommandFailure, FormattedParameter
 from command_utils import ExecutableCommand
 
 
 class IorCommand(ExecutableCommand):
+    # pylint: disable=too-many-instance-attributes
     """Defines a object for executing an IOR command.
 
     Example:
@@ -166,7 +167,7 @@ class IorCommand(ExecutableCommand):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.set_daos_pool_params(pool, display)
-        if self.api.value in ("DAOS", "MPIIO"):
+        if self.api.value in ["DAOS", "MPIIO"]:
             self.daos_group.update(group, "daos_group" if display else None)
             self.daos_cont.update(
                 cont_uuid if cont_uuid else uuid.uuid4(),
@@ -184,7 +185,7 @@ class IorCommand(ExecutableCommand):
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-        if self.api.value in ("DAOS", "MPIIO"):
+        if self.api.value in ["DAOS", "MPIIO"]:
             self.daos_pool.update(
                 pool.pool.get_uuid_str(), "daos_pool" if display else None)
         else:
@@ -203,7 +204,7 @@ class IorCommand(ExecutableCommand):
             [str(item) for item in [
                 int(pool.pool.svc.rl_ranks[index])
                 for index in range(pool.pool.svc.rl_nr)]])
-        if self.api.value in ("DAOS", "MPIIO"):
+        if self.api.value in ["DAOS", "MPIIO"]:
             self.daos_svcl.update(svcl, "daos_svcl" if display else None)
         else:
             self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)

@@ -28,17 +28,17 @@ import ctypes
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from avocado.utils import process
-from command_utils_base import BasicParameter, CommandFailure
+from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
                         daos_cref)
-from general_utils import check_pool_files, DaosTestError
+from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
 from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 
 class TestPool(TestDaosApiBase):
+    # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, log=None, cb_handler=None, dmg_command=None):
@@ -567,7 +567,7 @@ class TestPool(TestDaosApiBase):
         command = "{} --np {} --hostfile {} {} {} testfile".format(
             orterun, processes, hostfile,
             os.path.join(current_path, "write_some_data.py"), size)
-        return process.run(command, timeout, True, False, "both", True, env)
+        return run_command(command, timeout, True, env=env)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
@@ -579,6 +579,26 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         keys = ("s_total", "s_free")
         return {key: getattr(self.info.pi_space.ps_space, key) for key in keys}
+
+    def get_pool_free_space(self, device="scm"):
+        """Get SCM or NVME free space.
+
+        Args:
+            device (str, optional): device type, e.g. "scm" or "nvme". Defaults
+                to "scm".
+
+        Returns:
+            str: free SCM or NVME space
+
+        """
+        free_space = "0"
+        dev = device.lower()
+        daos_space = self.get_pool_daos_space()
+        if dev == "scm":
+            free_space = daos_space["s_free"][0]
+        elif dev == "nvme":
+            free_space = daos_space["s_free"][1]
+        return free_space
 
     def display_pool_daos_space(self, msg=None):
         """Display the pool info daos space attributes.

@@ -39,6 +39,7 @@ class DaosServerCommand(YamlCommand):
 
     NORMAL_PATTERN = "DAOS I/O server.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
+    REFORMAT_PATTERN = "Metadata format required"
 
     def __init__(self, path="", yaml_cfg=None, timeout=90):
         """Create a daos_server command object.
@@ -61,10 +62,10 @@ class DaosServerCommand(YamlCommand):
 
         # Command line parameters:
         # -d, --debug        Enable debug output
-        # -j, --json         Enable JSON output
+        # -J, --json-logging Enable JSON logging
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
-        self.json = FormattedParameter("--json", False)
+        self.json_logs = FormattedParameter("--json-logging", False)
         self.config = FormattedParameter("--config={}", default_yaml_file)
 
         # Additional daos_server command line parameters:
@@ -124,6 +125,9 @@ class DaosServerCommand(YamlCommand):
         """
         if mode == "format":
             self.pattern = self.FORMAT_PATTERN
+            self.pattern_count = host_qty
+        elif mode == "reformat":
+            self.pattern = self.REFORMAT_PATTERN
             self.pattern_count = host_qty
         else:
             self.pattern = self.NORMAL_PATTERN
@@ -480,10 +484,11 @@ class DaosServerManager(SubprocessManager):
                 dev_type = "dcpm"
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
-    def detect_format_ready(self):
+    def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format."""
+        f_type = "format" if not reformat else "reformat"
         self.log.info("<SERVER> Waiting for servers to be ready for format")
-        self.manager.job.update_pattern("format", len(self._hosts))
+        self.manager.job.update_pattern(f_type, len(self._hosts))
         try:
             self.manager.run()
         except CommandFailure as error:

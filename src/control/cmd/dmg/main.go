@@ -100,12 +100,12 @@ func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
 }
 
 func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
-	data, err := json.Marshal(in)
+	data, err := json.MarshalIndent(in, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	_, err = out.Write(data)
+	_, err = out.Write(append(data, []byte("\n")...))
 	return err
 }
 

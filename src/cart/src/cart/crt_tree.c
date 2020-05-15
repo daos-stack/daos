@@ -45,7 +45,7 @@
 
 static int
 crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-			       bool exclusive, d_rank_list_t *filter_ranks,
+			       bool filter_invert, d_rank_list_t *filter_ranks,
 			       d_rank_t root, d_rank_t self, d_rank_t *grp_size,
 			       uint32_t *grp_root, d_rank_t *grp_self,
 			       d_rank_list_t **result_grp_rank_list,
@@ -65,11 +65,11 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	D_ASSERT(grp_rank_list != NULL);
 	*allocated = true;
 
-	if (exclusive) {
+	if (filter_invert) {
 		d_rank_list_filter(filter_ranks, grp_rank_list,
 				   false /* exclude */);
 		if (grp_rank_list->rl_nr != filter_ranks->rl_nr) {
-			D_ERROR("%u/%u exclusive ranks out of group\n",
+			D_ERROR("%u/%u filter ranks (inverted) out of group\n",
 				filter_ranks->rl_nr - grp_rank_list->rl_nr,
 				filter_ranks->rl_nr);
 			d_rank_list_free(grp_rank_list);
@@ -162,7 +162,7 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	 * for building the tree, rank number in it is for primary group.
 	 */
 	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver,
-					    false /* exclusive */,
+					    false /* filter_invert */,
 					    exclude_ranks, root, self,
 					    &grp_size, &grp_root, &grp_self,
 					    &grp_rank_list, &allocated);
@@ -202,7 +202,7 @@ out:
  */
 int
 crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-		      bool exclusive, d_rank_list_t *filter_ranks,
+		      bool filter_invert, d_rank_list_t *filter_ranks,
 		      int tree_topo, d_rank_t root, d_rank_t self,
 		      d_rank_list_t **children_rank_list, bool *ver_match)
 {
@@ -238,7 +238,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	 * grp_rank_list is the target group (after applying filter_ranks)
 	 * for building the tree, rank number in it is for primary group.
 	 */
-	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver, exclusive,
+	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver, filter_invert,
 					    filter_ranks, root, self, &grp_size,
 					    &grp_root, &grp_self,
 					    &grp_rank_list, &allocated);
@@ -330,7 +330,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	 * for building the tree, rank number in it is for primary group.
 	 */
 	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver,
-					    false /* exclusive */,
+					    false /* filter_invert */,
 					    exclude_ranks, root, self,
 					    &grp_size, &grp_root, &grp_self,
 					    &grp_rank_list, &allocated);

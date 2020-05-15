@@ -32,7 +32,8 @@ from avocado.utils import process
 from command_utils_base import \
     CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
     CommandWithParameters, YamlParameters, EnvironmentVariables
-from general_utils import check_file_exists, stop_processes, get_log_file
+from general_utils import check_file_exists, stop_processes, get_log_file, \
+    run_command, DaosTestError
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -126,39 +127,15 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         command = self.__str__()
-        kwargs = {
-            "cmd": command,
-            "timeout": self.timeout,
-            "verbose": self.verbose,
-            "ignore_status": not self.exit_status_exception,
-            "allow_output_check": "combined",
-            "shell": True,
-            "env": self.env,
-        }
-        if kwargs["env"] and kwargs["verbose"]:
-            self.log.info("Running with env: %s", str(kwargs["env"]))
-
-        msg = None
         try:
             # Block until the command is complete or times out
-            return process.run(**kwargs)
+            return run_command(
+                command, self.timeout, self.verbose, self.exit_status_exception,
+                "combined", env=self.env)
 
-        except TypeError as error:
-            # Seen if using self.env with a non-string dictionary value
-            msg = "Error running '{}': {}".format(command, error)
-            if self.env:
-                msg = "\n".join([
-                    msg,
-                    "Verify self.env values are defined as strings: {}".format(
-                        self.env)])
-
-        except process.CmdError as error:
+        except DaosTestError as error:
             # Command failed or possibly timed out
-            msg = "Error occurred running '{}': {}".format(command, error)
-
-        if msg is not None:
-            self.log.error(msg)
-            raise CommandFailure(msg)
+            raise CommandFailure(error)
 
     def _run_subprocess(self):
         """Run the command as a sub process.
@@ -173,7 +150,7 @@ class ExecutableCommand(CommandWithParameters):
                 "cmd": self.__str__(),
                 "verbose": self.verbose,
                 "allow_output_check": "combined",
-                "shell": True,
+                "shell": False,
                 "env": self.env,
                 "sudo": self.sudo,
             }
@@ -344,7 +321,7 @@ class ExecutableCommand(CommandWithParameters):
             env (EnvironmentVariables): a dictionary of environment variable
                 names and values to export prior to running the command
         """
-        self._pre_command = env.get_export_str()
+        self.env = env.copy()
 
 
 class CommandWithSubCommand(ExecutableCommand):
@@ -454,6 +431,26 @@ class CommandWithSubCommand(ExecutableCommand):
         """
         self.sub_command.value = value
         self.get_sub_command_class()
+
+    def _get_result(self):
+        """Get the result from running the configured command.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        result = None
+        try:
+            result = self.run()
+        except CommandFailure as error:
+            raise CommandFailure(
+                "<{}> command failed: {}".format(self.command, error))
+
+        return result
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -634,7 +631,24 @@ class YamlCommand(SubProcessCommand):
         value = None
         if isinstance(self.yaml, YamlParameters):
             value = self.yaml.get_value(name)
+
         return value
+
+    def _get_result(self):
+        """Generate the yaml config if defined, then call the parent method.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        if self.yaml:
+            self.create_yaml_file()
+
+        return super(YamlCommand, self)._get_result()
 
 
 class SubprocessManager(object):
