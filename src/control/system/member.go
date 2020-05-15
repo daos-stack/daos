@@ -30,9 +30,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/pkg/errors"
 )
 
 // MemberState represents the activity state of DAOS system members.
@@ -41,6 +40,8 @@ type MemberState int
 const (
 	// MemberStateUnknown is the default invalid state.
 	MemberStateUnknown MemberState = iota
+	// MemberStateAwaitFormat indicates the member is waiting for format.
+	MemberStateAwaitFormat
 	// MemberStateStarting indicates the member has started but is not
 	// ready.
 	MemberStateStarting
@@ -63,6 +64,7 @@ const (
 func (ms MemberState) String() string {
 	return [...]string{
 		"Unknown",
+		"AwaitFormat",
 		"Starting",
 		"Ready",
 		"Joined",
@@ -72,6 +74,48 @@ func (ms MemberState) String() string {
 		"Errored",
 		"Unresponsive",
 	}[ms]
+}
+
+// isTransitionIllegal indicates if given state transitions is legal.
+//
+// Map state combinations to true (illegal) or false (legal) and return negated
+// value.
+func (ms MemberState) isTransitionIllegal(to MemberState) bool {
+	if ms == MemberStateUnknown {
+		return true // no legal transitions
+	}
+	return map[MemberState]map[MemberState]bool{
+		MemberStateAwaitFormat: map[MemberState]bool{
+			MemberStateEvicted: true,
+		},
+		MemberStateStarting: map[MemberState]bool{
+			MemberStateEvicted: true,
+		},
+		MemberStateReady: map[MemberState]bool{
+			MemberStateEvicted: true,
+		},
+		MemberStateJoined: map[MemberState]bool{
+			MemberStateReady: true,
+		},
+		MemberStateStopping: map[MemberState]bool{
+			MemberStateReady: true,
+		},
+		MemberStateEvicted: map[MemberState]bool{
+			MemberStateReady:    true,
+			MemberStateJoined:   true,
+			MemberStateStopping: true,
+		},
+		MemberStateErrored: map[MemberState]bool{
+			MemberStateReady:    true,
+			MemberStateJoined:   true,
+			MemberStateStopping: true,
+		},
+		MemberStateUnresponsive: map[MemberState]bool{
+			MemberStateReady:    true,
+			MemberStateJoined:   true,
+			MemberStateStopping: true,
+		},
+	}[ms][to]
 }
 
 // Member refers to a data-plane instance that is a member of this DAOS
@@ -140,11 +184,6 @@ func (sm *Member) State() MemberState {
 	return sm.state
 }
 
-// SetState sets member state.
-func (sm *Member) SetState(s MemberState) {
-	sm.state = s
-}
-
 // NewMember returns a reference to a new member struct.
 func NewMember(rank Rank, uuid string, addr net.Addr, state MemberState) *Member {
 	return &Member{Rank: rank, UUID: uuid, Addr: addr, state: state}
@@ -153,9 +192,9 @@ func NewMember(rank Rank, uuid string, addr net.Addr, state MemberState) *Member
 // Members is a type alias for a slice of member references
 type Members []*Member
 
-// MemberResult refers to the result of an action on a Member identified
-// its string representation "address/rank".
+// MemberResult refers to the result of an action on a Member.
 type MemberResult struct {
+	Addr    string
 	Rank    Rank
 	Action  string
 	Errored bool
@@ -203,8 +242,10 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 }
 
 // NewMemberResult returns a reference to a new member result struct.
-func NewMemberResult(rank Rank, action string, err error, state MemberState) *MemberResult {
-	result := MemberResult{Rank: rank, Action: action, State: state}
+//
+// Host address and action fields are not always used so not populated here.
+func NewMemberResult(rank Rank, err error, state MemberState) *MemberResult {
+	result := MemberResult{Rank: rank, State: state}
 	if err != nil {
 		result.Errored = true
 		result.Msg = err.Error()
@@ -240,7 +281,7 @@ func (m *Membership) Add(member *Member) (int, error) {
 	defer m.Unlock()
 
 	if value, found := m.members[member.Rank]; found {
-		return -1, errors.Wrapf(FaultMemberExists, "member %s", value)
+		return -1, FaultMemberExists(value)
 	}
 
 	m.members[member.Rank] = member
@@ -248,36 +289,25 @@ func (m *Membership) Add(member *Member) (int, error) {
 	return len(m.members), nil
 }
 
-// SetMemberState updates existing member state in membership.
-func (m *Membership) SetMemberState(rank Rank, state MemberState) error {
-	m.Lock()
-	defer m.Unlock()
-
-	if _, found := m.members[rank]; !found {
-		return errors.Wrapf(FaultMemberMissing, "rank %d", rank)
-	}
-
-	m.members[rank].SetState(state)
-
-	return nil
-}
-
 // AddOrUpdate adds member to membership or updates member state if member
 // already exists in membership. Returns flag for whether member was created and
 // the previous state if updated.
-func (m *Membership) AddOrUpdate(member *Member) (bool, *MemberState) {
+//
+// Note: this method updates state without checking if state transition is
+//       legal so use with caution.
+func (m *Membership) AddOrUpdate(newMember *Member) (bool, *MemberState) {
 	m.Lock()
 	defer m.Unlock()
 
-	oldMember, found := m.members[member.Rank]
+	oldMember, found := m.members[newMember.Rank]
 	if found {
 		os := oldMember.State()
-		m.members[member.Rank].SetState(member.State())
+		m.members[newMember.Rank].state = newMember.State()
 
 		return false, &os
 	}
 
-	m.members[member.Rank] = member
+	m.members[newMember.Rank] = newMember
 
 	return true, nil
 }
@@ -297,33 +327,28 @@ func (m *Membership) Get(rank Rank) (*Member, error) {
 
 	member, found := m.members[rank]
 	if !found {
-		return nil, errors.Wrapf(FaultMemberMissing, "rank %d", rank)
+		return nil, FaultMemberMissing(rank)
 	}
 
 	return member, nil
 }
 
 // Ranks returns slice of ordered member ranks.
-func (m *Membership) Ranks() (ranks []Rank) {
+func (m *Membership) Ranks(rankList ...Rank) (ranks []Rank) {
 	m.RLock()
 	defer m.RUnlock()
 
 	for rank := range m.members {
+		if len(rankList) != 0 && !rank.InList(rankList) {
+			continue
+		}
+
 		ranks = append(ranks, rank)
 	}
 
 	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
 
 	return
-}
-
-func mapMemberStates(states ...MemberState) map[MemberState]struct{} {
-	stateMap := make(map[MemberState]struct{})
-	for _, s := range states {
-		stateMap[s] = struct{}{}
-	}
-
-	return stateMap
 }
 
 // HostRanks returns mapping of control addresses to ranks managed by harness at
@@ -354,31 +379,37 @@ func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
 	return hostRanks
 }
 
-// Members returns slice of references to all system members filtering members
-// with excluded states and those not in rank list. Results ordered by member rank.
-func (m *Membership) Members(rankList []Rank, excludedStates ...MemberState) (ms Members) {
-	var ranks []Rank
+// Hosts returns slice of control addresses that contain any of the ranks
+// in the input rank list.
+//
+// If input rank list is empty, return all hosts in membership.
+func (m *Membership) Hosts(rankList ...Rank) []string {
+	hostRanks := m.HostRanks(rankList...)
+	hosts := make([]string, 0, len(hostRanks))
+
+	for host := range hostRanks {
+		hosts = append(hosts, host)
+	}
+	sort.Strings(hosts)
+
+	return hosts
+}
+
+// Members returns slice of references to all system members ordered by rank.
+//
+// Empty rank list implies no filtering/include all.
+func (m *Membership) Members(rankList ...Rank) (ms Members) {
+	ranks := m.Ranks(rankList...)
 
 	m.RLock()
 	defer m.RUnlock()
 
-	for rank := range m.members {
+	for _, rank := range ranks {
 		if len(rankList) != 0 && !rank.InList(rankList) {
 			continue
 		}
 
-		ranks = append(ranks, rank)
-	}
-
-	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
-
-	es := mapMemberStates(excludedStates...)
-	for _, r := range ranks {
-		m := m.members[r]
-		if _, exclude := es[m.State()]; exclude {
-			continue
-		}
-		ms = append(ms, m)
+		ms = append(ms, m.members[rank])
 	}
 
 	return ms
@@ -386,17 +417,44 @@ func (m *Membership) Members(rankList []Rank, excludedStates ...MemberState) (ms
 
 // UpdateMemberStates updates member's state according to result state.
 //
+// Only update member state if result is a success, ping will update current
+// member state.
+//
 // TODO: store error message in membership
-func (m *Membership) UpdateMemberStates(results MemberResults) error {
+func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored bool) error {
 	m.Lock()
 	defer m.Unlock()
 
 	for _, result := range results {
-		if _, found := m.members[result.Rank]; !found {
-			return errors.Wrapf(FaultMemberMissing, "rank %d", result.Rank)
+		member, found := m.members[result.Rank]
+		if !found {
+			return FaultMemberMissing(result.Rank)
 		}
 
-		m.members[result.Rank].SetState(result.State)
+		// use opportunity to update host address in result
+		if result.Addr == "" {
+			result.Addr = member.Addr.String()
+		}
+
+		// don't update members if:
+		// - result reports an error and ignoreErrored is set or
+		// - if transition from current to result state is illegal
+		if result.Errored {
+			if ignoreErrored {
+				continue
+			}
+			if result.State != MemberStateErrored {
+				return errors.Errorf(
+					"errored result for rank %d has conflicting state '%s'",
+					result.Rank, result.State)
+			}
+		}
+		if member.State().isTransitionIllegal(result.State) {
+			m.log.Debugf("skip illegal state transition: member %s, %s->%s",
+				member, member.State(), result.State)
+			continue
+		}
+		member.state = result.State
 	}
 
 	return nil

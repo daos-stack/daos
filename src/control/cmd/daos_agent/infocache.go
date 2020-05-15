@@ -38,8 +38,8 @@ import (
 )
 
 const (
-	defaultNumaNode = 0
-	verbsProvider   = "ofi+verbs"
+	invalidIndex  = -1
+	verbsProvider = "ofi+verbs"
 )
 
 type attachInfoCache struct {
@@ -53,6 +53,9 @@ type attachInfoCache struct {
 	// maps NUMA affinity to a device index
 	currentNumaDevIdx map[int]int
 	mutex             sync.Mutex
+	// specifies what NUMA node to use when there are no devices
+	// associated with the client NUMA node
+	defaultNumaNode int
 }
 
 // loadBalance is a simple round-robin load balancing scheme
@@ -61,21 +64,36 @@ type attachInfoCache struct {
 // to choose from.  Returns the index of the device to use.
 func (aic *attachInfoCache) loadBalance(numaNode int) int {
 	aic.mutex.Lock()
+	deviceIndex := invalidIndex
 	numDevs := len(aic.numaDeviceMarshResp[numaNode])
-	deviceIndex := aic.currentNumaDevIdx[numaNode]
-	aic.currentNumaDevIdx[numaNode] = (deviceIndex + 1) % numDevs
+	if numDevs > 0 {
+		deviceIndex = aic.currentNumaDevIdx[numaNode]
+		aic.currentNumaDevIdx[numaNode] = (deviceIndex + 1) % numDevs
+	}
 	aic.mutex.Unlock()
 	return deviceIndex
 }
 
 func (aic *attachInfoCache) getResponse(numaNode int) ([]byte, error) {
 	deviceIndex := aic.loadBalance(numaNode)
+	// If there is no response available for the client's actual NUMA node,
+	// use the default NUMA node
+	if deviceIndex == invalidIndex {
+		deviceIndex = aic.loadBalance(aic.defaultNumaNode)
+		if deviceIndex == invalidIndex {
+			return nil, errors.Errorf("No default response found for the default NUMA node %d", aic.defaultNumaNode)
+		}
+		aic.log.Infof("No network devices bound to client NUMA node %d.  Using response from NUMA %d", numaNode, aic.defaultNumaNode)
+		numaNode = aic.defaultNumaNode
+	}
+
 	aic.mutex.Lock()
 	defer aic.mutex.Unlock()
 	numaDeviceMarshResp, ok := aic.numaDeviceMarshResp[numaNode][deviceIndex]
 	if !ok {
 		return nil, errors.Errorf("GetAttachInfo entry for numaNode %d device index %d did not exist", numaNode, deviceIndex)
 	}
+
 	aic.log.Debugf("Retrieved response for NUMA %d with device index %d\n", numaNode, deviceIndex)
 	return numaDeviceMarshResp, nil
 }
@@ -90,10 +108,6 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 	aic.mutex.Lock()
 	defer aic.mutex.Unlock()
 
-	if len(scanResults) == 0 {
-		return errors.Errorf("No devices found in the scanResults")
-	}
-
 	// Make a new map each time the cache is initialized
 	aic.numaDeviceMarshResp = make(map[int]map[int][]byte)
 
@@ -104,6 +118,8 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 	}
 
 	netdetect.SetLogger(aic.log)
+
+	var haveDefaultNuma bool
 
 	for _, fs := range scanResults {
 		if fs.DeviceName == "lo" {
@@ -121,6 +137,7 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 				aic.log.Debugf("OFI_DOMAIN has been detected as: %s", resp.Domain)
 			}
 		}
+
 		numa := int(fs.NUMANode)
 
 		numaDeviceMarshResp, err := proto.Marshal(resp)
@@ -132,11 +149,33 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 			aic.numaDeviceMarshResp[numa] = make(map[int][]byte)
 		}
 		aic.numaDeviceMarshResp[numa][len(aic.numaDeviceMarshResp[numa])] = numaDeviceMarshResp
+
+		// Any client bound to a NUMA node that has no network devices associated with it will
+		// get a response from this defaultNumaNode.
+		// This response offers a valid network device at degraded performance for those clients
+		// that need it.
+		if !haveDefaultNuma {
+			aic.defaultNumaNode = numa
+			haveDefaultNuma = true
+			aic.log.Debugf("The default NUMA node is: %d", aic.defaultNumaNode)
+		}
+
 		aic.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, numa, len(aic.numaDeviceMarshResp[numa])-1)
 	}
 
-	// If there are any entries in the cache and caching is enabled, the cache is 'initialized'
-	if len(aic.numaDeviceMarshResp) > 0 && aic.enabled.IsTrue() {
+	// If there were no network devices found, then add a default response to the default NUMA node entry
+	if _, ok := aic.numaDeviceMarshResp[aic.defaultNumaNode]; !ok {
+		aic.log.Info("No network devices detected in fabric scan; default AttachInfo response may be incorrect\n")
+		aic.numaDeviceMarshResp[aic.defaultNumaNode] = make(map[int][]byte)
+		numaDeviceMarshResp, err := proto.Marshal(resp)
+		if err != nil {
+			return drpc.MarshalingFailure()
+		}
+		aic.numaDeviceMarshResp[aic.defaultNumaNode][0] = numaDeviceMarshResp
+	}
+
+	// If caching is enabled, the cache is now 'initialized'
+	if aic.enabled.IsTrue() {
 		aic.initialized.SetTrue()
 	}
 

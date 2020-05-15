@@ -52,13 +52,13 @@ def number_of_failures():
         path = os.path.join(conf["BUILD_DIR"], DIR, "src")
     if not os.path.exists(path):
         try:
-            res = subprocess.check_output(['make', '-C', DIR, 'tests'])
+            res = subprocess.check_output(['/usr/bin/make', '-C', DIR, 'tests'])
         except Exception as e:
             print("Building Raft Tests failed due to\n{}".format(e))
             return TEST_NOT_RUN
     else:
         os.chdir(path)
-        res = subprocess.check_output("./tests_main", shell=True).decode()
+        res = subprocess.check_output(["./tests_main"]).decode()
 
     for line in res.split('\n'):
         if line.startswith("not ok"):

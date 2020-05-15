@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,12 @@ static inline bool
 daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 {
 	return memcmp(dti0, dti1, sizeof(*dti0)) == 0;
+}
+
+static inline daos_epoch_t
+daos_dti2epoch(struct dtx_id *dti)
+{
+	return dti->dti_hlc;
 }
 
 #define DF_DTI		DF_UUID"."DF_X64

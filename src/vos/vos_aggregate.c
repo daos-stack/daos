@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1659,11 +1659,16 @@ set_window_size(struct agg_merge_window *mw, daos_size_t rsize)
 	int	rc = 0;
 
 	if (rsize == 0) {
-		D_CRIT("EV tree 0 iod_size could be caused by inserting "
-		       "punch records in an empty tree, this will be "
-		       "disallowed in the future.\n");
-		rc = -DER_INVAL;
-	} else if (mw->mw_rsize == 0) {
+		D_DEBUG(DB_TRACE, "EV tree 0 iod_size could be caused by "
+			"inserting punch records in an empty tree.  This can "
+			"happen during rebuild.\n");
+		/** Just set it to 1.  If the tree is all holes anyway, it
+		 *  should be fine to assume a record size.
+		 */
+		rsize = 1;
+	}
+
+	if (mw->mw_rsize == 0) {
 		mw->mw_rsize = rsize;
 
 		if (DAOS_FAIL_CHECK(DAOS_VOS_AGG_MW_THRESH)) {
@@ -1748,6 +1753,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 out:
 	if (rc)
 		close_merge_window(mw, rc);
+
 	return rc;
 }
 
