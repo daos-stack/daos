@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,10 @@
 package main
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 func TestNetworkCommands(t *testing.T) {
@@ -32,37 +35,59 @@ func TestNetworkCommands(t *testing.T) {
 		{
 			"Get network provider list",
 			"network list",
-			"ConnectClients NetworkListProviders",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.NetworkScanReq{}),
+			}, " "),
 			nil,
 		},
 		{
 			"Perform network scan no provider",
 			"network scan",
-			"ConnectClients NetworkScanDevices-",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.NetworkScanReq{}),
+			}, " "),
 			nil,
 		},
 		{
 			"Perform network scan all providers long",
 			"network scan --all",
-			"ConnectClients NetworkScanDevices-",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.NetworkScanReq{}),
+			}, " "),
 			nil,
 		},
 		{
 			"Perform network scan all providers short",
 			"network scan -a",
-			"ConnectClients NetworkScanDevices-",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.NetworkScanReq{}),
+			}, " "),
 			nil,
 		},
 		{
 			"Perform network scan with provider ofi+sockets (short)",
 			"network scan -p 'ofi+sockets'",
-			"ConnectClients NetworkScanDevices-'ofi+sockets'",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.NetworkScanReq{
+					Provider: "'ofi+sockets'",
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"Perform network scan with provider ofi+sockets (long)",
 			"network scan --provider 'ofi+sockets'",
-			"ConnectClients NetworkScanDevices-'ofi+sockets'",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.NetworkScanReq{
+					Provider: "'ofi+sockets'",
+				}),
+			}, " "),
 			nil,
 		},
 	})

@@ -271,7 +271,7 @@ typedef struct {
  *
  * \return	allocated daos_prop_t pointer, NULL if failed.
  */
-DAOS_API daos_prop_t *
+daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr);
 
 /**
@@ -279,7 +279,7 @@ daos_prop_alloc(uint32_t entries_nr);
  *
  * \param[in]	prop	properties to be freed.
  */
-DAOS_API void
+void
 daos_prop_free(daos_prop_t *prop);
 
 /**
@@ -290,7 +290,7 @@ daos_prop_free(daos_prop_t *prop);
  *
  * \return	Newly allocated merged property
  */
-DAOS_API daos_prop_t *
+daos_prop_t *
 daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
 
 /**
@@ -304,7 +304,7 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
  * \return		0		Success
  *			-DER_NOMEM	Out of memory
  */
-DAOS_API int
+int
 daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
 			struct daos_prop_entry *entry_src, size_t len);
 
@@ -317,7 +317,7 @@ daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
  * \return	0		Entries match
  *		-DER_MISMATCH	Entries do NOT match
  */
-DAOS_API int
+int
 daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 			struct daos_prop_entry *entry2);
 

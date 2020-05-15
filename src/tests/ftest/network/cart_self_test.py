@@ -21,118 +21,115 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
 import os
-import subprocess
-from apricot import TestWithoutServers
 
-import agent_utils
-import server_utils
-import write_host_file
-from pydaos.raw import DaosLog
+from apricot import TestWithServers
+
+from command_utils_base import \
+    EnvironmentVariables, FormattedParameter, CommandFailure
+from command_utils import ExecutableCommand
+from job_manager_utils import Orterun
+from general_utils import get_log_file
 
 
-class CartSelfTest(TestWithoutServers):
-    """Run a few variations of CaRT self-test.
+class SelfTest(ExecutableCommand):
+    """Defines a CaRT self test command."""
 
-    Runs a few variations of CaRT self-test to ensure network is in a
-    stable state prior to testing.
+    def __init__(self, path=""):
+        """Create a SelfTest object.
+
+        Uses Avocado's utils.process module to run self_test with parameters.
+
+        Args:
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+        """
+        super(SelfTest, self).__init__("/run/self_test/*", "self_test", path)
+
+        self.group_name = FormattedParameter("--group-name {}")
+        self.endpoint = FormattedParameter("--endpoint {0}")
+        self.message_sizes = FormattedParameter("--message-sizes {0}")
+        self.max_inflight_rpcs = FormattedParameter("--max-inflight-rpcs {0}")
+        self.repetitions = FormattedParameter("--repetitions {0}")
+        self.attach_info = FormattedParameter("--path {0}")
+
+
+class CartSelfTest(TestWithServers):
+    """Runs a few variations of CaRT self-test.
+
+    Ensures network is in a stable state prior to testing.
+
     :avocado: recursive
-
     """
 
     def __init__(self, *args, **kwargs):
-        """Class for running cart selftest."""
+        """Initialize a CartSelfTest object."""
         super(CartSelfTest, self).__init__(*args, **kwargs)
-
-        self.self_test_bin = None
-        self.endpoint = None
-        self.max_rpcs = None
-        self.repetitions = None
-        self.message_size = None
-        self.share_addr = None
-        self.env_dict = None
-        self.env_list = None
+        self.setup_start_servers = False
+        self.uri_file = None
+        self.cart_env = EnvironmentVariables()
 
     def setUp(self):
-        """Start servers, establish file locations."""
+        """Set up each test case."""
         super(CartSelfTest, self).setUp()
-        self.agent_sessions = None
 
-        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir)
+        # Configure the daos server
+        config_file = self.get_config_file(self.server_group, "server")
+        self.add_server_manager(config_file)
+        self.configure_manager(
+            "server",
+            self.server_managers[-1],
+            self.hostlist_servers,
+            self.hostfile_servers_slots,
+            self.hostlist_servers)
 
-        self.d_log = DaosLog(self.context)
+        # Setup additional environment variables for the server orterun command
+        share_addr = self.params.get("val",
+                                     "/run/muxtestparams/share_addr/*")[0]
+        self.cart_env["CRT_CTX_SHARE_ADDR"] = str(share_addr)
+        self.cart_env["CRT_CTX_NUM"] = "8"
+        self.cart_env["CRT_PHY_ADDR_STR"] = \
+            self.server_managers[0].get_config_value("provider")
+        self.cart_env["OFI_INTERFACE"] = \
+            self.server_managers[0].get_config_value("fabric_iface")
+        self.server_managers[0].manager.assign_environment(self.cart_env, True)
 
-        # self_test params
-        self.self_test_bin = os.path.join(self.prefix, "bin/self_test")
-        self.endpoint = self.params.get("endpoint", "/run/testparams/")
-        self.max_rpcs = self.params.get(
-            "max_inflight_rpcs", "/run/testparams/")
-        self.repetitions = self.params.get("repetitions", "/run/testparams/")
-        self.message_size = (
-            self.params.get("size", "/run/muxtestparams/message_size/*")[0])
-        self.share_addr = self.params.get("val",
-                                          "/run/muxtestparams/share_addr/*")[0]
-        self.env_dict = {
-            "CRT_PHY_ADDR_STR":     "ofi+sockets",
-            "CRT_CTX_NUM":          "8",
-            "OFI_INTERFACE":        os.environ.get("OFI_INTERFACE", "eth0"),
-            "CRT_CTX_SHARE_ADDR":   str(self.share_addr)
-        }
-        self.env_list = []
-        for key, val in self.env_dict.items():
-            self.env_list.append("-x")
-            self.env_list.append("{0}={1}".format(key, val))
+        # Start the daos server
+        self.start_server_managers()
 
-        # daos server params
-        self.server_group = self.params.get("name", 'server_config',
-                                            'daos_server')
+        # Generate a uri file using daos_agent dump-attachinfo
+        attachinfo_file = "{}.attach_info_tmp".format(self.server_group)
+        self.uri_file = get_log_file(attachinfo_file)
+        agent_cmd = self.agent_managers[0].manager.job
+        agent_cmd.dump_attachinfo(self.uri_file)
 
-        self.uri_file = os.path.join(self.tmp, "uri.txt")
-        self.agent_sessions = agent_utils.run_agent(self, self.hostlist_servers)
-        server_utils.run_server(
-            self, self.hostfile_servers, self.server_group,
-            uri_path=self.uri_file, env_dict=self.env_dict)
-
-    def tearDown(self):
-        """Teardown after testcase."""
-        try:
-            os.remove(self.hostfile_servers)
-            os.remove(self.uri_file)
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            super(CartSelfTest, self).tearDown()
 
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.
 
-        :avocado: tags=all,smoke,unittest,tiny,cartselftest
+        :avocado: tags=all,pr,smoke,unittest,tiny,cartselftest
         """
-        base_cmd = [self.orterun,
-                    "-np", "1",
-                    "-ompi-server", "file:{0}".format(self.uri_file)]
-        selftest = [self.self_test_bin,
-                    "--group-name", "{0}".format(self.server_group),
-                    "--endpoint", "{0}".format(self.endpoint),
-                    "--message-sizes", "{0}".format(self.message_size),
-                    "--max-inflight-rpcs", "{0}".format(self.max_rpcs),
-                    "--repetitions", "{0}".format(self.repetitions)]
+        # Setup the orterun command
+        orterun = Orterun(SelfTest(self.bin))
+        orterun.map_by.update(None, "orterun/map_by")
+        orterun.enable_recovery.update(False, "orterun/enable_recovery")
 
-        cmd = base_cmd + self.env_list + selftest
+        # Get the self_test command line parameters
+        orterun.job.get_params(self)
+        orterun.job.group_name.update(self.server_group, "group_name")
+        orterun.job.message_sizes.update(
+            self.params.get("size", "/run/muxtestparams/message_size/*")[0],
+            "message_sizes")
+        orterun.job.attach_info.update(
+            os.path.dirname(self.uri_file), "attach_info")
 
-        cmd_log_str = ""
-        for elem in cmd:
-            cmd_log_str += elem + " "
+        # Setup the environment variables for the self_test orterun command
+        orterun.assign_environment(self.cart_env)
+
+        # Run the test
         try:
-            self.d_log.info("Running cmd {0}".format(cmd_log_str))
-            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as exc:
-            self.d_log.error("CaRT self_test returned non-zero. "
-                             "rc {0}:".format(exc.returncode))
-            for line in exc.output.split('\n'):
-                self.d_log.error("{0}".format(line))
+            orterun.run()
+        except CommandFailure as error:
+            self.test_log.info(
+                "CaRT self_test returned non-zero: %s", str(error))
             self.fail("CaRT self_test returned non-zero")

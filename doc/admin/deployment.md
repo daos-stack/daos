@@ -69,8 +69,9 @@ $ sudo reboot
 ```
 
 !!! warning
-    VFIO support is currently planned for DAOS 1.2 and won't work until
-    we move to SPDK 20.01.1
+    VFIO support is a new feature for DAOS 1.2 and has been tested on the
+    following platforms:
+    •	CentOS 7.7
 
 ### Time Synchronization
 
@@ -317,7 +318,7 @@ transport_config:
 ```
 
 ```yaml
-# /etc/daos/daos.yml (dmg/admin)
+# /etc/daos/daos_control.yml (dmg/admin)
 
 transport_config:
   # Custom CA Root certificate for generated certs

@@ -87,7 +87,8 @@ const (
 	BdevUnknown Code = iota + 300
 	BdevFormatUnknownClass
 	BdevFormatFailure
-	BdevFormatBadPciAddress
+	BdevBadPCIAddress
+	BdevPCIAddressNotFound
 
 	// DAOS system fault codes
 	SystemUnknown Code = iota + 400
@@ -99,6 +100,11 @@ const (
 	ClientUnknown Code = iota + 500
 	ClientConfigBadControlPort
 	ClientConfigBadAccessPoints
+	ClientConfigEmptyHostList
+	ClientConnectionBadHost
+	ClientConnectionNoRoute
+	ClientConnectionRefused
+	ClientConnectionClosed
 
 	// server fault codes
 	ServerUnknown Code = iota + 600
@@ -120,6 +126,8 @@ const (
 	ServerPoolNvmeTooSmall
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
+	ServerDataPlaneNotStarted
+	ServerInstancesNotStopped
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

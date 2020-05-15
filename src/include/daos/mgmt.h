@@ -38,11 +38,10 @@ void dc_mgmt_fini(void);
 int dc_mgmt_svc_rip(tse_task_t *task);
 int dc_pool_create(tse_task_t *task);
 int dc_pool_destroy(tse_task_t *task);
-int dc_pool_evict(tse_task_t *task);
 int dc_pool_extend(tse_task_t *task);
 int dc_mgmt_set_params(tse_task_t *task);
 int dc_mgmt_list_pools(tse_task_t *task);
-int dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start);
+int dc_mgmt_profile(char *path, int avg, bool start);
 int dc_mgmt_add_mark(const char *mark);
 
 /** GetAttachInfo system info */

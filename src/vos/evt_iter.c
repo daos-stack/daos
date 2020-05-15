@@ -256,12 +256,15 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 		struct evt_trace	*trace;
 		struct evt_rect		*rect;
 		struct evt_node		*nd;
+		struct evt_node_entry	*ne;
 
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
 		nd = evt_off2node(tcx, trace->tr_node);
 		if (evt_node_is_leaf(tcx, nd)) {
-			desc = evt_node_desc_at(tcx, nd, trace->tr_at);
-			rc1 = evt_desc_log_status(tcx, desc, intent);
+			ne = evt_node_entry_at(tcx, nd, trace->tr_at);
+			desc = evt_off2desc(tcx, ne->ne_child);
+			rc1 = evt_desc_log_status(tcx, ne->ne_rect.rc_epc, desc,
+						  intent);
 			if (rc1 < 0)
 				return rc1;
 

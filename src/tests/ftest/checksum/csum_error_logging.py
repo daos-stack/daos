@@ -42,7 +42,10 @@ class CSumErrorLog(DaosCoreBase):
         super(CSumErrorLog, self).setUp()
         self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         self.dmg.get_params(self)
-        self.dmg.hostlist.value = self.hostlist_servers[0]
+        self.dmg.hostlist = self.hostlist_servers[0]
+        self.dmg.insecure.update(
+            self.server_managers[0].get_config_value("allow_insecure"),
+            "dmg.insecure")
         self.dmg.set_sub_command("storage")
         self.dmg.sub_command_class.set_sub_command("query")
 
@@ -92,7 +95,7 @@ class CSumErrorLog(DaosCoreBase):
         Test ID: DAOS-3927
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=all,full_regression,pr,hw,medium,csum_error_log
+        :avocado: tags=all,pr,hw,medium,ib2,csum_error_log
         """
         dev_id = self.get_nvme_device_id()
         self.log.info("%s", dev_id)

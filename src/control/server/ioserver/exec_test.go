@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,6 +113,7 @@ func TestRunnerContextExit(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	cfg := NewConfig()
+	cfg.Index = 9
 
 	runner := NewRunner(log, cfg)
 	errOut := make(chan error)
@@ -123,8 +124,8 @@ func TestRunnerContextExit(t *testing.T) {
 	}
 	cancel()
 
-	exitErr := <-errOut
-	if errors.Cause(exitErr) == NormalExit {
+	err := <-errOut
+	if errors.Cause(err) == NormalExit {
 		t.Fatal("expected process to not exit normally")
 	}
 }
@@ -156,9 +157,9 @@ func TestRunnerNormalExit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exitErr := <-errOut
-	if errors.Cause(exitErr).Error() != NormalExit.Error() {
-		t.Fatalf("expected normal exit; got %s", exitErr)
+	err := <-errOut
+	if errors.Cause(err).Error() != NormalExit.Error() {
+		t.Fatalf("expected normal exit; got %s", err)
 	}
 
 	// Light integration testing of arg/env generation; unit tests elsewhere.

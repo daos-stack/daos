@@ -71,22 +71,45 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 }
 
 static void
-rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
-		int *failed_tgts, int rank_nr, bool kill)
+rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
+		int tgt_idx)
 {
-	int	i;
+	int i;
+
+	for (i = 0; i < args_cnt; i++) {
+		if (!args[i]->pool.destroyed)
+			daos_add_target(args[i]->pool.pool_uuid,
+					args[i]->group,
+					&args[i]->pool.svc,
+					rank, tgt_idx);
+		sleep(2);
+	}
+}
+
+static void
+rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
+		int *tgts, int rank_nr, bool fail, bool kill)
+{
+	int i;
 
 	for (i = 0; i < args_cnt; i++)
 		if (args[i]->rebuild_pre_cb)
 			args[i]->rebuild_pre_cb(args[i]);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	/** exclude the target from the pool */
+	/** include or exclude the target from the pool */
 	if (args[0]->myrank == 0) {
 		for (i = 0; i < rank_nr; i++) {
-			rebuild_exclude_tgt(args, args_cnt, failed_ranks[i],
-					    failed_tgts ? failed_tgts[i] : -1,
-					    kill);
+			if (fail) {
+				rebuild_exclude_tgt(args, args_cnt,
+						    ranks[i],
+						    tgts ? tgts[i] : -1,
+						    kill);
+			} else {
+				rebuild_add_tgt(args, args_cnt, ranks[i],
+						tgts ? tgts[i] : -1);
+
+			}
 			/* Sleep 5 seconds to make sure the rebuild start */
 			sleep(5);
 		}
@@ -109,21 +132,22 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 static void
 rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
 {
-	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false);
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, true, false);
 }
 
 static void
 rebuild_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 		    int ranks_nr)
 {
-	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, false);
+	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, true,
+			false);
 }
 
 void
 rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 			   int failed_tgt)
 {
-	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false);
+	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, true, false);
 }
 
 void
@@ -348,6 +372,157 @@ rebuild_pool_destroy(test_arg_t *arg)
 	sleep(1);
 }
 
+static int
+rebuild_pool_connect_internal(void *data)
+{
+	test_arg_t	*arg = data;
+	int		rc = 0;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       &arg->pool.svc, DAOS_PC_RW,
+				       &arg->pool.poh, &arg->pool.pool_info,
+				       NULL /* ev */);
+		if (rc)
+			print_message("daos_pool_connect failed, rc: %d\n", rc);
+
+		print_message("pool connect "DF_UUIDF"\n",
+			       DP_UUID(arg->pool.pool_uuid));
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
+
+	/** broadcast pool info */
+	if (arg->multi_rank) {
+		MPI_Bcast(&arg->pool.pool_info, sizeof(arg->pool.pool_info),
+			  MPI_CHAR, 0, MPI_COMM_WORLD);
+		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
+			     arg->pool.poh, 0);
+	}
+
+	/** open container */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
+				    &arg->coh, &arg->co_info, NULL);
+		if (rc)
+			print_message("daos_cont_open failed, rc: %d\n", rc);
+
+		print_message("container open "DF_UUIDF"\n",
+			       DP_UUID(arg->co_uuid));
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
+
+	/** broadcast container info */
+	if (arg->multi_rank) {
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh,
+			     0);
+	}
+
+	return 0;
+}
+
+static int
+rebuild_pool_disconnect_internal(void *data)
+{
+	test_arg_t	*arg = data;
+	int		rc = 0;
+	int		rc_reduce = 0;
+
+	/* Close cont and disconnect pool */
+	rc = daos_cont_close(arg->coh, NULL);
+	if (arg->multi_rank) {
+		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
+			      MPI_COMM_WORLD);
+		rc = rc_reduce;
+	}
+	print_message("container close "DF_UUIDF"\n",
+		      DP_UUID(arg->co_uuid));
+	if (rc) {
+		print_message("failed to close container "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+		return rc;
+	}
+
+	arg->coh = DAOS_HDL_INVAL;
+	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
+	if (rc)
+		print_message("failed to disconnect pool "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->pool.pool_uuid), rc);
+
+	print_message("pool disconnect "DF_UUIDF"\n",
+		      DP_UUID(arg->pool.pool_uuid));
+
+	arg->pool.poh = DAOS_HDL_INVAL;
+	MPI_Barrier(MPI_COMM_WORLD);
+	return rc;
+}
+
+void
+reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+			       int failed_tgt)
+{
+	/* XXX: Disconnecting and reconnecting is necessary for the time being
+	 * while reintegration only supports "offline" mode and without
+	 * incremental reintegration. Disconnecting from the pool allows the
+	 * containers to be deleted before reintegration occurs
+	 *
+	 * Once incremental reintegration support is added, this should be
+	 * removed
+	 */
+	rebuild_pool_disconnect_internal(arg);
+	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false, false);
+	rebuild_pool_connect_internal(arg);
+}
+
+static void
+reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
+{
+
+	/* XXX: Disconnecting and reconnecting is necessary for the time being
+	 * while reintegration only supports "offline" mode and without
+	 * incremental reintegration. Disconnecting from the pool allows the
+	 * containers to be deleted before reintegration occurs
+	 *
+	 * Once incremental reintegration support is added, this should be
+	 * removed
+	 */
+	rebuild_pool_disconnect_internal(arg);
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, false);
+	rebuild_pool_connect_internal(arg);
+}
+
+static void
+reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
+			int ranks_nr)
+{
+	int i;
+
+	/* XXX: Disconnecting and reconnecting is necessary for the time being
+	 * while reintegration only supports "offline" mode and without
+	 * incremental reintegration. Disconnecting from the pool allows the
+	 * containers to be deleted before reintegration occurs
+	 *
+	 * Once incremental reintegration support is added, this should be
+	 * removed
+	 */
+	for (i = 0; i < args_cnt; i++)
+		rebuild_pool_disconnect_internal(args[i]);
+	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, false,
+			false);
+	for (i = 0; i < args_cnt; i++)
+		rebuild_pool_connect_internal(args[i]);
+}
+
 static void
 rebuild_drop_scan(void **state)
 {
@@ -375,9 +550,10 @@ rebuild_drop_scan(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -406,9 +582,10 @@ rebuild_retry_rebuild(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -435,9 +612,10 @@ rebuild_retry_for_stale_pool(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0]);
-
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -464,9 +642,10 @@ rebuild_drop_obj(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0]);
-
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -495,7 +674,7 @@ rebuild_update_failed(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -529,8 +708,11 @@ rebuild_multiple_pools(void **state)
 	rebuild_io_validate(args[0], oids, OBJ_NR, true);
 	rebuild_io_validate(args[1], oids, OBJ_NR, true);
 
+	reintegrate_pools_ranks(args, 2, ranks_to_kill, 1);
+	rebuild_io_validate(args[0], oids, OBJ_NR, true);
+	rebuild_io_validate(args[1], oids, OBJ_NR, true);
+
 	rebuild_pool_destroy(args[1]);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
 }
 
 static int
@@ -658,42 +840,6 @@ rebuild_close_container(void **state)
 }
 
 static int
-rebuild_pool_disconnect_internal(void *data)
-{
-	test_arg_t	*arg = data;
-	int		rc = 0;
-	int		rc_reduce = 0;
-
-	/* Close cont and disconnect pool */
-	rc = daos_cont_close(arg->coh, NULL);
-	if (arg->multi_rank) {
-		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-			      MPI_COMM_WORLD);
-		rc = rc_reduce;
-	}
-	print_message("container close "DF_UUIDF"\n",
-		      DP_UUID(arg->co_uuid));
-	if (rc) {
-		print_message("failed to close container "DF_UUIDF
-			      ": %d\n", DP_UUID(arg->co_uuid), rc);
-		return rc;
-	}
-
-	arg->coh = DAOS_HDL_INVAL;
-	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
-	if (rc)
-		print_message("failed to disconnect pool "DF_UUIDF
-			      ": %d\n", DP_UUID(arg->pool.pool_uuid), rc);
-
-	print_message("pool disconnect "DF_UUIDF"\n",
-		      DP_UUID(arg->pool.pool_uuid));
-
-	arg->pool.poh = DAOS_HDL_INVAL;
-	MPI_Barrier(MPI_COMM_WORLD);
-	return rc;
-}
-
-static int
 rebuild_destroy_pool_cb(void *data)
 {
 	test_arg_t	*arg = data;
@@ -791,10 +937,10 @@ rebuild_iv_tgt_fail(void **state)
 				     DAOS_FAIL_ONCE, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0]);
-
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -861,67 +1007,10 @@ rebuild_send_objects_fail(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
 	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
 }
 
-static int
-rebuild_pool_connect_internal(void *data)
-{
-	test_arg_t	*arg = data;
-	int		rc;
-
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->myrank == 0) {
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       &arg->pool.svc, DAOS_PC_RW,
-				       &arg->pool.poh, &arg->pool.pool_info,
-				       NULL /* ev */);
-		if (rc)
-			print_message("daos_pool_connect failed, rc: %d\n", rc);
-
-		print_message("pool connect "DF_UUIDF"\n",
-			       DP_UUID(arg->pool.pool_uuid));
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->multi_rank)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	/** broadcast pool info */
-	if (arg->multi_rank) {
-		MPI_Bcast(&arg->pool.pool_info, sizeof(arg->pool.pool_info),
-			  MPI_CHAR, 0, MPI_COMM_WORLD);
-		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
-			     arg->pool.poh, 0);
-	}
-
-	/** open container */
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->myrank == 0) {
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
-				    &arg->coh, &arg->co_info, NULL);
-		if (rc)
-			print_message("daos_cont_open failed, rc: %d\n", rc);
-
-		print_message("container open "DF_UUIDF"\n",
-			       DP_UUID(arg->co_uuid));
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->multi_rank)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	/** broadcast container info */
-	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh,
-			     0);
-	}
-
-	return 0;
-}
 
 static int
 rebuild_pool_disconnect_cb(void *data)
@@ -1048,7 +1137,7 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 	arg->rebuild_pre_cb = rebuild_pool_disconnect_internal;
 	arg->rebuild_cb = rebuild_pool_connect_cb;
 
-	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true);
+	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true, true);
 
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_cb = NULL;
@@ -1089,7 +1178,7 @@ rebuild_offline(void **state)
 	arg->rebuild_pre_cb = rebuild_pool_disconnect_internal;
 	arg->rebuild_post_cb = rebuild_pool_connect_internal;
 
-	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true);
+	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true, true);
 
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_post_cb = NULL;
@@ -1253,7 +1342,8 @@ rebuild_nospace(void **state)
 	arg->rebuild_cb = NULL;
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -1374,7 +1464,7 @@ rebuild_master_failure(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, OBJ_NR);
 
-	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true);
+	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true, true);
 
 	/* Verify the data */
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
@@ -1455,7 +1545,7 @@ rebuild_multiple_failures(void **state)
 #endif
 	arg->rebuild_post_cb_arg = cb_arg_oids;
 
-	rebuild_targets(&arg, 1, ranks_to_kill, NULL, MAX_KILLS, true);
+	rebuild_targets(&arg, 1, ranks_to_kill, NULL, MAX_KILLS, true, true);
 
 	arg->rebuild_cb = NULL;
 	arg->rebuild_post_cb = NULL;
@@ -1487,8 +1577,6 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	shard = layout->ol_shards[0];
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
 			 &arg->pool.alive_svc, shard->os_ranks[0]);
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    &arg->pool.svc, shard->os_ranks[0]);
 
 	/* Sleep 10 seconds after it scan finish and hang before rebuild */
 	print_message("sleep 10 seconds to wait scan to be finished \n");
@@ -1497,8 +1585,6 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	/* Then kill rank 1 */
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
 			 &arg->pool.alive_svc, shard->os_ranks[1]);
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    &arg->pool.svc, shard->os_ranks[1]);
 
 	/* Continue rebuild */
 	daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
@@ -1544,13 +1630,6 @@ rebuild_fail_all_replicas(void **state)
 			daos_kill_server(arg, arg->pool.pool_uuid,
 					 arg->group, &arg->pool.alive_svc,
 					 rank);
-		}
-
-		for (j = 0; j < layout->ol_shards[i]->os_replica_nr; j++) {
-			d_rank_t rank = layout->ol_shards[i]->os_ranks[j];
-
-			daos_exclude_server(arg->pool.pool_uuid, arg->group,
-					    &arg->pool.svc, rank);
 		}
 	}
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,7 +82,7 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return errors.Wrap(err, "check NotifyReady request socket path")
 	}
 
-	mod.iosrvs[req.InstanceIdx].NotifyReady(req)
+	mod.iosrvs[req.InstanceIdx].NotifyDrpcReady(req)
 
 	return nil
 }

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1026,18 +1026,25 @@ enum rdb_stop_flag {
 	RDB_OF_DESTROY		= 0x1
 };
 
+/*
+ * Create a bcast in the primary group. If filter_invert is false, bcast to the
+ * whole primary group filtering out filter_ranks; otherwise, bcast to
+ * filter_ranks only.
+ */
 static int
-bcast_create(crt_opcode_t opc, crt_group_t *group, d_rank_list_t *excluded,
+bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks,
 	     crt_rpc_t **rpc)
 {
 	struct dss_module_info *info = dss_get_module_info();
 	crt_opcode_t		opc_full;
 
+	D_ASSERT(!filter_invert || filter_ranks != NULL);
 	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RSVC_MODULE, DAOS_RSVC_VERSION);
-	return crt_corpc_req_create(info->dmi_ctx, group,
-				    excluded /* excluded_ranks */, opc_full,
+	return crt_corpc_req_create(info->dmi_ctx, NULL /* grp */,
+				    filter_ranks, opc_full,
 				    NULL /* co_bulk_hdl */, NULL /* priv */,
-				    0 /* flags */,
+				    filter_invert ?
+				    CRT_RPC_FLAG_FILTER_INVERT : 0,
 				    crt_tree_topo(CRT_TREE_FLAT, 0), rpc);
 }
 
@@ -1055,24 +1062,21 @@ bcast_create(crt_opcode_t opc, crt_group_t *group, d_rank_list_t *excluded,
  * \param[in]	size		size of each replica in bytes if \a create
  */
 int
-ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
-		   const uuid_t dbid, const d_rank_list_t *ranks, bool create,
-		   bool bootstrap, size_t size)
+ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
+		   const d_rank_list_t *ranks, bool create, bool bootstrap,
+		   size_t size)
 {
 	crt_rpc_t		*rpc;
 	struct rsvc_start_in	*in;
 	struct rsvc_start_out	*out;
 	int			 rc;
 
-	D_ASSERT(!create || ranks != NULL);
+	D_ASSERT(!bootstrap || ranks != NULL);
 	D_DEBUG(DB_MD, DF_UUID": %s DB\n",
 		DP_UUID(dbid), create ? "creating" : "starting");
 
-	/*
-	 * If ranks doesn't include myself, creating a group with ranks will
-	 * fail; bcast to the primary group instead.
-	 */
-	rc = bcast_create(RSVC_START, NULL /* group */, NULL, &rpc);
+	rc = bcast_create(RSVC_START, ranks != NULL /* filter_invert */,
+			  (d_rank_list_t *)ranks, &rpc);
 	if (rc != 0)
 		goto out;
 	in = crt_req_get(rpc);
@@ -1095,10 +1099,11 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 	out = crt_reply_get(rpc);
 	rc = out->sao_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start%s replicas: "DF_RC"\n",
-			DP_UUID(dbid), create ? "/create" : "", DP_RC(rc));
+		D_ERROR(DF_UUID": failed to start%s %d replicas: "DF_RC"\n",
+			DP_UUID(dbid), create ? "/create" : "", rc,
+			DP_RC(out->sao_rc_errval));
 		ds_rsvc_dist_stop(class, id, ranks, NULL, create);
-		rc = -DER_IO;
+		rc = out->sao_rc_errval;
 	}
 
 out_mem:
@@ -1115,29 +1120,20 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 	struct rsvc_start_in	*in = crt_req_get(rpc);
 	struct rsvc_start_out	*out = crt_reply_get(rpc);
 	bool			 create = in->sai_flags & RDB_AF_CREATE;
+	bool			 bootstrap = in->sai_flags & RDB_AF_BOOTSTRAP;
 	int			 rc;
 
-	if (create && in->sai_ranks == NULL) {
+	if (bootstrap && in->sai_ranks == NULL) {
 		rc = -DER_PROTO;
 		goto out;
 	}
 
-	if (in->sai_ranks != NULL) {
-		d_rank_t	rank;
-		int		i;
-
-		/* Do nothing if I'm not one of the replicas. */
-		rc = crt_group_rank(NULL /* grp */, &rank);
-		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-		if (!daos_rank_list_find(in->sai_ranks, rank, &i))
-			goto out;
-	}
-
 	rc = ds_rsvc_start(in->sai_class, &in->sai_svc_id, in->sai_db_uuid,
 			   create, in->sai_size,
-			   (in->sai_flags & RDB_AF_BOOTSTRAP) ?
-			   in->sai_ranks : NULL, NULL /* arg */);
+			   bootstrap ? in->sai_ranks : NULL, NULL /* arg */);
+
 out:
+	out->sao_rc_errval = rc;
 	out->sao_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
 }
@@ -1150,7 +1146,14 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 
 	out_source = crt_reply_get(source);
 	out_result = crt_reply_get(result);
+	/* rc is error count, rc_errval first error value */
 	out_result->sao_rc += out_source->sao_rc;
+
+	if (out_result->sao_rc_errval == 0) {
+		if (out_source->sao_rc_errval != 0)
+			out_result->sao_rc_errval = out_source->sao_rc_errval;
+	}
+
 	return 0;
 }
 
@@ -1180,11 +1183,12 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 	struct rsvc_stop_out	*out;
 	int			 rc;
 
-	/*
-	 * If ranks doesn't include myself, creating a group with ranks will
-	 * fail; bcast to the primary group instead.
-	 */
-	rc = bcast_create(RSVC_STOP, NULL /* group */, excluded, &rpc);
+	/* No "ranks != NULL && excluded != NULL" use case currently. */
+	D_ASSERT(ranks == NULL || excluded == NULL);
+
+	rc = bcast_create(RSVC_STOP, ranks != NULL /* filter_invert */,
+			  ranks != NULL ? (d_rank_list_t *)ranks : excluded,
+			  &rpc);
 	if (rc != 0)
 		goto out;
 	in = crt_req_get(rpc);
@@ -1194,7 +1198,6 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 		goto out_rpc;
 	if (destroy)
 		in->soi_flags |= RDB_OF_DESTROY;
-	in->soi_ranks = (d_rank_list_t *)ranks;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -1223,20 +1226,8 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 	struct rsvc_stop_out	*out = crt_reply_get(rpc);
 	int			 rc = 0;
 
-	if (in->soi_ranks != NULL) {
-		d_rank_t	rank;
-		int		i;
-
-		/* Do nothing if I'm not one of the replicas. */
-		rc = crt_group_rank(NULL /* grp */, &rank);
-		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-		if (!daos_rank_list_find(in->soi_ranks, rank, &i))
-			goto out;
-	}
-
 	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id,
 			  in->soi_flags & RDB_OF_DESTROY);
-out:
 	out->soo_rc = (rc == 0 || rc == -DER_ALREADY ? 0 : 1);
 	crt_reply_send(rpc);
 }

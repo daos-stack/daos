@@ -20,12 +20,14 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package proto
 
 import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -38,6 +40,11 @@ func TestProto_ConvertNvmeDeviceHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 	expNative := storage.MockNvmeDeviceHealth()
+	// set these manually, as the mock generators intentionally
+	// perturb these values
+	expNative.Temp = pb.Temp
+	expNative.PowerCycles = pb.Powercycles
+	expNative.PowerOnHours = pb.Poweronhours
 
 	if diff := cmp.Diff(expNative, native); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
@@ -65,7 +72,10 @@ func TestProto_ConvertNvmeController(t *testing.T) {
 	}
 	expNative := storage.MockNvmeController()
 
-	if diff := cmp.Diff(expNative, native); diff != "" {
+	cmpOpts := []cmp.Option{
+		cmpopts.IgnoreFields(storage.NvmeController{}, "HealthStats", "Serial"),
+	}
+	if diff := cmp.Diff(expNative, native, cmpOpts...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }

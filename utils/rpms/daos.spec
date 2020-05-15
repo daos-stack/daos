@@ -2,14 +2,11 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0a1-0.7.git.41caa14%{?dist}
-
-%global spdk_max_version 21
-%global spdk_min_version 19
+%global mercury_version 2.0.0~a1-1.git.4871023%{?dist}
 
 Name:          daos
 Version:       1.1.0
-Release:       9%{?relval}%{?dist}
+Release:       15%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -32,10 +29,9 @@ BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: libabt-devel >= 1.0rc1
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
-BuildRequires: fuse-devel >= 3.4.2
+BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
-BuildRequires: spdk-devel > %{spdk_min_version}, spdk-devel < %{spdk_max_version}
-BuildRequires: spdk-tools > %{spdk_min_version}, spdk-tools < %{spdk_max_version}
+BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 %else
@@ -56,6 +52,7 @@ BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
+BuildRequires: python-distro
 %else
 %if (0%{?suse_version} >= 1315)
 # see src/client/dfs/SConscript for why we need /etc/os-release
@@ -73,6 +70,7 @@ BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: Modules
 BuildRequires: systemd-rpm-macros
+BuildRequires: python3-distro
 %if 0%{?is_opensuse}
 %else
 # have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
@@ -87,10 +85,7 @@ BuildRequires: libpsm_infinipath1
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1, libpmemobj1
 %endif
-Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: fio < 3.4
-Requires: spdk > %{spdk_min_version}, spdk < %{spdk_max_version}
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
@@ -112,7 +107,7 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: %{name}-client = %{version}-%{release}
-Requires: spdk-tools > %{spdk_min_version}, spdk-tools < %{spdk_max_version}
+Requires: spdk-tools
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
@@ -130,6 +125,10 @@ Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
+Requires: fuse3 >= 3.4.2
+# because our repo has a deprecated fuse-3.x RPM, make sure we don't
+# get it when fuse3 Requires: /etc/fuse.conf
+Requires: fuse < 3, fuse3-libs >= 3.4.2
 %systemd_requires
 
 %description client
@@ -139,6 +138,7 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+Requires: fio
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -274,7 +274,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/dmg
 %{_bindir}/dmg_old
 %{_bindir}/daosctl
-%{_bindir}/dcont
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
@@ -315,7 +314,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %endif
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
-%config(noreplace) %{conf_dir}/daos.yml
+%config(noreplace) %{conf_dir}/daos_control.yml
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
 %{_mandir}/man8/dmg.8*
@@ -346,6 +345,25 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-15
+- Use new properly pre-release tagged mercury RPM
+
+* Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-14
+- Move fuse dependencies to the client subpackage
+
+* Mon Apr 27 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-13
+- Rename /etc/daos.yml -> /etc/daos_control.yml
+
+* Thu Apr 16 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-12
+- Use distro fuse
+
+* Fri Apr 10 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-11
+- Update to mercury 4871023 to pick na_ofi.c race condition fix for
+  "No route to host" errors.
+
+* Sun Apr 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-10
+- Clean up spdk dependencies
+
 * Mon Mar 30 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-9
 - Set version of spdk to < v21, > v19
 

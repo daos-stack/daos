@@ -7,7 +7,7 @@ from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'DAOS_VERSION', 'CONF_DIR')
+Import('env', 'prereqs', 'DAOS_VERSION', 'CONF_DIR', 'gurt_lib')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -68,7 +68,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
                          '-B %s"' % gen_build_id()])
     # Must be run from the top of the source dir in order to
     # pick up the vendored modules.
-    denv.Command(build_bin, src,
+    denv.Command(build_bin, src + gurt_lib,
                  'cd %s; %s build -mod vendor -v %s -o %s %s' %
                  (gosrc, GO_BIN, go_ldflags(), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
@@ -77,31 +77,10 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     return install_bin
 #pylint: enable=too-many-arguments
 
-def scons():
-    """Execute build"""
-    env.AppendUnique(LIBPATH=[Dir('.')])
-
-    denv = env.Clone()
-
-    # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
-    # runtime
-    prefix = denv.subst("$PREFIX")
-    sprefix = denv.subst("$SPDK_PREFIX")
-    if sprefix not in ["", prefix]:
-        def install_dir(ienv, srcdir, _destdir):
-            """walk a directory and install targets"""
-            for root, _dirs, files in os.walk(srcdir):
-                dest_root = os.path.relpath(root, sprefix)
-                for fname in files:
-                    full_name = os.path.join(root, fname)
-                    dest = os.path.join(prefix, dest_root)
-                    ienv.Install(dest, full_name)
-
-        for _dir in [join("share", "spdk", "scripts"), join("include", "spdk")]:
-            target = join(prefix, _dir)
-            source = join(sprefix, _dir)
-            install_dir(denv, source, target)
-
+def configure_go(denv):
+    """Do Go compiler checks"""
+    if GetOption('help') or GetOption('clean'):
+        return
     def check_go_version(context):
         """Check GO Version"""
         context.Display('Checking for Go compiler in $PATH... ')
@@ -136,15 +115,52 @@ def scons():
     conf.Finish()
     # pylint: enable=no-member
 
+
+def scons():
+    """Execute build"""
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
+    denv = env.Clone()
+
+    if denv.get("COMPILER") == 'covc':
+        denv.Replace(CC='gcc', CXX='g++')
+
+    # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
+    # runtime
+    prefix = denv.subst("$PREFIX")
+    sprefix = denv.subst("$SPDK_PREFIX")
+    if sprefix not in ["", prefix]:
+        def install_dir(ienv, srcdir, _destdir):
+            """walk a directory and install targets"""
+            for root, _dirs, files in os.walk(srcdir):
+                dest_root = os.path.relpath(root, sprefix)
+                for fname in files:
+                    full_name = os.path.join(root, fname)
+                    dest = os.path.join(prefix, dest_root)
+                    ienv.Install(dest, full_name)
+
+        for _dir in [join("share", "spdk", "scripts"), join("include", "spdk")]:
+            target = join(prefix, _dir)
+            source = join(sprefix, _dir)
+            install_dir(denv, source, target)
+
+    configure_go(denv)
+
     # Version-controlled DAOS Go source directory src/control
     gosrc = Dir('.').srcnode().abspath
     cartpath = Dir('#/src/cart/src/include').srcnode().abspath
 
-    denv.AppendENVPath("CGO_LDFLAGS",
-                       denv.subst("-L$BUILD_DIR/src/cart/src/gurt"), sep=" ")
-    denv.AppendENVPath("CGO_CFLAGS", "-I%s" % cartpath, sep=" ")
+    prereqs.require(denv, 'ofi', 'hwloc')
 
-    agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
+    denv.AppendENVPath("CGO_LDFLAGS",
+                       denv.subst("$_LIBDIRFLAGS "
+                                  "$_RPATH"),
+                       sep=" ")
+
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
+                       sep=" ")
+
+    agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
     dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
     drpcbin = install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
 
@@ -158,7 +174,7 @@ def scons():
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/cart/src/gurt "
                             "-L$BUILD_DIR/src/cart/src/cart "
-                            "-L$PREFIX/lib64 -L$SPDK_PREFIX/lib "
+                            "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access (need for clang build).
     senv.AppendENVPath("CGO_LDFLAGS", cgolibdirs + \

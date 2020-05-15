@@ -110,6 +110,9 @@ char *daos_key2str(daos_key_t *key);
 		                (int)(key)->iov_len,	\
 		                daos_key2str(key)
 
+#define DF_RECX			"["DF_U64"-"DF_U64"]"
+#define DP_RECX(r)		(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
+
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
 {
@@ -205,6 +208,8 @@ void daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
 int daos_sgl_copy_ptr(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 			    int src_nr);
+int daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
+		       int src_nr);
 int daos_sgl_copy_data_out(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
@@ -290,14 +295,14 @@ daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
  * @param[in]		sgl		sgl to be read from
  * @param[in/out]	idx		index into the sgl to start reading from
  * @param[in]		buf_len_req	number of bytes requested
- * @param[out]		buf		resulting pointer to buffer
- * @param[out]		buf_len		length of buffer
+ * @param[out]		p_buf		resulting pointer to buffer
+ * @param[out]		p_buf_len		length of buffer
  *
  * @return		true if end of SGL was reached
  */
 bool daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 			size_t buf_len_req,
-			uint8_t **buf, size_t *buf_len);
+			uint8_t **p_buf, size_t *p_buf_len);
 
 typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
 /**
@@ -513,6 +518,7 @@ daos_fail_fini(void);
 #define DAOS_FAIL_SOME		0x2000000
 #define DAOS_FAIL_ALWAYS	0x4000000
 
+#define DAOS_FAIL_ID_MASK    0xffffff
 #define DAOS_FAIL_GROUP_MASK 0xff0000
 #define DAOS_FAIL_GROUP_SHIFT 16
 
@@ -520,6 +526,8 @@ enum {
 	DAOS_FAIL_UNIT_TEST_GROUP = 1,
 	DAOS_FAIL_MAX_GROUP
 };
+
+#define DAOS_FAIL_ID_GET(fail_loc)	(fail_loc & DAOS_FAIL_ID_MASK)
 
 #define DAOS_FAIL_UNIT_TEST_GROUP_LOC	\
 		(DAOS_FAIL_UNIT_TEST_GROUP << DAOS_FAIL_GROUP_SHIFT)
@@ -564,14 +572,18 @@ enum {
 #define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
 #define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)
 
-#define DAOS_CHECKSUM_UPDATE_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
-#define DAOS_CHECKSUM_FETCH_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x21)
-#define DAOS_CHECKSUM_CDATA_CORRUPT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x22)
-#define DAOS_CHECKSUM_SDATA_CORRUPT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x23)
-#define DAOS_CHECKSUM_UPDATE_AKEY_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x24)
-#define DAOS_CHECKSUM_FETCH_AKEY_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x25)
-#define DAOS_CHECKSUM_UPDATE_DKEY_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x26)
-#define DAOS_CHECKSUM_FETCH_DKEY_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
+/** These faults simulate corruption over the network. Can be set on the client
+ * or server side.
+ */
+#define DAOS_CSUM_CORRUPT_UPDATE	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
+#define DAOS_CSUM_CORRUPT_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x21)
+#define DAOS_CSUM_CORRUPT_UPDATE_AKEY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x22)
+#define DAOS_CSUM_CORRUPT_FETCH_AKEY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x23)
+#define DAOS_CSUM_CORRUPT_UPDATE_DKEY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x24)
+#define DAOS_CSUM_CORRUPT_FETCH_DKEY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x25)
+
+ /** This fault simulates corruption on disk. Must be set on server side. */
+#define DAOS_CSUM_CORRUPT_DISK		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x26)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
@@ -599,6 +611,8 @@ enum {
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
 #define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
+
+#define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

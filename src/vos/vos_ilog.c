@@ -30,15 +30,16 @@
 #include "vos_internal.h"
 
 static int
-vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
-		    uint32_t intent, void *args)
+vos_ilog_status_get(struct umem_instance *umm, uint32_t tx_id,
+		    daos_epoch_t epoch, uint32_t intent, void *args)
 {
 	int	rc;
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
 
-	rc = vos_dtx_check_availability(umm, coh, tx_id, intent, DTX_RT_ILOG);
+	rc = vos_dtx_check_availability(umm, coh, tx_id, epoch, intent,
+					DTX_RT_ILOG);
 	if (rc < 0)
 		return rc;
 
@@ -57,10 +58,10 @@ vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
 }
 
 static int
-vos_ilog_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same,
-		    void *args)
+vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
+		    daos_epoch_t epoch, bool *same, void *args)
 {
-	umem_off_t dtx = vos_dtx_get();
+	uint32_t dtx = vos_dtx_get();
 
 	if (dtx == tx_id)
 		*same = true;
@@ -71,20 +72,23 @@ vos_ilog_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same,
 }
 
 static int
-vos_ilog_add(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t *tx_id,
-	     void *args)
+vos_ilog_add(struct umem_instance *umm, umem_off_t ilog_off, uint32_t *tx_id,
+	     daos_epoch_t epoch, void *args)
 {
 	return vos_dtx_register_record(umm, ilog_off, DTX_RT_ILOG, tx_id);
 }
 
 static int
-vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t tx_id,
-	     void *args)
+vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, uint32_t tx_id,
+	     daos_epoch_t epoch, bool deregister, void *args)
 {
 	daos_handle_t	coh;
 
+	if (!deregister)
+		return 0;
+
 	coh.cookie = (unsigned long)args;
-	vos_dtx_deregister_record(umm, coh, tx_id, ilog_off);
+	vos_dtx_deregister_record(umm, coh, tx_id, epoch, ilog_off);
 	return 0;
 }
 
@@ -294,7 +298,7 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	 *  is conditional update and sharing.
 	 */
 	if (cond == VOS_ILOG_COND_UPDATE && info->ii_uncommitted != 0)
-		return -DER_AGAIN;
+		return -DER_INPROGRESS;
 	if (rc == -DER_NONEXIST)
 		goto update;
 	if (rc != 0) {
@@ -381,7 +385,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	 *  is conditional update and sharing.
 	 */
 	if (info->ii_uncommitted != 0)
-		return -DER_AGAIN;
+		return -DER_INPROGRESS;
 	if (rc == -DER_NONEXIST)
 		return -DER_NONEXIST;
 	if (rc != 0) {

@@ -343,6 +343,7 @@ list_pools_hdlr(int argc, char *argv[])
 enum pool_op {
 	POOL_EVICT,
 	POOL_EXCLUDE,
+	POOL_ADD_TGT,
 	POOL_QUERY,
 	REPLICA_ADD,
 	REPLICA_DEL
@@ -355,6 +356,8 @@ pool_op_parse(const char *str)
 		return POOL_EVICT;
 	else if (strcmp(str, "exclude") == 0)
 		return POOL_EXCLUDE;
+	else if (strcmp(str, "include") == 0)
+		return POOL_ADD_TGT;
 	else if (strcmp(str, "query") == 0)
 		return POOL_QUERY;
 	else if (strcmp(str, "add") == 0)
@@ -447,9 +450,13 @@ pool_op_hdlr(int argc, char *argv[])
 		}
 	}
 
-	/* Check the ranks for POOL_EXCLUDE, REPLICA_ADD & REPLICA_DEL. */
+	/*
+	 * Check the ranks for POOL_EXCLUDE, POOL_ADD_TGT, REPLICA_ADD,
+	 * & REPLICA_DEL.
+	 */
 	if (ranks == NULL &&
-	    (op == POOL_EXCLUDE || op == REPLICA_ADD || op == REPLICA_DEL)) {
+	    (op == POOL_EXCLUDE || op == REPLICA_ADD || op == REPLICA_DEL ||
+	     op == POOL_ADD_TGT)) {
 		fprintf(stderr, "valid target ranks required\n");
 		d_rank_list_free(svc);
 		return 2;
@@ -484,18 +491,34 @@ pool_op_hdlr(int argc, char *argv[])
 		}
 
 		rc = daos_pool_tgt_exclude(pool_uuid, sysname, svc, &tgt_list,
+					   NULL /* ev */);
+		if (rc != 0)
+			fprintf(stderr, "failed to exclude target: %d\n", rc);
+		break;
+
+	case POOL_ADD_TGT:
+		/* Only support add single target XXX */
+		D_ASSERT(ranks->rl_nr == 1);
+		tgt_list.tl_nr = 1;
+		tgt_list.tl_ranks = ranks->rl_ranks;
+		if (targets != NULL) {
+			D_ASSERT(targets->rl_nr == 1);
+			tgt_list.tl_tgts = (int *)targets->rl_ranks;
+		} else {
+			tgt_list.tl_tgts = &tgt;
+		}
+
+		rc = daos_pool_add_tgt(pool_uuid, sysname, svc, &tgt_list,
 				       NULL /* ev */);
 		if (rc != 0)
-			fprintf(stderr, "failed to exclude target: "
-					"%d\n", rc);
+			fprintf(stderr, "failed to add target: %d\n", rc);
 		break;
 
 	case REPLICA_ADD:
 		rc = daos_pool_add_replicas(pool_uuid, sysname, svc, ranks,
 					    NULL /* failed */, NULL /* ev */);
 		if (rc != 0)
-			fprintf(stderr, "failed to add replicas: "
-					"%d\n", rc);
+			fprintf(stderr, "failed to add replicas: %d\n", rc);
 		break;
 
 	case REPLICA_DEL:
@@ -785,63 +808,6 @@ disconnect:
 }
 
 static int
-module_str2id(const char *name, int name_len)
-{
-	if (strncmp(name, "object", name_len) == 0)
-		return DAOS_OBJ_MODULE;
-	else if (strncmp(name, "rebuild", name_len) == 0)
-		return DAOS_REBUILD_MODULE;
-	else if (strncmp(name, "vos", name_len) == 0)
-		return DAOS_VOS_MODULE;
-	else if (strncmp(name, "pool", name_len) == 0)
-		return DAOS_VOS_MODULE;
-	else
-		return -DER_INVAL;
-}
-
-static int
-module_opt_parse(char *opt_str, uint64_t *module_p)
-{
-	char *ptr = opt_str;
-	uint64_t module = 0;
-	int rc = 0;
-
-	while (1) {
-		char *end;
-		int mod_id;
-
-		/* skip the space & , to locate the start */
-		while (*ptr && (*ptr == ' ' || *ptr == ','))
-			ptr++;
-
-		if (!*ptr)
-			break;
-
-		/* find the word end */
-		end = ptr;
-		while (*end && *end != ' ' && *end != ',')
-			end++;
-
-		mod_id = module_str2id(ptr, end - ptr);
-		if (mod_id < 0)
-			return mod_id;
-
-		if (mod_id > 64) {
-			fprintf(stderr, "wrong module %s id %d\n", ptr, mod_id);
-			return -DER_INVAL;
-		}
-		module |= 1 << mod_id;
-
-		ptr = end;
-	}
-
-	if (module > 0)
-		*module_p = module;
-
-	return rc;
-}
-
-int
 file_path_copy(char *opt_str, char **path)
 {
 	int len = strlen(opt_str) + 1;
@@ -857,7 +823,6 @@ file_path_copy(char *opt_str, char **path)
 static int
 profile_op_hdlr(int argc, char *argv[])
 {
-	uint64_t		modules = -1;
 	char			*path = NULL;
 	bool			start = false;
 	bool			stop = false;
@@ -868,7 +833,6 @@ profile_op_hdlr(int argc, char *argv[])
 		{"start",	no_argument,		NULL,	's'},
 		{"end",		no_argument,		NULL,	'e'},
 		{"path",	required_argument,	NULL,	'p'},
-		{"module",	required_argument,	NULL,	'm'},
 		{NULL,		0,			NULL,	0}
 	};
 
@@ -877,15 +841,6 @@ profile_op_hdlr(int argc, char *argv[])
 		switch (rc) {
 		case 'a':
 			average = atoi(optarg);
-			break;
-		case 'm':
-			rc = module_opt_parse(optarg, &modules);
-			if (rc != 0) {
-				fprintf(stderr, "failed to parse module: %s\n",
-					optarg);
-				goto out;
-			}
-
 			break;
 		case 'p':
 			rc = file_path_copy(optarg, &path);
@@ -913,13 +868,7 @@ profile_op_hdlr(int argc, char *argv[])
 		goto out;
 	}
 
-	if (start && (modules == (uint64_t)(-1))) {
-		fprintf(stderr, "module option and path are needed\n");
-		rc = -DER_INVAL;
-		goto out;
-	}
-
-	rc = dc_mgmt_profile(modules, path, average, start);
+	rc = dc_mgmt_profile(path, average, start);
 out:
 	if (path)
 		free(path);
@@ -1026,6 +975,8 @@ main(int argc, char *argv[])
 	else if (strcmp(argv[1], "evict") == 0)
 		hdlr = pool_op_hdlr;
 	else if (strcmp(argv[1], "exclude") == 0)
+		hdlr = pool_op_hdlr;
+	else if (strcmp(argv[1], "include") == 0)
 		hdlr = pool_op_hdlr;
 	else if (strcmp(argv[1], "add") == 0)
 		hdlr = pool_op_hdlr;
