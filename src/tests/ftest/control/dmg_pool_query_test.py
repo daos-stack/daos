@@ -163,15 +163,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         out_a = self.get_pool_query_info(self.uuid)
         self.log.info("==>   Pool info after write: \n%s", out_a)
 
-        # Compare info
-        errors = []
-        for mem in ["scm_info", "nvme_info"]:
-            bytes_orig_val = human_to_bytes(out_b[mem][1])
-            bytes_curr_val = human_to_bytes(out_a[mem][1])
-            if bytes_orig_val <= bytes_curr_val:
-                errors.append(mem)
-
-        if errors:
-            msg = ["Free space should be < {}".format(out_b[err][1])
-                   for err in errors]
-            self.fail("\n".join(msg))
+        # The file should have been written into nvme, compare info
+        bytes_orig_val = human_to_bytes(out_b["nvme_info"][1])
+        bytes_curr_val = human_to_bytes(out_a["nvme_info"][1])
+        if bytes_orig_val <= bytes_curr_val:
+            self.fail("NVMe free space should be < {}".format(
+                out_b["nvme_info"][1]))
