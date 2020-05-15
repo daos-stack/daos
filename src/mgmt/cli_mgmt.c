@@ -471,12 +471,12 @@ int dc_mgmt_net_cfg(const char *name)
 	/* These two are always set */
 	rc = setenv("CRT_PHY_ADDR_STR", sy_info.provider, 1);
 	if (rc != 0)
-		return errno;
+		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	sprintf(buf, "%d", sy_info.crt_ctx_share_addr);
 	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
 	if (rc != 0)
-		return errno;
+		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* Allow client env overrides for these three */
 	crt_timeout = getenv("CRT_TIMEOUT");
@@ -484,7 +484,7 @@ int dc_mgmt_net_cfg(const char *name)
 		sprintf(buf, "%d", sy_info.crt_timeout);
 		rc = setenv("CRT_TIMEOUT", buf, 1);
 		if (rc != 0)
-			return errno;
+			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
 		D_INFO("Using client provided CRT_TIMEOUT: %s\n",
 			crt_timeout);
@@ -494,7 +494,7 @@ int dc_mgmt_net_cfg(const char *name)
 	if (!ofi_interface) {
 		rc = setenv("OFI_INTERFACE", sy_info.interface, 1);
 		if (rc != 0)
-			return errno;
+			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
 		D_INFO("Using client provided OFI_INTERFACE: %s\n",
 			ofi_interface);
@@ -504,7 +504,7 @@ int dc_mgmt_net_cfg(const char *name)
 	if (!ofi_domain) {
 		rc = setenv("OFI_DOMAIN", sy_info.domain, 1);
 		if (rc != 0)
-			return errno;
+			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
 		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
@@ -517,10 +517,11 @@ int dc_mgmt_net_cfg(const char *name)
 		getenv("CRT_PHY_ADDR_STR"),
 		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
 
+cleanup:
 	/* free the psrs allocated by get_attach_info() */
 	put_attach_info(npsrs, psrs);
 
-	return 0;
+	return rc;
 }
 
 #define SYS_BUF_MAGIC 0x98234ad3
