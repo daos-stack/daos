@@ -235,7 +235,10 @@ class Dfuse(DfuseCommand):
         if not self.check_running(fail_on_error=False):
             self.log.info('Waiting five seconds for dfuse to start')
             time.sleep(5)
-            self.check_running()
+            if not self.check_running(fail_on_error=False):
+                self.log.info('Waiting twenty five seconds for dfuse to start')
+                time.sleep(25)
+                self.check_running()
 
     def check_running(self, fail_on_error=True):
         """Check dfuse is running.
