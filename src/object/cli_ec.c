@@ -499,12 +499,27 @@ out:
 	return rc;
 }
 
+static struct obj_ec_codec *
+codec_get(struct obj_reasb_req *reasb_req, daos_obj_id_t oid)
+{
+	if (reasb_req->orr_codec != NULL)
+		return reasb_req->orr_codec;
+
+	reasb_req->orr_codec = obj_ec_codec_get(daos_obj_id2class(oid));
+	if (reasb_req->orr_codec == NULL) {
+		D_ERROR("failed to get ec codec, oid "DF_OID".\n", DP_OID(oid));
+		return NULL;
+	}
+	return reasb_req->orr_codec;
+}
+
 /**
  * Encode the data in full stripe recx_array, the result parity stored in
  * struct obj_ec_recx_array::oer_pbufs.
  */
 static int
-obj_ec_recx_encode(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
+obj_ec_recx_encode(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
+		   daos_iod_t *iod, d_sg_list_t *sgl,
 		   struct daos_oclass_attr *oca,
 		   struct obj_ec_recx_array *recx_array)
 {
@@ -524,11 +539,6 @@ obj_ec_recx_encode(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 	if (recx_array->oer_stripe_total == 0)
 		D_GOTO(out, rc = 0);
 	singv = (iod->iod_type == DAOS_IOD_SINGLE);
-	codec = obj_ec_codec_get(daos_obj_id2class(oid));
-	if (codec == NULL) {
-		D_ERROR("failed to get ec codec.\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 	if (singv) {
 		cell_bytes = obj_ec_singv_cell_bytes(iod->iod_size, oca);
 		recx_nr = 1;
@@ -539,6 +549,9 @@ obj_ec_recx_encode(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 		recx_nr = recx_array->oer_nr;
 	}
 	stripe_bytes = cell_bytes * oca->u.ec.e_k;
+	codec = codec_get(reasb_req, oid);
+	if (codec == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
 
 	/* calculate EC parity for each full_stripe */
 	for (i = 0; i < recx_nr; i++) {
@@ -1191,7 +1204,7 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 				       obj_ec_tgt_nr(oca) - 1);
 		}
 	} else {
-		struct dcs_singv_layout	*singv_lo;
+		struct dcs_layout	*singv_lo;
 
 		singv_lo = &reasb_req->orr_singv_los[iod_idx];
 		singv_lo->cs_even_dist = 1;
@@ -1231,7 +1244,8 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 		rc = obj_ec_pbufs_init(ec_recx_array, cell_bytes);
 		if (rc)
 			goto out;
-		rc = obj_ec_recx_encode(oid, iod, sgl, oca, ec_recx_array);
+		rc = obj_ec_recx_encode(reasb_req, oid, iod, sgl, oca,
+					ec_recx_array);
 		if (rc) {
 			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
 				DP_OID(oid), rc);
@@ -1301,7 +1315,7 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 			goto out;
 		}
 
-		rc = obj_ec_recx_encode(oid, &iods[i], &sgls[i], oca,
+		rc = obj_ec_recx_encode(reasb_req, oid, &iods[i], &sgls[i], oca,
 					&reasb_req->orr_recxs[i]);
 		if (rc) {
 			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
@@ -1337,6 +1351,155 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 
 out:
 	return rc;
+}
+
+static struct obj_ec_recov *
+obj_ec_recov_alloc(struct daos_oclass_attr *oca)
+{
+	struct obj_ec_recov	*recov;
+	unsigned short		 k = obj_ec_data_tgt_nr(oca);
+	unsigned short		 p = obj_ec_parity_tgt_nr(oca);
+	void			*buf, *tmp_ptr;
+	size_t			 struct_size, tbl_size, matrix_size;
+	size_t			 idx_size, list_size, err_size;
+
+	struct_size = roundup(sizeof(struct obj_ec_recov), 8);
+	tbl_size = k * p * 32;
+	matrix_size = roundup((k + p) * k, 8);
+	idx_size = roundup(sizeof(uint32_t) * k, 8);
+	list_size = roundup(sizeof(uint32_t) * p, 8);
+	err_size = roundup(sizeof(bool) * (k + p), 8);
+
+	D_ALLOC(buf, struct_size + tbl_size + 3 * matrix_size + idx_size +
+		     list_size + err_size);
+	if (buf == NULL)
+		return NULL;
+
+	tmp_ptr = buf;
+	recov = buf;
+	tmp_ptr += struct_size;
+	recov->er_gftbls = tmp_ptr;
+	tmp_ptr += tbl_size;
+	recov->er_de_matrix = tmp_ptr;
+	tmp_ptr += matrix_size;
+	recov->er_inv_matrix = tmp_ptr;
+	tmp_ptr += matrix_size;
+	recov->er_b_matrix = tmp_ptr;
+	tmp_ptr += matrix_size;
+	recov->er_dec_idx = tmp_ptr;
+	tmp_ptr += idx_size;
+	recov->er_err_list = tmp_ptr;
+	tmp_ptr += list_size;
+	recov->er_in_err = tmp_ptr;
+
+	return recov;
+}
+
+void
+obj_ec_recov_free(struct obj_reasb_req *reasb_req)
+{
+	if (reasb_req->orr_recov)
+		D_FREE(reasb_req->orr_recov);
+}
+
+static bool
+obj_ec_err_match(uint32_t nerrs, uint32_t *err_list1, uint32_t *err_list2)
+{
+	uint32_t	i;
+
+	for (i = 0; i < nerrs; i++) {
+		if (err_list1[i] != err_list2[i])
+			return false;
+	}
+	return true;
+}
+
+int
+obj_ec_recov_prep(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
+		  struct daos_oclass_attr *oca, uint32_t nerrs,
+		  uint32_t *err_list)
+{
+	struct obj_ec_codec	*codec;
+	struct obj_ec_recov	*recov;
+	unsigned char		 s;
+	uint32_t		 i, j, r, k, p;
+	int			 rc;
+
+	k = obj_ec_data_tgt_nr(oca);
+	p = obj_ec_parity_tgt_nr(oca);
+	D_ASSERT(nerrs > 0 && nerrs <= p && err_list != NULL);
+
+	if (reasb_req->orr_recov == NULL) {
+		reasb_req->orr_recov = obj_ec_recov_alloc(oca);
+		if (reasb_req->orr_recov == NULL)
+			return -DER_NOMEM;
+	}
+	recov = reasb_req->orr_recov;
+
+	if (recov->er_nerrs == nerrs &&
+	    obj_ec_err_match(nerrs, err_list, recov->er_err_list))
+		return 0;
+
+	codec = codec_get(reasb_req, oid);
+	if (codec == NULL)
+		return -DER_INVAL;
+
+	/* init the err status */
+	recov->er_nerrs = nerrs;
+	recov->er_data_nerrs = 0;
+	memset(recov->er_in_err, 0, sizeof(bool) * (k + p));
+	for (i = 0; i < nerrs; i++) {
+		D_ASSERT(err_list[i] < k + p);
+		recov->er_err_list[i] = err_list[i];
+		recov->er_in_err[err_list[i]] = true;
+		if (err_list[i] < k)
+			recov->er_data_nerrs++;
+	}
+
+	/* if all parity targets failed, just reuse the encode gftbls */
+	if (recov->er_data_nerrs == 0 && recov->er_nerrs == p) {
+		memcpy(recov->er_gftbls, codec->ec_gftbls, k * p * 32);
+		D_DEBUG(DB_IO, "all parity tgts failed, reuse enc gftbls.\n");
+		return 0;
+	}
+
+	/* Construct matrix b by removing error rows */
+	for (i = 0, r = 0; i < k; i++, r++) {
+		while (recov->er_in_err[r])
+			r++;
+		for (j = 0; j < k; j++)
+			recov->er_b_matrix[k * i + j] =
+				codec->ec_en_matrix[k * r + j];
+		recov->er_dec_idx[i] = r;
+	}
+
+	/* Cauchy matrix is always invertible, should not fail */
+	rc = gf_invert_matrix(recov->er_b_matrix, recov->er_inv_matrix, k);
+	D_ASSERT(rc == 0);
+
+	/* Generate decode matrix (err_list from invert matrix) */
+	for (i = 0; i < recov->er_data_nerrs; i++) {
+		for (j = 0; j < k; j++)
+			recov->er_de_matrix[k * i + j] =
+				recov->er_inv_matrix[k * err_list[i] + j];
+	}
+	/* err_list from encode_matrix * invert matrix, for parity decoding */
+	for (p = recov->er_data_nerrs; p < recov->er_nerrs; p++) {
+		for (i = 0; i < k; i++) {
+			s = 0;
+			for (j = 0; j < k; j++)
+				s ^= gf_mul(recov->er_inv_matrix[j * k + i],
+					    codec->ec_en_matrix[k * err_list[p]
+								+ j]);
+
+			recov->er_de_matrix[k * p + i] = s;
+		}
+	}
+
+	ec_init_tables(k, recov->er_nerrs, recov->er_de_matrix,
+		       recov->er_gftbls);
+
+	return 0;
 }
 
 void
