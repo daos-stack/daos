@@ -251,33 +251,43 @@ daos_sgls_packed_size(d_sg_list_t *sgls, int nr, daos_size_t *buf_size)
 
 	return size;
 }
+
 bool
 daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-			size_t buf_len_req,
-			uint8_t **buf, size_t *buf_len)
+		   size_t buf_len_req,
+		   uint8_t **p_buf, size_t *p_buf_len)
 {
+	size_t buf_len = 0;
+
+	if (p_buf_len != NULL)
+	*p_buf_len = 0;
+
 	if (idx->iov_idx >= sgl->sg_nr)
 		return true; /** no data in sgl to get bytes from */
 
 	D_ASSERT(idx->iov_offset < sgl->sg_iovs[idx->iov_idx].iov_len);
 	/** Point to current idx */
-	*buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
+	if (p_buf != NULL)
+		*p_buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
 
 	/**
 	 * Determine how many bytes to be used from buf by using
 	 * minimum between requested bytes and bytes left in IOV buffer
 	 */
-	*buf_len = MIN(buf_len_req,
+	buf_len = MIN(buf_len_req,
 		       sgl->sg_iovs[idx->iov_idx].iov_len - idx->iov_offset);
 
 	/** Increment index */
-	idx->iov_offset += *buf_len;
+	idx->iov_offset += buf_len;
 
 	/** If end of iov was reached, go to next iov */
 	if (idx->iov_offset == sgl->sg_iovs[idx->iov_idx].iov_len) {
 		idx->iov_idx++;
 		idx->iov_offset = 0;
 	}
+
+	if (p_buf_len != NULL)
+		*p_buf_len = buf_len;
 
 	return idx->iov_idx == sgl->sg_nr;
 }
