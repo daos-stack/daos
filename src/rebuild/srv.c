@@ -621,9 +621,10 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			D_FREE(targets);
 		}
 
-		if ((!is_rebuild_global_pull_done(rgt) &&
-		     is_rebuild_global_scan_done(rgt)) ||
-		     !rgt->rgt_notify_stable_epoch) {
+		if (!rgt->rgt_abort &&
+		    ((!is_rebuild_global_pull_done(rgt) &&
+		      is_rebuild_global_scan_done(rgt)) ||
+		      !rgt->rgt_notify_stable_epoch)) {
 			struct rebuild_iv iv;
 
 			D_ASSERT(rgt->rgt_stable_epoch != 0);
@@ -968,6 +969,9 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 
 	if (rpt->rt_fini_cond)
 		ABT_cond_free(&rpt->rt_fini_cond);
+
+	if (rpt->rt_done_cond)
+		ABT_cond_free(&rpt->rt_done_cond);
 
 	D_FREE(rpt);
 }
@@ -1361,6 +1365,36 @@ rebuild_ults(void *arg)
 }
 
 void
+ds_rebuild_abort(uuid_t pool_uuid, unsigned int version)
+{
+	struct rebuild_tgt_pool_tracker *rpt;
+
+	/* If this is called on non-leader node, it will do nothing */
+	ds_rebuild_leader_stop(pool_uuid, version);
+
+	rpt = rpt_lookup(pool_uuid, version);
+	if (rpt == NULL)
+		return;
+
+	/* If it can find rpt, it means rebuild has not finished yet
+	 * on this target, so the rpt has to been hold by someone
+	 * else, so it is safe to use rpt after rpt_put().
+	 *
+	 * And we have to do rpt_put(), otherwise it will hold
+	 * rebuild_tgt_fini().
+	 */
+	D_ASSERT(rpt->rt_refcount > 1);
+	rpt_put(rpt);
+
+	/* Since the rpt will be destroyed after signal rt_done_cond,
+	 * so we have to use another lock here.
+	 */
+	ABT_mutex_lock(rebuild_gst.rg_lock);
+	ABT_cond_wait(rpt->rt_done_cond, rebuild_gst.rg_lock);
+	ABT_mutex_unlock(rebuild_gst.rg_lock);
+}
+
+void
 ds_rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version)
 {
 	struct rebuild_global_pool_tracker	*rgt;
@@ -1653,6 +1687,11 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	 */
 	D_ASSERT(rpt->rt_refcount == 0);
 
+	/* Notify anyone who is waiting for the rebuild to finish */
+	ABT_mutex_lock(rebuild_gst.rg_lock);
+	ABT_cond_signal(rpt->rt_done_cond);
+	ABT_mutex_unlock(rebuild_gst.rg_lock);
+
 	rpt_destroy(rpt);
 
 	return rc;
@@ -1854,6 +1893,10 @@ rpt_create(struct ds_pool *pool, uint32_t pm_ver, uint64_t leader_term,
 		D_GOTO(free, rc = dss_abterr2der(rc));
 
 	rc = ABT_cond_create(&rpt->rt_fini_cond);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(free, rc = dss_abterr2der(rc));
+
+	rc = ABT_cond_create(&rpt->rt_done_cond);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(free, rc = dss_abterr2der(rc));
 

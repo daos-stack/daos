@@ -87,8 +87,8 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		rpc_priv->crp_flags |= CRT_RPC_FLAG_COLL;
 		if (co_info->co_grp_priv->gp_primary)
 			rpc_priv->crp_flags |= CRT_RPC_FLAG_PRIMARY_GRP;
-		if (flags & CRT_RPC_FLAG_EXCLUSIVE)
-			rpc_priv->crp_flags |= CRT_RPC_FLAG_EXCLUSIVE;
+		if (flags & CRT_RPC_FLAG_FILTER_INVERT)
+			rpc_priv->crp_flags |= CRT_RPC_FLAG_FILTER_INVERT;
 
 		co_hdr->coh_grpid = grp_priv->gp_pub.cg_grpid;
 		co_hdr->coh_filter_ranks = co_info->co_filter_ranks;
@@ -359,7 +359,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	d_rank_list_t		*tobe_filter_ranks = NULL;
 	bool			 root_excluded = false;
-	bool			 exclusive = flags & CRT_RPC_FLAG_EXCLUSIVE;
+	bool			 filter_invert;
 	d_rank_t		 grp_root, pri_root;
 	uint32_t		 grp_ver;
 	int			 rc = 0;
@@ -416,7 +416,8 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	 * a special flag to indicate need not to execute RPC handler.
 	 */
 	rc = d_rank_in_rank_list(filter_ranks, pri_root);
-	if ((exclusive && !rc) || (!exclusive && rc)) {
+	filter_invert = flags & CRT_RPC_FLAG_FILTER_INVERT;
+	if ((filter_invert && !rc) || (!filter_invert && rc)) {
 		rc = d_rank_list_dup(&tobe_filter_ranks, filter_ranks);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -424,7 +425,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		root_excluded = true;
 
 		/* make sure pri_root is in the scope */
-		if (exclusive) {
+		if (filter_invert) {
 			rc = d_rank_list_append(tobe_filter_ranks, pri_root);
 			if (rc != 0)
 				D_GOTO(out, rc);
@@ -818,7 +819,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	}
 
 	rc = crt_tree_get_children(co_info->co_grp_priv, co_info->co_grp_ver,
-				   rpc_priv->crp_flags & CRT_RPC_FLAG_EXCLUSIVE,
+				   rpc_priv->crp_flags &
+				   CRT_RPC_FLAG_FILTER_INVERT,
 				   co_info->co_filter_ranks,
 				   co_info->co_tree_topo, co_info->co_root,
 				   co_info->co_grp_priv->gp_self,

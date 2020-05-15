@@ -60,4 +60,5 @@ int ds_rebuild_regenerate_task(struct ds_pool *pool);
 int ds_rebuild_pool_map_update(struct ds_pool *pool);
 void ds_rebuild_leader_stop_all(void);
 void ds_rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version);
+void ds_rebuild_abort(uuid_t pool_uuid, unsigned int version);
 #endif
