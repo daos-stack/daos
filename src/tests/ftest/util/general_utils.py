@@ -61,7 +61,7 @@ def human_to_bytes(h_size):
 
     return val
 
-  
+
 def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 output_check="combined", env=None):
     """Run the command on the local host.
