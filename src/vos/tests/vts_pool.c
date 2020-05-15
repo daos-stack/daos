@@ -421,9 +421,9 @@ static const struct CMUnitTest pool_tests[] = {
 int
 run_pool_test(const char *cfg)
 {
-	char	test_name[CFG_MAX];
+	char	test_name[DTS_CFG_MAX];
 
-	create_config(test_name, "VOS Pool tests %s", cfg);
+	dts_create_config(test_name, "VOS Pool tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name, pool_tests,
 					   setup, teardown);
 }

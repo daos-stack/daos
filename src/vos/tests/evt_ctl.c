@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,6 +80,7 @@ static daos_handle_t		ts_toh;
 #define EVT_SEP			','
 #define EVT_SEP_VAL		':'
 #define EVT_SEP_EXT		'-'
+#define EVT_SEP_MNR		'.'
 #define EVT_SEP_EPC		'@'
 
 /* Data sizes */
@@ -247,6 +248,13 @@ parse_rect:
 
 	str = tmp + 1;
 	rect->rc_epc = atoi(str);
+	tmp = strchr(str, EVT_SEP_MNR);
+	if (tmp == NULL) {
+		rect->rc_minor_epc = 1;
+	} else {
+		str = tmp + 1;
+		rect->rc_minor_epc = atoi(str);
+	}
 
 	if (high) {
 		*high = DAOS_EPOCH_MAX;
@@ -588,6 +596,7 @@ start:
 			if (i % 3 == 0) {
 				rect.rc_ex = ent.en_sel_ext;
 				rect.rc_epc = ent.en_epoch;
+				rect.rc_minor_epc = ent.en_minor_epc;
 				rc = evt_iter_probe(ih, EVT_ITER_FIND,
 						    &rect, NULL);
 			}

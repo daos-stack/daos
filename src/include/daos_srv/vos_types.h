@@ -327,6 +327,8 @@ typedef struct {
 			struct dcs_csum_info	ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
+			/** Minor epoch of extent */
+			uint16_t		ie_minor_epc;
 		};
 	};
 	/* Flags to describe the entry */

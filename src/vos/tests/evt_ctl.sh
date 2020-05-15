@@ -156,6 +156,8 @@ EOF
 )
 
 cmd+=" -b -2 -D"
+cmd+=" -C o:5 -a 1-8@1.1:12345678 -a 0-1@1.2 -a 8-9@1.3 -a 5-6@1.4:ab"
+cmd+=" -l0-10@0-1 -f 0-10@1 -f 0-10@2 -l0-10@0-1:b -b -2 -D"
 echo "$cmd"
 eval "$cmd"
 result="${PIPESTATUS[0]}"
