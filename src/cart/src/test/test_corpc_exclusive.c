@@ -36,7 +36,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * Basic CORPC test to check CRT_FLAG_RPC_EXCLUSIVE flag. Test assumes 5 ranks.
+ * Basic CORPC test to check CRT_FLAG_RPC_FILTER_INVERT flag. Test assumes 5
+ * ranks.
  * CORPC with 'shutdown' is sent to 3 ranks, 1,2 and 4.
  * Ranks0 and 3 are expected to not receive this call.
  */
@@ -219,7 +220,7 @@ int main(void)
 		rc = crt_corpc_req_create(g_main_ctx, NULL, &membs,
 			CRT_PROTO_OPC(TEST_CORPC_PREFWD_BASE,
 				TEST_CORPC_PREFWD_VER, 0), NULL, 0,
-			CRT_RPC_FLAG_EXCLUSIVE,
+			CRT_RPC_FLAG_FILTER_INVERT,
 			crt_tree_topo(CRT_TREE_KNOMIAL, 4), &rpc);
 		assert(rc == 0);
 

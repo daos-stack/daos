@@ -247,7 +247,7 @@ static void *progress_thread(void *arg)
 	ctx = (crt_context_t)test_g.t_crt_ctx[t_idx];
 	/* progress loop */
 	do {
-		rc = crt_progress(ctx, 0, NULL, NULL);
+		rc = crt_progress(ctx, 0);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
 		}

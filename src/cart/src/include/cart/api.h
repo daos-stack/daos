@@ -218,25 +218,47 @@ int
 crt_finalize(void);
 
 /**
- * Progress CRT transport layer.
+ * Progress RPC execution on a cart context \a crt_ctx for at most \a timeout
+ * micro-seconds.
+ * The progress call returns when the timeout is reached or any completion has
+ * occurred.
  *
- * \param[in] crt_ctx          CRT transport context
+ * \param[in] crt_ctx          cart context
  * \param[in] timeout          how long is caller going to wait (micro-second)
- *                             if \a timeout > 0 when there is no operation to
- *                             progress. Can return when one or more operation
- *                             progressed.
- *                             zero means no waiting and -1 waits indefinitely.
- * \param[in] cond_cb          optional progress condition callback.
- *                             CRT internally calls this function, when it
- *                             returns non-zero then stops the progressing or
- *                             waiting and returns.
- * \param[in] arg              argument to cond_cb.
+ *                             at most for a completion to occur.
+ *                             Can return when one or more operation progressed.
+ *                             zero means no waiting.
  *
- * \return                     DER_SUCCESS on success, negative value if error
+ * \return                     DER_SUCCESS on success
+ *                             -DER_TIMEDOUT if exited after timeout has expired
+ *                             negative value if other internal error
  */
 int
-crt_progress(crt_context_t crt_ctx, int64_t timeout,
-	     crt_progress_cond_cb_t cond_cb, void *arg);
+crt_progress(crt_context_t crt_ctx, int64_t timeout);
+
+/**
+ * Progress RPC execution on a cart context with a callback function.
+ * The callback function is regularly called internally. The progress call
+ * returns when the callback returns a non-zero value or when the timeout
+ * expires.
+ *
+ * \param[in] crt_ctx          cart context
+ * \param[in] timeout          how long is the caller going to wait in
+ *                             micro-second.
+ *                             zero means no waiting and -1 waits indefinitely.
+ * \param[in] cond_cb          progress condition callback.
+ *                             cart internally calls this function, when it
+ *                             returns non-zero then stops the progressing or
+ *                             waiting and returns.
+ * \param[in] arg              optional argument to cond_cb.
+ *
+ * \return                     DER_SUCCESS on success
+ *                             -DER_TIMEDOUT if exited after timeout has expired
+ *                             negative value if internal and \a conb_cb error
+ */
+int
+crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
+		  crt_progress_cond_cb_t cond_cb, void *arg);
 
 /**
  * Create an RPC request.
@@ -1172,17 +1194,19 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  *
  * \param[in] crt_ctx          CRT context
  * \param[in] grp              CRT group for the collective RPC
- * \param[in] filter_ranks     optional excluded or exclusive ranks. the RPC
+ * \param[in] filter_ranks     optional filter ranks. By default, the RPC
  *                             will be delivered to all members in the group
- *                             except or exclusively to those in ranks.
- *                             the ranks are numbered in primary group.
+ *                             except those in \a filter_ranks. If \a flags
+ *                             includes CRT_RPC_FLAG_FILTER_INVERT, the RPC
+ *                             will be delivered to \a filter_ranks only.
+ *                             The ranks are numbered in primary group.
  * \param[in] opc              unique opcode for the RPC
  * \param[in] co_bulk_hdl      collective bulk handle
  * \param[in] priv             A private pointer associated with the request
  *                             will be passed to crt_corpc_ops::co_aggregate as
  *                             2nd parameter.
  * \param[in] flags            collective RPC flags:
- *                             CRT_RPC_FLAG_EXCLUSIVE to send exclusively to
+ *                             CRT_RPC_FLAG_FILTER_INVERT to send only to
  *                             \a filter_ranks.
  * \param[in] tree_topo        tree topology for the collective propagation,
  *                             can be calculated by crt_tree_topo().

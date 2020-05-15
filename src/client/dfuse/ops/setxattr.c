@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,8 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		struct duns_attr_t	dattr = {};
 
 		rc = duns_parse_attr((char *)value, size, &dattr);
-		if (rc != -DER_SUCCESS)
-			D_GOTO(err, rc = daos_der2errno(rc));
+		if (rc)
+			D_GOTO(err, rc);
 
 		if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
 			D_GOTO(err, rc = ENOTSUP);

@@ -44,11 +44,6 @@ type IOServerRunner interface {
 	GetConfig() *ioserver.Config
 }
 
-// isStarted indicates whether IOServerInstance is in a running state.
-func (srv *IOServerInstance) isStarted() bool {
-	return srv.runner.IsRunning()
-}
-
 func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
 	idx := srv.Index()
 
@@ -56,7 +51,6 @@ func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err 
 	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
 		return
 	}
-	srv.log.Debugf("instance %d: creating superblock on formatted storage", idx)
 	if err = srv.createSuperblock(recreateSBs); err != nil {
 		return
 	}
@@ -177,7 +171,7 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 // Run is the processing loop for an IOServerInstance. Starts are triggered by
 // receiving true on instance start channel.
 func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Membership, cfg *Configuration) {
-	for relaunch := range srv.startChan {
+	for relaunch := range srv.startLoop {
 		if !relaunch {
 			return
 		}
