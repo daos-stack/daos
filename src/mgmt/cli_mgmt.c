@@ -454,6 +454,7 @@ int dc_mgmt_net_cfg(const char *name)
 	int rc;
 	int npsrs;
 	char buf[SYS_INFO_BUF_SIZE];
+	char *crt_timeout;
 	char *ofi_interface;
 	char *ofi_domain;
 	struct sys_info sy_info;
@@ -467,7 +468,7 @@ int dc_mgmt_net_cfg(const char *name)
 	if (rc != 0)
 		return rc;
 
-	/* These three are always set */
+	/* These two are always set */
 	rc = setenv("CRT_PHY_ADDR_STR", sy_info.provider, 1);
 	if (rc != 0)
 		return errno;
@@ -477,12 +478,18 @@ int dc_mgmt_net_cfg(const char *name)
 	if (rc != 0)
 		return errno;
 
-	sprintf(buf, "%d", sy_info.crt_timeout);
-	rc = setenv("CRT_TIMEOUT", buf, 1);
-	if (rc != 0)
-		return errno;
+	/* Allow client env overrides for these three */
+	crt_timeout = getenv("CRT_TIMEOUT");
+	if (!crt_timeout) {
+		sprintf(buf, "%d", sy_info.crt_timeout);
+		rc = setenv("CRT_TIMEOUT", buf, 1);
+		if (rc != 0)
+			return errno;
+	} else {
+		D_INFO("Using client provided CRT_TIMEOUT: %s\n",
+			crt_timeout);
+	}
 
-	/* Allow client env overrides for these two */
 	ofi_interface = getenv("OFI_INTERFACE");
 	if (!ofi_interface) {
 		rc = setenv("OFI_INTERFACE", sy_info.interface, 1);
