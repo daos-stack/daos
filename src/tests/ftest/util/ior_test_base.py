@@ -45,6 +45,9 @@ class IorTestBase(TestWithServers):
     :avocado: recursive
     """
 
+    IOR_WRITE_PATTERN = "Commencing write performance test"
+    IOR_READ_PATTERN = "Commencing read performance test"
+
     def __init__(self, *args, **kwargs):
         """Initialize a IorTestBase object."""
         super(IorTestBase, self).__init__(*args, **kwargs)
@@ -54,6 +57,7 @@ class IorTestBase(TestWithServers):
         self.dfuse = None
         self.container = None
         self.lock = None
+        self.mpirun = None
 
     def setUp(self):
         """Set up each test case."""
@@ -66,6 +70,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
+        self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
 
         # Until DAOS-3320 is resolved run IOR for POSIX
         # with single client node
@@ -185,6 +190,8 @@ class IorTestBase(TestWithServers):
     def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
 
+        Args:
+            subprocess (bool): Default set to False.
         Returns:
             str: the path for the mpi job manager command
 
@@ -197,7 +204,26 @@ class IorTestBase(TestWithServers):
         else:
             self.fail("Unsupported IOR API")
 
-        return Mpirun(self.ior_cmd, mpitype="mpich")
+        if self.subprocess:
+            self.mpirun = Mpirun(self.ior_cmd, True, mpitype="mpich")
+        else:
+            self.mpirun = Mpirun(self.ior_cmd, mpitype="mpich")
+
+        return self.mpirun
+
+    def check_subprocess_status(self, operation="write"):
+        """Check subprocess status """
+        if operation == "write":
+            self.ior_cmd.pattern = self.IOR_WRITE_PATTERN
+        elif operation == "read":
+            self.ior_cmd.pattern = self.IOR_READ_PATTERN
+        else:
+            self.fai("Exiting Test: Inappropriate operation type \
+                     for subprocess status check")
+
+        if not self.ior_cmd.check_ior_subprocess_status(
+                self.mpirun.process, self.ior_cmd):
+            self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None):
         """Run the IOR command.
@@ -219,7 +245,26 @@ class IorTestBase(TestWithServers):
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
+            if not self.subprocess:
+                self.pool.display_pool_daos_space()
+
+    def stop_ior(self):
+        """Stop IOR process.
+        Args:
+            manager (str): mpi job manager command
+        """
+        self.log.info(
+            "<IOR> Stopping in-progress IOR command: %s", self.mpirun.__str__())
+
+        try:
+            out = self.mpirun.stop()
+            return out
+        except CommandFailure as error:
+            self.log.error("IOR stop Failed: %s", str(error))
+            self.fail("Test was expected to pass but it failed.\n")
+        finally:
             self.pool.display_pool_daos_space()
+
 
     def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.

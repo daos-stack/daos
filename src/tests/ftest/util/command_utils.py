@@ -209,6 +209,27 @@ class ExecutableCommand(CommandWithParameters):
                 raise CommandFailure("Error stopping '{}'".format(self))
             self._process = None
 
+    def wait(self):
+        """Wait for the sub process to complete.
+
+        Args:
+            timeout (int): number of seconds to wait for the sub process
+                           to complete
+
+        Returns:
+            int: return code of process
+
+        """
+        retcode = 0
+        if self._process is not None:
+            try:
+                retcode = self._process.wait()
+            except OSError as error:
+                self.log.error("Error while waiting %s", error)
+                retcode = 255
+
+        return retcode
+
     def get_output(self, method_name, **kwargs):
         """Get output from the command issued by the specified method.
 
