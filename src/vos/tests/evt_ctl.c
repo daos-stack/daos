@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,6 +80,7 @@ static daos_handle_t		ts_toh;
 #define EVT_SEP			','
 #define EVT_SEP_VAL		':'
 #define EVT_SEP_EXT		'-'
+#define EVT_SEP_MNR		'.'
 #define EVT_SEP_EPC		'@'
 
 /* Data sizes */
@@ -229,7 +230,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, daos_epoch_t *high,
 		*should_pass = false;
 	}
 parse_rect:
-	rect->rc_ex.ex_lo = atoi(str);
+	rect->rc_ex.ex_lo = atoll(str);
 
 	tmp = strchr(str, EVT_SEP_EXT);
 	if (tmp == NULL) {
@@ -238,7 +239,7 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_ex.ex_hi = atoi(str);
+	rect->rc_ex.ex_hi = atoll(str);
 	tmp = strchr(str, EVT_SEP_EPC);
 	if (tmp == NULL) {
 		D_PRINT("Invalid input string %s\n", str);
@@ -246,7 +247,14 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_epc = atoi(str);
+	rect->rc_epc = atoll(str);
+	tmp = strchr(str, EVT_SEP_MNR);
+	if (tmp == NULL) {
+		rect->rc_minor_epc = 1;
+	} else {
+		str = tmp + 1;
+		rect->rc_minor_epc = atoll(str);
+	}
 
 	if (high) {
 		*high = DAOS_EPOCH_MAX;
@@ -254,7 +262,7 @@ parse_rect:
 		if (tmp == NULL)
 			goto parse_value;
 		str = tmp + 1;
-		*high = atoi(str);
+		*high = atoll(str);
 	}
 
 parse_value:
@@ -588,6 +596,7 @@ start:
 			if (i % 3 == 0) {
 				rect.rc_ex = ent.en_sel_ext;
 				rect.rc_epc = ent.en_epoch;
+				rect.rc_minor_epc = ent.en_minor_epc;
 				rc = evt_iter_probe(ih, EVT_ITER_FIND,
 						    &rect, NULL);
 			}
