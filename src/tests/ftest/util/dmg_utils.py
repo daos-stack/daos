@@ -559,8 +559,14 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.set_sub_command("scan")
         return self._get_result()
 
-    def storage_format(self):
+    def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
+
+        Args:
+            reformat (bool): always reformat storage, could be destructive.
+                This will create control-plane related metadata i.e. superblock
+                file and reformat if the storage media is available and
+                formattable.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -572,6 +578,7 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("format")
+        self.sub_command_class.sub_command_class.reformat.value = reformat
         return self._get_result()
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
