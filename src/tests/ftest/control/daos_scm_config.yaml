@@ -13,3 +13,8 @@ server_config:
     bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
+pool:
+  control_method: dmg
+  mode: 511
+  scm_size: 1073741824
+  name: daos_server
