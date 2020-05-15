@@ -52,7 +52,7 @@ type mgmtModule struct {
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
 	switch method {
-	case drpc.MethodGetAttachInfo:
+	case int32(drpc.MethodGetAttachInfo):
 
 		uc, ok := session.Conn.(*net.UnixConn)
 		if !ok {
