@@ -71,13 +71,13 @@ func (srv *IOServerInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 }
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
-func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) (*drpc.Response, error) {
+func (srv *IOServerInstance) CallDrpc(method drpc.MgmtMethod, body proto.Message) (*drpc.Response, error) {
 	dc, err := srv.getDrpcClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return makeDrpcCall(dc, module, method, body)
+	return makeDrpcCall(dc, method, body)
 }
 
 // drespToMemberResult converts drpc.Response to system.MemberResult.
@@ -108,7 +108,7 @@ func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tSta
 
 // TryDrpc attempts dRPC request to given rank managed by instance and return
 // success or error from call result or timeout encapsulated in result.
-func (srv *IOServerInstance) TryDrpc(ctx context.Context, method int32) *system.MemberResult {
+func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.MgmtMethod) *system.MemberResult {
 	rank, err := srv.GetRank()
 	if err != nil {
 		return nil // no rank to return result for
@@ -120,13 +120,8 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method int32) *system.
 		return system.NewMemberResult(rank, nil, localState)
 	}
 
-	var tgtState system.MemberState
-	switch method {
-	case drpc.MethodPingRank:
-		tgtState = system.MemberStateReady
-	case drpc.MethodPrepShutdown:
-		tgtState = system.MemberStateStopping
-	default:
+	tgtState := method.TargetState()
+	if tgtState == system.MemberStateUnknown {
 		return system.NewMemberResult(rank,
 			errors.Errorf("unsupported dRPC method (%d) for fanout", method),
 			system.MemberStateErrored)
@@ -134,7 +129,7 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method int32) *system.
 
 	resChan := make(chan *system.MemberResult)
 	go func() {
-		dresp, err := srv.CallDrpc(drpc.ModuleMgmt, method, nil)
+		dresp, err := srv.CallDrpc(method, nil)
 		resChan <- drespToMemberResult(rank, dresp, err, tgtState)
 	}()
 

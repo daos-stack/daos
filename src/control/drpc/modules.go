@@ -25,7 +25,11 @@
 
 package drpc
 
-import "github.com/golang/protobuf/proto"
+import (
+	"github.com/golang/protobuf/proto"
+
+	"github.com/daos-stack/daos/src/control/system"
+)
 
 // #cgo CFLAGS: -I${SRCDIR}/../../include
 // #include <daos/drpc_modules.h>
@@ -49,59 +53,85 @@ const (
 	MethodRequestCredentials = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
 )
 
+// MgmtMethod is a type alias for a drpc mgmt method.
+type MgmtMethod int32
+
+func (mm MgmtMethod) String() string {
+	return map[MgmtMethod]string{
+		MethodPrepShutdown: "prep shutdown",
+		MethodPingRank:     "ping",
+		MethodSetRank:      "set rank",
+		MethodSetUp:        "setup MS",
+	}[mm]
+}
+
+// Module returns the module that the method belongs to.
+func (mm MgmtMethod) Module() int32 {
+	return ModuleMgmt
+}
+
+// TargetState returns the system member state that should be set on successful
+// completion of the method action.
+func (mm MgmtMethod) TargetState() system.MemberState {
+	return map[MgmtMethod]system.MemberState{
+		MethodPrepShutdown: system.MemberStateStopping,
+		MethodPingRank:     system.MemberStateReady,
+	}[mm]
+}
+
 const (
 	// MethodPrepShutdown is a ModuleMgmt method
-	MethodPrepShutdown = C.DRPC_METHOD_MGMT_PREP_SHUTDOWN
+	MethodPrepShutdown MgmtMethod = C.DRPC_METHOD_MGMT_PREP_SHUTDOWN
 	// MethodPingRank is a ModuleMgmt method
-	MethodPingRank = C.DRPC_METHOD_MGMT_PING_RANK
+	MethodPingRank MgmtMethod = C.DRPC_METHOD_MGMT_PING_RANK
 	// MethodSetRank is a ModuleMgmt method
-	MethodSetRank = C.DRPC_METHOD_MGMT_SET_RANK
+	MethodSetRank MgmtMethod = C.DRPC_METHOD_MGMT_SET_RANK
 	// MethodCreateMS is a ModuleMgmt method
-	MethodCreateMS = C.DRPC_METHOD_MGMT_CREATE_MS
+	MethodCreateMS MgmtMethod = C.DRPC_METHOD_MGMT_CREATE_MS
 	// MethodStartMS is a ModuleMgmt method
-	MethodStartMS = C.DRPC_METHOD_MGMT_START_MS
+	MethodStartMS MgmtMethod = C.DRPC_METHOD_MGMT_START_MS
 	// MethodJoin is a ModuleMgmt method
-	MethodJoin = C.DRPC_METHOD_MGMT_JOIN
+	MethodJoin MgmtMethod = C.DRPC_METHOD_MGMT_JOIN
 	// MethodGetAttachInfo is a ModuleMgmt method
-	MethodGetAttachInfo = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
+	MethodGetAttachInfo MgmtMethod = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
 	// MethodPoolCreate is a ModuleMgmt method
-	MethodPoolCreate = C.DRPC_METHOD_MGMT_POOL_CREATE
+	MethodPoolCreate MgmtMethod = C.DRPC_METHOD_MGMT_POOL_CREATE
 	// MethodPoolDestroy is a ModuleMgmt method
-	MethodPoolDestroy = C.DRPC_METHOD_MGMT_POOL_DESTROY
+	MethodPoolDestroy MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DESTROY
 	// MethodPoolExclude is a ModuleMgmt method
-	MethodPoolExclude = C.DRPC_METHOD_MGMT_EXCLUDE
+	MethodPoolExclude MgmtMethod = C.DRPC_METHOD_MGMT_EXCLUDE
 	// MethodPoolReintegrate is a ModuleMgmt method
-	MethodPoolReintegrate = C.DRPC_METHOD_MGMT_REINTEGRATE
+	MethodPoolReintegrate MgmtMethod = C.DRPC_METHOD_MGMT_REINTEGRATE
 	// MethodBioHealth is a ModuleMgmt method
-	MethodBioHealth = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
+	MethodBioHealth MgmtMethod = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
 	// MethodSetUp is a ModuleMgmt method
-	MethodSetUp = C.DRPC_METHOD_MGMT_SET_UP
+	MethodSetUp MgmtMethod = C.DRPC_METHOD_MGMT_SET_UP
 	// MethodSmdDevs is a ModuleMgmt method
-	MethodSmdDevs = C.DRPC_METHOD_MGMT_SMD_LIST_DEVS
+	MethodSmdDevs MgmtMethod = C.DRPC_METHOD_MGMT_SMD_LIST_DEVS
 	// MethodSmdPools is a ModuleMgmt method
-	MethodSmdPools = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
+	MethodSmdPools MgmtMethod = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
 	// MethodPoolGetACL is a ModuleMgmt method
-	MethodPoolGetACL = C.DRPC_METHOD_MGMT_POOL_GET_ACL
+	MethodPoolGetACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_ACL
 	// MethodListPools is a ModuleMgmt method
-	MethodListPools = C.DRPC_METHOD_MGMT_LIST_POOLS
+	MethodListPools MgmtMethod = C.DRPC_METHOD_MGMT_LIST_POOLS
 	// MethodPoolOverwriteACL is a ModuleMgmt method
-	MethodPoolOverwriteACL = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
+	MethodPoolOverwriteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
 	// MethodPoolUpdateACL is a ModuleMgmt method
-	MethodPoolUpdateACL = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
+	MethodPoolUpdateACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
 	// MethodPoolDeleteACL is a ModuleMgmt method
-	MethodPoolDeleteACL = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
+	MethodPoolDeleteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
 	// MethodDevStateQuery is a ModuleMgmt method
-	MethodDevStateQuery = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
+	MethodDevStateQuery MgmtMethod = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
 	// MethodSetFaultyState is a ModuleMgmt method
-	MethodSetFaultyState = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
+	MethodSetFaultyState MgmtMethod = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
 	// MethodListContainers is a ModuleMgmt method
-	MethodListContainers = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
+	MethodListContainers MgmtMethod = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
 	// MethodPoolQuery defines a method for querying a pool
-	MethodPoolQuery = C.DRPC_METHOD_MGMT_POOL_QUERY
+	MethodPoolQuery MgmtMethod = C.DRPC_METHOD_MGMT_POOL_QUERY
 	// MethodPoolSetProp defines a method for setting a pool property
-	MethodPoolSetProp = C.DRPC_METHOD_MGMT_POOL_SET_PROP
+	MethodPoolSetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_SET_PROP
 	// MethodContSetOwner defines a method for setting the container's owner
-	MethodContSetOwner = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
+	MethodContSetOwner MgmtMethod = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
 )
 
 const (

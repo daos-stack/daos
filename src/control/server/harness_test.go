@@ -166,17 +166,17 @@ func TestServer_Harness_Start(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		trc              *ioserver.TestRunnerConfig
-		isAP             bool                   // is first instance an AP/MS replica/bootstrap
-		rankInSuperblock bool                   // rank already set in superblock when starting
-		instanceUuids    map[int]string         // UUIDs for each instance.Index()
-		dontNotifyReady  bool                   // skip sending notify ready on dRPC channel
-		expStartErr      error                  // error from harness.Start()
-		expStartCount    int                    // number of instance.runner.Start() calls
-		expDrpcCalls     map[uint32][]int32     // method ids called for each instance.Index()
-		expGrpcCalls     map[uint32][]string    // string repr of call for each instance.Index()
-		expRanks         map[uint32]system.Rank // ranks to have been set during Start()
-		expMembers       system.Members         // members to have been registered during Stop()
-		expIoErrs        map[uint32]error       // errors expected from instances
+		isAP             bool                         // is first instance an AP/MS replica/bootstrap
+		rankInSuperblock bool                         // rank already set in superblock when starting
+		instanceUuids    map[int]string               // UUIDs for each instance.Index()
+		dontNotifyReady  bool                         // skip sending notify ready on dRPC channel
+		expStartErr      error                        // error from harness.Start()
+		expStartCount    int                          // number of instance.runner.Start() calls
+		expDrpcCalls     map[uint32][]drpc.MgmtMethod // method ids called for each instance.Index()
+		expGrpcCalls     map[uint32][]string          // string repr of call for each instance.Index()
+		expRanks         map[uint32]system.Rank       // ranks to have been set during Start()
+		expMembers       system.Members               // members to have been registered during Stop()
+		expIoErrs        map[uint32]error             // errors expected from instances
 	}{
 		"normal startup/shutdown": {
 			trc: &ioserver.TestRunnerConfig{
@@ -190,7 +190,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				1: MockUUID(1),
 			},
 			expStartCount: maxIOServers,
-			expDrpcCalls: map[uint32][]int32{
+			expDrpcCalls: map[uint32][]drpc.MgmtMethod{
 				0: {
 					drpc.MethodSetRank,
 					drpc.MethodSetUp,
@@ -218,7 +218,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			},
 			rankInSuperblock: true,
 			expStartCount:    maxIOServers,
-			expDrpcCalls: map[uint32][]int32{
+			expDrpcCalls: map[uint32][]drpc.MgmtMethod{
 				0: {
 					drpc.MethodSetRank,
 					drpc.MethodSetUp,
@@ -250,7 +250,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				1: MockUUID(1),
 			},
 			expStartCount: maxIOServers,
-			expDrpcCalls: map[uint32][]int32{
+			expDrpcCalls: map[uint32][]drpc.MgmtMethod{
 				0: {
 					drpc.MethodSetRank,
 					drpc.MethodCreateMS,
@@ -311,7 +311,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				1: MockUUID(1),
 			},
 			expStartCount: maxIOServers,
-			expDrpcCalls: map[uint32][]int32{
+			expDrpcCalls: map[uint32][]drpc.MgmtMethod{
 				0: {
 					drpc.MethodSetRank,
 					drpc.MethodSetUp,
@@ -538,10 +538,9 @@ func TestServer_Harness_Start(t *testing.T) {
 			// members added to membership
 			for _, srv := range instances {
 				gotDrpcCalls := srv._drpcClient.(*mockDrpcClient).Calls
-				if diff := cmp.Diff(tc.expDrpcCalls[srv.Index()], gotDrpcCalls); diff != "" {
-					t.Fatalf("unexpected dRPCs for instance %d (-want, +got):\n%s\n",
-						srv.Index(), diff)
-				}
+				AssertEqual(t, tc.expDrpcCalls[srv.Index()], gotDrpcCalls,
+					name+": unexpected dRPCs for instance "+string(srv.Index()))
+
 				gotGrpcCalls := mockMSClients[int(srv.Index())].Calls
 				if diff := cmp.Diff(tc.expGrpcCalls[srv.Index()], gotGrpcCalls); diff != "" {
 					t.Fatalf("unexpected gRPCs for instance %d (-want, +got):\n%s\n",

@@ -112,7 +112,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodJoin, req)
+	dresp, err := mi.CallDrpc(drpc.MethodJoin, req)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (svc *mgmtSvc) localInstances(inRanks []uint32) ([]*IOServerInstance, error
 
 // drpcOnLocalRanks iterates over local instances issuing dRPC requests
 // concurrently and returning system member results.
-func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksReq, method int32) ([]*system.MemberResult, error) {
+func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksReq, method drpc.MgmtMethod) ([]*system.MemberResult, error) {
 	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
 	defer cancel()
 
