@@ -53,11 +53,11 @@ Environment variables in this section only apply to the server-side.
 ## Server and Client
 
 Environment variables in this section apply to both server-side and client.
+
 |Variable|Description|
 |----|----|
 |FI\_OFI\_RXM\_USE\_SRX|Enable shared receive buffers for RXM-based providers (verbs, tcp). BOOL. Auto-defaults to 1.|
 |FI\_UNIVERSE\_SIZE|Sets expected universe size in OFI layer to be more than expected number of clients. INTEGER. Auto-defaults to 2048.|
-  --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
 ## Client

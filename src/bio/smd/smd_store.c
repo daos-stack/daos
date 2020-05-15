@@ -39,16 +39,12 @@ struct smd_store	smd_store;
 static int
 smd_store_gen_fname(const char *path, char **store_fname)
 {
-	int	rc;
-
 	D_ASSERT(path != NULL);
 	D_ASSERT(store_fname != NULL);
 
-	rc = asprintf(store_fname, "%s/%s/%s", path, SMD_STORE_DIR,
-		      SMD_STORE_FILE);
-	if (rc < 0) {
-		D_ERROR("Generate SMD store filename failed. "DF_RC"\n",
-			DP_RC(rc));
+	D_ASPRINTF(*store_fname, "%s/%s/%s", path, SMD_STORE_DIR,
+		   SMD_STORE_FILE);
+	if (!*store_fname) {
 		return -DER_NOMEM;
 	}
 
