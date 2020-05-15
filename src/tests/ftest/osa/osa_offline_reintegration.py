@@ -41,6 +41,10 @@ class OSAOfflineReintegration(TestWithServers):
         self.dmg_command = self.get_dmg_command()
 
     def get_pool_version(self):
+        """Get the pool version
+           Args: None
+           Returns : pool_version (int)
+        """
         out = []
         kwargs = {"pool_uuid": self.pool.uuid}
         out = self.dmg_command.get_output("pool_query", **kwargs)

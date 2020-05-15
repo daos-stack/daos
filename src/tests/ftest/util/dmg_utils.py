@@ -839,7 +839,7 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.rank.value = rank
         self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
         return self._get_result()
-    
+
     def pool_query(self, pool_uuid):
         """Daos Pool Query
 
