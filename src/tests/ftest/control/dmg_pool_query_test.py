@@ -23,12 +23,13 @@
 """
 from __future__ import print_function
 
+from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
 from control_test_base import ControlTestBase
 from general_utils import human_to_bytes
 
 
-class DmgPoolQueryTest(ControlTestBase):
+class DmgPoolQueryTest(ControlTestBase, IorTestBase):
     """Test Class Description:
     Simple test to verify the pool query command of dmg tool.
     :avocado: recursive
@@ -141,7 +142,7 @@ class DmgPoolQueryTest(ControlTestBase):
                 self.log.error("==>   Failure: %s", err)
             self.fail("Failed dmg pool query input test.")
 
-    def test_pool_query_w_pool(self):
+    def test_pool_query_ior(self):
         """
         JIRA ID: DAOS-2976
 
@@ -154,21 +155,23 @@ class DmgPoolQueryTest(ControlTestBase):
         out_b = self.get_pool_query_info(self.uuid)
         self.log.info("==>   Pool info before write: \n%s", out_b)
 
+        #  Run ior
         self.log.info("==>   Write data to pool.")
-        self.pool.write_file(
-            self.orterun, len(self.hostlist_clients), self.hostfile_clients,
-            self.params.get("size", "/run/data_size/"))
+        self.run_ior_with_pool()
 
         # Check pool written data
-        out_a = self.get_pool_query_info(self.uuid)
+        out_a = self.get_pool_query_infself.get_pool_query_info(self.uuid)
         self.log.info("==>   Pool info after write: \n%s", out_a)
 
         # Compare info
+        errors = []
         for mem in ["scm_info", "nvme_info"]:
             bytes_orig_val = human_to_bytes(out_b[mem][1])
             bytes_curr_val = human_to_bytes(out_a[mem][1])
             if bytes_orig_val <= bytes_curr_val:
-                exception = mem
+                errors.append(mem)
 
-        if exception:
-            self.fail("Free space should be < {}".format(out_b[exception][1]))
+        if errors:
+            msg = ["Free space should be < {}".format(out_b[err][1])
+                   for err in errors]
+            self.fail("\n".join(msg))

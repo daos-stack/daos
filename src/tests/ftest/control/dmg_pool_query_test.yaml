@@ -23,8 +23,10 @@ pool:
   nvme_size: "32GB"
   name: daos_server
 
-data_size:
-  size: "1073741824"
+ior:
+  flags: "-k -w -r"
+  transfer_size: "32M"
+  block_size: "1G"
 
 exp_vals:
   pool_info: ['8', '0']
