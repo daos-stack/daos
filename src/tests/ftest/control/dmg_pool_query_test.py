@@ -160,7 +160,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         self.run_ior_with_pool()
 
         # Check pool written data
-        out_a = self.get_pool_query_infself.get_pool_query_info(self.uuid)
+        out_a = self.get_pool_query_info(self.uuid)
         self.log.info("==>   Pool info after write: \n%s", out_a)
 
         # Compare info
