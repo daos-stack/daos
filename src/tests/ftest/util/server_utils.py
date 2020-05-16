@@ -122,13 +122,11 @@ class DaosServerCommand(YamlCommand):
         """
         if mode == "format":
             self.pattern = self.FORMAT_PATTERN
-            self.pattern_count = host_qty
         elif mode == "reformat":
             self.pattern = self.REFORMAT_PATTERN
-            self.pattern_count = host_qty
         else:
             self.pattern = self.NORMAL_PATTERN
-            self.pattern_count = host_qty * len(self.yaml.server_params)
+        self.pattern_count = host_qty * len(self.yaml.server_params)
 
     @property
     def using_nvme(self):
