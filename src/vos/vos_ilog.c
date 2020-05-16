@@ -63,10 +63,13 @@ vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
 {
 	uint32_t dtx = vos_dtx_get();
 
-	/* If we are not in a dtx, treat the in-tree entry as
-	 * if it's a different transaction.
+	/* If the entry is committed, treat the new update as a different
+	 * transaction.   If the operation (update or punch) is the same,
+	 * we can detect this and return -DER_ALREADY.   If it's not,
+	 * we require either a major or minor epoch change and will
+	 * return -DER_TX_RESTART.
 	 */
-	if (dtx != DTX_LID_COMMITTED && dtx == tx_id)
+	if (tx_id != DTX_LID_COMMITTED && dtx == tx_id)
 		*same = true;
 	else
 		*same = false;
