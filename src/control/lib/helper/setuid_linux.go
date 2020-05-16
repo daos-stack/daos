@@ -22,7 +22,7 @@
 //
 // +build linux
 
-package main
+package helper
 
 import "syscall"
 
