@@ -456,8 +456,6 @@ func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored boo
 			}
 		}
 		if member.State().isTransitionIllegal(result.State) {
-			m.log.Debugf("skip illegal state transition: member %s, %s->%s",
-				member, member.State(), result.State)
 			continue
 		}
 		member.state = result.State
