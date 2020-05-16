@@ -556,6 +556,18 @@ class CommonConfig(YamlParameters):
 class EnvironmentVariables(dict):
     """Dictionary of environment variable keys and values."""
 
+    def __copy__(self):
+        """Return a shallow copy of this object.
+
+        Returns:
+            EnvironmentVariables: a copy of this object
+
+        """
+        clone = EnvironmentVariables()
+        for key, item in self.items():
+            clone[key] = item.copy()
+        return clone
+
     def get_list(self):
         """Get a list of environment variable assignments.
 
