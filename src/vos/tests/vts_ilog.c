@@ -547,14 +547,21 @@ ilog_test_update(void **state)
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
-	/** Same epoch, different DTX, same operation */
+	/** Same epoch, different transaction, same operation.  In other
+	 *  words, both the existing entry and this one are punches so
+	 *  we get back -DER_ALREADY because the existing entry covers
+	 *  this punch.
+	 */
 	fake_tx_reset();
 	rc = ilog_update(loh, NULL, epoch, 3, true);
 	LOG_FAIL(rc, -DER_ALREADY, "Epoch entry already exists. "
 		 "Replacing with different DTX should get "
 		 "-DER_ALREADY\n");
 
-	/** Same epoch, different DTX, different operation operation */
+	/** Same epoch, different DTX, different operation operation.
+	 *  Trying to replace a punch with an update at the same
+	 *  epoch requires a restart with later epoch
+	 */
 	fake_tx_reset();
 	rc = ilog_update(loh, NULL, epoch, 3, false);
 	LOG_FAIL(rc, -DER_TX_RESTART, "Epoch entry already exists. "

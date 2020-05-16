@@ -280,7 +280,7 @@ ilog_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		D_ASSERT(sizeof(*prec) == val_iov->iov_buf_len);
 
 		memcpy(val_iov->iov_buf, prec, sizeof(*prec));
-		key_iov->iov_len = sizeof(*prec);
+		val_iov->iov_len = sizeof(*prec);
 	}
 
 	return 0;

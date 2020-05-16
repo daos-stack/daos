@@ -63,6 +63,11 @@ vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
 {
 	uint32_t dtx = vos_dtx_get();
 
+	/* If we are not in a dtx, treat the in-tree entry as
+	 * if it's the same transaction.   In practice, we should
+	 * only do this when not using DTX or when doings on stable
+	 * epochs like aggregation.
+	 */
 	if (dtx != DTX_LID_COMMITTED && dtx == tx_id)
 		*same = true;
 	else
