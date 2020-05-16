@@ -125,7 +125,7 @@ type Member struct {
 	UUID  string
 	Addr  net.Addr
 	state MemberState
-	info  string
+	Info  string
 }
 
 // MarshalJSON marshals system.Member to JSON.
@@ -183,11 +183,6 @@ func (sm *Member) String() string {
 // State retrieves member state.
 func (sm *Member) State() MemberState {
 	return sm.state
-}
-
-// Info retrieves additional member info.
-func (sm *Member) Info() string {
-	return sm.info
 }
 
 // NewMember returns a reference to a new member struct.
@@ -309,6 +304,7 @@ func (m *Membership) AddOrUpdate(newMember *Member) (bool, *MemberState) {
 	if found {
 		os := oldMember.State()
 		m.members[newMember.Rank].state = newMember.State()
+		m.members[newMember.Rank].Info = newMember.Info
 
 		return false, &os
 	}
@@ -459,7 +455,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored boo
 			continue
 		}
 		member.state = result.State
-		member.info = result.Msg
+		member.Info = result.Msg
 	}
 
 	return nil

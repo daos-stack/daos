@@ -143,7 +143,8 @@ func (svc *ControlService) SystemQuery(parent context.Context, pbReq *ctlpb.Syst
 		return nil, err
 	}
 
-	svc.log.Debug("Responding to SystemQuery RPC")
+	svc.log.Debugf("Responding to SystemQuery RPC %+v", members)
+	svc.log.Debugf("Responding to SystemQuery RPC %+v", pbResp.Members)
 
 	return pbResp, nil
 }

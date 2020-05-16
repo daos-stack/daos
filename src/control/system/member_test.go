@@ -37,15 +37,19 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func mockMember(t *testing.T, idx uint32, state MemberState) *Member {
+func mockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
 	addr, err := net.ResolveTCPAddr("tcp",
 		fmt.Sprintf("127.0.0.%d:10001", idx))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return NewMember(Rank(idx), fmt.Sprintf("abcd-efgh-ijkl-mno%d", idx),
+	m := NewMember(Rank(idx), fmt.Sprintf("abcd-efgh-ijkl-mno%d", idx),
 		addr, state)
+	if len(info) > 0 {
+		m.Info = info[0]
+	}
+	return m
 }
 
 func TestMember_Stringify(t *testing.T) {
@@ -360,7 +364,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 			},
 			expMembers: Members{
 				mockMember(t, 1, MemberStateJoined),
-				mockMember(t, 2, MemberStateErrored),
+				mockMember(t, 2, MemberStateErrored, "can't stop"),
 			},
 			expResults: MemberResults{
 				expMrDiffAddr1,
@@ -406,7 +410,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 			},
 			expMembers: Members{
 				mockMember(t, 1, MemberStateStopped),
-				mockMember(t, 2, MemberStateErrored),
+				mockMember(t, 2, MemberStateErrored, "can't stop"),
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateReady),
 				mockMember(t, 5, MemberStateJoined),

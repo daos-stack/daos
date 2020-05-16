@@ -315,7 +315,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			expMembers: []*ctlpb.SystemMember{
 				&ctlpb.SystemMember{
 					Rank: 0, Addr: getHostAddr(1).String(),
-					State: uint32(system.MemberStateErrored),
+					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
 				},
 				&ctlpb.SystemMember{
 					Rank: 1, Addr: getHostAddr(1).String(),
@@ -375,7 +375,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			expMembers: []*ctlpb.SystemMember{
 				&ctlpb.SystemMember{
 					Rank: 0, Addr: getHostAddr(1).String(),
-					State: uint32(system.MemberStateErrored),
+					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
 				},
 				&ctlpb.SystemMember{
 					Rank: 2, Addr: getHostAddr(2).String(),
