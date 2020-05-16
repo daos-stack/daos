@@ -121,10 +121,11 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 // Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
-	Rank  Rank
-	UUID  string
-	Addr  net.Addr
-	state MemberState
+	Rank   Rank
+	UUID   string
+	Addr   net.Addr
+	state  MemberState
+	reason string
 }
 
 // MarshalJSON marshals system.Member to JSON.
@@ -455,6 +456,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored boo
 			continue
 		}
 		member.state = result.State
+		member.reason = result.Msg
 	}
 
 	return nil

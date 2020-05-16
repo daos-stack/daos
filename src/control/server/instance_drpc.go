@@ -116,8 +116,13 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.MgmtMethod
 
 	localState := srv.LocalState()
 	if localState != system.MemberStateReady {
-		// member not ready for dRPC comms
-		return system.NewMemberResult(rank, nil, localState)
+		// member not ready for dRPC comms, annotate result with last
+		// error as Msg field
+		result := &system.MemberResult{Rank: rank, State: localState}
+		if srv._lastErr != nil {
+			result.Msg = srv._lastErr.Error()
+		}
+		return result
 	}
 
 	tgtState := method.TargetState()
@@ -136,7 +141,10 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.MgmtMethod
 	select {
 	case <-ctx.Done():
 		if ctx.Err() == context.DeadlineExceeded {
-			return system.NewMemberResult(rank, nil, system.MemberStateUnresponsive)
+			return &system.MemberResult{
+				Rank: rank, Msg: ctx.Err().Error(),
+				State: system.MemberStateUnresponsive,
+			}
 		}
 		return nil // shutdown
 	case result := <-resChan:

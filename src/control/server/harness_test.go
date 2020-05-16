@@ -30,6 +30,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -171,7 +172,7 @@ func TestServer_Harness_Start(t *testing.T) {
 		instanceUuids    map[int]string               // UUIDs for each instance.Index()
 		dontNotifyReady  bool                         // skip sending notify ready on dRPC channel
 		expStartErr      error                        // error from harness.Start()
-		expStartCount    int                          // number of instance.runner.Start() calls
+		expStartCount    uint32                       // number of instance.runner.Start() calls
 		expDrpcCalls     map[uint32][]drpc.MgmtMethod // method ids called for each instance.Index()
 		expGrpcCalls     map[uint32][]string          // string repr of call for each instance.Index()
 		expRanks         map[uint32]system.Rank       // ranks to have been set during Start()
@@ -354,7 +355,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				WithSocketDir(testDir).
 				WithTransportConfig(&security.TransportConfig{AllowInsecure: true})
 
-			instanceStarts := 0
+			var instanceStarts uint32
 			harness := NewIOServerHarness(log)
 			mockMSClients := make(map[int]*proto.MockMgmtSvcClient)
 			for i, srvCfg := range config.Servers {
@@ -366,7 +367,10 @@ func TestServer_Harness_Start(t *testing.T) {
 					tc.trc = &ioserver.TestRunnerConfig{}
 				}
 				if tc.trc.StartCb == nil {
-					tc.trc.StartCb = func() { instanceStarts++ }
+					tc.trc.StartCb = func() {
+						atomic.StoreUint32(&instanceStarts,
+							atomic.AddUint32(&instanceStarts, 1))
+					}
 				}
 				runner := ioserver.NewTestRunner(tc.trc, srvCfg)
 				bdevProvider, err := bdev.NewClassProvider(log,
@@ -472,7 +476,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				if tc.expStartErr != nil {
 					<-done
 					CmpErr(t, tc.expStartErr, gotErr)
-					if instanceStarts != tc.expStartCount {
+					if atomic.LoadUint32(&instanceStarts) != tc.expStartCount {
 						t.Fatalf("expected %d starts, got %d",
 							tc.expStartCount, instanceStarts)
 					}
@@ -522,7 +526,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				t.Log("instances did not get to ready state")
 			}
 
-			if instanceStarts != tc.expStartCount {
+			if atomic.LoadUint32(&instanceStarts) != tc.expStartCount {
 				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)
 			}
 

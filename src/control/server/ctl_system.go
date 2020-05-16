@@ -95,11 +95,12 @@ func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq
 	hostRanks := svc.membership.HostRanks(req.Ranks...)
 	for errMsg, hostSet := range resp.HostErrors {
 		for _, addr := range strings.Split(hostSet.DerangedString(), ",") {
-			// TODO: should annotate member state with "harness unresponsive" err
 			for _, rank := range hostRanks[addr] {
 				results = append(results,
-					system.NewMemberResult(rank, errors.New(errMsg),
-						system.MemberStateUnresponsive))
+					&system.MemberResult{
+						Rank: rank, Msg: errMsg,
+						State: system.MemberStateUnresponsive,
+					})
 			}
 			svc.log.Debugf("harness %s (ranks %v) host error: %s",
 				addr, hostRanks[addr], errMsg)

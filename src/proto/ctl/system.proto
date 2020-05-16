@@ -34,6 +34,7 @@ message SystemMember {
 	string uuid = 2;
 	uint32 rank = 3;
 	uint32 state = 4;
+	string reason = 5;
 }
 
 // RankResult is a generic result for a system operation on a rank.
