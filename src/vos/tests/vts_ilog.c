@@ -550,7 +550,8 @@ ilog_test_update(void **state)
 	/** Same epoch, different transaction, same operation.  In other
 	 *  words, both the existing entry and this one are punches so
 	 *  we get back -DER_ALREADY because the existing entry covers
-	 *  this punch.
+	 *  this punch.  This only happens if both entries are not using
+	 *  DTX which is the case here.
 	 */
 	fake_tx_reset();
 	rc = ilog_update(loh, NULL, epoch, 3, true);
