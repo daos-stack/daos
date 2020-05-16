@@ -110,8 +110,9 @@ func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
 	uuidTitle := "UUID"
 	addrTitle := "Control Address"
 	stateTitle := "State"
+	reasonTitle := "Reason"
 
-	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle)
+	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle, reasonTitle)
 	var table []txtfmt.TableRow
 
 	for _, m := range members {
@@ -119,6 +120,7 @@ func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
 		row[uuidTitle] = m.UUID
 		row[addrTitle] = m.Addr.String()
 		row[stateTitle] = m.State().String()
+		row[reasonTitle] = m.Info()
 
 		table = append(table, row)
 	}
@@ -137,7 +139,7 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) error 
 		{"address": m.Addr.String()},
 		{"uuid": m.UUID},
 		{"status": m.State().String()},
-		{"reason": "unknown"},
+		{"reason": m.Info()},
 	}
 
 	title := fmt.Sprintf("Rank %d", m.Rank)
