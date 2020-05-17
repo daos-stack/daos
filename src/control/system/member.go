@@ -84,6 +84,9 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 	if ms == MemberStateUnknown {
 		return true // no legal transitions
 	}
+	if ms == to {
+		return true
+	}
 	return map[MemberState]map[MemberState]bool{
 		MemberStateAwaitFormat: map[MemberState]bool{
 			MemberStateEvicted: true,
@@ -419,10 +422,8 @@ func (m *Membership) Members(rankList ...Rank) (ms Members) {
 
 // UpdateMemberStates updates member's state according to result state.
 //
-// Only update member state if result is a success, ping will update current
-// member state.
-//
-// TODO: store error message in membership
+// If ignoreErrored is set, only update member state and info if result is a
+// success (subsequent ping will update member state).
 func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored bool) error {
 	m.Lock()
 	defer m.Unlock()

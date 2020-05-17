@@ -47,26 +47,30 @@ type ranksMethod string
 const (
 	prep  ranksMethod = "prep shutdown"
 	stop  ranksMethod = "stop"
-	reset ranksMethod = "reset"
+	reset ranksMethod = "reset format"
 	start ranksMethod = "start"
 	ping  ranksMethod = "ping"
 )
 
-func getRanksFunc(method ranksMethod) systemRanksFunc {
-	switch method {
+func (rm ranksMethod) Call(ctx context.Context, invoker control.Invoker, req *control.RanksReq) (*control.RanksResp, error) {
+	var fn systemRanksFunc
+
+	switch rm {
 	case prep:
-		return control.PrepShutdownRanks
+		fn = control.PrepShutdownRanks
 	case stop:
-		return control.StopRanks
+		fn = control.StopRanks
 	case reset:
-		return control.ResetFormatRanks
+		fn = control.ResetFormatRanks
 	case start:
-		return control.StartRanks
+		fn = control.StartRanks
 	case ping:
-		return control.PingRanks
+		fn = control.PingRanks
 	default:
-		panic(1) // shouldn't happen
+		return nil, errors.New("unrecognised system ranks method") // programming error
 	}
+
+	return fn(ctx, invoker, req)
 }
 
 // rpcToRanks sends requests to ranks in list on their respective host
@@ -83,7 +87,7 @@ func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq
 	}
 
 	req.SetHostList(svc.membership.Hosts(req.Ranks...))
-	resp, err := getRanksFunc(method)(ctx, svc.rpcClient, req)
+	resp, err := method.Call(ctx, svc.rpcClient, req)
 	if err != nil {
 		return nil, err
 	}
@@ -143,8 +147,7 @@ func (svc *ControlService) SystemQuery(parent context.Context, pbReq *ctlpb.Syst
 		return nil, err
 	}
 
-	svc.log.Debugf("Responding to SystemQuery RPC %+v", members)
-	svc.log.Debugf("Responding to SystemQuery RPC %+v", pbResp.Members)
+	svc.log.Debug("Responding to SystemQuery RPC")
 
 	return pbResp, nil
 }

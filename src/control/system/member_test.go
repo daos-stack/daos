@@ -379,12 +379,14 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateStopped),
 				mockMember(t, 5, MemberStateJoined),
+				mockMember(t, 6, MemberStateJoined),
 			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
 				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
 				NewMemberResult(4, nil, MemberStateReady),
 				NewMemberResult(5, nil, MemberStateReady),
+				&MemberResult{Rank: 6, Msg: "exit 1", State: MemberStateStopped},
 			},
 			expMembers: Members{
 				mockMember(t, 1, MemberStateStopped),
@@ -392,6 +394,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateReady),
 				mockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
+				mockMember(t, 6, MemberStateStopped, "exit 1"),
 			},
 		},
 		"dont ignore errored results": {
@@ -401,12 +404,14 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateStopped),
 				mockMember(t, 5, MemberStateJoined),
+				mockMember(t, 6, MemberStateStopped),
 			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
 				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
 				NewMemberResult(4, nil, MemberStateReady),
 				NewMemberResult(5, nil, MemberStateReady),
+				&MemberResult{Rank: 6, Msg: "exit 1", State: MemberStateStopped},
 			},
 			expMembers: Members{
 				mockMember(t, 1, MemberStateStopped),
@@ -414,6 +419,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateReady),
 				mockMember(t, 5, MemberStateJoined),
+				mockMember(t, 6, MemberStateStopped),
 			},
 		},
 		"errored result with nonerrored state": {
@@ -453,8 +459,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				if diff := cmp.Diff(tc.expMembers[i], m, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 				}
-				AssertEqual(t, tc.expMembers[i].State().String(), m.State().String(),
-					m.Rank.String())
+				AssertEqual(t, tc.expMembers[i], m, m.Rank.String())
 			}
 
 			// verify result host address is updated to that of member if empty

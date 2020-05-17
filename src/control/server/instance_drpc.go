@@ -117,9 +117,9 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.MgmtMethod
 	localState := srv.LocalState()
 	if localState != system.MemberStateReady {
 		// member not ready for dRPC comms, annotate result with last
-		// error as Msg field
+		// error as Msg field if found to be stopped
 		result := &system.MemberResult{Rank: rank, State: localState}
-		if srv._lastErr != nil {
+		if localState == system.MemberStateStopped && srv._lastErr != nil {
 			result.Msg = srv._lastErr.Error()
 		}
 		return result
