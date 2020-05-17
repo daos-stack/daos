@@ -246,8 +246,8 @@ pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 	char   *path;
 	int	rc;
 
-	rc = asprintf(&name, RDB_FILE"pool%s", suffix);
-	if (rc < 0)
+	D_ASPRINTF(name, RDB_FILE"pool%s", suffix);
+	if (name == NULL)
 		return NULL;
 	rc = ds_mgmt_tgt_file(pool_uuid, name, NULL /* idx */, &path);
 	D_FREE(name);
@@ -284,8 +284,8 @@ ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 	uuid_generate(target_uuid);
 
 	/* Store target_uuid in DSM_META_FILE. */
-	rc = asprintf(&fpath, "%s/%s", path, DSM_META_FILE);
-	if (rc < 0)
+	D_ASPRINTF(fpath, "%s/%s", path, DSM_META_FILE);
+	if (fpath == NULL)
 		return -DER_NOMEM;
 	rc = uuid_store(fpath, target_uuid);
 	D_FREE(fpath);

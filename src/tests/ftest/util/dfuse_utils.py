@@ -209,7 +209,7 @@ class Dfuse(DfuseCommand):
         self.log.info('Starting dfuse at %s', self.mount_dir.value)
 
         # A log file must be defined to ensure logs are captured
-        if "D_LOG_FILE" not in self._pre_command:
+        if "D_LOG_FILE" not in self.env:
             raise CommandFailure(
                 "Dfuse missing environment varaibles for D_LOG_FILE")
 
@@ -235,7 +235,10 @@ class Dfuse(DfuseCommand):
         if not self.check_running(fail_on_error=False):
             self.log.info('Waiting five seconds for dfuse to start')
             time.sleep(5)
-            self.check_running()
+            if not self.check_running(fail_on_error=False):
+                self.log.info('Waiting twenty five seconds for dfuse to start')
+                time.sleep(25)
+                self.check_running()
 
     def check_running(self, fail_on_error=True):
         """Check dfuse is running.

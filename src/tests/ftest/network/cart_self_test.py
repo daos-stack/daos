@@ -41,12 +41,8 @@ class SelfTest(ExecutableCommand):
         Uses Avocado's utils.process module to run self_test with parameters.
 
         Args:
-            namespace (str): yaml namespace (path to parameters)
-            command (str): string of the command to be executed.
             path (str, optional): path to location of command binary file.
                 Defaults to "".
-            subprocess (bool, optional): whether the command is run as a
-                subprocess. Defaults to False.
         """
         super(SelfTest, self).__init__("/run/self_test/*", "self_test", path)
 
