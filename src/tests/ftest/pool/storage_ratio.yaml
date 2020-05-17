@@ -47,4 +47,4 @@ pool:
     - ['16', '100G', 'FAIL']   #Low SCM Size
     # Skip below Tests because of issue DAOS-4814.
     #- ['1G', '100G', 'FAIL']   #SCM Size ratio is less than 6%
-    #- ['89G', '1500G', 'FAIL'] #SCM Size ratio is less than 6%
+    #- ['89G', '650G', 'FAIL'] #SCM Size ratio is less than 6%
