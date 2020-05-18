@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@
 #include <endian.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <mpi.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <argp.h>
@@ -132,7 +131,7 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cc_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &cc_options);
 
 	/* uuid needs extra parsing */
 	if (!cc_options.pool_uuid ||
@@ -218,7 +217,7 @@ cmd_destroy_container(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cc_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &cc_options);
 
 	/* uuids needs extra parsing */
 	rc = uuid_parse(cc_options.pool_uuid, pool_uuid);
@@ -294,7 +293,7 @@ cmd_query_container(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cc_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &cc_options);
 
 	/* uuids needs extra parsing */
 	rc = uuid_parse(cc_options.pool_uuid, pool_uuid);

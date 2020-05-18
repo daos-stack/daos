@@ -49,7 +49,8 @@ type storageQueryCmd struct {
 // an alias for "storage scan").
 type nvmeHealthQueryCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
+	hostListCmd
 	jsonOutputCmd
 }
 
@@ -59,7 +60,7 @@ func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
 	ctx := context.Background()
 	req := &control.StorageScanReq{}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageScan(ctx, cmd.ctlClient, req)
+	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}

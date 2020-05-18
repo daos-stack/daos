@@ -66,6 +66,8 @@ service MgmtSvc {
 	rpc PoolCreate(PoolCreateReq) returns (PoolCreateResp) {}
 	// Destroy a DAOS pool allocated across a number of ranks.
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
+	// Exclude a pool target.
+	rpc PoolExclude(PoolExcludeReq) returns (PoolExcludeResp) {}
 	// Reintegrate a pool target.
 	rpc PoolReintegrate(PoolReintegrateReq) returns (PoolReintegrateResp) {}
 	// PoolQuery queries a DAOS pool.
@@ -102,6 +104,8 @@ service MgmtSvc {
 	rpc StopRanks(RanksReq) returns (RanksResp) {}
 	// Ping DAOS IO servers on a host. (gRPC fanout)
 	rpc PingRanks(RanksReq) returns (RanksResp) {}
+	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
+	rpc ResetFormatRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS IO servers on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
 	// Change the owner of a DAOS container

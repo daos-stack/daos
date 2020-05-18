@@ -67,15 +67,6 @@ class MdtestBase(TestWithServers):
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
 
-        # Until DAOS-3320 is resolved run IOR for POSIX
-        # with single client node
-        if self.mdtest_cmd.api.value == "POSIX":
-            self.log.info("Restricting mdtest to one node")
-            self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
-
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
@@ -157,13 +148,13 @@ class MdtestBase(TestWithServers):
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
         # Run Mdtest
-        self.run_mdtest(self.get_job_manager_command(self.manager),
+        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.processes)
         if self.dfuse:
             self.dfuse.stop()
             self.dfuse = None
 
-    def get_job_manager_command(self, manager):
+    def get_mdtest_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.
 
         Returns:

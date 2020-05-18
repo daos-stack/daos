@@ -1,4 +1,4 @@
-.TH dmg 1 "14 April 2020"
+.TH dmg 1 "8 May 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -144,6 +144,23 @@ UUID of DAOS pool to destroy
 .TP
 \fB\fB\-f\fR, \fB\-\-force\fR\fP
 Force removal of DAOS pool
+.SS pool exclude
+Exclude a list of targets from a rank
+
+\fBUsage\fP: pool exclude [exclude-OPTIONS]
+.TP
+
+\fBAliases\fP: e
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of the DAOS pool to exclude a target from
+.TP
+\fB\fB\-\-rank\fR (\fIrequired\fR)\fP
+Rank of the targets to be excluded
+.TP
+\fB\fB\-\-target-idx\fR (\fIrequired\fR)\fP
+Comma-seperated list of target idx(s) to be excluded from the rank
 .SS pool get-acl
 Get a DAOS pool's Access Control List
 
@@ -258,12 +275,21 @@ Format SCM and NVMe storage attached to remote servers.
 
 \fBAliases\fP: f
 
+.SS Format SCM and NVMe storage attached to remote servers.
 .TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 Show results of each SCM & NVMe device format operation
 .TP
 \fB\fB\-\-reformat\fR\fP
 Always reformat storage (CAUTION: Potentially destructive)
+.SS System Format Options
+Reformat an existing DAOS system
+.TP
+\fB\fB\-\-system\fR\fP
+Perform reformat of stopped DAOS servers in system
+.TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated list of system ranks to format
 .SS storage prepare
 Prepare SCM and NVMe storage attached to remote servers.
 
