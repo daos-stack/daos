@@ -51,7 +51,7 @@ class DaosAdminPrivTest(TestWithServers):
         """JIRA ID: DAOS-2895.
 
         Test Description:
-            Test daso_admin functionality to perform format privileged
+            Test daos_admin functionality to perform format privileged
             operations while daos_server is run as normal user.
 
         :avocado: tags=all,pr,hw,small,daos_admin,basic
