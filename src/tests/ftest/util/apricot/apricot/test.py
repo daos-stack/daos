@@ -140,6 +140,7 @@ class Test(avocadoTest):
         """Obtain test name from self.__str__() """
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
 
+
 class TestWithoutServers(Test):
     """Run tests without DAOS servers.
 
@@ -235,6 +236,14 @@ class TestWithServers(TestWithoutServers):
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
         super(TestWithServers, self).__init__(*args, **kwargs)
+
+        # Add additional time to the test timeout for reporting running
+        # processes while stopping the daos_agent and daos_server.
+        tear_down_timeout = 30
+        self.timeout += tear_down_timeout
+        self.log.info(
+            "Increasing timeout by %s seconds for agent/server tear down: %s",
+            tear_down_timeout, self.timeout)
 
         self.server_group = None
         self.agent_managers = []
@@ -361,7 +370,7 @@ class TestWithServers(TestWithoutServers):
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos agents on all client
                 hosts specified in the test's yaml file.
-            servers (list): list of hosts running the doas servers to be used to
+            servers (list): list of hosts running the daos servers to be used to
                 define the access points in the agent yaml config file
 
         Raises:

@@ -80,8 +80,8 @@ fini_cb(struct lru_array *array, struct lru_sub *sub, struct lru_entry *entry,
 	array->la_cbs.lru_on_fini(entry->le_payload, real_idx, array->la_arg);
 }
 
-static int
-array_alloc_one(struct lru_array *array, struct lru_sub *sub)
+int
+lrua_array_alloc_one(struct lru_array *array, struct lru_sub *sub)
 {
 	struct lru_entry	*entry;
 	char			*payload;
@@ -144,7 +144,7 @@ sub_find_free(struct lru_array *array, struct lru_sub *sub,
 	return true;
 }
 
-static inline void
+static inline int
 manual_find_free(struct lru_array *array, struct lru_entry **entryp,
 		 uint32_t *idx, uint64_t key)
 {
@@ -161,24 +161,26 @@ manual_find_free(struct lru_array *array, struct lru_entry **entryp,
 				 */
 				d_list_del(&sub->ls_link);
 			}
-			return;
+			return 0;
 		}
 	}
 
 	/** No free entries */
 	if (d_list_empty(&array->la_unused_sub))
-		return; /* No free sub arrays either */
+		return -DER_BUSY;; /* No free sub arrays either */
 
 	sub = d_list_entry(array->la_unused_sub.next, struct lru_sub, ls_link);
-	rc = array_alloc_one(array, sub);
+	rc = lrua_array_alloc_one(array, sub);
 	if (rc != 0)
-		return;
+		return rc;
 
 	found = sub_find_free(array, sub, entryp, idx, key);
 	D_ASSERT(found);
+
+	return 0;
 }
 
-void
+int
 lrua_find_free(struct lru_array *array, struct lru_entry **entryp,
 	       uint32_t *idx, uint64_t key)
 {
@@ -188,13 +190,12 @@ lrua_find_free(struct lru_array *array, struct lru_entry **entryp,
 	*entryp = NULL;
 
 	if (array->la_flags & LRU_FLAG_EVICT_MANUAL) {
-		manual_find_free(array, entryp, idx, key);
-		return;
+		return manual_find_free(array, entryp, idx, key);
 	}
 
 	sub = &array->la_sub[0];
 	if (sub_find_free(array, sub, entryp, idx, key))
-		return;
+		return 0;
 
 	entry = &sub->ls_table[sub->ls_lru];
 	/** Key should not be 0, otherwise, it should be in free list */
@@ -207,6 +208,8 @@ lrua_find_free(struct lru_array *array, struct lru_entry **entryp,
 	sub->ls_lru = entry->le_next_idx;
 
 	*entryp = entry;
+
+	return 0;
 }
 
 void
@@ -312,7 +315,7 @@ lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent, uint32_t nr_arrays,
 				&array->la_unused_sub);
 	}
 
-	rc = array_alloc_one(array, &array->la_sub[0]);
+	rc = lrua_array_alloc_one(array, &array->la_sub[0]);
 	if (rc != 0) {
 		D_FREE(array);
 		return rc;

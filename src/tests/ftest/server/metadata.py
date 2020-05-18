@@ -38,9 +38,8 @@ except ImportError:
 from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Orterun
-from write_host_file import write_host_file
 from test_utils_pool import TestPool
 
 NO_OF_MAX_CONTAINER = 13034
@@ -86,10 +85,6 @@ class ObjectMetadata(TestWithServers):
         """Set up each test case."""
         # Start the servers and agents
         super(ObjectMetadata, self).setUp()
-
-        # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
 
         # Create a pool
         self.pool = TestPool(self.context, self.log)
@@ -221,7 +216,9 @@ class ObjectMetadata(TestWithServers):
                 # Define the job manager for the IOR command
                 manager = Orterun(ior_cmd)
                 env = ior_cmd.get_default_env(str(manager))
-                manager.setup_command(env, self.hostfile_clients, processes)
+                manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+                manager.assign_processes(processes)
+                manager.assign_environment(env)
 
                 # Add a thread for these IOR arguments
                 threads.append(

@@ -74,12 +74,12 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 			neg_info = info - 1;
 		}
 		lrua_lookup(parent_info->ti_array, entry->te_parent_ptr,
-			    (void **)&parent);
+			    &parent);
 		if (neg_info == NULL) {
 			other = parent;
 		} else if (parent != NULL) {
 			idx = &parent->te_miss_idx[entry->te_hash_idx];
-			lrua_lookup(neg_info->ti_array, idx, (void **)&other);
+			lrua_lookup(neg_info->ti_array, idx, &other);
 		}
 	}
 
@@ -251,8 +251,10 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 	struct vos_ts_entry	*entry;
 	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
 	uint32_t		*neg_idx;
+	int			 rc;
 
-	entry = lrua_alloc(ts_table->tt_type_info[type].ti_array, idx);
+	rc = lrua_alloc(ts_table->tt_type_info[type].ti_array, idx, &entry);
+	D_ASSERT(rc == 0); /** autoeviction and no allocation */
 
 	if (parent == NULL) {
 		/** Use global timestamps for the type to initialize it */
@@ -264,7 +266,7 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 		if ((type & 1) == 0) { /* positive entry */
 			neg_idx = &parent->te_miss_idx[hash_idx];
 			lrua_lookup(parent->te_info->ti_array, neg_idx,
-				    (void **)&ts_source);
+				    &ts_source);
 		}
 		if (ts_source == NULL) /* for negative and uncached entries */
 			ts_source = parent;
