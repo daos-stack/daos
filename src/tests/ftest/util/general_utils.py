@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -38,6 +38,83 @@ from avocado.utils import process
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
+
+
+def run_command(command, timeout=60, verbose=True, raise_exception=True,
+                output_check="combined", env=None):
+    """Run the command on the local host.
+
+    This method uses the avocado.utils.process.run() method to run the specified
+    command string on the local host using subprocess.Popen(). Even though the
+    command is specified as a string, since shell=False is passed to process.run
+    it will use shlex.spit() to break up the command into a list before it is
+    passed to subprocess.Popen. The shell=False is forced for security. As a
+    result typically any command containing ";", "|", "&&", etc. will fail.
+
+    Args:
+        command (str): command to run.
+        timeout (int, optional): command timeout. Defaults to 60 seconds.
+        verbose (bool, optional): whether to log the command run and
+            stdout/stderr. Defaults to True.
+        raise_exception (bool, optional): whether to raise an exception if the
+            command returns a non-zero exit status. Defaults to True.
+        output_check (str, optional): whether to record the output from the
+            command (from stdout and stderr) in the test output record files.
+            Valid values:
+                "stdout"    - standard output *only*
+                "stderr"    - standard error *only*
+                "both"      - both standard output and error in separate files
+                "combined"  - standard output and error in a single file
+                "none"      - disable all recording
+            Defaults to "combined".
+        env (dict, optional): dictionary of environment variable names and
+            values to set when running the command. Defaults to None.
+
+    Raises:
+        DaosTestError: if there is an error running the command
+
+    Returns:
+        CmdResult: an avocado.utils.process CmdResult object containing the
+            result of the command execution.  A CmdResult object has the
+            following properties:
+                command         - command string
+                exit_status     - exit_status of the command
+                stdout          - the stdout
+                stderr          - the stderr
+                duration        - command execution time
+                interrupted     - whether the command completed within timeout
+                pid             - command's pid
+
+    """
+    msg = None
+    kwargs = {
+        "cmd": command,
+        "timeout": timeout,
+        "verbose": verbose,
+        "ignore_status": not raise_exception,
+        "allow_output_check": output_check,
+        "shell": False,
+        "env": env,
+    }
+    try:
+        # Block until the command is complete or times out
+        return process.run(**kwargs)
+
+    except TypeError as error:
+        # Can occur if using env with a non-string dictionary values
+        msg = "Error running '{}': {}".format(command, error)
+        if env is not None:
+            msg = "\n".join([
+                msg,
+                "Verify env values are defined as strings: {}".format(env)])
+
+    except process.CmdError as error:
+        # Command failed or possibly timed out
+        msg = "Error occurred running '{}': {}".format(command, error)
+
+    if msg is not None:
+        print(msg)
+        raise DaosTestError(msg)
 
 
 def run_task(hosts, command, timeout=None):

@@ -159,7 +159,7 @@ def set_test_environment(args):
             if state.lower() == "up":
                 # Get the interface speed - used to select the fastest available
                 with open(os.path.join(net_path, device, "speed"), "r") as \
-                    fileh:
+                     fileh:
                     try:
                         speed = int(fileh.read().strip())
                         # KVM/Qemu/libvirt returns an EINVAL
@@ -233,40 +233,45 @@ def set_test_environment(args):
         os.environ["PYTHONPATH"] = python_path
 
 
-def get_output(cmd):
+def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
 
     Args:
-        cmd (str): command from which to obtain the output
+        cmd (list): command from which to obtain the output
+        check (bool, optional): whether to raise an exception and exit the
+            program if the exit status of the comamnd is non-zero. Defaults
+            to True.
 
     Returns:
         str: command output
 
     """
-    try:
-        print("Running {}".format(cmd))
-        return subprocess.check_output(
-            cmd, stderr=subprocess.STDOUT, shell=True)
-
-    except subprocess.CalledProcessError as err:
-        print("Error executing '{}':\n\t{}\n\tOutput:\n{}".format(cmd, err,
-                                                                  err.output))
+    print("Running {}".format(" ".join(cmd)))
+    process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    stdout, _ = process.communicate()
+    retcode = process.poll()
+    if check and retcode:
+        print(
+            "Error executing '{}':\n\tOutput:\n{}".format(
+                " ".join(cmd), stdout))
         exit(1)
+    return stdout
 
 
 def time_command(cmd):
     """Execute the command on this host and display its duration.
 
     Args:
-        cmd (str): command to time
+        cmd (list): command to time
 
     Returns:
         int: return code of the command
 
     """
-    print("Running {}".format(cmd))
+    print("Running {}".format(" ".join(cmd)))
     start_time = int(time.time())
-    return_code = subprocess.call(cmd, shell=True)
+    return_code = subprocess.call(cmd)
     end_time = int(time.time())
     print("Total test time: {}s".format(end_time - start_time))
     return return_code
@@ -390,7 +395,7 @@ def find_values(obj, keys, key=None, val_type=list):
             [A, B, C]   [A, B, C, D]    [A, B, C, D]
 
         Args:
-            found (list): list of matches found
+            found (dict): dictionary of matches found for each key
         """
         for found_key in found:
             if found_key not in matches:
@@ -403,9 +408,9 @@ def find_values(obj, keys, key=None, val_type=list):
                     matches[found_key] = [matches[found_key]]
                 if isinstance(found[found_key], list):
                     for found_item in found[found_key]:
-                        if found_key not in matches:
+                        if found_item not in matches[found_key]:
                             matches[found_key].append(found_item)
-                elif found_key not in matches:
+                elif found[found_key] not in matches[found_key]:
                     matches[found_key].append(found[found_key])
 
                 if not is_list and len(matches[found_key]) == 1:
@@ -434,7 +439,7 @@ def get_test_list(tags):
         tags (list): a list of tag or test file names
 
     Returns:
-        (str, list): a tuple of the avacado tag filter and lists of tests
+        (list, list): a tuple of an avacado tag filter list and lists of tests
 
     """
     test_tags = []
@@ -445,19 +450,20 @@ def get_test_list(tags):
             test_list.append(tag)
         else:
             # Otherwise it is assumed that this is a tag
-            test_tags.append(" --filter-by-tags={}".format(tag))
+            test_tags.extend(["--filter-by-tags", str(tag)])
 
     # Add to the list of tests any test that matches the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
-        command = " | ".join([
-            "avocado list --paginator off{} ./".format(" ".join(test_tags)),
-            r"sed -ne '/INSTRUMENTED/s/.* \([^:]*\):.*/\1/p'",
-            "uniq"])
-        test_list.extend(get_output(command).splitlines())
+        command = ["avocado", "list", "--paginator=off"]
+        for test_tag in test_tags:
+            command.append(str(test_tag))
+        command.append("./")
+        tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", get_output(command))
+        test_list.extend(list(set(tagged_tests)))
 
-    return " ".join(test_tags), test_list
+    return test_tags, test_list
 
 
 def get_test_files(test_list, args, tmp_dir):
@@ -699,9 +705,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
         # Optionally display the file
         if args.verbose:
-            print(
-                get_output(
-                    "diff -y {} {}; exit 0".format(orig_yaml_file, yaml_file)))
+            print(get_output(["diff", "-y", orig_yaml_file, yaml_file], False))
 
     # Return the untouched or modified yaml file
     return yaml_file
@@ -712,7 +716,7 @@ def run_tests(test_files, tag_filter, args):
 
     Args:
         test_files (dict): a list of dictionaries of each test script/yaml file
-        tag_filter (str): the avocado tag filter command line argument
+        tag_filter (list): the avocado tag filter command line argument
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
@@ -724,21 +728,23 @@ def run_tests(test_files, tag_filter, args):
     # Determine the location of the avocado logs for archiving or renaming
     avocado_logs_dir = None
     if args.archive or args.rename:
-        avocado_logs_dir = get_output(
-            "avocado config | sed -ne '/logs_dir/s/.*  *//p'").strip()
-        avocado_logs_dir = os.path.expanduser(avocado_logs_dir)
+        data = get_output(["avocado", "config"]).strip()
+        avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
+        avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
         print("Avocado logs stored in {}".format(avocado_logs_dir))
 
     # Create the base avocado run command
     command_list = [
         "avocado",
         "run",
-        "--ignore-missing-references on",
-        "--show-job-log" if not args.sparse else "",
-        "--html-job-result on",
-        "--tap-job-result=off",
-        tag_filter
+        "--ignore-missing-references", "on",
+        "--html-job-result", "on",
+        "--tap-job-result", "off",
     ]
+    if not args.sparse:
+        command_list.append("--show-job-log")
+    if tag_filter:
+        command_list.extend(tag_filter)
 
     # Run each test
     for test_file in test_files:
@@ -751,12 +757,11 @@ def run_tests(test_files, tag_filter, args):
 
             # Execute this test
             test_command_list = list(command_list)
-            test_command_list.append("--mux-yaml {}".format(test_file["yaml"]))
-            test_command_list.append("-- {}".format(test_file["py"]))
-            return_code |= time_command(
-                " ".join([item for item in test_command_list if item != ""]))
+            test_command_list.extend([
+                "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
+            return_code |= time_command(test_command_list)
 
-            # Optionally store all of the doas server and client log files
+            # Optionally store all of the daos server and client log files
             # along with the test results
             if args.archive:
                 archive_logs(avocado_logs_dir, test_file["yaml"], args)
@@ -882,7 +887,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # Create a subdirectory in the avocado logs directory for this test
     daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
     print("Archiving host logs from {} in {}".format(host_list, daos_logs_dir))
-    get_output("mkdir {}".format(daos_logs_dir))
+    get_output(["/usr/bin/mkdir", daos_logs_dir])
 
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful.  Attempt all of the commands and
@@ -926,7 +931,7 @@ def archive_config_files(avocado_logs_dir):
     daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_configs")
     print(
         "Archiving config files from {} in {}".format(host_list, daos_logs_dir))
-    get_output("mkdir {}".format(daos_logs_dir))
+    get_output(["/usr/bin/mkdir", daos_logs_dir])
 
     # Archive any yaml configuration files.  Currently these are always written
     # to a shared directory for all of hosts.
@@ -980,9 +985,9 @@ def install_debuginfos():
     if USE_DEBUGINFO_INSTALL:
         cmds.append(
             "sudo debuginfo-install -y --exclude ompi-debuginfo,gcc-debuginfo,"
-            "gcc-base-debuginfo daos-server libpmemobj python openmpi3")
+            "gcc-base-debuginfo daos-server cart libpmemobj python openmpi3")
     else:
-        import yum # pylint: disable=import-error
+        import yum  # pylint: disable=import-error
 
         yum_base = yum.YumBase()
         yum_base.conf.assumeyes = True
@@ -1031,13 +1036,13 @@ def install_debuginfos():
     cmd = "sudo yum -y --enablerepo=\\*debug\\* install"
     for pkg in install_pkgs:
         try:
-            cmd += " {}-{}-{}".format(pkg['name'], pkg['version'],
-                                      pkg['release'])
+            cmds.append(
+                "{}-{}-{}".format(pkg['name'], pkg['version'], pkg['release']))
         except KeyError:
             cmd += " {}".format(pkg['name'])
     cmds.append(cmd)
 
-    print(get_output(';'.join(cmds)))
+    print(get_output(cmds))
 
 
 def process_the_cores(avocado_logs_dir, test_yaml, args):
@@ -1056,7 +1061,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
 
     # Create a subdirectory in the avocado logs directory for this test
     print("Processing cores from {} in {}".format(host_list, daos_cores_dir))
-    get_output("mkdir {}".format(daos_cores_dir))
+    get_output(["/usr/bin/mkdir", daos_cores_dir])
 
     # Copy any core files that exist on the test hosts and remove them from the
     # test host if the copy is successful.  Attempt all of the commands and
@@ -1111,12 +1116,18 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             exe_name_start = exe_type.find("execfn: '") + 9
             exe_name_end = exe_type.find("', platform:")
             exe_name = exe_type[exe_name_start:exe_name_end]
-            get_output('cd {0} && gdb -ex "set pagination off" \
-                            -ex "thread apply all bt full"     \
-                            -ex "detach"                       \
-                            -ex "quit"                         \
-                        {1} {2} > {2}.stacktrace'.format(
-                            daos_cores_dir, exe_name, corefile))
+            cmd = [
+                "gdb", "-cd={}".format(daos_cores_dir),
+                "-ex", "\"set pagination off\"",
+                "-ex", "\"thread apply all bt full\"",
+                "-ex", "\"detach\"",
+                "-ex", "\"quit\"",
+                exe_name, corefile
+            ]
+            stack_trace_file = os.path.join(
+                daos_cores_dir, "{}.stacktrace".format(corefile))
+            with open(stack_trace_file, "w") as stack_trace:
+                stack_trace.writelines(get_output(cmd))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 

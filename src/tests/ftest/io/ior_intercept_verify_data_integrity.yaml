@@ -13,6 +13,7 @@ timeout: 7200
 server_config:
     name: daos_server
     servers:
+        log_mask: INFO
         bdev_class: nvme
         bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
         #scm_size needed for tmpfs
@@ -30,6 +31,9 @@ pool:
         nvme_size: 200000000000
     createsvc:
         svcn: 1
+container:
+    type: POSIX
+    control_method: daos
 ior:
     client_processes:
         np_24:

@@ -35,14 +35,41 @@ def load_mpi_path(env):
     if mpicc:
         env.PrependENVPath("PATH", os.path.dirname(mpicc))
 
-def _configure_mpi_pkg(env, libs):
-    """Configure MPI using pkg-config"""
-    if GetOption('help'):
-        return
+def clear_icc_env(env):
+    """Remove icc specific options from environment"""
+    if env.subst("$COMPILER") == "icc":
+        linkflags = str(env.get("LINKFLAGS")).split()
+        if '-static-intel' in linkflags:
+            linkflags.remove('-static-intel')
+        for flag_type in ['CCFLAGS', 'CXXFLAGS', 'CFLAGS']:
+            oldflags = str(env.get(flag_type)).split()
+            newflags = []
+            for flag in oldflags:
+                if 'diag-disable' in flag:
+                    continue
+                if '-Werror-all' == flag:
+                    newflags.append('-Werror')
+                    continue
+                newflags.append(flag)
+            env.Replace(**{flag_type : newflags})
+        env.Replace(LINKFLAGS=linkflags)
+
+def _find_mpicc(env):
+    """find mpicc"""
     mpicc = find_executable("mpicc")
     if mpicc:
         env.Replace(CC="mpicc")
         env.Replace(LINK="mpicc")
+        clear_icc_env(env)
+        load_mpi_path(env)
+        return True
+    return False
+
+def _configure_mpi_pkg(env, libs):
+    """Configure MPI using pkg-config"""
+    if GetOption('help'):
+        return
+    if _find_mpicc(env):
         return env.subst("$MPI_PKG")
     try:
         env.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
@@ -74,10 +101,9 @@ def configure_mpi(prereqs, env, libs, required=None):
         comp = mpi
         if mpi == "openmpi":
             comp = "ompi"
-        if prereqs.check_component(comp):
+        if _find_mpicc(env):
             prereqs.require(env, comp)
             print("%s is installed" % mpi)
-            libs.append('mpi')
             return comp
         print("No %s installed and/or loaded" % mpi)
     print("No OMPI installed")
