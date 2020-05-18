@@ -155,7 +155,6 @@ pool_alloc(unsigned int nr)
 	/** allocate and fill in pool connection */
 	D_ALLOC_PTR(pool);
 	if (pool == NULL) {
-		D_ERROR("failed to allocate pool connection\n");
 		return NULL;
 	}
 
@@ -1108,8 +1107,6 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	if (state == NULL) {
 		D_ALLOC_PTR(state);
 		if (state == NULL) {
-			D_ERROR(DF_UUID": failed to allocate state\n",
-				DP_UUID(args->uuid));
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
@@ -1606,8 +1603,6 @@ dc_pool_evict(tse_task_t *task)
 
 		D_ALLOC_PTR(state);
 		if (state == NULL) {
-			D_ERROR(DF_UUID": failed to allocate state\n",
-				DP_UUID(args->uuid));
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
@@ -2216,7 +2211,6 @@ rsvc_client_state_create(tse_task_t *task, d_rank_list_t *targets,
 	if (state == NULL) {
 		D_ALLOC_PTR(state);
 		if (state == NULL) {
-			D_ERROR("Failed to allocate state\n");
 			return -DER_NOMEM;
 		}
 		rc = dc_mgmt_sys_attach(group, &state->scs_sys);

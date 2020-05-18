@@ -34,7 +34,6 @@ from errno import ENOENT
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
-from avocado.utils import process
 
 
 class DaosTestError(Exception):
@@ -262,8 +261,9 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     # Run the command on each host in parallel
     task = run_task(hosts, command, timeout)
 
-    # Report any errors / display output if requested
+    # Report any errors
     retcode_dict = {}
+    errors = False
     for retcode, rc_nodes in task.iter_retcodes():
         # Create a NodeSet for this list of nodes
         nodeset = NodeSet.fromlist(rc_nodes)
@@ -273,27 +273,25 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
             retcode_dict[retcode] = NodeSet()
         retcode_dict[retcode].add(nodeset)
 
-        # Display any errors or requested output
-        if verbose or (expect_rc is not None and expect_rc != retcode):
-            msg = "output from"
-            if expect_rc is not None and expect_rc != retcode:
-                msg = "failure running"
-            buffers = task.iter_buffers(rc_nodes)
-            if not list(buffers):
-                print(
-                    "{}: {} '{}': rc={}".format(
-                        nodeset, msg, command, retcode))
-            else:
-                for output, nodes in buffers:
-                    nodeset = NodeSet.fromlist(nodes)
-                    lines = str(output).splitlines()
-                    output = "rc={}{}".format(
-                        retcode,
-                        ", {}".format(output) if len(lines) < 2 else
-                        "\n  {}".format("\n  ".join(lines)))
-                    print(
-                        "{}: {} '{}': {}".format(
-                            NodeSet.fromlist(nodes), msg, command, output))
+        # Keep track of any errors
+        if expect_rc is not None and expect_rc != retcode:
+            errors = True
+
+    # Report command output if requested or errors are detected
+    if verbose or errors:
+        print("Command:\n  {}".format(command))
+        print("Command return codes:")
+        for retcode in sorted(retcode_dict):
+            print("  {}: rc={}".format(retcode_dict[retcode], retcode))
+
+        print("Command output:")
+        for output, bf_nodes in task.iter_buffers():
+            # Create a NodeSet for this list of nodes
+            nodeset = NodeSet.fromlist(bf_nodes)
+
+            # Display the output per node set
+            print("  {}:\n    {}".format(
+                nodeset, "\n    ".join(str(output).splitlines())))
 
     # Report any timeouts
     if timeout and task.num_timeout() > 0:
@@ -481,9 +479,9 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
             "if pgrep --list-full {}".format(pattern),
             "then rc=1",
             "sudo pkill {}".format(pattern),
+            "sleep 5",
             "if pgrep --list-full {}".format(pattern),
-            "then sleep 5",
-            "pkill --signal KILL {}".format(pattern),
+            "then pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
             "exit $rc",
