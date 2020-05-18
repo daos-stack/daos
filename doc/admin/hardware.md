@@ -87,7 +87,7 @@ For example, 8 PCIe4 x4 NVMe SSDs balance a 200gbps PCIe4 x16 network adapter.
 The capacity of the SSDs will determine the minimum capacity of the
 Optane PMem DIMMs needed to provide the 6% ratio for DAOS metadata.
 
-![](./media/Fig_074.png) 
+![](./media/Fig_074.png)
 
 
 ## CPU Affinity
