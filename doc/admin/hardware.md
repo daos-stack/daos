@@ -99,7 +99,7 @@ Although globally accessible from any of the system cores, NVMe SSDs and
 network interface cards connected through the PCIe bus may provide
 different performance characteristics (e.g., higher latency, lower
 bandwidth) to each CPU. Accessing non-local PCIe devices may involve
-traffic over the UPI link that might become apoint of congestion.
+traffic over the UPI link that might become a point of congestion.
 Similarly, persistent memory is non-uniformly
 accessible (NUMA), and CPU affinity must be respected for maximal
 performance.
