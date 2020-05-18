@@ -52,7 +52,8 @@ class DmgCommand(YamlCommand):
         "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
         "pool_create": r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)",
         "pool_query": r"(?:Pool\s*([A-Za-z0-9-]+),\s*ntarget=([0-9]),"
-                      r"\s*disabled=([0-9])|Target\(VOS\) count:\s*([0-9])|"
+                      r"\s*disabled=([0-9]),\s+leader=([0-9]),"
+                      r"\s+version=([0-9])|Target\(VOS\) count:\s*([0-9])|"
                       r"(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
                       r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+)"
                       r",\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"

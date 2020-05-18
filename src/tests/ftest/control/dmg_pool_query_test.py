@@ -123,15 +123,14 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
             self.log.info("==>   Test is expected to finish with: %s", uuid[1])
 
             # Verify
-            if self.get_pool_query_info(uuid[0]):
+            out = self.get_pool_query_info(uuid[0])
+            if out:
                 exception = None
-            elif not self.get_pool_query_info(uuid[0]):
+            elif not out:
                 exception = 1
 
             if uuid[1] == "FAIL" and exception is None:
                 errors_list.append("==>   Test expected to fail:" + uuid[0])
-            elif uuid[1] == "PASS" and exception:
-                errors_list.append("==>   Test expected to pass: " + uuid[0])
 
         # Enable exceptions again for dmg.
         self.dmg.exit_status_exception = True

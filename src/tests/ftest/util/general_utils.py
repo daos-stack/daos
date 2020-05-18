@@ -46,6 +46,9 @@ def human_to_bytes(h_size):
 
     Args:
         h_size (str): human readable size value to be converted.
+
+    Returns:
+        int: value translated to bytes.
     """
     units = {"b": 1, "kb": (2**10), "mb": (2**20), "gb": (2**30)}
     pattern = r"([0-9.]+|[a-zA-Z]+)"

@@ -30,7 +30,7 @@ ior:
   daos_destroy: False
 
 exp_vals:
-  pool_info: ['8', '0']
+  pool_info: ['8', '0', '0', '1']
   target_cnt: ['8']
   scm_info: ['16 GB', '16 GB', '2.0 GB', '2.0 GB', '2.0 GB']
   nvme_info: ['32 GB', '32 GB', '4.0 GB', '4.0 GB', '4.0 GB']
