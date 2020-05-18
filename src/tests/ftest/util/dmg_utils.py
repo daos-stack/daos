@@ -28,9 +28,9 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils_base import \
-    CommandFailure, FormattedParameter, CommandWithParameters, YamlParameters
-from command_utils import CommandWithSubCommand, YamlCommand
+from command_utils import \
+    CommandWithParameters, FormattedParameter, CommandFailure, \
+    CommandWithSubCommand, YamlCommand, YamlParameters
 
 
 class DmgCommand(YamlCommand):
@@ -38,9 +38,6 @@ class DmgCommand(YamlCommand):
 
     METHOD_REGEX = {
         "run": r"(.*)",
-        "network_scan": r"(?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))"
-                        r"(?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+"
-                        r"([a-z0-9+;_]+))",
         # Sample output of dmg pool list.
         # wolf-3:10001: connected
         # Pool UUID                            Svc Replicas
@@ -50,7 +47,6 @@ class DmgCommand(YamlCommand):
         # whitespaces. If we use "\s+", it'll pick up the second divider as
         # UUID since it's made up of hyphens and \s includes new line.
         "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
-        "pool_create": r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)",
         "system_query": r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+:[0-9]+)\s+[A-Za-z]+)"
     }
 #system_query": r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+)\s+[A-Za-z]+)
@@ -103,6 +99,7 @@ class DmgCommand(YamlCommand):
             if isinstance(hostlist, list):
                 hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")
+
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -489,26 +486,27 @@ class DmgCommand(YamlCommand):
                         "/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
 
-    def network_scan(self, provider=None, all_devs=False):
-        """Get the result of the dmg network scan command.
-
-        Args:
-            provider (str): name of network provider tied to the device
-            all_devs (bool, optional): Show all devs  info. Defaults to False.
+    def _get_result(self):
+        """Get the result from running the configured dmg command.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage scan command fails.
+            CommandFailure: if the dmg command fails.
 
         """
-        self.set_sub_command("network")
-        self.sub_command_class.set_sub_command("scan")
-        self.sub_command_class.sub_command_class.provider.value = provider
-        self.sub_command_class.sub_command_class.all.value = all_devs
-        return self._get_result()
+        if self.yaml:
+            self.create_yaml_file()
+
+        result = None
+        try:
+            result = self.run()
+        except CommandFailure as error:
+            raise CommandFailure("<dmg> command failed: {}".format(error))
+
+        return result
 
     def storage_scan(self):
         """Get the result of the dmg storage scan command.
@@ -525,14 +523,8 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.set_sub_command("scan")
         return self._get_result()
 
-    def storage_format(self, reformat=False):
+    def storage_format(self):
         """Get the result of the dmg storage format command.
-
-        Args:
-            reformat (bool): always reformat storage, could be destructive.
-                This will create control-plane related metadata i.e. superblock
-                file and reformat if the storage media is available and
-                formattable.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -544,7 +536,6 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("format")
-        self.sub_command_class.sub_command_class.reformat.value = reformat
         return self._get_result()
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
@@ -730,7 +721,6 @@ class DmgCommand(YamlCommand):
 
         Raises:
             CommandFailure: if the dmg pool delete-acl command fails.
-
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list")
@@ -796,7 +786,7 @@ def check_system_query_status(stdout_str):
     rank_info = []
     failed_rank_list = []
     # iterate to obtain failed rank list
-    for i in enumerate(stdout_str):
+    for i, _ in enumerate(stdout_str):
         rank_info.append(stdout_str[i][0])
         print("rank_info: \n{}".format(rank_info))
         for items in rank_info:
