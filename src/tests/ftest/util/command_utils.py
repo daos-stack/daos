@@ -31,9 +31,9 @@ from avocado.utils import process
 
 from command_utils_base import \
     CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
-    CommandWithParameters, YamlParameters, FormattedParameter, \
-    EnvironmentVariables
-from general_utils import check_file_exists, stop_processes, get_log_file
+    CommandWithParameters, YamlParameters, EnvironmentVariables
+from general_utils import check_file_exists, stop_processes, get_log_file, \
+    run_command, DaosTestError
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -72,6 +72,11 @@ class ExecutableCommand(CommandWithParameters):
         # method.
         self._env_names = []
 
+        # Define a list of executable names associated with the command. This
+        # list is used to generate the 'command_regex' property, which can be
+        # used to check on the progress or terminate the command.
+        self._exe_names = [self.command]
+
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -88,6 +93,19 @@ class ExecutableCommand(CommandWithParameters):
     def process(self):
         """Getter for process attribute of the ExecutableCommand class."""
         return self._process
+
+    @property
+    def command_regex(self):
+        """Get the regular expression to use to search for the command.
+
+        Typical use would include combining with pgrep to verify a subprocess
+        is running.
+
+        Returns:
+            str: regular expression to use to search for the command
+
+        """
+        return "'({})'".format("|".join(self._exe_names))
 
     def run(self):
         """Run the command.
@@ -109,24 +127,15 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         command = self.__str__()
-        kwargs = {
-            "cmd": command,
-            "timeout": self.timeout,
-            "verbose": self.verbose,
-            "ignore_status": not self.exit_status_exception,
-            "allow_output_check": "combined",
-            "shell": True,
-            "env": self.env,
-        }
         try:
             # Block until the command is complete or times out
-            return process.run(**kwargs)
+            return run_command(
+                command, self.timeout, self.verbose, self.exit_status_exception,
+                "combined", env=self.env)
 
-        except process.CmdError as error:
+        except DaosTestError as error:
             # Command failed or possibly timed out
-            msg = "Error occurred running '{}': {}".format(command, error)
-            self.log.error(msg)
-            raise CommandFailure(msg)
+            raise CommandFailure(error)
 
     def _run_subprocess(self):
         """Run the command as a sub process.
@@ -141,7 +150,7 @@ class ExecutableCommand(CommandWithParameters):
                 "cmd": self.__str__(),
                 "verbose": self.verbose,
                 "allow_output_check": "combined",
-                "shell": True,
+                "shell": False,
                 "env": self.env,
                 "sudo": self.sudo,
             }
@@ -183,31 +192,62 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         if self._process is not None:
-            # Use a list to send signals to the process with one second delays:
-            #   Interupt + wait 3 seconds
-            #   Terminate + wait 2 seconds
-            #   Quit + wait 1 second
-            #   Kill
-            signal_list = [
-                signal.SIGINT, None, None, None,
-                signal.SIGTERM, None, None,
-                signal.SIGQUIT, None,
-                signal.SIGKILL]
+            # Send a SIGTERM to the stop the subprocess and if it is still
+            # running after 5 seconds send a SIGKILL and report an error
+            signal_list = [signal.SIGTERM, signal.SIGKILL]
 
             # Turn off verbosity to keep the logs clean as the server stops
             self._process.verbose = False
 
-            # Keep sending signals and or waiting while the process is alive
+            # Send signals while the process is still running
+            state = None
             while self._process.poll() is None and signal_list:
-                signal_type = signal_list.pop(0)
-                if signal_type is not None:
-                    self._process.send_signal(signal_type)
+                signal_to_send = signal_list.pop(0)
+                msg = "before sending signal {}".format(signal_to_send)
+                state = self.get_subprocess_state(msg)
+                self.log.info(
+                    "Sending signal %s to %s (state=%s)", str(signal_to_send),
+                    self._command, str(state))
+                self._process.send_signal(signal_to_send)
                 if signal_list:
-                    time.sleep(1)
+                    time.sleep(5)
+
             if not signal_list:
-                # Indicate an error if the process required a SIGKILL
-                raise CommandFailure("Error stopping '{}'".format(self))
+                if state and (len(state) > 1 or state[0] not in ("D", "Z")):
+                    # Indicate an error if the process required a SIGKILL and
+                    # either multiple processes were still found running or the
+                    # parent process was in any state except uninterruptible
+                    # sleep (D) or zombie (Z).
+                    raise CommandFailure("Error stopping '{}'".format(self))
+
+            self.log.info("%s stopped successfully", self.command)
             self._process = None
+
+    def get_subprocess_state(self, message=None):
+        """Display the state of the subprocess.
+
+        Args:
+            message (str, optional): additional text to include in output.
+                Defaults to None.
+
+        Returns:
+            list: a list of process states for the process found associated with
+                the subprocess pid.
+
+        """
+        state = None
+        if self._process is not None:
+            self.log.debug(
+                "%s processes still running%s:", self.command,
+                " {}".format(message) if message else "")
+            command = "/usr/bin/ps --forest -o pid,stat,time,cmd {}".format(
+                self._process.get_pid())
+            result = process.run(command, 10, True, True, "combined")
+
+            # Get the state of the process from the output
+            state = re.findall(
+                r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout)
+        return state
 
     def get_output(self, method_name, **kwargs):
         """Get output from the command issued by the specified method.
@@ -281,7 +321,7 @@ class ExecutableCommand(CommandWithParameters):
             env (EnvironmentVariables): a dictionary of environment variable
                 names and values to export prior to running the command
         """
-        self._pre_command = env.get_export_str()
+        self.env = env.copy()
 
 
 class CommandWithSubCommand(ExecutableCommand):
@@ -411,60 +451,6 @@ class CommandWithSubCommand(ExecutableCommand):
                 "<{}> command failed: {}".format(self.command, error))
 
         return result
-
-
-class DaosCommand(ExecutableCommand):
-    """A class for similar daos command line tools."""
-
-    def __init__(self, namespace, command, path=""):
-        """Create DaosCommand object.
-
-        Specific type of command object built so command str returns:
-            <command> <options> <request> <action/subcommand> <options>
-
-        Args:
-            namespace (str): yaml namespace (path to parameters)
-            command (str): string of the command to be executed.
-            path (str): path to location of daos command binary.
-        """
-        super(DaosCommand, self).__init__(namespace, command, path)
-        self.request = BasicParameter(None)
-        self.action = BasicParameter(None)
-        self.action_command = None
-
-    def get_action_command(self):
-        """Assign a command object for the specified request and action."""
-        self.action_command = None
-
-    def get_param_names(self):
-        """Get a sorted list of DaosCommand parameter names."""
-        names = self.get_attribute_names(FormattedParameter)
-        names.extend(["request", "action"])
-        return names
-
-    def get_params(self, test):
-        """Get values for all of the command params from the yaml file.
-
-        Args:
-            test (Test): avocado Test object
-        """
-        super(DaosCommand, self).get_params(test)
-        self.get_action_command()
-        if isinstance(self.action_command, ObjectWithParameters):
-            self.action_command.get_params(test)
-
-    def get_str_param_names(self):
-        """Get a sorted list of the names of the command attributes.
-
-        Returns:
-            list: a list of class attribute names used to define parameters
-                for the command.
-
-        """
-        names = self.get_param_names()
-        if self.action_command is not None:
-            names[-1] = "action_command"
-        return names
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -664,6 +650,7 @@ class YamlCommand(SubProcessCommand):
 
         return super(YamlCommand, self)._get_result()
 
+
 class SubprocessManager(object):
     """Defines an object that manages a sub process launched with orterun."""
 
@@ -689,9 +676,6 @@ class SubprocessManager(object):
 
         # Define the list of hosts that will execute the daos command
         self._hosts = []
-
-        # Define the list of executable names to terminate in the kill() method
-        self._exe_names = [self.manager.job.command]
 
     def __str__(self):
         """Get the complete manager command string.
@@ -772,7 +756,16 @@ class SubprocessManager(object):
 
     def kill(self):
         """Forcably terminate any sub process running on hosts."""
-        stop_processes(self._hosts, "'({})'".format("|".join(self._exe_names)))
+        regex = self.manager.job.command_regex
+        result = stop_processes(self._hosts, regex)
+        if 0 in result and len(result) == 1:
+            print(
+                "No remote {} processes killed (none found), done.".format(
+                    regex))
+        else:
+            print(
+                "***At least one remote {} process needed to be killed! Please "
+                "investigate/report.***".format(regex))
 
     def verify_socket_directory(self, user):
         """Verify the domain socket directory is present and owned by this user.
