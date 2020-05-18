@@ -147,6 +147,23 @@ def fault_test_tag() {
     return ""
 }
 
+def release_candidate() {
+    if sh script: "git diff-index --name-only HEAD^ | grep -q TAG", returnStatus: true {
+        if sh script: "git describe --tags", returnStdout: true {
+            return true
+        }
+    }
+    return false
+}
+
+def faults_enabled() {
+    // if the fault_enabled pragma is false or it a release candidate; disable fault injection 
+    if !cachedCommitPragma(pragma: 'faults_enabled', def_val: 'true') || release_candidate() {
+        return ""
+    }
+    return "--with-fault-injection"
+}
+
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -586,6 +603,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   scons_arg: faults_enabled(),
                                    failure_artifacts: 'config.log-centos7-gcc'
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
@@ -682,7 +700,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-centos7-clang'
+                                   failure_artifacts: 'config.log-centos7-clang',
+                                   scons_arg: faults_enabled()
                     }
                     post {
                         always {
@@ -743,7 +762,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-ubuntu18.04-gcc'
+                                   failure_artifacts: 'config.log-ubuntu18.04-gcc',
+                                   scons_arg: faults_enabled()
                     }
                     post {
                         always {
@@ -805,7 +825,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-ubuntu18.04-clag'
+                                   failure_artifacts: 'config.log-ubuntu18.04-clag',
+                                   scons_arg: faults_enabled()
                     }
                     post {
                         always {
@@ -866,7 +887,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-leap15-gcc'
+                                   failure_artifacts: 'config.log-leap15-gcc',
+                                   scons_arg: faults_enabled()
                     }
                     post {
                         always {
@@ -927,7 +949,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-leap15-clang'
+                                   failure_artifacts: 'config.log-leap15-clang',
+                                   scons_arg: faults_enabled()
                     }
                     post {
                         always {
@@ -990,7 +1013,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
-                                   TARGET_PREFIX: 'install/opt', failure_artifacts: 'config.log-leap15-icc'
+                                   TARGET_PREFIX: 'install/opt', failure_artifacts: 'config.log-leap15-icc',
+                                   scons_arg: faults_enabled()
                     }
                     post {
                         always {
@@ -1248,7 +1272,8 @@ pipeline {
                         sh "rm -f coverity/daos_coverity.tgz"
                         sconsBuild coverity: "daos-stack/daos",
                                    clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-centos7-cov'
+                                   failure_artifacts: 'config.log-centos7-cov',
+                                   scons_arg: faults_enabled()
                     }
                     post {
                         success {
