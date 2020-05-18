@@ -239,7 +239,7 @@ def get_output(cmd, check=True):
     Args:
         cmd (list): command from which to obtain the output
         check (bool, optional): whether to raise an exception and exit the
-            program if the exit status of the comamnd is non-zero. Defaults
+            program if the exit status of the command is non-zero. Defaults
             to True.
 
     Returns:
