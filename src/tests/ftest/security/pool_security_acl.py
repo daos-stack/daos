@@ -76,7 +76,6 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
 
         if permission.lower() == "none":
             permission = ""
-        #if permission not in poolSec.PERMISSIONS:
         if permission not in PERMISSIONS:
             self.fail("##permission %s is invalid, valid permissions are:"
                       "'none', 'r', w', 'rw'", permission)
