@@ -47,7 +47,7 @@ performance. DAOS can support multiple rails by binding different
 instances of the DAOS server to individual network cards.
 
 The DAOS control plane provides methods for administering and managing
-the DAOS servers using a secure socket layer interface. An additional 
+the DAOS servers using a secure socket layer interface. An additional
 out-of-band network connecting the nodes in the DAOS
 service cluster is required for DAOS administration. Management traffic
 between clients and servers use IP over Fabric.
@@ -80,11 +80,11 @@ file.
 
 ## Storage Server Design
 
-The hardware design of a DAOS storage server balances the network 
-bandwidth of the fabric with the aggregate storage bandwidth of the NVMe 
-storage devices.  This relationship sets the number of NVMe drives.  
-For example, 8 PCIe4 x4 NVMe SSDs balance a 200gbps PCIe4 x16 network adapter.  
-The capacity of the SSDs will determine the minimum capacity of the 
+The hardware design of a DAOS storage server balances the network
+bandwidth of the fabric with the aggregate storage bandwidth of the NVMe
+storage devices.  This relationship sets the number of NVMe drives.
+For example, 8 PCIe4 x4 NVMe SSDs balance a 200gbps PCIe4 x16 network adapter.
+The capacity of the SSDs will determine the minimum capacity of the
 Optane PMem DIMMs needed to provide the 6% ratio for DAOS metadata.
 
 ![](./media/Fig_074.png) 
@@ -99,7 +99,7 @@ Although globally accessible from any of the system cores, NVMe SSDs and
 network interface cards connected through the PCIe bus may provide
 different performance characteristics (e.g., higher latency, lower
 bandwidth) to each CPU. Accessing non-local PCIe devices may involve
-traffic over the UPI link that might become apoint of congestion. 
+traffic over the UPI link that might become apoint of congestion.
 Similarly, persistent memory is non-uniformly
 accessible (NUMA), and CPU affinity must be respected for maximal
 performance.
@@ -109,8 +109,8 @@ the DAOS service must be able to detect the CPU to PCIe device and
 persistent memory affinity and minimize as much as possible non-local
 access. This can be achieved by spawning one instance of the I/O server
 per CPU, then accessing only the persistent memory and PCI devices
-local to that CPU from that server instance. The DAOS control plane is 
-responsible for detecting the storage and network affinity and 
+local to that CPU from that server instance. The DAOS control plane is
+responsible for detecting the storage and network affinity and
 starting the I/O servers accordingly.
 
 ![](./media/Fig_075.png)
