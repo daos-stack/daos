@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -75,6 +75,9 @@ class DaosServerCommand(YamlCommand):
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
 
+        # Include the daos_io_server command lauched by the daos_server command.
+        self._exe_names.append("daos_io_server")
+
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
         """Get the daos_server sub command object based upon the sub-command."""
@@ -122,13 +125,11 @@ class DaosServerCommand(YamlCommand):
         """
         if mode == "format":
             self.pattern = self.FORMAT_PATTERN
-            self.pattern_count = host_qty
         elif mode == "reformat":
             self.pattern = self.REFORMAT_PATTERN
-            self.pattern_count = host_qty
         else:
             self.pattern = self.NORMAL_PATTERN
-            self.pattern_count = host_qty * len(self.yaml.server_params)
+        self.pattern_count = host_qty * len(self.yaml.server_params)
 
     @property
     def using_nvme(self):
@@ -320,7 +321,6 @@ class DaosServerManager(SubprocessManager):
         """
         super(DaosServerManager, self).__init__(server_command, manager)
         self.manager.job.sub_command_override = "start"
-        self._exe_names.append("daos_io_server")
 
         # Dmg command to access this group of servers which will be configured
         # to access the doas_servers when they are started

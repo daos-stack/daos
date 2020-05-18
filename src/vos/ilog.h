@@ -33,9 +33,14 @@
 
 struct ilog_id {
 	/** DTX of entry */
-	uint32_t	 id_tx_id;
-	/** Padding */
-	uint32_t	 id_pad1;
+	union {
+		uint64_t	id_value;
+		struct {
+			uint32_t	 id_tx_id;
+			uint16_t	 id_punch_minor_eph;
+			uint16_t	 id_update_minor_eph;
+		};
+	};
 	/** timestamp of entry */
 	daos_epoch_t	id_epoch;
 };
@@ -137,14 +142,15 @@ ilog_destroy(struct umem_instance *umm, struct ilog_desc_cbs *cbs,
  *
  *  \param	loh[in]		Open log handle
  *  \param	epr[in]		Limiting range
- *  \param	epoch[in]	Epoch of update
+ *  \param	major_eph[in]	Major epoch of update
+ *  \param	minor_eph[in]	Minor epoch of update
  *  \param	punch[in]	Punch if true, update otherwise
  *
  *  \return 0 on success, error code on failure
  */
 int
 ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
-	    daos_epoch_t epoch, bool punch);
+	    daos_epoch_t major_eph, uint16_t minor_eph, bool punch);
 
 /** Updates specified log entry to mark it as persistent (remove
  * the transaction identifier from the entry.   Additionally, this will
@@ -172,8 +178,6 @@ ilog_abort(daos_handle_t loh, const struct ilog_id *id);
 struct ilog_entry {
 	/** The epoch and tx_id for the log entry */
 	struct ilog_id	ie_id;
-	/** If true, entry is a punch, otherwise, it's a creation */
-	bool		ie_punch;
 	/** The status of the incarnation log entry.  See enum ilog_status */
 	int32_t		ie_status;
 };
@@ -282,5 +286,12 @@ ilog_ts_idx_get(struct ilog_df *ilog_df);
  **/
 uint32_t
 ilog_version_get(daos_handle_t loh);
+
+static inline bool
+ilog_is_punch(const struct ilog_entry *entry)
+{
+	return entry->ie_id.id_punch_minor_eph >
+		entry->ie_id.id_update_minor_eph;
+}
 
 #endif /* __ILOG_H__ */
