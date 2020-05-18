@@ -85,7 +85,7 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		return true // no legal transitions
 	}
 	if ms == to {
-		return true
+		return true // identical state
 	}
 	return map[MemberState]map[MemberState]bool{
 		MemberStateAwaitFormat: map[MemberState]bool{
