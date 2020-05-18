@@ -163,7 +163,6 @@ pool_child_add_one(void *varg)
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
 
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
-
 	/* Load all containers */
 	rc = ds_cont_child_start_all(child);
 	if (rc) {
@@ -452,7 +451,10 @@ ds_pool_stop(uuid_t uuid)
 		return;
 	if (pool->sp_stopping)
 		return;
+
 	pool->sp_stopping = true;
+	ds_rebuild_abort(pool->sp_uuid, -1);
+	ds_migrate_abort(pool->sp_uuid, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
 }
