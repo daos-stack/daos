@@ -217,7 +217,7 @@ class Dfuse(DfuseCommand):
         self.create_mount_point()
 
         # run dfuse command
-        cmd = ";".join([self.env.get_export_str(), self.__str__()])
+        cmd = "".join([self.env.get_export_str(), self.__str__()])
         ret_code = pcmd(self.hosts, cmd, timeout=30)
 
         if 0 in ret_code:
