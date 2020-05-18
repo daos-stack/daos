@@ -30,7 +30,6 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/container.h>
-#include <daos/object.h>
 #include <daos/array.h>
 
 #include "daos.h"
@@ -3961,45 +3960,17 @@ dfs_umount_root_cont(dfs_t *dfs)
 int
 dfs_obj_anchor_split(dfs_obj_t *obj, uint32_t *nr, daos_anchor_t *anchors)
 {
-	struct daos_obj_layout	*layout;
-	int			rc;
-
 	if (obj == NULL || nr == NULL || !S_ISDIR(obj->mode))
 		return EINVAL;
 
-	rc = dc_obj_layout_get(obj->oh, &layout);
-	if (rc)
-		return rc;
-
-	/** TBD - support more than per shard iteration */
-	if (*nr != 0 && *nr != layout->ol_nr) {
-		D_ERROR("For now, num anchors should be the same as what is"
-			" reported as optimal\n");
-		D_GOTO(out, rc = EINVAL);
-	}
-
-	*nr = layout->ol_nr;
-
-	if (anchors) {
-		uint32_t i;
-
-		for (i = 0; i < layout->ol_nr; i++) {
-			daos_anchor_set_zero(&anchors[i]);
-			dc_obj_shard2anchor(&anchors[i], i);
-			daos_anchor_set_flags(&anchors[i], DIOF_TO_SPEC_SHARD);
-		}
-	}
-out:
-	daos_obj_layout_free(layout);
-	return rc;
+	return daos_obj_anchor_split(obj->oh, nr, anchors);
 }
 
 int
 dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor)
 {
-	/** TBD - support more than per shard iteration */
-	daos_anchor_set_zero(anchor);
-	dc_obj_shard2anchor(anchor, index);
-	daos_anchor_set_flags(anchor, DIOF_TO_SPEC_SHARD);
-	return 0;
+	if (obj == NULL || !S_ISDIR(obj->mode))
+		return EINVAL;
+
+	return daos_obj_anchor_set(obj->oh, index, anchor);
 }
