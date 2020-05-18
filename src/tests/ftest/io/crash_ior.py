@@ -17,14 +17,10 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from ior_test_base import IorTestBase
 
-import write_host_file
-import threading
 import time
-import os
-import signal
 
+from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
 
 class CrashIor(IorTestBase):
