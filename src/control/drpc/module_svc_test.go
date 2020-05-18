@@ -33,7 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const defaultTestModID int32 = 7
+const defaultTestModID int32 = ModuleMgmt
 
 func TestNewModuleService(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -76,7 +76,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
-	expectedIDs := []int32{-1, 2, 255, defaultTestModID}
+	expectedIDs := []int32{-1, 7, 255, defaultTestModID}
 	testMods := make([]*mockModule, 0, len(expectedIDs))
 
 	for _, id := range expectedIDs {

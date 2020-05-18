@@ -61,7 +61,9 @@ func TestAgentSecurityModule_HandleCall_BadMethod(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, nil)
-	resp, err := mod.HandleCall(newTestSession(t, log, &net.UnixConn{}), -1, nil)
+	method := drpc.SecurityMethod(-1)
+	resp, err := mod.HandleCall(newTestSession(t, log, &net.UnixConn{}),
+		method, nil)
 
 	if resp != nil {
 		t.Errorf("Expected no response, got %+v", resp)

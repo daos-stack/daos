@@ -38,7 +38,7 @@ type mockModule struct {
 	IDValue            int32
 }
 
-func (m *mockModule) HandleCall(session *Session, method int32, input []byte) ([]byte, error) {
+func (m *mockModule) HandleCall(session *Session, method *Method, input []byte) ([]byte, error) {
 	return m.HandleCallResponse, m.HandleCallErr
 }
 

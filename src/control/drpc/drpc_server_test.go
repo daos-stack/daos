@@ -293,7 +293,7 @@ func TestServer_Integration(t *testing.T) {
 
 	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 
-	mod := newTestModule(5678)
+	mod := newTestModule(ModuleMgmt)
 	mod.HandleCallResponse = []byte("successful!")
 	dss.RegisterRPCModule(mod)
 

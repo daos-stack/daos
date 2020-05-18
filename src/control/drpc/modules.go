@@ -48,9 +48,45 @@ const (
 	ModuleSecurity = C.DRPC_MODULE_SEC
 )
 
+// Method interface is implemented by aliases for methods of each dRPC module.
+type Method interface {
+	Module() int32
+	String() string
+}
+
+// GetMethod returns object of type that implements method interface based on
+// module and method IDs.
+func GetMethod(moduleID int32, methodID int32) (Method, bool) {
+	switch moduleID {
+	case ModuleSecurityAgent:
+		m := SecurityAgentMethod(methodID)
+		return &m, true
+	case ModuleMgmt:
+		return MgmtMethod(methodID), true
+	case ModuleSrv:
+		return SrvMethod(methodID), true
+	case ModuleSecurity:
+		return SecurityMethod(methodID), true
+	default:
+		return nil, false
+	}
+}
+
+// SecurityAgentMethod is a type alias for a drpc agent security method.
+type SecurityAgentMethod int32
+
+func (sam *SecurityAgentMethod) String() string {
+	return map[*SecurityAgentMethod]string{}[sam]
+}
+
+// Module returns the module that the method belongs to.
+func (sam *SecurityAgentMethod) Module() int32 {
+	return ModuleSecurityAgent
+}
+
 const (
 	// MethodRequestCredentials is a ModuleSecurityAgent method
-	MethodRequestCredentials = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
+	MethodRequestCredentials SecurityAgentMethod = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
 )
 
 // MgmtMethod is a type alias for a drpc mgmt method.
@@ -134,16 +170,40 @@ const (
 	MethodContSetOwner MgmtMethod = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
 )
 
+// SrvMethod is a type alias for a drpc srv method.
+type SrvMethod int32
+
+func (sm SrvMethod) String() string {
+	return map[SrvMethod]string{}[sm]
+}
+
+// Module returns the module that the method belongs to.
+func (sm SrvMethod) Module() int32 {
+	return ModuleSrv
+}
+
 const (
 	// MethodNotifyReady is a ModuleSrv method
-	MethodNotifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
+	MethodNotifyReady SrvMethod = C.DRPC_METHOD_SRV_NOTIFY_READY
 	// MethodBIOError is a ModuleSrv method
-	MethodBIOError = C.DRPC_METHOD_SRV_BIO_ERR
+	MethodBIOError SrvMethod = C.DRPC_METHOD_SRV_BIO_ERR
 )
+
+// SecurityMethod is a type alias for a drpc security method.
+type SecurityMethod int32
+
+func (sm SecurityMethod) String() string {
+	return map[SecurityMethod]string{}[sm]
+}
+
+// Module returns the module that the method belongs to.
+func (sm SecurityMethod) Module() int32 {
+	return ModuleSecurity
+}
 
 const (
 	// MethodValidateCredentials is a ModuleSecurity method
-	MethodValidateCredentials = C.DRPC_METHOD_SEC_VALIDATE_CREDS
+	MethodValidateCredentials SecurityMethod = C.DRPC_METHOD_SEC_VALIDATE_CREDS
 )
 
 // Marshal is a utility function that can be used by dRPC method handlers to

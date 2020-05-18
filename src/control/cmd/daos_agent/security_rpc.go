@@ -100,8 +100,8 @@ func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *Securi
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
-	if method == drpc.MethodRequestCredentials {
+func (m *SecurityModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
+	if &method.(drpc.SecurityAgentMethod) == drpc.MethodRequestCredentials {
 		return m.getCredential(session)
 	}
 
