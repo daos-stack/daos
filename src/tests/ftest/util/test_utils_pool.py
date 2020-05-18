@@ -38,6 +38,7 @@ from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 
 class TestPool(TestDaosApiBase):
+    # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, log=None, cb_handler=None, dmg_command=None):
@@ -580,23 +581,24 @@ class TestPool(TestDaosApiBase):
         return {key: getattr(self.info.pi_space.ps_space, key) for key in keys}
 
     def get_pool_free_space(self, device="scm"):
-        """
-        Method Description
-             Get SCM or NVME free space
-        Keyword Arguments:
-            device {str} -- (default: {"scm"} or "nvme")
+        """Get SCM or NVME free space.
+
+        Args:
+            device (str, optional): device type, e.g. "scm" or "nvme". Defaults
+                to "scm".
 
         Returns:
-            free_space : Free SCM or NVME space "str"
+            str: free SCM or NVME space
+
         """
+        free_space = "0"
         dev = device.lower()
         daos_space = self.get_pool_daos_space()
         if dev == "scm":
-            return daos_space["s_free"][0]
+            free_space = daos_space["s_free"][0]
         elif dev == "nvme":
-            return daos_space["s_free"][1]
-        else:
-            return 0
+            free_space = daos_space["s_free"][1]
+        return free_space
 
     def display_pool_daos_space(self, msg=None):
         """Display the pool info daos space attributes.

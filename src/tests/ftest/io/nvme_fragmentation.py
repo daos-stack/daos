@@ -33,7 +33,7 @@ from write_host_file import write_host_file
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from daos_utils import DaosCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from mpio_utils import MpioUtils
 
@@ -120,8 +120,9 @@ class NvmeFragmentation(TestWithServers):
                                                           api,
                                                           test[0])])
             env = ior_cmd.get_default_env(str(manager))
-            manager.setup_command(env, self.hostfile_clients,
-                                  processes)
+            manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+            manager.assign_processes(processes)
+            manager.assign_environment(env, True)
 
             # run IOR Command
             try:
