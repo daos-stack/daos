@@ -591,5 +591,5 @@ class EnvironmentVariables(dict):
         export_list = ["export {}".format(export) for export in self.get_list()]
         export_str = separator.join(export_list)
         if export_str:
-            export_str = "".join(export_str, separator)
+            export_str = "".join([export_str, separator])
         return export_str
