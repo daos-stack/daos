@@ -44,6 +44,8 @@ int dc_mgmt_list_pools(tse_task_t *task);
 int dc_mgmt_profile(char *path, int avg, bool start);
 int dc_mgmt_add_mark(const char *mark);
 
+#define SYS_INFO_BUF_SIZE 16
+
 /** GetAttachInfo system info */
 struct sys_info {
 	char		provider[DAOS_SYS_INFO_STRING_MAX + 1];
@@ -65,6 +67,7 @@ struct dc_mgmt_sys {
 	struct sys_info		sy_info;
 };
 
+int dc_mgmt_net_cfg(const char *name);
 int dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp);
 void dc_mgmt_sys_detach(struct dc_mgmt_sys *sys);
 ssize_t dc_mgmt_sys_encode(struct dc_mgmt_sys *sys, void *buf, size_t cap);
