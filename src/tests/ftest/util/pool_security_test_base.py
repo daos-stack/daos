@@ -26,12 +26,10 @@ from __future__ import print_function
 import os
 from apricot import TestWithServers
 from daos_utils import DaosCommand
-from dmg_utils import DmgCommand
 import dmg_utils
 import random
 import grp
 import re
-from general_utils import pcmd
 import security_test_base as secTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
@@ -289,7 +287,8 @@ class PoolSecurityTestBase(TestWithServers):
         for group, permission in zip(sec_group, sec_group_perm):
             if permission == "none":
                 permission = ""
-            n_acl = secTestBase.acl_entry("group", group, permission, PERMISSIONS)
+            n_acl = secTestBase.acl_entry("group", group, permission,
+                                          PERMISSIONS)
             pool_acl_list.append(n_acl)
 
         self.log.info(
@@ -299,8 +298,10 @@ class PoolSecurityTestBase(TestWithServers):
         secTestBase.create_acl_file(acl_file, pool_acl_list)
 
         # modify primary-group permission for secondary-group test
-        grp_entry = secTestBase.acl_entry("group", current_group, primary_grp_perm, PERMISSIONS)
-        new_grp_entry = secTestBase.acl_entry("group", current_group, "", PERMISSIONS)
+        grp_entry = secTestBase.acl_entry("group", current_group,
+                                          primary_grp_perm, PERMISSIONS)
+        new_grp_entry = secTestBase.acl_entry("group", current_group, "",
+                                              PERMISSIONS)
         self.modify_acl_file_entry(acl_file, grp_entry, new_grp_entry)
 
         # dmg pool overwrite-acl --pool <uuid> --acl-file <file>
