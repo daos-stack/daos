@@ -1068,7 +1068,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	}
 
 	if (rc != 0) {
-		D_ERROR("Failed to update akey ilog: "DF_RC"\n", DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Failed to update akey ilog: "DF_RC"\n",
+				DP_RC(rc));
 		goto out;
 	}
 
@@ -1134,16 +1135,10 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 		ioc->ic_read_conflict = true;
 
 	if (ioc->ic_ts_set) {
-		switch (ioc->ic_ts_set->ts_flags & VOS_COND_DKEY_UPDATE_MASK) {
-		case VOS_OF_COND_DKEY_UPDATE:
+		if (ioc->ic_ts_set->ts_flags & VOS_COND_UPDATE_OP_MASK)
 			update_cond = VOS_ILOG_COND_UPDATE;
-			break;
-		case VOS_OF_COND_DKEY_INSERT:
+		else if (ioc->ic_ts_set->ts_flags & VOS_OF_COND_DKEY_INSERT)
 			update_cond = VOS_ILOG_COND_INSERT;
-			break;
-		default:
-			break;
-		}
 	}
 
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
@@ -1158,7 +1153,8 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 		goto out;
 	}
 	if (rc != 0) {
-		D_ERROR("Failed to update dkey ilog: "DF_RC"\n", DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Failed to update dkey ilog: "DF_RC"\n",
+				DP_RC(rc));
 		goto out;
 	}
 
@@ -1490,6 +1486,7 @@ update_ts_on_update(struct vos_io_context *ioc, int err)
 {
 	struct vos_ts_set	*ts_set = ioc->ic_ts_set;
 	struct vos_ts_entry	*entry;
+	struct vos_ts_entry	*centry;
 	int			 akey_idx;
 
 	if (ts_set == NULL)
@@ -1514,7 +1511,12 @@ update_ts_on_update(struct vos_io_context *ioc, int err)
 	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_OBJ, 0);
 	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
-	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
+	centry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
+	if (centry == NULL) {
+		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
+		return;
+	}
+	entry = centry;
 	if (ts_set->ts_flags & VOS_COND_DKEY_UPDATE_MASK)
 		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
 	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
@@ -1523,10 +1525,15 @@ update_ts_on_update(struct vos_io_context *ioc, int err)
 		return;
 
 	for (akey_idx = 0; akey_idx < ioc->ic_iod_nr; akey_idx++) {
-		entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_AKEY,
+		centry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_AKEY,
 						  akey_idx);
-		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
-		entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+		if (centry == NULL) {
+			entry->te_ts_rl = MAX(entry->te_ts_rl,
+					      ioc->ic_epr.epr_hi);
+			continue;
+		}
+		centry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
+		centry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
 	}
 }
 
@@ -1593,9 +1600,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	/* Update tree index */
 	err = dkey_update(ioc, pm_ver, dkey);
 	if (err) {
-		D_CDEBUG(err == -DER_EXIST || err == -DER_NONEXIST, DB_IO,
-			 DLOG_ERR, "Failed to update tree index: "DF_RC"\n",
-			 DP_RC(err));
+		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
+				DP_RC(err));
 		goto abort;
 	}
 
