@@ -213,7 +213,6 @@ out_pl:
 out_eq:
 	daos_eq_lib_fini();
 out_agent:
-	dc_agent_fini();
 out_hhash:
 	daos_hhash_fini();
 out_debug:

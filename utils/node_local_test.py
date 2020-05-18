@@ -628,13 +628,13 @@ def log_test(filename, show_memleaks=True, skip_fi=False):
                            show_memleaks=show_memleaks)
     except lt.LogCheckError:
         if lto.fi_location:
-            lt.show_line(lto.fi_location, 'error',
+            lt.show_line(lto.fi_location, 'warning',
                          'Fault injected here caused error')
         print('Error detected')
 
     if skip_fi:
         if not show_memleaks:
-            lt.show_line(lto.fi_location, 'error',
+            lt.show_line(lto.fi_location, 'warning',
                          'Fault injected here caused error')
         if not lto.fi_triggered:
             raise DFTestNoFi

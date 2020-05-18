@@ -298,7 +298,7 @@ class LogTest():
                         if line.rpc_opcode == '0xfe000000':
                             show = False
                     if show:
-                        show_line(line, 'error', 'warning in strict mode')
+                        show_line(line, 'warning', 'warning in strict mode')
                         warnings_mode = True
             if line.trace:
                 trace_lines += 1
@@ -398,11 +398,11 @@ class LogTest():
                         del regions[pointer]
                     elif pointer != '(nil)':
                         if pointer in old_regions:
-                            show_line(old_regions[pointer][0], 'error', 'double-free allocation point')
+                            show_line(old_regions[pointer][0], 'warning', 'double-free allocation point')
                             show_line(old_regions[pointer][1], 'error', '1st double-free location')
                             show_line(line, 'error', '2nd double-free location')
                         else:
-                            show_line(line, 'error', 'free of unknown memory')
+                            show_line(line, 'warning', 'free of unknown memory')
                         err_count += 1
                 elif line.is_realloc():
                     new_pointer = line.get_field(-3)
