@@ -491,14 +491,18 @@ class DmgCommand(YamlCommand):
 
     def network_scan(self, provider=None, all_devs=False):
         """Get the result of the dmg network scan command.
+
         Args:
             provider (str): name of network provider tied to the device
             all_devs (bool, optional): Show all devs  info. Defaults to False.
+
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.
+
         Raises:
             CommandFailure: if the dmg storage scan command fails.
+
         """
         self.set_sub_command("network")
         self.sub_command_class.set_sub_command("scan")
@@ -726,7 +730,7 @@ class DmgCommand(YamlCommand):
 
         Raises:
             CommandFailure: if the dmg pool delete-acl command fails.
-        
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list")
