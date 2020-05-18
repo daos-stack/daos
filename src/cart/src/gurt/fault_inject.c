@@ -553,6 +553,12 @@ d_fault_inject_init(void)
 		D_ERROR("Failed to parse fault config file.\n");
 		D_GOTO(out, rc);
 	}
+
+	/* Register D_ALLOC() hook as fault ID zero, but do not check
+	 * for failure as it will fail if no config file is provided
+	 */
+	d_fault_attr_mem = d_fault_attr_lookup(0);
+
 out:
 	if (fp)
 		fclose(fp);

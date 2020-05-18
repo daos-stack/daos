@@ -703,6 +703,9 @@ ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
 void
 ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
 
+void
+ds_migrate_abort(uuid_t pool_uuid, uint32_t ver);
+
 /** Server init state (see server_init) */
 enum dss_init_state {
 	DSS_INIT_STATE_INIT,		/**< initial state */
