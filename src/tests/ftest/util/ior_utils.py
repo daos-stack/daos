@@ -142,8 +142,6 @@ class IorCommand(ExecutableCommand):
         # See self.check_ior_subprocess_status() for details.
         self.pattern = None
         self.pattern_count = 1
-#        self.pattern_timeout = self.timeout
-#        self.pattern_timeout = BasicParameter(10, 10)
 
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""

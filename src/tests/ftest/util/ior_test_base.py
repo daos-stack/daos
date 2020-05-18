@@ -179,8 +179,6 @@ class IorTestBase(TestWithServers):
     def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
 
-        Args:
-            subprocess (bool): Default set to False.
         Returns:
             str: the path for the mpi job manager command
 
@@ -207,8 +205,8 @@ class IorTestBase(TestWithServers):
         elif operation == "read":
             self.ior_cmd.pattern = self.IOR_READ_PATTERN
         else:
-            self.fai("Exiting Test: Inappropriate operation type \
-                     for subprocess status check")
+            self.fail("Exiting Test: Inappropriate operation type \
+                      for subprocess status check")
 
         if not self.ior_cmd.check_ior_subprocess_status(
                 self.mpirun.process, self.ior_cmd):
