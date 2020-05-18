@@ -148,8 +148,8 @@ def fault_test_tag() {
 }
 
 def release_candidate() {
-    if sh script: "git diff-index --name-only HEAD^ | grep -q TAG", returnStatus: true {
-        if sh script: "git describe --tags | grep -i 'rc'", returnStatus: true {
+    if (sh script: "git diff-index --name-only HEAD^ | grep -q TAG", returnStatus: true) {
+        if (sh script: "git describe --tags | grep -i 'rc'", returnStatus: true) {
             return true
         }
     }
