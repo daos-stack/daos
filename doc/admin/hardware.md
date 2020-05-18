@@ -130,4 +130,5 @@ For efficient placement and optimal data resilience, more fault
 domains are better. As a result, it is preferable to distribute storage
 nodes across as many racks as possible.
 
-[^1]: <https://www.snia.org/sites/default/files/technical_work/final/NVMProgrammingModel_v1.2.pdf>
+[^1]: <https://www.snia.org/sites/default/files/
+technical_work/final/NVMProgrammingModel_v1.2.pdf>
