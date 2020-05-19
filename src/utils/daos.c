@@ -529,7 +529,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	}
 	D_STRNDUP(cmdname, argv[2], strlen(argv[2]));
 	if (cmdname == NULL)
-		return RC_NO_HELP;
+		D_GOTO(out_free, rc = RC_NO_HELP);
 
 	/* Parse command options. Use goto on any errors here
 	 * since some options may result in resource allocation.
