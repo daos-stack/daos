@@ -29,6 +29,7 @@ import (
 	fmt "fmt"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 // #cgo CFLAGS: -I${SRCDIR}/../../include
@@ -37,229 +38,233 @@ import "C"
 
 const moduleMethodOffset = 100
 
+type ModuleID int32
+
+func (id ModuleID) String() string {
+	if modName, found := map[ModuleID]string{
+		ModuleSecurityAgent: "Agent Security",
+		ModuleMgmt:          "Management",
+		ModuleSrv:           "Server",
+		ModuleSecurity:      "Security",
+	}[id]; found {
+		return modName
+	}
+	return fmt.Sprintf("unknown module id: %d", id)
+}
+
+func (id ModuleID) GetMethod(methodID int32) (Method, error) {
+	var m Method
+	switch id {
+	case ModuleSecurityAgent:
+		m = SecurityAgentMethod(methodID)
+	case ModuleMgmt:
+		m = MgmtMethod(methodID)
+	case ModuleSrv:
+		m = SrvMethod(methodID)
+	case ModuleSecurity:
+		m = SecurityMethod(methodID)
+	default:
+		return nil, errors.Errorf("unknown module id %d", id)
+	}
+
+	if !m.Valid() {
+		return nil, errors.Errorf("invalid method %d for module %s", methodID, id)
+	}
+	return m, nil
+}
+
 const (
 	// ModuleSecurityAgent is the dRPC module for security tasks in DAOS agent
-	ModuleSecurityAgent = C.DRPC_MODULE_SEC_AGENT
+	ModuleSecurityAgent ModuleID = C.DRPC_MODULE_SEC_AGENT
 	// ModuleMgmt is the dRPC module for management service tasks
-	ModuleMgmt = C.DRPC_MODULE_MGMT
+	ModuleMgmt ModuleID = C.DRPC_MODULE_MGMT
 	// ModuleSrv is the dRPC module for tasks relating to server setup
-	ModuleSrv = C.DRPC_MODULE_SRV
+	ModuleSrv ModuleID = C.DRPC_MODULE_SRV
 	// ModuleSecurity is the dRPC module for security tasks in DAOS server
-	ModuleSecurity = C.DRPC_MODULE_SEC
+	ModuleSecurity ModuleID = C.DRPC_MODULE_SEC
 )
 
-type Method struct {
-	id     int32
-	module int32
+type Method interface {
+	ID() int32
+	ModuleID() ModuleID
+	String() string
+	Valid() bool
 }
 
-func (meth *Method) Module() int32 {
-	return meth.module
+type SecurityAgentMethod int32
+
+func (m SecurityAgentMethod) ModuleID() ModuleID {
+	return ModuleSecurityAgent
 }
 
-func (meth *Method) ID() int32 {
-	return meth.id
+func (m SecurityAgentMethod) ID() int32 {
+	return int32(m)
 }
 
-func (meth *Method) Equals(m *Method) bool {
-	return meth.id == m.id && meth.module == m.module
+func (m SecurityAgentMethod) String() string {
+	if methodName, found := map[SecurityAgentMethod]string{
+		MethodRequestCredentials: "agent request credentials",
+	}[m]; found {
+		return methodName
+	}
+
+	return fmt.Sprintf("%s:%d", m.ModuleID(), m.ID())
 }
 
-func (meth *Method) String() string {
-	s := map[int32]string{
+func (m SecurityAgentMethod) Valid() bool {
+	startMethodID := int32(m.ModuleID()) * moduleMethodOffset
+	return m.ID() >= startMethodID && m.ID() < int32(C.NUM_DRPC_SEC_AGENT_METHODS)
+}
+
+const (
+	// MethodRequestCredentials is a ModuleSecurityAgent method
+	MethodRequestCredentials SecurityAgentMethod = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
+)
+
+type MgmtMethod int32
+
+func (m MgmtMethod) ModuleID() ModuleID {
+	return ModuleMgmt
+}
+
+func (m MgmtMethod) ID() int32 {
+	return int32(m)
+}
+
+func (m MgmtMethod) String() string {
+	if methodName, found := map[MgmtMethod]string{
 		MethodPrepShutdown: "prep shutdown",
 		MethodPingRank:     "ping",
 		MethodSetRank:      "set rank",
 		MethodSetUp:        "setup MS",
-	}[meth.id]
-
-	if s == "" {
-		return fmt.Sprintf("%d", meth.id)
+	}[m]; found {
+		return methodName
 	}
 
-	return s
+	return fmt.Sprintf("%s:%d", m.ModuleID(), m.ID())
 }
 
-// NewMethod constructs a Method object and returns a reference.
-func NewMethod(moduleID, methodID int32) *Method {
-	return &Method{id: methodID, module: moduleID}
+func (m MgmtMethod) Valid() bool {
+	startMethodID := int32(m.ModuleID()) * moduleMethodOffset
+	return m.ID() >= startMethodID && m.ID() < int32(C.NUM_DRPC_MGMT_METHODS)
 }
-
-// GetMethod returns Method reference after validating method and module IDs.
-//
-// Returns reference and boolean indicating a valid module.
-// Reference will be nil if method validation fails.
-func GetMethod(moduleID int32, methodID int32) (*Method, bool) {
-	var numMethods int32
-	startMethodID := moduleID * moduleMethodOffset
-
-	switch moduleID {
-	case ModuleSecurityAgent:
-		numMethods = int32(C.NUM_DRPC_SEC_AGENT_METHODS)
-	case ModuleMgmt:
-		numMethods = int32(C.NUM_DRPC_MGMT_METHODS)
-	case ModuleSrv:
-		numMethods = int32(C.NUM_DRPC_SRV_METHODS)
-	case ModuleSecurity:
-		numMethods = int32(C.NUM_DRPC_SEC_METHODS)
-	default:
-		return nil, false
-	}
-
-	if methodID <= startMethodID || methodID > (startMethodID+numMethods) {
-		return nil, true
-	}
-
-	return NewMethod(methodID, moduleID), true
-}
-
-//// SecurityAgentMethod is a type alias for a drpc agent security method.
-//type SecurityAgentMethod int32
-//
-//func (meth *SecurityAgentMethod) String() string {
-//	s := map[SecurityAgentMethod]string{}[*meth]
-//
-//	if s == "" {
-//		return fmt.Sprintf("%d", meth)
-//	}
-//
-//	return s
-//}
-//
-//// Module returns the module that the method belongs to.
-//func (meth *SecurityAgentMethod) Module() int32 {
-//	return ModuleSecurityAgent
-//}
-
-const (
-	// MethodRequestCredentials is a ModuleSecurityAgent method
-	MethodRequestCredentials = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
-)
-
-//// MgmtMethod is a type alias for a drpc mgmt method.
-//type MgmtMethod int32
-//
-//func (meth *MgmtMethod) String() string {
-//	s := map[MgmtMethod]string{
-//		MethodPrepShutdown: "prep shutdown",
-//		MethodPingRank:     "ping",
-//		MethodSetRank:      "set rank",
-//		MethodSetUp:        "setup MS",
-//	}[*meth]
-//
-//	if s == "" {
-//		return fmt.Sprintf("%d", meth)
-//	}
-//
-//	return s
-//}
-//
-//// Module returns the module that the method belongs to.
-//func (meth *MgmtMethod) Module() int32 {
-//	return ModuleMgmt
-//}
 
 const (
 	// MethodPrepShutdown is a ModuleMgmt method
-	MethodPrepShutdown = C.DRPC_METHOD_MGMT_PREP_SHUTDOWN
+	MethodPrepShutdown MgmtMethod = C.DRPC_METHOD_MGMT_PREP_SHUTDOWN
 	// MethodPingRank is a ModuleMgmt method
-	MethodPingRank = C.DRPC_METHOD_MGMT_PING_RANK
+	MethodPingRank MgmtMethod = C.DRPC_METHOD_MGMT_PING_RANK
 	// MethodSetRank is a ModuleMgmt method
-	MethodSetRank = C.DRPC_METHOD_MGMT_SET_RANK
+	MethodSetRank MgmtMethod = C.DRPC_METHOD_MGMT_SET_RANK
 	// MethodCreateMS is a ModuleMgmt method
-	MethodCreateMS = C.DRPC_METHOD_MGMT_CREATE_MS
+	MethodCreateMS MgmtMethod = C.DRPC_METHOD_MGMT_CREATE_MS
 	// MethodStartMS is a ModuleMgmt method
-	MethodStartMS = C.DRPC_METHOD_MGMT_START_MS
+	MethodStartMS MgmtMethod = C.DRPC_METHOD_MGMT_START_MS
 	// MethodJoin is a ModuleMgmt method
-	MethodJoin = C.DRPC_METHOD_MGMT_JOIN
+	MethodJoin MgmtMethod = C.DRPC_METHOD_MGMT_JOIN
 	// MethodGetAttachInfo is a ModuleMgmt method
-	MethodGetAttachInfo = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
+	MethodGetAttachInfo MgmtMethod = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
 	// MethodPoolCreate is a ModuleMgmt method
-	MethodPoolCreate = C.DRPC_METHOD_MGMT_POOL_CREATE
+	MethodPoolCreate MgmtMethod = C.DRPC_METHOD_MGMT_POOL_CREATE
 	// MethodPoolDestroy is a ModuleMgmt method
-	MethodPoolDestroy = C.DRPC_METHOD_MGMT_POOL_DESTROY
+	MethodPoolDestroy MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DESTROY
 	// MethodPoolExclude is a ModuleMgmt method
-	MethodPoolExclude = C.DRPC_METHOD_MGMT_EXCLUDE
+	MethodPoolExclude MgmtMethod = C.DRPC_METHOD_MGMT_EXCLUDE
 	// MethodPoolReintegrate is a ModuleMgmt method
-	MethodPoolReintegrate = C.DRPC_METHOD_MGMT_REINTEGRATE
+	MethodPoolReintegrate MgmtMethod = C.DRPC_METHOD_MGMT_REINTEGRATE
 	// MethodBioHealth is a ModuleMgmt method
-	MethodBioHealth = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
+	MethodBioHealth MgmtMethod = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
 	// MethodSetUp is a ModuleMgmt method
-	MethodSetUp = C.DRPC_METHOD_MGMT_SET_UP
+	MethodSetUp MgmtMethod = C.DRPC_METHOD_MGMT_SET_UP
 	// MethodSmdDevs is a ModuleMgmt method
-	MethodSmdDevs = C.DRPC_METHOD_MGMT_SMD_LIST_DEVS
+	MethodSmdDevs MgmtMethod = C.DRPC_METHOD_MGMT_SMD_LIST_DEVS
 	// MethodSmdPools is a ModuleMgmt method
-	MethodSmdPools = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
+	MethodSmdPools MgmtMethod = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
 	// MethodPoolGetACL is a ModuleMgmt method
-	MethodPoolGetACL = C.DRPC_METHOD_MGMT_POOL_GET_ACL
+	MethodPoolGetACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_ACL
 	// MethodListPools is a ModuleMgmt method
-	MethodListPools = C.DRPC_METHOD_MGMT_LIST_POOLS
+	MethodListPools MgmtMethod = C.DRPC_METHOD_MGMT_LIST_POOLS
 	// MethodPoolOverwriteACL is a ModuleMgmt method
-	MethodPoolOverwriteACL = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
+	MethodPoolOverwriteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
 	// MethodPoolUpdateACL is a ModuleMgmt method
-	MethodPoolUpdateACL = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
+	MethodPoolUpdateACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
 	// MethodPoolDeleteACL is a ModuleMgmt method
-	MethodPoolDeleteACL = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
+	MethodPoolDeleteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
 	// MethodDevStateQuery is a ModuleMgmt method
-	MethodDevStateQuery = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
+	MethodDevStateQuery MgmtMethod = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
 	// MethodSetFaultyState is a ModuleMgmt method
-	MethodSetFaultyState = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
+	MethodSetFaultyState MgmtMethod = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
 	// MethodListContainers is a ModuleMgmt method
-	MethodListContainers = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
+	MethodListContainers MgmtMethod = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
 	// MethodPoolQuery defines a method for querying a pool
-	MethodPoolQuery = C.DRPC_METHOD_MGMT_POOL_QUERY
+	MethodPoolQuery MgmtMethod = C.DRPC_METHOD_MGMT_POOL_QUERY
 	// MethodPoolSetProp defines a method for setting a pool property
-	MethodPoolSetProp = C.DRPC_METHOD_MGMT_POOL_SET_PROP
+	MethodPoolSetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_SET_PROP
 	// MethodContSetOwner defines a method for setting the container's owner
-	MethodContSetOwner = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
+	MethodContSetOwner MgmtMethod = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
 )
 
-//// SrvMethod is a type alias for a drpc srv method.
-//type SrvMethod int32
-//
-//func (meth *SrvMethod) String() string {
-//	s := map[SrvMethod]string{}[*meth]
-//
-//	if s == "" {
-//		return fmt.Sprintf("%d", meth)
-//	}
-//
-//	return s
-//}
-//
-//// Module returns the module that the method belongs to.
-//func (meth *SrvMethod) Module() int32 {
-//	return ModuleSrv
-//}
+type SrvMethod int32
+
+func (m SrvMethod) ModuleID() ModuleID {
+	return ModuleSrv
+}
+
+func (m SrvMethod) ID() int32 {
+	return int32(m)
+}
+
+func (m SrvMethod) String() string {
+	if methodName, found := map[SrvMethod]string{
+		MethodNotifyReady: "notify ready",
+		MethodBIOError:    "block i/o error",
+	}[m]; found {
+		return methodName
+	}
+
+	return fmt.Sprintf("%s:%d", m.ModuleID(), m.ID())
+}
+
+func (m SrvMethod) Valid() bool {
+	startMethodID := int32(m.ModuleID()) * moduleMethodOffset
+	return m.ID() >= startMethodID && m.ID() < int32(C.NUM_DRPC_SRV_METHODS)
+}
 
 const (
 	// MethodNotifyReady is a ModuleSrv method
-	MethodNotifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
+	MethodNotifyReady SrvMethod = C.DRPC_METHOD_SRV_NOTIFY_READY
 	// MethodBIOError is a ModuleSrv method
-	MethodBIOError = C.DRPC_METHOD_SRV_BIO_ERR
+	MethodBIOError SrvMethod = C.DRPC_METHOD_SRV_BIO_ERR
 )
 
-//// SecurityMethod is a type alias for a drpc security method.
-//type SecurityMethod int32
-//
-//func (meth *SecurityMethod) String() string {
-//	s := map[SecurityMethod]string{}[*meth]
-//
-//	if s == "" {
-//		return fmt.Sprintf("%d", meth)
-//	}
-//
-//	return s
-//}
-//
-//// Module returns the module that the method belongs to.
-//func (meth *SecurityMethod) Module() int32 {
-//	return ModuleSecurity
-//}
+type SecurityMethod int32
+
+func (m SecurityMethod) ModuleID() ModuleID {
+	return ModuleSecurity
+}
+
+func (m SecurityMethod) ID() int32 {
+	return int32(m)
+}
+
+func (m SecurityMethod) String() string {
+	if methodName, found := map[SecurityMethod]string{
+		MethodValidateCredentials: "validate credentials",
+	}[m]; found {
+		return methodName
+	}
+
+	return fmt.Sprintf("%s:%d", m.ModuleID(), m.ID())
+}
+
+func (m SecurityMethod) Valid() bool {
+	startMethodID := int32(m.ModuleID()) * moduleMethodOffset
+	return m.ID() >= startMethodID && m.ID() < int32(C.NUM_DRPC_SEC_METHODS)
+}
 
 const (
 	// MethodValidateCredentials is a ModuleSecurity method
-	MethodValidateCredentials = C.DRPC_METHOD_SEC_VALIDATE_CREDS
+	MethodValidateCredentials SecurityMethod = C.DRPC_METHOD_SEC_VALIDATE_CREDS
 )
 
 // Marshal is a utility function that can be used by dRPC method handlers to

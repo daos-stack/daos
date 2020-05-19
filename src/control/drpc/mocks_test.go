@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,20 +35,20 @@ import (
 type mockModule struct {
 	HandleCallResponse []byte
 	HandleCallErr      error
-	IDValue            int32
+	IDValue            ModuleID
 }
 
-func (m *mockModule) HandleCall(session *Session, method drpc.Method, input []byte) ([]byte, error) {
+func (m *mockModule) HandleCall(session *Session, method Method, input []byte) ([]byte, error) {
 	return m.HandleCallResponse, m.HandleCallErr
 }
 
-func (m *mockModule) ID() int32 {
+func (m *mockModule) ID() ModuleID {
 	return m.IDValue
 }
 
 func newTestModule(ID int32) *mockModule {
 	return &mockModule{
-		IDValue: ID,
+		IDValue: ModuleID(ID),
 	}
 }
 

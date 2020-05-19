@@ -144,7 +144,7 @@ func checkDrpcResponse(drpcResp *drpc.Response) error {
 
 // newDrpcCall creates a new drpc Call instance for specified with
 // the protobuf message marshalled in the body
-func newDrpcCall(method *drpc.Method, bodyMessage proto.Message) (*drpc.Call, error) {
+func newDrpcCall(method drpc.Method, bodyMessage proto.Message) (*drpc.Call, error) {
 	var bodyBytes []byte
 	if bodyMessage != nil {
 		var err error
@@ -155,7 +155,7 @@ func newDrpcCall(method *drpc.Method, bodyMessage proto.Message) (*drpc.Call, er
 	}
 
 	return &drpc.Call{
-		Module: method.Module(),
+		Module: int32(method.ModuleID()),
 		Method: method.ID(),
 		Body:   bodyBytes,
 	}, nil
@@ -164,7 +164,7 @@ func newDrpcCall(method *drpc.Method, bodyMessage proto.Message) (*drpc.Call, er
 // makeDrpcCall opens a drpc connection, sends a message with the
 // protobuf message marshalled in the body, and closes the connection.
 // drpc response is returned after basic checks.
-func makeDrpcCall(client drpc.DomainSocketClient, method *drpc.Method, body proto.Message) (drpcResp *drpc.Response, err error) {
+func makeDrpcCall(client drpc.DomainSocketClient, method drpc.Method, body proto.Message) (drpcResp *drpc.Response, err error) {
 	drpcCall, err := newDrpcCall(method, body)
 	if err != nil {
 		return drpcResp, errors.Wrap(err, "build drpc call")

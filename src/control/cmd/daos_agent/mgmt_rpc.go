@@ -50,8 +50,8 @@ type mgmtModule struct {
 	numaAware  bool
 }
 
-func (mod *mgmtModule) HandleCall(session *drpc.Session, method *drpc.Method, req []byte) ([]byte, error) {
-	if method.ID() != drpc.MethodGetAttachInfo {
+func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+	if method != drpc.MethodGetAttachInfo {
 		return nil, drpc.UnknownMethodFailure()
 	}
 
@@ -75,7 +75,7 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method *drpc.Method, re
 	return mod.handleGetAttachInfo(req, cred.Pid)
 }
 
-func (mod *mgmtModule) ID() int32 {
+func (mod *mgmtModule) ID() drpc.ModuleID {
 	return drpc.ModuleMgmt
 }
 

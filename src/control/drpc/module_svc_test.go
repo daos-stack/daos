@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,12 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const defaultTestModID int32 = ModuleMgmt
+const (
+	defaultTestModID       ModuleID   = ModuleMgmt
+	defaultTestModInt32    int32      = int32(ModuleMgmt)
+	defaultTestMethod      MgmtMethod = MethodGetAttachInfo
+	defaultTestMethodInt32 int32      = int32(MethodGetAttachInfo)
+)
 
 func TestNewModuleService(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -54,7 +59,7 @@ func TestService_RegisterModule_Single_Success(t *testing.T) {
 
 	service := NewModuleService(log)
 	expectedID := defaultTestModID
-	testMod := newTestModule(expectedID)
+	testMod := newTestModule(int32(expectedID))
 
 	if err := service.RegisterModule(testMod); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
@@ -76,7 +81,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
-	expectedIDs := []int32{-1, 7, 255, defaultTestModID}
+	expectedIDs := []int32{-1, 7, 255, defaultTestModInt32}
 	testMods := make([]*mockModule, 0, len(expectedIDs))
 
 	for _, id := range expectedIDs {
@@ -89,7 +94,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 	}
 
 	for i, id := range expectedIDs {
-		mod, ok := service.GetModule(id)
+		mod, ok := service.GetModule(ModuleID(id))
 
 		if !ok {
 			t.Fatalf("registered module %d wasn't found", id)
@@ -107,7 +112,7 @@ func TestService_RegisterModule_DuplicateID(t *testing.T) {
 
 	service := NewModuleService(log)
 	testMod := newTestModule(15)
-	dupMod := newTestModule(testMod.IDValue)
+	dupMod := newTestModule(int32(testMod.IDValue))
 
 	if err := service.RegisterModule(testMod); err != nil {
 		t.Fatalf("expected no error for initial registration, got: %v", err)
@@ -123,7 +128,7 @@ func TestService_GetModule_NotFound(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
-	if err := service.RegisterModule(newTestModule(defaultTestModID)); err != nil {
+	if err := service.RegisterModule(newTestModule(defaultTestModInt32)); err != nil {
 		t.Fatalf("couldn't register module: %v", err)
 	}
 
@@ -143,12 +148,13 @@ func getGarbageBytes() []byte {
 	return badBytes
 }
 
-func getCallBytes(t *testing.T, sequence int64, moduleID int32) []byte {
+func getCallBytes(t *testing.T, sequence int64, moduleID int32, methodID int32) []byte {
 	t.Helper()
 
 	call := &Call{
 		Sequence: sequence,
 		Module:   moduleID,
+		Method:   methodID,
 	}
 
 	callBytes, err := proto.Marshal(call)
@@ -181,21 +187,21 @@ func TestService_ProcessMessage(t *testing.T) {
 			expectedResp: getResponse(-1, Status_FAILED_UNMARSHAL_CALL, nil),
 		},
 		"module doesn't exist": {
-			callBytes:    getCallBytes(t, testSequenceNum, 256),
+			callBytes:    getCallBytes(t, testSequenceNum, 256, 0),
 			expectedResp: getResponse(testSequenceNum, Status_UNKNOWN_MODULE, nil),
 		},
 		"HandleCall fails with regular error": {
-			callBytes:     getCallBytes(t, testSequenceNum, defaultTestModID),
+			callBytes:     getCallBytes(t, testSequenceNum, defaultTestModInt32, defaultTestMethodInt32),
 			handleCallErr: errors.New("HandleCall error"),
 			expectedResp:  getResponse(testSequenceNum, Status_FAILURE, nil),
 		},
 		"HandleCall fails with drpc.Failure": {
-			callBytes:     getCallBytes(t, testSequenceNum, defaultTestModID),
+			callBytes:     getCallBytes(t, testSequenceNum, defaultTestModInt32, defaultTestMethodInt32),
 			handleCallErr: NewFailure(Status_FAILED_UNMARSHAL_PAYLOAD),
 			expectedResp:  getResponse(testSequenceNum, Status_FAILED_UNMARSHAL_PAYLOAD, nil),
 		},
 		"HandleCall succeeds": {
-			callBytes:      getCallBytes(t, testSequenceNum, defaultTestModID),
+			callBytes:      getCallBytes(t, testSequenceNum, defaultTestModInt32, defaultTestMethodInt32),
 			handleCallResp: []byte("succeeded"),
 			expectedResp:   getResponse(testSequenceNum, Status_SUCCESS, []byte("succeeded")),
 		},
@@ -204,7 +210,7 @@ func TestService_ProcessMessage(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			mockMod := newTestModule(defaultTestModID)
+			mockMod := newTestModule(defaultTestModInt32)
 			mockMod.HandleCallErr = tc.handleCallErr
 			mockMod.HandleCallResponse = tc.handleCallResp
 

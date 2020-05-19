@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,8 +85,8 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	socket := newMockConn()
 	call := &Call{
 		Sequence: 123,
-		Module:   1,
-		Method:   2,
+		Module:   defaultTestModInt32,
+		Method:   defaultTestMethodInt32,
 	}
 	callBytes, err := proto.Marshal(call)
 	if err != nil {
@@ -293,7 +293,7 @@ func TestServer_Integration(t *testing.T) {
 
 	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 
-	mod := newTestModule(ModuleMgmt)
+	mod := newTestModule(defaultTestModInt32)
 	mod.HandleCallResponse = []byte("successful!")
 	dss.RegisterRPCModule(mod)
 
@@ -311,7 +311,8 @@ func TestServer_Integration(t *testing.T) {
 	defer client.Close()
 
 	call := &Call{
-		Module: mod.ID(),
+		Module: int32(mod.ID()),
+		Method: defaultTestMethodInt32,
 	}
 	resp, err := client.SendMsg(call)
 	if err != nil {

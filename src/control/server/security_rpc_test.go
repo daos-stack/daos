@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ func TestSrvSecurityModule_ID(t *testing.T) {
 
 	mod := NewSecurityModule(log, nil)
 
-	common.AssertEqual(t, mod.ID(), int32(drpc.ModuleSecurity), "wrong drpc module")
+	common.AssertEqual(t, mod.ID(), drpc.ModuleSecurity, "wrong drpc module")
 }
 
 func insecureTransportConfig() *security.TransportConfig {
@@ -71,7 +71,7 @@ func TestSrvSecurityModule_HandleCall_BadMethod(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, insecureTransportConfig())
-	resp, err := mod.HandleCall(nil, -1, nil)
+	resp, err := mod.HandleCall(nil, drpc.SecurityMethod(-1), nil)
 
 	if resp != nil {
 		t.Errorf("Expected no response, got %+v", resp)

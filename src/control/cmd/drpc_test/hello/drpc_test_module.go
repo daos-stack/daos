@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,13 +34,21 @@ import (
 // HelloMethod is a type alias for a drpc agent hello method.
 type HelloMethod int32
 
-func (hm *HelloMethod) String() string {
-	return map[HelloMethod]string{}[*hm]
+func (hm HelloMethod) ID() int32 {
+	return int32(hm)
+}
+
+func (hm HelloMethod) String() string {
+	return ""
 }
 
 // Module returns the module that the method belongs to.
-func (hm *HelloMethod) Module() int32 {
-	return int32(Module_HELLO)
+func (hm HelloMethod) ModuleID() drpc.ModuleID {
+	return drpc.ModuleID(Module_HELLO)
+}
+
+func (hm HelloMethod) Valid() bool {
+	return true
 }
 
 const (
@@ -52,8 +60,8 @@ type HelloModule struct{}
 
 //HandleCall is the handler for calls to the hello module
 func (m *HelloModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
-	method, ok := i.(HelloMethod)
-	if !ok || method != MethodGreeting {
+	var gm drpc.Method = MethodGreeting
+	if method != gm {
 		return nil, fmt.Errorf("Attempt to call unregistered function")
 	}
 
@@ -75,6 +83,6 @@ func (m *HelloModule) HandleCall(session *drpc.Session, method drpc.Method, body
 }
 
 //ID will return Module_HELLO in int32 form
-func (m *HelloModule) ID() int32 {
-	return int32(Module_HELLO)
+func (m *HelloModule) ID() drpc.ModuleID {
+	return drpc.ModuleID(Module_HELLO)
 }

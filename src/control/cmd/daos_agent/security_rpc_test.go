@@ -44,7 +44,7 @@ func TestAgentSecurityModule_ID(t *testing.T) {
 
 	mod := NewSecurityModule(log, nil)
 
-	common.AssertEqual(t, mod.ID(), int32(drpc.ModuleSecurityAgent), "wrong drpc module")
+	common.AssertEqual(t, mod.ID(), drpc.ModuleSecurityAgent, "wrong drpc module")
 }
 
 func newTestSession(t *testing.T, log logging.Logger, conn net.Conn) *drpc.Session {
@@ -61,7 +61,7 @@ func TestAgentSecurityModule_HandleCall_BadMethod(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, nil)
-	method := drpc.NewMethod(mod.ID(), -1)
+	method := drpc.SecurityAgentMethod(-1)
 	resp, err := mod.HandleCall(newTestSession(t, log, &net.UnixConn{}), method, nil)
 
 	if resp != nil {
@@ -72,7 +72,7 @@ func TestAgentSecurityModule_HandleCall_BadMethod(t *testing.T) {
 }
 
 func callRequestCreds(mod *SecurityModule, t *testing.T, log logging.Logger, conn net.Conn) ([]byte, error) {
-	method := drpc.NewMethod(mod.ID(), drpc.MethodRequestCredentials)
+	method := drpc.MethodRequestCredentials
 	return mod.HandleCall(newTestSession(t, log, conn), method, nil)
 }
 

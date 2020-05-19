@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -276,7 +276,7 @@ func TestDrpc_Errors(t *testing.T) {
 			}
 			mc := newMockDrpcClient(cfg)
 
-			_, err := makeDrpcCall(mc, drpc.NewMethod(drpc.ModuleMgmt, drpc.MethodPoolCreate),
+			_, err := makeDrpcCall(mc, drpc.MethodPoolCreate,
 				&mgmtpb.PoolCreateReq{})
 			common.CmpErr(t, tc.expErr, err)
 		})
