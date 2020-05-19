@@ -41,7 +41,7 @@ func TestPretty_PrintPoolQueryResp(t *testing.T) {
 		"empty response": {
 			pqr: &control.PoolQueryResp{},
 			expPrintStr: `
-Pool , ntarget=0, disabled=0
+Pool , ntarget=0, disabled=0, leader=0, version=0
 Pool space info:
 - Target(VOS) count:0
 `,
@@ -52,6 +52,8 @@ Pool space info:
 				TotalTargets:    2,
 				DisabledTargets: 1,
 				ActiveTargets:   1,
+				Leader:          42,
+				Version:         100,
 				Scm: &control.StorageUsageStats{
 					Total: 2,
 					Free:  1,
@@ -67,7 +69,7 @@ Pool space info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1
+Pool %s, ntarget=2, disabled=1, leader=42, version=100
 Pool space info:
 - Target(VOS) count:1
 - SCM:
@@ -85,6 +87,8 @@ Rebuild busy, 42 objs, 21 recs
 				TotalTargets:    2,
 				DisabledTargets: 1,
 				ActiveTargets:   1,
+				Leader:          42,
+				Version:         100,
 				Scm: &control.StorageUsageStats{
 					Total: 2,
 					Free:  1,
@@ -101,7 +105,7 @@ Rebuild busy, 42 objs, 21 recs
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1
+Pool %s, ntarget=2, disabled=1, leader=42, version=100
 Pool space info:
 - Target(VOS) count:1
 - SCM:

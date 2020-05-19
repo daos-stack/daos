@@ -927,7 +927,7 @@ static void
 map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t byte_idx)
 {
 	map->iom_recxs[map->iom_nr_out].rx_idx = byte_idx / map->iom_size;
-	map->iom_recxs[map->iom_nr_out].rx_nr = biov->bi_data_len
+	map->iom_recxs[map->iom_nr_out].rx_nr = bio_iov2req_len(biov)
 						/ map->iom_size;
 	map->iom_nr_out++;
 }
@@ -986,7 +986,7 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 			if (!bio_addr_is_hole(&biov->bi_addr))
 				map_add_recx(map, biov, byte_idx);
 
-			byte_idx += biov->bi_data_len;
+			byte_idx += bio_iov2req_len(biov);
 		}
 		/** allocated and used should be the same */
 		D_ASSERT(map->iom_nr == map->iom_nr_out);
@@ -1525,8 +1525,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
 		orw->orw_map_ver, ioc.ioc_map_ver, DP_DTI(&orw->orw_dti));
 
-	/* FIXME: until distributed transaction. */
-	if (orw->orw_epoch == DAOS_EPOCH_MAX) {
+	if (orw->orw_epoch == DAOS_EPOCH_MAX || orw->orw_epoch == 0) {
 		orw->orw_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
 	}
@@ -2148,8 +2147,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 			opi->opi_map_ver, ioc.ioc_map_ver,
 			DP_DTI(&opi->opi_dti));
 
-	/* FIXME: until distributed transaction. */
-	if (opi->opi_epoch == DAOS_EPOCH_MAX) {
+	if (opi->opi_epoch == DAOS_EPOCH_MAX || opi->opi_epoch == 0) {
 		opi->opi_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
@@ -2268,8 +2266,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_IO, "flags = %d\n", okqi->okqi_flags);
 
-	/* FIXME: until distributed transaction. */
-	if (okqi->okqi_epoch == DAOS_EPOCH_MAX) {
+	if (okqi->okqi_epoch == DAOS_EPOCH_MAX || okqi->okqi_epoch == 0) {
 		okqi->okqi_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", okqi->okqi_epoch);
 	}
@@ -2377,7 +2374,8 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 
 		if (rc == 0)
 			rc = daos_csummer_verify_iod(csummer, iod, &sgl,
-						     &iod_csums[i], NULL, 0);
+						     &iod_csums[i], NULL, 0,
+						     NULL);
 
 		daos_sgl_fini(&sgl, false);
 

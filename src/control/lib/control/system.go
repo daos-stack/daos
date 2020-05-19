@@ -26,6 +26,7 @@ package control
 import (
 	"context"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -72,6 +73,138 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 
 	resp := new(SystemStopResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+// getResetHostErrors maps rank error messages to hosts that experience them.
+func getResetRankErrors(results system.MemberResults) (map[string][]string, []string, error) {
+	rankErrors := make(map[string][]string) // hosts that experience a specific rank err
+	hosts := make(map[string]struct{})
+	for _, result := range results {
+		if result.Addr == "" {
+			return nil, nil,
+				errors.Errorf("host address missing for rank %d result", result.Rank)
+		}
+		if !result.Errored {
+			hosts[result.Addr] = struct{}{}
+			continue
+		}
+		if result.Msg == "" {
+			result.Msg = "error message missing for rank result"
+		}
+
+		rankErrors[result.Msg] = append(rankErrors[result.Msg], result.Addr)
+	}
+
+	goodHosts := make([]string, 0) // hosts that have >0 successful rank results
+	for host := range hosts {
+		goodHosts = append(goodHosts, host)
+	}
+
+	return rankErrors, goodHosts, nil
+}
+
+// SystemReformatReq contains the inputs for the request.
+type SystemReformatReq struct {
+	unaryRequest
+	msRequest
+	Ranks []uint32
+}
+
+// SystemReformatResp contains the request response.
+type SystemReformatResp struct {
+	HostErrorsResp
+	HostStorage HostStorageMap
+}
+
+// SystemResetFormatReq contains the inputs for the request.
+type SystemResetFormatReq struct {
+	unaryRequest
+	msRequest
+	Ranks []system.Rank
+}
+
+// SystemResetFormatResp contains the request response.
+type SystemResetFormatResp struct {
+	Results system.MemberResults
+}
+
+// SystemReformat will reformat and start rank after a controlled shutdown of DAOS system.
+//
+// First phase trigger format reset on each rank in membership registry, if
+// successful, putting selected hardness managed instances in "awaiting format"
+// state (but not proceeding to starting the io_server process runner).
+//
+// Second phase is to perform storage format on each host which, if successful,
+// will reformat storage, un-block "awaiting format" state and start the
+// io_server process. SystemReformat() will only return when relevant io_server
+// processes are running and ready.
+//
+// TODO: supply rank list to storage format so we can selectively reformat ranks
+//       on a host, remove any ranks that fail SystemResetFormat() from list before
+//       passing to StorageFormat()
+func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, reformatReq *SystemReformatReq) (*SystemReformatResp, error) {
+	resetReq := &SystemResetFormatReq{Ranks: system.RanksFromUint32(reformatReq.Ranks)}
+	resetReq.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).SystemResetFormat(ctx, &ctlpb.SystemResetFormatReq{
+			Ranks: system.RanksToUint32(resetReq.Ranks),
+		})
+	})
+	rpcClient.Debugf("DAOS system-reset-format request: %s", resetReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, resetReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// MS response will contain collated results for all ranks
+	resetResp := new(SystemResetFormatResp)
+	if err = convertMSResponse(ur, resetResp); err != nil {
+		return nil, errors.WithMessage(err, "converting MS to reformat resp")
+	}
+
+	resetRankErrors, hostList, err := getResetRankErrors(resetResp.Results)
+	if err != nil {
+		return nil, err
+	}
+
+	reformatResp := new(SystemReformatResp)
+
+	if len(resetRankErrors) > 0 {
+		// create "X ranks failed: err..." error entries for each host address
+		// and merge host errors from reset into reformat response
+		// a single host maybe associated with multiple error entries in HEM
+		for msg, addrs := range resetRankErrors {
+			hostOccurrences := make(map[string]int)
+			for _, addr := range addrs {
+				hostOccurrences[addr]++
+			}
+			for addr, occurrences := range hostOccurrences {
+				err := errors.Errorf("%s failed: %s",
+					english.Plural(occurrences, "rank", "ranks"), msg)
+				reformatResp.HostErrorsResp.addHostError(addr, err)
+			}
+		}
+
+		return reformatResp, nil
+	}
+
+	// all requested ranks in AwaitFormat state, trigger format
+	// TODO: remove failed ranks from StorageFormat() rank list
+	formatReq := &StorageFormatReq{Reformat: true}
+	formatReq.SetHostList(hostList)
+
+	rpcClient.Debugf("DAOS storage-format request: %s", formatReq)
+
+	formatResp, err := StorageFormat(ctx, rpcClient, formatReq)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := convert.Types(formatResp, reformatResp); err != nil {
+		return nil, errors.WithMessage(err, "converting format to reformat resp")
+	}
+
+	return reformatResp, nil
 }
 
 // SystemStartReq contains the inputs for the system start request.
@@ -284,6 +417,21 @@ func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 		})
 	})
 	rpcClient.Debugf("DAOS system stop-ranks request: %+v", req)
+
+	return rpcToRanks(ctx, rpcClient, req)
+}
+
+// ResetFormatRanks concurrently resets format state on ranks across all hosts
+// supplied in the request's hostlist. The function blocks until all
+// results (successful or otherwise) are received, and returns a
+// single response structure containing results for all host operations.
+func ResetFormatRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).ResetFormatRanks(ctx, &mgmtpb.RanksReq{
+			Ranks: system.RanksToUint32(req.Ranks),
+		})
+	})
+	rpcClient.Debugf("DAOS system reset-format-ranks request: %+v", req)
 
 	return rpcToRanks(ctx, rpcClient, req)
 }

@@ -7,7 +7,7 @@ from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'DAOS_VERSION', 'CONF_DIR')
+Import('env', 'prereqs', 'DAOS_VERSION', 'CONF_DIR', 'gurt_lib')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -68,7 +68,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
                          '-B %s"' % gen_build_id()])
     # Must be run from the top of the source dir in order to
     # pick up the vendored modules.
-    denv.Command(build_bin, src,
+    denv.Command(build_bin, src + gurt_lib,
                  'cd %s; %s build -mod vendor -v %s -o %s %s' %
                  (gosrc, GO_BIN, go_ldflags(), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
@@ -160,7 +160,7 @@ def scons():
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
                        sep=" ")
 
-    agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
+    agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
     dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
     drpcbin = install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
 
