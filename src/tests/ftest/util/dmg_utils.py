@@ -633,7 +633,7 @@ class DmgCommand(YamlCommand):
                 information.
 
         Raises:
-            CommandFailure: if the dmg pool destroy command fails.
+            CommandFailure: if the dmg pool query command fails.
 
         """
         self.set_sub_command("pool")
@@ -759,24 +759,6 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list")
-        return self._get_result()
-
-    def pool_query(self, pool):
-        """Query pools.
-
-        Args:
-            pool (str): The Pool uuid.
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: if the dmg pool query command fails.
-        """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class.sub_command_class.pool.value = pool
         return self._get_result()
 
     def pool_set_prop(self, pool, name, value):
