@@ -72,6 +72,7 @@ class CartSelfTest(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super(CartSelfTest, self).setUp()
+        share_addr = self.params.get("share_addr", "/run/test_params/*")
 
         # Configure the daos server
         config_file = self.get_config_file(self.server_group, "server")
@@ -82,10 +83,12 @@ class CartSelfTest(TestWithServers):
             self.hostlist_servers,
             self.hostfile_servers_slots,
             self.hostlist_servers)
+        self.assertTrue(
+            self.server_managers[-1].set_config_value(
+                "crt_ctx_share_addr", share_addr),
+            "Error updating daos_server 'crt_ctx_share_addr' config setting")
 
         # Setup additional environment variables for the server orterun command
-        share_addr = self.params.get("val",
-                                     "/run/muxtestparams/share_addr/*")[0]
         self.cart_env["CRT_CTX_SHARE_ADDR"] = str(share_addr)
         self.cart_env["CRT_CTX_NUM"] = "8"
         self.cart_env["CRT_PHY_ADDR_STR"] = \
@@ -103,7 +106,6 @@ class CartSelfTest(TestWithServers):
         agent_cmd = self.agent_managers[0].manager.job
         agent_cmd.dump_attachinfo(self.uri_file)
 
-
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.
 
@@ -117,9 +119,6 @@ class CartSelfTest(TestWithServers):
         # Get the self_test command line parameters
         orterun.job.get_params(self)
         orterun.job.group_name.update(self.server_group, "group_name")
-        orterun.job.message_sizes.update(
-            self.params.get("size", "/run/muxtestparams/message_size/*")[0],
-            "message_sizes")
         orterun.job.attach_info.update(
             os.path.dirname(self.uri_file), "attach_info")
 

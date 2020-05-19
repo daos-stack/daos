@@ -26,7 +26,7 @@ from __future__ import print_function
 import os
 
 from env_modules import load_mpi
-from command_utils import EnvironmentVariables
+from command_utils_base import EnvironmentVariables
 from general_utils import run_command, DaosTestError
 
 

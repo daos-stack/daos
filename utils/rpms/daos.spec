@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       15%{?relval}%{?dist}
+Release:       16%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -126,9 +126,13 @@ Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
 Requires: fuse3 >= 3.4.2
+%if (0%{?suse_version} >= 1500)
+Requires: libfuse3-3 >= 3.4.2
+%else
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
 # get it when fuse3 Requires: /etc/fuse.conf
 Requires: fuse < 3, fuse3-libs >= 3.4.2
+%endif
 %systemd_requires
 
 %description client
@@ -344,6 +348,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-16
+- Fix fuse3-libs -> libfuse3 for SLES/Leap 15
+
 * Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-15
 - Use new properly pre-release tagged mercury RPM
 
