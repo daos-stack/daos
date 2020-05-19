@@ -180,6 +180,7 @@ def show_line(line, sev, msg):
     print(log)
     if output_file:
         output_file.write("{}\n".format(log))
+        output_file.write("Supporting data\n")
         output_file.flush()
     shown_logs.add(log)
 
@@ -298,7 +299,7 @@ class LogTest():
                         if line.rpc_opcode == '0xfe000000':
                             show = False
                     if show:
-                        show_line(line, 'warning', 'warning in strict mode')
+                        show_line(line, 'error', 'warning in strict mode')
                         warnings_mode = True
             if line.trace:
                 trace_lines += 1
@@ -308,9 +309,9 @@ class LogTest():
                 desc = line.descriptor
                 if line.is_new():
                     if desc in active_desc:
-                        show_line(line, 'error', 'already exists')
                         show_line(active_desc[desc], 'error',
                                   'not deregistered')
+                        show_line(line, 'warning', 'already exists')
                         err_count += 1
                     if line.parent not in active_desc:
                         show_line(line, 'error', 'add with bad parent')
@@ -379,18 +380,18 @@ class LogTest():
                                avar in mismatch_alloc_ok[afunc]:
                                 pass
                             else:
-                                show_line(regions[pointer], 'warning',
+                                show_line(regions[pointer], 'error',
                                           'mask mismatch in alloc/free')
-                                show_line(line, 'warning',
+                                show_line(line, 'error',
                                           'mask mismatch in alloc/free')
                                 err_count += 1
                             add_line_count_to_dict(line, mismatch_free_seen)
                             add_line_count_to_dict(regions[pointer],
                                                    mismatch_alloc_seen)
                         if line.level != regions[pointer].level:
-                            show_line(regions[pointer], 'warning',
+                            show_line(regions[pointer], 'error',
                                       'level mismatch in alloc/free')
-                            show_line(line, 'warning',
+                            show_line(line, 'error',
                                       'level mismatch in alloc/free')
                             err_count += 1
                         memsize.subtract(regions[pointer].calloc_size())
@@ -402,7 +403,7 @@ class LogTest():
                             show_line(old_regions[pointer][1], 'error', '1st double-free location')
                             show_line(line, 'error', '2nd double-free location')
                         else:
-                            show_line(line, 'warning', 'free of unknown memory')
+                            show_line(line, 'error', 'free of unknown memory')
                         err_count += 1
                 elif line.is_realloc():
                     new_pointer = line.get_field(-3)

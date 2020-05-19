@@ -1191,17 +1191,24 @@ pipeline {
                                          referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
+					 /* Set qualitygate to 1 new "HIGH" priority message
+					  * Supporting messages to help identify causes of
+					  * problems are set to "Normal", and there are a
+					  * number of intermittent issues during server
+					  * shutdown that would normally be HIGH but in
+					  * order to have stable results are set to Normal.
+					  */
 					 /* TODO: master is currently not determanistic and
 					 there is one message which appears occasionally
 					 so set the threshold to 2, which will not warn for
 					 stable builds against master, but might miss some
 					 individual issues.
 					 */
-                                         qualityGates: [[threshold: 2, type: 'NEW', unstable: true]],
-                                         name: "VM Testing",
+                                         qualityGates: [[threshold: 1, type: 'NEW_HIGH', unstable: true]],
+                                         name: "NLT Testing",
                                          tool: clang(pattern: 'vm_test/nlt-errors.out',
-                                                     name: 'VM test results',
-                                                     id: 'VM_test')
+                                                     name: 'NLT test results',
+                                                     id: 'NLT_test')
                         }
                     }
                 }
