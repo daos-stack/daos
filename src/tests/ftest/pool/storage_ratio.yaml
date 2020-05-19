@@ -41,10 +41,10 @@ pool:
     control_method: dmg
     stoage_ratio:
 #   - [scmsize, nvmesize, Expected Result]
-    - ['70G', '100G', 'PASS']  #SCM Size ratio is greater than 6%
-    - ['91G', '650G', 'PASS'] #SCM Size ratio is greater than 6%
-    - ['10G', '1G', 'FAIL']    #Low NVMe Size
-    - ['16', '100G', 'FAIL']   #Low SCM Size
+    - ['70G', '100G', 'PASS']  # SCM Size ratio is greater than 6%
+    - ['91G', '650G', 'PASS'] # SCM Size ratio is greater than 6%
+    - ['10G', '1G', 'FAIL']    # Low NVMe Size
+    - ['16', '100G', 'FAIL']   # Low SCM Size
     # Skip below Tests because of issue DAOS-4814.
-    #- ['1G', '100G', 'FAIL']   #SCM Size ratio is less than 6%
-    #- ['89G', '650G', 'FAIL'] #SCM Size ratio is less than 6%
+    #- ['1G', '100G', 'FAIL']   # SCM Size ratio is less than 6%
+    #- ['89G', '650G', 'FAIL'] # SCM Size ratio is less than 6%
