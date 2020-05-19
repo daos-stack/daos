@@ -1,3 +1,5 @@
+# add --with fault-injection option to rpmbuild
+%bcond_with fault-injection
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
@@ -172,14 +174,15 @@ This is the package needed to build software with the DAOS library.
 rpath_files="utils/daos_build.py"
 rpath_files+=" $(find . -name SConscript)"
 sed -i -e '/AppendUnique(RPATH=.*)/d' $rpath_files
-
 %define conf_dir %{_sysconfdir}/daos
+
 
 scons %{?no_smp_mflags}    \
       --config=force       \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
-      PREFIX=%{?buildroot}
+      PREFIX=%{?buildroot} \
+      %{?_with_fault-injection}
 
 %install
 scons %{?no_smp_mflags}               \
@@ -189,7 +192,9 @@ scons %{?no_smp_mflags}               \
       %{?buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
-      PREFIX=%{_prefix}
+      PREFIX=%{_prefix}               \
+      %{?_with_fault-injection}
+
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/

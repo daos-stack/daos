@@ -157,10 +157,13 @@ def release_candidate() {
     return false
 }
 
-def faults_enabled() {
+def faults_enabled(String type) {
     // if the fault_enabled pragma is false or it a release candidate; disable fault injection 
     if (! cachedCommitPragma(pragma: 'faults_enabled', def_val: 'true') || release_candidate()) {
         return ""
+    }
+    if (type == "rpm") {
+        return "--with fault-injection"
     }
     return "--with-fault-injection"
 }
@@ -466,7 +469,8 @@ pipeline {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/centos7/
                                           mkdir -p artifacts/centos7/
-                                          make CHROOT_NAME="epel-7-x86_64" -C utils/rpms chrootbuild'''
+                                          make CHROOT_NAME="epel-7-x86_64" EXTERNAL_RPM_BUILD_OPTIONS=''' +
+                                  faults_enabled('rpm') + ''' -C utils/rpms chrootbuild'''
                         }
                     }
                     post {
@@ -542,7 +546,8 @@ pipeline {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/leap15/
                                   mkdir -p artifacts/leap15/
-                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
+                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" EXTERNAL_RPM_BUILD_OPTIONS=''' +
+                                  faults_enabled('rpm') + ''' -C utils/rpms chrootbuild'''
                         }
                     }
                     post {
@@ -604,7 +609,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
-                                   scons_arg: faults_enabled(),
+                                   scons_arg: faults_enabled('scons'),
                                    failure_artifacts: 'config.log-centos7-gcc'
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
@@ -702,7 +707,7 @@ pipeline {
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
                                    failure_artifacts: 'config.log-centos7-clang',
-                                   scons_arg: faults_enabled()
+                                   scons_arg: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -764,7 +769,7 @@ pipeline {
                     steps {
                         sconsBuild clean: "_build.external${arch}",
                                    failure_artifacts: 'config.log-ubuntu18.04-gcc',
-                                   scons_arg: faults_enabled()
+                                   scons_arg: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -827,7 +832,7 @@ pipeline {
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
                                    failure_artifacts: 'config.log-ubuntu18.04-clag',
-                                   scons_arg: faults_enabled()
+                                   scons_arg: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -889,7 +894,7 @@ pipeline {
                     steps {
                         sconsBuild clean: "_build.external${arch}",
                                    failure_artifacts: 'config.log-leap15-gcc',
-                                   scons_arg: faults_enabled()
+                                   scons_arg: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -951,7 +956,7 @@ pipeline {
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
                                    failure_artifacts: 'config.log-leap15-clang',
-                                   scons_arg: faults_enabled()
+                                   scons_arg: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -1015,7 +1020,7 @@ pipeline {
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
                                    TARGET_PREFIX: 'install/opt', failure_artifacts: 'config.log-leap15-icc',
-                                   scons_arg: faults_enabled()
+                                   scons_arg: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -1274,7 +1279,7 @@ pipeline {
                         sconsBuild coverity: "daos-stack/daos",
                                    clean: "_build.external${arch}",
                                    failure_artifacts: 'config.log-centos7-cov',
-                                   scons_arg: faults_enabled()
+                                   scons_arg: faults_enabled('scons')
                     }
                     post {
                         success {
