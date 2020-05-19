@@ -578,13 +578,16 @@ pipeline {
                         }
                     }
                     steps {
-                        if (quickbuild()) {
-                            sconsBuild skip_clean: true,
-                                   failure_artifacts: 'config.log-centos7-gcc'
-                        } else {
-                            sconsBuild clean: "_build.external${arch}",
-                                       failure_artifacts: 'config.log-centos7-gcc'
+		        def skip_clean = false
+                        script {
+                            if (quickbuild()) {
+                                clean: 
+                                skip_clean = true
+                            }
                         }
+                        sconsBuild    skip_clean: skip_clean,
+                            failure_artifacts: 'config.log-centos7-gcc'
+
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
@@ -1198,7 +1201,7 @@ pipeline {
                                          referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
-					 /* Set qualitygate to 1 new "HIGH" priority message
+                			 /* Set qualitygate to 1 new "HIGH" priority message
 					  * Supporting messages to help identify causes of
 					  * problems are set to "Normal", and there are a
 					  * number of intermittent issues during server
