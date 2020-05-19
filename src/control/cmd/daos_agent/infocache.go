@@ -38,10 +38,10 @@ import (
 )
 
 const (
-	invalidIndex         = -1
-	verbsProvider        = "ofi+verbs"
+	invalidIndex  = -1
+	verbsProvider = "ofi+verbs"
 	defaultNetworkDevice = "lo"
-	defaultDomain        = "lo"
+	defaultDomain = "lo"
 )
 
 type attachInfoCache struct {
@@ -118,6 +118,8 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 	if len(aic.currentNumaDevIdx) == 0 {
 		aic.currentNumaDevIdx = make(map[int]int)
 	}
+
+	netdetect.SetLogger(aic.log)
 
 	var haveDefaultNuma bool
 
