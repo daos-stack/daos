@@ -350,7 +350,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Wed May 13 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.0-17
+* Wed May 19 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.0-17
 - add fault_status to daos-tests files list
 
 * Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-16
