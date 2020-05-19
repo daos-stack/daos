@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+import avocado
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError
 from command_utils import CommandFailure
@@ -39,23 +40,21 @@ class SCMConfigTest(TestWithServers):
         super(SCMConfigTest, self).__init__(*args, **kwargs)
         self.obj = None
 
+    @avocado.fail_on(DaosApiError)
     def write_data(self, data):
         """Write data obj to a container.
 
         Args:
             data (str): string of data to be written.
         """
-        try:
-            # create an object and write some data into it
-            self.obj = self.container.container.write_an_obj(data,
-                                                             len(data) + 1,
-                                                             "dkey",
-                                                             "akey",
-                                                             obj_cls="OC_S1")
-            self.obj.close()
-            self.log.info("==>    Wrote an object to the container")
-        except DaosApiError as error:
-            self.fail("Test failed during the object write.\n{0}".format(error))
+        # create an object and write some data into it
+        self.obj = self.container.container.write_an_obj(data,
+                                                         len(data) + 1,
+                                                         "dkey",
+                                                         "akey",
+                                                         obj_cls="OC_S1")
+        self.obj.close()
+        self.log.info("==>    Wrote an object to the container")
 
     def test_scm_in_use_basic(self):
         """
@@ -77,7 +76,6 @@ class SCMConfigTest(TestWithServers):
 
         # Run storage prepare
         if self.server_managers[-1].manager.job.using_dcpm:
-            # Storage prepare should return error
             self.log.info("==>    Verifying storage prepare is done")
             kwargs = {"scm": True, "force": True}
             try:
