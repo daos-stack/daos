@@ -1040,7 +1040,7 @@ def install_debuginfos():
             cmds.append(
                 "{}-{}-{}".format(pkg['name'], pkg['version'], pkg['release']))
         except KeyError:
-            cmd += " {}".format(pkg['name'])
+            cmds.append(pkg['name'])
     cmds.append(cmd)
 
     print(get_output(cmds))
