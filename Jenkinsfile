@@ -578,8 +578,13 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
+                        if (quickbuild()) {
+                            sconsBuild skip_clean: true,
                                    failure_artifacts: 'config.log-centos7-gcc'
+                        } else {
+                            sconsBuild clean: "_build.external${arch}",
+                                       failure_artifacts: 'config.log-centos7-gcc'
+                        }
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
@@ -1103,8 +1108,9 @@ pipeline {
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
                                                IS_CI=true OLD_CI=false utils/run_test.sh
+                                               ldd $SL_PREFIX/bin/daos_io_server
                                                ./utils/node_local_test.py all | tee vm_test.out
-                                               echo \$\\{PIPESTATUS\\[0\\]\\}"''',
+                                               echo $\\{PIPESTATUS\\[0\\]\\}"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
@@ -1206,10 +1212,10 @@ pipeline {
 					 individual issues.
 					 */
                                          qualityGates: [[threshold: 1, type: 'NEW_HIGH', unstable: true]],
-                                         name: "NLT Testing",
+                                         name: "VM Testing",
                                          tool: clang(pattern: 'vm_test/nlt-errors.out',
-                                                     name: 'NLT test results',
-                                                     id: 'NLT_test')
+                                                     name: 'VM test results',
+                                                     id: 'VM_test')
                         }
                     }
                 }
