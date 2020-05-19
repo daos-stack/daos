@@ -585,7 +585,8 @@ pipeline {
                                 skip_clean = true
                             }
                         }
-                        sconsBuild    skip_clean: skip_clean,
+                        sconsBuild skip_clean: skip_clean,
+                            prebuild: "rm -f daos.conf",
                             failure_artifacts: 'config.log-centos7-gcc'
 
                         stash name: 'CentOS-install', includes: 'install/**'
