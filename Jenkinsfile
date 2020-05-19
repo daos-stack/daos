@@ -1112,9 +1112,10 @@ pipeline {
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
                                                IS_CI=true OLD_CI=false utils/run_test.sh
-                                               ldd $SL_PREFIX/bin/daos_io_server
+                                               ldd $SL_PREFIX/bin/daos_server
+                                               export LD_LIBRARY_PATH=$SL_PREFIX/lib64
                                                ./utils/node_local_test.py all | tee vm_test.out
-                                               echo $\\{PIPESTATUS\\[0\\]\\}"''',
+                                               echo ${PIPESTATUS\\[0\\]}"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
