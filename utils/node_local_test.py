@@ -209,6 +209,7 @@ class DaosServer():
             # TODO: Enable memleak checking when server shutdown works.
             log_test(self._log_file, show_memleaks=False)
         self.running = False
+        return ret
 
 def il_cmd(dfuse, cmd):
     """Run a command under the interception library"""
@@ -1011,7 +1012,9 @@ def main():
     else:
         run_il_test(server, conf)
         run_dfuse(server, conf)
-    server.stop()
+
+    if server.stop() != 0:
+        fatal_errors = True
     if fatal_errors:
         sys.exit(1)
 
