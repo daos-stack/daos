@@ -37,46 +37,33 @@ class DmgCommand(YamlCommand):
     """Defines a object representing a dmg command."""
 
     METHOD_REGEX = {
-        "run": r"(.*)",
-        "network_scan": r"(?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))"
-                        r"(?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+"
-                        r"([a-z0-9+;_]+))",
-        # Sample output of dmg pool list.
-        # wolf-3:10001: connected
-        # Pool UUID                            Svc Replicas
-        # ---------                            ------------
-        # b4a27b5b-688a-4d1e-8c38-363e32eb4f29 1,2,3
-        # Between the first and the second group, use " +"; i.e., one or more
-        # whitespaces. If we use "\s+", it'll pick up the second divider as
-        # UUID since it's made up of hyphens and \s includes new line.
-        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
-        "pool_create": r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)",
-        "storage_query_smd": r"""([0-9a-zA-Z-_]+):(?:\d+):
-            (?:\n|\r\n)\s+(Pool|Device):
-            (?:\n|\r\n)\s+UUID:\s+([0-9a-f-]+)
-            (?:\n|\r\n)\s+VOS Target IDs:\s+([\d ]+)
-            (?:\n|\r\n)(?:\s+SPDK Blobs:\s+)?([\d ]+)?""",
-        "storage_query_blobstore": r"""^([0-9a-zA-Z_-]+):\d+:
-            (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
-            (?:\n|\r\n)\s+Read\s+errors:\s+([0-9]+)
-            (?:\n|\r\n)\s+Write\s+errors:\s+([0-9]+)
-            (?:\n|\r\n)\s+Unmap\s+errors:\s+([0-9]+)
-            (?:\n|\r\n)\s+Checksum\s+errors:\s+([0-9]+)
-            (?:\n|\r\n)\s+[0-9a-zA-Z_-]+\s+[0-9a-zA-Z_-]+:
-            (?:\n|\r\n)\s+Error\s+log\s+entries:\s+([0-9]+)
-            (?:\n|\r\n)\s+Media\s+errors:\s+([0-9]+)
-            (?:\n|\r\n)\s+Temperature:\s+([0-9]+)
-            (?:\n|\r\n)\s+Temperature:\s+([A-Z]+)
-            (?:\n|\r\n)\s+Available\s+Spare:\s+([A-Z]+)
-            (?:\n|\r\n)\s+Device\s+Reliability:\s+([A-Z]+)
-            (?:\n|\r\n)\s+Read\s+Only:\s+([A-Z]+)
-            (?:\n|\r\n)\s+Volatile\s+Memory\s+Backup:\s+([A-Z]+)""",
-        "storage_query_device_state": r"""^([0-9a-zA-Z_-]+):\d+:
-            (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
-            (?:\n|\r\n)\s+State:\s+([a-zA-Z]+)""",
-        "storage_set_faulty": r"""^([0-9a-zA-Z_-]+):\d+:
-            (?:\n|\r\n)\s+Device\s+UUID:\s+([a-f0-9-]+)
-            (?:\n|\r\n)\s+State:\s+([a-zA-Z]+)"""
+        "run":
+            r"(.*)",
+        "network_scan":
+            r"(?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))(?:.*\s+(fabric_iface|"
+            r"provider|pinned_numa_node):\s+([a-z0-9+;_]+))",
+        "pool_list":
+            r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
+        "pool_create":
+            r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)",
+        "pool_query":
+            r"(?:Pool\s*([A-Za-z0-9-]+),\s*ntarget=([0-9]),\s*disabled=([0-9]),"
+            r"\s+leader=([0-9]),\s+version=([0-9])|Target\(VOS\)\s+count:"
+            r"\s*([0-9])|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
+            r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
+            r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
+            r"|Rebuild\s+idle,\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
+        "storage_query_smd":
+            r"(?:UUID|VOS\s+Target\s+IDs|SPDK Blobs):\s+([a-z0-9- ]+)",
+        "storage_query_blobstore":
+            r"(?:Device\s+UUID|Read\s+errors|Write\s+errors|Unmap\s+errors|"
+            r"Checksum\s+errors|Error\s+log\s+entries|Media\s+errors|"
+            r"Temperature|Available\s+Spare|Device\s+Reliability|"
+            r"Read\s+Only|Volatile\s+Memory\s+Backup):\s+([A-Za-z0-9- ]+)",
+        "storage_query_device_state":
+            r"(?:Device\s+UUID|State):\s+([A-Za-z0-9- ]+)",
+        "storage_set_faulty":
+            r"(?:Device\s+UUID|State):\s+([A-Za-z0-9- ]+)",
     }
 
     def __init__(self, path):
@@ -794,6 +781,25 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.nsvc.value = svcn
         self.sub_command_class.sub_command_class.sys.value = group
         self.sub_command_class.sub_command_class.acl_file.value = acl_file
+        return self._get_result()
+
+    def pool_query(self, pool):
+        """Query a pool with the dmg command.
+
+        Args:
+            uuid (str): Pool UUID to query.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool destroy command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.pool.value = pool
         return self._get_result()
 
     def pool_destroy(self, pool, force=True):
