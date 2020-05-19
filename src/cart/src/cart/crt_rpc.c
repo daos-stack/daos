@@ -67,7 +67,7 @@ crt_hdlr_ctl_log_set(crt_rpc_t *rpc_req)
 {
 	struct crt_ctl_log_set_in	*in_args;
 	struct crt_ctl_log_set_out	*out_args;
-	int 				rc = 0;
+	int				rc = 0;
 
 	in_args = crt_req_get(rpc_req);
 	out_args = crt_reply_get(rpc_req);

@@ -254,7 +254,8 @@ print_usage_msg(const char *msg)
 		printf("\nERROR: %s\n", msg);
 	printf("Usage: cart_ctl <cmd> --group-name name --rank "
 	       "start-end,start-end,rank,rank\n");
-	printf("\ncmds: get_uri_cache, list_ctx, get_hostname, get_pid, set_log\n");
+	printf("\ncmds: get_uri_cache, list_ctx, get_hostname, get_pid, ");
+	printf("set_log, set_fi_attr\n");
 	printf("\nset_log:\n");
 	printf("\tSet log to mask passed via -l <mask> argument\n");
 	printf("\nget_uri_cache:\n");
