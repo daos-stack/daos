@@ -145,6 +145,7 @@ def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 def qb_inst_rpms = ""
+def skip_clean = false
 el7_component_repos = ""
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
@@ -578,7 +579,6 @@ pipeline {
                         }
                     }
                     steps {
-		        def skip_clean = false
                         script {
                             if (quickbuild()) {
                                 clean: 
