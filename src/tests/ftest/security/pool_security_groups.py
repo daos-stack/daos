@@ -24,7 +24,6 @@
 
 import os
 import grp
-#import pool_security_test_base as poolSec
 import security_test_base as secTestBase
 from pool_security_test_base import PoolSecurityTestBase
 
@@ -64,7 +63,8 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         read, write = self.params.get(\
             "pg_read_write", "/run/pool_acl/primary_secondary_group_test/*")
         acl_entries = ["", "", "",\
-            secTestBase.acl_entry("group", current_group, primary_grp_perm, PERMISSIONS), ""]
+            secTestBase.acl_entry("group", current_group, primary_grp_perm,
+                                  PERMISSIONS), ""]
         if primary_grp_perm.lower() == "none":
             primary_grp_perm = ""
         if primary_grp_perm not in PERMISSIONS:

@@ -217,7 +217,8 @@ class PoolSecurityTestBase(TestWithServers):
         for gid in range(num_group):
             groupname = user_prefix + "_testGrp_" + str(gid + 1)
             new_group = "A:G:" + groupname + "@:" + PERMISSIONS[(gid + 2) % 4]
-            secTestBase.add_del_user(self.hostlist_clients, "groupadd", groupname)
+            secTestBase.add_del_user(self.hostlist_clients, "groupadd",
+                                     groupname)
             group_list.append(new_group)
         permission_list = group_list + user_list + current_user_acl
         random.shuffle(permission_list)
@@ -242,7 +243,8 @@ class PoolSecurityTestBase(TestWithServers):
             secTestBase.add_del_user(self.hostlist_clients, "userdel", username)
         for gid in range(num_group):
             groupname = user_prefix + "_testGrp_" + str(gid + 1)
-            secTestBase.add_del_user(self.hostlist_clients, "groupdel", groupname)
+            secTestBase.add_del_user(self.hostlist_clients, "groupdel",
+                                     groupname)
 
     def verify_pool_acl_prim_sec_groups(self, pool_acl_list, acl_file, uuid,
                                         svc):

@@ -68,9 +68,11 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
 
         user_types = ["owner", "user", "ownergroup", "group", "everyone"]
         default_acl_entries = ["A::OWNER@:",
-                               secTestBase.acl_entry("user", current_user, "", PERMISSIONS),
+                               secTestBase.acl_entry("user", current_user, "",
+                                                     PERMISSIONS),
                                "A:G:GROUP@:",
-                               secTestBase.acl_entry("group", current_group, "", PERMISSIONS),
+                               secTestBase.acl_entry("group", current_group, "",
+                                                     PERMISSIONS),
                                "A::EVERYONE@:"]
         test_acl_entries = ["", "", "", "", ""]
 
