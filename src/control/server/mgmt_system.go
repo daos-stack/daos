@@ -25,7 +25,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"syscall"
 	"time"
@@ -42,45 +41,38 @@ import (
 
 const instanceUpdateDelay = 500 * time.Millisecond
 
-// NewRankResult returns a reference to a new member result struct.
-func NewRankResult(rank system.Rank, action string, state system.MemberState, err error) *mgmtpb.RanksResp_RankResult {
-	result := mgmtpb.RanksResp_RankResult{
-		Rank: rank.Uint32(), Action: action, State: uint32(state),
-	}
-	if err != nil {
-		result.Errored = true
-		result.Msg = err.Error()
-	}
+func pollInstanceState(ctx context.Context, instances []*IOServerInstance, validate func(*IOServerInstance) bool, timeout time.Duration) error {
+	ready := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 
-	return &result
-}
-
-// drespToRankResult converts drpc.Response to proto.RanksResp_RankResult
-//
-// RankResult is populated with rank, state and error dependent on processing
-// dRPC response. Target state param is populated on success, Errored otherwise.
-func drespToRankResult(rank system.Rank, action string, dresp *drpc.Response, err error, tState system.MemberState) *mgmtpb.RanksResp_RankResult {
-	var outErr error
-	state := system.MemberStateErrored
-
-	if err != nil {
-		outErr = errors.WithMessagef(err, "rank %s dRPC failed", &rank)
-	} else {
-		resp := &mgmtpb.DaosResp{}
-		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-			outErr = errors.WithMessagef(err, "rank %s dRPC unmarshal failed",
-				&rank)
-		} else if resp.GetStatus() != 0 {
-			outErr = errors.Errorf("rank %s dRPC returned DER %d",
-				&rank, resp.GetStatus())
+			success := true
+			for _, srv := range instances {
+				if !validate(srv) {
+					success = false
+				}
+			}
+			if success {
+				close(ready)
+				return
+			}
+			time.Sleep(instanceUpdateDelay)
 		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-ready:
+	case <-time.After(timeout):
 	}
 
-	if outErr == nil {
-		state = tState
-	}
-
-	return NewRankResult(rank, action, state, outErr)
+	return nil
 }
 
 // getPeerListenAddr combines peer ip from supplied context with input port.
@@ -134,7 +126,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	if resp.GetStatus() == 0 {
 		newState := system.MemberStateEvicted
 		if resp.GetState() == mgmtpb.JoinResp_IN {
-			newState = system.MemberStateStarted
+			newState = system.MemberStateJoined
 		}
 
 		member := system.NewMember(system.Rank(resp.GetRank()), req.GetUuid(), replyAddr, newState)
@@ -156,6 +148,60 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	return resp, nil
 }
 
+// localInstances takes slice of uint32 rank identifiers and returns a slice
+// containing any local instances matching the supplied ranks.
+func (svc *mgmtSvc) localInstances(inRanks []uint32) ([]*IOServerInstance, error) {
+	localInstances := make([]*IOServerInstance, 0, maxIOServers)
+
+	for _, rank := range system.RanksFromUint32(inRanks) {
+		for _, instance := range svc.harness.Instances() {
+			instanceRank, err := instance.GetRank()
+			if err != nil {
+				return nil, errors.WithMessage(err, "localInstances()")
+			}
+			if !rank.Equals(instanceRank) {
+				continue // requested rank not local
+			}
+			localInstances = append(localInstances, instance)
+		}
+	}
+
+	return localInstances, nil
+}
+
+// drpcOnLocalRanks iterates over local instances issuing dRPC requests
+// concurrently and returning system member results.
+func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksReq, method int32) ([]*system.MemberResult, error) {
+	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
+	defer cancel()
+
+	instances, err := svc.localInstances(req.GetRanks())
+	if err != nil {
+		return nil, err
+	}
+
+	inflight := 0
+	ch := make(chan *system.MemberResult)
+	for _, srv := range instances {
+		inflight++
+		go func(s *IOServerInstance) {
+			ch <- s.TryDrpc(ctx, method)
+		}(srv)
+	}
+
+	results := make(system.MemberResults, 0, inflight)
+	for inflight > 0 {
+		result := <-ch
+		inflight--
+		if result == nil {
+			return nil, errors.New("nil result")
+		}
+		results = append(results, result)
+	}
+
+	return results, nil
+}
+
 // PrepShutdown implements the method defined for the Management Service.
 //
 // Prepare data-plane instance managed by control-plane for a controlled shutdown,
@@ -168,32 +214,19 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, req:%+v\n", *req)
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
+	svc.log.Debugf("MgmtSvc.PrepShutdownRanks dispatch, req:%+v\n", *req)
+
+	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPrepShutdown)
+	if err != nil {
+		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
+	}
 
 	resp := &mgmtpb.RanksResp{}
-
-	for _, i := range svc.harness.Instances() {
-		rank, err := i.GetRank()
-		if err != nil {
-			return nil, err
-		}
-
-		if !rank.InList(system.RanksFromUint32(req.GetRanks())) {
-			continue // filtered out, no result expected
-		}
-
-		if !i.IsReady() {
-			resp.Results = append(resp.Results,
-				NewRankResult(rank, "prep shutdown",
-					system.MemberStateStopped, nil))
-			continue
-		}
-
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodPrepShutdown, nil)
-
-		resp.Results = append(resp.Results,
-			drespToRankResult(rank, "prep shutdown", dresp, err,
-				system.MemberStateStopping))
+	if err := convert.Types(results, &resp.Results); err != nil {
+		return nil, err
 	}
 
 	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, resp:%+v\n", *resp)
@@ -201,37 +234,23 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 	return resp, nil
 }
 
-func (svc *mgmtSvc) getStartedResults(rankList []system.Rank, desiredState system.MemberState, action string, stopErrs map[system.Rank]error) (system.MemberResults, error) {
-	results := make(system.MemberResults, 0, maxIOServers)
-	for _, i := range svc.harness.Instances() {
-		rank, err := i.GetRank()
+// memberStateResults returns system member results reflecting whether the state
+// of the given member is equivalent to the supplied desired state value.
+func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredState system.MemberState) (system.MemberResults, error) {
+	results := make(system.MemberResults, 0, len(instances))
+	for _, srv := range instances {
+		rank, err := srv.GetRank()
 		if err != nil {
-			return nil, err
+			svc.log.Debugf("Instance %d GetRank(): %s", srv.Index(), err)
+			continue
 		}
 
-		if !rank.InList(rankList) {
-			continue // filtered out, no result expected
-		}
-
-		state := system.MemberStateStarted
-		if !i.IsReady() {
-			state = system.MemberStateStopped
-		}
-
-		var extraErrMsg string
-		if len(stopErrs) > 0 {
-			if stopErr, exists := stopErrs[rank]; exists {
-				if stopErr == nil {
-					return nil, errors.New("expected non-nil error in error map")
-				}
-				extraErrMsg = fmt.Sprintf(" (%s)", stopErr.Error())
-			}
-		}
+		state := srv.LocalState()
 		if state != desiredState {
-			err = errors.Errorf("want %s, got %s%s", desiredState, state, extraErrMsg)
+			err = errors.Errorf("want %s, got %s", desiredState, state)
 		}
 
-		results = append(results, system.NewMemberResult(rank, action, err, state))
+		results = append(results, system.NewMemberResult(rank, err, state))
 	}
 
 	return results, nil
@@ -243,55 +262,45 @@ func (svc *mgmtSvc) getStartedResults(rankList []system.Rank, desiredState syste
 // After attempting to stop instances through harness (when either all instances
 // are stopped or timeout has occurred, populate response results based on
 // instance started state.
-func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
 	svc.log.Debugf("MgmtSvc.StopRanks dispatch, req:%+v\n", *req)
-
-	resp := &mgmtpb.RanksResp{}
-
-	rankList := system.RanksFromUint32(req.GetRanks())
 
 	signal := syscall.SIGINT
 	if req.Force {
 		signal = syscall.SIGKILL
 	}
 
-	ctx, cancel := context.WithTimeout(parent, ioserverShutdownTimeout)
-	defer cancel()
-
-	stopErrs, err := svc.harness.StopInstances(ctx, signal, rankList...)
-	if err != nil {
-		if err != context.DeadlineExceeded {
-			// unexpected error, fail without collecting rank results
-			return nil, err
-		}
-	}
-
-	stopped := make(chan struct{})
-	go func() {
-		for {
-			if len(svc.harness.StartedRanks()) != 0 {
-				time.Sleep(instanceUpdateDelay)
-				continue
-			}
-			close(stopped)
-			break
-		}
-	}()
-
-	select {
-	case <-stopped:
-	case <-time.After(svc.harness.rankReqTimeout):
-		svc.log.Debug("deadline exceeded when waiting for instances to stop")
-	}
-
-	results, err := svc.getStartedResults(rankList, system.MemberStateStopped, "stop", stopErrs)
+	instances, err := svc.localInstances(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
+	for _, srv := range instances {
+		if !srv.isStarted() {
+			continue
+		}
+		if err := srv.Stop(signal); err != nil {
+			return nil, errors.Wrapf(err, "sending %s", signal)
+		}
+	}
 
+	if err := pollInstanceState(ctx, instances,
+		func(s *IOServerInstance) bool { return !s.isStarted() },
+		svc.harness.rankReqTimeout); err != nil {
+
+		return nil, err
+	}
+
+	results, err := svc.memberStateResults(instances, system.MemberStateStopped)
+	if err != nil {
+		return nil, err
+	}
+	resp := &mgmtpb.RanksResp{}
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
 	}
@@ -301,66 +310,29 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	return resp, nil
 }
 
-func ping(i *IOServerInstance, rank system.Rank, timeout time.Duration) *mgmtpb.RanksResp_RankResult {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	resChan := make(chan *mgmtpb.RanksResp_RankResult)
-	go func() {
-		var err error
-		var dresp *drpc.Response
-
-		dresp, err = i.CallDrpc(drpc.ModuleMgmt, drpc.MethodPingRank, nil)
-
-		select {
-		case <-ctx.Done():
-		case resChan <- drespToRankResult(rank, "ping", dresp, err, system.MemberStateStarted):
-		}
-	}()
-
-	select {
-	case result := <-resChan:
-		return result
-	case <-time.After(timeout):
-		return NewRankResult(rank, "ping", system.MemberStateUnresponsive,
-			errors.New("timeout occurred"))
-	}
-}
-
 // PingRanks implements the method defined for the Management Service.
 //
 // Query data-plane all instances (DAOS system members) managed by harness to verify
 // responsiveness.
 //
-// For each instance, call over dRPC and either return error for CallDrpc err or
-// populate a RanksResp_RankResult in response. Result is either populated from
-// return from dRPC which indicates activity and Status == 0, or in the case of a timeout
-// the results status will be pingTimeoutStatus.
+// For each instance, call over dRPC with dPing() async and collect results.
 func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
 
+	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPingRank)
+	if err != nil {
+		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
+	}
+
 	resp := &mgmtpb.RanksResp{}
-
-	for _, i := range svc.harness.Instances() {
-		rank, err := i.GetRank()
-		if err != nil {
-			return nil, err
-		}
-
-		if !rank.InList(system.RanksFromUint32(req.GetRanks())) {
-			continue // filtered out, no result expected
-		}
-
-		if !i.IsReady() {
-			resp.Results = append(resp.Results,
-				NewRankResult(rank, "ping", system.MemberStateStopped, nil))
-			continue
-		}
-
-		resp.Results = append(resp.Results, ping(i, rank, svc.harness.rankReqTimeout))
+	if err := convert.Types(results, &resp.Results); err != nil {
+		return nil, err
 	}
 
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, resp:%+v\n", *resp)
@@ -368,49 +340,105 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	return resp, nil
 }
 
+// ResetFormatRanks implements the method defined for the Management Service.
+//
+// Reset storage format of data-plane instances (DAOS system members) managed by harness.
+func (svc *mgmtSvc) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
+	svc.log.Debugf("MgmtSvc.ResetFormatRanks dispatch, req:%+v\n", *req)
+
+	instances, err := svc.localInstances(req.GetRanks())
+	if err != nil {
+		return nil, err
+	}
+
+	savedRanks := make(map[uint32]system.Rank) // instance idx to system rank
+	for _, srv := range instances {
+		rank, err := srv.GetRank()
+		if err != nil {
+			return nil, err
+		}
+		savedRanks[srv.Index()] = rank
+
+		if srv.isStarted() {
+			return nil, FaultInstancesNotStopped("reset format", srv.Index())
+		}
+		if err := srv.RemoveSuperblock(); err != nil {
+			return nil, err
+		}
+		srv.startLoop <- true // proceed to awaiting storage format
+	}
+
+	if err := pollInstanceState(ctx, instances, (*IOServerInstance).isAwaitingFormat,
+		svc.harness.rankStartTimeout); err != nil {
+
+		return nil, err
+	}
+
+	// rank cannot be pulled from superblock so use saved value
+	results := make(system.MemberResults, 0, len(instances))
+	for _, srv := range instances {
+		var err error
+		state := srv.LocalState()
+		if state != system.MemberStateAwaitFormat {
+			err = errors.Errorf("want %s, got %s", system.MemberStateAwaitFormat, state)
+		}
+
+		results = append(results,
+			system.NewMemberResult(savedRanks[srv.Index()], err, state))
+	}
+
+	resp := &mgmtpb.RanksResp{}
+	if err := convert.Types(results, &resp.Results); err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.ResetFormatRanks dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // StartRanks implements the method defined for the Management Service.
 //
 // Restart data-plane instances (DAOS system members) managed by harness.
-//
-// TODO: Current implementation sends restart signal to harness, restarting all
-//       ranks managed by harness, future implementations will allow individual
-//       ranks to be restarted. Work out how to start only a subsection of
-//       instances based on ranks supplied in request.
 func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("no ranks specified in request")
+	}
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
 
-	resp := &mgmtpb.RanksResp{}
-
-	if err := svc.harness.RestartInstances(); err != nil {
-		return nil, err
-	}
-
-	started := make(chan struct{})
-	// select until instances start or timeout occurs (at which point get results of each instance)
-	go func() {
-		for {
-			if len(svc.harness.StartedRanks()) != len(svc.harness.instances) {
-				time.Sleep(instanceUpdateDelay)
-				continue
-			}
-			close(started)
-			break
-		}
-	}()
-
-	select {
-	case <-started:
-	case <-time.After(svc.harness.rankReqTimeout):
-	}
-
-	results, err := svc.getStartedResults(system.RanksFromUint32(req.GetRanks()),
-		system.MemberStateStarted, "start", nil)
+	instances, err := svc.localInstances(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
+	for _, srv := range instances {
+		if srv.isStarted() {
+			continue
+		}
+		srv.startLoop <- true
+	}
+
+	if err := pollInstanceState(ctx, instances, (*IOServerInstance).isReady,
+		svc.harness.rankStartTimeout); err != nil {
+
+		return nil, err
+	}
+
+	// instances will update state to "Started" through join or
+	// bootstrap in membership, here just make sure instances "Ready"
+	results, err := svc.memberStateResults(instances, system.MemberStateReady)
+	if err != nil {
+		return nil, err
+	}
+	resp := &mgmtpb.RanksResp{}
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
 	}

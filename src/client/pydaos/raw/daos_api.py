@@ -34,6 +34,7 @@ import enum
 
 from . import daos_cref
 from . import conversion
+from .. import DaosClient
 
 # pylint: disable=import-error
 if sys.version_info < (3, 0):
@@ -464,7 +465,7 @@ class DaosPool(object):
         t_size = ctypes.pointer(ctypes.c_size_t(5000))
 
         func = self.context.get_function('list-pool-attr')
-        ret = func(self.handle, sbuf, t_size)
+        ret = func(self.handle, sbuf, t_size, None)
         if ret != 0:
             raise DaosApiError("Pool List-attr returned non-zero. RC:{0}"
                                .format(ret))
@@ -1134,6 +1135,7 @@ class IORequest(object):
             self.iod.iod_type = 1
             self.iod.iod_size = size
             self.iod.iod_nr = 1
+            self.iod.iod_recxs = None
 
         # now do it
         if dkey is not None:
@@ -1669,7 +1671,7 @@ class DaosContainer(object):
         c_tx = ctypes.c_uint64(txn)
 
         func = self.context.get_function('open-tx')
-        ret = func(self.coh, ctypes.byref(c_tx), None)
+        ret = func(self.coh, ctypes.byref(c_tx), 0, None)
         if ret != 0:
             raise DaosApiError("tx open returned non-zero. RC: {0}"
                                .format(ret))
@@ -1714,6 +1716,20 @@ class DaosContainer(object):
         ret = func(c_tx, None)
         if ret != 0:
             raise DaosApiError("TX abort returned non-zero. RC: {0}"
+                               .format(ret))
+
+    def restart_tx(self, txn):
+        """Restart a transaction that is being modified."""
+        # container should be in open state
+        if self.coh == 0:
+            raise DaosApiError("Container needs to be opened.")
+
+        c_tx = ctypes.c_uint64(txn)
+
+        func = self.context.get_function('restart-tx')
+        ret = func(c_tx, None)
+        if ret != 0:
+            raise DaosApiError("TX restart returned non-zero. RC: {0}"
                                .format(ret))
 
     def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
@@ -2128,16 +2144,15 @@ class DaosSnapshot(object):
         self.name = name            # currently unused
         self.epoch = 0
 
-    def create(self, coh, epoch):
+    def create(self, coh):
         """Send a snapshot creation request.
 
         Store the info in the DaosSnapshot object.
 
         coh     --ctype.u_long handle on an open container
-        epoch   --the epoch number of the obj to be snapshotted
         """
         func = self.context.get_function('create-snap')
-        epoch = ctypes.c_uint64(epoch)
+        epoch = ctypes.c_uint64(self.epoch)
         retcode = func(coh, ctypes.byref(epoch), None, None)
         self.epoch = epoch.value
         if retcode != 0:
@@ -2240,6 +2255,7 @@ class DaosContext(object):
     def __init__(self, path):
         """Set up the DAOS API and MPI."""
         # first find the DAOS version
+        self._dc = None
         with open(os.path.join(path, "daos", "API_VERSION"),
                   "r") as version_file:
             daos_version = version_file.read().rstrip()
@@ -2303,6 +2319,7 @@ class DaosContext(object):
             'query-obj':       self.libdaos.daos_obj_query,
             'query-pool':      self.libdaos.daos_pool_query,
             'query-target':    self.libdaos.daos_pool_query_target,
+            'restart-tx':      self.libdaos.daos_tx_restart,
             'set-cont-attr':   self.libdaos.daos_cont_set_attr,
             'set-pool-attr':   self.libdaos.daos_pool_set_attr,
             'stop-service':    self.libdaos.daos_pool_stop_svc,
@@ -2311,6 +2328,12 @@ class DaosContext(object):
 
     def get_function(self, function):
         """Call a function through the API."""
+        init_not_required = ['d_log']
+        if function not in init_not_required:
+            # For most functions, we need to ensure
+            # that daos_init() has been called before
+            # invoking anything.
+            self._dc = DaosClient()
         return self.ftable[function]
 
 

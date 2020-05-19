@@ -140,7 +140,8 @@ dss_module_key_get(struct dss_thread_local_storage *dtls,
 void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
-#define DSS_XS_NAME_LEN		64
+/** pthread names are limited to 16 chars */
+#define DSS_XS_NAME_LEN		16
 
 struct srv_profile_chunk {
 	d_list_t	spc_chunk_list;
@@ -698,9 +699,12 @@ int
 ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
 		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
 		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		  unsigned int *shards, int cnt);
+		  unsigned int *shards, int cnt, int clear_conts);
 void
 ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
+
+void
+ds_migrate_abort(uuid_t pool_uuid, uint32_t ver);
 
 /** Server init state (see server_init) */
 enum dss_init_state {

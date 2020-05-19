@@ -278,9 +278,17 @@ sched_pop_one(struct sched_data *data, ABT_pool pool, int pool_idx)
 		return ABT_UNIT_NULL;
 	}
 
-	/* XXX Need to figure out why it can pop a NULL unit */
+	/*
+	 * When ABT_thread_join() is called to wait for a target ULT to
+	 * terminate, the target ULT could be removed from ABT pool by the
+	 * ABT_thread_join(), so the ABT pool could become empty when our
+	 * scheduler back to control.
+	 *
+	 * This usually happen on pool destroy or server shutdown where
+	 * ABT_thread_join() is called.
+	 */
 	if (unit == ABT_UNIT_NULL)
-		D_ERROR("XS(%d) poped NULL unit for ABT pool(%d)\n",
+		D_DEBUG(DB_TRACE, "XS(%d) poped NULL unit for ABT pool(%d)\n",
 			dx->dx_xs_id, pool_idx);
 
 	cycle->sc_age_net++;

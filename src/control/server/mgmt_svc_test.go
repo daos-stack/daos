@@ -241,7 +241,7 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_SmdListDevs(t *testing.T) {
+func TestServer_MgmtSvc_SmdListDevs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
 		numIO     int
@@ -373,7 +373,7 @@ func TestMgmtSvc_SmdListDevs(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_SmdListPools(t *testing.T) {
+func TestServer_MgmtSvc_SmdListPools(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
 		numIO     int
@@ -505,7 +505,7 @@ func TestMgmtSvc_SmdListPools(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_BioHealthQuery(t *testing.T) {
+func TestServer_MgmtSvc_BioHealthQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
 		numIO     int
@@ -628,7 +628,7 @@ func TestMgmtSvc_BioHealthQuery(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_DevStateQuery(t *testing.T) {
+func TestServer_MgmtSvc_DevStateQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
 		numIO     int
@@ -735,7 +735,7 @@ func TestMgmtSvc_DevStateQuery(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_StorageSetFaulty(t *testing.T) {
+func TestServer_MgmtSvc_StorageSetFaulty(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
 		numIO     int
@@ -839,5 +839,88 @@ func TestMgmtSvc_StorageSetFaulty(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
+	}
+}
+
+func newTestContSetOwnerReq() *mgmtpb.ContSetOwnerReq {
+	return &mgmtpb.ContSetOwnerReq{
+		ContUUID:   "contUUID",
+		PoolUUID:   "poolUUID",
+		Owneruser:  "user@",
+		Ownergroup: "group@",
+	}
+}
+
+func TestContSetOwner_NoMS(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
+
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, FaultHarnessNotStarted, err)
+}
+
+func TestContSetOwner_DrpcFailed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	expectedErr := errors.New("mock error")
+	setupMockDrpcClient(svc, nil, expectedErr)
+
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, expectedErr, err)
+}
+
+func TestContSetOwner_BadDrpcResp(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	// dRPC call returns junk in the message body
+	badBytes := makeBadBytes(16)
+
+	setupMockDrpcClientBytes(svc, badBytes, nil)
+
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("unmarshal"), err)
+}
+
+func TestContSetOwner_Success(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+
+	expectedResp := &mgmtpb.ContSetOwnerResp{
+		Status: 0,
+	}
+	setupMockDrpcClient(svc, expectedResp, nil)
+
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	cmpOpts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }

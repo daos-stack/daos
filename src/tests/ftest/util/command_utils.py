@@ -22,264 +22,18 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from logging import getLogger
-import time
-import os
+from importlib import import_module
 import re
+import time
 import signal
 
 from avocado.utils import process
 
-from env_modules import load_mpi
-
-
-class CommandFailure(Exception):
-    """Base exception for this module."""
-
-
-class BasicParameter(object):
-    """A class for parameters whose values are read from a yaml file."""
-
-    def __init__(self, value, default=None):
-        """Create a BasicParameter object.
-
-        Args:
-            value (object): intial value for the parameter
-            default (object, optional): default value. Defaults to None.
-        """
-        self.value = value if value is not None else default
-        self._default = default
-        self.log = getLogger(self.__class__.__name__)
-
-    def __str__(self):
-        """Convert this BasicParameter into a string.
-
-        Returns:
-            str: the string version of the parameter's value
-
-        """
-        return str(self.value) if self.value is not None else ""
-
-    def get_yaml_value(self, name, test, path):
-        """Get the value for the parameter from the test case's yaml file.
-
-        Args:
-            name (str): name of the value in the yaml file
-            test (Test): avocado Test object to use to read the yaml file
-            path (str): yaml path where the name is to be found
-        """
-        if hasattr(test, "config") and test.config is not None:
-            self.value = test.config.get(name, path, self._default)
-        else:
-            self.value = test.params.get(name, path, self._default)
-
-    def update(self, value, name=None, append=False):
-        """Update the value of the parameter.
-
-        Args:
-            value (object): value to assign
-            name (str, optional): name of the parameter which, if provided, is
-                used to display the update. Defaults to None.
-            append (bool, optional): appemnd/extend/update the current list/dict
-                with the provided value.  Defaults to False - override the
-                current value.
-        """
-        if append and isinstance(self.value, list):
-            if isinstance(value, list):
-                # Add the new list of value to the existing list
-                self.value.extend(value)
-            else:
-                # Add the new value to the existing list
-                self.value.append(value)
-        elif append and isinstance(self.value, dict):
-            # Update the dictionary with the new key/value pairs
-            self.value.update(value)
-        else:
-            # Override the current value with the new value
-            self.value = value
-
-        if name is not None:
-            self.log.debug("Updated param %s => %s", name, self.value)
-
-
-class NamedParameter(BasicParameter):
-    # pylint: disable=too-few-public-methods
-    """A class for test parameters whose values are read from a yaml file.
-
-    This is essentially a BasicParameter object whose yaml value is obtained
-    with a different name than the one assigned to the object.
-    """
-
-    def __init__(self, name, value, default=None):
-        """Create a NamedParameter  object.
-
-        Args:
-            name (str): yaml key name
-            value (object): intial value for the parameter
-            default (object): default value for the param
-        """
-        super(NamedParameter, self).__init__(value, default)
-        self._name = name
-
-    def get_yaml_value(self, name, test, path):
-        """Get the value for the parameter from the test case's yaml file.
-
-        Args:
-            name (str): name of the value in the yaml file - not used
-            test (Test): avocado Test object to use to read the yaml file
-            path (str): yaml path where the name is to be found
-        """
-        return super(NamedParameter, self).get_yaml_value(
-            self._name, test, path)
-
-
-class FormattedParameter(BasicParameter):
-    # pylint: disable=too-few-public-methods
-    """A class for test parameters whose values are read from a yaml file."""
-
-    def __init__(self, str_format, default=None):
-        """Create a FormattedParameter  object.
-
-        Args:
-            str_format (str): format string used to convert the value into an
-                command line argument string
-            default (object): default value for the param
-        """
-        super(FormattedParameter, self).__init__(default, default)
-        self._str_format = str_format
-
-    def __str__(self):
-        """Return a FormattedParameter object as a string.
-
-        Returns:
-            str: if defined, the parameter, otherwise an empty string
-
-        """
-        parameter = ""
-        if isinstance(self._default, bool) and self.value:
-            parameter = self._str_format
-        elif not isinstance(self._default, bool) and self.value is not None:
-            if isinstance(self.value, dict):
-                parameter = " ".join([
-                    self._str_format.format(
-                        "{} \"{}\"".format(key, self.value[key]))
-                    for key in self.value])
-            elif isinstance(self.value, (list, tuple)):
-                parameter = " ".join(
-                    [self._str_format.format(value) for value in self.value])
-            else:
-                parameter = self._str_format.format(self.value)
-        return parameter
-
-
-class ObjectWithParameters(object):
-    """A class for an object with parameters."""
-
-    def __init__(self, namespace):
-        """Create a ObjectWithParameters object.
-
-        Args:
-            namespace (str): yaml namespace (path to parameters)
-        """
-        self.namespace = namespace
-        self.log = getLogger(self.__class__.__name__)
-
-    def get_attribute_names(self, attr_type=None):
-        """Get a sorted list of the names of the attr_type attributes.
-
-        Args:
-            attr_type(object, optional): A single object type or tuple of
-                object types used to filter class attributes by their type.
-                Defaults to None.
-
-        Returns:
-            list: a list of class attribute names used to define parameters
-
-        """
-        return [
-            name for name in sorted(self.__dict__.keys())
-            if attr_type is None or isinstance(getattr(self, name), attr_type)]
-
-    def get_param_names(self):
-        """Get a sorted list of the names of the BasicParameter attributes.
-
-        Note: Override this method to change the order or inclusion of a
-            command parameter in the get_params() method.
-
-        Returns:
-            list: a list of class attribute names used to define parameters
-
-        """
-        return self.get_attribute_names(BasicParameter)
-
-    def get_params(self, test):
-        """Get values for all of the command params from the yaml file.
-
-        Sets each BasicParameter object's value to the yaml key that matches
-        the assigned name of the BasicParameter object in this class. For
-        example, the self.block_size.value will be set to the value in the yaml
-        file with the key 'block_size'.
-
-        If no key matches are found in the yaml file the BasicParameter object
-        will be set to its default value.
-
-        Args:
-            test (Test): avocado Test object
-        """
-        for name in self.get_param_names():
-            getattr(self, name).get_yaml_value(name, test, self.namespace)
-
-
-class CommandWithParameters(ObjectWithParameters):
-    """A class for command with paramaters."""
-
-    def __init__(self, namespace, command, path=""):
-        """Create a CommandWithParameters object.
-
-        Uses Avocado's utils.process module to run a command str provided.
-
-        Args:
-            namespace (str): yaml namespace (path to parameters)
-            command (str): string of the command to be executed.
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
-        """
-        super(CommandWithParameters, self).__init__(namespace)
-        self._command = command
-        self._path = path
-        self._pre_command = None
-
-    def __str__(self):
-        """Return the command with all of its defined parameters as a string.
-
-        Returns:
-            str: the command with all the defined parameters
-
-        """
-        # Join all the parameters that have been assigned a value with the
-        # command to create the command string
-        params = []
-        for name in self.get_str_param_names():
-            value = str(getattr(self, name))
-            if value != "":
-                params.append(value)
-
-        # Append the path to the command and preceed it with any other
-        # specified commands
-        command_list = [] if self._pre_command is None else [self._pre_command]
-        command_list.append(os.path.join(self._path, self._command))
-
-        # Return the command and its parameters
-        return " ".join(command_list + params)
-
-    def get_str_param_names(self):
-        """Get a sorted list of the names of the command attributes.
-
-        Returns:
-            list: a list of class attribute names used to define parameters
-                for the command.
-
-        """
-        return self.get_param_names()
+from command_utils_base import \
+    CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
+    CommandWithParameters, YamlParameters, EnvironmentVariables
+from general_utils import check_file_exists, stop_processes, get_log_file, \
+    run_command, DaosTestError
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -312,10 +66,46 @@ class ExecutableCommand(CommandWithParameters):
         self.env = None
         self.sudo = False
 
+        # A list of environment variable names to set and export prior to
+        # running the command.  Values can be set via the get_environment()
+        # method and included in the command string by the set_environment()
+        # method.
+        self._env_names = []
+
+        # Define a list of executable names associated with the command. This
+        # list is used to generate the 'command_regex' property, which can be
+        # used to check on the progress or terminate the command.
+        self._exe_names = [self.command]
+
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
+        value = super(ExecutableCommand, self).__str__()
+        if self.sudo:
+            value = " ".join(["sudo -n", value])
+        return value
+
     @property
     def process(self):
         """Getter for process attribute of the ExecutableCommand class."""
         return self._process
+
+    @property
+    def command_regex(self):
+        """Get the regular expression to use to search for the command.
+
+        Typical use would include combining with pgrep to verify a subprocess
+        is running.
+
+        Returns:
+            str: regular expression to use to search for the command
+
+        """
+        return "'({})'".format("|".join(self._exe_names))
 
     def run(self):
         """Run the command.
@@ -337,25 +127,15 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         command = self.__str__()
-        kwargs = {
-            "cmd": command,
-            "timeout": self.timeout,
-            "verbose": self.verbose,
-            "ignore_status": not self.exit_status_exception,
-            "allow_output_check": "combined",
-            "shell": True,
-            "env": self.env,
-            "sudo": self.sudo,
-        }
         try:
             # Block until the command is complete or times out
-            return process.run(**kwargs)
+            return run_command(
+                command, self.timeout, self.verbose, self.exit_status_exception,
+                "combined", env=self.env)
 
-        except process.CmdError as error:
+        except DaosTestError as error:
             # Command failed or possibly timed out
-            msg = "Error occurred running '{}': {}".format(command, error)
-            self.log.error(msg)
-            raise CommandFailure(msg)
+            raise CommandFailure(error)
 
     def _run_subprocess(self):
         """Run the command as a sub process.
@@ -370,7 +150,7 @@ class ExecutableCommand(CommandWithParameters):
                 "cmd": self.__str__(),
                 "verbose": self.verbose,
                 "allow_output_check": "combined",
-                "shell": True,
+                "shell": False,
                 "env": self.env,
                 "sudo": self.sudo,
             }
@@ -412,31 +192,62 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         if self._process is not None:
-            # Use a list to send signals to the process with one second delays:
-            #   Interupt + wait 3 seconds
-            #   Terminate + wait 2 seconds
-            #   Quit + wait 1 second
-            #   Kill
-            signal_list = [
-                signal.SIGINT, None, None, None,
-                signal.SIGTERM, None, None,
-                signal.SIGQUIT, None,
-                signal.SIGKILL]
+            # Send a SIGTERM to the stop the subprocess and if it is still
+            # running after 5 seconds send a SIGKILL and report an error
+            signal_list = [signal.SIGTERM, signal.SIGKILL]
 
             # Turn off verbosity to keep the logs clean as the server stops
             self._process.verbose = False
 
-            # Keep sending signals and or waiting while the process is alive
+            # Send signals while the process is still running
+            state = None
             while self._process.poll() is None and signal_list:
-                signal_type = signal_list.pop(0)
-                if signal_type is not None:
-                    self._process.send_signal(signal_type)
+                signal_to_send = signal_list.pop(0)
+                msg = "before sending signal {}".format(signal_to_send)
+                state = self.get_subprocess_state(msg)
+                self.log.info(
+                    "Sending signal %s to %s (state=%s)", str(signal_to_send),
+                    self._command, str(state))
+                self._process.send_signal(signal_to_send)
                 if signal_list:
-                    time.sleep(1)
+                    time.sleep(5)
+
             if not signal_list:
-                # Indicate an error if the process required a SIGKILL
-                raise CommandFailure("Error stopping '{}'".format(self))
+                if state and (len(state) > 1 or state[0] not in ("D", "Z")):
+                    # Indicate an error if the process required a SIGKILL and
+                    # either multiple processes were still found running or the
+                    # parent process was in any state except uninterruptible
+                    # sleep (D) or zombie (Z).
+                    raise CommandFailure("Error stopping '{}'".format(self))
+
+            self.log.info("%s stopped successfully", self.command)
             self._process = None
+
+    def get_subprocess_state(self, message=None):
+        """Display the state of the subprocess.
+
+        Args:
+            message (str, optional): additional text to include in output.
+                Defaults to None.
+
+        Returns:
+            list: a list of process states for the process found associated with
+                the subprocess pid.
+
+        """
+        state = None
+        if self._process is not None:
+            self.log.debug(
+                "%s processes still running%s:", self.command,
+                " {}".format(message) if message else "")
+            command = "/usr/bin/ps --forest -o pid,stat,time,cmd {}".format(
+                self._process.get_pid())
+            result = process.run(command, 10, True, True, "combined")
+
+            # Get the state of the process from the output
+            state = re.findall(
+                r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout)
+        return state
 
     def get_output(self, method_name, **kwargs):
         """Get output from the command issued by the specified method.
@@ -475,6 +286,42 @@ class ExecutableCommand(CommandWithParameters):
             raise CommandFailure(
                 "{}() did not return a CmdResult".format(method_name))
         return re.findall(pattern, result.stdout)
+
+    def get_environment(self, manager, log_file=None):
+        """Get the environment variables to export for the command.
+
+        Args:
+            manager (DaosServerManager): the job manager used to start
+                daos_server from which the server config values can be obtained
+                to set the required environment variables.
+            log_file (str, optional): when specified overrides the default
+                D_LOG_FILE value. Defaults to None.
+
+        Returns:
+            EnvironmentVariables: a dictionary of environment variable names and
+                values to export prior to running daos_racer
+
+        """
+        env = EnvironmentVariables()
+        for name in self._env_names:
+            if name == "D_LOG_FILE":
+                if not log_file:
+                    log_file = "{}_daos.log".format(self.command)
+                value = get_log_file(log_file)
+            else:
+                value = manager.get_environment_value(name)
+            env[name] = value
+
+        return env
+
+    def set_environment(self, env):
+        """Set the environment variables to export in the command string.
+
+        Args:
+            env (EnvironmentVariables): a dictionary of environment variable
+                names and values to export prior to running the command
+        """
+        self.env = env.copy()
 
 
 class CommandWithSubCommand(ExecutableCommand):
@@ -585,49 +432,57 @@ class CommandWithSubCommand(ExecutableCommand):
         self.sub_command.value = value
         self.get_sub_command_class()
 
+    def _get_result(self):
+        """Get the result from running the configured command.
 
-class DaosCommand(ExecutableCommand):
-    """A class for similar daos command line tools."""
+        Returns:
+            CmdResult: an avocado CmdResult object containing the command
+                information, e.g. exit status, stdout, stderr, etc.
 
-    def __init__(self, namespace, command, path=""):
-        """Create DaosCommand object.
+        Raises:
+            CommandFailure: if the command fails.
 
-        Specific type of command object built so command str returns:
-            <command> <options> <request> <action/subcommand> <options>
+        """
+        result = None
+        try:
+            result = self.run()
+        except CommandFailure as error:
+            raise CommandFailure(
+                "<{}> command failed: {}".format(self.command, error))
+
+        return result
+
+
+class SubProcessCommand(CommandWithSubCommand):
+    """A class for a command run as a subprocess with a sub command.
+
+    Example commands: daos_agent, daos_server
+    """
+
+    def __init__(self, namespace, command, path="", timeout=60):
+        """Create a SubProcessCommand object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
             command (str): string of the command to be executed.
-            path (str): path to location of daos command binary.
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+            timeout (int, optional): number of seconds to wait for patterns to
+                appear in the subprocess output. Defaults to 60 seconds.
         """
-        super(DaosCommand, self).__init__(namespace, command, path)
-        self.request = BasicParameter(None)
-        self.action = BasicParameter(None)
-        self.action_command = None
+        super(SubProcessCommand, self).__init__(namespace, command, path, True)
 
-    def get_action_command(self):
-        """Assign a command object for the specified request and action."""
-        self.action_command = None
-
-    def get_param_names(self):
-        """Get a sorted list of DaosCommand parameter names."""
-        names = self.get_attribute_names(FormattedParameter)
-        names.extend(["request", "action"])
-        return names
-
-    def get_params(self, test):
-        """Get values for all of the command params from the yaml file.
-
-        Args:
-            test (Test): avocado Test object
-        """
-        super(DaosCommand, self).get_params(test)
-        self.get_action_command()
-        if isinstance(self.action_command, ObjectWithParameters):
-            self.action_command.get_params(test)
+        # Attributes used to determine command success when run as a subprocess
+        # See self.check_subprocess_status() for details.
+        self.pattern = None
+        self.pattern_count = 1
+        self.pattern_timeout = BasicParameter(timeout, timeout)
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
+
+        Exclude the 'pattern_timeout' BasicParameter value from the command
+        string as it is only used internally to the class.
 
         Returns:
             list: a list of class attribute names used to define parameters
@@ -635,71 +490,19 @@ class DaosCommand(ExecutableCommand):
 
         """
         names = self.get_param_names()
-        if self.action_command is not None:
-            names[-1] = "action_command"
+        names.remove("pattern_timeout")
+        if self.sub_command_class is not None:
+            index = names.index("sub_command")
+            names[index] = "sub_command_class"
         return names
 
-
-class EnvironmentVariables(dict):
-    """Dictionary of environment variable keys and values."""
-
-    def get_list(self):
-        """Get a list of environment variable assignments.
-
-        Returns:
-            list: a list of environment variable assignment (key=value) strings
-
-        """
-        return ["{}={}".format(key, value) for key, value in self.items()]
-
-    def get_export_str(self, separator=";"):
-        """Get the command to export all of the environment variables.
-
-        Args:
-            separator (str, optional): export command separtor.
-                Defaults to ";".
-
-        Returns:
-            str: a string of export commands for each environment variable
-
-        """
-        join_str = "{} export ".format(separator)
-        return "export {}{}".format(join_str.join(self.get_list()), separator)
-
-
-class JobManager(ExecutableCommand):
-    """A class for commands with parameters that manage other commands."""
-
-    def __init__(self, namespace, command, job, path="", subprocess=False):
-        """Create a JobManager object.
-
-        Args:
-            namespace (str): yaml namespace (path to parameters)
-            command (str): string of the command to be executed.
-            job (ExecutableCommand): command object to manage.
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
-            subprocess (bool, optional): whether the command is run as a
-                subprocess. Defaults to False.
-        """
-        super(JobManager, self).__init__(namespace, command, path, subprocess)
-        self.job = job
-
-    def __str__(self):
-        """Return the command with all of its defined parameters as a string.
-
-        Returns:
-            str: the command with all the defined parameters
-
-        """
-        commands = [super(JobManager, self).__str__(), str(self.job)]
-        if self.job.sudo:
-            commands.insert(-1, "sudo -n")
-
-        return " ".join(commands)
-
     def check_subprocess_status(self, sub_process):
-        """Verify command status when called in a subprocess.
+        """Verify the status of the command started as a subprocess.
+
+        Continually search the subprocess output for a pattern (self.pattern)
+        until the expected number of patterns (self.pattern_count) have been
+        found (typically one per host) or the timeout (self.pattern_timeout)
+        is reached or the process has stopped.
 
         Args:
             sub_process (process.SubProcess): subprocess used to run the command
@@ -708,177 +511,318 @@ class JobManager(ExecutableCommand):
             bool: whether or not the command progress has been detected
 
         """
-        return self.job.check_subprocess_status(sub_process)
+        complete = True
+        self.log.info(
+            "Checking status of the %s command in %s with a %s second timeout",
+            self._command, sub_process, self.pattern_timeout.value)
 
-    def setup_command(self, env, hostfile, processes):
-        """Set up the job manager command with common inputs.
+        if self.pattern is not None:
+            detected = 0
+            complete = False
+            timed_out = False
+            start = time.time()
+
+            # Search for patterns in the subprocess output until:
+            #   - the expected number of pattern matches are detected (success)
+            #   - the time out is reached (failure)
+            #   - the subprocess is no longer running (failure)
+            while not complete and not timed_out and sub_process.poll() is None:
+                output = sub_process.get_stdout()
+                detected = len(re.findall(self.pattern, output))
+                complete = detected == self.pattern_count
+                timed_out = time.time() - start > self.pattern_timeout.value
+
+            # Summarize results
+            msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
+                detected, self.pattern_count, self.pattern,
+                time.time() - start, self.pattern_timeout.value)
+
+            if not complete:
+                # Report the error / timeout
+                self.log.info(
+                    "%s detected - %s:\n%s",
+                    "Time out" if timed_out else "Error",
+                    msg,
+                    sub_process.get_stdout())
+
+                # Stop the timed out process
+                if timed_out:
+                    self.stop()
+            else:
+                # Report the successful start
+                self.log.info(
+                    "%s subprocess startup detected - %s", self._command, msg)
+
+        return complete
+
+
+class YamlCommand(SubProcessCommand):
+    """Defines a sub-process command that utilizes a yaml configuration file.
+
+    Example commands: daos_agent, daos_server, dmg
+    """
+
+    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=60):
+        """Create a YamlCommand command object.
 
         Args:
-            env (EnvironmentVariables): the environment variables to use with
-                the launch command
-            hostfile (str): file defining host names and slots
-            processes (int): number of host processes
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            yaml_cfg (YamlParameters, optional): yaml configuration parameters.
+                Defaults to None.
+            path (str, optional): path to location of daos command binary.
+                Defaults to ""
+            timeout (int, optional): number of seconds to wait for patterns to
+                appear in the subprocess output. Defaults to 60 seconds.
         """
-        pass
+        super(YamlCommand, self).__init__(namespace, command, path)
 
+        # Command configuration yaml file
+        self.yaml = yaml_cfg
 
-class Orterun(JobManager):
-    """A class for the orterun job manager command."""
-
-    def __init__(self, job, path="", subprocess=False):
-        """Create a Orterun object.
+    def get_params(self, test):
+        """Get values for the daos command and its yaml config file.
 
         Args:
-            job (ExecutableCommand): command object to manage.
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
-            subprocess (bool, optional): whether the command is run as a
-                subprocess. Defaults to False.
+            test (Test): avocado Test object
         """
-        super(Orterun, self).__init__(
-            "/run/orterun", "orterun", job, path, subprocess)
+        super(YamlCommand, self).get_params(test)
+        if isinstance(self.yaml, YamlParameters):
+            self.yaml.get_params(test)
 
-        # Default mca values to avoid queue pair errors
-        mca_default = {
-            "btl_openib_warn_default_gid_prefix": "0",
-            "btl": "tcp,self",
-            "oob": "tcp",
-            "pml": "ob1",
-        }
+    def create_yaml_file(self):
+        """Create the yaml file with the current yaml file parameters.
 
-        self.hostfile = FormattedParameter("--hostfile {}", None)
-        self.processes = FormattedParameter("--np {}", 1)
-        self.display_map = FormattedParameter("--display-map", False)
-        self.map_by = FormattedParameter("--map-by {}", "node")
-        self.export = FormattedParameter("-x {}", None)
-        self.enable_recovery = FormattedParameter("--enable-recovery", True)
-        self.report_uri = FormattedParameter("--report-uri {}", None)
-        self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
-        self.mca = FormattedParameter("--mca {}", mca_default)
-        self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
+        This should be called before running the daos command and after all the
+        yaml file parameters have been defined.  Any updates to the yaml file
+        parameter definitions would require calling this method before calling
+        the daos command in order for them to have any effect.
+        """
+        if isinstance(self.yaml, YamlParameters):
+            self.yaml.create_yaml()
 
-    def setup_command(self, env, hostfile, processes):
-        """Set up the orterun command with common inputs.
+    def set_config_value(self, name, value):
+        """Set the yaml configuration parameter value.
 
         Args:
-            env (EnvironmentVariables): the environment variables to use with
-                the launch command
-            hostfile (str): file defining host names and slots
-            processes (int): number of host processes
+            name (str): name of the yaml configuration parameter
+            value (object): value to set
+
+        Returns:
+            bool: if the attribute name was found and the value was set
+
         """
-        # Setup the env for the job to export with the orterun command
-        if self.export.value is None:
-            self.export.value = []
-        self.export.value.extend(env.get_list())
+        status = False
+        if isinstance(self.yaml, YamlParameters):
+            status = self.yaml.set_value(name, value)
+        return status
 
-        # Setup the orterun command
-        self.hostfile.value = hostfile
-        self.processes.value = processes
+    def get_config_value(self, name):
+        """Get the value of the yaml configuration parameter name.
 
-    def run(self):
-        """Run the orterun command.
+        Args:
+            name (str): name of the yaml configuration parameter from which to
+                get the value
+
+        Returns:
+            object: the yaml configuration parameter value or None
+
+        """
+        value = None
+        if isinstance(self.yaml, YamlParameters):
+            value = self.yaml.get_value(name)
+
+        return value
+
+    def _get_result(self):
+        """Generate the yaml config if defined, then call the parent method.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the command
+                information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if there is an error running the command
+            CommandFailure: if the command fails.
 
         """
-        load_mpi("openmpi")
-        return super(Orterun, self).run()
+        if self.yaml:
+            self.create_yaml_file()
+
+        return super(YamlCommand, self)._get_result()
 
 
-class Mpirun(JobManager):
-    """A class for the mpirun job manager command."""
+class SubprocessManager(object):
+    """Defines an object that manages a sub process launched with orterun."""
 
-    def __init__(self, job, path="", subprocess=False, mpitype="openmpi"):
-        """Create a Mpirun object.
+    def __init__(self, command, manager="Orterun"):
+        """Create a SubprocessManager object.
 
         Args:
-            job (ExecutableCommand): command object to manage.
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
-            subprocess (bool, optional): whether the command is run as a
-                subprocess. Defaults to False.
+            command (YamlCommand): command to manage as a subprocess
+            manager (str, optional): the name of the JobManager class used to
+                manage the YamlCommand defined through the "job" attribute.
+                Defaults to "OpenMpi"
         """
-        super(Mpirun, self).__init__(
-            "/run/mpirun", "mpirun", job, path, subprocess)
+        self.log = getLogger(__name__)
 
-        self.hostfile = FormattedParameter("-hostfile {}", None)
-        self.processes = FormattedParameter("-np {}", 1)
-        self.ppn = FormattedParameter("-ppn {}", None)
-        self.mpitype = mpitype
+        # Define the JobManager class used to manage the command as a subprocess
+        try:
+            manager_module = import_module("job_manager_utils")
+            manager_class = getattr(manager_module, manager)
+        except (ImportError, AttributeError) as error:
+            raise CommandFailure(
+                "Invalid '{}' job manager class: {}".format(manager, error))
+        self.manager = manager_class(command, subprocess=True)
 
-    def setup_command(self, env, hostfile, processes):
-        """Set up the mpirun command with common inputs.
+        # Define the list of hosts that will execute the daos command
+        self._hosts = []
+
+    def __str__(self):
+        """Get the complete manager command string.
+
+        Returns:
+            str: the complete manager command string
+
+        """
+        return str(self.manager)
+
+    @property
+    def hosts(self):
+        """Get the hosts used to execute the daos command."""
+        return self._hosts
+
+    @hosts.setter
+    def hosts(self, value):
+        """Set the hosts used to execute the daos command.
 
         Args:
-            env (EnvironmentVariables): the environment variables to use with
-                the launch command
-            hostfile (str): file defining host names and slots
-            processes (int): number of host processes
+            value (tuple): a tuple of a list of hosts, a path in which to create
+                the hostfile, and a number of slots to specify per host in the
+                hostfile (can be None)
         """
-        # Setup the env for the job to export with the mpirun command
-        self._pre_command = env.get_export_str()
+        self._set_hosts(*value)
 
-        # Setup the orterun command
-        self.hostfile.value = hostfile
-        self.processes.value = processes
+    def _set_hosts(self, hosts, path, slots):
+        """Set the hosts used to execute the daos command.
 
-    def run(self):
-        """Run the mpirun command.
+        Defined as a private method to enable overriding the setter method.
+
+        Args:
+            hosts (list): list of hosts on which to run the command
+            path (str): path in which to create the hostfile
+            slots (int): number of slots per host to specify in the hostfile
+        """
+        self._hosts = hosts
+        self.manager.assign_hosts(self._hosts, path, slots)
+        self.manager.assign_processes(len(self._hosts))
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Use the yaml file paramter values to assign the server command and
+        orterun command parameters.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        # Get the parameters for the JobManager command parameters
+        self.manager.get_params(test)
+
+        # Get the values for the job parameters
+        self.manager.job.get_params(test)
+
+    def start(self):
+        """Start the daos command.
 
         Raises:
-            CommandFailure: if there is an error running the command
+            CommandFailure: if the daos command fails to start
 
         """
-        load_mpi(self.mpitype)
-        return super(Mpirun, self).run()
+        # Create the yaml file for the daos command
+        self.manager.job.create_yaml_file()
 
+        # Start the daos command
+        try:
+            self.manager.run()
+        except CommandFailure:
+            # Kill the subprocess, anything that might have started
+            self.kill()
+            raise CommandFailure(
+                "Failed to start {}.".format(str(self.manager.job)))
 
-class Srun(JobManager):
-    """A class for the srun job manager command."""
+    def stop(self):
+        """Stop the daos command."""
+        self.manager.stop()
 
-    def __init__(self, job, path="", subprocess=False):
-        """Create a Srun object.
+    def kill(self):
+        """Forcably terminate any sub process running on hosts."""
+        regex = self.manager.job.command_regex
+        result = stop_processes(self._hosts, regex)
+        if 0 in result and len(result) == 1:
+            print(
+                "No remote {} processes killed (none found), done.".format(
+                    regex))
+        else:
+            print(
+                "***At least one remote {} process needed to be killed! Please "
+                "investigate/report.***".format(regex))
+
+    def verify_socket_directory(self, user):
+        """Verify the domain socket directory is present and owned by this user.
 
         Args:
-            job (ExecutableCommand): command object to manage.
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
-            subprocess (bool, optional): whether the command is run as a
-                subprocess. Defaults to False.
+            user (str): user to verify has ownership of the directory
+
+        Raises:
+            CommandFailure: if the socket directory does not exist or is not
+                owned by the user
+
         """
-        super(Srun, self).__init__("/run/srun", "srun", job, path, subprocess)
+        if self._hosts and hasattr(self.manager.job, "yaml"):
+            directory = self.get_user_file()
+            status, nodes = check_file_exists(self._hosts, directory, user)
+            if not status:
+                raise CommandFailure(
+                    "{}: Server missing socket directory {} for user {}".format(
+                        nodes, directory, user))
 
-        self.label = FormattedParameter("--label", False)
-        self.mpi = FormattedParameter("--mpi={}", None)
-        self.export = FormattedParameter("--export={}", None)
-        self.ntasks = FormattedParameter("--ntasks={}", None)
-        self.distribution = FormattedParameter("--distribution={}", None)
-        self.nodefile = FormattedParameter("--nodefile={}", None)
-        self.nodelist = FormattedParameter("--nodelist={}", None)
-        self.ntasks_per_node = FormattedParameter("--ntasks-per-node={}", None)
-        self.reservation = FormattedParameter("--reservation={}", None)
-        self.partition = FormattedParameter("--partition={}", None)
-        self.output = FormattedParameter("--output={}", None)
-
-    def setup_command(self, env, hostfile, processes):
-        """Set up the srun command with common inputs.
+    def set_config_value(self, name, value):
+        """Set the yaml configuration parameter value.
 
         Args:
-            env (EnvironmentVariables): the environment variables to use with
-                the launch command
-            hostfile (str): file defining host names and slots
-            processes (int): number of host processes
-            processpernode (int): number of process per node
-        """
-        # Setup the env for the job to export with the srun command
-        self.export.value = ",".join(["ALL"] + env.get_list())
+            name (str): name of the yaml configuration parameter
+            value (object): value to set
 
-        # Setup the srun command
-        self.label.value = True
-        self.mpi.value = "pmi2"
-        if processes is not None:
-            self.ntasks.value = processes
-            self.distribution.value = "cyclic"
-        if hostfile is not None:
-            self.nodefile.value = hostfile
+        Returns:
+            bool: if the attribute name was found and the value was set
+
+        """
+        status = False
+        if self.manager.job and hasattr(self.manager.job, "set_config_value"):
+            status = self.manager.job.set_config_value(name, value)
+        return status
+
+    def get_config_value(self, name):
+        """Get the value of the yaml configuration parameter name.
+
+        Args:
+            name (str): name of the yaml configuration parameter from which to
+                get the value
+
+        Returns:
+            object: the yaml configuration parameter value or None
+
+        """
+        value = None
+        if self.manager.job and hasattr(self.manager.job, "get_config_value"):
+            value = self.manager.job.get_config_value(name)
+        return value
+
+    def get_user_file(self):
+        """Get the file defined in the yaml file that must be owned by the user.
+
+        Returns:
+            str: file defined in the yaml file that must be owned by the user
+
+        """
+        return self.get_config_value("socket_dir")

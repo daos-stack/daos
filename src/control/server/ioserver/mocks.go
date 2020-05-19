@@ -37,8 +37,8 @@ type (
 		Running    atm.Bool
 		SignalCb   func(uint32, os.Signal)
 		SignalErr  error
-		ErrChanCb  func(uint32) InstanceError
-		ErrChanErr InstanceError
+		ErrChanCb  func() error
+		ErrChanErr error
 	}
 
 	TestRunner struct {
@@ -57,12 +57,12 @@ func NewTestRunner(trc *TestRunnerConfig, sc *Config) *TestRunner {
 	}
 }
 
-func (tr *TestRunner) Start(ctx context.Context, errChan chan<- InstanceError) error {
+func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 	if tr.runnerCfg.StartCb != nil {
 		tr.runnerCfg.StartCb()
 	}
 	if tr.runnerCfg.ErrChanCb == nil {
-		tr.runnerCfg.ErrChanCb = func(idx uint32) InstanceError {
+		tr.runnerCfg.ErrChanCb = func() error {
 			return tr.runnerCfg.ErrChanErr
 		}
 	}
@@ -70,10 +70,11 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- InstanceError) e
 	go func() {
 		select {
 		case <-ctx.Done():
-		case errChan <- tr.runnerCfg.ErrChanCb(tr.serverCfg.Index):
+		case errChan <- tr.runnerCfg.ErrChanCb():
+			if tr.runnerCfg.ErrChanErr != nil {
+				tr.runnerCfg.Running.SetFalse()
+			}
 		}
-		tr.runnerCfg.Running.SetFalse()
-		return
 	}()
 
 	if tr.runnerCfg.StartErr == nil {

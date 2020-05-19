@@ -143,10 +143,14 @@ struct  _Mgmt__GetAttachInfoReq
    * System name. For daos_agent only.
    */
   char *sys;
+  /*
+   * Return PSRs for all ranks, not just the MS replicas.
+   */
+  protobuf_c_boolean allranks;
 };
 #define MGMT__GET_ATTACH_INFO_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_req__descriptor) \
-    , (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__GetAttachInfoResp__Psr

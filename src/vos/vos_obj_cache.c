@@ -208,6 +208,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	struct daos_llink	*lret;
 	struct obj_lru_key	 lkey;
 	int			 rc = 0;
+	uint32_t		 cond_mask = 0;
 	bool			 found;
 
 	D_ASSERT(cont != NULL);
@@ -315,12 +316,19 @@ check_object:
 		goto out;
 	}
 
+	/** If it's a conditional update, we need to preserve the -DER_NONEXIST
+	 *  for the caller.
+	 */
+	if (ts_set && ts_set->ts_flags & VOS_COND_UPDATE_OP_MASK)
+		cond_mask = VOS_ILOG_COND_UPDATE;
 	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr,
-			     NULL, &obj->obj_ilog_info, 0, ts_set);
+			     NULL, &obj->obj_ilog_info, cond_mask, ts_set);
+	if (rc == -DER_NONEXIST && cond_mask)
+		goto out;
 	if (rc != 0) {
-		D_ERROR("Could not update object "DF_UOID" at "DF_U64
-			": "DF_RC"\n", DP_UOID(oid), epr->epr_hi,
-			DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Could not update object "DF_UOID" at "
+				DF_U64 ": "DF_RC"\n", DP_UOID(oid), epr->epr_hi,
+				DP_RC(rc));
 		goto failed;
 	}
 
@@ -344,7 +352,7 @@ out:
 		       " is not newer than the sync epoch "DF_U64"\n",
 		       intent == DAOS_INTENT_PUNCH ? "punch" : "update",
 		       DP_UOID(oid), epr->epr_hi, obj->obj_sync_epoch);
-		D_GOTO(failed, rc = -DER_INPROGRESS);
+		D_GOTO(failed, rc = -DER_TX_RESTART);
 	}
 
 	*obj_p = obj;
@@ -352,9 +360,7 @@ out:
 failed:
 	vos_obj_release(occ, obj, true);
 failed_2:
-	if (rc != -DER_NONEXIST)
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,
-			 "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
 	return	rc;
 }
 

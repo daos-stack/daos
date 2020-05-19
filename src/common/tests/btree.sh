@@ -2,7 +2,8 @@
 
 cwd=$(dirname "$0")
 DAOS_DIR=${DAOS_DIR:-$(cd "$cwd/../../.." && echo "$PWD")}
-BTR=$DAOS_DIR/build/src/common/tests/btree
+source "${DAOS_DIR}/.build_vars.sh"
+BTR=${SL_BUILD_DIR}/src/common/tests/btree
 VCMD=()
 if [ "$USE_VALGRIND" = "yes" ]; then
     VCMD=("valgrind" "--tool=pmemcheck")
@@ -32,6 +33,7 @@ EOF
 
 PERF=""
 UINT=""
+test_conf_pre=""
 while [ $# -gt 0 ]; do
     case "$1" in
     -s)
@@ -42,25 +44,29 @@ while [ $# -gt 0 ]; do
             print_help
         fi
         shift
+        test_conf_pre="${test_conf_pre} keys=${BAT_NUM}"
         ;;
     dyn)
         DYN="-t"
         shift
+        test_conf_pre="${test_conf_pre} dyn"
         ;;
     perf)
         shift
         PERF="on"
+        test_conf_pre="${test_conf_pre} perf"
         ;;
     ukey)
         shift
         UINT="+"
+        test_conf_pre="${test_conf_pre} ukey"
         ;;
     direct)
-        BTR=$DAOS_DIR/build/src/common/tests/btree_direct
+        BTR=${SL_BUILD_DIR}/src/common/tests/btree_direct
         KEYS=${KEYS:-"delta,lambda,kappa,omega,beta,alpha,epsilon"}
         RECORDS=${RECORDS:-"omega:loaded,delta:that,kappa:dice,beta:knows,epsilon:the,lambda:are,alpha:Everybody"}
-
         shift
+        test_conf_pre="${test_conf_pre} direct"
         ;;
     *)
         echo "Unknown option $1"
@@ -72,14 +78,26 @@ done
 set -x
 set -e
 
+gen_test_conf_string()
+{
+        name=""
+        [ -n "$1" ] && name="${name} inplace"
+        [ -n "$2" ] && name="${name} pmem"
+        echo "$name"
+}
+
 run_test()
 {
     printf "\nOptions: IPL='%s' IDIR='%s' PMEM='%s'\n" "$IPL" "$IDIR" "$PMEM"
+    test_conf=$(gen_test_conf_string "${IPL}" "${PMEM}")
+
     if [ -z ${PERF} ]; then
 
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" --start-test \
+        "btree functional ${test_conf_pre} ${test_conf} iterate=${IDIR}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -u "$RECORDS"                               \
@@ -97,19 +115,25 @@ run_test()
         -D
 
         echo "B+tree batch operations test..."
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "btree batch operations ${test_conf_pre} ${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -b "$BAT_NUM"                               \
         -D
 
         echo "B+tree drain test..."
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "btree drain ${test_conf_pre} ${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
     else
         echo "B+tree performance test..."
-        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" \
+        --start-test "btree performance ${test_conf_pre} ${test_conf}" \
+        "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \
         -D
     fi

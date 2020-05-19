@@ -653,9 +653,11 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 	int		rc = 0;
 	int		i;
 
-	rc = dc_tx_local_open(obj->cob_coh, epoch, &th);
-	if (rc != 0)
+	rc = dc_tx_local_open(obj->cob_coh, epoch, DAOS_TF_RDONLY, &th);
+	if (rc != 0) {
+		D_ERROR("dc_tx_local-open failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
 	for (i = 0; i < reps; i++) {
 		struct dc_obj_verify_cursor	*cursor = &dova[i].cursor;
@@ -679,8 +681,11 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		cursor->iod.iod_recxs = &cursor->recx;
 
 		rc = dc_obj_verify_list(&dova[i]);
-		if (rc < 0)
+		if (rc < 0) {
+			D_ERROR("Failed to verify object list: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
+		}
 	}
 
 	rc = dc_obj_verify_check_existence(dova, oid, start, reps);
@@ -690,15 +695,21 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 	do {
 		for (i = 0; i < reps; i++) {
 			rc = dc_obj_verify_move_cursor(&dova[i], oid);
-			if (rc != 0)
+			if (rc != 0) {
+				D_ERROR("Failed to verify cursor: "DF_RC"\n",
+					DP_RC(rc));
 				goto out;
+			}
 		}
 
 		for (i = 1; i < reps; i++) {
 			rc = dc_obj_verify_cmp(&dova[0], &dova[i],
 					       oid, reps, start, start + i);
-			if (rc != 0)
+			if (rc != 0) {
+				D_ERROR("Failed to verify cmp: "DF_RC"\n",
+					DP_RC(rc));
 				goto out;
+			}
 		}
 	} while (dova[0].cursor.type != OBJ_ITER_NONE);
 

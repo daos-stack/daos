@@ -180,8 +180,7 @@ dtx_4(void **state)
 
 static int
 vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
-	      daos_epoch_t epoch, uint64_t dkey_hash,
-	      struct dtx_conflict_entry *conflict, uint32_t intent,
+	      daos_epoch_t epoch, uint64_t dkey_hash, uint32_t intent,
 	      struct dtx_handle **dthp)
 {
 	struct dtx_handle	*dth;
@@ -200,10 +199,15 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_intent = intent;
 	dth->dth_dti_cos = NULL;
 	dth->dth_dti_cos_count = 0;
-	dth->dth_conflict = conflict;
 	dth->dth_leader = 1;
 	dth->dth_ent = NULL;
 	dth->dth_obj = UMOFF_NULL;
+	dth->dth_sync = 0;
+	dth->dth_solo = 0;
+	dth->dth_dti_cos_done = 0;
+	dth->dth_has_ilog = 0;
+	dth->dth_actived = 0;
+	dth->dth_op_seq = 1;
 
 	*dthp = dth;
 
@@ -273,7 +277,6 @@ dtx_5(void **state)
 	struct io_test_args		*args = *state;
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
 	struct dtx_stat			 stat = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
@@ -299,10 +302,10 @@ dtx_5(void **state)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
-	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
 	assert_int_equal(rc, 0);
 
 	/* The DTX is 'prepared'. */
@@ -331,7 +334,6 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 {
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
 	daos_recx_t			 rex = { 0 };
@@ -354,10 +356,10 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
-	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
 	assert_int_equal(rc, 0);
 
 	/* The update DTX is 'prepared'. */
@@ -367,7 +369,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
-	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	/* Data record with update DTX is invisible before commit. */
@@ -382,7 +384,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	iod.iod_size = DAOS_REC_ANY;
 
 	/* Fetch again. */
-	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	/* Data record with update DTX is readable after commit. */
@@ -392,7 +394,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	daos_dti_gen(&xid, false);
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_PUNCH, &dth);
+			   dkey_hash, DAOS_INTENT_PUNCH, &dth);
 	assert_int_equal(rc, 0);
 
 	if (punch_obj)
@@ -410,7 +412,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
-	rc = io_test_obj_fetch(args, ++epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, ++epoch, 0, &dkey, &iod, &sgl, true);
 	/* Punch is not yet visible */
 	assert_int_equal(rc, 0);
 
@@ -425,7 +427,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	iod.iod_size = DAOS_REC_ANY;
 
 	/* Fetch again. */
-	rc = io_test_obj_fetch(args, ++epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, ++epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	/* Data record with punch DTX is invisible after commit. */
@@ -465,7 +467,6 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 {
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
 	daos_recx_t			 rex = { 0 };
@@ -488,7 +489,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 			    &epoch, ext);
 
 	/* initial update. */
-	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
 	assert_int_equal(rc, 0);
 
 	dts_buf_render(update_buf2, UPDATE_BUF_SIZE);
@@ -496,10 +497,10 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
-	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
 	assert_int_equal(rc, 0);
 
 	/* The update DTX is 'prepared'. */
@@ -513,7 +514,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
-	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	assert_memory_not_equal(update_buf2, fetch_buf, UPDATE_BUF_SIZE);
@@ -524,7 +525,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	daos_dti_gen(&xid, false);
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_PUNCH, &dth);
+			   dkey_hash, DAOS_INTENT_PUNCH, &dth);
 	assert_int_equal(rc, 0);
 
 	if (punch_obj)
@@ -546,7 +547,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
-	rc = io_test_obj_fetch(args, ++epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, ++epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	/* The fetched result is the data written via the initial update. */
@@ -588,7 +589,6 @@ dtx_14(void **state)
 	struct io_test_args		*args = *state;
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
 	daos_recx_t			 rex = { 0 };
@@ -611,10 +611,10 @@ dtx_14(void **state)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
-	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
 	assert_int_equal(rc, 0);
 
 	/* The DTX is 'prepared'. */
@@ -631,7 +631,7 @@ dtx_14(void **state)
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
-	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	/* Data record is not affected by double commit. */
@@ -647,7 +647,7 @@ dtx_14(void **state)
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
-	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	/* Data record is not affected by failed abort. */
@@ -661,7 +661,6 @@ dtx_15(void **state)
 	struct io_test_args		*args = *state;
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
 	daos_recx_t			 rex = { 0 };
@@ -684,7 +683,7 @@ dtx_15(void **state)
 			    &epoch, false);
 
 	/* initial update. */
-	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
 	assert_int_equal(rc, 0);
 
 	dts_buf_render(update_buf2, UPDATE_BUF_SIZE);
@@ -692,10 +691,10 @@ dtx_15(void **state)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
-	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
 	assert_int_equal(rc, 0);
 
 	/* The update DTX is 'prepared'. */
@@ -712,7 +711,7 @@ dtx_15(void **state)
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
-	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	assert_memory_not_equal(update_buf2, fetch_buf, UPDATE_BUF_SIZE);
@@ -726,7 +725,7 @@ dtx_15(void **state)
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
-	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	assert_memory_not_equal(update_buf2, fetch_buf, UPDATE_BUF_SIZE);
@@ -741,7 +740,6 @@ dtx_16(void **state)
 	struct io_test_args		*args = *state;
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid;
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod = { 0 };
 	d_sg_list_t			 sgl = { 0 };
 	daos_recx_t			 rex = { 0 };
@@ -766,10 +764,10 @@ dtx_16(void **state)
 			    &epoch, false);
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
-	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
 	assert_int_equal(rc, 0);
 
 	/* The DTX is 'prepared'. */
@@ -788,7 +786,7 @@ dtx_16(void **state)
 
 	daos_fail_loc_reset();
 
-	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	/* Former DTX is not committed, so nothing can be fetched. */
@@ -800,7 +798,7 @@ dtx_16(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Fetch again. */
-	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	/* The DTX in CoS cache will make related data record as readable. */
@@ -874,7 +872,6 @@ dtx_17(void **state)
 	/* Assume I am the leader. */
 	for (i = 0; i < 10; i++) {
 		struct dtx_handle		*dth = NULL;
-		struct dtx_conflict_entry	 conflict = { 0 };
 		d_iov_t				 dkey_iov;
 		uint64_t			 dkey_hash;
 
@@ -888,11 +885,11 @@ dtx_17(void **state)
 				    false);
 
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
-				   epoch[i], dkey_hash, &conflict,
+				   epoch[i], dkey_hash,
 				   DAOS_INTENT_UPDATE, &dth);
 		assert_int_equal(rc, 0);
 
-		rc = io_test_obj_update(args, epoch[i], &dkey, &iod, &sgl,
+		rc = io_test_obj_update(args, epoch[i], 0, &dkey, &iod, &sgl,
 					dth, true);
 		assert_int_equal(rc, 0);
 
@@ -966,7 +963,6 @@ dtx_18(void **state)
 	/* Assume I am the leader. */
 	for (i = 0; i < 10; i++) {
 		struct dtx_handle		*dth = NULL;
-		struct dtx_conflict_entry	 conflict = { 0 };
 		d_iov_t				 dkey_iov;
 		uint64_t			 dkey_hash;
 
@@ -976,11 +972,11 @@ dtx_18(void **state)
 				    UPDATE_REC_SIZE, &dkey_hash, &epoch, false);
 
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
-				   epoch, dkey_hash, &conflict,
+				   epoch, dkey_hash,
 				   DAOS_INTENT_UPDATE, &dth);
 		assert_int_equal(rc, 0);
 
-		rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl,
+		rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl,
 					dth, true);
 		assert_int_equal(rc, 0);
 
@@ -1011,7 +1007,7 @@ dtx_18(void **state)
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
-	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
 	/* Related data record is still readable after DTX aggregation. */
@@ -1024,7 +1020,6 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 {
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid[5];
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod[5];
 	d_sg_list_t			 sgl[5];
 	daos_recx_t			 rex[5];
@@ -1058,10 +1053,10 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid[0], &args->oid, args->ctx.tc_co_hdl, epoch[0],
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
-	rc = io_test_obj_update(args, epoch[0], &dkey, &iod[0], &sgl[0],
+	rc = io_test_obj_update(args, epoch[0], 0, &dkey, &iod[0], &sgl[0],
 				dth, true);
 	assert_int_equal(rc, 0);
 
@@ -1102,12 +1097,12 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 		iod[i].iod_nr = 1;
 
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
-				   epoch[i], dkey_hash, &conflict,
+				   epoch[i], dkey_hash,
 				   DAOS_INTENT_UPDATE, &dth);
 		assert_int_equal(rc, 0);
 
-		rc = io_test_obj_update(args, epoch[i], &dkey, &iod[i], &sgl[i],
-					dth, true);
+		rc = io_test_obj_update(args, epoch[i], 0, &dkey, &iod[i],
+					&sgl[i], dth, true);
 		assert_int_equal(rc, 0);
 
 		vts_dtx_end(dth);
@@ -1146,7 +1141,7 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 		d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 		iod[commit_list[i]].iod_size = DAOS_REC_ANY;
 
-		rc = io_test_obj_fetch(args, epoch[commit_list[i]], &dkey,
+		rc = io_test_obj_fetch(args, epoch[commit_list[i]], 0, &dkey,
 				       &iod[commit_list[i]],
 				       &sgl[commit_list[i]], true);
 		assert_int_equal(rc, 0);
@@ -1160,7 +1155,7 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 		d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 		iod[abort_list[i]].iod_size = DAOS_REC_ANY;
 
-		rc = io_test_obj_fetch(args, epoch[abort_list[i]], &dkey,
+		rc = io_test_obj_fetch(args, epoch[abort_list[i]], 0, &dkey,
 				       &iod[abort_list[i]],
 				       &sgl[abort_list[i]], true);
 		assert_int_equal(rc, 0);
@@ -1283,7 +1278,6 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 {
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			 xid[4];
-	struct dtx_conflict_entry	 conflict = { 0 };
 	daos_iod_t			 iod[3];
 	d_sg_list_t			 sgl[3];
 	daos_recx_t			 rex[3];
@@ -1315,10 +1309,10 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 
 	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid[0], &args->oid, args->ctx.tc_co_hdl, epoch[0],
-			   dkey_hash, &conflict, DAOS_INTENT_UPDATE, &dth);
+			   dkey_hash, DAOS_INTENT_UPDATE, &dth);
 	assert_int_equal(rc, 0);
 
-	rc = io_test_obj_update(args, epoch[0], &dkey, &iod[0], &sgl[0],
+	rc = io_test_obj_update(args, epoch[0], 0, &dkey, &iod[0], &sgl[0],
 				dth, true);
 	assert_int_equal(rc, 0);
 
@@ -1359,12 +1353,12 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 		iod[i].iod_nr = 1;
 
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
-				   epoch[i], dkey_hash, &conflict,
+				   epoch[i], dkey_hash,
 				   DAOS_INTENT_UPDATE, &dth);
 		assert_int_equal(rc, 0);
 
-		rc = io_test_obj_update(args, epoch[i], &dkey, &iod[i], &sgl[i],
-					dth, true);
+		rc = io_test_obj_update(args, epoch[i], 0, &dkey, &iod[i],
+					&sgl[i], dth, true);
 		assert_int_equal(rc, 0);
 
 		vts_dtx_end(dth);
@@ -1378,7 +1372,7 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 	epoch[3] = crt_hlc_get();
 
 	rc = vts_dtx_begin(&xid[3], &args->oid, args->ctx.tc_co_hdl, epoch[3],
-			   dkey_hash, &conflict, DAOS_INTENT_PUNCH, &dth);
+			   dkey_hash, DAOS_INTENT_PUNCH, &dth);
 	assert_int_equal(rc, 0);
 
 	/* Punch the object or dkey. */
@@ -1412,7 +1406,8 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 	iod[0].iod_size = DAOS_REC_ANY;
 
 	/* DTX[0] is aborted, so cannot be read even if against epoch[0] */
-	rc = io_test_obj_fetch(args, epoch[0], &dkey, &iod[0], &sgl[0], true);
+	rc = io_test_obj_fetch(args, epoch[0], 0, &dkey, &iod[0], &sgl[0],
+			       true);
 	assert_int_equal(rc, 0);
 
 	assert_memory_not_equal(update_buf[0], fetch_buf, UPDATE_BUF_SIZE);
@@ -1423,7 +1418,7 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 		iod[i].iod_size = DAOS_REC_ANY;
 
 		/* DTX[i] is committed, so readable against its epoch[i] */
-		rc = io_test_obj_fetch(args, epoch[i], &dkey, &iod[i],
+		rc = io_test_obj_fetch(args, epoch[i], 0, &dkey, &iod[i],
 				       &sgl[i], true);
 		assert_int_equal(rc, 0);
 
@@ -1435,7 +1430,7 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 		d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 		iod[0].iod_size = DAOS_REC_ANY;
 
-		rc = io_test_obj_fetch(args, ++epoch[3], &dkey, &iod[0],
+		rc = io_test_obj_fetch(args, ++epoch[3], 0, &dkey, &iod[0],
 				       &sgl[0], true);
 		assert_int_equal(rc, 0);
 
@@ -1447,8 +1442,8 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 			d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 			iod[i].iod_size = DAOS_REC_ANY;
 
-			rc = io_test_obj_fetch(args, ++epoch[3], &dkey, &iod[i],
-					       &sgl[i], true);
+			rc = io_test_obj_fetch(args, ++epoch[3], 0, &dkey,
+					       &iod[i], &sgl[i], true);
 			assert_int_equal(rc, 0);
 
 			assert_memory_equal(update_buf[i], fetch_buf,
@@ -1460,8 +1455,8 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 			d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 			iod[i].iod_size = DAOS_REC_ANY;
 
-			rc = io_test_obj_fetch(args, ++epoch[3], &dkey, &iod[i],
-					       &sgl[i], true);
+			rc = io_test_obj_fetch(args, ++epoch[3], 0, &dkey,
+					       &iod[i], &sgl[i], true);
 			assert_int_equal(rc, 0);
 
 			assert_memory_not_equal(update_buf[i], fetch_buf,
@@ -1578,9 +1573,12 @@ static const struct CMUnitTest dtx_tests[] = {
 };
 
 int
-run_dtx_tests(void)
+run_dtx_tests(const char *cfg)
 {
-	return cmocka_run_group_tests_name("VOS DTX Test",
+	char	test_name[CFG_MAX];
+
+	create_config(test_name, "VOS DTX Test %s", cfg);
+	return cmocka_run_group_tests_name(test_name,
 					   dtx_tests, setup_io,
 					   teardown_io);
 }

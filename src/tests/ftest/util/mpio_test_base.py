@@ -32,22 +32,22 @@ from test_utils_pool import TestPool
 from daos_utils import DaosCommand
 
 
-class LlnlMpi4pyHdf5(TestWithServers):
+class MpiioTests(TestWithServers):
     """
-    Runs LLNL, MPI4PY and HDF5 test suites.
+    Runs ROMIO, LLNL, MPI4PY and HDF5 test suites.
     :avocado: recursive
     """
 
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
-        super(LlnlMpi4pyHdf5, self).__init__(*args, **kwargs)
+        super(MpiioTests, self).__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
         self.mpio = None
         self.daos_cmd = None
         self.cont_uuid = None
 
     def setUp(self):
-        super(LlnlMpi4pyHdf5, self).setUp()
+        super(MpiioTests, self).setUp()
 
         # initialise daos_cmd
         self.daos_cmd = DaosCommand(self.bin)
@@ -58,11 +58,11 @@ class LlnlMpi4pyHdf5(TestWithServers):
         self.pool.get_params(self)
         self.pool.create()
 
-    def _create_cont(self, doas_cmd):
+    def _create_cont(self):
         """Create a container.
 
         Args:
-            daos_cmd (DaosCommand): doas command to issue the container
+            daos_cmd (DaosCommand): daos command to issue the container
                 create
 
         Returns:
@@ -97,13 +97,12 @@ class LlnlMpi4pyHdf5(TestWithServers):
         # initialise test specific variables
         client_processes = self.params.get("np", '/run/client_processes/')
 
-        # create container for mpi4py
-        if test_name == "mpi4py":
-            self._create_cont(self.daos_cmd)
+        # create container
+        self._create_cont()
 
         try:
             # running tests
-            self.mpio.run_llnl_mpi4py_hdf5(
+            self.mpio.run_mpiio_tests(
                 self.hostfile_clients, self.pool.uuid, self.pool.svc_ranks,
                 test_repo, test_name, client_processes, self.cont_uuid)
         except MpioFailed as excep:

@@ -43,6 +43,7 @@ This provides a way of querying CaRT logfiles for processing.
 """
 
 import os
+import re
 
 class InvalidPid(Exception):
     """Exception to be raised when invalid pid is requested"""
@@ -53,12 +54,13 @@ class InvalidLogFile(Exception):
     pass
 
 LOG_LEVELS = {'FATAL' :1,
-              'CRIT'  :2,
-              'ERR'   :3,
-              'WARN'  :4,
-              'NOTE'  :5,
-              'INFO'  :6,
-              'DBUG'  :7}
+              'EMRG'  :2,
+              'CRIT'  :3,
+              'ERR'   :4,
+              'WARN'  :5,
+              'NOTE'  :6,
+              'INFO'  :7,
+              'DBUG'  :8}
 
 # pylint: disable=too-few-public-methods
 class LogRaw():
@@ -142,6 +144,10 @@ class LogLine():
     def __getattr__(self, attr):
         if attr == 'parent':
             if self._fields[2] == 'Registered':
+                # This is a bit of a hack but handle the case where descriptor
+                # names contain spaces.
+                if self._fields[6] == 'from':
+                    return self._fields[7]
                 return self._fields[6]
             if self._fields[2] == 'Link':
                 return self._fields[5]
@@ -178,14 +184,26 @@ class LogLine():
 
         fields = []
         for entry in self._fields[2:]:
-            if entry.startswith('Gah('):
-                (root, _, _) = entry[4:-1].split('.')
-                fields.append('Gah({}.-.-)'.format(root))
-            elif entry.startswith('0x') and len(entry) > 5:
+            field = None
+            if entry.startswith('0x') and len(entry) > 5:
                 if entry.endswith(')'):
-                    fields.append('0x...)')
+                    field = '0x...)'
                 else:
-                    fields.append('0x...')
+                    field = '0x...'
+            if not field:
+                r = re.search("^[0-9,a-f]{8}$", entry)
+                if r:
+                    field = 'uuid'
+            if not field:
+                r = re.search("^[0-9,a-f]{8}\[\d+\]\:$", entry)
+                if r:
+                    field = 'uuid/rank'
+            if not field:
+                r = re.search("^\d+.\d+.\d+\:*$", entry)
+                if r:
+                    field = 'low/high/shard'
+            if field:
+                fields.append(field)
             else:
                 fields.append(entry)
 
@@ -247,10 +265,13 @@ class LogLine():
         if self.function != 'crt_hg_req_destroy':
             return False
 
-        return self._is_type(['destroying'])
+        return self._fields[-1] == 'destroying'
 
     def is_callback(self):
         """Returns true if line is RPC callback"""
+
+        # TODO: This is broken for now but the RPCtrace has not been ported yet
+        # so there are no current users of it.
 
         return self._is_type(['Invoking', 'RPC', 'callback'])
 
@@ -258,6 +279,12 @@ class LogLine():
         """Returns True if line is Link descriptor"""
 
         return self._is_type(['Link'])
+
+    def is_fi_site(self):
+        return self._is_type(['fault_id'], trace=False)
+
+    def is_fi_alloc_fail(self):
+        return self._is_type(['out', 'of', 'memory'], trace=False)
 
     def is_calloc(self):
         """Returns True if line is a allocation point"""
@@ -357,6 +384,7 @@ class StateIter():
         return line
 
     def next(self):
+        """Python2/3 compat function"""
         return self.__next__()
 
 # pylint: disable=too-many-branches
@@ -377,7 +405,23 @@ class LogIter():
         # or do a first pass checking the pid list.  This allows the same
         # iterator to work fast if the file can be kept in memory, or the
         # same, bug slower if it needs to be re-read each time.
-        self._fd = open(fname, 'r')
+        #
+        # Try and open the file as utf-8, but if that doesn't work then
+        # find and report the error, then continue with the file open as
+        # latin-1
+        self._fd = None
+        try:
+            self._fd = open(fname, 'r', encoding='utf-8')
+            self._fd.read()
+        except UnicodeDecodeError as err:
+            print('ERROR: Invalid data in server.log on following line')
+            self._fd = open(fname, 'r', encoding='latin-1')
+            self._fd.read(err.start - 200)
+            data = self._fd.read(199)
+            lines = data.splitlines()
+            print(lines[-1])
+
+        self._fd.seek(0)
         self.fname = fname
         self._data = []
         index = 0
@@ -495,6 +539,7 @@ class LogIter():
             return line
 
     def next(self):
+        """Python2/3 compat function"""
         return self.__next__()
 
     def get_pids(self):
