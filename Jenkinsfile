@@ -150,7 +150,7 @@ def fault_test_tag() {
 def release_candidate() {
     if (sh(label: "Determine if building (a PR of) an RC",
           script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
-                  "grep -i '[0-9]rc[0-9] TAG'",
+                  "grep -i '[0-9]rc[0-9]' TAG",
           returnStatus: true)) {
         return true
     }
@@ -158,7 +158,7 @@ def release_candidate() {
 }
 
 def faults_enabled(String type) {
-    // if the fault_enabled pragma is false or it a release candidate; disable fault injection 
+    // if the fault_enabled pragma is false or it a release candidate; disable fault injection
     if (! cachedCommitPragma(pragma: 'faults_enabled', def_val: 'true') || release_candidate()) {
         return ""
     }
