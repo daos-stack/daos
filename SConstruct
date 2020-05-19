@@ -122,12 +122,6 @@ def set_defaults(env):
               default=False,
               help='Preprocess selected files for profiling')
 
-    AddOption('--debug-build',
-              dest='debug_build',
-              action='store_true',
-              default=False,
-              help='Enable debug build')
-
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
@@ -139,11 +133,6 @@ def set_defaults(env):
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
-
-    if GetOption("debug_build"):
-        env.Append(DEBUG_BUILD='yes')
-    else:
-        env.Append(DEBUG_BUILD='no')
 
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
@@ -367,7 +356,6 @@ def scons(): # pylint: disable=too-many-locals
     prereqs = PreReqComponent(env, opts, commits_file)
     if not GetOption('help') and not GetOption('clean'):
         daos_build.load_mpi_path(env)
-    set_defaults(env)
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
@@ -388,6 +376,8 @@ def scons(): # pylint: disable=too-many-locals
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
         env.Replace(SHLIBSUFFIX='.so')
+
+    set_defaults(env)
 
     build_prefix = prereqs.get_src_build_dir()
 

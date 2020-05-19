@@ -687,6 +687,8 @@ class PreReqComponent():
         self.download_deps = False
         self.build_deps = False
         self.__parse_build_deps()
+        self.build_type = 'dev'
+        self.__parse_build_type()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
         warning_level = GetOption('warning_level')
@@ -720,6 +722,9 @@ class PreReqComponent():
             env.SConsignFile('.sconsign-%s' % arch)
             env.Replace(CONFIGUREDIR='#/.sconf-temp-%s' % arch,
                         CONFIGURELOG='#/config-%s.log' % arch)
+
+        # Build pre-reqs in sub-dir based on selected build type
+        build_dir_name = os.path.join(build_dir_name, self.build_type)
 
         self.add_opts(PathVariable('ENV_SCRIPT',
                                    "Location of environment script",
@@ -921,6 +926,14 @@ class PreReqComponent():
                   help="Automatically download and build sources.  " \
                        "(yes|no|build-only) [no]")
 
+        AddOption('--build-type',
+                  dest='build_type',
+                  type='choice',
+                  choices=['dev', 'debug', 'release'],
+                  default='dev',
+                  help="Pre-reqs build type.  " \
+                       "(dev|debug|release) [dev]")
+
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
         # on the command line because it disables running the tests for the
@@ -985,6 +998,10 @@ class PreReqComponent():
             self.build_deps = True
         elif build_deps == 'build-only':
             self.build_deps = True
+
+    def __parse_build_type(self):
+        """Parse the build dependances type command line flag"""
+        self.build_type = GetOption('build_type')
 
     def setup_path_var(self, var, multiple=False):
         """Create a command line variable for a path"""
