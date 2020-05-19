@@ -148,8 +148,8 @@ def fault_test_tag() {
 }
 
 def release_candidate() {
-    if (sh script: "git diff-index --name-only HEAD^ | grep -q TAG", returnStatus: true) {
-        if (sh script: "git describe --tags | grep -i 'rc'", returnStatus: true) {
+    if env.ON_TAG {
+        if env.RC_IN_TAG {
             return true
         }
     }
@@ -310,6 +310,8 @@ pipeline {
         QUICKBUILD_DEPS = sh script: "rpmspec -q --srpm --requires utils/rpms/daos.spec 2>/dev/null",
                              returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'false')
+        ON_TAG = sh script: "git diff-index --name-only HEAD^ | grep -q TAG", returnStatus: true
+        RC_IN_TAG = sh script: "git describe --tags | grep -i 'rc'", returnStatus: true
     }
 
     options {
