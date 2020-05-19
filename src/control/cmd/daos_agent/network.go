@@ -35,6 +35,13 @@ type netScanCmd struct {
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is all providers)"`
 }
 
+func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
+	if cmd.jsonOutputEnabled() {
+		return
+	}
+	cmd.log.Infof(fmtStr, args...)
+}
+
 func (cmd *netScanCmd) Execute(_ []string) error {
 	var provider string
 	defer os.Exit(0)
@@ -46,15 +53,15 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 	}
 
 	if !numaAware {
-		cmd.log.Info("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
+		cmd.printUnlessJson("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
 	switch {
 	case len(cmd.FabricProvider) > 0:
 		provider = cmd.FabricProvider
-		cmd.log.Infof("Scanning fabric for provider: %s\n", provider)
+		cmd.printUnlessJson("Scanning fabric for provider: %s\n", provider)
 	default:
-		cmd.log.Infof("Scanning fabric for all providers\n")
+		cmd.printUnlessJson("Scanning fabric for all providers\n")
 	}
 
 	results, err := netdetect.ScanFabric(provider)
@@ -67,14 +74,14 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		provider = "All"
 	}
 
-	cmd.log.Infof("\nFabric scan found %d devices matching the provider spec: %s\n\n", len(results), provider)
+	cmd.printUnlessJson("\nFabric scan found %d devices matching the provider spec: %s\n\n", len(results), provider)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(os.Stdout, results)
 	}
 
 	for _, sr := range results {
-		cmd.log.Infof("OFI_INTERFACE: %-16sCRT_PHY_ADDR_STR: %-25sNUMA affinity: %d", sr.DeviceName, sr.Provider, sr.NUMANode)
+		cmd.printUnlessJson("OFI_INTERFACE: %-16sCRT_PHY_ADDR_STR: %-25sNUMA affinity: %d", sr.DeviceName, sr.Provider, sr.NUMANode)
 	}
 
 	return nil
