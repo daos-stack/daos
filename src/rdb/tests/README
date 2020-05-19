@@ -12,6 +12,9 @@ orterun -np <S> --hostfile <file_containing_server_hostnames> --map-by-node
  -o <builddir>/utils/config/examples/daos_server_unittests.yml
  start -d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt
 
+==== agent:
+daos_agent --config-path=<builddir>/utils/config/daos_agent.yml
+
 ==== client:
 # possible debug environment variable settings
 D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR

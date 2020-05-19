@@ -37,7 +37,7 @@ BuildRequires: libisa-l-devel
 %else
 BuildRequires: libisal-devel
 %endif
-BuildRequires: raft-devel <= 0.5.0
+BuildRequires: raft-devel >= 0.6.0
 BuildRequires: hwloc-devel
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel

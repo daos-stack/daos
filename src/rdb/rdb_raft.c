@@ -2521,9 +2521,6 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 }
 
-/* TODO: update raft.h in daos-stack/raft repo */
-extern int raft_election_start(raft_server_t *me_);
-
 /* Call new election (campaign to be leader) by a follower */
 int
 rdb_raft_campaign(struct rdb *db)
