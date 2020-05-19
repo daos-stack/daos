@@ -38,10 +38,10 @@ import (
 )
 
 const (
-	invalidIndex  = -1
-	verbsProvider = "ofi+verbs"
+	invalidIndex         = -1
+	verbsProvider        = "ofi+verbs"
 	defaultNetworkDevice = "lo"
-	defaultDomain = "lo"
+	defaultDomain        = "lo"
 )
 
 type attachInfoCache struct {
