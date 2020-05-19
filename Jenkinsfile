@@ -1104,7 +1104,7 @@ pipeline {
                                                cd $DAOS_BASE
                                                IS_CI=true OLD_CI=false utils/run_test.sh
                                                ./utils/node_local_test.py all | tee vm_test.out
-                                               ecgo \$\{PIPESTATUS\[0\]\}"''',
+                                               echo \$\\{PIPESTATUS\[0\]\\}"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
