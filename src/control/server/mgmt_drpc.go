@@ -36,7 +36,7 @@ import (
 type mgmtModule struct{}
 
 // HandleCall is the handler for calls to the mgmtModule
-func (m *mgmtModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
+func (m *mgmtModule) HandleCall(session *drpc.Session, method *drpc.Method, req []byte) ([]byte, error) {
 	return nil, drpc.UnknownMethodFailure()
 }
 
@@ -52,8 +52,8 @@ type srvModule struct {
 }
 
 // HandleCall is the handler for calls to the srvModule.
-func (mod *srvModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
-	switch method {
+func (mod *srvModule) HandleCall(session *drpc.Session, method *drpc.Method, req []byte) ([]byte, error) {
+	switch method.ID() {
 	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
 	case drpc.MethodBIOError:

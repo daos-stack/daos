@@ -31,14 +31,32 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
+// HelloMethod is a type alias for a drpc agent hello method.
+type HelloMethod int32
+
+func (hm *HelloMethod) String() string {
+	return map[HelloMethod]string{}[*hm]
+}
+
+// Module returns the module that the method belongs to.
+func (hm *HelloMethod) Module() int32 {
+	return int32(Module_HELLO)
+}
+
+const (
+	MethodGreeting HelloMethod = HelloMethod(Function_GREETING)
+)
+
 //HelloModule is the RPC Handler for the Hello Module
 type HelloModule struct{}
 
 //HandleCall is the handler for calls to the hello module
-func (m *HelloModule) HandleCall(session *drpc.Session, function int32, body []byte) ([]byte, error) {
-	if function != int32(Function_GREETING) {
+func (m *HelloModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
+	method, ok := i.(HelloMethod)
+	if !ok || method != MethodGreeting {
 		return nil, fmt.Errorf("Attempt to call unregistered function")
 	}
+
 	helloMsg := &Hello{}
 	proto.Unmarshal(body, helloMsg)
 

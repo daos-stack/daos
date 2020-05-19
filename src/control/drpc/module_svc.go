@@ -32,7 +32,7 @@ import (
 // Module is an interface that a type must implement to provide the
 // functionality needed by the ModuleService to process dRPC requests.
 type Module interface {
-	HandleCall(*Session, Method, []byte) ([]byte, error)
+	HandleCall(*Session, *Method, []byte) ([]byte, error)
 	ID() int32
 }
 
@@ -121,12 +121,16 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 	}
 	method, ok := GetMethod(module.ID(), msg.GetMethod())
 	if !ok {
+		err = errors.Errorf("Attempted to call unknown module")
+		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_MODULE, nil)
+	}
+	if method == nil {
 		err = errors.Errorf("Attempted to call unknown method")
 		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_METHOD, nil)
 	}
 	respBody, err := module.HandleCall(session, method, msg.GetBody())
 	if err != nil {
-		r.log.Errorf("HandleCall for %d:%d failed: %s\n", module.ID(), method, err)
+		r.log.Errorf("HandleCall for %d:%s failed: %s\n", method.String(), method, err)
 		return marshalResponse(msg.GetSequence(), ErrorToStatus(err), nil)
 	}
 

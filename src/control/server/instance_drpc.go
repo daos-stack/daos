@@ -71,13 +71,13 @@ func (srv *IOServerInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 }
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
-func (srv *IOServerInstance) CallDrpc(method drpc.MgmtMethod, body proto.Message) (*drpc.Response, error) {
+func (srv *IOServerInstance) CallDrpc(method int32, body proto.Message) (*drpc.Response, error) {
 	dc, err := srv.getDrpcClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return makeDrpcCall(dc, method, body)
+	return makeDrpcCall(dc, drpc.NewMethod(drpc.ModuleMgmt, method), body)
 }
 
 // drespToMemberResult converts drpc.Response to system.MemberResult.
@@ -108,7 +108,7 @@ func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tSta
 
 // TryDrpc attempts dRPC request to given rank managed by instance and return
 // success or error from call result or timeout encapsulated in result.
-func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.MgmtMethod) *system.MemberResult {
+func (srv *IOServerInstance) TryDrpc(ctx context.Context, method int32) *system.MemberResult {
 	rank, err := srv.GetRank()
 	if err != nil {
 		return nil // no rank to return result for
@@ -125,8 +125,14 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.MgmtMethod
 		return result
 	}
 
-	tgtState := method.TargetState()
-	if tgtState == system.MemberStateUnknown {
+	// system member state that should be set on dRPC success
+	targetState := system.MemberStateUnknown
+	switch method {
+	case drpc.MethodPrepShutdown:
+		targetState = system.MemberStateStopping
+	case drpc.MethodPingRank:
+		targetState = system.MemberStateReady
+	default:
 		return system.NewMemberResult(rank,
 			errors.Errorf("unsupported dRPC method (%d) for fanout", method),
 			system.MemberStateErrored)
@@ -135,7 +141,7 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.MgmtMethod
 	resChan := make(chan *system.MemberResult)
 	go func() {
 		dresp, err := srv.CallDrpc(method, nil)
-		resChan <- drespToMemberResult(rank, dresp, err, tgtState)
+		resChan <- drespToMemberResult(rank, dresp, err, targetState)
 	}()
 
 	select {
