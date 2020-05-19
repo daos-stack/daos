@@ -148,17 +148,18 @@ def fault_test_tag() {
 }
 
 def release_candidate() {
-    if env.ON_TAG {
-        if env.RC_IN_TAG {
-            return true
-        }
+    if sh(label: "Determine if building (a PR of) an RC",
+          script: "git diff-index --name-only HEAD^ | grep -q TAG" && " +
+                  "grep -i '[0-9]rc[0-9] TAG',
+          returnStatus: true) {
+        return true
     }
     return false
 }
 
 def faults_enabled() {
     // if the fault_enabled pragma is false or it a release candidate; disable fault injection 
-    if !cachedCommitPragma(pragma: 'faults_enabled', def_val: 'true') || release_candidate() {
+    if ! cachedCommitPragma(pragma: 'faults_enabled', def_val: 'true') || release_candidate() {
         return ""
     }
     return "--with-fault-injection"
@@ -310,8 +311,6 @@ pipeline {
         QUICKBUILD_DEPS = sh script: "rpmspec -q --srpm --requires utils/rpms/daos.spec 2>/dev/null",
                              returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'false')
-        ON_TAG = sh script: "git diff-index --name-only HEAD^ | grep -q TAG", returnStatus: true
-        RC_IN_TAG = sh script: "git describe --tags | grep -i 'rc'", returnStatus: true
     }
 
     options {
