@@ -71,13 +71,13 @@ func (srv *IOServerInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 }
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
-func (srv *IOServerInstance) CallDrpc(method int32, body proto.Message) (*drpc.Response, error) {
+func (srv *IOServerInstance) CallDrpc(method drpc.Method, body proto.Message) (*drpc.Response, error) {
 	dc, err := srv.getDrpcClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return makeDrpcCall(dc, drpc.NewMethod(drpc.ModuleMgmt, method), body)
+	return makeDrpcCall(dc, method, body)
 }
 
 // drespToMemberResult converts drpc.Response to system.MemberResult.
@@ -108,7 +108,7 @@ func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tSta
 
 // TryDrpc attempts dRPC request to given rank managed by instance and return
 // success or error from call result or timeout encapsulated in result.
-func (srv *IOServerInstance) TryDrpc(ctx context.Context, method int32) *system.MemberResult {
+func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.Method) *system.MemberResult {
 	rank, err := srv.GetRank()
 	if err != nil {
 		return nil // no rank to return result for
@@ -134,7 +134,7 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method int32) *system.
 		targetState = system.MemberStateReady
 	default:
 		return system.NewMemberResult(rank,
-			errors.Errorf("unsupported dRPC method (%d) for fanout", method),
+			errors.Errorf("unsupported dRPC method (%s) for fanout", method),
 			system.MemberStateErrored)
 	}
 

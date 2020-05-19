@@ -100,8 +100,8 @@ func (m *SecurityModule) validateRespWithStatus(status drpc.DaosStatus) ([]byte,
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(session *drpc.Session, method *drpc.Method, body []byte) ([]byte, error) {
-	if method.ID() != drpc.MethodValidateCredentials {
+func (m *SecurityModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
+	if method != drpc.MethodValidateCredentials {
 		return nil, drpc.UnknownMethodFailure()
 	}
 
@@ -109,6 +109,6 @@ func (m *SecurityModule) HandleCall(session *drpc.Session, method *drpc.Method, 
 }
 
 // ID will return Security module ID
-func (m *SecurityModule) ID() int32 {
+func (m *SecurityModule) ID() drpc.ModuleID {
 	return drpc.ModuleSecurity
 }
