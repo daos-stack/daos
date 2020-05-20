@@ -268,7 +268,7 @@ else
 fi
 
 # export CRT_PHY_ADDR_STR=ofi+sockets
-export CRT_PHY_ADDR_STR=ofi+verbs;ofi_rxm
+export CRT_PHY_ADDR_STR="ofi+verbs;ofi_rxm"
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE
