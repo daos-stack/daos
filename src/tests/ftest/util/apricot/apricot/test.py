@@ -153,6 +153,7 @@ class TestWithoutServers(Test):
 
         self.client_mca = None
         self.orterun = None
+        self.ofi_prefix = None
         self.ompi_prefix = None
         self.basepath = None
         self.prefix = None
@@ -186,6 +187,10 @@ class TestWithoutServers(Test):
         self.basepath = os.path.normpath(os.path.join(build_paths['PREFIX'],
                                                       '..') + os.path.sep)
         self.prefix = build_paths['PREFIX']
+        try:
+            self.ofi_prefix = build_paths['OFI_PREFIX']
+        except KeyError:
+            self.ofi_prefix = "/usr"
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
 
