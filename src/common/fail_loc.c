@@ -141,13 +141,18 @@ daos_fail_init(void)
 	int rc;
 
 	rc = d_fault_inject_init();
-	if (rc)
+	if (rc == -DER_NOSYS) {
+		D_GOTO(out, rc = -DER_SUCCESS);
+	} else if (rc) {
 		return rc;
+	}
 
 	rc = d_fault_attr_set(DAOS_FAIL_UNIT_TEST_GROUP, attr);
 	if (rc)
 		d_fault_inject_fini();
 
+
+out:
 	return rc;
 }
 
