@@ -837,7 +837,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 		rc = crt_req_fill_tgt_uri(rpc_priv, base_addr);
 		if (rc != 0)
 			D_ERROR("crt_req_fill_tgt_uri failed, "
-				"opc: %#x.\n", req->cr_opc);
+				"opc: %#x rc %d\n", req->cr_opc, rc);
 		D_GOTO(out, rc);
 	}
 
