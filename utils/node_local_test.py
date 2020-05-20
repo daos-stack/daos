@@ -77,9 +77,7 @@ def get_base_env():
     """Return the base set of env vars needed for DAOS"""
 
     env = os.environ.copy()
-    env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     env['DD_MASK'] = 'all'
-    env['OFI_INTERFACE'] = 'lo'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
     env['FI_UNIVERSE_SIZE'] = '128'
@@ -147,6 +145,7 @@ class DaosServer():
         self._agent = subprocess.Popen([agent_bin,
                                         '--config-path', agent_config,
                                         '--insecure',
+                                        '--debug',
                                         '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
                                        env=agent_env)
@@ -454,8 +453,6 @@ def import_daos(server, conf):
                                  pydir,
                                  'site-packages'))
 
-    os.environ['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-    os.environ['OFI_INTERFACE'] = 'lo'
     os.environ["DAOS_AGENT_DRPC_DIR"] = server.agent_dir
 
     daos = __import__('pydaos')
@@ -653,6 +650,18 @@ def create_and_read_via_il(dfuse, path):
     ofd.close()
     il_cmd(dfuse, ['cat', fname])
 
+def run_container_query(conf, path):
+    cmd = ['container', 'query', '--svc', '0', '--path', path]
+
+    rc = run_daos_cmd(conf, cmd)
+
+    assert rc.returncode == 0
+
+    print(rc)
+    output = rc.stdout.decode('utf-8')
+    for line in output.splitlines():
+        print(line)
+
 def run_dfuse(server, conf):
     """Run several dfuse instances"""
 
@@ -731,6 +740,14 @@ def run_dfuse(server, conf):
     print(os.stat(uns_path))
     print(os.stat(uns_path))
     print(os.listdir(dfuse.dir))
+
+    run_container_query(conf, uns_path)
+
+    child_path = os.path.join(uns_path, 'child')
+    os.mkdir(child_path)
+    run_container_query(conf, child_path)
+
+    return
 
     dfuse.stop()
 
@@ -881,7 +898,7 @@ def test_pydaos_kv(server, conf):
 
     print(container)
     c_uuid = container.decode().split(' ')[-1]
-    kvg = dbm.daos_named_kv('ofi+sockets', 'lo', pool, c_uuid)
+    kvg = dbm.daos_named_kv(pool, c_uuid)
 
     kv = kvg.get_kv_by_name('Dave')
     kv['a'] = 'a'
