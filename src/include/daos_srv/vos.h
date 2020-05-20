@@ -963,4 +963,27 @@ enum vos_cont_opc {
 int
 vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc);
 
+daos_unit_oid_t
+vos_cmt_get_oid(d_iov_t *value);
+
+daos_epoch_t
+vos_cmt_get_epoch(d_iov_t *value);
+
+void
+vos_agg_iterate(daos_handle_t coh, dbtree_iterate_cb_t cb, void *arg);
+
+struct vos_agg_set {
+	d_list_t	as_entries;
+	uuid_t		as_pool_uuid;
+	uint32_t	as_pool_version;
+	unsigned int	as_count;
+};
+
+struct vos_agg_entry {
+	d_list_t	ae_link;
+	daos_unit_oid_t	ae_oid;
+	daos_epoch_t	ae_epoch;
+};
+
 #endif /* __VOS_API_H */
+

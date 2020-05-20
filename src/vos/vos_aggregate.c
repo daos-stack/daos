@@ -52,7 +52,6 @@
  * facilitate the data transfer from old physical entries to new coalesced
  * physical entries. If any old physical entry (not fully covered in current
  * window) straddles window end, it has to be head-truncated on window flush,
- * and the remaining part will be processed in next merge window.
  */
 
 /* EV tree physical entry */
@@ -1862,19 +1861,6 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 }
 
 static int
-commited_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *value, void *arg)
-{
-        struct vos_dtx_cmt_ent	*dce = value->iov_buf;
-	//struct pl_obj_layout	*layout;
-
-	D_PRINT("oid: "DF_UOID", epoch: "DF_U64"\n",
-		DP_UOID(dce->dce_base.dce_oid), dce->dce_base.dce_epoch);
-	int rc = 0;
-       //	ds_pool_check_leader(0, &dce->dce_base.dce_oid, 0, &layout);
-	D_PRINT("rc == %d\nb", rc);
-	return 0;
-}
-static int
 aggregate_enter(struct vos_container *cont, bool discard)
 {
 	if (cont->vc_in_aggregation) {
@@ -1882,8 +1868,6 @@ aggregate_enter(struct vos_container *cont, bool discard)
 			DP_CONT(cont->vc_pool->vp_id, cont->vc_id), discard);
 		return -DER_BUSY;
 	}
-	dbtree_iterate(cont->vc_dtx_committed_hdl, DAOS_INTENT_DEFAULT, false,
-		       commited_dtx_cb, NULL);
 
 	cont->vc_in_aggregation = 1;
 	cont->vc_abort_aggregation = 0;
@@ -1906,6 +1890,31 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 	D_INIT_LIST_HEAD(&mw->mw_phy_ents);
 	D_INIT_LIST_HEAD(&io->ic_nvme_exts);
 	io->ic_csum_recalc_func = func;
+}
+
+daos_unit_oid_t
+vos_cmt_get_oid(d_iov_t *value)
+{
+        struct vos_dtx_cmt_ent	*dce = value->iov_buf;
+
+	return dce->dce_base.dce_oid;
+}
+
+daos_epoch_t
+vos_cmt_get_epoch(d_iov_t *value)
+{
+        struct vos_dtx_cmt_ent	*dce = value->iov_buf;
+
+	return dce->dce_base.dce_epoch;
+}
+
+void
+vos_agg_iterate(daos_handle_t coh, dbtree_iterate_cb_t cb, void *arg)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+
+	dbtree_iterate(cont->vc_dtx_committed_hdl, DAOS_INTENT_DEFAULT, false,
+		       cb, arg);
 }
 
 int

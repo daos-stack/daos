@@ -497,7 +497,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	 * hand, for modifying single replicated object, there is no DTX
 	 * entry in the active DTX table.
 	 */
-	if (epoch == 0) {
+	//if (epoch == 0) {
 		d_iov_set(&riov, NULL, 0);
 		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 		if (rc == -DER_NONEXIST) {
@@ -510,7 +510,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 			goto out;
 
 		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-	}
+	//}
 
 	D_ALLOC_PTR(dce);
 	if (dce == NULL)
@@ -518,7 +518,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 	DCE_XID(dce) = *dti;
 	DCE_OID(dce) = DAE_OID(dae);
-	DCE_EPOCH(dce) = epoch != 0 ? epoch : DAE_EPOCH(dae);
+	//DCE_EPOCH(dce) = epoch != 0 ? epoch : DAE_EPOCH(dae);
+	DCE_EPOCH(dce) = DAE_EPOCH(dae);
 	dce->dce_reindex = 0;
 
 	d_iov_set(&riov, dce, sizeof(*dce));
