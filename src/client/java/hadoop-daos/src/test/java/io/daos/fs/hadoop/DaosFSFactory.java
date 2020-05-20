@@ -14,8 +14,8 @@ public class DaosFSFactory {
 
 //  public final static String pooluuid = "53a47469-ea2a-418e-89d3-6d1df1aaadb4";
 //  public final static String contuuid = "9e60aff2-ca28-45fe-bdb0-d1a6c182c342";
-  public final static String defaultPoolId = "0417107c-144e-4394-a7f1-a281d0251b0c";
-  public final static String defaultContId = "71bfbb65-5de6-4f85-88a5-e1a8b33af335";
+  public final static String defaultPoolId = "6112d3ac-f99b-4e46-a2ab-549d9d56c069";
+  public final static String defaultContId = "10e8b68a-c80a-4840-84fe-3b707ebb5475";
   public final static String pooluuid = System.getProperty("pool_id", defaultPoolId);
   public final static String contuuid = System.getProperty("cont_id", defaultContId);
   public final static String svc = "0";
@@ -25,7 +25,7 @@ public class DaosFSFactory {
     conf.set(Constants.DAOS_POOL_UUID, pooluuid);
     conf.set(Constants.DAOS_CONTAINER_UUID, contuuid);
     conf.set(Constants.DAOS_POOL_SVC, svc);
-    return DaosUtils.createTestFileSystem(conf);
+    return DaosHadoopTestUtils.createTestFileSystem(conf);
   }
 
   public synchronized static FileSystem getFS() throws IOException{
@@ -45,8 +45,8 @@ public class DaosFSFactory {
       //clear all content
       DaosFile daosFile = client.getFile("/");
       String[] children = daosFile.listChildren();
-      for(String child : children) {
-        if(child.length() == 0 || ".".equals(child)){
+      for (String child : children) {
+        if (child.length() == 0 || ".".equals(child)) {
           continue;
         }
         String path = "/"+child;

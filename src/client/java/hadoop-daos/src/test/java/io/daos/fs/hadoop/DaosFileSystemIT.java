@@ -1,5 +1,7 @@
 package io.daos.fs.hadoop;
 
+import io.daos.dfs.DaosUns;
+import io.daos.dfs.uns.Layout;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.AfterClass;
@@ -9,8 +11,10 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
 
 /**
  *
@@ -51,8 +55,26 @@ public class DaosFileSystemIT {
   }
 
   private void initializationTest(String initializationUri, String expectedUri) throws Exception{
-    fs.initialize(URI.create(initializationUri), DaosUtils.getConfiguration());
+    fs.initialize(URI.create(initializationUri), DaosHadoopTestUtils.getConfiguration());
     Assert.assertEquals(URI.create(expectedUri), fs.getUri());
+  }
+
+  @Test
+  public void testNewDaosFileSystemFromUns() throws Exception {
+    File file = Files.createTempDirectory("uns").toFile();
+    try {
+      String path = file.getAbsolutePath();
+      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+                    DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
+      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      DaosUns.setAppInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
+              Constants.DAOS_POOL_FLAGS + "=2:");
+      URI uri = URI.create("daos://" + Constants.DAOS_AUTHORITY_UNS + path);
+      FileSystem fs = FileSystem.get(uri, new Configuration());
+      Assert.assertNotNull(fs);
+    } finally {
+      file.delete();
+    }
   }
 
   @AfterClass

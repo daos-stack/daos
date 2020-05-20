@@ -54,17 +54,17 @@ import org.w3c.dom.NodeList;
  * see {@link #getDaosUriDesc()} and {@link #parseConfig(String, String, Configuration)} for how configurations are
  * read and merged.
  */
-public class DaosConfig {
+public class DaosConfigFile {
 
   private Configuration defaultConfig;
 
   private String daosUriDesc;
 
-  private static final Logger log = LoggerFactory.getLogger(DaosConfig.class);
+  private static final Logger log = LoggerFactory.getLogger(DaosConfigFile.class);
 
-  private static final DaosConfig _INSTANCE = new DaosConfig();
+  private static final DaosConfigFile _INSTANCE = new DaosConfigFile();
 
-  private DaosConfig() {
+  private DaosConfigFile() {
     defaultConfig = new Configuration(false);
     defaultConfig.addResource("daos-site.xml");
     if (log.isDebugEnabled()) {
@@ -99,7 +99,7 @@ public class DaosConfig {
     }
   }
 
-  public static final DaosConfig getInstance() {
+  public static final DaosConfigFile getInstance() {
     return _INSTANCE;
   }
 

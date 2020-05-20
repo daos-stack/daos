@@ -69,4 +69,28 @@ public class DaosUnsTest {
         builder.putEntry(PropType.DAOS_PROP_CO_LABEL, new DaosUns.PropValue(1L, 0));
         builder.build();
     }
+
+    @Test
+    public void testSetAppInfoBadAttrName() throws Exception {
+        Exception ee = null;
+        try {
+            DaosUns.setAppInfo("/abc", "attr", "abc");
+        } catch (Exception e) {
+            ee =e;
+        }
+        Assert.assertTrue(ee instanceof IllegalArgumentException);
+        Assert.assertTrue(ee.getMessage().contains("start with \"user.\""));
+    }
+
+    @Test
+    public void testGetAppInfoBadAttrName() throws Exception {
+        Exception ee = null;
+        try {
+            DaosUns.getAppInfo("/abc", "attr", 100);
+        } catch (Exception e) {
+            ee =e;
+        }
+        Assert.assertTrue(ee instanceof IllegalArgumentException);
+        Assert.assertTrue(ee.getMessage().contains("start with \"user.\""));
+    }
 }

@@ -9,11 +9,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class DaosConfigTest {
+public class DaosConfigFileTest {
 
   @Test
   public void testInstantiateWithoutDaosFile() throws Exception {
-    URL url = DaosConfigTest.class.getResource("/daos-site.xml");
+    URL url = DaosConfigFileTest.class.getResource("/daos-site.xml");
     if (url == null) {
       return;
     }
@@ -23,9 +23,9 @@ public class DaosConfigTest {
       if (!file.renameTo(backFile)) {
         throw new Exception("failed to rename daos file to "+backFile.getAbsolutePath());
       }
-      Constructor<DaosConfig> constructor = DaosConfig.class.getDeclaredConstructor();
+      Constructor<DaosConfigFile> constructor = DaosConfigFile.class.getDeclaredConstructor();
       constructor.setAccessible(true);
-      DaosConfig config = constructor.newInstance();
+      DaosConfigFile config = constructor.newInstance();
       Assert.assertNull(config.getFromDaosFile(Constants.DAOS_DEFAULT_FS));
       Assert.assertEquals("unset", config.getFromDaosFile(Constants.DAOS_POOL_UUID, "unset"));
     } finally {
@@ -37,7 +37,7 @@ public class DaosConfigTest {
 
   @Test
   public void testGetUriDesc() throws Exception {
-    DaosConfig config = DaosConfig.getInstance();
+    DaosConfigFile config = DaosConfigFile.getInstance();
     String desc = config.getDaosUriDesc().trim();
     Assert.assertTrue(desc.startsWith("Unique DAOS server"));
     Assert.assertTrue(desc.endsWith("back to defaults."));
@@ -51,7 +51,7 @@ public class DaosConfigTest {
     Assert.assertNull(hadoopConfig.get(Constants.DAOS_DEFAULT_FS));
     Assert.assertNull(hadoopConfig.get(Constants.DAOS_POOL_UUID));
     Assert.assertNull(hadoopConfig.get(Constants.DAOS_CONTAINER_UUID));
-    DaosConfig config = DaosConfig.getInstance();
+    DaosConfigFile config = DaosConfigFile.getInstance();
     hadoopConfig = config.parseConfig("default", "1", hadoopConfig);
     Assert.assertEquals("uuid of pool", hadoopConfig.get(Constants.DAOS_POOL_UUID));
     Assert.assertEquals("uuid of container", hadoopConfig.get(Constants.DAOS_CONTAINER_UUID));
@@ -64,7 +64,7 @@ public class DaosConfigTest {
     hadoopConfig.set(Constants.DAOS_CONTAINER_UUID, "hadoop cid");
     hadoopConfig.set(Constants.DAOS_PRELOAD_SIZE, "9876");
 
-    DaosConfig config = DaosConfig.getInstance();
+    DaosConfigFile config = DaosConfigFile.getInstance();
     try {
       config.parseConfig("default", "1", hadoopConfig);
     }catch (Exception e) {
@@ -81,7 +81,7 @@ public class DaosConfigTest {
     hadoopConfig.set(Constants.DAOS_PRELOAD_SIZE, "9876");
     hadoopConfig.set(Constants.DAOS_CHUNK_SIZE, "45678");
 
-    DaosConfig config = DaosConfig.getInstance();
+    DaosConfigFile config = DaosConfigFile.getInstance();
     hadoopConfig = config.parseConfig("pkey", "3", hadoopConfig);
     Assert.assertEquals("hadoop pid", hadoopConfig.get(Constants.DAOS_POOL_UUID));
     Assert.assertEquals("hadoop cid", hadoopConfig.get(Constants.DAOS_CONTAINER_UUID));
@@ -89,13 +89,13 @@ public class DaosConfigTest {
     Assert.assertEquals("0", hadoopConfig.get(Constants.DAOS_POOL_SVC));
   }
 
-  private void parseConfigWithDifferentDaosFile(String newDaosFile, Consumer<Constructor<DaosConfig>> function)
+  private void parseConfigWithDifferentDaosFile(String newDaosFile, Consumer<Constructor<DaosConfigFile>> function)
           throws Exception {
-    URL url = DaosConfigTest.class.getResource("/daos-site.xml");
+    URL url = DaosConfigFileTest.class.getResource("/daos-site.xml");
     if (url == null) {
       throw new Exception("cannot load daos-site.xml");
     }
-    URL url2 = DaosConfigTest.class.getResource("/" + newDaosFile);
+    URL url2 = DaosConfigFileTest.class.getResource("/" + newDaosFile);
     if (url2 == null) {
       throw new Exception("cannot load " + newDaosFile);
     }
@@ -112,7 +112,7 @@ public class DaosConfigTest {
         throw new Exception("failed to rename test file to "+file.getAbsolutePath());
       }
 
-      Constructor<DaosConfig> constructor = DaosConfig.class.getDeclaredConstructor();
+      Constructor<DaosConfigFile> constructor = DaosConfigFile.class.getDeclaredConstructor();
       constructor.setAccessible(true);
       function.accept(constructor);
     } finally {
@@ -125,9 +125,9 @@ public class DaosConfigTest {
     }
   }
 
-  private void poolDefaultFunction(Constructor<DaosConfig> constructor) {
+  private void poolDefaultFunction(Constructor<DaosConfigFile> constructor) {
     try {
-      DaosConfig config = constructor.newInstance();
+      DaosConfigFile config = constructor.newInstance();
       Assert.assertNotNull(config.getFromDaosFile(Constants.DAOS_DEFAULT_FS));
 
       Configuration hadoopConfig = new Configuration(false);
@@ -140,7 +140,7 @@ public class DaosConfigTest {
       Assert.assertEquals("1048", hadoopConfig.get(Constants.DAOS_CHUNK_SIZE));
       Assert.assertEquals("-1", hadoopConfig.get(Constants.DAOS_PRELOAD_SIZE));
 
-      DaosConfig config2 = constructor.newInstance();
+      DaosConfigFile config2 = constructor.newInstance();
       Assert.assertNotNull(config2.getFromDaosFile(Constants.DAOS_DEFAULT_FS));
 
       Configuration hadoopConfig2 = new Configuration(false);
@@ -165,9 +165,9 @@ public class DaosConfigTest {
     parseConfigWithDifferentDaosFile("daos-site-default-pool.xml", this::poolDefaultFunction);
   }
 
-  private void containerDefaultFunction(Constructor<DaosConfig> constructor) {
+  private void containerDefaultFunction(Constructor<DaosConfigFile> constructor) {
     try {
-      DaosConfig config = constructor.newInstance();
+      DaosConfigFile config = constructor.newInstance();
       Assert.assertNotNull(config.getFromDaosFile(Constants.DAOS_DEFAULT_FS));
 
       Configuration hadoopConfig = new Configuration(false);
@@ -180,7 +180,7 @@ public class DaosConfigTest {
       Assert.assertEquals("1048", hadoopConfig.get(Constants.DAOS_CHUNK_SIZE));
       Assert.assertEquals("4194304", hadoopConfig.get(Constants.DAOS_PRELOAD_SIZE));
 
-      DaosConfig config2 = constructor.newInstance();
+      DaosConfigFile config2 = constructor.newInstance();
       Assert.assertNotNull(config2.getFromDaosFile(Constants.DAOS_DEFAULT_FS));
 
       Configuration hadoopConfig2 = new Configuration(false);
@@ -203,9 +203,9 @@ public class DaosConfigTest {
     parseConfigWithDifferentDaosFile("daos-site-default-container.xml", this::containerDefaultFunction);
   }
 
-  private void noDefaultFunction(Constructor<DaosConfig> constructor) {
+  private void noDefaultFunction(Constructor<DaosConfigFile> constructor) {
     try {
-      DaosConfig config = constructor.newInstance();
+      DaosConfigFile config = constructor.newInstance();
       Assert.assertNotNull(config.getFromDaosFile(Constants.DAOS_DEFAULT_FS));
 
       Configuration hadoopConfig = new Configuration(false);
@@ -217,7 +217,7 @@ public class DaosConfigTest {
       Assert.assertEquals("1234567", hadoopConfig.get(Constants.DAOS_BLOCK_SIZE));
       Assert.assertEquals("1048", hadoopConfig.get(Constants.DAOS_CHUNK_SIZE));
 
-      DaosConfig config2 = constructor.newInstance();
+      DaosConfigFile config2 = constructor.newInstance();
       Assert.assertNotNull(config2.getFromDaosFile(Constants.DAOS_DEFAULT_FS));
 
       Configuration hadoopConfig2 = new Configuration(false);

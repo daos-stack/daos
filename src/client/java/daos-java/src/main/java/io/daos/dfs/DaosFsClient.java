@@ -719,11 +719,10 @@ public final class DaosFsClient {
    * pointer to dfs object
    * @param prefix
    * path prefix
-   * @return 0 for success, others for failure
    * @throws IOException
    * {@link DaosIOException}
    */
-  native int dfsSetPrefix(long dfsPtr, String prefix) throws IOException;
+  native void dfsSetPrefix(long dfsPtr, String prefix) throws IOException;
 
   /**
    * open a file with opened parent specified by <code>parentObjId</code>.
@@ -1043,6 +1042,33 @@ public final class DaosFsClient {
    * @throws IOException
    */
   static native byte[] dunsResolvePath(String path) throws IOException;
+
+  /**
+   * get application info stored in <code>attrName</code> from <code>path</code>.
+   *
+   * @param path
+   * OS file path
+   * @param attrName
+   * app-specific attribute name
+   * @param maxLen
+   * maximum length of attribute value
+   * @return application info in string, key1=value1;key2=value2...
+   * @throws IOException
+   */
+  static native String dunsGetAppInfo(String path, String attrName, int maxLen) throws IOException;
+
+  /**
+   * set application info to <code>attrName</code> on <code>path</code>.
+   *
+   * @param path
+   * OS file path
+   * @param attrName
+   * app-specific attribute name
+   * @param value
+   * application info in string, key1=value1;key2=value2...
+   * @throws IOException
+   */
+  static native void dunsSetAppInfo(String path, String attrName, String value) throws IOException;
 
   /**
    * Destroy a container and remove the path associated with it in the UNS.

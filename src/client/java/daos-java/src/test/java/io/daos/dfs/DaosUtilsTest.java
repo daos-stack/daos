@@ -1,5 +1,6 @@
 package io.daos.dfs;
 
+import org.apache.commons.lang.StringEscapeUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -120,5 +121,13 @@ public class DaosUtilsTest {
   public void testUuidLength(){
     String id = DaosUtils.randomUUID();
     Assert.assertEquals(16, id.length());
+  }
+
+  @Test
+  public void testEscapeUnsValue() throws Exception {
+    String value = "ab:c=:def=";
+    String evalue = DaosUtils.escapeUnsValue(value);
+    Assert.assertEquals("ab\\u003ac\\u003d\\u003adef\\u003d", evalue);
+    Assert.assertEquals(value, StringEscapeUtils.unescapeJava(evalue));
   }
 }

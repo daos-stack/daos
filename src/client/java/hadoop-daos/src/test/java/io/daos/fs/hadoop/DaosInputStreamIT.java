@@ -23,7 +23,7 @@ import static org.junit.Assert.assertTrue;
 public class DaosInputStreamIT {
   private static final Logger LOG = LoggerFactory.getLogger(DaosInputStreamIT.class);
   private static FileSystem fs;
-  private static String testRootPath = DaosUtils.generateUniqueTestPath();
+  private static String testRootPath = DaosHadoopTestUtils.generateUniqueTestPath();
 
   @Rule
   public Timeout testTimeout = new Timeout(30 * 60 * 1000);

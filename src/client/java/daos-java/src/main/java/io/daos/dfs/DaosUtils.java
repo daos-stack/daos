@@ -23,6 +23,8 @@
 
 package io.daos.dfs;
 
+import org.apache.commons.lang.StringUtils;
+
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -106,5 +108,13 @@ public final class DaosUtils {
   public static long toMilliSeconds(StatAttributes.TimeSpec timeSpec) {
     long ms = timeSpec.getSeconds() * 1000;
     return ms + timeSpec.getNano() / (1000 * 1000);
+  }
+
+  public static String escapeUnsValue(String value) {
+    if (StringUtils.isBlank(value)) {
+      return value;
+    }
+    value = value.replaceAll(":", "\\\\u003a");
+    return value.replaceAll("=", "\\\\u003d");
   }
 }

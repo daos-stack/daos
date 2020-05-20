@@ -27,9 +27,19 @@
     </description>
   </property>
   <property>
+    <name>fs.daos.server.group</name>
+    <value>daos_server</value>
+    <description>daos server group</description>
+  </property>
+  <property>
     <name>fs.daos.pool.uuid</name>
     <value>uuid of pool</value>
     <description>UUID of DAOS pool</description>
+  </property>
+  <property>
+    <name>fs.daos.pool.flags</name>
+    <value>2</value>
+    <description>daos pool access flags, 1 for readonly, 2 for read/write, 4 for execute</description>
   </property>
   <property>
     <name>fs.daos.container.uuid</name>

@@ -1,9 +1,7 @@
 package io.daos.dfs;
 
 import io.daos.dfs.uns.*;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -13,24 +11,49 @@ import java.util.Map;
 
 public class DaosUnsIT {
 
-    private static String poolId;
+    private static String poolUuid;
+    private static String contUuid;
+
+    private DaosUns uns;
+    private File dir;
 
     @BeforeClass
     public static void setup() {
-        poolId = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
+        poolUuid = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
+        contUuid = System.getProperty("cont_id", DaosFsClientTestBase.DEFAULT_CONT_ID);
+    }
+
+    @Before
+    public void prepare() {
+        uns = null;
+        dir = null;
+    }
+
+    @After
+    public void done() throws Exception{
+        if (uns != null) {
+            try {
+                uns.destroyPath();
+            } catch (Exception e) {
+
+            }
+        }
+        if (dir != null) {
+            dir.delete();
+        }
     }
 
     private String createPath(String contId, Layout layout,
                               Map<PropType, DaosUns.PropValue> propMap,
                               File file) throws Exception {
-        File dir = null;
+        File dir2 = null;
         if (file == null) {
-            dir = Files.createTempDirectory("uns").toFile();
-            file = new File(dir, "path");
+            dir2 = Files.createTempDirectory("uns").toFile();
+            file = new File(dir2, "path");
         }
         DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
         builder.path(file.getAbsolutePath());
-        builder.poolId(poolId);
+        builder.poolId(poolUuid);
         if (contId != null) {
             builder.containerId(contId);
         }
@@ -42,17 +65,22 @@ public class DaosUnsIT {
                 builder.putEntry(entry.getKey(), entry.getValue());
             }
         }
-        DaosUns uns = builder.build();
+        DaosUns duns = builder.build();
+        String cid;
         try {
-            String cid = uns.createPath();
+            cid = duns.createPath();
             Assert.assertTrue(cid.length() > 0);
-            return cid;
-        } finally {
-            if (dir != null) {
+        } catch (Exception e) {
+            if (file != null) {
                 file.delete();
-                dir.delete();
             }
+            if (dir2 != null) {
+                dir2.delete();
+            }
+            throw e;
         }
+        uns = duns;
+        return cid;
     }
 
     private String createPath(String contId, Layout layout,
@@ -212,7 +240,7 @@ public class DaosUnsIT {
 
             DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
             builder.path(file.getAbsolutePath());
-            builder.poolId(poolId);
+            builder.poolId(poolUuid);
             DaosUns uns = builder.build();
             uns.destroyPath();
 
@@ -241,5 +269,46 @@ public class DaosUnsIT {
         Assert.assertEquals(Layout.HDF5, attribute.getLayoutType());
         Assert.assertEquals(DaosFsClientTestBase.DEFAULT_POOL_ID, attribute.getPuuid());
         Assert.assertEquals(DaosFsClientTestBase.DEFAULT_CONT_ID, attribute.getCuuid());
+    }
+
+    @Test
+    public void testSetAppInfoWithoutPath() throws Exception {
+        Exception ee = null;
+        try {
+            DaosUns.setAppInfo("/abc1234567890abc", "user.attr", "abc");
+        } catch (Exception e) {
+            ee = e;
+        }
+        Assert.assertNotNull(ee);
+        Assert.assertTrue(ee.getMessage().contains("error code: 2 error msg: No such file or directory"));
+    }
+
+    @Test
+    public void testSetAppInfoSuccessful() throws Exception {
+        File file = Files.createTempDirectory("uns").toFile();
+        try {
+            DaosUns.setAppInfo(file.getAbsolutePath(), "user.attr", "abc");
+            Assert.assertEquals("abc", DaosUns.getAppInfo(file.getAbsolutePath(), "user.attr",
+                    10));
+        } finally {
+            file.delete();
+        }
+    }
+
+    @Test
+    public void testGetAppInfoBeforeSet() throws Exception {
+        File file = Files.createTempDirectory("uns").toFile();
+        Exception ee = null;
+        try {
+            DaosUns.getAppInfo(file.getAbsolutePath(), "user.attr",
+                    10);
+        } catch (Exception e) {
+            ee = e;
+            e.printStackTrace();
+        } finally {
+            file.delete();
+        }
+        Assert.assertNotNull(ee);
+        Assert.assertTrue(ee.getMessage().contains("error code: 61 error msg: No data available"));
     }
 }
