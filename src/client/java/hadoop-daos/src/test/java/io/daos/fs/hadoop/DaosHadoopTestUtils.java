@@ -10,11 +10,11 @@ import java.net.URI;
 /**
  *
  */
-public class DaosUtils {
+public class DaosHadoopTestUtils {
   private static Configuration configuration;
   public static final String TEST_FS_DAOS_NAME = "test.fs.daos.name";
 
-  private DaosUtils(){}
+  private DaosHadoopTestUtils(){}
 
   public static DaosFileSystem createTestFileSystem(Configuration conf)throws IOException{
     DaosFileSystem daosFileSystem = new DaosFileSystem();
@@ -29,7 +29,7 @@ public class DaosUtils {
 
   private static URI getURI(Configuration conf) {
     String fsname = conf.getTrimmed(
-            DaosUtils.TEST_FS_DAOS_NAME, "daos://192.168.2.1:23456/");
+            DaosHadoopTestUtils.TEST_FS_DAOS_NAME, "daos://192.168.2.1:23456/");
 
     boolean liveTest = !StringUtils.isEmpty(fsname);
     URI testURI = null;
@@ -40,7 +40,7 @@ public class DaosUtils {
 
     if (!liveTest) {
       throw new AssumptionViolatedException("No test filesystem in "
-          + DaosUtils.TEST_FS_DAOS_NAME);
+          + DaosHadoopTestUtils.TEST_FS_DAOS_NAME);
     }
     return testURI;
   }

@@ -114,9 +114,72 @@ public class DaosUns {
      * @return UNS attribute
      * @throws IOException
      */
-    public static DunsAttribute resolvePath(String path) throws IOException{
+    public static DunsAttribute resolvePath(String path) throws IOException {
         byte[] bytes = DaosFsClient.dunsResolvePath(path);
+        if (bytes == null) {
+            return null;
+        }
         return DunsAttribute.parseFrom(bytes);
+    }
+
+    /**
+     * set application info to <code>attrName</code> on <code>path</code>.
+     * If <code>value</code> is empty, the <code>attrName</code> will be removed from the path.
+     *
+     * @param path
+     * OS file path
+     * @param attrName
+     * attribute name. Its length should not exceed {@value Constants#UNS_ATTR_NAME_MAX_LEN}.
+     * @param value
+     * attribute value, Its length should not exceed {@value Constants#UNS_ATTR_VALUE_MAX_LEN}.
+     * @throws IOException
+     */
+    public static void setAppInfo(String path, String attrName, String value) throws IOException {
+        if (StringUtils.isBlank(attrName)) {
+            throw new IllegalArgumentException("attribute name cannot be empty");
+        }
+        if (!attrName.startsWith("user.")) {
+            throw new IllegalArgumentException("attribute name should start with \"user.\", " + attrName);
+        }
+        if (attrName.length() > Constants.UNS_ATTR_NAME_MAX_LEN) {
+            throw new IllegalArgumentException("attribute name " + attrName + ", length should not exceed " +
+                    Constants.UNS_ATTR_NAME_MAX_LEN);
+        }
+        if (value != null && value.length() > Constants.UNS_ATTR_VALUE_MAX_LEN) {
+            throw new IllegalArgumentException("attribute value length should not exceed " +
+                    Constants.UNS_ATTR_VALUE_MAX_LEN);
+        }
+        DaosFsClient.dunsSetAppInfo(path, attrName, value);
+    }
+
+    /**
+     * get application info stored in <code>attrName</code> from <code>path</code>.
+     *
+     * @param path
+     * OS file path
+     * @param attrName
+     * attribute name. Its length should not exceed {@value Constants#UNS_ATTR_NAME_MAX_LEN}.
+     * @param maxValueLen
+     * maximum attribute length. It should not exceed {@value Constants#UNS_ATTR_VALUE_MAX_LEN}.
+     * @return attribute value
+     * @throws IOException
+     */
+    public static String getAppInfo(String path, String attrName, int maxValueLen) throws IOException {
+        if (StringUtils.isBlank(attrName)) {
+            throw new IllegalArgumentException("attribute name cannot be empty");
+        }
+        if (!attrName.startsWith("user.")) {
+            throw new IllegalArgumentException("attribute name should start with \"user.\", " + attrName);
+        }
+        if (attrName.length() > Constants.UNS_ATTR_NAME_MAX_LEN) {
+            throw new IllegalArgumentException("attribute name " + attrName + ", length should not exceed " +
+                    Constants.UNS_ATTR_NAME_MAX_LEN);
+        }
+        if (maxValueLen > Constants.UNS_ATTR_VALUE_MAX_LEN) {
+            throw new IllegalArgumentException("maximum value length should not exceed " +
+                    Constants.UNS_ATTR_VALUE_MAX_LEN);
+        }
+        return DaosFsClient.dunsGetAppInfo(path, attrName, maxValueLen);
     }
 
     /**
@@ -150,6 +213,32 @@ public class DaosUns {
     public static DunsAttribute parseAttribute(String input) throws IOException {
         byte[] bytes = DaosFsClient.dunsParseAttribute(input);
         return DunsAttribute.parseFrom(bytes);
+    }
+
+    /**
+     * get information from extended attributes of UNS path.
+     * Some info gets from DAOS extended attribute.
+     * The Rest gets from app extended attributes.
+     *
+     * @param path
+     * OS FS path
+     * @param appInfoAttrName
+     * app-specific attribute name
+     * @return information hold in {@link DunsInfo}
+     * @throws IOException
+     */
+    public static DunsInfo getAccessInfo(String path, String appInfoAttrName) throws IOException {
+        DunsAttribute attribute = DaosUns.resolvePath(path);
+        if (attribute == null) {
+            throw new IOException("no UNS attribute get from " + path);
+        }
+        String poolId = attribute.getPuuid();
+        String contId = attribute.getCuuid();
+        Layout layout = attribute.getLayoutType();
+
+        String value = DaosUns.getAppInfo(path, appInfoAttrName,
+                io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT);
+        return new DunsInfo(poolId, contId, layout.name(), value);
     }
 
     protected DunsAttribute getAttribute() {
@@ -446,8 +535,35 @@ public class DaosUns {
             case "resolve": resolve(); return;
             case "destroy": destroy(); return;
             case "parse": parse(); return;
+            case "setappinfo": setAppInfoCommand(); return;
+            case "getappinfo": getAppInfoCommand(); return;
             case "util": util(); return;
             default: throw new IllegalArgumentException("not supported command, " + args[0]);
+        }
+    }
+
+    private static void setAppInfoCommand() {
+        String path = System.getProperty("path");
+        String attr = System.getProperty("attr");
+        String value = System.getProperty("value");
+        try {
+            setAppInfo(path, attr, value);
+            log.info("attribute({}) = value({}) is set on path({})", attr, value, path);
+        } catch (Exception e) {
+            log.error("failed to set app info. ", e);
+        }
+    }
+
+    private static void getAppInfoCommand() {
+        String path = System.getProperty("path");
+        String attr = System.getProperty("attr");
+        String maxLen = System.getProperty("maxlen");
+        try {
+            String value = getAppInfo(path, attr, maxLen == null ? Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT :
+                    Integer.valueOf(maxLen));
+            log.info("attribute({}) = value({}) get from path({})", attr, value, path);
+        } catch (Exception e) {
+            log.error("failed to get app info. ", e);
         }
     }
 
@@ -736,7 +852,7 @@ public class DaosUns {
         String usage = "===================================================\n" +
                 "Usage: create/resolve/destroy/parse UNS path associated with DAOS.\n" +
                 "see following commands and their parameters:\n" +
-                "command: [create|resolve|destroy|parse|util]\n" +
+                "command: [create|resolve|destroy|parse|setappinfo|getappinfo|util]\n" +
                 "=>create:\n" +
                 "   -Dpath=, required, OS file path. The file should not exist.\n" +
                 "   -Dpool_id=, required, DAOS pool UUID.\n" +
@@ -767,6 +883,14 @@ public class DaosUns {
                 "   -Dpool_flags=, optional, pool access flags. Default is 2. [2(readwrite)].\n" +
                 "=>parse:\n" +
                 "   -Dinput=, required, attribute string.\n" +
+                "=>setappinfo:\n" +
+                "   -Dpath=, required, OS file path. The file should exist.\n" +
+                "   -Dattr=, required, attribute name.\n" +
+                "   -Dvalue=, optional, attribute value. The attribute will be removed if value is not specified.\n" +
+                "=>getappinfo:\n" +
+                "   -Dpath=, required, OS file path. The file should exist.\n" +
+                "   -Dattr=, required, attribute name.\n" +
+                "   -Dmaxlen=, optional, maximum length of value to be get. Default is 1024\n" +
                 "=>util\n" +
                 "   -Dop=, required, operation types. [list-object-types|list-property-types|" +
                 "get-property-value-type|sample-properties]\n" +

@@ -13,7 +13,7 @@ import java.util.concurrent.*;
 import io.daos.dfs.DaosFile;
 import io.daos.dfs.DaosFsClient;
 import io.daos.fs.hadoop.Constants;
-import io.daos.fs.hadoop.DaosConfig;
+import io.daos.fs.hadoop.DaosConfigFile;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -133,7 +133,7 @@ public class Main {
 
     protected void prepare() throws Exception {
       super.prepare();
-      writeSize = Integer.parseInt(DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_WRITE_BUFFER_SIZE,
+      writeSize = Integer.parseInt(DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_WRITE_BUFFER_SIZE,
               String.valueOf(Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE)));
       System.out.println("write buffer size: " + writeSize);
       fileSize = Long.valueOf(System.getProperty("fileSize", String.valueOf(1L * 1024L*1024L*1024L)));
@@ -297,7 +297,7 @@ public class Main {
     @Override
     protected void prepare() throws Exception {
       super.prepare();
-      readSize = Integer.valueOf(DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_READ_BUFFER_SIZE,
+      readSize = Integer.valueOf(DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_READ_BUFFER_SIZE,
               String.valueOf(Constants.DEFAULT_DAOS_READ_BUFFER_SIZE)));
       System.out.println("read buffer size: " + readSize);
       random = "true".equalsIgnoreCase(System.getProperty("random"));
@@ -475,11 +475,11 @@ public class Main {
 
       if ("java-api".equalsIgnoreCase(api)) {
         String poolId = System.getProperty("pid",
-                DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_POOL_UUID));
+                DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_POOL_UUID));
         String contId = System.getProperty("uid",
-                DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_CONTAINER_UUID));
+                DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_CONTAINER_UUID));
         String svc = System.getProperty("svc",
-                DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_POOL_SVC));
+                DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_POOL_SVC));
         DaosFsClient client = new DaosFsClient.DaosFsClientBuilder().poolId(poolId).containerId(contId)
                 .ranks(svc).build();
 

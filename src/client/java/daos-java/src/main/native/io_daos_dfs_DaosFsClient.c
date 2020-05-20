@@ -279,6 +279,24 @@ Java_io_daos_dfs_DaosFsClient_daosClosePool(JNIEnv *env,
 	}
 }
 
+JNIEXPORT void JNICALL
+Java_io_daos_dfs_DaosFsClient_dfsSetPrefix(JNIEnv *env, jobject clientObj,
+        jlong dfsPtr, jstring prefixStr)
+{
+    dfs_t *dfs = *(dfs_t **)&dfsPtr;
+    const char *prefix = (*env)->GetStringUTFChars(env, prefixStr, NULL);
+    int rc = dfs_set_prefix(dfs, prefix);
+
+    if (rc) {
+        char *tmp = "Failed to set prefix (%s)";
+        char *msg = (char *)malloc(strlen(tmp) + strlen(prefix));
+
+        sprintf(msg, tmp, prefix);
+        throw_exception_base(env, msg, rc, 1, 0);
+    }
+    (*env)->ReleaseStringUTFChars(env, prefixStr, prefix);
+}
+
 /**
  * JNI method to open container with given \a contUuid.
  *
@@ -1741,7 +1759,7 @@ Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
         msg = (char *)malloc(strlen(tmp) + strlen(path)
                             + strlen(cont_str) + strlen(pool_str));
         sprintf(msg, tmp, path, cont_str, pool_str);
-        throw_exception(env, msg, rc);
+        throw_exception_base(env, msg, rc, 1, 0);
         goto out;
     }
     char cont_str[37] = "";
@@ -1801,7 +1819,7 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 
         msg = (char *)malloc(strlen(tmp) + strlen(path));
         sprintf(msg, tmp, path);
-        throw_exception(env, msg, rc);
+        throw_exception_base(env, msg, rc, 1, 0);
         goto out;
     }
 
@@ -1848,6 +1866,97 @@ out:
 }
 
 /**
+ * set app-specific extended attributes on a given \a pathStr.
+ * If \a valueStr is NULL or empty, this function will try to
+ * remove the \a attrNameStr from the path.
+ *
+ * \param[in]	env		        JNI environment
+ * \param[in]	clientClass	    DaosFsClient class
+ * \param[in]   pathStr         file path to set on
+ * \param[in]   attrNameStr     attribute name
+ * \param[in]   valueStr        attribute value
+ */
+JNIEXPORT void JNICALL
+Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
+        jstring pathStr, jstring attrNameStr, jstring valueStr)
+{
+    const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
+    const char *attrName = (*env)->GetStringUTFChars(env, attrNameStr, NULL);
+    const char *value = (*env)->GetStringUTFChars(env, valueStr, NULL);
+    int rc;
+
+    if (!(value == NULL || strlen(value) == 0)) {
+        rc = lsetxattr(path, attrName, value, strlen(value) + 1, 0);
+        if (rc) {
+            char *tmp = "failed to set app attribute (%s) = (%s) on path" \
+                        " (%s)";
+            char *msg = (char *)malloc(strlen(tmp) + strlen(attrName) +
+                            strlen(value) + strlen(path));
+
+            sprintf(msg, tmp, attrName, value, path);
+            rc = errno;
+            throw_exception(env, msg, rc);
+        }
+    } else { /* remove attribute */
+        rc = lremovexattr(path, attrName);
+        if (rc) {
+            char *tmp = "failed to remove app attribute (%s) from path" \
+                                    " (%s)";
+            char *msg = (char *)malloc(strlen(tmp) + strlen(attrName) +
+                            strlen(path));
+
+            sprintf(msg, tmp, attrName, path);
+            rc = errno;
+            throw_exception(env, msg, rc);
+        }
+    }
+out:
+    (*env)->ReleaseStringUTFChars(env, pathStr, path);
+    (*env)->ReleaseStringUTFChars(env, attrNameStr, attrName);
+    (*env)->ReleaseStringUTFChars(env, valueStr, value);
+}
+
+/**
+ * get app-specific extended attributes from a given \a pathStr.
+ *
+ * \param[in]	env		        JNI environment
+ * \param[in]	clientClass	    DaosFsClient class
+ * \param[in]   pathStr         file path to set on
+ * \param[in]   attrNameStr     attribute name
+ *
+ * \return	JVM string of attribute value.
+ */
+JNIEXPORT jstring JNICALL
+Java_io_daos_dfs_DaosFsClient_dunsGetAppInfo(JNIEnv *env, jclass clientClass,
+        jstring pathStr, jstring attrNameStr, jint maxLen)
+{
+    const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
+    const char *attrName = (*env)->GetStringUTFChars(env, attrNameStr, NULL);
+    void *value = malloc(maxLen);
+    int len = lgetxattr(path, attrName, value, maxLen);
+    jstring ret = NULL;
+
+    if (len < 0 || len > maxLen) {
+        char *tmp = "failed to get app attribute (%s) from path" \
+                                            " (%s)";
+        char *msg = (char *)malloc(strlen(tmp) + strlen(attrName) +
+                            strlen(path));
+
+        sprintf(msg, tmp, attrName, path);
+        throw_exception(env, msg, errno);
+        goto out;
+    }
+
+out:
+    (*env)->ReleaseStringUTFChars(env, attrNameStr, attrName);
+    (*env)->ReleaseStringUTFChars(env, pathStr, path);
+    ret = (*env)->NewStringUTF(env, value);
+    free(value);
+
+    return ret;
+}
+
+/**
  * Destroy a container and remove the path associated with it in the UNS.
  *
  * \param[in]	env		        JNI environment
@@ -1871,7 +1980,7 @@ Java_io_daos_dfs_DaosFsClient_dunsDestroyPath(JNIEnv *env, jclass clientClass,
 
         msg = (char *)malloc(strlen(tmp) + strlen(path));
         sprintf(msg, tmp, path);
-        throw_exception(env, msg, rc);
+        throw_exception_base(env, msg, rc, 1, 0);
     }
 
 out:
@@ -1910,7 +2019,7 @@ Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
 
         msg = (char *)malloc(strlen(tmp) + len);
         sprintf(msg, tmp, input);
-        throw_exception(env, msg, rc);
+        throw_exception_base(env, msg, rc, 1, 0);
         goto out;
     }
 

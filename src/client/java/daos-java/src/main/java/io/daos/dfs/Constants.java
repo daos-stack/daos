@@ -28,11 +28,13 @@ package io.daos.dfs;
  */
 public final class Constants {
 
-  private Constants() {
-  }
+  private Constants() {}
 
   public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";
   public static final String POOL_DEFAULT_RANKS = "0";
+
+  public static final String DUNS_XATTR_NAME = "user.daos";
+  public static final String DUNS_XATTR_FMT = "DAOS.%s://%36s/%36s";
 
   // DAOS will decide what default is. 1MB for now.
   public static final int FILE_DEFAULT_CHUNK_SIZE = 0;
@@ -88,4 +90,8 @@ public final class Constants {
   public static final int ACCESS_FLAG_CONTAINER_READONLY = 1;
   public static final int ACCESS_FLAG_CONTAINER_READWRITE = 2;
   public static final int ACCESS_FLAG_CONTAINER_NOSLIP = 4;
+
+  public static final int UNS_ATTR_NAME_MAX_LEN = 255;
+  public static final int UNS_ATTR_VALUE_MAX_LEN = 64 * 1024;
+  public static final int UNS_ATTR_VALUE_MAX_LEN_DEFAULT = 1024;
 }

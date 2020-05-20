@@ -82,9 +82,9 @@ JNIEXPORT void JNICALL Java_io_daos_dfs_DaosFsClient_daosClosePool
 /*
  * Class:     io_daos_dfs_DaosFsClient
  * Method:    dfsSetPrefix
- * Signature: (JLjava/lang/String;)I
+ * Signature: (JLjava/lang/String;)V
  */
-JNIEXPORT jint JNICALL Java_io_daos_dfs_DaosFsClient_dfsSetPrefix
+JNIEXPORT void JNICALL Java_io_daos_dfs_DaosFsClient_dfsSetPrefix
   (JNIEnv *, jobject, jlong, jstring);
 
 /*
@@ -254,6 +254,22 @@ JNIEXPORT jstring JNICALL Java_io_daos_dfs_DaosFsClient_dunsCreatePath
  */
 JNIEXPORT jbyteArray JNICALL Java_io_daos_dfs_DaosFsClient_dunsResolvePath
   (JNIEnv *, jclass, jstring);
+
+/*
+ * Class:     io_daos_dfs_DaosFsClient
+ * Method:    dunsGetAppInfo
+ * Signature: (Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_io_daos_dfs_DaosFsClient_dunsGetAppInfo
+  (JNIEnv *, jclass, jstring, jstring, jint);
+
+/*
+ * Class:     io_daos_dfs_DaosFsClient
+ * Method:    dunsSetAppInfo
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo
+  (JNIEnv *, jclass, jstring, jstring, jstring);
 
 /*
  * Class:     io_daos_dfs_DaosFsClient
