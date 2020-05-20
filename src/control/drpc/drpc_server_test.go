@@ -85,8 +85,8 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	socket := newMockConn()
 	call := &Call{
 		Sequence: 123,
-		Module:   1,
-		Method:   2,
+		Module:   ModuleMgmt.ID(),
+		Method:   MethodPoolCreate.ID(),
 	}
 	callBytes, err := proto.Marshal(call)
 	if err != nil {
@@ -95,7 +95,7 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	socket.ReadOutputBytes = callBytes
 	socket.ReadOutputNumBytes = len(callBytes)
 
-	mod := newTestModule(call.Module)
+	mod := newTestModule(ModuleID(call.Module))
 	svc := NewModuleService(log)
 	svc.RegisterModule(mod)
 
@@ -283,7 +283,9 @@ func TestServer_Shutdown(t *testing.T) {
 	<-lis.closed
 }
 
-func TestServer_Integration(t *testing.T) {
+// TestServer_IntegrationNoMethod verifies failure when adding a new
+// module without specifying a method.
+func TestServer_IntegrationNoMethod(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
@@ -293,8 +295,8 @@ func TestServer_Integration(t *testing.T) {
 
 	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 
-	mod := newTestModule(ModuleMgmt)
-	mod.HandleCallResponse = []byte("successful!")
+	// TEST module as defined in <daos/drpc_modules.h> has id 0
+	mod := newTestModule(0)
 	dss.RegisterRPCModule(mod)
 
 	// Stand up a server loop
@@ -311,7 +313,7 @@ func TestServer_Integration(t *testing.T) {
 	defer client.Close()
 
 	call := &Call{
-		Module: mod.ID(),
+		Module: int32(mod.ID()),
 	}
 	resp, err := client.SendMsg(call)
 	if err != nil {
@@ -320,7 +322,7 @@ func TestServer_Integration(t *testing.T) {
 
 	expectedResp := &Response{
 		Sequence: call.Sequence,
-		Body:     mod.HandleCallResponse,
+		Status:   Status_UNKNOWN_METHOD,
 	}
 	cmpOpts := common.DefaultCmpOpts()
 	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {

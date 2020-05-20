@@ -100,8 +100,8 @@ func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *Securi
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(session *drpc.Session, method *drpc.Method, body []byte) ([]byte, error) {
-	if method.ID() != drpc.MethodRequestCredentials {
+func (m *SecurityModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
+	if method != drpc.MethodRequestCredentials {
 		return nil, drpc.UnknownMethodFailure()
 	}
 
@@ -145,6 +145,6 @@ func (m *SecurityModule) credRespWithStatus(status drpc.DaosStatus) ([]byte, err
 }
 
 // ID will return Security module ID
-func (m *SecurityModule) ID() int32 {
+func (m *SecurityModule) ID() drpc.ModuleID {
 	return drpc.ModuleSecurityAgent
 }

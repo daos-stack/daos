@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const defaultTestModID int32 = ModuleMgmt
+const defaultTestModID ModuleID = ModuleMgmt
 
 func TestNewModuleService(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -76,7 +76,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
-	expectedIDs := []int32{-1, 7, 255, defaultTestModID}
+	expectedIDs := []ModuleID{-1, 7, 255, defaultTestModID}
 	testMods := make([]*mockModule, 0, len(expectedIDs))
 
 	for _, id := range expectedIDs {
@@ -106,7 +106,7 @@ func TestService_RegisterModule_DuplicateID(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
-	testMod := newTestModule(15)
+	testMod := newTestModule(ModuleMgmt)
 	dupMod := newTestModule(testMod.IDValue)
 
 	if err := service.RegisterModule(testMod); err != nil {
@@ -143,12 +143,13 @@ func getGarbageBytes() []byte {
 	return badBytes
 }
 
-func getCallBytes(t *testing.T, sequence int64, moduleID int32) []byte {
+func getCallBytes(t *testing.T, sequence int64, moduleID int32, method Method) []byte {
 	t.Helper()
 
 	call := &Call{
 		Sequence: sequence,
 		Module:   moduleID,
+		Method:   method.ID(),
 	}
 
 	callBytes, err := proto.Marshal(call)
@@ -181,21 +182,24 @@ func TestService_ProcessMessage(t *testing.T) {
 			expectedResp: getResponse(-1, Status_FAILED_UNMARSHAL_CALL, nil),
 		},
 		"module doesn't exist": {
-			callBytes:    getCallBytes(t, testSequenceNum, 256),
+			callBytes:    getCallBytes(t, testSequenceNum, 256, MethodPoolCreate),
 			expectedResp: getResponse(testSequenceNum, Status_UNKNOWN_MODULE, nil),
 		},
 		"HandleCall fails with regular error": {
-			callBytes:     getCallBytes(t, testSequenceNum, defaultTestModID),
+			callBytes: getCallBytes(t, testSequenceNum, int32(defaultTestModID),
+				MethodPoolCreate),
 			handleCallErr: errors.New("HandleCall error"),
 			expectedResp:  getResponse(testSequenceNum, Status_FAILURE, nil),
 		},
 		"HandleCall fails with drpc.Failure": {
-			callBytes:     getCallBytes(t, testSequenceNum, defaultTestModID),
+			callBytes: getCallBytes(t, testSequenceNum, int32(defaultTestModID),
+				MethodPoolCreate),
 			handleCallErr: NewFailure(Status_FAILED_UNMARSHAL_PAYLOAD),
 			expectedResp:  getResponse(testSequenceNum, Status_FAILED_UNMARSHAL_PAYLOAD, nil),
 		},
 		"HandleCall succeeds": {
-			callBytes:      getCallBytes(t, testSequenceNum, defaultTestModID),
+			callBytes: getCallBytes(t, testSequenceNum, int32(defaultTestModID),
+				MethodPoolCreate),
 			handleCallResp: []byte("succeeded"),
 			expectedResp:   getResponse(testSequenceNum, Status_SUCCESS, []byte("succeeded")),
 		},

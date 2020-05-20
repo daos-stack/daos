@@ -31,29 +31,36 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
-// HelloMethod is a type alias for a drpc agent hello method.
-type HelloMethod int32
+// helloMethod is a type alias for a drpc agent hello method.
+type helloMethod int32
 
-func (hm *HelloMethod) String() string {
-	return map[HelloMethod]string{}[*hm]
+func (hm helloMethod) String() string {
+	return "hello"
 }
 
 // Module returns the module that the method belongs to.
-func (hm *HelloMethod) Module() int32 {
-	return int32(Module_HELLO)
+func (hm helloMethod) Module() drpc.ModuleID {
+	return HelloModule{}.ID()
+}
+
+func (hm helloMethod) ID() int32 {
+	return int32(hm)
+}
+
+func (hm helloMethod) IsValid() bool {
+	return true
 }
 
 const (
-	MethodGreeting HelloMethod = HelloMethod(Function_GREETING)
+	methodGreeting helloMethod = helloMethod(Function_GREETING)
 )
 
 //HelloModule is the RPC Handler for the Hello Module
 type HelloModule struct{}
 
-//HandleCall is the handler for calls to the hello module
-func (m *HelloModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
-	method, ok := i.(HelloMethod)
-	if !ok || method != MethodGreeting {
+//HandleCall is the handler for calls to the Hello module
+func (m HelloModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
+	if method != methodGreeting {
 		return nil, fmt.Errorf("Attempt to call unregistered function")
 	}
 
@@ -74,7 +81,7 @@ func (m *HelloModule) HandleCall(session *drpc.Session, method drpc.Method, body
 	return responseBytes, nil
 }
 
-//ID will return Module_HELLO in int32 form
-func (m *HelloModule) ID() int32 {
-	return int32(Module_HELLO)
+//ID will return Module_HELLO as a ModuleID type
+func (m HelloModule) ID() drpc.ModuleID {
+	return drpc.ModuleID(Module_HELLO)
 }
