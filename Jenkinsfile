@@ -478,8 +478,8 @@ pipeline {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/centos7/
                                           mkdir -p artifacts/centos7/
-                                          make CHROOT_NAME="epel-7-x86_64" EXTERNAL_RPM_BUILD_OPTIONS=''' +
-                                          faults_enabled('rpm') + ''' -C utils/rpms chrootbuild'''
+                                          make CHROOT_NAME="epel-7-x86_64" EXTERNAL_RPM_BUILD_OPTIONS=\"''' +
+                                          faults_enabled('rpm') + '''\" -C utils/rpms chrootbuild'''
                         }
                     }
                     post {
@@ -555,8 +555,8 @@ pipeline {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/leap15/
                                   mkdir -p artifacts/leap15/
-                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" EXTERNAL_RPM_BUILD_OPTIONS=''' +
-                                  faults_enabled('rpm') + ''' -C utils/rpms chrootbuild'''
+                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" EXTERNAL_RPM_BUILD_OPTIONS=\"''' +
+                                  faults_enabled('rpm') + '''\" -C utils/rpms chrootbuild'''
                         }
                     }
                     post {
