@@ -264,7 +264,9 @@ void
 vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df)
 {
 	struct vos_dtx_blob_df		*dbd;
+	struct vos_dtx_act_ent_df	*dae_df;
 	umem_off_t			 dbd_off;
+	int				 i;
 
 	/* cd_dtx_committed_tail is next to cd_dtx_committed_head */
 	umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_head,
@@ -289,6 +291,14 @@ vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df)
 	while (!umoff_is_null(cont_df->cd_dtx_active_head)) {
 		dbd_off = cont_df->cd_dtx_active_head;
 		dbd = umem_off2ptr(umm, dbd_off);
+
+		for (i = 0; i < dbd->dbd_index; i++) {
+			dae_df = &dbd->dbd_active_data[i];
+			if (!(dae_df->dae_flags & DTX_EF_INVALID) &&
+			    !umoff_is_null(dae_df->dae_rec_off))
+				umem_free(umm, dae_df->dae_rec_off);
+		}
+
 		cont_df->cd_dtx_active_head = dbd->dbd_next;
 		umem_free(umm, dbd_off);
 	}
@@ -330,13 +340,9 @@ dtx_ilog_rec_release(struct umem_instance *umm, struct vos_container *cont,
 static void
 do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		   struct vos_dtx_act_ent *dae, struct vos_dtx_record_df *rec,
-		   struct vos_dtx_record_df *rec_df, int index, bool abort)
+		   bool abort)
 {
 	if (umoff_is_null(rec->dr_record))
-		return;
-
-	/* Has been deregistered. */
-	if (rec_df != NULL && umoff_is_null(rec_df[index].dr_record))
 		return;
 
 	switch (rec->dr_type) {
@@ -397,7 +403,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 {
 	struct umem_instance		*umm = vos_cont2umm(cont);
 	struct vos_dtx_act_ent_df	*dae_df;
-	struct vos_dtx_record_df	*rec_df = NULL;
 	struct vos_dtx_blob_df		*dbd;
 	int				 count;
 	int				 i;
@@ -413,20 +418,14 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 	if (dae->dae_records != NULL) {
 		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
 
-		if (dae_df->dae_layout_gen != DAE_LAYOUT_GEN(dae))
-			rec_df = umem_off2ptr(umm, dae_df->dae_rec_off);
-
 		for (i = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT - 1; i >= 0; i--)
 			do_dtx_rec_release(umm, cont, dae, &dae->dae_records[i],
-					   rec_df, i, abort);
+					   abort);
 
 		D_FREE(dae->dae_records);
 		dae->dae_records = NULL;
 		dae->dae_rec_cap = 0;
 	}
-
-	if (dae_df->dae_layout_gen != DAE_LAYOUT_GEN(dae))
-		rec_df = dae_df->dae_rec_inline;
 
 	if (DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT)
 		count = DTX_INLINE_REC_CNT;
@@ -435,7 +434,7 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 	for (i = count - 1; i >= 0; i--)
 		do_dtx_rec_release(umm, cont, dae, &DAE_REC_INLINE(dae)[i],
-				   rec_df, i, abort);
+				   abort);
 
 	if (!umoff_is_null(dae_df->dae_rec_off))
 		umem_free(umm, dae_df->dae_rec_off);
@@ -697,7 +696,6 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 	DAE_FLAGS(dae) = dth->dth_leader ? DTX_EF_LEADER : 0;
 	DAE_INTENT(dae) = dth->dth_intent;
 	DAE_SRV_GEN(dae) = dth->dth_gen;
-	DAE_LAYOUT_GEN(dae) = dth->dth_gen;
 
 	/* Will be set as dbd::dbd_index via vos_dtx_prepared(). */
 	DAE_INDEX(dae) = -1;
@@ -983,6 +981,10 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 	D_ASSERT(entry >= DTX_LID_RESERVED);
 
 	cont = vos_hdl2cont(coh);
+	/* If "cont" is NULL, then we are destroying the container.
+	 * Under such case, the DTX entry in DRAM has been removed,
+	 * The on-disk entry will be destroyed soon.
+	 */
 	if (cont == NULL)
 		return;
 
@@ -1031,8 +1033,6 @@ handle_df:
 	for (i = 0; i < count; i++) {
 		if (rec_df[i].dr_record == record) {
 			rec_df[i].dr_record = UMOFF_NULL;
-			if (cont == NULL)
-				dae_df->dae_layout_gen++;
 			return;
 		}
 	}
@@ -1046,8 +1046,6 @@ handle_df:
 	for (i = 0; i < dae_df->dae_rec_cnt - DTX_INLINE_REC_CNT; i++) {
 		if (rec_df[i].dr_record == record) {
 			rec_df[i].dr_record = UMOFF_NULL;
-			if (cont == NULL)
-				dae_df->dae_layout_gen++;
 			return;
 		}
 	}

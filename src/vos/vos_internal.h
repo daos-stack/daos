@@ -233,7 +233,6 @@ struct vos_dtx_act_ent {
 #define DAE_DKEY_HASH(dae)	((dae)->dae_base.dae_dkey_hash)
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
-#define DAE_LAYOUT_GEN(dae)	((dae)->dae_base.dae_layout_gen)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_INTENT(dae)		((dae)->dae_base.dae_intent)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
