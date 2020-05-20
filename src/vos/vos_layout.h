@@ -178,8 +178,6 @@ struct vos_dtx_act_ent_df {
 	daos_epoch_t			dae_epoch;
 	/** The server generation when handles the DTX. */
 	uint64_t			dae_srv_gen;
-	/** The active DTX entry on-disk layout generation. */
-	uint64_t			dae_layout_gen;
 	/** The allocated local id for the DTX entry */
 	uint32_t			dae_lid;
 	/** The intent of related modification. */
