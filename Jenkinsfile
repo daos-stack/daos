@@ -152,21 +152,28 @@ def release_candidate() {
           script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
                   "grep -i '[0-9]rc[0-9]' TAG",
           returnStatus: true)) {
-        return false
+        return true
     }
     return false
 }
 
 def faults_enabled(String type) {
     // if the fault_enabled pragma is false or it a release candidate; disable fault injection
-    if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
+    echo "type: >" + type + "<"
+    pragma = cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true'
+    echo "Fault enabled: >" + pragma + "<"
+    rc = release_candidate()
+    echo "Release candidate: >" + rc + "<"
+    // if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate())
+    if ((pragma != "true") || rc {
         return ""
     }
     if (type == "rpm") {
         return "--with fault-injection"
     }
-    if (type == "scons")
+    if (type == "scons") {
         return "--with-fault-injection"
+    }
     return ""
 }
 
