@@ -51,6 +51,13 @@ class DmgCommand(YamlCommand):
         # UUID since it's made up of hyphens and \s includes new line.
         "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
         "pool_create": r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)",
+        "pool_query": r"(?:Pool\s*([A-Za-z0-9-]+),\s*ntarget=([0-9]),"
+                      r"\s*disabled=([0-9]),\s+leader=([0-9]),"
+                      r"\s+version=([0-9])|Target\(VOS\) count:\s*([0-9])|"
+                      r"(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
+                      r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+)"
+                      r",\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
+                      r"|Rebuild\s+idle,\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
         "system_query": r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+:[0-9]+)\s+[A-Za-z]+)"
     }
 
@@ -614,6 +621,25 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.nsvc.value = svcn
         self.sub_command_class.sub_command_class.sys.value = group
         self.sub_command_class.sub_command_class.acl_file.value = acl_file
+        return self._get_result()
+
+    def pool_query(self, pool):
+        """Query a pool with the dmg command.
+
+        Args:
+            uuid (str): Pool UUID to query.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool destroy command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.pool.value = pool
         return self._get_result()
 
     def pool_destroy(self, pool, force=True):

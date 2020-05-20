@@ -189,7 +189,7 @@ def set_test_environment(args):
 
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-    os.environ["CRT_CTX_SHARE_ADDR"] = "1"
+    os.environ["CRT_CTX_SHARE_ADDR"] = "0"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
 
     # Set the default location for daos log files written during testing if not
