@@ -90,6 +90,8 @@ struct dtx_handle {
 	void				*dth_ent;
 	/** The address (offset) of the (new) object to be modified. */
 	umem_off_t			 dth_obj;
+	/** Modification sequence in the distributed transaction. */
+	uint16_t			 dth_op_seq;
 };
 
 /* Each sub transaction handle to manage each sub thandle */

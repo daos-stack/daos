@@ -2448,7 +2448,8 @@ csum_obj_update(struct dc_object *obj, daos_obj_update_t *args,
 		return rc;
 
 	/** Calc 'a' key checksum and value checksum */
-	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, args->nr,
+	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, NULL,
+				    args->nr,
 				    false, obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {
@@ -2492,7 +2493,8 @@ csum_obj_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 		return rc;
 
 	/** akeys (1 for each iod) */
-	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, args->nr,
+	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, NULL,
+				    args->nr,
 				    true, obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {
