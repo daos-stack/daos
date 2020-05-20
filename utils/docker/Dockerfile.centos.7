@@ -81,6 +81,8 @@ RUN pip3 install avocado-framework; \
     pip3 install avocado-framework-plugin-result-html; \
     pip3 install avocado-framework-plugin-varianter-yaml-to-mux
 
+RUN pip install codespell
+
 # Add DAOS user
 ENV USER daos
 ENV PASSWD daos
