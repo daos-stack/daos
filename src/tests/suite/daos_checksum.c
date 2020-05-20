@@ -967,7 +967,7 @@ extents_with_holes_7(void **state)
 
 	/** Setup Update IOD */
 	ctx.update_iod.iod_size = rec_size;
-	/** These thest cases always use 1 recx at a time */
+	/** These test cases always use 1 recx at a time */
 	ctx.update_iod.iod_nr	= 1;
 	ctx.update_iod.iod_recxs = ctx.recx;
 	ctx.update_iod.iod_type  = DAOS_IOD_ARRAY;

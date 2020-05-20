@@ -1577,7 +1577,7 @@ static const struct CMUnitTest tests[] = {
 	TEST("CSUM_HOLES03: With 2 mapped extents with a hole that starts "
 	     "and ends in different chunks", holes_3),
 	TEST("CSUM_HOLES04: With 2 mapped extents with a hole that spans "
-	     "multiple chuncks", holes_4),
+	     "multiple chunks", holes_4),
 	TEST("CSUM_HOLES05: With record size 2 and many holes within a "
 	     "single chunk", holes_5),
 
