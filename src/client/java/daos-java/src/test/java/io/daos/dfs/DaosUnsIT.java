@@ -296,6 +296,23 @@ public class DaosUnsIT {
     }
 
     @Test
+    public void testRemoveAppInfoSuccessful() throws Exception {
+        Exception ee = null;
+        File file = Files.createTempDirectory("uns").toFile();
+        try {
+            DaosUns.setAppInfo(file.getAbsolutePath(), "user.attr", "abc");
+            DaosUns.setAppInfo(file.getAbsolutePath(), "user.attr", null);
+            DaosUns.getAppInfo(file.getAbsolutePath(), "user.attr", 10);
+        } catch (Exception e) {
+            ee = e;
+        } finally {
+            file.delete();
+        }
+        Assert.assertNotNull(ee);
+        Assert.assertTrue(ee.getMessage().contains("error code: 61 error msg: No data available"));
+    }
+
+    @Test
     public void testGetAppInfoBeforeSet() throws Exception {
         File file = Files.createTempDirectory("uns").toFile();
         Exception ee = null;
