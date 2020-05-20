@@ -160,7 +160,7 @@ def release_candidate() {
 def faults_enabled(String type) {
     // if the fault_enabled pragma is false or it a release candidate; disable fault injection
     echo "type: >" + type + "<"
-    pragma = cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true'
+    pragma = cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true')
     echo "Fault enabled: >" + pragma + "<"
     rc = release_candidate()
     echo "Release candidate: >" + rc + "<"
