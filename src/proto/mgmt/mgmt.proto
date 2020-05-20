@@ -104,6 +104,8 @@ service MgmtSvc {
 	rpc StopRanks(RanksReq) returns (RanksResp) {}
 	// Ping DAOS IO servers on a host. (gRPC fanout)
 	rpc PingRanks(RanksReq) returns (RanksResp) {}
+	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
+	rpc ResetFormatRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS IO servers on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
 	// Change the owner of a DAOS container

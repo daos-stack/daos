@@ -214,7 +214,7 @@ class Dfuse(DfuseCommand):
         self.log.info('Starting dfuse at %s', self.mount_dir.value)
 
         # A log file must be defined to ensure logs are captured
-        if "D_LOG_FILE" not in self._pre_command:
+        if "D_LOG_FILE" not in self.env:
             raise CommandFailure(
                 "Dfuse missing environment varaibles for D_LOG_FILE")
 
@@ -222,7 +222,8 @@ class Dfuse(DfuseCommand):
         self.create_mount_point()
 
         # run dfuse command
-        ret_code = pcmd(self.hosts, self.__str__(), timeout=30)
+        cmd = "".join([self.env.get_export_str(), self.__str__()])
+        ret_code = pcmd(self.hosts, cmd, timeout=30)
 
         if 0 in ret_code:
             self.running_hosts.add(ret_code[0])

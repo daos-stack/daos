@@ -29,10 +29,11 @@ from apricot import TestWithServers
 from test_utils_pool import TestPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun, Orterun
 from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
+
 
 class MdtestBase(TestWithServers):
     """Base mdtest class.
@@ -176,7 +177,10 @@ class MdtestBase(TestWithServers):
             processes (int): number of host processes
         """
         env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
-        manager.setup_command(env, self.hostfile_clients, processes)
+        manager.assign_hosts(
+            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_processes(processes)
+        manager.assign_environment(env)
         try:
             self.pool.display_pool_daos_space()
             manager.run()

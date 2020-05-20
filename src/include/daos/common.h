@@ -208,6 +208,8 @@ void daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
 int daos_sgl_copy_ptr(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 			    int src_nr);
+int daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
+		       int src_nr);
 int daos_sgl_copy_data_out(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
@@ -293,14 +295,14 @@ daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
  * @param[in]		sgl		sgl to be read from
  * @param[in/out]	idx		index into the sgl to start reading from
  * @param[in]		buf_len_req	number of bytes requested
- * @param[out]		buf		resulting pointer to buffer
- * @param[out]		buf_len		length of buffer
+ * @param[out]		p_buf		resulting pointer to buffer
+ * @param[out]		p_buf_len		length of buffer
  *
  * @return		true if end of SGL was reached
  */
 bool daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 			size_t buf_len_req,
-			uint8_t **buf, size_t *buf_len);
+			uint8_t **p_buf, size_t *p_buf_len);
 
 typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
 /**
