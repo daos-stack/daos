@@ -568,12 +568,12 @@ objects_verify(void)
 }
 
 static int
-objects_verify_close(void)
+objects_verify_close(bool verify)
 {
 	int i;
 	int rc = 0;
 
-	if (ts_verify_fetch) {
+	if (verify) {
 		if (ts_single || ts_overwrite) {
 			fprintf(stdout, "Verification is unsupported\n");
 		} else {
@@ -746,7 +746,7 @@ ts_prep_fetch(void)
 static int
 ts_post_verify(void)
 {
-	return objects_verify_close();
+	return objects_verify_close(ts_verify_fetch);
 }
 
 static int
@@ -771,6 +771,54 @@ static int
 ts_update_fetch_perf(double *duration)
 {
 	return objects_fetch(duration, RANK_ZERO);
+}
+
+static int
+ts_oit_post(void)
+{
+	static const int OID_ARR_SIZE	= 8;
+	daos_obj_id_t	oids[OID_ARR_SIZE];
+	daos_anchor_t	anchor;
+	daos_handle_t	toh;
+	daos_epoch_t	epoch;
+	uint32_t	oids_nr;
+	int		total;
+	int		i;
+	int		rc;
+
+	objects_verify_close(false);
+
+	if (ts_mode != TS_MODE_DAOS)
+		return 0; /* cannot support */
+
+	rc = daos_cont_create_snap_opt(ts_ctx.tsc_coh, &epoch, NULL,
+				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
+				       NULL);
+	if (rc)
+		fprintf(stderr, "failed to create snapshot\n");
+
+	rc = daos_oit_open(ts_ctx.tsc_coh, epoch, &toh, NULL);
+	D_ASSERT(rc == 0);
+
+	memset(&anchor, 0, sizeof(anchor));
+	for (total = 0; true; ) {
+		oids_nr = OID_ARR_SIZE;
+		rc = daos_oit_list(toh, oids, &oids_nr, &anchor, NULL);
+		D_ASSERTF(rc == 0, "%d\n", rc);
+
+		D_PRINT("returned %d oids\n", oids_nr);
+		for (i = 0; i < oids_nr; i++) {
+			D_PRINT("oid[%d] ="DF_OID"\n", total, DP_OID(oids[i]));
+			total++;
+		}
+		if (daos_anchor_is_eof(&anchor)) {
+			D_PRINT("done\n");
+			break;
+		}
+	}
+	rc = daos_oit_close(toh, NULL);
+	D_ASSERT(rc == 0);
+	return rc;
 }
 
 static int
@@ -1036,6 +1084,7 @@ static struct option ts_ops[] = {
 	{ "pool_nvme",	required_argument,	NULL,	'N' },
 	{ "type",	required_argument,	NULL,	'T' },
 	{ "credits",	required_argument,	NULL,	'C' },
+	{ "oit",	no_argument,		NULL,	'O' },
 	{ "obj",	required_argument,	NULL,	'o' },
 	{ "dkey",	required_argument,	NULL,	'd' },
 	{ "akey",	required_argument,	NULL,	'a' },
@@ -1046,6 +1095,7 @@ static struct option ts_ops[] = {
 	{ "overwrite",	no_argument,		NULL,	't' },
 	{ "nest_iter",	no_argument,		NULL,	'n' },
 	{ "file",	required_argument,	NULL,	'f' },
+	{ "dmg_conf",	required_argument,	NULL,	'g' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ "verify",	no_argument,		NULL,	'v' },
 	{ "wait",	no_argument,		NULL,	'w' },
@@ -1131,9 +1181,12 @@ static int (*perf_tests[TEST_SIZE])(double *duration);
 static int (*perf_tests_prep[TEST_SIZE])(void);
 static int (*perf_tests_post[TEST_SIZE])(void);
 
+static char *perf_conf;
+
 char	*perf_tests_name[] = {
 	"update",
 	"fetch",
+	"oit",
 	"iterate",
 	"rebuild",
 	"update and fetch"
@@ -1144,7 +1197,7 @@ main(int argc, char **argv)
 {
 	struct timeval	tv;
 	daos_size_t	scm_size = (2ULL << 30); /* default pool SCM size */
-	daos_size_t	nvme_size = (8ULL << 30); /* default pool NVMe size */
+	daos_size_t	nvme_size = (16ULL << 30); /* default pool NVMe size */
 	int		credits   = -1;	/* sync mode */
 	int		vsize	   = 32;	/* default value size */
 	int		ec_vsize = 0;
@@ -1163,7 +1216,7 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nASG:s:ztf:hUFRBvIiuwxp",
+				 "P:N:T:C:c:o:d:a:r:nASg:G:s:ztf:hUFORBvIiuwxp",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1259,6 +1312,9 @@ main(int argc, char **argv)
 		case 'S':
 			ts_shuffle = true;
 			break;
+		case 'g':
+			perf_conf = optarg;
+			break;
 		case 'G':
 			seed = atoi(optarg);
 			break;
@@ -1293,6 +1349,11 @@ main(int argc, char **argv)
 		case 'R':
 			perf_tests_prep[REBUILD_TEST] = ts_io_prep;
 			perf_tests[REBUILD_TEST] = ts_rebuild_perf;
+			break;
+		case 'O':
+			perf_tests_prep[UPDATE_TEST] = ts_io_prep;
+			perf_tests[UPDATE_TEST] = ts_write_perf;
+			perf_tests_post[UPDATE_TEST] = ts_oit_post;
 			break;
 		case 'i':
 			ts_rebuild_only_iteration = true;
@@ -1439,6 +1500,7 @@ main(int argc, char **argv)
 	ts_ctx.tsc_cred_vsize	= vsize;
 	ts_ctx.tsc_scm_size	= scm_size;
 	ts_ctx.tsc_nvme_size	= nvme_size;
+	ts_ctx.tsc_dmg_conf	= perf_conf;
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,

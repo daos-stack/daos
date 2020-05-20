@@ -955,7 +955,7 @@ out:
 	if (rc)
 		D_ERROR("pool "DF_UUID" event %d failed: rc %d\n",
 			DP_UUID(svc->ps_uuid), src, rc);
-	daos_prop_entries_free(&prop);
+	daos_prop_fini(&prop);
 }
 
 static void
@@ -4212,7 +4212,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 out:
 	if (pool)
 		ds_pool_put(pool);
-	daos_prop_entries_free(&prop);
+	daos_prop_fini(&prop);
 	pool_target_id_list_free(&target_list);
 	return rc;
 }

@@ -1193,6 +1193,63 @@ out:
 	return rc;
 }
 
+/* parameter for fetching service rank list */
+struct pool_svc_iv_args {
+	struct ds_pool	*ia_pool;
+	d_rank_list_t	*ia_svc;
+};
+
+static int
+cont_pool_svc_ult(void *args)
+{
+	struct pool_svc_iv_args	*iv_args = args;
+	struct daos_prop_entry	*entry;
+	daos_prop_t		 prop;
+	int			 rc;
+
+	memset(&prop, 0, sizeof(prop));
+	rc = ds_pool_iv_prop_fetch(iv_args->ia_pool, &prop);
+	if (rc)
+		return rc;
+
+	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SVC_LIST);
+	D_ASSERT(entry != NULL);
+
+	rc = d_rank_list_dup(&iv_args->ia_svc, entry->dpe_val_ptr);
+	if (rc)
+		D_GOTO(out, rc);
+out:
+	daos_prop_fini(&prop);
+	return rc;
+}
+
+int
+ds_pool_iv_svc_fetch(struct ds_pool *pool, d_rank_list_t **svc_p)
+{
+	struct pool_svc_iv_args	 ia;
+	int			 rc;
+
+	ia.ia_pool = pool;
+	ia.ia_svc  = NULL;
+
+	if (dss_get_module_info()->dmi_xs_id == 0) {
+		/* OK to fetch it from xstream-0 */
+		rc = cont_pool_svc_ult(&ia);
+		if (rc)
+			D_GOTO(failed, rc);
+	} else {
+		/* create a ULT and schedule it on xstream-0 */
+		rc = dss_ult_execute(cont_pool_svc_ult, &ia, NULL, NULL,
+				     DSS_ULT_POOL_SRV, 0, 0);
+		if (rc)
+			D_GOTO(failed, rc);
+	}
+	*svc_p = ia.ia_svc;
+	return 0;
+failed:
+	return rc;
+}
+
 int
 ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 {

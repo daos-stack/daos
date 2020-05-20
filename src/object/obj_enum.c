@@ -85,7 +85,7 @@ is_sgl_full(struct dss_enum_arg *arg, daos_size_t size)
 	while (arg->sgl_idx < sgl->sg_nr) {
 		d_iov_t *iovs = sgl->sg_iovs;
 
-		if (iovs[arg->sgl_idx].iov_len + size >=
+		if (iovs[arg->sgl_idx].iov_len + size >
 		    iovs[arg->sgl_idx].iov_buf_len) {
 			D_DEBUG(DB_IO, "current %dth iov buf is full"
 				" iov_len %zd size "DF_U64" buf_len %zd\n",

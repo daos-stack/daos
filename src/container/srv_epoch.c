@@ -158,8 +158,8 @@ out:
 }
 
 static int
-snap_create_bcast(struct rdb_tx *tx, struct cont *cont, crt_context_t *ctx,
-		  daos_epoch_t *epoch)
+snap_create_bcast(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
+		  uint64_t opts, crt_context_t *ctx, daos_epoch_t *epoch)
 {
 	struct cont_tgt_snapshot_notify_in	*in;
 	struct cont_tgt_snapshot_notify_out	*out;
@@ -177,6 +177,10 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, crt_context_t *ctx,
 	in = crt_req_get(rpc);
 	uuid_copy(in->tsi_pool_uuid, cont->c_svc->cs_pool_uuid);
 	uuid_copy(in->tsi_cont_uuid, cont->c_uuid);
+	uuid_copy(in->tsi_coh_uuid, coh_uuid);
+	in->tsi_epoch = crt_hlc_get();
+	in->tsi_opts = opts;
+
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		goto out_rpc;
@@ -190,7 +194,7 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, crt_context_t *ctx,
 		goto out_rpc;
 	}
 
-	*epoch = crt_hlc_get();
+	*epoch = in->tsi_epoch;
 	d_iov_set(&key, epoch, sizeof(*epoch));
 	d_iov_set(&value, &zero, sizeof(zero));
 	rc = rdb_tx_update(tx, &cont->c_snaps, &key, &value);
@@ -234,7 +238,8 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	rc = snap_create_bcast(tx, cont, rpc->cr_ctx, &snap_eph);
+	rc = snap_create_bcast(tx, cont, in->cei_op.ci_hdl, in->cei_opts,
+			       rpc->cr_ctx, &snap_eph);
 	if (rc == 0)
 		out->ceo_epoch = snap_eph;
 out:
