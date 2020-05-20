@@ -80,7 +80,8 @@ func TestInfoCacheInitNoScanResults(t *testing.T) {
 			if err = proto.Unmarshal(res, resp); err != nil {
 				t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
 			}
-			common.AssertTrue(t, resp.GetInterface() == "", fmt.Sprintf("Expected empty interface name, got %s", resp.GetInterface()))
+			common.AssertTrue(t, resp.GetInterface() == defaultNetworkDevice, fmt.Sprintf("Expected default interface: %s, got %s", defaultNetworkDevice, resp.GetInterface()))
+			common.AssertTrue(t, resp.GetDomain() == defaultDomain, fmt.Sprintf("Expected default domain: %s, got %s", defaultDomain, resp.GetDomain()))
 		})
 	}
 }

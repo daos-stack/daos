@@ -52,11 +52,9 @@ class OSAOfflineReintegration(TestWithServers):
            Returns : pool_leader (int)
         """
         out = []
-        kwargs = {"pool_uuid": self.pool.uuid}
+        kwargs = {"pool": self.pool.uuid}
         out = self.dmg_command.get_output("pool_query", **kwargs)
-        pool_leader = out[0][3]
-        pool_leader = pool_leader.split('=')
-        return int(pool_leader[1])
+        return int(out[0][3])
 
     def get_pool_version(self):
         """Get the pool version
@@ -64,13 +62,15 @@ class OSAOfflineReintegration(TestWithServers):
            Returns : pool_version (int)
         """
         out = []
-        kwargs = {"pool_uuid": self.pool.uuid}
+        kwargs = {"pool": self.pool.uuid}
         out = self.dmg_command.get_output("pool_query", **kwargs)
-        pool_version = out[0][4]
-        pool_version = pool_version.split('=')
-        return int(pool_version[1])
+        return int(out[0][4])
 
     def write_single_object(self):
+        """Write some data to the existing pool.
+           Args: None
+           Returns : None
+        """
         self.pool.connect(2)
         csum = self.params.get("enable_checksum", '/run/container/*')
         container = DaosContainer(self.context)
@@ -105,7 +105,9 @@ class OSAOfflineReintegration(TestWithServers):
     def run_offline_reintegration_test(self, num_pool, data=False):
         """Run the offline reintegration without data.
            Args: num_pool (int) : Total pools to create
-            for testing purpose.
+                                  for testing purpose.
+                 data (bool) : False (Pool has no data)
+                               True (Create some data in pool)
            Returns : None
         """
         # Create a pool
@@ -144,13 +146,14 @@ class OSAOfflineReintegration(TestWithServers):
             self.pool = pool[val]
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
-            self.log.info("Pool Version at the beginning %d", pver_begin)
+            self.log.info("Pool Version at the beginning %s", pver_begin)
             output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                    rank, t_string)
             self.log.info(output)
             time.sleep(10)
             pver_exclude = self.get_pool_version()
-            self.log.info("Pool Version after exclude %d", pver_exclude)
+            self.log.info("Pool Version after exclude %s", pver_exclude)
+            # Check pool vversion incremented after pool exclude
             if pver_exclude <= pver_begin:
                 self.fail("Pool Version Error:  After exclude")
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
@@ -160,6 +163,7 @@ class OSAOfflineReintegration(TestWithServers):
             time.sleep(10)
             pver_reint = self.get_pool_version()
             self.log.info("Pool Version after reintegrate %d", pver_reint)
+            # Check pool vversion incremented after pool reintegrate
             if pver_reint <= pver_exclude:
                 self.fail("Pool Version Error: After reintegrate")
 
@@ -175,6 +179,8 @@ class OSAOfflineReintegration(TestWithServers):
 
         :avocado: tags=all,pr,hw,large,osa,offline_reintegration
         """
+        # Perform reintegration testing with 1 to 3 pools
         for x in range(1, 4):
             self.run_offline_reintegration_test(x)
+        # Perform reintegration testing : inserting data in pool
         self.run_offline_reintegration_test(1, True)

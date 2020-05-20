@@ -51,11 +51,14 @@ class DmgCommand(YamlCommand):
         # UUID since it's made up of hyphens and \s includes new line.
         "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
         "pool_create": r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)",
-        "pool_query": r"(?:Pool\s+([0-9a-fA-F-]+),\s+(ntarget=\d+),"
-                      r"\s+(disabled=\d+),\s+(leader=\d+),\s+(version=\d+)"
-                      r"|Target\(VOS\)\s+(count:\d+)|(SCM|NVMe)|"
-                      r"(Total size:\s+.*B)|(?:(Free:\s*.*B),\s*(min:\s*.*B)"
-                      r",\s*(max:\s*.*B),\s*(mean:\s*.*B)))"
+        "pool_query": r"(?:Pool\s+([0-9a-fA-F-]+),\s+ntarget=(\d+),"
+                      r"\s+disabled=(\d+),\s+leader=(\d+),"
+                      r"\s+version=(\d+)|Target\(VOS\)\s+count:\s*(\d+)|"
+                      r"(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
+                      r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+)"
+                      r",\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
+                      r"|Rebuild\s+(\w+),\s+([0-9]+)\s+objs,\s+([0-9]+)"
+                      r"\s+recs)"
     }
 
     def __init__(self, path, yaml_cfg=None):
@@ -650,6 +653,25 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.acl_file.value = acl_file
         return self._get_result()
 
+    def pool_query(self, pool):
+        """Query a pool with the dmg command.
+
+        Args:
+            uuid (str): Pool UUID to query.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool destroy command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        return self._get_result()
+
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.
 
@@ -839,26 +861,6 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.rank.value = rank
         self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
         return self._get_result()
-
-    def pool_query(self, pool_uuid):
-        """Daos Pool Query
-
-        Args:
-            pool (str): Pool uuid.
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                       information.
-
-        Raises:
-            CommandFailure: if the dmg pool query command fails.
-
-        """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class.sub_command_class.pool.value = pool_uuid
-        return self._get_result()
-
 
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
