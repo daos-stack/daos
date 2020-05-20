@@ -218,7 +218,7 @@ public class DaosUns {
     /**
      * get information from extended attributes of UNS path.
      * Some info gets from DAOS extended attribute.
-     * The Rest gets from app extended attributes.
+     * The Rest gets from app extended attributes if any.
      *
      * @param path
      * OS FS path
@@ -228,6 +228,29 @@ public class DaosUns {
      * @throws IOException
      */
     public static DunsInfo getAccessInfo(String path, String appInfoAttrName) throws IOException {
+        return getAccessInfo(path, appInfoAttrName, io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
+                false);
+    }
+
+    /**
+     * get information from extended attributes of UNS path.
+     * Some info gets from DAOS extended attribute.
+     * The Rest gets from app extended attributes. A exception will be thrown if user expect app info and no
+     * info gets.
+     *
+     * @param path
+     * OS FS path
+     * @param appInfoAttrName
+     * app-specific attribute name
+     * @param maxValueLen
+     * maximum value length
+     * @param expectAppInfo
+     * expect app info? true for throwing exception if no value gets, false for ignoring quietly.
+     * @return information hold in {@link DunsInfo}
+     * @throws IOException
+     */
+    public static DunsInfo getAccessInfo(String path, String appInfoAttrName, int maxValueLen,
+                                         boolean expectAppInfo) throws IOException {
         DunsAttribute attribute = DaosUns.resolvePath(path);
         if (attribute == null) {
             throw new IOException("no UNS attribute get from " + path);
@@ -236,8 +259,15 @@ public class DaosUns {
         String contId = attribute.getCuuid();
         Layout layout = attribute.getLayoutType();
 
-        String value = DaosUns.getAppInfo(path, appInfoAttrName,
-                io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT);
+        String value = null;
+        try {
+            value = DaosUns.getAppInfo(path, appInfoAttrName,
+                    maxValueLen);
+        } catch (DaosIOException e) {
+            if (expectAppInfo) {
+                throw e;
+            }
+        }
         return new DunsInfo(poolId, contId, layout.name(), value);
     }
 

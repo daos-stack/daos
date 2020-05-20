@@ -58,7 +58,8 @@ public class DaosFileSystemTest {
     String path = "/file/abc";
     DunsInfo info = new DunsInfo("123", "56", "POSIX", Constants.DAOS_POOL_SVC + "=0");
     PowerMockito.mockStatic(DaosUns.class);
-    when(DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP)).thenReturn(info);
+    when(DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
+            io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false)).thenReturn(info);
     URI uri = URI.create("daos://" + Constants.DAOS_AUTHORITY_UNS + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();
@@ -99,7 +100,8 @@ public class DaosFileSystemTest {
     DunsInfo info = new DunsInfo("123", "56", "POSIX",
             sb.toString());
     PowerMockito.mockStatic(DaosUns.class);
-    when(DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP)).thenReturn(info);
+    when(DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
+            io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false)).thenReturn(info);
     URI uri = URI.create("daos://" + Constants.DAOS_AUTHORITY_UNS + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();
