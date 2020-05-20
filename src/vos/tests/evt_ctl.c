@@ -100,6 +100,10 @@ struct test_arg {
 	char			*ta_pool_name;
 };
 
+/* variables for test group */
+static char		**test_group_args;
+static int		test_group_argc;
+
 static int
 ts_evt_bio_free(struct umem_instance *umm, struct evt_desc *desc,
 		daos_size_t nob, void *args)
@@ -362,7 +366,7 @@ ts_add_rect(void **state)
 	entry.ei_ver = 0;
 	entry.ei_inob = val == NULL ? 0 : 1;
 
-	rc = evt_insert(ts_toh, &entry);
+	rc = evt_insert(ts_toh, &entry, NULL);
 	if (rc == 0)
 		total_added++;
 	if (should_pass) {
@@ -704,7 +708,7 @@ ts_many_add(void **state)
 		entry.ei_ver = 0;
 		entry.ei_inob = 1;
 
-		rc = evt_insert(ts_toh, &entry);
+		rc = evt_insert(ts_toh, &entry, NULL);
 		if (rc != 0) {
 			D_FATAL("Add rect %d failed "DF_RC"\n", i, DP_RC(rc));
 			fail();
@@ -1078,7 +1082,7 @@ test_evt_iter_flags(void **state)
 			}
 			if (rc != 0)
 				goto finish;
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			if (rc != 0)
 				goto finish;
 		}
@@ -1206,7 +1210,7 @@ test_evt_iter_delete(void **state)
 					    sizeof(sum));
 			assert_int_equal(rc, 0);
 
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			assert_int_equal(rc, 0);
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
@@ -1359,7 +1363,7 @@ test_evt_find_internal(void **state)
 						testdata, sizeof(testdata));
 				assert_int_equal(rc, 0);
 			}
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			assert_int_equal(rc, 0);
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
@@ -1473,7 +1477,7 @@ test_evt_iter_delete_internal(void **state)
 					    &offset, sizeof(offset));
 			assert_int_equal(rc, 0);
 
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			assert_int_equal(rc, 0);
 		}
 	}
@@ -1539,7 +1543,7 @@ test_evt_variable_record_size_internal(void **state)
 			rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
 					    data, data_size);
 			assert_int_equal(rc, 0);
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			if (count > 0)
 				assert_int_not_equal(rc, 0);
 			else
@@ -1611,7 +1615,7 @@ test_evt_various_data_size_internal(void **state)
 				assert_int_equal(rc, -DER_NOSPACE);
 				break;
 			}
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			if (rc != 0) {
 				assert_int_equal(rc, -DER_NOSPACE);
 				break;
@@ -1847,7 +1851,7 @@ test_evt_overlap_split_internal(void **state)
 		rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
 				    data, data_size);
 		assert_int_equal(rc, 0);
-		rc = evt_insert(toh, &entry);
+		rc = evt_insert(toh, &entry, NULL);
 		assert_int_equal(rc, 0);
 		memset(data, 0, data_size);
 	}
@@ -1927,7 +1931,7 @@ insert_and_check(daos_handle_t toh, struct evt_entry_in *entry, int idx, int nr)
 	entry->ei_rect.rc_ex.ex_lo = idx;
 	entry->ei_rect.rc_ex.ex_hi = idx + nr - 1;
 	entry->ei_rect.rc_epc = epoch;
-	rc = evt_insert(toh, entry);
+	rc = evt_insert(toh, entry, NULL);
 	assert_int_equal(rc, 0);
 
 	return epoch++;
@@ -2040,113 +2044,6 @@ test_evt_root_deactivate_bug(void **state)
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
-static int
-run_create_test(void)
-{
-	static const struct CMUnitTest evt_create[] = {
-		{ "EVT001: evt_create", ts_open_create, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree create test", evt_create,
-					   NULL, NULL);
-}
-
-static int
-run_destroy_test(void)
-{
-	static const struct CMUnitTest evt_destroy[] = {
-		{ "EVT002: evt_destroy", ts_close_destroy, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree destroy test", evt_destroy,
-						NULL, NULL);
-}
-
-static int
-run_add_test(void)
-{
-	static const struct CMUnitTest evt_add_rect[] = {
-		{ "EVT003: evt_add_rect", ts_add_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree add test", evt_add_rect,
-						NULL, NULL);
-}
-
-static int
-run_many_add_test(void)
-{
-	static const struct CMUnitTest evt_many_add[] = {
-		{ "EVT004: evt_many_add", ts_many_add, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree many add test",
-						evt_many_add, NULL, NULL);
-}
-
-static int
-run_find_rect_test(void)
-{
-	static const struct CMUnitTest evt_find_rect[] = {
-		{ "EVT005: evt_find_rect", ts_find_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree find rect test",
-						evt_find_rect, NULL, NULL);
-}
-
-static int
-run_list_rect_test(void)
-{
-	static const struct CMUnitTest evt_list_rect[] = {
-		{ "EVT006: evt_list_rect", ts_list_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree list rect test",
-						evt_list_rect, NULL, NULL);
-}
-
-static int
-run_delete_rect_test(void)
-{
-	static const struct CMUnitTest evt_delete_rect[] = {
-		{ "EVT007: evt_delete_rect", ts_delete_rect, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree delete rect test",
-						evt_delete_rect, NULL, NULL);
-}
-
-static int
-run_tree_debug_test(void)
-{
-	static const struct CMUnitTest evt_tree_debug[] = {
-		{ "EVT008: evt_tree_debug", ts_tree_debug, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree tree debug test",
-					evt_tree_debug, NULL, NULL);
-}
-
-static int
-run_drain_test(void)
-{
-	static const struct CMUnitTest evt_drain[] = {
-		{ "EVT009: evt_drain", ts_drain, NULL, NULL},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree drain test",
-					   evt_drain, NULL, NULL);
-}
 
 static void
 test_evt_outer_punch(void **state)
@@ -2184,7 +2081,7 @@ test_evt_outer_punch(void **state)
 					    sizeof(sum));
 			assert_int_equal(rc, 0);
 
-			rc = evt_insert(toh, &entry);
+			rc = evt_insert(toh, &entry, NULL);
 			assert_int_equal(rc, 0);
 		}
 	}
@@ -2277,7 +2174,7 @@ test_evt_outer_punch(void **state)
 }
 
 static int
-run_internal_tests(void)
+run_internal_tests(char *test_name)
 {
 	static const struct CMUnitTest evt_builtin[] = {
 		{ "EVT050: evt_iter_delete", test_evt_iter_delete,
@@ -2315,7 +2212,7 @@ run_internal_tests(void)
 		{ NULL, NULL, NULL, NULL }
 	};
 
-	return cmocka_run_group_tests_name("evtree built-in tests", evt_builtin,
+	return cmocka_run_group_tests_name(test_name, evt_builtin,
 					   global_setup, global_teardown);
 }
 
@@ -2339,50 +2236,50 @@ static struct option ts_ops[] = {
 static int
 ts_cmd_run(char opc, char *args)
 {
-	int	rc = 0;
+	int	 rc = 0;
+	void	 **st = NULL;
 
 	tst_fn_val.optval = args;
 	tst_fn_val.input = true;
 
 	switch (opc) {
 	case 'C':
-		rc = run_create_test();
+		ts_open_create(st);
 		break;
 	case 'D':
-		rc = run_destroy_test();
+		ts_close_destroy(st);
 		break;
 	case 'o':
 		tst_fn_val.input = false;
 		tst_fn_val.optval = NULL;
-		rc = run_create_test();
+		ts_open_create(st);
 		break;
 	case 'c':
 		tst_fn_val.input = false;
-		rc = run_destroy_test();
+		ts_close_destroy(st);
 		break;
 	case 'a':
-		rc = run_add_test();
+		ts_add_rect(st);
 		break;
 	case 'm':
-		rc = run_many_add_test();
+		ts_many_add(st);
 		break;
 	case 'e':
-		rc = run_drain_test();
+		ts_drain(st);
 		break;
 	case 'f':
-		rc = run_find_rect_test();
+		ts_find_rect(st);
 		break;
 	case 'l':
-		rc = run_list_rect_test();
+		ts_list_rect(st);
 		break;
 	case 'd':
-		rc = run_delete_rect_test();
+		ts_delete_rect(st);
 		break;
 	case 'b':
-		rc = run_tree_debug_test();
+		ts_tree_debug(st);
 		break;
 	case 't':
-		rc = run_internal_tests();
 		break;
 	case 's':
 		if (strcasecmp(args, "soff") == 0)
@@ -2395,10 +2292,41 @@ ts_cmd_run(char opc, char *args)
 		rc = 0;
 		break;
 	}
-	if (rc != 0)
-		D_PRINT("opc=%d failed with rc="DF_RC"\n", opc, DP_RC(rc));
+	if (st != NULL)
+		rc = -1;
 
 	return rc;
+}
+
+static void
+ts_group(void **state)
+{
+
+	int	opc = 0;
+
+	while ((opc = getopt_long(test_group_argc,
+				 test_group_args,
+				 "C:a:m:e:f:g:d:b:Docl::ts",
+				 ts_ops, NULL)) != -1){
+		ts_cmd_run(opc, optarg);
+	}
+}
+
+static int
+run_cmd_line_test(char *test_name, char **args, int argc)
+{
+
+	const struct CMUnitTest evt_test[] = {
+		{ test_name, ts_group, NULL, NULL},
+	};
+
+	test_group_args = args;
+	test_group_argc = argc;
+
+	return cmocka_run_group_tests_name(test_name,
+					   evt_test,
+					   NULL,
+					   NULL);
 }
 
 int
@@ -2406,6 +2334,10 @@ main(int argc, char **argv)
 {
 	struct timeval	tv;
 	int		rc;
+	int		j;
+	int		start_idx;
+	char		*test_name;
+	bool		create_pmem;
 
 	d_register_alt_assert(mock_assert);
 
@@ -2418,33 +2350,61 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	optind = 0;
-	if (argc > 1 && strcmp(argv[1], "pmem") == 0) {
-		optind = 1;
+	/* Capture test_name and pmem args if any */
+	start_idx = 0;
+	test_name = "evtree default test suite name";
+	create_pmem = false;
+	if (argc > 1) {
+		/* Get test suite variables */
+		if (strcmp(argv[1], "--start-test") == 0) {
+			start_idx = 2;
+			test_name = argv[start_idx];
+		}
+
+		/* Capture pmem parameter */
+		if (argc > start_idx+1) {
+			if (strcmp(argv[start_idx+1], "pmem") == 0) {
+				create_pmem = true;
+				start_idx++;
+			}
+		}
+	}
+	optind = start_idx;
+	/* Create pool - pmem or vmem */
+	if (create_pmem) {
 		rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*ts_root),
 				       &ts_utx);
 	} else {
 		rc = utest_vmem_create(sizeof(*ts_root), &ts_utx);
 	}
-
-	if (rc != 0)
+	if (rc != 0) {
+		perror("Evtree test couldn't create pool");
 		return rc;
+	}
 
 	ts_root = utest_utx2root(ts_utx);
 	ts_uma = utest_utx2uma(ts_utx);
 
+	/* Start interactive session*/
 	if ((argc - optind) == 1) {
+		print_message("Starting interactive session...\n");
 		rc = dts_cmd_parser(ts_ops, "$ > ", ts_cmd_run);
 		goto out;
 	}
 
-	while ((rc = getopt_long(argc, argv, "C:a:m:e:f:g:d:b:Docl::ts:",
-				 ts_ops, NULL)) != -1) {
-		rc = ts_cmd_run(rc, optarg);
-		if (rc != 0)
+	/* Execute Internal tests in the command */
+	for (j = 0; j < argc; j++) {
+		if (strcmp(argv[j], "-t") == 0) {
+			rc = run_internal_tests(test_name);
+			if (rc != 0)
+				D_PRINT("Internal tests failed rc="DF_RC"\n",
+					DP_RC(rc));
 			goto out;
+		}
 	}
-	rc = 0;
+
+	/* Execute the sequence of tests */
+	rc = run_cmd_line_test(test_name, argv, argc);
  out:
 	daos_debug_fini();
 	rc += utest_utx_destroy(ts_utx);

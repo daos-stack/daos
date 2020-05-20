@@ -271,7 +271,7 @@ gc_obj_run(struct gc_test_args *args)
 		if (rc) {
 			print_error("failed to delete objects: %s\n",
 				    d_errstr(rc));
-			return rc;
+			goto out;
 		}
 	}
 
@@ -429,8 +429,11 @@ static const struct CMUnitTest gc_tests[] = {
 };
 
 int
-run_gc_tests(void)
+run_gc_tests(const char *cfg)
 {
-	return cmocka_run_group_tests_name("Garbage collector",
+	char	test_name[CFG_MAX];
+
+	create_config(test_name, "Garbage collector %s", cfg);
+	return cmocka_run_group_tests_name(test_name,
 					   gc_tests, gc_setup, gc_teardown);
 }

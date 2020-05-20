@@ -352,7 +352,6 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	if (rlink == NULL) {
 		D_ALLOC_PTR(ui);
 		if (!ui) {
-			D_ERROR("Failed to allocate uri item\n");
 			D_GOTO(exit, rc = -DER_NOMEM);
 		}
 
@@ -392,7 +391,6 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		}
 
 		if (!ui->ui_uri[tag]) {
-			D_ERROR("Failed to strndup uri string\n");
 			rc = -DER_NOMEM;
 		}
 
@@ -475,6 +473,7 @@ free_htables:
 			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
 	}
 	D_FREE(htables);
+	grp_priv->gp_lookup_cache = NULL;
 
 out:
 	if (rc != 0)
@@ -670,7 +669,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 		rc = grp_lc_uri_insert_internal_locked(grp_priv, ctx_idx, rank,
 						tag, uri);
 		if (rc != 0) {
-			D_ERROR("Insertion failed for ctx_idx=%d\n", ctx_idx);
+			D_ERROR("Insertion failed: rc %d\n", rc);
 			D_GOTO(unlock, rc);
 		}
 	}
@@ -2521,7 +2520,8 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 
 	D_ASSERT(index >= 0);
 
-	if (grp_priv->gp_primary) {
+	/* Do not populate swim entries for views and secondary groups */
+	if (grp_priv->gp_primary && !grp_priv->gp_view) {
 		rc = crt_swim_rank_add(grp_priv, rank);
 		if (rc) {
 			D_ERROR("crt_swim_rank_add() failed: rc=%d\n", rc);
@@ -2676,7 +2676,6 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 
 	D_STRNDUP(*uri_str, uri, strlen(uri) + 1);
 	if (!(*uri_str)) {
-		D_ERROR("Failed to allocate uri string\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -2825,7 +2824,7 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank)
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 out:
-	if (rc == 0 && grp_priv->gp_primary)
+	if (rc == 0 && grp_priv->gp_primary && !grp_priv->gp_view)
 		crt_swim_rank_del(grp_priv, rank);
 
 	return rc;
@@ -2887,13 +2886,15 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 	}
 
 	grp_priv->gp_size = 0;
-	grp_priv->gp_self = 0;
+	grp_priv->gp_self = CRT_NO_RANK;
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
 		D_ERROR("grp_priv_init_membs() failed; rc=%d\n", rc);
 		D_GOTO(out, rc);
 	}
+
+	grp_priv->gp_view = 1;
 
 	rc = crt_grp_lc_create(grp_priv);
 	if (rc != 0) {
@@ -3002,7 +3003,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 	}
 
 	grp_priv->gp_size = 0;
-	grp_priv->gp_self = 0;
+	grp_priv->gp_self = CRT_NO_RANK;
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
@@ -3032,7 +3033,6 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 	/* Record secondary group in the primary group */
 	D_ALLOC_PTR(entry);
 	if (entry == NULL) {
-		D_ERROR("Failed to allocate entry for group\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -3175,6 +3175,12 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
+	/*
+	 * Set the self rank based on my primary group rank. For simplicity,
+	 * assert that my primary group rank must have been set already, since
+	 * this is always the case with daos_io_server today.
+	 */
+	D_ASSERT(grp_priv->gp_priv_prim->gp_self != CRT_NO_RANK);
 	if (prim_rank == grp_priv->gp_priv_prim->gp_self) {
 		D_DEBUG(DB_ALL, "Setting rank %d as self rank for grp %s\n",
 			sec_rank, grp_priv->gp_pub.cg_grpid);
@@ -3330,7 +3336,6 @@ crt_group_mod_get(d_rank_list_t *grp_membs, d_rank_list_t *mod_membs,
 	/* Array will have at most 'mod_membs' elements */
 	D_ALLOC_ARRAY(idx_to_add, mod_membs->rl_nr);
 	if (!idx_to_add) {
-		D_ERROR("Failed to allocate array\n");
 		D_GOTO(cleanup, rc = -DER_NOMEM);
 	}
 

@@ -49,11 +49,7 @@ class MultiServerCreateDeleteTest(TestWithServers):
         :avocado: tags=all,pool,full_regression,small,multitarget
         """
         # Create a dmg command object
-        dmg = DmgCommand(self.bin)
-        dmg.get_params(self)
-        dmg.hostlist.update(
-            self.server_managers[0].runner.job.yaml_params.access_points.value,
-            "dmg.hostlist")
+        dmg = self.get_dmg_command()
 
         # Disable raising an exception if the dmg command fails
         dmg.exit_status_exception = False

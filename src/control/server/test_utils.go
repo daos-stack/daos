@@ -45,6 +45,7 @@ type mockDrpcClientConfig struct {
 	SendMsgResponse *drpc.Response
 	SendMsgError    error
 	ResponseDelay   time.Duration
+	SocketPath      string
 }
 
 func (cfg *mockDrpcClientConfig) setSendMsgResponse(status drpc.Status, body []byte, err error) {
@@ -88,6 +89,10 @@ func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
 	<-time.After(c.cfg.ResponseDelay)
 
 	return c.cfg.SendMsgResponse, c.cfg.SendMsgError
+}
+
+func (c *mockDrpcClient) GetSocketPath() string {
+	return c.cfg.SocketPath
 }
 
 func newMockDrpcClient(cfg *mockDrpcClientConfig) *mockDrpcClient {

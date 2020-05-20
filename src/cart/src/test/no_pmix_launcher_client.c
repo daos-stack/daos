@@ -60,7 +60,7 @@ progress_function(void *data)
 	crt_context_t *p_ctx = (crt_context_t *)data;
 
 	while (g_do_shutdown == 0)
-		crt_progress(*p_ctx, 1000, NULL, NULL);
+		crt_progress(*p_ctx, 1000);
 
 	crt_context_destroy(*p_ctx, 1);
 

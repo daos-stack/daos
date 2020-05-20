@@ -97,6 +97,7 @@ typedef enum {
 	DAOS_OPC_TX_ABORT,
 	DAOS_OPC_TX_OPEN_SNAP,
 	DAOS_OPC_TX_CLOSE,
+	DAOS_OPC_TX_RESTART,
 
 	/** Object APIs */
 	DAOS_OPC_OBJ_REGISTER_CLASS,
@@ -548,6 +549,8 @@ typedef struct {
 	daos_handle_t		coh;
 	/** Returned transaction open handle. */
 	daos_handle_t		*th;
+	/** Transaction flags. */
+	uint64_t		flags;
 } daos_tx_open_t;
 
 /** Transaction commit args */
@@ -577,6 +580,12 @@ typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
 } daos_tx_close_t;
+
+/** Transaction restart args */
+typedef struct {
+	/** Transaction open handle. */
+	daos_handle_t		th;
+} daos_tx_restart_t;
 
 /** Object class register args */
 typedef struct {
@@ -635,10 +644,10 @@ typedef struct {
  *   to allocate multiple instances of this data structure.
  */
 typedef struct {
-	/** Object open handle */
-	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
+	/** Object open handle */
+	daos_handle_t		oh;
 	/** Distribution Key. */
 	daos_key_t		*dkey;
 	/** Array of attribute keys. */
@@ -685,10 +694,10 @@ typedef struct {
 
 /** Object fetch/update args */
 typedef struct {
-	/** Object open handle */
-	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
+	/** Object open handle */
+	daos_handle_t		oh;
 	/** Operation flags. */
 	uint64_t		flags;
 	/** Distribution Key. */

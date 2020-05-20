@@ -52,7 +52,7 @@ static inline int drain_queue(crt_context_t ctx)
 	 * a more robust method
 	 */
 	do {
-		rc = crt_progress(ctx, 1000000, NULL, NULL);
+		rc = crt_progress(ctx, 1000000);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			printf("crt_progress failed rc: %d.\n", rc);
 			return rc;
