@@ -518,7 +518,7 @@ io_test_add_csums(daos_iod_t *iod, d_sg_list_t *sgl,
 	rc = daos_csummer_type_init(p_csummer, type, chunk_size, 0);
 	if (rc)
 		return rc;
-	rc = daos_csummer_calc_iods(*p_csummer, sgl, iod, 1, false,
+	rc = daos_csummer_calc_iods(*p_csummer, sgl, iod, NULL, 1, false,
 				    NULL, 0, p_iod_csums);
 	if (rc)
 		daos_csummer_destroy(p_csummer);
@@ -789,7 +789,7 @@ io_oi_test(void **state)
 	rc = vos_oi_find_alloc(cont, oid, 1, true, &obj[0], NULL);
 	assert_int_equal(rc, 0);
 
-	rc = vos_oi_find_alloc(cont, oid, 1, true, &obj[1], NULL);
+	rc = vos_oi_find_alloc(cont, oid, 2, true, &obj[1], NULL);
 	assert_int_equal(rc, 0);
 }
 
