@@ -469,8 +469,8 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 
 		memcpy(pp, rp, strlen(rp));
 		print_message("  update(%s, "DF_U64") before %s(%s, "
-			      DF_U64"): ", pp, re, r->o_name, rp, re);
-		rc = update_f(arg, pp, re);
+			      DF_U64"): ", pp, re - 1, r->o_name, rp, re);
+		rc = update_f(arg, pp, re - 1);
 		print_message("%d\n", rc);
 		if (rc != 0) {
 			nfailed++;

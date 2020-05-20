@@ -1219,7 +1219,7 @@ cond_test(void **state)
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxxx", 'x');
 	/** Conditional update of non-existed key should fail */
-	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a", "b",
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 1, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE,
 		       -DER_NONEXIST, sgl, "foo");
 	/** Conditional punch of non-existed akey should fail */

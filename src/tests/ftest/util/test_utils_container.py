@@ -27,7 +27,7 @@ from time import time
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from command_utils import BasicParameter
+from command_utils_base import BasicParameter
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
                         c_uuid_to_str, str_to_c_uuid)
 from general_utils import get_random_string, DaosTestError

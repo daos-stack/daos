@@ -299,7 +299,7 @@ objects_update(d_rank_t rank)
 	int		i;
 	int		j;
 	int		rc;
-	daos_epoch_t	epoch = 0;
+	daos_epoch_t	epoch = 1;
 
 	dts_reset_key();
 
@@ -378,7 +378,7 @@ objects_verify(void)
 	int		k;
 	int		rc = 0;
 	char		dkey[DTS_KEY_LEN];
-	daos_epoch_t	epoch = 0;
+	daos_epoch_t	epoch = 1;
 
 	dts_reset_key();
 	if (!ts_overwrite)

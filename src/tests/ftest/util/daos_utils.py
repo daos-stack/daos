@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from command_utils_base import \
-    CommandWithParameters, FormattedParameter, CommandFailure
+    CommandFailure, FormattedParameter, CommandWithParameters
 from command_utils import CommandWithSubCommand
 
 

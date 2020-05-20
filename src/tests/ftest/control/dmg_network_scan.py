@@ -74,15 +74,15 @@ class NetDev(object):
         """Create a copy instance of this object."""
         return NetDev(self.host, self.f_iface, self.providers, self.numa)
 
-    def set_dev_info(self, dev_name, prefix):
+    def set_dev_info(self, dev_name, libfabric_prefix):
         """Get all of this devices' information.
 
         Args:
             dev_name (str): device name or infiniband device name
-            prefix (str): prefix path pointing to daos install path
+            prefix (str): prefix path pointing to libfabric install path
         """
         self.set_numa()
-        self.set_providers(dev_name, prefix)
+        self.set_providers(dev_name, libfabric_prefix)
 
     def set_numa(self):
         """Get the numa node information for this device."""
@@ -91,10 +91,11 @@ class NetDev(object):
             if os.path.exists(p):
                 self.numa = ''.join(open(p, 'r').read()).rstrip()
 
-    def set_providers(self, dev_name, prefix):
+    def set_providers(self, dev_name, libfabric_prefix):
         """Get the provider information."""
         # Setup and run command
-        fi_info = os.path.join(prefix, "bin", "fi_info -d {}".format(dev_name))
+        fi_info = os.path.join(libfabric_prefix, "bin",
+                               "fi_info -d {}".format(dev_name))
         out = process.run(fi_info)
 
         # Parse the list and divide the info
@@ -199,7 +200,7 @@ class DmgNetworkScanTest(TestWithServers):
         for dev in dev_names:
             dev_info = NetDev(self.hostlist_servers[-1], dev)
             for dev_name in dev_names[dev]:
-                dev_info.set_dev_info(dev_name, self.prefix)
+                dev_info.set_dev_info(dev_name, self.ofi_prefix)
             sys_net_devs.append(dev_info)
 
         # Create NetDev per provider to match dmg output

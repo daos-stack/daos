@@ -232,6 +232,9 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_dti_cos_done = 0;
 	dth->dth_has_ilog = 0;
 	dth->dth_actived = 0;
+
+	/* Operation sequence starts from 1 instead of 0. */
+	dth->dth_op_seq = 1;
 }
 
 /**

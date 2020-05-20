@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2019 Intel Corporation.
+(C) Copyright 2019-2020 Intel Corporation.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -476,7 +476,8 @@ class SoakTestBase(TestWithServers):
                         if ior_cmd.api.value == "MPIIO":
                             env["DAOS_CONT"] = ior_cmd.daos_cont.value
                         cmd = Srun(ior_cmd)
-                        cmd.setup_command(env, None, nprocs)
+                        cmd.assign_processes(nprocs)
+                        cmd.assign_environment(env, True)
                         cmd.ntasks_per_node.update(ppn)
                         log_name = "{}_{}_{}_{}".format(
                             api, b_size, t_size, o_type)
