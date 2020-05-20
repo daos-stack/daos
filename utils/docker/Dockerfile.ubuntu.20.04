@@ -1,5 +1,5 @@
 #
-# Copyright 2018-2019, Intel Corporation
+# Copyright 2018-2020, Intel Corporation
 #
 # 'recipe' for Docker to build an image of Ubuntu-based
 # environment for building the DAOS project.
@@ -60,12 +60,15 @@ WORKDIR /home/$USER
 ARG NOBUILD
 
 # Fetch DAOS code
-RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/daos.git; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+  git clone https://github.com/daos-stack/daos.git; fi
 WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
-RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install PREFIX=/usr; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+  git submodule init && git submodule update; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+  scons --build-deps=yes install PREFIX=/usr; fi
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
