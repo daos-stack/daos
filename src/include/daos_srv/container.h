@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,9 @@ int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 void ds_cont_svc_fini(struct cont_svc **svcp);
 void ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
+
+int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
+			      d_rank_list_t *ranks, daos_prop_t *prop);
 
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
 		 uint64_t *ncont);
@@ -139,6 +142,10 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);
+
+int
+ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
+			  struct ds_cont_child **cont);
 
 typedef int (*cont_iter_cb_t)(uuid_t co_uuid, vos_iter_entry_t *ent, void *arg);
 int

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,20 +111,38 @@ void dts_ctx_fini(struct dts_context *tsc);
  */
 struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
 
+#define CFG_MAX 128
+__attribute__ ((__format__(__printf__, 2, 3)))
+static inline void
+create_config(char buf[CFG_MAX], const char *format, ...)
+{
+	va_list	ap;
+	int	count;
+
+	va_start(ap, format);
+	count = vsnprintf(buf, CFG_MAX, format, ap);
+	va_end(ap);
+
+	if (count >= CFG_MAX)
+		buf[CFG_MAX - 1] = 0;
+}
+
 /**
  * VOS test suite run tests
  */
-int run_pool_test(void);
-int run_co_test(void);
-int run_discard_tests(void);
-int run_aggregate_tests(bool slow);
-int run_dtx_tests(void);
-int run_gc_tests(void);
-int run_pm_tests(void);
-int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators);
+int run_pool_test(const char *cfg);
+int run_co_test(const char *cfg);
+int run_discard_tests(const char *cfg);
+int run_aggregate_tests(bool slow, const char *cfg);
+int run_dtx_tests(const char *cfg);
+int run_gc_tests(const char *cfg);
+int run_pm_tests(const char *cfg);
+int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators,
+		const char *cfg);
+int run_ts_tests(const char *cfg);
 
-int run_ilog_tests(void);
-
-int run_csum_extent_tests(void);
+int run_ilog_tests(const char *cfg);
+int run_csum_extent_tests(const char *cfg);
+int run_mvcc_tests(const char *cfg);
 
 #endif

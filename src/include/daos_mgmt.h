@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -180,25 +180,6 @@ daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
 		 d_rank_list_t *failed, daos_event_t *ev);
 
 /**
- * Evict all connections to a pool.
- *
- * \param uuid	[IN]	UUID of the pool
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NONEXIST	Pool is nonexistent
- */
-int
-daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
-		daos_event_t *ev);
-
-/**
  * add a set of storage targets from a pool.
  *
  * \param uuid	[IN]	UUID of the pool
@@ -365,7 +346,8 @@ enum {
  * \param rank	[IN]	Ranks to set parameter. -1 means setting on all servers.
  * \param key_id [IN]	key ID of the parameter.
  * \param value [IN]	value of the parameter.
- * \param value [IN]	optional extra value to set the fail value when
+ * \param value_extra [IN]
+ *			optional extra value to set the fail value when
  *			\a key_id is DMG_CMD_FAIL_LOC and \a value is in
  *			DAOS_FAIL_VALUE mode.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,8 +71,13 @@ cont_df_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 static int
 cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
+	struct vos_cont_df	*cont_df;
+
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NONEXIST;
+
+	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	vos_ts_evict(&cont_df->cd_ts_idx, VOS_TS_TYPE_CONT);
 
 	return gc_add_item(tins->ti_priv, GC_CONT, rec->rec_off, 0);
 }
@@ -197,6 +202,9 @@ cont_free(struct d_ulink *ulink)
 		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
 	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
 		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+
+	if (cont->vc_dtx_array)
+		lrua_array_free(cont->vc_dtx_array);
 
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committable_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_list));
@@ -365,6 +373,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	uuid_copy(cont->vc_id, co_uuid);
 	cont->vc_pool	 = pool;
 	cont->vc_cont_df = args.ca_cont_df;
+	cont->vc_ts_idx = &cont->vc_cont_df->cd_ts_idx;
 	cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
 	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
 	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
@@ -387,6 +396,16 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
+
+	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
+			      sizeof(struct vos_dtx_act_ent),
+			      LRU_FLAG_REUSE_UNIQUE,
+			      NULL, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX active array: rc = "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(exit, rc);
+	}
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACT_TABLE, 0,
 				      DTX_BTREE_ORDER, &uma,

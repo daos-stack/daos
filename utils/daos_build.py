@@ -35,18 +35,32 @@ def load_mpi_path(env):
     if mpicc:
         env.PrependENVPath("PATH", os.path.dirname(mpicc))
 
+def clear_icc_env(env):
+    """Remove icc specific options from environment"""
+    if env.subst("$COMPILER") == "icc":
+        linkflags = str(env.get("LINKFLAGS")).split()
+        if '-static-intel' in linkflags:
+            linkflags.remove('-static-intel')
+        for flag_type in ['CCFLAGS', 'CXXFLAGS', 'CFLAGS']:
+            oldflags = str(env.get(flag_type)).split()
+            newflags = []
+            for flag in oldflags:
+                if 'diag-disable' in flag:
+                    continue
+                if flag == '-Werror-all':
+                    newflags.append('-Werror')
+                    continue
+                newflags.append(flag)
+            env.Replace(**{flag_type : newflags})
+        env.Replace(LINKFLAGS=linkflags)
+
 def _find_mpicc(env):
     """find mpicc"""
     mpicc = find_executable("mpicc")
     if mpicc:
         env.Replace(CC="mpicc")
         env.Replace(LINK="mpicc")
-        if env.subst("$COMPILER") == "icc":
-            linkflags = str(env.get("LINKFLAGS")).split()
-            if '-static-intel' in linkflags:
-                linkflags.remove('-static-intel')
-            env.Replace(LINKFLAGS=linkflags)
-
+        clear_icc_env(env)
         load_mpi_path(env)
         return True
     return False

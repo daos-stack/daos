@@ -152,8 +152,8 @@ CRT_RPC_DECLARE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
 		DAOS_OSEQ_MGMT_PARAMS_SET)
 
 #define DAOS_ISEQ_MGMT_PROFILE /* input fields */		 \
-	((uint64_t)		(p_module)		CRT_VAR) \
 	((d_string_t)		(p_path)		CRT_VAR) \
+	((int32_t)		(p_avg)			CRT_VAR) \
 	((int32_t)		(p_op)			CRT_VAR)
 
 #define DAOS_OSEQ_MGMT_PROFILE /* output fields */	 \

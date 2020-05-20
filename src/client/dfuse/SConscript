@@ -109,12 +109,25 @@ def check_struct_member(env, text, struct, member):
 
     env.Message('Checking for {} in {} '.format(member, struct))
 
-    rc = env.TryCompile('{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text,
-                                                                               struct,
-                                                                               member),
-                        '.c')
+    src = '{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text, struct,
+                                                                 member)
+    rc = env.TryCompile(src, '.c')
     env.Result(rc)
     return rc
+
+def configure_fuse(cenv):
+    """Configure for specific version of fuse"""
+    if GetOption('help') or GetOption('clean'):
+        return
+
+    check = Configure(cenv,
+                      custom_tests={'CheckStructMember': check_struct_member})
+
+    if check.CheckStructMember('#include <fuse3/fuse.h>',
+                               'struct fuse_file_info',
+                               'cache_readdir'):
+        cenv.AppendUnique(CPPDEFINES=['-DHAVE_CACHE_READDIR=1'])
+    check.Finish()
 
 def scons():
     """Scons function"""
@@ -151,19 +164,14 @@ def scons():
 
     prereqs.require(cenv, 'fuse')
 
-    check = Configure(cenv, custom_tests={'CheckStructMember': check_struct_member})
-
-    if check.CheckStructMember('#include <fuse3/fuse.h>',
-                               'struct fuse_file_info',
-                               'cache_readdir'):
-        cenv.AppendUnique(CPPDEFINES=['-DHAVE_CACHE_READDIR=1'])
-    check.Finish()
+    configure_fuse(cenv)
 
     dfuse_obj = []
     for src in DFUSE_SRC:
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
+    cenv.AppendUnique(LIBS=['gurt'])
     progs = daos_build.program(cenv, 'dfuse/dfuse', common + dfuse_obj)
 
     Default(progs + libs)

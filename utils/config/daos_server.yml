@@ -1,7 +1,7 @@
 ## DAOS server configuration file.
 #
 ## Location of this configuration file is determined by first checking for the
-## path specified through the -f option of the daos_server command line.
+## path specified through the -o option of the daos_server command line.
 ## Otherwise, /etc/daos_server.conf is used.
 #
 #
@@ -75,6 +75,13 @@
 #provider: ofi+verbs;ofi_rxm
 #
 #
+## global CRT_CTX_SHARE_ADDR shared with client
+#crt_ctx_share_addr: 1
+#
+#
+## global CRT_TIMEOUT shared with client
+#crt_timeout: 30
+#
 #
 ## NVMe SSD whitelist
 #
@@ -118,11 +125,11 @@
 ## Number of hugepages to allocate for use by NVMe SSDs
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
-## through SPDK. This indicates the total number to be used by any spawned
-## servers. Default system hugepage size will be used and hugepages will be
-## evenly distributed between CPU nodes.
+## through SPDK. This indicates the number to be used for each spawned
+## I/O server, so the total will be this number * number of I/O servers.
+## Default system hugepage size will be used.
 #
-## default: 1024
+## default: 4096
 #nr_hugepages: 4096
 #
 #

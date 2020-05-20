@@ -12,13 +12,13 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.intel.daos</groupId>
+  <groupId>io.daos</groupId>
   <artifactId>daos-java-root</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>1.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>DAOS Java Root POM</name>
-  <description>Java API for DAOS Object and DAOS FS</description>
+  <description>Java Root POM for DAOS</description>
   <url>http://daos.io</url>
 
   <properties>
@@ -26,13 +26,14 @@
     <junit.jupiter.version>5.4.0</junit.jupiter.version>
     <slf4j.version>1.7.25</slf4j.version>
     <log4j.version>2.11.1</log4j.version>
-    <forkCount>2</forkCount>
     <checkstyle.failOnViolation>true</checkstyle.failOnViolation>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
     <surefire.version>2.22.0</surefire.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <dependency.locations.enabled>false</dependency.locations.enabled>
+    <native.build.path>${project.basedir}/build</native.build.path>
+    <daos.install.path>/usr/local/daos</daos.install.path>
   </properties>
 
   <repositories>
@@ -82,6 +83,11 @@
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>3.2.1</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-clean-plugin</artifactId>
           <version>3.0.0</version>
         </plugin>
@@ -104,11 +110,6 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-enforcer-plugin</artifactId>
           <version>1.4.1</version>
-        </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-failsafe-plugin</artifactId>
-          <version>${surefire.version}</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -209,6 +210,36 @@
           <artifactId>maven-checkstyle-plugin</artifactId>
           <version>3.0.0</version>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>${surefire.version}</version>
+          <configuration>
+            <forkCount>0</forkCount>
+            <systemPropertyVariables>
+              <java.library.path>${daos.install.path}/lib:${daos.install.path}/lib64
+              </java.library.path>
+            </systemPropertyVariables>
+            <argLine>
+              -Djava.library.path=${daos.install.path}/lib:${daos.install.path}/lib64
+            </argLine>
+            <runOrder>alphabetical</runOrder>
+          </configuration>
+          <executions>
+            <execution>
+              <id>integration-test</id>
+              <goals>
+                <goal>integration-test</goal>
+              </goals>
+            </execution>
+            <execution>
+              <id>verify</id>
+              <goals>
+                <goal>verify</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
       </plugins>
     </pluginManagement>
   </build>
@@ -279,8 +310,9 @@
   </reporting>
 
   <modules>
-    <module>daos-java-api</module>
+    <module>daos-java</module>
     <module>hadoop-daos</module>
+    <module>distribution</module>
   </modules>
 
   <profiles>

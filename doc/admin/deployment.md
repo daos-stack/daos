@@ -68,6 +68,11 @@ $ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
 $ sudo reboot
 ```
 
+!!! warning
+    VFIO support is a new feature for DAOS 1.2 and has been tested on the
+    following platforms:
+    •	CentOS 7.7
+
 ### Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
@@ -265,6 +270,23 @@ The generated keys and certificates must then be securely distributed to all nod
 in the DAOS system (servers, clients, and admin nodes). Permissions for these files should
 be set to prevent unauthorized access to the keys and certificates.
 
+Client nodes require:
+- CA root cert
+- Agent cert
+- Agent key
+
+Administrative nodes require:
+- CA root cert
+- Admin cert
+- Admin key
+
+Server nodes require:
+- CA root cert
+- Server cert
+- Server key
+- All valid agent certs in the DAOS system (in the client cert directory, see
+  config file below)
+
 After the certificates have been securely distributed, the DAOS configuration files must be
 updated in order to enable authentication and secure communications. These examples assume
 that the configuration files have been installed under `/etc/daos`:
@@ -296,7 +318,7 @@ transport_config:
 ```
 
 ```yaml
-# /etc/daos/daos.yml (dmg/admin)
+# /etc/daos/daos_control.yml (dmg/admin)
 
 transport_config:
   # Custom CA Root certificate for generated certs
@@ -901,9 +923,23 @@ $ sudo journalctl --unit daos-agent
 ## System Validation
 
 To validate that the DAOS system is properly installed, the daos_test
-suite can be executed. Ensure the DAOS Agent is configured and running before
-running daos_test and that the DAOS_SINGLETON_CLI and CRT_ATTACH_INFO_PATH
-environment variables are properly set as described [here](#server-startup).
+suite can be executed. Ensure the DAOS Agent is configured before running
+daos_test and that the following environment variables are properly set:
+
+- `CRT_PHY_ADDR_STR` must be set to match the provider specified in the server
+  yaml configuration file (e.g. export `CRT_PHY_ADDR_STR="ofi+sockets"`)
+
+- `OFI_INTERFACE` is set to the network interface you want to user on the client
+  node.
+
+- `OFI_DOMAIN` must optionally be set for infiniband deployments.
+
+- `DAOS_AGENT_DRPC_DIR` must also optionally be set if the agent is using a
+  non-default path for the socket.
+
+While those environment variables need to be set up for DAOS v1.0, versions 1.2
+and upward automatically set up the environment via the agent and don't require
+any special environment set up to run applications.
 
 ```bash
 mpirun -np <num_clients> --hostfile <hostfile> ./daos_test

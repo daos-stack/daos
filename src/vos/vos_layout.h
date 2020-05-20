@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 #define POOL_DF_VER_1				1
-#define POOL_DF_VERSION				2
+#define POOL_DF_VERSION				6
 
 /**
  * Durable format for VOS pool
@@ -180,10 +180,12 @@ struct vos_dtx_act_ent_df {
 	uint64_t			dae_srv_gen;
 	/** The active DTX entry on-disk layout generation. */
 	uint64_t			dae_layout_gen;
+	/** The allocated local id for the DTX entry */
+	uint32_t			dae_lid;
 	/** The intent of related modification. */
-	uint32_t			dae_intent;
+	uint16_t			dae_intent;
 	/** The index in the current vos_dtx_blob_df. */
-	int32_t				dae_index;
+	int16_t				dae_index;
 	/** The inlined dtx records. */
 	struct vos_dtx_record_df	dae_rec_inline[DTX_INLINE_REC_CNT];
 	/** DTX flags, see enum vos_dtx_entry_flags. */
@@ -251,6 +253,8 @@ struct vos_cont_df {
 	uuid_t				cd_id;
 	uint64_t			cd_nobjs;
 	uint64_t			cd_dtx_resync_gen;
+	uint32_t			cd_ts_idx;
+	uint32_t			cd_pad;
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
 	struct btr_root			cd_obj_root;
@@ -326,7 +330,9 @@ struct vos_irec_df {
 	/** pool map version */
 	uint32_t			ir_ver;
 	/** The DTX entry in SCM. */
-	umem_off_t			ir_dtx;
+	uint32_t			ir_dtx;
+	/** padding bytes */
+	uint32_t			ir_pad32;
 	/** length of value */
 	uint64_t			ir_size;
 	/**

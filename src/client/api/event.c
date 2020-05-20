@@ -45,22 +45,21 @@ static __thread bool		ev_thpriv_is_init;
 #define crt_finalize()			({0;})
 #define crt_context_create(a, b)	({0;})
 #define crt_context_destroy(a, b)	({0;})
-#define crt_progress(ctx, timeout, cb, args)	\
-({						\
-	int __rc = cb(args);			\
-						\
-	while ((timeout) != 0 && __rc == 0) {	\
-		sleep(1);			\
-		__rc = cb(args);		\
-		if ((timeout) < 0)		\
-			continue;		\
-		if ((timeout) < 1000000)	\
-			break;			\
-		(timeout) -= 1000000;		\
-	}					\
-	0;					\
+#define crt_progress_cond(ctx, timeout, cb, args)	\
+({							\
+	int __rc = cb(args);				\
+							\
+	while ((timeout) != 0 && __rc == 0) {		\
+		sleep(1);				\
+		__rc = cb(args);			\
+		if ((timeout) < 0)			\
+			continue;			\
+		if ((timeout) < 1000000)		\
+			break;				\
+		(timeout) -= 1000000;			\
+	}						\
+	0;						\
 })
-
 #endif
 
 /*
@@ -537,7 +536,7 @@ ev_progress_cb(void *arg)
 	if (eqx->eqx_finalizing) {
 		evx->evx_status = DAOS_EVS_READY;
 		D_ASSERT(d_list_empty(&evx->evx_link));
-		D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 		return 1;
 	}
 
@@ -585,7 +584,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 	}
 
 	/* pass the timeout to crt_progress() with a conditional callback */
-	rc = crt_progress(evx->evx_ctx, timeout, ev_progress_cb, &epa);
+	rc = crt_progress_cond(evx->evx_ctx, timeout, ev_progress_cb, &epa);
 
 	/** drop ref grabbed in daos_eq_lookup() */
 	if (epa.eqx)
@@ -722,7 +721,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	epa.count	= 0;
 
 	/* pass the timeout to crt_progress() with a conditional callback */
-	rc = crt_progress(epa.eqx->eqx_ctx, timeout, eq_progress_cb, &epa);
+	rc = crt_progress_cond(epa.eqx->eqx_ctx, timeout, eq_progress_cb, &epa);
 
 	/* drop ref grabbed in daos_eq_lookup() */
 	daos_eq_putref(epa.eqx);
@@ -1202,12 +1201,11 @@ daos_event_priv_wait()
 
 	/* Wait on the event to complete */
 	while (evx->evx_status != DAOS_EVS_READY) {
-		rc = crt_progress(evx->evx_ctx, DAOS_EQ_WAIT,
-				  ev_progress_cb, &epa);
+		rc = crt_progress_cond(evx->evx_ctx, 0, ev_progress_cb, &epa);
 		if (rc == 0)
 			rc = ev_thpriv.ev_error;
 
-		if (rc)
+		if (rc && rc != -DER_TIMEDOUT)
 			break;
 	}
 	return rc;

@@ -36,7 +36,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -50,7 +50,7 @@ type Superblock struct {
 	Version     uint8
 	UUID        string
 	System      string
-	Rank        *ioserver.Rank
+	Rank        *system.Rank
 	ValidRank   bool
 	MS          bool
 	CreateMS    bool
@@ -100,6 +100,8 @@ func (srv *IOServerInstance) hasSuperblock() bool {
 
 // NeedsSuperblock indicates whether or not the instance appears
 // to need a superblock to be created in order to start.
+//
+// Should not be called if SCM format is required.
 func (srv *IOServerInstance) NeedsSuperblock() (bool, error) {
 	if srv.hasSuperblock() {
 		return false, nil
@@ -150,7 +152,7 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 	}
 
 	if cfg.Rank != nil || msInfo.isReplica && msInfo.shouldBootstrap {
-		superblock.Rank = new(ioserver.Rank)
+		superblock.Rank = new(system.Rank)
 		if cfg.Rank != nil {
 			*superblock.Rank = *cfg.Rank
 		}
@@ -187,14 +189,6 @@ func (srv *IOServerInstance) WriteSuperblock() error {
 // ReadSuperblock reads the instance's superblock
 // from storage.
 func (srv *IOServerInstance) ReadSuperblock() error {
-	needsFormat, err := srv.NeedsScmFormat()
-	if err != nil {
-		return errors.Wrap(err, "failed to check storage formatting")
-	}
-	if needsFormat {
-		return errors.New("can't read superblock from unformatted storage")
-	}
-
 	if err := srv.MountScmDevice(); err != nil {
 		return errors.Wrap(err, "failed to mount SCM device")
 	}
@@ -206,6 +200,13 @@ func (srv *IOServerInstance) ReadSuperblock() error {
 	srv.setSuperblock(sb)
 
 	return nil
+}
+
+// RemoveSuperblock removes a Superblock from storage.
+func (srv *IOServerInstance) RemoveSuperblock() error {
+	srv.setSuperblock(nil)
+
+	return os.Remove(srv.superblockPath())
 }
 
 // WriteSuperblock writes a Superblock to storage.

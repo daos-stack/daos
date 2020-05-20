@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -271,5 +271,14 @@ ds_sec_cont_can_read_data(uint64_t cont_capas);
  */
 uint64_t
 ds_sec_get_rebuild_cont_capabilities(void);
+
+/**
+ * Get the security capabilities for a container handle that can perform
+ * administrative tasks.
+ *
+ * @return	Bits representing security capabilities
+ */
+uint64_t
+ds_sec_get_admin_cont_capabilities(void);
 
 #endif /* __DAOS_SRV_SECURITY_H__ */

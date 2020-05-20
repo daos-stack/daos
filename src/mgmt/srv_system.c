@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -453,14 +453,17 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 {
 	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
 	struct rdb_tx		tx;
+	uint32_t		map_version;
 	struct enum_server_arg	arg;
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
+	/* Retrieve map_version (from the cache) and arg (from the DB). */
 	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
 	if (rc != 0)
 		return rc;
 	ABT_rwlock_rdlock(svc->ms_lock);
+	map_version = svc->ms_map_version;
 	enum_server_arg_init(&arg);
 	rc = rdb_tx_iterate(&tx, &svc->ms_servers, false /* !backward */,
 			    enum_server_cb, &arg);
@@ -471,7 +474,7 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 		return rc;
 	}
 
-	rc = map_update_bcast(info->dmi_ctx, svc, svc->ms_map_version,
+	rc = map_update_bcast(info->dmi_ctx, svc, map_version,
 			      arg.esa_servers_len, arg.esa_servers);
 
 	enum_server_arg_fini(&arg);
@@ -809,7 +812,7 @@ out:
 
 /* Callers are responsible for freeing resp->psrs. */
 int
-ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
+ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp, bool all_ranks)
 {
 	struct mgmt_svc	       *svc;
 	d_rank_list_t	       *ranks;
@@ -817,21 +820,29 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
 	int			i;
 	int			rc;
 
-	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
-	if (rc != 0)
-		goto out;
+	grp = crt_group_lookup(NULL);
+	D_ASSERT(grp != NULL);
 
-	rc = rdb_get_ranks(svc->ms_rsvc.s_db, &ranks);
-	if (rc != 0)
-		goto out_svc;
+	if (all_ranks) {
+		rc = crt_group_ranks_get(grp, &ranks);
+		if (rc != 0)
+			goto out;
+	} else {
+		rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+		if (rc != 0)
+			goto out;
+
+		rc = rdb_get_ranks(svc->ms_rsvc.s_db, &ranks);
+		if (rc != 0)
+			goto out_svc;
+	}
 
 	D_ALLOC(resp->psrs, sizeof(*resp->psrs) * ranks->rl_nr);
 	if (resp->psrs == NULL) {
 		rc = -DER_NOMEM;
 		goto out_ranks;
 	}
-	grp = crt_group_lookup(NULL);
-	D_ASSERT(grp != NULL);
+
 	for (i = 0; i < ranks->rl_nr; i++) {
 		d_rank_t rank = ranks->rl_ranks[i];
 
@@ -867,7 +878,8 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
 out_ranks:
 	d_rank_list_free(ranks);
 out_svc:
-	ds_mgmt_svc_put_leader(svc);
+	if (!all_ranks)
+		ds_mgmt_svc_put_leader(svc);
 out:
 	return rc;
 }

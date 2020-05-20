@@ -45,7 +45,7 @@
 #include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
-#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,pool,cont,dtx,obj,rebuild"
+#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -161,15 +161,14 @@ register_dbtree_classes(void)
 }
 
 static int
-modules_load(uint64_t *facs)
+modules_load(void)
 {
 	char		*mod;
 	char		*sep;
 	char		*run;
-	uint64_t	 mod_facs;
 	int		 rc = 0;
 
-	sep = strdup(modules);
+	D_STRNDUP(sep, modules, MAX_MODULE_OPTIONS + 1);
 	if (sep == NULL)
 		return -DER_NOMEM;
 	run = sep;
@@ -188,16 +187,12 @@ modules_load(uint64_t *facs)
 		else if (strcmp(mod, "vos") == 0)
 			mod = "vos_srv";
 
-		mod_facs = 0;
-		rc = dss_module_load(mod, &mod_facs);
+		rc = dss_module_load(mod);
 		if (rc != 0) {
 			D_ERROR("Failed to load module %s: %d\n",
 				mod, rc);
 			break;
 		}
-
-		if (facs != NULL)
-			*facs |= mod_facs;
 
 		mod = strsep(&run, ",");
 	}
@@ -205,6 +200,7 @@ modules_load(uint64_t *facs)
 	D_FREE(sep);
 	return rc;
 }
+
 
 /**
  * Get the appropriate number of main XS based on the number of cores and
@@ -492,6 +488,14 @@ server_init(int argc, char *argv[])
 		goto exit_abt_init;
 
 	D_INFO("Module interface successfully initialized\n");
+	/* load modules.  Split load an init so first call to dlopen
+	 * is from the ioserver to avoid DAOS-4557
+	 */
+	rc = modules_load();
+	if (rc)
+		/* Some modules may have been loaded successfully. */
+		D_GOTO(exit_mod_loaded, rc);
+	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
@@ -504,12 +508,12 @@ server_init(int argc, char *argv[])
 
 	ds_iv_init();
 
-	/* load modules */
-	rc = modules_load(&dss_mod_facs);
+	/* init modules */
+	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
 		/* Some modules may have been loaded successfully. */
 		D_GOTO(exit_mod_loaded, rc);
-	D_INFO("Module %s successfully loaded\n", modules);
+	D_INFO("Module %s successfully initialized\n", modules);
 
 	/* initialize service */
 	rc = dss_srv_init();
@@ -612,21 +616,32 @@ server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
 	dss_module_cleanup_all();
+	D_INFO("dss_module_cleanup_all() done\n");
 	drpc_fini();
+	D_INFO("drpc_fini() done\n");
 	server_init_state_fini();
+	D_INFO("server_init_state_fini() done\n");
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
 	} else {
 		pl_fini();
 		daos_hhash_fini();
 	}
+	D_INFO("daos_fini() or pl_fini() done\n");
 	dss_srv_fini(force);
+	D_INFO("dss_srv_fini() done\n");
 	dss_module_unload_all();
+	D_INFO("dss_module_unload_all() done\n");
 	ds_iv_fini();
+	D_INFO("ds_iv_fini() done\n");
 	crt_finalize();
+	D_INFO("crt_finalize() done\n");
 	dss_module_fini(force);
+	D_INFO("dss_module_fini() done\n");
 	abt_fini();
+	D_INFO("abt_fini() done\n");
 	daos_debug_fini();
+	D_INFO("daos_debug_fini() done\n");
 }
 
 static void

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -472,7 +472,7 @@ pool_properties(void **state)
 
 	print_message("create pool with properties, and query it to verify.\n");
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
@@ -624,7 +624,7 @@ static int
 pool_setup_sync(void **state)
 {
 	async_disable(state);
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
@@ -632,14 +632,14 @@ static int
 pool_setup_async(void **state)
 {
 	async_enable(state);
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_POOL_CREATE, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CREATE, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
@@ -668,7 +668,7 @@ setup_containers(void **state, daos_size_t nconts)
 	lcarg->tpool.poh = DAOS_HDL_INVAL;
 	lcarg->tpool.svc.rl_nr = svc_nreplicas;
 	lcarg->tpool.svc.rl_ranks = lcarg->tpool.ranks;
-	lcarg->tpool.pool_size = 1 << 30;	/* 1GB SCM */
+	lcarg->tpool.pool_size = 1 << 28;	/* 256MB SCM */
 	/* Create the pool */
 	rc = test_setup_pool_create(state, NULL /* ipool */, &lcarg->tpool,
 				    NULL /* prop */);
@@ -1015,7 +1015,7 @@ expect_pool_connect_access(test_arg_t *arg0, uint64_t perms,
 	int		 rc;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	arg->pool.pool_connect_flags = flags;

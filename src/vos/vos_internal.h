@@ -37,9 +37,46 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
-#include <vos_layout.h>
-#include <vos_ilog.h>
-#include <vos_obj.h>
+#include "vos_tls.h"
+#include "vos_layout.h"
+#include "vos_ilog.h"
+#include "vos_obj.h"
+
+#define VOS_TX_LOG_FAIL(rc, ...)			\
+	do {						\
+		bool	__is_err = true;		\
+							\
+		if (rc >= 0)				\
+			break;				\
+		switch (rc) {				\
+		case -DER_TX_RESTART:			\
+		case -DER_INPROGRESS:			\
+		case -DER_EXIST:			\
+		case -DER_NONEXIST:			\
+			__is_err = false;		\
+			break;				\
+		}					\
+		D_CDEBUG(__is_err, DLOG_ERR, DB_IO,	\
+			 __VA_ARGS__);			\
+	} while (0)
+
+#define VOS_TX_TRACE_FAIL(rc, ...)			\
+	do {						\
+		bool	__is_err = true;		\
+							\
+		if (rc >= 0)				\
+			break;				\
+		switch (rc) {				\
+		case -DER_TX_RESTART:			\
+		case -DER_INPROGRESS:			\
+		case -DER_EXIST:			\
+		case -DER_NONEXIST:			\
+			__is_err = false;		\
+			break;				\
+		}					\
+		D_CDEBUG(__is_err, DLOG_ERR, DB_TRACE,	\
+			 __VA_ARGS__);			\
+	} while (0)
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */
 #define VOS_OBJ_ORDER		20	/* Order of object tree */
@@ -47,8 +84,6 @@
 #define VOS_SVT_ORDER		5	/* order of single value tree */
 #define VOS_EVT_ORDER		23	/* evtree order */
 #define DTX_BTREE_ORDER		23	/* Order for DTX tree */
-
-
 
 #define DAOS_VOS_VERSION 1
 
@@ -60,6 +95,19 @@ extern struct dss_module_key vos_module_key;
 #define VOS_BLK_SHIFT		12	/* 4k */
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
+
+/** Up to 1 million lid entries split into 16 expansion slots */
+#define DTX_ARRAY_LEN		(1 << 20) /* Total array slots for DTX lid */
+#define DTX_ARRAY_NR		(1 << 4)  /* Number of expansion arrays */
+
+enum {
+	/** Used for marking an in-tree record committed */
+	DTX_LID_COMMITTED = 0,
+	/** Used for marking an in-tree record aborted */
+	DTX_LID_ABORTED,
+	/** Reserved local ids */
+	DTX_LID_RESERVED,
+};
 
 /** hash seed for murmur hash */
 #define VOS_BTR_MUR_SEED	0xC0FFEE
@@ -127,6 +175,8 @@ struct vos_container {
 	uuid_t			vc_id;
 	/* DAOS handle for object index btree */
 	daos_handle_t		vc_btr_hdl;
+	/** Array for active DTX records */
+	struct lru_array	*vc_dtx_array;
 	/* The handle for active DTX table */
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
@@ -151,6 +201,8 @@ struct vos_container {
 	uint32_t		vc_dtx_committed_count;
 	/* The items count in vc_dtx_committed_tmp_list. */
 	uint32_t		vc_dtx_committed_tmp_count;
+	/** Index for timestamp lookup */
+	uint32_t		*vc_ts_idx;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 	/**
@@ -182,6 +234,7 @@ struct vos_dtx_act_ent {
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
 #define DAE_LAYOUT_GEN(dae)	((dae)->dae_base.dae_layout_gen)
+#define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_INTENT(dae)		((dae)->dae_base.dae_intent)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
@@ -200,17 +253,6 @@ struct vos_dtx_cmt_ent {
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 
-struct vos_imem_strts {
-	/**
-	 * In-memory object cache for the PMEM
-	 * object table
-	 */
-	struct daos_lru_cache	*vis_ocache;
-	/** Hash table to refcount VOS handles */
-	/** (container/pool, etc.,) */
-	struct d_hash_table	*vis_pool_hhash;
-	struct d_hash_table	*vis_cont_hhash;
-};
 /* in-memory structures standalone instance */
 struct bio_xs_context		*vsa_xsctxt_inst;
 extern int vos_evt_feats;
@@ -225,13 +267,9 @@ vos_xsctxt_get(void)
 #endif
 }
 
-enum {
-	VOS_KEY_CMP_UINT64	= (1ULL << 63),
-	VOS_KEY_CMP_LEXICAL	= (1ULL << 62),
-	VOS_KEY_CMP_ANY		= (VOS_KEY_CMP_UINT64 | VOS_KEY_CMP_LEXICAL),
-};
+#define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
 
-#define VOS_KEY_CMP_UINT64_SET	(VOS_KEY_CMP_UINT64  | BTR_FEAT_DIRECT_KEY)
+#define VOS_KEY_CMP_UINT64_SET	(BTR_FEAT_UINT_KEY)
 #define VOS_KEY_CMP_LEXICAL_SET	(VOS_KEY_CMP_LEXICAL | BTR_FEAT_DIRECT_KEY)
 #define VOS_OFEAT_SHIFT		48
 #define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
@@ -242,67 +280,6 @@ extern struct vos_iter_ops vos_oi_iter_ops;
 extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_cont_iter_ops;
 extern struct vos_iter_ops vos_dtx_iter_ops;
-
-/** VOS thread local storage structure */
-struct vos_tls {
-	/* in-memory structures TLS instance */
-	/* TODO: move those members to vos_tls, nosense to have another
-	 * data structure for it.
-	 */
-	struct vos_imem_strts		 vtl_imems_inst;
-	/** pools registered for GC */
-	d_list_t			 vtl_gc_pools;
-	/* PMDK transaction stage callback data */
-	struct umem_tx_stage_data	 vtl_txd;
-	/** XXX: The DTX handle.
-	 *
-	 *	 Transferring DTX handle via TLS can avoid much changing
-	 *	 of existing functions' interfaces, and avoid the corner
-	 *	 cases that someone may miss to set the DTX handle when
-	 *	 operate related tree.
-	 *
-	 *	 But honestly, it is some hack to pass the DTX handle via
-	 *	 the TLS. It requires that there is no CPU yield during the
-	 *	 processing. Otherwise, the vtl_dth may be changed by other
-	 *	 ULTs. The user needs to guarantee that by itself.
-	 */
-	struct dtx_handle		*vtl_dth;
-};
-
-struct vos_tls *
-vos_tls_get();
-
-static inline struct d_hash_table *
-vos_pool_hhash_get(void)
-{
-	return vos_tls_get()->vtl_imems_inst.vis_pool_hhash;
-}
-
-static inline struct d_hash_table *
-vos_cont_hhash_get(void)
-{
-	return vos_tls_get()->vtl_imems_inst.vis_cont_hhash;
-}
-
-static inline struct umem_tx_stage_data *
-vos_txd_get(void)
-{
-	return &vos_tls_get()->vtl_txd;
-}
-
-static inline struct dtx_handle *
-vos_dth_get(void)
-{
-	return vos_tls_get()->vtl_dth;
-}
-
-static inline void
-vos_dth_set(struct dtx_handle *dth)
-{
-	D_ASSERT(dth == NULL || vos_tls_get()->vtl_dth == NULL);
-
-	vos_tls_get()->vtl_dth = dth;
-}
 
 static inline void
 vos_pool_addref(struct vos_pool *pool)
@@ -370,7 +347,8 @@ vos_dtx_table_register(void);
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
- * \param entry		[IN]	Address (offset) of the DTX to be checked.
+ * \param entry		[IN]	DTX local id
+ * \param epoch		[IN]	Epoch of update
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  *
@@ -386,7 +364,8 @@ vos_dtx_table_register(void);
  */
 int
 vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   umem_off_t entry, uint32_t intent, uint32_t type);
+			   uint32_t entry, daos_epoch_t epoch,
+			   uint32_t intent, uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -402,7 +381,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
  */
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
-			uint32_t type, umem_off_t *tx_id);
+			uint32_t type, uint32_t *tx_id);
 
 /**
  * Cleanup DTX handle (in DRAM things) when related PMDK transaction failed.
@@ -411,7 +390,7 @@ void
 vos_dtx_cleanup_dth(struct dtx_handle *dth);
 
 /** Return the already active dtx id, if any */
-umem_off_t
+uint32_t
 vos_dtx_get(void);
 
 /**
@@ -419,13 +398,15 @@ vos_dtx_get(void);
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
- * \param entry		[IN]	The DTX entry address (offset).
+ * \param entry		[IN]	The local DTX id.
+ * \param epoch		[IN]	Epoch for the DTX.
  * \param record	[IN]	Address (offset) of the record to be
  *				deregistered.
  */
 void
 vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
-			  umem_off_t entry, umem_off_t record);
+			  uint32_t entry, daos_epoch_t epoch,
+			  umem_off_t record);
 
 /**
  * Mark the DTX as prepared locally.
@@ -457,8 +438,11 @@ vos_dtx_cos_register(void);
  * \param xid		[IN]	Pointer to the DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param punch		[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success.
+ * \return		Other negative value if error.
  */
-void
+int
 vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 		struct dtx_id *xid, uint64_t dkey_hash, bool punch);
 
@@ -948,12 +932,14 @@ int
 key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		 enum vos_tree_class tclass, daos_key_t *key, int flags,
 		 uint32_t intent, struct vos_krec_df **krecp,
-		 daos_handle_t *sub_toh);
+		 daos_handle_t *sub_toh, struct vos_ts_set *ts_set);
 void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
-	       d_iov_t *key_iov, d_iov_t *val_iov, int flags);
+	       d_iov_t *key_iov, d_iov_t *val_iov, uint64_t flags,
+	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
+	       struct vos_ilog_info *info);
 
 /* vos_io.c */
 uint16_t
@@ -999,6 +985,15 @@ int
 gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 	    uint64_t args);
 
+static inline uint64_t
+vos_hash_get(void *buf, uint64_t len)
+{
+	if (buf == NULL)
+		return vos_kh_get();
+
+	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
+}
+
 /**
  * Aggregate the creation/punch records in the current entry of the object
  * iterator
@@ -1028,5 +1023,33 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
+
+/** Start epoch of vos */
+extern daos_epoch_t	vos_start_epoch;
+
+/* Slab allocation */
+enum {
+	VOS_SLAB_OBJ_NODE	= 0,
+	VOS_SLAB_KEY_NODE	= 1,
+	VOS_SLAB_SV_NODE	= 2,
+	VOS_SLAB_EVT_NODE	= 3,
+	VOS_SLAB_EVT_DESC	= 4,
+	VOS_SLAB_MAX		= 5
+};
+D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
+
+static inline umem_off_t
+vos_slab_alloc(struct umem_instance *umm, int size, int slab_id)
+{
+	/* evtree unit tests may skip slab register in vos_pool_open() */
+	D_ASSERTF(!umem_slab_registered(umm, slab_id) ||
+		  size == umem_slab_usize(umm, slab_id),
+		  "registered: %d, id: %d, size: %d != %zu\n",
+		  umem_slab_registered(umm, slab_id),
+		  slab_id, size, umem_slab_usize(umm, slab_id));
+
+	return umem_alloc_verb(umm, umem_slab_flags(umm, slab_id) |
+					POBJ_FLAG_ZERO, size);
+}
 
 #endif /* __VOS_INTERNAL_H__ */

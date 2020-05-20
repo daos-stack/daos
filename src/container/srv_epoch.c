@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,86 +136,25 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
-	if (epoch >= DAOS_EPOCH_MAX)
-		return -DER_INVAL;
-	else if (in->cei_epoch == 0)
-		epoch = crt_hlc_get();
+	/* Verify handle has write access */
+	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to aggregate\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		rc = -DER_NO_PERM;
+		goto out;
+	}
 
+	if (epoch >= DAOS_EPOCH_MAX) {
+		rc = -DER_INVAL;
+		goto out;
+	} else if (in->cei_epoch == 0) {
+		epoch = crt_hlc_get();
+	}
+
+out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: epoch="DF_U64", %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		epoch, rc);
-	return rc;
-}
-
-static int
-cont_epoch_discard_bcast(crt_context_t ctx, struct cont *cont,
-			 const uuid_t hdl_uuid, daos_epoch_t epoch)
-{
-	struct cont_tgt_epoch_discard_in       *in;
-	struct cont_tgt_epoch_discard_out      *out;
-	crt_rpc_t			       *rpc;
-	int					rc;
-
-	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
-
-	rc = ds_cont_bcast_create(ctx, cont->c_svc, CONT_TGT_EPOCH_DISCARD,
-				  &rpc);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->tii_hdl, hdl_uuid);
-	in->tii_epoch = epoch;
-
-	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	out = crt_reply_get(rpc);
-	rc = out->tio_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to discard epoch "DF_U64" for handle "
-			DF_UUID" on %d targets\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch,
-			DP_UUID(hdl_uuid), rc);
-		rc = -DER_IO;
-	}
-
-out_rpc:
-	crt_req_decref(rpc);
-out:
-	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
-	return rc;
-}
-
-int
-ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		      struct cont *cont, struct container_hdl *hdl,
-		      crt_rpc_t *rpc)
-{
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	int				rc;
-
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" epoch="
-		DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		DP_UUID(in->cei_op.ci_hdl), in->cei_epoch);
-
-	/* Verify the container handle capabilities. */
-	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas))
-		D_GOTO(out, rc = -DER_NO_PERM);
-
-	if (in->cei_epoch >= DAOS_EPOCH_MAX)
-		D_GOTO(out, rc = -DER_OVERFLOW);
-
-	rc = cont_epoch_discard_bcast(rpc->cr_ctx, cont, in->cei_op.ci_hdl,
-				      in->cei_epoch);
-out:
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		rc);
 	return rc;
 }
 
@@ -283,8 +222,10 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
-	/* Verify the container handle capabilities. */
+	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to create snapshot\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 		rc = -DER_NO_PERM;
 		goto out;
 	}
@@ -316,6 +257,14 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
 		rpc, in->cei_epoch);
+
+	/* Verify the handle has write access */
+	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to delete snapshot\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		rc = -DER_NO_PERM;
+		goto out;
+	}
 
 	d_iov_set(&key, &in->cei_epoch, sizeof(daos_epoch_t));
 	rc = rdb_tx_delete(tx, &cont->c_snaps, &key);
@@ -357,6 +306,15 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid),
 		rpc, DP_UUID(in->sli_op.ci_hdl));
+
+	/* Verify the handle has read access */
+	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to list snapshots\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		rc = -DER_NO_PERM;
+		goto out;
+	}
+
 	/*
 	 * If remote bulk handle does not exist, only aggregate size is sent.
 	 */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,7 +144,8 @@ evt_off2desc(struct evt_context *tcx, umem_off_t offset)
 }
 
 int
-evt_desc_log_status(struct evt_context *tcx, struct evt_desc *desc, int intent);
+evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
+		    struct evt_desc *desc, int intent);
 
 /** Helper function for starting a PMDK transaction, if applicable */
 static inline int
@@ -186,7 +187,7 @@ evt_csum_count(const struct evt_context *tcx,
  */
 void
 evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
-		   const struct evt_entry_in *ent);
+		   const struct evt_entry_in *ent, uint8_t **csum_bufp);
 
 /**
  * Fill the entry's checksum from the evt_desc. It is expected that the entry's
@@ -203,6 +204,15 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
  */
 struct evt_extent
 evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size);
+
+/**
+ * Update the csum info for an entry so it takes into account the selected
+ * extent.
+ */
+void
+evt_entry_csum_update(const struct evt_extent *const ext,
+		      const struct evt_extent *const sel,
+		      struct dcs_csum_info *csum_info);
 
 /* By definition, all rectangles overlap in the epoch range because all
  * are from start to infinity.  However, for common queries, we often only want

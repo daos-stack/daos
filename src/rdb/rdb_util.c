@@ -304,7 +304,8 @@ rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
 	rdb_vos_set_sgls(RDB_VOS_QUERY, 1 /* n */, value, &sgl);
-	rc = vos_obj_fetch(cont, uoid, epoch, &rdb_dkey, 1 /* n */, &iod, &sgl);
+	rc = vos_obj_fetch(cont, uoid, epoch, 0 /* flags */, &rdb_dkey,
+			   1 /* n */, &iod, &sgl);
 	if (rc != 0)
 		return rc;
 
@@ -332,8 +333,8 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
-	rc = vos_fetch_begin(cont, uoid, epoch, &rdb_dkey, 1 /* n */,
-			     &iod, false /* size_fetch */, &io);
+	rc = vos_fetch_begin(cont, uoid, epoch, 0 /* flags */, &rdb_dkey,
+			     1 /* n */, &iod, false /* size_fetch */, &io);
 	if (rc != 0)
 		return rc;
 
@@ -513,8 +514,8 @@ rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_UPDATE, n, akeys, values, iods);
 	rdb_vos_set_sgls(RDB_VOS_UPDATE, n, values, sgls);
-	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, &rdb_dkey, n, iods,
-			      NULL, sgls);
+	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, 0 /* flags */,
+			      &rdb_dkey, n, iods, NULL, sgls);
 }
 
 int

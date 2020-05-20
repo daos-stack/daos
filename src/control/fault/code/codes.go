@@ -23,6 +23,11 @@
 // Package code is a central repository for all control plane fault codes.
 package code
 
+import (
+	"encoding/json"
+	"strconv"
+)
+
 // Code represents a stable fault code.
 //
 // NB: All control plane errors should register their codes in the
@@ -32,6 +37,26 @@ package code
 // their respective blocks. This ensures stability of fault codes
 // over time.
 type Code int
+
+// UnmarshalJSON implements a custom unmarshaler
+// to convert an int or string code to a Code.
+func (c *Code) UnmarshalJSON(data []byte) (err error) {
+	var ic int
+	if err = json.Unmarshal(data, &ic); err == nil {
+		*c = Code(ic)
+		return
+	}
+
+	var sc string
+	if err = json.Unmarshal(data, &sc); err != nil {
+		return
+	}
+
+	if ic, err = strconv.Atoi(sc); err == nil {
+		*c = Code(ic)
+	}
+	return
+}
 
 const (
 	// general fault codes
@@ -62,7 +87,8 @@ const (
 	BdevUnknown Code = iota + 300
 	BdevFormatUnknownClass
 	BdevFormatFailure
-	BdevFormatBadPciAddress
+	BdevBadPCIAddress
+	BdevPCIAddressNotFound
 
 	// DAOS system fault codes
 	SystemUnknown Code = iota + 400
@@ -74,6 +100,11 @@ const (
 	ClientUnknown Code = iota + 500
 	ClientConfigBadControlPort
 	ClientConfigBadAccessPoints
+	ClientConfigEmptyHostList
+	ClientConnectionBadHost
+	ClientConnectionNoRoute
+	ClientConnectionRefused
+	ClientConnectionClosed
 
 	// server fault codes
 	ServerUnknown Code = iota + 600
@@ -93,6 +124,10 @@ const (
 	ServerIommuDisabled
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
+	ServerInsufficientFreeHugePages
+	ServerHarnessNotStarted
+	ServerDataPlaneNotStarted
+	ServerInstancesNotStopped
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

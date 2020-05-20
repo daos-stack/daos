@@ -183,7 +183,9 @@ func init() {
 	proto.RegisterType((*BioErrorReq)(nil), "srv.BioErrorReq")
 }
 
-func init() { proto.RegisterFile("srv.proto", fileDescriptor_2bbe8325d22c1a26) }
+func init() {
+	proto.RegisterFile("srv.proto", fileDescriptor_2bbe8325d22c1a26)
+}
 
 var fileDescriptor_2bbe8325d22c1a26 = []byte{
 	// 246 bytes of a gzipped FileDescriptorProto

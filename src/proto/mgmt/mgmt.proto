@@ -25,6 +25,7 @@ syntax = "proto3";
 package mgmt;
 
 import "pool.proto";
+import "cont.proto";
 import "srv.proto";
 import "storage_query.proto"; // storage query req/resp BIO data and SMD device list
 import "acl.proto"; // ACL-related requests
@@ -65,6 +66,10 @@ service MgmtSvc {
 	rpc PoolCreate(PoolCreateReq) returns (PoolCreateResp) {}
 	// Destroy a DAOS pool allocated across a number of ranks.
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
+	// Exclude a pool target.
+	rpc PoolExclude(PoolExcludeReq) returns (PoolExcludeResp) {}
+	// Reintegrate a pool target.
+	rpc PoolReintegrate(PoolReintegrateReq) returns (PoolReintegrateResp) {}
 	// PoolQuery queries a DAOS pool.
 	rpc PoolQuery(PoolQueryReq) returns (PoolQueryResp) {}
 	// Set a DAOS pool property.
@@ -99,6 +104,10 @@ service MgmtSvc {
 	rpc StopRanks(RanksReq) returns (RanksResp) {}
 	// Ping DAOS IO servers on a host. (gRPC fanout)
 	rpc PingRanks(RanksReq) returns (RanksResp) {}
+	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
+	rpc ResetFormatRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS IO servers on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
+	// Change the owner of a DAOS container
+	rpc ContSetOwner(ContSetOwnerReq) returns (ContSetOwnerResp) {}
 }

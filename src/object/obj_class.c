@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -296,6 +296,30 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_resil		= DAOS_RES_EC,
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 2,
+			.ca_ec_p		= 2,
+			.ca_ec_cell		= 1 << 15,
+		},
+	},
+	{
+		.oc_name	= "EC_4P1G1",
+		.oc_id		= OC_EC_4P1G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 1,
+			.ca_ec_cell		= 1 << 15,
+		},
+	},
+	{
+		.oc_name	= "EC_4P2G1",
+		.oc_id		= OC_EC_4P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
 			.ca_ec_p		= 2,
 			.ca_ec_cell		= 1 << 15,
 		},

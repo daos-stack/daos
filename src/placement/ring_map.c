@@ -410,7 +410,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 			&ring_domain_ver_sops);
 
 	ver = buf->rb_domains[0].rd_comp->co_ver;
-	merged = &scratch[buf->rb_domain_nr];
+	merged = scratch + buf->rb_domain_nr;
 
 	for (i = start = 0; i < buf->rb_domain_nr; i++) {
 		struct pool_component	 *comp;

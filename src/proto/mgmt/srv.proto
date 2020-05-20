@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ message LeaderQueryResp {
 
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
+	bool allRanks = 2;      // Return PSRs for all ranks, not just the MS replicas.
 }
 
 message GetAttachInfoResp {
@@ -70,6 +71,13 @@ message GetAttachInfoResp {
 		string uri = 2;
 	}
 	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
+				// These CaRT settings are shared with the
+				// libdaos client to aid in CaRT initialization.
+	string Provider = 3;	// CaRT OFI provider
+	string Interface = 4;	// CaRT OFI_INTERFACE
+	string Domain = 5;	// CaRT OFI_DOMAIN for given OFI_INTERFACE
+	uint32 CrtCtxShareAddr = 6; // CaRT CRT_CTX_SHARE_ADDR
+	uint32 CrtTimeout = 7;	// CaRT CRT_TIMEOUT
 }
 
 message PrepShutdownReq {

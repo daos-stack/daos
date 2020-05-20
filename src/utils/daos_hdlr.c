@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@
 #include "daos_api.h"
 #include "daos_fs.h"
 #include "daos_uns.h"
+#include "daos_prop.h"
 
 #include "daos_hdlr.h"
 
@@ -435,9 +436,9 @@ pool_query_hdlr(struct cmd_args_s *ap)
 		fprintf(stderr, "pool query failed: %d\n", rc);
 		D_GOTO(out_disconnect, rc);
 	}
-	D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
+	D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u, version=%u\n",
 		DP_UUID(pinfo.pi_uuid), pinfo.pi_ntargets,
-		pinfo.pi_ndisabled);
+		pinfo.pi_ndisabled, pinfo.pi_map_ver);
 
 	D_PRINT("Pool space info:\n");
 	D_PRINT("- Target(VOS) count:%d\n", ps->ps_ntargets);
@@ -487,7 +488,6 @@ out:
  *
  * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_set_prop_hdlr()
  * int cont_del_attr_hdlr()
  * int cont_rollback_hdlr()
  */
@@ -510,8 +510,8 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	}
 
 	D_PRINT("Container's snapshots :\n");
-	if (daos_anchor_is_eof < 0) {
-		fprintf(stderr, "invalid number of snapshots returned\n");
+	if (!daos_anchor_is_eof(&anchor)) {
+		fprintf(stderr, "too many snapshots returned\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (snaps_count == 0) {
@@ -848,6 +848,39 @@ err_out:
 	return rc;
 }
 
+int
+cont_set_prop_hdlr(struct cmd_args_s *ap)
+{
+	int			 rc;
+	struct daos_prop_entry	*entry;
+	uint32_t		 i;
+
+	if (ap->props == NULL || ap->props->dpp_nr == 0) {
+		fprintf(stderr, "at least one property must be requested\n");
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+
+	/* Validate the properties are supported for set */
+	for (i = 0; i < ap->props->dpp_nr; i++) {
+		entry = &(ap->props->dpp_entries[i]);
+		if (entry->dpe_type != DAOS_PROP_CO_LABEL) {
+			fprintf(stderr, "property not supported for set\n");
+			D_GOTO(err_out, rc = -DER_INVAL);
+		}
+	}
+
+	rc = daos_cont_set_prop(ap->cont, ap->props, NULL);
+	if (rc) {
+		fprintf(stderr, "Container set-prop failed, result: %d\n", rc);
+		D_GOTO(err_out, rc);
+	}
+
+	D_PRINT("Properties were successfully set\n");
+
+err_out:
+	return rc;
+}
+
 static size_t
 get_num_prop_entries_to_add(struct cmd_args_s *ap)
 {
@@ -1039,7 +1072,7 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 
 	rc = duns_create_path(ap->pool, ap->path, &dattr);
 	if (rc) {
-		fprintf(stderr, "duns_create_path() error: rc=%d\n", rc);
+		fprintf(stderr, "duns_create_path() error: %s\n", strerror(rc));
 		D_GOTO(err_rc, rc);
 	}
 
@@ -1123,8 +1156,8 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 	if (ap->path) {
 		rc = duns_destroy_path(ap->pool, ap->path);
 		if (rc)
-			fprintf(stderr, "duns_destroy_path() failed %s (%d)\n",
-				ap->path, rc);
+			fprintf(stderr, "duns_destroy_path() failed %s (%s)\n",
+				ap->path, strerror(rc));
 		else
 			fprintf(stdout, "Successfully destroyed path %s\n",
 				ap->path);

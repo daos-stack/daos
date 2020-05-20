@@ -79,7 +79,7 @@ ctl_update(struct dts_io_credit *cred)
 				     &cred->tc_iod, &cred->tc_sgl, NULL);
 	} else {
 		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0xcafe,
-				    &cred->tc_dkey, 1, &cred->tc_iod, NULL,
+				    0, &cred->tc_dkey, 1, &cred->tc_iod, NULL,
 				    &cred->tc_sgl);
 	}
 	return rc;
@@ -94,7 +94,7 @@ ctl_fetch(struct dts_io_credit *cred)
 		rc = daos_obj_fetch(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				    &cred->tc_iod, &cred->tc_sgl, NULL, NULL);
 	} else {
-		rc = vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
+		rc = vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0,
 				   &cred->tc_dkey, 1, &cred->tc_iod,
 				   &cred->tc_sgl);
 	}
@@ -231,7 +231,7 @@ ctl_daos_list(struct dts_io_credit *cred)
 	char		*kstr;
 	char		 kbuf[CTL_BUF_LEN];
 	uint32_t	 knr = KDS_NR;
-	daos_key_desc_t	 kds[KDS_NR];
+	daos_key_desc_t	 kds[KDS_NR] = {0};
 	daos_anchor_t	 anchor;
 	int		 i;
 	int		 rc = 0;

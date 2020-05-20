@@ -29,9 +29,13 @@
 #define __REBUILD_INTERNAL_H__
 
 #include <stdint.h>
+#include <abt.h>
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
 #include <daos/btree.h>
+#include <daos/pool_map.h>
+#include <daos_srv/daos_server.h>
+#include <daos_srv/rebuild.h>
 
 /* Track the pool rebuild status on each target, which exists on
  * all server targets. Then each target will report its rebuild
@@ -45,6 +49,9 @@ struct rebuild_tgt_pool_tracker {
 
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rt_rebuild_ver;
+
+	/** the current rebuild operation */
+	daos_rebuild_opc_t	rt_rebuild_op;
 
 	/** rebuild pool/container hdl uuid */
 	uuid_t			rt_poh_uuid;
@@ -68,7 +75,14 @@ struct rebuild_tgt_pool_tracker {
 	int			rt_refcount;
 	uint32_t		rt_tgts_num;
 	uint64_t		rt_leader_term;
+	/* Wait for other to release the rpt, so the target
+	 * can be go ahead to finish the rebuild.
+	 */
 	ABT_cond		rt_fini_cond;
+	/* Notify others the rebuild of this pool has been
+	 * done on this target.
+	 */
+	ABT_cond		rt_done_cond;
 	/* # to-be-rebuilt objs */
 	uint64_t		rt_reported_toberb_objs;
 	/* reported # rebuilt objs */
@@ -91,6 +105,12 @@ struct rebuild_tgt_pool_tracker {
 				rt_global_done:1;
 };
 
+struct rebuild_server_status {
+	d_rank_t	rank;
+	uint32_t	scan_done:1,
+			pull_done:1;
+};
+
 /* Track the rebuild status globally */
 struct rebuild_global_pool_tracker {
 	/* rebuild status */
@@ -110,16 +130,11 @@ struct rebuild_global_pool_tracker {
 	/** the current version being rebuilt */
 	uint32_t	rgt_rebuild_ver;
 
-	/* bits to track scan status for all targets */
-	uint8_t		*rgt_scan_bits;
+	/** rebuild status for each server */
+	struct rebuild_server_status *rgt_servers;
 
-	/* bits to track pull status for all targets */
-	uint8_t		*rgt_pull_bits;
-
-	/* The size of rgt_scan_bits and
-	 * rgt_pull_bits in bit
-	 */
-	uint32_t	rgt_bits_size;
+	/** number of rgt_server_status */
+	uint32_t	rgt_servers_number;
 
 	/* The term of the current rebuild leader */
 	uint64_t	rgt_leader_term;
@@ -189,6 +204,7 @@ struct rebuild_task {
 	uuid_t				dst_pool_uuid;
 	struct pool_target_id_list	dst_tgts;
 	uint32_t			dst_map_ver;
+	daos_rebuild_opc_t		dst_rebuild_op;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
@@ -280,26 +296,6 @@ int rebuild_iv_ns_create(struct ds_pool *pool, uint32_t map_ver,
 			 d_rank_list_t *exclude_tgts,
 			 unsigned int master_rank);
 
-static inline bool
-is_rebuild_global_pull_done(struct rebuild_global_pool_tracker *rgt)
-{
-	return isset_range(rgt->rgt_pull_bits, 0, rgt->rgt_bits_size - 1);
-}
-
-static inline bool
-is_rebuild_global_scan_done(struct rebuild_global_pool_tracker *rgt)
-{
-	return isset_range(rgt->rgt_scan_bits, 0, rgt->rgt_bits_size - 1);
-}
-
-static inline bool
-is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt)
-{
-	return is_rebuild_global_scan_done(rgt) &&
-	       is_rebuild_global_pull_done(rgt);
-
-}
-
 int rebuild_iv_init(void);
 int rebuild_iv_fini(void);
 
@@ -313,7 +309,11 @@ int
 rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt);
 
 bool
-is_current_tgt_up(struct rebuild_tgt_pool_tracker *rpt);
+rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
+		enum pool_comp_state states);
+
+bool
+is_current_tgt_unavail(struct rebuild_tgt_pool_tracker *rpt);
 
 typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
 				       uuid_t co_uuid, daos_unit_oid_t oid,

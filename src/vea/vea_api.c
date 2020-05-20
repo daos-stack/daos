@@ -380,7 +380,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 		    d_list_t *resrvd_list, bool publish)
 {
 	struct vea_resrvd_ext	*resrvd, *tmp;
-	struct vea_free_extent	 vfe;
+	struct vea_free_extent vfe = {0};
 	uint64_t		 seq_max = 0, seq_min = 0;
 	uint64_t		 off_c = 0, off_p = 0;
 	uint64_t		 cur_time;

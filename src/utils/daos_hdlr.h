@@ -119,7 +119,7 @@ struct cmd_args_s {
 			D_GOTO(label, (rcexpr));			\
 		}							\
 		if ((ap)->mdsrv == NULL) {				\
-			fprintf(stderr, "failed to parse--svc=%s\n",	\
+			fprintf(stderr, "failed to parse --svc=%s\n",	\
 					(ap)->mdsrv_str);		\
 			D_GOTO(label, (rcexpr));			\
 		}							\
@@ -196,6 +196,7 @@ int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_query_hdlr(struct cmd_args_s *ap);
 int cont_destroy_hdlr(struct cmd_args_s *ap);
 int cont_get_prop_hdlr(struct cmd_args_s *ap);
+int cont_set_prop_hdlr(struct cmd_args_s *ap);
 int cont_list_attrs_hdlr(struct cmd_args_s *ap);
 int cont_set_attr_hdlr(struct cmd_args_s *ap);
 int cont_get_attr_hdlr(struct cmd_args_s *ap);
@@ -214,7 +215,6 @@ int cont_set_owner_hdlr(struct cmd_args_s *ap);
  *
  * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_set_prop_hdlr()
  * int cont_del_attr_hdlr()
  * int cont_rollback_hdlr()
  */

@@ -686,7 +686,7 @@ ut_inval_params_load(void **state)
 	uint32_t block_size = 0; /* use the default size */
 	uint32_t header_blocks = 1;
 	uint64_t capacity = ((VEA_LARGE_EXT_MB * 2) << 20); /* 128 MB */
-	struct vea_unmap_context unmap_ctxt;
+	struct vea_unmap_context unmap_ctxt = {0};
 	int rc;
 
 	ut_setup(&args);

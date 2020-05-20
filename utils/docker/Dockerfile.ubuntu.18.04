@@ -28,7 +28,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             libssl-dev libtool-bin libyaml-dev                          \
             locales make meson nasm ninja-build pandoc patch            \
             pylint python-dev python3-dev scons sg3-utils uuid-dev      \
-            yasm valgrind libhwloc-dev man
+            yasm valgrind libhwloc-dev man python-distro
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
@@ -75,5 +75,3 @@ ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
 ENV CRT_PHY_ADDR_STR="ofi+sockets"
 ENV OFI_INTERFACE=eth0
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
-ENV DAOS_SINGLETON_CLI=1
-ENV CRT_ATTACH_INFO_PATH=/tmp/uri

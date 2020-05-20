@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package bdev
 
 import (
@@ -33,11 +34,19 @@ var (
 	FaultUnknown = bdevFault(code.BdevUnknown, "unknown bdev error", "")
 )
 
-func FaultFormatBadPciAddr(pciAddr string) *fault.Fault {
+func FaultPCIAddrNotFound(pciAddr string) *fault.Fault {
 	return bdevFault(
-		code.BdevFormatBadPciAddress,
-		fmt.Sprintf("format request contains invalid NVMe PCI address %q", pciAddr),
-		"check your configuration, restart the server, and retry the format operation",
+		code.BdevPCIAddressNotFound,
+		fmt.Sprintf("request contains NVMe PCI address %q that can't be found", pciAddr),
+		"check your configuration is correct and devices with given PCI addresses exist on server host",
+	)
+}
+
+func FaultBadPCIAddr(pciAddr string) *fault.Fault {
+	return bdevFault(
+		code.BdevBadPCIAddress,
+		fmt.Sprintf("request contains invalid NVMe PCI address %q", pciAddr),
+		"check your configuration, restart the server, and retry the operation",
 	)
 }
 

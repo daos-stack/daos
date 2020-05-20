@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -231,6 +231,7 @@ validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 
 	request = new_validation_request(server_socket, creds);
 	if (request == NULL) {
+		drpc_close(server_socket);
 		return -DER_NOMEM;
 	}
 
@@ -779,4 +780,13 @@ ds_sec_get_rebuild_cont_capabilities(void)
 	 * Internally generated rebuild container handles can read data
 	 */
 	return CONT_CAPA_READ_DATA;
+}
+
+uint64_t
+ds_sec_get_admin_cont_capabilities(void)
+{
+	/*
+	 * Internally generated admin container handles can do everything.
+	 */
+	return CONT_CAPAS_ALL;
 }
