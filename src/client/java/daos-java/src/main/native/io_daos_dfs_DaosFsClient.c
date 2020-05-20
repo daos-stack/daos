@@ -1882,7 +1882,8 @@ Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
 {
     const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
     const char *attrName = (*env)->GetStringUTFChars(env, attrNameStr, NULL);
-    const char *value = (*env)->GetStringUTFChars(env, valueStr, NULL);
+    const char *value = valueStr == NULL ? NULL :
+                        (*env)->GetStringUTFChars(env, valueStr, NULL);
     int rc;
 
     if (!(value == NULL || strlen(value) == 0)) {
@@ -1913,7 +1914,9 @@ Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
 out:
     (*env)->ReleaseStringUTFChars(env, pathStr, path);
     (*env)->ReleaseStringUTFChars(env, attrNameStr, attrName);
-    (*env)->ReleaseStringUTFChars(env, valueStr, value);
+    if (value != NULL) {
+        (*env)->ReleaseStringUTFChars(env, valueStr, value);
+    }
 }
 
 /**
