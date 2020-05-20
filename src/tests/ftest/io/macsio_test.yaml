@@ -11,8 +11,12 @@ hosts:
     - client-H
 timeout: 120
 server_config:
-  servers:
-    scm_size: 32
+    name: daos_server
+    servers:
+        bdev_class: nvme
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
   control_method: dmg
   mode: 511
