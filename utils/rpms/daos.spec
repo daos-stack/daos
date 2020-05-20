@@ -182,7 +182,7 @@ scons %{?no_smp_mflags}    \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-      %{?_with_fault-injection}
+      %{?with_fault-injection:--with-fault-injection}
 
 %install
 scons %{?no_smp_mflags}               \
@@ -193,7 +193,7 @@ scons %{?no_smp_mflags}               \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?_with_fault-injection}
+      %{?with_fault-injection:--with-fault-injection}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"

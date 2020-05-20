@@ -152,7 +152,7 @@ def release_candidate() {
           script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
                   "grep -i '[0-9]rc[0-9]' TAG",
           returnStatus: true)) {
-        return true
+        return false
     }
     return false
 }
