@@ -163,6 +163,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	struct obj_rw_out	*orwo;
 	daos_iod_t		*iods;
 	struct dcs_iod_csums	*iods_csums;
+	daos_iom_t		*maps;
 	struct dcs_singv_layout	*singv_lo, *singv_los;
 	uint32_t		 shard_idx;
 	int			 i;
@@ -177,6 +178,9 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	sgls = rw_args->rwaa_sgls;
 	iods = orw->orw_iod_array.oia_iods;
 	iods_csums = orwo->orw_iod_csums.ca_arrays;
+	maps = orwo->orw_maps.ca_arrays;
+
+	D_ASSERT(orwo->orw_maps.ca_count == orw->orw_iod_array.oia_iod_nr);
 
 	/** fault injection - corrupt data after getting from server and before
 	 * verifying on client - simulates corruption over network
@@ -192,13 +196,15 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	for (i = 0; i < orw->orw_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
 		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
+		daos_iom_t		*map = &maps[i];
 
 		if (!csum_iod_is_supported(iod))
 			continue;
 
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
-		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i], iod_csum,
-					     singv_lo, shard_idx);
+		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i],
+					     iod_csum, singv_lo, shard_idx,
+					     map);
 		if (rc != 0) {
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
 				D_ERROR("Data Verification failed (object: "
@@ -475,7 +481,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	pool = obj_shard_ptr2pool(shard);
 	if (pool == NULL)
-		D_GOTO(out_obj, rc);
+		D_GOTO(out_obj, rc = -DER_NO_HDL);
 
 	tgt_ep.ep_grp = pool->dp_sys->sy_group;
 	tgt_ep.ep_tag = shard->do_target_idx;
@@ -562,7 +568,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	/* remember the sgl to copyout the data inline for fetch */
 	rw_args.rwaa_sgls = (opc == DAOS_OBJ_RPC_FETCH) ? sgls : NULL;
 	rw_args.maps = args->api_args->maps;
-	if (rw_args.maps != NULL)
+	if (opc == DAOS_OBJ_RPC_FETCH &&
+	    (rw_args.maps != NULL || args->iod_csums != NULL))
 		orw->orw_flags |= ORF_CREATE_MAP;
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_CRT_ERROR))
@@ -928,7 +935,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 
 	pool = obj_shard_ptr2pool(obj_shard);
 	if (pool == NULL)
-		D_GOTO(out_put, rc);
+		D_GOTO(out_put, rc = -DER_NO_HDL);
 
 	tgt_ep.ep_grp = pool->dp_sys->sy_group;
 	tgt_ep.ep_tag = obj_shard->do_target_idx;

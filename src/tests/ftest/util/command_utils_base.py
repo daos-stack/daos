@@ -556,6 +556,15 @@ class CommonConfig(YamlParameters):
 class EnvironmentVariables(dict):
     """Dictionary of environment variable keys and values."""
 
+    def copy(self):
+        """Return a copy of this object.
+
+        Returns:
+            EnvironmentVariables: a copy of this object
+
+        """
+        return EnvironmentVariables(self)
+
     def get_list(self):
         """Get a list of environment variable assignments.
 
@@ -579,5 +588,8 @@ class EnvironmentVariables(dict):
             str: a string of export commands for each environment variable
 
         """
-        join_str = "{} export ".format(separator)
-        return "export {}{}".format(join_str.join(self.get_list()), separator)
+        export_list = ["export {}".format(export) for export in self.get_list()]
+        export_str = separator.join(export_list)
+        if export_str:
+            export_str = "".join([export_str, separator])
+        return export_str

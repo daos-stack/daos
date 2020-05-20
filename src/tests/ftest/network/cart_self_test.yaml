@@ -6,25 +6,20 @@ hosts:
 timeout: 180
 server_config:
   name: daos_server
-testparams:
+self_test:
   repetitions: 1000
   endpoint: 0:0
   max_inflight_rpcs: 16
-muxtestparams:
-  share_addr: !mux
-    on:
-      val:
-        - 1
-    off:
-      val:
-        - 0
-  message_size: !mux
+  message_sizes_mux: !mux
     small_io:
-      size:
-        - 0
+      message_sizes: "0"
     large_io_bulk_put:
-      size:
-        - "\"0 b1048576\""
+      message_sizes: "\"0 b1048576\""
     large_io_bulk_get:
-      size:
-        - "\"b1048576 0\""
+      message_sizes: "\"b1048576 0\""
+test_params:
+  share_addr_mux: !mux
+    on:
+      share_addr: 1
+    off:
+      share_addr: 0
