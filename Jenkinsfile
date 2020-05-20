@@ -148,7 +148,7 @@ def fault_test_tag() {
 }
 
 // def release_candidate() {
-//     if (sh(label: "Determine if building (a PR of) an RC",
+//     if (! sh(label: "Determine if building (a PR of) an RC",
 //           script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
 //                   "grep -i '[0-9]rc[0-9]' TAG",
 //           returnStatus: true)) {
@@ -188,10 +188,7 @@ def faults_enabled(String type) {
     if (type == "rpm") {
         return "--with fault-injection"
     }
-    if (type == "scons") {
-        return "--with-fault-injection"
-    }
-    return ""
+    return "--with-fault-injection"
 }
 
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
