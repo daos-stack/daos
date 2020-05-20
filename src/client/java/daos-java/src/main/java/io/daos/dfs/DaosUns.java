@@ -850,8 +850,9 @@ public class DaosUns {
 
     private static String getUsage() {
         String usage = "===================================================\n" +
-                "Usage: create/resolve/destroy/parse UNS path associated with DAOS.\n" +
-                "see following commands and their parameters:\n" +
+                "create/resolve/destroy/parse UNS path associated with DAOS.\n" +
+                "Usage java [-options] <-jar jarfile | -cp classpath> io.daos.dfs.DaosUns <command>\n" +
+                "see following commands and their options:\n" +
                 "command: [create|resolve|destroy|parse|setappinfo|getappinfo|util]\n" +
                 "=>create:\n" +
                 "   -Dpath=, required, OS file path. The file should not exist.\n" +
@@ -895,6 +896,9 @@ public class DaosUns {
                 "   -Dop=, required, operation types. [list-object-types|list-property-types|" +
                 "get-property-value-type|sample-properties]\n" +
                 "   -Dprop_type=, required when op=get-property-value-type\n" +
+                "===================================================\n" +
+                "examples: java -Dpath=/tmp/uns -Dpool_id=<your pool uuid> -cp ./daos-java-1.1.0-shaded.jar " +
+                "io.daos.dfs.DaosUns create\n" +
                 "==================================================="
                 ;
         return usage;

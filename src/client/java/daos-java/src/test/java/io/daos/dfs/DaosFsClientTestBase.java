@@ -4,7 +4,7 @@ public class DaosFsClientTestBase {
 
   public static final String DEFAULT_POOL_ID = "6112d3ac-f99b-4e46-a2ab-549d9d56c069";
 //  public static final String DEFAULT_CONT_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
-  public static final String DEFAULT_CONT_ID = "71bfbb65-5de6-4f85-88a5-e1a8b33af335";
+  public static final String DEFAULT_CONT_ID = "10e8b68a-c80a-4840-84fe-3b707ebb5475";
 
   public static DaosFsClient prepareFs(String poolId, String contId) throws Exception {
     DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
