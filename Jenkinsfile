@@ -147,28 +147,11 @@ def fault_test_tag() {
     return ""
 }
 
-// def release_candidate() {
-//     if (! sh(label: "Determine if building (a PR of) an RC",
-//           script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
-//                   "grep -i '[0-9]rc[0-9]' TAG",
-//           returnStatus: true)) {
-//         return true
-//     }
-//     return false
-// }
-
 def release_candidate() {
-    def rc = sh(label: "Determine if building (a PR of) an RC",
-        script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
-            "grep -i '[0-9]rc[0-9]' TAG",
-        returnStatus: true)
-    echo "rc: " + rc
-    if (rc) {
-        echo "rc: " + rc + " is a true result"
-    } else {
-        echo "rc: " + rc + " is a false result"
-    }
-    if (rc == 0) {
+    if (!sh(label: "Determine if building (a PR of) an RC",
+          script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
+                  "grep -i '[0-9]rc[0-9]' TAG",
+          returnStatus: true)) {
         return true
     }
     return false
@@ -188,7 +171,10 @@ def faults_enabled(String type) {
     if (type == "rpm") {
         return "--with fault-injection"
     }
-    return "--with-fault-injection"
+    if (type == "scons") {
+        return "--with-fault-injection"
+    }
+    error("Unexpected value passed to faults_enabled(): " + type)
 }
 
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -492,8 +478,8 @@ pipeline {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/centos7/
                                           mkdir -p artifacts/centos7/
-                                          make CHROOT_NAME="epel-7-x86_64" EXTERNAL_RPM_BUILD_OPTIONS=\'''' +
-                                  faults_enabled('rpm') + '''\' -C utils/rpms chrootbuild'''
+                                          make CHROOT_NAME="epel-7-x86_64" EXTERNAL_RPM_BUILD_OPTIONS=''' +
+                                          faults_enabled('rpm') + ''' -C utils/rpms chrootbuild'''
                         }
                     }
                     post {
@@ -569,8 +555,8 @@ pipeline {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/leap15/
                                   mkdir -p artifacts/leap15/
-                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" EXTERNAL_RPM_BUILD_OPTIONS=\'''' +
-                                  faults_enabled('rpm') + '''\' -C utils/rpms chrootbuild'''
+                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" EXTERNAL_RPM_BUILD_OPTIONS=''' +
+                                  faults_enabled('rpm') + ''' -C utils/rpms chrootbuild'''
                         }
                     }
                     post {
