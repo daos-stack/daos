@@ -762,11 +762,7 @@ class SubprocessManager(object):
         self.manager.stop()
 
     def kill(self):
-<<<<<<< HEAD
         """Forcibly terminate any sub process running on hosts."""
-        stop_processes(self._hosts, "'({})'".format("|".join(self._exe_names)))
-=======
-        """Forcably terminate any sub process running on hosts."""
         regex = self.manager.job.command_regex
         result = stop_processes(self._hosts, regex)
         if 0 in result and len(result) == 1:
@@ -777,7 +773,6 @@ class SubprocessManager(object):
             print(
                 "***At least one remote {} process needed to be killed! Please "
                 "investigate/report.***".format(regex))
->>>>>>> master
 
     def verify_socket_directory(self, user):
         """Verify the domain socket directory is present and owned by this user.
