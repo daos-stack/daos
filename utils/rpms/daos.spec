@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       17%{?relval}%{?dist}
+Release:       18%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -39,8 +39,7 @@ BuildRequires: libisa-l-devel
 %else
 BuildRequires: libisal-devel
 %endif
-BuildRequires: raft-devel <= 0.5.0
-BuildRequires: hwloc-devel
+BuildRequires: raft-devel >= 0.6.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -161,6 +160,17 @@ This is the package needed to run the DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: %{name} = %{version}-%{release}
 %endif
+Requires: libuuid-devel
+Requires: libyaml-devel
+Requires: boost-devel
+# Pin mercury to exact version during development
+#Requires: mercury-devel < 2.0.0a1
+# we ideally want to set this minimum version however it seems to confuse yum:
+# https://github.com/rpm-software-management/yum/issues/124
+#Requires: mercury >= 2.0.0~a1
+Requires: mercury-devel = %{mercury_version}
+Requires: openpa-devel
+Requires: hwloc-devel
 Summary: The DAOS development libraries and headers
 
 %description devel
@@ -355,8 +365,15 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Wed May 19 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.0-17
+* Wed May 20 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.0-19
 - add fault_status to daos-tests files list
+
+* Fri May 15 2020 Kenneth Cain <kenneth.c.cain@intel.com> - 1.1.0-18
+- Require raft-devel >= 0.6.0 that adds new API raft_election_start()
+
+* Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-17
+- Add cart-devel's Requires to daos-devel as they were forgotten
+  during the cart merge
 
 * Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-16
 - Fix fuse3-libs -> libfuse3 for SLES/Leap 15

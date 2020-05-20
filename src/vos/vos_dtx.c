@@ -41,6 +41,53 @@ D_CASSERT((DTX_BLOB_SIZE / sizeof(struct vos_dtx_cmt_ent_df)) <  (1 << 15));
 #define DTX_ACT_BLOB_MAGIC	0x14130a2b
 #define DTX_CMT_BLOB_MAGIC	0x2502191c
 
+enum {
+	DTX_UMOFF_ILOG		= (1 << 0),
+	DTX_UMOFF_SVT		= (1 << 1),
+	DTX_UMOFF_EVT		= (1 << 2),
+};
+
+#define DTX_UMOFF_TYPES		(DTX_UMOFF_ILOG | DTX_UMOFF_SVT | DTX_UMOFF_EVT)
+
+static inline void
+dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
+{
+	uint8_t		flag = 0;
+
+	switch (type) {
+	case DTX_RT_ILOG:
+		flag = DTX_UMOFF_ILOG;
+		break;
+	case DTX_RT_SVT:
+		flag = DTX_UMOFF_SVT;
+		break;
+	case DTX_RT_EVT:
+		flag = DTX_UMOFF_EVT;
+		break;
+	default:
+		D_ASSERT(0);
+	}
+
+	umem_off_set_flags(rec, flag);
+}
+
+static inline uint32_t
+dtx_umoff_flag2type(umem_off_t umoff)
+{
+	switch (umem_off2flags(umoff) & DTX_UMOFF_TYPES) {
+	case DTX_UMOFF_ILOG:
+		return DTX_RT_ILOG;
+	case DTX_UMOFF_SVT:
+		return DTX_RT_SVT;
+	case DTX_UMOFF_EVT:
+		return DTX_RT_EVT;
+	default:
+		D_ASSERT(0);
+	}
+
+	return 0;
+}
+
 static inline bool
 umoff_is_null(umem_off_t umoff)
 {
@@ -309,8 +356,7 @@ vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df)
 
 static int
 dtx_ilog_rec_release(struct umem_instance *umm, struct vos_container *cont,
-		     struct vos_dtx_record_df *rec, struct vos_dtx_act_ent *dae,
-		     bool abort)
+		     umem_off_t rec, struct vos_dtx_act_ent *dae, bool abort)
 {
 	struct ilog_df		*ilog;
 	daos_handle_t		 loh;
@@ -318,7 +364,7 @@ dtx_ilog_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	struct ilog_id		 id;
 	int			 rc;
 
-	ilog = umem_off2ptr(umm, rec->dr_record);
+	ilog = umem_off2ptr(umm, umem_off2offset(rec));
 
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(umm, ilog, &cbs, &loh);
@@ -339,13 +385,12 @@ dtx_ilog_rec_release(struct umem_instance *umm, struct vos_container *cont,
 
 static void
 do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
-		   struct vos_dtx_act_ent *dae, struct vos_dtx_record_df *rec,
-		   bool abort)
+		   struct vos_dtx_act_ent *dae, umem_off_t rec, bool abort)
 {
-	if (umoff_is_null(rec->dr_record))
+	if (umoff_is_null(rec))
 		return;
 
-	switch (rec->dr_type) {
+	switch (dtx_umoff_flag2type(rec)) {
 	case DTX_RT_ILOG: {
 		dtx_ilog_rec_release(umm, cont, rec, dae, abort);
 		break;
@@ -353,7 +398,7 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	case DTX_RT_SVT: {
 		struct vos_irec_df	*svt;
 
-		svt = umem_off2ptr(umm, rec->dr_record);
+		svt = umem_off2ptr(umm, umem_off2offset(rec));
 		if (abort) {
 			if (DAE_INDEX(dae) != -1)
 				umem_tx_add_ptr(umm, &svt->ir_dtx,
@@ -368,7 +413,7 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	case DTX_RT_EVT: {
 		struct evt_desc		*evt;
 
-		evt = umem_off2ptr(umm, rec->dr_record);
+		evt = umem_off2ptr(umm, umem_off2offset(rec));
 		if (abort) {
 			if (DAE_INDEX(dae) != -1)
 				umem_tx_add_ptr(umm, &evt->dc_dtx,
@@ -383,7 +428,7 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	default:
 		D_ERROR(DF_UOID" unknown DTX "DF_DTI" type %u\n",
 			DP_UOID(DAE_OID(dae)), DP_DTI(&DAE_XID(dae)),
-			rec->dr_type);
+			dtx_umoff_flag2type(rec));
 		break;
 	}
 }
@@ -419,7 +464,7 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
 
 		for (i = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT - 1; i >= 0; i--)
-			do_dtx_rec_release(umm, cont, dae, &dae->dae_records[i],
+			do_dtx_rec_release(umm, cont, dae, dae->dae_records[i],
 					   abort);
 
 		D_FREE(dae->dae_records);
@@ -433,7 +478,7 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		count = DAE_REC_CNT(dae);
 
 	for (i = count - 1; i >= 0; i--)
-		do_dtx_rec_release(umm, cont, dae, &DAE_REC_INLINE(dae)[i],
+		do_dtx_rec_release(umm, cont, dae, DAE_REC_INLINE(dae)[i],
 				   abort);
 
 	if (!umoff_is_null(dae_df->dae_rec_off))
@@ -729,7 +774,7 @@ vos_dtx_append(struct umem_instance *umm, struct dtx_handle *dth,
 	       umem_off_t record, uint32_t type)
 {
 	struct vos_dtx_act_ent		*dae = dth->dth_ent;
-	struct vos_dtx_record_df	*rec;
+	umem_off_t			*rec;
 
 	D_ASSERT(dae != NULL);
 
@@ -761,8 +806,8 @@ vos_dtx_append(struct umem_instance *umm, struct dtx_handle *dth,
 		rec = &dae->dae_records[DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT];
 	}
 
-	rec->dr_type = type;
-	rec->dr_record = record;
+	*rec = record;
+	dtx_type2umoff_flag(rec, type);
 
 	/* The rec_cnt on-disk value will be refreshed via vos_dtx_prepared() */
 	DAE_REC_CNT(dae)++;
@@ -970,7 +1015,7 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 	struct vos_container		*cont;
 	struct vos_dtx_act_ent		*dae;
 	struct vos_dtx_act_ent_df	*dae_df;
-	struct vos_dtx_record_df	*rec_df;
+	umem_off_t			*rec_df;
 	bool				 found;
 	int				 count;
 	int				 i;
@@ -1007,15 +1052,15 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 		count = DAE_REC_CNT(dae);
 
 	for (i = 0; i < count; i++) {
-		if (record == DAE_REC_INLINE(dae)[i].dr_record) {
-			DAE_REC_INLINE(dae)[i].dr_record = UMOFF_NULL;
+		if (record == umem_off2offset(DAE_REC_INLINE(dae)[i])) {
+			DAE_REC_INLINE(dae)[i] = UMOFF_NULL;
 			goto handle_df;
 		}
 	}
 
 	for (i = 0; i < DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT; i++) {
-		if (record == dae->dae_records[i].dr_record) {
-			dae->dae_records[i].dr_record = UMOFF_NULL;
+		if (record == umem_off2offset(dae->dae_records[i])) {
+			dae->dae_records[i] = UMOFF_NULL;
 			goto handle_df;
 		}
 	}
@@ -1031,8 +1076,8 @@ handle_df:
 
 	rec_df = dae_df->dae_rec_inline;
 	for (i = 0; i < count; i++) {
-		if (rec_df[i].dr_record == record) {
-			rec_df[i].dr_record = UMOFF_NULL;
+		if (umem_off2offset(rec_df[i]) == record) {
+			rec_df[i] = UMOFF_NULL;
 			return;
 		}
 	}
@@ -1044,8 +1089,8 @@ handle_df:
 		return;
 
 	for (i = 0; i < dae_df->dae_rec_cnt - DTX_INLINE_REC_CNT; i++) {
-		if (rec_df[i].dr_record == record) {
-			rec_df[i].dr_record = UMOFF_NULL;
+		if (umem_off2offset(rec_df[i]) == record) {
+			rec_df[i] = UMOFF_NULL;
 			return;
 		}
 	}
@@ -1091,7 +1136,7 @@ vos_dtx_prepared(struct dtx_handle *dth)
 		dth->dth_sync = 1;
 
 	if (dae->dae_records != NULL) {
-		struct vos_dtx_record_df	*rec_df;
+		umem_off_t			*rec_df;
 		umem_off_t			 rec_off;
 		int				 count;
 		int				 size;
@@ -1099,7 +1144,7 @@ vos_dtx_prepared(struct dtx_handle *dth)
 		count = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT;
 		D_ASSERTF(count > 0, "Invalid DTX rec count %d\n", count);
 
-		size = sizeof(struct vos_dtx_record_df) * count;
+		size = sizeof(umem_off_t) * count;
 		rec_off = umem_zalloc(umm, size);
 		if (umoff_is_null(rec_off)) {
 			D_ERROR("No space to store active DTX "DF_DTI"\n",
