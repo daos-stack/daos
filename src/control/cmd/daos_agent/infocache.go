@@ -38,8 +38,10 @@ import (
 )
 
 const (
-	invalidIndex  = -1
-	verbsProvider = "ofi+verbs"
+	invalidIndex         = -1
+	verbsProvider        = "ofi+verbs"
+	defaultNetworkDevice = "lo"
+	defaultDomain        = "lo"
 )
 
 type attachInfoCache struct {
@@ -167,6 +169,8 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 	if _, ok := aic.numaDeviceMarshResp[aic.defaultNumaNode]; !ok {
 		aic.log.Info("No network devices detected in fabric scan; default AttachInfo response may be incorrect\n")
 		aic.numaDeviceMarshResp[aic.defaultNumaNode] = make(map[int][]byte)
+		resp.Interface = defaultNetworkDevice
+		resp.Domain = defaultDomain
 		numaDeviceMarshResp, err := proto.Marshal(resp)
 		if err != nil {
 			return drpc.MarshalingFailure()
