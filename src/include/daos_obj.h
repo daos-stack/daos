@@ -538,14 +538,14 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *			For an unfound record, the output length of the
  *			corresponding sgl is set to zero.
  *
- * \param[out]	maps	Optional, upper layers can simply pass in NULL.
+ * \param[out]	ioms	Optional, upper layers can simply pass in NULL.
  *			It is the sink buffer to store the returned actual
  *			layout of the iods used in fetch. It gives information
  *			for every iod on the highest/lowest extent in that dkey,
  *			in additional to the valid extents from the ones fetched
  *			(if asked for). If the extents don't fit in the io_map,
  *			the number required is set on the fetch in
- *			\a maps[]::iom_nr for that particular iod.
+ *			\a ioms[]::iom_nr for that particular iod.
  *
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -563,7 +563,7 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
 int
 daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev);
+	       d_sg_list_t *sgls, daos_iom_t *ioms, daos_event_t *ev);
 
 /**
  * Insert or update object records stored in co-located arrays.

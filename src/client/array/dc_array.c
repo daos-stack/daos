@@ -56,6 +56,8 @@ struct dc_array {
 	daos_obj_id_t		oid;
 	/** object handle access mode */
 	unsigned int		mode;
+	/** Is this a byte array (set short fetch & memset holes to 0 */
+	bool			byte_array;
 };
 
 struct md_params {
@@ -71,14 +73,15 @@ struct md_params {
 struct io_params {
 	daos_key_t		dkey;
 	uint64_t		dkey_val;
-	char			akey_str;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
-	bool			user_sgl_used;
+	daos_iom_t		iom; /* used on fetch only */
 	daos_size_t		cell_size;
 	daos_size_t		num_records;
 	tse_task_t		*task;
 	struct io_params	*next;
+	bool			user_sgl_used;
+	char			akey_str;
 };
 
 static void
@@ -196,6 +199,7 @@ create_handle_cb(tse_task_t *task, void *data)
 {
 	daos_array_create_t	*args = *((daos_array_create_t **)data);
 	struct dc_array		*array;
+	daos_ofeat_t		feat;
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
@@ -208,13 +212,17 @@ create_handle_cb(tse_task_t *task, void *data)
 	if (array == NULL)
 		D_GOTO(err_obj, rc = -DER_NOMEM);
 
-	array->coh = args->coh;
-	array->oid.hi = args->oid.hi;
-	array->oid.lo = args->oid.lo;
-	array->mode = DAOS_OO_RW;
-	array->cell_size = args->cell_size;
-	array->chunk_size = args->chunk_size;
-	array->daos_oh = *args->oh;
+	array->coh		= args->coh;
+	array->oid.hi		= args->oid.hi;
+	array->oid.lo		= args->oid.lo;
+	array->mode		= DAOS_OO_RW;
+	array->cell_size	= args->cell_size;
+	array->chunk_size	= args->chunk_size;
+	array->daos_oh		= *args->oh;
+
+	feat = daos_obj_id2feat(args->oid);
+	if (feat & DAOS_OF_ARRAY_BYTE)
+		array->byte_array = true;
 
 	array_hdl_link(array);
 	*args->oh = array_ptr2hdl(array);
@@ -374,6 +382,7 @@ dc_array_g2l(daos_handle_t coh, struct dc_array_glob *array_glob,
 	uuid_t			coh_uuid;
 	uuid_t			cont_uuid;
 	unsigned int		array_mode;
+	daos_ofeat_t            feat;
 	int			rc = 0;
 
 	D_ASSERT(array_glob != NULL);
@@ -409,6 +418,10 @@ dc_array_g2l(daos_handle_t coh, struct dc_array_glob *array_glob,
 	array->oid.hi = array_glob->oid.hi;
 	array->oid.lo = array_glob->oid.lo;
 	array->mode = array_mode;
+
+	feat = daos_obj_id2feat(array->oid);
+	if (feat & DAOS_OF_ARRAY_BYTE)
+		array->byte_array = true;
 
 	array_hdl_link(array);
 	*oh = array_ptr2hdl(array);
@@ -590,7 +603,7 @@ dc_array_create(tse_task_t *task)
 
 	/** CB to generate the array OH */
 	rc = tse_task_register_cbs(task, NULL, NULL, 0, create_handle_cb,
-				    &args, sizeof(args));
+				   &args, sizeof(args));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion cb\n");
 		D_GOTO(err_put2, rc);
@@ -618,6 +631,7 @@ open_handle_cb(tse_task_t *task, void *data)
 	struct dc_array		*array;
 	struct md_params	*params;
 	uint64_t		*md_vals;
+	daos_ofeat_t            feat;
 	int			rc = task->dt_result;
 
 	if (rc != 0)
@@ -653,6 +667,10 @@ open_handle_cb(tse_task_t *task, void *data)
 	array->cell_size	= *args->cell_size;
 	array->chunk_size	= *args->chunk_size;
 	array->daos_oh		= *args->oh;
+
+	feat = daos_obj_id2feat(args->oid);
+	if (feat & DAOS_OF_ARRAY_BYTE)
+		array->byte_array = true;
 
 	array_hdl_link(array);
 	*args->oh = array_ptr2hdl(array);
@@ -1070,7 +1088,7 @@ set_short_read_cb(tse_task_t *task, void *data)
 	struct io_params	*io_list = *((struct io_params **)data);
 	struct io_params	*current;
 	uint64_t		dkey_val;
-	daos_size_t		num_records = 0;
+	daos_size_t		total_recs = 0;
 	bool			break_on_lower = false;
 	int			rc = task->dt_result;
 
@@ -1086,17 +1104,13 @@ set_short_read_cb(tse_task_t *task, void *data)
 	dkey_val = io_list->dkey_val;
 	current = io_list;
 	while (current) {
-		daos_size_t len = 0, recs;
 		int i;
-		d_iov_t sg_iov;
+		daos_size_t hi_off, num_recs = 0;
 
 		if (current->user_sgl_used) {
 			D_ASSERT(args->sgl->sg_nr == 1);
 			current->sgl.sg_nr = args->sgl->sg_nr;
 			current->sgl.sg_nr_out = args->sgl->sg_nr_out;
-			sg_iov.iov_buf_len = args->sgl->sg_iovs[0].iov_buf_len;
-			sg_iov.iov_len = args->sgl->sg_iovs[0].iov_len;
-			current->sgl.sg_iovs = &sg_iov;
 		}
 
 		/*
@@ -1111,50 +1125,46 @@ set_short_read_cb(tse_task_t *task, void *data)
 			goto next;
 
 		dkey_val = current->dkey_val;
+		hi_off = current->iom.iom_recx_hi.rx_idx +
+			current->iom.iom_recx_hi.rx_nr;
+		       
+		for (i = 0; i < current->iod.iod_nr; i++) {
+			if ((current->iod.iod_recxs[i].rx_idx +
+			     current->iod.iod_recxs[i].rx_nr) > hi_off) {
+				num_recs += current->iod.iod_recxs[i].rx_nr;
+				continue;
+			}
+
+			D_ASSERT(current->iod.iod_recxs[i].rx_idx <=
+				 current->iom.iom_recx_hi.rx_idx);
+		}
 
 		/*
 		 * if no DAOS "short-fetch" detected, continue. Can't break here
 		 * because we could have the same dkey in the next entry that we
 		 * need to check.
 		 */
-		i = current->sgl.sg_nr_out - 1;
-		if (current->sgl.sg_nr == current->sgl.sg_nr_out &&
-		    current->sgl.sg_iovs[i].iov_buf_len ==
-		    current->sgl.sg_iovs[i].iov_len) {
+		if (num_recs == 0) {
 			break_on_lower = true;
-			goto next;
+			goto next; 
 		}
-
-		/** How many bytes are short fetched. */
-		if (current->sgl.sg_nr == current->sgl.sg_nr_out ||
-		    current->sgl.sg_nr_out != 0) {
-			len = current->sgl.sg_iovs[i].iov_buf_len -
-				current->sgl.sg_iovs[i].iov_len;
-		}
-
-		for (i = current->sgl.sg_nr_out; i < current->sgl.sg_nr; i++)
-			len += current->sgl.sg_iovs[i].iov_buf_len;
-
-		D_ASSERT(len);
-		/** calculate number of records (not bytes) short-fetched */
-		recs = len / current->cell_size;
-		num_records += recs;
 
 		/*
 		 * if the entire read from this dkey is not short fetched, we
 		 * can break once we encounter a lower key.
 		 */
-		if (recs != current->num_records)
+		if (num_recs != current->num_records)
 			break_on_lower = true;
 
-		D_DEBUG(DB_IO, "DKEY "DF_U64": shortfetch %zu B, %zu recs\n",
-			current->dkey_val, len, num_records);
+		total_recs += num_recs;
+		D_DEBUG(DB_IO, "DKEY "DF_U64": shortfetch %zu recs\n",
+			current->dkey_val, num_recs);
 
 next:
 		current = current->next;
 	}
 
-	args->iod->arr_nr_short_read = num_records;
+	args->iod->arr_nr_short_read = total_recs;
 	return rc;
 }
 
@@ -1216,6 +1226,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	 */
 	while (u < rg_iod->arr_nr) {
 		daos_iod_t	*iod;
+		daos_iom_t	*iom;
 		d_sg_list_t	*sgl;
 		daos_key_t	*dkey;
 		uint64_t	dkey_val;
@@ -1286,6 +1297,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		}
 
 		iod = &params->iod;
+		iom = &params->iom;
 		sgl = &params->sgl;
 		dkey = &params->dkey;
 		params->akey_str = '0';
@@ -1298,13 +1310,17 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 		/* set descriptor for KV object */
 		d_iov_set(&iod->iod_name, &params->akey_str, 1);
-		iod->iod_nr = 0;
-		iod->iod_recxs = NULL;
-		iod->iod_type = DAOS_IOD_ARRAY;
+		iod->iod_nr	= 0;
+		iod->iod_recxs	= NULL;
+		iod->iod_type	= DAOS_IOD_ARRAY;
 		if (op_type == DAOS_OPC_ARRAY_PUNCH)
 			iod->iod_size = 0;
 		else
 			iod->iod_size = array->cell_size;
+
+		/* Set iom to fetch lowest/highest recx */
+		iom->iom_type	= DAOS_IOD_ARRAY;
+		iom->iom_nr	= 0;
 
 		i = 0;
 		dkey_records = 0;
@@ -1438,7 +1454,10 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			io_arg->nr	= 1;
 			io_arg->iods	= iod;
 			io_arg->sgls	= sgl;
-			io_arg->maps	= NULL;
+			if (array->byte_array)
+				io_arg->ioms = iom;
+			else
+				io_arg->ioms = NULL;
 		} else if (op_type == DAOS_OPC_ARRAY_WRITE ||
 			   op_type == DAOS_OPC_ARRAY_PUNCH) {
 			daos_obj_update_t *io_arg;
@@ -1467,7 +1486,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	} /* end while */
 
 	tse_task_register_comp_cb(task, free_io_params_cb, &head, sizeof(head));
-	if (op_type == DAOS_OPC_ARRAY_READ)
+
+	rg_iod->arr_nr_short_read = 0;
+	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array)
 		tse_task_register_comp_cb(task, set_short_read_cb, &head,
 					  sizeof(head));
 
@@ -1939,7 +1960,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	io_arg->nr	= 1;
 	io_arg->iods	= iod;
 	io_arg->sgls	= sgl;
-	io_arg->maps	= NULL;
+	io_arg->ioms	= NULL;
 
 	rc = tse_task_register_comp_cb(io_task, check_record_cb, &params,
 				       sizeof(params));

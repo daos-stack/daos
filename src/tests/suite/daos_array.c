@@ -826,14 +826,17 @@ read_empty_records(void **state)
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
 	d_sg_list_t	sgl;
-	d_iov_t	iov;
+	d_iov_t		iov;
 	int		*wbuf = NULL, *rbuf = NULL;
 	daos_size_t	i;
 	daos_event_t	ev;
+	daos_ofeat_t	ofeat;
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	ofeat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
+		DAOS_OF_ARRAY | DAOS_OF_ARRAY_BYTE;
+	oid = dts_oid_gen(OC_SX, ofeat, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
