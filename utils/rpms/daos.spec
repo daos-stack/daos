@@ -1,5 +1,5 @@
 # add --with fault-injection option to rpmbuild
-%bcond_with fault-injection
+%bcond_with fault_injection
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
@@ -182,7 +182,7 @@ scons %{?no_smp_mflags}    \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-      %{?_with_fault-injection}
+      %{?_with_fault_injection}
 
 %install
 scons %{?no_smp_mflags}               \
@@ -193,7 +193,7 @@ scons %{?no_smp_mflags}               \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?_with_fault-injection}
+      %{?_with_fault_injection}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
