@@ -119,8 +119,6 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 		aic.currentNumaDevIdx = make(map[int]int)
 	}
 
-	netdetect.SetLogger(aic.log)
-
 	var haveDefaultNuma bool
 
 	for _, fs := range scanResults {

@@ -72,7 +72,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 
 	if !numaAware {
-		cmd.log.Debugf("This system is not NUMA aware")
+		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.log, cmd.cfg.TransportConfig))
