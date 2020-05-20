@@ -563,7 +563,7 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	uint32_t		 size;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, DF_UUID": map_ver=%u\n", DP_UUID(pool->sp_uuid),
+	D_DEBUG(DB_MD, DF_UUID": map_ver=%u\n", DP_UUID(pool->sp_uuid),
 		map_ver);
 
 	size = pool_iv_map_ent_size(buf->pb_nr);
@@ -583,7 +583,7 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_MAP, iv_entry, size,
 			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, false);
 	if (rc != 0)
-		D_DEBUG(DB_TRACE, DF_UUID": map_ver=%u: %d\n",
+		D_DEBUG(DB_MD, DF_UUID": map_ver=%u: %d\n",
 			DP_UUID(pool->sp_uuid), map_ver, rc);
 
 	D_FREE(iv_entry);
@@ -691,7 +691,7 @@ ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 	pool_iv_prop_l2g(prop, &iv_entry->piv_prop);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_PROP, iv_entry, size,
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, true);
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, false);
 	if (rc)
 		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
 	D_FREE(iv_entry);

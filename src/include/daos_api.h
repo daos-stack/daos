@@ -33,6 +33,16 @@
 extern "C" {
 #endif
 
+enum {
+	/** The transaction is read only. */
+	DAOS_TF_RDONLY		= (1 << 0),
+	/**
+	 * Not copy application buffer (neither key buffer nor value buffer)
+	 * when cache modification on client for the distributed transaction.
+	 */
+	DAOS_TF_ZERO_COPY	= (1 << 1),
+};
+
 /**
  * Generate a rank list from a string with a seprator argument. This is a
  * convenience function to generate the rank list required by
@@ -45,8 +55,7 @@ extern "C" {
  * \return		allocated rank list that user is responsible to free
  *			with d_rank_list_free().
  */
-DAOS_API d_rank_list_t *
-daos_rank_list_parse(const char *str, const char *sep);
+d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
 
 /*
  * Transaction API
@@ -59,13 +68,15 @@ daos_rank_list_parse(const char *str, const char *sep);
  *
  * \param[in]	coh	Container handle.
  * \param[out]	th	Returned transaction handle.
+ * \param[in]	flags	Transaction flags.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
-daos_tx_open(daos_handle_t coh, daos_handle_t *th, daos_event_t *ev);
+int
+daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags,
+	     daos_event_t *ev);
 
 /**
  * Commit the transaction on the container it was created with. The transaction
@@ -83,7 +94,7 @@ daos_tx_open(daos_handle_t coh, daos_handle_t *th, daos_event_t *ev);
  *			-DER_INVAL      Invalid parameter
  *			-DER_RESTART	transaction conflict detected.
  */
-DAOS_API int
+int
 daos_tx_commit(daos_handle_t th, daos_event_t *ev);
 
 /**
@@ -101,7 +112,7 @@ daos_tx_commit(daos_handle_t th, daos_event_t *ev);
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
 		  daos_event_t *ev);
 
@@ -115,7 +126,7 @@ daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_abort(daos_handle_t th, daos_event_t *ev);
 
 /**
@@ -128,8 +139,21 @@ daos_tx_abort(daos_handle_t th, daos_event_t *ev);
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_close(daos_handle_t th, daos_event_t *ev);
+
+/**
+ * Restart the transaction handle. It drops all the modifications that have
+ * been issued via the handle. This is a local operation, no RPC involved.
+ *
+ * \param[in]	th	Transaction handle to be restarted.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 if Success, negative if failed.
+ */
+int
+daos_tx_restart(daos_handle_t th, daos_event_t *ev);
 
 /**
  * Return epoch associated with the transaction handle.
@@ -139,7 +163,7 @@ daos_tx_close(daos_handle_t th, daos_event_t *ev);
  *
  * \return		0 if Success, negative if failed.
  */
-DAOS_API int
+int
 daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 
 #if defined(__cplusplus)

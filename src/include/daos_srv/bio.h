@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,7 +125,7 @@ bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
 }
 
 static inline bool
-bio_addr_is_hole(bio_addr_t *addr)
+bio_addr_is_hole(const bio_addr_t *addr)
 {
 	return addr->ba_hole != 0;
 }
@@ -157,14 +157,14 @@ bio_iov_set_extra(struct bio_iov *biov,	uint64_t prefix_len,
 }
 
 static inline uint64_t
-bio_iov2off(struct bio_iov *biov)
+bio_iov2off(const struct bio_iov *biov)
 {
 	D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
 	return biov->bi_addr.ba_off;
 }
 
 static inline uint64_t
-bio_iov2len(struct bio_iov *biov)
+bio_iov2len(const struct bio_iov *biov)
 {
 	D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
 	return biov->bi_data_len;
@@ -177,26 +177,26 @@ bio_iov_set_len(struct bio_iov *biov, uint64_t len)
 }
 
 static inline void *
-bio_iov2buf(struct bio_iov *biov)
+bio_iov2buf(const struct bio_iov *biov)
 {
 	D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
 	return biov->bi_buf;
 }
 
 static inline uint64_t
-bio_iov2raw_off(struct bio_iov *biov)
+bio_iov2raw_off(const struct bio_iov *biov)
 {
 	return biov->bi_addr.ba_off;
 }
 
 static inline uint64_t
-bio_iov2raw_len(struct bio_iov *biov)
+bio_iov2raw_len(const struct bio_iov *biov)
 {
 	return biov->bi_data_len;
 }
 
 static inline void *
-bio_iov2raw_buf(struct bio_iov *biov)
+bio_iov2raw_buf(const struct bio_iov *biov)
 {
 	return biov->bi_buf;
 }
@@ -214,25 +214,25 @@ bio_iov_alloc_raw_buf(struct bio_iov *biov, uint64_t len)
 }
 
 static inline void *
-bio_iov2req_buf(struct bio_iov *biov)
+bio_iov2req_buf(const struct bio_iov *biov)
 {
 	return biov->bi_buf + biov->bi_prefix_len;
 }
 
 static inline uint64_t
-bio_iov2req_off(struct bio_iov *biov)
+bio_iov2req_off(const struct bio_iov *biov)
 {
 	return biov->bi_addr.ba_off + biov->bi_prefix_len;
 }
 
 static inline uint64_t
-bio_iov2req_len(struct bio_iov *biov)
+bio_iov2req_len(const struct bio_iov *biov)
 {
 	return biov->bi_data_len - (biov->bi_prefix_len + biov->bi_suffix_len);
 }
 
 static inline
-uint16_t bio_iov2media(struct bio_iov *biov)
+uint16_t bio_iov2media(const struct bio_iov *biov)
 {
 	return biov->bi_addr.ba_type;
 }
@@ -297,6 +297,21 @@ bio_sgl_iov(struct bio_sglist *bsgl, uint32_t idx)
 		return NULL;
 
 	return &bsgl->bs_iovs[idx];
+}
+
+/** Count the number of biovs that are 'holes' in a bsgl */
+static inline uint32_t
+bio_sgl_holes(struct bio_sglist *bsgl)
+{
+	uint32_t result = 0;
+	int i;
+
+	for (i = 0; i < bsgl->bs_nr_out; i++) {
+		if (bio_addr_is_hole(&bsgl->bs_iovs[i].bi_addr))
+			result++;
+	}
+
+	return result;
 }
 
 /**

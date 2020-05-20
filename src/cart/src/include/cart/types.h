@@ -171,8 +171,8 @@ typedef void *crt_bulk_array_t; /**< abstract bulk array handle */
 
 /** RPC flags enumeration */
 enum crt_rpc_flags {
-	/** send CORPC exclusively to a specified set of ranks */
-	CRT_RPC_FLAG_EXCLUSIVE		= (1U << 1)
+	/** send CORPC to filter_ranks only */
+	CRT_RPC_FLAG_FILTER_INVERT	= (1U << 1)
 };
 
 struct crt_rpc;

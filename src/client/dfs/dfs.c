@@ -1414,7 +1414,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	dfs->coh = coh;
 	dfs->amode = (flags == 0) ? dfs_params->amode : (flags & O_ACCMODE);
 	dfs->uid = dfs_params->uid;
-	dfs->uid = dfs_params->gid;
+	dfs->gid = dfs_params->gid;
 	dfs->attr.da_id = dfs_params->id;
 	dfs->attr.da_chunk_size = dfs_params->chunk_size;
 	dfs->attr.da_oclass_id = dfs_params->oclass;
@@ -1723,7 +1723,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	dfs_obj_t		parent;
 	dfs_obj_t		*obj = NULL;
 	char			*token;
-	char			*rem, *sptr;
+	char			*rem, *sptr = NULL; /* bogus compiler warning */
 	bool			exists;
 	int			daos_mode;
 	struct dfs_entry	entry = {0};

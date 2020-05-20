@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,8 +87,8 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		rpc_priv->crp_flags |= CRT_RPC_FLAG_COLL;
 		if (co_info->co_grp_priv->gp_primary)
 			rpc_priv->crp_flags |= CRT_RPC_FLAG_PRIMARY_GRP;
-		if (flags & CRT_RPC_FLAG_EXCLUSIVE)
-			rpc_priv->crp_flags |= CRT_RPC_FLAG_EXCLUSIVE;
+		if (flags & CRT_RPC_FLAG_FILTER_INVERT)
+			rpc_priv->crp_flags |= CRT_RPC_FLAG_FILTER_INVERT;
 
 		co_hdr->coh_grpid = grp_priv->gp_pub.cg_grpid;
 		co_hdr->coh_filter_ranks = co_info->co_filter_ranks;
@@ -359,7 +359,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	d_rank_list_t		*tobe_filter_ranks = NULL;
 	bool			 root_excluded = false;
-	bool			 exclusive = flags & CRT_RPC_FLAG_EXCLUSIVE;
+	bool			 filter_invert;
 	d_rank_t		 grp_root, pri_root;
 	uint32_t		 grp_ver;
 	int			 rc = 0;
@@ -402,8 +402,12 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	rpc_priv->crp_grp_priv = grp_priv;
 
 	/* grp_root is logical rank number in this group */
-
 	grp_root = grp_priv->gp_self;
+	if (grp_root == CRT_NO_RANK) {
+		D_DEBUG(DB_NET, "%s: self rank not known yet\n",
+			grp_priv->gp_pub.cg_grpid);
+		D_GOTO(out, rc = -DER_GRPVER);
+	}
 	pri_root = crt_grp_priv_get_primary_rank(grp_priv, grp_root);
 
 	tobe_filter_ranks = filter_ranks;
@@ -412,7 +416,8 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	 * a special flag to indicate need not to execute RPC handler.
 	 */
 	rc = d_rank_in_rank_list(filter_ranks, pri_root);
-	if ((exclusive && !rc) || (!exclusive && rc)) {
+	filter_invert = flags & CRT_RPC_FLAG_FILTER_INVERT;
+	if ((filter_invert && !rc) || (!filter_invert && rc)) {
 		rc = d_rank_list_dup(&tobe_filter_ranks, filter_ranks);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -420,7 +425,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		root_excluded = true;
 
 		/* make sure pri_root is in the scope */
-		if (exclusive) {
+		if (filter_invert) {
 			rc = d_rank_list_append(tobe_filter_ranks, pri_root);
 			if (rc != 0)
 				D_GOTO(out, rc);
@@ -772,7 +777,6 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_corpc_info	*co_info;
 	d_rank_list_t		*children_rank_list = NULL;
-	d_rank_t		 grp_rank;
 	struct crt_rpc_priv	*child_rpc_priv;
 	struct crt_opc_info	*opc_info;
 	struct crt_corpc_ops	*co_ops;
@@ -781,8 +785,6 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	co_info = rpc_priv->crp_corpc_info;
 	D_ASSERT(co_info != NULL);
-
-	grp_rank = co_info->co_grp_priv->gp_self;
 
 	/* corresponds to decref in crt_corpc_complete */
 	RPC_ADDREF(rpc_priv);
@@ -804,8 +806,21 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		}
 	}
 
+	/*
+	 * Check the self rank after calling the pre-forward callback, which
+	 * might have changed the self rank from CRT_NO_RANK to a valid value.
+	 */
+	if (co_info->co_grp_priv->gp_self == CRT_NO_RANK) {
+		RPC_TRACE(DB_NET, rpc_priv, "%s: self rank not known yet\n",
+			  co_info->co_grp_priv->gp_pub.cg_grpid);
+		rc = -DER_GRPVER;
+		crt_corpc_fail_parent_rpc(rpc_priv, rc);
+		D_GOTO(forward_done, rc);
+	}
+
 	rc = crt_tree_get_children(co_info->co_grp_priv, co_info->co_grp_ver,
-				   rpc_priv->crp_flags & CRT_RPC_FLAG_EXCLUSIVE,
+				   rpc_priv->crp_flags &
+				   CRT_RPC_FLAG_FILTER_INVERT,
 				   co_info->co_filter_ranks,
 				   co_info->co_tree_topo, co_info->co_root,
 				   co_info->co_grp_priv->gp_self,
@@ -825,8 +840,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	co_info->co_child_ack_num = 0;
 
 	D_DEBUG(DB_TRACE, "group %s grp_rank %d, co_info->co_child_num: %d.\n",
-		co_info->co_grp_priv->gp_pub.cg_grpid, grp_rank,
-		co_info->co_child_num);
+		co_info->co_grp_priv->gp_pub.cg_grpid,
+		co_info->co_grp_priv->gp_self, co_info->co_child_num);
 
 	if (!ver_match) {
 		D_INFO("parent version and local version mismatch.\n");

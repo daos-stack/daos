@@ -31,7 +31,6 @@
 #include <endian.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <mpi.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <argp.h>
@@ -435,7 +434,7 @@ cmd_write_pattern(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &io_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &io_options);
 
 	/* uuid needs extra parsing */
 	if (io_options.pool_uuid == NULL)
@@ -522,7 +521,7 @@ cmd_verify_pattern(int argc, const char **argv, void *ctx)
 	/* once the command is removed the remaining arguments conform
 	 * to GNU standards and can be parsed with argp
 	 */
-	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &io_options);
+	argp_parse(&argp, argc, (char **)argv, 0, 0, &io_options);
 
 	/* uuid needs extra parsing */
 	if (io_options.pool_uuid == NULL)

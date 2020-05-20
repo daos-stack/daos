@@ -37,6 +37,7 @@
 #include <daos/event.h>
 #include "srv.pb-c.h"
 #include "rpc.h"
+#include <errno.h>
 
 struct cp_arg {
 	struct dc_mgmt_sys	*sys;
@@ -185,7 +186,7 @@ out_task:
 }
 
 int
-dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start)
+dc_mgmt_profile(char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;
 	struct mgmt_profile_in	*in;
@@ -213,7 +214,6 @@ dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start)
 
 	D_ASSERT(rpc != NULL);
 	in = crt_req_get(rpc);
-	in->p_module = modules;
 	in->p_path = path;
 	in->p_avg = avg;
 	in->p_op = start ? MGMT_PROFILE_START : MGMT_PROFILE_STOP;
@@ -280,6 +280,16 @@ struct dc_mgmt_psr {
 	}						\
 	__rc;						\
 })
+
+static void
+put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
+{
+	int i;
+
+	for (i = 0; i < npsrs; i++)
+		D_FREE(psrs[i].uri);
+	D_FREE(psrs);
+}
 
 /*
  * Get the attach info (i.e., the CaRT PSRs) for name. npsrs outputs the number
@@ -381,6 +391,21 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	*psrs = p;
 
 	if (sy_info) {
+		if (strnlen(resp->provider, sizeof(sy_info->provider)) == 0) {
+			D_ERROR("GetAttachInfo provider string is empty\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (strnlen(resp->interface, sizeof(sy_info->interface)) == 0) {
+			D_ERROR("GetAttachInfo interface string is empty\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (strnlen(resp->domain, sizeof(sy_info->domain)) == 0) {
+			D_ERROR("GetAttachInfo domain string is empty\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
 		if (copy_str(sy_info->provider, resp->provider)) {
 			D_ERROR("GetAttachInfo provider string too long\n");
 			D_GOTO(out_resp, rc = -DER_INVAL);
@@ -398,6 +423,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
 		sy_info->crt_timeout = resp->crttimeout;
+
 		D_DEBUG(DB_MGMT,
 			"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
 			"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u\n",
@@ -415,6 +441,86 @@ out_dreq:
 out_ctx:
 	drpc_close(ctx);
 out:
+	return rc;
+}
+
+/*
+ * Get the CaRT network configuration for this client node
+ * via the get_attach_info() dRPC.
+ * Configure the client's local environment with these parameters
+ */
+int dc_mgmt_net_cfg(const char *name)
+{
+	int rc;
+	int npsrs;
+	char buf[SYS_INFO_BUF_SIZE];
+	char *crt_timeout;
+	char *ofi_interface;
+	char *ofi_domain;
+	struct sys_info sy_info;
+	struct dc_mgmt_psr *psrs;
+
+	if (name == NULL)
+		name = DAOS_DEFAULT_SYS_NAME;
+
+	/* Query the agent for the CaRT network configuration parameters */
+	rc = get_attach_info(name, &npsrs, &psrs, &sy_info);
+	if (rc != 0)
+		return rc;
+
+	/* These two are always set */
+	rc = setenv("CRT_PHY_ADDR_STR", sy_info.provider, 1);
+	if (rc != 0)
+		D_GOTO(cleanup, rc = d_errno2der(errno));
+
+	sprintf(buf, "%d", sy_info.crt_ctx_share_addr);
+	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
+	if (rc != 0)
+		D_GOTO(cleanup, rc = d_errno2der(errno));
+
+	/* Allow client env overrides for these three */
+	crt_timeout = getenv("CRT_TIMEOUT");
+	if (!crt_timeout) {
+		sprintf(buf, "%d", sy_info.crt_timeout);
+		rc = setenv("CRT_TIMEOUT", buf, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided CRT_TIMEOUT: %s\n",
+			crt_timeout);
+	}
+
+	ofi_interface = getenv("OFI_INTERFACE");
+	if (!ofi_interface) {
+		rc = setenv("OFI_INTERFACE", sy_info.interface, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided OFI_INTERFACE: %s\n",
+			ofi_interface);
+	}
+
+	ofi_domain = getenv("OFI_DOMAIN");
+	if (!ofi_domain) {
+		rc = setenv("OFI_DOMAIN", sy_info.domain, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+	}
+
+	D_DEBUG(DB_MGMT,
+		"CaRT initialization with:\n"
+		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
+		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
+		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
+		getenv("CRT_PHY_ADDR_STR"),
+		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
+
+cleanup:
+	/* free the psrs allocated by get_attach_info() */
+	put_attach_info(npsrs, psrs);
+
 	return rc;
 }
 
@@ -465,16 +571,6 @@ get_attach_info_from_buf(int npsrbs, struct psr_buf *psrbs, int *npsrs,
 	*npsrs = npsrbs;
 	*psrs = p;
 	return 0;
-}
-
-static void
-put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
-{
-	int i;
-
-	for (i = 0; i < npsrs; i++)
-		D_FREE(psrs[i].uri);
-	D_FREE(psrs);
 }
 
 static int
@@ -571,6 +667,7 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 		goto err_sys;
 	if (sys->sy_npsrs < 1) {
 		D_ERROR(">= 1 PSRs required: %d\n", sys->sy_npsrs);
+		rc = -DER_MISC;
 		goto err_psrs;
 	}
 

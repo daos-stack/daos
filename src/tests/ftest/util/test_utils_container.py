@@ -27,9 +27,9 @@ from time import time
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from command_utils import BasicParameter
+from command_utils_base import BasicParameter
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
-                        c_uuid_to_str)
+                        c_uuid_to_str, str_to_c_uuid)
 from general_utils import get_random_string, DaosTestError
 
 
@@ -253,7 +253,7 @@ class TestContainerData(object):
 class TestContainer(TestDaosApiBase):
     """A class for functional testing of DaosContainer objects."""
 
-    def __init__(self, pool, cb_handler=None):
+    def __init__(self, pool, cb_handler=None, daos_command=None):
         """Create a TeestContainer object.
 
         Args:
@@ -273,6 +273,17 @@ class TestContainer(TestDaosApiBase):
         # Provider access to get input params values
         # for enabling different container properties
         self.input_params = DaosInputParams()
+
+        # Optional daos command objec to use with the USE_DAOS control method
+        self.daos = daos_command
+
+        # Optional daos command argument values to use with the USE_DAOS control
+        # method when creating/destroying containers
+        self.path = BasicParameter(None)
+        self.type = BasicParameter(None)
+        self.oclass = BasicParameter(None)
+        self.chunk_size = BasicParameter(None)
+        self.properties = BasicParameter(None)
 
         self.container = None
         self.uuid = None
@@ -303,20 +314,54 @@ class TestContainer(TestDaosApiBase):
             "Creating a container with pool handle %s",
             self.pool.pool.handle.value)
         self.container = DaosContainer(self.pool.context)
-        kwargs = {"poh": self.pool.pool.handle}
-        if uuid is not None:
-            kwargs["con_uuid"] = uuid
-        # Refer daos_api for setting input params for DaosContainer.
-        if con_in is not None:
-            cop = self.input_params.get_con_create_params()
-            cop.type = con_in[0]
-            cop.enable_chksum = con_in[1]
-            cop.srv_verify = con_in[2]
-            cop.chksum_type = con_in[3]
-            cop.chunk_size = con_in[4]
-            kwargs["con_prop"] = cop
 
-        self._call_method(self.container.create, kwargs)
+        if self.control_method.value == self.USE_API:
+            # Create a container with the API method
+            kwargs = {"poh": self.pool.pool.handle}
+            if uuid is not None:
+                kwargs["con_uuid"] = uuid
+
+            # Refer daos_api for setting input params for DaosContainer.
+            if con_in is not None:
+                cop = self.input_params.get_con_create_params()
+                cop.type = con_in[0]
+                cop.enable_chksum = con_in[1]
+                cop.srv_verify = con_in[2]
+                cop.chksum_type = con_in[3]
+                cop.chunk_size = con_in[4]
+                kwargs["con_prop"] = cop
+
+            self._call_method(self.container.create, kwargs)
+
+        elif self.control_method.value == self.USE_DAOS and self.daos:
+            # Create a container with the daos command
+            kwargs = {
+                "pool": self.pool.uuid,
+                "sys_name": self.pool.name.value,
+                "svc": ",".join(str(rank) for rank in self.pool.svc_ranks),
+                "cont": uuid,
+                "path": self.path.value,
+                "cont_type": self.type.value,
+                "oclass": self.oclass.value,
+                "chunk_size": self.chunk_size.value,
+                "properties": self.properties.value,
+            }
+            self._log_method("daos.container_create", kwargs)
+            uuid = self.daos.get_output("container_create", **kwargs)[0]
+
+            # Populte the empty DaosContainer object with the properties of the
+            # container created with daos container create.
+            self.container.uuid = str_to_c_uuid(uuid)
+            self.container.attached = 1
+
+        elif self.control_method.value == self.USE_DAOS:
+            self.log.error("Error: Undefined daos command")
+
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s",
+                self.control_method.value)
+
         self.uuid = self.container.get_uuid_str()
         self.log.info("  Container created with uuid %s", self.uuid)
 
@@ -378,17 +423,43 @@ class TestContainer(TestDaosApiBase):
                 container does not exist.
 
         """
+        status = False
         if self.container:
             self.close()
             self.log.info("Destroying container %s", self.uuid)
             if self.container.attached:
-                self._call_method(self.container.destroy, {"force": force})
+                kwargs = {"force": force}
+
+                if self.control_method.value == self.USE_API:
+                    # Destroy the container with the API method
+                    self._call_method(self.container.destroy, kwargs)
+                    status = True
+
+                elif self.control_method.value == self.USE_DAOS and self.daos:
+                    # Destroy the container with the daos command
+                    kwargs["pool"] = self.pool.uuid
+                    kwargs["sys_name"] = self.pool.name.value
+                    kwargs["svc"] = ",".join(
+                        [str(item) for item in self.pool.svc_ranks])
+                    kwargs["cont"] = self.uuid
+                    self._log_method("daos.container_destroy", kwargs)
+                    self.daos.container_destroy(**kwargs)
+                    status = True
+
+                elif self.control_method.value == self.USE_DAOS:
+                    self.log.error("Error: Undefined daos command")
+
+                else:
+                    self.log.error(
+                        "Error: Undefined control_method: %s",
+                        self.control_method.value)
+
             self.container = None
             self.uuid = None
             self.info = None
             self.written_data = []
-            return True
-        return False
+
+        return status
 
     @fail_on(DaosApiError)
     def get_info(self, coh=None):
@@ -652,8 +723,8 @@ class TestContainer(TestDaosApiBase):
         for data in self.written_data:
             # Close the object
             self.log.info(
-                "Closing object %s (txn: %s) in container %s",
-                data.obj, data.txn, self.uuid)
+                "Closing object %s in container %s",
+                data.obj, self.uuid)
             try:
                 self._call_method(data.obj.close, {})
             except DaosApiError:

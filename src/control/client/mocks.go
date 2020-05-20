@@ -25,13 +25,13 @@ package client
 
 import (
 	"io"
-	"sort"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -40,7 +40,6 @@ import (
 )
 
 var (
-	MockUUID         = "00000000-0000-0000-0000-000000000000"
 	MockServers      = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
 	MockCtrlrs       = NvmeControllers{MockNvmeController()}
 	MockSuccessState = ctlpb.ResponseState{Status: ctlpb.ResponseStatus_CTL_SUCCESS}
@@ -68,16 +67,6 @@ var (
 			Mntpoint: "/mnt/daos",
 			State:    &MockState,
 		},
-	}
-	MockACL = &mockACLResult{
-		acl: []string{
-			"A::OWNER@:rw",
-			"A::GROUP@:r",
-		},
-	}
-	MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
-		{Uuid: "12345678-1234-1234-1234-123456789abc", Svcreps: []uint32{1, 2}},
-		{Uuid: "12345678-1234-1234-1234-cba987654321", Svcreps: []uint32{0}},
 	}
 	MockErr = errors.New("unknown failure")
 )
@@ -145,11 +134,8 @@ func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *ctlpb.StorageS
 	}, m.cfg.scanRet
 }
 
-func (m *mockMgmtCtlClient) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq, o ...grpc.CallOption) (ctlpb.MgmtCtl_StorageFormatClient, error) {
-	return &mgmtCtlStorageFormatClient{
-			ctrlrResults: m.cfg.nvmeControllerResults,
-			mountResults: m.cfg.scmMountResults},
-		m.cfg.formatRet
+func (m *mockMgmtCtlClient) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq, o ...grpc.CallOption) (*ctlpb.StorageFormatResp, error) {
+	return nil, m.cfg.formatRet
 }
 
 type mgmtCtlNetworkScanDevicesClient struct {
@@ -160,12 +146,8 @@ func (m *mgmtCtlNetworkScanDevicesClient) Recv() (*ctlpb.DeviceScanReply, error)
 	return &ctlpb.DeviceScanReply{}, nil
 }
 
-func (m *mockMgmtCtlClient) NetworkScanDevices(ctx context.Context, in *ctlpb.DeviceScanRequest, o ...grpc.CallOption) (ctlpb.MgmtCtl_NetworkScanDevicesClient, error) {
-	return &mgmtCtlNetworkScanDevicesClient{}, nil
-}
-
-func (m *mockMgmtCtlClient) NetworkListProviders(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
-	return &ctlpb.ProviderListReply{}, nil
+func (m *mockMgmtCtlClient) NetworkScan(ctx context.Context, in *ctlpb.NetworkScanReq, o ...grpc.CallOption) (*ctlpb.NetworkScanResp, error) {
+	return &ctlpb.NetworkScanResp{}, nil
 }
 
 func (m *mockMgmtCtlClient) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq, o ...grpc.CallOption) (*ctlpb.SystemQueryResp, error) {
@@ -176,166 +158,12 @@ func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemSto
 	return &ctlpb.SystemStopResp{}, nil
 }
 
+func (m *mockMgmtCtlClient) SystemResetFormat(ctx context.Context, req *ctlpb.SystemResetFormatReq, o ...grpc.CallOption) (*ctlpb.SystemResetFormatResp, error) {
+	return &ctlpb.SystemResetFormatResp{}, nil
+}
+
 func (m *mockMgmtCtlClient) SystemStart(ctx context.Context, req *ctlpb.SystemStartReq, o ...grpc.CallOption) (*ctlpb.SystemStartResp, error) {
 	return &ctlpb.SystemStartResp{}, nil
-}
-
-type mockACLResult struct {
-	acl    []string
-	status int32
-	err    error
-}
-
-// ACL returns a properly formed AccessControlList from the mock data
-func (m *mockACLResult) ACL() *AccessControlList {
-	return &AccessControlList{
-		Entries: m.acl,
-	}
-}
-
-type mockListPoolsResult struct {
-	status int32
-	err    error
-}
-
-type mockMgmtSvcClientConfig struct {
-	ACLRet            *mockACLResult
-	ListPoolsRet      *mockListPoolsResult
-	killErr           error
-	poolQueryResult   *mgmtpb.PoolQueryResp
-	poolQueryErr      error
-	poolSetPropResult *mgmtpb.PoolSetPropResp
-	poolSetPropErr    error
-}
-
-type mockMgmtSvcClient struct {
-	cfg mockMgmtSvcClientConfig
-}
-
-func (m *mockMgmtSvcClient) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq, o ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
-	// return successful pool creation results
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
-	return &mgmtpb.PoolCreateResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq, o ...grpc.CallOption) (*mgmtpb.PoolDestroyResp, error) {
-	// return successful pool destroy results
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
-	return &mgmtpb.PoolDestroyResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq, _ ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
-	if m.cfg.poolQueryErr != nil {
-		return nil, m.cfg.poolQueryErr
-	}
-	return m.cfg.poolQueryResult, nil
-}
-
-func (m *mockMgmtSvcClient) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq, _ ...grpc.CallOption) (*mgmtpb.PoolSetPropResp, error) {
-	if m.cfg.poolSetPropErr != nil {
-		return nil, m.cfg.poolSetPropErr
-	}
-	return m.cfg.poolSetPropResult, nil
-}
-
-// returnACLResult returns the mock ACL results - either an error or an ACLResp
-func (m *mockMgmtSvcClient) returnACLResult() (*mgmtpb.ACLResp, error) {
-	if m.cfg.ACLRet.err != nil {
-		return nil, m.cfg.ACLRet.err
-	}
-	return &mgmtpb.ACLResp{ACL: m.cfg.ACLRet.acl, Status: m.cfg.ACLRet.status}, nil
-}
-
-func (m *mockMgmtSvcClient) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
-	return m.returnACLResult()
-}
-
-func (m *mockMgmtSvcClient) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
-	return m.returnACLResult()
-}
-
-func (m *mockMgmtSvcClient) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
-	return m.returnACLResult()
-}
-
-func (m *mockMgmtSvcClient) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
-	return m.returnACLResult()
-}
-
-func (m *mockMgmtSvcClient) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq, o ...grpc.CallOption) (*mgmtpb.BioHealthResp, error) {
-
-	// return successful bio health results
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
-	return &mgmtpb.BioHealthResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq, o ...grpc.CallOption) (*mgmtpb.SmdDevResp, error) {
-
-	// return successful SMD device list
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
-	return &mgmtpb.SmdDevResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq, o ...grpc.CallOption) (*mgmtpb.SmdPoolResp, error) {
-
-	// return successful SMD pool list
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
-	return &mgmtpb.SmdPoolResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
-
-	// return successful device state
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &mgmtpb.DevStateResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
-
-	// return suscessful FAULTY device state
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &mgmtpb.DevStateResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...grpc.CallOption) (*mgmtpb.JoinResp, error) {
-
-	return &mgmtpb.JoinResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
-	return &mgmtpb.GetAttachInfoResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
-	return &mgmtpb.RanksResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) StopRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
-	return &mgmtpb.RanksResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) PingRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
-	return &mgmtpb.RanksResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) StartRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
-	return &mgmtpb.RanksResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq, o ...grpc.CallOption) (*mgmtpb.ListPoolsResp, error) {
-	if m.cfg.ListPoolsRet.err != nil {
-		return nil, m.cfg.ListPoolsRet.err
-	}
-	return &mgmtpb.ListPoolsResp{Pools: MockPoolList, Status: m.cfg.ListPoolsRet.status}, nil
-}
-
-func (m *mockMgmtSvcClient) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq, _ ...grpc.CallOption) (*mgmtpb.LeaderQueryResp, error) {
-	return &mgmtpb.LeaderQueryResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) ListContainers(ctx context.Context, req *mgmtpb.ListContReq, o ...grpc.CallOption) (*mgmtpb.ListContResp, error) {
-	// return successful list containers results
-	return &mgmtpb.ListContResp{}, nil
 }
 
 type mockControlConfig struct {
@@ -392,14 +220,14 @@ type mockControllerFactory struct {
 	log          logging.Logger
 	controlCfg   mockControlConfig
 	ctlClientCfg mockMgmtCtlClientConfig
-	svcClientCfg mockMgmtSvcClientConfig
+	svcClientCfg MockMgmtSvcClientConfig
 }
 
 func (m *mockControllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
 	// returns controller with mock properties specified in constructor
 	cClient := &mockMgmtCtlClient{cfg: m.ctlClientCfg}
 
-	sClient := &mockMgmtSvcClient{cfg: m.svcClientCfg}
+	sClient := &MockMgmtSvcClient{Cfg: m.svcClientCfg}
 
 	controller := newMockControl(m.log, address, m.controlCfg, cClient, sClient)
 
@@ -413,7 +241,7 @@ type mockConnectConfig struct {
 	addresses     Addresses
 	controlConfig mockControlConfig
 	ctlClientCfg  mockMgmtCtlClientConfig
-	svcClientCfg  mockMgmtSvcClientConfig
+	svcClientCfg  MockMgmtSvcClientConfig
 }
 
 // newMockConnnectCfg is the config-based version of newMockConnect()
@@ -441,8 +269,8 @@ func newMockConnect(log logging.Logger,
 	state connectivity.State, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems ScmNamespaces, mountResults ScmMountResults,
-	scanRet error, formatRet error, killRet error, connectRet error, ACLRet *mockACLResult,
-	listPoolsRet *mockListPoolsResult) *connList {
+	scanRet error, formatRet error, killRet error, connectRet error,
+	listPoolsRet *common.MockListPoolsResult) *connList {
 
 	return &connList{
 		log: log,
@@ -462,10 +290,9 @@ func newMockConnect(log logging.Logger,
 				scanRet:               scanRet,
 				formatRet:             formatRet,
 			},
-			svcClientCfg: mockMgmtSvcClientConfig{
-				ACLRet:       ACLRet,
+			svcClientCfg: MockMgmtSvcClientConfig{
 				ListPoolsRet: listPoolsRet,
-				killErr:      killRet,
+				KillErr:      killRet,
 			},
 		},
 	}
@@ -475,27 +302,5 @@ func defaultMockConnect(log logging.Logger) Connect {
 	return newMockConnect(
 		log, connectivity.Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
 		MockModuleResults, MockScmNamespaces, MockMountResults,
-		nil, nil, nil, nil, MockACL, nil)
-}
-
-// MockScanResp mocks scan results from scm and nvme for multiple servers.
-// Each result indicates success or failure through presence of Err.
-func MockScanResp(cs *NvmeControllers, ms *ScmModules, nss *ScmNamespaces, addrs Addresses) *StorageScanResp {
-	nvmeResults := make(NvmeScanResults)
-	scmResults := make(ScmScanResults)
-
-	for _, addr := range addrs {
-		nvmeResults[addr] = &NvmeScanResult{Ctrlrs: *cs}
-
-		sResult := &ScmScanResult{}
-		modules, _ := ms.ToNative()
-		namespaces, _ := nss.ToNative()
-		sResult.Modules = modules
-		sResult.Namespaces = namespaces
-		scmResults[addr] = sResult
-	}
-
-	sort.Strings(addrs)
-
-	return &StorageScanResp{Servers: addrs, Nvme: nvmeResults, Scm: scmResults}
+		nil, nil, nil, nil, nil)
 }

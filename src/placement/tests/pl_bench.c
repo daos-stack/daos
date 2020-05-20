@@ -355,14 +355,14 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 {
 	struct pool_map *initial_pool_map;
 	struct pl_map *initial_pl_map;
-	struct daos_obj_md *obj_table;
-	struct pl_obj_layout **initial_layout;
-	struct pl_obj_layout **iter_layout;
+	struct daos_obj_md *obj_table = NULL;
+	struct pl_obj_layout **initial_layout = NULL;
+	struct pl_obj_layout **iter_layout = NULL;
 	int obj_idx;
 	int type_idx;
 	int added;
 	char *token;
-	double *percent_moved;
+	double *percent_moved = NULL;
 	int j;
 
 	/*
@@ -435,7 +435,7 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 					D_PRINT("ERROR: Unknown map-type: %s\n",
 						token);
 					benchmark_add_data_movement_usage();
-					return;
+					goto out;
 				}
 				num_map_types++;
 				token = strtok(NULL, ",");
@@ -449,7 +449,7 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 			if (ret != 1 || domains_to_add <= 0) {
 				D_PRINT("ERROR: Invalid num-domains-to-add\n");
 				benchmark_add_data_movement_usage();
-				return;
+				goto out;
 			}
 			break;
 		case 't':
@@ -457,7 +457,7 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 			if (ret != 1 || test_entries <= 0) {
 				D_PRINT("ERROR: Invalid num-test-entries\n");
 				benchmark_add_data_movement_usage();
-				return;
+				goto out;
 			}
 			break;
 		case 'x':
@@ -467,14 +467,14 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 		default:
 			D_PRINT("ERROR: Unrecognized argument: %s\n", optarg);
 			benchmark_add_data_movement_usage();
-			return;
+			goto out;
 		}
 	}
 
 	if (num_map_types == 0) {
 		D_PRINT("ERROR: --map-type must be specified!\n");
 		benchmark_add_data_movement_usage();
-		return;
+		goto out;
 	}
 
 	/* Generate list of OIDs to look up */
@@ -562,6 +562,20 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 			"% Data Moved", 1.0,
 			"Data movement %% when adding racks", "/tmp/gnufifo",
 			use_x11);
+
+out:
+	if (map_keys != NULL)
+		D_FREE(map_keys);
+	if (map_types != NULL)
+		D_FREE(map_types);
+	if (percent_moved != NULL)
+		D_FREE(percent_moved);
+	if (iter_layout != NULL)
+		D_FREE(iter_layout);
+	if (initial_layout != NULL)
+		D_FREE(initial_layout);
+	if (obj_table != NULL)
+		D_FREE(obj_table);
 }
 
 

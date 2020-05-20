@@ -199,6 +199,10 @@ daos_csummer_get_type(struct daos_csummer *obj);
 uint32_t
 daos_csummer_get_chunksize(struct daos_csummer *obj);
 
+/** Get an appropriate chunksize (based on configured chunksize) for a record */
+uint32_t
+daos_csummer_get_rec_chunksize(struct daos_csummer *obj, uint64_t rec_size);
+
 bool
 daos_csummer_get_srv_verify(struct daos_csummer *obj);
 
@@ -275,9 +279,9 @@ daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
  */
 int
 daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
-		       daos_iod_t *iods, uint32_t nr, bool akey_only,
-		       struct dcs_singv_layout *singv_los, int singv_idx,
-		       struct dcs_iod_csums **p_iods_csums);
+		       daos_iod_t *iods, daos_iom_t *maps, uint32_t nr,
+		       bool akey_only, struct dcs_singv_layout *singv_los,
+		       int singv_idx, struct dcs_iod_csums **p_iods_csums);
 
 /**
  * Calculate a checksum for a daos key. Memory will be allocated for the
@@ -320,7 +324,8 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 int
 daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csum,
-			struct dcs_singv_layout *singv_lo, int singv_idx);
+			struct dcs_singv_layout *singv_lo, int singv_idx,
+			daos_iom_t *map);
 
 /**
  * Verify a single buffer to a checksum
@@ -372,7 +377,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  *				distributed to multiple targets. When it is NULL
  *				it means replica object, or EC object located
  *				in single target.
- * @param[in]	p_iods_csums	pointer that will reference the
+ * @param[out]	p_iods_csums	pointer that will reference the
  *				the memory allocated
  * @return			number of iod_csums allocated, or
  *				negative if error
@@ -465,15 +470,12 @@ csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size);
 
 static inline bool
-csum_iod_is_supported(uint64_t chunksize, daos_iod_t *iod)
+csum_iod_is_supported(daos_iod_t *iod)
 {
 	/**
-	 * iod_size must be greater than 1 and chunksize must be larger
-	 * than iod size if it's an array type. Doesn't support very large
-	 * record size yet for array types
+	 * iod_size must be greater than 1
 	 */
-	return iod->iod_size > 0 &&
-	       (iod->iod_type == DAOS_IOD_SINGLE || iod->iod_size <= chunksize);
+	return iod->iod_size > 0;
 }
 
 /**
@@ -487,6 +489,10 @@ daos_off_t
 csum_chunk_align_floor(daos_off_t off, size_t chunksize);
 daos_off_t
 csum_chunk_align_ceiling(daos_off_t off, size_t chunksize);
+
+/** get appropriate chunksize for the record size */
+daos_off_t
+csum_record_chunksize(daos_off_t default_chunksize, daos_off_t rec_size);
 
 /** Represents a chunk, extent, or some calculated alignment for a range
  */
@@ -547,6 +553,19 @@ struct daos_csum_range
 csum_align_boundaries(daos_off_t lo, daos_off_t hi, daos_off_t lo_boundary,
 		      daos_off_t hi_boundary, daos_off_t record_size,
 		      size_t chunksize);
+
+/**
+ * return start index and number of recxs within the map.recxs that have
+ * data for the provided range.
+ */
+struct daos_csum_range
+get_maps_idx_nr_for_range(struct daos_csum_range *req_range, daos_iom_t *map);
+
+/**
+ * DAOS Checksum Fault Injection ... corrupt data
+ */
+void
+dcf_corrupt(d_sg_list_t *data, uint32_t nr);
 
 #endif /** __DAOS_CHECKSUM_H */
 

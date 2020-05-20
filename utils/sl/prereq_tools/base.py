@@ -597,6 +597,8 @@ def check_flag_cc(context, flag):
 
 def check_flags(env, config, key, value):
     """Check and append all supported flags"""
+    if GetOption('help') or GetOption('clean'):
+        return
     checked = []
     for flag in value:
         if flag in checked:
@@ -676,6 +678,7 @@ class PreReqComponent():
         if self.__env['PLATFORM'] == 'darwin':
             libtoolize = 'glibtoolize'
 
+        self.__dry_run = GetOption('no_exec')
         self.add_options()
         self.__setup_unit_test_builders()
         self.__env.AddMethod(append_if_supported, "AppendIfSupported")
@@ -687,7 +690,7 @@ class PreReqComponent():
         self.__parse_build_deps()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
-        warning_level = GetOption('warning_level')
+        warning_level = self.__env.subst("$WARNING_LEVEL")
         pre_path = GetOption('prepend_path')
         if pre_path:
             old_path = self.__env['ENV']['PATH']
@@ -699,7 +702,6 @@ class PreReqComponent():
         if self.__check_only:
             # This is mostly a no_exec request.
             SetOption('no_exec', True)
-        self.__dry_run = GetOption('no_exec')
         if config_file is None:
             config_file = GetOption('build_config')
 
@@ -750,6 +752,7 @@ class PreReqComponent():
                                    'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
+        self._setup_compiler(warning_level)
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       ('PREBUILT_PREFIX',
@@ -767,9 +770,13 @@ class PreReqComponent():
                                    'Location of your GOPATH for the build',
                                    "%s/go" % self.__build_dir,
                                    PathVariable.PathIsDirCreate),
-                      PathVariable('BUILD_DIR',
-                                   'Location of temporary build files',
-                                   'build', PathVariable.PathIsDirCreate))
+                      PathVariable('BUILD_ROOT',
+                                   'Alternative build root dierctory',
+                                   "build", PathVariable.PathIsDirCreate))
+        bdir = self._setup_build_type()
+        self.__env["BUILD_DIR"] = bdir
+        if not os.path.exists(bdir):
+            os.makedirs(bdir)
         self.setup_path_var('PREFIX')
         self.setup_path_var('BUILD_DIR')
         self.setup_path_var('PREBUILT_PREFIX', True)
@@ -777,9 +784,9 @@ class PreReqComponent():
         self.setup_path_var('SRC_PREFIX', True)
         self.setup_path_var('GOPATH')
         self.__build_info = BuildInfo()
+        self.__build_info.update("BUILD_DIR", self.__env.subst("$BUILD_DIR"))
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
 
-        self._setup_compiler(warning_level)
         self.setup_parallel_build()
 
         self.config_file = config_file
@@ -808,6 +815,15 @@ class PreReqComponent():
         return True
 
 # pylint: enable=too-many-branches
+
+    def _setup_build_type(self):
+        """set build type"""
+        self.add_opts(EnumVariable('BUILD_TYPE', "Set the build type",
+                                   'dev', ['dev', 'debug', 'release'],
+                                   ignorecase=1))
+
+        return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
+
     def _setup_intelc(self):
         """Setup environment to use intel compilers"""
         env = self.__env.Clone(tools=['intelc'])
@@ -839,7 +855,7 @@ class PreReqComponent():
                                    'gcc', ['gcc', 'covc', 'clang', 'icc'],
                                    ignorecase=1))
 
-        if GetOption('clean'):
+        if GetOption('clean') or GetOption('help'):
             return
 
         compiler = self.__env.get('COMPILER').lower()
@@ -897,8 +913,7 @@ class PreReqComponent():
         """Retrieve the Config File"""
         return self.config_file
 
-    @staticmethod
-    def add_options():
+    def add_options(self):
         """Add common options to environment"""
 
         AddOption('--require-optional',
@@ -949,15 +964,11 @@ class PreReqComponent():
                   default='en_US.UTF8',
                   help='locale to use for building. [%default]')
 
-        # This option sets a hint as to if -Werror should be used.
-        AddOption('--warning-level',
-                  dest='warning_level',
-                  type='choice',
-                  choices=['warning', 'error'],
-                  default='error',
-                  help='Treatment for a compiler warning.  ' \
-                       '(warning|error} [error]')
         SetOption("implicit_cache", True)
+
+        self.add_opts(EnumVariable('WARNING_LEVEL', "Set default warning level",
+                                   'error', ['warning', 'warn', 'error'],
+                                   ignorecase=1))
 
     def __setup_unit_test_builders(self):
         """Setup unit test builders for general use"""
@@ -1176,7 +1187,7 @@ class PreReqComponent():
         """Get the build directory for external components"""
         return self.__build_dir
 
-    def get_prebuilt_path(self, name, prebuilt_default):
+    def get_prebuilt_path(self, name):
         """Get the path for a prebuilt component"""
         if name in self.__prebuilt_path:
             return self.__prebuilt_path[name]
@@ -1185,7 +1196,7 @@ class PreReqComponent():
         self.add_opts(PathVariable(opt_name,
                                    'Alternate installation '
                                    'prefix for %s' % name,
-                                   prebuilt_default, PathVariable.PathIsDir))
+                                   None, PathVariable.PathIsDir))
         self.setup_path_var(opt_name)
         prebuilt = self.__env.get(opt_name)
         if prebuilt and not os.path.exists(prebuilt):
@@ -1477,6 +1488,9 @@ class _Component():
             print('Would check for missing system libraries')
             return False
 
+        if GetOption('help'):
+            return True
+
         config = Configure(env)
 
         for lib in self.required_libs:
@@ -1543,6 +1557,9 @@ class _Component():
                 env.SetOption('no_exec', True)
             return True
 
+        if GetOption('help'):
+            return True
+
         config = Configure(env)
         for prog in self.progs:
             if not config.CheckProg(prog):
@@ -1596,11 +1613,10 @@ class _Component():
         """Setup paths for a required component"""
         self.prereqs.setup_path_var(self.src_opt)
         self.prereqs.setup_path_var(self.prebuilt_opt)
-        prebuilt_default = None
         if not self.retriever:
-            prebuilt_default = "/usr"
-        self.prebuilt_path = self.prereqs.get_prebuilt_path(self.name,
-                                                            prebuilt_default)
+            self.prebuilt_path = "/usr"
+        else:
+            self.prebuilt_path = self.prereqs.get_prebuilt_path(self.name)
 
         (self.component_prefix, self.prefix) = \
             self.prereqs.get_prefixes(self.name, self.prebuilt_path)

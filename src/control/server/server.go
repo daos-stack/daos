@@ -33,13 +33,13 @@ import (
 	"os/user"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -61,8 +61,6 @@ const (
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128
 )
-
-var ioserverShutdownTimeout = 15 * time.Second
 
 func cfgHasBdev(cfg *Configuration) bool {
 	for _, srvCfg := range cfg.Servers {
@@ -212,8 +210,15 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 	}
 
+	// Create rpcClient for inter-server communication.
+	cliCfg := control.DefaultConfig()
+	cliCfg.TransportConfig = cfg.TransportConfig
+	rpcClient := control.NewClient(
+		control.WithConfig(cliCfg),
+		control.WithClientLogger(log))
+
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership)
+	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, rpcClient)
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}
@@ -280,33 +285,13 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
-		var err error
+		// SIGKILL I/O servers immediately on exit.
+		// TODO: Re-enable attempted graceful shutdown of I/O servers.
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
 
-		defer func() {
-			if errors.Cause(err) == context.DeadlineExceeded {
-				log.Debug("resorting to kill signal")
-			}
-			shutdown() // Kill I/O servers if running after graceful shutdown.
-		}()
-
-		stopCtx, cancel := context.WithTimeout(ctx, ioserverShutdownTimeout)
-		defer cancel()
-
-		// Attampt graceful shutdown of I/O servers.
-		if _, err = harness.StopInstances(stopCtx, sig); err != nil {
-			log.Error(errors.Wrap(err, "graceful shutdown").Error())
-		}
+		shutdown()
 	}()
-
-	if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
-		return err
-	}
-
-	if err := harness.CreateSuperblocks(cfg.RecreateSuperblocks); err != nil {
-		return err
-	}
 
 	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
 }

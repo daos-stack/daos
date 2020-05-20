@@ -128,7 +128,14 @@ cleanup() {
 pre_clean
 
 # shellcheck disable=SC1091
-. .build_vars.sh
+if ${TEST_RPMS:-false}; then
+    PREFIX=/usr
+    SL_PREFIX=$PWD
+else
+    TEST_RPMS=false
+    PREFIX=install
+    . .build_vars.sh
+fi
 
 if ${TEARDOWN_ONLY:-false}; then
     cleanup
@@ -178,15 +185,15 @@ fi
 current_username=\$(whoami)
 sudo bash -c \"set -ex
 if [ -d  /var/run/daos_agent ]; then
-    rmdir /var/run/daos_agent
+    rm -rf /var/run/daos_agent
 fi
 if [ -d  /var/run/daos_server ]; then
-    rmdir /var/run/daos_server
+    rm -rf /var/run/daos_server
 fi
 mkdir /var/run/daos_{agent,server}
 chown \$current_username -R /var/run/daos_{agent,server}
 chmod 0755 /var/run/daos_{agent,server}
-if [ -f $DAOS_BASE/SConstruct ]; then
+if $TEST_RPMS || [ -f $DAOS_BASE/SConstruct ]; then
     echo \\\"No need to NFS mount $DAOS_BASE\\\"
 else
     mkdir -p $DAOS_BASE
@@ -199,33 +206,35 @@ EOF
     mount \\\"$DAOS_BASE\\\"
 fi\"
 
-# set up symlinks to spdk scripts (none of this would be
-# necessary if we were testing from RPMs) in order to
-# perform NVMe operations via daos_admin
-sudo mkdir -p /usr/share/daos/control
-sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
-           /usr/share/daos/control
-sudo mkdir -p /usr/share/spdk/scripts
-if [ ! -f /usr/share/spdk/scripts/setup.sh ]; then
-    sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
-               /usr/share/spdk/scripts
-fi
-if [ ! -f /usr/share/spdk/scripts/common.sh ]; then
-    sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
-               /usr/share/spdk/scripts
-fi
-if [ ! -f /usr/share/spdk/include/spdk/pci_ids.h ]; then
-    sudo rm -f /usr/share/spdk/include
-    sudo ln -s $SL_PREFIX/include \
-               /usr/share/spdk/include
-fi
+if ! $TEST_RPMS; then
+    # set up symlinks to spdk scripts (none of this would be
+    # necessary if we were testing from RPMs) in order to
+    # perform NVMe operations via daos_admin
+    sudo mkdir -p /usr/share/daos/control
+    sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
+               /usr/share/daos/control
+    sudo mkdir -p /usr/share/spdk/scripts
+    if [ ! -f /usr/share/spdk/scripts/setup.sh ]; then
+        sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+                   /usr/share/spdk/scripts
+    fi
+    if [ ! -f /usr/share/spdk/scripts/common.sh ]; then
+        sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+                   /usr/share/spdk/scripts
+    fi
+    if [ ! -f /usr/share/spdk/include/spdk/pci_ids.h ]; then
+        sudo rm -f /usr/share/spdk/include
+        sudo ln -s $SL_PREFIX/include \
+                   /usr/share/spdk/include
+    fi
 
-# first, strip the execute bit from the in-tree binary,
-# then copy daos_admin binary into \$PATH and fix perms
-chmod -x $DAOS_BASE/install/bin/daos_admin && \
-sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
-	sudo chown root /usr/bin/daos_admin && \
-	sudo chmod 4755 /usr/bin/daos_admin
+    # first, strip the execute bit from the in-tree binary,
+    # then copy daos_admin binary into \$PATH and fix perms
+    chmod -x $DAOS_BASE/install/bin/daos_admin && \
+    sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
+	    sudo chown root /usr/bin/daos_admin && \
+	    sudo chmod 4755 /usr/bin/daos_admin
+fi
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
 mkdir -p \"$TEST_TAG_DIR/\"
@@ -243,11 +252,23 @@ args+=" $*"
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
-rm -rf $DAOS_BASE/install/tmp
-mkdir -p $DAOS_BASE/install/tmp
-cd $DAOS_BASE
+if $TEST_RPMS; then
+    rm -rf $PWD/install/tmp
+    mkdir -p $PWD/install/tmp
+    # set the shared dir
+    # TODO: remove the need for a shared dir by copying needed files to
+    #       the test nodes
+    export DAOS_TEST_SHARED_DIR=${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}
+    logs_prefix=\"/var/tmp\"
+else
+    rm -rf $DAOS_BASE/install/tmp
+    mkdir -p $DAOS_BASE/install/tmp
+    logs_prefix=\"$DAOS_BASE/install/lib/daos/TESTING\"
+    cd $DAOS_BASE
+fi
+
 # export CRT_PHY_ADDR_STR=ofi+sockets
-export CRT_PHY_ADDR_STR=ofi+verbs;ofi_rxm
+export CRT_PHY_ADDR_STR=ofi+verbs;rxm
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE
@@ -260,7 +281,7 @@ export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
-logs_dir = $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results
+logs_dir = \$logs_prefix/ftest/avocado/job-results
 
 [sysinfo.collectibles]
 files = \$HOME/.config/avocado/sysinfo/files
@@ -354,7 +375,7 @@ wq
 EOF
 fi
 
-pushd install/lib/daos/TESTING/ftest
+pushd $PREFIX/lib/daos/TESTING/ftest
 
 # make sure no lingering corefiles or junit files exist
 rm -f core.* *_results.xml

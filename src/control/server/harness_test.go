@@ -25,118 +25,114 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"net"
-	"os"
-	"path/filepath"
 	"strconv"
-	"sync"
-	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/drpc"
+	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
-const testShortTimeout = 50 * time.Millisecond
+const (
+	testShortTimeout   = 60 * time.Millisecond
+	testMediumTimeout  = 100 * testShortTimeout
+	testLongTimeout    = 2 * testMediumTimeout
+	delayedFailTimeout = 80 * testShortTimeout
+)
 
-func TestServer_HarnessCreateSuperblocks(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	testDir, cleanup := common.CreateTestDir(t)
-	defer cleanup()
-
-	defaultApList := []string{"1.2.3.4:5"}
-	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
-	h := NewIOServerHarness(log)
-	for idx, mnt := range []string{"one", "two"} {
-		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
-			t.Fatal(err)
-		}
-		cfg := ioserver.NewConfig().
-			WithRank(uint32(idx)).
-			WithSystemName(t.Name()).
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithScmMountPoint(mnt)
-		r := ioserver.NewRunner(log, cfg)
-		ctrlAddr, err := net.ResolveTCPAddr("tcp", ctrlAddrs[idx])
-		if err != nil {
-			t.Fatal(err)
-		}
-		ms := newMgmtSvcClient(
-			context.Background(), log, mgmtSvcClientCfg{
-				ControlAddr:  ctrlAddr,
-				AccessPoints: defaultApList,
-			},
-		)
-		msc := &scm.MockSysConfig{
-			IsMountedBool: true,
-		}
-		mp := scm.NewMockProvider(log, nil, msc)
-		srv := NewIOServerInstance(log, nil, mp, ms, r)
-		srv.fsRoot = testDir
-		if err := h.AddInstance(srv); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// ugh, this isn't ideal
-	oldGetAddrFn := getInterfaceAddrs
-	defer func() {
-		getInterfaceAddrs = oldGetAddrFn
-	}()
-	getInterfaceAddrs = func() ([]net.Addr, error) {
-		addrs := make([]net.Addr, len(ctrlAddrs))
-		var err error
-		for i, ca := range ctrlAddrs {
-			addrs[i], err = net.ResolveTCPAddr("tcp", ca)
-			if err != nil {
-				return nil, err
-			}
-		}
-		return addrs, nil
-	}
-
-	if err := h.CreateSuperblocks(false); err != nil {
-		t.Fatal(err)
-	}
-
-	h.setStarted()
-	mi, err := h.GetMSLeaderInstance()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if mi._superblock == nil {
-		t.Fatal("instance superblock is nil after CreateSuperblocks()")
-	}
-	if mi._superblock.System != t.Name() {
-		t.Fatalf("expected superblock system name to be %q, got %q", t.Name(), mi._superblock.System)
-	}
-
-	for idx, i := range h.Instances() {
-		if i._superblock.Rank.Uint32() != uint32(idx) {
-			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
-		}
-		if i == mi {
-			continue
-		}
-		if i._superblock.UUID == mi._superblock.UUID {
-			t.Fatal("second instance has same superblock as first")
-		}
-	}
-}
+// TODO: re-work test after making multi-io format concurrent (DAOS-4627)
+//       and decoupling instance flow-control (DAOS-4456)
+//func TestServer_HarnessCreateSuperblocks(t *testing.T) {
+//	log, buf := logging.NewTestLogger(t.Name())
+//	defer ShowBufferOnFailure(t, buf)
+//
+//	testDir, cleanup := CreateTestDir(t)
+//	defer cleanup()
+//
+//	defaultApList := []string{"1.2.3.4:5"}
+//	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
+//	h := NewIOServerHarness(log)
+//	for idx, mnt := range []string{"one", "two"} {
+//		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
+//			t.Fatal(err)
+//		}
+//		cfg := ioserver.NewConfig().
+//			WithRank(uint32(idx)).
+//			WithSystemName(t.Name()).
+//			WithScmClass("ram").
+//			WithScmRamdiskSize(1).
+//			WithScmMountPoint(mnt)
+//		r := ioserver.NewRunner(log, cfg)
+//		ctrlAddr, err := net.ResolveTCPAddr("tcp", ctrlAddrs[idx])
+//		if err != nil {
+//			t.Fatal(err)
+//		}
+//		ms := newMgmtSvcClient(
+//			context.Background(), log, mgmtSvcClientCfg{
+//				ControlAddr:  ctrlAddr,
+//				AccessPoints: defaultApList,
+//			},
+//		)
+//		msc := &scm.MockSysConfig{
+//			IsMountedBool: true,
+//		}
+//		mp := scm.NewMockProvider(log, nil, msc)
+//		srv := NewIOServerInstance(log, nil, mp, ms, r)
+//		srv.fsRoot = testDir
+//		if err := h.AddInstance(srv); err != nil {
+//			t.Fatal(err)
+//		}
+//	}
+//
+//	// ugh, this isn't ideal
+//	oldGetAddrFn := getInterfaceAddrs
+//	defer func() {
+//		getInterfaceAddrs = oldGetAddrFn
+//	}()
+//	getInterfaceAddrs = func() ([]net.Addr, error) {
+//		addrs := make([]net.Addr, len(ctrlAddrs))
+//		var err error
+//		for i, ca := range ctrlAddrs {
+//			addrs[i], err = net.ResolveTCPAddr("tcp", ca)
+//			if err != nil {
+//				return nil, err
+//			}
+//		}
+//		return addrs, nil
+//	}
+//
+//	if err := h.CreateSuperblocks(false); err != nil {
+//		t.Fatal(err)
+//	}
+//
+//	h.started.SetTrue()
+//	mi, err := h.GetMSLeaderInstance()
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	if mi._superblock == nil {
+//		t.Fatal("instance superblock is nil after CreateSuperblocks()")
+//	}
+//	if mi._superblock.System != t.Name() {
+//		t.Fatalf("expected superblock system name to be %q, got %q", t.Name(), mi._superblock.System)
+//	}
+//
+//	for idx, i := range h.Instances() {
+//		if i._superblock.Rank.Uint32() != uint32(idx) {
+//			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
+//		}
+//		if i == mi {
+//			continue
+//		}
+//		if i._superblock.UUID == mi._superblock.UUID {
+//			t.Fatal("second instance has same superblock as first")
+//		}
+//	}
+//}
 
 func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 	defaultApList := []string{"1.2.3.4:5", "6.7.8.9:10"}
@@ -179,7 +175,7 @@ func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer ShowBufferOnFailure(t, buf)
 
 			// ugh, this isn't ideal
 			oldGetAddrFn := getInterfaceAddrs
@@ -232,260 +228,398 @@ func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			h.setStarted()
+			h.started.SetTrue()
 
 			_, err := h.GetMSLeaderInstance()
-			common.CmpErr(t, tc.expError, err)
+			CmpErr(t, tc.expError, err)
 		})
 	}
 }
 
-func TestServer_HarnessIOServerStart(t *testing.T) {
-	for name, tc := range map[string]struct {
-		trc           *ioserver.TestRunnerConfig
-		expStartErr   error
-		expStartCount int
-	}{
-		"normal startup/shutdown": {
-			expStartErr:   context.Canceled,
-			expStartCount: maxIOServers,
-		},
-		"fails to start": {
-			trc:           &ioserver.TestRunnerConfig{StartErr: errors.New("no")},
-			expStartErr:   errors.New("no"),
-			expStartCount: 1, // first one starts, dies, next one never starts
-		},
-		"delayed failure": {
-			trc: &ioserver.TestRunnerConfig{
-				ErrChanCb: func() error {
-					time.Sleep(10 * time.Millisecond)
-					return errors.New("oops")
-				},
-			},
-			expStartErr:   errors.New("oops"),
-			expStartCount: maxIOServers,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			testDir, cleanup := common.CreateTestDir(t)
-			defer cleanup()
-
-			srvCfgs := make([]*ioserver.Config, maxIOServers)
-			for i := 0; i < maxIOServers; i++ {
-				srvCfgs[i] = ioserver.NewConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
-			}
-			config := NewConfiguration().WithServers(srvCfgs...)
-
-			instanceStarts := 0
-			harness := NewIOServerHarness(log)
-			for _, srvCfg := range config.Servers {
-				if err := os.MkdirAll(srvCfg.Storage.SCM.MountPoint, 0777); err != nil {
-					t.Fatal(err)
-				}
-
-				if tc.trc == nil {
-					tc.trc = &ioserver.TestRunnerConfig{}
-				}
-				if tc.trc.StartCb == nil {
-					tc.trc.StartCb = func() { instanceStarts++ }
-				}
-				runner := ioserver.NewTestRunner(tc.trc, srvCfg)
-				bdevProvider, err := bdev.NewClassProvider(log,
-					srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
-				if err != nil {
-					t.Fatal(err)
-				}
-				scmProvider := scm.NewMockProvider(log, nil, &scm.MockSysConfig{IsMountedBool: true})
-				msClientCfg := mgmtSvcClientCfg{
-					ControlAddr:  &net.TCPAddr{},
-					AccessPoints: []string{"localhost"},
-				}
-				msClient := newMgmtSvcClient(context.TODO(), log, msClientCfg)
-				srv := NewIOServerInstance(log, bdevProvider, scmProvider, msClient, runner)
-				if err := harness.AddInstance(srv); err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			if err := harness.CreateSuperblocks(false); err != nil {
-				t.Fatal(err)
-			}
-
-			for _, srv := range harness.Instances() {
-				// simulate ready notification
-				srv.setDrpcClient(newMockDrpcClient(&mockDrpcClientConfig{
-					SendMsgResponse: &drpc.Response{},
-				}))
-			}
-
-			done := make(chan struct{})
-			ctx, shutdown := context.WithCancel(context.Background())
-			go func(t *testing.T, expStartErr error, th *IOServerHarness) {
-				common.CmpErr(t, expStartErr, th.Start(ctx, nil, nil))
-				close(done)
-			}(t, tc.expStartErr, harness)
-
-			time.Sleep(testShortTimeout)
-			shutdown()
-			<-done // wait for inner goroutine to finish
-
-			if instanceStarts != tc.expStartCount {
-				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)
-			}
-
-			if tc.expStartErr != context.Canceled {
-				return
-			}
-
-			for _, srv := range harness.Instances() {
-				expCall := &drpc.Call{
-					Module: drpc.ModuleMgmt,
-					Method: drpc.MethodSetUp,
-				}
-				lastCall := srv._drpcClient.(*mockDrpcClient).SendMsgInputCall
-				if lastCall == nil ||
-					lastCall.Module != expCall.Module ||
-					lastCall.Method != expCall.Method {
-					t.Fatalf("expected final dRPC call for instance %d to be %s, got %s",
-						srv.Index(), expCall, lastCall)
-				}
-			}
-		})
-	}
-}
-
-func TestHarness_StopInstances(t *testing.T) {
-	for name, tc := range map[string]struct {
-		ioserverCount     int
-		missingSB         bool
-		signal            os.Signal
-		ranks             []system.Rank
-		harnessNotStarted bool
-		signalErr         error
-		ctxTimeout        time.Duration
-		expRankErrs       map[system.Rank]error
-		expSignalsSent    map[uint32]os.Signal
-		expErr            error
-	}{
-		"nil signal": {
-			expErr: errors.New("nil signal"),
-		},
-		"missing superblock": {
-			missingSB: true,
-			signal:    syscall.SIGKILL,
-			expErr:    errors.New("nil superblock"),
-		},
-		"harness not started": {
-			harnessNotStarted: true,
-			signal:            syscall.SIGKILL,
-			expSignalsSent:    map[uint32]os.Signal{},
-		},
-		"rank not in list": {
-			ranks:          []system.Rank{system.Rank(2), system.Rank(3)},
-			signal:         syscall.SIGKILL,
-			expRankErrs:    map[system.Rank]error{},
-			expSignalsSent: map[uint32]os.Signal{1: syscall.SIGKILL}, // instance 1 has rank 2
-		},
-		"signal send error": {
-			signal:    syscall.SIGKILL,
-			signalErr: errors.New("sending signal failed"),
-			expRankErrs: map[system.Rank]error{
-				1: errors.New("sending signal failed"),
-				2: errors.New("sending signal failed"),
-			},
-			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
-		},
-		"context timeout": {
-			signal:     syscall.SIGKILL,
-			ctxTimeout: 1 * time.Nanosecond,
-			expErr:     context.DeadlineExceeded,
-		},
-		"normal stop single-io": {
-			ioserverCount:  1,
-			signal:         syscall.SIGINT,
-			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT},
-		},
-		"normal stop multi-io": {
-			signal:         syscall.SIGTERM,
-			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGTERM, 1: syscall.SIGTERM},
-		},
-		"force stop multi-io": {
-			signal:         syscall.SIGKILL,
-			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			var signalsSent sync.Map
-			if tc.ioserverCount == 0 {
-				tc.ioserverCount = maxIOServers
-			}
-			if tc.ranks == nil {
-				tc.ranks = []system.Rank{}
-			}
-			svc := newTestMgmtSvcMulti(log, tc.ioserverCount, false)
-			if !tc.harnessNotStarted {
-				svc.harness.setStarted()
-			}
-			for i, srv := range svc.harness.Instances() {
-				trc := &ioserver.TestRunnerConfig{}
-				trc.SignalCb = func(idx uint32, sig os.Signal) { signalsSent.Store(idx, sig) }
-				trc.SignalErr = tc.signalErr
-				if !tc.harnessNotStarted {
-					atomic.StoreUint32(&trc.Running, 1)
-				}
-
-				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
-				srv.SetIndex(uint32(i))
-
-				if tc.missingSB {
-					srv._superblock = nil
-					continue
-				}
-
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
-			}
-
-			if tc.ctxTimeout == 0 {
-				tc.ctxTimeout = 100 * time.Millisecond
-			}
-			ctx, shutdown := context.WithTimeout(context.Background(), tc.ctxTimeout)
-			defer shutdown()
-			gotRankErrs, gotErr := svc.harness.StopInstances(ctx, tc.signal, tc.ranks...)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-			if diff := cmp.Diff(
-				fmt.Sprintf("%v", tc.expRankErrs), fmt.Sprintf("%v", gotRankErrs)); diff != "" {
-				t.Fatalf("unexpexted rank errors (-want, +got):\n%s\n", diff)
-			}
-
-			var numSignalsSent int
-			signalsSent.Range(func(_, _ interface{}) bool {
-				numSignalsSent++
-				return true
-			})
-			common.AssertEqual(t, len(tc.expSignalsSent), numSignalsSent, "number of signals sent")
-
-			for expKey, expValue := range tc.expSignalsSent {
-				value, found := signalsSent.Load(expKey)
-				if !found {
-					t.Fatalf("rank %d was not sent %s signal", expKey, expValue)
-				}
-				if diff := cmp.Diff(expValue, value); diff != "" {
-					t.Fatalf("unexpected signals sent (-want, +got):\n%s\n", diff)
-				}
-			}
-		})
-	}
-}
+// TODO: re-work test after making multi-io format concurrent (DAOS-4627)
+//       and decoupling instance flow-control (DAOS-4456)
+//func TestServer_HarnessIOServerStart(t *testing.T) {
+//	defaultAddrStr := "127.0.0.1:10001"
+//	defaultAddr, err := net.ResolveTCPAddr("tcp", defaultAddrStr)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//
+//	for name, tc := range map[string]struct {
+//		trc              *ioserver.TestRunnerConfig
+//		isAP             bool           // should first instance be AP/MS replica/bootstrap
+//		rankInSuperblock bool           // rank already set in superblock when starting
+//		instanceUuids    map[int]string // UUIDs for each instance.Index()
+//		expStartErr      error
+//		expStartCount    int
+//		expDrpcCalls     map[uint32][]int32     // method ids called for each instance.Index()
+//		expGrpcCalls     map[uint32][]string    // string repr of call for each instance.Index()
+//		expRanks         map[uint32]system.Rank // ranks to have been set during Start()
+//		expMembers       system.Members         // members to have been registered during Stop()
+//		expIoErrs        map[uint32]error       // errors expected from instances
+//	}{
+//		"normal startup/shutdown": {
+//			trc: &ioserver.TestRunnerConfig{
+//				ErrChanCb: func(idx uint32) error {
+//					time.Sleep(testLongTimeout)
+//					return errors.New("ending")
+//				},
+//			},
+//			instanceUuids: map[int]string{
+//				0: MockUUID(0),
+//				1: MockUUID(1),
+//			},
+//			expStartErr:   context.DeadlineExceeded,
+//			expStartCount: maxIOServers,
+//			expDrpcCalls: map[uint32][]int32{
+//				0: {
+//					drpc.MethodSetRank,
+//					drpc.MethodSetUp,
+//				},
+//				1: {
+//					drpc.MethodSetRank,
+//					drpc.MethodSetUp,
+//				},
+//			},
+//			expGrpcCalls: map[uint32][]string{
+//				0: {fmt.Sprintf("Join %d", system.NilRank)},
+//				1: {fmt.Sprintf("Join %d", system.NilRank)},
+//			},
+//			expRanks: map[uint32]system.Rank{
+//				0: system.Rank(0),
+//				1: system.Rank(1),
+//			},
+//		},
+//		"startup/shutdown with preset ranks": {
+//			trc: &ioserver.TestRunnerConfig{
+//				ErrChanCb: func(idx uint32) error {
+//					time.Sleep(testLongTimeout)
+//					return errors.New("ending")
+//				},
+//			},
+//			rankInSuperblock: true,
+//			expStartErr:      context.DeadlineExceeded,
+//			expStartCount:    maxIOServers,
+//			expDrpcCalls: map[uint32][]int32{
+//				0: {
+//					drpc.MethodSetRank,
+//					drpc.MethodSetUp,
+//				},
+//				1: {
+//					drpc.MethodSetRank,
+//					drpc.MethodSetUp,
+//				},
+//			},
+//			expGrpcCalls: map[uint32][]string{
+//				0: {"Join 1"}, // rank == instance.Index() + 1
+//				1: {"Join 2"},
+//			},
+//			expRanks: map[uint32]system.Rank{
+//				0: system.Rank(1),
+//				1: system.Rank(2),
+//			},
+//		},
+//		"normal startup/shutdown with MS bootstrap": {
+//			trc: &ioserver.TestRunnerConfig{
+//				ErrChanCb: func(idx uint32) error {
+//					time.Sleep(testLongTimeout)
+//					return errors.New("ending")
+//				},
+//			},
+//			isAP: true,
+//			instanceUuids: map[int]string{
+//				0: MockUUID(0),
+//				1: MockUUID(1),
+//			},
+//			expStartErr:   context.DeadlineExceeded,
+//			expStartCount: maxIOServers,
+//			expDrpcCalls: map[uint32][]int32{
+//				0: {
+//					drpc.MethodSetRank,
+//					drpc.MethodCreateMS,
+//					drpc.MethodStartMS,
+//					drpc.MethodSetUp,
+//				},
+//				1: {
+//					drpc.MethodSetRank,
+//					drpc.MethodSetUp,
+//				},
+//			},
+//			expGrpcCalls: map[uint32][]string{
+//				0: {"Join 0"}, // bootstrap instance will be pre-allocated rank 0
+//				1: {fmt.Sprintf("Join %d", system.NilRank)},
+//			},
+//			expRanks: map[uint32]system.Rank{
+//				0: system.Rank(0),
+//				1: system.Rank(1),
+//			},
+//			expMembers: system.Members{ // bootstrap member is added on start
+//				system.NewMember(system.Rank(0), "", defaultAddr, system.MemberStateJoined),
+//			},
+//		},
+//		"fails to start": {
+//			trc:           &ioserver.TestRunnerConfig{StartErr: errors.New("no")},
+//			expStartErr:   errors.New("no"),
+//			expStartCount: 1, // first one starts, dies, next one never starts
+//		},
+//		"delayed failure": {
+//			trc: &ioserver.TestRunnerConfig{
+//				ErrChanCb: func(idx uint32) error {
+//					time.Sleep(delayedFailTimeout)
+//					return errors.New("oops")
+//				},
+//			},
+//			instanceUuids: map[int]string{
+//				0: MockUUID(0),
+//				1: MockUUID(1),
+//			},
+//			expStartErr:   context.DeadlineExceeded,
+//			expStartCount: maxIOServers,
+//			expDrpcCalls: map[uint32][]int32{
+//				0: {
+//					drpc.MethodSetRank,
+//					drpc.MethodSetUp,
+//				},
+//				1: {
+//					drpc.MethodSetRank,
+//					drpc.MethodSetUp,
+//				},
+//			},
+//			expGrpcCalls: map[uint32][]string{
+//				0: {fmt.Sprintf("Join %d", system.NilRank)},
+//				1: {fmt.Sprintf("Join %d", system.NilRank)},
+//			},
+//			expRanks: map[uint32]system.Rank{
+//				0: system.Rank(0),
+//				1: system.Rank(1),
+//			},
+//			expIoErrs: map[uint32]error{
+//				0: errors.New("oops"),
+//				1: errors.New("oops"),
+//			},
+//		},
+//	} {
+//		t.Run(name, func(t *testing.T) {
+//			log, buf := logging.NewTestLogger(t.Name())
+//			defer ShowBufferOnFailure(t, buf)
+//
+//			testDir, cleanup := CreateTestDir(t)
+//			defer cleanup()
+//
+//			srvCfgs := make([]*ioserver.Config, maxIOServers)
+//			for i := 0; i < maxIOServers; i++ {
+//				srvCfgs[i] = ioserver.NewConfig().
+//					WithScmClass("ram").
+//					WithScmRamdiskSize(1).
+//					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
+//			}
+//			config := NewConfiguration().WithServers(srvCfgs...)
+//
+//			instanceStarts := 0
+//			harness := NewIOServerHarness(log)
+//			mockMSClients := make(map[int]*proto.MockMgmtSvcClient)
+//			for i, srvCfg := range config.Servers {
+//				if err := os.MkdirAll(srvCfg.Storage.SCM.MountPoint, 0777); err != nil {
+//					t.Fatal(err)
+//				}
+//
+//				if tc.trc == nil {
+//					tc.trc = &ioserver.TestRunnerConfig{}
+//				}
+//				if tc.trc.StartCb == nil {
+//					tc.trc.StartCb = func() { instanceStarts++ }
+//				}
+//				runner := ioserver.NewTestRunner(tc.trc, srvCfg)
+//				bdevProvider, err := bdev.NewClassProvider(log,
+//					srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
+//				if err != nil {
+//					t.Fatal(err)
+//				}
+//				scmProvider := scm.NewMockProvider(log, nil, &scm.MockSysConfig{IsMountedBool: true})
+//
+//				msClientCfg := mgmtSvcClientCfg{
+//					ControlAddr:  &net.TCPAddr{},
+//					AccessPoints: []string{defaultAddrStr},
+//				}
+//				msClient := newMgmtSvcClient(context.TODO(), log, msClientCfg)
+//				// create mock that implements MgmtSvcClient
+//				mockMSClient := proto.NewMockMgmtSvcClient(
+//					proto.MockMgmtSvcClientConfig{})
+//				// store for checking calls later
+//				mockMSClients[i] = mockMSClient.(*proto.MockMgmtSvcClient)
+//				mockConnectFn := func(ctx context.Context, ap string,
+//					tc *security.TransportConfig,
+//					fn func(context.Context, mgmtpb.MgmtSvcClient) error,
+//					extraDialOpts ...grpc.DialOption) error {
+//
+//					return fn(ctx, mockMSClient)
+//				}
+//				// inject fn that uses the mock client to be used on connect
+//				msClient.connectFn = mockConnectFn
+//
+//				srv := NewIOServerInstance(log, bdevProvider, scmProvider, msClient, runner)
+//				var isAP bool
+//				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
+//					isAP = true
+//				}
+//				var uuid string
+//				if UUID, exists := tc.instanceUuids[i]; exists {
+//					uuid = UUID
+//				}
+//				var rank *system.Rank
+//				if tc.rankInSuperblock {
+//					rank = system.NewRankPtr(uint32(i + 1))
+//				} else if isAP { // bootstrap will assume rank 0
+//					rank = new(system.Rank)
+//				}
+//				srv.setSuperblock(&Superblock{
+//					MS: isAP, UUID: uuid, Rank: rank, CreateMS: isAP, BootstrapMS: isAP,
+//				})
+//
+//				if err := harness.AddInstance(srv); err != nil {
+//					t.Fatal(err)
+//				}
+//			}
+//
+//			instances := harness.Instances()
+//
+//			// set mock dRPC client to record call details
+//			for _, srv := range instances {
+//				srv.setDrpcClient(newMockDrpcClient(&mockDrpcClientConfig{
+//					SendMsgResponse: &drpc.Response{},
+//				}))
+//			}
+//
+//			ctx, cancel := context.WithTimeout(context.Background(), testMediumTimeout)
+//			defer cancel()
+//
+//			// start harness async and signal completion
+//			var gotErr error
+//			membership := system.NewMembership(log)
+//			done := make(chan struct{})
+//			go func(ctxIn context.Context) {
+//				gotErr = harness.Start(ctxIn, membership, nil)
+//				close(done)
+//			}(ctx)
+//
+//			waitDrpcReady := make(chan struct{})
+//			go func(ctxIn context.Context) {
+//				for {
+//					ready := true
+//					for _, srv := range instances {
+//						if srv.waitDrpc.IsFalse() {
+//							ready = false
+//						}
+//					}
+//					if ready {
+//						close(waitDrpcReady)
+//						return
+//					}
+//					select {
+//					case <-time.After(testShortTimeout):
+//					case <-ctxIn.Done():
+//						return
+//					}
+//				}
+//			}(ctx)
+//
+//			select {
+//			case <-waitDrpcReady:
+//			case <-ctx.Done():
+//				if tc.expStartErr != context.DeadlineExceeded {
+//					<-done
+//					CmpErr(t, tc.expStartErr, gotErr)
+//					return
+//				}
+//				// deadline exceeded as expected but desired state not reached
+//				t.Fatalf("instances did not get to waiting for dRPC state: %s", ctx.Err())
+//			}
+//			t.Log("instances ready and waiting for dRPC ready notification")
+//
+//			// simulate receiving notify ready whilst instances
+//			// running in harness
+//			for _, srv := range instances {
+//				req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
+//				go func(ctxIn context.Context, i *IOServerInstance) {
+//					select {
+//					case i.drpcReady <- req:
+//					case <-ctxIn.Done():
+//					}
+//				}(ctx, srv)
+//			}
+//
+//			waitReady := make(chan struct{})
+//			go func(ctxIn context.Context) {
+//				for {
+//					if len(harness.readyRanks()) == len(instances) {
+//						close(waitReady)
+//						return
+//					}
+//					select {
+//					case <-time.After(testShortTimeout):
+//					case <-ctxIn.Done():
+//						return
+//					}
+//				}
+//			}(ctx)
+//
+//			select {
+//			case <-waitReady:
+//			case <-ctx.Done():
+//				if tc.expStartErr != context.DeadlineExceeded {
+//					<-done
+//					CmpErr(t, tc.expStartErr, gotErr)
+//					return
+//				}
+//				// deadline exceeded as expected but desired state not reached
+//				t.Fatalf("instances did not get to ready state: %s", ctx.Err())
+//			}
+//			t.Log("instances setup and ready")
+//
+//			<-done
+//			t.Log("harness Start() exited")
+//
+//			if instanceStarts != tc.expStartCount {
+//				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)
+//			}
+//
+//			CmpErr(t, tc.expStartErr, gotErr)
+//			if tc.expStartErr != context.DeadlineExceeded {
+//				return
+//			}
+//
+//			// verify expected RPCs were made, ranks allocated and
+//			// members added to membership
+//			for _, srv := range instances {
+//				gotDrpcCalls := srv._drpcClient.(*mockDrpcClient).Calls
+//				if diff := cmp.Diff(tc.expDrpcCalls[srv.Index()], gotDrpcCalls); diff != "" {
+//					t.Fatalf("unexpected dRPCs for instance %d (-want, +got):\n%s\n",
+//						srv.Index(), diff)
+//				}
+//				gotGrpcCalls := mockMSClients[int(srv.Index())].Calls
+//				if diff := cmp.Diff(tc.expGrpcCalls[srv.Index()], gotGrpcCalls); diff != "" {
+//					t.Fatalf("unexpected gRPCs for instance %d (-want, +got):\n%s\n",
+//						srv.Index(), diff)
+//				}
+//				rank, err := srv.GetRank()
+//				if err != nil {
+//					t.Fatal(err)
+//				}
+//				if diff := cmp.Diff(tc.expRanks[srv.Index()], rank); diff != "" {
+//					t.Fatalf("unexpected rank for instance %d (-want, +got):\n%s\n",
+//						srv.Index(), diff)
+//				}
+//				CmpErr(t, tc.expIoErrs[srv.Index()], srv._lastErr)
+//			}
+//			members := membership.Members([]system.Rank{})
+//			AssertEqual(t, len(tc.expMembers), len(members), "unexpected number in membership")
+//			for i, member := range members {
+//				if diff := cmp.Diff(fmt.Sprintf("%v", member),
+//					fmt.Sprintf("%v", tc.expMembers[i])); diff != "" {
+//
+//					t.Fatalf("unexpected system membership (-want, +got):\n%s\n", diff)
+//				}
+//			}
+//		})
+//	}
+//}

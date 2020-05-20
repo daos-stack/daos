@@ -97,6 +97,7 @@ typedef enum {
 	DAOS_OPC_TX_ABORT,
 	DAOS_OPC_TX_OPEN_SNAP,
 	DAOS_OPC_TX_CLOSE,
+	DAOS_OPC_TX_RESTART,
 
 	/** Object APIs */
 	DAOS_OPC_OBJ_REGISTER_CLASS,
@@ -548,6 +549,8 @@ typedef struct {
 	daos_handle_t		coh;
 	/** Returned transaction open handle. */
 	daos_handle_t		*th;
+	/** Transaction flags. */
+	uint64_t		flags;
 } daos_tx_open_t;
 
 /** Transaction commit args */
@@ -577,6 +580,12 @@ typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
 } daos_tx_close_t;
+
+/** Transaction restart args */
+typedef struct {
+	/** Transaction open handle. */
+	daos_handle_t		th;
+} daos_tx_restart_t;
 
 /** Object class register args */
 typedef struct {
@@ -635,10 +644,10 @@ typedef struct {
  *   to allocate multiple instances of this data structure.
  */
 typedef struct {
-	/** Object open handle */
-	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
+	/** Object open handle */
+	daos_handle_t		oh;
 	/** Distribution Key. */
 	daos_key_t		*dkey;
 	/** Array of attribute keys. */
@@ -685,10 +694,10 @@ typedef struct {
 
 /** Object fetch/update args */
 typedef struct {
-	/** Object open handle */
-	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
+	/** Object open handle */
+	daos_handle_t		oh;
 	/** Operation flags. */
 	uint64_t		flags;
 	/** Distribution Key. */
@@ -1000,7 +1009,7 @@ typedef struct {
  *			-DER_INVAL	Invalid parameter
  *			-DER_NOSYS	Unsupported opc
  */
-DAOS_API int
+int
 daos_task_create(daos_opc_t opc, tse_sched_t *sched,
 		 unsigned int num_deps, tse_task_t *dep_tasks[],
 		 tse_task_t **taskp);
@@ -1015,7 +1024,7 @@ daos_task_create(daos_opc_t opc, tse_sched_t *sched,
  *
  * \return		Success: Pointer to arguments for the DAOS task
  */
-DAOS_API void *
+void *
 daos_task_get_args(tse_task_t *task);
 
 /**
@@ -1026,7 +1035,7 @@ daos_task_get_args(tse_task_t *task);
  *
  * \return		Pointer to the private state
  */
-DAOS_API void *
+void *
 daos_task_get_priv(tse_task_t *task);
 
 /**
@@ -1037,7 +1046,7 @@ daos_task_get_priv(tse_task_t *task);
  *
  * \return		private state set by the previous call
  */
-DAOS_API void *
+void *
 daos_task_set_priv(tse_task_t *task, void *priv);
 
 /**
@@ -1053,7 +1062,7 @@ daos_task_set_priv(tse_task_t *task, void *priv);
  *
  * \return		0 if Success, negative DER if failed.
  */
-DAOS_API int
+int
 daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty);
 
 #if defined(__cplusplus)

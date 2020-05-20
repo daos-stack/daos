@@ -1,6 +1,7 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
-
+server_manager:
+    srv_timeout: 500
 hosts:
  test_servers:
   - boro-A
@@ -12,7 +13,9 @@ hosts:
   - boro-G
  test_clients:
   - boro-H
-timeout: 16000
+timeouts:
+  test_nvme_object_single_pool: 500
+  test_nvme_object_multiple_pools: 16000
 server_config:
  name: daos_server
  servers:
