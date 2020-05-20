@@ -53,11 +53,11 @@ struct vos_btr_attr {
 
 static struct vos_btr_attr *obj_tree_find_attr(unsigned tree_class);
 
-static struct vos_key_bundle *
-iov2key_bundle(d_iov_t *key_iov)
+static struct vos_svt_key *
+iov2svt_key(d_iov_t *key_iov)
 {
-	D_ASSERT(key_iov->iov_len == sizeof(struct vos_key_bundle));
-	return (struct vos_key_bundle *)key_iov->iov_buf;
+	D_ASSERT(key_iov->iov_len == sizeof(struct vos_svt_key));
+	return (struct vos_svt_key *)key_iov->iov_buf;
 }
 
 static struct vos_rec_bundle *
@@ -412,18 +412,13 @@ static btr_ops_t key_btr_ops = {
  * @{
  */
 
-struct svt_hkey {
-	/** */
-	uint64_t	sv_epoch;
-};
-
 /**
  * Set size for the record and returns write buffer address of the record,
  * so caller can copy/rdma data into it.
  */
 static int
 svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
-	      struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
+	      struct vos_rec_bundle *rbund)
 {
 	struct dtx_handle	*dth	= vos_dth_get();
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
@@ -468,15 +463,15 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
  */
 static int
 svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
-	     struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
+	     struct vos_svt_key *key, struct vos_rec_bundle *rbund)
 {
-	struct svt_hkey		*skey = (struct svt_hkey *)&rec->rec_hkey[0];
+	struct vos_svt_key	*skey = (struct vos_svt_key *)&rec->rec_hkey[0];
 	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
 	struct dcs_csum_info	*csum = rbund->rb_csum;
 	struct bio_iov		*biov = rbund->rb_biov;
 
-	if (kbund != NULL) /* called from iterator */
-		kbund->kb_epoch = skey->sv_epoch;
+	if (key != NULL) /* called from iterator */
+		*key = *skey;
 
 	/* NB: return record address, caller should copy/rma data for it */
 	bio_iov_set_len(biov, irec->ir_size);
@@ -510,7 +505,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 static int
 svt_hkey_size(void)
 {
-	return sizeof(struct svt_hkey);
+	return sizeof(struct vos_svt_key);
 }
 
 static int
@@ -526,24 +521,33 @@ svt_rec_msize(int alloc_overhead)
 static void
 svt_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
-	struct svt_hkey		*skey = (struct svt_hkey *)hkey;
-	struct vos_key_bundle	*kbund;
+	struct vos_svt_key	*skey = (struct vos_svt_key *)hkey;
+	struct vos_svt_key	*skey_in;
 
-	kbund = iov2key_bundle(key_iov);
-	skey->sv_epoch = kbund->kb_epoch;
+	D_ASSERT(key_iov->iov_len == sizeof(*skey));
+	D_ASSERT(key_iov->iov_buf != NULL);
+
+	skey_in = (struct vos_svt_key *)key_iov->iov_buf;
+	*skey = *skey_in;
 }
 
 /** compare the hashed key */
 static int
 svt_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 {
-	struct svt_hkey *skey1 = (struct svt_hkey *)&rec->rec_hkey[0];
-	struct svt_hkey *skey2 = (struct svt_hkey *)hkey;
+	struct vos_svt_key *skey1 = (struct vos_svt_key *)&rec->rec_hkey[0];
+	struct vos_svt_key *skey2 = (struct vos_svt_key *)hkey;
 
-	if (skey1->sv_epoch < skey2->sv_epoch)
+	if (skey1->sk_epoch < skey2->sk_epoch)
 		return BTR_CMP_LT;
 
-	if (skey1->sv_epoch > skey2->sv_epoch)
+	if (skey1->sk_epoch > skey2->sk_epoch)
+		return BTR_CMP_GT;
+
+	if (skey1->sk_minor_epc < skey2->sk_minor_epc)
+		return BTR_CMP_LT;
+
+	if (skey1->sk_minor_epc > skey2->sk_minor_epc)
 		return BTR_CMP_GT;
 
 	return BTR_CMP_EQ;
@@ -555,11 +559,9 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	       d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct vos_rec_bundle	*rbund;
-	struct vos_key_bundle	*kbund;
 	struct vos_irec_df	*irec;
 	int			 rc = 0;
 
-	kbund = iov2key_bundle(key_iov);
 	rbund = iov2rec_bundle(val_iov);
 
 	if (UMOFF_IS_NULL(rbund->rb_off)) {
@@ -583,14 +585,14 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		 */
 		return rc;
 
-	rc = svt_rec_store(tins, rec, kbund, rbund);
+	rc = svt_rec_store(tins, rec, rbund);
 	return rc;
 }
 
 static int
 svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	struct svt_hkey *skey = (struct svt_hkey *)&rec->rec_hkey[0];
+	struct vos_svt_key *skey = (struct vos_svt_key *)&rec->rec_hkey[0];
 	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
 	bio_addr_t	   *addr = &irec->ir_ex_addr;
 
@@ -598,7 +600,7 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		return 0;
 
 	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
-				  irec->ir_dtx, skey->sv_epoch, rec->rec_off);
+				  irec->ir_dtx, skey->sk_epoch, rec->rec_off);
 
 	/* SCM value is stored together with vos_irec_df */
 	if (addr->ba_type == DAOS_MEDIA_NVME) {
@@ -615,14 +617,14 @@ static int
 svt_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	       d_iov_t *key_iov, d_iov_t *val_iov)
 {
-	struct vos_key_bundle	*kbund = NULL;
+	struct vos_svt_key	*key = NULL;
 	struct vos_rec_bundle	*rbund;
 
 	rbund = iov2rec_bundle(val_iov);
 	if (key_iov != NULL)
-		kbund = iov2key_bundle(key_iov);
+		key = iov2svt_key(key_iov);
 
-	svt_rec_load(tins, rec, kbund, rbund);
+	svt_rec_load(tins, rec, key, rbund);
 	return 0;
 }
 
@@ -630,11 +632,9 @@ static int
 svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		d_iov_t *key_iov, d_iov_t *val_iov)
 {
-	struct svt_hkey		*skey;
-	struct vos_key_bundle	*kbund;
+	struct vos_svt_key	*skey;
 	struct vos_rec_bundle	*rbund;
 
-	kbund = iov2key_bundle(key_iov);
 	rbund = iov2rec_bundle(val_iov);
 
 	if (!UMOFF_IS_NULL(rbund->rb_off) ||
@@ -650,23 +650,24 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		return -DER_NO_PERM;
 	}
 
-	skey = (struct svt_hkey *)&rec->rec_hkey[0];
-	D_DEBUG(DB_IO, "Overwrite epoch "DF_U64"\n", skey->sv_epoch);
+	skey = (struct vos_svt_key *)&rec->rec_hkey[0];
+	D_DEBUG(DB_IO, "Overwrite epoch "DF_X64".%d\n", skey->sk_epoch,
+		skey->sk_minor_epc);
 
 	umem_tx_add(&tins->ti_umm, rec->rec_off, vos_irec_size(rbund));
-	return svt_rec_store(tins, rec, kbund, rbund);
+	return svt_rec_store(tins, rec, rbund);
 }
 
 static int
 svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 		       uint32_t intent)
 {
-	struct svt_hkey *skey = (struct svt_hkey *)&rec->rec_hkey[0];
+	struct vos_svt_key *skey = (struct vos_svt_key *)&rec->rec_hkey[0];
 	struct vos_irec_df	*svt;
 
 	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-					  svt->ir_dtx, skey->sv_epoch, intent,
+					  svt->ir_dtx, skey->sk_epoch, intent,
 					  DTX_RT_SVT);
 }
 

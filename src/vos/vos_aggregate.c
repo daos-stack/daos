@@ -543,7 +543,7 @@ prepare_segments(struct agg_merge_window *mw)
 		/* Merge to highest pool map version */
 		if (ent_in->ei_ver < phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
-		ent_in->ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
+		ent_in->ei_rect.rc_minor_epc = VOS_MINOR_EPC_MAX;
 	}
 
 	if (mw->mw_csum_support) {
