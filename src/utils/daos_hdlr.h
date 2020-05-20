@@ -119,7 +119,7 @@ struct cmd_args_s {
 			D_GOTO(label, (rcexpr));			\
 		}							\
 		if ((ap)->mdsrv == NULL) {				\
-			fprintf(stderr, "failed to parse--svc=%s\n",	\
+			fprintf(stderr, "failed to parse --svc=%s\n",	\
 					(ap)->mdsrv_str);		\
 			D_GOTO(label, (rcexpr));			\
 		}							\

@@ -27,6 +27,7 @@ import os
 from command_utils import ExecutableCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from env_modules import load_mpi
+from general_utils import pcmd
 from write_host_file import write_host_file
 
 
@@ -47,6 +48,12 @@ class JobManager(ExecutableCommand):
         """
         super(JobManager, self).__init__(namespace, command, path, subprocess)
         self.job = job
+        self._hosts = None
+
+    @property
+    def hosts(self):
+        """Get the list of hosts associated with this command."""
+        return self._hosts
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -69,18 +76,6 @@ class JobManager(ExecutableCommand):
 
         """
         return self.job.check_subprocess_status(sub_process)
-
-    # deprecated: Use assign_[hosts|processes|environment]() methods instead
-    def setup_command(self, env, hostfile, processes):
-        """Set up the job manager command with common inputs.
-
-        Args:
-            env (EnvironmentVariables): the environment variables to use with
-                the launch command
-            hostfile (str): file defining host names and slots
-            processes (int): number of host processes
-        """
-        pass
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command.
@@ -126,6 +121,45 @@ class JobManager(ExecutableCommand):
         """
         pass
 
+    def get_subprocess_state(self, message=None):
+        """Display the state of the subprocess.
+
+        Args:
+            message (str, optional): additional text to include in output.
+                Defaults to None.
+
+        Returns:
+            list: a list of states for the process found. If the local job
+                manager command is running its state will be the first in the
+                list. Additional states in the list can typically indicate that
+                remote processes were also found to be active.  Active remote
+                processes will be indicated by a 'R' state at the end of the
+                list.
+
+        """
+        # Get/display the state of the local job manager process
+        state = super(JobManager, self).get_subprocess_state(message)
+        if self._process is not None and self._hosts:
+            # Display the status of the remote job processes on each host
+            command = "/usr/bin/pgrep -a {}".format(self.job.command_regex)
+            self.log.debug(
+                "%s processes still running remotely%s:", self.command,
+                " {}".format(message) if message else "")
+            self.log.debug("Running (on %s): %s", self._hosts, command)
+            results = pcmd(self._hosts, command, True, 10, None)
+
+            # Add a running state to the list of process states if any remote
+            # process was found to be active.  The pcmd method will return a
+            # dictioanry with a single key, e.g. {1: <NodeSet>}, if there are
+            # no remote processes running on any of the hosts.  If this value
+            # is not returned, indicate there are processes running by adding
+            # the "R" state to the process state list.
+            if 1 not in results or len(results) > 1:
+                if not state:
+                    state = ["?"]
+                state.append("R")
+        return state
+
 
 class Orterun(JobManager):
     """A class for the orterun job manager command."""
@@ -164,25 +198,6 @@ class Orterun(JobManager):
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
 
-    # deprecated: Use assign_[hosts|processes|environment]() methods instead
-    def setup_command(self, env, hostfile, processes):
-        """Set up the orterun command with common inputs.
-
-        Args:
-            env (EnvironmentVariables): the environment variables to use with
-                the launch command
-            hostfile (str): file defining host names and slots
-            processes (int): number of host processes
-        """
-        # Setup the env for the job to export with the orterun command
-        if self.export.value is None:
-            self.export.value = []
-        self.export.value.extend(env.get_list())
-
-        # Setup the orterun command
-        self.hostfile.value = hostfile
-        self.processes.value = processes
-
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
 
@@ -192,7 +207,8 @@ class Orterun(JobManager):
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        kwargs = {"hostlist": hosts, "slots": slots}
+        self._hosts = hosts
+        kwargs = {"hostlist": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
@@ -271,23 +287,6 @@ class Mpirun(JobManager):
         self.envlist = FormattedParameter("-envlist {}", None)
         self.mpitype = mpitype
 
-    # deprecated: Use assign_[hosts|processes|environment]() methods instead
-    def setup_command(self, env, hostfile, processes):
-        """Set up the mpirun command with common inputs.
-
-        Args:
-            env (EnvironmentVariables): the environment variables to use with
-                the launch command
-            hostfile (str): file defining host names and slots
-            processes (int): number of host processes
-        """
-        # Setup the env for the job to export with the mpirun command
-        self._pre_command = env.get_export_str()
-
-        # Setup the orterun command
-        self.hostfile.value = hostfile
-        self.processes.value = processes
-
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).
 
@@ -297,7 +296,8 @@ class Mpirun(JobManager):
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        kwargs = {"hostlist": hosts, "slots": slots}
+        self._hosts = hosts
+        kwargs = {"hostlist": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
@@ -319,20 +319,13 @@ class Mpirun(JobManager):
             append (bool): whether to assign (False) or append (True) the
                 specified environment variables
         """
-        if append and self.envlist.value is not None:
-            # Convert the current list of environmental variable assignments
-            # into an EnvironmentVariables (dict) object.  Then update the
-            # dictionary keys with the specified values or add new key value
-            # pairs to the dictionary.  Finally convert the updated dictionary
-            # back to a string for the parameter assignment.
-            original = EnvironmentVariables({
-                item.split("=")[0]: item.split("=")[1] if "=" in item else None
-                for item in self.envlist.value.split(",")})
-            original.update(env_vars)
-            self.envlist.value = ",".join(original.get_list())
+        # Pass the environment variables via the process.run method env argument
+        if append and self.env is not None:
+            # Update the existing dictionary with the new values
+            self.env.update(env_vars)
         else:
-            # Overwrite the environmental variable assignment
-            self.envlist.value = ",".join(env_vars.get_list())
+            # Overwrite/create the dictionary of environment variables
+            self.env = EnvironmentVariables(env_vars)
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -369,9 +362,9 @@ class Srun(JobManager):
         """
         super(Srun, self).__init__("/run/srun", "srun", job, path, subprocess)
 
-        self.label = FormattedParameter("--label", False)
-        self.mpi = FormattedParameter("--mpi={}", None)
-        self.export = FormattedParameter("--export={}", None)
+        self.label = FormattedParameter("--label", True)
+        self.mpi = FormattedParameter("--mpi={}", "pmi2")
+        self.export = FormattedParameter("--export={}", "ALL")
         self.ntasks = FormattedParameter("--ntasks={}", None)
         self.distribution = FormattedParameter("--distribution={}", None)
         self.nodefile = FormattedParameter("--nodefile={}", None)
@@ -380,29 +373,6 @@ class Srun(JobManager):
         self.reservation = FormattedParameter("--reservation={}", None)
         self.partition = FormattedParameter("--partition={}", None)
         self.output = FormattedParameter("--output={}", None)
-
-    # deprecated: Use assign_[hosts|processes|environment]() methods instead
-    def setup_command(self, env, hostfile, processes):
-        """Set up the srun command with common inputs.
-
-        Args:
-            env (EnvironmentVariables): the environment variables to use with
-                the launch command
-            hostfile (str): file defining host names and slots
-            processes (int): number of host processes
-            processpernode (int): number of process per node
-        """
-        # Setup the env for the job to export with the srun command
-        self.export.value = ",".join(["ALL"] + env.get_list())
-
-        # Setup the srun command
-        self.label.value = True
-        self.mpi.value = "pmi2"
-        if processes is not None:
-            self.ntasks.value = processes
-            self.distribution.value = "cyclic"
-        if hostfile is not None:
-            self.nodefile.value = hostfile
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).
@@ -413,7 +383,8 @@ class Srun(JobManager):
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        kwargs = {"hostlist": hosts, "slots": None}
+        self._hosts = hosts
+        kwargs = {"hostlist": self._hosts, "slots": None}
         if path is not None:
             kwargs["path"] = path
         self.nodefile.value = write_host_file(**kwargs)

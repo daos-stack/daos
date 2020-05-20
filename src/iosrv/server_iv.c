@@ -517,6 +517,8 @@ ivc_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 	struct ds_iv_key key;
 
 	iv_key_unpack(&key, iv_key);
+	if (key.rank == ((d_rank_t)-1))
+		return -DER_NOTLEADER;
 	*root = key.rank;
 	return 0;
 }
@@ -723,7 +725,7 @@ ds_iv_ns_destroy(void *ns)
 	if (iv_ns == NULL)
 		return;
 
-	D_DEBUG(DB_TRACE, "destroy ivns %d\n", iv_ns->iv_ns_id);
+	D_DEBUG(DB_MGMT, "destroy ivns %d\n", iv_ns->iv_ns_id);
 	iv_ns_destroy_internal(iv_ns);
 }
 
@@ -759,7 +761,7 @@ free:
 void
 ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank)
 {
-	D_DEBUG(DB_TRACE, "update iv_ns %u master rank %u new master rank %u "
+	D_DEBUG(DB_MGMT, "update iv_ns %u master rank %u new master rank %u "
 		"myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
 		master_rank, dss_self_rank(), ns);
 	ns->iv_master_rank = master_rank;
@@ -868,7 +870,7 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
 	D_ASSERT(class != NULL);
-	D_DEBUG(DB_TRACE, "class_id %d crt class id %d opc %d\n",
+	D_DEBUG(DB_MD, "class_id %d crt class id %d opc %d\n",
 		key_iv->class_id, class->iv_cart_class_id, opc);
 
 	iv_key_pack(&key_iov, key_iv);
@@ -904,8 +906,7 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 
 	ABT_future_wait(future);
 	rc = cb_info.result;
-	D_DEBUG(DB_TRACE, "class_id %d opc %d rc %d\n", key_iv->class_id, opc,
-		rc);
+	D_DEBUG(DB_MD, "class_id %d opc %d rc %d\n", key_iv->class_id, opc, rc);
 out:
 	ABT_future_free(&future);
 	return rc;
@@ -924,7 +925,10 @@ retry:
 		 * in the mean time, it will rely on others to update the
 		 * ns for it.
 		 */
-		D_WARN("retry upon %d\n", rc);
+		D_WARN("retry upon %d for class %d opc %d\n", rc,
+		       key->class_id, opc);
+		/* Yield to avoid hijack the cycle if IV RPC is not sent */
+		ABT_thread_yield();
 		goto retry;
 	}
 	return rc;

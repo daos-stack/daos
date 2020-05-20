@@ -28,6 +28,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -49,7 +53,8 @@ type storageCmd struct {
 // storagePrepareCmd is the struct representing the prep storage subcommand.
 type storagePrepareCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
+	hostListCmd
 	jsonOutputCmd
 	types.StoragePrepareCmd
 }
@@ -86,7 +91,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		SCM:  sReq,
 	}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StoragePrepare(ctx, cmd.ctlClient, req)
+	resp, err := control.StoragePrepare(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
@@ -110,7 +115,8 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 // storageScanCmd is the struct representing the scan storage subcommand.
 type storageScanCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
+	hostListCmd
 	jsonOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
 }
@@ -122,7 +128,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	req := &control.StorageScanReq{}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageScan(ctx, cmd.ctlClient, req)
+	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
@@ -147,26 +153,63 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 // storageFormatCmd is the struct representing the format storage subcommand.
 type storageFormatCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
+	hostListCmd
 	jsonOutputCmd
 	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
 	Reformat bool `long:"reformat" description:"Always reformat storage (CAUTION: Potentially destructive)"`
+	Group    struct {
+		System bool   `long:"system" description:"Perform reformat of stopped DAOS servers in system"`
+		Ranks  string `long:"ranks" short:"r" description:"Comma separated list of system ranks to format"`
+	} `group:"System Format Options" description:"Reformat an existing DAOS system"`
 }
 
 // Execute is run when storageFormatCmd activates
 //
 // run NVMe and SCM storage format on all connected servers
-func (cmd *storageFormatCmd) Execute(args []string) error {
+func (cmd *storageFormatCmd) Execute(args []string) (err error) {
+	resp := &control.StorageFormatResp{}
 	ctx := context.Background()
-	req := &control.StorageFormatReq{
-		Reformat: cmd.Reformat,
+
+	if cmd.Group.System {
+		cmd.log.Info("system reformat selected")
+
+		if cmd.Reformat {
+			cmd.log.Info("--reformat is already implied by --system")
+		}
+
+		var ranks []uint32
+		if err = common.ParseNumberList(cmd.Group.Ranks, &ranks); err != nil {
+			return errors.Wrap(err, "parsing input ranklist")
+		}
+
+		sysResp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
+			&control.SystemReformatReq{Ranks: ranks})
+		if err != nil {
+			return err
+		}
+		if err = convert.Types(sysResp, resp); err != nil {
+			return errors.WithMessage(err, "converting system-reformat response")
+		}
+
+		return cmd.printResp(resp)
 	}
+
+	if cmd.Group.Ranks != "" {
+		cmd.log.Info("--ranks are ignored unless --system is set")
+	}
+
+	req := &control.StorageFormatReq{Reformat: cmd.Reformat}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageFormat(ctx, cmd.ctlClient, req)
+	resp, err = control.StorageFormat(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
 
+	return cmd.printResp(resp)
+}
+
+func (cmd *storageFormatCmd) printResp(resp *control.StorageFormatResp) error {
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(os.Stdout, resp)
 	}

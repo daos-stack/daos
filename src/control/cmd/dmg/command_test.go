@@ -216,6 +216,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		})
 	case *control.SystemStopReq:
 		resp = control.MockMSResponse("", nil, &ctlpb.SystemStopResp{})
+	case *control.SystemResetFormatReq:
+		resp = control.MockMSResponse("", nil, &ctlpb.SystemResetFormatResp{})
 	case *control.SystemStartReq:
 		resp = control.MockMSResponse("", nil, &ctlpb.SystemStartResp{})
 	case *control.SystemQueryReq:
@@ -229,6 +231,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
+	case *control.PoolExcludeReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExcludeResp{})
 	case *control.PoolReintegrateReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
 	}

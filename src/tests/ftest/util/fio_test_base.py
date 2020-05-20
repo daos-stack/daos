@@ -29,7 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from test_utils_pool import TestPool
 from fio_utils import FioCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
 

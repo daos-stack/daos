@@ -40,6 +40,8 @@
  * APIs/handling.
  */
 
+#include <malloc.h>
+#include <sys/mman.h>
 #include "crt_internal.h"
 
 struct crt_gdata crt_gdata;
@@ -56,7 +58,8 @@ dump_envariables(void)
 		"DD_STDERR", "DD_SUBSYS", "CRT_TIMEOUT", "CRT_ATTACH_INFO_PATH",
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
-		"FI_UNIVERSE_SIZE"};
+		"FI_UNIVERSE_SIZE", "CRT_DISABLE_MEM_PIN",
+		"FI_OFI_RXM_USE_SRX" };
 
 	D_DEBUG(DB_ALL, "-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
@@ -65,14 +68,42 @@ dump_envariables(void)
 	}
 }
 
+/* Workaround for CART-890 */
+static int
+mem_pin_workaround(void)
+{
+	int crt_rc = 0;
+	int rc;
+
+	/* Prevent malloc from releasing memory via sbrk syscall */
+	rc = mallopt(M_TRIM_THRESHOLD, -1);
+	if (rc != 1) {
+		D_ERROR("Failed to disable malloc trim: %d\n", errno);
+		D_GOTO(exit, crt_rc = -DER_MISC);
+	}
+
+	/** Disable fastbins */
+	rc = mallopt(M_MXFAST, 0);
+	if (rc != 1) {
+		D_ERROR("Failed to disable malloc fastbins: %d\n", errno);
+		D_GOTO(exit, crt_rc = -DER_MISC);
+	}
+
+	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
+exit:
+	return crt_rc;
+}
+
+
 /* first step init - for initializing crt_gdata */
-static int data_init(crt_init_options_t *opt)
+static int data_init(int server, crt_init_options_t *opt)
 {
 	uint32_t	timeout;
 	uint32_t	credits;
 	bool		share_addr = false;
 	uint32_t	ctx_num = 1;
 	uint32_t	fi_univ_size = 0;
+	uint32_t	mem_pin_disable =  0;
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -99,6 +130,16 @@ static int data_init(crt_init_options_t *opt)
 	crt_gdata.cg_addr = NULL;
 	crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
 	crt_gdata.cg_share_na = false;
+
+	/* Apply CART-890 workaround for server side only */
+	if (server) {
+		d_getenv_int("CRT_DISABLE_MEM_PIN", &mem_pin_disable);
+		if (mem_pin_disable == 0) {
+			rc = mem_pin_workaround();
+			if (rc != 0)
+				D_GOTO(exit, rc);
+		}
+	}
 
 	timeout = 0;
 
@@ -225,7 +266,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	server = flags & CRT_FLAG_BIT_SERVER;
 
-
 	/* d_log_init is reference counted */
 	rc = d_log_init();
 	if (rc != 0) {
@@ -259,7 +299,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	}
 
 	if (gdata_init_flag == 0) {
-		rc = data_init(opt);
+		rc = data_init(server, opt);
 		if (rc != 0) {
 			D_ERROR("data_init failed, rc(%d) - %s.\n",
 				rc, strerror(rc));
@@ -338,6 +378,17 @@ do_init:
 			D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 			       "for current provider, ignore it.\n");
 			crt_gdata.cg_share_na = false;
+		}
+
+		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_VERBS_RXM ||
+		    crt_gdata.cg_na_plugin == CRT_NA_OFI_TCP_RXM) {
+			char *srx_env;
+
+			srx_env = getenv("FI_OFI_RXM_USE_SRX");
+			if (srx_env == NULL) {
+				D_WARN("FI_OFI_RXM_USE_SRX not set, set=1\n");
+				setenv("FI_OFI_RXM_USE_SRX", "1", true);
+			}
 		}
 
 		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_PSM2) {
@@ -627,7 +678,6 @@ int crt_na_ofi_config_init(void)
 
 	D_STRNDUP(crt_na_ofi_conf.noc_domain, domain, 64);
 	if (!crt_na_ofi_conf.noc_domain) {
-		D_ERROR("Failed to stdndup domain name\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 

@@ -26,6 +26,7 @@ package server
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/golang/protobuf/proto"
@@ -39,7 +40,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
-func TestMgmtSvc_PoolCreate(t *testing.T) {
+func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 	missingSB := newTestMgmtSvc(nil)
 	missingSB.harness.instances[0]._superblock = nil
 	notAP := newTestMgmtSvc(nil)
@@ -103,6 +104,19 @@ func TestMgmtSvc_PoolCreate(t *testing.T) {
 				setupMockDrpcClientBytes(svc, badBytes, err)
 			},
 			expErr: errors.New("unmarshal"),
+		},
+		"retries exceed context deadline": {
+			targetCount: 8,
+			req: &mgmtpb.PoolCreateReq{
+				Scmbytes:  100 * humanize.GiByte,
+				Nvmebytes: 10 * humanize.TByte,
+			},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				setupMockDrpcClient(svc, &mgmtpb.PoolCreateResp{
+					Status: int32(drpc.DaosGroupVersionMismatch),
+				}, nil)
+			},
+			expErr: context.DeadlineExceeded,
 		},
 		"successful creation": {
 			targetCount: 8,
@@ -170,7 +184,9 @@ func TestMgmtSvc_PoolCreate(t *testing.T) {
 				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolCreate(context.TODO(), tc.req)
+			ctx, cancel := context.WithTimeout(context.Background(), poolCreateRetryDelay+10*time.Millisecond)
+			defer cancel()
+			gotResp, gotErr := tc.mgmtSvc.PoolCreate(ctx, tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -183,7 +199,7 @@ func TestMgmtSvc_PoolCreate(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_PoolDestroy(t *testing.T) {
+func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 	missingSB := newTestMgmtSvc(nil)
 	missingSB.harness.instances[0]._superblock = nil
 	notAP := newTestMgmtSvc(nil)
@@ -674,7 +690,7 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_PoolQuery(t *testing.T) {
+func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	missingSB := newTestMgmtSvc(nil)
 	missingSB.harness.instances[0]._superblock = nil
 
@@ -753,7 +769,7 @@ func TestMgmtSvc_PoolQuery(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_PoolSetProp(t *testing.T) {
+func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 	withName := func(r *mgmtpb.PoolSetPropReq, n string) *mgmtpb.PoolSetPropReq {
 		r.SetPropertyName(n)
 		return r
