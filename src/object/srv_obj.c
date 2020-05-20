@@ -1393,8 +1393,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid,
-				       &orw->orw_dti,
-				       orw->orw_dkey_hash, false,
+				       &orw->orw_dti, orw->orw_dkey_hash,
 				       &orw->orw_epoch);
 
 		/* Do nothing if 'prepared' or 'committed'. */
@@ -1553,8 +1552,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		daos_epoch_t	tmp = 0;
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid,
-				       &orw->orw_dti, orw->orw_dkey_hash,
-				       false, &tmp);
+				       &orw->orw_dti, orw->orw_dkey_hash, &tmp);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
 
@@ -1589,8 +1587,7 @@ renew:
 			      orw->orw_epoch, orw->orw_dkey_hash,
 			      orw->orw_map_ver, DAOS_INTENT_UPDATE,
 			      orw->orw_shard_tgts.ca_arrays,
-			      orw->orw_shard_tgts.ca_count,
-			      orw->orw_api_flags & VOS_COND_UPDATE_MASK, &dlh);
+			      orw->orw_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -2031,7 +2028,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	if (opi->opi_flags & ORF_RESEND) {
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid,
 				       &opi->opi_dti, opi->opi_dkey_hash,
-				       true, &opi->opi_epoch);
+				       &opi->opi_epoch);
 
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc == -DER_ALREADY || rc == 0)
@@ -2170,8 +2167,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		daos_epoch_t	tmp = 0;
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid,
-				       &opi->opi_dti, opi->opi_dkey_hash,
-				       true, &tmp);
+				       &opi->opi_dti, opi->opi_dkey_hash, &tmp);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
 
@@ -2205,8 +2201,7 @@ renew:
 			      opi->opi_epoch, opi->opi_dkey_hash,
 			      opi->opi_map_ver, DAOS_INTENT_PUNCH,
 			      opi->opi_shard_tgts.ca_arrays,
-			      opi->opi_shard_tgts.ca_count,
-			      opi->opi_api_flags & VOS_OF_COND_PUNCH, &dlh);
+			      opi->opi_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
