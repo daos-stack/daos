@@ -38,11 +38,12 @@ class StorageRatio(TestWithServers):
 
         Test Description:
             Purpose of this test is to verify minimum required SCM/NVME
-            storage space for pool creation.
+            storage space ratio for pool creation.
 
         Use case:
-        Create Pool with different SCM/NVMe pool size and verify that pool
-        creation failed if SCM storage size is too low compare to NVMe size.
+        Create Pool with different SCM/NVMe pool storage size ratio and
+        verify that pool creation failed if SCM storage size is too low
+        compare to NVMe size.
         For now 6% minimum SCM size needed against NVMe. There is no Maximum
         limit.Added tests to verify the minimum SCM/NVMe pool size.
 
