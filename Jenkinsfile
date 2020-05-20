@@ -147,11 +147,28 @@ def fault_test_tag() {
     return ""
 }
 
+// def release_candidate() {
+//     if (sh(label: "Determine if building (a PR of) an RC",
+//           script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
+//                   "grep -i '[0-9]rc[0-9]' TAG",
+//           returnStatus: true)) {
+//         return true
+//     }
+//     return false
+// }
+
 def release_candidate() {
-    if (sh(label: "Determine if building (a PR of) an RC",
-          script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
-                  "grep -i '[0-9]rc[0-9]' TAG",
-          returnStatus: true)) {
+    def rc = sh(label: "Determine if building (a PR of) an RC",
+        script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
+            "grep -i '[0-9]rc[0-9]' TAG",
+        returnStatus: true)
+    echo "rc: " + rc
+    if (rc) {
+        echo "rc: " + rc + " is a true result"
+    } else {
+        echo "rc: " + rc + " is a false result"
+    }
+    if (rc == 0) {
         return true
     }
     return false
