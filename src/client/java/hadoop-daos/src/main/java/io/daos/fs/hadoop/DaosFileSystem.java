@@ -210,56 +210,59 @@ public class DaosFileSystem extends FileSystem {
   }
 
   private void parseUnsConfig(String path, Configuration conf) throws IOException {
-    DunsInfo info = DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP);
+    DunsInfo info = DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
+            io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
     if (!"POSIX".equalsIgnoreCase(info.getLayout())) {
       throw new IllegalArgumentException("expect POSIX file system, but " + info.getLayout());
     }
     String poolId = info.getPoolId();
     String contId = info.getContId();
     String appInfo = info.getAppInfo();
-    String[] pairs = appInfo.split(":");
-    for (String pair : pairs) {
-      if (StringUtils.isBlank(pair)) {
-        continue;
-      }
-      String[] kv = pair.split("=");
-      try {
-        switch (kv[0]) {
-          case Constants.DAOS_SERVER_GROUP:
-            conf.set(Constants.DAOS_SERVER_GROUP, StringEscapeUtils.unescapeJava(kv[1]));
-            break;
-          case Constants.DAOS_POOL_UUID:
-            if (StringUtils.isBlank(poolId)) {
-              poolId = StringEscapeUtils.unescapeJava(kv[1]);
-            } else {
-              LOG.warn("ignoring pool id {} from app info", kv[1]);
-            }
-            break;
-          case Constants.DAOS_POOL_SVC:
-            conf.set(Constants.DAOS_POOL_SVC, StringEscapeUtils.unescapeJava(kv[1]));
-            break;
-          case Constants.DAOS_POOL_FLAGS:
-            conf.set(Constants.DAOS_POOL_FLAGS, StringEscapeUtils.unescapeJava(kv[1]));
-            break;
-          case Constants.DAOS_CONTAINER_UUID:
-            if (StringUtils.isBlank(contId)) {
-              contId = StringEscapeUtils.unescapeJava(kv[1]);
-            } else {
-              LOG.warn("ignoring container id {} from app info", kv[1]);
-            }
-            break;
-          case Constants.DAOS_READ_BUFFER_SIZE:
-          case Constants.DAOS_WRITE_BUFFER_SIZE:
-          case Constants.DAOS_BLOCK_SIZE:
-          case Constants.DAOS_CHUNK_SIZE:
-          case Constants.DAOS_PRELOAD_SIZE:
-            conf.setInt(kv[0], Integer.valueOf(kv[1]));
-            break;
-          default:
-            throw new IllegalArgumentException("unknown daos config, " + kv[0]);
+    if (appInfo != null) {
+      String[] pairs = appInfo.split(":");
+      for (String pair : pairs) {
+        if (StringUtils.isBlank(pair)) {
+          continue;
         }
-      } catch (NumberFormatException e) {
-        throw new IllegalArgumentException("bad config " + pair, e);
+        String[] kv = pair.split("=");
+        try {
+          switch (kv[0]) {
+            case Constants.DAOS_SERVER_GROUP:
+              conf.set(Constants.DAOS_SERVER_GROUP, StringEscapeUtils.unescapeJava(kv[1]));
+              break;
+            case Constants.DAOS_POOL_UUID:
+              if (StringUtils.isBlank(poolId)) {
+                poolId = StringEscapeUtils.unescapeJava(kv[1]);
+              } else {
+                LOG.warn("ignoring pool id {} from app info", kv[1]);
+              }
+              break;
+            case Constants.DAOS_POOL_SVC:
+              conf.set(Constants.DAOS_POOL_SVC, StringEscapeUtils.unescapeJava(kv[1]));
+              break;
+            case Constants.DAOS_POOL_FLAGS:
+              conf.set(Constants.DAOS_POOL_FLAGS, StringEscapeUtils.unescapeJava(kv[1]));
+              break;
+            case Constants.DAOS_CONTAINER_UUID:
+              if (StringUtils.isBlank(contId)) {
+                contId = StringEscapeUtils.unescapeJava(kv[1]);
+              } else {
+                LOG.warn("ignoring container id {} from app info", kv[1]);
+              }
+              break;
+            case Constants.DAOS_READ_BUFFER_SIZE:
+            case Constants.DAOS_WRITE_BUFFER_SIZE:
+            case Constants.DAOS_BLOCK_SIZE:
+            case Constants.DAOS_CHUNK_SIZE:
+            case Constants.DAOS_PRELOAD_SIZE:
+              conf.setInt(kv[0], Integer.valueOf(kv[1]));
+              break;
+            default:
+              throw new IllegalArgumentException("unknown daos config, " + kv[0]);
+          }
+        } catch (NumberFormatException e) {
+          throw new IllegalArgumentException("bad config " + pair, e);
+        }
       }
     }
     conf.set(Constants.DAOS_POOL_UUID, poolId);
