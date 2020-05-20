@@ -24,7 +24,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
 
@@ -34,12 +36,14 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type cliOptions struct {
 	AllowProxy bool              `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      bool              `short:"d" long:"debug" description:"Enable debug output"`
+	Debug      string            `short:"d" long:"debug" optional:"1" optional-value:"basic" choice:"basic" choice:"net" description:"Enable basic or enhanced network debug"`
+	JSON       bool              `short:"j" long:"json" description:"Enable JSON output"`
 	JSONLogs   bool              `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath string            `short:"o" long:"config-path" description:"Path to agent configuration file"`
 	Insecure   bool              `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
@@ -48,6 +52,7 @@ type cliOptions struct {
 	Start      startCmd          `command:"start" description:"Start daos_agent daemon (default behavior)"`
 	Version    versionCmd        `command:"version" description:"Print daos_agent version"`
 	DumpInfo   dumpAttachInfoCmd `command:"dump-attachinfo" description:"Dump system attachinfo"`
+	NetScan    netScanCmd        `command:"net-scan" description:"Perform local network fabric scan"`
 }
 
 type (
@@ -92,6 +97,36 @@ func (cmd *logCmd) setLog(log logging.Logger) {
 	cmd.log = log
 }
 
+type (
+	jsonOutputter interface {
+		enableJsonOutput(bool)
+		jsonOutputEnabled() bool
+		outputJSON(io.Writer, interface{}) error
+	}
+
+	jsonOutputCmd struct {
+		shouldEmitJSON bool
+	}
+)
+
+func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool) {
+	cmd.shouldEmitJSON = emitJson
+}
+
+func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
+	return cmd.shouldEmitJSON
+}
+
+func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
+	data, err := json.MarshalIndent(in, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	_, err = out.Write(append(data, []byte("\n")...))
+	return err
+}
+
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
@@ -119,13 +154,25 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			common.ScrubProxyVariables()
 		}
 
-		if opts.Debug {
+		switch opts.Debug {
+		case "net":
 			log.WithLogLevel(logging.LogLevelDebug)
-			log.Debug("debug output enabled")
+			log.Debug("net debug output enabled")
+			netdetect.SetLogger(log)
+
+		case "basic":
+			log.WithLogLevel(logging.LogLevelDebug)
+			log.Debug("basic debug output enabled")
+		default:
+			// debug output is disabled
 		}
 
 		if opts.JSONLogs {
 			log.WithJSONOutput()
+		}
+
+		if jsonCmd, ok := cmd.(jsonOutputter); ok {
+			jsonCmd.enableJsonOutput(opts.JSON)
 		}
 
 		cfgPath := opts.ConfigPath
