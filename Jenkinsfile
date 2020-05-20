@@ -165,7 +165,7 @@ def faults_enabled(String type) {
     rc = release_candidate()
     echo "Release candidate: >" + rc + "<"
     // if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate())
-    if ((pragma != "true") || rc {
+    if ((pragma != "true") || rc ) {
         return ""
     }
     if (type == "rpm") {
