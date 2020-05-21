@@ -203,6 +203,33 @@
         <artifactId>maven-shade-plugin</artifactId>
         <executions>
           <execution>
+            <id>shade-protobuf3</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <relocations>
+                <relocation>
+                  <pattern>com.google.protobuf</pattern>
+                  <shadedPattern>com.google.protoshadebuf3</shadedPattern>
+                </relocation>
+              </relocations>
+              <artifactSet>
+                <excludes>
+                  <exclude>org.slf4j:slf4j-api</exclude>
+                  <exclude>org.apache.logging.log4j:log4j-slf4j-impl</exclude>
+                  <exclude>org.apache.logging.log4j:log4j-core</exclude>
+                  <exclude>commons-lang:commons-lang</exclude>
+                  <exclude>com.google.code.findbugs:jsr305</exclude>
+                </excludes>
+              </artifactSet>
+              <finalName>${artifactId}-${version}-protobuf3-shaded</finalName>
+            </configuration>
+          </execution>
+          <execution>
+            <id>shade</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
