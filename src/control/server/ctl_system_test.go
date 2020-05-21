@@ -134,19 +134,19 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 				{Rank: 1, State: system.MemberStateJoined},
 				{Rank: 2, State: system.MemberStateJoined},
 				{
-					Rank: 4, Errored: true, Msg: "connection refused",
+					Rank: 4, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 5, Errored: true, Msg: "connection refused",
+					Rank: 5, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 6, Errored: true, Msg: "connection refused",
+					Rank: 6, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 7, Errored: true, Msg: "connection refused",
+					Rank: 7, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 			},
@@ -200,11 +200,11 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 				{Rank: 1, State: system.MemberStateJoined},
 				{Rank: 2, State: system.MemberStateJoined},
 				{
-					Rank: 6, Errored: true, Msg: "connection refused",
+					Rank: 6, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 7, Errored: true, Msg: "connection refused",
+					Rank: 7, Msg: "connection refused",
 					State: system.MemberStateUnresponsive,
 				},
 			},
@@ -315,7 +315,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			expMembers: []*ctlpb.SystemMember{
 				&ctlpb.SystemMember{
 					Rank: 0, Addr: getHostAddr(1).String(),
-					State: uint32(system.MemberStateErrored),
+					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
 				},
 				&ctlpb.SystemMember{
 					Rank: 1, Addr: getHostAddr(1).String(),
@@ -375,7 +375,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			expMembers: []*ctlpb.SystemMember{
 				&ctlpb.SystemMember{
 					Rank: 0, Addr: getHostAddr(1).String(),
-					State: uint32(system.MemberStateErrored),
+					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
 				},
 				&ctlpb.SystemMember{
 					Rank: 2, Addr: getHostAddr(2).String(),

@@ -51,7 +51,6 @@ BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
-BuildRequires: python-distro
 %else
 %if (0%{?suse_version} >= 1315)
 # see src/client/dfs/SConscript for why we need /etc/os-release
@@ -69,7 +68,6 @@ BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: Modules
 BuildRequires: systemd-rpm-macros
-BuildRequires: python3-distro
 %if 0%{?is_opensuse}
 %else
 # have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
