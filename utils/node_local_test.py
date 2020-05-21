@@ -46,12 +46,19 @@ class NLT_Conf():
         self.wf = None
 
     def set_wf(self, wf):
+        """Set the WarningsFactory object"""
         self.wf = wf
 
     def __getitem__(self, key):
         return self.bc[key]
 
 class WarningsFactory():
+    """Class to parse warnings, and save to JSON output file
+
+    Take a list of failures, and output the data in a way that is best
+    displayed according to
+    https://github.com/jenkinsci/warnings-ng-plugin/blob/master/doc/Documentation.md
+    """
 
     # Error levels are LOW, NORMAL, HIGH, ERROR
     FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'vos_tls_fini')
@@ -60,21 +67,26 @@ class WarningsFactory():
         self._fd = open(filename, 'w')
         self.issues = []
         self.pending = []
-        self.flush()
+        self._flush()
 
     def __del__(self):
         if self._fd:
             self.close()
 
-    def explain(self, line, log_file, signal):
+    def explain(self, line, log_file, esignal):
+        """Log an error, along with the other errors it caused
+
+        Log the line as an error, and reference everything in the pending
+        array.
+        """
         count = len(self.pending)
         symptoms = set()
         locs = set()
         mtype = 'Fault injection'
 
         sev = 'LOW'
-        if signal:
-            symptoms.add('Process died with signal {}'.format(signal))
+        if esignal:
+            symptoms.add('Process died with signal {}'.format(esignal))
             sev = 'ERROR'
             mtype = 'Fault injection caused crash'
             count += 1
@@ -87,15 +99,25 @@ class WarningsFactory():
             locs.add('{}:{}'.format(sline.filename, sline.lineno))
             symptoms.add(smessage)
 
-        preamble = 'Fault injected here caused {} errors, logfile {}:'.format(count,
-                                                                              log_file)
+        preamble = 'Fault injected here caused {} errors,' \
+                   ' logfile {}:'.format(count, log_file)
+
         message = '{} {} {}'.format(preamble,
                                     ' '.join(sorted(symptoms)),
                                     ' '.join(sorted(locs)))
-        self.add(line, sev, message, cat='Fault injection location', mtype=mtype)
+        self.add(line,
+                 sev,
+                 message,
+                 cat='Fault injection location',
+                 mtype=mtype)
         self.pending = []
 
     def add(self, line, sev, message, cat=None, mtype=None):
+        """Log an error
+
+        Describe an error and add it to the issues array.
+        Add it to the pending array, for later clarification
+        """
         entry = {}
         entry['directory'] = os.path.dirname(line.filename)
         entry['fileName'] = os.path.basename(line.filename)
@@ -114,9 +136,13 @@ class WarningsFactory():
             entry['severity'] = 'LOW'
         self.issues.append(entry)
         self.pending.append((line, message))
-        self.flush()
+        self._flush()
 
-    def flush(self):
+    def _flush(self):
+        """Write the current list to the json file
+
+        This is done just in case of crash
+        """
         self._fd.seek(0)
         self._fd.truncate(0)
         data = {}
@@ -125,6 +151,7 @@ class WarningsFactory():
         self._fd.flush()
 
     def close(self):
+        """Save, and close the log file"""
         self.flush()
         self._fd.close()
         self._fd = None
@@ -582,7 +609,7 @@ def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
              log_file.name,
              show_memleaks=show_memleaks,
              skip_fi=skip_fi,
-             fi_signal = fi_signal)
+             fi_signal=fi_signal)
     valgrind.convert_xml()
     return rc
 
@@ -1094,7 +1121,7 @@ def main():
 
     wf.close()
     if fatal_errors:
-        sys.exit(1)
+        print("Significant errors encountered")
 
 if __name__ == '__main__':
     main()

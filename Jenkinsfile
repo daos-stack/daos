@@ -145,7 +145,6 @@ def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 def qb_inst_rpms = ""
-def skip_clean = false
 el7_component_repos = ""
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
@@ -579,14 +578,8 @@ pipeline {
                         }
                     }
                     steps {
-                        script {
-                            if (quickbuild()) {
-                                skip_clean = true
-                            }
-                        }
-                        sconsBuild skip_clean: skip_clean,
-                            prebuild: "rm -rf daos.conf .sconf_temp .sconsign.dblite",
-                            failure_artifacts: 'config.log-centos7-gcc'
+                        sconsBuild clean: "_build.external${arch}",
+                                   failure_artifacts: 'config.log-centos7-gcc'
 
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
@@ -1111,8 +1104,6 @@ pipeline {
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
                                                IS_CI=true OLD_CI=false utils/run_test.sh
-                                               ldd $SL_PREFIX/bin/daos_server
-                                               export LD_LIBRARY_PATH=$SL_PREFIX/lib64
                                                ./utils/node_local_test.py all"''',
                               junit_files: 'test_results/*.xml'
                     }
@@ -1211,9 +1202,9 @@ pipeline {
                                          qualityGates: [[threshold: 1, type: 'TOTAL_HIGH', unstable: true],
                                                         [threshold: 1, type: 'NEW_NORMAL', unstable: true]],
                                          name: "Node local testing",
-                                         tools: [issues(pattern: 'vm_test/nlt-errors.json',
-                                                     name: 'NLT results',
-                                                     id: 'NLT_test')]
+                                         tool: issues(pattern: 'vm_test/nlt-errors.json',
+                                                      name: 'NLT results',
+                                                      id: 'VM_test')
                         }
                     }
                 }
