@@ -173,22 +173,6 @@ func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
 	return mi, nil
 }
 
-// startedRanks returns rank assignment of configured harness instances that are
-// in a running state. Rank assignments can be nil.
-func (h *IOServerHarness) startedRanks() []system.Rank {
-	h.RLock()
-	defer h.RUnlock()
-
-	ranks := make([]system.Rank, 0, maxIOServers)
-	for _, srv := range h.instances {
-		if srv.hasSuperblock() && srv.isStarted() {
-			ranks = append(ranks, *srv.getSuperblock().Rank)
-		}
-	}
-
-	return ranks
-}
-
 // readyRanks returns rank assignment of configured harness instances that are
 // in a ready state. Rank assignments can be nil.
 func (h *IOServerHarness) readyRanks() []system.Rank {
