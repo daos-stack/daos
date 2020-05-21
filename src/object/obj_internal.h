@@ -246,6 +246,11 @@ typedef int (*shard_io_cb_t)(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			     struct daos_shard_tgt *fw_shard_tgts,
 			     uint32_t fw_cnt, tse_task_t *task);
 
+struct dc_obj_epoch {
+	daos_epoch_t	oe_value;
+	bool		oe_uncertain;
+};
+
 /* shard update/punch auxiliary args, must be the first field of
  * shard_rw_args and shard_punch_args.
  */
@@ -253,7 +258,7 @@ struct shard_auxi_args {
 	struct dc_object	*obj;
 	struct obj_auxi_args	*obj_auxi;
 	shard_io_cb_t		 shard_io_cb;
-	uint64_t		 epoch;
+	struct dc_obj_epoch	 epoch;
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
@@ -412,11 +417,17 @@ obj_ptr2hdl(struct dc_object *obj)
 	return oh;
 }
 
-static inline daos_epoch_t
-dc_io_epoch(void)
+static inline void
+dc_io_epoch_set(struct dc_obj_epoch *epoch)
 {
-	return (srv_io_mode != DIM_CLIENT_DISPATCH) ?
-			DAOS_EPOCH_MAX : crt_hlc_get();
+	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
+		epoch->oe_value = crt_hlc_get();
+		/* DIM_CLIENT_DISPATCH doesn't promise consistency. */
+		epoch->oe_uncertain = false;
+	} else {
+		epoch->oe_value = DAOS_EPOCH_MAX;
+		epoch->oe_uncertain = false; /* not applicable */
+	}
 }
 
 void obj_shard_decref(struct dc_obj_shard *shard);
@@ -425,9 +436,9 @@ void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
-int dc_obj_update(tse_task_t *task, daos_epoch_t epoch, uint32_t map_ver,
-		  daos_obj_update_t *args);
-int dc_obj_punch(tse_task_t *task, daos_epoch_t epoch, uint32_t map_ver,
+int dc_obj_update(tse_task_t *task, struct dc_obj_epoch *epoch,
+		  uint32_t map_ver, daos_obj_update_t *args);
+int dc_obj_punch(tse_task_t *task, struct dc_obj_epoch *epoch, uint32_t map_ver,
 		 enum obj_rpc_opc opc, daos_obj_punch_t *api_args);
 
 struct ds_obj_exec_arg {
@@ -474,7 +485,8 @@ int
 dc_tx_check_pmv(daos_handle_t th);
 
 int
-dc_tx_hdl2epoch_and_pmv(daos_handle_t th, daos_epoch_t *epoch, uint32_t *pmv);
+dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dc_obj_epoch *epoch,
+			uint32_t *pmv);
 
 int
 dc_tx_set_epoch(daos_handle_t th, daos_epoch_t epoch);

@@ -856,7 +856,8 @@ update_prev:
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
-		daos_iod_t *iods, bool size_fetch, daos_handle_t *ioh)
+		daos_iod_t *iods, bool size_fetch, daos_handle_t *ioh,
+		struct dtx_handle *dth)
 {
 	struct vos_io_context	*ioc;
 	struct vos_ts_entry	*entry;
@@ -1823,7 +1824,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	int rc;
 
 	rc = vos_fetch_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
-			     size_fetch, &ioh);
+			     size_fetch, &ioh, NULL);
 	if (rc) {
 		if (rc == -DER_INPROGRESS)
 			D_DEBUG(DB_TRACE, "Cannot fetch "DF_UOID" because of "
