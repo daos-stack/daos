@@ -274,7 +274,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	rc = statfs(path, &fs);
 	if (rc == -1) {
 		int err = errno;
-		D_ERROR("Failed to statfs %s: %s\n", path, strerror(errno));
+		D_INFO("Failed to statfs %s: %s\n", path, strerror(errno));
 		return err;
 	}
 
@@ -299,7 +299,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 			D_ERROR("Path is not in a filesystem that supports the"
 				" DAOS unified namespace\n");
 		else if (err == ENODATA) {
-			D_WARN("Path does not represent a DAOS link\n");
+			D_INFO("Path does not represent a DAOS link\n");
 		} else if (s > DUNS_MAX_XATTR_LEN) {
 			err = EIO;
 			D_ERROR("Invalid xattr length\n");
