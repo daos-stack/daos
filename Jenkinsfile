@@ -1208,7 +1208,7 @@ pipeline {
                                            * shutdown that would normally be NORMAL but in
                                            * order to have stable results are set to LOW.
                                            */
-                                         qualityGates: [[threshold: 1, type: 'HIGH', unstable: true],
+                                         qualityGates: [[threshold: 1, type: 'TOTAL_HIGH', unstable: true],
                                                         [threshold: 1, type: 'NEW_NORMAL', unstable: true]],
                                          name: "Node local testing",
                                          tools: [issues(pattern: 'vm_test/nlt-errors.json',
