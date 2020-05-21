@@ -32,6 +32,7 @@ ior:
   api: "DAOS"
   client_processes:
     np: 2
+  daos_destroy: False
   iorflags:
     sequential:
       flags: "-v -D 100 -w -r"
