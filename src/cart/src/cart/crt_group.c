@@ -473,7 +473,9 @@ free_htables:
 			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
 	}
 	D_FREE(htables);
+#if 0
 	grp_priv->gp_lookup_cache = NULL;
+#endif
 
 out:
 	if (rc != 0)

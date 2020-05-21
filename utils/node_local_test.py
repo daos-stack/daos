@@ -46,6 +46,9 @@ class NLT_Conf():
         self.agent_dir = None
         self.wf = None
 
+    def set_wf(self, wf):
+        self.wf = wf
+
     def set_output_file(self, filename):
         """Set the name of a output file for error logging
 
@@ -60,31 +63,58 @@ class NLT_Conf():
 class WarningsFactory():
 
     # Error levels are LOW, NORMAL, HIGH, ERROR
-    WARNING_LEVELS = {'warning': 'NORMAL',
-                      'error': 'ERROR'}
-    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy')
+    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'vos_tls_fini')
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')
         self.issues = []
+        self.pending = []
         self.flush()
 
     def __del__(self):
         if self._fd:
             self.close()
 
-    def add(self, line, sev, message):
+    def explain(self, line, log_file, signal):
+        if len(self.pending) == 0 and not signal:
+            return
+        symptoms = set()
+        locs = set()
+
+        sev = 'LOW'
+        if signal:
+            symptoms.add('Process died with signal {}'.format(signal))
+            sev = 'ERROR'
+
+        for (sline, smessage) in self.pending:
+            locs.add('{}:{}'.format(sline.filename, sline.lineno))
+            symptoms.add(smessage)
+
+        preamble = 'Fault injected here caused:'
+        message = '{}\n{}\n{}'.format(preamble,
+                                      ','.join(sorted(symptoms)),
+                                      ','.join(sorted(locs)))
+        self.add(line, sev, message,
+                 additional='Triggered by fault injection testing, logs in {}'.format(log_file))
+        self.pending = []
+
+    def add(self, line, sev, message, append=True, additional=None):
         entry = {}
         entry['directory'] = os.path.dirname(line.filename)
         entry['fileName'] = os.path.basename(line.filename)
         entry['lineStart'] = line.lineno
         entry['description'] = message
         entry['message'] = line.get_anon_msg()
-        entry['severity'] = self.WARNING_LEVELS[sev]
+        entry['severity'] = sev
         if line.function in self.FLAKY_FUNCTIONS and entry['severity'] == 'HIGH':
-            entry['severity'] = 'NORMAL'
+            entry['severity'] = 'LOW'
             entry['additional'] = 'Priority downgraded due to flaky nature'
+        if additional:
+            entry['additional'] = additional
+        # Filename showing log?
         self.issues.append(entry)
+        if append:
+            self.pending.append((line, message))
         self.flush()
 
     def flush(self):
@@ -253,7 +283,7 @@ class DaosServer():
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
             # TODO: Enable memleak checking when server shutdown works.
-            log_test(self._log_file, show_memleaks=False)
+            log_test(self.conf, self._log_file, show_memleaks=False)
         self.running = False
         return ret
 
@@ -271,7 +301,7 @@ def il_cmd(dfuse, cmd):
     print('Logged il to {}'.format(log_file.name))
     print(ret)
     print('Log results for il')
-    log_test(log_file.name)
+    log_test(dfuse.conf, log_file.name)
     return ret
 
 class ValgrindHelper():
@@ -446,7 +476,7 @@ class DFuse():
         except subprocess.TimeoutExpired:
             self._sp.send_signal(signal.SIGTERM)
         self._sp = None
-        log_test(self.log_file)
+        log_test(self.conf, self.log_file)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -543,13 +573,19 @@ def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
     if fi_file:
         skip_fi = True
 
+    fi_signal = None
     # A negative return code means the process exited with a signal so do not
     # check for memory leaks in this case as it adds noise, right when it's
     # least wanted.
     if rc.returncode < 0:
         show_memleaks = False
+        fi_signal = -rc.returncode
 
-    log_test(log_file.name, show_memleaks=show_memleaks, skip_fi=skip_fi)
+    log_test(conf,
+             log_file.name,
+             show_memleaks=show_memleaks,
+             skip_fi=skip_fi,
+             fi_signal = fi_signal)
     valgrind.convert_xml()
     return rc
 
@@ -646,7 +682,11 @@ def setup_log_test(conf, wf):
     lt.output_file = conf.output_fd
     lt.wf = wf
 
-def log_test(filename, show_memleaks=True, skip_fi=False):
+def log_test(conf,
+             filename,
+             show_memleaks=True,
+             skip_fi=False,
+             fi_signal=None):
     """Run the log checker on filename, logging to stdout"""
 
     print('Running log_test on {}'.format(filename))
@@ -667,14 +707,16 @@ def log_test(filename, show_memleaks=True, skip_fi=False):
                            show_memleaks=show_memleaks)
     except lt.LogCheckError:
         if lto.fi_location:
-            lt.show_line(lto.fi_location, 'warning',
-                         'Fault injected here caused error')
+            conf.wf.explain(lto.fi_location,
+                            os.path.basename(filename),
+                            fi_signal)
         print('Error detected')
 
     if skip_fi:
         if not show_memleaks:
-            lt.show_line(lto.fi_location, 'warning',
-                         'Fault injected here caused error')
+            conf.wf.explain(lto.fi_location,
+                            os.path.basename(filename),
+                            fi_signal)
         if not lto.fi_triggered:
             raise DFTestNoFi
 
@@ -1030,6 +1072,7 @@ def main():
     wf = WarningsFactory('nlt-errors.json')
     conf.set_output_file('nlt-errors.out')
 
+    conf.set_wf(wf)
     setup_log_test(conf, wf)
 
     server = DaosServer(conf)

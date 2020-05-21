@@ -1201,12 +1201,12 @@ pipeline {
                                          referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
-                                         /* Set qualitygate to 1 new "HIGH" priority message
+                                         /* Set qualitygate to 1 new "NORMAL" priority message
                                            * Supporting messages to help identify causes of
-                                           * problems are set to "Normal", and there are a
+                                           * problems are set to "LOW", and there are a
                                            * number of intermittent issues during server
-                                           * shutdown that would normally be HIGH but in
-                                           * order to have stable results are set to Normal.
+                                           * shutdown that would normally be NORMAL but in
+                                           * order to have stable results are set to LOW.
                                            */
                                          qualityGates: [[threshold: 1, type: 'NEW_HIGH', unstable: true]],
                                          name: "Node local testing",
