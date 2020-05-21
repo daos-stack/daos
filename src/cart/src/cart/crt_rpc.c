@@ -41,6 +41,8 @@
 
 #include "crt_internal.h"
 
+#define CRT_CTL_MAX_LOG_MSG_SIZE 256
+
 void
 crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 {
@@ -55,6 +57,36 @@ crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 		d_fault_inject_enable();
 	else
 		d_fault_inject_disable();
+
+	out_args->rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
+}
+
+void
+crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_log_add_msg_in	*in_args;
+	struct crt_ctl_log_add_msg_out	*out_args;
+	int				rc = 0;
+
+	in_args = crt_req_get(rpc_req);
+	out_args = crt_reply_get(rpc_req);
+
+	if (in_args->log_msg == NULL) {
+		D_ERROR("Empty log message\n");
+		rc = -DER_INVAL;
+	}
+
+	if (strlen(in_args->log_msg) > CRT_CTL_MAX_LOG_MSG_SIZE) {
+		D_ERROR("Log message exceeded %d chars\n",
+			CRT_CTL_MAX_LOG_MSG_SIZE);
+		rc = -DER_OVERFLOW;
+	}
+
+	if (rc == 0)
+		D_INFO("%s\n", in_args->log_msg);
 
 	out_args->rc = rc;
 	rc = crt_reply_send(rpc_req);
@@ -172,6 +204,8 @@ CRT_RPC_DEFINE(crt_ctl_fi_toggle, CRT_ISEQ_CTL_FI_TOGGLE,
 	       CRT_OSEQ_CTL_FI_TOGGLE)
 
 CRT_RPC_DEFINE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
+CRT_RPC_DEFINE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
+		CRT_OSEQ_CTL_LOG_ADD_MSG)
 
 /* Define for crt_internal_rpcs[] array population below.
  * See CRT_INTERNAL_RPCS_LIST macro definition
