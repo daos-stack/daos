@@ -1186,10 +1186,9 @@ pipeline {
                                     unstableThresholdTotal: '0'
                             )
                             recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
                                          failOnError: true,
                                          referenceJobName: 'daos-stack/daos/master',
-                                         ignoreFailedBuilds: true,
+                                         ignoreFailedBuilds: false,
                                          ignoreQualityGate: true,
                                          /* Set qualitygate to 1 new "NORMAL" priority message
                                            * Supporting messages to help identify causes of
