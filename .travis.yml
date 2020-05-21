@@ -2,8 +2,12 @@ sudo: required
 
 env:
  matrix:
-  - DOCKER_IMAGE=ubuntu.20.04
-  - DOCKER_IMAGE=centos.7
+  - DIST=ubuntu
+    VER=20.04
+  - DIST=centos
+    VER=7
+  - DIST=opensuse.leap
+    VER=15
 
 language: c
 
@@ -14,12 +18,11 @@ services:
  - docker
 
 before_install:
- - echo $DOCKER_IMAGE
+ - echo ${DIST}:${VER}
  - git submodule init
  - git submodule update
- - docker pull ${DOCKER_IMAGE/./:}
+ - docker pull ${DIST/.//}:${VER}
 
 script:
- - docker build -f utils/docker/Dockerfile.$DOCKER_IMAGE -t daos/$DOCKER_IMAGE --build-arg NOBUILD=1 --build-arg UID=$UID .
- - docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes install"
- - docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "cd src/client/java && mvn clean install -DskipITs -Ddaos.install.path=/home/daos/daos/install"
+ - docker build -f utils/docker/Dockerfile.${DIST}.${VER} -t daos/$DIST --build-arg NOBUILD=1 --build-arg UID=$UID .
+ - docker run -v $PWD:/home/daos/daos:z daos/$DIST /bin/bash -c "scons --build-deps=yes install"
