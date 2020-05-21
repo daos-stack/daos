@@ -65,11 +65,17 @@ class StorageRatio(TestWithServers):
                     results[num] = 'FAIL'
                 elif 'PASS' in test[2]:
                     results[num] = 'PASS'
+                elif ('WARNING' in test[2] and
+                      'SCM:NVMe ratio is less than' in pool.cmd_output):
+                    results[num] = 'PASS'
+                else:
+                    results[num] = 'FAIL'
             except TestFail:
                 if 'PASS' in test[2]:
                     results[num] = 'FAIL'
                 elif 'FAIL' in test[2]:
                     results[num] = 'PASS'
+
             pool.destroy()
 
         for key in results:
