@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"os"
 	"sync"
 	"syscall"
@@ -34,6 +35,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/peer"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -713,7 +715,7 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 		"instances already started": {
 			req:              &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			instancesStarted: true,
-			expErr:           FaultInstancesNotStopped("reset format", 0),
+			expErr:           FaultInstancesNotStopped("reset format", 1),
 		},
 		"instances reach wait format": {
 			req: &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
@@ -944,6 +946,58 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, opts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
+	defaultAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ipAddr, err := net.ResolveIPAddr("ip", "localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	combinedAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:15001")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		ctx     context.Context
+		addr    string
+		expAddr net.Addr
+		expErr  error
+	}{
+		"no peer": {
+			ctx:    context.Background(),
+			expErr: errors.New("peer details not found in context"),
+		},
+		"bad input address": {
+			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
+			expErr: errors.New("get listening port: missing port in address"),
+		},
+		"non tcp address": {
+			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: ipAddr}),
+			expErr: errors.New("peer address (127.0.0.1) not tcp"),
+		},
+		"normal operation": {
+			ctx:     peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
+			addr:    "0.0.0.0:15001",
+			expAddr: combinedAddr,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotAddr, gotErr := getPeerListenAddr(tc.ctx, tc.addr)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expAddr, gotAddr); diff != "" {
+				t.Fatalf("unexpected address (-want, +got)\n%s\n", diff)
 			}
 		})
 	}
