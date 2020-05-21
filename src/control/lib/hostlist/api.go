@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package hostlist
 
 // This file contains package-level convenience functions for working with
@@ -28,7 +29,7 @@ package hostlist
 // Expand converts a ranged host string into an expanded string
 // of all hosts in the supplied range(s).
 func Expand(stringHosts string) (string, error) {
-	hs, err := CreateSet(stringHosts)
+	hs, err := CreateSet(stringHosts, false)
 	if err != nil {
 		return "", err
 	}
@@ -39,7 +40,7 @@ func Expand(stringHosts string) (string, error) {
 // Compress converts the supplied host list into a string
 // of ranged host strings.
 func Compress(stringHosts string) (string, error) {
-	hs, err := CreateSet(stringHosts)
+	hs, err := CreateSet(stringHosts, false)
 	if err != nil {
 		return "", err
 	}
@@ -49,7 +50,7 @@ func Compress(stringHosts string) (string, error) {
 
 // Count returns the number of distinct hosts in the supplied host list.
 func Count(stringHosts string) (int, error) {
-	hs, err := CreateSet(stringHosts)
+	hs, err := CreateSet(stringHosts, false)
 	if err != nil {
 		return -1, err
 	}

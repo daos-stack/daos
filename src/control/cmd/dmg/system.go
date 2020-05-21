@@ -73,18 +73,6 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-// addRankPrefix is a hack, but don't want to modify the hostlist library to
-// accept invalid hostnames.
-func addRankPrefix(rank system.Rank) string {
-	return fmt.Sprintf("r-%d", rank)
-}
-
-// removeRankPrefixes is a hack, but don't want to modify the hostlist library to
-// accept invalid hostnames.
-func removeRankPrefixes(in string) string {
-	return strings.Replace(in, "r-", "", -1)
-}
-
 func displaySystemQuery(log logging.Logger, members system.Members) error {
 	groups := make(hostlist.HostGroups)
 	for _, m := range members {

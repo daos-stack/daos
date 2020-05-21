@@ -233,7 +233,7 @@ func parseBracketedHostList(input, rangeSep, rangeOp string, nameOptional bool) 
 		}
 
 		prefix := tok[:leftIndex]
-		if len(prefix) == 0 {
+		if len(prefix) == 0 && !nameOptional {
 			return nil, fmt.Errorf("invalid range: %q", tok)
 		}
 		var suffix string
@@ -254,13 +254,9 @@ func parseBracketedHostList(input, rangeSep, rangeOp string, nameOptional bool) 
 }
 
 // Create creates a new HostList from the supplied string representation.
-func Create(stringHosts string) (*HostList, error) {
-	return parseBracketedHostList(stringHosts, outerRangeSeparators, rangeOperator, false)
-}
-
-// CreateNumber creates a new HostList with only numbers from the supplied string representation.
-func CreateNumber(stringNumbers string) (*HostList, error) {
-	return parseBracketedHostList(stringNumbers, outerRangeSeparators, rangeOperator, true)
+func Create(stringHosts string, nameOptional bool) (*HostList, error) {
+	return parseBracketedHostList(stringHosts, outerRangeSeparators,
+		rangeOperator, nameOptional)
 }
 
 // String returns a ranged string representation of the HostList.
@@ -338,7 +334,7 @@ func (hl *HostList) DerangedString() string {
 
 // Push adds a string representation of hostnames to this HostList.
 func (hl *HostList) Push(stringHosts string) error {
-	other, err := Create(stringHosts)
+	other, err := Create(stringHosts, false)
 	if err != nil {
 		return err
 	}
@@ -600,7 +596,7 @@ func (hl *HostList) Delete(stringHosts string) (int, error) {
 		return 0, ErrEmpty
 	}
 
-	tmp, err := Create(stringHosts)
+	tmp, err := Create(stringHosts, false)
 	if err != nil {
 		return 0, err
 	}
@@ -689,7 +685,7 @@ func (hl *HostList) DeleteNth(n int) error {
 // Within returns true if all hosts in the supplied hosts are contained
 // within the HostList, false otherwise.
 func (hl *HostList) Within(stringHosts string) (bool, error) {
-	toFind, err := Create(stringHosts)
+	toFind, err := Create(stringHosts, false)
 	if err != nil {
 		return false, err
 	}
@@ -706,11 +702,11 @@ func (hl *HostList) Within(stringHosts string) (bool, error) {
 // Intersects returns a *HostList containing hosts which are in both this
 // HostList and the supplied hosts string.
 func (hl *HostList) Intersects(stringHosts string) (*HostList, error) {
-	toFind, err := Create(stringHosts)
+	toFind, err := Create(stringHosts, false)
 	if err != nil {
 		return nil, err
 	}
-	intersection, err := Create("")
+	intersection, err := Create("", false)
 	if err != nil {
 		return nil, err
 	}

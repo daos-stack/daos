@@ -37,7 +37,7 @@ func makeStringRef(in string) *string {
 func TestHostList_Create(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startList    string
-		nameOptional []bool
+		nameOptional bool
 		expRawOut    string
 		expUniqOut   string
 		expUniqCount int
@@ -145,53 +145,8 @@ func TestHostList_Create(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			hl, gotErr := hostlist.Create(tc.startList)
-			if gotErr != nil {
-				t.Log(gotErr.Error())
-			}
-			cmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
-			}
-
-			cmpOut(t, tc.expRawOut, hl.String())
-			hl.Uniq()
-			cmpOut(t, tc.expUniqOut, hl.String())
-
-			gotCount := hl.Count()
-			if gotCount != tc.expUniqCount {
-				t.Fatalf("expected count to be %d; got %d", tc.expUniqCount, gotCount)
-			}
-		})
-	}
-}
-
-func TestHostList_CreateNumber(t *testing.T) {
-	for name, tc := range map[string]struct {
-		startList    string
-		expRawOut    string
-		expUniqOut   string
-		expUniqCount int
-		expErr       error
-	}{
-		"simple": {
-			startList:    "node[1-128]",
-			expRawOut:    "node[1-128]",
-			expUniqOut:   "node[1-128]",
-			expUniqCount: 128,
-		},
-		"complex": {
-			startList:    "node2-1,node1-2,node1-[45,47],node3,node1-3",
-			expRawOut:    "node2-1,node1-[2,45,47],node3,node1-3",
-			expUniqOut:   "node3,node1-[2-3,45,47],node2-1",
-			expUniqCount: 6,
-		},
-		"no hostname": {
-			startList: "[0-1],[3-5]",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			hl, gotErr := hostlist.CreateNumber(tc.startList)
+			hl, gotErr := hostlist.Create(tc.startList,
+				tc.nameOptional)
 			if gotErr != nil {
 				t.Log(gotErr.Error())
 			}
@@ -263,7 +218,8 @@ func TestHostList_Push(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			hl, err := hostlist.Create(tc.startList)
+			hl, err := hostlist.Create(tc.startList,
+				false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -394,7 +350,8 @@ func TestHostList_Etc(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hl, err := hostlist.Create(*tc.startList)
+			hl, err := hostlist.Create(*tc.startList,
+				false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -474,7 +431,8 @@ func TestHostList_Nth(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hl, err := hostlist.Create(*tc.startList)
+			hl, err := hostlist.Create(*tc.startList,
+				false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -539,7 +497,8 @@ func TestHostList_DeleteNth(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hl, err := hostlist.Create(*tc.startList)
+			hl, err := hostlist.Create(*tc.startList,
+				false)
 			if err != nil {
 				t.Fatal(err)
 			}

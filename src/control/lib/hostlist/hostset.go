@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package hostlist
 
 import (
@@ -32,7 +33,8 @@ type (
 	// and is always sorted alphanumerically based on prefix.
 	HostSet struct {
 		sync.Mutex
-		list *HostList
+		list         *HostList
+		nameOptional bool
 	}
 )
 
@@ -41,14 +43,14 @@ func (hs *HostSet) MarshalJSON() ([]byte, error) {
 }
 
 // CreateSet creates a new HostSet from the supplied string representation.
-func CreateSet(stringHosts string) (*HostSet, error) {
-	hl, err := Create(stringHosts)
+func CreateSet(stringHosts string, nameOptional bool) (*HostSet, error) {
+	hl, err := Create(stringHosts, nameOptional)
 	if err != nil {
 		return nil, err
 	}
 	hl.Uniq()
 
-	return &HostSet{list: hl}, nil
+	return &HostSet{list: hl, nameOptional: nameOptional}, nil
 }
 
 // initList will initialize the underlying *HostList if necessary
@@ -57,7 +59,7 @@ func (hs *HostSet) initList() {
 	defer hs.Unlock()
 
 	if hs.list == nil {
-		hs.list, _ = Create("")
+		hs.list, _ = Create("", hs.nameOptional)
 	}
 }
 
@@ -83,7 +85,7 @@ func (hs *HostSet) DerangedString() string {
 func (hs *HostSet) Insert(stringHosts string) (int, error) {
 	hs.initList()
 
-	newList, err := Create(stringHosts)
+	newList, err := Create(stringHosts, hs.nameOptional)
 	if err != nil {
 		return -1, err
 	}
