@@ -125,7 +125,7 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 		return nil, err
 	}
 
-	joinErr = withConnection(ctx, ap, msc.cfg.TransportConfig,
+	joinErr = msc.connectFn(ctx, ap, msc.cfg.TransportConfig,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 			if req.Addr == "" {
 				req.Addr = msc.cfg.ControlAddr.String()
