@@ -80,6 +80,7 @@ class WarningsFactory():
             count += 1
 
         if count == 0:
+            print('Nothing to explain')
             return
 
         for (sline, smessage) in self.pending:
@@ -91,10 +92,10 @@ class WarningsFactory():
         message = '{} {} {}'.format(preamble,
                                     ' '.join(sorted(symptoms)),
                                     ' '.join(sorted(locs)))
-        self.add(line, sev, message, mtype=mtype)
+        self.add(line, sev, message, cat='Fault injection location', mtype=mtype)
         self.pending = []
 
-    def add(self, line, sev, message, mtype=None):
+    def add(self, line, sev, message, cat=None, mtype=None):
         entry = {}
         entry['directory'] = os.path.dirname(line.filename)
         entry['fileName'] = os.path.basename(line.filename)
@@ -102,6 +103,8 @@ class WarningsFactory():
             entry['type'] = mtype
         else:
             entry['type'] = message
+        if cat:
+            entry['category'] = cat
         entry['lineStart'] = line.lineno
         entry['description'] = message
         entry['message'] = line.get_anon_msg()
@@ -110,6 +113,7 @@ class WarningsFactory():
            entry['severity'] == 'NORMAL':
             entry['severity'] = 'LOW'
         self.issues.append(entry)
+        self.pending.append((line, message))
         self.flush()
 
     def flush(self):
@@ -702,7 +706,6 @@ def log_test(conf,
             conf.wf.explain(lto.fi_location,
                             os.path.basename(filename),
                             fi_signal)
-        print('Error detected')
 
     if skip_fi:
         if not show_memleaks:
