@@ -607,6 +607,7 @@ public class DaosUns {
             case "list-property-types": listPropertyTypes(); return;
             case "get-property-value-type": getPropertyValueType(); return;
             case "sample-properties": sampleProperties(); return;
+            case "escape-app-value": escapeAppValue(); return;
             default: throw new IllegalArgumentException("not supported operation, " + op);
         }
     }
@@ -646,6 +647,14 @@ public class DaosUns {
         printPropAclValues();
         log.info("sample 4, Set Integer And ACL Values:");
         printPropIntAndAclValues();
+    }
+
+    private static void escapeAppValue() {
+        String input = System.getProperty("input");
+        if (StringUtils.isBlank(input)) {
+            throw new IllegalArgumentException("need input.\n" + getUsage());
+        }
+        log.info("escaped value is: " + DaosUtils.escapeUnsValue(input));
     }
 
     private static String escapeDoubleQuote(String str) {
@@ -924,8 +933,9 @@ public class DaosUns {
                 "   -Dmaxlen=, optional, maximum length of value to be get. Default is 1024\n" +
                 "=>util\n" +
                 "   -Dop=, required, operation types. [list-object-types|list-property-types|" +
-                "get-property-value-type|sample-properties]\n" +
+                "get-property-value-type|sample-properties|escape-app-value]\n" +
                 "   -Dprop_type=, required when op=get-property-value-type\n" +
+                "   -Dinput=, required when op=escape-app-value\n" +
                 "===================================================\n" +
                 "examples: java -Dpath=/tmp/uns -Dpool_id=<your pool uuid> -cp ./daos-java-1.1.0-shaded.jar " +
                 "io.daos.dfs.DaosUns create\n" +

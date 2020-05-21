@@ -9,7 +9,7 @@
       <directory>${project.parent.basedir}/daos-java/target</directory>
       <outputDirectory>.</outputDirectory>
       <includes>
-        <include>daos-java-${project.version}.jar</include>
+        <include>daos-java-${project.version}*.jar</include>
       </includes>
     </fileSet>
     <fileSet>

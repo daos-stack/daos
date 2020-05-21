@@ -1,17 +1,18 @@
 ## Description
 This module is DAOS Java client and DAOS DFS implementation of Hadoop FileSystem. There are two submodules,
-daos-client and hadoop-daos.
+daos-java and hadoop-daos.
 
-### daos-client
-It wraps most of common APIs from daos_fs.h, as well as some pool and container connection related APIs from
-daos_api.h. There are two main classes, DaosFsClient and DaosFile.
+### daos-java
+It wraps most of common APIs from daos_fs.h and daos_uns.h, as well as some pool and container connection related APIs
+from daos_pool.h and daos_cont.h. There are three main classes, DaosFsClient, DaosFile and DaosUns.
 
 * DaosFsClient
-There will be single instance of DaosFsClient per pool and container. All DAOS DFS calls and init/finalize, are from
+There will be single instance of DaosFsClient per pool and container. All DAOS DFS/UNS calls and init/finalize, are from
 this class which has all native methods implementations in jni which call DAOS APIs directly. It provides a few public
 APIs, move, delete, mkdir, exists, for simple non-repetitive file operations. They release all opened files, if any,
 immediately. If you have multiple operations on same file in short period of time, you should use DaosFile which can be
 instantiated by calling getFile methods.
+It also has some DAOS UNS native methods which should be indirectly accessed via DaosUns.
 
 * DaosFile
 It's a simple and efficient representative of underlying DAOS file. You just need to give a posix-compatible path to
@@ -19,11 +20,19 @@ create a DaosFile instance. All later file operations can be done via this insta
 make it friendly to Java developers. And you don't need to release DaosFile explicitly since it will be released
 automatically if there is no reference to this DaosFile instance. You, of course, can release DaosFile explicitly if
 you like or you have to. Besides, it's more efficient for multiple consecutive file operations since underlying DFS
-object is cached and remain open until being released. Later DFS operations don't
-need to lookup repeatedly for each FS operation.
+object is cached and remain open until being released. Later DFS operations don't need to lookup repeatedly for each FS
+operation.
+
+* DaosUns
+It wraps some DAOS UNS APIs, like creating, resolving and destroying UNS path, as well as parsing DAOS UNS string
+attribute. Besides, this class can be run from command line in which you can call all DAOS UNS APIs with different
+parameters. Use below command to show its usage in details.
+    ```bash
+    java -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns --help
+    ```
 
 ### hadoop-daos
-It's DAOS FS implementation of Hadoop FileSystem based on daos-client. There are three main classes, DaosFileSystem,
+It's DAOS FS implementation of Hadoop FileSystem based on daos-java. There are three main classes, DaosFileSystem,
 DaosInputStream and DaosOutputStream.
 
 * DaosFileSystem, it provides APIs to create file as DaosOutputStream, open file as DaosInputStream, list file
@@ -32,9 +41,30 @@ DaosInputStream and DaosOutputStream.
 * DaosOutputStream, for writing file.
 
 #### Hadoop DAOS FileSystem Configuration
-DAOS FileSystem binds to schema, "daos". All DAOS FileSystem configuration will be read from daos-site.xml. So make
-sure daos-site.xml can be loaded by Hadoop. Please check [example](hadoop-daos/src/main/resources/daos-site-example.xml)
-for configuration items, defaults and their description.
+DAOS FileSystem binds to schema, "daos". And there are two ways to instantiate Hadoop DAOS FileSystem, DAOS UNS path and 
+configuration file, daos-site.xml.
+* daos-site.xml
+make sure daos-site.xml can be loaded by Hadoop. Please check
+[example](hadoop-daos/src/main/resources/daos-site-example.xml) for configuration items, defaults and their description.
+* DAOS UNS path
+The URI should be in format of "daos://uns/your path". "your path" is your OS file path created by DAOS UNS method,
+DaosUns.create(). You can create the UNS path with below command.
+    ```bash
+    java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns create
+    ```
+If you need to customize more parameters in [example](hadoop-daos/src/main/resources/daos-site-example.xml), you can
+set more info to the same UNS path with below command.
+   ```bash
+   java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=daos_server:fs.daos.pool.svc=0"
+        -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns setappinfo
+   ```
+For value property, you need to follow pattern, key1=value1:key2=value2... And key* should be from
+[example](hadoop-daos/src/main/resources/daos-site-example.xml). If value* contains characters of '=' or ':', you need
+to escape the value with below command.
+   ```bash
+    java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns util
+   ```
+You'll get escaped value, "daos_server\u003a1\u003d2", for "daos_server:1=2".
 
 ## Build
 It's Java module and built by Maven. Java 1.8 and Maven 3 are required to build this module. After they are installed,
