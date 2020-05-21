@@ -164,6 +164,7 @@ mismatch_alloc_seen = {}
 mismatch_free_seen = {}
 
 output_file = None
+wf = None
 
 def show_line(line, sev, msg):
     """Output a log line in gcc error format"""
@@ -180,8 +181,9 @@ def show_line(line, sev, msg):
     print(log)
     if output_file:
         output_file.write("{}\n".format(log))
-        output_file.write("Supporting data\n")
         output_file.flush()
+    if wf:
+        wf.add(line, sev, msg)
     shown_logs.add(log)
 
 def add_line_count_to_dict(line, target):

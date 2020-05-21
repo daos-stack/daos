@@ -44,6 +44,7 @@ class NLT_Conf():
         self.bc = bc
         self.output_fd = None
         self.agent_dir = None
+        self.wf = None
 
     def set_output_file(self, filename):
         """Set the name of a output file for error logging
@@ -55,6 +56,51 @@ class NLT_Conf():
 
     def __getitem__(self, key):
         return self.bc[key]
+
+class WarningsFactory():
+
+    # Error levels are LOW, NORMAL, HIGH, ERROR
+    WARNING_LEVELS = {'warning': 'NORMAL',
+                      'error': 'ERROR'}
+    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy')
+
+    def __init__(self, filename):
+        self._fd = open(filename, 'w')
+        self.issues = []
+        self.flush()
+
+    def __del__(self):
+        if self._fd:
+            self.close()
+
+    def add(self, line, sev, message):
+        entry = {}
+        entry['directory'] = os.path.dirname(line.filename)
+        entry['fileName'] = os.path.basename(line.filename)
+        entry['lineStart'] = line.lineno
+        entry['description'] = message
+        entry['message'] = line.get_anon_msg()
+        entry['severity'] = self.WARNING_LEVELS[sev]
+        if line.function in self.FLAKY_FUNCTIONS and entry['severity'] == 'HIGH':
+            entry['severity'] = 'NORMAL'
+            entry['additional'] = 'Priority downgraded due to flaky nature'
+        self.issues.append(entry)
+        self.flush()
+
+    def flush(self):
+        self._fd.seek(0)
+        self._fd.truncate(0)
+        data = {}
+        data['_class'] = 'io.jenkins.plugins.analysis.core.restapi.ReportApi'
+        data['issues'] = self.issues
+        data['size'] = len(self.issues)
+        json.dump(data, self._fd, indent=2)
+        self._fd.flush()
+
+    def close(self):
+        self.flush()
+        self._fd.close()
+        self._fd = None
 
 def load_conf():
     """Load the build config file"""
@@ -218,7 +264,6 @@ def il_cmd(dfuse, cmd):
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                            suffix='.log',
                                            delete=False)
-    symlink_file('/tmp/dfuse_il_latest.log', log_file.name)
     my_env['D_LOG_FILE'] = log_file.name
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
@@ -228,12 +273,6 @@ def il_cmd(dfuse, cmd):
     print('Log results for il')
     log_test(log_file.name)
     return ret
-
-def symlink_file(a, b):
-    """Create a symlink from a to b"""
-    if os.path.exists(a):
-        os.remove(a)
-    os.symlink(b, a)
 
 class ValgrindHelper():
 
@@ -320,8 +359,6 @@ class DFuse():
                                                suffix='.log',
                                                delete=False)
         self.log_file = log_file.name
-
-        symlink_file('/tmp/dfuse_latest.log', self.log_file)
 
         self.valgrind = None
 
@@ -590,7 +627,7 @@ def check_no_file(dfuse):
 lp = None
 lt = None
 
-def setup_log_test(conf):
+def setup_log_test(conf, wf):
     """Setup and import the log tracing code"""
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
@@ -607,6 +644,7 @@ def setup_log_test(conf):
     lt = __import__('cart_logtest')
 
     lt.output_file = conf.output_fd
+    lt.wf = wf
 
 def log_test(filename, show_memleaks=True, skip_fi=False):
     """Run the log checker on filename, logging to stdout"""
@@ -989,9 +1027,10 @@ def main():
 
     conf = load_conf()
 
+    wf = WarningsFactory('nlt-errors.json')
     conf.set_output_file('nlt-errors.out')
 
-    setup_log_test(conf)
+    setup_log_test(conf, wf)
 
     server = DaosServer(conf)
     server.start()
@@ -1015,6 +1054,8 @@ def main():
 
     if server.stop() != 0:
         fatal_errors = True
+
+    wf.close()
     if fatal_errors:
         sys.exit(1)
 

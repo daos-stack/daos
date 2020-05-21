@@ -581,12 +581,11 @@ pipeline {
                     steps {
                         script {
                             if (quickbuild()) {
-                                clean: 
                                 skip_clean = true
                             }
                         }
                         sconsBuild skip_clean: skip_clean,
-                            prebuild: "rm -f daos.conf",
+                            prebuild: "rm -rf daos.conf .sconf_temp .sconsign.dblite",
                             failure_artifacts: 'config.log-centos7-gcc'
 
                         stash name: 'CentOS-install', includes: 'install/**'
@@ -1086,7 +1085,7 @@ pipeline {
                                            mkdir -p ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/
                                            ln -s ../../../../../../../../src/control ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
                                            DAOS_BASE=${SL_PREFIX%/install*}
-                                           rm -f dnt.*.memcheck.xml vm_test.out nlt-errors.out
+                                           rm -f dnt.*.memcheck.xml vm_test.out nlt-errors.out nlt-errors.json
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
@@ -1153,7 +1152,7 @@ pipeline {
                                           cd $DAOS_BASE
                                           mkdir run_test.sh
                                           mkdir vm_test
-                                          mv vm_test.out nlt-errors.out vm_test/
+                                          mv vm_test.out nlt-errors.out nlt-errors.json vm_test/
                                           if ls /tmp/daos*.log > /dev/null; then
                                               mv /tmp/daos*.log run_test.sh/
                                           fi
@@ -1203,24 +1202,21 @@ pipeline {
                                          referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
-                			 /* Set qualitygate to 1 new "HIGH" priority message
-					  * Supporting messages to help identify causes of
-					  * problems are set to "Normal", and there are a
-					  * number of intermittent issues during server
-					  * shutdown that would normally be HIGH but in
-					  * order to have stable results are set to Normal.
-					  */
-					 /* TODO: master is currently not determanistic and
-					 there is one message which appears occasionally
-					 so set the threshold to 2, which will not warn for
-					 stable builds against master, but might miss some
-					 individual issues.
-					 */
+                                         /* Set qualitygate to 1 new "HIGH" priority message
+                                           * Supporting messages to help identify causes of
+                                           * problems are set to "Normal", and there are a
+                                           * number of intermittent issues during server
+                                           * shutdown that would normally be HIGH but in
+                                           * order to have stable results are set to Normal.
+                                           */
                                          qualityGates: [[threshold: 1, type: 'NEW_HIGH', unstable: true]],
-                                         name: "VM Testing",
-                                         tool: clang(pattern: 'vm_test/nlt-errors.out',
+                                         name: "Node local testing",
+                                         tools: [clang(pattern: 'vm_test/nlt-errors.out',
                                                      name: 'VM test results',
-                                                     id: 'VM_test')
+                                                     id: 'VM_test'),
+						 issues(pattern: 'vm_test/nlt-errors.json',
+                                                     name: 'NLT results',
+                                                     id: 'NLT_test')]
                         }
                     }
                 }
