@@ -808,11 +808,12 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 			dom = pool_map_find_node_by_rank(pool->sp_map,
 						target->ta_comp.co_rank);
 			if (dom && dom->do_comp.co_status == match_status) {
-				D_DEBUG(DB_REBUILD, "rebuild %s rank %u\n",
+				D_DEBUG(DB_REBUILD, "rebuild %s rank %u/%u\n",
 					rebuild_op == RB_OP_FAIL ? "fail" :
 					rebuild_op == RB_OP_DRAIN ? "drain" :
 					rebuild_op == RB_OP_ADD ? "add" : "???",
-					target->ta_comp.co_rank);
+					target->ta_comp.co_rank,
+					target->ta_comp.co_id);
 			}
 		}
 		/* These failed targets do not exist in the pool

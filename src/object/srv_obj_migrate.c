@@ -1913,7 +1913,7 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
 
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" migrating=%s,"
 		" obj_count="DF_U64", rec_count="DF_U64
-		"size = "DF_U64" obj %u/%u general %u/%u status %d\n",
+		" size="DF_U64" obj %u/%u general %u/%u status %d\n",
 		DP_UUID(pool_uuid), dms->dm_migrating ? "yes" : "no",
 		dms->dm_obj_count, dms->dm_rec_count, dms->dm_total_size,
 		arg.obj_generated_ult, arg.obj_executed_ult,

@@ -944,8 +944,8 @@ struct ds_pool_evict_arg {
 	d_rank_t	rank;
 };
 
-void
-ds_pool_evict_rank_ult(void *data)
+static void
+pool_evict_rank_ult(void *data)
 {
 	struct ds_pool_evict_arg *arg = data;
 	int			 rc;
@@ -972,19 +972,43 @@ ds_pool_enable_evict(void)
 	pool_disable_evict = false;
 }
 
+static int
+pool_evict_rank(struct pool_svc *svc, d_rank_t rank)
+{
+	struct ds_pool_evict_arg	*ult_arg;
+	int				rc;
+
+	D_ALLOC_PTR(ult_arg);
+	if (ult_arg == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	pool_svc_get(svc);
+	ult_arg->svc = svc;
+	ult_arg->rank = rank;
+	rc = dss_ult_create(pool_evict_rank_ult, ult_arg, DSS_ULT_MISC,
+			    DSS_TGT_SELF, 0, NULL);
+	if (rc) {
+		pool_svc_put(svc);
+		D_FREE_PTR(ult_arg);
+	}
+out:
+	if (rc)
+		D_ERROR("evict ult failed: rc %d\n", rc);
+	return rc;
+}
+
 static void
 ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		     enum crt_event_type type, void *arg)
 {
-	struct ds_pool_evict_arg	*ult_arg;
-	daos_prop_t			prop = { 0 };
-	struct daos_prop_entry		*entry;
-	struct pool_svc			*svc = arg;
-	int				rc = 0;
+	daos_prop_t		prop = { 0 };
+	struct daos_prop_entry	*entry;
+	struct pool_svc		*svc = arg;
+	int			rc = 0;
 
 	/* Only used for evict the rank for the moment */
 	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD || pool_disable_evict) {
-		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u%d\n",
+		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u/%d\n",
 			src, type, pool_disable_evict);
 		return;
 	}
@@ -1000,28 +1024,7 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		D_GOTO(out, rc);
 	}
 
-	D_ALLOC_PTR(ult_arg);
-	if (ult_arg == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	/* Failure allocation might cause event lost,
-	 * let's use assert for now XXX
-	 */
-	D_ASSERT(ult_arg);
-
-	/* Since this is called from swim_progress, let's create another
-	 * ult to do the job asynchronously, so this can return quickly.
-	 */
-	pool_svc_get(svc);
-	ult_arg->svc = svc;
-	ult_arg->rank = rank;
-	rc = dss_ult_create(ds_pool_evict_rank_ult, ult_arg, DSS_ULT_MISC,
-			    DSS_TGT_SELF, 0, NULL);
-	if (rc) {
-		pool_svc_put(svc);
-		D_FREE_PTR(ult_arg);
-		D_ERROR("create evict ult failed: rc %d\n", rc);
-	}
+	rc = pool_evict_rank(svc, rank);
 out:
 	if (rc)
 		D_ERROR("pool "DF_UUID" event %d failed: rc %d\n",
@@ -1079,6 +1082,60 @@ fini_svc_pool(struct pool_svc *svc)
 	ds_pool_iv_ns_update(svc->ps_pool, -1 /* master_rank */);
 	ds_pool_put(svc->ps_pool);
 	svc->ps_pool = NULL;
+}
+
+/*
+ * There might be some swim status inconsistency, let's check and
+ * fix it.
+ */
+static int
+pool_svc_check_node_status(struct pool_svc *svc)
+{
+	struct pool_domain	*doms;
+	int			doms_cnt;
+	int			i;
+	int			rc = 0;
+
+	if (pool_disable_evict) {
+		D_DEBUG(DB_REBUILD, DF_UUID" disable swim evict.\n",
+			DP_UUID(svc->ps_uuid));
+		return 0;
+	}
+
+	doms_cnt = pool_map_find_nodes(svc->ps_pool->sp_map, PO_COMP_ID_ALL,
+				       &doms);
+	D_ASSERT(doms_cnt >= 0);
+	for (i = 0; i < doms_cnt; i++) {
+		struct swim_member_state state;
+
+		/* Only check if UPIN server becomes DEAD for now */
+		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
+			continue;
+
+		rc = crt_rank_state_get(crt_group_lookup(NULL),
+				   doms[i].do_comp.co_rank, &state);
+		if (rc != 0) {
+			D_ERROR("failed to get swim for rank %u: %d\n",
+				doms[i].do_comp.co_rank, rc);
+			break;
+		}
+
+		/* Since there is a big chance the INACTIVE node will become
+		 * ACTIVE soon, let's only evict the DEAD node rank for the
+		 * moment.
+		 */
+		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
+			doms[i].do_comp.co_rank, state.sms_status);
+		if (state.sms_status == SWIM_MEMBER_DEAD) {
+			rc = pool_evict_rank(svc, doms[i].do_comp.co_rank);
+			if (rc) {
+				D_ERROR("failed to evict rank %u: %d\n",
+					doms[i].do_comp.co_rank, rc);
+				break;
+			}
+		}
+	}
+	return rc;
 }
 
 static int
@@ -1149,6 +1206,10 @@ unlock:
 		D_ERROR("ds_pool_iv_prop_update failed %d.\n", rc);
 		D_GOTO(out, rc);
 	}
+
+	rc = pool_svc_check_node_status(svc);
+	if (rc)
+		D_GOTO(out, rc);
 
 	rc = ds_rebuild_regenerate_task(svc->ps_pool);
 	if (rc != 0)
