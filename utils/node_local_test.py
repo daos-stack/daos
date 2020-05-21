@@ -152,7 +152,7 @@ class WarningsFactory():
 
     def close(self):
         """Save, and close the log file"""
-        self.flush()
+        self._flush()
         self._fd.close()
         self._fd = None
 
