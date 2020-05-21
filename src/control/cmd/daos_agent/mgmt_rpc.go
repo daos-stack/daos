@@ -50,34 +50,32 @@ type mgmtModule struct {
 	numaAware  bool
 }
 
-func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
-	switch method {
-	case drpc.MethodGetAttachInfo:
-
-		uc, ok := session.Conn.(*net.UnixConn)
-		if !ok {
-			return nil, errors.Errorf("session.Conn type conversion failed")
-		}
-
-		file, err := uc.File()
-		if err != nil {
-			return nil, err
-		}
-		defer file.Close()
-
-		fd := int(file.Fd())
-		cred, err := unix.GetsockoptUcred(fd, unix.SOL_SOCKET, unix.SO_PEERCRED)
-		if err != nil {
-			return nil, err
-		}
-
-		return mod.handleGetAttachInfo(req, cred.Pid)
-	default:
+func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+	if method != drpc.MethodGetAttachInfo {
 		return nil, drpc.UnknownMethodFailure()
 	}
+
+	uc, ok := session.Conn.(*net.UnixConn)
+	if !ok {
+		return nil, errors.Errorf("session.Conn type conversion failed")
+	}
+
+	file, err := uc.File()
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	fd := int(file.Fd())
+	cred, err := unix.GetsockoptUcred(fd, unix.SOL_SOCKET, unix.SO_PEERCRED)
+	if err != nil {
+		return nil, err
+	}
+
+	return mod.handleGetAttachInfo(req, cred.Pid)
 }
 
-func (mod *mgmtModule) ID() int32 {
+func (mod *mgmtModule) ID() drpc.ModuleID {
 	return drpc.ModuleMgmt
 }
 

@@ -72,14 +72,16 @@ RUN yum -y install \
            python2-clustershell python2-Cython python2-pip     \
            python36-clustershell python36-paramiko             \
            python36-numpy python36-jira python3-pip            \
-           fuse3-devel python{36,}-distro                      \
-           libipmctl-devel openmpi3-devel hwloc-devel
+           fuse3-devel libipmctl-devel openmpi3-devel          \
+           hwloc-devel
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
 RUN pip3 install avocado-framework; \
     pip3 install avocado-framework-plugin-result-html; \
     pip3 install avocado-framework-plugin-varianter-yaml-to-mux
+
+RUN pip install codespell
 
 # Add DAOS user
 ENV USER daos

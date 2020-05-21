@@ -66,19 +66,19 @@ func TestStorageCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
-		//		{
-		//			"Reformat system with ranks filter",
-		//			"storage format --system --ranks 0,1,2,3,4", // TODO DAOS-4454: enable [0-4] syntax
-		//			strings.Join([]string{
-		//				"ConnectClients",
-		//				printRequest(t, &control.SystemResetFormatReq{
-		//					Ranks: []system.Rank{0, 1, 2, 3, 4},
-		//				}),
-		//				"ConnectClients",
-		//				printRequest(t, storageFormatReq),
-		//			}, " "),
-		//			nil,
-		//		},
+		{
+			"Reformat system with ranks filter",
+			"storage format --system --ranks 0,1,2,3,4", // TODO DAOS-4454: enable [0-4] syntax
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemResetFormatReq{
+					Ranks: []system.Rank{0, 1, 2, 3, 4},
+				}),
+				"ConnectClients",
+				printRequest(t, storageFormatReq),
+			}, " "),
+			nil,
+		},
 		{
 			"Scan",
 			"storage scan",
