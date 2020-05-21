@@ -1085,7 +1085,7 @@ pipeline {
                                            mkdir -p ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/
                                            ln -s ../../../../../../../../src/control ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
                                            DAOS_BASE=${SL_PREFIX%/install*}
-                                           rm -f dnt.*.memcheck.xml vm_test.out nlt-errors.out nlt-errors.json
+                                           rm -f dnt.*.memcheck.xml nlt-errors.out nlt-errors.json
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
@@ -1113,8 +1113,7 @@ pipeline {
                                                IS_CI=true OLD_CI=false utils/run_test.sh
                                                ldd $SL_PREFIX/bin/daos_server
                                                export LD_LIBRARY_PATH=$SL_PREFIX/lib64
-                                               ./utils/node_local_test.py all | tee vm_test.out
-                                               echo ${PIPESTATUS\\[0\\]}"''',
+                                               ./utils/node_local_test.py all"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
@@ -1152,7 +1151,7 @@ pipeline {
                                           cd $DAOS_BASE
                                           mkdir run_test.sh
                                           mkdir vm_test
-                                          mv vm_test.out nlt-errors.out nlt-errors.json vm_test/
+                                          mv nlt-errors.out nlt-errors.json vm_test/
                                           if ls /tmp/daos*.log > /dev/null; then
                                               mv /tmp/daos*.log run_test.sh/
                                           fi
