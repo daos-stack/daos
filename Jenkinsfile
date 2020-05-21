@@ -1085,7 +1085,7 @@ pipeline {
                                            mkdir -p ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/
                                            ln -s ../../../../../../../../src/control ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
                                            DAOS_BASE=${SL_PREFIX%/install*}
-                                           rm -f dnt.*.memcheck.xml nlt-errors.out nlt-errors.json
+                                           rm -f dnt.*.memcheck.xml nlt-errors.json
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
@@ -1151,7 +1151,7 @@ pipeline {
                                           cd $DAOS_BASE
                                           mkdir run_test.sh
                                           mkdir vm_test
-                                          mv nlt-errors.out nlt-errors.json vm_test/
+                                          mv nlt-errors.json vm_test/
                                           if ls /tmp/daos*.log > /dev/null; then
                                               mv /tmp/daos*.log run_test.sh/
                                           fi
@@ -1208,12 +1208,10 @@ pipeline {
                                            * shutdown that would normally be NORMAL but in
                                            * order to have stable results are set to LOW.
                                            */
-                                         qualityGates: [[threshold: 1, type: 'NEW_HIGH', unstable: true]],
+                                         qualityGatess: [[threshold: 1, type: 'HIGH', unstable: true],
+                                                         [threshold: 1, type: 'NEW_NORMAL', unstable: true]],
                                          name: "Node local testing",
-                                         tools: [clang(pattern: 'vm_test/nlt-errors.out',
-                                                     name: 'VM test results',
-                                                     id: 'VM_test'),
-						 issues(pattern: 'vm_test/nlt-errors.json',
+                                         tools: [issues(pattern: 'vm_test/nlt-errors.json',
                                                      name: 'NLT results',
                                                      id: 'NLT_test')]
                         }

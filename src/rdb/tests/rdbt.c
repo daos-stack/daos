@@ -303,7 +303,7 @@ wait_for_this_leader(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 		     d_rank_t expect_ldr, uint64_t expect_term_min,
 		     uint64_t *out_termp)
 {
-	int			rc = 0;
+	int			rc;
 	int			try;
 	d_rank_t		found_ldr;
 	uint64_t		found_term;
@@ -348,7 +348,7 @@ wait_for_any_leader(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 		    uint64_t expect_term_min, d_rank_t *out_ldrp,
 		    uint64_t *out_termp)
 {
-	int			rc = 0;
+	int			rc;
 	int			try;
 	d_rank_t		found_ldr;
 	uint64_t		found_term;

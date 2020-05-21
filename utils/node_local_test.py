@@ -42,20 +42,11 @@ class NLT_Conf():
     """Helper class for configuration"""
     def __init__(self, bc):
         self.bc = bc
-        self.output_fd = None
         self.agent_dir = None
         self.wf = None
 
     def set_wf(self, wf):
         self.wf = wf
-
-    def set_output_file(self, filename):
-        """Set the name of a output file for error logging
-
-        This is used to save the lines or src that report issues
-        for use with the Jenkins warnings-ng plugin
-        """
-        self.output_fd = open(filename, 'w')
 
     def __getitem__(self, key):
         return self.bc[key]
@@ -76,54 +67,56 @@ class WarningsFactory():
             self.close()
 
     def explain(self, line, log_file, signal):
-        if len(self.pending) == 0 and not signal:
-            return
+        count = len(self.pending)
         symptoms = set()
         locs = set()
+        mtype = 'Fault injection'
 
         sev = 'LOW'
         if signal:
             symptoms.add('Process died with signal {}'.format(signal))
             sev = 'ERROR'
+            mtype = 'Fault injection caused crash'
+            count += 1
+
+        if count == 0:
+            return
 
         for (sline, smessage) in self.pending:
             locs.add('{}:{}'.format(sline.filename, sline.lineno))
             symptoms.add(smessage)
 
-        preamble = 'Fault injected here caused:'
-        message = '{}\n{}\n{}'.format(preamble,
-                                      ','.join(sorted(symptoms)),
-                                      ','.join(sorted(locs)))
-        self.add(line, sev, message,
-                 additional='Triggered by fault injection testing, logs in {}'.format(log_file))
+        preamble = 'Fault injected here caused {} errors, logfile {}:'.format(count,
+                                                                              log_file)
+        message = '{} {} {}'.format(preamble,
+                                    ' '.join(sorted(symptoms)),
+                                    ' '.join(sorted(locs)))
+        self.add(line, sev, message, mtype=mtype)
         self.pending = []
 
-    def add(self, line, sev, message, append=True, additional=None):
+    def add(self, line, sev, message, mtype=None):
         entry = {}
         entry['directory'] = os.path.dirname(line.filename)
         entry['fileName'] = os.path.basename(line.filename)
+        if mtype:
+            entry['type'] = mtype
+        else:
+            entry['type'] = message
         entry['lineStart'] = line.lineno
         entry['description'] = message
         entry['message'] = line.get_anon_msg()
         entry['severity'] = sev
-        if line.function in self.FLAKY_FUNCTIONS and entry['severity'] == 'HIGH':
+        if line.function in self.FLAKY_FUNCTIONS and \
+           entry['severity'] == 'NORMAL':
             entry['severity'] = 'LOW'
-            entry['additional'] = 'Priority downgraded due to flaky nature'
-        if additional:
-            entry['additional'] = additional
-        # Filename showing log?
         self.issues.append(entry)
-        if append:
-            self.pending.append((line, message))
         self.flush()
 
     def flush(self):
         self._fd.seek(0)
         self._fd.truncate(0)
         data = {}
-        data['_class'] = 'io.jenkins.plugins.analysis.core.restapi.ReportApi'
         data['issues'] = self.issues
-        data['size'] = len(self.issues)
         json.dump(data, self._fd, indent=2)
         self._fd.flush()
 
@@ -663,7 +656,7 @@ def check_no_file(dfuse):
 lp = None
 lt = None
 
-def setup_log_test(conf, wf):
+def setup_log_test(conf):
     """Setup and import the log tracing code"""
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
@@ -679,8 +672,7 @@ def setup_log_test(conf, wf):
     lp = __import__('cart_logparse')
     lt = __import__('cart_logtest')
 
-    lt.output_file = conf.output_fd
-    lt.wf = wf
+    lt.wf = conf.wf
 
 def log_test(conf,
              filename,
@@ -1070,10 +1062,9 @@ def main():
     conf = load_conf()
 
     wf = WarningsFactory('nlt-errors.json')
-    conf.set_output_file('nlt-errors.out')
 
     conf.set_wf(wf)
-    setup_log_test(conf, wf)
+    setup_log_test(conf)
 
     server = DaosServer(conf)
     server.start()
