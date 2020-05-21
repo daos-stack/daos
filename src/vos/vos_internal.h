@@ -223,7 +223,7 @@ struct vos_dtx_act_ent {
 	umem_off_t			 dae_df_off;
 	struct vos_dtx_blob_df		*dae_dbd;
 	/* More DTX records if out of the inlined buffer. */
-	struct vos_dtx_record_df	*dae_records;
+	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
 };
