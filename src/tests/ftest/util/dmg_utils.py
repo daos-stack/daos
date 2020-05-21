@@ -57,7 +57,7 @@ class DmgCommand(YamlCommand):
                       r"(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
                       r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+)"
                       r",\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
-                      r"|Rebuild\s+(\w+),\s+([0-9]+)\s+objs,\s+([0-9]+)"
+                      r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)"
                       r"\s+recs)"
     }
 
