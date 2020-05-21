@@ -100,7 +100,7 @@ class MacsioCommand(ExecutableCommand):
         #   --mesh_decomp %d %d %d []
         #       The layout of parts in the mesh overriding the simple
         #       decomposition e.g. 4 8 1 will decompose into 32 parts in the
-        #       stucture (x y z).
+        #       structure (x y z).
         #
         #       Note: Value should be specified as a string of three space-
         #           separated integer values, e.g. '4 8 1'.
@@ -233,7 +233,7 @@ class MacsioCommand(ExecutableCommand):
         #                    data
         #           Level 3: Solves the 2D Poisson equation via the Jacobi
         #                    iterative method
-        #       This input is intended to be used in conjunection with
+        #       This input is intended to be used in conjunction with
         #       --compute_time which will roughly control how much time is spent
         #       doing work between iops
         self.compute_work_intensity = FormattedParameter(
@@ -272,7 +272,7 @@ class MacsioCommand(ExecutableCommand):
         self.no_validate_read = FormattedParameter("--no_validate_read {}")
 
         #   --read_mesh %s []
-        #       Specficify mesh name to read.
+        #       Specify mesh name to read.
         self.read_mesh = FormattedParameter("--read_mesh {}")
 
         #   --read_vars %s []
@@ -360,9 +360,9 @@ class MacsioCommand(ExecutableCommand):
         #               Use Peter Lindstrom's ZFP compression (
         #               computation.llnl.gov/casc/zfp) Note: Whether this
         #               compression is available is determined entirely at
-        #               run-time using the H5Z-ZFP compresser as a generic
+        #               run-time using the H5Z-ZFP compressor as a generic
         #               filter. This means all that is necessary is to specify
-        #               the HDF5_PLUGIN_PATH environnment variable with a path
+        #               the HDF5_PLUGIN_PATH environment variable with a path
         #               to the shared lib for the filter.
         #
         #               The following ZFP options are *mutually*exclusive*.

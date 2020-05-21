@@ -33,7 +33,7 @@ class MacsioTest(MacsioTestBase):
     """
 
     def test_macsio(self):
-        """Jira ID: DAOS-3658.
+        """JIRA ID: DAOS-3658.
 
         Test Description:
             Purpose of this test is to check basic functionality for DAOS,
