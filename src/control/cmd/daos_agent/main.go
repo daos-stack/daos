@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -127,6 +128,20 @@ func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
 	return err
 }
 
+type (
+	ctxSetter interface {
+		setContext(context.Context)
+	}
+
+	ctxCmd struct {
+		ctx context.Context
+	}
+)
+
+func (cmd *ctxCmd) setContext(ctx context.Context) {
+	cmd.ctx = ctx
+}
+
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
@@ -140,7 +155,7 @@ func exitWithError(log logging.Logger, err error) {
 	os.Exit(1)
 }
 
-func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *logging.LeveledLogger) error {
+func parseOpts(ctx context.Context, args []string, opts *cliOptions, invoker control.Invoker, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.Default)
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.SubcommandsOptional = true
@@ -173,6 +188,10 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 
 		if jsonCmd, ok := cmd.(jsonOutputter); ok {
 			jsonCmd.enableJsonOutput(opts.JSON)
+		}
+
+		if ctxCmd, ok := cmd.(ctxSetter); ok {
+			ctxCmd.setContext(ctx)
 		}
 
 		cfgPath := opts.ConfigPath
@@ -270,7 +289,9 @@ func main() {
 		control.WithClientLogger(log),
 	)
 
-	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {
+	ctx := context.Background()
+
+	if err := parseOpts(ctx, os.Args[1:], &opts, ctlInvoker, log); err != nil {
 		exitWithError(log, err)
 	}
 }

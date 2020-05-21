@@ -41,6 +41,7 @@ const (
 
 type startCmd struct {
 	logCmd
+	ctxCmd
 	configCmd
 	ctlInvokerCmd
 }
@@ -48,7 +49,7 @@ type startCmd struct {
 func (cmd *startCmd) Execute(_ []string) error {
 	cmd.log.Info("Starting daos_agent:")
 
-	ctx, shutdown := context.WithCancel(context.Background())
+	ctx, shutdown := context.WithCancel(cmd.ctx)
 	defer shutdown()
 
 	sockPath := filepath.Join(cmd.cfg.RuntimeDir, agentSockName)
