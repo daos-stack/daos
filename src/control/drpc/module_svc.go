@@ -32,20 +32,20 @@ import (
 // Module is an interface that a type must implement to provide the
 // functionality needed by the ModuleService to process dRPC requests.
 type Module interface {
-	HandleCall(*Session, int32, []byte) ([]byte, error)
-	ID() int32
+	HandleCall(*Session, Method, []byte) ([]byte, error)
+	ID() ModuleID
 }
 
 // ModuleService is the collection of Modules used by
 // DomainSocketServer to be used to process messages.
 type ModuleService struct {
 	log     logging.Logger
-	modules map[int32]Module
+	modules map[ModuleID]Module
 }
 
 // NewModuleService creates an initialized ModuleService instance
 func NewModuleService(log logging.Logger) *ModuleService {
-	modules := make(map[int32]Module)
+	modules := make(map[ModuleID]Module)
 	return &ModuleService{
 		log:     log,
 		modules: modules,
@@ -64,9 +64,9 @@ func (r *ModuleService) RegisterModule(mod Module) error {
 	return nil
 }
 
-// GetModule fetches the module for the given ID. Returns true if found, false
+// GetMethod fetches the module for the given ID. Returns true if found, false
 // otherwise.
-func (r *ModuleService) GetModule(id int32) (Module, bool) {
+func (r *ModuleService) GetModule(id ModuleID) (Module, bool) {
 	mod, found := r.modules[id]
 	return mod, found
 }
@@ -114,14 +114,19 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 	if err != nil {
 		return marshalResponse(-1, Status_FAILED_UNMARSHAL_CALL, nil)
 	}
-	module, ok := r.GetModule(msg.GetModule())
+	module, ok := r.GetModule(ModuleID(msg.GetModule()))
 	if !ok {
 		err = errors.Errorf("Attempted to call unregistered module")
 		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_MODULE, nil)
 	}
-	respBody, err := module.HandleCall(session, msg.GetMethod(), msg.GetBody())
+	var method Method
+	method, err = module.ID().GetMethod(msg.GetMethod())
 	if err != nil {
-		r.log.Errorf("HandleCall for %d:%d failed: %s\n", module.ID(), msg.GetMethod(), err)
+		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_METHOD, nil)
+	}
+	respBody, err := module.HandleCall(session, method, msg.GetBody())
+	if err != nil {
+		r.log.Errorf("HandleCall for %d:%s failed: %s\n", method.String(), method, err)
 		return marshalResponse(msg.GetSequence(), ErrorToStatus(err), nil)
 	}
 
