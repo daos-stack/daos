@@ -39,8 +39,12 @@ import (
 )
 
 const (
+	// minScmNvmeRatio indicates the minimum storage size ratio SCM:NVMe
+	// (requested on pool creation), warning issued if ratio is lower
 	minScmNvmeRatio = 0.01
-	maxNumSvcReps   = 13
+	// maxNumSvcReps is the maximum number of pool service replicas
+	// that can be requested when creating a pool
+	maxNumSvcReps = 13
 )
 
 // PoolCmd is the struct representing the top-level pool subcommand.
