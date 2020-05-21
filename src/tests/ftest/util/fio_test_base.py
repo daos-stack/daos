@@ -134,7 +134,7 @@ class FioBase(TestWithServers):
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
 
-    def execute_fio(self):
+    def execute_fio(self, directory=None, stop_dfuse=True):
         """Runner method for Fio."""
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -146,15 +146,20 @@ class FioBase(TestWithServers):
             # Uncomment below two lines once DAOS-3355 is resolved
             # self.pool.connect()
             # self.create_cont()
-            self._start_dfuse()
-            self.fio_cmd.update(
-                "global", "directory", self.dfuse.mount_dir.value,
-                "fio --name=global --directory")
+            if directory:
+                self.fio_cmd.update(
+                    "global", "directory", directory,
+                    "fio --name=global --directory")
+            else:
+                self._start_dfuse()
+                self.fio_cmd.update(
+                    "global", "directory", self.dfuse.mount_dir.value,
+                    "fio --name=global --directory")
 
         # Run Fio
         self.fio_cmd.hosts = self.hostlist_clients
         self.fio_cmd.run()
 
-        if self.dfuse:
+        if stop_dfuse and self.dfuse:
             self.dfuse.stop()
             self.dfuse = None
