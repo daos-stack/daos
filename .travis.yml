@@ -2,7 +2,7 @@ sudo: required
 
 env:
  matrix:
-  - DOCKER_IMAGE=ubuntu.18.04
+  - DOCKER_IMAGE=ubuntu.20.04
   - DOCKER_IMAGE=centos.7
 
 language: c
