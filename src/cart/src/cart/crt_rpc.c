@@ -77,16 +77,10 @@ crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 	if (in_args->log_msg == NULL) {
 		D_ERROR("Empty log message\n");
 		rc = -DER_INVAL;
+	} else {
+		D_INFO("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
+			in_args->log_msg);
 	}
-
-	if (strlen(in_args->log_msg) > CRT_CTL_MAX_LOG_MSG_SIZE) {
-		D_ERROR("Log message exceeded %d chars\n",
-			CRT_CTL_MAX_LOG_MSG_SIZE);
-		rc = -DER_OVERFLOW;
-	}
-
-	if (rc == 0)
-		D_INFO("%s\n", in_args->log_msg);
 
 	out_args->rc = rc;
 	rc = crt_reply_send(rpc_req);
