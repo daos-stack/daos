@@ -26,11 +26,8 @@ package server
 import (
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
-	"syscall"
 
-	"github.com/dustin/go-humanize"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -124,8 +121,28 @@ func (srv *IOServerInstance) NeedsSuperblock() (bool, error) {
 	return false, nil
 }
 
-// CreateSuperblock creates the superblock for this instance.
-func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
+// createSuperblock creates instance superblock if needed.
+func (srv *IOServerInstance) createSuperblock(recreate bool) error {
+	if srv.isStarted() {
+		return errors.Errorf("can't create superblock: instance %d already started", srv.Index())
+	}
+
+	needsSuperblock, err := srv.NeedsSuperblock() // scm format completed by now
+	if !needsSuperblock {
+		return nil
+	}
+	if err != nil && !recreate {
+		return err
+	}
+
+	// Only the first I/O server can be an MS replica.
+	msInfo := new(mgmtInfo)
+	if srv.Index() == 0 {
+		if msInfo, err = getMgmtInfo(srv); err != nil {
+			return err
+		}
+	}
+
 	if err := srv.MountScmDevice(); err != nil {
 		return err
 	}
@@ -162,22 +179,6 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 		srv.superblockPath(), superblock.Rank, superblock.UUID)
 
 	return srv.WriteSuperblock()
-}
-
-func (srv *IOServerInstance) logScmStorage() error {
-	scmMount := path.Dir(srv.superblockPath())
-	stBuf := new(syscall.Statfs_t)
-
-	if err := syscall.Statfs(scmMount, stBuf); err != nil {
-		return err
-	}
-
-	frSize := uint64(stBuf.Frsize)
-	totalBytes := frSize * stBuf.Blocks
-	availBytes := frSize * stBuf.Bavail
-	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
-		humanize.Bytes(totalBytes), humanize.Bytes(availBytes))
-	return nil
 }
 
 // WriteSuperblock writes the instance's superblock

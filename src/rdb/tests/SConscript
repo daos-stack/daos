@@ -11,7 +11,8 @@ def scons():
 
     # rdbt client
     rdbt = daos_build.program(denv, 'rdbt', ['rdbt.c', 'rpc.c'],
-                              LIBS=['cart', 'gurt', 'daos_common', 'uuid'])
+                              LIBS=['cart', 'gurt', 'daos_common', 'uuid',
+                                    'daos'])
     denv.Install('$PREFIX/bin', rdbt)
 
 if __name__ == "SCons.Script":

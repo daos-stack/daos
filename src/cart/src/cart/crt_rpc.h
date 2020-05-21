@@ -281,7 +281,10 @@ struct crt_rpc_priv {
 		crt_hdlr_ctl_fi_toggle, NULL),				\
 	X(CRT_OPC_CTL_FI_SET_ATTR,					\
 		0, &CQF_crt_ctl_fi_attr_set,				\
-		crt_hdlr_ctl_fi_attr_set, NULL)
+		crt_hdlr_ctl_fi_attr_set, NULL),			\
+	X(CRT_OPC_CTL_LOG_SET,						\
+		0, &CQF_crt_ctl_log_set,				\
+		crt_hdlr_ctl_log_set, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -514,6 +517,14 @@ CRT_RPC_DECLARE(crt_ctl_fi_attr_set, CRT_ISEQ_CTL_FI_ATTR_SET,
 
 CRT_RPC_DECLARE(crt_ctl_fi_toggle,
 		CRT_ISEQ_CTL_FI_TOGGLE, CRT_OSEQ_CTL_FI_TOGGLE)
+
+#define CRT_ISEQ_CTL_LOG_SET		/* input fields */	\
+	((d_string_t)		(log_mask)	CRT_VAR)
+
+#define CRT_OSEQ_CTL_LOG_SET		/* output fields */	\
+	((int32_t)		(rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
 
 /* Internal macros for crt_req_(add|dec)ref from within cart.  These take
  * a crt_internal_rpc pointer and provide better logging than the public
