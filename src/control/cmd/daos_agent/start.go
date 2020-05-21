@@ -65,7 +65,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
-	netdetect.SetLogger(cmd.log)
 	numaAware, err := netdetect.NumaAware()
 	if err != nil {
 		return err
