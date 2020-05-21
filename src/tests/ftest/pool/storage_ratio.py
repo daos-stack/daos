@@ -37,15 +37,15 @@ class StorageRatio(TestWithServers):
         """Jira ID: DAOS-2332.
 
         Test Description:
-            Purpose of this test is to verify minimum required SCM/NVME
+            Purpose of this test is to verify SCM/NVME
             storage space ratio for pool creation.
 
         Use case:
         Create Pool with different SCM/NVMe pool storage size ratio and
         verify that pool creation failed if SCM storage size is too low
         compare to NVMe size.
-        For now 6% minimum SCM size needed against NVMe. There is no Maximum
-        limit.Added tests to verify the minimum SCM/NVMe pool size.
+        For now 1% minimum SCM size needed against NVMe. There is no Maximum
+        limit.Added tests to verify the Warning message if ration is not 1%.
 
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=storage_ratio
