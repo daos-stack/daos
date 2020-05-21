@@ -23,13 +23,12 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 
 from apricot import TestWithServers
 
 import check_for_pool
-import dmg_utils
+from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 # pylint: disable=fixme, broad-except
 class ConnectTest(TestWithServers):
@@ -61,21 +60,18 @@ class ConnectTest(TestWithServers):
             if result == 'FAIL':
                 expected_result = 'FAIL'
                 break
+
+        host1 = self.hostlist_servers[0]
+        host2 = self.hostlist_servers[1]
+
+        dmg = self.get_dmg_command()
+        scm_size = self.params.get("scm_size", "/run/pool*")
+
         try:
-            uid = os.geteuid()
-            gid = os.getegid()
-
-            host1 = self.hostlist_servers[0]
-            host2 = self.hostlist_servers[1]
-
-            dmg = self.get_dmg_command()
-            scm_size = self.params.get("scm_size", "/run/pool*")
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
-                                     group=setid, svcn=1)
-            if "ERR" not in result.stderr:
-                uuid_str, _ = \
-                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
-                        result.stdout)
+            result = dmg.pool_create(scm_size=scm_size, group=setid)
+            if result.exit_status == 0:
+                uuid_str, _ = get_pool_uuid_service_replicas_from_stdout(
+                    result.stdout)
             else:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
@@ -91,7 +87,8 @@ class ConnectTest(TestWithServers):
                           format(uuid_str, host2))
 
             result = dmg.pool_query(uuid_str)
-
+            if result.exit_status != 0:
+                self.fail("Could not connect to Pool {}\n".format(uuid_str))
 
             if expected_result == 'FAIL':
                 self.fail("Expected to fail but passed.\n")

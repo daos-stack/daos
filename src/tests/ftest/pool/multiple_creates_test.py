@@ -23,13 +23,12 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 
 from apricot import TestWithServers
 
 import check_for_pool
-import dmg_utils
+from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 # pylint: disable = broad-except
 class MultipleCreatesTest(TestWithServers):
@@ -60,9 +59,6 @@ class MultipleCreatesTest(TestWithServers):
 
         scm_size = self.params.get("scm_size", "/run/pool*")
 
-        uid = os.geteuid()
-        gid = os.getegid()
-
         # if any parameter results in failure then the test should FAIL
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -71,12 +67,10 @@ class MultipleCreatesTest(TestWithServers):
                 break
         try:
             dmg = self.get_dmg_command()
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
-                                     group=setid, svcn=1)
-            if "ERR" not in result.stderr:
-                uuid_str, _ = \
-                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
-                        result.stdout)
+            result = dmg.pool_create(scm_size=scm_size, group=setid)
+            if result.exit_status == 0:
+                uuid_str, _ = get_pool_uuid_service_replicas_from_stdout(
+                    result.stdout)
             else:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
@@ -89,8 +83,8 @@ class MultipleCreatesTest(TestWithServers):
                                                                      host))
 
             result = dmg.pool_destroy(pool=uuid_str)
-            if "failed" in result.stdout:
-                self.log.info("Unable to destroy pool %s", uuid_str)
+            if result.exit_status != 0:
+                self.fail("Unable to destroy pool %s", uuid_str)
 
             exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists == 0:
@@ -129,9 +123,6 @@ class MultipleCreatesTest(TestWithServers):
 
         scm_size = self.params.get("scm_size", "/run/pool*")
 
-        uid = os.geteuid()
-        gid = os.getegid()
-
         # if any parameter results in failure then the test should FAIL
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -140,21 +131,17 @@ class MultipleCreatesTest(TestWithServers):
                 break
         try:
             dmg = self.get_dmg_command()
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
-                                     group=setid, svcn=1)
-            if "ERR" not in result.stderr:
-                uuid_str_1, _ = \
-                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
-                        result.stdout)
+            result = dmg.pool_create(scm_size=scm_size, group=setid)
+            if result.exit_status == 0:
+                uuid_str_1, _ = get_pool_uuid_service_replicas_from_stdout(
+                    result.stdout)
             else:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
-                                     group=setid, svcn=1)
-            if "ERR" not in result.stderr:
-                uuid_str_2, _ = \
-                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
-                        result.stdout)
+            result = dmg.pool_create(scm_size=scm_size, group=setid)
+            if result.exit_status == 0:
+                uuid_str_2, _ = get_pool_uuid_service_replicas_from_stdout(
+                    result.stdout)
             else:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
@@ -169,12 +156,12 @@ class MultipleCreatesTest(TestWithServers):
                                                                      host))
 
             result = dmg.pool_destroy(pool=uuid_str_1)
-            if "failed" in result.stdout:
-                self.log.info("Unable to destroy pool %s", uuid_str_1)
+            if result.exit_status != 0:
+                self.fail("Unable to destroy pool %s", uuid_str_1)
 
             result = dmg.pool_destroy(pool=uuid_str_2)
-            if "failed" in result.stdout:
-                self.log.info("Unable to destroy pool %s", uuid_str_2)
+            if result.exit_status != 0:
+                self.fail("Unable to destroy pool %s", uuid_str_2)
 
 
             exists = check_for_pool.check_for_pool(host, uuid_str_1)
@@ -218,9 +205,6 @@ class MultipleCreatesTest(TestWithServers):
 
         scm_size = self.params.get("scm_size", "/run/pool*")
 
-        uid = os.geteuid()
-        gid = os.getegid()
-
         # if any parameter results in failure then the test should FAIL
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -229,30 +213,24 @@ class MultipleCreatesTest(TestWithServers):
                 break
         try:
             dmg = self.get_dmg_command()
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
-                                     group=setid, svcn=1)
-            if "ERR" not in result.stderr:
-                uuid_str_1, _ = \
-                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
-                        result.stdout)
+            result = dmg.pool_create(scm_size=scm_size, group=setid)
+            if result.exit_status == 0:
+                uuid_str_1, _ = get_pool_uuid_service_replicas_from_stdout(
+                    result.stdout)
             else:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
-                                     group=setid, svcn=1)
-            if "ERR" not in result.stderr:
-                uuid_str_2, _ = \
-                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
-                        result.stdout)
+            result = dmg.pool_create(scm_size=scm_size, group=setid)
+            if result.exit_status == 0:
+                uuid_str_2, _ = get_pool_uuid_service_replicas_from_stdout(
+                    result.stdout)
             else:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            result = dmg.pool_create(scm_size=scm_size, uid=uid, gid=gid,
-                                     group=setid, svcn=1)
-            if "ERR" not in result.stderr:
-                uuid_str_3, _ = \
-                    dmg_utils.get_pool_uuid_service_replicas_from_stdout(
-                        result.stdout)
+            result = dmg.pool_create(scm_size=scm_size, group=setid)
+            if result.exit_status == 0:
+                uuid_str_3, _ = get_pool_uuid_service_replicas_from_stdout(
+                    result.stdout)
             else:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
@@ -272,16 +250,16 @@ class MultipleCreatesTest(TestWithServers):
                                                                      host))
 
             result = dmg.pool_destroy(pool=uuid_str_1)
-            if "failed" in result.stdout:
-                self.log.info("Unable to destroy pool %s", uuid_str_1)
+            if result.exit_status != 0:
+                self.fail("Unable to destroy pool %s", uuid_str_1)
 
             result = dmg.pool_destroy(pool=uuid_str_2)
-            if "failed" in result.stdout:
-                self.log.info("Unable to destroy pool %s", uuid_str_2)
+            if result.exit_status != 0:
+                self.fail("Unable to destroy pool %s", uuid_str_2)
 
             result = dmg.pool_destroy(pool=uuid_str_3)
-            if "failed" in result.stdout:
-                self.log.info("Unable to destroy pool %s", uuid_str_3)
+            if result.exit_status != 0:
+                self.fail("Unable to destroy pool %s", uuid_str_3)
 
 
             exists = check_for_pool.check_for_pool(host, uuid_str_1)
