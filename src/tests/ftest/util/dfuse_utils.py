@@ -217,7 +217,8 @@ class Dfuse(DfuseCommand):
         self.create_mount_point()
 
         # run dfuse command
-        ret_code = pcmd(self.hosts, self.__str__(), timeout=30)
+        cmd = "".join([self.env.get_export_str(), self.__str__()])
+        ret_code = pcmd(self.hosts, cmd, timeout=30)
 
         if 0 in ret_code:
             self.running_hosts.add(ret_code[0])
@@ -235,7 +236,10 @@ class Dfuse(DfuseCommand):
         if not self.check_running(fail_on_error=False):
             self.log.info('Waiting five seconds for dfuse to start')
             time.sleep(5)
-            self.check_running()
+            if not self.check_running(fail_on_error=False):
+                self.log.info('Waiting twenty five seconds for dfuse to start')
+                time.sleep(25)
+                self.check_running()
 
     def check_running(self, fail_on_error=True):
         """Check dfuse is running.

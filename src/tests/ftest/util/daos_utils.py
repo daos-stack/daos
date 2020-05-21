@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from command_utils_base import \
-    CommandWithParameters, FormattedParameter, CommandFailure
+    CommandFailure, FormattedParameter, CommandWithParameters
 from command_utils import CommandWithSubCommand
 
 
@@ -691,6 +691,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the doas pool query command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("set-attr")
@@ -714,6 +715,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the doas pool query command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("get-attr")
@@ -735,6 +737,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the doas pool query command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list-attrs")

@@ -34,7 +34,6 @@ def scons():
     SConscript('vos/SConscript')
 
     # Build each DAOS component
-    SConscript('rdb/SConscript')
     SConscript('rsvc/SConscript')
     SConscript('mgmt/SConscript')
     SConscript('pool/SConscript')
@@ -47,6 +46,9 @@ def scons():
 
     # Build DAOS client libraries
     SConscript('client/SConscript')
+
+    # rdb unit test rdbt depends on libdaos
+    SConscript('rdb/SConscript')
 
     # Then the DAOS I/O server executable
     SConscript('iosrv/SConscript')

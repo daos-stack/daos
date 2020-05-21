@@ -2155,7 +2155,8 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 
 	if (!daos_anchor_is_eof(anchor)) {
 		D_DEBUG(DB_IO, "More keys in shard %d\n", shard);
-	} else if ((shard < obj->cob_shards_nr - grp_size)) {
+	} else if (!(daos_anchor_get_flags(anchor) & DIOF_TO_SPEC_SHARD) &&
+		   (shard < obj->cob_shards_nr - grp_size)) {
 		shard += grp_size;
 		D_DEBUG(DB_IO, "next shard %d grp %d nr %u\n",
 			shard, grp_size, obj->cob_shards_nr);
@@ -2448,7 +2449,8 @@ csum_obj_update(struct dc_object *obj, daos_obj_update_t *args,
 		return rc;
 
 	/** Calc 'a' key checksum and value checksum */
-	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, args->nr,
+	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, NULL,
+				    args->nr,
 				    false, obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {
@@ -2492,7 +2494,8 @@ csum_obj_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 		return rc;
 
 	/** akeys (1 for each iod) */
-	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, args->nr,
+	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, NULL,
+				    args->nr,
 				    true, obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {

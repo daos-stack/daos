@@ -189,7 +189,7 @@ def set_test_environment(args):
 
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-    os.environ["CRT_CTX_SHARE_ADDR"] = "1"
+    os.environ["CRT_CTX_SHARE_ADDR"] = "0"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
 
     # Set the default location for daos log files written during testing if not
@@ -233,25 +233,30 @@ def set_test_environment(args):
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
 
 
-def get_output(cmd):
+def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
 
     Args:
         cmd (list): command from which to obtain the output
+        check (bool, optional): whether to raise an exception and exit the
+            program if the exit status of the comamnd is non-zero. Defaults
+            to True.
 
     Returns:
         str: command output
 
     """
-    try:
-        print("Running: {}".format(" ".join(cmd)))
-        return subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-
-    except subprocess.CalledProcessError as err:
+    print("Running {}".format(" ".join(cmd)))
+    process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    stdout, _ = process.communicate()
+    retcode = process.poll()
+    if check and retcode:
         print(
-            "Error executing '{}':\n\t{}\n\tOutput:\n{}".format(
-                " ".join(cmd), err, err.output))
+            "Error executing '{}':\n\tOutput:\n{}".format(
+                " ".join(cmd), stdout))
         exit(1)
+    return stdout
 
 
 def time_command(cmd):
@@ -390,7 +395,7 @@ def find_values(obj, keys, key=None, val_type=list):
             [A, B, C]   [A, B, C, D]    [A, B, C, D]
 
         Args:
-            found (list): list of matches found
+            found (dict): dictionary of matches found for each key
         """
         for found_key in found:
             if found_key not in matches:
@@ -403,9 +408,9 @@ def find_values(obj, keys, key=None, val_type=list):
                     matches[found_key] = [matches[found_key]]
                 if isinstance(found[found_key], list):
                     for found_item in found[found_key]:
-                        if found_key not in matches:
+                        if found_item not in matches[found_key]:
                             matches[found_key].append(found_item)
-                elif found_key not in matches:
+                elif found[found_key] not in matches[found_key]:
                     matches[found_key].append(found[found_key])
 
                 if not is_list and len(matches[found_key]) == 1:
@@ -701,7 +706,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
         # Optionally display the file
         if args.verbose:
             cmd = ["diff", "-y", orig_yaml_file, yaml_file]
-            print(get_output(cmd))
+            print(get_output(cmd, False))
 
     # Return the untouched or modified yaml file
     return yaml_file

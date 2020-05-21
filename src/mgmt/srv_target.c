@@ -268,11 +268,11 @@ ds_mgmt_tgt_setup(void)
 	int	rc;
 
 	/** create the path string */
-	rc = asprintf(&newborns_path, "%s/NEWBORNS", dss_storage_path);
-	if (rc < 0)
+	D_ASPRINTF(newborns_path, "%s/NEWBORNS", dss_storage_path);
+	if (newborns_path == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
-	rc = asprintf(&zombies_path, "%s/ZOMBIES", dss_storage_path);
-	if (rc < 0)
+	D_ASPRINTF(zombies_path, "%s/ZOMBIES", dss_storage_path);
+	if (zombies_path == NULL)
 		D_GOTO(err_newborns, rc = -DER_NOMEM);
 
 	stored_mode = umask(0);

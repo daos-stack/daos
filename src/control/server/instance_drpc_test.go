@@ -99,7 +99,7 @@ func TestIOServerInstance_CallDrpc(t *testing.T) {
 				instance.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			_, err := instance.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
+			_, err := instance.CallDrpc(drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
 			common.CmpErr(t, tc.expErr, err)
 		})
 	}
@@ -122,7 +122,7 @@ func TestIOServerInstance_DrespToRankResult(t *testing.T) {
 			daosResp: &mgmtpb.DaosResp{Status: int32(drpc.DaosNoSpace)},
 			expResult: &MemberResult{
 				Rank: dRank, State: MemberStateErrored, Errored: true,
-				Msg: fmt.Sprintf("rank %d: DAOS error (-1007): DER_NOSPACE", dRank),
+				Msg: fmt.Sprintf("rank %d: %s", dRank, drpc.DaosNoSpace),
 			},
 		},
 		"drpc failure": {

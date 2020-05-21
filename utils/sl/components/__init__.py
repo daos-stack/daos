@@ -24,7 +24,6 @@
 import sys
 import os
 import platform
-import distro
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
 from prereq_tools import ProgramBinary
@@ -269,24 +268,8 @@ def define_components(reqs):
                 libs=['abt'],
                 headers=['abt.h'])
 
-    if distro.id() == "ubuntu" and int(distro.major_version()) < 20:
-        retriever = GitRepoRetriever('https://github.com/libfuse/libfuse')
-        reqs.define('fuse',
-                    retriever=retriever,
-                    commands=['meson $FUSE_SRC --prefix=$FUSE_PREFIX' \
-                              ' -D udevrulesdir=$FUSE_PREFIX/udev' \
-                              ' -D disable-mtab=True' \
-                              ' -D utils=False',
-                              '$ninja -v $JOBS_OPT',
-                              '$ninja install'],
-                    libs=['fuse3'],
-                    defines=["FUSE_USE_VERSION=32"],
-                    required_progs=['libtoolize', NINJA_PROG],
-                    headers=['fuse3/fuse.h'],
-                    out_of_src_build=True)
-    else:
-        reqs.define('fuse', libs=['fuse3'], defines=["FUSE_USE_VERSION=32"],
-                    headers=['fuse3/fuse.h'], package='fuse3-devel')
+    reqs.define('fuse', libs=['fuse3'], defines=["FUSE_USE_VERSION=32"],
+                headers=['fuse3/fuse.h'], package='fuse3-devel')
 
     reqs.define('fio',
                 retriever=GitRepoRetriever(
