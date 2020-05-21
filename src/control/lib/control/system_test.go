@@ -569,7 +569,7 @@ func TestControl_SystemReformat(t *testing.T) {
 	for name, tc := range map[string]struct {
 		uErr    error
 		uResp   *UnaryResponse
-		expResp *SystemReformatResp
+		expResp *StorageFormatResp
 		expErr  error
 	}{
 		"local failure": {
@@ -629,7 +629,7 @@ func TestControl_SystemReformat(t *testing.T) {
 					},
 				},
 			),
-			expResp: &SystemReformatResp{
+			expResp: &StorageFormatResp{
 				HostErrorsResp: HostErrorsResp{
 					HostErrors: HostErrorsMap{
 						"1 rank failed: didn't start": mockHostSet(
@@ -691,7 +691,7 @@ func TestControl_SystemReformat(t *testing.T) {
 					},
 				},
 			),
-			expResp: &SystemReformatResp{
+			expResp: &StorageFormatResp{
 				HostErrorsResp: HostErrorsResp{
 					HostErrors: HostErrorsMap{
 						"2 ranks failed: didn't start": mockHostSet(
@@ -717,7 +717,7 @@ func TestControl_SystemReformat(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemReformat(context.TODO(), mi, &SystemReformatReq{})
+			gotResp, gotErr := SystemReformat(context.TODO(), mi, &SystemResetFormatReq{})
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
