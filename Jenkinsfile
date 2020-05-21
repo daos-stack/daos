@@ -727,7 +727,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Ubuntu 18.04') {
+                stage('Build on Ubuntu 20.04') {
                     when {
                         beforeAgent true
                         allOf {
@@ -737,22 +737,22 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.18.04'
+                            filename 'Dockerfile.ubuntu.20.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 " + '$BUILDARGS'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu20.04 " + '$BUILDARGS'
                         }
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-ubuntu18.04-gcc'
+                                   failure_artifacts: 'config.log-ubuntu20.04-gcc'
                     }
                     post {
                         always {
                             node('lightweight') {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
-                                             id: "analysis-ubuntu18",
+                                             id: "analysis-ubuntu20",
                                              tools: [ gcc4(), cppCheck() ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
@@ -775,9 +775,9 @@ pipeline {
                         }
                         unsuccessful {
                             sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-ubuntu18.04-gcc
+                                      mv config${arch}.log config.log-ubuntu20.04-gcc
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc',
+                            archiveArtifacts artifacts: 'config.log-ubuntu20.04-gcc',
                                              allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -788,7 +788,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Ubuntu 18.04 with Clang') {
+                stage('Build on Ubuntu 20.04 with Clang') {
                     when {
                         beforeAgent true
                         allOf {
@@ -799,22 +799,22 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.18.04'
+                            filename 'Dockerfile.ubuntu.20.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 " + '$BUILDARGS'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu20.04 " + '$BUILDARGS'
                         }
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-ubuntu18.04-clag'
+                                   failure_artifacts: 'config.log-ubuntu20.04-clag'
                     }
                     post {
                         always {
                             node('lightweight') {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
-                                             id: "analysis-ubuntu18-clang",
+                                             id: "analysis-ubuntu20-clang",
                                              tools: [ clang(), cppCheck() ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
@@ -837,9 +837,9 @@ pipeline {
                         }
                         unsuccessful {
                             sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-ubuntu18.04-clang
+                                      mv config${arch}.log config.log-ubuntu20.04-clang
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang',
+                            archiveArtifacts artifacts: 'config.log-ubuntu20.04-clang',
                                              allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
