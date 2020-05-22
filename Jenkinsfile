@@ -313,11 +313,11 @@ pipeline {
             parallel {
                 stage('checkpatch') {
                     when {
-                      beforeAgent true
+                        beforeAgent true
                         allOf {
                             expression { ! skip_stage('checkpatch') }
                             expression { ! doc_only_change() }
-                      }
+                        }
                     }
                     agent {
                         dockerfile {
@@ -434,7 +434,7 @@ pipeline {
                         }
                     }
                     steps {
-                         githubNotify credentialsId: 'daos-jenkins-commit-status',
+                        githubNotify credentialsId: 'daos-jenkins-commit-status',
                                       description: env.STAGE_NAME,
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
