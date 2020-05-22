@@ -40,7 +40,7 @@ class DaosServerCommand(YamlCommand):
     NORMAL_PATTERN = "DAOS I/O server.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
 
-    def __init__(self, path="", yaml_cfg=None, timeout=90):
+    def __init__(self, path="", yaml_cfg=None, timeout=120):
         """Create a daos_server command object.
 
         Args:
@@ -48,7 +48,7 @@ class DaosServerCommand(YamlCommand):
             yaml_cfg (YamlParameters, optional): yaml configuration parameters.
                 Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 90 seconds.
+                appear in the subprocess output. Defaults to 120 seconds.
         """
         super(DaosServerCommand, self).__init__(
             "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
