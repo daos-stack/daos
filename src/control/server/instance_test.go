@@ -49,7 +49,7 @@ func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, un
 	}
 }
 
-func TestIOServerInstance_BioError(t *testing.T) {
+func TestServer_Instance_BioError(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
