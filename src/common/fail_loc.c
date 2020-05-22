@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,18 +141,13 @@ daos_fail_init(void)
 	int rc;
 
 	rc = d_fault_inject_init();
-	if (rc == -DER_NOSYS) {
-		D_GOTO(out, rc = -DER_SUCCESS);
-	} else if (rc) {
+	if (rc != 0 && rc != -DER_NOSYS)
 		return rc;
-	}
 
 	rc = d_fault_attr_set(DAOS_FAIL_UNIT_TEST_GROUP, attr);
 	if (rc)
 		d_fault_inject_fini();
 
-
-out:
 	return rc;
 }
 

@@ -586,6 +586,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   scons_args: "BUILD_TYPE=dev",
                                    failure_artifacts: 'config.log-centos7-gcc'
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
@@ -678,6 +679,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   scons_args: "BUILD_TYPE=dev",
                                    failure_artifacts: 'config.log-centos7-clang'
                     }
                     post {
@@ -739,6 +741,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   scons_args: "BUILD_TYPE=dev",
                                    failure_artifacts: 'config.log-ubuntu18.04-gcc'
                     }
                     post {
@@ -801,6 +804,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   scons_args: "BUILD_TYPE=dev",
                                    failure_artifacts: 'config.log-ubuntu18.04-clag'
                     }
                     post {
@@ -862,6 +866,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   scons_args: "BUILD_TYPE=dev",
                                    failure_artifacts: 'config.log-leap15-gcc'
                     }
                     post {
@@ -923,6 +928,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   scons_args: "BUILD_TYPE=dev",
                                    failure_artifacts: 'config.log-leap15-clang'
                     }
                     post {
@@ -986,6 +992,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
+                                   scons_args: "BUILD_TYPE=dev",
                                    TARGET_PREFIX: 'install/opt', failure_artifacts: 'config.log-leap15-icc'
                     }
                     post {
