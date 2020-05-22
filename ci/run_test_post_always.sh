@@ -5,7 +5,7 @@
 
 set -uex
 
-# shellcheck disable=SC1091
+# shellcheck source ./.build_vars.sh
 source ./.build_vars.sh
 
 rm -rf run_test.sh vm_test
@@ -13,12 +13,16 @@ DAOS_BASE="${SL_PREFIX%/install*}"
 NODE="${NODELIST%%,*}"
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-# shellcheck disable=SC2029
+
+scp -i ci_key "$mydir/run_test_post_always_node.sh" \
+              jenkins@"${nodelist[0]}":/var/tmp
+
+
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
   "DAOS_BASE=$DAOS_BASE      \
    HOSTNAME=$HOSTNAME        \
    PWD=$PWD                  \
-   $(cat "$mydir/run_test_post_always_node.sh")"
+   /var/tmp/post_always_node.sh"
 
 # Note that we are taking advantage of the NFS mount here and if that
 # should ever go away, we need to pull run_test.sh/ from $NODE

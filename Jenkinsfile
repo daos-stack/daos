@@ -942,7 +942,7 @@ pipeline {
                                            'centos7-gcc-build-vars' ],
                                 script: "SSH_KEY_ARGS=${env.SSH_KEY_ARGS} " +
                                         "NODELIST=${env.NODELIST} " +
-                                        'ci/run_test/main.sh',
+                                        'ci/run_test_main.sh',
                                 junit_files: 'test_results/*.xml'
                     }
                     post {
@@ -951,7 +951,7 @@ pipeline {
                             // label is at the end
                             // sh label: "Collect artifacts and tear down",
                             //   script '''set -ex
-                            sh script: 'ci/run_test/run_test_post_always.sh',
+                            sh script: 'ci/run_test_post_always.sh',
                                label: "Collect artifacts and tear down"
                             junit 'test_results/*.xml'
                             archiveArtifacts artifacts: 'run_test.sh/**'
