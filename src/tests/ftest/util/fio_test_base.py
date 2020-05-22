@@ -128,7 +128,13 @@ class FioBase(TestWithServers):
             self.fail("Unable to launch Dfuse.\n")
 
     def execute_fio(self, directory=None, stop_dfuse=True):
-        """Runner method for Fio."""
+        """Runner method for Fio.
+
+        Args:
+            directory (str): path for fio run dir
+            stop_dfuse (bool): Flag to stop or not stop dfuse as part of this
+                               method.
+        """
         # Create a pool if one does not already exist
         if self.pool is None:
             self._create_pool()
