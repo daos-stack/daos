@@ -31,10 +31,10 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -160,7 +160,7 @@ type storageFormatCmd struct {
 	Reformat bool `long:"reformat" description:"Always reformat storage (CAUTION: Potentially destructive)"`
 	Group    struct {
 		System bool   `long:"system" description:"Perform reformat of stopped DAOS servers in system"`
-		Ranks  string `long:"ranks" short:"r" description:"Comma separated list of system ranks to format"`
+		Ranks  string `long:"ranks" short:"r" description:"Comma separated list of system ranks to format, default is all ranks"`
 	} `group:"System Format Options" description:"Reformat an existing DAOS system"`
 }
 
@@ -168,7 +168,6 @@ type storageFormatCmd struct {
 //
 // run NVMe and SCM storage format on all connected servers
 func (cmd *storageFormatCmd) Execute(args []string) (err error) {
-	resp := &control.StorageFormatResp{}
 	ctx := context.Background()
 
 	if cmd.Group.System {
@@ -183,13 +182,10 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 			return errors.Wrap(err, "parsing input ranklist")
 		}
 
-		sysResp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
-			&control.SystemReformatReq{Ranks: ranks})
+		resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
+			&control.SystemResetFormatReq{Ranks: system.RanksFromUint32(ranks)})
 		if err != nil {
 			return err
-		}
-		if err = convert.Types(sysResp, resp); err != nil {
-			return errors.WithMessage(err, "converting system-reformat response")
 		}
 
 		return cmd.printResp(resp)
@@ -201,7 +197,7 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 
 	req := &control.StorageFormatReq{Reformat: cmd.Reformat}
 	req.SetHostList(cmd.hostlist)
-	resp, err = control.StorageFormat(ctx, cmd.ctlInvoker, req)
+	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}

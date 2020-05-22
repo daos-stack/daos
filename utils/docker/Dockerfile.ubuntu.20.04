@@ -28,7 +28,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             libssl-dev libtool-bin libyaml-dev                          \
             locales make meson nasm ninja-build pandoc patch            \
             pylint python-dev python3-dev scons sg3-utils uuid-dev      \
-            yasm valgrind libhwloc-dev man fuse3 libfuse3-dev
+            yasm valgrind libhwloc-dev man fuse3 libfuse3-dev 		\
+	    openjdk-8-jdk maven
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
@@ -39,6 +40,23 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 RUN rm /bin/sh && ln -s bash /bin/sh
 
 RUN locale-gen en_US.UTF-8 || cat /usr/share/i18n/SUPPORTED
+
+# use Java 8 instead of default Java 11
+RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+
+# set maven mirror
+RUN mkdir -p /home/$USER/.m2
+
+RUN echo -e "<settings>\n\
+	<mirrors>\n\
+		<mirror>\n\
+			<id>google-maven-central</id>\n\
+			<name>GCS Maven Central mirror</name>\n\
+			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+			<mirrorOf>central</mirrorOf>\n\
+		</mirror>\n\
+	</mirrors>\n\
+</settings>" > /home/$USER/.m2/settings.xml
 
 # Dependencies
 
