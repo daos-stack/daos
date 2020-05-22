@@ -267,7 +267,7 @@ def docker_build_args(Map config = [:]) {
       ret_str += ' --build-arg QUICKBUILD=true'
     }
     ret_str += ' '
-    println "exiting docker_build_args ${ret_str}"
+    println "Exiting docker_build_args ${ret_str}"
     return ret_str
 }
 
