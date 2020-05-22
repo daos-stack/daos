@@ -596,7 +596,7 @@ class YamlCommand(SubProcessCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 60 seconds.
         """
-        super(YamlCommand, self).__init__(namespace, command, path)
+        super(YamlCommand, self).__init__(namespace, command, path, timeout)
 
         # Command configuration yaml file
         self.yaml = yaml_cfg
