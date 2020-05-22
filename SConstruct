@@ -115,7 +115,7 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-D_FORTIFY_SOURCE=2'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
-    if env.get('BUILT_TYPE') != 'release':
+    if env.get('BUILD_TYPE') != 'release':
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
     if GetOption("preprocess"):
