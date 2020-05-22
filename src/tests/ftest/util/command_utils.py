@@ -226,10 +226,6 @@ class ExecutableCommand(CommandWithParameters):
     def wait(self):
         """Wait for the sub process to complete.
 
-        Args:
-            timeout (int): number of seconds to wait for the sub process
-                           to complete
-
         Returns:
             int: return code of process
 
