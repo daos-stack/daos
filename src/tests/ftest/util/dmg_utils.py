@@ -645,14 +645,14 @@ class DmgCommand(YamlCommand):
             sub_command_class.sub_command_class.devuuid.value = devuuid
         return self._get_result()
 
-    def storage_query_smd(self, devices=True, pools=True):
+    def storage_query_smd(self, devices=False, pools=False):
         """Get the result of the 'dmg storage query smd' command.
 
         Args:
             devices (bool, optional): List all devices/blobstores stored in
-                per-server metadata table. Defaults to True.
+                per-server metadata table. Defaults to False.
             pools (bool, optional): List all VOS pool targets stored in
-                per-server metadata table. Defaults to True.
+                per-server metadata table. Defaults to False.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command

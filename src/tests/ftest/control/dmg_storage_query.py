@@ -23,6 +23,7 @@
 """
 from __future__ import print_function
 
+import avocado
 from command_utils import CommandFailure
 from control_test_base import ControlTestBase
 
@@ -37,136 +38,122 @@ class DmgStorageQuery(ControlTestBase):
 
     :avocado: recursive
     """
-    def check_len(self, attr_name, expected_len):
-        """Check if VOS ids provided by dmg match config value.
 
-        Args:
-            attr_name (str): Name of config attribute wanted.
-            expected_len (int): Len of the list that contains the config_attr.
-        """
-        params = self.server_managers[-1].runner.job.yaml_params
-        cfg_attr = getattr(params.server_params[-1], attr_name)
-        if expected_len != cfg_attr.value:
-            self.fail("Number of {}: {} dont match config val: {}".format(
-                attr_name, expected_len, cfg_attr.value))
-        return True
+    def setUp(self):
+        "Set up for dmg storage query."
+        super(DmgStorageQuery, self).setUp()
+        self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
+        self.targets = self.server_managers[-1].get_config_value("targets")
 
-    def check_smd_out(self, smd_info, valid_info, invalid_info):
-        """Check the smd output with specified
-
-        Args:
-            valid_info (str): Info from "devices" or "pools"
-            invalid_info (str): Info from "devices" or "pools"
-        """
-        if smd_info:
-            if valid_info in smd_info:
-                self.log.info("Found uuid: %s", smd_info[valid_info]["uuid"])
-                self.check_len("targets", len(smd_info[valid_info]["vos_ids"]))
-                # Perform additional check for pools uuid and blobs
-                if valid_info == "pools":
-                    if smd_info[valid_info]["uuid"] != self.pool.uuid:
-                        self.fail("Pool uuids don't match: {} {}".format(
-                            smd_info[valid_info]["uuid"], self.pool.uuid))
-                    self.check_len(
-                        "targets", len(smd_info[valid_info]["spdk_blobs"]))
-            else:
-                self.fail("Wanted information not found: {}".format(smd_info))
-
-            if invalid_info in smd_info:
-                self.fail("Found unwanted pool information: {}".format(
-                    smd_info[invalid_info]))
-        else:
-            self.fail("SMD info not found: {}".format(smd_info))
-
-    def get_devs_info(self, smd_info, method_name):
-        """Check device state output.
-
-        Args:
-            smd_info (str): smd info used to grab uuid and get other cmds info
-            method_name (str): name of method to be run
-        """
-        device_info = []
-        for info in smd_info:
-            if "Device" in info:
-                uuid = info[info.index("Device") + 1]
-                device_info.append(
-                    self.get_dmg_output(method_name, devuuid=uuid))
-
-        return device_info
-
+    @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_smd_devices(self):
         """
         JIRA ID: DAOS-3925
 
         Test Description: Test 'dmg storage query smd -d' command.
 
-        :avocado: tags=all,pr,hw,small,dmg_storage_query,smd_devs,basic
+        :avocado: tags=all,pr,hw,small,storage_query,smd_devs,basic
         """
         # Get the storage smd infromation, parse and check devices info
-        smd_info = self.get_dmg_output("storage_query_smd", pools=False)
-        self.check_smd_out(smd_info, "devices", "pools")
+        smd_info = self.get_dmg_output("storage_query_smd", devices=True)
+        devs_info = [smd_info[i:(i + 2)] for i in range(0, len(smd_info), 2)]
 
         # Check if the number of devices match the config
-        if self.check_len("dbev_list", len(smd_info)):
-            self.fail("Number of devices does not match config: {}".format(
-                len(smd_info)))
+        msg = "Number of devs doesn't match cfg: {}".format(len(self.bdev_list))
+        self.assertEqual(len(self.bdev_list), len(devs_info), msg)
 
+        # Check that number of targets match the config
+        errors = []
+        for devs in devs_info:
+            devs[1] = devs[1].split()
+            if self.targets != len(devs[1]):
+                errors.append(devs[0])
+
+        msg = "Found wrong number of targets in device info"
+        self.assertEqual(len(errors), 0, msg)
+
+    @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_smd_pools(self):
         """
         JIRA ID: DAOS-3925
 
         Test Description: Test 'dmg storage query smd -p' command.
 
-        :avocado: tags=all,pr,hw,small,dmg_storage_query,smd_pools,basic
+        :avocado: tags=all,pr,hw,small,storage_query,smd_pools,basic
         """
         # Create pool and get the storage smd information, then verfify info
-        self.prepare_pool(self.dmg)
-        smd_info = self.get_dmg_output("storage_query_smd", devices=False)
-        self.check_smd_out(smd_info, "pools", "devices")
+        self.prepare_pool()
+        smd_info = self.get_dmg_output("storage_query_smd", pools=True)
+        pools_info = [smd_info[i:(i + 2)] for i in range(0, len(smd_info), 2)]
 
-        # Destroy pool and get the storage smd information, then verify info
+        # Check pool uuid
+        for pool in pools_info:
+            self.assertEqual(self.pool.pool.get_uuid_str(), pool[0])
+
+        # Destroy pool and get smd information and check there is no pool
         self.pool.destroy()
-        smd_info = self.get_dmg_output("storage_query_smd", devices=False)
-        self.check_smd_out(smd_info, "devices", "pools")
+        smd_info = self.get_dmg_output("storage_query_smd", pools=True)
+        self.assertFalse(smd_info)
 
+        # Check that number of pool blobs match the number of targets
+        t_err = []
+        b_err = []
+        for pool in pools_info:
+            vos_targets = pool[1].split()
+            blobs = pool[2].split()
+            if self.targets != len(vos_targets):
+                t_err.append(pool[0])
+            if self.targets != len(blobs):
+                b_err.append(pool[0])
+
+        self.assertEqual(len(t_err), 0, "Wrong number of targets in pool info")
+        self.assertEqual(len(b_err), 0, "Wrong number of blobs in pool info")
+
+    @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_blobstore_health(self):
         """
         JIRA ID: DAOS-3925
 
         Test Description: Test 'dmg storage query blobstore-health' command.
 
-        :avocado: tags=all,pr,hw,small,dmg_storage_query,blobstore,basic
+        :avocado: tags=all,pr,hw,small,storage_query,blobstore,basic
         """
-        # Create pool and get the storage smd information
-        self.prepare_pool(self.dmg)
         smd_info = self.get_dmg_output("storage_query_smd", devices=False)
+        devs_info = [smd_info[i:(i + 2)] for i in range(0, len(smd_info), 2)]
 
         # Get the device uuid and run command
-        devs_info = self.get_devs_info(smd_info, "storage_query_blobstore")
-        print(devs_info)
+        blob_info = []
+        for dev in devs_info:
+            blob_info.append(
+                self.get_dmg_output("storage_query_blobstore", devuuid=dev[0]))
 
         # Compare config expected values with dmg output
         e_blob_info = self.params.get("blobstore_info", "/run/*")
-        print(e_blob_info)
-        # if blobstore_info.sort() != e_blob_info.sort():
-        #     self.fail("dmg storage query expected output: {}".format(
-        #         e_blob_info))
+        e_blob_info.insert(0, dev[0])
 
+        #
+
+    @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_device_state(self):
         """
         JIRA ID: DAOS-3925
 
         Test Description: Test 'dmg storage query device-state' command.
 
-        :avocado: tags=all,pr,hw,small,dmg_storage_query,device_state,basic
+        :avocado: tags=all,pr,hw,small,storage_query,device_state,basic
         """
-        smd_info = self.get_dmg_output("storage_query_smd", devices=False)
+        smd_info = self.get_dmg_output("storage_query_smd", devices=True)
+        devs_info = [smd_info[i:(i + 2)] for i in range(0, len(smd_info), 2)]
 
         # Check that the state of each device is NORMAL
-        devs_info = self.get_devs_info(smd_info, "storage_query_device_state")
+        status_err = []
         for dev in devs_info:
-            if dev[2] != "NORMAL":
-                self.fail("Found a device in {} state.".format(dev[2]))
+            status = self.get_dmg_output(
+                "storage_query_device_state", devuuid=dev[0])[1])
+            if status != "NORMAL":
+                status_err.append([dev[0], status])
+
+
 
         # Set device to faulty state and check that it's in FAULTY state
         devs_info = self.get_devs_info(smd_info, "storage_set_faulty")
@@ -185,7 +172,7 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query nvme-faulty' command.
 
-        :avocado: tags=all,pr,hw,small,dmg_storage_set,nvme_faulty,basic
+        :avocado: tags=all,pr,hw,small,storage_query,nvme_faulty,basic
         """
         # Set nvme-faulty command to run without devuuid provided.
         self.dmg.set_sub_command("storage")

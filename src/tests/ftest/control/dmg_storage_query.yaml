@@ -4,6 +4,8 @@ timeout: 200
 hosts:
   test_servers:
     - server-A
+  test_clients:
+    - client-B
 server_config:
   name: daos_server
   port: 10001
@@ -17,17 +19,4 @@ pool:
     nvme_size: 9000000000
     svcn: 1
     control_method: dmg
-blobstore_info:
-  - aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
-  - "0"
-  - "0"
-  - "0"
-  - "0"
-  - "0"
-  - "0"
-  - aaa
-  - OK
-  - OK
-  - OK
-  - OK
-  - OK
+blobstore_info: ["0", "0", "0", "0", "0", "0", abc, OK, OK, OK, OK, OK]
