@@ -17,6 +17,7 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 scp -i ci_key "${lmd_tarball}" "$mydir/rpm_scan_daos_test_node.sh" \
               "jenkins@${nodelist[0]}:/var/tmp"
 
+# shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"${nodelist[0]}" \
  "NODE=${nodelist[0]}                \
   DAOS_PKG_VERSION=$DAOS_PKG_VERSION \

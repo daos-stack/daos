@@ -262,12 +262,12 @@ def docker_build_args(Map config = [:]) {
       ret_str += ' --build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '"'
                  ' --build-arg https_proxy="' + env.HTTPS_PROXY + '"'
     }
+    println "docker_build_args config=$config"
     if (config['qb']) {
-      ret_str += ' --build-arg QUICKBUILD=' + config['qb']
-      ret_str += ' --build-arg REPOS="' + component_repos() + '"'
+      ret_str += ' --build-arg QUICKBUILD=true'
     }
     ret_str += ' '
-    println ret_str
+    println "exiting docker_build_args ${ret_str}"
     return ret_str
 }
 
@@ -285,7 +285,7 @@ pipeline {
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         UID = getuid()
         BUILDARGS = docker_build_args()
-        BUILDARGS_QB_CHECK = docker_build_args(qb: quickbuild)
+        BUILDARGS_QB_CHECK = docker_build_args(qb: quickbuild())
         BUILDARGS_QB_TRUE = docker_build_args(qb: true)
         QUICKBUILD_DEPS = sh label: 'Get Quickbuild dependencies',
                              script: 'rpmspec -q --srpm --requires' +
@@ -551,7 +551,8 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"'
+                                  env.QUICKBUILD_DEPS + '"' +
+                                ' --build-arg REPOS="' + component_repos() + '"'
                         }
                     }
                     steps {
@@ -1018,7 +1019,8 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"'
+                                  env.QUICKBUILD_DEPS + '"' +
+                                ' --build-arg REPOS="' + component_repos() + '"'
                         }
                     }
                     steps {
