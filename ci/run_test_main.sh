@@ -18,7 +18,7 @@ rm -f dnt.*.memcheck.xml vm_test.out nlt-errors.out
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-scp -i ci_key "$mydir/run_test_main_node.sh" jenkins@"${nodelist[0]}":/var/tmp
+scp -i ci_key "$mydir/run_test_main_node.sh" jenkins@"$NODE":/var/tmp
 
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
