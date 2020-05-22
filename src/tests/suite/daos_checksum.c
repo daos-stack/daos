@@ -335,6 +335,8 @@ io_with_server_side_verify(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
 		skip();
 
@@ -402,6 +404,8 @@ test_server_data_corruption(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, oc);
 
@@ -431,6 +435,8 @@ test_fetch_array(void **state)
 	struct csum_test_ctx	ctx = {0};
 	daos_oclass_id_t	oc = dts_csum_oc;
 	int			rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	/**
 	 * Setup
@@ -1097,6 +1103,8 @@ single_value_test(void **state, bool large_buf)
 static void
 single_value(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
 		skip();
 
@@ -1123,6 +1131,8 @@ mix_test(void **state)
 	d_sg_list_t		 fetch_sgls[2] = {0};
 	d_sg_list_t		*fetch_sv_sgl = &fetch_sgls[0];
 	d_sg_list_t		*fetch_array_sgl = &fetch_sgls[1];
+
+	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
 
@@ -1360,6 +1370,8 @@ many_iovs_with_single_values(void **state)
 static void
 test_update_fetch_a_key(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	key_csum_fetch_update(state,
 			      DAOS_CSUM_CORRUPT_UPDATE_AKEY,
 			      DAOS_CSUM_CORRUPT_FETCH_AKEY);
@@ -1368,6 +1380,8 @@ test_update_fetch_a_key(void **state)
 static void
 test_update_fetch_d_key(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	key_csum_fetch_update(state,
 			      DAOS_CSUM_CORRUPT_UPDATE_DKEY,
 			      DAOS_CSUM_CORRUPT_FETCH_DKEY);
@@ -1386,6 +1400,8 @@ test_enumerate_a_key(void **state)
 	daos_key_desc_t		kds[KDS_NR] = {0};
 	d_sg_list_t		sgl = {0};
 	uint32_t		nr = KDS_NR;
+
+	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, oc);
@@ -1438,6 +1454,8 @@ test_enumerate_d_key(void **state)
 	d_sg_list_t		sgl = {0};
 	uint32_t		nr = KDS_NR;
 	uint32_t		key_count = 0;
+
+	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, oc);

@@ -387,13 +387,14 @@ list_pools_test(void **state)
 	print_message("success\n");
 }
 
-#if FAULT_INJECT
 static void
 pool_create_and_destroy_retry(void **state)
 {
 	test_arg_t	*arg = *state;
 	uuid_t		 uuid;
 	int		 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (arg->myrank != 0)
 		return;
@@ -430,7 +431,6 @@ pool_create_and_destroy_retry(void **state)
 #endif
 	print_message("success\n");
 }
-#endif
 
 static const struct CMUnitTest tests[] = {
 	{ "MGMT1: create/destroy pool on all tgts",
@@ -440,12 +440,9 @@ static const struct CMUnitTest tests[] = {
 	{ "MGMT3: list-pools with no pools in sys",
 	  list_pools_test, setup_zeropools, teardown_pools},
 	{ "MGMT4: list-pools with multiple pools in sys",
-	  list_pools_test, setup_manypools, teardown_pools}
-#if FAULT_INJECT
-	  ,
+	  list_pools_test, setup_manypools, teardown_pools},
 	{ "MGMT5: retry MGMT_POOL_{CREATE,DESETROY} upon errors",
 	  pool_create_and_destroy_retry, async_disable, test_case_teardown}
-#endif
 };
 
 static int

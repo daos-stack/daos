@@ -116,7 +116,6 @@ pool_ref_count_test(void **state)
 	assert_int_equal(ret, 0);
 }
 
-#if FAULT_INJECT
 static void
 pool_interop(void **state)
 {
@@ -124,6 +123,8 @@ pool_interop(void **state)
 	uuid_t			uuid;
 	daos_handle_t		poh;
 	int			ret;
+
+	FAULT_INJECTION_REQUIRED();
 
 	uuid_generate(uuid);
 
@@ -137,7 +138,6 @@ pool_interop(void **state)
 	ret = vos_pool_destroy(arg->fname[0], uuid);
 	assert_int_equal(ret, 0);
 }
-#endif
 
 static void
 pool_ops_run(void **state)
@@ -405,10 +405,8 @@ static const struct CMUnitTest pool_tests[] = {
 		pool_ops_run, pool_create_empty, pool_unit_teardown},
 	{ "VOS3: Pool Destroy", pool_ops_run,
 		pool_destroy, pool_unit_teardown},
-#if FAULT_INJECT
 	{ "VOS4: Pool DF interoperability", pool_interop,
 		 pool_file_setup, pool_file_destroy},
-#endif
 	{ "VOS5: Pool Close after open", pool_ops_run,
 		pool_open_close, pool_unit_teardown},
 	{ "VOS6: Pool handle refcount", pool_ref_count_test,

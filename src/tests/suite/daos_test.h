@@ -57,6 +57,16 @@
 	} while  (0)
 #endif
 
+#if FAULT_INJECTION
+#define FAULT_INJECTION_REQUIRED() do { } while (0)
+#else
+#define FAULT_INJECTION_REQUIRED() \
+	do { \
+		print_message("Fault injection required for test, skipping...\n"); \
+		skip();\
+	} while (0)
+#endif /* FAULT_INJECTION */
+
 #include <mpi.h>
 #include <daos/debug.h>
 #include <daos/common.h>
