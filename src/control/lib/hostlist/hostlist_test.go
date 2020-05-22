@@ -140,8 +140,15 @@ func TestHostList_Create(t *testing.T) {
 			expErr:    errors.New("invalid range"),
 		},
 		"no hostname": {
-			startList: "[0-1],[3-5]",
+			startList: "[0-1,3-5]",
 			expErr:    errors.New("invalid range"),
+		},
+		"hostname optional": {
+			startList:    "[0-1,3-5,3]",
+			nameOptional: true,
+			expRawOut:    "[0-1,3-5,3]",
+			expUniqOut:   "[0-1,3-5]",
+			expUniqCount: 5,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -577,7 +584,7 @@ func TestHostList_DeleteHosts(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hl, err := hostlist.Create(*tc.startList)
+			hl, err := hostlist.Create(*tc.startList, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -637,7 +644,7 @@ func TestHostList_Within(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hl, err := hostlist.Create(*tc.startList)
+			hl, err := hostlist.Create(*tc.startList, false)
 			if err != nil {
 				t.Fatal(err)
 			}

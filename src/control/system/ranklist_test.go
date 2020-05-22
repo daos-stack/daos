@@ -25,52 +25,49 @@ package system
 
 import (
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
-func TestHostList_CreateNumber(t *testing.T) {
+func TestRankSet_Create(t *testing.T) {
 	for name, tc := range map[string]struct {
-		startList    string
-		expRawOut    string
-		expUniqOut   string
-		expUniqCount int
-		expErr       error
+		startList string
+		expOut    string
+		expCount  int
+		expErr    error
 	}{
-		"simple": {
-			startList:    "node[1-128]",
-			expRawOut:    "node[1-128]",
-			expUniqOut:   "node[1-128]",
-			expUniqCount: 128,
+		"complex with suffixes": {
+			startList: "node2-1,node1-2.suffix1,node1-[45,47].suffix2,node3,node1-3",
+			expErr:    errors.New("expecting no alphabetic characters"),
 		},
-		"complex": {
-			startList:    "node2-1,node1-2,node1-[45,47],node3,node1-3",
-			expRawOut:    "node2-1,node1-[2,45,47],node3,node1-3",
-			expUniqOut:   "node3,node1-[2-3,45,47],node2-1",
-			expUniqCount: 6,
+		"simple ranged rank list": {
+			startList: "0-10",
+			expOut:    "0-10",
+			expCount:  11,
 		},
-		"no hostname": {
-			startList:    "[0-1],[3-5]",
-			expRawOut:    "0-1,3-5",
-			expUniqOut:   "0-1,3-5",
-			expUniqCount: 5,
+		"deranged rank list": {
+			startList: "1,2,3,5,6,8,10,10,1",
+			expOut:    "1-3,5-6,8,10",
+			expCount:  7,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			hl, gotErr := Create(tc.startList)
-			if gotErr != nil {
-				t.Log(gotErr.Error())
-			}
-			cmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
+			rs, gotErr := CreateSet(tc.startList)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
 				return
 			}
 
-			cmpOut(t, tc.expRawOut, hl.String())
-			hl.Uniq()
-			cmpOut(t, tc.expUniqOut, hl.String())
+			if diff := cmp.Diff(tc.expOut, rs.String()); diff != "" {
+				t.Fatalf("unexpected value (-want, +got):\n%s\n", diff)
+			}
 
-			gotCount := hl.Count()
-			if gotCount != tc.expUniqCount {
-				t.Fatalf("expected count to be %d; got %d", tc.expUniqCount, gotCount)
+			gotCount := rs.Count()
+			if gotCount != tc.expCount {
+				t.Fatalf("\nexpected count to be %d; got %d", tc.expCount, gotCount)
 			}
 		})
 	}

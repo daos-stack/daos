@@ -56,7 +56,7 @@ func TestHostSet_Create(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			hs, gotErr := hostlist.CreateSet(tc.startList)
+			hs, gotErr := hostlist.CreateSet(tc.startList, false)
 			cmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
@@ -88,7 +88,7 @@ func TestHostSet_Insert(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			hs, err := hostlist.CreateSet(tc.startList)
+			hs, err := hostlist.CreateSet(tc.startList, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -144,7 +144,7 @@ func TestHostSet_Intersects(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hs, err := hostlist.CreateSet(*tc.startList)
+			hs, err := hostlist.CreateSet(*tc.startList, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -175,11 +175,11 @@ func TestHostSet_ZeroValue(t *testing.T) {
 }
 
 func TestHostSet_MergeSet(t *testing.T) {
-	a, err := hostlist.CreateSet("host[1-8]")
+	a, err := hostlist.CreateSet("host[1-8]", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := hostlist.CreateSet("host[8-15]")
+	b, err := hostlist.CreateSet("host[8-15]", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestHostSet_FuzzCrashers(t *testing.T) {
 		"host0": {},
 	} {
 		t.Run(input, func(t *testing.T) {
-			hs, gotErr := hostlist.CreateSet(input)
+			hs, gotErr := hostlist.CreateSet(input, false)
 			cmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return

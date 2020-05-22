@@ -26,132 +26,65 @@ package system
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/pkg/errors"
 )
 
+// RankSet embodies HostSet type
 type RankSet struct {
-	set hostlist.HostSet
+	hostlist.HostSet
 }
 
-// Create creates a new HostList with ranks Rather than hostnames from the
+func fixBrackets(stringRanks string, remove bool) string {
+	hasPrefix := strings.HasPrefix(stringRanks, "[")
+	hasSuffix := strings.HasSuffix(stringRanks, "]")
+	if remove {
+		if hasPrefix {
+			stringRanks = stringRanks[1:]
+		}
+		if hasSuffix {
+			stringRanks = stringRanks[:len(stringRanks)-1]
+		}
+
+		return stringRanks
+	}
+
+	if !hasPrefix {
+		stringRanks = "[" + stringRanks
+	}
+	if !hasSuffix {
+		stringRanks += "]"
+	}
+
+	return stringRanks
+}
+
+// CreateSet creates a new HostList with ranks rather than hostnames from the
 // supplied string representation.
-func Create(stringRanks string) (*hostlist.HostList, error) {
-	return parseBracketedHostList(stringNumbers, outerRangeSeparators, rangeOperator, true)
+func CreateSet(stringRanks string) (*RankSet, error) {
+	for _, r := range stringRanks {
+		if unicode.IsLetter(r) {
+			return nil, errors.Errorf(
+				"expecting no alphabetic characters, got '%s'",
+				stringRanks)
+		}
+	}
+
+	stringRanks = fixBrackets(stringRanks, false)
+
+	fmt.Printf(" r '%s'", stringRanks)
+	hs, err := hostlist.CreateSet(stringRanks, true)
+	if err != nil {
+		return nil, err
+	}
+	// copying locks ok because original hs is discarded
+	rs := RankSet{HostSet: *hs}
+
+	return &rs, nil
 }
 
-// addRankPrefix is a hack, but don't want to modify the hostlist library to
-// accept invalid hostnames.
-func addRankPrefix(rank Rank) string {
-	return fmt.Sprintf("r-%d", rank)
+func (rs *RankSet) String() string {
+	return fixBrackets(rs.HostSet.String(), true)
 }
-
-// removeRankPrefixes is a hack, but don't want to modify the hostlist library to
-// accept invalid hostnames.
-func removeRankPrefixes(in string) string {
-	return strings.Replace(in, "r-", "", -1)
-}
-
-//func (rs *RankSet) MarshalJSON() ([]byte, error) {
-//	return []byte(`"` + rs.RangedString() + `"`), nil
-//}
-//
-//// CreateSet creates a new RankSet from the supplied string representation.
-//func CreateSet(stringRanks string) (*RankSet, error) {
-//	hl, err := Create(stringRanks)
-//	if err != nil {
-//		return nil, err
-//	}
-//	hl.Uniq()
-//
-//	return &RankSet{list: hl}, nil
-//}
-//
-//// initList will initialize the underlying *HostList if necessary
-//func (rs *HostSet) initList() {
-//	rs.Lock()
-//	defer rs.Unlock()
-//
-//	if rs.list == nil {
-//		rs.list, _ = Create("")
-//	}
-//}
-//
-//func (rs *RankSet) String() string {
-//	return rs.RangedString()
-//}
-//
-//// RangedString returns a string containing a bracketed RankSet representation.
-//func (rs *RankSet) RangedString() string {
-//	return removeRankPrefixes(rs.set.RangedString())
-//}
-//
-//// DerangedString returns a string containing the rank of
-//// every rank in the RankSet, without any bracketing.
-//func (rs *RankSet) DerangedString() string {
-//	return removeRankPrefixes(rs.set.DerangedString())
-//}
-//
-//// Insert adds a rank or list of ranks to the RankSet.
-//// Returns the number of non-duplicate ranks successfully added.
-//func (rs *RankSet) Insert(stringRanks string) (int, error) {
-//	rs.initList()
-//
-//	newList, err := Create(stringRanks)
-//	if err != nil {
-//		return -1, err
-//	}
-//
-//	rs.Lock()
-//	defer rs.Unlock()
-//
-//	startCount := rs.set.hostCount
-//	if err := rs.set.PushList(newList); err != nil {
-//		return -1, err
-//	}
-//	rs.list.Uniq()
-//
-//	return int(rs.set.hostCount - startCount), nil
-//}
-//
-//// RankGroups maps a set of ranks to a string key value.
-//type RankGroups map[string]*RankSet
-//
-//func (rg RankGroups) Keys() []string {
-//	keys := make([]string, 0, len(rg))
-//
-//	for key := range rg {
-//		keys = append(keys, key)
-//	}
-//
-//	sort.Strings(keys)
-//	return keys
-//}
-//
-//func (rg RankGroups) AddRank(key, rank string) error {
-//	if _, exists := rg[key]; !exists {
-//		rg[key] = new(RankSet)
-//	}
-//
-//	_, err := rg[key].Insert(rank)
-//	return err
-//}
-//
-//func (rg RankGroups) String() string {
-//	var buf bytes.Buffer
-//
-//	padding := 0
-//	keys := rg.Keys()
-//	for _, key := range keys {
-//		valStr := rg[key].String()
-//		if len(valStr) > padding {
-//			padding = len(valStr)
-//		}
-//	}
-//
-//	for _, key := range rg.Keys() {
-//		fmt.Fprintf(&buf, "%*s: %s\n", padding, rg[key], key)
-//	}
-//
-//	return buf.String()
-//}
