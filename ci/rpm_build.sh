@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script for buiding RPMs in a chroot
+# Script for building RPMs in a chroot
 # If the STAGE_NAME environment variable is present the script will
 # attempt to parse it to determine what distribution to build for.
 #

@@ -15,7 +15,7 @@ NODE="${NODELIST%%,*}"
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 scp -i ci_key "$mydir/run_test_post_always_node.sh" \
-              jenkins@"${nodelist[0]}":/var/tmp
+              jenkins@"$NODE":/var/tmp
 
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \

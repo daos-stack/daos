@@ -25,4 +25,4 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                      HOSTNAME=$HOSTNAME        \
                                      PWD=$PWD                  \
                                      SL_PREFIX=$SL_PREFIX      \
-                                     /var/tmp/run_test_main_node.sh
+                                     /var/tmp/run_test_main_node.sh"
