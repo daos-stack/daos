@@ -110,12 +110,12 @@ class ParallelIo(FioBase):
             containers using fio.
         Use cases:
             Mount dfuse using pool uuid.
-            create multiple containers under that dfuse mount point.
-            Check those container are accessable from that mount point.
+            Create multiple containers under that dfuse mount point.
+            Check those containers are accessible from that mount point.
             Perform io to those containers using FIO
             Delete one of the containers
-            Check if dfuse is still running.
-            If not, fail otherwise, try accessing the deleted container.
+            Check if dfuse is still running. If not, fail the test and exit.
+            Otherwise, try accessing the deleted container.
             This should fail.
             Check dfuse again.
         :avocado: tags=all,hw,daosio,medium,ib2,full_regression,parallelio
