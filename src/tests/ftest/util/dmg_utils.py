@@ -66,7 +66,7 @@ class DmgCommand(YamlCommand):
             r"(?:Device\s+UUID|State):\s+([A-Za-z0-9- ]+)",
     }
 
-    def __init__(self, path):
+    def __init__(self, path, yaml_cfg=None):
         """Create a dmg Command object.
 
         Args:
