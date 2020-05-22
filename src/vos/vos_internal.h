@@ -42,6 +42,42 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
+#define VOS_TX_LOG_FAIL(rc, ...)			\
+	do {						\
+		bool	__is_err = true;		\
+							\
+		if (rc >= 0)				\
+			break;				\
+		switch (rc) {				\
+		case -DER_TX_RESTART:			\
+		case -DER_INPROGRESS:			\
+		case -DER_EXIST:			\
+		case -DER_NONEXIST:			\
+			__is_err = false;		\
+			break;				\
+		}					\
+		D_CDEBUG(__is_err, DLOG_ERR, DB_IO,	\
+			 __VA_ARGS__);			\
+	} while (0)
+
+#define VOS_TX_TRACE_FAIL(rc, ...)			\
+	do {						\
+		bool	__is_err = true;		\
+							\
+		if (rc >= 0)				\
+			break;				\
+		switch (rc) {				\
+		case -DER_TX_RESTART:			\
+		case -DER_INPROGRESS:			\
+		case -DER_EXIST:			\
+		case -DER_NONEXIST:			\
+			__is_err = false;		\
+			break;				\
+		}					\
+		D_CDEBUG(__is_err, DLOG_ERR, DB_TRACE,	\
+			 __VA_ARGS__);			\
+	} while (0)
+
 #define VOS_CONT_ORDER		20	/* Order of container tree */
 #define VOS_OBJ_ORDER		20	/* Order of object tree */
 #define VOS_KTR_ORDER		23	/* order of d/a-key tree */
@@ -192,7 +228,7 @@ struct vos_dtx_act_ent {
 	umem_off_t			 dae_df_off;
 	struct vos_dtx_blob_df		*dae_dbd;
 	/* More DTX records if out of the inlined buffer. */
-	struct vos_dtx_record_df	*dae_records;
+	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
 };
@@ -202,7 +238,6 @@ struct vos_dtx_act_ent {
 #define DAE_DKEY_HASH(dae)	((dae)->dae_base.dae_dkey_hash)
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
-#define DAE_LAYOUT_GEN(dae)	((dae)->dae_base.dae_layout_gen)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_INTENT(dae)		((dae)->dae_base.dae_intent)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
