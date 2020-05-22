@@ -7,6 +7,9 @@ env:
 
 language: c
 
+language: java
+jdk: openjdk8
+
 services:
  - docker
 
@@ -19,3 +22,4 @@ before_install:
 script:
  - docker build -f utils/docker/Dockerfile.$DOCKER_IMAGE -t daos/$DOCKER_IMAGE --build-arg NOBUILD=1 --build-arg UID=$UID .
  - docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes install"
+ - docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "cd src/client/java && mvn clean install -DskipITs -Ddaos.install.path=/home/daos/daos/install"
