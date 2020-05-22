@@ -236,7 +236,7 @@ struct vos_dtx_act_ent {
 	umem_off_t			 dae_df_off;
 	struct vos_dtx_blob_df		*dae_dbd;
 	/* More DTX records if out of the inlined buffer. */
-	struct vos_dtx_record_df	*dae_records;
+	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
 };
@@ -246,7 +246,6 @@ struct vos_dtx_act_ent {
 #define DAE_DKEY_HASH(dae)	((dae)->dae_base.dae_dkey_hash)
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
-#define DAE_LAYOUT_GEN(dae)	((dae)->dae_base.dae_layout_gen)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_INTENT(dae)		((dae)->dae_base.dae_intent)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
