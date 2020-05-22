@@ -63,6 +63,24 @@ crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 }
 
 void
+crt_hdlr_ctl_log_set(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_log_set_in	*in_args;
+	struct crt_ctl_log_set_out	*out_args;
+	int				rc = 0;
+
+	in_args = crt_req_get(rpc_req);
+	out_args = crt_reply_get(rpc_req);
+
+	out_args->rc = rc;
+
+	d_log_setmasks(in_args->log_mask, -1);
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
+}
+
+void
 crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
 {
 	struct crt_ctl_fi_attr_set_in	*in_args_fi_attr;
@@ -150,9 +168,10 @@ CRT_RPC_DEFINE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 
 CRT_RPC_DEFINE(crt_ctl_fi_attr_set, CRT_ISEQ_CTL_FI_ATTR_SET,
 		CRT_OSEQ_CTL_FI_ATTR_SET)
-CRT_RPC_DEFINE(crt_ctl_fi_toggle,
-	       CRT_ISEQ_CTL_FI_TOGGLE,
+CRT_RPC_DEFINE(crt_ctl_fi_toggle, CRT_ISEQ_CTL_FI_TOGGLE,
 	       CRT_OSEQ_CTL_FI_TOGGLE)
+
+CRT_RPC_DEFINE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
 
 /* Define for crt_internal_rpcs[] array population below.
  * See CRT_INTERNAL_RPCS_LIST macro definition
