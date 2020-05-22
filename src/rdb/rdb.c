@@ -410,6 +410,15 @@ rdb_resign(struct rdb *db, uint64_t term)
 }
 
 /**
+ * Call for a new election (campaign to become leader).
+ */
+int
+rdb_campaign(struct rdb *db)
+{
+	return rdb_raft_campaign(db);
+}
+
+/**
  * Is this replica in the leader state? True does not guarantee a _current_
  * leadership.
  *

@@ -1060,10 +1060,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;
 done:
-	if (rc != 0)
-		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 "Failed to punch key: "DF_RC"\n",
-			 DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

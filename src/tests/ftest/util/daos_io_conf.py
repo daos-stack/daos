@@ -94,14 +94,10 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
         "iod_size 1",
         "pool --query",
         "update --tx 0 --recx \"[0, {}]045\"".format(record_size),
-        "update --tx 1 --recx \"[{}, {}]123\""
-        .format(rand_ofs_start, rand_ofs_end),
-        "fetch  --tx 1 -v --recx \"[0, {}]045 [{}, {}]123 [{}, {}]045\""
-        .format(rand_ofs_start,
-                rand_ofs_start,
-                rand_ofs_end,
-                rand_ofs_end,
-                record_size),
+        "update --tx 1 --recx \"[{}, {}]123\"".format(
+            rand_ofs_start, rand_ofs_end),
+        "fetch  --tx 1 -v --recx \"[0, {0}]045 [{0}, {1}]123 [{1}, "
+        "{2}]045\"".format(rand_ofs_start, rand_ofs_end, record_size),
         "pool --query")
 
     try:
