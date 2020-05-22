@@ -26,7 +26,10 @@ package server
 import (
 	"context"
 	"os"
+	"path"
+	"syscall"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -168,30 +171,18 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 	return ctx.Err()
 }
 
-// createSuperblock creates instance superblock if needed.
-func (srv *IOServerInstance) createSuperblock(recreate bool) error {
-	if srv.isStarted() {
-		return errors.Errorf("can't create superblock: instance %d already started", srv.Index())
-	}
+func (srv *IOServerInstance) logScmStorage() error {
+	scmMount := path.Dir(srv.superblockPath())
+	stBuf := new(syscall.Statfs_t)
 
-	needsSuperblock, err := srv.NeedsSuperblock() // scm format completed by now
-	if !needsSuperblock {
-		return nil
-	}
-	if err != nil && !recreate {
+	if err := syscall.Statfs(scmMount, stBuf); err != nil {
 		return err
 	}
 
-	// Only the first I/O server can be an MS replica.
-	mInfo := new(mgmtInfo)
-	if srv.Index() == 0 {
-		if mInfo, err = getMgmtInfo(srv); err != nil {
-			return err
-		}
-	}
-	if err := srv.CreateSuperblock(mInfo); err != nil {
-		return err
-	}
-
+	frSize := uint64(stBuf.Frsize)
+	totalBytes := frSize * stBuf.Blocks
+	availBytes := frSize * stBuf.Bavail
+	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
+		humanize.Bytes(totalBytes), humanize.Bytes(availBytes))
 	return nil
 }
