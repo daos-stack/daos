@@ -1803,7 +1803,7 @@ test_evt_overlap_split(struct test_arg *arg, int major_num, int minor_num)
 	int			minor_epc;
 	int			major_epc;
 	int			total_size;
-	const char		*mystr;
+	const char		*mystr = NULL;
 	char			*expected_data = NULL;
 	struct expected_epochs	*expected_epochs = NULL;
 	uint32_t		 inob;
