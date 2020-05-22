@@ -23,8 +23,6 @@
 '''
 from __future__ import print_function
 
-import subprocess
-import os
 import re
 
 from ClusterShell.NodeSet import NodeSet
@@ -87,12 +85,8 @@ class FioBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-    def _create_cont(self, doas_cmd):
+    def _create_cont(self):
         """Create a container.
-
-        Args:
-            daos_cmd (DaosCommand): daos command to issue the container
-                create
 
         Returns:
             str: UUID of the created container
