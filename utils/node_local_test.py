@@ -399,8 +399,11 @@ class DFuse():
 
     instance_num = 0
 
-    def __init__(self, daos, conf, pool=None, container=None):
-        self.dir = '/tmp/dfs_test'
+    def __init__(self, daos, conf, pool=None, container=None, path=None):
+        if path:
+            self.dir = path
+        else:
+            self.dir = '/tmp/dfs_test'
         self.pool = pool
         self.valgrind_file = None
         self.container = container
@@ -415,7 +418,6 @@ class DFuse():
         self.log_file = log_file.name
 
         self.valgrind = None
-
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
 
@@ -459,6 +461,8 @@ class DFuse():
                 ret = self._sp.wait(timeout=1)
                 print('dfuse command exited with {}'.format(ret))
                 self._sp = None
+                if os.path.exists(self.log_file):
+                    log_test(self.log_file)
                 raise Exception('dfuse died waiting for start')
             except subprocess.TimeoutExpired:
                 pass
@@ -617,11 +621,13 @@ def show_cont(conf, pool):
     """Create a container and return a container list"""
     cmd = ['container', 'create', '--svc', '0', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
+    assert rc.returncode == 0
     print('rc is {}'.format(rc))
 
     cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
+    assert rc.returncode == 0
     return rc.stdout.strip()
 
 def make_pool(daos, conf):
@@ -717,9 +723,6 @@ def log_test(conf,
     global lp
     global lt
 
-    lp = __import__('cart_logparse')
-    lt = __import__('cart_logtest')
-
     log_iter = lp.LogIter(filename)
     lto = lt.LogTest(log_iter)
 
@@ -755,6 +758,47 @@ def create_and_read_via_il(dfuse, path):
     print(os.fstat(ofd.fileno()))
     ofd.close()
     il_cmd(dfuse, ['cat', fname])
+
+def run_duns_overlay_test(server, conf):
+    """Create a DUNS entry point, and then start fuse over it
+
+    Fuse should use the pool/container IDs from the entry point,
+    and expose the container.
+    """
+    daos = import_daos(server, conf)
+
+    pools = get_pool_list()
+    while len(pools) < 1:
+        pools = make_pool(daos, conf)
+
+    parent_dir = tempfile.TemporaryDirectory(prefix='dnt_uns_')
+
+    uns_dir = os.path.join(parent_dir.name, 'uns_ep')
+
+    rc = run_daos_cmd(conf, ['container',
+                             'create',
+                             '--svc',
+                             '0',
+                             '--pool',
+                             pools[0],
+                             '--type',
+                             'POSIX',
+                             '--path',
+                             uns_dir])
+
+    print('rc is {}'.format(rc))
+    assert rc.returncode == 0
+
+    dfuse = DFuse(server, conf, path=uns_dir)
+
+    dfuse.start(v_hint='uns-overlay')
+    # To show the contents.
+    # getfattr -d <file>
+
+    # This should work now if the container was correctly found
+    create_and_read_via_il(dfuse, uns_dir)
+
+    dfuse.stop()
 
 def run_dfuse(server, conf):
     """Run several dfuse instances"""
@@ -1105,11 +1149,14 @@ def main():
         run_in_fg(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
         test_pydaos_kv(server, conf)
+    elif len(sys.argv) == 2 and sys.argv[1] == 'overlay':
+        run_duns_overlay_test(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'fi':
         fatal_errors = test_alloc_fail(conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'all':
         run_il_test(server, conf)
         run_dfuse(server, conf)
+        run_duns_overlay_test(server, conf)
         test_pydaos_kv(server, conf)
         fatal_errors = test_alloc_fail(conf)
     else:
