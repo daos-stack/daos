@@ -74,12 +74,12 @@ class DaosCommand(CommandWithSubCommand):
         # Sample get-attr output - no line break.
         # 04/20-17:47:07.86 wolf-3 Container's attr1 attribute value:  04
         # /20-17:47:07.86 wolf-3 val1
-        "container_get_attr": r"\b(\S+)$",
+        "container_get_attr": r"value:  \S+ \S+ (.+)$",
         # Sample list output.
         #  04/20-17:52:33.63 wolf-3 Container attributes:
         #  04/20-17:52:33.63 wolf-3 attr1
         #  04/20-17:52:33.63 wolf-3 attr2
-        "container_list_attrs": r"\b([^:\s]+)\n"
+        "container_list_attrs": r"\n \S+ \S+ (.+)"
     }
 
     def __init__(self, path):
@@ -656,10 +656,10 @@ class DaosCommand(CommandWithSubCommand):
         """List containers in the given pool.
 
         Args:
-            pool (String): Pool UUID
-            svc (String, optional): Service replicas. If there are multiple,
-                numbers must be separated by comma like 1,2,3
-            sys_name (String, optional): System name. Defaults to None.
+            pool (str): Pool UUID
+            svc (str): Service replicas. If there are multiple, numbers must be
+                separated by comma like 1,2,3
+            sys_name (str, optional): System name. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -680,10 +680,10 @@ class DaosCommand(CommandWithSubCommand):
         """Set pool attribute.
 
         Args:
-            pool (String): Pool UUID.
-            attr (String): Attribute name.
-            value (String): Attribute value
-            svc (String): Service replicas.
+            pool (str): Pool UUID.
+            attr (str): Attribute name.
+            value (str): Attribute value
+            svc (str): Service replicas.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -705,9 +705,9 @@ class DaosCommand(CommandWithSubCommand):
         """Set pool attribute.
 
         Args:
-            pool (String): Pool UUID.
-            attr (String): Pool UUID.
-            svc (String): Service replicas.
+            pool (str): Pool UUID.
+            attr (str): Pool UUID.
+            svc (str): Service replicas.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -728,8 +728,8 @@ class DaosCommand(CommandWithSubCommand):
         """List pool attributes.
 
         Args:
-            pool (String): Pool UUID.
-            svc (String): Service replicas.
+            pool (str): Pool UUID.
+            svc (str): Service replicas.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -749,11 +749,11 @@ class DaosCommand(CommandWithSubCommand):
         """Query a container.
 
         Args:
-            pool (String): Pool UUID.
-            cont (String): Container UUID.
-            svc (String): pool service replicas, e.g., '1,2,3'. Defaults to
-                None.
-            sys_name (String, optional): DAOS system name context for servers.
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            svc (str, optional): pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
         Returns:
@@ -776,13 +776,13 @@ class DaosCommand(CommandWithSubCommand):
         """Call daos container set-attr.
 
         Args:
-            pool (String): Pool UUID.
-            cont (String): Container UUID.
-            attr (String): Attribute name.
-            val (String): Attribute value.
-            svc (String): Pool service replicas, e.g., '1,2,3'. Defaults to
-                None.
-            sys_name (String, optional): DAOS system name context for servers.
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            attr (str): Attribute name.
+            val (str): Attribute value.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
         Returns:
@@ -806,12 +806,12 @@ class DaosCommand(CommandWithSubCommand):
         """Call daos container get-attr.
 
         Args:
-            pool (String): Pool UUID.
-            cont (String): Container UUID.
-            attr (String): Attribute name.
-            svc (String): Pool service replicas, e.g., '1,2,3'. Defaults to
-                None.
-            sys_name (String, optional): DAOS system name context for servers.
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            attr (str): Attribute name.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
         Returns:
@@ -834,11 +834,11 @@ class DaosCommand(CommandWithSubCommand):
         """Call daos container list-attrs.
 
         Args:
-            pool (String): Pool UUID.
-            cont (String): Container UUID.
-            svc (String): Pool service replicas, e.g., '1,2,3'. Defaults to
-                None.
-            sys_name (String, optional): DAOS system name context for servers.
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
         Returns:

@@ -34,16 +34,37 @@ class ContainerQueryAttributeTest(TestWithServers):
         that was returned when creating the pool/container.
 
         Attribute test:
-        1. Create 5 attributes to a container. We can set attribute
-        name and corresponding value, so set unique name-value pair for each of
-        the 5 attributes.
-        2. Call continaer list-attrs. This returns the 5 attribute names, so
-        compare them against the actual names used.
-        3. Call container get-attr. This returns the value of the corresponding
-        name, so do this for each of the 5 attributes.
+        1. Prepare 7 types of strings; alphabets, numbers, special characters,
+        etc.
+        2. Create attributes with each of these 7 types in attr and value;
+        i.e., 14 total attributes are created.
+        3. Call get-attr for each of the 14 attrs and verify the returned
+        values.
+        4. Call list-attrs and verify the returned attrs.
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a ContainerQueryAttribute object."""
+        super(ContainerQueryAttributeTest, self).__init__(*args, **kwargs)
+        self.expected_pool_uuid = None
+        self.expected_cont_uuid = None
+        self.sr = None
+        self.daos_cmd = None
+    
+    def create_pool_container(self):
+        """Create a pool and a container in the pool.
+
+        Save some variables so that we can use them in the tests.
+        """
+        pool_create_result = self.get_dmg_command().get_output(
+            "pool_create", scm_size="1G")
+        self.expected_pool_uuid = pool_create_result[0]
+        self.sr = pool_create_result[1]
+        self.daos_cmd = DaosCommand(self.bin)
+        self.expected_cont_uuid = self.daos_cmd.get_output(
+            "container_create", pool=self.expected_pool_uuid, svc=self.sr)[0]
 
     def test_container_query_attr(self):
         """JIRA ID: DAOS-4640
@@ -53,61 +74,132 @@ class ContainerQueryAttributeTest(TestWithServers):
             above.
 
         Use Cases:
-            Test container query, set-attr, list-attr, and get-attr commands.
+            Test container query, set-attr, get-attr, and list-attrs.
 
         :avocado: tags=all,pool,small,full_regression,cont_query_attr
         """
-        # 1. Test pool query.
-        kwargs = {"scm_size": "1G"}
-        pool_create_result = self.get_dmg_command().get_output(
-            "pool_create", **kwargs)
-        expected_pool_uuid = pool_create_result[0]
-        sr = pool_create_result[1]
-        daos_cmd = DaosCommand(self.bin)
-        # Create container and store the UUID as expected.
-        kwargs = {"pool": expected_pool_uuid, "svc": sr}
-        expected_cont_uuid = daos_cmd.get_output(
-            "container_create", **kwargs)[0]
+        # Test pool query.
+        self.create_pool_container()
         # Call daos container query, obtain pool and container UUID, and
         # compare against those used when creating the pool and the container.
-        kwargs["cont"] = expected_cont_uuid
-        query_output = daos_cmd.get_output("container_query", **kwargs)[0]
+        kwargs = {
+            "pool": self.expected_pool_uuid,
+            "svc": self.sr,
+            "cont": self.expected_cont_uuid
+        }
+        query_output = self.daos_cmd.get_output("container_query", **kwargs)[0]
         actual_pool_uuid = query_output[0]
         actual_cont_uuid = query_output[1]
-        self.assertEqual(actual_pool_uuid, expected_pool_uuid)
-        self.assertEqual(actual_cont_uuid, expected_cont_uuid)
+        self.assertEqual(actual_pool_uuid, self.expected_pool_uuid)
+        self.assertEqual(actual_cont_uuid, self.expected_cont_uuid)
 
-        # 2. Test container set-attr, get-attr, and list-attrs.
+        # Test container set-attr, get-attr, and list-attrs with different
+        # types of characters.
+        test_strings = [
+            "abcd",
+            "1234",
+            "abc123",
+            "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij",
+            # Characters that don't require backslash. The backslashes in here
+            # are required for the code to work, but not by daos.
+            "~@#$%^*-=_+[]\{\}:/?,.",
+            # Characters that require backslash.
+            "\`\&\(\)\\\;\\'\\\"\!\<\>",
+            # Characters that include space.
+            "\"aa bb\""]
+        # We added backslashes for the code to work, but get-attr output
+        # doesn't contain them, so prepare the expected output that doesn't
+        # include backslashes.
+        escape_to_not = {}
+        escape_to_not[test_strings[-3]] = "~@#$%^*-=_+[]{}:/?,."
+        # We still need a backslash before the double quote for the code to
+        # work.
+        escape_to_not[test_strings[-2]] = "`&()\;'\"!<>"
+        escape_to_not[test_strings[-1]] = "aa bb"
+        # Prepare attr-value paris. Use the test_strings in value for the first
+        # 7 and in attr for the next 7.
+        attr_values = []
+        j = 0
+        for i in range(2):
+            for test_string in test_strings:
+                if i == 0:
+                    attr_values.append(["attr" + str(j), test_string])
+                else:
+                    attr_values.append([test_string, "attr" + str(j)])
+                j += 1
+
+        # Set and verify get-attr.
+        errors = []
         expected_attrs = []
-        expected_attrs_dict = {}
-        sample_attrs = []
-        sample_vals = []
-        # Create 5 attributes.
-        for i in range(5):
-            sample_attr = "attr" + str(i)
-            sample_val = "val" + str(i)
-            sample_attrs.append(sample_attr)
-            sample_vals.append(sample_val)
-            _ = daos_cmd.container_set_attr(
+        for attr_value in attr_values:
+            _ = self.daos_cmd.container_set_attr(
                 pool=actual_pool_uuid, cont=actual_cont_uuid,
-                attr=sample_attr, val=sample_val, svc=sr).stdout
-            expected_attrs.append(sample_attr)
-            expected_attrs_dict[sample_attr] = sample_val
+                attr=attr_value[0], val=attr_value[1], svc=self.sr)
+            kwargs["attr"] = attr_value[0]
+            actual_val = self.daos_cmd.get_output(
+                "container_get_attr", **kwargs)[0]
+            #self.log.debug("## value = %s", actual_val)
+            if attr_value[1] in escape_to_not:
+                # Special character string.
+                if actual_val != escape_to_not[attr_value[1]]:
+                    errors.append(
+                        "Unexpected output for get_attr: {} != {}\n".format(
+                            actual_val, escape_to_not[attr_value[1]]))
+            else:
+                # Standard character string.
+                if actual_val != attr_value[1]:
+                    errors.append(
+                        "Unexpected output for get_attr: {} != {}\n".format(
+                            actual_val, attr_value[1]))
+            # Collect comparable attr as a prepartion of list-attrs test.
+            if attr_value[0] in escape_to_not:
+                expected_attrs.append(escape_to_not[attr_value[0]])
+            else:
+                expected_attrs.append(attr_value[0])
+        self.assertEqual(len(errors), 0, "; ".join(errors))
+
+        # Verify that attr-lists works with test_strings.
         expected_attrs.sort()
-        # List the attribute names.
         kwargs = {
             "pool": actual_pool_uuid,
-            "svc": sr,
+            "svc": self.sr,
             "cont": actual_cont_uuid
         }
-        actual_attrs = daos_cmd.get_output("container_list_attrs", **kwargs)
+        actual_attrs = self.daos_cmd.get_output(
+            "container_list_attrs", **kwargs)
         actual_attrs.sort()
+        self.log.debug(str(actual_attrs))
         self.assertEqual(actual_attrs, expected_attrs)
-        # Verify each attribute's value.
-        errors = []
-        for i in range(5):
-            kwargs["attr"] = sample_attrs[i]
-            actual_val = daos_cmd.get_output("container_get_attr", **kwargs)[0]
-            if sample_vals[i] != actual_val:
-                errors.append("{} != {}".format(sample_vals[i], actual_val))
-        self.assertEqual(len(errors), 0, '\n'.join(errors))
+
+    def test_list_attrs_long(self):
+        """JIRA ID: DAOS-4640
+
+        Test Description:
+            Set many attributes and verify list-attrs works.
+
+        Use Cases:
+            Test daos container list-attrs with 50 attributes.
+
+        :avocado: tags=all,pool,small,full_regression,cont_list_attrs
+        """
+        self.create_pool_container()
+        expected_attrs = []
+        vals = []
+        for i in range(50):
+            expected_attrs.append("attr" + str(i))
+            vals.append("val" + str(i))
+        for expected_attr, val in zip(expected_attrs, vals):
+            _ = self.daos_cmd.container_set_attr(
+                pool=self.expected_pool_uuid, cont=self.expected_cont_uuid,
+                attr=expected_attr, val=val, svc=self.sr)
+        expected_attrs.sort()
+        kwargs = {
+            "pool": self.expected_pool_uuid,
+            "svc": self.sr,
+            "cont": self.expected_cont_uuid
+        }
+        actual_attrs = self.daos_cmd.get_output(
+            "container_list_attrs", **kwargs)
+        actual_attrs.sort()
+        self.assertEqual(
+            expected_attrs, actual_attrs, "Unexpected output from list_attrs")
