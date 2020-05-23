@@ -783,8 +783,6 @@ def run_dfuse(server, conf):
     os.mkdir(child_path)
     run_container_query(conf, child_path)
 
-    return
-
     dfuse.stop()
 
     print('Trying UNS')
