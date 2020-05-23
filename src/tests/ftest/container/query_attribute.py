@@ -52,7 +52,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         self.expected_cont_uuid = None
         self.sr = None
         self.daos_cmd = None
-    
+
     def create_pool_container(self):
         """Create a pool and a container in the pool.
 
@@ -151,7 +151,7 @@ class ContainerQueryAttributeTest(TestWithServers):
                     errors.append(
                         "Unexpected output for get_attr: {} != {}\n".format(
                             actual_val, attr_value[1]))
-            # Collect comparable attr as a prepartion of list-attrs test.
+            # Collect comparable attr as a preparation of list-attrs test.
             if attr_value[0] in escape_to_not:
                 expected_attrs.append(escape_to_not[attr_value[0]])
             else:
