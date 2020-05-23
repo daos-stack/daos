@@ -82,7 +82,7 @@ mem_pin_workaround(void)
 		D_GOTO(exit, crt_rc = -DER_MISC);
 	}
 
-	/* Disable fastbins -- this option is not available on all systems */
+	/* Disable fastbins; this option is not available on all systems */
 	rc = mallopt(M_MXFAST, 0);
 	if (rc != 1)
 		D_ERROR("Failed to disable malloc fastbins: %d\n", errno);
