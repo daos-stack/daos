@@ -251,31 +251,45 @@ func TestPoolCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
-		// TODO: Tests need to be fixed after pull pool info
-		/*{
+		/* TODO: Tests need to be fixed after pull pool info */
+		{
+			"Extend pool with missing arguments",
+			"pool extend",
+			"",
+			errMissingFlag,
+		},
+		{
 			"Extend a pool with a single rank",
-			"pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1",
+			fmt.Sprintf("pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1 --scm-size %s", testScmSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
 				printRequest(t, &control.PoolExtendReq{
-					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks: []uint32{1},
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []uint32{1},
+					ScmBytes:  uint64(testScmSize),
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Sys:       "daos_server",
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Extend a pool with multiple ranks",
-			"pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1,2,3",
+			fmt.Sprintf("pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1,2,3 --scm-size %s", testScmSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
 				printRequest(t, &control.PoolExtendReq{
-					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks: []uint32{1, 2, 3},
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []uint32{1, 2, 3},
+					ScmBytes:  uint64(testScmSize),
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Sys:       "daos_server",
 				}),
 			}, " "),
 			nil,
-		},*/
+		},
 		{
 			"Reintegrate a target with single target idx",
 			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",

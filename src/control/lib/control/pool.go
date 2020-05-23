@@ -452,15 +452,14 @@ type PoolExtendReq struct {
 	UUID  string
 	Ranks []uint32
 	// TEMP SECTION
-	ScmBytes   uint64
-	NvmeBytes  uint64
-	Sys        string
-	User       string
-	UserGroup  string
-	ACL        *AccessControlList
+	ScmBytes  uint64
+	NvmeBytes uint64
+	Sys       string
+	User      string
+	UserGroup string
+	ACL       *AccessControlList
 	// END TEMP SECTION
 }
-
 
 // PoolExtend will extend the DAOS pool by the specified ranks.
 // This should automatically start the rebalance process.

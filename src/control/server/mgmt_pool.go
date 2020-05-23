@@ -189,7 +189,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolExtend, req)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolExtend, req)
 	if err != nil {
 		return nil, err
 	}

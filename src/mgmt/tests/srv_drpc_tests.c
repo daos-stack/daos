@@ -1654,6 +1654,7 @@ setup_extend_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 
 	req.uuid = uuid;
 	req.n_ranks = 3;
+	req.scmbytes = 1000000000;
 	req.ranks = TEST_RANKS;
 	pack_pool_extend_req(call, &req);
 }
