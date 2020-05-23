@@ -394,6 +394,8 @@ pool_create_and_destroy_retry(void **state)
 	uuid_t		 uuid;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (arg->myrank != 0)
 		return;
 

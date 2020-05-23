@@ -249,6 +249,8 @@ io_with_server_side_verify(void **state)
 	struct csum_test_ctx	 ctx = {0};
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/**
 	 * Setup
 	 */
@@ -326,6 +328,8 @@ test_server_data_corruption(void **state)
 	struct csum_test_ctx	 ctx = {0};
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, OC_SX);
 
@@ -358,6 +362,8 @@ test_fetch_array(void **state)
 {
 	int			rc;
 	struct csum_test_ctx	ctx = {0};
+
+	FAULT_INJECTION_REQUIRED();
 
 	/**
 	 * Setup
@@ -740,6 +746,8 @@ single_value(void **state)
 {
 	struct csum_test_ctx	ctx = {0};
 	int			rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
 

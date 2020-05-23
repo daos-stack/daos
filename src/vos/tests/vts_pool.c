@@ -124,6 +124,8 @@ pool_interop(void **state)
 	daos_handle_t		poh;
 	int			ret;
 
+	FAULT_INJECTION_REQUIRED();
+
 	uuid_generate(uuid);
 
 	daos_fail_loc_set(FLC_POOL_DF_VER | DAOS_FAIL_ONCE);
