@@ -26,7 +26,7 @@ from daos_utils import DaosCommand
 
 
 class ContainerQueryAttributeTest(TestWithServers):
-    # pylint: anomalous-backslash-in-string
+    # pylint: disable=anomalous-backslash-in-string
     """Test class for daos container query and attribute tests.
 
     Test Class Description:
