@@ -73,7 +73,7 @@ static int
 mem_pin_workaround(void)
 {
 	int crt_rc = 0;
-	int rc;
+	int rc = 0;
 
 	/* Prevent malloc from releasing memory via sbrk syscall */
 	rc = mallopt(M_TRIM_THRESHOLD, -1);
