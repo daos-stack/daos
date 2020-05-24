@@ -26,6 +26,7 @@ from daos_utils import DaosCommand
 
 
 class ContainerQueryAttributeTest(TestWithServers):
+    # pylint: anomalous-backslash-in-string
     """Test class for daos container query and attribute tests.
 
     Test Class Description:
@@ -108,7 +109,7 @@ class ContainerQueryAttributeTest(TestWithServers):
             # Characters that include space.
             "\"aa bb\""]
         # We added backslashes for the code to work, but get-attr output
-        # doesn't contain them, so prepare the expected output that doesn't
+        # does not contain them, so prepare the expected output that does not
         # include backslashes.
         escape_to_not = {}
         escape_to_not[test_strings[-3]] = "~@#$%^*-=_+[]{}:/?,."
