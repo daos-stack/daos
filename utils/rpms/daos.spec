@@ -4,8 +4,8 @@
 %global cart_version 4.7.0
 
 Name:          daos
-Version:       0.9.4
-Release:       2%{?relval}%{?dist}
+Version:       1.0.0
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -317,6 +317,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Sat May 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0.0-1
+- Version bump to 1.0.0 (rc1)
+
 * Wed May 06 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.4-2
 - Move fuse dependencies to the client subpackage
 
