@@ -754,13 +754,14 @@ typedef int (*crt_rpc_task_t) (crt_context_t *ctx, void *rpc_hdlr_arg,
  *
  * \param[in] crt_ctx          The context to be registered.
  * \param[in] rpc_cb           The RPC process callback.
+ * \param[in] iv_reps_cb       The IV response callback.
  * \param[in] arg              The argument for RPC process callback.
  *
  * \return                     DER_SUCCESS on success, negative value if error.
  */
 int
-crt_context_register_rpc_task(crt_context_t crt_ctx,
-			      crt_rpc_task_t rpc_cb, void *arg);
+crt_context_register_rpc_task(crt_context_t crt_ctx, crt_rpc_task_t rpc_cb,
+			      crt_rpc_task_t iv_resp_cb, void *arg);
 
 /**
  * Dynamically register an RPC with features at server-side.
