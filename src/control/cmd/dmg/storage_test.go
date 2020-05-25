@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,27 +25,67 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestStorageCommands(t *testing.T) {
+	storageFormatReq := &control.StorageFormatReq{Reformat: true}
+	storageFormatReq.SetHostList([]string{})
+
 	runCmdTests(t, []cmdTest{
 		{
 			"Format without reformat",
 			"storage format",
-			"ConnectClients StorageFormat-false",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.StorageFormatReq{}),
+			}, " "),
 			nil,
 		},
 		{
 			"Format with reformat",
 			"storage format --reformat",
-			"ConnectClients StorageFormat-true",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.StorageFormatReq{Reformat: true}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reformat system without ranks filter",
+			"storage format --system",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemResetFormatReq{Ranks: []system.Rank{}}),
+				"ConnectClients",
+				printRequest(t, storageFormatReq),
+			}, " "),
+			nil,
+		},
+		{
+			"Reformat system with ranks filter",
+			"storage format --system --ranks 0,1,2,3,4", // TODO DAOS-4454: enable [0-4] syntax
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.SystemResetFormatReq{
+					Ranks: []system.Rank{0, 1, 2, 3, 4},
+				}),
+				"ConnectClients",
+				printRequest(t, storageFormatReq),
+			}, " "),
 			nil,
 		},
 		{
 			"Scan",
 			"storage scan",
-			"ConnectClients StorageScan-<nil>",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.StorageScanReq{}),
+			}, " "),
 			nil,
 		},
 		{
@@ -63,13 +103,23 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Prepare with scm-only",
 			"storage prepare --force --scm-only",
-			"ConnectClients StoragePrepare",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.StoragePrepareReq{
+					SCM: &control.ScmPrepareReq{},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"Prepare with nvme-only",
 			"storage prepare --force --nvme-only",
-			"ConnectClients StoragePrepare",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.StoragePrepareReq{
+					NVMe: &control.NvmePrepareReq{},
+				}),
+			}, " "),
 			nil,
 		},
 		{
@@ -81,13 +131,25 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Prepare with force and reset",
 			"storage prepare --force --reset",
-			"ConnectClients StoragePrepare",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.StoragePrepareReq{
+					NVMe: &control.NvmePrepareReq{Reset: true},
+					SCM:  &control.ScmPrepareReq{Reset: true},
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"Prepare with force",
 			"storage prepare --force",
-			"ConnectClients StoragePrepare",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.StoragePrepareReq{
+					NVMe: &control.NvmePrepareReq{Reset: false},
+					SCM:  &control.ScmPrepareReq{Reset: false},
+				}),
+			}, " "),
 			nil,
 		},
 		{

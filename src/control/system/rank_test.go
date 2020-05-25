@@ -252,3 +252,119 @@ func TestSystem_NonPointerRankEquals(t *testing.T) {
 		})
 	}
 }
+
+func TestSystem_RankRemoveFromList(t *testing.T) {
+	for name, tc := range map[string]struct {
+		r        Rank
+		rl       []Rank
+		expRanks []Rank
+	}{
+		"no list": {
+			r:        Rank(1),
+			rl:       []Rank{},
+			expRanks: []Rank{},
+		},
+		"present": {
+			r:        Rank(1),
+			rl:       []Rank{Rank(0), Rank(1)},
+			expRanks: []Rank{Rank(0)},
+		},
+		"absent": {
+			r:        Rank(1),
+			rl:       []Rank{Rank(0), Rank(2)},
+			expRanks: []Rank{Rank(0), Rank(2)},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotList := tc.r.RemoveFromList(tc.rl)
+			common.AssertEqual(t, tc.expRanks, gotList, name)
+		})
+	}
+}
+
+func TestSystem_RankInList(t *testing.T) {
+	for name, tc := range map[string]struct {
+		r       Rank
+		rl      []Rank
+		expBool bool
+	}{
+		"no list": {
+			r:       Rank(1),
+			rl:      []Rank{},
+			expBool: false,
+		},
+		"present": {
+			r:       Rank(1),
+			rl:      []Rank{Rank(0), Rank(1)},
+			expBool: true,
+		},
+		"absent": {
+			r:       Rank(1),
+			rl:      []Rank{Rank(0), Rank(2)},
+			expBool: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotBool := tc.r.InList(tc.rl)
+			common.AssertEqual(t, tc.expBool, gotBool, name)
+		})
+	}
+}
+
+func TestSystem_RanksToUint32(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rl       []Rank
+		expRanks []uint32
+	}{
+		"nil list": {
+			rl:       nil,
+			expRanks: []uint32{},
+		},
+		"no list": {
+			rl:       []Rank{},
+			expRanks: []uint32{},
+		},
+		"with list": {
+			rl:       []Rank{Rank(0), Rank(1), Rank(2)},
+			expRanks: []uint32{0, 1, 2},
+		},
+		"NilRank in list": {
+			rl:       []Rank{Rank(0), Rank(2), NilRank},
+			expRanks: []uint32{0, 2, 0xffffffff},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotList := RanksToUint32(tc.rl)
+			common.AssertEqual(t, tc.expRanks, gotList, name)
+		})
+	}
+}
+
+func TestSystem_RanksFromUint32(t *testing.T) {
+	for name, tc := range map[string]struct {
+		expRanks []Rank
+		rl       []uint32
+	}{
+		"nil list": {
+			rl:       nil,
+			expRanks: []Rank{},
+		},
+		"no list": {
+			rl:       []uint32{},
+			expRanks: []Rank{},
+		},
+		"with list": {
+			rl:       []uint32{0, 1, 2},
+			expRanks: []Rank{Rank(0), Rank(1), Rank(2)},
+		},
+		"NilRank in list": {
+			rl:       []uint32{0, 2, 0xffffffff},
+			expRanks: []Rank{Rank(0), Rank(2), NilRank},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotList := RanksFromUint32(tc.rl)
+			common.AssertEqual(t, tc.expRanks, gotList, name)
+		})
+	}
+}

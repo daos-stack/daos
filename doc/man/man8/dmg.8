@@ -1,4 +1,4 @@
-.TH dmg 1 "1 April 2020"
+.TH dmg 1 "12 May 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -27,12 +27,37 @@ enable debug output
 \fB\fB\-j\fR, \fB\-\-json\fR\fP
 Enable JSON output
 .TP
+\fB\fB\-J\fR, \fB\-\-json-logging\fR\fP
+Enable JSON-formatted log output
+.TP
 \fB\fB\-f\fR, \fB\-\-host-file\fR\fP
 path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList
 .TP
 \fB\fB\-o\fR, \fB\-\-config-path\fR\fP
 Client config file path
 .SH COMMANDS
+.SS cont
+Perform tasks related to DAOS containers
+
+\fBAliases\fP: c
+
+.SS cont set-owner
+Change the owner for a DAOS container
+
+\fBUsage\fP: cont set-owner [set-owner-OPTIONS]
+.TP
+.TP
+\fB\fB\-g\fR, \fB\-\-group\fR\fP
+New owner-group for the container, format name@domain
+.TP
+\fB\fB\-u\fR, \fB\-\-user\fR\fP
+New owner-user for the container, format name@domain
+.TP
+\fB\fB\-c\fR, \fB\-\-cont\fR (\fIrequired\fR)\fP
+UUID of the DAOS container
+.TP
+\fB\fB\-p\fR, \fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of the DAOS pool for the container
 .SS network
 Perform tasks related to network devices attached to remote servers
 
@@ -119,6 +144,23 @@ UUID of DAOS pool to destroy
 .TP
 \fB\fB\-f\fR, \fB\-\-force\fR\fP
 Force removal of DAOS pool
+.SS pool exclude
+Exclude a list of targets from a rank
+
+\fBUsage\fP: pool exclude [exclude-OPTIONS]
+.TP
+
+\fBAliases\fP: e
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of the DAOS pool to exclude a target from
+.TP
+\fB\fB\-\-rank\fR (\fIrequired\fR)\fP
+Rank of the targets to be excluded
+.TP
+\fB\fB\-\-target-idx\fR (\fIrequired\fR)\fP
+Comma-seperated list of target idx(s) to be excluded from the rank
 .SS pool get-acl
 Get a DAOS pool's Access Control List
 
@@ -169,6 +211,23 @@ Query a DAOS pool
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
 UUID of DAOS pool to query
+.SS pool reintegrate
+Reintegrate a list of targets for a rank
+
+\fBUsage\fP: pool reintegrate [reintegrate-OPTIONS]
+.TP
+
+\fBAliases\fP: r
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of the DAOS pool to start reintegration in
+.TP
+\fB\fB\-\-rank\fR (\fIrequired\fR)\fP
+Rank of the targets to be reintegrated
+.TP
+\fB\fB\-\-target-idx\fR (\fIrequired\fR)\fP
+Comma-seperated list of target idx(s) to be reintegrated into the rank
 .SS pool set-prop
 Set pool property
 
@@ -216,12 +275,21 @@ Format SCM and NVMe storage attached to remote servers.
 
 \fBAliases\fP: f
 
+.SS Format SCM and NVMe storage attached to remote servers.
 .TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 Show results of each SCM & NVMe device format operation
 .TP
 \fB\fB\-\-reformat\fR\fP
 Always reformat storage (CAUTION: Potentially destructive)
+.SS System Format Options
+Reformat an existing DAOS system
+.TP
+\fB\fB\-\-system\fR\fP
+Perform reformat of stopped DAOS servers in system
+.TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated list of system ranks to format, default is all ranks
 .SS storage prepare
 Prepare SCM and NVMe storage attached to remote servers.
 
@@ -359,8 +427,14 @@ Comma separated list of system ranks to query
 .SS system start
 Perform start of stopped DAOS system
 
+\fBUsage\fP: system start [start-OPTIONS]
+.TP
+
 \fBAliases\fP: r
 
+.TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated list of system ranks to query
 .SS system stop
 Perform controlled shutdown of DAOS system
 
@@ -372,5 +446,8 @@ Perform controlled shutdown of DAOS system
 .TP
 \fB\fB\-\-force\fR\fP
 Force stop DAOS system members
+.TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated list of system ranks to query
 .SS version
 Print dmg version

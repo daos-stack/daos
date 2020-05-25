@@ -198,6 +198,8 @@ int pool_map_find_domain(struct pool_map *map, pool_comp_type_t type,
 			 uint32_t id, struct pool_domain **domain_pp);
 int pool_map_find_nodes(struct pool_map *map, uint32_t id,
 			struct pool_domain **domain_pp);
+int pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+			  unsigned int *tgt_cnt);
 int pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			    unsigned int *tgt_cnt);
 int pool_map_update_failed_cnt(struct pool_map *map);

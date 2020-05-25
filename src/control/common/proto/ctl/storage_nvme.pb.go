@@ -587,9 +587,7 @@ func init() {
 	proto.RegisterType((*FormatNvmeReq)(nil), "ctl.FormatNvmeReq")
 }
 
-func init() {
-	proto.RegisterFile("storage_nvme.proto", fileDescriptor_b4b1a62bc89112d2)
-}
+func init() { proto.RegisterFile("storage_nvme.proto", fileDescriptor_b4b1a62bc89112d2) }
 
 var fileDescriptor_b4b1a62bc89112d2 = []byte{
 	// 627 bytes of a gzipped FileDescriptorProto

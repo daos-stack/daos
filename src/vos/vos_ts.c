@@ -48,9 +48,9 @@ static const uint32_t type_counts[] = {
 
 #define TS_TRACE(action, entry, idx, type)				\
 	D_DEBUG(DB_TRACE, "%s %s at idx %d(%p), read.hi="DF_U64		\
-		" read.lo="DF_U64" write="DF_U64"\n", action,		\
-		type_strs[type], idx, (entry)->te_record_ptr,		\
-		(entry)->te_ts_rh, (entry)->te_ts_rl, (entry)->te_ts_w)
+		" read.lo="DF_U64"\n", action, type_strs[type], idx,	\
+		(entry)->te_record_ptr, (entry)->te_ts_rh,		\
+		(entry)->te_ts_rl)
 
 /** This probably needs more thought */
 static bool
@@ -74,25 +74,23 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 			neg_info = info - 1;
 		}
 		lrua_lookup(parent_info->ti_array, entry->te_parent_ptr,
-			    (void **)&parent);
+			    &parent);
 		if (neg_info == NULL) {
 			other = parent;
 		} else if (parent != NULL) {
 			idx = &parent->te_miss_idx[entry->te_hash_idx];
-			lrua_lookup(neg_info->ti_array, idx, (void **)&other);
+			lrua_lookup(neg_info->ti_array, idx, &other);
 		}
 	}
 
 	if (other == NULL) {
 		ts_table->tt_ts_rl = MAX(ts_table->tt_ts_rl, entry->te_ts_rl);
 		ts_table->tt_ts_rh = MAX(ts_table->tt_ts_rh, entry->te_ts_rh);
-		ts_table->tt_ts_w = MAX(ts_table->tt_ts_w, entry->te_ts_w);
 		return true;
 	}
 
 	other->te_ts_rl = MAX(other->te_ts_rl, entry->te_ts_rl);
 	other->te_ts_rh = MAX(other->te_ts_rh, entry->te_ts_rh);
-	other->te_ts_w = MAX(other->te_ts_w, entry->te_ts_w);
 
 	return true;
 }
@@ -180,7 +178,6 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 
 	ts_table->tt_ts_rl = vos_start_epoch;
 	ts_table->tt_ts_rh = vos_start_epoch;
-	ts_table->tt_ts_w = vos_start_epoch;
 	miss_cursor = ts_table->tt_misses;
 	for (i = 0; i < VOS_TS_TYPE_COUNT; i++) {
 		info = &ts_table->tt_type_info[i];
@@ -209,8 +206,8 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 			miss_cursor += info->ti_count * miss_size;
 		}
 
-		rc = lrua_array_alloc(&info->ti_array, info->ti_count,
-				      sizeof(struct vos_ts_entry), &lru_cbs,
+		rc = lrua_array_alloc(&info->ti_array, info->ti_count, 1,
+				      sizeof(struct vos_ts_entry), 0, &lru_cbs,
 				      info);
 		if (rc != 0)
 			goto cleanup;
@@ -254,29 +251,28 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 	struct vos_ts_entry	*entry;
 	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
 	uint32_t		*neg_idx;
+	int			 rc;
 
-	entry = lrua_alloc(ts_table->tt_type_info[type].ti_array, idx,
-			   true);
+	rc = lrua_alloc(ts_table->tt_type_info[type].ti_array, idx, &entry);
+	D_ASSERT(rc == 0); /** autoeviction and no allocation */
 
 	if (parent == NULL) {
 		/** Use global timestamps for the type to initialize it */
 		entry->te_ts_rl = ts_table->tt_ts_rl;
 		entry->te_ts_rh = ts_table->tt_ts_rh;
-		entry->te_ts_w = ts_table->tt_ts_w;
 		entry->te_parent_ptr = NULL;
 	} else {
 		entry->te_parent_ptr = parent->te_record_ptr;
 		if ((type & 1) == 0) { /* positive entry */
 			neg_idx = &parent->te_miss_idx[hash_idx];
 			lrua_lookup(parent->te_info->ti_array, neg_idx,
-				    (void **)&ts_source);
+				    &ts_source);
 		}
 		if (ts_source == NULL) /* for negative and uncached entries */
 			ts_source = parent;
 
 		entry->te_ts_rl = ts_source->te_ts_rl;
 		entry->te_ts_rh = ts_source->te_ts_rh;
-		entry->te_ts_w = ts_source->te_ts_w;
 	}
 
 	/** Set the lower bounds for the entry */
@@ -284,7 +280,6 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 	entry->te_record_ptr = idx;
 	uuid_clear(entry->te_tx_rl);
 	uuid_clear(entry->te_tx_rh);
-	uuid_clear(entry->te_tx_w);
 	TS_TRACE("Allocated", entry, *idx, type);
 
 	D_ASSERT(type == info->ti_type);

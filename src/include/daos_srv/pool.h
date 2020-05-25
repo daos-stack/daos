@@ -55,6 +55,7 @@ struct ds_pool {
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_iv_refresh_lock;
 	struct ds_iv_ns	       *sp_iv_ns;
+	uint32_t		sp_dtx_resync_version;
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -120,6 +121,7 @@ int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
+int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
@@ -133,6 +135,10 @@ int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
+int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
+				uint32_t rank,
+				struct pool_target_id_list *target_list,
+				pool_comp_state_t state);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
@@ -209,7 +215,6 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 			       unsigned int *failed_tgts_cnt);
-
 int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 			  struct daos_pool_cont_info **containers,
 			  uint64_t *ncontainers);

@@ -139,7 +139,7 @@ static int
 test_setup_pool_connect(void **state, struct test_pool *pool)
 {
 	test_arg_t *arg = *state;
-	int rc;
+	int rc = -DER_INVAL;
 
 	if (pool != NULL) {
 		assert_int_equal(arg->pool.slave, 1);
@@ -587,8 +587,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 		if (arg->srv_nnodes - disable_nodes < required_nodes) {
 			if (arg->myrank == 0)
 				print_message("Not enough targets(need %d),"
-					      " skipping "
-					      "(%d/%d)\n",
+					      " skipping (%d/%d)\n",
 					      required_nodes,
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);
@@ -712,9 +711,11 @@ test_rebuild_query(test_arg_t **args, int args_cnt)
 	int i;
 
 	for (i = 0; i < args_cnt; i++) {
-		bool done;
+		bool done = true;
 
-		done = rebuild_pool_wait(args[i]);
+		if (!args[i]->pool.destroyed)
+			done = rebuild_pool_wait(args[i]);
+
 		if (!done)
 			all_done = false;
 	}
@@ -746,11 +747,11 @@ run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 		}
 
 		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
+			if (sub_tests[i] >= tests_size || sub_tests[i] < 0) {
 				print_message("No subtest %d\n", sub_tests[i]);
 				continue;
 			}
-			subtests[i] = tests[sub_tests[i] - 1];
+			subtests[i] = tests[sub_tests[i]];
 			subtestsnb++;
 		}
 
@@ -860,34 +861,15 @@ daos_add_server(const uuid_t pool_uuid, const char *grp,
 }
 
 void
-daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
-		 d_rank_list_t *svc, d_rank_t rank)
-{
-	int tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
-	int rc;
-
-	arg->srv_disabled_ntgts += tgts_per_node;
-	if (d_rank_in_rank_list(svc, rank))
-		svc->rl_nr--;
-	print_message("\tKilling rank %d (total of %d with %d already "
-		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
-		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
-
-	/** kill server */
-	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
-	assert_int_equal(rc, 0);
-}
-
-void
-daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			 const char *grp, d_rank_list_t *svc)
+daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
+		 const char *grp, d_rank_list_t *svc, d_rank_t rank)
 {
 	int		tgts_per_node;
 	int		disable_nodes;
 	int		failures = 0;
 	int		max_failure;
 	int		i;
-	d_rank_t	rank;
+	int		rc;
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -906,10 +888,18 @@ daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 		return;
 	}
 
-	rank = arg->srv_nnodes - disable_nodes - 1;
+	if ((int)rank == -1)
+		rank = arg->srv_nnodes - disable_nodes - 1;
 
-	daos_kill_server(arg, pool_uuid, grp, svc, rank);
-	daos_exclude_server(pool_uuid, grp, svc, rank);
+	arg->srv_disabled_ntgts += tgts_per_node;
+	if (d_rank_in_rank_list(svc, rank))
+		svc->rl_nr--;
+	print_message("\tKilling rank %d (total of %d with %d already "
+		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
+		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
+
+	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
+	assert_int_equal(rc, 0);
 }
 
 struct daos_acl *

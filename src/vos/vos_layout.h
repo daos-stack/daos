@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 #define POOL_DF_VER_1				1
-#define POOL_DF_VERSION				3
+#define POOL_DF_VERSION				6
 
 /**
  * Durable format for VOS pool
@@ -152,19 +152,8 @@ enum vos_dtx_entry_flags {
 	DTX_EF_INVALID			= (1 << 1),
 };
 
-/** The agent of the record being modified via the DTX in both SCM and DRAM. */
-struct vos_dtx_record_df {
-	/** The DTX record type, see enum vos_dtx_record_types. */
-	uint32_t			dr_type;
-	/** The 64-bits alignment. */
-	uint32_t			dr_padding;
-	/** The modified record in the related tree in SCM. */
-	umem_off_t			dr_record;
-};
-
 #define DTX_INLINE_REC_CNT	4
 #define DTX_REC_CAP_DEFAULT	4
-
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_act_ent_df {
@@ -178,19 +167,19 @@ struct vos_dtx_act_ent_df {
 	daos_epoch_t			dae_epoch;
 	/** The server generation when handles the DTX. */
 	uint64_t			dae_srv_gen;
-	/** The active DTX entry on-disk layout generation. */
-	uint64_t			dae_layout_gen;
+	/** The allocated local id for the DTX entry */
+	uint32_t			dae_lid;
 	/** The intent of related modification. */
-	uint32_t			dae_intent;
+	uint16_t			dae_intent;
 	/** The index in the current vos_dtx_blob_df. */
-	int32_t				dae_index;
+	int16_t				dae_index;
 	/** The inlined dtx records. */
-	struct vos_dtx_record_df	dae_rec_inline[DTX_INLINE_REC_CNT];
+	umem_off_t			dae_rec_inline[DTX_INLINE_REC_CNT];
 	/** DTX flags, see enum vos_dtx_entry_flags. */
 	uint32_t			dae_flags;
 	/** The DTX records count, including inline case. */
 	uint32_t			dae_rec_cnt;
-	/** The offset for the list of vos_dtx_record_df if out of inline. */
+	/** The offset for the list of dtx records if out of inline. */
 	umem_off_t			dae_rec_off;
 };
 
@@ -328,7 +317,9 @@ struct vos_irec_df {
 	/** pool map version */
 	uint32_t			ir_ver;
 	/** The DTX entry in SCM. */
-	umem_off_t			ir_dtx;
+	uint32_t			ir_dtx;
+	/** padding bytes */
+	uint32_t			ir_pad32;
 	/** length of value */
 	uint64_t			ir_size;
 	/**

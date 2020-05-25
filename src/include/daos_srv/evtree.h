@@ -62,7 +62,9 @@ struct evt_desc {
 	/** Magic number for validation */
 	uint32_t			dc_magic;
 	/** The DTX entry in SCM. */
-	umem_off_t			dc_dtx;
+	uint32_t			dc_dtx;
+	/** padding */
+	uint32_t			dc_pad;
 	/** placeholder for csum array buffer */
 	/** csum_count * csum_len (from tree root) is length of csum buf */
 	uint8_t				pt_csum[0];
@@ -97,8 +99,9 @@ struct evt_desc_cbs {
 	 * this method is absent.
 	 */
 	int		(*dc_log_status_cb)(struct umem_instance *umm,
-					    struct evt_desc *desc,
-					    int intent, void *args);
+					    daos_epoch_t epoch,
+					    struct evt_desc *desc, int intent,
+					    void *args);
 	void		 *dc_log_status_args;
 	/** Add a descriptor to undo log */
 	int		(*dc_log_add_cb)(struct umem_instance *umm,
@@ -106,6 +109,7 @@ struct evt_desc_cbs {
 	void		 *dc_log_add_args;
 	/** remove a descriptor to undo log */
 	int		(*dc_log_del_cb)(struct umem_instance *umm,
+					 daos_epoch_t epoch,
 					 struct evt_desc *desc, void *args);
 	void		 *dc_log_del_args;
 };
@@ -422,7 +426,8 @@ struct evt_policy_ops {
 			     struct evt_node *node,
 			     uint64_t in_off,
 			     const struct evt_entry_in *entry,
-			     bool *mbr_changed);
+			     bool *mbr_changed,
+			     uint8_t **csum_bufp);
 	/**
 	 * move half entries of the current node \a nd_src to the new
 	 * node \a nd_dst.
@@ -509,8 +514,10 @@ int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
  *
  * \param toh		[IN]	The tree open handle
  * \param entry		[IN]	The entry to insert
+ * \param csum_bufp	[OUT]	The pointer for the csum copy location.
  */
-int evt_insert(daos_handle_t toh, const struct evt_entry_in *entry);
+int evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
+	       uint8_t **csum_bufp);
 
 /**
  * Delete an extent \a rect from an opened tree.

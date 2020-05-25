@@ -41,7 +41,6 @@ dc_agent_init()
 	}
 
 	if (path == NULL) {
-		D_ERROR("Unable to allocate dc_agent_sockpath.");
 		return -DER_NOMEM;
 	}
 

@@ -299,7 +299,7 @@ objects_update(d_rank_t rank)
 	int		i;
 	int		j;
 	int		rc;
-	daos_epoch_t	epoch = 0;
+	daos_epoch_t	epoch = 1;
 
 	dts_reset_key();
 
@@ -378,7 +378,7 @@ objects_verify(void)
 	int		k;
 	int		rc = 0;
 	char		dkey[DTS_KEY_LEN];
-	daos_epoch_t	epoch = 0;
+	daos_epoch_t	epoch = 1;
 
 	dts_reset_key();
 	if (!ts_overwrite)
@@ -393,6 +393,7 @@ objects_verify(void)
 			}
 		}
 	}
+	rc = dts_credit_drain(&ts_ctx);
 	return rc;
 }
 
@@ -403,9 +404,13 @@ objects_verify_close(void)
 	int rc = 0;
 
 	if (ts_verify_fetch) {
-		rc = objects_verify();
-		fprintf(stdout, "Fetch verification: %s\n", rc ? "Failed" :
-			"Success");
+		if (ts_single || ts_overwrite) {
+			fprintf(stdout, "Verification is unsupported\n");
+		} else {
+			rc = objects_verify();
+			fprintf(stdout, "Fetch verification: %s\n",
+				rc ? "Failed" : "Success");
+		}
 	}
 
 	for (i = 0; ts_mode == TS_MODE_DAOS && i < ts_obj_p_cont; i++) {
@@ -438,6 +443,7 @@ objects_fetch(d_rank_t rank)
 				return rc;
 		}
 	}
+	rc = dts_credit_drain(&ts_ctx);
 	return rc;
 }
 

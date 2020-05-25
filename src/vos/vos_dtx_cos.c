@@ -407,7 +407,7 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 			/* The DTX has been aborted by resync ULT, ask the
 			 * client to retry.
 			 */
-			return -DER_NONEXIST;
+			return -DER_TX_RESTART;
 		default:
 			return rc >= 0 ? -DER_INVAL : rc;
 		}

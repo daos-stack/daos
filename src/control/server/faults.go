@@ -31,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -77,7 +78,20 @@ var (
 		fmt.Sprintf("%s harness not started", DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
+	FaultDataPlaneNotStarted = serverFault(
+		code.ServerDataPlaneNotStarted,
+		fmt.Sprintf("%s instance not started or not responding on dRPC", DataPlaneName),
+		"retry the operation or check server logs for more details",
+	)
 )
+
+func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
+	return serverFault(
+		code.ServerInstancesNotStopped,
+		fmt.Sprintf("%s not supported when rank %d is running", action, rank),
+		fmt.Sprintf("retry %s operation after stopping rank %d-", action, rank),
+	)
+}
 
 func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 	return serverFault(

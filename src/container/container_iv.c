@@ -975,7 +975,7 @@ out:
 }
 
 int
-cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
+cont_iv_prop_update(void *ns, uuid_t iv_key_uuid, uuid_t cont_uuid,
 		    daos_prop_t *prop)
 {
 	struct cont_iv_entry	*iv_entry;
@@ -993,7 +993,7 @@ cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	uuid_copy(iv_entry->cont_uuid, cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
 
-	rc = cont_iv_update(ns, IV_CONT_PROP, cont_hdl_uuid, iv_entry,
+	rc = cont_iv_update(ns, IV_CONT_PROP, iv_key_uuid, iv_entry,
 			    entry_size, CRT_IV_SHORTCUT_TO_ROOT,
 			    CRT_IV_SYNC_EAGER, false /* retry */);
 	D_FREE(iv_entry);

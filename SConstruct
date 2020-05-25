@@ -33,6 +33,21 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
+def run_checks(env):
+    """Run all configure time checks"""
+    if GetOption('help') or GetOption('clean'):
+        return
+    cenv = env.Clone()
+    cenv.Append(CFLAGS='-Werror')
+    if cenv.get("COMPILER") == 'icc':
+        cenv.Replace(CC='gcc', CXX='g++')
+    config = Configure(cenv)
+
+    if config.CheckHeader('stdatomic.h'):
+        env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+
+    config.Finish()
+
 def get_version():
     """ Read version from VERSION file """
     with open("VERSION", "r") as version_file:
@@ -109,10 +124,19 @@ def set_defaults(env):
 
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
-    env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
-    env.Append(CCFLAGS=['-D_FORTIFY_SOURCE=2'])
+    if env.get('BUILD_TYPE') == 'debug':
+        if env.get("COMPILER") == 'gcc':
+            env.AppendUnique(CCFLAGS=['-Og'])
+        else:
+            env.AppendUnique(CCFLAGS=['-O0'])
+    else:
+        if env.get('BUILD_TYPE') == 'release':
+            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])
+        env.AppendUnique(CCFLAGS=['-O2', '-D_FORTIFY_SOURCE=2'])
+
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
     if GetOption("preprocess"):
@@ -339,10 +363,14 @@ def scons(): # pylint: disable=too-many-locals
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    daos_build.load_mpi_path(env)
+    if not GetOption('help') and not GetOption('clean'):
+        daos_build.load_mpi_path(env)
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
+
+    run_checks(env)
+
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
@@ -377,6 +405,8 @@ def scons(): # pylint: disable=too-many-locals
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['utils/sl/env_modules.py'])
+    env.Install('$PREFIX/lib/daos/TESTING/ftest/',
+                ['ftest.sh'])
 
     # install the configuration files
     SConscript('utils/config/SConscript')
@@ -389,6 +419,9 @@ def scons(): # pylint: disable=too-many-locals
 
     Default(build_prefix)
     Depends('install', build_prefix)
+
+    # an "rpms" target
+    env.Command('rpms', '', 'make -C utils/rpms rpms')
 
     try:
         #if using SCons 2.4+, provide a more complete help

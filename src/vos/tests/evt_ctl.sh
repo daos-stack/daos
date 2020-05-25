@@ -10,8 +10,6 @@ DAOS_DIR=$(cd "${cwd}/../../.." && echo "$PWD")
 source "$DAOS_DIR/.build_vars.sh"
 EVT_CTL="$SL_PREFIX/bin/evt_ctl"
 
-cmd_create="$VCMD $EVT_CTL $* -C o:4"
-cmd=$cmd_create
 
 function word_set {
     ((flag = $1 % 2))
@@ -94,6 +92,9 @@ EOF
 )
 }
 
+# Sequence
+cmd="$VCMD $EVT_CTL --start-test \"evt tests $*\" $* -C o:4"
+
 i=0
 while [ $i -lt 20 ]; do
     ((base = i * 9))
@@ -156,19 +157,28 @@ EOF
 
 cmd+=" -b -2 -D"
 echo "$cmd"
-
-$cmd -t
+eval "$cmd"
 result="${PIPESTATUS[0]}"
 echo "Test returned $result"
 if (( result != 0 )); then
-	exit "$result"
+        exit "$result"
 fi
 
-cmd=$cmd_create
+# Internal tests
+cmd="$VCMD $EVT_CTL --start-test \"evtree built-in tests $*\" $* -t"
+echo "$cmd"
+eval "$cmd"
+result="${PIPESTATUS[0]}"
+echo "Internal tests returned $result"
+if (( result != 0 )); then
+        exit "$result"
+fi
+
+# Drain tests
+cmd="$VCMD $EVT_CTL --start-test \"evtree drain tests $*\" $* -C o:4"
 cmd+=" -e s:0,e:128,n:2379 -c"
 echo "$cmd"
-$cmd
-
+eval "$cmd"
 result="${PIPESTATUS[0]}"
 echo "Drain test returned $result"
 exit "$result"

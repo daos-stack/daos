@@ -2,14 +2,11 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0a1-0.7.git.41caa14%{?dist}
-
-%global spdk_max_version 21
-%global spdk_min_version 19
+%global mercury_version 2.0.0~a1-1.git.4871023%{?dist}
 
 Name:          daos
 Version:       1.1.0
-Release:       9%{?relval}%{?dist}
+Release:       18%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -32,17 +29,15 @@ BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: libabt-devel >= 1.0rc1
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
-BuildRequires: fuse-devel >= 3.4.2
+BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
-BuildRequires: spdk-devel > %{spdk_min_version}, spdk-devel < %{spdk_max_version}
-BuildRequires: spdk-tools > %{spdk_min_version}, spdk-tools < %{spdk_max_version}
+BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 %else
 BuildRequires: libisal-devel
 %endif
-BuildRequires: raft-devel <= 0.5.0
-BuildRequires: hwloc-devel
+BuildRequires: raft-devel >= 0.6.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -87,10 +82,7 @@ BuildRequires: libpsm_infinipath1
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1, libpmemobj1
 %endif
-Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: fio < 3.4
-Requires: spdk > %{spdk_min_version}, spdk < %{spdk_max_version}
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
@@ -112,7 +104,7 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: %{name}-client = %{version}-%{release}
-Requires: spdk-tools > %{spdk_min_version}, spdk-tools < %{spdk_max_version}
+Requires: spdk-tools
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
@@ -130,6 +122,14 @@ Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
+Requires: fuse3 >= 3.4.2
+%if (0%{?suse_version} >= 1500)
+Requires: libfuse3-3 >= 3.4.2
+%else
+# because our repo has a deprecated fuse-3.x RPM, make sure we don't
+# get it when fuse3 Requires: /etc/fuse.conf
+Requires: fuse < 3, fuse3-libs >= 3.4.2
+%endif
 %systemd_requires
 
 %description client
@@ -139,6 +139,7 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+Requires: fio
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -155,6 +156,17 @@ This is the package needed to run the DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: %{name} = %{version}-%{release}
 %endif
+Requires: libuuid-devel
+Requires: libyaml-devel
+Requires: boost-devel
+# Pin mercury to exact version during development
+#Requires: mercury-devel < 2.0.0a1
+# we ideally want to set this minimum version however it seems to confuse yum:
+# https://github.com/rpm-software-management/yum/issues/124
+#Requires: mercury >= 2.0.0~a1
+Requires: mercury-devel = %{mercury_version}
+Requires: openpa-devel
+Requires: hwloc-devel
 Summary: The DAOS development libraries and headers
 
 %description devel
@@ -274,7 +286,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/dmg
 %{_bindir}/dmg_old
 %{_bindir}/daosctl
-%{_bindir}/dcont
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
@@ -315,7 +326,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %endif
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
-%config(noreplace) %{conf_dir}/daos.yml
+%config(noreplace) %{conf_dir}/daos_control.yml
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
 %{_mandir}/man8/dmg.8*
@@ -346,6 +357,35 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Fri May 15 2020 Kenneth Cain <kenneth.c.cain@intel.com> - 1.1.0-18
+- Require raft-devel >= 0.6.0 that adds new API raft_election_start()
+
+* Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-17
+- Add cart-devel's Requires to daos-devel as they were forgotten
+  during the cart merge
+
+* Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-16
+- Fix fuse3-libs -> libfuse3 for SLES/Leap 15
+
+* Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-15
+- Use new properly pre-release tagged mercury RPM
+
+* Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-14
+- Move fuse dependencies to the client subpackage
+
+* Mon Apr 27 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-13
+- Rename /etc/daos.yml -> /etc/daos_control.yml
+
+* Thu Apr 16 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-12
+- Use distro fuse
+
+* Fri Apr 10 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-11
+- Update to mercury 4871023 to pick na_ofi.c race condition fix for
+  "No route to host" errors.
+
+* Sun Apr 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-10
+- Clean up spdk dependencies
+
 * Mon Mar 30 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-9
 - Set version of spdk to < v21, > v19
 

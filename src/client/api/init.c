@@ -96,6 +96,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_tx_abort, sizeof(daos_tx_abort_t)},
 	{dc_tx_open_snap, sizeof(daos_tx_open_snap_t)},
 	{dc_tx_close, sizeof(daos_tx_close_t)},
+	{dc_tx_restart, sizeof(daos_tx_restart_t)},
 
 	/** Object */
 	{dc_obj_register_class, sizeof(daos_obj_register_class_t)},
@@ -156,11 +157,21 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_debug, rc);
 
+	/** set up agent */
+	rc = dc_agent_init();
+	if (rc != 0)
+		D_GOTO(out_hhash, rc);
+
+	/** get CaRT configuration */
+	rc = dc_mgmt_net_cfg(NULL);
+	if (rc != 0)
+		D_GOTO(out_agent, rc);
+
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_hhash, rc);
+		D_GOTO(out_agent, rc);
 	}
 
 	/** set up placement */
@@ -188,16 +199,9 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
-	/** set up agent */
-	rc = dc_agent_init();
-	if (rc != 0)
-		D_GOTO(out_obj, rc);
-
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);
 
-out_obj:
-	dc_obj_fini();
 out_co:
 	dc_cont_fini();
 out_pool:
@@ -208,6 +212,8 @@ out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_agent:
+	dc_agent_fini();
 out_hhash:
 	daos_hhash_fini();
 out_debug:
