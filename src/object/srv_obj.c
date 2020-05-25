@@ -238,14 +238,14 @@ cont_prop_csum_enabled(struct ds_iv_ns *ns, uuid_t co_hdl)
 {
 	int			rc;
 	daos_prop_t		cont_prop = {0};
-	struct daos_prop_entry entry = {0};
+	struct daos_prop_entry	entry = {0};
 	uint32_t		csum_val;
 
 	entry.dpe_type = DAOS_PROP_CO_CSUM;
 	cont_prop.dpp_entries = &entry;
 	cont_prop.dpp_nr = 1;
 
-	rc = cont_iv_prop_fetch(ns, co_hdl, &cont_prop);
+	rc = ds_cont_fetch_prop(ns, co_hdl, &cont_prop);
 	if (rc != 0)
 		return false;
 	csum_val = daos_cont_prop2csum(&cont_prop);
@@ -1199,7 +1199,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	int		      rc;
 
 	memset(ioc, 0, sizeof(*ioc));
-	rc = cont_iv_capa_fetch(pool_uuid, coh_uuid, cont_uuid, &coh);
+	rc = ds_cont_find_hdl(pool_uuid, coh_uuid, &coh);
 	if (rc) {
 		if (rc == -DER_NONEXIST)
 			rc = -DER_NO_HDL;
@@ -1226,7 +1226,12 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	if (coh->sch_cont != NULL) {
 		ds_cont_child_get(coh->sch_cont);
 		coc = coh->sch_cont;
-		D_GOTO(out, rc = 0);
+		if (uuid_compare(cont_uuid, coc->sc_uuid) == 0)
+			D_GOTO(out, rc = 0);
+
+		D_ERROR("Stale container handle "DF_UUID" != "DF_UUID"\n",
+			DP_UUID(cont_uuid), DP_UUID(coh->sch_uuid));
+		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
 	if (!is_rebuild_container(pool_uuid, coh_uuid)) {
