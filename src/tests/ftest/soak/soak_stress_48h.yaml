@@ -93,7 +93,7 @@ soak_stress:
         - -1
         - 2
         - 4
-    # used for perfomance benchmarks
+    # used for performance benchmarks
     taskspernode:
         - 1
         - 16

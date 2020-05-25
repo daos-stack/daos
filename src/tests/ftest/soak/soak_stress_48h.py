@@ -33,7 +33,7 @@ class SoakStress(SoakTestBase):
     """
 
     def test_soak_stress(self):
-        """Run soak test for 48hours on perfromance cluster.
+        """Run soak test for 48hours on performance cluster.
 
         Test Description: This will create a slurm batch jobs that run
         various jobs defined in the soak yaml

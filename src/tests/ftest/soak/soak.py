@@ -533,16 +533,14 @@ class SoakTestBase(TestWithServers):
         dfuse.set_dfuse_params(pool)
         dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
         # create dfuse mount point
-        commands.append(slurm_utils.srun(
+        commands.append(slurm_utils.srun_str(
             hosts=None,
             cmd="mkdir -p {}".format(dfuse.mount_dir.value),
-            srun_params=None,
-            string=True))
-        commands.append(slurm_utils.srun(
+            srun_params=None))
+        commands.append(slurm_utils.srun_str(
             hosts=None,
             cmd="{}".format(dfuse.__str__()),
-            srun_params=None,
-            string=True))
+            srun_params=None))
         return dfuse, commands
 
     def stop_dfuse(self, dfuse):
@@ -554,16 +552,14 @@ class SoakTestBase(TestWithServers):
         Returns list:    list of cmds to pass to slurm script
         """
         self.log.info("\n")
-        dfuse_stop_cmds = [slurm_utils.srun(
+        dfuse_stop_cmds = [slurm_utils.srun_str(
             hosts=None,
             cmd="fusermount3 -u {0}".format(dfuse.mount_dir.value),
-            srun_params=None,
-            string=True)]
-        dfuse_stop_cmds.append(slurm_utils.srun(
+            srun_params=None)]
+        dfuse_stop_cmds.append(slurm_utils.srun_str(
             hosts=None,
             cmd="rm -rf {0}".format(dfuse.mount_dir.value),
-            srun_params=None,
-            string=True))
+            srun_params=None))
         return dfuse_stop_cmds
 
     def cleanup_dfuse(self):
@@ -631,11 +627,10 @@ class SoakTestBase(TestWithServers):
                             "fio --name=global --directory")
                     log_name = "{}_{}_{}".format(blocksize, size, rw)
                     # self.dfuse_list.append(dfuse)
-                    cmds.append(slurm_utils.srun(
+                    cmds.append(slurm_utils.srun_str(
                         hosts=None,
                         cmd=str(fio_cmd.__str__()),
-                        srun_params=None,
-                        string=True))
+                        srun_params=None))
                     cmds.extend(self.stop_dfuse(dfuse))
                     commands.append([cmds, log_name])
                     self.log.info("<<Fio cmdlines>>:")
