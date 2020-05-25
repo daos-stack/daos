@@ -36,12 +36,12 @@ import (
 type mgmtModule struct{}
 
 // HandleCall is the handler for calls to the mgmtModule
-func (m *mgmtModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
+func (m *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	return nil, drpc.UnknownMethodFailure()
 }
 
 // ID will return Mgmt module ID
-func (m *mgmtModule) ID() int32 {
+func (m *mgmtModule) ID() drpc.ModuleID {
 	return drpc.ModuleMgmt
 }
 
@@ -52,7 +52,7 @@ type srvModule struct {
 }
 
 // HandleCall is the handler for calls to the srvModule.
-func (mod *srvModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
+func (mod *srvModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	switch method {
 	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
@@ -63,7 +63,7 @@ func (mod *srvModule) HandleCall(session *drpc.Session, method int32, req []byte
 	}
 }
 
-func (mod *srvModule) ID() int32 {
+func (mod *srvModule) ID() drpc.ModuleID {
 	return drpc.ModuleSrv
 }
 
