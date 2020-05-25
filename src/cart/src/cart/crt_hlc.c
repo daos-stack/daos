@@ -48,7 +48,7 @@
 static ATOMIC uint64_t crt_hlc;
 
 /** See crt_hlc_epsilon_set's API doc */
-static uint64_t crt_hlc_epsilon = 100 * 1000 * 1000;
+static uint64_t crt_hlc_epsilon = 1000 * 1000 * 1000;
 
 /** Get local physical time */
 static inline uint64_t crt_hlc_localtime_get(void)
