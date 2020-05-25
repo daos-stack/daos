@@ -1,9 +1,9 @@
 # Getting Started with the DAOS Hadoop Filesystem
 
 Here, we describe the steps required to build and deploy the DAOS Hadoop
-filesystem, and the configurations to access DAOS in Spark. We assume DAOS
-servers and agents have already been deployed in the environment; otherwise,
-they can be deployed by following the
+filesystem, and the configurations to access DAOS in Spark and Hadoop. We
+assume DAOS servers and agents have already been deployed in the environment.
+Otherwise, they can be deployed by following the
 [DAOS installation guide](https://daos-stack.github.io/admin/installation/).
 
 ## Build DAOS Hadoop Filesystem
@@ -11,8 +11,8 @@ they can be deployed by following the
 The DAOS Java and Hadoop filesystem implementation have been merged into
 the DAOS repository. Below are the steps to build the Java jar files for the
 DAOS Java and DAOS Hadoop filesystem. These jar files are required when
-running Spark. You can ignore this section if you already have the pre-built
-jars.
+running Spark and Hadoop. You can ignore this section if you already have
+the pre-built jars.
 
 ```bash
 $ git clone https://github.com/daos-stack/daos.git
@@ -33,27 +33,21 @@ following files.
 
 * `daos-java-<version>.jar` and `hadoop-daos-<version>.jar`
 These files need to be deployed on every compute node that runs Spark.
-Place them in a directory, e.g., $SPARK_HOME/jars, that are accessible to all
+Place them in a directory, e.g., $SPARK_HOME/jars for Spark and
+$HADOOP_HOME/share/hadoop/common/lib for Hadoop, which are accessible to all
 the nodes or copy them to every node.
 
 * `daos-site-example.xml`
 The file contains DAOS configuration and needs to be properly configured with
 the DAOS pool UUID, container UUID, and a few other settings. Rename it to
-daos-site.xml and place it in Spark's conf ($SPARK_HOME/conf) directory.
+daos-site.xml and place it your application config directory, e.g.,
+$SPARK_HOME/conf for Spark and $HADOOP_HOME/etc/hadoop for Hadoop.
 
-## Configure Spark to use DAOS
+## Configure DAOS Hadoop FileSystem
 
-* To access DAOS Hadoop filesystem in Spark, add the jar files to the classpath
-of the Spark executor and driver. This can be configured in Spark's
-configuration file spark-defaults.conf.
-
-```
-spark.executor.extraClassPath   /path/to/daos-java-<version>.jar:/path/to/hadoop-daos-<version>.jar
-spark.driver.extraClassPath     /path/to/daos-java-<version>.jar:/path/to/hadoop-daos-<version>.jar
-```
-
-* Next, export all DAOS related env variables and the following env variable in
-spark-env.sh. This enables signal chaining in JVM to better interoperate with
+* Export all DAOS related env variables and the following env variable in
+your application, e.g., spark-env.sh for Spark and hadoop-env.sh for Hadoop.
+The following env enables signal chaining in JVM to better interoperate with
 DAOS native code that installs its own signal handlers. It ensures that signal
 calls are intercepted so that they do not actually replace the JVM's signal
 handlers if the handlers conflict with those already installed by the JVM.
@@ -100,13 +94,13 @@ After that, configure daos-site.xml with the pool and container created.
 
 The default pool and container are configured by `fs.daos.pool.uuid` and
 `fs.daos.container.uuid`. The default DAOS filesystem can be accessed by URI
-`daos://default:1` in Spark. In HDFS, the URI is composed by a master host name
-(or IP address) and a port for example hdfs://<HostName>:8020. In DAOS, we
-don't use host name and port to connect, instead we use pool UUID and container
-UUID to specify the DFS filesystem. We do not put the UUIDs in URI as UUID is
-not a valid port number. Instead, the hostname `default` maps to the default
-pool configured by `fs.daos.pool.uuid` and the port 1 maps to the default
-container configured by `fs.daos.container.uuid`.
+`daos://default:1` in Spark and Hadoop. In HDFS, the URI is composed by a
+master host name (or IP address) and a port for example hdfs://<HostName>:8020.
+In DAOS, we don't use host name and port to connect, instead we use pool UUID
+and container UUID to specify the DFS filesystem. We do not put the UUIDs in
+URI as UUID is not a valid port number. Instead, the hostname `default` maps to
+the default pool configured by `fs.daos.pool.uuid` and the port 1 maps to the
+default container configured by `fs.daos.container.uuid`.
 
 It is also possible to configure multiple pools and containers in the
 daos-site.xml and use different URI to access them. For example, to access
@@ -118,7 +112,7 @@ See examples,
 
 ```
 "daos://default:1" reads values of "fs.daos.pool.uuid" and "fs.daos.container.uuid"
-daos://default:2" reads values of "fs.daos.pool.uuid" and "c2.fs.daos.container.uuid"
+"daos://default:2" reads values of "fs.daos.pool.uuid" and "c2.fs.daos.container.uuid"
 "daos://pool1:3" reads values of "pool1.fs.daos.pool.uuid" and "c3.fs.daos.container.uuid"
 ```
 
@@ -139,7 +133,18 @@ you can set `fs.daos.container.uuid` and `c2.fs.daos.container.uuid` to same the
 container UUID. Then set `fs.daos.preload.size` to a value greater than 0 and
 `c2.fs.daos.preload.size` to 0.
 
-## Access DAOS in Spark
+### Configure Spark to Use DAOS
+
+To access DAOS Hadoop filesystem in Spark, add the jar files to the classpath
+of the Spark executor and driver. This can be configured in Spark's
+configuration file spark-defaults.conf.
+
+```
+spark.executor.extraClassPath   /path/to/daos-java-<version>.jar:/path/to/hadoop-daos-<version>.jar
+spark.driver.extraClassPath     /path/to/daos-java-<version>.jar:/path/to/hadoop-daos-<version>.jar
+```
+
+#### Access DAOS in Spark
 
 All Spark APIs that work with the Hadoop filesystem will work with DAOS. We use
 the `daos://` URI to access files stored in DAOS. For example, to read
@@ -150,3 +155,36 @@ following pySpark code:
 df = spark.read.json("daos://default:1/people.json")
 ```
 
+### Configure Hadoop to Use DAOS
+
+Edit $HADOOP_HOME/etc/hadoop/core-site.xml to change fs.defaultFS to
+“daos://default:1”. Then append below configuration to this file and
+$HADOOP_HOME/etc/hadoop/yarn-site.xml.
+
+```xml
+<property>
+    <name>fs.AbstractFileSystem.daos.impl</name>
+    <value>io.daos.fs.hadoop.DaosAbsFsImpl</value>
+</property>
+
+```
+
+Then replicate daos-site.xml, core-site.xml and yarn-site.xml to other nodes.
+
+#### Access DAOS in Hadoop
+
+If everything goes well, you should see “/user” directory being listed after
+issuing below command.
+
+```bash
+$ hadoop fs -ls /
+```
+
+You can also play around with other Hadoop commands, like -copyFromLocal and
+-copyToLocal. You can also start Yarn and run some mapreduce jobs on Yarn. Just
+make sure you have DAOS URI, “daos://default:1/”, set correctly in your job.
+
+#### Known Issues
+
+If you use Omni-path PSM2 provider in DAOS, you'll get connection issue in
+Yarn container due to PSM2 resource not being released properly in time.
