@@ -60,52 +60,52 @@
 #define OBJ_PROTO_CLI_RPC_LIST						\
 	X(DAOS_OBJ_RPC_UPDATE,						\
 		0, &CQF_obj_update,					\
-		ds_obj_rw_handler, NULL),				\
+		ds_obj_rw_handler, ds_obj_rw_enq, NULL),		\
 	X(DAOS_OBJ_RPC_FETCH,						\
 		0, &CQF_obj_fetch,					\
-		ds_obj_rw_handler, NULL),				\
+		ds_obj_rw_handler, ds_obj_rw_enq, NULL),		\
 	X(DAOS_OBJ_DKEY_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, NULL),			\
 	X(DAOS_OBJ_AKEY_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, NULL),			\
 	X(DAOS_OBJ_RECX_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, NULL),			\
 	X(DAOS_OBJ_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, NULL),			\
 	X(DAOS_OBJ_RPC_PUNCH,						\
 		0, &CQF_obj_punch,					\
-		ds_obj_punch_handler, NULL),				\
+		ds_obj_punch_handler, NULL, NULL),			\
 	X(DAOS_OBJ_RPC_PUNCH_DKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_punch_handler, NULL),				\
+		ds_obj_punch_handler, NULL, NULL),			\
 	X(DAOS_OBJ_RPC_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_punch_handler, NULL),				\
+		ds_obj_punch_handler, NULL, NULL),			\
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
 		0, &CQF_obj_query_key,					\
-		ds_obj_query_key_handler, NULL),			\
+		ds_obj_query_key_handler, NULL, NULL),			\
 	X(DAOS_OBJ_RPC_SYNC,						\
 		0, &CQF_obj_sync,					\
-		ds_obj_sync_handler, NULL),				\
+		ds_obj_sync_handler, NULL, NULL),			\
 	X(DAOS_OBJ_RPC_TGT_UPDATE,					\
 		0, &CQF_obj_update,					\
-		ds_obj_tgt_update_handler, NULL),			\
+		ds_obj_tgt_update_handler, ds_obj_tgt_wr_enq, NULL),	\
 	X(DAOS_OBJ_RPC_TGT_PUNCH,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL),			\
+		ds_obj_tgt_punch_handler, NULL, NULL),			\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_DKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL),			\
+		ds_obj_tgt_punch_handler, NULL, NULL),			\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL)
+		ds_obj_tgt_punch_handler, NULL, NULL)
 
 /* Define for RPC enum population below */
-#define X(a, b, c, d, e) a
+#define X(a, b, c, d, e, f) a
 
 enum obj_rpc_opc {
 	OBJ_PROTO_CLI_RPC_LIST,
@@ -148,6 +148,7 @@ struct obj_iod_array {
 #define DAOS_ISEQ_OBJ_RW	/* input fields */		 \
 	((struct dtx_id)	(orw_dti)		CRT_VAR) \
 	((daos_unit_oid_t)	(orw_oid)		CRT_VAR) \
+	((uuid_t)		(orw_cli_id)		CRT_VAR) \
 	((uuid_t)		(orw_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(orw_co_hdl)		CRT_VAR) \
 	((uuid_t)		(orw_co_uuid)		CRT_VAR) \

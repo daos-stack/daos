@@ -495,7 +495,7 @@ CRT_RPC_DEFINE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 /* Define for cont_rpcs[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
+#define X(a, b, c, d, e, f)	\
 {				\
 	.prf_flags   = b,	\
 	.prf_req_fmt = c,	\

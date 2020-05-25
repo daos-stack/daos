@@ -66,11 +66,12 @@ obj_mod_fini(void)
 /* Define for cont_rpcs[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
+#define X(a, b, c, d, e, f)	\
 {				\
 	.dr_opc       = a,	\
 	.dr_hdlr      = d,	\
-	.dr_corpc_ops = e,	\
+	.dr_enq       = e,	\
+	.dr_corpc_ops = f,	\
 }
 
 static struct daos_rpc_handler obj_handlers[] = {
@@ -85,6 +86,7 @@ obj_tls_init(const struct dss_thread_local_storage *dtls,
 {
 	struct obj_tls *tls;
 
+	obj_enq_init();
 	D_ALLOC_PTR(tls);
 	return tls;
 }
@@ -101,6 +103,7 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 	if (tls->ot_sp)
 		srv_profile_destroy(tls->ot_sp);
 
+	obj_enq_fini();
 	D_FREE(tls);
 }
 

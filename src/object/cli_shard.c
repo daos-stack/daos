@@ -410,6 +410,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_map_ver = args->auxi.map_ver;
 	orw->orw_start_shard = args->auxi.start_shard;
 	orw->orw_oid = shard->do_id;
+	uuid_copy(orw->orw_cli_id, obj_cli_uuid);
 	uuid_copy(orw->orw_pool_uuid, pool->dp_pool);
 	uuid_copy(orw->orw_co_hdl, cont_hdl_uuid);
 	uuid_copy(orw->orw_co_uuid, cont_uuid);

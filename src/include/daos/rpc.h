@@ -81,6 +81,8 @@ struct daos_rpc_handler {
 	crt_opcode_t		 dr_opc;
 	/* Request handler, only relevant on the server side */
 	crt_rpc_cb_t		 dr_hdlr;
+	/* Enqueue request */
+	crt_rpc_cb_t		 dr_enq;
 	/* CORPC operations (co_aggregate == NULL for point-to-point RPCs) */
 	struct crt_corpc_ops	*dr_corpc_ops;
 };
@@ -183,6 +185,8 @@ daos_rpc_register(struct crt_proto_format *proto_fmt, uint32_t cli_count,
 		for (i = 0; i < proto_fmt->cpf_count; i++) {
 			proto_fmt->cpf_prf[i].prf_hdlr =
 						handlers[i].dr_hdlr;
+			proto_fmt->cpf_prf[i].prf_enq =
+						handlers[i].dr_enq;
 			proto_fmt->cpf_prf[i].prf_co_ops =
 						handlers[i].dr_corpc_ops;
 		}

@@ -363,6 +363,9 @@ int
 ds_obj_remote_punch(struct dtx_leader_handle *dth, void *arg, int idx,
 		    dtx_sub_comp_cb_t comp_cb);
 /* srv_obj.c */
+
+void ds_obj_rw_enq(crt_rpc_t *rpc);
+void ds_obj_tgt_wr_enq(crt_rpc_t *rpc);
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_update_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);
@@ -386,5 +389,8 @@ obj_dkey2hash(daos_key_t *dkey)
 int  obj_utils_init(void);
 void obj_utils_fini(void);
 
+extern uuid_t obj_cli_uuid;
+void obj_enq_init(void);
+void obj_enq_fini(void);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

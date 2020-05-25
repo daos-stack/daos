@@ -2219,3 +2219,266 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 	ds_pool_put(pool);
 	return rc;
 }
+
+struct obj_client {
+	/** client uuid hash link */
+	struct d_ulink		oc_ulink;
+	/** link chain on fifo or idle list */
+	d_list_t		oc_link;
+	/** all the queued requests from this client */
+	d_list_t		oc_reqs;
+	/** # queued requests */
+	int			oc_reqs_nr;
+};
+
+struct obj_io_req {
+	/** pointer to the real RPC */
+	crt_rpc_t		*or_rpc;
+	/** link chain on obj_client or idle list */
+	d_list_t		 or_link;
+	/** call rw_handler or rw_tgt_handler */
+	bool			 or_leader;
+};
+
+__thread struct d_hash_table	*obj_cli_hash;
+__thread d_list_t		 obj_cli_free;
+__thread d_list_t		 obj_cli_fifo;
+__thread d_list_t		 obj_req_free;
+__thread int			 obj_io_ults;
+
+#include "../iosrv/srv_internal.h"
+
+#define OBJ_IO_BUSY	32
+
+static void
+obj_io_ult(void *args)
+{
+	struct dss_xstream *dxs = dss_current_xstream();
+	int		    busy = 0;
+	bool		    created = false;
+
+	while (1) {
+		struct obj_client	*cli;
+		struct obj_io_req	*req;
+		int			 rc;
+
+		if (d_list_empty(&obj_cli_fifo) ||
+		    dss_xstream_exiting(dxs)) /* nothing to do */
+			break;
+
+		cli = d_list_entry(obj_cli_fifo.next, struct obj_client,
+				   oc_link);
+		D_ASSERT(!d_list_empty(&cli->oc_reqs));
+		req = d_list_entry(cli->oc_reqs.next, struct obj_io_req,
+				   or_link);
+		d_list_del(&req->or_link);
+
+		cli->oc_reqs_nr--;
+		d_list_del_init(&cli->oc_link);
+		if (!d_list_empty(&cli->oc_reqs)) {
+			/* more pending requets, move it to fifo tail */
+			D_ASSERT(cli->oc_reqs_nr > 0);
+			d_list_add_tail(&cli->oc_link, &obj_cli_fifo);
+		} else {
+			/* nothing left, put this client on freelist */
+			D_ASSERT(cli->oc_reqs_nr == 0);
+			d_uhash_link_delete(obj_cli_hash, &cli->oc_ulink);
+			/* the last refcount is taken by freelist */
+			D_ASSERT(d_uhash_link_last_ref(&cli->oc_ulink));
+			d_list_add(&cli->oc_link, &obj_cli_free);
+		}
+
+		if (!d_list_empty(&obj_cli_fifo) && !created) {
+			/* more queued requests, create a new ULT before
+			 * handling the current RPC, so the new ULT can be
+			 * scheduled when the current ULT yields
+			 */
+			rc = ABT_thread_create(dxs->dx_pools[DSS_POOL_IO],
+					       obj_io_ult, NULL,
+					       ABT_THREAD_ATTR_NULL, NULL);
+			D_ASSERT(rc == ABT_SUCCESS);
+			obj_io_ults++;
+			created = true;
+		}
+		/* call the actual handler */
+		if (req->or_leader)
+			ds_obj_rw_handler(req->or_rpc);
+		else
+			ds_obj_tgt_update_handler(req->or_rpc);
+
+		crt_req_decref(req->or_rpc);
+		req->or_rpc = NULL;
+		/* put it on freelist */
+		d_list_add(&req->or_link, &obj_req_free);
+
+		busy++;
+		if (busy >= OBJ_IO_BUSY) {
+			/* just in case I'm processing small I/O in a busy
+			 * loop and never yield to other ULT.
+			 */
+			ABT_thread_yield();
+			busy = 0;
+		}
+	}
+	obj_io_ults--;
+}
+
+static void
+obj_cli_hop_free(struct d_ulink *ul)
+{
+	struct obj_client *cli;
+
+	cli = container_of(ul, struct obj_client, oc_ulink);
+	D_FREE(cli);
+}
+
+static struct d_ulink_ops	obj_cli_ops = {
+	.uop_free	= obj_cli_hop_free,
+};
+
+static void
+obj_cli_decref(struct obj_client *cli)
+{
+	d_uhash_link_putref(obj_cli_hash, &cli->oc_ulink);
+}
+
+
+static struct obj_client *
+obj_cli_find(crt_rpc_t *rpc)
+{
+	struct obj_rw_in  *rwi = crt_req_get(rpc);
+	struct obj_client *cli;
+	struct d_ulink	  *ul;
+	struct d_uuid	   uuid;
+
+	uuid_copy(uuid.uuid, rwi->orw_cli_id);
+	ul = d_uhash_link_lookup(obj_cli_hash, &uuid, NULL);
+	if (ul) { /* already in client hash */
+		cli = container_of(ul, struct obj_client, oc_ulink);
+		D_ASSERT(!d_list_empty(&cli->oc_reqs));
+		D_ASSERT(cli->oc_reqs_nr > 0);
+		return cli;
+	}
+	/* create a new client */
+
+	if (!d_list_empty(&obj_cli_free)) { /* take from freelist */
+		cli = d_list_entry(obj_cli_free.next, struct obj_client,
+				   oc_link);
+		d_list_del_init(&cli->oc_link);
+		D_ASSERT(cli->oc_reqs_nr == 0);
+		D_ASSERT(d_list_empty(&cli->oc_reqs));
+		D_ASSERT(d_uhash_link_last_ref(&cli->oc_ulink));
+	} else {
+		D_ALLOC_PTR(cli);
+		D_ASSERT(cli != NULL);
+
+		D_INIT_LIST_HEAD(&cli->oc_reqs);
+		D_INIT_LIST_HEAD(&cli->oc_link);
+		d_uhash_ulink_init(&cli->oc_ulink, &obj_cli_ops);
+	}
+	d_uhash_link_insert(obj_cli_hash, &uuid, NULL, &cli->oc_ulink);
+	return cli;
+}
+
+static void
+obj_req_enq(crt_rpc_t *rpc, bool tx_leader)
+{
+	struct dss_xstream	*dxs = dss_current_xstream();
+	struct obj_client	*cli;
+	struct obj_io_req	*req;
+	int			 rc;
+
+	if (d_list_empty(&obj_req_free)) { /* freelist is empty */
+		D_ALLOC_PTR(req);
+		D_ASSERT(req);
+	} else {
+		/* take from the freelist */
+		req = d_list_entry(obj_req_free.next,
+				   struct obj_io_req, or_link);
+		d_list_del(&req->or_link);
+	}
+	cli = obj_cli_find(rpc);
+
+	req->or_rpc = rpc; /* NB: take over refcount taken by cart */
+	req->or_leader = tx_leader;
+	d_list_add_tail(&req->or_link, &cli->oc_reqs);
+	cli->oc_reqs_nr++;
+	if (d_list_empty(&cli->oc_link)) {
+		/* not queued for handling yet */
+		D_ASSERT(cli->oc_reqs_nr == 1);
+		d_list_add_tail(&cli->oc_link, &obj_cli_fifo);
+	} else {
+		/* already in fifo, release the ref taken by obj_cli_find */
+		obj_cli_decref(cli);
+	}
+
+	if (obj_io_ults == 0) { /* create if there is no handler ULT */
+		rc = ABT_thread_create(dxs->dx_pools[DSS_POOL_IO],
+				       obj_io_ult, NULL,
+				       ABT_THREAD_ATTR_NULL, NULL);
+		D_ASSERT(rc == ABT_SUCCESS);
+		obj_io_ults = 1;
+	}
+}
+
+void
+ds_obj_rw_enq(crt_rpc_t *rpc)
+{
+	obj_req_enq(rpc, true);
+}
+
+void
+ds_obj_tgt_wr_enq(crt_rpc_t *rpc)
+{
+	obj_req_enq(rpc, false);
+}
+
+void
+obj_enq_init(void)
+{
+	int	rc;
+
+	D_INIT_LIST_HEAD(&obj_req_free);
+	D_INIT_LIST_HEAD(&obj_cli_free);
+	D_INIT_LIST_HEAD(&obj_cli_fifo);
+
+	rc = d_uhash_create(D_HASH_FT_NOLOCK, 10, &obj_cli_hash);
+	D_ASSERT(rc == 0);
+}
+
+void
+obj_enq_fini(void)
+{
+	while (!d_list_empty(&obj_req_free)) {
+		struct obj_io_req *req;
+
+		req = d_list_entry(obj_req_free.next,
+				   struct obj_io_req, or_link);
+		d_list_del(&req->or_link);
+		D_FREE(req);
+	}
+
+	while (!d_list_empty(&obj_cli_fifo)) {
+		struct obj_client *cli;
+
+		cli = d_list_entry(obj_cli_fifo.next,
+				   struct obj_client, oc_link);
+		d_uhash_link_delete(obj_cli_hash, &cli->oc_ulink);
+		d_list_del(&cli->oc_link);
+		obj_cli_decref(cli);
+	}
+
+	while (!d_list_empty(&obj_cli_free)) {
+		struct obj_client *cli;
+
+		cli = d_list_entry(obj_cli_free.next,
+				   struct obj_client, oc_link);
+		d_list_del(&cli->oc_link);
+		obj_cli_decref(cli);
+	}
+
+	if (obj_cli_hash) {
+		d_uhash_destroy(obj_cli_hash);
+		obj_cli_hash = NULL;
+	}
+}

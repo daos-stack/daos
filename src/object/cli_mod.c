@@ -33,6 +33,7 @@
 #include "obj_internal.h"
 
 unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
+uuid_t		obj_cli_uuid;
 
 /**
  * Initialize object interface
@@ -51,6 +52,7 @@ dc_obj_init(void)
 		srv_io_mode = DIM_DTX_FULL_ENABLED;
 		D_DEBUG(DB_IO, "Full dtx mode by default\n");
 	}
+	uuid_generate(obj_cli_uuid);
 
 	rc = obj_utils_init();
 	if (rc)
