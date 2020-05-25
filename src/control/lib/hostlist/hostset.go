@@ -38,19 +38,32 @@ type (
 	}
 )
 
+// MarshalJSON outputs JSON representation of HostSet.
 func (hs *HostSet) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + hs.RangedString() + `"`), nil
 }
 
 // CreateSet creates a new HostSet from the supplied string representation.
-func CreateSet(stringHosts string, nameOptional bool) (*HostSet, error) {
-	hl, err := Create(stringHosts, nameOptional)
+func CreateSet(stringHosts string) (*HostSet, error) {
+	hl, err := Create(stringHosts, false)
 	if err != nil {
 		return nil, err
 	}
 	hl.Uniq()
 
-	return &HostSet{list: hl, nameOptional: nameOptional}, nil
+	return &HostSet{list: hl, nameOptional: false}, nil
+}
+
+// CreateNumberSet creates a new HostSet with optional host names from the
+// supplied string representation.
+func CreateNumberSet(stringHosts string) (*HostSet, error) {
+	hl, err := Create(stringHosts, true)
+	if err != nil {
+		return nil, err
+	}
+	hl.Uniq()
+
+	return &HostSet{list: hl, nameOptional: true}, nil
 }
 
 // initList will initialize the underlying *HostList if necessary

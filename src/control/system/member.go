@@ -284,8 +284,8 @@ func (m *Membership) Add(member *Member) (int, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	if value, found := m.members[member.Rank]; found {
-		return -1, FaultMemberExists(value)
+	if _, found := m.members[member.Rank]; found {
+		return -1, FaultMemberExists(member.Rank)
 	}
 
 	m.members[member.Rank] = member

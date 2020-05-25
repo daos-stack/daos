@@ -24,46 +24,40 @@
 package system
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/pkg/errors"
 )
 
-// RankSet embodies HostSet type
+// RankSet embodies HostSet type.
 type RankSet struct {
 	hostlist.HostSet
 }
 
 func fixBrackets(stringRanks string, remove bool) string {
-	hasPrefix := strings.HasPrefix(stringRanks, "[")
-	hasSuffix := strings.HasSuffix(stringRanks, "]")
 	if remove {
-		if hasPrefix {
-			stringRanks = stringRanks[1:]
-		}
-		if hasSuffix {
-			stringRanks = stringRanks[:len(stringRanks)-1]
-		}
-
-		return stringRanks
+		return strings.Trim(stringRanks, "[]")
 	}
 
-	if !hasPrefix {
+	if !strings.HasPrefix(stringRanks, "[") {
 		stringRanks = "[" + stringRanks
 	}
-	if !hasSuffix {
+	if !strings.HasSuffix(stringRanks, "]") {
 		stringRanks += "]"
 	}
 
 	return stringRanks
 }
 
-// CreateSet creates a new HostList with ranks rather than hostnames from the
+// NewRankSet creates a new HostList with ranks rather than hostnames from the
 // supplied string representation.
-func CreateSet(stringRanks string) (*RankSet, error) {
+func NewRankSet(stringRanks string) (*RankSet, error) {
 	for _, r := range stringRanks {
 		if unicode.IsLetter(r) {
 			return nil, errors.Errorf(
@@ -72,10 +66,12 @@ func CreateSet(stringRanks string) (*RankSet, error) {
 		}
 	}
 
-	stringRanks = fixBrackets(stringRanks, false)
+	if len(stringRanks) > 0 {
+		stringRanks = fixBrackets(stringRanks, false)
+	}
 
-	fmt.Printf(" r '%s'", stringRanks)
-	hs, err := hostlist.CreateSet(stringRanks, true)
+	// add enclosing brackets to input so CreateSet works without hostnames
+	hs, err := hostlist.CreateNumberSet(stringRanks)
 	if err != nil {
 		return nil, err
 	}
@@ -87,4 +83,51 @@ func CreateSet(stringRanks string) (*RankSet, error) {
 
 func (rs *RankSet) String() string {
 	return fixBrackets(rs.HostSet.String(), true)
+}
+
+// Ranks returns a slice of Rank from a RankSet.
+func (rs *RankSet) Ranks() ([]Rank, error) {
+	var ranks []uint32
+	err := common.ParseNumberList(
+		fixBrackets(rs.HostSet.DerangedString(), true),
+		&ranks)
+	if err != nil {
+		return nil, err
+	}
+
+	return RanksFromUint32(ranks), nil
+}
+
+// RankGroups maps a set of ranks to string value (group).
+type RankGroups map[string]*RankSet
+
+// Keys returns sorted group names.
+func (rsg RankGroups) Keys() []string {
+	keys := make([]string, 0, len(rsg))
+
+	for key := range rsg {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	return keys
+}
+
+func (rsg RankGroups) String() string {
+	var buf bytes.Buffer
+
+	padding := 0
+	keys := rsg.Keys()
+	for _, key := range keys {
+		valStr := rsg[key].String()
+		if len(valStr) > padding {
+			padding = len(valStr)
+		}
+	}
+
+	for _, key := range rsg.Keys() {
+		fmt.Fprintf(&buf, "%*s: %s\n", padding, rsg[key], key)
+	}
+
+	return buf.String()
 }

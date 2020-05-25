@@ -29,7 +29,7 @@ package hostlist
 // Expand converts a ranged host string into an expanded string
 // of all hosts in the supplied range(s).
 func Expand(stringHosts string) (string, error) {
-	hs, err := CreateSet(stringHosts, false)
+	hs, err := CreateSet(stringHosts)
 	if err != nil {
 		return "", err
 	}
@@ -40,7 +40,7 @@ func Expand(stringHosts string) (string, error) {
 // Compress converts the supplied host list into a string
 // of ranged host strings.
 func Compress(stringHosts string) (string, error) {
-	hs, err := CreateSet(stringHosts, false)
+	hs, err := CreateSet(stringHosts)
 	if err != nil {
 		return "", err
 	}
@@ -50,7 +50,7 @@ func Compress(stringHosts string) (string, error) {
 
 // Count returns the number of distinct hosts in the supplied host list.
 func Count(stringHosts string) (int, error) {
-	hs, err := CreateSet(stringHosts, false)
+	hs, err := CreateSet(stringHosts)
 	if err != nil {
 		return -1, err
 	}

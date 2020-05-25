@@ -24,6 +24,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -33,7 +34,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -73,22 +73,48 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-func displaySystemQuery(log logging.Logger, members system.Members) error {
-	groups := make(hostlist.HostGroups)
+// rankStateGroups initialises groupings of ranks that are at a particular state.
+func rankStateGroups(members system.Members) (system.RankGroups, error) {
+	ranksInState := make(map[system.MemberState]*bytes.Buffer)
+	ranksSeen := make(map[system.Rank]struct{})
+
 	for _, m := range members {
-		if err := groups.AddHost(m.State().String(), addRankPrefix(m.Rank)); err != nil {
-			return err
+		if _, exists := ranksSeen[m.Rank]; exists {
+			return nil, system.FaultMemberExists(m.Rank)
 		}
+		ranksSeen[m.Rank] = struct{}{}
+
+		if _, exists := ranksInState[m.State()]; !exists {
+			ranksInState[m.State()] = new(bytes.Buffer)
+		}
+		fmt.Fprintf(ranksInState[m.State()], "%d,", m.Rank)
 	}
 
-	out, err := tabulateHostGroups(groups, "Rank", "State")
+	groups := make(system.RankGroups)
+	for state, ranksStrBuf := range ranksInState {
+		rankSet, err := system.NewRankSet(
+			strings.TrimSuffix(ranksStrBuf.String(), ","))
+		if err != nil {
+			return nil, errors.WithMessage(err,
+				"generating groups of ranks at state")
+		}
+		groups[state.String()] = rankSet
+	}
+
+	return groups, nil
+}
+
+func displaySystemQuery(log logging.Logger, members system.Members) error {
+	groups, err := rankStateGroups(members)
+	if err != nil {
+		return err
+	}
+	out, err := tabulateRankGroups(groups, "Rank", "State")
 	if err != nil {
 		return err
 	}
 
-	// kind of a hack, but don't want to modify the hostlist library to
-	// accept invalid hostnames.
-	log.Info(removeRankPrefixes(out))
+	log.Info(out)
 
 	return nil
 }
@@ -142,20 +168,23 @@ type systemQueryCmd struct {
 	ctlInvokerCmd
 	jsonOutputCmd
 	Verbose bool   `long:"verbose" short:"v" description:"Display more member details"`
-	Ranks   string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
+	Ranks   string `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to query"`
 }
 
 // Execute is run when systemQueryCmd activates
 func (cmd *systemQueryCmd) Execute(_ []string) error {
-	var ranks []uint32
-	if err := common.ParseNumberList(cmd.Ranks, &ranks); err != nil {
+	rankSet, err := system.NewRankSet(cmd.Ranks)
+	if err != nil {
 		return errors.Wrap(err, "parsing input ranklist")
+	}
+	ranks, err := rankSet.Ranks()
+	if err != nil {
+		return errors.Wrap(err, "generating ranks from rank set")
 	}
 
 	ctx := context.Background()
-	resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{
-		Ranks: system.RanksFromUint32(ranks),
-	})
+	resp, err := control.SystemQuery(ctx, cmd.ctlInvoker,
+		&control.SystemQueryReq{Ranks: ranks})
 	if err != nil {
 		return errors.Wrap(err, "System-Query command failed")
 	}
@@ -170,7 +199,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return nil
 	}
 
-	if len(ranks) == 1 {
+	if rankSet.Count() == 1 {
 		return displaySystemQuerySingle(cmd.log, resp.Members)
 	}
 
@@ -182,27 +211,54 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	return displaySystemQuery(cmd.log, resp.Members)
 }
 
-func displaySystemAction(log logging.Logger, results system.MemberResults) error {
-	groups := make(hostlist.HostGroups)
+// rankActionGroups initialises groupings of ranks that return the same results.
+func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
+	ranksWithResult := make(map[string]*bytes.Buffer)
+	ranksSeen := make(map[system.Rank]struct{})
 
 	for _, r := range results {
+		if _, exists := ranksSeen[r.Rank]; exists {
+			return nil, system.FaultMemberExists(r.Rank)
+		}
+		ranksSeen[r.Rank] = struct{}{}
+
 		msg := "OK"
 		if r.Errored {
 			msg = r.Msg
 		}
 
 		resStr := fmt.Sprintf(" %s%s%s", r.Action, rowFieldSep, msg)
-		if err := groups.AddHost(resStr, addRankPrefix(r.Rank)); err != nil {
-			return errors.Wrap(err, "adding rank result to group")
+		if _, exists := ranksWithResult[resStr]; !exists {
+			ranksWithResult[resStr] = new(bytes.Buffer)
 		}
+		fmt.Fprintf(ranksWithResult[resStr], "%d,", r.Rank)
 	}
 
-	out, err := tabulateHostGroups(groups, "Rank", "Operation", "Result")
+	groups := make(system.RankGroups)
+	for strResult, ranksStrBuf := range ranksWithResult {
+		rankSet, err := system.NewRankSet(
+			strings.TrimSuffix(ranksStrBuf.String(), ","))
+		if err != nil {
+			return nil, errors.WithMessage(err,
+				"generating groups of ranks with same result")
+		}
+		groups[strResult] = rankSet
+	}
+
+	return groups, nil
+}
+
+func displaySystemAction(log logging.Logger, results system.MemberResults) error {
+	groups, err := rankActionGroups(results)
+	if err != nil {
+		return err
+	}
+	out, err := tabulateRankGroups(groups, "Rank", "Operation", "Result")
 	if err != nil {
 		return errors.Wrap(err, "printing result table")
 	}
 
-	log.Info(removeRankPrefixes(out))
+	log.Info(out)
 
 	return nil
 }
