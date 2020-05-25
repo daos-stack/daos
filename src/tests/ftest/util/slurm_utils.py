@@ -241,7 +241,7 @@ def watch_job(handle, maxwait, test_obj):
         test_obj.job_done(params)
 
 
-def srun(nodes, cmd, srun_params=None):
+def srun(hosts, cmd, srun_params=None, string=False):
     """Run srun cmd on slurm partition.
 
     Args:
@@ -256,11 +256,15 @@ def srun(nodes, cmd, srun_params=None):
     """
     params_list = []
     params = ""
+    if hosts is not None:
+        params_list.append("--nodelist {}".format(hosts))
     if srun_params is not None:
         for key, value in srun_params.items():
             params_list.extend(["--{}={}".format(key, value)])
             params = " ".join(params_list)
-    cmd = "srun --nodelist={} {} {}".format(nodes, params, cmd)
+    cmd = "srun {} {}".format(params, cmd)
+    if string:
+        return str(cmd)
     try:
         result = run_command(cmd, timeout=30)
     except DaosTestError as error:

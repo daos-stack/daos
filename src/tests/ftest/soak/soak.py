@@ -27,6 +27,9 @@ import time
 from apricot import TestWithServers
 from ior_utils import IorCommand
 from fio_utils import FioCommand
+from dmg_utils import DmgCommand
+from dmg_utils_params import \
+    DmgYamlParameters, DmgTransportCredentials
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
 from general_utils import get_random_string, run_command, DaosTestError
@@ -100,14 +103,10 @@ class SoakTestBase(TestWithServers):
         self.all_failed_jobs = None
         self.username = None
         self.used = None
-        self.dfuse_list = []
 
     def setUp(self):
         """Define test setup to be done."""
         self.log.info("<<setUp Started>> at %s", time.ctime())
-        # Start the daos_agents in the job scripts
-        self.setup_start_servers = True
-        self.setup_start_agents = False
         super(SoakTestBase, self).setUp()
         self.username = getuser()
         # Initialize loop param for all tests
@@ -115,10 +114,8 @@ class SoakTestBase(TestWithServers):
         self.exclude_slurm_nodes = []
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
-        self.log_dir = self.params.get("logdir", "/run/*")
+        self.log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp") + "/soak"
         self.outputsoakdir = self.outputdir + "/soak"
-        # Create the remote log directories on all client nodes
-        self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
         # Fail if slurm partition daos_client is not defined
         if not self.client_partition:
             raise SoakTestError(
@@ -141,12 +138,12 @@ class SoakTestBase(TestWithServers):
         if not self.hostlist_clients:
             self.fail("There are no nodes that are client only;"
                       "check if the partition also contains server nodes")
-
-        # Start an agent on the test control host to enable API calls for
-        # reserved pool and containers.  The test control host should be the
-        # last host in the hostlist_clients list.
-        agent_groups = {self.server_group: local_host_list}
-        self.start_agents(agent_groups)
+        # create dmg command object for soak
+        dmg_config_file = self.get_config_file("daos", "dmg")
+        dmg_cfg = DmgYamlParameters(
+            dmg_config_file, self.server_group, DmgTransportCredentials())
+        dmg_cfg.hostlist.update([self.hostlist_servers[0]])
+        self.dmg = DmgCommand(self.bin, dmg_cfg)
 
     def pre_tear_down(self):
         """Tear down any test-specific steps prior to running tearDown().
@@ -214,7 +211,7 @@ class SoakTestBase(TestWithServers):
             path = "".join(["/run/", pool_name, "/*"])
             # Create a pool and add it to the overall list of pools
             self.pool.append(TestPool(
-                self.context, self.log, dmg_command=self.get_dmg_command()))
+                self.context, self.log, dmg_command=self.dmg))
             self.pool[-1].namespace = path
             self.pool[-1].get_params(self)
             self.pool[-1].create()
@@ -242,8 +239,8 @@ class SoakTestBase(TestWithServers):
             except DaosTestError as error:
                 raise SoakTestError(
                     "<<FAILED: Soak remote logfiles not copied to avocado data "
-                    "dir {} - check /tmp/soak on nodes {}>>".format(
-                        error, self.hostlist_clients))
+                    "dir {} - check {} on nodes {}>>".format(
+                        error, self.test_log_dir, self.hostlist_clients))
 
             command = "/usr/bin/rm -rf {0}/*".format(self.test_log_dir)
             slurm_utils.srun(
@@ -488,7 +485,7 @@ class SoakTestBase(TestWithServers):
                             api, b_size, t_size, o_type)
                         commands.append([cmd.__str__(), log_name])
                         self.log.info(
-                            "<<IOR cmdline>>: %s \n", commands[-1].__str__())
+                            "<<IOR cmdline>>:\n %s", cmd.__str__())
         return commands
 
     def create_dfuse_cont(self, pool):
@@ -536,40 +533,38 @@ class SoakTestBase(TestWithServers):
         dfuse.set_dfuse_params(pool)
         dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
         # create dfuse mount point
-        commands.append("mkdir -p {}".format(dfuse.mount_dir.value))
-        commands.append("{}".format(dfuse.__str__()))
-        commands.append("sleep 5")
-        commands.append(
-            "stat -c %T -f {} | grep fuseblk".format(dfuse.mount_dir.value))
+        commands.append(slurm_utils.srun(
+            hosts=None,
+            cmd="mkdir -p {}".format(dfuse.mount_dir.value),
+            srun_params=None,
+            string=True))
+        commands.append(slurm_utils.srun(
+            hosts=None,
+            cmd="{}".format(dfuse.__str__()),
+            srun_params=None,
+            string=True))
         return dfuse, commands
 
-    def stop_dfuse(self, dfuse_list):
+    def stop_dfuse(self, dfuse):
         """Create dfuse stop command line for slurm.
 
         Args:
-            dfuse_list (list): list of Dfuse obj
+            dfuse (obj): Dfuse obj
 
+        Returns list:    list of cmds to pass to slurm script
         """
         self.log.info("\n")
-        for dfuse in dfuse_list:
-            dfuse_stop_cmd = "fusermount3 -u {0}".format(dfuse.mount_dir.value)
-            try:
-                slurm_utils.srun(NodeSet.fromlist(
-                    self.hostlist_clients), "{}".format(
-                        dfuse_stop_cmd), self.srun_params)
-            except slurm_utils.SlurmFailed as error:
-                self.log.info(
-                    "<<FAILED: Dfuse fusemount3 failed on %s; %s>>",
-                    dfuse.mount_dir.value, error)
-            try:
-                slurm_utils.srun(
-                    NodeSet.fromlist(self.hostlist_clients),
-                    "rm -rf {0}".format(
-                        dfuse.mount_dir.value), self.srun_params)
-            except slurm_utils.SlurmFailed as error:
-                self.log.info(
-                    "<<FAILED: Failed to remove %s: %s>>",
-                    dfuse.mount_dir.value, error)
+        dfuse_stop_cmds = [slurm_utils.srun(
+            hosts=None,
+            cmd="fusermount3 -u {0}".format(dfuse.mount_dir.value),
+            srun_params=None,
+            string=True)]
+        dfuse_stop_cmds.append(slurm_utils.srun(
+            hosts=None,
+            cmd="rm -rf {0}".format(dfuse.mount_dir.value),
+            srun_params=None,
+            string=True))
+        return dfuse_stop_cmds
 
     def cleanup_dfuse(self):
         """Cleanup and remove any dfuse mount points."""
@@ -602,7 +597,7 @@ class SoakTestBase(TestWithServers):
 
         """
         commands = []
-
+        cmds = []
         fio_namespace = "/run/{}".format(job_spec)
         # test params
         bs_list = self.params.get("blocksize", fio_namespace + "/soak/*")
@@ -635,13 +630,17 @@ class SoakTestBase(TestWithServers):
                             dfuse.mount_dir.value,
                             "fio --name=global --directory")
                     log_name = "{}_{}_{}".format(blocksize, size, rw)
-                    self.dfuse_list.append(dfuse)
-                    cmds.append(str(fio_cmd.__str__()))
+                    # self.dfuse_list.append(dfuse)
+                    cmds.append(slurm_utils.srun(
+                        hosts=None,
+                        cmd=str(fio_cmd.__str__()),
+                        srun_params=None,
+                        string=True))
+                    cmds.extend(self.stop_dfuse(dfuse))
                     commands.append([cmds, log_name])
-                    print("Commands = {}\n".format(commands))
-                    self.log.info(
-                        "<<Fio cmdlines>>:\n %s",
-                        (cmd for cmd in commands[-1][0]))
+                    self.log.info("<<Fio cmdlines>>:")
+                    for cmd in cmds:
+                        self.log.info("%s", cmd)
         return commands
 
     def build_job_script(self, commands, job, ppn, nodesperjob):
@@ -658,14 +657,8 @@ class SoakTestBase(TestWithServers):
         """
         self.log.info("<<Build Script>> at %s", time.ctime())
         script_list = []
-
-        # Start the daos_agent in the batch script for now
-        # TO-DO:  daos_agents start with systemd
-        agent_launch_cmds = [
-            "mkdir -p {}".format(os.environ.get("DAOS_TEST_LOG_DIR"))]
-        agent_launch_cmds.append(
-            " ".join([str(self.agent_managers[0].manager.job), "&"]))
-
+        # if additional cmds are needed in the batch script
+        additional_cmds = []
         # Create the sbatch script for each list of cmdlines
         for cmd, log_name in commands:
             if isinstance(cmd, str):
@@ -688,7 +681,7 @@ class SoakTestBase(TestWithServers):
             unique = get_random_string(5, self.used)
             script = slurm_utils.write_slurm_script(
                 self.test_log_dir, job, output, nodesperjob,
-                agent_launch_cmds + cmd, unique, sbatch)
+                additional_cmds + cmd, unique, sbatch)
             script_list.append(script)
             self.used.append(unique)
         return script_list
@@ -818,12 +811,6 @@ class SoakTestBase(TestWithServers):
             except SoakTestError as error:
                 self.log.info("Remote copy failed with %s", error)
             self.soak_results = {}
-        # Check if dfuse obj exists and then cleanup;
-        if self.dfuse_list:
-            try:
-                self.stop_dfuse(self.dfuse_list)
-            except SoakTestError as error:
-                self.log.info("Dfuse stop failed with %s", error)
         return job_id_list
 
     def execute_jobs(self, jobs, pools):
@@ -939,7 +926,7 @@ class SoakTestBase(TestWithServers):
             raise SoakTestError(
                 "<<FAILED: Soak directories not removed"
                 "from clients>>: {}".format(self.hostlist_clients))
-        # cleanup test_node /tmp/soak
+        # cleanup test_node soak directory
         cmd = "rm -rf {}".format(self.log_dir)
         try:
             result = run_command(cmd, timeout=30)
