@@ -14,14 +14,13 @@ nodelist=(${NODELIST//,/ })
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-scp -i ci_key "${lmd_tarball}" "$mydir/rpm_scan_daos_test_node.sh" \
-              "jenkins@${nodelist[0]}:/var/tmp"
+scp -i ci_key "${lmd_tarball}" "jenkins@${nodelist[0]}:/var/tmp"
 
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"${nodelist[0]}" \
- "NODE=${nodelist[0]}                \
-  DAOS_PKG_VERSION=$DAOS_PKG_VERSION \
-  /var/tmp/rpm_scan_daos_test_node.sh"
+  "NODE=${nodelist[0]}                       \
+   DAOS_PKG_VERSION=$DAOS_PKG_VERSION        \
+   $(cat "$mydir/rpm_scan_daos_test_node.sh")"
 
 rm -f "${WORKSPACE}/maldetect.xml"
 scp -i ci_key jenkins@"${nodelist[0]}":/var/tmp/maldetect.xml \

@@ -25,3 +25,9 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
 # Note that we are taking advantage of the NFS mount here and if that
 # should ever go away, we need to pull run_test.sh/ from $NODE
 python utils/fix_cmocka_xml.py
+
+
+ssh "$SSH_KEY_ARGS" jenkins@"${nodelist[0]}" \
+  "NODE=${nodelist[0]}                       \
+   DAOS_PKG_VERSION=$DAOS_PKG_VERSION        \
+   $(cat "$mydir/rpm_scan_daos_test_node.sh")"

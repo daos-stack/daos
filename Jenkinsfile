@@ -262,12 +262,10 @@ def docker_build_args(Map config = [:]) {
       ret_str += ' --build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '"'
                  ' --build-arg https_proxy="' + env.HTTPS_PROXY + '"'
     }
-    println "docker_build_args config=$config"
     if (config['qb']) {
       ret_str += ' --build-arg QUICKBUILD=true'
     }
     ret_str += ' '
-    println "Exiting docker_build_args ${ret_str}"
     return ret_str
 }
 
