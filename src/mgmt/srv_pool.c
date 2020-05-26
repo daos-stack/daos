@@ -165,7 +165,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 	D_DEBUG(DB_MGMT, DF_UUID" create %zu tgts pool\n",
 		DP_UUID(pool_uuid), tc_out->tc_tgt_uuids.ca_count);
 
-	/* Abort early if the caller doesn't need the new pool target UUIDs */
+	/* Abort early if the caller does not need the new pool target UUIDs */
 	if (tgt_uuids == NULL)
 		D_GOTO(decref, rc = DER_SUCCESS);
 
@@ -798,8 +798,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, "pmem",
 						   reint_ranks, 0, 0, NULL);
 		if (rc != 0) {
-			D_ERROR("creating pool on ranks "DF_UUID" failed: rc "DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(rc));
+			D_ERROR("creating pool on ranks "DF_UUID" failed: rc "
+				""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 	}
