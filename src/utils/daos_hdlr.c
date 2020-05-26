@@ -1109,7 +1109,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
 
 	if (ap->oid.hi || ap->oid.lo) {
-		printf("Path is within container, oid %#lx %#lx\n", ap->oid.hi, ap->oid.lo);
+		printf("Path is within container, oid " DF_OID "\n",
+			DP_OID(ap->oid));
 	}
 
 	if (ap->path != NULL) {

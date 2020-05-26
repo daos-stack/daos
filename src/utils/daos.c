@@ -867,20 +867,25 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
-		struct dfuse_il_reply il_reply = {};
+		struct dfuse_il_reply il_reply = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
 
-		/* Resolve pool, container UUIDs from path if needed */
+		/* Resolve pool, container UUIDs from path if needed
+		 *
+		 * Firtly check for a unified namespace entry point, then if
+		 * that isn't detected then check for dfuse backing the
+		 * path, and print pool/container/oid for the path.
+		 */
 		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
 
 			rc = call_dfuse_ioctl(ap->path, &il_reply);
 			if (rc != 0) {
-				fprintf(stderr, "could not resolve pool, container "
-					"by path: %d %s %s\n", rc, strerror(rc), ap->path);
+				fprintf(stderr, "could not resolve pool, "
+					"container by path: %d %s %s\n",
+					rc, strerror(rc), ap->path);
 
-				/* Call the ioctl */
 				D_GOTO(out, rc);
 			}
 
