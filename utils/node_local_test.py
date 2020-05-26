@@ -183,6 +183,7 @@ class WarningsFactory():
         self._flush()
         self._fd.close()
         self._fd = None
+        print('Closed JSON file with {} errors'.format(len(self.issues)))
 
 def load_conf():
     """Load the build config file"""
