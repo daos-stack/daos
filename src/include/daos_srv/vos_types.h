@@ -175,7 +175,7 @@ enum {
 	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
 	/** replay punch (underwrite) */
 	VOS_OF_REPLAY_PC	= (1 << 8),
-	/** Set when propagating a punch the results in empty subtree */
+	/** Set when propagating a punch that results in empty subtree */
 	VOS_OF_PUNCH_PROPAGATE	= (1 << 9),
 };
 
@@ -242,6 +242,8 @@ enum {
 	VOS_IT_FOR_REBUILD	= (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED		= (1 << 6),
+	/** Mask for all flags */
+	VOS_IT_MASK		= (1 << 7) - 1,
 };
 
 /**

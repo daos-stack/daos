@@ -1262,7 +1262,9 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (param->ip_flags & VOS_IT_FOR_REBUILD)
 		oiter->it_iter.it_for_rebuild = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
-		/** Prepare the iterator from an already open tree handle */
+		/** Prepare the iterator from an already open tree handle.   See
+		 *  vos_iterate_key
+		 */
 		D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
 		oiter->it_obj = param->ip_dkey.iov_buf;
 		rc = prepare_key_from_toh(oiter, param->ip_hdl);
