@@ -24,10 +24,12 @@
 import time
 import random
 import ctypes
+from avocado import fail_on
 from apricot import TestWithServers
 from test_utils_pool import TestPool
+from command_utils import CommandFailure
 from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj)
+                        DaosObj, DaosApiError)
 
 
 class OSAOfflineReintegration(TestWithServers):
@@ -42,34 +44,33 @@ class OSAOfflineReintegration(TestWithServers):
         """Set up for test case."""
         super(OSAOfflineReintegration, self).setUp()
         self.dmg_command = self.get_dmg_command()
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
+        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')
+        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')
         self.record_length = self.params.get("length", '/run/record/*')
 
+    @fail_on(CommandFailure)
     def get_pool_leader(self):
         """Get the pool leader
-           Args: None
-           Returns : pool_leader (int)
+           Returns : int (pool_leader)
         """
         out = []
         kwargs = {"pool": self.pool.uuid}
         out = self.dmg_command.get_output("pool_query", **kwargs)
         return int(out[0][3])
 
+    @fail_on(CommandFailure)
     def get_pool_version(self):
         """Get the pool version
-           Args: None
-           Returns : pool_version (int)
+           Returns : int (pool_version_value)
         """
         out = []
         kwargs = {"pool": self.pool.uuid}
         out = self.dmg_command.get_output("pool_query", **kwargs)
         return int(out[0][4])
 
+    @fail_on(DaosApiError)
     def write_single_object(self):
         """Write some data to the existing pool.
-           Args: None
-           Returns : None
         """
         self.pool.connect(2)
         csum = self.params.get("enable_checksum", '/run/container/*')
@@ -104,19 +105,16 @@ class OSAOfflineReintegration(TestWithServers):
 
     def run_offline_reintegration_test(self, num_pool, data=False):
         """Run the offline reintegration without data.
-           Args: num_pool (int) : Total pools to create
-                                  for testing purpose.
-                 data (bool) : False (Pool has no data) -Default
-                               True (Create some data in pool)
-           Returns : None
+            Args:
+            num_pool (int) : total pools to create for testing purposes.
+            data (bool) : whether pool has no data or to create
+                          some data in pool. Defaults to False.
         """
         # Create a pool
         pool = {}
         pool_uuid = []
         target_list = []
         exclude_servers = len(self.hostlist_servers) - 1
-        nvme_size = 54000000000
-        scm_size = 6000000000
 
         # Exclude target : random two targets
         n = random.randint(1, 7)
@@ -132,12 +130,14 @@ class OSAOfflineReintegration(TestWithServers):
                                  dmg_command=self.get_dmg_command())
             pool[val].get_params(self)
             # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(scm_size / num_pool)
-            pool[val].nvme_size.value = int(nvme_size / num_pool)
+            pool[val].scm_size.value = int(pool[val].nvme_size.value /
+                                           num_pool)
+            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
+                                            num_pool)
             pool[val].create()
             pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]
-            if data is True:
+            if data:
                 self.write_single_object()
 
         # Exclude and reintegrate the pool_uuid, rank and targets
