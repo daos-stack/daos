@@ -67,11 +67,26 @@ class WarningsFactory():
         self._fd = open(filename, 'w')
         self.issues = []
         self.pending = []
+        self._running = True
+        # Save the filename of the object, as __file__ does not
+        # work in __del__
+        self._file = __file__.lstrip('./')
         self._flush()
 
     def __del__(self):
-        if self._fd:
-            self.close()
+        """Ensure the file is flushed on exit, but if it hasn't already
+        been closed then mark an error"""
+        if not self._fd:
+            return
+
+        entry = {}
+        entry['fileName'] = os.path.basename(self._file)
+        entry['directory'] = os.path.dirname(self._file)
+        entry['lineStart'] = sys._getframe().f_lineno
+        entry['description'] = 'Tests exited without shutting down'
+        entry['severity'] = 'ERROR'
+        self.issues.append(entry)
+        self.close()
 
     def explain(self, line, log_file, esignal):
         """Log an error, along with the other errors it caused
@@ -146,12 +161,23 @@ class WarningsFactory():
         self._fd.seek(0)
         self._fd.truncate(0)
         data = {}
-        data['issues'] = self.issues
+        data['issues'] = list(self.issues)
+        if self._running:
+            # When the test is running insert an error in case of abnormal
+            # exit, so that crashes in this code can be identified.
+            entry = {}
+            entry['fileName'] = os.path.basename(__file__)
+            entry['directory'] = os.path.dirname(__file__)
+            entry['lineStart'] = sys._getframe().f_lineno
+            entry['severity'] = 'ERROR'
+            entry['description'] = 'Tests are still running'
+            data['issues'].append(entry)
         json.dump(data, self._fd, indent=2)
         self._fd.flush()
 
     def close(self):
         """Save, and close the log file"""
+        self._running = False
         self._flush()
         self._fd.close()
         self._fd = None
@@ -177,9 +203,7 @@ def get_base_env():
     """Return the base set of env vars needed for DAOS"""
 
     env = os.environ.copy()
-    env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     env['DD_MASK'] = 'all'
-    env['OFI_INTERFACE'] = 'lo'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
     env['FI_UNIVERSE_SIZE'] = '128'
@@ -247,6 +271,7 @@ class DaosServer():
         self._agent = subprocess.Popen([agent_bin,
                                         '--config-path', agent_config,
                                         '--insecure',
+                                        '--debug',
                                         '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
                                        env=agent_env)
@@ -550,8 +575,6 @@ def import_daos(server, conf):
                                  pydir,
                                  'site-packages'))
 
-    os.environ['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-    os.environ['OFI_INTERFACE'] = 'lo'
     os.environ["DAOS_AGENT_DRPC_DIR"] = server.agent_dir
 
     daos = __import__('pydaos')

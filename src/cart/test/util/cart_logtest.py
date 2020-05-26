@@ -397,9 +397,12 @@ class LogTest():
                         del regions[pointer]
                     elif pointer != '(nil)':
                         if pointer in old_regions:
-                            show_line(old_regions[pointer][0], 'ERROR', 'double-free allocation point')
-                            show_line(old_regions[pointer][1], 'ERROR', '1st double-free location')
-                            show_line(line, 'ERROR', '2nd double-free location')
+                            show_line(old_regions[pointer][0], 'ERROR',
+                                      'double-free allocation point')
+                            show_line(old_regions[pointer][1], 'ERROR',
+                                      '1st double-free location')
+                            show_line(line, 'ERROR',
+                                      '2nd double-free location')
                         else:
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
