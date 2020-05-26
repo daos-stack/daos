@@ -591,6 +591,10 @@ int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
 
+int dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg,
+		 int arg_size, bool sync);
+tse_sched_t *dsc_scheduler(void);
+
 struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
