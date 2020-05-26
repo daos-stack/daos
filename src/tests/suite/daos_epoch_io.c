@@ -1242,10 +1242,24 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 		arg->eio_args.op_iod_size = atoi(argv[1]);
 	} else if (strcmp(argv[0], "obj_class") == 0) {
 		if (strcmp(argv[1], "ec") == 0) {
+			print_message("the test is for EC object.\n");
 			arg->eio_args.op_ec = 1;
+			if ((argc == 3 && strcmp(argv[2], "OC_EC_2P2G1") == 0)
+			    || argc == 2) {
+				print_message("EC obj class OC_EC_2P2G1\n");
+				dts_ec_obj_class = OC_EC_2P2G1;
+				dts_ec_grp_size = 4;
+			} else if (argc == 3 &&
+				   strcmp(argv[2], "OC_EC_4P2G1") == 0) {
+				print_message("EC obj class OC_EC_4P2G1\n");
+				dts_ec_obj_class = OC_EC_4P2G1;
+				dts_ec_grp_size = 6;
+			} else {
+				print_message("bad parameter");
+				D_GOTO(out, rc = -DER_INVAL);
+			}
 			arg->eio_args.op_oid = dts_oid_gen(dts_ec_obj_class, 0,
 							   arg->myrank);
-			print_message("the test is for EC object.\n");
 		} else if (strcmp(argv[1], "replica") == 0) {
 			arg->eio_args.op_ec = 0;
 			arg->eio_args.op_oid = dts_oid_gen(dts_obj_class, 0,
@@ -1254,6 +1268,32 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 		} else {
 			print_message("bad obj_class %s.\n", argv[1]);
 			rc = -DER_INVAL;
+		}
+	} else if (strcmp(argv[0], "fail_shard_fetch") == 0) {
+		uint16_t	shard[4] = {0};
+		uint64_t	fail_val;
+		int		i;
+
+		if (argc < 2 || argc > 6) {
+			print_message("bad parameter");
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+		if (strcmp(argv[1], "set") == 0) {
+			for (i = 0; i < argc - 2; i++) {
+				shard[i] = atoi(argv[i + 2]) + 1;
+				print_message("will fail fetch from shard %d\n",
+					      shard[i]);
+			}
+			fail_val = daos_shard_fail_value(shard, argc - 2);
+			arg->fail_loc = DAOS_FAIL_SHARD_FETCH |
+					DAOS_FAIL_ALWAYS;
+			arg->fail_value = fail_val;
+		} else if (strcmp(argv[1], "clear") == 0) {
+			arg->fail_loc = 0;
+			arg->fail_value = 0;
+		} else {
+			print_message("bad parameter");
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	} else if (strcmp(argv[0], "oid") == 0) {
 		rc = cmd_parse_oid(arg, argc, argv);

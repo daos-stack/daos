@@ -372,8 +372,8 @@ obj_ec_recx_cell_nr(daos_recx_t *recx, struct daos_oclass_attr *oca)
 	if (start > end)
 		return 1;
 	return (end - start) / obj_ec_cell_rec_nr(oca) +
-	       (recx->rx_idx % obj_ec_cell_rec_nr(oca)) +
-	       (recx_end % obj_ec_cell_rec_nr(oca));
+	       ((recx->rx_idx % obj_ec_cell_rec_nr(oca)) != 0) +
+	       ((recx_end % obj_ec_cell_rec_nr(oca)) != 0);
 }
 
 static inline int
@@ -406,9 +406,10 @@ obj_io_desc_fini(struct obj_io_desc *oiod)
 	memset(oiod, 0, sizeof(*oiod));
 }
 
+/* translate the queried VOS shadow list to daos extents */
 static inline void
-obj_recx_ep_list_idx_parity2daos(uint32_t nr, struct daos_recx_ep_list *lists,
-				 struct daos_oclass_attr *oca)
+obj_shadow_list_vos2daos(uint32_t nr, struct daos_recx_ep_list *lists,
+			 struct daos_oclass_attr *oca)
 {
 	struct daos_recx_ep_list	*list;
 	daos_recx_t			*recx;
@@ -425,7 +426,8 @@ obj_recx_ep_list_idx_parity2daos(uint32_t nr, struct daos_recx_ep_list *lists,
 		for (j = 0; j < list->re_nr; j++) {
 			recx = &list->re_items[j].re_recx;
 			D_ASSERT(recx->rx_idx % cell_rec_nr == 0);
-			stripe_nr = recx->rx_nr / cell_rec_nr;
+			stripe_nr = roundup(recx->rx_nr, cell_rec_nr) /
+				    cell_rec_nr;
 			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
 			recx->rx_idx &= ~PARITY_INDICATOR;
 			recx->rx_idx = obj_ec_idx_vos2daos(recx->rx_idx,
@@ -454,7 +456,7 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 		D_ASSERT(stripe_nr >= 1);
 		if (stripe_nr == 1)
 			continue;
-		D_ALLOC_ARRAY(new_recx, stripe_nr);
+		D_ALLOC_ARRAY(new_recx, stripe_nr + iod->iod_nr - 1);
 		if (new_recx == NULL)
 			return -DER_NOMEM;
 		for (j = 0; j < i; j++)
@@ -490,8 +492,9 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 	return 0;
 }
 
+/* translate iod's recxs from mapped VOS extend to unmapped daos extents */
 static inline int
-obj_iod_idx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
+obj_iod_recx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
 		     struct daos_oclass_attr *oca)
 {
 	daos_iod_t	*iod;

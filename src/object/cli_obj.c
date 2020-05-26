@@ -763,6 +763,14 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	start_shard = shard - ec_tgt_idx;
 shard_open:
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
+	if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH &&
+	    DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_FETCH) &&
+	    daos_shard_in_fail_value(shard + 1)) {
+		rc = -DER_NONEXIST;
+		D_ERROR("obj_shard_open failed on shard %d, "DF_RC"\n",
+			shard, DP_RC(rc));
+	}
+
 	if (rc == 0) {
 		if (obj_op_is_ec_fetch(obj_auxi) && obj_shard->do_rebuilding) {
 			ec_degrade = true;
@@ -797,6 +805,9 @@ shard_open:
 		D_ASSERT(ec_deg_tgt >=
 			 obj_ec_data_tgt_nr(obj_auxi->reasb_req.orr_oca));
 		shard = start_shard + ec_deg_tgt;
+		D_DEBUG(DB_IO, DF_OID" shard %d fetch re-direct to shard %d.\n",
+			DP_OID(obj->cob_md.omd_id), start_shard + ec_tgt_idx,
+			start_shard + ec_deg_tgt);
 		ec_degrade = false;
 		goto shard_open;
 	}

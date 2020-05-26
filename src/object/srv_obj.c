@@ -1050,8 +1050,8 @@ obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 out:
 	obj_iod_idx_parity2vos(iod_nr, iods);
 	if (rc == 0) {
-		obj_recx_ep_list_idx_parity2daos(iod_nr, *pshadows, oca);
-		rc = obj_iod_idx_vos2daos(iod_nr, iods, tgt_idx, oca);
+		obj_shadow_list_vos2daos(iod_nr, *pshadows, oca);
+		rc = obj_iod_recx_vos2daos(iod_nr, iods, tgt_idx, oca);
 	}
 	return rc;
 }
