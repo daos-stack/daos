@@ -32,7 +32,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -173,13 +172,9 @@ type systemQueryCmd struct {
 
 // Execute is run when systemQueryCmd activates
 func (cmd *systemQueryCmd) Execute(_ []string) error {
-	rankSet, err := system.NewRankSet(cmd.Ranks)
+	ranks, err := system.ParseRanks(cmd.Ranks)
 	if err != nil {
-		return errors.Wrap(err, "parsing input ranklist")
-	}
-	ranks, err := rankSet.Ranks()
-	if err != nil {
-		return errors.Wrap(err, "generating ranks from rank set")
+		return errors.Wrap(err, "parsing rank list")
 	}
 
 	ctx := context.Background()
@@ -199,7 +194,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return nil
 	}
 
-	if rankSet.Count() == 1 {
+	if len(cmd.Ranks) == 1 {
 		return displaySystemQuerySingle(cmd.log, resp.Members)
 	}
 
@@ -226,8 +221,12 @@ func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
 		if r.Errored {
 			msg = r.Msg
 		}
+		if r.Action == "" {
+			return nil, errors.Errorf(
+				"action field empty for rank %d result", r.Rank)
+		}
 
-		resStr := fmt.Sprintf(" %s%s%s", r.Action, rowFieldSep, msg)
+		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
 		if _, exists := ranksWithResult[resStr]; !exists {
 			ranksWithResult[resStr] = new(bytes.Buffer)
 		}
@@ -276,9 +275,9 @@ type systemStopCmd struct {
 //
 // Perform prep and kill stages with stop command.
 func (cmd *systemStopCmd) Execute(_ []string) error {
-	var ranks []uint32
-	if err := common.ParseNumberList(cmd.Ranks, &ranks); err != nil {
-		return errors.Wrap(err, "parsing input ranklist")
+	ranks, err := system.ParseRanks(cmd.Ranks)
+	if err != nil {
+		return errors.Wrap(err, "parsing rank list")
 	}
 
 	ctx := context.Background()
@@ -286,7 +285,7 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 		Prep:  true,
 		Kill:  true,
 		Force: cmd.Force,
-		Ranks: system.RanksFromUint32(ranks),
+		Ranks: ranks,
 	})
 	if err != nil {
 		return errors.Wrap(err, "System-Stop command failed")
@@ -315,15 +314,14 @@ type systemStartCmd struct {
 
 // Execute is run when systemStartCmd activates
 func (cmd *systemStartCmd) Execute(_ []string) error {
-	var ranks []uint32
-	if err := common.ParseNumberList(cmd.Ranks, &ranks); err != nil {
-		return errors.Wrap(err, "parsing input ranklist")
+	ranks, err := system.ParseRanks(cmd.Ranks)
+	if err != nil {
+		return errors.Wrap(err, "parsing rank list")
 	}
 
 	ctx := context.Background()
-	resp, err := control.SystemStart(ctx, cmd.ctlInvoker, &control.SystemStartReq{
-		Ranks: system.RanksFromUint32(ranks),
-	})
+	resp, err := control.SystemStart(ctx, cmd.ctlInvoker,
+		&control.SystemStartReq{Ranks: ranks})
 	if err != nil {
 		return errors.Wrap(err, "System-Start command failed")
 	}

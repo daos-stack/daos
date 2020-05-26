@@ -61,8 +61,7 @@ func NewRankSet(stringRanks string) (*RankSet, error) {
 	for _, r := range stringRanks {
 		if unicode.IsLetter(r) {
 			return nil, errors.Errorf(
-				"expecting no alphabetic characters, got '%s'",
-				stringRanks)
+				"expecting no alphabetic characters, got '%s'", stringRanks)
 		}
 	}
 
@@ -98,17 +97,39 @@ func (rs *RankSet) Ranks() ([]Rank, error) {
 	return RanksFromUint32(ranks), nil
 }
 
+// ParseRanks takes a string representation of a list of ranks e.g. 1-4,6 and
+// returns a slice of system.Rank type or error.
+func ParseRanks(stringRanks string) ([]Rank, error) {
+	rs, err := NewRankSet(stringRanks)
+	if err != nil {
+		return nil, errors.Wrapf(err, "creating rank set from '%s'", stringRanks)
+	}
+
+	return rs.Ranks()
+}
+
 // RankGroups maps a set of ranks to string value (group).
 type RankGroups map[string]*RankSet
 
 // Keys returns sorted group names.
+//
+// Sort first by number of ranks in grouping then by alphabetical order of
+// group name.
 func (rsg RankGroups) Keys() []string {
 	keys := make([]string, 0, len(rsg))
 
 	for key := range rsg {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool {
+		ci := rsg[keys[i]].Count()
+		cj := rsg[keys[j]].Count()
+		if ci == cj {
+			return keys[i] < keys[j]
+		}
+
+		return ci > cj
+	})
 
 	return keys
 }
