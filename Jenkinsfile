@@ -1198,6 +1198,7 @@ pipeline {
                                            * order to have stable results are set to LOW.
                                            */
                                          qualityGates: [[threshold: 1, type: 'TOTAL_HIGH', unstable: true],
+                                                        [threshold: 1, type: 'TOTAL_ERROR', unstable: true],
                                                         [threshold: 1, type: 'NEW_NORMAL', unstable: true]],
                                          name: "Node local testing",
                                          tool: issues(pattern: 'vm_test/nlt-errors.json',

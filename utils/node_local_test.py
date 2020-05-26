@@ -83,7 +83,7 @@ class WarningsFactory():
         entry['fileName'] = os.path.basename(self._file)
         entry['directory'] = os.path.dirname(self._file)
         entry['lineStart'] = sys._getframe().f_lineno
-        entry['description'] = 'Tests exited without shutting down properly'
+        entry['message'] = 'Tests exited without shutting down properly'
         entry['severity'] = 'ERROR'
         self.issues.append(entry)
         self.close()
@@ -172,7 +172,7 @@ class WarningsFactory():
             entry['directory'] = os.path.dirname(self._file)
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
-            entry['description'] = 'Tests are still running'
+            entry['message'] = 'Tests are still running'
             data['issues'].append(entry)
         json.dump(data, self._fd, indent=2)
         self._fd.flush()
@@ -1051,7 +1051,7 @@ def test_pydaos_kv(server, conf):
 
     print(container)
     c_uuid = container.decode().split(' ')[-1]
-    kvg = dbm.daos_named_kv('ofi+sockets', 'lo', pool, c_uuid)
+    kvg = dbm.daos_named_kv(pool, c_uuid)
 
     kv = kvg.get_kv_by_name('Dave')
     kv['a'] = 'a'
