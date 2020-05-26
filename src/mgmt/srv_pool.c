@@ -662,6 +662,45 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 }
 
 int
+ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group)
+{
+	struct mgmt_svc	*svc;
+	d_rank_list_t	*psvcranks;
+	int		 rc;
+
+	D_DEBUG(DB_MGMT, "evict pool "DF_UUID"\n", DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &psvcranks);
+	if (rc != 0) {
+		D_ERROR("Failed to get pool service ranks "DF_UUID" rc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		goto out_svc;
+	}
+
+	/* Evict active pool connections if they exist*/
+	rc = ds_pool_svc_check_evict(pool_uuid, psvcranks, true);
+	if (rc != 0) {
+		D_ERROR("Failed to evict pool handles"DF_UUID" rc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		goto out_ranks;
+	}
+
+	D_DEBUG(DB_MGMT, "evicting pool connections "DF_UUID" succeed.\n",
+		DP_UUID(pool_uuid));
+out_ranks:
+	d_rank_list_free(psvcranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+
+int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 				 struct pool_target_id_list *target_list,
 				 pool_comp_state_t state)

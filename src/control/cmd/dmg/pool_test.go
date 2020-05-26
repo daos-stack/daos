@@ -290,6 +290,18 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Evict pool",
+			"pool evict --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.PoolEvictReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+
+		{
 			"List pools",
 			"pool list",
 			strings.Join([]string{

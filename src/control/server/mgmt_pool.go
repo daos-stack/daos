@@ -141,6 +141,38 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	return resp, nil
 }
 
+// PoolEvict implements the method defined for the Management Service.
+func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*mgmtpb.PoolEvictResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if req.GetUuid() == "" {
+		// TODO: do we want to validate pool exists via ListPools?
+		return nil, errors.New("nil UUID")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolEvict dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.MethodPoolEvict, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolEvictResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolEvict response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolEvict dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // PoolExclude implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq) (*mgmtpb.PoolExcludeResp, error) {
 	if req == nil {
