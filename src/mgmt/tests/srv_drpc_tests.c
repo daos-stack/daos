@@ -115,7 +115,6 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_reintegrate);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_destroy);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_exclude);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_reintegrate);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_get_acl);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_overwrite_acl);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_update_acl);
@@ -1648,7 +1647,7 @@ pack_pool_extend_req(Drpc__Call *call, Mgmt__PoolExtendReq *req)
 }
 
 static void
-setup_extend_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
+setup_extend_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__PoolExtendReq req = MGMT__POOL_EXTEND_REQ__INIT;
 
@@ -1656,6 +1655,8 @@ setup_extend_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 	req.n_ranks = 3;
 	req.scmbytes = 1000000000;
 	req.ranks = TEST_RANKS;
+	req.user = TEST_OWNER;
+	req.usergroup = TEST_GROUP;
 	pack_pool_extend_req(call, &req);
 }
 
@@ -1681,7 +1682,7 @@ test_drpc_extend_bad_uuid(void **state)
 	Drpc__Call	call = DRPC__CALL__INIT;
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
-	setup_extend_drpc_call(&call, "BAD", 0);
+	setup_extend_drpc_call(&call, "BAD");
 
 	ds_mgmt_drpc_pool_extend(&call, &resp);
 
@@ -1697,12 +1698,11 @@ test_drpc_extend_mgmt_svc_fails(void **state)
 	Drpc__Call	call = DRPC__CALL__INIT;
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
-	setup_extend_drpc_call(&call, TEST_UUID, 0);
+	setup_extend_drpc_call(&call, TEST_UUID);
 	ds_mgmt_pool_extend_return = -DER_UNKNOWN;
 
 	ds_mgmt_drpc_pool_extend(&call, &resp);
-	expect_drpc_extend_resp_with_error(&resp,
-					   ds_mgmt_pool_extend_return);
+	expect_drpc_extend_resp_with_error(&resp, ds_mgmt_pool_extend_return);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -1714,7 +1714,7 @@ test_drpc_extend_success(void **state)
 	Drpc__Call	call = DRPC__CALL__INIT;
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
-	setup_extend_drpc_call(&call, TEST_UUID, 0);
+	setup_extend_drpc_call(&call, TEST_UUID);
 	ds_mgmt_drpc_pool_extend(&call, &resp);
 
 	expect_drpc_extend_resp_with_error(&resp, 0);

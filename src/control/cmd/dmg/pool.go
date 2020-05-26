@@ -197,7 +197,7 @@ type PoolExtendCmd struct {
 	logCmd
 	ctlInvokerCmd
 	UUID  string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
-	Ranks string `long:"ranks" required:"1" description:"Comma-seperated list of ranks to add to the pool"`
+	Ranks string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
 	// Everything after this needs to be removed when pool info can be fetched
 	GroupName string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName  string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
