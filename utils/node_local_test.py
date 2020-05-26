@@ -83,7 +83,7 @@ class WarningsFactory():
         entry['fileName'] = os.path.basename(self._file)
         entry['directory'] = os.path.dirname(self._file)
         entry['lineStart'] = sys._getframe().f_lineno
-        entry['description'] = 'Tests exited without shutting down'
+        entry['description'] = 'Tests exited without shutting down properly'
         entry['severity'] = 'ERROR'
         self.issues.append(entry)
         self.close()
@@ -156,7 +156,9 @@ class WarningsFactory():
     def _flush(self):
         """Write the current list to the json file
 
-        This is done just in case of crash
+        This is done just in case of crash.  This function might get called
+        from the __del__ method of DaosServer, so do not use __file__ here
+        either.
         """
         self._fd.seek(0)
         self._fd.truncate(0)
@@ -166,8 +168,8 @@ class WarningsFactory():
             # When the test is running insert an error in case of abnormal
             # exit, so that crashes in this code can be identified.
             entry = {}
-            entry['fileName'] = os.path.basename(__file__)
-            entry['directory'] = os.path.dirname(__file__)
+            entry['fileName'] = os.path.basename(self._file)
+            entry['directory'] = os.path.dirname(self._file)
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
             entry['description'] = 'Tests are still running'
