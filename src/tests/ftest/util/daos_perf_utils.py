@@ -37,10 +37,6 @@ class DaosPerfCommand(ExecutableCommand):
 
         Args:
             basepath (str): DAOS base path
-            processes (int): number of host processes
-            hostfile (str): file defining host names and slots
-            display (bool, optional): print daos_perf output to the console.
-                Defaults to True.
         Raises:
             DaosPerfFailed: if an error occurred running the daos_perf command
         """

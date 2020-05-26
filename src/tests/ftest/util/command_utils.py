@@ -192,16 +192,9 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         if self._process is not None:
-            # Use a list to send signals to the process with one second delays:
-            #   Interrupt + wait 3 seconds
-            #   Terminate + wait 2 seconds
-            #   Quit + wait 1 second
-            #   Kill
-            signal_list = [
-                signal.SIGINT, None, None, None,
-                signal.SIGTERM, None, None,
-                signal.SIGQUIT, None,
-                signal.SIGKILL]
+            # Send a SIGTERM to the stop the subprocess and if it is still
+            # running after 5 seconds send a SIGKILL and report an error
+            signal_list = [signal.SIGTERM, signal.SIGKILL]
 
             # Turn off verbosity to keep the logs clean as the server stops
             self._process.verbose = False
