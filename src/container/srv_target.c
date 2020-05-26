@@ -545,13 +545,14 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
 			       (void *)po_uuid, &llink);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, DF_CONT": failed to lookup%s "
+			D_DEBUG(DF_DSMS, "po_uuid %p : failed to lookup%s "
 				"container: "DF_RC"\n",
-				DP_CONT(po_uuid, co_uuid),
+				/* DP_CONT(po_uuid, co_uuid),*/
+				po_uuid,
 				po_uuid == NULL ? "" : "/create", DP_RC(rc));
 		else
-			D_ERROR(DF_CONT": failed to lookup%s container: "
-				""DF_RC"\n", DP_CONT(po_uuid, co_uuid),
+			D_ERROR("po_uuid %p : failed to lookup%s container: "
+				""DF_RC"\n", po_uuid,
 				po_uuid == NULL ? "" : "/create", DP_RC(rc));
 		return rc;
 	}
