@@ -490,7 +490,7 @@ class DFuse():
                 print('dfuse command exited with {}'.format(ret))
                 self._sp = None
                 if os.path.exists(self.log_file):
-                    log_test(self.log_file)
+                    log_test(self.conf, self.log_file)
                 raise Exception('dfuse died waiting for start')
             except subprocess.TimeoutExpired:
                 pass
@@ -745,9 +745,6 @@ def log_test(conf,
     """Run the log checker on filename, logging to stdout"""
 
     print('Running log_test on {}'.format(filename))
-
-    global lp
-    global lt
 
     log_iter = lp.LogIter(filename)
     lto = lt.LogTest(log_iter)
