@@ -61,7 +61,7 @@ RUN yum -y install epel-release; \
         pandoc patch python python-devel python36-devel python-magic   \
         python-pep8 python-pygit2 python2-pygithub python-requests     \
         readline-devel scons sg3_utils ShellCheck yasm pciutils        \
-        valgrind-devel python36-pylint man
+        valgrind-devel python36-pylint man java-1.8.0-openjdk maven
 
 # DAOS specific
 RUN yum -y install \
@@ -72,8 +72,8 @@ RUN yum -y install \
            python2-clustershell python2-Cython python2-pip     \
            python36-clustershell python36-paramiko             \
            python36-numpy python36-jira python3-pip            \
-           fuse3-devel python{36,}-distro                      \
-           libipmctl-devel openmpi3-devel hwloc-devel
+           fuse3-devel libipmctl-devel openmpi3-devel          \
+           hwloc-devel
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
@@ -81,11 +81,27 @@ RUN pip3 install avocado-framework; \
     pip3 install avocado-framework-plugin-result-html; \
     pip3 install avocado-framework-plugin-varianter-yaml-to-mux
 
+RUN pip install codespell
+
 # Add DAOS user
 ENV USER daos
 ENV PASSWD daos
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
+
+# set maven mirror
+RUN mkdir -p /home/$USER/.m2
+
+RUN echo -e "<settings>\n\
+	<mirrors>\n\
+		<mirror>\n\
+			<id>google-maven-central</id>\n\
+			<name>GCS Maven Central mirror</name>\n\
+			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+			<mirrorOf>central</mirrorOf>\n\
+		</mirror>\n\
+	</mirrors>\n\
+</settings>" > /home/$USER/.m2/settings.xml
 
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos

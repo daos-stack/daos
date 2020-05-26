@@ -226,4 +226,10 @@ ds_pool_enable_evict(void);
 int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 			    uint32_t force);
 
+int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+		       unsigned int flags, const char *grp,
+		       struct pool_map *map, d_rank_list_t *svc_list,
+		       daos_handle_t *ph);
+int dsc_pool_close(daos_handle_t ph);
+
 #endif /* __DAOS_SRV_POOL_H__ */

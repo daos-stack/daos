@@ -1547,8 +1547,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 }
 
 static int
-pool_map_update(struct pool_svc *svc, uint32_t map_version,
-		struct pool_buf *buf)
+pool_map_propagate(struct pool_svc *svc, uint32_t map_version,
+		   struct pool_buf *buf)
 {
 	int			rc;
 
@@ -2071,9 +2071,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc);
 
 	/* Update pool map by IV */
-	rc = pool_map_update(svc, map_version, map_buf);
+	rc = pool_map_propagate(svc, map_version, map_buf);
 	if (rc) {
-		D_ERROR("pool_map_update failed "DF_RC"\n", DP_RC(rc));
+		D_ERROR("pool_map_propagate failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
 

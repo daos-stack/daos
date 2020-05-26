@@ -31,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -84,11 +85,11 @@ var (
 	)
 )
 
-func FaultInstancesNotStopped(action string, idx uint32) *fault.Fault {
+func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
 	return serverFault(
 		code.ServerInstancesNotStopped,
-		fmt.Sprintf("%s not supported when instance %d is running", action, idx),
-		"retry the operation after stopping instance",
+		fmt.Sprintf("%s not supported when rank %d is running", action, rank),
+		fmt.Sprintf("retry %s operation after stopping rank %d-", action, rank),
 	)
 }
 

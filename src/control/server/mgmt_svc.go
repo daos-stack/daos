@@ -167,7 +167,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodGetAttachInfo, req)
+	dresp, err := mi.CallDrpc(drpc.MethodGetAttachInfo, req)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq
 	// the first one that successfully fulfills the request. If none succeed,
 	// return an error.
 	for _, i := range svc.harness.Instances() {
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodBioHealth, req)
+		dresp, err := i.CallDrpc(drpc.MethodBioHealth, req)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +245,7 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 	// Iterate through the list of local I/O server instances, and aggregate
 	// results into a single response.
 	for _, i := range svc.harness.Instances() {
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdDevs, req)
+		dresp, err := i.CallDrpc(drpc.MethodSmdDevs, req)
 		if err != nil {
 			return nil, err
 		}
@@ -274,7 +274,7 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 	// Iterate through the list of local I/O server instances, and aggregate
 	// results into a single response.
 	for _, i := range svc.harness.Instances() {
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdPools, req)
+		dresp, err := i.CallDrpc(drpc.MethodSmdPools, req)
 		if err != nil {
 			return nil, err
 		}
@@ -302,7 +302,7 @@ func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq) 
 	// the first one that successfully fulfills the request. If none succeed,
 	// return an error.
 	for _, i := range svc.harness.Instances() {
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodDevStateQuery, req)
+		dresp, err := i.CallDrpc(drpc.MethodDevStateQuery, req)
 		if err != nil {
 			return nil, err
 		}
@@ -328,7 +328,7 @@ func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateRe
 	// the first one that successfully fulfills the request. If none succeed,
 	// return an error.
 	for _, i := range svc.harness.Instances() {
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetFaultyState, req)
+		dresp, err := i.CallDrpc(drpc.MethodSetFaultyState, req)
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +355,7 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodListContainers, req)
+	dresp, err := mi.CallDrpc(drpc.MethodListContainers, req)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +379,7 @@ func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerRe
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodContSetOwner, req)
+	dresp, err := mi.CallDrpc(drpc.MethodContSetOwner, req)
 	if err != nil {
 		return nil, err
 	}

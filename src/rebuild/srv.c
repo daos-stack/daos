@@ -1613,7 +1613,7 @@ rebuild_fini_one(void *arg)
 		D_DEBUG(DB_REBUILD, "close container/pool "
 			DF_UUID"/"DF_UUID"\n",
 			DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
-		dc_pool_local_close(pool_tls->rebuild_pool_hdl);
+		dsc_pool_close(pool_tls->rebuild_pool_hdl);
 		pool_tls->rebuild_pool_hdl = DAOS_HDL_INVAL;
 	}
 
@@ -1984,9 +1984,9 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		 * snapshot during rebuild fetch, otherwise it may cause
 		 * corruption.
 		 */
-		rc = cont_iv_snapshot_invalidate(pool->sp_iv_ns, cont_uuid,
-						 CRT_IV_SHORTCUT_NONE,
-						 CRT_IV_SYNC_NONE);
+		rc = ds_cont_revoke_snaps(pool->sp_iv_ns, cont_uuid,
+					  CRT_IV_SHORTCUT_NONE,
+					  CRT_IV_SYNC_NONE);
 		if (rc)
 			D_GOTO(out, rc);
 	}
