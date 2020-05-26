@@ -543,9 +543,9 @@ dss_srv_handler(void *arg)
 	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
 
 	wait_all_exited(dx);
-	if (dmi->dmi_sp) {
-		srv_profile_destroy(dmi->dmi_sp);
-		dmi->dmi_sp = NULL;
+	if (dmi->dmi_dp) {
+		daos_profile_destroy(dmi->dmi_dp);
+		dmi->dmi_dp = NULL;
 	}
 nvme_fini:
 	if (dx->dx_main_xs)
