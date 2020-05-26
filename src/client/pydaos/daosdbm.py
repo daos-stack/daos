@@ -35,10 +35,10 @@ class daos_named_kv():
                 sys.version_info.major, sys.version_info.minor)
         else:
             pydir = 'python{}'.format(sys.version_info.major)
-            sys.path.append(os.path.join(conf['PREFIX'],
-                                         'lib64',
-                                         pydir,
-                                         'site-packages'))
+        sys.path.append(os.path.join(conf['PREFIX'],
+                                     'lib64',
+                                     pydir,
+                                     'site-packages'))
 
         self.daos = __import__('pydaos')
 
