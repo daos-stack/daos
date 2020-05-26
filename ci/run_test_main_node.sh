@@ -13,7 +13,7 @@ sudo mkdir -p /mnt/daos
 
 sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
 sudo mkdir -p "$DAOS_BASE"
-sudo mount -t nfs "$HOSTNAME":"$PWD" "$DAOS_BASE"
+sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
 sudo cp "$DAOS_BASE/install/bin/daos_admin" /usr/bin/daos_admin
 sudo chown root /usr/bin/daos_admin
 sudo chmod 4755 /usr/bin/daos_admin
