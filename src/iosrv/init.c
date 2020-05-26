@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,7 +168,7 @@ modules_load(void)
 	char		*run;
 	int		 rc = 0;
 
-	sep = strdup(modules);
+	D_STRNDUP(sep, modules, MAX_MODULE_OPTIONS + 1);
 	if (sep == NULL)
 		return -DER_NOMEM;
 	run = sep;

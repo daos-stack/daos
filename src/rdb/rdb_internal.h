@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,6 +141,7 @@ int rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
 int rdb_raft_start(struct rdb *db);
 void rdb_raft_stop(struct rdb *db);
 void rdb_raft_resign(struct rdb *db, uint64_t term);
+int rdb_raft_campaign(struct rdb *db);
 int rdb_raft_verify_leadership(struct rdb *db);
 int rdb_raft_add_replica(struct rdb *db, d_rank_t rank);
 int rdb_raft_remove_replica(struct rdb *db, d_rank_t rank);

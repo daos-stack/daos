@@ -240,6 +240,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p,
 		  struct vos_ts_set *ts_set)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_obj_df	*obj = NULL;
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
@@ -280,7 +281,8 @@ do_log:
 	if (rc != 0)
 		return rc;
 
-	rc = ilog_update(loh, NULL, epoch, false);
+	rc = ilog_update(loh, NULL, epoch, dth != NULL ? dth->dth_op_seq : 1,
+			 false);
 
 	ilog_close(loh);
 skip_log:
@@ -315,8 +317,8 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 			rc = -DER_TX_RESTART;
 	}
 
-	VOS_TX_LOG_FAILURE(rc, "Failed to update incarnation log no punch: "
-			   DF_RC"\n", DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Failed to update incarnation log entry: "DF_RC"\n",
+			DP_RC(rc));
 
 	return rc;
 }

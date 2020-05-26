@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,7 +119,7 @@ struct cmd_args_s {
 			D_GOTO(label, (rcexpr));			\
 		}							\
 		if ((ap)->mdsrv == NULL) {				\
-			fprintf(stderr, "failed to parse--svc=%s\n",	\
+			fprintf(stderr, "failed to parse --svc=%s\n",	\
 					(ap)->mdsrv_str);		\
 			D_GOTO(label, (rcexpr));			\
 		}							\

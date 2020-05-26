@@ -468,8 +468,8 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 
 		memcpy(pp, rp, strlen(rp));
 		print_message("  update(%s, "DF_U64") before %s(%s, "
-			      DF_U64"): ", pp, re, r->o_name, rp, re);
-		rc = update_f(arg, pp, re);
+			      DF_U64"): ", pp, re - 1, r->o_name, rp, re);
+		rc = update_f(arg, pp, re - 1);
 		print_message("%d\n", rc);
 		if (rc != 0) {
 			nfailed++;
@@ -679,12 +679,17 @@ teardown_mvcc(void **state)
 }
 
 int
-run_mvcc_tests(void)
+run_mvcc_tests(const char *cfg)
 {
+	char	test_name[CFG_MAX];
+
+	create_config(test_name, "VOS MVCC Tests %s", cfg);
+
 	if (getenv("DAOS_IO_BYPASS")) {
 		print_message("Skipping MVCC tests: DAOS_IO_BYPASS is set\n");
 		return 0;
 	}
-	return cmocka_run_group_tests_name("VOS MVCC Tests", mvcc_tests,
+
+	return cmocka_run_group_tests_name(test_name, mvcc_tests,
 					   setup_mvcc, teardown_mvcc);
 }

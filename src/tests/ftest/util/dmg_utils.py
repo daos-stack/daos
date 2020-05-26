@@ -28,9 +28,9 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand, YamlCommand, YamlParameters
+from command_utils_base import \
+    CommandFailure, FormattedParameter, CommandWithParameters, YamlParameters
+from command_utils import CommandWithSubCommand, YamlCommand
 
 
 class DmgCommand(YamlCommand):
@@ -38,6 +38,9 @@ class DmgCommand(YamlCommand):
 
     METHOD_REGEX = {
         "run": r"(.*)",
+        "network_scan": r"(?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))"
+                        r"(?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+"
+                        r"([a-z0-9+;_]+))",
         # Sample output of dmg pool list.
         # wolf-3:10001: connected
         # Pool UUID                            Svc Replicas
@@ -46,7 +49,15 @@ class DmgCommand(YamlCommand):
         # Between the first and the second group, use " +"; i.e., one or more
         # whitespaces. If we use "\s+", it'll pick up the second divider as
         # UUID since it's made up of hyphens and \s includes new line.
-        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))"
+        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
+        "pool_create": r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)",
+        "pool_query": r"(?:Pool\s*([A-Za-z0-9-]+),\s*ntarget=([0-9]),"
+                      r"\s*disabled=([0-9]),\s+leader=([0-9]),"
+                      r"\s+version=([0-9])|Target\(VOS\) count:\s*([0-9])|"
+                      r"(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
+                      r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+)"
+                      r",\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
+                      r"|Rebuild\s+idle,\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)"
     }
 
     def __init__(self, path, yaml_cfg=None):
@@ -98,7 +109,6 @@ class DmgCommand(YamlCommand):
             if isinstance(hostlist, list):
                 hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")
-
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -485,27 +495,26 @@ class DmgCommand(YamlCommand):
                         "/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
 
-    def _get_result(self):
-        """Get the result from running the configured dmg command.
+    def network_scan(self, provider=None, all_devs=False):
+        """Get the result of the dmg network scan command.
+
+        Args:
+            provider (str): name of network provider tied to the device
+            all_devs (bool, optional): Show all devs  info. Defaults to False.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg command fails.
+            CommandFailure: if the dmg storage scan command fails.
 
         """
-        if self.yaml:
-            self.create_yaml_file()
-
-        result = None
-        try:
-            result = self.run()
-        except CommandFailure as error:
-            raise CommandFailure("<dmg> command failed: {}".format(error))
-
-        return result
+        self.set_sub_command("network")
+        self.sub_command_class.set_sub_command("scan")
+        self.sub_command_class.sub_command_class.provider.value = provider
+        self.sub_command_class.sub_command_class.all.value = all_devs
+        return self._get_result()
 
     def storage_scan(self):
         """Get the result of the dmg storage scan command.
@@ -522,8 +531,14 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.set_sub_command("scan")
         return self._get_result()
 
-    def storage_format(self):
+    def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
+
+        Args:
+            reformat (bool): always reformat storage, could be destructive.
+                This will create control-plane related metadata i.e. superblock
+                file and reformat if the storage media is available and
+                formattable.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -535,6 +550,7 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("format")
+        self.sub_command_class.sub_command_class.reformat.value = reformat
         return self._get_result()
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
@@ -604,6 +620,25 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.nsvc.value = svcn
         self.sub_command_class.sub_command_class.sys.value = group
         self.sub_command_class.sub_command_class.acl_file.value = acl_file
+        return self._get_result()
+
+    def pool_query(self, pool):
+        """Query a pool with the dmg command.
+
+        Args:
+            uuid (str): Pool UUID to query.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool destroy command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.pool.value = pool
         return self._get_result()
 
     def pool_destroy(self, pool, force=True):
@@ -720,9 +755,34 @@ class DmgCommand(YamlCommand):
 
         Raises:
             CommandFailure: if the dmg pool delete-acl command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list")
+        return self._get_result()
+
+    def pool_set_prop(self, pool, name, value):
+        """Set property for a given Pool.
+
+        Args:
+            pool (str): Pool uuid for which property is supposed
+                        to be set.
+            name (str): Property name to be set
+            value (str): Property value to be set
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool set-prop command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("set-prop")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.name.value = name
+        self.sub_command_class.sub_command_class.value.value = value
         return self._get_result()
 
 

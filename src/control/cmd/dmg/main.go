@@ -37,13 +37,10 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
-)
-
-const (
-	defaultConfigFile = "daos.yml"
 )
 
 type (
@@ -59,14 +56,20 @@ type (
 		conns client.Connect
 	}
 
-	ctlClientUser interface {
-		setClient(control.Invoker)
+	hostListSetter interface {
 		setHostList([]string)
 	}
 
-	ctlClientCmd struct {
-		hostlist  []string
-		ctlClient control.Invoker
+	hostListCmd struct {
+		hostlist []string
+	}
+
+	ctlInvoker interface {
+		setInvoker(control.Invoker)
+	}
+
+	ctlInvokerCmd struct {
+		ctlInvoker control.Invoker
 	}
 
 	jsonOutputter interface {
@@ -80,11 +83,11 @@ type (
 	}
 )
 
-func (cmd *ctlClientCmd) setClient(c control.Invoker) {
-	cmd.ctlClient = c
+func (cmd *ctlInvokerCmd) setInvoker(c control.Invoker) {
+	cmd.ctlInvoker = c
 }
 
-func (cmd *ctlClientCmd) setHostList(hl []string) {
+func (cmd *hostListCmd) setHostList(hl []string) {
 	cmd.hostlist = hl
 }
 
@@ -97,12 +100,12 @@ func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
 }
 
 func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
-	data, err := json.Marshal(in)
+	data, err := json.MarshalIndent(in, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	_, err = out.Write(data)
+	_, err = out.Write(append(data, []byte("\n")...))
 	return err
 }
 
@@ -123,18 +126,18 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 	c.log = log
 }
 
-// cmdConfigSetter is an interface for setting the client config on a command
+// cmdConfigSetter is an interface for setting the control config on a command
 type cmdConfigSetter interface {
-	setConfig(*client.Configuration)
+	setConfig(*control.Config)
 }
 
-// cfgCmd is a structure that can be used by commands that need the client
+// cfgCmd is a structure that can be used by commands that need the control
 // config.
 type cfgCmd struct {
-	config *client.Configuration
+	config *control.Config
 }
 
-func (c *cfgCmd) setConfig(cfg *client.Configuration) {
+func (c *cfgCmd) setConfig(cfg *control.Config) {
 	c.config = cfg
 }
 
@@ -187,12 +190,16 @@ and access control settings, along with system wide operations.`
 	p.WriteManPage(wr)
 }
 
-func parseOpts(args []string, opts *cliOptions, ctlClient control.Invoker, conns client.Connect, log *logging.LeveledLogger) error {
+func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, conns client.Connect, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.Default)
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
 		if cmd == nil {
 			return nil
+		}
+
+		if opts.HostFile != "" {
+			return errors.New("hostfile option not implemented")
 		}
 
 		if !opts.AllowProxy {
@@ -216,24 +223,48 @@ func parseOpts(args []string, opts *cliOptions, ctlClient control.Invoker, conns
 			logCmd.setLog(log)
 		}
 
-		if opts.ConfigPath == "" {
-			defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
-			if _, err := os.Stat(defaultConfigPath); err == nil {
-				opts.ConfigPath = defaultConfigPath
-			}
-		}
-
-		config, err := client.GetConfig(log, opts.ConfigPath)
-		if err != nil {
-			return errors.WithMessage(err, "processing config file")
-		}
-
-		ctlClientCfg, err := control.LoadClientConfig(opts.ConfigPath)
+		ctlCfg, err := control.LoadConfig(opts.ConfigPath)
 		if err != nil {
 			if opts.ConfigPath != "" {
-				return errors.WithMessage(err, "failed to load client configuration")
+				return errors.WithMessage(err, "failed to load control configuration")
 			}
-			ctlClientCfg = control.DefaultClientConfig()
+			ctlCfg = control.DefaultConfig()
+		}
+		if opts.ConfigPath != "" {
+			log.Debugf("control config loaded from %s", opts.ConfigPath)
+		}
+
+		if opts.Insecure {
+			ctlCfg.TransportConfig.AllowInsecure = true
+		}
+		if err := ctlCfg.TransportConfig.PreLoadCertData(); err != nil {
+			return errors.Wrap(err, "Unable to load Certificate Data")
+		}
+
+		invoker.SetConfig(ctlCfg)
+		if ctlCmd, ok := cmd.(ctlInvoker); ok {
+			ctlCmd.setInvoker(invoker)
+			if opts.HostList != "" {
+				if hlCmd, ok := cmd.(hostListSetter); ok {
+					hlCmd.setHostList(strings.Split(opts.HostList, ","))
+				} else {
+					return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
+						control.UserConfigPath(), control.SystemConfigPath())
+				}
+			}
+		}
+
+		if cfgCmd, ok := cmd.(cmdConfigSetter); ok {
+			cfgCmd.setConfig(ctlCfg)
+		}
+
+		// BEGIN DEPRECATED CLIENT SETUP (DAOS-4632)
+		//
+		// Temporarily set up an old-style client config based on the control
+		// config.
+		config := new(client.Configuration)
+		if err := convert.Types(ctlCfg, config); err != nil {
+			return err
 		}
 
 		if opts.HostList != "" {
@@ -244,19 +275,9 @@ func parseOpts(args []string, opts *cliOptions, ctlClient control.Invoker, conns
 			config.HostList = hostlist
 		}
 
-		if opts.HostFile != "" {
-			return errors.New("hostfile option not implemented")
-		}
-
 		if opts.Insecure {
 			config.TransportConfig.AllowInsecure = true
-			ctlClientCfg.TransportConfig.AllowInsecure = true
 		}
-
-		if err := ctlClientCfg.TransportConfig.PreLoadCertData(); err != nil {
-			return errors.Wrap(err, "Unable to load Certificate Data")
-		}
-
 		err = config.TransportConfig.PreLoadCertData()
 		if err != nil {
 			return errors.Wrap(err, "Unable to load Certificate Data")
@@ -276,18 +297,7 @@ func parseOpts(args []string, opts *cliOptions, ctlClient control.Invoker, conns
 			log.Info(connStates.String())
 			wantsConn.setConns(conns)
 		}
-
-		ctlClient.SetClientConfig(ctlClientCfg)
-		if clientCmd, ok := cmd.(ctlClientUser); ok {
-			clientCmd.setClient(ctlClient)
-			if opts.HostList != "" {
-				clientCmd.setHostList(strings.Split(opts.HostList, ","))
-			}
-		}
-
-		if cfgCmd, ok := cmd.(cmdConfigSetter); ok {
-			cfgCmd.setConfig(config)
-		}
+		// END DEPRECATED CLIENT SETUP (DAOS-4632)
 
 		if err := cmd.Execute(args); err != nil {
 			return err
@@ -305,11 +315,11 @@ func main() {
 	log := logging.NewCommandLineLogger()
 
 	conns := client.NewConnect(log)
-	ctlClient := control.NewClient(
+	ctlInvoker := control.NewClient(
 		control.WithClientLogger(log),
 	)
 
-	if err := parseOpts(os.Args[1:], &opts, ctlClient, conns, log); err != nil {
+	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, conns, log); err != nil {
 		exitWithError(log, err)
 	}
 }

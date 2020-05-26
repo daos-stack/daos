@@ -25,61 +25,57 @@ package main
 
 import (
 	"net"
-	"syscall"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
+	"golang.org/x/sys/unix"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/security"
 )
 
 // mgmtModule represents the daos_agent dRPC module. It acts mostly as a
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	log logging.Logger
-	sys string
-	// The access point
-	ap        string
-	tcfg      *security.TransportConfig
-	aiCache   *attachInfoCache
-	numaAware bool
+	log        logging.Logger
+	sys        string
+	ctlInvoker control.Invoker
+	aiCache    *attachInfoCache
+	numaAware  bool
 }
 
-func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
-	switch method {
-	case drpc.MethodGetAttachInfo:
-
-		uc, ok := session.Conn.(*net.UnixConn)
-		if !ok {
-			return nil, errors.Errorf("session.Conn type conversion failed")
-		}
-
-		file, err := uc.File()
-		if err != nil {
-			return nil, err
-		}
-		defer file.Close()
-
-		fd := int(file.Fd())
-		cred, err := syscall.GetsockoptUcred(fd, syscall.SOL_SOCKET, syscall.SO_PEERCRED)
-		if err != nil {
-			return nil, err
-		}
-
-		return mod.handleGetAttachInfo(req, cred.Pid)
-	default:
+func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+	if method != drpc.MethodGetAttachInfo {
 		return nil, drpc.UnknownMethodFailure()
 	}
+
+	uc, ok := session.Conn.(*net.UnixConn)
+	if !ok {
+		return nil, errors.Errorf("session.Conn type conversion failed")
+	}
+
+	file, err := uc.File()
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	fd := int(file.Fd())
+	cred, err := unix.GetsockoptUcred(fd, unix.SOL_SOCKET, unix.SO_PEERCRED)
+	if err != nil {
+		return nil, err
+	}
+
+	return mod.handleGetAttachInfo(req, cred.Pid)
 }
 
-func (mod *mgmtModule) ID() int32 {
+func (mod *mgmtModule) ID() drpc.ModuleID {
 	return drpc.ModuleMgmt
 }
 
@@ -96,7 +92,7 @@ func (mod *mgmtModule) ID() int32 {
 // "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, error) {
 	var err error
-	numaNode := defaultNumaNode
+	numaNode := mod.aiCache.defaultNumaNode
 
 	if mod.numaAware {
 		numaNode, err = netdetect.GetNUMASocketIDForPid(pid)
@@ -109,38 +105,27 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return mod.aiCache.getResponse(numaNode)
 	}
 
-	req := &mgmtpb.GetAttachInfoReq{}
-	if err := proto.Unmarshal(reqb, req); err != nil {
+	pbReq := new(mgmtpb.GetAttachInfoReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
-	mod.log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
+	mod.log.Debugf("GetAttachInfo req from client: %+v", pbReq)
 
-	if req.Sys != mod.sys {
-		return nil, errors.Errorf("unknown system name %s", req.Sys)
+	if pbReq.Sys != mod.sys {
+		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
 	}
 
-	dialOpt, err := security.DialOptionForTransportConfig(mod.tcfg)
+	ctx := context.TODO() // FIXME: Should be the top-level context.
+	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, &control.GetAttachInfoReq{
+		System: pbReq.Sys,
+	})
 	if err != nil {
-		return nil, err
-	}
-	opts := []grpc.DialOption{dialOpt}
-
-	conn, err := grpc.Dial(mod.ap, opts...)
-	if err != nil {
-		return nil, errors.Wrapf(err, "dial %s", mod.ap)
-	}
-	defer conn.Close()
-
-	client := mgmtpb.NewMgmtSvcClient(conn)
-
-	resp, err := client.GetAttachInfo(context.Background(), req)
-	if err != nil {
-		return nil, errors.Wrapf(err, "GetAttachInfo %s %v", mod.ap, *req)
+		return nil, errors.Wrapf(err, "GetAttachInfo %+v", pbReq)
 	}
 
 	if resp.Provider == "" {
-		return nil, errors.Errorf("GetAttachInfo %s %v contained no provider.", mod.ap, *req)
+		return nil, errors.New("GetAttachInfo response contained no provider.")
 	}
 
 	// Scan the local fabric to determine what devices are available that match our provider
@@ -149,7 +134,14 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, err
 	}
 
-	err = mod.aiCache.initResponseCache(resp, scanResults)
+	mod.log.Debugf("GetAttachInfo resp from MS: %+v", resp)
+
+	pbResp := new(mgmtpb.GetAttachInfoResp)
+	if err := convert.Types(resp, pbResp); err != nil {
+		return nil, errors.Wrap(err, "Failed to convert GetAttachInfo response")
+	}
+
+	err = mod.aiCache.initResponseCache(pbResp, scanResults)
 	if err != nil {
 		return nil, err
 	}

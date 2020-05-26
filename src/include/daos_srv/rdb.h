@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,6 +157,7 @@ int rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs,
 	      void *arg, struct rdb **dbp);
 void rdb_stop(struct rdb *db);
 void rdb_resign(struct rdb *db, uint64_t term);
+int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);

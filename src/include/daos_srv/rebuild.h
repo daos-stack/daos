@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,4 +60,5 @@ int ds_rebuild_regenerate_task(struct ds_pool *pool);
 int ds_rebuild_pool_map_update(struct ds_pool *pool);
 void ds_rebuild_leader_stop_all(void);
 void ds_rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version);
+void ds_rebuild_abort(uuid_t pool_uuid, unsigned int version);
 #endif

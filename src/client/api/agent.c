@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,6 @@ dc_agent_init()
 	}
 
 	if (path == NULL) {
-		D_ERROR("Unable to allocate dc_agent_sockpath.");
 		return -DER_NOMEM;
 	}
 

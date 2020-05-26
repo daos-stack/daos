@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,6 @@ struct dtx_resync_entry {
 	struct dtx_entry	dre_dte;
 	daos_epoch_t		dre_epoch;
 	uint64_t		dre_hash;
-	uint32_t		dre_intent;
 	uint32_t		dre_in_cache:1;
 };
 
@@ -111,17 +110,14 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 			goto commit;
 
 		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
-					&dre->dre_xid, dre->dre_hash,
-					dre->dre_intent == DAOS_INTENT_PUNCH ?
-					true : false);
+					&dre->dre_xid, dre->dre_hash);
 		if (rc == -DER_NONEXIST) {
-			int	flags = 0;
-
-			if (dre->dre_intent == DAOS_INTENT_PUNCH)
-				flags |= DCF_FOR_PUNCH;
+			/* Not sure about whether the DTX modified shared
+			 * items or not, then just assume it is.
+			 */
 			rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_oid,
-				&dre->dre_xid, dre->dre_hash, dre->dre_epoch, 0,
-				flags);
+					     &dre->dre_xid, dre->dre_hash,
+					     dre->dre_epoch, 0, DCF_SHARED);
 			if (rc < 0)
 				D_WARN("Fail to add DTX "DF_DTI" to CoS cache: "
 				       "rc = %d\n",  DP_DTI(&dre->dre_xid), rc);
@@ -171,9 +167,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		}
 
 		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
-					&dre->dre_xid, dre->dre_hash,
-					dre->dre_intent == DAOS_INTENT_PUNCH ?
-					true : false);
+					&dre->dre_xid, dre->dre_hash);
 		/* If it is in CoS cache, no need to check remote replicas. */
 		if (rc == 0) {
 			dre->dre_in_cache = 1;
@@ -240,9 +234,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		}
 
 		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
-					&dre->dre_xid, dre->dre_hash,
-					dre->dre_intent == DAOS_INTENT_PUNCH ?
-					true : false);
+					&dre->dre_xid, dre->dre_hash);
 		if (rc == 0) {
 			dre->dre_in_cache = 1;
 			goto commit;
@@ -307,7 +299,6 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	dre->dre_epoch = ent->ie_epoch;
 	dre->dre_xid = ent->ie_xid;
 	dre->dre_oid = ent->ie_oid;
-	dre->dre_intent = ent->ie_dtx_intent;
 	dre->dre_hash = ent->ie_dtx_hash;
 	d_list_add_tail(&dre->dre_link, &dra->tables.drh_list);
 	dra->tables.drh_count++;

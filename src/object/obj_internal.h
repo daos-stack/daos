@@ -193,6 +193,7 @@ struct migrate_pool_tls {
 	/* Service rank list for migrate fetch RPC */
 	d_rank_list_t		mpt_svc_list;
 
+	ABT_eventual		mpt_done_eventual;
 	/* Migrate status */
 	uint64_t		mpt_obj_count;
 	uint64_t		mpt_rec_count;
@@ -380,7 +381,8 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      uint32_t fw_cnt, tse_task_t *task);
 
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
-			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
+			   uint32_t flags, struct dc_object *obj,
+			   daos_key_t *dkey, daos_key_t *akey,
 			   daos_recx_t *recx, const uuid_t coh_uuid,
 			   const uuid_t cont_uuid, unsigned int *map_ver,
 			   tse_task_t *task);
@@ -401,11 +403,32 @@ obj_retry_error(int err)
 	       daos_crt_network_error(err);
 }
 
+static inline daos_handle_t
+obj_ptr2hdl(struct dc_object *obj)
+{
+	daos_handle_t oh;
+
+	daos_hhash_link_key(&obj->cob_hlink, &oh.cookie);
+	return oh;
+}
+
+static inline daos_epoch_t
+dc_io_epoch(void)
+{
+	return (srv_io_mode != DIM_CLIENT_DISPATCH) ?
+			DAOS_EPOCH_MAX : crt_hlc_get();
+}
+
 void obj_shard_decref(struct dc_obj_shard *shard);
 void obj_shard_addref(struct dc_obj_shard *shard);
 void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
+struct dc_object *obj_hdl2ptr(daos_handle_t oh);
+int dc_obj_update(tse_task_t *task, daos_epoch_t epoch, uint32_t map_ver,
+		  daos_obj_update_t *args);
+int dc_obj_punch(tse_task_t *task, daos_epoch_t epoch, uint32_t map_ver,
+		 enum obj_rpc_opc opc, daos_obj_punch_t *api_args);
 
 struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;
@@ -446,4 +469,22 @@ obj_dkey2hash(daos_key_t *dkey)
 int  obj_utils_init(void);
 void obj_utils_fini(void);
 
+/* obj_tx.c */
+int
+dc_tx_check_pmv(daos_handle_t th);
+
+int
+dc_tx_hdl2epoch_and_pmv(daos_handle_t th, daos_epoch_t *epoch, uint32_t *pmv);
+
+int
+dc_tx_set_epoch(daos_handle_t th, daos_epoch_t epoch);
+
+int
+dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
+
+int
+dc_tx_non_cpd_cb(daos_handle_t th, int result);
+
+int
+dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc);
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

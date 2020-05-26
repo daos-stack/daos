@@ -184,16 +184,11 @@ cont_cmp(struct d_ulink *ulink, void *cmp_args)
 	return !uuid_compare(cont->vc_pool->vp_id, pkey->uuid);
 }
 
-/**
- * Container cache functions
- */
-void
-cont_free(struct d_ulink *ulink)
+static void
+cont_free_internal(struct vos_container *cont)
 {
-	struct vos_container		*cont;
-	int				 i;
+	int i;
 
-	cont = container_of(ulink, struct vos_container, vc_uhlink);
 	D_ASSERT(cont->vc_open_count == 0);
 
 	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
@@ -202,6 +197,9 @@ cont_free(struct d_ulink *ulink)
 		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
 	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
 		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+
+	if (cont->vc_dtx_array)
+		lrua_array_free(cont->vc_dtx_array);
 
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committable_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_list));
@@ -215,6 +213,18 @@ cont_free(struct d_ulink *ulink)
 	}
 
 	D_FREE(cont);
+}
+
+/**
+ * Container cache functions
+ */
+void
+cont_free(struct d_ulink *ulink)
+{
+	struct vos_container		*cont;
+
+	cont = container_of(ulink, struct vos_container, vc_uhlink);
+	cont_free_internal(cont);
 }
 
 struct d_ulink_ops   co_hdl_uh_ops = {
@@ -394,6 +404,16 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 
+	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
+			      sizeof(struct vos_dtx_act_ent),
+			      LRU_FLAG_REUSE_UNIQUE,
+			      NULL, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX active array: rc = "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(exit, rc);
+	}
+
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACT_TABLE, 0,
 				      DTX_BTREE_ORDER, &uma,
 				      &cont->vc_dtx_active_btr,
@@ -460,7 +480,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 exit:
 	if (rc != 0 && cont)
-		cont_decref(cont);
+		cont_free_internal(cont);
 
 	return rc;
 }

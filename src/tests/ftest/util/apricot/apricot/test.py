@@ -108,11 +108,17 @@ class Test(avocadoTest):
                 if dhms[index] is not None:
                     self.timeout += multiplier * int(dhms[index])
 
+        # param to add multiple timeouts for different tests under
+        # same test class
+        self.timeouts = self.params.get(self.get_test_name(),
+                                        "/run/timeouts/*")
         # If not specified, set a default timeout of 1 minute.
         # Tests that require a longer timeout should set a "timeout: <int>"
         # entry in their yaml file.  All tests should have a timeout defined.
-        if not self.timeout:
+        if (not self.timeout) and (not self.timeouts):
             self.timeout = 60
+        elif self.timeouts:
+            self.timeout = self.timeouts
         self.log.info("self.timeout: %s", self.timeout)
 
         item_list = self.logdir.split('/')
@@ -130,6 +136,10 @@ class Test(avocadoTest):
         return self.cancel("Skipping until {} is fixed.".format(ticket))
     # pylint: enable=invalid-name
 
+    def get_test_name(self):
+        """Obtain test name from self.__str__() """
+        return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
+
 
 class TestWithoutServers(Test):
     """Run tests without DAOS servers.
@@ -143,6 +153,7 @@ class TestWithoutServers(Test):
 
         self.client_mca = None
         self.orterun = None
+        self.ofi_prefix = None
         self.ompi_prefix = None
         self.basepath = None
         self.prefix = None
@@ -177,6 +188,10 @@ class TestWithoutServers(Test):
         self.basepath = os.path.normpath(os.path.join(build_paths['PREFIX'],
                                                       '..') + os.path.sep)
         self.prefix = build_paths['PREFIX']
+        try:
+            self.ofi_prefix = build_paths['OFI_PREFIX']
+        except KeyError:
+            self.ofi_prefix = "/usr"
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
         self.daosctl = os.path.join(self.bin, 'daosctl')
@@ -226,6 +241,14 @@ class TestWithServers(TestWithoutServers):
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
         super(TestWithServers, self).__init__(*args, **kwargs)
+
+        # Add additional time to the test timeout for reporting running
+        # processes while stopping the daos_agent and daos_server.
+        tear_down_timeout = 30
+        self.timeout += tear_down_timeout
+        self.log.info(
+            "Increasing timeout by %s seconds for agent/server tear down: %s",
+            tear_down_timeout, self.timeout)
 
         self.server_group = None
         self.agent_managers = []
@@ -293,9 +316,6 @@ class TestWithServers(TestWithoutServers):
                     "Specifying both a {} partition name and a list of hosts "
                     "is not supported!".format(name))
 
-        # For API calls include running the agent on the local host
-        self.hostlist_clients = include_local_host(self.hostlist_clients)
-
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
         #     self.params, self.hostlist_servers, debug=self.debug)
@@ -355,7 +375,7 @@ class TestWithServers(TestWithoutServers):
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos agents on all client
                 hosts specified in the test's yaml file.
-            servers (list): list of hosts running the doas servers to be used to
+            servers (list): list of hosts running the daos servers to be used to
                 define the access points in the agent yaml config file
 
         Raises:
@@ -364,7 +384,10 @@ class TestWithServers(TestWithoutServers):
 
         """
         if agent_groups is None:
-            agent_groups = {self.server_group: self.hostlist_clients}
+            # Include running the daos_agent on the test control host for API
+            # calls and calling the daos command from this host.
+            agent_groups = {
+                self.server_group: include_local_host(self.hostlist_clients)}
 
         self.log.debug("--- STARTING AGENT GROUPS: %s ---", agent_groups)
 

@@ -1219,7 +1219,7 @@ cond_test(void **state)
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxxx", 'x');
 	/** Conditional update of non-existed key should fail */
-	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a", "b",
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 1, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE,
 		       -DER_NONEXIST, sgl, "foo");
 	/** Conditional punch of non-existed akey should fail */
@@ -1403,11 +1403,14 @@ static const struct CMUnitTest punch_model_tests[] = {
 };
 
 int
-run_pm_tests(void)
+run_pm_tests(const char *cfg)
 {
+	char	test_name[CFG_MAX];
+
+	create_config(test_name, "VOS Punch Model tests %s", cfg);
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
-	return cmocka_run_group_tests_name("VOS Punch Model tests",
+	return cmocka_run_group_tests_name(test_name,
 					   punch_model_tests, setup_io,
 					   teardown_io);
 }

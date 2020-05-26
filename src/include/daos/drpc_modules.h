@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,7 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_PING_RANK		= 224,
 	DRPC_METHOD_MGMT_REINTEGRATE		= 225,
 	DRPC_METHOD_MGMT_CONT_SET_OWNER		= 226,
+	DRPC_METHOD_MGMT_EXCLUDE		= 227,
 
 	NUM_DRPC_MGMT_METHODS			/* Must be last */
 };

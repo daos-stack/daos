@@ -51,13 +51,13 @@ type SystemCmd struct {
 type leaderQueryCmd struct {
 	logCmd
 	cfgCmd
-	ctlClientCmd
+	ctlInvokerCmd
 	jsonOutputCmd
 }
 
 func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	ctx := context.Background()
-	resp, err := control.LeaderQuery(ctx, cmd.ctlClient, &control.LeaderQueryReq{
+	resp, err := control.LeaderQuery(ctx, cmd.ctlInvoker, &control.LeaderQueryReq{
 		System: cmd.config.SystemName,
 	})
 	if err != nil {
@@ -110,8 +110,9 @@ func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
 	uuidTitle := "UUID"
 	addrTitle := "Control Address"
 	stateTitle := "State"
+	reasonTitle := "Reason"
 
-	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle)
+	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle, reasonTitle)
 	var table []txtfmt.TableRow
 
 	for _, m := range members {
@@ -119,6 +120,7 @@ func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
 		row[uuidTitle] = m.UUID
 		row[addrTitle] = m.Addr.String()
 		row[stateTitle] = m.State().String()
+		row[reasonTitle] = m.Info
 
 		table = append(table, row)
 	}
@@ -137,7 +139,7 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) error 
 		{"address": m.Addr.String()},
 		{"uuid": m.UUID},
 		{"status": m.State().String()},
-		{"reason": "unknown"},
+		{"reason": m.Info},
 	}
 
 	title := fmt.Sprintf("Rank %d", m.Rank)
@@ -149,7 +151,7 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) error 
 // systemQueryCmd is the struct representing the command to query system status.
 type systemQueryCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
 	jsonOutputCmd
 	Verbose bool   `long:"verbose" short:"v" description:"Display more member details"`
 	Ranks   string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
@@ -163,7 +165,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
-	resp, err := control.SystemQuery(ctx, cmd.ctlClient, &control.SystemQueryReq{
+	resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{
 		Ranks: system.RanksFromUint32(ranks),
 	})
 	if err != nil {
@@ -201,7 +203,7 @@ func displaySystemAction(log logging.Logger, results system.MemberResults) error
 			msg = r.Msg
 		}
 
-		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
+		resStr := fmt.Sprintf(" %s%s%s", r.Action, rowFieldSep, msg)
 		if err := groups.AddHost(resStr, addRankPrefix(r.Rank)); err != nil {
 			return errors.Wrap(err, "adding rank result to group")
 		}
@@ -220,7 +222,7 @@ func displaySystemAction(log logging.Logger, results system.MemberResults) error
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
 type systemStopCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
 	jsonOutputCmd
 	Force bool   `long:"force" description:"Force stop DAOS system members"`
 	Ranks string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
@@ -236,7 +238,7 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
-	resp, err := control.SystemStop(ctx, cmd.ctlClient, &control.SystemStopReq{
+	resp, err := control.SystemStop(ctx, cmd.ctlInvoker, &control.SystemStopReq{
 		Prep:  true,
 		Kill:  true,
 		Force: cmd.Force,
@@ -262,7 +264,7 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 // systemStartCmd is the struct representing the command to start system.
 type systemStartCmd struct {
 	logCmd
-	ctlClientCmd
+	ctlInvokerCmd
 	jsonOutputCmd
 	Ranks string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
 }
@@ -275,7 +277,7 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
-	resp, err := control.SystemStart(ctx, cmd.ctlClient, &control.SystemStartReq{
+	resp, err := control.SystemStart(ctx, cmd.ctlInvoker, &control.SystemStartReq{
 		Ranks: system.RanksFromUint32(ranks),
 	})
 	if err != nil {
@@ -299,7 +301,7 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 type systemListPoolsCmd struct {
 	logCmd
 	cfgCmd
-	ctlClientCmd
+	ctlInvokerCmd
 	jsonOutputCmd
 }
 
@@ -322,7 +324,7 @@ func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
-	resp, err := control.ListPools(ctx, cmd.ctlClient, &control.ListPoolsReq{
+	resp, err := control.ListPools(ctx, cmd.ctlInvoker, &control.ListPoolsReq{
 		System: cmd.config.SystemName,
 	})
 	if err != nil {

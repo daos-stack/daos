@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,7 +176,6 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	it_entry->ie_xid = DAE_XID(dae);
 	it_entry->ie_oid = DAE_OID(dae);
 	it_entry->ie_epoch = DAE_EPOCH(dae);
-	it_entry->ie_dtx_intent = DAE_INTENT(dae);
 	it_entry->ie_dtx_hash = DAE_DKEY_HASH(dae);
 
 	D_DEBUG(DB_IO, "DTX iterator fetch the one "DF_DTI"\n",

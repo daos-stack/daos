@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,8 +135,10 @@ int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
-int ds_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *ranks,
-		uint32_t reint_rank, struct pool_target_id_list *reint_list);
+int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
+				uint32_t rank,
+				struct pool_target_id_list *target_list,
+				pool_comp_state_t state);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
@@ -223,5 +225,11 @@ ds_pool_enable_evict(void);
 
 int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 			    uint32_t force);
+
+int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+		       unsigned int flags, const char *grp,
+		       struct pool_map *map, d_rank_list_t *svc_list,
+		       daos_handle_t *ph);
+int dsc_pool_close(daos_handle_t ph);
 
 #endif /* __DAOS_SRV_POOL_H__ */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,8 +145,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		return rc;
 
 	rc = duns_parse_attr(&str[0], str_len, &dattr);
-	if (rc != -DER_SUCCESS)
-		return daos_der2errno(rc);
+	if (rc)
+		return rc;
 
 	if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
 		return ENOTSUP;
@@ -256,7 +256,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
 
-	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
+	rc = dfuse_lookup_inode(fs_handle, dfs, NULL,
 				&ie->ie_stat.st_ino);
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
