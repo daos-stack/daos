@@ -48,11 +48,6 @@ int dc_cont_local2global(daos_handle_t coh, d_iov_t *glob);
 int dc_cont_global2local(daos_handle_t poh, d_iov_t glob,
 			 daos_handle_t *coh);
 
-int dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
-		       unsigned int flags, daos_handle_t ph,
-		       daos_handle_t *coh);
-int dc_cont_local_close(daos_handle_t ph, daos_handle_t coh);
-
 int dc_cont_create(tse_task_t *task);
 int dc_cont_open(tse_task_t *task);
 int dc_cont_close(tse_task_t *task);
