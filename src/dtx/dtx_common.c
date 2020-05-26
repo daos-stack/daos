@@ -230,7 +230,7 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_leader = leader ? 1 : 0;
 	dth->dth_solo = solo ? 1 : 0;
 	dth->dth_dti_cos_done = 0;
-	dth->dth_has_ilog = 0;
+	dth->dth_modify_shared = 0;
 	dth->dth_actived = 0;
 
 	/* Operation sequence starts from 1 instead of 0. */
@@ -260,12 +260,11 @@ int
 dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
 		 uint32_t intent, struct daos_shard_tgt *tgts, int tgts_cnt,
-		 bool cond_check, struct dtx_leader_handle *dlh)
+		 struct dtx_leader_handle *dlh)
 {
 	struct dtx_handle	*dth = &dlh->dlh_handle;
 	struct dtx_id		*dti_cos = NULL;
 	int			 dti_cos_count = 0;
-	uint32_t		 type = DCLT_PUNCH;
 	int			 i;
 
 	/* Single replica case. */
@@ -291,34 +290,17 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		return 0;
 	}
 
-	/* XXX: For leader case, we need to find out the potential
-	 *	conflict DTXs in the CoS cache, and append them to
-	 *	the dispatched RPC to non-leaders. Then non-leader
-	 *	replicas can commit them before real modifications
-	 *	to avoid availability trouble.
+	/* XXX: The leader needs to find out the DTXs in the CoS cache
+	 *	that modified potential shared items (object/dkey/akey),
+	 *	and append them to the dispatched RPC to non-leaders.
+	 *	Then non-leader replicas can commit them before real
+	 *	modifications to avoid availability trouble.
 	 */
-
-	if (intent == DAOS_INTENT_PUNCH || cond_check)
-		type |= DCLT_UPDATE;
-
-	dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash, type,
+	dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash,
 					 DTX_THRESHOLD_COUNT, &dti_cos);
 	if (dti_cos_count < 0) {
 		D_FREE(dlh->dlh_subs);
 		return dti_cos_count;
-	}
-
-	if (dti_cos_count > 0 && dti_cos == NULL) {
-		/* There are too many conflict DTXs to be committed,
-		 * as to cannot be taken via the normal IO RPC. The
-		 * background dedicated DTXs batched commit ULT has
-		 * not committed them in time. Let's retry later.
-		 */
-		D_DEBUG(DB_TRACE, "Too many potential conflict DTXs"
-			" for the given "DF_DTI", let's retry later.\n",
-			DP_DTI(dti));
-		D_FREE(dlh->dlh_subs);
-		return -DER_INPROGRESS;
 	}
 
 init:
@@ -364,7 +346,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	       int result)
 {
 	struct dtx_handle		*dth = &dlh->dlh_handle;
-	int				 flags = 0;
+	daos_epoch_t			 epoch = dth->dth_epoch;
 	int				 rc = 0;
 
 	if (dlh->dlh_sub_cnt == 0)
@@ -381,15 +363,13 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	    daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
 
-	if (dth->dth_intent == DAOS_INTENT_PUNCH)
-		flags |= DCF_FOR_PUNCH;
-	if (dth->dth_has_ilog)
-		flags |= DCF_HAS_ILOG;
-
 again:
-	rc = vos_dtx_add_cos(dth->dth_coh, &dth->dth_oid, &dth->dth_xid,
-			     dth->dth_dkey_hash, dth->dth_epoch, dth->dth_gen,
-			     flags);
+	rc = vos_dtx_check_sync(dth->dth_coh, dth->dth_oid, &epoch);
+	if (rc == 0)
+		rc = vos_dtx_add_cos(dth->dth_coh, &dth->dth_oid, &dth->dth_xid,
+				     dth->dth_dkey_hash, dth->dth_epoch,
+				     dth->dth_gen,
+				     dth->dth_modify_shared ? DCF_SHARED : 0);
 	if (rc == -DER_TX_RESTART) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS "
 		       "because of using old epoch "DF_U64
@@ -413,7 +393,7 @@ again:
 		goto again;
 	}
 
-	if (rc != 0) {
+	if (rc != 0 && epoch < dth->dth_epoch) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS cache: %d. "
 		       "Try to commit it sychronously.\n",
 		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), rc);
@@ -626,7 +606,7 @@ dtx_batched_commit_deregister(struct ds_cont_child *cont)
 
 int
 dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		  uint64_t dkey_hash, bool punch, daos_epoch_t *epoch)
+		  uint64_t dkey_hash, daos_epoch_t *epoch)
 {
 	int	rc;
 
@@ -644,7 +624,7 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 		return -DER_NONEXIST;
 
 again:
-	rc = vos_dtx_check_resend(coh, oid, dti, dkey_hash, punch, epoch);
+	rc = vos_dtx_check_resend(coh, oid, dti, dkey_hash, epoch);
 	switch (rc) {
 	case DTX_ST_PREPARED:
 		return 0;

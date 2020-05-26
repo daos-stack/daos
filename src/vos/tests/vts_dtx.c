@@ -32,7 +32,7 @@
 #include "vts_io.h"
 
 static void
-vts_dtx_cos(void **state, bool punch)
+vts_dtx_cos(void **state, bool shared)
 {
 	struct io_test_args	*args = *state;
 	struct vos_container	*cont;
@@ -45,39 +45,34 @@ vts_dtx_cos(void **state, bool punch)
 	/* Insert a DTX into CoS cache. */
 	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
 			     dkey_hash, DAOS_EPOCH_MAX - 1, 0,
-			     punch ? DCF_FOR_PUNCH : 0);
+			     shared ? DCF_SHARED : 0);
 	assert_int_equal(rc, 0);
-
-	/* Query the DTX with different @punch parameter will find nothing. */
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash, !punch);
-	assert_int_equal(rc, -DER_NONEXIST);
 
 	/* Query the DTX different dkey hash will find nothing. */
 	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash + 1, punch);
+				dkey_hash + 1);
 	assert_int_equal(rc, -DER_NONEXIST);
 
 	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash, punch);
+				dkey_hash);
 	assert_int_equal(rc, 0);
 
 	cont = vos_hdl2cont(args->ctx.tc_co_hdl);
 	/* Remove the DTX from CoS cache. */
-	vos_dtx_del_cos(cont, &args->oid, &xid, dkey_hash, punch);
+	vos_dtx_del_cos(cont, &args->oid, &xid, dkey_hash);
 	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash, punch);
+				dkey_hash);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
-/* update-DTX CoS cache insert/delete/query */
+/* DTX CoS cache insert/delete/query without shared items. */
 static void
 dtx_1(void **state)
 {
 	vts_dtx_cos(state, false);
 }
 
-/* punch-DTX CoS cache insert/delete/query */
+/* DTX CoS cache insert/delete/query with shared items. */
 static void
 dtx_2(void **state)
 {
@@ -93,39 +88,26 @@ dtx_3(void **state)
 	struct dtx_id		 xid;
 	struct dtx_stat		 stat = { 0 };
 	uint64_t		 dkey_hash = lrand48();
-	int			 flags[3];
+	int			 flags[2];
 	int			 rc;
 	int			 i;
 
 	flags[0] = 0;
-	flags[1] = DCF_HAS_ILOG;
-	flags[2] = DCF_FOR_PUNCH;
+	flags[1] = DCF_SHARED;
 
 	for (i = 0; i < 11; i++) {
 		daos_dti_gen(&xid, false);
 
 		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
 				     dkey_hash, DAOS_EPOCH_MAX - 1, 0,
-				     flags[i % 3]);
+				     flags[i % 2]);
 		assert_int_equal(rc, 0);
 	}
 
 	rc = vos_dtx_list_cos(args->ctx.tc_co_hdl, &args->oid, dkey_hash,
-			      DCLT_PUNCH, 100, &dti_cos);
-	/* xid[1,2,4,5,7,8,10] */
-	assert_int_equal(rc, 7);
-	D_FREE(dti_cos);
-
-	rc = vos_dtx_list_cos(args->ctx.tc_co_hdl, &args->oid, dkey_hash,
-			      DCLT_UPDATE, 100, &dti_cos);
-	/* xid[0,1,3,4,6,7,9,10] */
-	assert_int_equal(rc, 8);
-	D_FREE(dti_cos);
-
-	rc = vos_dtx_list_cos(args->ctx.tc_co_hdl, &args->oid, dkey_hash,
-			      DCLT_PUNCH | DCLT_UPDATE, 100, &dti_cos);
-	/* xid[all] */
-	assert_int_equal(rc, 11);
+			      100, &dti_cos);
+	/* xid[1,3,5,7,9] */
+	assert_int_equal(rc, 5);
 	D_FREE(dti_cos);
 
 	vos_dtx_stat(args->ctx.tc_co_hdl, &stat);
@@ -140,13 +122,12 @@ dtx_4(void **state)
 	struct dtx_entry	*dtes = NULL;
 	struct dtx_id		 xid[10];
 	uint64_t		 dkey_hash;
-	int			 flags[3];
+	int			 flags[2];
 	int			 rc;
 	int			 i;
 
 	flags[0] = 0;
-	flags[1] = DCF_HAS_ILOG;
-	flags[2] = DCF_FOR_PUNCH;
+	flags[1] = DCF_SHARED;
 
 	for (i = 0; i < 10; i++) {
 		daos_dti_gen(&xid[i], false);
@@ -154,7 +135,7 @@ dtx_4(void **state)
 
 		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid[i],
 				     dkey_hash, DAOS_EPOCH_MAX - 1, 0,
-				     flags[i % 3]);
+				     flags[i % 2]);
 		assert_int_equal(rc, 0);
 	}
 
@@ -205,7 +186,7 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_sync = 0;
 	dth->dth_solo = 0;
 	dth->dth_dti_cos_done = 0;
-	dth->dth_has_ilog = 0;
+	dth->dth_modify_shared = 0;
 	dth->dth_actived = 0;
 	dth->dth_op_seq = 1;
 

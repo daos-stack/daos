@@ -557,7 +557,7 @@ dc_tx_commit_non_cpd(tse_task_t *task, struct dc_tx *tx)
 		args->sgls = dtsr->dtsr_sgls;
 		args->maps = NULL;
 
-		rc = do_dc_obj_update(task, tx->tx_epoch, tx->tx_pm_ver, args);
+		rc = dc_obj_update(task, tx->tx_epoch, tx->tx_pm_ver, args);
 	} else {
 		daos_obj_punch_t	*args = dc_task_get_args(task);
 
@@ -568,8 +568,8 @@ dc_tx_commit_non_cpd(tse_task_t *task, struct dc_tx *tx)
 		args->flags = dtsr->dtsr_flags;
 		args->akey_nr = dtsr->dtsr_nr;
 
-		rc = do_dc_obj_punch(task, tx->tx_epoch, tx->tx_pm_ver,
-				     dtsr->dtsr_opc, args);
+		rc = dc_obj_punch(task, tx->tx_epoch, tx->tx_pm_ver,
+				  dtsr->dtsr_opc, args);
 	}
 
 	/* -1 for dc_tx_commit() held */
