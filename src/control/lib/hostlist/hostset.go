@@ -45,25 +45,25 @@ func (hs *HostSet) MarshalJSON() ([]byte, error) {
 
 // CreateSet creates a new HostSet from the supplied string representation.
 func CreateSet(stringHosts string) (*HostSet, error) {
-	hl, err := Create(stringHosts, false)
+	hl, err := Create(stringHosts)
 	if err != nil {
 		return nil, err
 	}
 	hl.Uniq()
 
-	return &HostSet{list: hl, nameOptional: false}, nil
+	return &HostSet{list: hl}, nil
 }
 
 // CreateNumberSet creates a new HostSet with optional host names from the
 // supplied string representation.
 func CreateNumberSet(stringHosts string) (*HostSet, error) {
-	hl, err := Create(stringHosts, true)
+	hl, err := CreateNumbersOnly(stringHosts)
 	if err != nil {
 		return nil, err
 	}
 	hl.Uniq()
 
-	return &HostSet{list: hl, nameOptional: true}, nil
+	return &HostSet{list: hl}, nil
 }
 
 // initList will initialize the underlying *HostList if necessary
@@ -72,7 +72,7 @@ func (hs *HostSet) initList() {
 	defer hs.Unlock()
 
 	if hs.list == nil {
-		hs.list, _ = Create("", hs.nameOptional)
+		hs.list, _ = Create("")
 	}
 }
 
@@ -98,7 +98,7 @@ func (hs *HostSet) DerangedString() string {
 func (hs *HostSet) Insert(stringHosts string) (int, error) {
 	hs.initList()
 
-	newList, err := Create(stringHosts, hs.nameOptional)
+	newList, err := Create(stringHosts)
 	if err != nil {
 		return -1, err
 	}

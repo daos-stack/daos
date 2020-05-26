@@ -67,7 +67,7 @@ type (
 	}
 )
 
-func (hn *hostName) Parse(input string, nameOptional bool) error {
+func (hn *hostName) Parse(input string) error {
 	// prefixN (default)
 	re := regexp.MustCompile(`^([a-zA-Z]+)(\d+)?(.*)?`)
 	if strings.Contains(input, "-") {
@@ -85,7 +85,7 @@ func (hn *hostName) Parse(input string, nameOptional bool) error {
 		}
 	}
 
-	if len(matches[1]) == 0 && !nameOptional {
+	if len(matches[1]) == 0 {
 		return fmt.Errorf("invalid hostname (missing prefix) %q", input)
 	}
 	hn.prefix = matches[1]
@@ -109,9 +109,30 @@ func (hn *hostName) Parse(input string, nameOptional bool) error {
 	return nil
 }
 
-func createHostName(input string, nameOptional bool) (*hostName, error) {
+func (hn *hostName) parseNumber(input string) error {
+	// prefixN (default)
+	re := regexp.MustCompile(`^(\d+)?(.*)?`)
+
+	matches := re.FindStringSubmatch(input)
+
+	if len(matches[1]) == 0 {
+		return errors.New("invalid number or number range")
+	}
+	number, err := strconv.ParseUint(matches[1], 10, 0)
+	if err != nil {
+		return err
+	}
+	hn.number = uint(number)
+	hn.hasNumber = true
+	hn.width = len(matches[1])
+	hn.suffix = matches[2]
+
+	return nil
+}
+
+func createHostName(input string) (*hostName, error) {
 	hn := &hostName{}
-	return hn, hn.Parse(input, nameOptional)
+	return hn, hn.Parse(input)
 }
 
 func nextToken(input, sep string) (output string, token string) {
@@ -213,7 +234,13 @@ func parseBracketedHostList(input, rangeSep, rangeOp string, nameOptional bool) 
 
 		var leftIndex, rightIndex int
 		if leftIndex = strings.IndexRune(tok, '['); leftIndex == -1 {
-			if err := hl.PushHost(tok, nameOptional); err != nil {
+			if nameOptional {
+				if err := hl.pushNumber(tok); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			if err := hl.PushHost(tok); err != nil {
 				return nil, err
 			}
 			continue
@@ -254,9 +281,15 @@ func parseBracketedHostList(input, rangeSep, rangeOp string, nameOptional bool) 
 }
 
 // Create creates a new HostList from the supplied string representation.
-func Create(stringHosts string, nameOptional bool) (*HostList, error) {
+func Create(stringHosts string) (*HostList, error) {
 	return parseBracketedHostList(stringHosts, outerRangeSeparators,
-		rangeOperator, nameOptional)
+		rangeOperator, false)
+}
+
+// CreateNumbersOnly creates a new HostList from the supplied string representation.
+func CreateNumbersOnly(stringHosts string) (*HostList, error) {
+	return parseBracketedHostList(stringHosts, outerRangeSeparators,
+		rangeOperator, true)
 }
 
 // String returns a ranged string representation of the HostList.
@@ -334,7 +367,7 @@ func (hl *HostList) DerangedString() string {
 
 // Push adds a string representation of hostnames to this HostList.
 func (hl *HostList) Push(stringHosts string) error {
-	other, err := Create(stringHosts, false)
+	other, err := Create(stringHosts)
 	if err != nil {
 		return err
 	}
@@ -342,9 +375,28 @@ func (hl *HostList) Push(stringHosts string) error {
 	return hl.PushList(other)
 }
 
+func (hl *HostList) pushNumber(stringNumber string) error {
+	hn := &hostName{}
+	if err := hn.parseNumber(stringNumber); err != nil {
+		return err
+	}
+
+	hl.Lock()
+	defer hl.Unlock()
+
+	return hl.pushRange(&hostRange{
+		prefix:  hn.prefix,
+		suffix:  hn.suffix,
+		lo:      hn.number,
+		hi:      hn.number,
+		width:   hn.width,
+		isRange: true,
+	})
+}
+
 // PushHost adds a single host to this HostList.
-func (hl *HostList) PushHost(stringHost string, nameOptional bool) error {
-	hn, err := createHostName(stringHost, nameOptional)
+func (hl *HostList) PushHost(stringHost string) error {
+	hn, err := createHostName(stringHost)
 	if err != nil {
 		return err
 	}
@@ -570,7 +622,7 @@ func (hl *HostList) ShiftRange() (hostRange string, err error) {
 // Find searches the HostList for the given hostname. Returns
 // the index of the host and true if found; -1 and false if not.
 func (hl *HostList) Find(stringHost string) (int, bool) {
-	hn, err := createHostName(stringHost, false)
+	hn, err := createHostName(stringHost)
 	if err != nil {
 		return -1, false
 	}
@@ -596,7 +648,7 @@ func (hl *HostList) Delete(stringHosts string) (int, error) {
 		return 0, ErrEmpty
 	}
 
-	tmp, err := Create(stringHosts, false)
+	tmp, err := Create(stringHosts)
 	if err != nil {
 		return 0, err
 	}
@@ -685,7 +737,7 @@ func (hl *HostList) DeleteNth(n int) error {
 // Within returns true if all hosts in the supplied hosts are contained
 // within the HostList, false otherwise.
 func (hl *HostList) Within(stringHosts string) (bool, error) {
-	toFind, err := Create(stringHosts, false)
+	toFind, err := Create(stringHosts)
 	if err != nil {
 		return false, err
 	}
@@ -702,18 +754,18 @@ func (hl *HostList) Within(stringHosts string) (bool, error) {
 // Intersects returns a *HostList containing hosts which are in both this
 // HostList and the supplied hosts string.
 func (hl *HostList) Intersects(stringHosts string) (*HostList, error) {
-	toFind, err := Create(stringHosts, false)
+	toFind, err := Create(stringHosts)
 	if err != nil {
 		return nil, err
 	}
-	intersection, err := Create("", false)
+	intersection, err := Create("")
 	if err != nil {
 		return nil, err
 	}
 
 	for host, err := toFind.Pop(); err == nil; host, err = toFind.Pop() {
 		if _, found := hl.Find(host); found {
-			if err := intersection.PushHost(host, false); err != nil {
+			if err := intersection.PushHost(host); err != nil {
 				return nil, err
 			}
 		}
