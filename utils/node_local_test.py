@@ -77,7 +77,9 @@ def get_base_env():
     """Return the base set of env vars needed for DAOS"""
 
     env = os.environ.copy()
+    env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     env['DD_MASK'] = 'all'
+    env['OFI_INTERFACE'] = 'lo'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
     env['FI_UNIVERSE_SIZE'] = '128'
@@ -145,7 +147,6 @@ class DaosServer():
         self._agent = subprocess.Popen([agent_bin,
                                         '--config-path', agent_config,
                                         '--insecure',
-                                        '--debug',
                                         '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
                                        env=agent_env)
@@ -448,6 +449,8 @@ def import_daos(server, conf):
                                  pydir,
                                  'site-packages'))
 
+    os.environ['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
+    os.environ['OFI_INTERFACE'] = 'lo'
     os.environ["DAOS_AGENT_DRPC_DIR"] = server.agent_dir
 
     daos = __import__('pydaos')
@@ -696,7 +699,6 @@ def run_duns_overlay_test(server, conf):
     create_and_read_via_il(dfuse, uns_dir)
 
     dfuse.stop()
->>>>>>> master
 
 def run_dfuse(server, conf):
     """Run several dfuse instances"""
@@ -932,7 +934,7 @@ def test_pydaos_kv(server, conf):
 
     print(container)
     c_uuid = container.decode().split(' ')[-1]
-    kvg = dbm.daos_named_kv(pool, c_uuid)
+    kvg = dbm.daos_named_kv('ofi+sockets', 'lo', pool, c_uuid)
 
     kv = kvg.get_kv_by_name('Dave')
     kv['a'] = 'a'
