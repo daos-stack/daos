@@ -196,22 +196,19 @@ def set_test_environment(args):
     print("Before Environment:")
     for name in ("OFI_INTERFACE", "OFI_DOMAIN", "CRT_PHY_ADDR_STR"):
         print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
+    fi_info_path = os.path.join(os.path.sep, base_dir, bin_dir, "fi_info")
 
     print("fi_info : ")
-    out = get_output("command -v fi_info")
-    print(out)
-
-    print("fi_info : ")
-    out = get_output("fi_info")
+    out = get_output("command -v {}".format(fi_info_path))
     print(out)
 
     default_provider = "ofi+sockets"
     if os.environ["OFI_INTERFACE"].startswith("ib"):
         default_provider = "ofi+verbs;ofi_rxm"
-    # os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
-    #                                                default_provider)
+    os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
+                                                    default_provider)
     # Remove the above comments later after ofi+verbs testing.
-        os.environ["CRT_PHY_ADDR_STR"] = default_provider
+    #    os.environ["CRT_PHY_ADDR_STR"] = default_provider
     default_domain = os.environ.get("OFI_INTERFACE")
     provider = os.environ.get("CRT_PHY_ADDR_STR")
     if (os.environ["OFI_INTERFACE"].startswith("ib") and
@@ -221,12 +218,9 @@ def set_test_environment(args):
     print("After Environment:")
     for name in ("OFI_INTERFACE", "OFI_DOMAIN", "CRT_PHY_ADDR_STR"):
         print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
-    print("Daos Server : ")
-    out = get_output("command -v daos_server")
-    print(out)
 
     print("fi_info : ")
-    out = get_output("command -v fi_info")
+    out = get_output("command -v {}".format(fi_info_path))
     print(out)
 
     # Set the default location for daos log files written during testing if not
