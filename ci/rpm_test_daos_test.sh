@@ -19,6 +19,6 @@ scp -i ci_key /tmp/daos_agent.yml /tmp/dmg.yml /tmp/daos_server.yml \
 
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"${nodelist[0]}" \
-  "NODE=${nodelist[0]}  \
-   DAOS_PKG_VERSION=$DAOS_PKG_VERSION \
+  "NODE=${nodelist[0]}                       \
+   DAOS_PKG_VERSION=$DAOS_PKG_VERSION        \
    $(cat "$mydir/rpm_test_daos_test_node.sh")"

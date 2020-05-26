@@ -19,7 +19,7 @@ scp -i ci_key "$mydir/run_test_post_always_node.sh" \
 
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
-  "DAOS_BASE=$DAOS_BASE      \
+  "DAOS_BASE=$DAOS_BASE             \
    /var/tmp/run_test_post_always_node.sh"
 
 # Note that we are taking advantage of the NFS mount here and if that
@@ -27,7 +27,7 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
 python utils/fix_cmocka_xml.py
 
 
-ssh "$SSH_KEY_ARGS" jenkins@"${nodelist[0]}" \
-  "NODE=${nodelist[0]}                       \
-   DAOS_PKG_VERSION=$DAOS_PKG_VERSION        \
+ssh "$SSH_KEY_ARGS" jenkins@"$NODE"   \
+  "NODE=$NODE                         \
+   DAOS_PKG_VERSION=$DAOS_PKG_VERSION \
    $(cat "$mydir/rpm_scan_daos_test_node.sh")"
