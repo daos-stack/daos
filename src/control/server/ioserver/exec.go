@@ -163,15 +163,6 @@ func (r *Runner) Signal(signal os.Signal) error {
 	return r.cmd.Process.Signal(signal)
 }
 
-// Wait waits for the process to exit.
-func (r *Runner) Wait() error {
-	if !r.IsRunning() {
-		return nil
-	}
-
-	return r.cmd.Wait()
-}
-
 // GetConfig returns the runner's configuration
 func (r *Runner) GetConfig() *Config {
 	return r.Config

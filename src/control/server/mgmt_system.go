@@ -112,7 +112,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodJoin, req)
+	dresp, err := mi.CallDrpc(drpc.MethodJoin, req)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (svc *mgmtSvc) localInstances(inRanks []uint32) ([]*IOServerInstance, error
 
 // drpcOnLocalRanks iterates over local instances issuing dRPC requests
 // concurrently and returning system member results.
-func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksReq, method int32) ([]*system.MemberResult, error) {
+func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksReq, method drpc.Method) ([]*system.MemberResult, error) {
 	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
 	defer cancel()
 
@@ -236,7 +236,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 
 // memberStateResults returns system member results reflecting whether the state
 // of the given member is equivalent to the supplied desired state value.
-func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredState system.MemberState) (system.MemberResults, error) {
+func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredState system.MemberState, successMsg string) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, len(instances))
 	for _, srv := range instances {
 		rank, err := srv.GetRank()
@@ -247,10 +247,14 @@ func (svc *mgmtSvc) memberStateResults(instances []*IOServerInstance, desiredSta
 
 		state := srv.LocalState()
 		if state != desiredState {
-			err = errors.Errorf("want %s, got %s", desiredState, state)
+			results = append(results, system.NewMemberResult(rank,
+				errors.Errorf("want %s, got %s", desiredState, state), state))
+			continue
 		}
 
-		results = append(results, system.NewMemberResult(rank, err, state))
+		results = append(results, &system.MemberResult{
+			Rank: rank, Msg: successMsg, State: state,
+		})
 	}
 
 	return results, nil
@@ -296,7 +300,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 		return nil, err
 	}
 
-	results, err := svc.memberStateResults(instances, system.MemberStateStopped)
+	results, err := svc.memberStateResults(instances, system.MemberStateStopped, "system stop")
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +370,7 @@ func (svc *mgmtSvc) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq) 
 		savedRanks[srv.Index()] = rank
 
 		if srv.isStarted() {
-			return nil, FaultInstancesNotStopped("reset format", srv.Index())
+			return nil, FaultInstancesNotStopped("reset format", rank)
 		}
 		if err := srv.RemoveSuperblock(); err != nil {
 			return nil, err
@@ -434,7 +438,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 
 	// instances will update state to "Started" through join or
 	// bootstrap in membership, here just make sure instances "Ready"
-	results, err := svc.memberStateResults(instances, system.MemberStateReady)
+	results, err := svc.memberStateResults(instances, system.MemberStateReady, "system start")
 	if err != nil {
 		return nil, err
 	}
