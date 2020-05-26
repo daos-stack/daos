@@ -61,9 +61,9 @@ class DmgCommand(YamlCommand):
             r"Temperature|Available\s+Spare|Device\s+Reliability|"
             r"Read\s+Only|Volatile\s+Memory\s+Backup):\s+([A-Za-z0-9- ]+)",
         "storage_query_device_state":
-            r"(?:Device\s+UUID|State):\s+([A-Za-z0-9- ]+)",
+            r"(?:Device\s+UUID|State):\s+([A-Za-z0-9-]+)",
         "storage_set_faulty":
-            r"(?:Device\s+UUID|State):\s+([A-Za-z0-9- ]+)",
+            r"(?:Device\s+UUID|State):\s+([A-Za-z0-9-]+)",
     }
 
     def __init__(self, path, yaml_cfg=None):

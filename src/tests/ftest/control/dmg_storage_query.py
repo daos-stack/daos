@@ -45,6 +45,23 @@ class DmgStorageQuery(ControlTestBase):
         self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
         self.targets = self.server_managers[-1].get_config_value("targets")
 
+    def check_dev_state(self, state, devs_info):
+        """Check the state of the devices.
+
+        Args:
+            devs_info (list): device info containing lists with
+                [UUID, VOS tgt IDs, blobs].
+        """
+        status_err = []
+        for dev in devs_info:
+            state_info = self.get_dmg_output(
+                "storage_query_device_state", devuuid=dev[0])
+            if state_info[1] != state:
+                status_err.append(":".join(state_info))
+        if status_err:
+            msg = "Found device in bad state: {}".format(status_err)
+            self.assertEqual(len(status_err), 0, msg)
+
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_smd_devices(self):
         """
@@ -54,9 +71,8 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,pr,hw,small,storage_query,smd_devs,basic
         """
-        # Get the storage smd infromation, parse and check devices info
-        smd_info = self.get_dmg_output("storage_query_smd", devices=True)
-        devs_info = [smd_info[i:(i + 2)] for i in range(0, len(smd_info), 2)]
+        # Get the storage smd information, parse and check devices info
+        devs_info = self.get_smd_info(devices=True)
 
         # Check if the number of devices match the config
         msg = "Number of devs doesn't match cfg: {}".format(len(self.bdev_list))
@@ -83,8 +99,7 @@ class DmgStorageQuery(ControlTestBase):
         """
         # Create pool and get the storage smd information, then verfify info
         self.prepare_pool()
-        smd_info = self.get_dmg_output("storage_query_smd", pools=True)
-        pools_info = [smd_info[i:(i + 2)] for i in range(0, len(smd_info), 2)]
+        pools_info = self.get_smd_info(pools=True)
 
         # Check pool uuid
         for pool in pools_info:
@@ -118,20 +133,38 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,pr,hw,small,storage_query,blobstore,basic
         """
-        smd_info = self.get_dmg_output("storage_query_smd", devices=False)
-        devs_info = [smd_info[i:(i + 2)] for i in range(0, len(smd_info), 2)]
+        devs_info = self.get_smd_info(devices=True)
 
-        # Get the device uuid and run command
+        # Get the blobstore info from dmg cmd
         blob_info = []
+        e_blob_info = self.params.get("blobstore_info", "/run/*")
         for dev in devs_info:
             blob_info.append(
                 self.get_dmg_output("storage_query_blobstore", devuuid=dev[0]))
 
-        # Compare config expected values with dmg output
-        e_blob_info = self.params.get("blobstore_info", "/run/*")
-        e_blob_info.insert(0, dev[0])
+        # Check that we have expected number of devices
+        msg = "Found wrong number of devices in blobstore info"
+        self.assertEqual(len(e_blob_info), len(blob_info), msg)
 
-        #
+        # Verify temperature, convert from Kelvins to Celsius
+        temp_err = []
+        for info in blob_info:
+            cels_temp = int(info[6]) - 273.15
+            if cels_temp not in range(0, 71):
+                temp_err.append("{}: {}".format(info[0], cels_temp))
+            info.pop(6)
+        if temp_err:
+            msg = "Bad temperature on SSDs: {}".format(",".join(temp_err))
+            self.assertEqual(len(temp_err), 0, msg)
+
+        # Compare the rest of the values in blob info
+        err = []
+        for dmg_info, exp_info in zip(blob_info, e_blob_info):
+            if dmg_info[1:] != exp_info:
+                err.append("dmg info :{} != expected info:{}".format(
+                    dmg_info, exp_info))
+        if err:
+            self.assertEqual(len(err), 0, "Blob info not as expected")
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_device_state(self):
@@ -139,49 +172,18 @@ class DmgStorageQuery(ControlTestBase):
         JIRA ID: DAOS-3925
 
         Test Description: Test 'dmg storage query device-state' command.
+        In addition this test also does a basic test of nvme-faulty cmd:
+        'dmg storage query nvme-faulty'
 
         :avocado: tags=all,pr,hw,small,storage_query,device_state,basic
         """
-        smd_info = self.get_dmg_output("storage_query_smd", devices=True)
-        devs_info = [smd_info[i:(i + 2)] for i in range(0, len(smd_info), 2)]
-
-        # Check that the state of each device is NORMAL
-        status_err = []
-        for dev in devs_info:
-            status = self.get_dmg_output(
-                "storage_query_device_state", devuuid=dev[0])[1])
-            if status != "NORMAL":
-                status_err.append([dev[0], status])
-
-
+        # Get device info and check state is NORMAL
+        devs_info = self.get_smd_info(devices=True)
+        self.check_dev_state("NORMAL", devs_info)
 
         # Set device to faulty state and check that it's in FAULTY state
-        devs_info = self.get_devs_info(smd_info, "storage_set_faulty")
         for dev in devs_info:
-            if dev[2] != "FAULTY":
-                self.fail("Found a device in {} state.".format(dev[2]))
+            self.get_dmg_output("storage_set_faulty", devuuid=dev[0])
 
-        devs_info = self.get_devs_info(smd_info, "storage_query_device_state")
-        for dev in devs_info:
-            if dev[2] != "FAULTY":
-                self.fail("Found a device in {} state.".format(dev[2]))
-
-    def test_dmg_storage_set_nvme_fault(self):
-        """
-        JIRA ID: DAOS-3925
-
-        Test Description: Test 'dmg storage query nvme-faulty' command.
-
-        :avocado: tags=all,pr,hw,small,storage_query,nvme_faulty,basic
-        """
-        # Set nvme-faulty command to run without devuuid provided.
-        self.dmg.set_sub_command("storage")
-        self.dmg.sub_command_class.set_sub_command("set")
-        self.dmg.sub_command_class.sub_command_class. \
-            set_sub_command("nvme-faulty")
-
-        # Run command, expected to fail.
-        try:
-            self.dmg.run()
-        except CommandFailure as error:
-            self.log.info("Command failed as expected:%s", error)
+        # Check that devices are in FAULTY state
+        self.check_dev_state("FAULTY", devs_info)

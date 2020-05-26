@@ -67,3 +67,18 @@ class ControlTestBase(TestWithServers):
         error = "Error obtaining superblock info: {}".format(sp_value)
 
         return get_host_data(self.dmg.hostlist, cmd, text, error, 20)
+
+    def get_smd_info(self, devices=False, pools=False):
+        """Get device smd information.
+
+        Args:
+            devices (bool, optional): Get devices info. Defaults to False.
+            pools (bool, optional): Get pool info. Defaults to False.
+
+        Returns:
+            list: device info containing lists with [UUID, VOS tgt IDs, blobs].
+
+        """
+        kwargs = {"devices": devices, "pools": pools}
+        smd_info = self.get_dmg_output("storage_query_smd", **kwargs)
+        return [smd_info[i:(i + 2)] for i in range(0, len(smd_info), 2)]

@@ -19,4 +19,6 @@ pool:
     nvme_size: 9000000000
     svcn: 1
     control_method: dmg
-blobstore_info: ["0", "0", "0", "0", "0", "0", abc, OK, OK, OK, OK, OK]
+blobstore_info:
+  - ["0", "0", "0", "0", "0", "0", OK, OK, OK, OK, OK]
+  - ["0", "0", "0", "0", "0", "0", OK, OK, OK, OK, OK]
