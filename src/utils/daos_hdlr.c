@@ -1108,6 +1108,11 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	printf("Highest Aggregated Epoch: "DF_U64"\n", cont_info.ci_hae);
 	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
 
+	if (ap->oid.hi || ap->oid.lo) {
+		printf("Path is within container, oid: " DF_OID "\n",
+			DP_OID(ap->oid));
+	}
+
 	if (ap->path != NULL) {
 		/* cont_op_hdlr() already did resolve_by_path()
 		 * all resulting fields should be populated
