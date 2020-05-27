@@ -21,45 +21,45 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package helper
+package pbin
 
 import (
 	"encoding/json"
+	"errors"
+	"testing"
 
-	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/pkg/errors"
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
-// RequestHandler is an interface that handles a pbin.Request.
-type RequestHandler interface {
-	Handle(logging.Logger, *pbin.Request) *pbin.Response
+func TestPbin_NewResponseWithError(t *testing.T) {
+	expErr := errors.New("test error")
+
+	resp := NewResponseWithError(expErr)
+
+	common.CmpErr(t, expErr, resp.Error)
+
+	if diff := cmp.Diff(json.RawMessage("null"), resp.Payload); diff != "" {
+		t.Errorf("unexpected payload (-want, +got)\n%s\n", diff)
+	}
 }
 
-// NewResponseWithError creates a new pbin.Response indicating a failure.
-func NewResponseWithError(err error) *pbin.Response {
-	f, ok := errors.Cause(err).(*fault.Fault)
-	if !ok {
-		f = pbin.PrivilegedHelperRequestFailed(err.Error())
-	}
-	res := &pbin.Response{
-		Error:   f,
-		Payload: json.RawMessage([]byte("null")),
-	}
-	return res
-}
-
-// NewResponseWithPayload creates a new pbin.Response with a payload structure
-// marshalled into JSON.
-func NewResponseWithPayload(payloadSrc interface{}) *pbin.Response {
-	payload, err := json.Marshal(payloadSrc)
+func TestPbin_NewResponseWithPayload(t *testing.T) {
+	payload := testPayload{result: "here's the real result"}
+	expPayloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return NewResponseWithError(err)
+		t.Fatalf("couldn't marshal payload: %v", err)
+	}
+	expPayload := json.RawMessage(expPayloadBytes)
+
+	resp := NewResponseWithPayload(payload)
+
+	if resp.Error != nil {
+		t.Errorf("unexpected error (wanted nil): %v", resp.Error)
 	}
 
-	res := &pbin.Response{
-		Payload: payload,
+	if diff := cmp.Diff(expPayload, resp.Payload); diff != "" {
+		t.Errorf("unexpected payload (-want, +got)\n%s\n", diff)
 	}
-	return res
 }

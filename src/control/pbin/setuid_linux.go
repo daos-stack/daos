@@ -22,7 +22,7 @@
 //
 // +build linux
 
-package helper
+package pbin
 
 import "syscall"
 

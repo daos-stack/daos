@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package helper
+package pbin
 
 import (
 	"encoding/json"
@@ -36,7 +36,6 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/pbin"
 )
 
 // processProvider is an interface for interacting with the current process.
@@ -147,7 +146,7 @@ func (a *App) Run() error {
 	}
 
 	// set up the r/w pipe from the parent process
-	conn := pbin.NewStdioConn(a.Name(), parentName, a.input, a.output)
+	conn := NewStdioConn(a.Name(), parentName, a.input, a.output)
 
 	if err = a.checkPrivileges(); err != nil {
 		resp := NewResponseWithError(a.logError(err))
@@ -191,7 +190,7 @@ func (a *App) isCallerPermitted(callerName string) bool {
 
 func (a *App) checkPrivileges() error {
 	if !a.process.IsPrivileged() {
-		return pbin.PrivilegedHelperNotPrivileged(a.Name())
+		return PrivilegedHelperNotPrivileged(a.Name())
 	}
 
 	// hack for stuff that doesn't use geteuid() (e.g. ipmctl)
@@ -202,13 +201,13 @@ func (a *App) checkPrivileges() error {
 	return nil
 }
 
-func (a *App) readRequest(rdr io.Reader) (*pbin.Request, error) {
-	buf, err := pbin.ReadMessage(rdr)
+func (a *App) readRequest(rdr io.Reader) (*Request, error) {
+	buf, err := ReadMessage(rdr)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read request")
 	}
 
-	var req pbin.Request
+	var req Request
 	if err := json.Unmarshal(buf, &req); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal request")
 	}
@@ -216,7 +215,7 @@ func (a *App) readRequest(rdr io.Reader) (*pbin.Request, error) {
 	return &req, nil
 }
 
-func (a *App) handleRequest(req *pbin.Request) *pbin.Response {
+func (a *App) handleRequest(req *Request) *Response {
 	reqHandler, ok := a.handlers[req.Method]
 	if !ok {
 		err := a.logError(errors.Errorf("unhandled method '%s'", req.Method))
@@ -235,7 +234,7 @@ func (a *App) handleRequest(req *pbin.Request) *pbin.Response {
 	return resp
 }
 
-func (a *App) writeResponse(res *pbin.Response, dest io.Writer) error {
+func (a *App) writeResponse(res *Response, dest io.Writer) error {
 	data, err := json.Marshal(res)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("failed to marshal response %+v", res))

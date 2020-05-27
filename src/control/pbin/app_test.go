@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package helper
+package pbin
 
 import (
 	"errors"
@@ -34,7 +34,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/pbin"
 )
 
 func expectDefaultProcess(t *testing.T, app *App) {
@@ -55,7 +54,7 @@ func expectCallers(t *testing.T, app *App, expCallers []string) {
 	}
 }
 
-func TestHelper_NewApp(t *testing.T) {
+func TestPbin_NewApp(t *testing.T) {
 	app := NewApp()
 
 	if app == nil {
@@ -70,7 +69,7 @@ func TestHelper_NewApp(t *testing.T) {
 	common.AssertEqual(t, app.output, os.Stdout, "default output should be stdout")
 }
 
-func TestHelperApp_WithCallers(t *testing.T) {
+func TestPbinApp_WithCallers(t *testing.T) {
 	expCallers := []string{"caller1", "caller2"}
 
 	app := NewApp().WithAllowedCallers(expCallers...)
@@ -82,7 +81,7 @@ func TestHelperApp_WithCallers(t *testing.T) {
 	expectCallers(t, app, expCallers)
 }
 
-func TestHelperApp_WithLogFile_GoodPath(t *testing.T) {
+func TestPbinApp_WithLogFile_GoodPath(t *testing.T) {
 	logDir, cleanup := common.CreateTestDir(t)
 	defer cleanup()
 
@@ -102,7 +101,7 @@ func TestHelperApp_WithLogFile_GoodPath(t *testing.T) {
 	}
 }
 
-func TestHelperApp_WithLogFile_BadPath(t *testing.T) {
+func TestPbinApp_WithLogFile_BadPath(t *testing.T) {
 	// Bad path should silently fall back to acting as if no path supplied
 	app := NewApp().WithLogFile("/not/a/real/path")
 
@@ -113,7 +112,7 @@ func TestHelperApp_WithLogFile_BadPath(t *testing.T) {
 	common.AssertNotEqual(t, app.log, nil, "expected non-nil logger")
 }
 
-func TestHelperApp_WithInput(t *testing.T) {
+func TestPbinApp_WithInput(t *testing.T) {
 	expInput := &mockReadWriter{}
 	app := NewApp().WithInput(expInput)
 
@@ -124,7 +123,7 @@ func TestHelperApp_WithInput(t *testing.T) {
 	common.AssertEqual(t, app.input, expInput, "input should be custom")
 }
 
-func TestHelperApp_WithOutput(t *testing.T) {
+func TestPbinApp_WithOutput(t *testing.T) {
 	expOutput := &mockReadWriter{}
 	app := NewApp().WithOutput(expOutput)
 
@@ -145,9 +144,9 @@ func expectHandlerAdded(t *testing.T, app *App, name string, handler RequestHand
 	common.AssertEqual(t, len(app.handlers), expLen, "incorrect resulting number of handlers")
 }
 
-func TestHelperApp_AddHandler(t *testing.T) {
+func TestPbinApp_AddHandler(t *testing.T) {
 	h1 := &testHandler{}
-	h2 := &testHandler{outputResp: &pbin.Response{}}
+	h2 := &testHandler{outputResp: &Response{}}
 
 	app := NewApp()
 	expectHandlerAdded(t, app, "Method1", h1, 1)
@@ -155,30 +154,30 @@ func TestHelperApp_AddHandler(t *testing.T) {
 	expectHandlerAdded(t, app, "Method1", h2, 2) // Should overwrite original Method1 handler
 }
 
-func TestHelperApp_Name(t *testing.T) {
+func TestPbinApp_Name(t *testing.T) {
 	mockProcess := defaultMockProcess()
 	app := newTestApp(mockProcess)
 
 	common.AssertEqual(t, mockProcess.name, app.Name(), "name didn't come from process")
 }
 
-// testPayload is a pbin.Response payload used by the test handler.
+// testPayload is a Response payload used by the test handler.
 type testPayload struct {
 	result string
 }
 
 // testHandler is an implementation of the RequestHandler for unit tests.
 type testHandler struct {
-	outputResp *pbin.Response
+	outputResp *Response
 }
 
-func (h *testHandler) Handle(_ logging.Logger, _ *pbin.Request) *pbin.Response {
+func (h *testHandler) Handle(_ logging.Logger, _ *Request) *Response {
 	return h.outputResp
 }
 
-func TestHelperApp_Run(t *testing.T) {
+func TestPbinApp_Run(t *testing.T) {
 	testMethod := "TestMethod"
-	defaultReq := &pbin.Request{
+	defaultReq := &Request{
 		Method: testMethod,
 	}
 	defaultResp := NewResponseWithPayload(&testPayload{result: "defaultResp"})
@@ -186,11 +185,11 @@ func TestHelperApp_Run(t *testing.T) {
 	for name, tc := range map[string]struct {
 		process        *mockProcess
 		allowedCallers []string
-		inputReq       *pbin.Request
+		inputReq       *Request
 		readErr        error
-		outputResp     *pbin.Response
+		outputResp     *Response
 		writeErr       error
-		expResp        *pbin.Response
+		expResp        *Response
 		expErr         error
 	}{
 		"can't get parent process name": {
@@ -214,8 +213,8 @@ func TestHelperApp_Run(t *testing.T) {
 				name:       "myprocess",
 				parentName: "parent",
 			},
-			expErr:  pbin.PrivilegedHelperNotPrivileged("myprocess"),
-			expResp: NewResponseWithError(pbin.PrivilegedHelperNotPrivileged("myprocess")),
+			expErr:  PrivilegedHelperNotPrivileged("myprocess"),
+			expResp: NewResponseWithError(PrivilegedHelperNotPrivileged("myprocess")),
 		},
 		"can't elevate privs": {
 			process: &mockProcess{
@@ -235,7 +234,7 @@ func TestHelperApp_Run(t *testing.T) {
 		},
 		"unhandled method": {
 			process: defaultMockProcess(),
-			inputReq: &pbin.Request{
+			inputReq: &Request{
 				Method: "garbage",
 			},
 			expErr:  errors.New("unhandled method 'garbage'"),

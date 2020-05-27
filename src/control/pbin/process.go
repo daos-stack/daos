@@ -21,45 +21,44 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package helper
+package pbin
 
 import (
-	"encoding/json"
-	"errors"
-	"testing"
+	"fmt"
+	"os"
+	"path/filepath"
 
-	"github.com/google/go-cmp/cmp"
-
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/pkg/errors"
 )
 
-func TestHelper_NewResponseWithError(t *testing.T) {
-	expErr := errors.New("test error")
+// Process is a mechanism to interact with the current process.
+type Process struct{}
 
-	resp := NewResponseWithError(expErr)
-
-	common.CmpErr(t, expErr, resp.Error)
-
-	if diff := cmp.Diff(json.RawMessage("null"), resp.Payload); diff != "" {
-		t.Errorf("unexpected payload (-want, +got)\n%s\n", diff)
-	}
+// CurrentProcessName fetches the name of the running process.
+func (p *Process) CurrentProcessName() string {
+	return filepath.Base(os.Args[0])
 }
 
-func TestHelper_NewResponseWithPayload(t *testing.T) {
-	payload := testPayload{result: "here's the real result"}
-	expPayloadBytes, err := json.Marshal(payload)
+// ParentProcessName fetches the name of the parent process, or returns an error otherwise.
+func (p *Process) ParentProcessName() (string, error) {
+	pPath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", os.Getppid()))
 	if err != nil {
-		t.Fatalf("couldn't marshal payload: %v", err)
-	}
-	expPayload := json.RawMessage(expPayloadBytes)
-
-	resp := NewResponseWithPayload(payload)
-
-	if resp.Error != nil {
-		t.Errorf("unexpected error (wanted nil): %v", resp.Error)
+		return "", errors.Wrap(err, "failed to identify parent process binary")
 	}
 
-	if diff := cmp.Diff(expPayload, resp.Payload); diff != "" {
-		t.Errorf("unexpected payload (-want, +got)\n%s\n", diff)
+	return filepath.Base(pPath), nil
+}
+
+// IsPrivileged determines whether the process is running as a privileged user.
+func (p *Process) IsPrivileged() bool {
+	return os.Geteuid() == 0
+}
+
+// ElevatePrivileges raises the process privileges.
+func (p *Process) ElevatePrivileges() error {
+	if err := setuid(0); err != nil {
+		return errors.Wrap(err, "unable to setuid(0)")
 	}
+
+	return nil
 }

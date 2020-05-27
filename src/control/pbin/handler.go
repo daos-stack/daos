@@ -21,44 +21,43 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package helper
+package pbin
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
+	"encoding/json"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// Process is a mechanism to interact with the current process.
-type Process struct{}
-
-// CurrentProcessName fetches the name of the running process.
-func (p *Process) CurrentProcessName() string {
-	return filepath.Base(os.Args[0])
+// RequestHandler is an interface that handles a pbin.Request.
+type RequestHandler interface {
+	Handle(logging.Logger, *Request) *Response
 }
 
-// ParentProcessName fetches the name of the parent process, or returns an error otherwise.
-func (p *Process) ParentProcessName() (string, error) {
-	pPath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", os.Getppid()))
+// NewResponseWithError creates a new pbin.Response indicating a failure.
+func NewResponseWithError(err error) *Response {
+	f, ok := errors.Cause(err).(*fault.Fault)
+	if !ok {
+		f = PrivilegedHelperRequestFailed(err.Error())
+	}
+	return &Response{
+		Error:   f,
+		Payload: json.RawMessage([]byte("null")),
+	}
+}
+
+// NewResponseWithPayload creates a new pbin.Response with a payload structure
+// marshalled into JSON.
+func NewResponseWithPayload(payloadSrc interface{}) *Response {
+	payload, err := json.Marshal(payloadSrc)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to identify parent process binary")
+		return NewResponseWithError(err)
 	}
 
-	return filepath.Base(pPath), nil
-}
-
-// IsPrivileged determines whether the process is running as a privileged user.
-func (p *Process) IsPrivileged() bool {
-	return os.Geteuid() == 0
-}
-
-// ElevatePrivileges raises the process privileges.
-func (p *Process) ElevatePrivileges() error {
-	if err := setuid(0); err != nil {
-		return errors.Wrap(err, "unable to setuid(0)")
+	return &Response{
+		Payload: payload,
 	}
-
-	return nil
 }

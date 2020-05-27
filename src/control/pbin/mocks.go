@@ -21,14 +21,12 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package helper
+package pbin
 
 import (
 	"encoding/json"
 	"io"
 	"testing"
-
-	"github.com/daos-stack/daos/src/control/pbin"
 )
 
 // mockProcess is a mock process provider.
@@ -74,7 +72,7 @@ type mockReadWriter struct {
 	writeErr error
 }
 
-func (r *mockReadWriter) setRequestToRead(t *testing.T, req *pbin.Request) {
+func (r *mockReadWriter) setRequestToRead(t *testing.T, req *Request) {
 	data, err := json.Marshal(req)
 	if err != nil {
 		t.Fatalf("failed to marshal req: %v", err)
@@ -96,11 +94,11 @@ func (r *mockReadWriter) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (r *mockReadWriter) getWrittenResponse(t *testing.T) *pbin.Response {
+func (r *mockReadWriter) getWrittenResponse(t *testing.T) *Response {
 	if len(r.written) == 0 {
 		return nil
 	}
-	var res pbin.Response
+	var res Response
 	if err := json.Unmarshal(r.written, &res); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}

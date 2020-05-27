@@ -26,12 +26,11 @@ package main
 import (
 	"os"
 
-	"github.com/daos-stack/daos/src/control/lib/helper"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
 func main() {
-	app := helper.NewApp().
+	app := pbin.NewApp().
 		WithAllowedCallers("daos_server")
 
 	if logPath, set := os.LookupEnv(pbin.DaosAdminLogFileEnvVar); set {
@@ -47,7 +46,7 @@ func main() {
 }
 
 // addMethodHandlers adds all of daos_admin's supported handler functions.
-func addMethodHandlers(app *helper.App) {
+func addMethodHandlers(app *pbin.App) {
 	app.AddHandler("Ping", &pingHandler{})
 
 	app.AddHandler("ScmMount", &scmMountUnmountHandler{})
