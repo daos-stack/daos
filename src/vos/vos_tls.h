@@ -82,6 +82,8 @@ struct vos_tls {
 	struct vos_ts_table		*vtl_ts_table;
 	/** saved hash value */
 	uint64_t			 vtl_kh;
+	/** profile for standalone vos test */
+	struct daos_profile		*vtl_dp;
 };
 
 struct vos_tls *
