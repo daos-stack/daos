@@ -61,7 +61,7 @@ class WarningsFactory():
     """
 
     # Error levels are LOW, NORMAL, HIGH, ERROR
-    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'vos_tls_fini')
+    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'vos_tls_fini', 'rdb_timerd')
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')
