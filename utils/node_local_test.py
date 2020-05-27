@@ -648,6 +648,8 @@ def create_and_read_via_il(dfuse, path):
     il_cmd(dfuse, ['cat', fname])
 
 def run_container_query(conf, path):
+    """Query a path to extract container information"""
+
     cmd = ['container', 'query', '--svc', '0', '--path', path]
 
     rc = run_daos_cmd(conf, cmd)

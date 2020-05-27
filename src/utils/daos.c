@@ -839,6 +839,7 @@ call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
 	rc = ioctl(fd, DFUSE_IOCTL_IL, reply);
 	if (rc != 0) {
 		int err = errno;
+
 		close(fd);
 		return err;
 	}
