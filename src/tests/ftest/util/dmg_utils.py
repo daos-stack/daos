@@ -469,7 +469,7 @@ class DmgCommand(YamlCommand):
                         DmgCommand.StorageSubCommand.SetSubCommand.
                         NvmeFaultySubCommand,
                         self).__init__(
-                            "/run/dmg/storage/query/device-state/*",
+                            "/run/dmg/storage/set/nvme-faulty/*",
                             "nvme-faulty")
                     self.devuuid = FormattedParameter("-u {}", None)
 
