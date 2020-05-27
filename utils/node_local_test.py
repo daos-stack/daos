@@ -782,6 +782,20 @@ def create_and_read_via_il(dfuse, path):
     ofd.close()
     il_cmd(dfuse, ['cat', fname])
 
+def run_container_query(conf, path):
+    """Query a path to extract container information"""
+
+    cmd = ['container', 'query', '--svc', '0', '--path', path]
+
+    rc = run_daos_cmd(conf, cmd)
+
+    assert rc.returncode == 0
+
+    print(rc)
+    output = rc.stdout.decode('utf-8')
+    for line in output.splitlines():
+        print(line)
+
 def run_duns_overlay_test(server, conf):
     """Create a DUNS entry point, and then start fuse over it
 
@@ -901,6 +915,12 @@ def run_dfuse(server, conf):
     print(os.stat(uns_path))
     print(os.stat(uns_path))
     print(os.listdir(dfuse.dir))
+
+    run_container_query(conf, uns_path)
+
+    child_path = os.path.join(uns_path, 'child')
+    os.mkdir(child_path)
+    run_container_query(conf, child_path)
 
     dfuse.stop()
 
