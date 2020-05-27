@@ -114,12 +114,29 @@ def el7_daos_repos() {
     return el7_component_repos + ' ' + component_repos() + ' ' + daos_repo()
 }
 
-Boolean commitPragma(Map config) {
-    if (commitPragma(config) == "true") {
+Boolean commitPragma2(Map config) {
+    if (commitPragma2(config) == "true") {
         return true
     }
 
     return false
+}
+
+String commitPragma2(Map config) {
+    def def_value = ''
+    if (config['def_val']) {
+        def_value = config['def_val']
+    }
+    def value = sh(script: '''b=$(git show -s --format=%B |
+                                  sed -ne 's/^''' + config['pragma'] +
+                           ''': *\\(.*\\)/\\1/p')
+                              if [ -n "$b" ]; then
+                                  echo "$b"
+                              else
+                                  echo "''' + def_value + '''"
+                              fi''',
+                returnStdout: true)
+    return value.trim()
 }
 
 /*
@@ -144,7 +161,7 @@ def cachedCommitPragma(Map config) {
         return commit_pragma_cache[config['pragma']]
     }
 
-    commit_pragma_cache[config['pragma']] = commitPragma(config)
+    commit_pragma_cache[config['pragma']] = commitPragma2(config)
 
     return commit_pragma_cache[config['pragma']]
 
