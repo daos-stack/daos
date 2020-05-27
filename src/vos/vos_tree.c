@@ -579,7 +579,6 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 {
 	struct vos_svt_key	*skey = key_iov->iov_buf;
 	struct vos_rec_bundle	*rbund;
-	int			 rc = 0;
 
 	rbund = iov2rec_bundle(val_iov);
 
