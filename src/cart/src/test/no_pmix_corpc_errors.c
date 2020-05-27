@@ -342,7 +342,7 @@ int main(int argc, char **argv)
 		assert(rc == 0);
 
 		rc = crt_context_register_rpc_task(crt_ctx[i],
-				rpc_callback, NULL);
+				rpc_callback, NULL, NULL);
 		if (rc != 0) {
 			D_ERROR("register_rpc_task failed; rc=%d\n", rc);
 			assert(0);
