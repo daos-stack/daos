@@ -35,7 +35,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -407,13 +406,8 @@ func invokeRPCFanout(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq)
 
 	rr := new(RanksResp)
 	for _, hostResp := range ur.Responses {
-		hostErr := hostResp.Error
-		if hostErr != nil {
-			f, ok := errors.Cause(hostErr).(*fault.Fault)
-			if ok && f != nil {
-				hostErr = errors.New(f.Description)
-			}
-			if err := rr.addHostError(hostResp.Addr, hostErr); err != nil {
+		if hostResp.Error != nil {
+			if err := rr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
 				return nil, err
 			}
 			continue

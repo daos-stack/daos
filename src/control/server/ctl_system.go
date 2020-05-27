@@ -104,17 +104,17 @@ func (svc *ControlService) rpcFanout(ctx context.Context, req *control.RanksReq,
 
 	// synthesise "Stopped" rank results for any harness host errors
 	hostRanks := svc.membership.HostRanks(req.Ranks...)
-	for errMsg, hostSet := range resp.HostErrors {
-		for _, addr := range strings.Split(hostSet.DerangedString(), ",") {
+	for _, hes := range resp.HostErrors {
+		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
 			for _, rank := range hostRanks[addr] {
 				results = append(results,
 					&system.MemberResult{
-						Rank: rank, Msg: errMsg,
+						Rank: rank, Msg: hes.HostError.Error(),
 						State: system.MemberStateUnresponsive,
 					})
 			}
 			svc.log.Debugf("harness %s (ranks %v) host error: %s",
-				addr, hostRanks[addr], errMsg)
+				addr, hostRanks[addr], hes.HostError)
 		}
 	}
 
