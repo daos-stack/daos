@@ -853,12 +853,22 @@ def run_il_test(server, conf):
                 pass
             dirs.append(d)
 
+    # Create a file natively.
     f = os.path.join(dirs[0], 'file')
     fd = open(f, 'w')
     fd.write('Hello')
     fd.close()
+    # Copy it across containers.
     il_cmd(dfuse, ['cp', f, dirs[-1]])
+
+    # Copy it within the container.
+    child_dir = os.path.join(dirs[0], 'new_dir')
+    os.mkdir(child_dir)
+    il_cmd(dfuse, ['cp', f, child_dir])
+
+    # Copy something into a container
     il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]])
+    # Read it from within a container
     il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
     dfuse.stop()
 
