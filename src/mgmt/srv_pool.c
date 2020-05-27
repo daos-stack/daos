@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2016-2019 Intel Corporation.
+/*
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,12 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/*
+/**
+ * \file
+ *
  * ds_mgmt: Pool Methods
  */
+
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <daos_srv/pool.h>
@@ -128,7 +131,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 			      DAOS_MGMT_VERSION);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
 				  rank_list, opc, NULL, NULL,
-				  CRT_RPC_FLAG_EXCLUSIVE, topo, &tc_req);
+				  CRT_RPC_FLAG_FILTER_INVERT, topo, &tc_req);
 	if (rc) {
 		D_ERROR(DF_UUID": corpc_req_create failed: rc="DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));

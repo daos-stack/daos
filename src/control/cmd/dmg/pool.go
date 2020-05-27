@@ -39,6 +39,11 @@ import (
 )
 
 const (
+	// minScmNvmeRatio indicates the minimum storage size ratio SCM:NVMe
+	// (requested on pool creation), warning issued if ratio is lower
+	minScmNvmeRatio = 0.01
+	// maxNumSvcReps is the maximum number of pool service replicas
+	// that can be requested when creating a pool
 	maxNumSvcReps = 13
 )
 
@@ -90,6 +95,19 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 			return errors.Wrap(err, "pool NVMe size")
 		}
 	}
+
+	ratio := 1.00
+	if nvmeBytes > 0 {
+		ratio = float64(scmBytes) / float64(nvmeBytes)
+	}
+
+	if ratio < minScmNvmeRatio {
+		c.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
+			"performance will suffer!\n", ratio*100)
+	}
+	c.log.Infof("Creating DAOS pool with %s SCM and %s NVMe storage "+
+		"(%0.2f %% ratio)\n", humanize.IBytes(scmBytes),
+		humanize.IBytes(nvmeBytes), ratio*100)
 
 	var acl *control.AccessControlList
 	if c.ACLFile != "" {

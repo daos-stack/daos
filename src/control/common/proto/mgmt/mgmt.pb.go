@@ -192,9 +192,7 @@ func init() {
 	proto.RegisterType((*RanksResp_RankResult)(nil), "mgmt.RanksResp.RankResult")
 }
 
-func init() {
-	proto.RegisterFile("mgmt.proto", fileDescriptor_24cf82780fd24e73)
-}
+func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_24cf82780fd24e73) }
 
 var fileDescriptor_24cf82780fd24e73 = []byte{
 	// 690 bytes of a gzipped FileDescriptorProto
@@ -246,11 +244,11 @@ var fileDescriptor_24cf82780fd24e73 = []byte{
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
-var _ grpc.ClientConnInterface
+var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion6
+const _ = grpc.SupportPackageIsVersion4
 
 // MgmtSvcClient is the client API for MgmtSvc service.
 //
@@ -305,6 +303,8 @@ type MgmtSvcClient interface {
 	StopRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Ping DAOS IO servers on a host. (gRPC fanout)
 	PingRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
+	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
+	ResetFormatRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Start DAOS IO servers on a host. (gRPC fanout)
 	StartRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Change the owner of a DAOS container
@@ -312,10 +312,10 @@ type MgmtSvcClient interface {
 }
 
 type mgmtSvcClient struct {
-	cc grpc.ClientConnInterface
+	cc *grpc.ClientConn
 }
 
-func NewMgmtSvcClient(cc grpc.ClientConnInterface) MgmtSvcClient {
+func NewMgmtSvcClient(cc *grpc.ClientConn) MgmtSvcClient {
 	return &mgmtSvcClient{cc}
 }
 
@@ -535,6 +535,15 @@ func (c *mgmtSvcClient) PingRanks(ctx context.Context, in *RanksReq, opts ...grp
 	return out, nil
 }
 
+func (c *mgmtSvcClient) ResetFormatRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
+	out := new(RanksResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/ResetFormatRanks", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) StartRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
 	out := new(RanksResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/StartRanks", in, out, opts...)
@@ -604,6 +613,8 @@ type MgmtSvcServer interface {
 	StopRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Ping DAOS IO servers on a host. (gRPC fanout)
 	PingRanks(context.Context, *RanksReq) (*RanksResp, error)
+	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
+	ResetFormatRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Start DAOS IO servers on a host. (gRPC fanout)
 	StartRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Change the owner of a DAOS container
@@ -685,6 +696,9 @@ func (*UnimplementedMgmtSvcServer) StopRanks(ctx context.Context, req *RanksReq)
 }
 func (*UnimplementedMgmtSvcServer) PingRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingRanks not implemented")
+}
+func (*UnimplementedMgmtSvcServer) ResetFormatRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResetFormatRanks not implemented")
 }
 func (*UnimplementedMgmtSvcServer) StartRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartRanks not implemented")
@@ -1129,6 +1143,24 @@ func _MgmtSvc_PingRanks_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_ResetFormatRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RanksReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).ResetFormatRanks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/ResetFormatRanks",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).ResetFormatRanks(ctx, req.(*RanksReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_StartRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RanksReq)
 	if err := dec(in); err != nil {
@@ -1264,6 +1296,10 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PingRanks",
 			Handler:    _MgmtSvc_PingRanks_Handler,
+		},
+		{
+			MethodName: "ResetFormatRanks",
+			Handler:    _MgmtSvc_ResetFormatRanks_Handler,
 		},
 		{
 			MethodName: "StartRanks",

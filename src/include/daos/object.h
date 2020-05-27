@@ -330,15 +330,15 @@ int dc_obj_query_class(tse_task_t *task);
 int dc_obj_list_class(tse_task_t *task);
 int dc_obj_open(tse_task_t *task);
 int dc_obj_close(tse_task_t *task);
-int dc_obj_punch(tse_task_t *task);
-int dc_obj_punch_dkeys(tse_task_t *task);
-int dc_obj_punch_akeys(tse_task_t *task);
+int dc_obj_punch_task(tse_task_t *task);
+int dc_obj_punch_dkeys_task(tse_task_t *task);
+int dc_obj_punch_akeys_task(tse_task_t *task);
 int dc_obj_query(tse_task_t *task);
 int dc_obj_query_key(tse_task_t *task);
 int dc_obj_sync(tse_task_t *task);
-int dc_obj_fetch_shard(tse_task_t *task);
-int dc_obj_fetch(tse_task_t *task);
-int dc_obj_update(tse_task_t *task);
+int dc_obj_fetch_shard_task(tse_task_t *task);
+int dc_obj_fetch_task(tse_task_t *task);
+int dc_obj_update_task(tse_task_t *task);
 int dc_obj_list_dkey(tse_task_t *task);
 int dc_obj_list_akey(tse_task_t *task);
 int dc_obj_list_rec(tse_task_t *task);
@@ -348,6 +348,17 @@ int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
+
+int dc_tx_open(tse_task_t *task);
+int dc_tx_commit(tse_task_t *task);
+int dc_tx_abort(tse_task_t *task);
+int dc_tx_open_snap(tse_task_t *task);
+int dc_tx_close(tse_task_t *task);
+int dc_tx_restart(tse_task_t *task);
+int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
+		     uint32_t flags, daos_handle_t *th);
+int dc_tx_local_close(daos_handle_t th);
+int dc_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 
 /** Decode shard number from enumeration anchor */
 static inline uint32_t

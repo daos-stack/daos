@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +84,8 @@ struct mgmt_join_out {
 	struct rsvc_hint	jo_hint;
 };
 int ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out);
-int ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp);
+int ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp,
+				    bool all_ranks);
 
 /** srv_pool.c */
 int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,

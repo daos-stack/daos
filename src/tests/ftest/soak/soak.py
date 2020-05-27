@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2019 Intel Corporation.
+(C) Copyright 2019-2020 Intel Corporation.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
-from general_utils import get_random_string
+from general_utils import get_random_string, run_command, DaosTestError
 import slurm_utils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -37,7 +37,6 @@ from ClusterShell.NodeSet import NodeSet
 from getpass import getuser
 import socket
 import threading
-from avocado.utils import process
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
 from agent_utils import include_local_host
@@ -162,11 +161,14 @@ class SoakTestBase(TestWithServers):
             self.log.info(
                 "<<Cancel jobs in queue with ids %s >>",
                 self.failed_job_id_list)
-            status = process.system("scancel --partition {} -u {}".format(
-                self.client_partition, self.username))
-            if status > 0:
-                errors.append("Failed to cancel jobs {}".format(
-                    self.failed_job_id_list))
+            try:
+                run_command(
+                    "scancel --partition {} -u {}".format(
+                        self.client_partition, self.username))
+            except DaosTestError as error:
+                # Exception was raised due to a non-zero exit status
+                errors.append("Failed to cancel jobs {}: {}".format(
+                    self.failed_job_id_list, error))
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
@@ -224,26 +226,30 @@ class SoakTestBase(TestWithServers):
         # copy the files from the remote
         # TO-DO: change scp
         this_host = socket.gethostname()
-        rsync_str = "rsync -avtr --min-size=1B"
+        command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}:{0}/..".format(
+            self.test_log_dir, this_host)
         result = slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients),
-            "bash -c \"{0} {1} {2}:{1}/.. && rm -rf {1}/*\"".format(
-                rsync_str, self.test_log_dir, this_host),
-            self.srun_params)
+            NodeSet.fromlist(self.hostlist_clients), command, self.srun_params)
         if result.exit_status == 0:
-            cmd = "cp -R -p {0}/ \'{1}\'; rm -rf {0}/*".format(
+            command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(
                 self.test_log_dir, self.outputsoakdir)
             try:
-                result = process.run(cmd, shell=True, timeout=30)
-            except process.CmdError as error:
+                run_command(command, timeout=30)
+            except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: Soak remote logfiles not copied"
-                    "to avocado data dir {} - check /tmp/soak "
-                    "on nodes {}>>".format(error, self.hostlist_clients))
+                    "<<FAILED: Soak remote logfiles not copied to avocado data "
+                    "dir {} - check /tmp/soak on nodes {}>>".format(
+                        error, self.hostlist_clients))
+
+            command = "/usr/bin/rm -rf {0}/*".format(self.test_log_dir)
+            slurm_utils.srun(
+                NodeSet.fromlist(self.hostlist_clients), command,
+                self.srun_params)
+            run_command(command)
         else:
             raise SoakTestError(
-                "<<FAILED: Soak remote logfiles not copied "
-                "from clients>>: {}".format(self.hostlist_clients))
+                "<<FAILED: Soak remote logfiles not copied from clients>>: "
+                "{}".format(self.hostlist_clients))
 
     def is_harasser(self, harasser):
         """Check if harasser is defined in yaml.
@@ -470,7 +476,8 @@ class SoakTestBase(TestWithServers):
                         if ior_cmd.api.value == "MPIIO":
                             env["DAOS_CONT"] = ior_cmd.daos_cont.value
                         cmd = Srun(ior_cmd)
-                        cmd.setup_command(env, None, nprocs)
+                        cmd.assign_processes(nprocs)
+                        cmd.assign_environment(env, True)
                         cmd.ntasks_per_node.update(ppn)
                         log_name = "{}_{}_{}_{}".format(
                             api, b_size, t_size, o_type)
@@ -491,13 +498,13 @@ class SoakTestBase(TestWithServers):
 
         """
         # TO-DO: use daos tool when available
-        # This method assumes that doas agent is running on test node
+        # This method assumes that daos agent is running on test node
         cmd = "daos cont create --pool={} --svc={} --type=POSIX".format(
             pool.uuid, ":".join(
                 [str(item) for item in pool.svc_ranks]))
         try:
-            result = process.run(cmd, shell=True, timeout=30)
-        except process.CmdError as error:
+            result = run_command(cmd, timeout=30)
+        except DaosTestError as error:
             raise SoakTestError(
                 "<<FAILED: Dfuse container failed {}>>".format(error))
         self.log.info("Dfuse Container UUID = %s", result.stdout.split()[3])
@@ -516,7 +523,6 @@ class SoakTestBase(TestWithServers):
         # update dfuse params
         self.dfuse.set_dfuse_params(pool)
         self.dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
 
         # create dfuse mount point
         cmd = "mkdir -p {}".format(self.dfuse.mount_dir.value)
@@ -529,6 +535,11 @@ class SoakTestBase(TestWithServers):
             raise SoakTestError(
                 "<<FAILED: Dfuse mountpoint {} not created>>".format(
                     self.dfuse.mount_dir.value))
+
+        # Run dfuse command
+        dfuse_env = self.dfuse.get_environment(
+            self.server_managers[0], self.client_log)
+        params["export"] = ",".join(["all"] + dfuse_env.get_list())
         cmd = self.dfuse.__str__()
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), cmd, params)
@@ -881,8 +892,8 @@ class SoakTestBase(TestWithServers):
         # cleanup test_node /tmp/soak
         cmd = "rm -rf {}".format(self.log_dir)
         try:
-            result = process.run(cmd, shell=True, timeout=30)
-        except process.CmdError as error:
+            result = run_command(cmd, timeout=30)
+        except DaosTestError as error:
             raise SoakTestError(
                 "<<FAILED: Soak directory on testnode not removed {}>>".format(
                     error))
@@ -929,7 +940,7 @@ class SoakTestBase(TestWithServers):
             self.container.read_objects(),
             "Data verification error on reserved pool"
             "after SOAK completed")
-        # gather the doas logs from the client nodes
+        # gather the daos logs from the client nodes
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>", DDHHMMSS_format(
                 time.time() - start_time))

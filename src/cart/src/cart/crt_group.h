@@ -178,13 +178,15 @@ grp_priv_set_membs(struct crt_grp_priv *priv, d_rank_list_t *list)
 static inline int
 grp_priv_init_membs(struct crt_grp_priv *priv, int size)
 {
+	D_INIT_LIST_HEAD(&priv->gp_membs.cgm_free_indices);
 	priv->gp_membs.cgm_list = d_rank_list_alloc(size);
 
 	if (!priv->gp_membs.cgm_list)
 		return -DER_NOMEM;
 
-	D_INIT_LIST_HEAD(&priv->gp_membs.cgm_free_indices);
 	priv->gp_membs.cgm_linear_list = d_rank_list_alloc(0);
+	if (!priv->gp_membs.cgm_linear_list)
+		return -DER_NOMEM;
 
 	return 0;
 }

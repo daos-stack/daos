@@ -238,14 +238,14 @@ cont_prop_csum_enabled(struct ds_iv_ns *ns, uuid_t co_hdl)
 {
 	int			rc;
 	daos_prop_t		cont_prop = {0};
-	struct daos_prop_entry entry = {0};
+	struct daos_prop_entry	entry = {0};
 	uint32_t		csum_val;
 
 	entry.dpe_type = DAOS_PROP_CO_CSUM;
 	cont_prop.dpp_entries = &entry;
 	cont_prop.dpp_nr = 1;
 
-	rc = cont_iv_prop_fetch(ns, co_hdl, &cont_prop);
+	rc = ds_cont_fetch_prop(ns, co_hdl, &cont_prop);
 	if (rc != 0)
 		return false;
 	csum_val = daos_cont_prop2csum(&cont_prop);
@@ -927,7 +927,7 @@ static void
 map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t byte_idx)
 {
 	map->iom_recxs[map->iom_nr_out].rx_idx = byte_idx / map->iom_size;
-	map->iom_recxs[map->iom_nr_out].rx_nr = biov->bi_data_len
+	map->iom_recxs[map->iom_nr_out].rx_nr = bio_iov2req_len(biov)
 						/ map->iom_size;
 	map->iom_nr_out++;
 }
@@ -986,7 +986,7 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 			if (!bio_addr_is_hole(&biov->bi_addr))
 				map_add_recx(map, biov, byte_idx);
 
-			byte_idx += biov->bi_data_len;
+			byte_idx += bio_iov2req_len(biov);
 		}
 		/** allocated and used should be the same */
 		D_ASSERT(map->iom_nr == map->iom_nr_out);
@@ -1199,7 +1199,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	int		      rc;
 
 	memset(ioc, 0, sizeof(*ioc));
-	rc = cont_iv_capa_fetch(pool_uuid, coh_uuid, cont_uuid, &coh);
+	rc = ds_cont_find_hdl(pool_uuid, coh_uuid, &coh);
 	if (rc) {
 		if (rc == -DER_NONEXIST)
 			rc = -DER_NO_HDL;
@@ -1226,7 +1226,12 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	if (coh->sch_cont != NULL) {
 		ds_cont_child_get(coh->sch_cont);
 		coc = coh->sch_cont;
-		D_GOTO(out, rc = 0);
+		if (uuid_compare(cont_uuid, coc->sc_uuid) == 0)
+			D_GOTO(out, rc = 0);
+
+		D_ERROR("Stale container handle "DF_UUID" != "DF_UUID"\n",
+			DP_UUID(cont_uuid), DP_UUID(coh->sch_uuid));
+		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
 	if (!is_rebuild_container(pool_uuid, coh_uuid)) {
@@ -1393,8 +1398,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid,
-				       &orw->orw_dti,
-				       orw->orw_dkey_hash, false,
+				       &orw->orw_dti, orw->orw_dkey_hash,
 				       &orw->orw_epoch);
 
 		/* Do nothing if 'prepared' or 'committed'. */
@@ -1525,8 +1529,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
 		orw->orw_map_ver, ioc.ioc_map_ver, DP_DTI(&orw->orw_dti));
 
-	/* FIXME: until distributed transaction. */
-	if (orw->orw_epoch == DAOS_EPOCH_MAX) {
+	if (orw->orw_epoch == DAOS_EPOCH_MAX || orw->orw_epoch == 0) {
 		orw->orw_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
 	}
@@ -1554,8 +1557,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		daos_epoch_t	tmp = 0;
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid,
-				       &orw->orw_dti, orw->orw_dkey_hash,
-				       false, &tmp);
+				       &orw->orw_dti, orw->orw_dkey_hash, &tmp);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
 
@@ -1590,8 +1592,7 @@ renew:
 			      orw->orw_epoch, orw->orw_dkey_hash,
 			      orw->orw_map_ver, DAOS_INTENT_UPDATE,
 			      orw->orw_shard_tgts.ca_arrays,
-			      orw->orw_shard_tgts.ca_count,
-			      orw->orw_api_flags & VOS_COND_UPDATE_MASK, &dlh);
+			      orw->orw_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -2032,7 +2033,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	if (opi->opi_flags & ORF_RESEND) {
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid,
 				       &opi->opi_dti, opi->opi_dkey_hash,
-				       true, &opi->opi_epoch);
+				       &opi->opi_epoch);
 
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc == -DER_ALREADY || rc == 0)
@@ -2148,8 +2149,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 			opi->opi_map_ver, ioc.ioc_map_ver,
 			DP_DTI(&opi->opi_dti));
 
-	/* FIXME: until distributed transaction. */
-	if (opi->opi_epoch == DAOS_EPOCH_MAX) {
+	if (opi->opi_epoch == DAOS_EPOCH_MAX || opi->opi_epoch == 0) {
 		opi->opi_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
@@ -2172,8 +2172,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		daos_epoch_t	tmp = 0;
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid,
-				       &opi->opi_dti, opi->opi_dkey_hash,
-				       true, &tmp);
+				       &opi->opi_dti, opi->opi_dkey_hash, &tmp);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
 
@@ -2207,8 +2206,7 @@ renew:
 			      opi->opi_epoch, opi->opi_dkey_hash,
 			      opi->opi_map_ver, DAOS_INTENT_PUNCH,
 			      opi->opi_shard_tgts.ca_arrays,
-			      opi->opi_shard_tgts.ca_count,
-			      opi->opi_api_flags & VOS_OF_COND_PUNCH, &dlh);
+			      opi->opi_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -2268,8 +2266,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_IO, "flags = %d\n", okqi->okqi_flags);
 
-	/* FIXME: until distributed transaction. */
-	if (okqi->okqi_epoch == DAOS_EPOCH_MAX) {
+	if (okqi->okqi_epoch == DAOS_EPOCH_MAX || okqi->okqi_epoch == 0) {
 		okqi->okqi_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", okqi->okqi_epoch);
 	}
@@ -2377,7 +2374,8 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 
 		if (rc == 0)
 			rc = daos_csummer_verify_iod(csummer, iod, &sgl,
-						     &iod_csums[i], NULL, 0);
+						     &iod_csums[i], NULL, 0,
+						     NULL);
 
 		daos_sgl_fini(&sgl, false);
 

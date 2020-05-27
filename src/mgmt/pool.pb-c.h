@@ -600,10 +600,22 @@ struct  _Mgmt__PoolQueryResp
    * NVMe storage usage stats
    */
   Mgmt__StorageUsageStats *nvme;
+  /*
+   * total nodes in pool
+   */
+  uint32_t totalnodes;
+  /*
+   * latest pool map version
+   */
+  uint32_t version;
+  /*
+   * current raft leader
+   */
+  uint32_t leader;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL }
+    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL, 0, 0, 0 }
 
 
 /* Mgmt__PoolCreateReq methods */

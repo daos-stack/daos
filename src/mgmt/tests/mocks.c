@@ -486,7 +486,7 @@ ds_rsvc_get_md_cap(void)
 }
 
 int
-ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
+ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp, bool all_ranks)
 {
 	return 0;
 }

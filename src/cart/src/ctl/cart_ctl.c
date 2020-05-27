@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2019 Intel Corporation
+/* Copyright (C) 2018-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,7 @@ enum cmd_t {
 	CMD_ENABLE_FI,
 	CMD_DISABLE_FI,
 	CMD_SET_FI_ATTR,
+	CMD_LOG_SET,
 };
 
 struct cmd_info {
@@ -81,6 +82,7 @@ struct cmd_info cmds[] = {
 	DEF_CMD(CMD_ENABLE_FI, CRT_OPC_CTL_FI_TOGGLE),
 	DEF_CMD(CMD_DISABLE_FI, CRT_OPC_CTL_FI_TOGGLE),
 	DEF_CMD(CMD_SET_FI_ATTR, CRT_OPC_CTL_FI_SET_ATTR),
+	DEF_CMD(CMD_LOG_SET, CRT_OPC_CTL_LOG_SET),
 };
 
 static char *cmd2str(enum cmd_t cmd)
@@ -127,6 +129,9 @@ struct ctl_g {
 	sem_t				 cg_num_reply;
 	struct crt_ctl_fi_attr_set_in	 cg_fi_attr;
 	int				 cg_fi_attr_inited;
+	char				*cg_log_mask;
+	int				 cg_log_mask_set;
+	bool				 cg_no_wait_for_ranks;
 };
 
 static struct ctl_g ctl_gdata;
@@ -249,7 +254,10 @@ print_usage_msg(const char *msg)
 		printf("\nERROR: %s\n", msg);
 	printf("Usage: cart_ctl <cmd> --group-name name --rank "
 	       "start-end,start-end,rank,rank\n");
-	printf("\ncmds: get_uri_cache, list_ctx, get_hostname, get_pid\n");
+	printf("\ncmds: get_uri_cache, list_ctx, get_hostname, get_pid, ");
+	printf("set_log, set_fi_attr\n");
+	printf("\nset_log:\n");
+	printf("\tSet log to mask passed via -l <mask> argument\n");
 	printf("\nget_uri_cache:\n");
 	printf("\tPrint rank, tag and uri from uri cache\n");
 	printf("\nlist_ctx:\n");
@@ -270,6 +278,10 @@ print_usage_msg(const char *msg)
 	printf("\tPath to group config file\n");
 	printf("--rank start-end,start-end,rank,rank\n");
 	printf("\tspecify target ranks\n");
+	printf("-l log_mask\n");
+	printf("\tSpecify log_mask to be set remotely\n");
+	printf("-n\n");
+	printf("\tdon't perfom 'wait for ranks' sync\n");
 }
 
 static int
@@ -298,6 +310,8 @@ parse_args(int argc, char **argv)
 		ctl_gdata.cg_cmd_code = CMD_DISABLE_FI;
 	else if (strcmp(argv[1], "set_fi_attr") == 0)
 		ctl_gdata.cg_cmd_code = CMD_SET_FI_ATTR;
+	else if (strcmp(argv[1], "set_log") == 0)
+		ctl_gdata.cg_cmd_code = CMD_LOG_SET;
 	else {
 		print_usage_msg("Invalid command\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -310,11 +324,13 @@ parse_args(int argc, char **argv)
 		{"rank", required_argument, 0, 'r'},
 		{"attr", required_argument, 0, 'a'},
 		{"cfg_path", required_argument, 0, 's'},
+		{"log_mask", required_argument, 0, 'l'},
+		{"no_sync", optional_argument, 0, 'n'},
 		{0, 0, 0, 0},
 	};
 
 	while (1) {
-		opt = getopt_long(argc, argv, "g:r:a:p:", long_options,
+		opt = getopt_long(argc, argv, "g:r:a:p:l:n", long_options,
 				  &option_index);
 		if (opt == -1)
 			break;
@@ -337,9 +353,22 @@ parse_args(int argc, char **argv)
 			ctl_gdata.cg_save_cfg = true;
 			ctl_gdata.cg_cfg_path = optarg;
 			break;
+		case 'l':
+			ctl_gdata.cg_log_mask = optarg;
+			ctl_gdata.cg_log_mask_set = 1;
+			break;
+		case 'n':
+			ctl_gdata.cg_no_wait_for_ranks = true;
+			break;
 		default:
 			break;
 		}
+	}
+
+	if (ctl_gdata.cg_cmd_code == CMD_LOG_SET &&
+	    ctl_gdata.cg_log_mask_set == 0) {
+		D_ERROR("log mask (-l mask) missing for set_log\n");
+		rc = -DER_INVAL;
 	}
 
 	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR &&
@@ -380,6 +409,7 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 	struct crt_ctl_get_pid_out		*out_get_pid_args;
 	struct crt_ctl_fi_attr_set_out		*out_set_fi_attr_args;
 	struct crt_ctl_fi_toggle_out		*out_fi_toggle_args;
+	struct crt_ctl_log_set_out		*out_log_set_args;
 	char					*addr_str;
 	struct cb_info				*info;
 	int					 i;
@@ -402,6 +432,10 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 		out_set_fi_attr_args = crt_reply_get(cb_info->cci_rpc);
 		fprintf(stdout, "rc: %d (%s)\n", out_set_fi_attr_args->fa_ret,
 			d_errstr(out_set_fi_attr_args->fa_ret));
+	} else if (info->cmd == CMD_LOG_SET) {
+		out_log_set_args = crt_reply_get(cb_info->cci_rpc);
+		fprintf(stdout, "rc: %d (%s)\n", out_log_set_args->rc,
+				d_errstr(out_log_set_args->rc));
 	} else if (cb_info->cci_rc == 0) {
 		fprintf(stdout, "group: %s, rank: %d\n",
 			in_args->cel_grp_id, in_args->cel_rank);
@@ -465,6 +499,16 @@ ctl_fill_fi_toggle_rpc_args(crt_rpc_t *rpc_req, int op)
 }
 
 static void
+crt_fill_set_log(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_log_set_in	*in_args;
+
+	in_args = crt_req_get(rpc_req);
+
+	in_args->log_mask = ctl_gdata.cg_log_mask;
+}
+
+static void
 ctl_fill_fi_set_attr_rpc_args(crt_rpc_t *rpc_req)
 {
 	struct crt_ctl_fi_attr_set_in	*in_args_fi_attr;
@@ -521,11 +565,13 @@ ctl_init()
 	 * 5 - ping timeout
 	 * 150 - total timeout
 	 */
-	rc = tc_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
-			       0, 1, 5, 150);
-	if (rc != 0) {
-		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
-		D_GOTO(out, rc);
+	if (ctl_gdata.cg_no_wait_for_ranks == false) {
+		rc = tc_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
+				       0, 1, 5, 150);
+		if (rc != 0) {
+			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
+			D_GOTO(out, rc);
+		}
 	}
 
 	ctl_gdata.cg_target_group = grp;
@@ -552,6 +598,9 @@ ctl_init()
 			break;
 		case (CMD_SET_FI_ATTR):
 			ctl_fill_fi_set_attr_rpc_args(rpc_req);
+			break;
+		case (CMD_LOG_SET):
+			crt_fill_set_log(rpc_req);
 			break;
 		default:
 			ctl_fill_rpc_args(rpc_req, i);

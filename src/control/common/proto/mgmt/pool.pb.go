@@ -1337,6 +1337,9 @@ type PoolQueryResp struct {
 	Rebuild              *PoolRebuildStatus `protobuf:"bytes,6,opt,name=rebuild,proto3" json:"rebuild,omitempty"`
 	Scm                  *StorageUsageStats `protobuf:"bytes,7,opt,name=scm,proto3" json:"scm,omitempty"`
 	Nvme                 *StorageUsageStats `protobuf:"bytes,8,opt,name=nvme,proto3" json:"nvme,omitempty"`
+	Totalnodes           uint32             `protobuf:"varint,9,opt,name=totalnodes,proto3" json:"totalnodes,omitempty"`
+	Version              uint32             `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"`
+	Leader               uint32             `protobuf:"varint,11,opt,name=leader,proto3" json:"leader,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1423,6 +1426,27 @@ func (m *PoolQueryResp) GetNvme() *StorageUsageStats {
 	return nil
 }
 
+func (m *PoolQueryResp) GetTotalnodes() uint32 {
+	if m != nil {
+		return m.Totalnodes
+	}
+	return 0
+}
+
+func (m *PoolQueryResp) GetVersion() uint32 {
+	if m != nil {
+		return m.Version
+	}
+	return 0
+}
+
+func (m *PoolQueryResp) GetLeader() uint32 {
+	if m != nil {
+		return m.Leader
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterEnum("mgmt.PoolRebuildStatus_State", PoolRebuildStatus_State_name, PoolRebuildStatus_State_value)
 	proto.RegisterType((*PoolCreateReq)(nil), "mgmt.PoolCreateReq")
@@ -1449,9 +1473,7 @@ func init() {
 	proto.RegisterType((*PoolQueryResp)(nil), "mgmt.PoolQueryResp")
 }
 
-func init() {
-	proto.RegisterFile("pool.proto", fileDescriptor_8a14d8612184524f)
-}
+func init() { proto.RegisterFile("pool.proto", fileDescriptor_8a14d8612184524f) }
 
 var fileDescriptor_8a14d8612184524f = []byte{
 	// 835 bytes of a gzipped FileDescriptorProto

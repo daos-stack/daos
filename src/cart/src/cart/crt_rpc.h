@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,7 +72,7 @@ struct crt_corpc_hdr {
 	d_string_t		 coh_grpid;
 	/* collective bulk handle */
 	crt_bulk_t		 coh_bulk_hdl;
-	/* optional excluded or exclusive ranks */
+	/* optional filter ranks (see crt_corpc_req_create) */
 	d_rank_list_t		*coh_filter_ranks;
 	/* optional inline ranks, for example piggyback the group members */
 	d_rank_list_t		*coh_inline_ranks;
@@ -119,7 +119,7 @@ typedef enum {
 /* corpc info to track the tree topo and child RPCs info */
 struct crt_corpc_info {
 	struct crt_grp_priv	*co_grp_priv;
-	/* excluded or exclusive ranks */
+	/* filter ranks (see crt_corpc_req_create) */
 	d_rank_list_t		*co_filter_ranks;
 	uint32_t		 co_grp_ver;
 	uint32_t		 co_tree_topo;
@@ -281,7 +281,10 @@ struct crt_rpc_priv {
 		crt_hdlr_ctl_fi_toggle, NULL),				\
 	X(CRT_OPC_CTL_FI_SET_ATTR,					\
 		0, &CQF_crt_ctl_fi_attr_set,				\
-		crt_hdlr_ctl_fi_attr_set, NULL)
+		crt_hdlr_ctl_fi_attr_set, NULL),			\
+	X(CRT_OPC_CTL_LOG_SET,						\
+		0, &CQF_crt_ctl_log_set,				\
+		crt_hdlr_ctl_log_set, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -514,6 +517,14 @@ CRT_RPC_DECLARE(crt_ctl_fi_attr_set, CRT_ISEQ_CTL_FI_ATTR_SET,
 
 CRT_RPC_DECLARE(crt_ctl_fi_toggle,
 		CRT_ISEQ_CTL_FI_TOGGLE, CRT_OSEQ_CTL_FI_TOGGLE)
+
+#define CRT_ISEQ_CTL_LOG_SET		/* input fields */	\
+	((d_string_t)		(log_mask)	CRT_VAR)
+
+#define CRT_OSEQ_CTL_LOG_SET		/* output fields */	\
+	((int32_t)		(rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
 
 /* Internal macros for crt_req_(add|dec)ref from within cart.  These take
  * a crt_internal_rpc pointer and provide better logging than the public

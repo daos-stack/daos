@@ -79,7 +79,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		default:
 		}
 
-		dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, req)
+		dresp, err := mi.CallDrpc(drpc.MethodPoolCreate, req)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +126,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolDestroy, req)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolExclude, req)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolExclude, req)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +189,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolExtend, req)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolExtend, req)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +221,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolReintegrate, req)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolReintegrate, req)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +249,7 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolQuery, req)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolQuery, req)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req (converted):%+v", *newReq)
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolSetProp, newReq)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolSetProp, newReq)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +351,7 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolGetACL, req)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolGetACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +375,7 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolOverwriteACL, req)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolOverwriteACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +400,7 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolUpdateACL, req)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolUpdateACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -425,7 +425,7 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolDeleteACL, req)
+	dresp, err := mi.CallDrpc(drpc.MethodPoolDeleteACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +450,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodListPools, req)
+	dresp, err := mi.CallDrpc(drpc.MethodListPools, req)
 	if err != nil {
 		return nil, err
 	}
