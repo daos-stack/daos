@@ -154,6 +154,10 @@ sudo bash -c \"set -ex
 if [ \\\"\\\$(ulimit -c)\\\" != \\\"unlimited\\\" ]; then
     echo \\\"*  soft  core  unlimited\\\" >> /etc/security/limits.conf
 fi
+if [ \\\"\\\$(ulimit -l)\\\" != \\\"unlimited\\\" ]; then
+    echo \\\"*  soft  memlock  unlimited\\\" >> /etc/security/limits.conf
+    echo \\\"*  hard  memlock  unlimited\\\" >> /etc/security/limits.conf
+fi
 echo \\\"/var/tmp/core.%e.%t.%p\\\" > /proc/sys/kernel/core_pattern\"
 rm -f /var/tmp/core.*
 if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
