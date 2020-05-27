@@ -47,6 +47,7 @@ pool_iv_prop_ent_size(int nr_aces, int nr_ranks)
 	/* Calculate pool_iv_buf size */
 	acl_size = roundup(offsetof(struct daos_acl, dal_ace[nr_aces]), 8);
 	svc_size = roundup(nr_ranks * sizeof(d_rank_t), 8);
+	D_PRINT("DEBUGTEST: pool_iv_prop_ent_size\n");
 
 	return sizeof(struct pool_iv_entry) + acl_size + svc_size;
 }
@@ -57,6 +58,7 @@ pool_iv_value_alloc_internal(struct ds_iv_key *key, d_sg_list_t *sgl)
 	struct pool_iv_key *pool_key = (struct pool_iv_key *)key->key_buf;
 	uint32_t	buf_size = pool_key->pik_entry_size;
 	int		rc;
+	D_PRINT("DEBUGTEST: pool_iv_value_alloc_internal\n");
 
 	D_ASSERT(buf_size != 0);
 	rc = daos_sgl_init(sgl, 1);
@@ -89,6 +91,7 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 	unsigned int		offset = 0;
 	int			i;
 
+	D_PRINT("DEBUGTEST: pool_iv_prop_l2g\n");
 	D_ASSERT(prop->dpp_nr == DAOS_PROP_PO_NUM);
 	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
 		prop_entry = &prop->dpp_entries[i];
@@ -167,6 +170,7 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 	int			i;
 	int			rc = 0;
 
+	D_PRINT("DEBUGTEST: pool_iv_prop_g2l\n");
 	D_ASSERT(prop->dpp_nr == DAOS_PROP_PO_NUM);
 	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
 		prop_entry = &prop->dpp_entries[i];
@@ -267,6 +271,7 @@ pool_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 {
 	int	rc;
 
+	D_PRINT("DEBUGTEST: pool_iv_ent_init\n");
 	rc = pool_iv_value_alloc_internal(iv_key, &entry->iv_value);
 	if (rc)
 		return rc;
@@ -291,6 +296,7 @@ pool_iv_ent_put(struct ds_iv_entry *entry, void **priv)
 static int
 pool_iv_ent_destroy(d_sg_list_t *sgl)
 {
+	D_PRINT("DEBUGTEST: pool_iv_ent_destroy\n");
 	daos_sgl_fini(sgl, true);
 	return 0;
 }
@@ -300,6 +306,7 @@ pool_iv_ent_copy(int class_id, d_sg_list_t *dst, d_sg_list_t *src)
 {
 	struct pool_iv_entry *src_iv = src->sg_iovs[0].iov_buf;
 	struct pool_iv_entry *dst_iv = dst->sg_iovs[0].iov_buf;
+	D_PRINT("DEBUGTEST: pool_iv_ent_copy\n");
 
 	if (dst_iv == src_iv)
 		return 0;
@@ -360,6 +367,7 @@ static int
 pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		  d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
+	D_PRINT("DEBUGTEST: pool_iv_ent_fetch\n");
 	return pool_iv_ent_copy(entry->iv_class->iv_class_id, dst, src);
 }
 
@@ -371,6 +379,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct ds_pool		*pool;
 	d_rank_t		rank;
 	int			rc;
+	D_PRINT("DEBUGTEST: pool_iv_ent_update\n");
 
 	pool = ds_pool_lookup(src_iv->piv_pool_uuid);
 	if (pool == NULL)
@@ -413,6 +422,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct pool_iv_entry	*src_iv;
 	struct ds_pool		*pool;
 	int			rc;
+	D_PRINT("DEBUGTEST: pool_iv_ent_refresh\n");
 
 	if (src == NULL) /* invalidate */
 		return 0;
@@ -447,6 +457,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 static int
 pool_iv_value_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
 {
+	D_PRINT("DEBUGTEST: pool_iv_value_alloc\n");
 	return pool_iv_value_alloc_internal(&entry->iv_key, sgl);
 }
 
@@ -458,6 +469,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct ds_pool		*pool;
 	struct pool_buf		*map_buf = NULL;
 	int			 rc;
+	D_PRINT("DEBUGTEST: pool_iv_pre_sync\n");
 
 	/* This function is only for IV_POOL_MAP. */
 	if (entry->iv_class->iv_class_id != IV_POOL_MAP)

@@ -731,6 +731,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	struct ds_pool_hdl		*hdl;
 	int				 rc;
 
+	D_PRINT("DEBUGTEST: ds_pool_tgt_connect_handler");
 	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->tci_uuid), rpc, DP_UUID(in->tci_hdl));
 
