@@ -865,8 +865,11 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	int			rc;
 
 	rc = ABT_future_create(1, NULL, &future);
-	if (rc)
+	if (rc) {
+		if (sync->ivs_comp_cb)
+			sync->ivs_comp_cb(sync->ivs_comp_cb_arg);
 		return rc;
+	}
 
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
@@ -956,20 +959,17 @@ struct sync_comp_cb_arg {
 	struct ds_iv_key iv_key;
 };
 
-static void
-sync_comp_cb_arg_free(struct sync_comp_cb_arg *arg)
-{
-	if (arg == NULL)
-		return;
-
-	daos_sgl_fini(&arg->iv_value, true);
-	D_FREE(arg);
-}
-
 int
 sync_comp_cb(void *arg)
 {
-	sync_comp_cb_arg_free((struct sync_comp_cb_arg *)arg);
+	struct sync_comp_cb_arg *cb_arg = arg;
+
+	if (cb_arg == NULL)
+		return 0;
+
+	daos_sgl_fini(&cb_arg->iv_value, true);
+	D_FREE(cb_arg);
+
 	return 0;
 }
 
@@ -1017,9 +1017,6 @@ ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 
 	rc = iv_op(ns, key, value, &iv_sync, shortcut, retry, IV_UPDATE);
 out:
-	if (rc && arg != NULL)
-		sync_comp_cb_arg_free(arg);
-
 	return rc;
 }
 
