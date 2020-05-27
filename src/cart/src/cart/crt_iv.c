@@ -2623,7 +2623,7 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 	D_ASSERT(rpc_priv != NULL);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
-	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub)) {
+	if (crt_ctx->cc_iv_resp_cb != NULL) {
 		int rc;
 		struct crt_cb_info *info;
 
@@ -2638,10 +2638,10 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 		info->cci_rpc = cb_info->cci_rpc;
 		info->cci_rc = cb_info->cci_rc;
 		info->cci_arg = cb_info->cci_arg;
-		rc = crt_ctx->cc_rpc_cb((crt_context_t)crt_ctx,
-					 info,
-					 handle_response_cb_internal,
-					 crt_ctx->cc_rpc_cb_arg);
+		rc = crt_ctx->cc_iv_resp_cb((crt_context_t)crt_ctx,
+					    info,
+					    handle_response_cb_internal,
+					    crt_ctx->cc_rpc_cb_arg);
 		if (rc) {
 			D_WARN("rpc_cb failed %d, do cb directly\n", rc);
 			RPC_DECREF(rpc_priv);
