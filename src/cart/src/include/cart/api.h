@@ -479,6 +479,26 @@ uint64_t
 crt_hlc2sec(uint64_t hlc);
 
 /**
+ * Set the maximum system clock offset.
+ *
+ * This is the maximum offset believed to be observable between the physical
+ * clocks behind any two HLCs in the system. The format of the value represent
+ * a nonnegative diff between two HLC timestamps.
+ *
+ * \param[in] epsilon          Nonnegative HLC duration
+ */
+void
+crt_hlc_epsilon_set(uint64_t epsilon);
+
+/**
+ * Get the maximum system clock offset. See crt_hlc_set_epsilon's API doc.
+ *
+ * \return                     Nonnegative HLC duration
+ */
+uint64_t
+crt_hlc_epsilon_get(void);
+
+/**
  * Abort an RPC request.
  *
  * \param[in] req              pointer to RPC request
