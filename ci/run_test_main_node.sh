@@ -27,4 +27,4 @@ export CMOCKA_MESSAGE_OUTPUT=xml
 export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml
 cd "$DAOS_BASE"
 IS_CI=true OLD_CI=false utils/run_test.sh
-./utils/node_local_test.py all | tee vm_test.out
+./utils/node_local_test.py all

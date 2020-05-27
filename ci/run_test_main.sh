@@ -14,7 +14,7 @@ mkdir -p "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/"
 ln -s ../../../../../../../../src/control \
   "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
 DAOS_BASE=${SL_PREFIX%/install*}
-rm -f dnt.*.memcheck.xml vm_test.out nlt-errors.out
+rm -f dnt.*.memcheck.xml nlt-errors.json
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 

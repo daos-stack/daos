@@ -15,6 +15,10 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 def doc_only_change() {
+    if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
+        return true
+    }
+
     def rc = sh label: "Determine if doc-only change",
                 script: "CHANGE_ID=${env.CHANGE_ID} " +
                         "TARGET_BRANCH=${target_branch} " +
@@ -24,7 +28,7 @@ def doc_only_change() {
 }
 
 def skip_stage(String stage) {
-    return cachedCommitPragma(pragma: 'Skip-' + stage).contains('true')
+    return cachedCommitPragma(pragma: 'Skip-' + stage) == 'true'
 }
 
 def quickbuild() {
@@ -970,22 +974,24 @@ pipeline {
                                     unstableThresholdTotal: '0'
                             )
                             recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
                                          failOnError: true,
                                          referenceJobName: 'daos-stack/daos/master',
-                                         ignoreFailedBuilds: true,
+                                         ignoreFailedBuilds: false,
                                          ignoreQualityGate: true,
-					 /* TODO: master is currently not determanistic and
-					 there is one message which appears occasionally
-					 so set the threshold to 2, which will not warn for
-					 stable builds against master, but might miss some
-					 individual issues.
-					 */
-                                         qualityGates: [[threshold: 2, type: 'NEW', unstable: true]],
-                                         name: "VM Testing",
-                                         tool: clang(pattern: 'vm_test/nlt-errors.out',
-                                                     name: 'VM test results',
-                                                     id: 'VM_test')
+                                         /* Set qualitygate to 1 new "NORMAL" priority message
+                                           * Supporting messages to help identify causes of
+                                           * problems are set to "LOW", and there are a
+                                           * number of intermittent issues during server
+                                           * shutdown that would normally be NORMAL but in
+                                           * order to have stable results are set to LOW.
+                                           */
+                                         qualityGates: [[threshold: 1, type: 'TOTAL_HIGH', unstable: true],
+                                                        [threshold: 1, type: 'TOTAL_ERROR', unstable: true],
+                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true]],
+                                         name: "Node local testing",
+                                         tool: issues(pattern: 'vm_test/nlt-errors.json',
+                                                      name: 'NLT results',
+                                                      id: 'VM_test')
                         }
                     }
                 }
