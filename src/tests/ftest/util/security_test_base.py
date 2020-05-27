@@ -23,9 +23,11 @@
 """
 
 import os
-import re
 import random
 from general_utils import pcmd
+
+class DaosTestError(Exception):
+    """DAOS API exception class."""
 
 def acl_entry(usergroup, name, perm, permissions):
     """Create a daos acl entry for the specified user or group and permission
@@ -99,14 +101,42 @@ def create_acl_file(file_name, permissions):
     acl_file.close()
 
 
-def check_uuid_format(uuid):
-    """Checks a correct UUID format.
+def generate_acl_file(acl_type, acl_args):
+    """Creates an acl file for the specified type.
 
     Args:
-        uuid (str): Pool or Conatiner UUID.
+        acl_type (str): default, invalid, valid
+        acl_args (dic): Dictionary that contains the required parameters
+                        to generate the acl entries, such as user, group
+                        and permissions
 
     Returns:
-        True or False if uuid is well formed or not.
+        List of permissions
     """
-    pattern = re.compile("([0-9a-f-]+)")
-    return bool(len(uuid) == 36 and pattern.match(uuid))
+    # First we determine the type o acl to be created
+    msg = None
+    acl_entries = {
+        "default": ["A::OWNER@:rwdtTaAo", "A:G:GROUP@:rwtT"],
+        "valid": ["A::OWNER@:rwdtTaAo",
+                  acl_entry("user", acl_args["user"], "random",
+                            acl_args["permissions"]),
+                  "A:G:GROUP@:rwtT",
+                  acl_entry("group", acl_args["group"], "random",
+                            acl_args["permissions"]),
+                  "A::EVERYONE@:"],
+        "invalid": ["A::OWNER@:invalid", "A:G:GROUP@:rwtT"]
+    }
+
+    if acl_type in acl_entries:
+        get_acl_file = "acl_" + acl_type + ".txt"
+        file_name = os.path.join(acl_args["tmp_dir"], get_acl_file)
+        create_acl_file(file_name, acl_entries[acl_type])
+    else:
+        msg = "Invalid acl_type '{}' while generating permissions".format(
+            acl_type)
+
+    if msg is not None:
+        print(msg)
+        raise DaosTestError(msg)
+
+    return acl_entries[acl_type]

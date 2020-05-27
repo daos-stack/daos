@@ -32,11 +32,7 @@ from avocado import fail_on
 import dmg_utils
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
-import security_test_base as secTestBase
 import general_utils
-
-PERMISSIONS = ["r", "w", "rw", "rwd", "rwdt", "rwdtT",
-               "rwdtTa", "rwdtTaA", "rwdtTaAo"]
 
 class ContSecurityTestBase(TestWithServers):
     """Container security test cases.
@@ -73,43 +69,6 @@ class ContSecurityTestBase(TestWithServers):
                                        "/run/container/*")
         self.dmg = self.get_dmg_command()
         self.daos_tool = DaosCommand(self.bin)
-
-
-    def generate_acl_file(self, acl_type):
-        """Create an acl file for the specified type.
-
-        Args:
-            acl_type (str): default, invalid, valid
-
-        Returns:
-            List of permissions of container
-        """
-        # First we determine the type o acl to be created
-        if acl_type == "default":
-            acl_entries = ["A::OWNER@:rwdtTaAo",
-                           "A:G:GROUP@:rwtT"]
-        elif acl_type == "valid":
-            acl_entries = ["A::OWNER@:rwdtTaAo",
-                           secTestBase.acl_entry("user", self.current_user,
-                                                 "random", PERMISSIONS),
-                           "A:G:GROUP@:rwtT",
-                           secTestBase.acl_entry("group", self.current_group,
-                                                 "random", PERMISSIONS),
-                           "A::EVERYONE@:"]
-        elif acl_type == "invalid":
-            acl_entries = ["A::OWNER@:invalid",
-                           "A:G:GROUP@:rwtT"]
-        else:
-            acl_entries = None
-            self.fail("    Invalid acl_type while generating permissions")
-
-        # We now write the default acl file
-        get_acl_file = "acl_" + acl_type + ".txt"
-        file_name = os.path.join(self.tmp, get_acl_file)
-        acl_file = open(file_name, "w")
-        acl_file.write("\n".join(acl_entries))
-        acl_file.close()
-        return acl_entries
 
 
     @fail_on(CommandFailure)
@@ -171,7 +130,7 @@ class ContSecurityTestBase(TestWithServers):
         Returns:
             container_uuid: Container UUID created or None.
         """
-        if not secTestBase.check_uuid_format(pool_uuid):
+        if not general_utils.check_uuid_format(pool_uuid):
             self.fail(
                 "    Invalid Pool UUID '%s' provided.", pool_uuid)
 
@@ -221,7 +180,7 @@ class ContSecurityTestBase(TestWithServers):
             True or False if Container was destroyed or not.
 
         """
-        if not secTestBase.check_uuid_format(container_uuid):
+        if not general_utils.check_uuid_format(container_uuid):
             self.fail(
                 "    Invalid Container UUID '%s' provided.", container_uuid)
 
@@ -255,11 +214,11 @@ class ContSecurityTestBase(TestWithServers):
             cont_permission_list: daos container acl list.
 
         """
-        if not secTestBase.check_uuid_format(pool_uuid):
+        if not general_utils.check_uuid_format(pool_uuid):
             self.fail(
                 "    Invalid Pool UUID '%s' provided.", pool_uuid)
 
-        if not secTestBase.check_uuid_format(container_uuid):
+        if not general_utils.check_uuid_format(container_uuid):
             self.fail(
                 "    Invalid Container UUID '%s' provided.", container_uuid)
 

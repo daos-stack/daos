@@ -22,6 +22,10 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from cont_security_test_base import ContSecurityTestBase
+from security_test_base import generate_acl_file
+
+PERMISSIONS = ["r", "w", "rw", "rwd", "rwdt", "rwdtT",
+               "rwdtTa", "rwdtTaA", "rwdtTaAo"]
 
 class CreateContainterACLTest(ContSecurityTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors
@@ -29,10 +33,6 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a CreateContainterACLTest object."""
-        super(CreateContainterACLTest, self).__init__(*args, **kwargs)
 
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
@@ -49,9 +49,13 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_create_acl
         """
+        acl_args = {"tmp_dir": self.tmp,
+                    "user": self.current_user,
+                    "group": self.current_group,
+                    "permissions": PERMISSIONS}
 
         ## Getting the default ACL list
-        expected_acl = self.generate_acl_file("default")
+        expected_acl = generate_acl_file("default", acl_args)
 
         ## 1. Create a pool and obtain its UUID and SVC
         self.log.info("===> Creating a pool with no ACL file passed")
@@ -87,7 +91,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         ## Create a valid ACL file
         self.log.info("===> Generating a valid ACL file")
-        expected_acl = self.generate_acl_file("valid")
+        expected_acl = generate_acl_file("valid", acl_args)
 
         ## 4. Create a container with a valid ACL file passed
         self.log.info("===> Creating a container with an ACL file passed")
@@ -121,7 +125,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         ## Create an invalid ACL file
         self.log.info("===> Generating an invalid ACL file")
-        self.generate_acl_file("invalid")
+        generate_acl_file("invalid", acl_args)
 
         ## 6. Create a container with an invalid ACL file passed
         self.log.info("===> Creating a container with invalid ACL file passed")
