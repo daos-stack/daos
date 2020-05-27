@@ -233,13 +233,41 @@ struct vos_dtx_act_ent {
 	int				 dae_rec_cap;
 };
 
+extern struct vos_tls	*standalone_tls;
+#ifdef VOS_STANDALONE
+unsigned int tmp_count;
+#define VOS_TIME_START(start, op)		\
+do {						\
+	if (standalone_tls->vtl_dp == NULL)	\
+		break;				\
+	start = daos_get_ntime();		\
+} while (0)
+
+#define VOS_TIME_END(start, op)			\
+do {						\
+	struct daos_profile *dp;		\
+	int time_msec;				\
+						\
+	dp = standalone_tls->vtl_dp;		\
+	if ((dp) == NULL || start == 0)		\
+		break;				\
+	time_msec = (daos_get_ntime() - start)/1000; \
+	daos_profile_count(dp, op, time_msec);	\
+} while (0)
+
+#else
+
+#define VOS_TIME_START(start, op) D_TIME_START(start, op)
+#define VOS_TIME_END(start, op) D_TIME_END(start, op)
+
+#endif
+
 #define DAE_XID(dae)		((dae)->dae_base.dae_xid)
 #define DAE_OID(dae)		((dae)->dae_base.dae_oid)
 #define DAE_DKEY_HASH(dae)	((dae)->dae_base.dae_dkey_hash)
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
-#define DAE_INTENT(dae)		((dae)->dae_base.dae_intent)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
@@ -441,14 +469,13 @@ vos_dtx_cos_register(void);
  * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
- * \param punch		[IN]	For punch DTX or not.
  *
  * \return		Zero on success.
  * \return		Other negative value if error.
  */
 int
 vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct dtx_id *xid, uint64_t dkey_hash, bool punch);
+		struct dtx_id *xid, uint64_t dkey_hash);
 
 /**
  * Query the oldest DTX's timestamp in the CoS cache.
