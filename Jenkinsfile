@@ -42,7 +42,7 @@
 
 def doc_only_change() {
 
-    if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
+    if (cachedCommitPragma(pragma: 'Doc-only')) {
         return true
     }
 
@@ -113,6 +113,29 @@ def daos_repo() {
 def el7_daos_repos() {
     return el7_component_repos + ' ' + component_repos() + ' ' + daos_repo()
 }
+
+Boolean commitPragma(Map config) {
+    if (commitPragma(config) == "true") {
+        return true
+    }
+
+    return false
+}
+
+/*
+boolean_commit_pragma_cache = [:]
+Boolean cachedCommitPragma(Map config) {
+
+    if (boolean_commit_pragma_cache[config['pragma']]) {
+        return boolean_commit_pragma_cache[config['pragma']]
+    }
+
+    boolean_commit_pragma_cache[config['pragma']] = commitPragma(config)
+
+    return boolean_commit_pragma_cache[config['pragma']]
+
+}
+*/
 
 commit_pragma_cache = [:]
 def cachedCommitPragma(Map config) {
