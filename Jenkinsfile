@@ -42,7 +42,7 @@
 
 def doc_only_change() {
 
-    if (cachedCommitPragma(pragma: 'Doc-only') == true) {
+    if (cachedCommitPragma(pragma: 'Doc-only').toBoolean()) {
         return true
     }
 
