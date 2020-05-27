@@ -500,10 +500,8 @@ write_md_cb(tse_task_t *task, void *data)
 	}
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	params->md_vals[0] = AKEY_MAGIC_V;
 	params->md_vals[1] = args->cell_size;
@@ -798,10 +796,8 @@ dc_array_open(tse_task_t *task)
 	 * the open handle.
 	 */
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		D_GOTO(err_put2, rc = -DER_NOMEM);
-	}
 
 	rc = tse_task_register_comp_cb(task, free_md_params_cb, &params,
 				       sizeof(params));
@@ -1247,10 +1243,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 		/** allocate params for this dkey io */
 		D_ALLOC_PTR(params);
-		if (params == NULL) {
-			D_ERROR("Failed memory allocation\n");
+		if (params == NULL)
 			D_GOTO(err_task, rc = -DER_NOMEM);
-		}
+
 		params->dkey_val = dkey_val;
 
 		/*
@@ -1686,10 +1681,8 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	int			rc;
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	params->dkey_val = dkey_val;
 	dkey = &params->dkey;
@@ -1749,11 +1742,8 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 		record_i + 1, num_records, dkey_val);
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
-
 
 	iod = &params->iod;
 	sgl = NULL;
@@ -1769,6 +1759,8 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	iod->iod_size = 0; /* 0 to punch */
 	iod->iod_type = DAOS_IOD_ARRAY;
 	D_ALLOC_PTR(iod->iod_recxs);
+	if (iod->iod_recxs == NULL)
+		D_GOTO(err, rc = -DER_NOMEM);
 	iod->iod_recxs[0].rx_idx = record_i + 1;
 	iod->iod_recxs[0].rx_nr = num_records;
 
@@ -1800,8 +1792,7 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -1901,10 +1892,8 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	int			rc;
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	iod = &params->iod;
 	sgl = NULL;
@@ -1975,10 +1964,8 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	int			rc;
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	iod = &params->iod;
 	sgl = &params->sgl;

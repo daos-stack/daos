@@ -233,11 +233,9 @@ dc_pool_create(tse_task_t *task)
 		uuid_generate(args->uuid);
 
 		D_ALLOC_PTR(state);
-		if (state == NULL) {
-			D_ERROR("failed to allocate state\n");
-			rc = -DER_NOMEM;
-			goto out;
-		}
+		if (state == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
 
 		rc = add_ownership_props(&state->prop, args->prop, args->uid,
 					 args->gid);
@@ -393,11 +391,8 @@ dc_pool_destroy(tse_task_t *task)
 		}
 
 		D_ALLOC_PTR(state);
-		if (state == NULL) {
-			D_ERROR("failed to allocate state\n");
-			rc = -DER_NOMEM;
-			goto out;
-		}
+		if (state == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 
 		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
 		if (rc != 0)

@@ -591,10 +591,8 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	int			rc = 0;
 
 	D_ALLOC_PTR(dx);
-	if (dx == NULL) {
-		D_ERROR("Can not allocate execution stream.\n");
+	if (dx == NULL)
 		return NULL;
-	}
 
 	rc = ABT_future_create(1, NULL, &dx->dx_shutdown);
 	if (rc != 0) {

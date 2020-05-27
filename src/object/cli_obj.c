@@ -3533,11 +3533,8 @@ dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
 		  obj->cob_grp_nr, nr);
 
 	D_ALLOC_ARRAY(dova, reps);
-	if (dova == NULL) {
-		D_ERROR(DF_OID" no MEM for verify group, reps %u\n",
-			DP_OID(obj->cob_md.omd_id), reps);
+	if (dova == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 
 	for (i = 0; i < reps; i++) {
 		dova[i].oh = oh;

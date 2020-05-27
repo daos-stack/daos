@@ -140,10 +140,8 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	}
 
 	D_ALLOC(resp->devices, sizeof(*resp->devices) * dev_list_cnt);
-	if (resp->devices == NULL) {
-		D_ERROR("Failed to allocate devices for resp\n");
+	if (resp->devices == NULL)
 		return -DER_NOMEM;
-	}
 
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
 		D_ALLOC(resp->devices[i], sizeof(*(resp->devices[i])));
@@ -222,10 +220,8 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 	}
 
 	D_ALLOC(resp->pools, sizeof(*resp->pools) * pool_list_cnt);
-	if (resp->pools == NULL) {
-		D_ERROR("Failed to allocate pools for resp\n");
+	if (resp->pools == NULL)
 		return -DER_NOMEM;
-	}
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
 		D_ALLOC(resp->pools[i], sizeof(*(resp->pools[i])));
@@ -323,11 +319,8 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	}
 
 	D_ALLOC(resp->dev_state, buflen);
-	if (resp->dev_state == NULL) {
-		D_ERROR("Failed to allocate device state");
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (resp->dev_state == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	if (dev_info->sdi_state == SMD_DEV_NORMAL)
 		strncpy(resp->dev_state, "NORMAL\n", buflen);
@@ -340,11 +333,8 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	}
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
-	if (resp->dev_uuid == NULL) {
-		D_ERROR("Failed to allocate device uuid");
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (resp->dev_uuid == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
 
@@ -419,18 +409,12 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	tgt_id = dev_info->sdi_tgts[0];
 
 	D_ALLOC(resp->dev_state, buflen);
-	if (resp->dev_state == NULL) {
-		D_ERROR("Failed to allocate device state");
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (resp->dev_state == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
-	if (resp->dev_uuid == NULL) {
-		D_ERROR("Failed to allocate device uuid");
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (resp->dev_uuid == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
 

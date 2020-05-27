@@ -72,10 +72,8 @@ dc_kv_put(tse_task_t *task)
 	int			rc;
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	/** init dkey */
 	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
@@ -152,10 +150,8 @@ dc_kv_get(tse_task_t *task)
 	}
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	/** init dkey */
 	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
@@ -230,10 +226,8 @@ dc_kv_remove(tse_task_t *task)
 	int			rc;
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	/** init dkey */
 	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));

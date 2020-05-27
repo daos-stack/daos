@@ -98,13 +98,13 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		  char *traddr)
 {
 	struct spdk_pci_addr *tmp = *list;
+	struct spdk_pci_addr *new;
 	size_t count = opts->num_pci_addr;
 
-	tmp = realloc(tmp, sizeof(struct spdk_pci_addr) * (count + 1));
-	if (tmp == NULL) {
-		D_ERROR("realloc error\n");
+	D_REALLOC(new, tmp, sizeof(struct spdk_pci_addr) * (count + 1));
+	if (new == NULL)
 		return -DER_NOMEM;
-	}
+	tmp = new;
 
 	*list = tmp;
 	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
@@ -550,10 +550,9 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 	bool				 new_bs = false;
 
 	D_ALLOC_PTR(d_bdev);
-	if (d_bdev == NULL) {
-		D_ERROR("failed to allocate bio_bdev\n");
+	if (d_bdev == NULL)
 		return -DER_NOMEM;
-	}
+
 	D_INIT_LIST_HEAD(&d_bdev->bb_link);
 
 	/* Try to load blobstore without specifying 'bstype' first */

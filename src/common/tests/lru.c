@@ -57,10 +57,9 @@ uint_ref_lru_alloc(void *key, unsigned int ksize,
 	struct uint_ref *ref;
 
 	D_ALLOC_PTR(ref);
-	if (ref == NULL) {
-		D_ERROR("Error in allocating lru_refs");
+	if (ref == NULL)
 		return -DER_NOMEM;
-	}
+
 	ref->ur_key = *(uint64_t *)key;
 	*link = &ref->ur_llink;
 

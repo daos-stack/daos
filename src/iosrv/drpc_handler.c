@@ -33,10 +33,8 @@ int
 drpc_hdlr_init(void)
 {
 	D_ALLOC_ARRAY(registry_table, NUM_DRPC_MODULES);
-	if (registry_table == NULL) {
-		D_ERROR("Failed to allocate handler registry table\n");
+	if (registry_table == NULL)
 		return -DER_NOMEM;
-	}
 
 	return DER_SUCCESS;
 }

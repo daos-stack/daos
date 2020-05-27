@@ -116,8 +116,6 @@ d_errno_register_range(int start, int end, const char * const *error_strings)
 
 	D_ALLOC_PTR(entry);
 	if (entry == NULL) {
-		D_ERROR("No memory to register error code range %d - %d\n",
-			start, end);
 		/* Not fatal.  It just means we get DER_UNKNOWN from d_errstr */
 		return -DER_NOMEM;
 	}

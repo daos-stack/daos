@@ -418,10 +418,8 @@ ilog_ctx_create(struct umem_instance *umm, struct ilog_root *root,
 		const struct ilog_desc_cbs *cbs, struct ilog_context **lctxp)
 {
 	D_ALLOC_PTR(*lctxp);
-	if (*lctxp == NULL) {
-		D_ERROR("Could not allocate memory for open incarnation log\n");
+	if (*lctxp == NULL)
 		return -DER_NOMEM;
-	}
 
 	(*lctxp)->ic_root = root;
 	(*lctxp)->ic_root_off = umem_ptr2off(umm, root);
@@ -1295,10 +1293,8 @@ alloc_entry(struct ilog_entries *entries)
 	new_count = old_count * 2;
 
 	D_ALLOC_ARRAY(new_data, new_count);
-	if (new_data == NULL) {
-		D_ERROR("No memory available for iterating ilog\n");
+	if (new_data == NULL)
 		return NULL;
-	}
 
 	memcpy(new_data, entries->ie_entries,
 	       sizeof(*new_data) * old_count);

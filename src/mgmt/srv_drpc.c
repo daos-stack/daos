@@ -246,7 +246,6 @@ ds_mgmt_drpc_get_attach_info(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__get_attach_info_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -322,7 +321,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__join_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -500,7 +498,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_create_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -561,7 +558,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_destroy_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -632,7 +628,6 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_exclude_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -671,7 +666,6 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_reintegrate_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -800,7 +794,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_set_prop_resp__pack(&resp, body);
 		drpc_resp->body.len  = len;
@@ -894,7 +887,6 @@ pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate buffer for packed ACLResp\n");
 	} else {
 		mgmt__aclresp__pack(acl_resp, body);
 		drpc_resp->body.len = len;
@@ -1425,7 +1417,6 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		mgmt__smd_dev_req__free_unpacked(req, NULL);
 		return;
 	}
@@ -1442,7 +1433,6 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__smd_dev_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -1494,7 +1484,6 @@ ds_mgmt_drpc_smd_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		mgmt__smd_pool_req__free_unpacked(req, NULL);
 		return;
 	}
@@ -1511,7 +1500,6 @@ ds_mgmt_drpc_smd_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__smd_pool_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -1566,7 +1554,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		mgmt__bio_health_req__free_unpacked(req, NULL);
 		return;
 	}
@@ -1585,11 +1572,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		uuid_clear(uuid); /* need to set uuid = NULL */
 
 	D_ALLOC_PTR(bio_health);
-	if (bio_health == NULL) {
-		D_ERROR("Failed to allocate bio health struct\n");
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (bio_health == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_bio_health_query(bio_health, uuid, req->tgt_id);
 	if (rc != 0) {
@@ -1599,11 +1583,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
-	if (resp->dev_uuid == NULL) {
-		D_ERROR("failed to allocate buffer");
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (resp->dev_uuid == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	uuid_unparse_lower(bio_health->mb_devid, resp->dev_uuid);
 	bds = bio_health->mb_dev_state;
@@ -1627,7 +1608,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__bio_health_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -1666,7 +1646,6 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		mgmt__dev_state_req__free_unpacked(req, NULL);
 		return;
 	}
@@ -1692,7 +1671,6 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__dev_state_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -1736,7 +1714,6 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		mgmt__dev_state_req__free_unpacked(req, NULL);
 		return;
 	}
@@ -1762,7 +1739,6 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__dev_state_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -1834,7 +1810,6 @@ out:
 	len = mgmt__cont_set_owner_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		D_ERROR("Failed to allocate response body\n");
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
 		mgmt__cont_set_owner_resp__pack(&resp, body);

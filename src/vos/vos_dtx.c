@@ -1280,9 +1280,6 @@ again:
 	if (slots > 1) {
 		D_ALLOC(dce_df, sizeof(*dce_df) * slots);
 		if (dce_df == NULL) {
-			D_ERROR("Not enough DRAM to commit "DF_DTI"\n",
-				DP_DTI(&dtis[cur]));
-
 			/* For the DTXs that have been committed we will not
 			 * re-insert them back into the active DTX table (in
 			 * DRAM) even if we abort the PMDK transaction, then
@@ -1363,8 +1360,6 @@ new_blob:
 	if (count > 1) {
 		D_ALLOC(dce_df, sizeof(*dce_df) * count);
 		if (dce_df == NULL) {
-			D_ERROR("Not enough DRAM to commit "DF_DTI"\n",
-				DP_DTI(&dtis[cur]));
 			return committed > 0 ? 0 : -DER_NOMEM;
 		}
 	} else {
@@ -1698,7 +1693,7 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			D_ALLOC(dae->dae_records,
 				sizeof(*dae->dae_records) * count);
 			if (dae->dae_records == NULL) {
-				D_FREE_PTR(dae);
+				D_FREE(dae);
 				D_GOTO(out, rc = -DER_NOMEM);
 			}
 

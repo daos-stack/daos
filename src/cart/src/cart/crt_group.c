@@ -3135,10 +3135,8 @@ crt_rank_mapping_init(d_rank_t key, d_rank_t value)
 	int			rc;
 
 	D_ALLOC_PTR(rm);
-	if (!rm) {
-		D_ERROR("Failed to allocate rm item\n");
+	if (!rm)
 		D_GOTO(out, rm);
-	}
 
 	D_INIT_LIST_HEAD(&rm->rm_link);
 	rm->rm_ref = 0;
@@ -3146,7 +3144,7 @@ crt_rank_mapping_init(d_rank_t key, d_rank_t value)
 
 	rc = D_MUTEX_INIT(&rm->rm_mutex, NULL);
 	if (rc != 0) {
-		D_FREE_PTR(rm);
+		D_FREE(rm);
 		D_GOTO(out, rm = NULL);
 	}
 

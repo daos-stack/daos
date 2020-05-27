@@ -959,10 +959,8 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 		D_GOTO(err, rc);
 
 	D_ALLOC_PTR(p);
-	if (p == NULL) {
-		D_ERROR("Failed to allocate container descriptor\n");
+	if (p == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
-	}
 
 	uuid_copy(p->c_uuid, uuid);
 	p->c_svc = (struct cont_svc *)svc;

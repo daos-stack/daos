@@ -59,10 +59,9 @@ notify_ready(void)
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
-	if (reqb == NULL) {
-		rc = -DER_NOMEM;
-		goto out_uri;
-	}
+	if (reqb == NULL)
+		D_GOTO(out_uri, rc = -DER_NOMEM);
+
 	srv__notify_ready_req__pack(&req, reqb);
 
 	dreq = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
@@ -127,10 +126,8 @@ notify_bio_error(int media_err_type, int tgt_id)
 
 	req_size = srv__bio_error_req__get_packed_size(&bioerr_req);
 	D_ALLOC(req, req_size);
-	if (req == NULL) {
-		D_ERROR("Unable to alloc bio error dRPC request\n");
+	if (req == NULL)
 		return -DER_NOMEM;
-	}
 
 	srv__bio_error_req__pack(&bioerr_req, req);
 	dreq = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
