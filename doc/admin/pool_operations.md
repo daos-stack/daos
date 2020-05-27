@@ -306,15 +306,15 @@ This will automatically trigger a server rebalance operation where objects withi
 pool will be rebalanced across the new storage.
 
 ```
-$ dmg pool extend --pool=${puuid} --ranks=${rank1},${randk2}...
+$ dmg pool extend --pool=${puuid} --ranks=${rank1},${rank2}...
 ```
 
 The pool extend command accepts 2 required parameters:
 
 * The pool UUID of the pool to be extended.
-* A comma separated list of ranks to include in the pool.
+* A comma separated list of server ranks to include in the pool.
 
-The pool rebalance operation will work most efficiently when the pool is extended to it's desired
+The pool rebalance operation will work most efficiently when the pool is extended to its desired
 size in a single operation, as opposed to multiple, small extensions.
 
 #### Pool Shard Resize
