@@ -325,7 +325,8 @@ class TestContainer(TestDaosApiBase):
             if con_in is not None:
                 cop = self.input_params.get_con_create_params()
                 cop.type = con_in[0]
-                cop.enable_chksum = con_in[1]
+                #cop.enable_chksum = con_in[1]
+                cop.enable_chksum = True
                 cop.srv_verify = con_in[2]
                 cop.chksum_type = con_in[3]
                 cop.chunk_size = con_in[4]

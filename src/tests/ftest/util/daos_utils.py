@@ -289,7 +289,7 @@ class DaosCommand(CommandWithSubCommand):
                 #               cksum_size: <any size>
                 #               srv_cksum:  on, off
                 #               rf:         [0-4]
-                self.properties = FormattedParameter("--properties={}")
+                self.properties = FormattedParameter("--properties=cksum:crc32,{}")
 
         class DestroySubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container destroy command."""
