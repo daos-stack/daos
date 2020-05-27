@@ -114,13 +114,14 @@ def el7_daos_repos() {
     return el7_component_repos + ' ' + component_repos() + ' ' + daos_repo()
 }
 
-Boolean commitPragma2(Map config) {
+/* Boolean commitPragma2(Map config) {
     if (commitPragma2(config) == "true") {
         return true
     }
 
     return false
 }
+*/
 
 String commitPragma2(Map config) {
     def def_value = ''
