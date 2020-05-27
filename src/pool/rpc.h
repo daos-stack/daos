@@ -99,10 +99,6 @@
 		ds_pool_list_cont_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
-	X(POOL_TGT_CONNECT,						\
-		0, &CQF_pool_tgt_connect,				\
-		ds_pool_tgt_connect_handler,				\
-		&ds_pool_tgt_connect_co_ops),				\
 	X(POOL_TGT_DISCONNECT,						\
 		0, &CQF_pool_tgt_disconnect,				\
 		ds_pool_tgt_disconnect_handler,				\
@@ -301,25 +297,6 @@ CRT_RPC_DECLARE(pool_evict, DAOS_ISEQ_POOL_EVICT, DAOS_OSEQ_POOL_EVICT)
 	((struct pool_op_out)	(pso_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_svc_stop, DAOS_ISEQ_POOL_SVC_STOP, DAOS_OSEQ_POOL_SVC_STOP)
-
-#define DAOS_ISEQ_POOL_TGT_CONNECT /* input fields */		 \
-	((uuid_t)		(tci_uuid)		CRT_VAR) \
-	((uuid_t)		(tci_hdl)		CRT_VAR) \
-	((uint64_t)		(tci_flags)		CRT_VAR) \
-	((uint64_t)		(tci_sec_capas)		CRT_VAR) \
-	((uint32_t)		(tci_map_version)	CRT_VAR) \
-	((uint32_t)		(tci_iv_ns_id)		CRT_VAR) \
-	((uint32_t)		(tci_master_rank)	CRT_VAR) \
-	((uint32_t)		(tci_pad)		CRT_VAR) \
-	((uint64_t)		(tci_query_bits)	CRT_VAR) \
-	((d_iov_t)		(tci_cred)		CRT_VAR)
-
-#define DAOS_OSEQ_POOL_TGT_CONNECT /* output fields */		 \
-	((struct daos_pool_space) (tco_space)		CRT_VAR) \
-	((int32_t)		(tco_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
-		DAOS_OSEQ_POOL_TGT_CONNECT)
 
 #define DAOS_ISEQ_POOL_TGT_DISCONNECT /* input fields */	 \
 	((uuid_t)		(tdi_uuid)		CRT_VAR) \
