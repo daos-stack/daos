@@ -412,13 +412,9 @@ static btr_ops_t key_btr_ops = {
  * @{
  */
 
-/**
- * Set size for the record and returns write buffer address of the record,
- * so caller can copy/rdma data into it.
- */
 static int
 svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
-	      struct vos_rec_bundle *rbund)
+	      struct vos_svt_key *skey, struct vos_rec_bundle *rbund)
 {
 	struct dtx_handle	*dth	= vos_dth_get();
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
@@ -428,12 +424,13 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	if (bio_iov2len(biov) != rbund->rb_rsize)
 		return -DER_IO_INVAL;
 
-	irec->ir_cs_size = csum->cs_len;
-	irec->ir_cs_type = csum->cs_type;
-	irec->ir_size	 = bio_iov2len(biov);
-	irec->ir_gsize	 = rbund->rb_gsize;
-	irec->ir_ex_addr = biov->bi_addr;
-	irec->ir_ver	 = rbund->rb_ver;
+	irec->ir_cs_size	= csum->cs_len;
+	irec->ir_cs_type	= csum->cs_type;
+	irec->ir_size		= bio_iov2len(biov);
+	irec->ir_gsize		= rbund->rb_gsize;
+	irec->ir_ex_addr	= biov->bi_addr;
+	irec->ir_ver		= rbund->rb_ver;
+	irec->ir_minor_epc	= skey->sk_minor_epc;
 
 	if (irec->ir_size == 0) { /* it is a punch */
 		csum->cs_csum = NULL;
@@ -524,7 +521,7 @@ svt_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 	daos_epoch_t		*epc = hkey;
 	struct vos_svt_key	*skey_in;
 
-	D_ASSERT(key_iov->iov_len == sizeof(*skey));
+	D_ASSERT(key_iov->iov_len == sizeof(struct vos_svt_key));
 	D_ASSERT(key_iov->iov_buf != NULL);
 
 	skey_in = (struct vos_svt_key *)key_iov->iov_buf;
@@ -547,28 +544,20 @@ svt_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	return BTR_CMP_EQ;
 }
 
-/** allocate a new record and fetch data */
+/** Single value is always pre-allocated so rbund->rb_off should be pointer to
+ * it.   Just assert this condition to simplify the code a bit.
+ */
 static int
-svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-	       d_iov_t *val_iov, struct btr_record *rec)
+svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
+		     struct vos_svt_key *skey, struct vos_rec_bundle *rbund)
 {
-	struct vos_rec_bundle	*rbund;
 	struct vos_irec_df	*irec;
-	int			 rc = 0;
+	int			 rc;
 
-	rbund = iov2rec_bundle(val_iov);
-
-	if (UMOFF_IS_NULL(rbund->rb_off)) {
-		rec->rec_off = umem_alloc(&tins->ti_umm,
-					   vos_irec_size(rbund));
-		if (UMOFF_IS_NULL(rec->rec_off))
-			return -DER_NOSPACE;
-	} else {
-		umem_tx_add(&tins->ti_umm, rbund->rb_off,
-			    vos_irec_msize(rbund));
-		rec->rec_off = rbund->rb_off;
-		rbund->rb_off = UMOFF_NULL; /* taken over by btree */
-	}
+	D_ASSERT(!UMOFF_IS_NULL(rbund->rb_off));
+	umem_tx_add(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund));
+	rec->rec_off = rbund->rb_off;
+	rbund->rb_off = UMOFF_NULL; /* taken over by btree */
 
 	irec	= vos_rec2irec(tins, rec);
 	rc = vos_dtx_register_record(&tins->ti_umm, rec->rec_off,
@@ -579,8 +568,22 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		 */
 		return rc;
 
-	rc = svt_rec_store(tins, rec, rbund);
+	rc = svt_rec_store(tins, rec, skey, rbund);
 	return rc;
+}
+
+/** allocate a new record and fetch data */
+static int
+svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+	       d_iov_t *val_iov, struct btr_record *rec)
+{
+	struct vos_svt_key	*skey = key_iov->iov_buf;
+	struct vos_rec_bundle	*rbund;
+	int			 rc = 0;
+
+	rbund = iov2rec_bundle(val_iov);
+
+	return svt_rec_alloc_common(tins, rec, skey, rbund);
 }
 
 static int
@@ -627,33 +630,26 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct vos_svt_key	*skey;
-	staruct vos_irec_df	*irec;
+	struct vos_irec_df	*irec;
 	struct vos_rec_bundle	*rbund;
+	int			 rc;
 
 	rbund = iov2rec_bundle(val_iov);
 	skey = (struct vos_svt_key *)key_iov->iov_buf;
 	irec = vos_rec2irec(tins, rec);
 
-	if (skey->sk_minor_epc > irec->ir_minor_epc)
-		goto store;
-
-	if (irec != NULL || !vos_irec_size_equal(irec, rbund)) {
-		/* This function should return -DER_NO_PERM to dbtree if:
-		 * - it is a rdma, the original record should be replaced.
-		 * - the new record size cannot match the original one, so we
-		 *   need to realloc and copyin data to the new space.
-		 *
-		 * So dbtree can release the original record and install the
-		 * rdma-ed record, or just allocate a new one.
-		 */
+	/** Disallow same epoch overwrite */
+	if (skey->sk_minor_epc <= irec->ir_minor_epc)
 		return -DER_NO_PERM;
-	}
-store:
+
 	D_DEBUG(DB_IO, "Overwrite epoch "DF_X64".%d\n", skey->sk_epoch,
 		skey->sk_minor_epc);
 
-	umem_tx_add(&tins->ti_umm, rec->rec_off, vos_irec_size(rbund));
-	return svt_rec_store(tins, rec, skey, rbund);
+	rc = svt_rec_free(tins, rec, NULL);
+	if (rc != 0)
+		return rc;
+
+	return svt_rec_alloc_common(tins, rec, skey, rbund);
 }
 
 static int
