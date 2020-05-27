@@ -486,6 +486,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (v->piv_map.piv_pool_buf.pb_nr > 0)
 		map_buf = &v->piv_map.piv_pool_buf;
 
+	ds_iv_ns_update(pool->sp_iv_ns, key->rank);
 	rc = ds_pool_tgt_map_update(pool, map_buf, v->piv_pool_map_ver);
 
 	ds_pool_put(pool);
@@ -720,6 +721,7 @@ ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 	d_sg_list_t		 sgl = { 0 };
 	d_iov_t			 iov = { 0 };
 	struct ds_iv_key	 key;
+	struct pool_iv_key	*pool_key;
 	uint32_t		 size;
 	int			 rc;
 
@@ -743,6 +745,8 @@ ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_PROP;
+	pool_key = (struct pool_iv_key *)key.key_buf;
+	pool_key->pik_entry_size = size;
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
 		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));

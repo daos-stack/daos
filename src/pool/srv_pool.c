@@ -3046,7 +3046,7 @@ rechoose:
 	case PO_COMP_ST_UP:
 		opcode = POOL_ADD;
 		break;
-	case PO_COMP_ST_ADD_NEW:
+	case PO_COMP_ST_NEW:
 		opcode = POOL_EXTEND;
 		break;
 	default:
