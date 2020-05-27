@@ -98,34 +98,8 @@ func (hn *hostName) Parse(input string) error {
 		hn.number = uint(number)
 		hn.hasNumber = true
 		hn.width = len(matches[2])
-	} else {
-		if len(hn.prefix) == 0 {
-			return errors.New("no hostname or number")
-		}
 	}
-
 	hn.suffix = matches[3]
-
-	return nil
-}
-
-func (hn *hostName) parseNumber(input string) error {
-	// prefixN (default)
-	re := regexp.MustCompile(`^(\d+)?(.*)?`)
-
-	matches := re.FindStringSubmatch(input)
-
-	if len(matches[1]) == 0 {
-		return errors.New("invalid number or number range")
-	}
-	number, err := strconv.ParseUint(matches[1], 10, 0)
-	if err != nil {
-		return err
-	}
-	hn.number = uint(number)
-	hn.hasNumber = true
-	hn.width = len(matches[1])
-	hn.suffix = matches[2]
 
 	return nil
 }
@@ -234,14 +208,10 @@ func parseBracketedHostList(input, rangeSep, rangeOp string, nameOptional bool) 
 
 		var leftIndex, rightIndex int
 		if leftIndex = strings.IndexRune(tok, '['); leftIndex == -1 {
-			if nameOptional {
-				if err := hl.pushNumber(tok); err != nil {
+			if !nameOptional {
+				if err := hl.PushHost(tok); err != nil {
 					return nil, err
 				}
-				continue
-			}
-			if err := hl.PushHost(tok); err != nil {
-				return nil, err
 			}
 			continue
 		}
@@ -284,12 +254,6 @@ func parseBracketedHostList(input, rangeSep, rangeOp string, nameOptional bool) 
 func Create(stringHosts string) (*HostList, error) {
 	return parseBracketedHostList(stringHosts, outerRangeSeparators,
 		rangeOperator, false)
-}
-
-// CreateNumbersOnly creates a new HostList from the supplied string representation.
-func CreateNumbersOnly(stringHosts string) (*HostList, error) {
-	return parseBracketedHostList(stringHosts, outerRangeSeparators,
-		rangeOperator, true)
 }
 
 // String returns a ranged string representation of the HostList.
@@ -373,25 +337,6 @@ func (hl *HostList) Push(stringHosts string) error {
 	}
 
 	return hl.PushList(other)
-}
-
-func (hl *HostList) pushNumber(stringNumber string) error {
-	hn := &hostName{}
-	if err := hn.parseNumber(stringNumber); err != nil {
-		return err
-	}
-
-	hl.Lock()
-	defer hl.Unlock()
-
-	return hl.pushRange(&hostRange{
-		prefix:  hn.prefix,
-		suffix:  hn.suffix,
-		lo:      hn.number,
-		hi:      hn.number,
-		width:   hn.width,
-		isRange: true,
-	})
 }
 
 // PushHost adds a single host to this HostList.

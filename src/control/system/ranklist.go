@@ -28,14 +28,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"unicode"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/pkg/errors"
 )
 
-// RankSet embodies HostSet type.
+// RankSet implements a set of unique ranks in a condensed format.
 type RankSet struct {
 	hostlist.HostSet
 }
@@ -58,19 +58,12 @@ func fixBrackets(stringRanks string, remove bool) string {
 // NewRankSet creates a new HostList with ranks rather than hostnames from the
 // supplied string representation.
 func NewRankSet(stringRanks string) (*RankSet, error) {
-	for _, r := range stringRanks {
-		if unicode.IsLetter(r) {
-			return nil, errors.Errorf(
-				"expecting no alphabetic characters, got '%s'", stringRanks)
-		}
-	}
-
 	if len(stringRanks) > 0 {
 		stringRanks = fixBrackets(stringRanks, false)
 	}
 
 	// add enclosing brackets to input so CreateSet works without hostnames
-	hs, err := hostlist.CreateNumberSet(stringRanks)
+	hs, err := hostlist.CreateNumericSet(stringRanks)
 	if err != nil {
 		return nil, err
 	}

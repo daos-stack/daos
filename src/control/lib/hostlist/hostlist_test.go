@@ -37,7 +37,6 @@ func makeStringRef(in string) *string {
 func TestHostList_Create(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startList    string
-		nameOptional bool
 		expRawOut    string
 		expUniqOut   string
 		expUniqCount int
@@ -143,17 +142,9 @@ func TestHostList_Create(t *testing.T) {
 			startList: "[0-1,3-5]",
 			expErr:    errors.New("invalid range"),
 		},
-		"hostname optional": {
-			startList:    "[0-1,3-5,3]",
-			nameOptional: true,
-			expRawOut:    "[0-1,3-5,3]",
-			expUniqOut:   "[0-1,3-5]",
-			expUniqCount: 5,
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			hl, gotErr := hostlist.Create(tc.startList,
-				tc.nameOptional)
+			hl, gotErr := hostlist.Create(tc.startList)
 			if gotErr != nil {
 				t.Log(gotErr.Error())
 			}
@@ -225,8 +216,7 @@ func TestHostList_Push(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			hl, err := hostlist.Create(tc.startList,
-				false)
+			hl, err := hostlist.Create(tc.startList)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -357,8 +347,7 @@ func TestHostList_Etc(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hl, err := hostlist.Create(*tc.startList,
-				false)
+			hl, err := hostlist.Create(*tc.startList)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -438,8 +427,7 @@ func TestHostList_Nth(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hl, err := hostlist.Create(*tc.startList,
-				false)
+			hl, err := hostlist.Create(*tc.startList)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -504,8 +492,7 @@ func TestHostList_DeleteNth(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hl, err := hostlist.Create(*tc.startList,
-				false)
+			hl, err := hostlist.Create(*tc.startList)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -584,7 +571,7 @@ func TestHostList_DeleteHosts(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hl, err := hostlist.Create(*tc.startList, false)
+			hl, err := hostlist.Create(*tc.startList)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -644,7 +631,7 @@ func TestHostList_Within(t *testing.T) {
 				tc.startList = defaultList
 			}
 
-			hl, err := hostlist.Create(*tc.startList, false)
+			hl, err := hostlist.Create(*tc.startList)
 			if err != nil {
 				t.Fatal(err)
 			}

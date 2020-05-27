@@ -54,18 +54,6 @@ func CreateSet(stringHosts string) (*HostSet, error) {
 	return &HostSet{list: hl}, nil
 }
 
-// CreateNumberSet creates a new HostSet with optional host names from the
-// supplied string representation.
-func CreateNumberSet(stringHosts string) (*HostSet, error) {
-	hl, err := CreateNumbersOnly(stringHosts)
-	if err != nil {
-		return nil, err
-	}
-	hl.Uniq()
-
-	return &HostSet{list: hl}, nil
-}
-
 // initList will initialize the underlying *HostList if necessary
 func (hs *HostSet) initList() {
 	hs.Lock()

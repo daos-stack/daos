@@ -45,7 +45,7 @@ func hostsByPort(addrPatterns string, defaultPort int) (portHosts hostlist.HostG
 	var inHostSet *hostlist.HostList
 	portHosts = make(hostlist.HostGroups)
 
-	inHostSet, err = hostlist.Create(addrPatterns, false)
+	inHostSet, err = hostlist.Create(addrPatterns)
 	if err != nil {
 		return
 	}
