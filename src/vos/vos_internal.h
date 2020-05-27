@@ -532,10 +532,6 @@ struct vos_svt_key {
 	uint64_t	sk_epoch;
 	/** Minor epoch of entry */
 	uint16_t	sk_minor_epc;
-	/** pad to 32 bits */
-	uint16_t	sk_pad1;
-	/** pad to 64 bits */
-	uint32_t	sk_pad2;
 };
 
 /**

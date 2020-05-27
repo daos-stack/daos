@@ -308,8 +308,10 @@ struct vos_irec_df {
 	uint32_t			ir_ver;
 	/** The DTX entry in SCM. */
 	uint32_t			ir_dtx;
+	/** Minor epoch */
+	uint16_t			ir_minor_epc;
 	/** padding bytes */
-	uint32_t			ir_pad32;
+	uint16_t			ir_pad16;
 	/** length of value */
 	uint64_t			ir_size;
 	/**

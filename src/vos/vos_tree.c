@@ -505,7 +505,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 static int
 svt_hkey_size(void)
 {
-	return sizeof(struct vos_svt_key);
+	return sizeof(daos_epoch_t);
 }
 
 static int
@@ -521,33 +521,27 @@ svt_rec_msize(int alloc_overhead)
 static void
 svt_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
-	struct vos_svt_key	*skey = (struct vos_svt_key *)hkey;
+	daos_epoch_t		*epc = hkey;
 	struct vos_svt_key	*skey_in;
 
 	D_ASSERT(key_iov->iov_len == sizeof(*skey));
 	D_ASSERT(key_iov->iov_buf != NULL);
 
 	skey_in = (struct vos_svt_key *)key_iov->iov_buf;
-	*skey = *skey_in;
+	*epc = skey_in->sk_epoch;
 }
 
 /** compare the hashed key */
 static int
 svt_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 {
-	struct vos_svt_key *skey1 = (struct vos_svt_key *)&rec->rec_hkey[0];
-	struct vos_svt_key *skey2 = (struct vos_svt_key *)hkey;
+	daos_epoch_t		*epc1 = (daos_epoch_t *)&rec->rec_hkey[0];
+	daos_epoch_t		*epc2 = hkey;
 
-	if (skey1->sk_epoch < skey2->sk_epoch)
+	if (*epc1 < *epc2)
 		return BTR_CMP_LT;
 
-	if (skey1->sk_epoch > skey2->sk_epoch)
-		return BTR_CMP_GT;
-
-	if (skey1->sk_minor_epc < skey2->sk_minor_epc)
-		return BTR_CMP_LT;
-
-	if (skey1->sk_minor_epc > skey2->sk_minor_epc)
+	if (*epc1 > *epc2)
 		return BTR_CMP_GT;
 
 	return BTR_CMP_EQ;
@@ -592,15 +586,15 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 static int
 svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	struct vos_svt_key *skey = (struct vos_svt_key *)&rec->rec_hkey[0];
-	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
-	bio_addr_t	   *addr = &irec->ir_ex_addr;
+	daos_epoch_t		*epc = (daos_epoch_t *)&rec->rec_hkey[0];
+	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
+	bio_addr_t		*addr = &irec->ir_ex_addr;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
 	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
-				  irec->ir_dtx, skey->sk_epoch, rec->rec_off);
+				  irec->ir_dtx, *epc, rec->rec_off);
 
 	/* SCM value is stored together with vos_irec_df */
 	if (addr->ba_type == DAOS_MEDIA_NVME) {
@@ -633,12 +627,17 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct vos_svt_key	*skey;
+	staruct vos_irec_df	*irec;
 	struct vos_rec_bundle	*rbund;
 
 	rbund = iov2rec_bundle(val_iov);
+	skey = (struct vos_svt_key *)key_iov->iov_buf;
+	irec = vos_rec2irec(tins, rec);
 
-	if (!UMOFF_IS_NULL(rbund->rb_off) ||
-	    !vos_irec_size_equal(vos_rec2irec(tins, rec), rbund)) {
+	if (skey->sk_minor_epc > irec->ir_minor_epc)
+		goto store;
+
+	if (irec != NULL || !vos_irec_size_equal(irec, rbund)) {
 		/* This function should return -DER_NO_PERM to dbtree if:
 		 * - it is a rdma, the original record should be replaced.
 		 * - the new record size cannot match the original one, so we
@@ -649,13 +648,12 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		 */
 		return -DER_NO_PERM;
 	}
-
-	skey = (struct vos_svt_key *)&rec->rec_hkey[0];
+store:
 	D_DEBUG(DB_IO, "Overwrite epoch "DF_X64".%d\n", skey->sk_epoch,
 		skey->sk_minor_epc);
 
 	umem_tx_add(&tins->ti_umm, rec->rec_off, vos_irec_size(rbund));
-	return svt_rec_store(tins, rec, rbund);
+	return svt_rec_store(tins, rec, skey, rbund);
 }
 
 static int
