@@ -2,10 +2,11 @@
 
 %global spdk_version 19.04.1
 %global cart_version 4.7.0
+%global argobots_version 1.0rc1
 
 Name:          daos
 Version:       1.0.0
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -20,9 +21,9 @@ BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
 BuildRequires: libpsm2-devel
 %if (0%{?rhel} >= 7)
-BuildRequires: argobots-devel >= 1.0rc1
+BuildRequires: argobots-devel = %{argobots_version}
 %else
-BuildRequires: libabt-devel >= 1.0rc1
+BuildRequires: libabt-devel = %{argobots_version}
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse3-devel >= 3.4.2
@@ -78,6 +79,11 @@ Requires: libpmem1, libpmemobj1
 Requires: protobuf-c
 Requires: spdk >= %{spdk_version}, spdk < 20
 Requires: openssl
+%if (0%{?rhel} >= 7)
+Requires: argobots = %{argobots_version}
+%else
+Requires: libabt0 = %{argobots_version}
+%endif
 # this should be satisfied by autoprovides but daos-1.x also provides
 # lib{car,gur}t.so.x so if it is in an available repo, RPM will try to
 # install it to satisfy the shared libraries.
@@ -105,6 +111,11 @@ Requires: spdk-tools >= %{spdk_version}, spdk-tools < 20
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
+%if (0%{?rhel} >= 7)
+Requires: argobots = %{argobots_version}
+%else
+Requires: libabt0 = %{argobots_version}
+%endif
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 
@@ -130,6 +141,11 @@ Requires: python-pathlib
 Requires: libpsm_infinipath1
 %endif
 Requires: fio
+%if (0%{?rhel} >= 7)
+Requires: argobots = %{argobots_version}
+%else
+Requires: libabt0 = %{argobots_version}
+%endif
 
 
 %description tests
@@ -317,6 +333,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Wed May 27 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0.0-2
+- Restrict Argobots to version 1.0rc1
+
 * Sat May 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0.0-1
 - Version bump to 1.0.0 (rc1)
 
