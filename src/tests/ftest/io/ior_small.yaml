@@ -11,7 +11,7 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 1800
+timeout: 9000
 server_config:
     name: daos_server
     servers:
@@ -36,7 +36,7 @@ ior:
         np_16:
             np: 16
     test_file: daos:testFile
-    repetitions: 2
+    repetitions: 10
     daos_destroy: False
     iorflags:
           ior_flags:
