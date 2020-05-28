@@ -38,6 +38,36 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+// SystemJoinReq contains the inputs for the system join request.
+type SystemJoinReq struct {
+	unaryRequest
+	msRequest
+	Ranks []system.Rank
+}
+
+// SystemJoinResp contains the request response.
+type SystemJoinResp struct {
+	Results system.MemberResults // resulting from harness starts
+}
+
+// SystemJoin will attempt to join a new member to the DAOS system.
+//
+// TODO: replace the method in mgmt_client.go with this one
+func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq) (*SystemJoinResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, &mgmtpb.JoinReq{})
+	})
+	rpcClient.Debugf("DAOS system join request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemJoinResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
 // SystemStopReq contains the inputs for the system stop command.
 type SystemStopReq struct {
 	unaryRequest
@@ -103,19 +133,6 @@ func getResetRankErrors(results system.MemberResults) (map[string][]string, []st
 	return rankErrors, goodHosts, nil
 }
 
-// SystemReformatReq contains the inputs for the request.
-type SystemReformatReq struct {
-	unaryRequest
-	msRequest
-	Ranks []uint32
-}
-
-// SystemReformatResp contains the request response.
-type SystemReformatResp struct {
-	HostErrorsResp
-	HostStorage HostStorageMap
-}
-
 // SystemResetFormatReq contains the inputs for the request.
 type SystemResetFormatReq struct {
 	unaryRequest
@@ -131,7 +148,7 @@ type SystemResetFormatResp struct {
 // SystemReformat will reformat and start rank after a controlled shutdown of DAOS system.
 //
 // First phase trigger format reset on each rank in membership registry, if
-// successful, putting selected hardness managed instances in "awaiting format"
+// successful, putting selected harness managed instances in "awaiting format"
 // state (but not proceeding to starting the io_server process runner).
 //
 // Second phase is to perform storage format on each host which, if successful,
@@ -142,8 +159,7 @@ type SystemResetFormatResp struct {
 // TODO: supply rank list to storage format so we can selectively reformat ranks
 //       on a host, remove any ranks that fail SystemResetFormat() from list before
 //       passing to StorageFormat()
-func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, reformatReq *SystemReformatReq) (*SystemReformatResp, error) {
-	resetReq := &SystemResetFormatReq{Ranks: system.RanksFromUint32(reformatReq.Ranks)}
+func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *SystemResetFormatReq) (*StorageFormatResp, error) {
 	resetReq.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemResetFormat(ctx, &ctlpb.SystemResetFormatReq{
 			Ranks: system.RanksToUint32(resetReq.Ranks),
@@ -167,11 +183,10 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, reformatReq *Sy
 		return nil, err
 	}
 
-	reformatResp := new(SystemReformatResp)
-
 	if len(resetRankErrors) > 0 {
+		reformatResp := new(StorageFormatResp)
+
 		// create "X ranks failed: err..." error entries for each host address
-		// and merge host errors from reset into reformat response
 		// a single host maybe associated with multiple error entries in HEM
 		for msg, addrs := range resetRankErrors {
 			hostOccurrences := make(map[string]int)
@@ -195,16 +210,7 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, reformatReq *Sy
 
 	rpcClient.Debugf("DAOS storage-format request: %s", formatReq)
 
-	formatResp, err := StorageFormat(ctx, rpcClient, formatReq)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := convert.Types(formatResp, reformatResp); err != nil {
-		return nil, errors.WithMessage(err, "converting format to reformat resp")
-	}
-
-	return reformatResp, nil
+	return StorageFormat(ctx, rpcClient, formatReq)
 }
 
 // SystemStartReq contains the inputs for the system start request.

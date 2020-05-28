@@ -152,19 +152,8 @@ enum vos_dtx_entry_flags {
 	DTX_EF_INVALID			= (1 << 1),
 };
 
-/** The agent of the record being modified via the DTX in both SCM and DRAM. */
-struct vos_dtx_record_df {
-	/** The DTX record type, see enum vos_dtx_record_types. */
-	uint32_t			dr_type;
-	/** The 64-bits alignment. */
-	uint32_t			dr_padding;
-	/** The modified record in the related tree in SCM. */
-	umem_off_t			dr_record;
-};
-
 #define DTX_INLINE_REC_CNT	4
 #define DTX_REC_CAP_DEFAULT	4
-
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_act_ent_df {
@@ -178,33 +167,21 @@ struct vos_dtx_act_ent_df {
 	daos_epoch_t			dae_epoch;
 	/** The server generation when handles the DTX. */
 	uint64_t			dae_srv_gen;
-	/** The active DTX entry on-disk layout generation. */
-	uint64_t			dae_layout_gen;
 	/** The allocated local id for the DTX entry */
 	uint32_t			dae_lid;
-	/** The intent of related modification. */
-	uint16_t			dae_intent;
+	/** For 32-bits alignment. */
+	uint16_t			dae_padding;
 	/** The index in the current vos_dtx_blob_df. */
 	int16_t				dae_index;
 	/** The inlined dtx records. */
-	struct vos_dtx_record_df	dae_rec_inline[DTX_INLINE_REC_CNT];
+	umem_off_t			dae_rec_inline[DTX_INLINE_REC_CNT];
 	/** DTX flags, see enum vos_dtx_entry_flags. */
 	uint32_t			dae_flags;
 	/** The DTX records count, including inline case. */
 	uint32_t			dae_rec_cnt;
-	/** The offset for the list of vos_dtx_record_df if out of inline. */
+	/** The offset for the list of dtx records if out of inline. */
 	umem_off_t			dae_rec_off;
 };
-
-/* Assume dae_rec_cnt is next to dae_flags. */
-D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_cnt) ==
-	  offsetof(struct vos_dtx_act_ent_df, dae_flags) +
-	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_flags));
-
-/* Assume dae_rec_off is next to dae_rec_cnt. */
-D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_off) ==
-	  offsetof(struct vos_dtx_act_ent_df, dae_rec_cnt) +
-	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_rec_cnt));
 
 /** Committed DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_cmt_ent_df {

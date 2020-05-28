@@ -33,7 +33,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
@@ -134,13 +133,7 @@ func TestControl_StartRanks(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmp.Comparer(func(x, y *hostlist.HostSet) bool {
-					return x.RangedString() == y.RangedString()
-				}),
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected results (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -242,13 +235,7 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmp.Comparer(func(x, y *hostlist.HostSet) bool {
-					return x.RangedString() == y.RangedString()
-				}),
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected results (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -350,13 +337,7 @@ func TestControl_StopRanks(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmp.Comparer(func(x, y *hostlist.HostSet) bool {
-					return x.RangedString() == y.RangedString()
-				}),
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected results (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -458,13 +439,7 @@ func TestControl_PingRanks(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmp.Comparer(func(x, y *hostlist.HostSet) bool {
-					return x.RangedString() == y.RangedString()
-				}),
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected results (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -569,7 +544,7 @@ func TestControl_SystemReformat(t *testing.T) {
 	for name, tc := range map[string]struct {
 		uErr    error
 		uResp   *UnaryResponse
-		expResp *SystemReformatResp
+		expResp *StorageFormatResp
 		expErr  error
 	}{
 		"local failure": {
@@ -629,13 +604,11 @@ func TestControl_SystemReformat(t *testing.T) {
 					},
 				},
 			),
-			expResp: &SystemReformatResp{
+			expResp: &StorageFormatResp{
 				HostErrorsResp: HostErrorsResp{
-					HostErrors: HostErrorsMap{
-						"1 rank failed: didn't start": mockHostSet(
-							t, "10.0.0.1:10001",
-						),
-					},
+					HostErrors: mockHostErrorsMap(t, &mockHostError{
+						"10.0.0.1:10001", "1 rank failed: didn't start",
+					}),
 				},
 			},
 		},
@@ -691,19 +664,13 @@ func TestControl_SystemReformat(t *testing.T) {
 					},
 				},
 			),
-			expResp: &SystemReformatResp{
+			expResp: &StorageFormatResp{
 				HostErrorsResp: HostErrorsResp{
-					HostErrors: HostErrorsMap{
-						"2 ranks failed: didn't start": mockHostSet(
-							t, "10.0.0.4:10001",
-						),
-						"1 rank failed: didn't start": mockHostSet(
-							t, "10.0.0.[1,3]:10001",
-						),
-						"1 rank failed: something bad": mockHostSet(
-							t, "10.0.0.3:10001",
-						),
-					},
+					HostErrors: mockHostErrorsMap(t,
+						&mockHostError{"10.0.0.4:10001", "2 ranks failed: didn't start"},
+						&mockHostError{"10.0.0.[1,3]:10001", "1 rank failed: didn't start"},
+						&mockHostError{"10.0.0.3:10001", "1 rank failed: something bad"},
+					),
 				},
 			},
 		},
@@ -717,23 +684,15 @@ func TestControl_SystemReformat(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemReformat(context.TODO(), mi, &SystemReformatReq{})
+			gotResp, gotErr := SystemReformat(context.TODO(), mi, &SystemResetFormatReq{})
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmp.Comparer(func(x, y *hostlist.HostSet) bool {
-					return x.RangedString() == y.RangedString()
-				}),
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
-				// only printed for convenience when the below assert fails
-				t.Logf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-
-			common.AssertEqual(t, tc.expResp, gotResp, name+" response")
 		})
 	}
 }
