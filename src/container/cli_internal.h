@@ -68,6 +68,10 @@ dc_cont2hdl(struct dc_cont *dc, daos_handle_t *hdl)
 	daos_hhash_link_key(&dc->dc_hlink, &hdl->cookie);
 }
 
+void dc_cont_hdl_link(struct dc_cont *dc);
+void dc_cont_hdl_unlink(struct dc_cont *dc);
+
+struct dc_cont *dc_cont_alloc(const uuid_t uuid);
 void dc_cont_put(struct dc_cont *dc);
 int dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		tse_task_t *task);

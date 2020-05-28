@@ -978,72 +978,88 @@ def rename_logs(avocado_logs_dir, test_file):
 USE_DEBUGINFO_INSTALL = True
 
 
+def resolve_debuginfo(pkg):
+    """ given a package name, return it's debuginfo package """
+    import yum # pylint: disable=import-error,import-outside-toplevel
+
+    yum_base = yum.YumBase()
+    yum_base.conf.assumeyes = True
+    yum_base.setCacheDir(force=True, reuse=True)
+    yum_base.repos.enableRepo('*debug*')
+
+    debuginfo_map = {'glibc':   'glibc-debuginfo-common'}
+
+    try:
+        debug_pkg = debuginfo_map[pkg]
+    except KeyError:
+        debug_pkg = pkg + "-debuginfo"
+    try:
+        pkg_data = yum_base.rpmdb.returnNewestByName(name=pkg)[0]
+    except yum.Errors.PackageSackError as expn:
+        if expn.__str__().rstrip() == "No Package Matching " + pkg:
+            print("Package {} not installed, "
+                  "skipping debuginfo".format(pkg))
+            return None
+        else:
+            raise
+
+    return {'name': debug_pkg,
+            'version': pkg_data['version'],
+            'release': pkg_data['release'],
+            'epoch': pkg_data['epoch']}
+
 def install_debuginfos():
     """Install debuginfo packages."""
-    install_pkgs = [{'name': 'gdb'}, {'name': 'python-magic'}]
+    install_pkgs = [{'name': 'gdb'},
+                    {'name': 'python-magic'}]
+
+    # -debuginfo packages that don't get installed with debuginfo-install
+    for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury']:
+        debug_pkg = resolve_debuginfo(pkg)
+        if debug_pkg and debug_pkg not in install_pkgs:
+            install_pkgs.append(debug_pkg)
+
     cmds = []
 
     if USE_DEBUGINFO_INSTALL:
-        cmds.extend([
-            "sudo", "debuginfo-install", "-y",
-            "--exclude", "ompi-debuginfo,gcc-debuginfo,gcc-base-debuginfo",
-            "daos-server", "libpmemobj", "python", "openmpi3"])
+        yum_args = [
+            "--exclude", "ompi-debuginfo",
+            "daos-server", "libpmemobj", "python", "openmpi3"]
+        cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
+        cmds.append(["sudo", "debuginfo-install", "--enablerepo=*-debuginfo",
+                     "-y"] + yum_args + ["gcc"])
     else:
-        import yum # pylint: disable=import-error
-
-        yum_base = yum.YumBase()
-        yum_base.conf.assumeyes = True
-        yum_base.setCacheDir(force=True, reuse=True)
-        yum_base.repos.enableRepo('*debug*')
-
-        debuginfo_map = {'glibc':   'glibc-debuginfo-common',
-                         'libpmem': 'pmdk-debuginfo'}
-
         # We're not using the yum API to install packages
         # See the comments below.
         # kwarg = {'name': 'gdb'}
         # yum_base.install(**kwarg)
 
-        for pkg in ['python', 'glibc', 'daos', 'systemd', 'ndctl', 'libpmem',
-                    'mercury', 'libfabric', 'argobots']:
-            try:
-                debug_pkg = debuginfo_map[pkg]
-            except KeyError:
-                debug_pkg = pkg + "-debuginfo"
-            try:
-                pkg_data = yum_base.rpmdb.returnNewestByName(name=pkg)[0]
-            except yum.Errors.PackageSackError as expn:
-                if expn.__str__().rstrip() == "No Package Matching " + pkg:
-                    print("Package {} not installed, "
-                          "skipping debuginfo".format(pkg))
-                    continue
-                else:
-                    raise
+        for debug_pkg in install_pkgs:
             # This is how you actually use the API to add a package
             # But since we need sudo to do it, we need to call out to yum
-            # kwarg = {'name': debug_pkg,
-            #         'version': pkg_data['version'],
-            #         'release': pkg_data['release']}
+            # kwarg = debug_pkg
             # yum_base.install(**kwarg)
-            install_pkgs.append({'name': debug_pkg,
-                                 'version': pkg_data['version'],
-                                 'release': pkg_data['release'],
-                                 'epoch': pkg_data['epoch']})
+            install_pkgs.append(debug_pkg)
 
     # This is how you normally finish up a yum transaction, but
     # again, we need to employ sudo
     # yum_base.resolveDeps()
     # yum_base.buildTransaction()
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
-    cmds.extend(["sudo", "yum", "-y", "--enablerepo=\\*debug\\*", "install"])
+
+    # Now install a few pkgs that debuginfo-install wouldn't
+    cmd = ["sudo", "yum", "-y", "--enablerepo=*debug*", "install"]
     for pkg in install_pkgs:
         try:
-            cmds.append(
+            cmd.append(
                 "{}-{}-{}".format(pkg['name'], pkg['version'], pkg['release']))
         except KeyError:
-            cmds.append(pkg['name'])
+            cmd.append(pkg['name'])
 
-    print(get_output(cmds))
+    cmds.append(cmd)
+
+    for cmd in cmds:
+        print(get_output(cmd))
 
 
 def process_the_cores(avocado_logs_dir, test_yaml, args):
@@ -1054,7 +1070,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
-    import fnmatch
+    import fnmatch # pylint: disable=import-outside-toplevel
 
     this_host = socket.gethostname().split(".")[0]
     host_list = get_hosts_from_yaml(test_yaml, args)
@@ -1074,7 +1090,8 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "copied=()",
         "for file in /var/tmp/core.*",
         "do if [ -e $file ]",
-        "then if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+        "then if sudo chmod 644 $file && "
+        "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_cores_dir),
         "then copied+=($file)",
         "if ! sudo rm -fr $file",
@@ -1105,7 +1122,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             pattern (str): the fnmatch/glob pattern of core files to
                            run gdb on
         """
-        import magic
+        import magic # pylint: disable=import-outside-toplevel
 
         for corefile in cores:
             if not fnmatch.fnmatch(corefile, pattern):
@@ -1115,20 +1132,31 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             exe_magic.load()
             exe_type = exe_magic.file(corefile_fqpn)
             exe_name_start = exe_type.find("execfn: '") + 9
-            exe_name_end = exe_type.find("', platform:")
-            exe_name = exe_type[exe_name_start:exe_name_end]
-            cmd = [
-                "gdb", "-cd={}".format(daos_cores_dir),
-                "-ex", "\"set pagination off\"",
-                "-ex", "\"thread apply all bt full\""
-                "-ex", "\"detach\"",
-                "-ex", "\"quit\"",
-                exe_name, corefile
-            ]
-            stack_trace_file = os.path.join(
-                daos_cores_dir, "{}.stacktrace".format(corefile))
-            with open(stack_trace_file, "w") as stack_trace:
-                stack_trace.writelines(get_output(cmd))
+            exe_name_end = 0
+            if exe_name_start > 8:
+                exe_name_end = exe_type.find("', platform:")
+            else:
+                exe_name_start = exe_type.find("from '") + 6
+                if exe_name_start > 5:
+                    exe_name_end = exe_type[exe_name_start:].find(" ") + \
+                                   exe_name_start
+                else:
+                    print("Unable to determine executable name from: "
+                          "{}\nNot creating stacktrace".format(exe_type))
+            if exe_name_end:
+                exe_name = exe_type[exe_name_start:exe_name_end]
+                cmd = [
+                    "gdb", "-cd={}".format(daos_cores_dir),
+                    "-ex", "set pagination off",
+                    "-ex", "thread apply all bt full",
+                    "-ex", "detach",
+                    "-ex", "quit",
+                    exe_name, corefile
+                ]
+                stack_trace_file = os.path.join(
+                    daos_cores_dir, "{}.stacktrace".format(corefile))
+                with open(stack_trace_file, "w") as stack_trace:
+                    stack_trace.writelines(get_output(cmd))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 

@@ -49,6 +49,7 @@
 #include <daos_types.h>
 #include <daos_prop.h>
 #include <daos_security.h>
+#include <daos/profile.h>
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -706,5 +707,4 @@ static inline int daos_gettime_coarse(uint64_t *time)
 
 	return rc;
 }
-
 #endif /* __DAOS_COMMON_H__ */
