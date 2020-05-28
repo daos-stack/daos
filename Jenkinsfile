@@ -384,7 +384,7 @@ pipeline {
                       beforeAgent true
                       expression {
                           cachedCommitPragma(pragma: 'Skip-python-bandit',
-                                       def_val: 'true') != 'true'
+                                       def_val: 'false') != 'true'
                       }
                     }
                     agent {
