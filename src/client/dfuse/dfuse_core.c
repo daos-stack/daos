@@ -92,7 +92,7 @@ static void
 ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct dfuse_inode_entry	*ie;
-	int				oldref;
+	uint				oldref;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	oldref = atomic_fetch_add_relaxed(&ie->ie_ref, 1);
@@ -103,7 +103,7 @@ static bool
 ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct dfuse_inode_entry	*ie;
-	int				oldref;
+	uint				oldref;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	oldref = atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
@@ -115,25 +115,29 @@ static int
 ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 {
 	struct dfuse_inode_entry	*ie;
-	int				oldref;
-	int				newref;
+	uint				oldref;
+	uint				newref;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	do {
 		oldref = atomic_load_relaxed(&ie->ie_ref);
 
-		newref = oldref - count;
-
-		if (newref < 0)
+		if (oldref > count)
 			break;
+
+		newref = oldref - count;
 
 	} while (!atomic_compare_exchange(&ie->ie_ref, oldref, newref));
 
-	DFUSE_TRA_DEBUG(ie, "decref of %u to %u", count, newref);
-	if (newref < 0)
+	if (oldref > count) {
+		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u",
+				count, oldref);
 		return -DER_INVAL;
-	else if (newref == 0)
+	}
+
+	DFUSE_TRA_DEBUG(ie, "decref of %u to %u", count, newref);
+	if (newref == 0)
 		return 1;
 	return 0;
 }
