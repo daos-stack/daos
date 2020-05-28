@@ -978,7 +978,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	}
 
 	if (update_map) {
-		struct dtx_resync_arg *arg;
+		struct dtx_scan_args	*arg;
 		int ret;
 
 		/* Since the map has been updated successfully, so let's

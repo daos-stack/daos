@@ -181,22 +181,14 @@ struct vos_container {
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
 	daos_handle_t		vc_dtx_committed_hdl;
-	/* The objects with committable DTXs in DRAM. */
-	daos_handle_t		vc_dtx_cos_hdl;
 	/** The root of the B+ tree for ative DTXs. */
 	struct btr_root		vc_dtx_active_btr;
 	/** The root of the B+ tree for committed DTXs. */
 	struct btr_root		vc_dtx_committed_btr;
-	/* The DTX COS-btree. */
-	struct btr_root		vc_dtx_cos_btr;
-	/* The global list for committable DTXs. */
-	d_list_t		vc_dtx_committable_list;
 	/* The global list for committed DTXs. */
 	d_list_t		vc_dtx_committed_list;
 	/* The temporary list for committed DTXs during re-index. */
 	d_list_t		vc_dtx_committed_tmp_list;
-	/* The count of committable DTXs. */
-	uint32_t		vc_dtx_committable_count;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
 	/* The items count in vc_dtx_committed_tmp_list. */
@@ -220,7 +212,6 @@ struct vos_container {
 				vc_abort_aggregation:1,
 				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
-	uint64_t		vc_dtx_resync_gen;
 };
 
 struct vos_dtx_act_ent {
@@ -231,6 +222,7 @@ struct vos_dtx_act_ent {
 	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
+	unsigned int			 dae_committable:1;
 };
 
 extern struct vos_tls	*standalone_tls;
@@ -266,12 +258,12 @@ do {						\
 #define DAE_OID(dae)		((dae)->dae_base.dae_oid)
 #define DAE_DKEY_HASH(dae)	((dae)->dae_base.dae_dkey_hash)
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
-#define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
+#define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
-#define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
+#define DAE_VER(dae)		((dae)->dae_base.dae_ver)
 #define DAE_REC_OFF(dae)	((dae)->dae_base.dae_rec_off)
 
 struct vos_dtx_cmt_ent {
@@ -284,6 +276,8 @@ struct vos_dtx_cmt_ent {
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
+#define DCE_OID(dce)		((dce)->dce_base.dce_oid)
+#define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 
 /* in-memory structures standalone instance */
 struct bio_xs_context		*vsa_xsctxt_inst;
@@ -452,41 +446,8 @@ vos_dtx_prepared(struct dtx_handle *dth);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int counti, daos_epoch_t epoch);
-
-/**
- * Register dbtree class for DTX CoS, it is called within vos_init().
- *
- * \return		0 on success and negative on failure.
- */
-int
-vos_dtx_cos_register(void);
-
-/**
- * Remove the DTX from the CoS cache.
- *
- * \param cont		[IN]	Pointer to the container.
- * \param oid		[IN]	Pointer to the object ID.
- * \param xid		[IN]	Pointer to the DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
- *
- * \return		Zero on success.
- * \return		Other negative value if error.
- */
-int
-vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct dtx_id *xid, uint64_t dkey_hash);
-
-/**
- * Query the oldest DTX's timestamp in the CoS cache.
- *
- * \param cont	[IN]	Pointer to the container.
- *
- * \return		The oldest DTX's timestamp in the CoS cache.
- *			Zero if the CoS cache is empty.
- */
-uint64_t
-vos_dtx_cos_oldest(struct vos_container *cont);
+			int counti, daos_epoch_t epoch,
+			struct dtx_cos_key *dcks);
 
 /**
  * Establish indexed active DTX table in DRAM.
@@ -515,10 +476,8 @@ enum vos_tree_class {
 	VOS_BTR_DTX_ACT_TABLE	= (VOS_BTR_BEGIN + 5),
 	/** DAOS two-phase commit transation table (committed) */
 	VOS_BTR_DTX_CMT_TABLE	= (VOS_BTR_BEGIN + 6),
-	/** The objects with committable DTXs in DRAM */
-	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 7),
 	/** The VOS incarnation log tree */
-	VOS_BTR_ILOG		= (VOS_BTR_BEGIN + 8),
+	VOS_BTR_ILOG		= (VOS_BTR_BEGIN + 7),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };

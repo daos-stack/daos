@@ -35,6 +35,25 @@ enum dtx_cos_flags {
 	DCF_SHARED	= (1 << 0),
 };
 
+struct dtx_cos_key {
+	daos_unit_oid_t		oid;
+	uint64_t		dkey_hash;
+};
+
+enum dtx_entry_flags {
+	/* The DTX is the leader */
+	DTE_LEADER		= (1 << 0),
+	/* The DTX entry is invalid. */
+	DTE_INVALID		= (1 << 1),
+};
+
+struct dtx_entry {
+	/** The identifier of the DTX */
+	struct dtx_id		dte_xid;
+	/** The identifier of the modified object (shard). */
+	daos_unit_oid_t		dte_oid;
+};
+
 enum vos_oi_attr {
 	/** Marks object as failed */
 	VOS_OI_FAILED		= (1U << 0),
@@ -294,20 +313,10 @@ typedef struct {
 			/** Non-zero if punched */
 			daos_epoch_t		ie_punch;
 			union {
-				/** dkey or akey */
-				struct {
-					/** key value */
-					daos_key_t		ie_key;
-				};
-				/** object or DTX entry */
-				struct {
-					/** The DTX identifier. */
-					struct dtx_id		ie_xid;
-					/** oid */
-					daos_unit_oid_t		ie_oid;
-					/* The dkey hash for DTX iteration. */
-					uint64_t		ie_dtx_hash;
-				};
+				/** key value */
+				daos_key_t	ie_key;
+				/** oid */
+				daos_unit_oid_t	ie_oid;
 			};
 		};
 		/** Array entry */
@@ -324,6 +333,17 @@ typedef struct {
 			struct dcs_csum_info	ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
+		};
+		/** Active DTX entry. */
+		struct {
+			/** The DTX identifier. */
+			struct dtx_id		ie_dtx_xid;
+			/** The OID. */
+			daos_unit_oid_t		ie_dtx_oid;
+			/** The pool map version when handling DTX on server. */
+			uint32_t		ie_dtx_ver;
+			/* The dkey hash for DTX iteration. */
+			uint16_t		ie_dtx_flags;
 		};
 	};
 	/* Flags to describe the entry */
