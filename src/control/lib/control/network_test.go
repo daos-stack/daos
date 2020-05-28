@@ -33,7 +33,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -287,13 +286,7 @@ func TestControl_NetworkScan(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmp.Comparer(func(x, y *hostlist.HostSet) bool {
-					return x.RangedString() == y.RangedString()
-				}),
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
