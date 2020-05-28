@@ -63,10 +63,10 @@
 #define atomic_load_relaxed(ptr) atomic_load_explicit(ptr, memory_order_relaxed)
 
 #define atomic_fetch_sub_relaxed(ptr, value)			\
-	atomic_fetch_sub(ptr, value, memory_order_relaxed)
+	atomic_fetch_sub_explicit(ptr, value, memory_order_relaxed)
 
 #define atomic_fetch_add_relaxed(ptr, value)			\
-	atomic_fetch_add(ptr, value, memory_order_relaxed)
+	atomic_fetch_add_explicit(ptr, value, memory_order_relaxed)
 
 #else
 
