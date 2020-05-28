@@ -745,8 +745,9 @@ daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			records.
  *
  * \param[in,out]
- *		eprs	[in]: preallocated array of \nr epoch ranges. [out]:
- *			returned epoch ranges.
+ *		eprs	[in]: optional preallocated array of \nr epoch ranges.
+ *			[out]: if eprs is not NULL, returned epoch ranges. This
+ *			parameter shall only be passed if th is DAOS_TX_NONE.
  *
  * \param[in,out]
  *		anchor	Hash anchor for the next call, it should be set to

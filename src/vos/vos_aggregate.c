@@ -1967,7 +1967,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
-			 &agg_param);
+			 &agg_param, NULL);
 	if (rc != 0) {
 		close_merge_window(&agg_param.ap_window, rc);
 		goto exit;
@@ -2038,7 +2038,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
-			 &agg_param);
+			 &agg_param, NULL);
 
 	aggregate_exit(cont, true);
 	return rc;

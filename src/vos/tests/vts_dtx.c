@@ -720,7 +720,7 @@ dtx_17(void **state)
 	vdid.count = 4;
 
 	rc = vos_iterate(&param, VOS_ITER_DKEY, false, &anchors,
-			 vts_dtx_iter_cb, NULL, &vdid);
+			 vts_dtx_iter_cb, NULL, &vdid, NULL);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < 4; i++) {
@@ -736,7 +736,7 @@ dtx_17(void **state)
 	vdid.count = 10;
 
 	rc = vos_iterate(&param, VOS_ITER_DKEY, false, &anchors,
-			 vts_dtx_iter_cb, NULL, &vdid);
+			 vts_dtx_iter_cb, NULL, &vdid, NULL);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < 10; i++) {
