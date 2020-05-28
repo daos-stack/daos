@@ -60,7 +60,10 @@
 #define atomic_add(ptr, value) atomic_fetch_add_explicit(ptr,		\
 							 value,		\
 							 memory_order_relaxed)
-#define atomic_load_consume(ptr) \
+
+#define atomic_load(ptr) atomic_load_explicit(ptr, memory_order_relaxed)
+
+#define atomic_load_consume(ptr)			\
 	atomic_load_explicit(ptr, memory_order_consume)
 
 #define atomic_dec_release(ptr) \
@@ -83,6 +86,7 @@
  * required.
  */
 #define atomic_load_consume(ptr) atomic_fetch_add(ptr, 0)
+#define atomic_load(ptr) atomic_fetch_add(ptr, 0)
 #define atomic_dec_release(ptr) __sync_fetch_and_sub(ptr, 1)
 #define ATOMIC
 

@@ -111,6 +111,33 @@ ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 	return oldref == 1;
 }
 
+static int
+ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
+{
+	struct dfuse_inode_entry	*ie;
+	int				oldref;
+	int				newref;
+
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	do {
+		oldref = atomic_load(&ie->ie_ref);
+
+		newref = oldref - count;
+
+		if (newref < 0)
+			break;
+
+	} while (!atomic_compare_exchange(&ie->ie_ref, oldref, newref));
+
+	DFUSE_TRA_DEBUG(ie, "decref of %u to %u", count, newref);
+	if (newref < 0)
+		return -DER_INVAL;
+	else if (newref == 0)
+		return 1;
+	return 0;
+}
+
 static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
@@ -124,10 +151,11 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t ie_hops = {
-	.hop_key_cmp	= ih_key_cmp,
-	.hop_rec_addref	= ih_addref,
-	.hop_rec_decref	= ih_decref,
-	.hop_rec_free	= ih_free,
+	.hop_key_cmp		= ih_key_cmp,
+	.hop_rec_addref		= ih_addref,
+	.hop_rec_decref		= ih_decref,
+	.hop_rec_ndecref	= ih_ndecref,
+	.hop_rec_free		= ih_free,
 };
 
 static d_hash_table_ops_t ir_hops = {
