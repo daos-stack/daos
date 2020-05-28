@@ -141,56 +141,9 @@ def set_test_environment(args):
     usr_sbin = os.path.sep + os.path.join("usr", "sbin")
     path = os.environ.get("PATH")
 
-    # Get the default interface to use if OFI_INTERFACE is not set
-    interface = os.environ.get("OFI_INTERFACE")
-    if interface is None:
-        # Find all the /sys/class/net interfaces on the launch node
-        # (excluding lo)
-        print("Detecting network devices - OFI_INTERFACE not set")
-        available_interfaces = {}
-        net_path = os.path.join(os.path.sep, "sys", "class", "net")
-        net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
-        for device in sorted(net_list):
-            # Get the interface state - only include active (up) interfaces
-            with open(os.path.join(net_path, device, "operstate"), "r") as \
-                 fileh:
-                state = fileh.read().strip()
-            # Only include interfaces that are up
-            if state.lower() == "up":
-                # Get the interface speed - used to select the fastest available
-                with open(os.path.join(net_path, device, "speed"), "r") as \
-                    fileh:
-                    try:
-                        speed = int(fileh.read().strip())
-                        # KVM/Qemu/libvirt returns an EINVAL
-                    except IOError as ioerror:
-                        if ioerror.errno == errno.EINVAL:
-                            speed = 1000
-                        else:
-                            raise
-                print(
-                    "  - {0:<5} (speed: {1:>6} state: {2})".format(
-                        device, speed, state))
-                # Only include the first active interface for each speed - first
-                # is determined by an alphabetic sort: ib0 will be checked
-                # before ib1
-                if speed not in available_interfaces:
-                    available_interfaces[speed] = device
-        print("Available interfaces: {}".format(available_interfaces))
-        try:
-            # Select the fastest active interface available by sorting the speed
-            interface = available_interfaces[sorted(available_interfaces)[-1]]
-        except IndexError:
-            print(
-                "Error obtaining a default interface from: {}".format(
-                    os.listdir(net_path)))
-            exit(1)
-    print("Using {} as the default interface".format(interface))
-
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
     os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-    os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
 
     # Set the default location for daos log files written during testing if not
     # already defined.

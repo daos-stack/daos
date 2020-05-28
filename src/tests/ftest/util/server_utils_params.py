@@ -313,7 +313,6 @@ class DaosServerYamlParameters(YamlParameters):
                 self).__init__(namespace)
 
             # Use environment variables to get default parameters
-            default_interface = os.environ.get("OFI_INTERFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
             default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
 
@@ -339,7 +338,7 @@ class DaosServerYamlParameters(YamlParameters):
             self.targets = BasicParameter(None, 8)
             self.first_core = BasicParameter(None, 0)
             self.nr_xs_helpers = BasicParameter(None, 16)
-            self.fabric_iface = BasicParameter(None, default_interface)
+            self.fabric_iface = BasicParameter(None)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.pinned_numa_node = BasicParameter(None)
             self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR")
