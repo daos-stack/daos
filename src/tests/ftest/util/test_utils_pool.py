@@ -620,6 +620,22 @@ class TestPool(TestDaosApiBase):
             "Pool %s space%s:\n  %s", self.uuid,
             " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
 
+    def pool_percentage_used(self):
+        """Get the pool storage used % for SCM and NVMe.
+
+        Args:
+            None
+
+        Returns:
+            dict: a dictionary of SCM/NVMe pool space usage in %(float)
+        """
+        daos_space = self.get_pool_daos_space()
+        pool_percent = {'scm':round(float(daos_space["s_free"][0])/
+                        float(daos_space["s_total"][0]) * 100, 2),
+                        'nvme':round(float(daos_space["s_free"][1])/
+                        float(daos_space["s_total"][1]) * 100, 2)}
+        return pool_percent
+
     def get_pool_rebuild_status(self):
         """Get the pool info rebuild status attributes as a dictionary.
 

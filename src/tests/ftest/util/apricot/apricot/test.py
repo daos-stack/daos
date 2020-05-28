@@ -730,6 +730,40 @@ class TestWithServers(TestWithoutServers):
                         "Error stopping {}: {}".format(name, error))
         return error_list
 
+    def stop_servers_noreset(self):
+        """Stop the daos server and I/O servers only and no storage reset.
+
+        Returns:
+            list: a list of exceptions raised stopping the servers
+
+        """
+        self.test_log.info(
+            "Stopping %s group(s) of servers without Storage Reset",
+            len(self.server_managers))
+        self._stop_noreset_managers(self.server_managers, "servers")
+
+    def _stop_noreset_managers(self, managers, name):
+        """Stop each manager object in the specified list.
+
+        Args:
+            managers (list): list of managers to stop
+            name (str): manager list name
+
+        Returns:
+            list: a list of exceptions raised stopping the managers
+
+        """
+        error_list = []
+        if managers:
+            for manager in managers:
+                try:
+                    manager.stop_noreset()
+                except CommandFailure as error:
+                    self.test_log.info("  {}".format(error))
+                    error_list.append(
+                        "Error stopping {}: {}".format(name, error))
+        return error_list
+
     def update_log_file_names(self, test_name=None):
         """Define agent, server, and client log files that include the test id.
 
