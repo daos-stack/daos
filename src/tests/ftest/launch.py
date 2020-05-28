@@ -199,16 +199,16 @@ def set_test_environment(args):
     fi_info_path = os.path.join(os.path.sep, bin_dir, "fi_info")
 
     print("fi_info : ")
-    out = get_output(fi_info_path)
+    out = get_output([fi_info_path])
     print(out)
 
     default_provider = "ofi+sockets"
     if os.environ["OFI_INTERFACE"].startswith("ib"):
         default_provider = "ofi+verbs;ofi_rxm"
-    os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
-                                                    default_provider)
+    # os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
+    #                                                default_provider)
     # Remove the above comments later after ofi+verbs testing.
-    #    os.environ["CRT_PHY_ADDR_STR"] = default_provider
+    os.environ["CRT_PHY_ADDR_STR"] = default_provider
     default_domain = os.environ.get("OFI_INTERFACE")
     provider = os.environ.get("CRT_PHY_ADDR_STR")
     if (os.environ["OFI_INTERFACE"].startswith("ib") and
@@ -220,7 +220,7 @@ def set_test_environment(args):
         print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
 
     print("fi_info : ")
-    out = get_output(fi_info_path)
+    out = get_output([fi_info_path])
     print(out)
 
     # Set the default location for daos log files written during testing if not
@@ -786,7 +786,9 @@ def run_tests(test_files, tag_filter, args):
             if args.clean:
                 if not clean_logs(test_file["yaml"], args):
                     return 128
-
+            # dump ulimit 
+            get_ulimit(test_file["yaml"], args)
+            
             # Execute this test
             test_command_list = list(command_list)
             test_command_list.extend([
@@ -898,6 +900,22 @@ def clean_logs(test_yaml, args):
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
+        return False
+
+    return True
+
+def get_ulimit(test_yaml, args):
+    """Get ulimit -a
+
+    Args:
+        test_yaml (str): yaml file containing host names
+        args (argparse.Namespace): command line arguments for this program
+    """
+    host_list = get_hosts_from_yaml(test_yaml, args)
+    command = "sudo ulimit -a"
+    print("Getting ulimit -a on {}".format(host_list))
+    if not spawn_commands(host_list, command):
+        print("Error getting ulimit, aborting")
         return False
 
     return True

@@ -156,7 +156,6 @@ if [ \\\"\\\$(ulimit -c)\\\" != \\\"unlimited\\\" ]; then
 fi
 if [ \\\"\\\$(ulimit -l)\\\" != \\\"unlimited\\\" ]; then
     echo \\\"*  soft  memlock  unlimited\\\" >> /etc/security/limits.conf
-    echo \\\"*  hard  memlock  unlimited\\\" >> /etc/security/limits.conf
 fi
 echo \\\"/var/tmp/core.%e.%t.%p\\\" > /proc/sys/kernel/core_pattern\"
 rm -f /var/tmp/core.*
