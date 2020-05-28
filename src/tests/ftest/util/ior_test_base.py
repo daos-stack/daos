@@ -294,8 +294,8 @@ class IorTestBase(TestWithServers):
             env["LD_PRELOAD"] = intercept
         manager.assign_hosts(clients, self.workdir, self.hostfile_clients_slots)
         manager.assign_processes(procs)
-            if not debug:
-                env["D_LOG_MASK"] = "WARN"
+        if not debug:
+            env["D_LOG_MASK"] = "WARN"
         manager.assign_environment(env)
         self.lock.release()
         try:
