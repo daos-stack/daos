@@ -107,5 +107,4 @@ public final class DaosUtils {
     long ms = timeSpec.getSeconds() * 1000;
     return ms + timeSpec.getNano() / (1000 * 1000);
   }
-
 }

@@ -49,7 +49,6 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     rename(super.path("/"),
               super.path("/test/newRootDir"),
               false, true, false);
-
   }
 
   @Test
@@ -70,15 +69,12 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
     assertTrue("Deleted file", this.fs.delete(file, false));
     assertTrue("Parent should exist", this.fs.exists(parentDir));
-
   }
 
   @Test
   protected boolean renameSupported() {
     return true;
   }
-
-
 
   @Test
   public void testRenameDirectoryConcurrent() throws Exception {
@@ -127,7 +123,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertTrue(this.fs.exists(testFile));
     this.fs.mkdirs(testFile);
 //    fail("/test/hadoop/file is a file");
-    }catch (FileAlreadyExistsException e){
+    } catch (FileAlreadyExistsException e) {
     }
   }
 
@@ -209,7 +205,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
   }
 
 
- @Override
+  @Override
   public void testListStatus() throws Exception {
     Path[] testDirs = { path("/test/hadoop/a"),
             path("/test/hadoop/b"),
@@ -271,5 +267,4 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertTrue("Destination changed",
             fs.exists(path("/test/hadoop/file")));
   }
-
 }
