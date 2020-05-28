@@ -29,10 +29,11 @@ import re
 from apricot import TestWithServers
 from avocado import fail_on
 
-import dmg_utils
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
 import general_utils
+from general_utils import DaosTestError
+from test_utils_container import TestContainer
 
 class ContSecurityTestBase(TestWithServers):
     """Container security test cases.
@@ -73,7 +74,7 @@ class ContSecurityTestBase(TestWithServers):
 
     @fail_on(CommandFailure)
     def create_pool_with_dmg(self):
-        """Create a pool with the dmg tool and verify its status.
+        """Create a pool with the dmg tool
 
         Also, obtains the pool uuid and svc from the operation's
         result
@@ -82,65 +83,32 @@ class ContSecurityTestBase(TestWithServers):
             pool_uuid (str): Pool UUID, randomly generated.
             pool_svc (str): Pool service replica
         """
-        scm_size = self.params.get("scm_size", "/run/pool*")
-        result = self.dmg.pool_create(scm_size)
-        self.log.info("    dmg = %s", self.dmg)
-
-        # Verify the pool create status
-        self.log.info("    dmg.run() result =\n%s", result)
-        if "ERR" not in result.stderr:
-            pool_uuid, pool_svc = \
-                dmg_utils.get_pool_uuid_service_replicas_from_stdout(
-                    result.stdout)
-        else:
-            self.fail("    Unable to parse the Pool's UUID and SVC.")
-            pool_uuid = None
-            pool_svc = None
+        self.prepare_pool()
+        pool_uuid = self.pool.pool.get_uuid_str()
+        pool_svc = self.pool.svc_ranks[0]
 
         return pool_uuid, pool_svc
 
 
-    @fail_on(CommandFailure)
-    def destroy_pool_with_dmg(self):
-        """Destroy a pool with the dmg tool and verify its status.
-
-        """
-        result = self.dmg.pool_destroy(pool=self.pool_uuid)
-        self.log.info("    dmg = %s", self.dmg)
-
-        # Verify the pool destroy status
-        self.log.info("    dmg.run() result =\n%s", result)
-        if "failed" in result.stdout:
-            self.fail("    Unable to destroy pool")
-        else:
-            self.pool_uuid = None
-            self.pool_svc = None
-
-
-    def create_container_with_daos(self, pool_uuid, pool_svc, acl_type=None):
-        """Create a container with the daos tool and verify its status.
+    def create_container_with_daos(self, pool, acl_type=None):
+        """Create a container with the daos tool
 
         Also, obtains the container uuid from the operation's result.
 
         Args:
-            pool_uuid (str): Pool uuid.
-            pool_svc (str): Pool service replicas.
+            pool (TestPool): Pool object.
             acl_type (str, optional): valid or invalid.
 
         Returns:
-            container_uuid: Container UUID created or None.
+            container_uuid: Container UUID created.
         """
-        if not general_utils.check_uuid_format(pool_uuid):
-            self.fail(
-                "    Invalid Pool UUID '%s' provided.", pool_uuid)
-
         file_name = None
         get_acl_file = None
         expected_acl_types = [None, "valid", "invalid"]
 
         if acl_type not in expected_acl_types:
             self.fail(
-                "    Invalid '%s' acl type passed.", acl_type)
+                "    Invalid '{}' acl type passed.".format(acl_type))
 
         if acl_type:
             get_acl_file = "acl_{}.txt".format(acl_type)
@@ -148,55 +116,19 @@ class ContSecurityTestBase(TestWithServers):
         else:
             get_acl_file = ""
 
-        if acl_type == "invalid":
-            self.daos_tool.exit_status_exception = False
-
-        kwargs = {"pool": pool_uuid,
-                  "svc": pool_svc,
-                  "acl_file": file_name}
-        container = \
-            self.daos_tool.get_output("container_create", **kwargs)
-        if len(container) == 1:
-            container_uuid = container[0]
-        else:
+        try:
+            self.container = TestContainer(pool=pool,
+                                           daos_command=self.daos_tool)
+            self.container.get_params(self)
+            self.container.create(acl_file=file_name)
+            container_uuid = self.container.uuid
+        except CommandFailure:
+            if acl_type is not "invalid":
+                raise DaosTestError(
+                    "Could not create a container when expecting one")
             container_uuid = None
 
-        if acl_type == "invalid":
-            self.daos_tool.exit_status_exception = True
-
-        self.log.info("    daos = %s", self.daos_tool)
-
         return container_uuid
-
-
-    @fail_on(CommandFailure)
-    def destroy_container_with_daos(self, container_uuid):
-        """Destroy a container with the daos tool and verify its status.
-
-        Args:
-            container_uuid (str): The UUID of the container to be destroyed.
-
-        Returns:
-            True or False if Container was destroyed or not.
-
-        """
-        if not general_utils.check_uuid_format(container_uuid):
-            self.fail(
-                "    Invalid Container UUID '%s' provided.", container_uuid)
-
-        result = self.daos_tool.container_destroy(pool=self.pool_uuid,
-                                                  svc=self.pool_svc,
-                                                  cont=self.container_uuid)
-
-        self.log.info("    daos = %s", self.daos_tool)
-
-        # Verify the container destroy status
-        self.log.info("    daos.run() result =\n%s", result)
-        if "failed" in result.stdout:
-            self.log.info("    Unable to destroy container")
-            return False
-        else:
-            return True
 
 
     def get_container_acl_list(self, pool_uuid, pool_svc, container_uuid,
@@ -216,11 +148,12 @@ class ContSecurityTestBase(TestWithServers):
         """
         if not general_utils.check_uuid_format(pool_uuid):
             self.fail(
-                "    Invalid Pool UUID '%s' provided.", pool_uuid)
+                "    Invalid Pool UUID '{}' provided.".format(pool_uuid))
 
         if not general_utils.check_uuid_format(container_uuid):
             self.fail(
-                "    Invalid Container UUID '%s' provided.", container_uuid)
+                "    Invalid Container UUID '{}' provided.".format(
+                    container_uuid))
 
         result = self.daos_tool.container_get_acl(pool_uuid, pool_svc,
                                                   container_uuid, verbose,
@@ -269,7 +202,6 @@ class ContSecurityTestBase(TestWithServers):
 
         Args:
             types (list): types of acl files [valid, invalid]
-
         """
         for typ in types:
             get_acl_file = "acl_{}.txt".format(typ)

@@ -44,8 +44,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
             5. Destroy the container.
             6. Try to create a container (daos tool) with an invalid acl
                file passed.
-            7. Destroy the pool.
-            8. Remove all files created
+            7. Remove all files created
 
         :avocado: tags=all,pr,security,container_acl,cont_create_acl
         """
@@ -63,9 +62,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         ## 2. Create a container with no ACL file passed
         self.log.info("===> Creating a container with no ACL file passed")
-        self.container_uuid = self.create_container_with_daos(
-            self.pool_uuid,
-            self.pool_svc)
+        self.container_uuid = self.create_container_with_daos(self.pool)
 
         if not self.container_uuid:
             self.fail("    An expected container could not be created")
@@ -75,19 +72,19 @@ class CreateContainterACLTest(ContSecurityTestBase):
                                                self.container_uuid)
         if not self.compare_acl_lists(cont_acl, expected_acl):
             self.fail("    ACL permissions mismatch:\n\t \
-                      Container ACL: %s\n\tExpected ACL:  %s",
-                      cont_acl, expected_acl)
+                      Container ACL: {}\n\tExpected ACL: {}".format(
+                          cont_acl, expected_acl))
         cont_acl = None
         expected_acl = None
 
         ## 3. Destroy the container
         self.log.info("===> Destroying the container")
-        if not self.destroy_container_with_daos(self.container_uuid):
-            self.fail("    Unable to destroy conatiner '%s'",
-                      self.container_uuid)
+        result = self.destroy_containers(self.container)
+        if result:
+            self.fail("    Unable to destroy conatiner '{}'".format(
+                self.container_uuid))
         else:
             self.container_uuid = None
-
 
         ## Create a valid ACL file
         self.log.info("===> Generating a valid ACL file")
@@ -96,9 +93,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
         ## 4. Create a container with a valid ACL file passed
         self.log.info("===> Creating a container with an ACL file passed")
         self.container_uuid = self.create_container_with_daos(
-            self.pool_uuid,
-            self.pool_svc,
-            "valid")
+            self.pool, "valid")
 
         if not self.container_uuid:
             self.fail("    An expected container could not be created")
@@ -109,19 +104,19 @@ class CreateContainterACLTest(ContSecurityTestBase):
                                                True)
         if not self.compare_acl_lists(cont_acl, expected_acl):
             self.fail("    ACL permissions mismatch:\n\t \
-                      Container ACL: %s\n\tExpected ACL:  %s",
-                      cont_acl, expected_acl)
+                      Container ACL: {}\n\tExpected ACL:  {}".format(
+                          cont_acl, expected_acl))
         cont_acl = None
         expected_acl = None
 
         ## 5. Destroy the container
         self.log.info("===> Destroying the container")
-        if not self.destroy_container_with_daos(self.container_uuid):
-            self.fail("    Unable to destroy conatiner '%s'",
-                      self.container_uuid)
+        result = self.destroy_containers(self.container)
+        if result:
+            self.fail("    Unable to destroy conatiner '{}'".format(
+                self.container_uuid))
         else:
             self.container_uuid = None
-
 
         ## Create an invalid ACL file
         self.log.info("===> Generating an invalid ACL file")
@@ -130,21 +125,14 @@ class CreateContainterACLTest(ContSecurityTestBase):
         ## 6. Create a container with an invalid ACL file passed
         self.log.info("===> Creating a container with invalid ACL file passed")
         self.container_uuid = self.create_container_with_daos(
-            self.pool_uuid,
-            self.pool_svc,
-            "invalid")
+            self.pool, "invalid")
 
         if self.container_uuid:
-            self.fail("    Did not expect the container '%s' to be created",
-                      self.container_uuid)
+            self.fail(
+                "    Did not expect the container '{}' to be created".format(
+                    self.container_uuid))
 
-
-        ## 7. Destroy the pool
-        self.log.info("===> Destroying the pool")
-        self.destroy_pool_with_dmg()
-
-
-        ## 8. Cleanup environment
+        ## 7. Cleanup environment
         self.log.info("===> Cleaning the environment")
         types = ["valid", "invalid", "default"]
         self.cleanup(types)

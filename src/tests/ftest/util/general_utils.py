@@ -549,5 +549,5 @@ def check_uuid_format(uuid):
     Returns:
         bool: status of valid or invalid uuid
     """
-    pattern = re.compile("([0-9a-f-]+)")
+    pattern = re.compile("([0-9a-fA-F-]+)")
     return bool(len(uuid) == 36 and pattern.match(uuid))
