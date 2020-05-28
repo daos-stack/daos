@@ -919,6 +919,8 @@ iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 {
 	int rc;
 
+	if (ns->iv_master_rank == ((d_rank_t)-1))
+		return -DER_NOTLEADER;
 retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {

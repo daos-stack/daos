@@ -512,8 +512,9 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->class_id = class_id;
 	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL, retry);
 	if (rc)
-		D_ERROR(DF_UUID" iv fetch failed "DF_RC"\n",
-			DP_UUID(key_uuid), DP_RC(rc));
+		D_CDEBUG(rc != -DER_NOTLEADER, DLOG_ERR, DB_MGMT,
+			 DF_UUID" iv fetch failed "DF_RC"\n",
+			 DP_UUID(key_uuid), DP_RC(rc));
 
 	return rc;
 }

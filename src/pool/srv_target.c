@@ -224,7 +224,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	struct dss_module_info	       *info = dss_get_module_info();
 	unsigned int			iv_ns_id;
 	int				rc;
-	int				rc_tmp;
 
 	if (arg == NULL) {
 		/* The caller doesn't want to create a ds_pool object. */
@@ -250,24 +249,13 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
 
-	collective_arg.pla_pool = pool;
-	collective_arg.pla_uuid = key;
-	collective_arg.pla_map_version = arg->pca_map_version;
-	rc = dss_thread_collective(pool_child_add_one, &collective_arg, 0,
-				   DSS_ULT_IO);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
-			DP_UUID(key), DP_RC(rc));
-		goto err_iv_lock;
-	}
-
 	uuid_unparse_lower(key, group_id);
 	rc = crt_group_secondary_create(group_id, NULL /* primary_grp */,
 					NULL /* ranks */, &pool->sp_group);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool group: %d\n",
 			DP_UUID(key), rc);
-		goto err_collective;
+		goto err_iv_lock;
 	}
 
 	rc = ds_iv_ns_create(info->dmi_ctx, pool->sp_uuid, pool->sp_group,
@@ -278,15 +266,24 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto err_group;
 	}
 
+	collective_arg.pla_pool = pool;
+	collective_arg.pla_uuid = key;
+	collective_arg.pla_map_version = arg->pca_map_version;
+	rc = dss_thread_collective(pool_child_add_one, &collective_arg, 0,
+				   DSS_ULT_IO);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
+			DP_UUID(key), DP_RC(rc));
+		goto err_iv_ns;
+	}
+
 	*link = &pool->sp_entry;
 	return 0;
 
+err_iv_ns:
+	ds_iv_ns_destroy(pool->sp_iv_ns);
 err_group:
 	crt_group_secondary_destroy(pool->sp_group);
-err_collective:
-	rc_tmp = dss_thread_collective(pool_child_delete_one, key, 0,
-				       DSS_ULT_IO);
-	D_ASSERTF(rc_tmp == 0, ""DF_RC"\n", DP_RC(rc_tmp));
 err_iv_lock:
 	ABT_mutex_free(&pool->sp_iv_refresh_lock);
 err_lock:
