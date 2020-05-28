@@ -817,7 +817,7 @@ const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor =
   (ProtobufCMessageInit) mgmt__leader_query_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descriptors[2] =
 {
   {
     "sys",
@@ -831,14 +831,27 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descripto
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "allRanks",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoReq, allranks),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__get_attach_info_req__field_indices_by_name[] = {
+  1,   /* field[1] = allRanks */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__get_attach_info_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
 {
@@ -848,7 +861,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
   "Mgmt__GetAttachInfoReq",
   "mgmt",
   sizeof(Mgmt__GetAttachInfoReq),
-  1,
+  2,
   mgmt__get_attach_info_req__field_descriptors,
   mgmt__get_attach_info_req__field_indices_by_name,
   1,  mgmt__get_attach_info_req__number_ranges,

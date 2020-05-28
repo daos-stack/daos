@@ -436,9 +436,9 @@ pool_query_hdlr(struct cmd_args_s *ap)
 		fprintf(stderr, "pool query failed: %d\n", rc);
 		D_GOTO(out_disconnect, rc);
 	}
-	D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
+	D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u, version=%u\n",
 		DP_UUID(pinfo.pi_uuid), pinfo.pi_ntargets,
-		pinfo.pi_ndisabled);
+		pinfo.pi_ndisabled, pinfo.pi_map_ver);
 
 	D_PRINT("Pool space info:\n");
 	D_PRINT("- Target(VOS) count:%d\n", ps->ps_ntargets);
@@ -1107,6 +1107,11 @@ cont_query_hdlr(struct cmd_args_s *ap)
 		(int)cont_info.ci_lsnapshot);
 	printf("Highest Aggregated Epoch: "DF_U64"\n", cont_info.ci_hae);
 	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
+
+	if (ap->oid.hi || ap->oid.lo) {
+		printf("Path is within container, oid: " DF_OID "\n",
+			DP_OID(ap->oid));
+	}
 
 	if (ap->path != NULL) {
 		/* cont_op_hdlr() already did resolve_by_path()

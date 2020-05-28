@@ -32,8 +32,7 @@
 #include <daos/checksum.h>
 
 enum dtx_cos_flags {
-	DCF_FOR_PUNCH	= (1 << 0),
-	DCF_HAS_ILOG	= (1 << 1),
+	DCF_SHARED	= (1 << 0),
 };
 
 enum vos_oi_attr {
@@ -194,6 +193,10 @@ enum {
 #define VOS_COND_UPDATE_MASK					\
 	(VOS_COND_DKEY_UPDATE_MASK | VOS_COND_AKEY_UPDATE_MASK)
 
+/** Mask for if the update has any conditional update */
+#define VOS_COND_UPDATE_OP_MASK					\
+	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
+
 D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
 D_CASSERT((VOS_OF_USE_TIMESTAMPS & DAOS_COND_MASK) == 0);
 
@@ -304,8 +307,6 @@ typedef struct {
 					daos_unit_oid_t		ie_oid;
 					/* The dkey hash for DTX iteration. */
 					uint64_t		ie_dtx_hash;
-					/* The DTX intent for DTX iteration. */
-					uint32_t		ie_dtx_intent;
 				};
 			};
 		};
