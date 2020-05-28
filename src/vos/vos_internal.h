@@ -42,6 +42,42 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
+#define VOS_TX_LOG_FAIL(rc, ...)			\
+	do {						\
+		bool	__is_err = true;		\
+							\
+		if (rc >= 0)				\
+			break;				\
+		switch (rc) {				\
+		case -DER_TX_RESTART:			\
+		case -DER_INPROGRESS:			\
+		case -DER_EXIST:			\
+		case -DER_NONEXIST:			\
+			__is_err = false;		\
+			break;				\
+		}					\
+		D_CDEBUG(__is_err, DLOG_ERR, DB_IO,	\
+			 __VA_ARGS__);			\
+	} while (0)
+
+#define VOS_TX_TRACE_FAIL(rc, ...)			\
+	do {						\
+		bool	__is_err = true;		\
+							\
+		if (rc >= 0)				\
+			break;				\
+		switch (rc) {				\
+		case -DER_TX_RESTART:			\
+		case -DER_INPROGRESS:			\
+		case -DER_EXIST:			\
+		case -DER_NONEXIST:			\
+			__is_err = false;		\
+			break;				\
+		}					\
+		D_CDEBUG(__is_err, DLOG_ERR, DB_TRACE,	\
+			 __VA_ARGS__);			\
+	} while (0)
+
 #define VOS_CONT_ORDER		20	/* Order of container tree */
 #define VOS_OBJ_ORDER		20	/* Order of object tree */
 #define VOS_KTR_ORDER		23	/* order of d/a-key tree */
@@ -59,6 +95,19 @@ extern struct dss_module_key vos_module_key;
 #define VOS_BLK_SHIFT		12	/* 4k */
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
+
+/** Up to 1 million lid entries split into 16 expansion slots */
+#define DTX_ARRAY_LEN		(1 << 20) /* Total array slots for DTX lid */
+#define DTX_ARRAY_NR		(1 << 4)  /* Number of expansion arrays */
+
+enum {
+	/** Used for marking an in-tree record committed */
+	DTX_LID_COMMITTED = 0,
+	/** Used for marking an in-tree record aborted */
+	DTX_LID_ABORTED,
+	/** Reserved local ids */
+	DTX_LID_RESERVED,
+};
 
 /** hash seed for murmur hash */
 #define VOS_BTR_MUR_SEED	0xC0FFEE
@@ -126,6 +175,8 @@ struct vos_container {
 	uuid_t			vc_id;
 	/* DAOS handle for object index btree */
 	daos_handle_t		vc_btr_hdl;
+	/** Array for active DTX records */
+	struct lru_array	*vc_dtx_array;
 	/* The handle for active DTX table */
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
@@ -159,8 +210,13 @@ struct vos_container {
 	 * durable hints in vos_cont_df
 	 */
 	struct vea_hint_context	*vc_hint_ctxt[VOS_IOS_CNT];
+	/* Current ongoing aggregation ERR */
+	daos_epoch_range_t	vc_epr_aggregation;
+	/* Current ongoing discard EPR */
+	daos_epoch_range_t	vc_epr_discard;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
+				vc_in_discard:1,
 				vc_abort_aggregation:1,
 				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
@@ -172,18 +228,46 @@ struct vos_dtx_act_ent {
 	umem_off_t			 dae_df_off;
 	struct vos_dtx_blob_df		*dae_dbd;
 	/* More DTX records if out of the inlined buffer. */
-	struct vos_dtx_record_df	*dae_records;
+	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
 };
+
+extern struct vos_tls	*standalone_tls;
+#ifdef VOS_STANDALONE
+unsigned int tmp_count;
+#define VOS_TIME_START(start, op)		\
+do {						\
+	if (standalone_tls->vtl_dp == NULL)	\
+		break;				\
+	start = daos_get_ntime();		\
+} while (0)
+
+#define VOS_TIME_END(start, op)			\
+do {						\
+	struct daos_profile *dp;		\
+	int time_msec;				\
+						\
+	dp = standalone_tls->vtl_dp;		\
+	if ((dp) == NULL || start == 0)		\
+		break;				\
+	time_msec = (daos_get_ntime() - start)/1000; \
+	daos_profile_count(dp, op, time_msec);	\
+} while (0)
+
+#else
+
+#define VOS_TIME_START(start, op) D_TIME_START(start, op)
+#define VOS_TIME_END(start, op) D_TIME_END(start, op)
+
+#endif
 
 #define DAE_XID(dae)		((dae)->dae_base.dae_xid)
 #define DAE_OID(dae)		((dae)->dae_base.dae_oid)
 #define DAE_DKEY_HASH(dae)	((dae)->dae_base.dae_dkey_hash)
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
-#define DAE_LAYOUT_GEN(dae)	((dae)->dae_base.dae_layout_gen)
-#define DAE_INTENT(dae)		((dae)->dae_base.dae_intent)
+#define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
@@ -295,7 +379,8 @@ vos_dtx_table_register(void);
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
- * \param entry		[IN]	Address (offset) of the DTX to be checked.
+ * \param entry		[IN]	DTX local id
+ * \param epoch		[IN]	Epoch of update
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  *
@@ -311,7 +396,8 @@ vos_dtx_table_register(void);
  */
 int
 vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   umem_off_t entry, uint32_t intent, uint32_t type);
+			   uint32_t entry, daos_epoch_t epoch,
+			   uint32_t intent, uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -327,7 +413,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
  */
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
-			uint32_t type, umem_off_t *tx_id);
+			uint32_t type, uint32_t *tx_id);
 
 /**
  * Cleanup DTX handle (in DRAM things) when related PMDK transaction failed.
@@ -336,7 +422,7 @@ void
 vos_dtx_cleanup_dth(struct dtx_handle *dth);
 
 /** Return the already active dtx id, if any */
-umem_off_t
+uint32_t
 vos_dtx_get(void);
 
 /**
@@ -344,13 +430,15 @@ vos_dtx_get(void);
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
- * \param entry		[IN]	The DTX entry address (offset).
+ * \param entry		[IN]	The local DTX id.
+ * \param epoch		[IN]	Epoch for the DTX.
  * \param record	[IN]	Address (offset) of the record to be
  *				deregistered.
  */
 void
 vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
-			  umem_off_t entry, umem_off_t record);
+			  uint32_t entry, daos_epoch_t epoch,
+			  umem_off_t record);
 
 /**
  * Mark the DTX as prepared locally.
@@ -381,14 +469,13 @@ vos_dtx_cos_register(void);
  * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
- * \param punch		[IN]	For punch DTX or not.
  *
  * \return		Zero on success.
  * \return		Other negative value if error.
  */
 int
 vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct dtx_id *xid, uint64_t dkey_hash, bool punch);
+		struct dtx_id *xid, uint64_t dkey_hash);
 
 /**
  * Query the oldest DTX's timestamp in the CoS cache.

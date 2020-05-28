@@ -90,7 +90,10 @@ bool			ts_rebuild_only_iteration = false;
 /* rebuild without update */
 bool			ts_rebuild_no_update = false;
 /* test inside ULT */
-bool			ts_in_ult = false;
+bool			ts_in_ult;
+bool			ts_profile_vos;
+char			*ts_profile_vos_path = ".";
+int			ts_profile_vos_avg = 100;
 static ABT_xstream	abt_xstream;
 
 int
@@ -105,28 +108,40 @@ ts_abt_init(void)
 		fprintf(stderr, "ABT init failed: %d\n", rc);
 		return -1;
 	}
+
 	rc = ABT_xstream_self(&abt_xstream);
 	if (rc != ABT_SUCCESS) {
 		printf("ABT get self xstream failed: %d\n", rc);
 		return -1;
 	}
+
 	rc = ABT_xstream_get_cpubind(abt_xstream, &cpuid);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "get cpubind: %d\n", rc);
-		return -1;
+		fprintf(stderr, "get cpubind failed: %d\n", rc);
+		fprintf(stderr, "No CPU affinity for this test.\n");
+		fprintf(stderr, "Build ABT by --enable-affinity if"
+			" you want to try CPU affinity.\n");
+		return 0;
 	}
 
 	rc = ABT_xstream_get_affinity(abt_xstream, 0, NULL,
 				      &num_cpus);
 	if (rc != ABT_SUCCESS) {
 		fprintf(stderr, "get num_cpus: %d\n", rc);
-		return -1;
+		fprintf(stderr, "No CPU affinity for this test.\n");
+		fprintf(stderr, "Build ABT by --enable-affinity if"
+			" you want to try CPU affinity.\n");
+		return 0;
 	}
+
 	cpuid = (cpuid + 1) % num_cpus;
 	rc = ABT_xstream_set_cpubind(abt_xstream, cpuid);
 	if (rc != ABT_SUCCESS) {
 		fprintf(stderr, "set affinity: %d\n", rc);
-		return -1;
+		fprintf(stderr, "No CPU affinity for this test.\n");
+		fprintf(stderr, "Build ABT by --enable-affinity if"
+			" you want to try CPU affinity.\n");
+		return 0;
 	}
 
 	return 0;
@@ -422,7 +437,7 @@ objects_update(double *duration, d_rank_t rank)
 	int		i;
 	int		j;
 	int		rc;
-	daos_epoch_t	epoch = 0;
+	daos_epoch_t	epoch = 1;
 
 	dts_reset_key();
 
@@ -501,7 +516,7 @@ objects_verify(void)
 	int		k;
 	int		rc = 0;
 	char		dkey[DTS_KEY_LEN];
-	daos_epoch_t	epoch = 0;
+	daos_epoch_t	epoch = 1;
 
 	dts_reset_key();
 	if (!ts_overwrite)
@@ -991,7 +1006,9 @@ The options are as follows:\n\
 -w	Pause after initialization for attaching debugger or analysis\n\
 	tool.\n\
 \n\
--x	run vos perf test in a ABT ult mode.\n");
+-x	run vos perf test in a ABT ult mode.\n\
+\n\
+-p	run vos perf with profile.\n");
 }
 
 static struct option ts_ops[] = {
@@ -1030,12 +1047,12 @@ void show_result(double duration, uint64_t start, uint64_t end,
 			   MPI_MIN, 0, MPI_COMM_WORLD);
 		MPI_Reduce(&end, &last_end, 1, MPI_DOUBLE,
 			   MPI_MAX, 0, MPI_COMM_WORLD);
+		agg_duration = (last_end - first_start) / (1000 * 1000 * 1000);
 	} else {
-		first_start = start;
-		last_end = end;
+		agg_duration = duration / (1000 * 1000);
 	}
 
-	agg_duration = last_end - first_start;
+	/* nano sec to sec */
 
 	if (ts_ctx.tsc_mpi_size > 1) {
 		MPI_Reduce(&duration, &duration_max, 1, MPI_DOUBLE,
@@ -1072,11 +1089,11 @@ void show_result(double duration, uint64_t start, uint64_t end,
 
 		fprintf(stdout, "Duration across processes:\n");
 		fprintf(stdout, "\tMAX duration : %-10.6f sec\n",
-			duration_max);
+			duration_max/(1000 * 1000));
 		fprintf(stdout, "\tMIN duration : %-10.6f sec\n",
-			duration_min);
+			duration_min/(1000 * 1000));
 		fprintf(stdout, "\tAverage duration : %-10.6f sec\n",
-			duration_sum / ts_ctx.tsc_mpi_size);
+			duration_sum / ((ts_ctx.tsc_mpi_size) * 1000 * 1000));
 	}
 }
 enum {
@@ -1120,7 +1137,7 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nASG:s:ztf:hUFRBvIiuwx",
+				 "P:N:T:C:c:o:d:a:r:nASG:s:ztf:hUFRBvIiuwxp",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1264,6 +1281,9 @@ main(int argc, char **argv)
 		case 'x':
 			ts_in_ult = true;
 			break;
+		case 'p':
+			ts_profile_vos = true;
+			break;
 		case 'h':
 			if (ts_ctx.tsc_mpi_rank == 0)
 				ts_print_usage();
@@ -1350,8 +1370,9 @@ main(int argc, char **argv)
 				return rc;
 		}
 	} else {
-		if (ts_in_ult) {
-			fprintf(stderr, "ult is only supported for VOS mode\n");
+		if (ts_in_ult || ts_profile_vos) {
+			fprintf(stderr, "ULT and profiling is only supported"
+				" in VOS mode.\n");
 			if (ts_ctx.tsc_mpi_rank == 0)
 				ts_print_usage();
 			return -1;
@@ -1433,6 +1454,8 @@ main(int argc, char **argv)
 		fprintf(stdout, "Started...\n");
 	}
 
+	if (ts_profile_vos)
+		vos_profile_start(ts_profile_vos_path, ts_profile_vos_avg);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0; i < TEST_SIZE; i++) {
@@ -1444,9 +1467,9 @@ main(int argc, char **argv)
 
 		srand(seed);
 
-		start = dts_time_now();
+		start = daos_get_ntime();
 		rc = perf_tests[i](&duration);
-		end = dts_time_now();
+		end = daos_get_ntime();
 		if (ts_ctx.tsc_mpi_size > 1) {
 			int rc_g;
 
@@ -1466,6 +1489,8 @@ main(int argc, char **argv)
 	if (ts_in_ult)
 		ts_abt_fini();
 
+	if (ts_profile_vos)
+		vos_profile_stop();
 	dts_ctx_fini(&ts_ctx);
 	MPI_Finalize();
 	free(ts_ohs);

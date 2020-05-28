@@ -244,7 +244,10 @@ type (
 		UUID            string
 		TotalTargets    uint32
 		ActiveTargets   uint32
+		TotalNodes      uint32
 		DisabledTargets uint32
+		Version         uint32
+		Leader          uint32
 		Rebuild         *PoolRebuildStatus
 		Scm             *StorageUsageStats
 		Nvme            *StorageUsageStats

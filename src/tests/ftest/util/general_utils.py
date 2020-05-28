@@ -34,11 +34,34 @@ from errno import ENOENT
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
-from avocado.utils import process
 
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
+
+
+def human_to_bytes(h_size):
+    """Convert human readable size values to respective byte value.
+
+    Args:
+        h_size (str): human readable size value to be converted.
+
+    Returns:
+        int: value translated to bytes.
+    """
+    units = {"b": 1, "kb": (2**10), "mb": (2**20), "gb": (2**30)}
+    pattern = r"([0-9.]+|[a-zA-Z]+)"
+    val, unit = re.findall(pattern, h_size)
+
+    # Check if float or int and then convert
+    val = float(val) if "." in val else int(val)
+    if unit.lower() in units:
+        val = val * units[unit.lower()]
+    else:
+        print("Unit not found! Provide a valid unit i.e: b, kb, mb, gb")
+        val = -1
+
+    return val
 
 
 def run_command(command, timeout=60, verbose=True, raise_exception=True,
@@ -49,11 +72,8 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     command string on the local host using subprocess.Popen(). Even though the
     command is specified as a string, since shell=False is passed to process.run
     it will use shlex.spit() to break up the command into a list before it is
-    passed to subprocess.Popen. The shell=False is forced for security.
-
-    As a result typically any command containing ";", "|", "&&", etc. will fail.
-    This can be avoided in command strings like "for x in a b; echo $x; done"
-    by using "/usr/bin/bash -c 'for x in a b; echo $x; done'".
+    passed to subprocess.Popen. The shell=False is forced for security. As a
+    result typically any command containing ";", "|", "&&", etc. will fail.
 
     Args:
         command (str): command to run.
@@ -90,6 +110,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 pid             - command's pid
 
     """
+    msg = None
     kwargs = {
         "cmd": command,
         "timeout": timeout,
@@ -103,9 +124,19 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         # Block until the command is complete or times out
         return process.run(**kwargs)
 
+    except TypeError as error:
+        # Can occur if using env with a non-string dictionary values
+        msg = "Error running '{}': {}".format(command, error)
+        if env is not None:
+            msg = "\n".join([
+                msg,
+                "Verify env values are defined as strings: {}".format(env)])
+
     except process.CmdError as error:
         # Command failed or possibly timed out
-        msg = "Error occurred running '{}': {}".format(" ".join(command), error)
+        msg = "Error occurred running '{}': {}".format(command, error)
+
+    if msg is not None:
         print(msg)
         raise DaosTestError(msg)
 
@@ -132,6 +163,86 @@ def run_task(hosts, command, timeout=None):
     return task
 
 
+def get_host_data(hosts, command, text, error, timeout=None):
+    """Get the data requested for each host using the specified command.
+
+    Args:
+        hosts (list): list of hosts
+        command (str): command used to obtain the data on each server
+        text (str): data identification string
+        error (str): data error string
+
+    Returns:
+        dict: a dictionary of data values for each NodeSet key
+
+    """
+    # Find the data for each specified servers
+    print("  Obtaining {} data on {}".format(text, hosts))
+    task = run_task(hosts, command, timeout)
+    host_data = {}
+    DATA_ERROR = "[ERROR]"
+
+    # Create a list of NodeSets with the same return code
+    data = {code: hosts for code, hosts in task.iter_retcodes()}
+
+    # Multiple return codes or a single non-zero return code
+    # indicate at least one error obtaining the data
+    if len(data) > 1 or 0 not in data:
+        # Report the errors
+        messages = []
+        for code, hosts in data.items():
+            if code != 0:
+                output_data = list(task.iter_buffers(hosts))
+                if len(output_data) == 0:
+                    messages.append(
+                        "{}: rc={}, command=\"{}\"".format(
+                            NodeSet.fromlist(hosts), code, command))
+                else:
+                    for output, o_hosts in output_data:
+                        lines = str(output).splitlines()
+                        info = "rc={}{}".format(
+                            code,
+                            ", {}".format(output) if len(lines) < 2 else
+                            "\n  {}".format("\n  ".join(lines)))
+                        messages.append(
+                            "{}: {}".format(
+                                NodeSet.fromlist(o_hosts), info))
+        print("    {} on the following hosts:\n      {}".format(
+            error, "\n      ".join(messages)))
+
+        # Return an error data set for all of the hosts
+        host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
+
+    else:
+        # The command completed successfully on all servers.
+        for output, hosts in task.iter_buffers(data[0]):
+            # Find the maximum size of the all the devices reported by
+            # this group of hosts as only one needs to meet the minimum
+            nodes = NodeSet.fromlist(hosts)
+            try:
+                # The assumption here is that each line of command output
+                # will begin with a number and that for the purposes of
+                # checking this requirement the maximum of these numbers is
+                # needed
+                int_host_values = [
+                    int(line.split()[0])
+                    for line in str(output).splitlines()]
+                host_data[nodes] = max(int_host_values)
+
+            except (IndexError, ValueError):
+                # Log the error
+                print(
+                    "    {}: Unable to obtain the maximum {} size due to "
+                    "unexpected output:\n      {}".format(
+                        nodes, text, "\n      ".join(str(output).splitlines())))
+
+                # Return an error data set for all of the hosts
+                host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
+                break
+
+    return host_data
+
+
 def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the return codes.
 
@@ -150,8 +261,9 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     # Run the command on each host in parallel
     task = run_task(hosts, command, timeout)
 
-    # Report any errors / display output if requested
+    # Report any errors
     retcode_dict = {}
+    errors = False
     for retcode, rc_nodes in task.iter_retcodes():
         # Create a NodeSet for this list of nodes
         nodeset = NodeSet.fromlist(rc_nodes)
@@ -161,27 +273,25 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
             retcode_dict[retcode] = NodeSet()
         retcode_dict[retcode].add(nodeset)
 
-        # Display any errors or requested output
-        if verbose or (expect_rc is not None and expect_rc != retcode):
-            msg = "output from"
-            if expect_rc is not None and expect_rc != retcode:
-                msg = "failure running"
-            buffers = task.iter_buffers(rc_nodes)
-            if not list(buffers):
-                print(
-                    "{}: {} '{}': rc={}".format(
-                        nodeset, msg, command, retcode))
-            else:
-                for output, nodes in buffers:
-                    nodeset = NodeSet.fromlist(nodes)
-                    lines = str(output).splitlines()
-                    output = "rc={}{}".format(
-                        retcode,
-                        ", {}".format(output) if len(lines) < 2 else
-                        "\n  {}".format("\n  ".join(lines)))
-                    print(
-                        "{}: {} '{}': {}".format(
-                            NodeSet.fromlist(nodes), msg, command, output))
+        # Keep track of any errors
+        if expect_rc is not None and expect_rc != retcode:
+            errors = True
+
+    # Report command output if requested or errors are detected
+    if verbose or errors:
+        print("Command:\n  {}".format(command))
+        print("Command return codes:")
+        for retcode in sorted(retcode_dict):
+            print("  {}: rc={}".format(retcode_dict[retcode], retcode))
+
+        print("Command output:")
+        for output, bf_nodes in task.iter_buffers():
+            # Create a NodeSet for this list of nodes
+            nodeset = NodeSet.fromlist(bf_nodes)
+
+            # Display the output per node set
+            print("  {}:\n    {}".format(
+                nodeset, "\n    ".join(str(output).splitlines())))
 
     # Report any timeouts
     if timeout and task.num_timeout() > 0:
@@ -369,9 +479,9 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
             "if pgrep --list-full {}".format(pattern),
             "then rc=1",
             "sudo pkill {}".format(pattern),
+            "sleep 5",
             "if pgrep --list-full {}".format(pattern),
-            "then sleep 5",
-            "pkill --signal KILL {}".format(pattern),
+            "then pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
             "exit $rc",
@@ -396,7 +506,7 @@ def get_partition_hosts(partition):
         # Get the partition name information
         cmd = "scontrol show partition {}".format(partition)
         try:
-            result = process.run(cmd, shell=True, timeout=10)
+            result = process.run(cmd, timeout=10)
         except process.CmdError as error:
             log.warning(
                 "Unable to obtain hosts from the %s slurm "

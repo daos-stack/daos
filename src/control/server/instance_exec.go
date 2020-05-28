@@ -40,13 +40,7 @@ type IOServerRunner interface {
 	Start(context.Context, chan<- error) error
 	IsRunning() bool
 	Signal(os.Signal) error
-	Wait() error
 	GetConfig() *ioserver.Config
-}
-
-// isStarted indicates whether IOServerInstance is in a running state.
-func (srv *IOServerInstance) isStarted() bool {
-	return srv.runner.IsRunning()
 }
 
 func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
@@ -176,12 +170,16 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 // Run is the processing loop for an IOServerInstance. Starts are triggered by
 // receiving true on instance start channel.
 func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Membership, cfg *Configuration) {
-	for relaunch := range srv.startLoop {
-		if !relaunch {
+	for {
+		select {
+		case <-ctx.Done():
 			return
+		case relaunch := <-srv.startLoop:
+			if !relaunch {
+				return
+			}
+			srv.exit(srv.run(ctx, membership, cfg.RecreateSuperblocks))
 		}
-
-		srv.exit(srv.run(ctx, membership, cfg.RecreateSuperblocks))
 	}
 }
 

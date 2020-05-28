@@ -30,15 +30,12 @@ import "fmt"
 
 // IpmCtl is the interface that provides access to libipmctl.
 type IpmCtl interface {
-	// SetInterleaved mode for app-direct regions
-	// process referred to as "set goal" in NVM API
-	//SetRegion(...)
 	// Discover persistent memory modules
 	Discover() ([]DeviceDiscovery, error)
+	// Get firmware information from persistent memory modules
+	GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error)
 	// Update persistent memory module firmware
-	//Update(...)
-	// Cleanup persistent memory references
-	//Cleanup()
+	UpdateFirmware(uid DeviceUID, fwPath string, force bool) error
 }
 
 // NvmMgmt is an implementation of the IpmCtl interface which exercises
@@ -48,6 +45,18 @@ type NvmMgmt struct{}
 // Discover queries number of SCM modules and retrieves device_discovery structs
 // for each.
 func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
+	fmt.Print("ipmctl lib not present\n")
+	return
+}
+
+// GetFirmwareInfo fetches the firmware revision and other information from the device
+func (n *NvmMgmt) GetFirmwareInfo(uid DeviceUID) (fw DeviceFirmwareInfo, err error) {
+	fmt.Print("ipmctl lib not present\n")
+	return
+}
+
+// UpdateFirmware updates the firmware on the device
+func (n *NvmMgmt) UpdateFirmware(uid DeviceUID, fwPath string, force bool) error {
 	fmt.Print("ipmctl lib not present\n")
 	return
 }

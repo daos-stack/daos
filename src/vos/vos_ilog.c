@@ -30,15 +30,16 @@
 #include "vos_internal.h"
 
 static int
-vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
-		    uint32_t intent, void *args)
+vos_ilog_status_get(struct umem_instance *umm, uint32_t tx_id,
+		    daos_epoch_t epoch, uint32_t intent, void *args)
 {
 	int	rc;
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
 
-	rc = vos_dtx_check_availability(umm, coh, tx_id, intent, DTX_RT_ILOG);
+	rc = vos_dtx_check_availability(umm, coh, tx_id, epoch, intent,
+					DTX_RT_ILOG);
 	if (rc < 0)
 		return rc;
 
@@ -57,12 +58,18 @@ vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
 }
 
 static int
-vos_ilog_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same,
-		    void *args)
+vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
+		    daos_epoch_t epoch, bool *same, void *args)
 {
-	umem_off_t dtx = vos_dtx_get();
+	uint32_t dtx = vos_dtx_get();
 
-	if (dtx == tx_id)
+	/* If the entry is committed, treat the new update as a different
+	 * transaction.   If the operation (update or punch) is the same,
+	 * we can detect this and return -DER_ALREADY.   If it's not,
+	 * we require either a major or minor epoch change and will
+	 * return -DER_TX_RESTART.
+	 */
+	if (tx_id != DTX_LID_COMMITTED && dtx == tx_id)
 		*same = true;
 	else
 		*same = false;
@@ -71,20 +78,23 @@ vos_ilog_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same,
 }
 
 static int
-vos_ilog_add(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t *tx_id,
-	     void *args)
+vos_ilog_add(struct umem_instance *umm, umem_off_t ilog_off, uint32_t *tx_id,
+	     daos_epoch_t epoch, void *args)
 {
 	return vos_dtx_register_record(umm, ilog_off, DTX_RT_ILOG, tx_id);
 }
 
 static int
-vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t tx_id,
-	     void *args)
+vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, uint32_t tx_id,
+	     daos_epoch_t epoch, bool deregister, void *args)
 {
 	daos_handle_t	coh;
 
+	if (!deregister)
+		return 0;
+
 	coh.cookie = (unsigned long)args;
-	vos_dtx_deregister_record(umm, coh, tx_id, ilog_off);
+	vos_dtx_deregister_record(umm, coh, tx_id, epoch, ilog_off);
 	return 0;
 }
 
@@ -127,13 +137,13 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		}
 
 		if (entry->ie_id.id_epoch > epoch) {
-			if (entry->ie_punch &&
+			if (ilog_is_punch(entry) &&
 			    entry->ie_status == ILOG_COMMITTED)
 				info->ii_next_punch = entry->ie_id.id_epoch;
 			continue;
 		}
 
-		if (entry->ie_punch &&
+		if (ilog_is_punch(entry) &&
 		    info->ii_prior_any_punch < entry->ie_id.id_epoch)
 			info->ii_prior_any_punch = entry->ie_id.id_epoch;
 
@@ -156,7 +166,7 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 
 		D_ASSERT(entry->ie_status == ILOG_COMMITTED);
 
-		if (entry->ie_punch) {
+		if (ilog_is_punch(entry)) {
 			info->ii_prior_punch = entry->ie_id.id_epoch;
 			break;
 		}
@@ -270,6 +280,7 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		     struct vos_ilog_info *parent, struct vos_ilog_info *info,
 		     uint32_t cond, struct vos_ts_set *ts_set)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
@@ -324,15 +335,15 @@ update:
 		return rc;
 	}
 
-	rc = ilog_update(loh, &max_epr, epr->epr_hi, false);
+	rc = ilog_update(loh, &max_epr, epr->epr_hi,
+			 dth != NULL ? dth->dth_op_seq : 1, false);
 
 	ilog_close(loh);
 
-	if (rc != 0) {
-		D_ERROR("Could not update incarnation log: "DF_RC"\n",
+	if (rc == -DER_ALREADY) /* operation had no effect */
+		rc = 0;
+	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
 			DP_RC(rc));
-		return rc;
-	}
 
 	/* No need to refetch the log.  The only field that is used by update
 	 * is prior_any_punch.   This field will not be changed by ilog_update
@@ -348,6 +359,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 		struct vos_ilog_info *info, struct vos_ts_set *ts_set,
 		bool leaf)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
@@ -408,15 +420,15 @@ punch_log:
 		return rc;
 	}
 
-	rc = ilog_update(loh, NULL, epr->epr_hi, true);
+	rc = ilog_update(loh, NULL, epr->epr_hi,
+			 dth != NULL ? dth->dth_op_seq : 1, true);
 
 	ilog_close(loh);
 
-	if (rc != 0) {
-		D_ERROR("Could not update incarnation log: "DF_RC"\n",
+	if (rc == -DER_ALREADY) /* operation had no effect */
+		rc = 0;
+	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
 			DP_RC(rc));
-		return rc;
-	}
 
 	return rc;
 }

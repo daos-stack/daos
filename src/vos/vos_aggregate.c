@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1659,11 +1659,16 @@ set_window_size(struct agg_merge_window *mw, daos_size_t rsize)
 	int	rc = 0;
 
 	if (rsize == 0) {
-		D_CRIT("EV tree 0 iod_size could be caused by inserting "
-		       "punch records in an empty tree, this will be "
-		       "disallowed in the future.\n");
-		rc = -DER_INVAL;
-	} else if (mw->mw_rsize == 0) {
+		D_DEBUG(DB_TRACE, "EV tree 0 iod_size could be caused by "
+			"inserting punch records in an empty tree.  This can "
+			"happen during rebuild.\n");
+		/** Just set it to 1.  If the tree is all holes anyway, it
+		 *  should be fine to assume a record size.
+		 */
+		rsize = 1;
+	}
+
+	if (mw->mw_rsize == 0) {
 		mw->mw_rsize = rsize;
 
 		if (DAOS_FAIL_CHECK(DAOS_VOS_AGG_MW_THRESH)) {
@@ -1748,6 +1753,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 out:
 	if (rc)
 		close_merge_window(mw, rc);
+
 	return rc;
 }
 
@@ -1793,7 +1799,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (cont->vc_abort_aggregation) {
-		D_DEBUG(DB_EPC, "VOS aggregation aborted\n");
+		D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
 		return 1;
 	}
 
@@ -1860,15 +1866,51 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 }
 
 static int
-aggregate_enter(struct vos_container *cont, bool discard)
+aggregate_enter(struct vos_container *cont, bool discard,
+		daos_epoch_range_t *epr)
 {
-	if (cont->vc_in_aggregation) {
-		D_ERROR(DF_CONT": Already in aggregation. discard:%d\n",
-			DP_CONT(cont->vc_pool->vp_id, cont->vc_id), discard);
-		return -DER_BUSY;
+	if (discard) {
+		if (cont->vc_in_discard) {
+			D_ERROR(DF_CONT": Already in discard\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id));
+			return -DER_BUSY;
+		}
+
+		if (cont->vc_in_aggregation &&
+		    cont->vc_epr_aggregation.epr_hi >= epr->epr_lo) {
+			D_ERROR(DF_CONT": Aggregate epr["DF_U64", "DF_U64"], "
+				"discard epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_aggregation.epr_lo,
+				cont->vc_epr_aggregation.epr_hi,
+				epr->epr_lo, epr->epr_hi);
+			return -DER_BUSY;
+		}
+
+		cont->vc_in_discard = 1;
+		cont->vc_epr_discard = *epr;
+	} else {
+		if (cont->vc_in_aggregation) {
+			D_ERROR(DF_CONT": Already in aggregation\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id));
+			return -DER_BUSY;
+		}
+
+		if (cont->vc_in_discard &&
+		    cont->vc_epr_discard.epr_lo <= epr->epr_hi) {
+			D_ERROR(DF_CONT": Discard epr["DF_U64", "DF_U64"], "
+				"aggregation epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_discard.epr_lo,
+				cont->vc_epr_discard.epr_hi,
+				epr->epr_lo, epr->epr_hi);
+			return -DER_BUSY;
+		}
+
+		cont->vc_in_aggregation = 1;
+		cont->vc_epr_aggregation = *epr;
 	}
 
-	cont->vc_in_aggregation = 1;
 	cont->vc_abort_aggregation = 0;
 	return 0;
 }
@@ -1876,8 +1918,17 @@ aggregate_enter(struct vos_container *cont, bool discard)
 static void
 aggregate_exit(struct vos_container *cont, bool discard)
 {
-	D_ASSERT(cont->vc_in_aggregation);
-	cont->vc_in_aggregation = 0;
+	if (discard) {
+		D_ASSERT(cont->vc_in_discard);
+		cont->vc_in_discard = 0;
+		cont->vc_epr_discard.epr_lo = 0;
+		cont->vc_epr_discard.epr_hi = 0;
+	} else {
+		D_ASSERT(cont->vc_in_aggregation);
+		cont->vc_in_aggregation = 0;
+		cont->vc_epr_aggregation.epr_lo = 0;
+		cont->vc_epr_aggregation.epr_hi = 0;
+	}
 }
 
 static void
@@ -1905,7 +1956,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
 		  epr->epr_lo, epr->epr_hi);
 
-	rc = aggregate_enter(cont, false);
+	rc = aggregate_enter(cont, false, epr);
 	if (rc)
 		return rc;
 
@@ -1971,7 +2022,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
 		  epr->epr_lo, epr->epr_hi);
 
-	rc = aggregate_enter(cont, true);
+	rc = aggregate_enter(cont, true, epr);
 	if (rc != 0)
 		return rc;
 

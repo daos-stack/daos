@@ -85,11 +85,11 @@ var (
 	)
 )
 
-func FaultInstancesNotStopped(ranks []*system.Rank) *fault.Fault {
+func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
 	return serverFault(
 		code.ServerInstancesNotStopped,
-		fmt.Sprintf("harness has running ranks: %v", ranks),
-		"retry the operation after stopping all harness' ranks",
+		fmt.Sprintf("%s not supported when rank %d is running", action, rank),
+		fmt.Sprintf("retry %s operation after stopping rank %d-", action, rank),
 	)
 }
 

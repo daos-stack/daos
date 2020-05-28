@@ -109,7 +109,10 @@
 		ds_obj_tgt_punch_handler, NULL),			\
 	X(DAOS_OBJ_RPC_MIGRATE,						\
 		0, &CQF_obj_migrate,					\
-		ds_obj_migrate_handler, NULL)
+		ds_obj_migrate_handler, NULL),				\
+	X(DAOS_OBJ_RPC_CPD,						\
+		0, NULL /* TBD */,					\
+		NULL /* TBD */, NULL)
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
 

@@ -28,9 +28,9 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand, YamlCommand, YamlParameters
+from command_utils_base import \
+    CommandFailure, FormattedParameter, CommandWithParameters, YamlParameters
+from command_utils import CommandWithSubCommand, YamlCommand
 
 
 class DmgCommand(YamlCommand):
@@ -49,7 +49,16 @@ class DmgCommand(YamlCommand):
         # Between the first and the second group, use " +"; i.e., one or more
         # whitespaces. If we use "\s+", it'll pick up the second divider as
         # UUID since it's made up of hyphens and \s includes new line.
-        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))"
+        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
+        "pool_create": r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)",
+        "pool_query": r"(?:Pool\s+([0-9a-fA-F-]+),\s+ntarget=(\d+),"
+                      r"\s+disabled=(\d+),\s+leader=(\d+),"
+                      r"\s+version=(\d+)|Target\(VOS\)\s+count:\s*(\d+)|"
+                      r"(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
+                      r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+)"
+                      r",\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
+                      r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)"
+                      r"\s+recs)"
     }
 
     def __init__(self, path, yaml_cfg=None):
@@ -101,7 +110,6 @@ class DmgCommand(YamlCommand):
             if isinstance(hostlist, list):
                 hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")
-
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -173,6 +181,10 @@ class DmgCommand(YamlCommand):
                 self.sub_command_class = self.SetPropSubCommand()
             elif self.sub_command.value == "update-acl":
                 self.sub_command_class = self.UpdateAclSubCommand()
+            elif self.sub_command.value == "exclude":
+                self.sub_command_class = self.ExcludeSubCommand()
+            elif self.sub_command.value == "reintegrate":
+                self.sub_command_class = self.ReintegrateSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -193,6 +205,32 @@ class DmgCommand(YamlCommand):
                 self.ranks = FormattedParameter("--ranks={}", None)
                 self.nsvc = FormattedParameter("--nsvc={}", None)
                 self.sys = FormattedParameter("--sys={}", None)
+
+        class ExcludeSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool exclude command."""
+
+            def __init__(self):
+                """Create a dmg pool exclude command object."""
+                super(
+                    DmgCommand.PoolSubCommand.ExcludeSubCommand,
+                    self).__init__(
+                        "/run/dmg/pool/exclude/*", "exclude")
+                self.pool = FormattedParameter("--pool={}", None)
+                self.rank = FormattedParameter("--rank={}", None)
+                self.tgt_idx = FormattedParameter("--target-idx={}", None)
+
+        class ReintegrateSubCommand(CommandWithParameters):
+            """Defines an object for dmg pool reintegrate command."""
+
+            def __init__(self):
+                """Create a dmg pool reintegrate command object."""
+                super(
+                    DmgCommand.PoolSubCommand.ReintegrateSubCommand,
+                    self).__init__(
+                        "/run/dmg/pool/reintegrate/*", "reintegrate")
+                self.pool = FormattedParameter("--pool={}", None)
+                self.rank = FormattedParameter("--rank={}", None)
+                self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
         class DeleteAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool delete-acl command."""
@@ -488,28 +526,6 @@ class DmgCommand(YamlCommand):
                         "/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
 
-    def _get_result(self):
-        """Get the result from running the configured dmg command.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg command fails.
-
-        """
-        if self.yaml:
-            self.create_yaml_file()
-
-        result = None
-        try:
-            result = self.run()
-        except CommandFailure as error:
-            raise CommandFailure("<dmg> command failed: {}".format(error))
-
-        return result
-
     def network_scan(self, provider=None, all_devs=False):
         """Get the result of the dmg network scan command.
 
@@ -546,8 +562,14 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.set_sub_command("scan")
         return self._get_result()
 
-    def storage_format(self):
+    def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
+
+        Args:
+            reformat (bool): always reformat storage, could be destructive.
+                This will create control-plane related metadata i.e. superblock
+                file and reformat if the storage media is available and
+                formattable.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -559,6 +581,7 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("format")
+        self.sub_command_class.sub_command_class.reformat.value = reformat
         return self._get_result()
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
@@ -628,6 +651,25 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.nsvc.value = svcn
         self.sub_command_class.sub_command_class.sys.value = group
         self.sub_command_class.sub_command_class.acl_file.value = acl_file
+        return self._get_result()
+
+    def pool_query(self, pool):
+        """Query a pool with the dmg command.
+
+        Args:
+            uuid (str): Pool UUID to query.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool destroy command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.pool.value = pool
         return self._get_result()
 
     def pool_destroy(self, pool, force=True):
@@ -744,6 +786,7 @@ class DmgCommand(YamlCommand):
 
         Raises:
             CommandFailure: if the dmg pool delete-acl command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list")
@@ -771,6 +814,52 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.pool.value = pool
         self.sub_command_class.sub_command_class.name.value = name
         self.sub_command_class.sub_command_class.value.value = value
+        return self._get_result()
+
+    def pool_exclude(self, pool_uuid, rank, tgt_idx=None):
+        """Exclude a daos_server from the pool
+
+        Args:
+            pool (str): Pool uuid.
+            rank (int): Rank of the daos_server to exclude
+            tgt_idx (int): target to be excluded from the pool
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool exclude command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("exclude")
+        self.sub_command_class.sub_command_class.pool.value = pool_uuid
+        self.sub_command_class.sub_command_class.rank.value = rank
+        self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
+        return self._get_result()
+
+    def pool_reintegrate(self, pool_uuid, rank, tgt_idx=None):
+        """Reintegrate a daos_server to the pool
+
+        Args:
+            pool (str): Pool uuid.
+            rank (int): Rank of the daos_server to reintegrate
+            tgt_idx (int): target to be reintegrated to the pool
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool reintegrate command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("reintegrate")
+        self.sub_command_class.sub_command_class.pool.value = pool_uuid
+        self.sub_command_class.sub_command_class.rank.value = rank
+        self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
         return self._get_result()
 
 

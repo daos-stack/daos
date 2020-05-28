@@ -32,6 +32,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -123,9 +124,16 @@ func PrintHostErrorsMap(hem HostErrorsMap, out io.Writer, opts ...PrintConfigOpt
 	table := []txtfmt.TableRow{}
 
 	for _, errStr := range hem.Keys() {
-		errHosts := GetPrintHosts(hem[errStr].RangedString(), opts...)
+		errHosts := GetPrintHosts(hem[errStr].HostSet.RangedString(), opts...)
 		row := txtfmt.TableRow{setTitle: errHosts}
-		row[errTitle] = errStr
+
+		// Unpack the root cause error. If it's a fault,
+		// just print the description.
+		hostErr := errors.Cause(hem[errStr].HostError)
+		row[errTitle] = hostErr.Error()
+		if f, ok := hostErr.(*fault.Fault); ok {
+			row[errTitle] = f.Description
+		}
 
 		table = append(table, row)
 	}

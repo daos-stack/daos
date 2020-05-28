@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,6 +57,24 @@ crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 		d_fault_inject_disable();
 
 	out_args->rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
+}
+
+void
+crt_hdlr_ctl_log_set(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_log_set_in	*in_args;
+	struct crt_ctl_log_set_out	*out_args;
+	int				rc = 0;
+
+	in_args = crt_req_get(rpc_req);
+	out_args = crt_reply_get(rpc_req);
+
+	out_args->rc = rc;
+
+	d_log_setmasks(in_args->log_mask, -1);
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
@@ -150,9 +168,10 @@ CRT_RPC_DEFINE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 
 CRT_RPC_DEFINE(crt_ctl_fi_attr_set, CRT_ISEQ_CTL_FI_ATTR_SET,
 		CRT_OSEQ_CTL_FI_ATTR_SET)
-CRT_RPC_DEFINE(crt_ctl_fi_toggle,
-	       CRT_ISEQ_CTL_FI_TOGGLE,
+CRT_RPC_DEFINE(crt_ctl_fi_toggle, CRT_ISEQ_CTL_FI_TOGGLE,
 	       CRT_OSEQ_CTL_FI_TOGGLE)
+
+CRT_RPC_DEFINE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
 
 /* Define for crt_internal_rpcs[] array population below.
  * See CRT_INTERNAL_RPCS_LIST macro definition
@@ -169,6 +188,10 @@ static struct crt_proto_rpc_format crt_internal_rpcs[] = {
 	CRT_INTERNAL_RPCS_LIST,
 };
 
+static struct crt_proto_rpc_format crt_fi_rpcs[] = {
+	CRT_FI_RPCS_LIST,
+};
+
 #undef X
 
 /* CRT RPC related APIs or internal functions */
@@ -178,15 +201,27 @@ crt_internal_rpc_register(void)
 	struct crt_proto_format	cpf;
 	int			rc;
 
-	cpf.cpf_name  = "internal-proto";
-	cpf.cpf_ver   = 0;
+	cpf.cpf_name  = "internal";
+	cpf.cpf_ver   = CRT_PROTO_INTERNAL_VERSION;
 	cpf.cpf_count = ARRAY_SIZE(crt_internal_rpcs);
 	cpf.cpf_prf   = crt_internal_rpcs;
 	cpf.cpf_base  = CRT_OPC_INTERNAL_BASE;
 
 	rc = crt_proto_register_internal(&cpf);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("crt_proto_register_internal() failed. rc %d\n", rc);
+		return rc;
+	}
+
+	cpf.cpf_name  = "fault-injection";
+	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_fi_rpcs);
+	cpf.cpf_prf   = crt_fi_rpcs;
+	cpf.cpf_base  = CRT_OPC_FI_BASE;
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0)
+		D_ERROR("crt_proto_register() failed. rc %d\n", rc);
 
 	return rc;
 }
@@ -821,7 +856,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 		rc = crt_req_fill_tgt_uri(rpc_priv, base_addr);
 		if (rc != 0)
 			D_ERROR("crt_req_fill_tgt_uri failed, "
-				"opc: %#x.\n", req->cr_opc);
+				"opc: %#x rc %d\n", req->cr_opc, rc);
 		D_GOTO(out, rc);
 	}
 
