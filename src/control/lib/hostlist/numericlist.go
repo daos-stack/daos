@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,52 +20,39 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package hostlist
 
 import (
-	"bytes"
-	"fmt"
-	"sort"
+	"unicode"
+
+	"github.com/pkg/errors"
 )
 
-// HostGroups maps a set of hosts to a string key value.
-type HostGroups map[string]*HostSet
-
-func (hg HostGroups) Keys() []string {
-	keys := make([]string, 0, len(hg))
-
-	for key := range hg {
-		keys = append(keys, key)
-	}
-
-	sort.Strings(keys)
-	return keys
-}
-
-func (hg HostGroups) AddHost(key, host string) error {
-	if _, exists := hg[key]; !exists {
-		hg[key] = new(HostSet)
-	}
-
-	_, err := hg[key].Insert(host)
-	return err
-}
-
-func (hg HostGroups) String() string {
-	var buf bytes.Buffer
-
-	padding := 0
-	keys := hg.Keys()
-	for _, key := range keys {
-		valStr := hg[key].String()
-		if len(valStr) > padding {
-			padding = len(valStr)
+// CreateNumericList creates a special HostList that contains numeric entries
+// and ranges only (no hostname prefixes) from the supplied string representation.
+func CreateNumericList(stringRanges string) (*HostList, error) {
+	for _, r := range stringRanges {
+		if !unicode.IsLetter(r) {
+			continue
 		}
+		return nil, errors.Errorf(
+			"unexpected alphabetic character(s), got %q",
+			stringRanges)
 	}
 
-	for _, key := range hg.Keys() {
-		fmt.Fprintf(&buf, "%*s: %s\n", padding, hg[key], key)
-	}
+	return parseBracketedHostList(stringRanges, outerRangeSeparators,
+		rangeOperator, true)
+}
 
-	return buf.String()
+// CreateNumericSet creates a special HostSet containing numeric entries
+// and ranges only (no hostname prefixes) from the supplied string representation.
+func CreateNumericSet(stringRanges string) (*HostSet, error) {
+	hl, err := CreateNumericList(stringRanges)
+	if err != nil {
+		return nil, err
+	}
+	hl.Uniq()
+
+	return &HostSet{list: hl}, nil
 }
