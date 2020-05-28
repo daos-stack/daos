@@ -479,6 +479,26 @@ uint64_t
 crt_hlc2sec(uint64_t hlc);
 
 /**
+ * Set the maximum system clock offset.
+ *
+ * This is the maximum offset believed to be observable between the physical
+ * clocks behind any two HLCs in the system. The format of the value represent
+ * a nonnegative diff between two HLC timestamps.
+ *
+ * \param[in] epsilon          Nonnegative HLC duration
+ */
+void
+crt_hlc_epsilon_set(uint64_t epsilon);
+
+/**
+ * Get the maximum system clock offset. See crt_hlc_set_epsilon's API doc.
+ *
+ * \return                     Nonnegative HLC duration
+ */
+uint64_t
+crt_hlc_epsilon_get(void);
+
+/**
  * Abort an RPC request.
  *
  * \param[in] req              pointer to RPC request
@@ -754,13 +774,14 @@ typedef int (*crt_rpc_task_t) (crt_context_t *ctx, void *rpc_hdlr_arg,
  *
  * \param[in] crt_ctx          The context to be registered.
  * \param[in] rpc_cb           The RPC process callback.
+ * \param[in] iv_reps_cb       The IV response callback.
  * \param[in] arg              The argument for RPC process callback.
  *
  * \return                     DER_SUCCESS on success, negative value if error.
  */
 int
-crt_context_register_rpc_task(crt_context_t crt_ctx,
-			      crt_rpc_task_t rpc_cb, void *arg);
+crt_context_register_rpc_task(crt_context_t crt_ctx, crt_rpc_task_t rpc_cb,
+			      crt_rpc_task_t iv_resp_cb, void *arg);
 
 /**
  * Dynamically register an RPC with features at server-side.
@@ -1194,17 +1215,19 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  *
  * \param[in] crt_ctx          CRT context
  * \param[in] grp              CRT group for the collective RPC
- * \param[in] filter_ranks     optional excluded or exclusive ranks. the RPC
+ * \param[in] filter_ranks     optional filter ranks. By default, the RPC
  *                             will be delivered to all members in the group
- *                             except or exclusively to those in ranks.
- *                             the ranks are numbered in primary group.
+ *                             except those in \a filter_ranks. If \a flags
+ *                             includes CRT_RPC_FLAG_FILTER_INVERT, the RPC
+ *                             will be delivered to \a filter_ranks only.
+ *                             The ranks are numbered in primary group.
  * \param[in] opc              unique opcode for the RPC
  * \param[in] co_bulk_hdl      collective bulk handle
  * \param[in] priv             A private pointer associated with the request
  *                             will be passed to crt_corpc_ops::co_aggregate as
  *                             2nd parameter.
  * \param[in] flags            collective RPC flags:
- *                             CRT_RPC_FLAG_EXCLUSIVE to send exclusively to
+ *                             CRT_RPC_FLAG_FILTER_INVERT to send only to
  *                             \a filter_ranks.
  * \param[in] tree_topo        tree topology for the collective propagation,
  *                             can be calculated by crt_tree_topo().

@@ -65,14 +65,6 @@ class ActiveDescriptors(LogCheckError):
 class LogError(LogCheckError):
     """Errors detected in log file"""
 
-WARN_FUNCTIONS = ['crt_grp_lc_addr_insert',
-                  'crt_ctx_epi_abort',
-                  'crt_rpc_complete',
-                  'crt_req_timeout_hdlr',
-                  'crt_req_hg_addr_lookup_cb',
-                  'crt_progress',
-                  'crt_context_timeout_check']
-
 # Use a global variable here so show_line can remember previously reported
 # error lines.
 shown_logs = set()
@@ -110,9 +102,12 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'obj_enum_prep_sgls': ('dst_sgls[i].sg_iovs',
                                             'dst_sgls[i].sg_iovs[j].iov_buf'),
                      'notify_ready': ('reqb'),
+                     'pool_svc_name_cb': ('s'),
                      'local_name_to_principal_name': ('*name'),
                      'pack_daos_response': ('body'),
                      'ds_mgmt_drpc_get_attach_info': ('body'),
+                     'mgmt_svc_locate_cb': ('s'),
+                     'mgmt_svc_name_cb': ('s'),
                      'pool_prop_default_copy': ('entry_def->dpe_str'),
                      'pool_iv_prop_g2l': ('prop_entry->dpe_str'),
                      'daos_prop_entry_copy': ('entry_dup->dpe_str'),
@@ -123,9 +118,12 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_group_psr_set': ('uri'),
                     'crt_hdlr_uri_lookup': ('tmp_uri'),
                     'crt_rpc_priv_free': ('rpc_priv'),
+                    'crt_init_opt': ('crt_gdata.cg_addr'),
                     'cont_prop_default_copy': ('entry_def->dpe_str'),
                     'ds_pool_list_cont_handler': ('cont_buf'),
                     'dtx_resync_ult': ('arg'),
+                    'fini_free': ('svc->s_name',
+                                  'svc->s_db_path'),
                     'daos_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
                                       'sgl->sg_iovs'),
                     'd_rank_list_free': ('rank_list',
@@ -133,6 +131,7 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'pool_prop_default_copy': ('entry_def->dpe_str'),
                     'pool_svc_store_uuid_cb': ('path'),
                     'ds_mgmt_svc_start': ('uri'),
+                    'ds_rsvc_lookup': ('path'),
                     'daos_acl_free': ('acl'),
                     'drpc_free': ('pointer'),
                     'pool_child_add_one': ('path'),
@@ -164,6 +163,8 @@ EFILES = ['src/common/misc.c',
 mismatch_alloc_seen = {}
 mismatch_free_seen = {}
 
+wf = None
+
 def show_line(line, sev, msg):
     """Output a log line in gcc error format"""
 
@@ -177,11 +178,9 @@ def show_line(line, sev, msg):
     if log in shown_logs:
         return
     print(log)
+    if wf:
+        wf.add(line, sev, msg)
     shown_logs.add(log)
-
-def show_bug(line, bug_id):
-    """Mark output with a known bug"""
-    show_line(line, 'error', 'Known bug {}'.format(bug_id))
 
 def add_line_count_to_dict(line, target):
     """Add entry for a output line into a dict"""
@@ -236,14 +235,9 @@ class LogTest():
 
     def __init__(self, log_iter):
         self._li = log_iter
-        self.strict_functions = {}
-
-    def set_warning_function(self, function, bug_id):
-        """Register functions for known bugs
-
-        Add a mapping from functions with errors to known bugs
-        """
-        self.strict_functions[function] = bug_id
+        self.hide_fi_calls = False
+        self.fi_triggered = False
+        self.fi_location = None
 
     def check_log_file(self, abort_on_warning, show_memleaks=True):
         """Check a single log file for consistency"""
@@ -271,6 +265,8 @@ class LogTest():
         regions = OrderedDict()
         memsize = hwm_counter()
 
+        old_regions = {}
+
         error_files = set()
 
         have_debug = False
@@ -279,28 +275,29 @@ class LogTest():
         non_trace_lines = 0
 
         for line in self._li.new_iter(pid=pid, stateful=True):
-            try:
-                # Not all log lines contain a function so catch that case
-                # here and do not abort.
-                if line.function in self.strict_functions and \
-                   line.level <= cart_logparse.LOG_LEVELS['WARN']:
-                    show_line(line, 'error', 'warning in strict file')
-                    show_bug(line, self.strict_functions[line.function])
-                    warnings_strict = True
-            except AttributeError:
-                pass
             if abort_on_warning:
-                if line.level <= cart_logparse.LOG_LEVELS['WARN'] and \
-                   line.mask.lower() != 'hg' and \
-                   line.function not in WARN_FUNCTIONS:
-                    if line.rpc:
+                if line.level <= cart_logparse.LOG_LEVELS['WARN']:
+                    show = True
+                    if self.hide_fi_calls:
+                        if line.is_fi_site():
+                            show = False
+                            self.fi_triggered = True
+                        elif line.is_fi_alloc_fail():
+                            show = False
+                            self.fi_location = line
+                        elif '-1009' in line.get_msg():
+                            # For the fault injection test do not report
+                            # errors for lines that print -DER_NOMEM, as
+                            # this highlights other errors and lines which
+                            # report an error, but not a fault code.
+                            show = False
+                    elif line.rpc:
                         # Ignore the SWIM RPC opcode, as this often sends RPCs
                         # that fail during shutdown.
-                        if line.rpc_opcode != '0xfe000000':
-                            show_line(line, 'error', 'warning in strict mode')
-                            warnings_mode = True
-                    else:
-                        show_line(line, 'error', 'warning in strict mode')
+                        if line.rpc_opcode == '0xfe000000':
+                            show = False
+                    if show:
+                        show_line(line, 'NORMAL', 'warning in strict mode')
                         warnings_mode = True
             if line.trace:
                 trace_lines += 1
@@ -310,21 +307,21 @@ class LogTest():
                 desc = line.descriptor
                 if line.is_new():
                     if desc in active_desc:
-                        show_line(line, 'error', 'already exists')
-                        show_line(active_desc[desc], 'error',
+                        show_line(active_desc[desc], 'NORMAL',
                                   'not deregistered')
+                        show_line(line, 'NORMAL', 'already exists')
                         err_count += 1
                     if line.parent not in active_desc:
                         show_line(line, 'error', 'add with bad parent')
                         if line.parent in regions:
-                            show_line(regions[line.parent], 'warning',
+                            show_line(regions[line.parent], 'NORMAL',
                                       'used as parent without registering')
                         err_count += 1
                     active_desc[desc] = line
                 elif line.is_link():
                     parent = line.parent
                     if parent not in active_desc:
-                        show_line(line, 'error', 'link with bad parent')
+                        show_line(line, 'NORMAL', 'link with bad parent')
                         err_count += 1
                     desc = parent
                 elif line.is_new_rpc():
@@ -333,13 +330,13 @@ class LogTest():
                     if desc in active_desc:
                         del active_desc[desc]
                     else:
-                        show_line(line, 'error', 'invalid desc remove')
+                        show_line(line, 'NORMAL', 'invalid desc remove')
                         err_count += 1
                 elif line.is_dereg_rpc():
                     if desc in active_rpcs:
                         del active_rpcs[desc]
                     else:
-                        show_line(line, 'error', 'invalid rpc remove')
+                        show_line(line, 'NORMAL', 'invalid rpc remove')
                         err_count += 1
                 else:
                     if desc not in active_desc and \
@@ -348,9 +345,9 @@ class LogTest():
 
                         # There's something about this particular function
                         # that makes it very slow at logging output.
-                        show_line(line, 'error', 'inactive desc')
+                        show_line(line, 'NORMAL', 'inactive desc')
                         if line.descriptor in regions:
-                            show_line(regions[line.descriptor], 'error',
+                            show_line(regions[line.descriptor], 'NORMAL',
                                       'Used as descriptor without registering')
                         error_files.add(line.filename)
                         err_count += 1
@@ -359,7 +356,7 @@ class LogTest():
                 if line.is_calloc():
                     pointer = line.get_field(-1).rstrip('.')
                     if pointer in regions:
-                        show_line(regions[pointer], 'error',
+                        show_line(regions[pointer], 'NORMAL',
                                   'new allocation seen for same pointer')
                         err_count += 1
                     regions[pointer] = line
@@ -381,24 +378,33 @@ class LogTest():
                                avar in mismatch_alloc_ok[afunc]:
                                 pass
                             else:
-                                show_line(regions[pointer], 'warning',
+                                show_line(regions[pointer], 'LOW',
                                           'mask mismatch in alloc/free')
-                                show_line(line, 'warning',
+                                show_line(line, 'LOW',
                                           'mask mismatch in alloc/free')
                                 err_count += 1
                             add_line_count_to_dict(line, mismatch_free_seen)
                             add_line_count_to_dict(regions[pointer],
                                                    mismatch_alloc_seen)
                         if line.level != regions[pointer].level:
-                            show_line(regions[pointer], 'warning',
+                            show_line(regions[pointer], 'LOW',
                                       'level mismatch in alloc/free')
-                            show_line(line, 'warning',
+                            show_line(line, 'LOW',
                                       'level mismatch in alloc/free')
                             err_count += 1
                         memsize.subtract(regions[pointer].calloc_size())
+                        old_regions[pointer] = [regions[pointer], line]
                         del regions[pointer]
                     elif pointer != '(nil)':
-                        show_line(line, 'error', 'free of unknown memory')
+                        if pointer in old_regions:
+                            show_line(old_regions[pointer][0], 'ERROR',
+                                      'double-free allocation point')
+                            show_line(old_regions[pointer][1], 'ERROR',
+                                      '1st double-free location')
+                            show_line(line, 'ERROR',
+                                      '2nd double-free location')
+                        else:
+                            show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
                 elif line.is_realloc():
                     new_pointer = line.get_field(-3)
@@ -411,14 +417,15 @@ class LogTest():
                         if old_pointer in regions:
                             del regions[old_pointer]
                         else:
-                            show_line(line, 'error',
+                            show_line(line, 'NORMAL',
                                       'realloc of unknown memory')
                             err_count += 1
 
         del active_desc['root']
 
-        if not have_debug:
-            print('DEBUG not enabled, No log consistency checking possible')
+        # This isn't currently used anyway.
+        #if not have_debug:
+        #    print('DEBUG not enabled, No log consistency checking possible')
 
         total_lines = trace_lines + non_trace_lines
         p_trace = trace_lines * 1.0 / total_lines * 100
@@ -430,13 +437,14 @@ class LogTest():
 
         print("Memsize: {}".format(memsize))
 
-        pp = pprint.PrettyPrinter()
-        if mismatch_alloc_seen:
-            print('Mismatched allocations were allocated here:')
-            print(pp.pformat(mismatch_alloc_seen))
-        if mismatch_free_seen:
-            print('Mismatched allocations were freed here:')
-            print(pp.pformat(mismatch_free_seen))
+        if False:
+            pp = pprint.PrettyPrinter()
+            if mismatch_alloc_seen:
+                print('Mismatched allocations were allocated here:')
+                print(pp.pformat(mismatch_alloc_seen))
+            if mismatch_free_seen:
+                print('Mismatched allocations were freed here:')
+                print(pp.pformat(mismatch_free_seen))
 
         if not show_memleaks:
             return
@@ -451,20 +459,20 @@ class LogTest():
                 continue
             pointer = line.get_field(-1).rstrip('.')
             if pointer in active_desc:
-                show_line(line, 'error', 'descriptor not freed')
+                show_line(line, 'NORMAL', 'descriptor not freed')
                 del active_desc[pointer]
             else:
-                show_line(line, 'error', 'memory not freed')
+                show_line(line, 'NORMAL', 'memory not freed')
             lost_memory = True
 
         if active_desc:
             for (_, line) in active_desc.items():
-                show_line(line, 'error', 'desc not deregistered')
+                show_line(line, 'NORMAL', 'desc not deregistered')
             raise ActiveDescriptors()
 
         if active_rpcs:
             for (_, line) in active_rpcs.items():
-                show_line(line, 'error', 'rpc not deregistered')
+                show_line(line, 'NORMAL', 'rpc not deregistered')
         if error_files or err_count:
             raise LogError()
         if lost_memory:

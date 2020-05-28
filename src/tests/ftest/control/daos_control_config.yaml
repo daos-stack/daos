@@ -1,0 +1,93 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+server_manager:
+    srv_timeout: 30
+timeout: 120
+server_config:
+  name: daos_server
+
+# The 'config_val' list is composed of the following values:
+# - name of the config attribute, used to look for the attribute object
+# - test value that will be inserted into the agent config for the attribute
+# - PASS or FAIL value, specifying how the agent is expected to function
+control_config_val: !mux
+  name_special_chars:
+    config_val:
+      - "name"
+      - "! @#$%^&*()_+{}|:<>?-=[];',./"
+      - "PASS"
+  name_numeric:
+    config_val:
+      - "name"
+      - "12345678"
+      - "PASS"
+  name_list:
+    config_val:
+      - "name"
+      - [amjustin, 12345, abcdef]
+      - "FAIl"
+  port_special_str:
+    config_val:
+      - "port"
+      - "*(_ABCdef123"
+      - "FAIL"
+  port_neg_value:
+    config_val:
+      - "port"
+      - "-100"
+      - "FAIL"
+  port_multi_value:
+    config_val:
+      - "port"
+      - "34, 35, 10001"
+      - "FAIL"
+  port_multi_list_value:
+    config_val:
+      - "port"
+      - [1, 2, 10001]
+      - "FAIL"
+  allow_insecure_junk:
+    config_val:
+       - "allow_insecure"
+       - "! @#$%^&*()_+{}|:<>?-=[];',./"
+       - "FAIL"
+  allow_insecure_list:
+    config_val:
+       - "allow_insecure"
+       - [1, 2, 10001]
+       - "FAIL"
+  ca_cert_junk:
+    config_val:
+       - "ca_cert"
+       - "! @#$%^&*()_+{}|:<>?-=[];',./"
+       - "PASS"
+  ca_cert_file_does_not_exist:
+    config_val:
+       - "ca_cert"
+       - /tmp/does_not_exist.ext
+       - "PASS"
+  cert_junk:
+    config_val:
+       - "cert"
+       - "! @#$%^&*()_+{}|:<>?-=[];',./"
+       - "PASS"
+  cert_file_does_not_exist:
+    config_val:
+       - "cert"
+       - /tmp/does_not_exist.ext
+       - "PASS"
+  key_junk:
+    config_val:
+       - "key"
+       - "! @#$%^&*()_+{}|:<>?-=[];',./"
+       - "PASS"
+  key_file_does_not_exist:
+    config_val:
+       - "key"
+       - /tmp/does_not_exist.ext
+       - "PASS"

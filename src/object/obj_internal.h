@@ -193,6 +193,7 @@ struct migrate_pool_tls {
 	/* Service rank list for migrate fetch RPC */
 	d_rank_list_t		mpt_svc_list;
 
+	ABT_eventual		mpt_done_eventual;
 	/* Migrate status */
 	uint64_t		mpt_obj_count;
 	uint64_t		mpt_rec_count;
@@ -424,10 +425,10 @@ void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
-int do_dc_obj_update(tse_task_t *task, daos_epoch_t epoch, uint32_t map_ver,
-		     daos_obj_update_t *args);
-int do_dc_obj_punch(tse_task_t *task, daos_epoch_t epoch, uint32_t map_ver,
-		    enum obj_rpc_opc opc, daos_obj_punch_t *api_args);
+int dc_obj_update(tse_task_t *task, daos_epoch_t epoch, uint32_t map_ver,
+		  daos_obj_update_t *args);
+int dc_obj_punch(tse_task_t *task, daos_epoch_t epoch, uint32_t map_ver,
+		 enum obj_rpc_opc opc, daos_obj_punch_t *api_args);
 
 struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;

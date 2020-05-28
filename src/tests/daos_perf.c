@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <mpi.h>
+#include <abt.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
@@ -88,13 +89,94 @@ bool			 ts_nest_iterator;
 bool			ts_rebuild_only_iteration = false;
 /* rebuild without update */
 bool			ts_rebuild_no_update = false;
+/* test inside ULT */
+bool			ts_in_ult;
+bool			ts_profile_vos;
+char			*ts_profile_vos_path = ".";
+int			ts_profile_vos_avg = 100;
+static ABT_xstream	abt_xstream;
+
+int
+ts_abt_init(void)
+{
+	int cpuid;
+	int num_cpus;
+	int rc;
+
+	rc = ABT_init(0, NULL);
+	if (rc != ABT_SUCCESS) {
+		fprintf(stderr, "ABT init failed: %d\n", rc);
+		return -1;
+	}
+
+	rc = ABT_xstream_self(&abt_xstream);
+	if (rc != ABT_SUCCESS) {
+		printf("ABT get self xstream failed: %d\n", rc);
+		return -1;
+	}
+
+	rc = ABT_xstream_get_cpubind(abt_xstream, &cpuid);
+	if (rc != ABT_SUCCESS) {
+		fprintf(stderr, "get cpubind failed: %d\n", rc);
+		fprintf(stderr, "No CPU affinity for this test.\n");
+		fprintf(stderr, "Build ABT by --enable-affinity if"
+			" you want to try CPU affinity.\n");
+		return 0;
+	}
+
+	rc = ABT_xstream_get_affinity(abt_xstream, 0, NULL,
+				      &num_cpus);
+	if (rc != ABT_SUCCESS) {
+		fprintf(stderr, "get num_cpus: %d\n", rc);
+		fprintf(stderr, "No CPU affinity for this test.\n");
+		fprintf(stderr, "Build ABT by --enable-affinity if"
+			" you want to try CPU affinity.\n");
+		return 0;
+	}
+
+	cpuid = (cpuid + 1) % num_cpus;
+	rc = ABT_xstream_set_cpubind(abt_xstream, cpuid);
+	if (rc != ABT_SUCCESS) {
+		fprintf(stderr, "set affinity: %d\n", rc);
+		fprintf(stderr, "No CPU affinity for this test.\n");
+		fprintf(stderr, "Build ABT by --enable-affinity if"
+			" you want to try CPU affinity.\n");
+		return 0;
+	}
+
+	return 0;
+}
+
+void
+ts_abt_fini(void)
+{
+	ABT_xstream_join(abt_xstream);
+	ABT_xstream_free(&abt_xstream);
+	ABT_finalize();
+}
+
+#define TS_TIME_START(time, start)		\
+do {						\
+	if (time == NULL)			\
+		break;				\
+	start = daos_get_ntime();		\
+} while (0)
+
+#define TS_TIME_END(time, start)		\
+do {						\
+	if ((time) == NULL)			\
+		break;				\
+	*time += (daos_get_ntime() - start)/1000;\
+} while (0)
 
 static int
-vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
-		    daos_epoch_t epoch)
+_vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
+		     daos_epoch_t epoch, double *duration)
 {
-	int	rc = 0;
+	uint64_t start = 0;
+	int	 rc = 0;
 
+	TS_TIME_START(duration, start);
 	if (!ts_zero_copy) {
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch, 0,
@@ -149,15 +231,67 @@ end:
 			rc = vos_fetch_end(ioh, rc);
 	}
 
+	TS_TIME_END(duration, start);
+	return rc;
+}
+
+struct vos_ult_arg {
+	enum ts_op_type op_type;
+	struct dts_io_credit *cred;
+	daos_epoch_t	epoch;
+	double		*duration;
+	int		status;
+};
+
+static void
+vos_update_or_fetch_ult(void *arg)
+{
+	struct vos_ult_arg *ult_arg = arg;
+
+	ult_arg->status = _vos_update_or_fetch(ult_arg->op_type, ult_arg->cred,
+					       ult_arg->epoch,
+					       ult_arg->duration);
+}
+
+static int
+vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
+		    daos_epoch_t epoch, double *duration)
+{
+	ABT_thread		thread;
+	struct vos_ult_arg	ult_arg;
+	int			rc;
+
+	if (!ts_in_ult)
+		return _vos_update_or_fetch(op_type, cred, epoch, duration);
+
+	ult_arg.op_type = op_type;
+	ult_arg.cred = cred;
+	ult_arg.epoch = epoch;
+	ult_arg.duration = duration;
+	rc = ABT_thread_create_on_xstream(abt_xstream, vos_update_or_fetch_ult,
+					  &ult_arg, ABT_THREAD_ATTR_NULL,
+					  &thread);
+	if (rc != ABT_SUCCESS)
+		return rc;
+
+	rc = ABT_thread_join(thread);
+	if (rc != ABT_SUCCESS)
+		return rc;
+
+	ABT_thread_free(&thread);
+	rc = ult_arg.status;
 	return rc;
 }
 
 static int
 daos_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
-		     struct dts_io_credit *cred, daos_epoch_t epoch)
+		     struct dts_io_credit *cred, daos_epoch_t epoch,
+		     double *duration)
 {
 	int	rc;
+	uint64_t start = 0;
 
+	TS_TIME_START(duration, start);
 	if (op_type == TS_DO_UPDATE) {
 		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl,
@@ -167,6 +301,8 @@ daos_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 				    &cred->tc_iod, &cred->tc_sgl, NULL,
 				    cred->tc_evp);
 	}
+	TS_TIME_END(duration, start);
+
 	return rc;
 }
 
@@ -182,7 +318,8 @@ set_value_buffer(char *buffer, int idx)
 static int
 akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 		     char *dkey, char *akey, daos_epoch_t *epoch,
-		     int *indices, int idx, char *verify_buff)
+		     int *indices, int idx, char *verify_buff,
+		     double *duration)
 {
 	struct dts_io_credit *cred;
 	daos_iod_t	     *iod;
@@ -242,9 +379,9 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 	sgl->sg_nr = 1;
 
 	if (ts_mode == TS_MODE_VOS)
-		rc = vos_update_or_fetch(op_type, cred, *epoch);
+		rc = vos_update_or_fetch(op_type, cred, *epoch, duration);
 	else
-		rc = daos_update_or_fetch(oh, op_type, cred, *epoch);
+		rc = daos_update_or_fetch(oh, op_type, cred, *epoch, duration);
 
 	if (rc != 0) {
 		fprintf(stderr, "%s failed. rc=%d, epoch=%"PRIu64"\n",
@@ -267,7 +404,7 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 
 static int
 dkey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type, char *dkey,
-		     daos_epoch_t *epoch)
+		     daos_epoch_t *epoch, double *duration)
 {
 	int		*indices;
 	char		 akey[DTS_KEY_LEN];
@@ -282,7 +419,8 @@ dkey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type, char *dkey,
 		dts_key_gen(akey, DTS_KEY_LEN, "walker");
 		for (j = 0; j < ts_recx_p_akey; j++) {
 			rc = akey_update_or_fetch(oh, op_type, dkey, akey,
-						  epoch, indices, j, NULL);
+						  epoch, indices, j, NULL,
+						  duration);
 			if (rc)
 				goto failed;
 		}
@@ -294,12 +432,12 @@ failed:
 }
 
 static int
-objects_update(d_rank_t rank)
+objects_update(double *duration, d_rank_t rank)
 {
 	int		i;
 	int		j;
 	int		rc;
-	daos_epoch_t	epoch = 0;
+	daos_epoch_t	epoch = 1;
 
 	dts_reset_key();
 
@@ -328,7 +466,7 @@ objects_update(d_rank_t rank)
 
 			dts_key_gen(dkey, DTS_KEY_LEN, "blade");
 			rc = dkey_update_or_fetch(ts_ohs[i], TS_DO_UPDATE, dkey,
-						  &epoch);
+						  &epoch, duration);
 			if (rc)
 				return rc;
 		}
@@ -355,7 +493,7 @@ dkey_verify(daos_handle_t oh, char *dkey, daos_epoch_t *epoch)
 	for (i = 0; i < ts_recx_p_akey; i++) {
 		set_value_buffer(ground_truth, i);
 		rc = akey_update_or_fetch(oh, TS_DO_FETCH, dkey, akey, epoch,
-					  indices, i, test_string);
+					  indices, i, test_string, NULL);
 		if (rc)
 			goto failed;
 		if (memcmp(test_string, ground_truth, TEST_VAL_SIZE) != 0) {
@@ -378,7 +516,7 @@ objects_verify(void)
 	int		k;
 	int		rc = 0;
 	char		dkey[DTS_KEY_LEN];
-	daos_epoch_t	epoch = 0;
+	daos_epoch_t	epoch = 1;
 
 	dts_reset_key();
 	if (!ts_overwrite)
@@ -421,7 +559,7 @@ objects_verify_close(void)
 }
 
 static int
-objects_fetch(d_rank_t rank)
+objects_fetch(double *duration, d_rank_t rank)
 {
 	int		i;
 	int		j;
@@ -438,7 +576,7 @@ objects_fetch(d_rank_t rank)
 
 			dts_key_gen(dkey, DTS_KEY_LEN, "blade");
 			rc = dkey_update_or_fetch(ts_ohs[i], TS_DO_FETCH, dkey,
-						  &epoch);
+						  &epoch, duration);
 			if (rc != 0)
 				return rc;
 		}
@@ -536,10 +674,11 @@ iter_dkey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
 
 /* Iterate all of dkey/akey/record */
 static int
-ts_iterate_records_internal(d_rank_t rank)
+ts_iterate_records_internal(double *duration, d_rank_t rank)
 {
 	vos_iter_param_t	param = {};
 	int			rc = 0;
+	uint64_t		start = 0;
 
 	assert_int_equal(ts_class, DAOS_OC_RAW);
 
@@ -551,18 +690,18 @@ ts_iterate_records_internal(d_rank_t rank)
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_epc_expr = VOS_IT_EPC_RE;
 
+	TS_TIME_START(duration, start);
 	rc = ts_iterate_internal(VOS_ITER_DKEY, &param, iter_dkey_cb);
+	TS_TIME_END(duration, start);
 	return rc;
 }
 
 static int
-ts_write_perf(double *start_time, double *end_time)
+ts_write_perf(double *duration)
 {
 	int	rc;
 
-	*start_time = dts_time_now();
-	rc = objects_update(RANK_ZERO);
-	*end_time = dts_time_now();
+	rc = objects_update(duration, RANK_ZERO);
 	if (rc)
 		return rc;
 
@@ -571,16 +710,14 @@ ts_write_perf(double *start_time, double *end_time)
 }
 
 static int
-ts_fetch_perf(double *start_time, double *end_time)
+ts_fetch_perf(double *duration)
 {
 	int	rc;
 
-	rc = objects_update(RANK_ZERO);
+	rc = objects_update(NULL, RANK_ZERO);
 	if (rc)
 		return rc;
-	*start_time = dts_time_now();
-	rc = objects_fetch(RANK_ZERO);
-	*end_time = dts_time_now();
+	rc = objects_fetch(duration, RANK_ZERO);
 	if (rc)
 		return rc;
 
@@ -589,30 +726,26 @@ ts_fetch_perf(double *start_time, double *end_time)
 }
 
 static int
-ts_iterate_perf(double *start_time, double *end_time)
+ts_iterate_perf(double *duration)
 {
 	int	rc;
 
-	rc = objects_update(RANK_ZERO);
+	rc = objects_update(NULL, RANK_ZERO);
 	if (rc)
 		return rc;
-	*start_time = dts_time_now();
-	rc = ts_iterate_records_internal(RANK_ZERO);
-	*end_time = dts_time_now();
+	rc = ts_iterate_records_internal(duration, RANK_ZERO);
 	return rc;
 }
 
 static int
-ts_update_fetch_perf(double *start_time, double *end_time)
+ts_update_fetch_perf(double *duration)
 {
 	int	rc;
 
-	*start_time = dts_time_now();
-	rc = objects_update(RANK_ZERO);
+	rc = objects_update(NULL, RANK_ZERO);
 	if (rc)
 		return rc;
-	rc = objects_fetch(RANK_ZERO);
-	*end_time = dts_time_now();
+	rc = objects_fetch(duration, RANK_ZERO);
 	if (rc)
 		return rc;
 
@@ -654,12 +787,14 @@ ts_add_server(d_rank_t rank)
 }
 
 static void
-ts_rebuild_wait()
+ts_rebuild_wait(double *duration)
 {
 	daos_pool_info_t	   pinfo;
 	struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
 	int			   rc = 0;
+	uint64_t		   start = 0;
 
+	TS_TIME_START(duration, start);
 	while (1) {
 		memset(&pinfo, 0, sizeof(pinfo));
 		pinfo.pi_bits = DPI_REBUILD_STATUS;
@@ -671,16 +806,17 @@ ts_rebuild_wait()
 		}
 		sleep(2);
 	}
+	TS_TIME_END(duration, start);
 }
 
 static int
-ts_rebuild_perf(double *start_time, double *end_time)
+ts_rebuild_perf(double *duration)
 {
 	int rc;
 
 	/* prepare the record */
 	ts_class = DAOS_OC_R2S_SPEC_RANK;
-	rc = objects_update(RANK_ZERO);
+	rc = objects_update(NULL, RANK_ZERO);
 	if (rc)
 		return rc;
 
@@ -697,9 +833,7 @@ ts_rebuild_perf(double *start_time, double *end_time)
 	if (rc)
 		return rc;
 
-	*start_time = dts_time_now();
-	ts_rebuild_wait();
-	*end_time = dts_time_now();
+	ts_rebuild_wait(duration);
 
 	rc = ts_add_server(RANK_ZERO);
 
@@ -742,7 +876,10 @@ ts_class_name(void)
 	default:
 		return "unknown";
 	case DAOS_OC_RAW:
-		return "VOS (storage only)";
+		if (ts_in_ult)
+			return "VOS (storage only running in ABT ULT)";
+		else
+			return "VOS (storage only)";
 	case DAOS_OC_ECHO_TINY_RW:
 		return "ECHO TINY (network only, non-replica)";
 	case DAOS_OC_ECHO_R2S_RW:
@@ -867,7 +1004,11 @@ The options are as follows:\n\
 	Full path name of the VOS file.\n\
 \n\
 -w	Pause after initialization for attaching debugger or analysis\n\
-	tool.\n");
+	tool.\n\
+\n\
+-x	run vos perf test in a ABT ult mode.\n\
+\n\
+-p	run vos perf with profile.\n");
 }
 
 static struct option ts_ops[] = {
@@ -891,28 +1032,27 @@ static struct option ts_ops[] = {
 	{ NULL,		0,			NULL,	0   },
 };
 
-void show_result(double now, double then, int vsize, char *test_name)
+void show_result(double duration, uint64_t start, uint64_t end,
+		 int vsize, char *test_name)
 {
-	double		duration, agg_duration;
-	double		first_start;
-	double		last_end;
-	double		duration_max;
-	double		duration_min;
-	double		duration_sum;
-
-	duration = now - then;
+	double agg_duration;
+	double first_start;
+	double last_end;
+	double	duration_max;
+	double	duration_min;
+	double	duration_sum;
 
 	if (ts_ctx.tsc_mpi_size > 1) {
-		MPI_Reduce(&then, &first_start, 1, MPI_DOUBLE,
+		MPI_Reduce(&start, &first_start, 1, MPI_DOUBLE,
 			   MPI_MIN, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&now, &last_end, 1, MPI_DOUBLE,
+		MPI_Reduce(&end, &last_end, 1, MPI_DOUBLE,
 			   MPI_MAX, 0, MPI_COMM_WORLD);
+		agg_duration = (last_end - first_start) / (1000 * 1000 * 1000);
 	} else {
-		first_start = then;
-		last_end = now;
+		agg_duration = duration / (1000 * 1000);
 	}
 
-	agg_duration = last_end - first_start;
+	/* nano sec to sec */
 
 	if (ts_ctx.tsc_mpi_size > 1) {
 		MPI_Reduce(&duration, &duration_max, 1, MPI_DOUBLE,
@@ -936,7 +1076,7 @@ void show_result(double now, double then, int vsize, char *test_name)
 			ts_akey_p_dkey * ts_recx_p_akey;
 
 		rate = total / agg_duration;
-		latency = (agg_duration * 1000 * 1000) / total;
+		latency = duration_max / total;
 		bandwidth = (rate * vsize) / (1024 * 1024);
 
 		fprintf(stdout, "%s successfully completed:\n"
@@ -949,11 +1089,11 @@ void show_result(double now, double then, int vsize, char *test_name)
 
 		fprintf(stdout, "Duration across processes:\n");
 		fprintf(stdout, "\tMAX duration : %-10.6f sec\n",
-			duration_max);
+			duration_max/(1000 * 1000));
 		fprintf(stdout, "\tMIN duration : %-10.6f sec\n",
-			duration_min);
+			duration_min/(1000 * 1000));
 		fprintf(stdout, "\tAverage duration : %-10.6f sec\n",
-			duration_sum / ts_ctx.tsc_mpi_size);
+			duration_sum / ((ts_ctx.tsc_mpi_size) * 1000 * 1000));
 	}
 }
 enum {
@@ -965,7 +1105,7 @@ enum {
 	TEST_SIZE,
 };
 
-static int (*perf_tests[TEST_SIZE])(double *start, double *end);
+static int (*perf_tests[TEST_SIZE])(double *duration);
 
 char	*perf_tests_name[] = {
 	"update",
@@ -985,9 +1125,8 @@ main(int argc, char **argv)
 	int		vsize	   = 32;	/* default value size */
 	int		ec_vsize = 0;
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
-	double		then;
-	double		now;
 	int		i;
+	double		duration = 0;
 	bool		pause = false;
 	unsigned	seed = 0;
 	int		rc;
@@ -998,7 +1137,7 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nASG:s:ztf:hUFRBvIiuw",
+				 "P:N:T:C:c:o:d:a:r:nASG:s:ztf:hUFRBvIiuwxp",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1139,6 +1278,12 @@ main(int argc, char **argv)
 		case 'I':
 			perf_tests[ITERATE_TEST] = ts_iterate_perf;
 			break;
+		case 'x':
+			ts_in_ult = true;
+			break;
+		case 'p':
+			ts_profile_vos = true;
+			break;
 		case 'h':
 			if (ts_ctx.tsc_mpi_rank == 0)
 				ts_print_usage();
@@ -1219,7 +1364,20 @@ main(int argc, char **argv)
 			strcpy(ts_pmem_file, "/mnt/daos/vos_perf.pmem");
 
 		ts_ctx.tsc_pmem_file = ts_pmem_file;
+		if (ts_in_ult) {
+			rc = ts_abt_init();
+			if (rc)
+				return rc;
+		}
 	} else {
+		if (ts_in_ult || ts_profile_vos) {
+			fprintf(stderr, "ULT and profiling is only supported"
+				" in VOS mode.\n");
+			if (ts_ctx.tsc_mpi_rank == 0)
+				ts_print_usage();
+			return -1;
+		}
+
 		ts_ctx.tsc_cred_nr = credits;
 		ts_ctx.tsc_svc.rl_nr = 1;
 		ts_ctx.tsc_svc.rl_ranks  = &svc_rank;
@@ -1296,15 +1454,22 @@ main(int argc, char **argv)
 		fprintf(stdout, "Started...\n");
 	}
 
+	if (ts_profile_vos)
+		vos_profile_start(ts_profile_vos_path, ts_profile_vos_avg);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0; i < TEST_SIZE; i++) {
+		double start;
+		double end;
+
 		if (perf_tests[i] == NULL)
 			continue;
 
 		srand(seed);
 
-		rc = perf_tests[i](&then, &now);
+		start = daos_get_ntime();
+		rc = perf_tests[i](&duration);
+		end = daos_get_ntime();
 		if (ts_ctx.tsc_mpi_size > 1) {
 			int rc_g;
 
@@ -1318,9 +1483,14 @@ main(int argc, char **argv)
 			break;
 		}
 
-		show_result(now, then, vsize, perf_tests_name[i]);
+		show_result(duration, start, end, vsize, perf_tests_name[i]);
 	}
 
+	if (ts_in_ult)
+		ts_abt_fini();
+
+	if (ts_profile_vos)
+		vos_profile_stop();
 	dts_ctx_fini(&ts_ctx);
 	MPI_Finalize();
 	free(ts_ohs);

@@ -72,11 +72,8 @@ dump_envariables(void)
 static int
 mem_pin_workaround(void)
 {
-	D_DEBUG(DB_ALL, "Memory pinning workaround disabled\n");
-	return 0;
-#if 0
 	int crt_rc = 0;
-	int rc;
+	int rc = 0;
 
 	/* Prevent malloc from releasing memory via sbrk syscall */
 	rc = mallopt(M_TRIM_THRESHOLD, -1);
@@ -85,17 +82,15 @@ mem_pin_workaround(void)
 		D_GOTO(exit, crt_rc = -DER_MISC);
 	}
 
-	/** Disable fastbins */
+	/* Disable fastbins; this option is not available on all systems */
 	rc = mallopt(M_MXFAST, 0);
-	if (rc != 1) {
-		D_ERROR("Failed to disable malloc fastbins: %d\n", errno);
-		D_GOTO(exit, crt_rc = -DER_MISC);
-	}
+	if (rc != 1)
+		D_WARN("Failed to disable malloc fastbins: %d (%s)\n",
+			errno, strerror(errno));
 
 	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
 exit:
 	return crt_rc;
-#endif
 }
 
 
@@ -682,7 +677,6 @@ int crt_na_ofi_config_init(void)
 
 	D_STRNDUP(crt_na_ofi_conf.noc_domain, domain, 64);
 	if (!crt_na_ofi_conf.noc_domain) {
-		D_ERROR("Failed to stdndup domain name\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 

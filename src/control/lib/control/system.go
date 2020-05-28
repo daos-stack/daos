@@ -26,6 +26,7 @@ package control
 import (
 	"context"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -36,6 +37,36 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+// SystemJoinReq contains the inputs for the system join request.
+type SystemJoinReq struct {
+	unaryRequest
+	msRequest
+	Ranks []system.Rank
+}
+
+// SystemJoinResp contains the request response.
+type SystemJoinResp struct {
+	Results system.MemberResults // resulting from harness starts
+}
+
+// SystemJoin will attempt to join a new member to the DAOS system.
+//
+// TODO: replace the method in mgmt_client.go with this one
+func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq) (*SystemJoinResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, &mgmtpb.JoinReq{})
+	})
+	rpcClient.Debugf("DAOS system join request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemJoinResp)
+	return resp, convertMSResponse(ur, resp)
+}
 
 // SystemStopReq contains the inputs for the system stop command.
 type SystemStopReq struct {
@@ -72,6 +103,114 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 
 	resp := new(SystemStopResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+// getResetHostErrors maps rank error messages to hosts that experience them.
+func getResetRankErrors(results system.MemberResults) (map[string][]string, []string, error) {
+	rankErrors := make(map[string][]string) // hosts that experience a specific rank err
+	hosts := make(map[string]struct{})
+	for _, result := range results {
+		if result.Addr == "" {
+			return nil, nil,
+				errors.Errorf("host address missing for rank %d result", result.Rank)
+		}
+		if !result.Errored {
+			hosts[result.Addr] = struct{}{}
+			continue
+		}
+		if result.Msg == "" {
+			result.Msg = "error message missing for rank result"
+		}
+
+		rankErrors[result.Msg] = append(rankErrors[result.Msg], result.Addr)
+	}
+
+	goodHosts := make([]string, 0) // hosts that have >0 successful rank results
+	for host := range hosts {
+		goodHosts = append(goodHosts, host)
+	}
+
+	return rankErrors, goodHosts, nil
+}
+
+// SystemResetFormatReq contains the inputs for the request.
+type SystemResetFormatReq struct {
+	unaryRequest
+	msRequest
+	Ranks []system.Rank
+}
+
+// SystemResetFormatResp contains the request response.
+type SystemResetFormatResp struct {
+	Results system.MemberResults
+}
+
+// SystemReformat will reformat and start rank after a controlled shutdown of DAOS system.
+//
+// First phase trigger format reset on each rank in membership registry, if
+// successful, putting selected harness managed instances in "awaiting format"
+// state (but not proceeding to starting the io_server process runner).
+//
+// Second phase is to perform storage format on each host which, if successful,
+// will reformat storage, un-block "awaiting format" state and start the
+// io_server process. SystemReformat() will only return when relevant io_server
+// processes are running and ready.
+//
+// TODO: supply rank list to storage format so we can selectively reformat ranks
+//       on a host, remove any ranks that fail SystemResetFormat() from list before
+//       passing to StorageFormat()
+func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *SystemResetFormatReq) (*StorageFormatResp, error) {
+	resetReq.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).SystemResetFormat(ctx, &ctlpb.SystemResetFormatReq{
+			Ranks: system.RanksToUint32(resetReq.Ranks),
+		})
+	})
+	rpcClient.Debugf("DAOS system-reset-format request: %s", resetReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, resetReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// MS response will contain collated results for all ranks
+	resetResp := new(SystemResetFormatResp)
+	if err = convertMSResponse(ur, resetResp); err != nil {
+		return nil, errors.WithMessage(err, "converting MS to reformat resp")
+	}
+
+	resetRankErrors, hostList, err := getResetRankErrors(resetResp.Results)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(resetRankErrors) > 0 {
+		reformatResp := new(StorageFormatResp)
+
+		// create "X ranks failed: err..." error entries for each host address
+		// a single host maybe associated with multiple error entries in HEM
+		for msg, addrs := range resetRankErrors {
+			hostOccurrences := make(map[string]int)
+			for _, addr := range addrs {
+				hostOccurrences[addr]++
+			}
+			for addr, occurrences := range hostOccurrences {
+				err := errors.Errorf("%s failed: %s",
+					english.Plural(occurrences, "rank", "ranks"), msg)
+				reformatResp.HostErrorsResp.addHostError(addr, err)
+			}
+		}
+
+		return reformatResp, nil
+	}
+
+	// all requested ranks in AwaitFormat state, trigger format
+	// TODO: remove failed ranks from StorageFormat() rank list
+	formatReq := &StorageFormatReq{Reformat: true}
+	formatReq.SetHostList(hostList)
+
+	rpcClient.Debugf("DAOS storage-format request: %s", formatReq)
+
+	return StorageFormat(ctx, rpcClient, formatReq)
 }
 
 // SystemStartReq contains the inputs for the system start request.
@@ -284,6 +423,21 @@ func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 		})
 	})
 	rpcClient.Debugf("DAOS system stop-ranks request: %+v", req)
+
+	return rpcToRanks(ctx, rpcClient, req)
+}
+
+// ResetFormatRanks concurrently resets format state on ranks across all hosts
+// supplied in the request's hostlist. The function blocks until all
+// results (successful or otherwise) are received, and returns a
+// single response structure containing results for all host operations.
+func ResetFormatRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).ResetFormatRanks(ctx, &mgmtpb.RanksReq{
+			Ranks: system.RanksToUint32(req.Ranks),
+		})
+	})
+	rpcClient.Debugf("DAOS system reset-format-ranks request: %+v", req)
 
 	return rpcToRanks(ctx, rpcClient, req)
 }

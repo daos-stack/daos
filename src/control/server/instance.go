@@ -56,7 +56,7 @@ type IOServerInstance struct {
 	bdevClassProvider *bdev.ClassProvider
 	scmProvider       *scm.Provider
 	msClient          *mgmtSvcClient
-	waitStorage       atm.Bool
+	waitFormat        atm.Bool
 	storageReady      chan bool
 	waitDrpc          atm.Bool
 	drpcReady         chan *srvpb.NotifyReadyReq
@@ -90,17 +90,43 @@ func NewIOServerInstance(log logging.Logger,
 	}
 }
 
+// isAwaitingFormat indicates whether IOServerInstance is waiting
+// for an administrator action to trigger a format.
+func (srv *IOServerInstance) isAwaitingFormat() bool {
+	return srv.waitFormat.Load()
+}
+
+// isStarted indicates whether IOServerInstance is in a running state.
+func (srv *IOServerInstance) isStarted() bool {
+	return srv.runner.IsRunning()
+}
+
 // isReady indicates whether the IOServerInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
 func (srv *IOServerInstance) isReady() bool {
-	return srv.ready.Load()
+	return srv.ready.Load() && srv.isStarted()
 }
 
 // isMSReplica indicates whether or not this instance is a management service replica.
 func (srv *IOServerInstance) isMSReplica() bool {
 	return srv.hasSuperblock() && srv.getSuperblock().MS
+}
+
+// LocalState returns local perspective of the current instance state
+// (doesn't consider state info held by the global system membership).
+func (srv *IOServerInstance) LocalState() system.MemberState {
+	switch {
+	case srv.isReady():
+		return system.MemberStateReady
+	case srv.isStarted():
+		return system.MemberStateStarting
+	case srv.isAwaitingFormat():
+		return system.MemberStateAwaitFormat
+	default:
+		return system.MemberStateStopped
+	}
 }
 
 // setIndex sets the server index assigned by the harness.
@@ -181,7 +207,7 @@ func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyRea
 }
 
 func (srv *IOServerInstance) callSetRank(rank system.Rank) error {
-	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
+	dresp, err := srv.CallDrpc(drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
 	}
@@ -284,7 +310,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 		req.Addr = msAddr
 	}
 
-	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodCreateMS, req)
+	dresp, err := srv.CallDrpc(drpc.MethodCreateMS, req)
 	if err != nil {
 		return err
 	}
@@ -301,7 +327,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 }
 
 func (srv *IOServerInstance) callStartMS() error {
-	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodStartMS, nil)
+	dresp, err := srv.CallDrpc(drpc.MethodStartMS, nil)
 	if err != nil {
 		return err
 	}
@@ -318,7 +344,7 @@ func (srv *IOServerInstance) callStartMS() error {
 }
 
 func (srv *IOServerInstance) callSetUp() error {
-	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetUp, nil)
+	dresp, err := srv.CallDrpc(drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}
