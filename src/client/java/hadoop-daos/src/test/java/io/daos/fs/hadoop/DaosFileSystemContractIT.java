@@ -49,7 +49,6 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     rename(super.path("/"),
               super.path("/test/newRootDir"),
               false, true, false);
-
   }
 
   @Test
@@ -127,7 +126,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertTrue(this.fs.exists(testFile));
     this.fs.mkdirs(testFile);
 //    fail("/test/hadoop/file is a file");
-    }catch (FileAlreadyExistsException e){
+    } catch (FileAlreadyExistsException e) {
     }
   }
 
