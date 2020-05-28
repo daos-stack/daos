@@ -58,5 +58,5 @@ func (n *NvmMgmt) GetFirmwareInfo(uid DeviceUID) (fw DeviceFirmwareInfo, err err
 // UpdateFirmware updates the firmware on the device
 func (n *NvmMgmt) UpdateFirmware(uid DeviceUID, fwPath string, force bool) error {
 	fmt.Print("ipmctl lib not present\n")
-	return
+	return nil
 }
