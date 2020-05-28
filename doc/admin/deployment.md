@@ -373,28 +373,31 @@ to storage format). See the orterun(1) man page for additional options.
 
 DAOS Server can be started as a systemd service. The DAOS Server
 unit file is installed in the correct location when installing from RPMs.
+The DAOS Server will be run as `daos-server` user which will be created
+during RPM install.
+
 If you wish to use systemd with a development build, you must copy the service
-file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
+file from utils/systemd to `/usr/lib/systemd/system{`. Once the file is copied
 modify the ExecStart line to point to your in tree daos_server binary.
 
 Once the service file is installed you can start daos_server
 with the following commands:
 
 ```bash
-$ systemctl enable daos-server
-$ systemctl start daos-server
+$ systemctl enable daos_server
+$ systemctl start daos_server
 ```
 
 To check the component status use:
 
 ```bash
-$ systemctl status daos-server
+$ systemctl status daos_server
 ```
 
 If DAOS Server failed to start, check the logs with:
 
 ```bash
-$ journalctl --unit daos-server
+$ journalctl --unit daos_server
 ```
 
 #### Kubernetes Pod

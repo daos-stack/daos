@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       19%{?relval}%{?dist}
+Release:       20%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -208,6 +208,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
+getent passwd daos_server >/dev/null || useradd -g daos_admins daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -357,6 +358,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Thu May 28 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-20
+- Create daos_server group to run as in systemd unit file
+
 * Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
 - Enable parallel building with _smp_mflags
 
