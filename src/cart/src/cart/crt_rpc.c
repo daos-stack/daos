@@ -188,6 +188,10 @@ static struct crt_proto_rpc_format crt_internal_rpcs[] = {
 	CRT_INTERNAL_RPCS_LIST,
 };
 
+static struct crt_proto_rpc_format crt_fi_rpcs[] = {
+	CRT_FI_RPCS_LIST,
+};
+
 #undef X
 
 /* CRT RPC related APIs or internal functions */
@@ -197,15 +201,27 @@ crt_internal_rpc_register(void)
 	struct crt_proto_format	cpf;
 	int			rc;
 
-	cpf.cpf_name  = "internal-proto";
-	cpf.cpf_ver   = 0;
+	cpf.cpf_name  = "internal";
+	cpf.cpf_ver   = CRT_PROTO_INTERNAL_VERSION;
 	cpf.cpf_count = ARRAY_SIZE(crt_internal_rpcs);
 	cpf.cpf_prf   = crt_internal_rpcs;
 	cpf.cpf_base  = CRT_OPC_INTERNAL_BASE;
 
 	rc = crt_proto_register_internal(&cpf);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("crt_proto_register_internal() failed. rc %d\n", rc);
+		return rc;
+	}
+
+	cpf.cpf_name  = "fault-injection";
+	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_fi_rpcs);
+	cpf.cpf_prf   = crt_fi_rpcs;
+	cpf.cpf_base  = CRT_OPC_FI_BASE;
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0)
+		D_ERROR("crt_proto_register() failed. rc %d\n", rc);
 
 	return rc;
 }
