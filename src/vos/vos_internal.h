@@ -738,7 +738,7 @@ void vos_cont_decref(struct vos_container *cont);
 enum vos_iter_state {
 	/** iterator has no valid cursor */
 	VOS_ITS_NONE,
-	/** iterator has valide cursor (user can call next/probe) */
+	/** iterator has valid cursor (user can call next/probe) */
 	VOS_ITS_OK,
 	/** end of iteration, no more entries */
 	VOS_ITS_END,

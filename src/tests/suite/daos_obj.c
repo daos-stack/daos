@@ -649,7 +649,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	daos_pool_info_t pinfo;
 	daos_size_t	 nvme_initial_size;
 	daos_size_t	 nvme_current_size;
-	void const *const aggr_disabled[] = {"disaled"};
+	void const *const aggr_disabled[] = {"disabled"};
 	void const *const aggr_set_time[] = {"time"};
 
 	if (size < OW_IOD_SIZE || (size % OW_IOD_SIZE != 0))
@@ -857,7 +857,7 @@ io_rewritten_array_with_mixed_size(void **state)
 	int			rc;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
-	void const *const aggr_disabled[] = {"disaled"};
+	void const *const aggr_disabled[] = {"disabled"};
 	void const *const aggr_set_time[] = {"time"};
 
 	/* choose random object */

@@ -180,7 +180,7 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	}
 
 	/* Comparison is for the full length of the output csum array,
-	 * starting at the correct offset of the checksum array for the inout
+	 * starting at the correct offset of the checksum array for the input
 	 * segment.
 	 */
 	return !memcmp(new_csum->cs_csum,

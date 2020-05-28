@@ -50,7 +50,7 @@ struct pl_jump_map {
 	struct pl_map		jmp_map;
 	/* Total size of domain type specified during map creation */
 	unsigned int		jmp_domain_nr;
-	/* The dom that will comtain no colocated shards */
+	/* The dom that will contain no colocated shards */
 	pool_comp_type_t	min_redundant_dom;
 };
 

@@ -306,7 +306,7 @@ d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx)
 }
 
 /**
- * delete the first occurrence of rank, shrink the arrray storage size in
+ * delete the first occurrence of rank, shrink the array storage size in
  * rank_list, and reduce the size of rank_list by 1.
  */
 int

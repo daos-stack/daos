@@ -704,7 +704,7 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_14, NULL, test_case_teardown},
 	{"DTX15: Resend with lost multiple replicated obj reply",
 	 dtx_15, NULL, test_case_teardown},
-	{"DTX16: Resend after DTX aggreation",
+	{"DTX16: Resend after DTX aggregation",
 	 dtx_16, NULL, test_case_teardown},
 	{"DTX17: DTX resync during open-close",
 	 dtx_17, NULL, test_case_teardown},

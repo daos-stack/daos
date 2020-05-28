@@ -741,7 +741,7 @@ create_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 {
 	int			rc;
 
-	/** Allocate an OID for the dir - local operaiton */
+	/** Allocate an OID for the dir - local operation */
 	rc = oid_gen(dfs, cid, false, &dir->oid);
 	if (rc != 0)
 		return rc;

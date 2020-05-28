@@ -4,7 +4,7 @@ In DAOS, if the data is replicated with multiple copies on different
 targets, once one of the target failed, the data on it will be rebuilt
 on the other targets automatically, so the data redundancy will not be
 impacted due to the target failure. In future, DAOS will also support
-Erasure Codeing to protect the data, then the rebuild process might be
+Erasure Coding to protect the data, then the rebuild process might be
 updated accordingly.
 
 ## Rebuild Detection

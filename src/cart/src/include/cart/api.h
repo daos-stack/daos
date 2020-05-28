@@ -1816,7 +1816,7 @@ int crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list);
 
 /**
  * Create local group view and return a handle to a group.
- * This call is only supported for cliens.
+ * This call is only supported for clients.
  *
  * \param[in] grp_id            Group id to create
  * \param[out] ret_grp          Returned group handle

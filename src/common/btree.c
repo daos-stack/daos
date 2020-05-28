@@ -2269,7 +2269,7 @@ btr_node_del_leaf(struct btr_context *tcx,
  * direction. In addition, caller should guarantee the child being deleted
  * is already empty.
  *
- * NB: This function may leave the node in an intermeidate state if it only
+ * NB: This function may leave the node in an intermediate state if it only
  * has one key (and two children). In this case, after returning from this
  * function, caller should either grab a child from a sibling node, or move
  * the only child of this node to a sibling node, then free this node.
@@ -3324,7 +3324,7 @@ dbtree_destroy(daos_handle_t toh, void *args)
  * the later case, it also destroys the btree.
  *
  * \param toh		[IN]	 Tree open handle.
- * \param credis	[IN/OUT] Input and returned drain credits
+ * \param credits	[IN/OUT] Input and returned drain credits
  * \param args		[IN]	 user parameter for btr_ops_t::to_rec_free
  * \param destroy	[OUT]	 Tree is empty and destroyed
  */
