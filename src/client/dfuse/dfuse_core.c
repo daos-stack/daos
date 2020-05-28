@@ -95,7 +95,7 @@ ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 	int				oldref;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	oldref = atomic_fetch_add(&ie->ie_ref, 1);
+	oldref = atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 	DFUSE_TRA_DEBUG(ie, "addref to %u", oldref + 1);
 }
 
@@ -106,7 +106,7 @@ ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 	int				oldref;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	oldref = atomic_fetch_sub(&ie->ie_ref, 1);
+	oldref = atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 	DFUSE_TRA_DEBUG(ie, "decref to %u", oldref - 1);
 	return oldref == 1;
 }
@@ -210,7 +210,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (rc != 0)
 		D_GOTO(err, 0);
 
-	atomic_fetch_add(&fs_handle->dpi_ino_next, 2);
+	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
 	args.argc = 4;
 
@@ -250,7 +250,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	ie->ie_dfs = dfs;
 	ie->ie_parent = 1;
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_stat.st_ino = 1;
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	dfs->dfs_root = ie->ie_stat.st_ino;

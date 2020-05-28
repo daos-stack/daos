@@ -47,7 +47,7 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		dfir->ir_id.irid_oid.hi = oid->hi;
 	}
 
-	dfir->ir_ino = atomic_fetch_add(&fs_handle->dpi_ino_next, 1);
+	dfir->ir_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
 	dfir->ir_id.irid_dfs = dfs;
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_irt,

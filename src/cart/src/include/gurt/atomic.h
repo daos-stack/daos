@@ -57,18 +57,30 @@
 #define atomic_store_release(ptr, value) \
 	atomic_store_explicit(ptr, value, memory_order_release)
 
+#define atomic_store_relaxed(ptr, value) \
+	atomic_store_explicit(ptr, value, memory_order_relaxed)
+
 #define atomic_load_relaxed(ptr) atomic_load_explicit(ptr, memory_order_relaxed)
+
+#define atomic_fetch_sub_relaxed(ptr) \
+	atomic_fetch_sub(ptr, memory_order_relaxed)
+
+#define atomic_fetch_add_relaxed(ptr) \
+	atomic_fetch_add(ptr, memory_order_relaxed)
 
 #else
 
 #define atomic_fetch_sub __sync_fetch_and_sub
 #define atomic_fetch_add __sync_fetch_and_add
+#define atomic_fetch_sub_relaxed __sync_fetch_and_sub
+#define atomic_fetch_add_relaxed __sync_fetch_and_add
 #define atomic_compare_exchange __sync_bool_compare_and_swap
 #define atomic_store_release(ptr, value) \
 	do {                             \
 		__sync_synchronize();    \
 		*(ptr) = (value);        \
 	} while (0)
+#define atomic_store_relaxed(ptr, value) atomic_store_release(ptr, value)
 /* There doesn't seem to be a great option here to mimic just
  * consume.  Adding 0 should suffice for the load side.  If
  * the compiler is smart, it could potentially avoid the
