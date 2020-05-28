@@ -48,7 +48,7 @@ func TestSystem_RankSet(t *testing.T) {
 		},
 		"complex with suffixes": {
 			startList: "node2-1,node1-2.suffix1,node1-[45,47].suffix2,node3,node1-3",
-			expErr:    errors.New("expecting no alphabetic characters"),
+			expErr:    errors.New("unexpected alphabetic character(s)"),
 		},
 		"simple ranged rank list": {
 			startList: "0-10",

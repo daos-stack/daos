@@ -38,7 +38,7 @@ func TestHostList_CreateNumericList(t *testing.T) {
 		expUniqCount int
 		expErr       error
 	}{
-		"simple": {
+		"letters in numeric list": {
 			startList: "node[1-128]",
 			expErr:    errors.New("unexpected alphabetic character(s)"),
 		},
@@ -78,7 +78,7 @@ func TestHostSet_CreateNumericSet(t *testing.T) {
 		expCount  int
 		expErr    error
 	}{
-		"complex with suffixes": {
+		"letters in numeric list": {
 			startList: "node2-1,node1-2.suffix1,node1-[45,47].suffix2,node3,node1-3",
 			expErr:    errors.New("unexpected alphabetic character(s)"),
 		},

@@ -163,7 +163,7 @@ type SystemResetFormatResp struct {
 //
 // This method handles request sent from management client app e.g. 'dmg'.
 //
-// The SystemResetFormat and StorageFormat control API requests are sent ggering
+// The SystemResetFormat and StorageFormat control API requests are sent to
 // mgmt_system.go method of the same name. The triggered method uses the control
 // API to fanout to (selection or all) gRPC servers listening as part of the
 // DAOS system and retrieve results from the selected ranks hosted there.

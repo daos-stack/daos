@@ -33,8 +33,7 @@ type (
 	// and is always sorted alphanumerically based on prefix.
 	HostSet struct {
 		sync.Mutex
-		list         *HostList
-		nameOptional bool
+		list *HostList
 	}
 )
 

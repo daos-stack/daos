@@ -28,12 +28,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	. "github.com/daos-stack/daos/src/control/system"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 )
 
 func TestDmg_SystemCommands(t *testing.T) {
@@ -280,10 +281,10 @@ func TestDmg_System_rankActionGroups(t *testing.T) {
 		},
 		"results with no action": {
 			results: MemberResults{
-				MockMemberResult(4, "", nil, MemberStateEvicted),
-				MockMemberResult(4, "", nil, MemberStateEvicted),
+				MockMemberResult(4, "ping", nil, MemberStateEvicted),
+				MockMemberResult(5, "", nil, MemberStateEvicted),
 			},
-			expErr: errors.New("action field empty for rank 4 result"),
+			expErr: errors.New("action field empty for rank 5 result"),
 		},
 		"results with duplicate ranks": {
 			results: MemberResults{
