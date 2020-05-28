@@ -33,7 +33,7 @@ servers:
   log_file: /tmp/server0.log # map to D_LOG_FILE=/tmp/server0.log
 
   # Environment variable values should be supplied without encapsulating quotes.
-  env_vars:                 # influence DAOS IO Server behaviour by setting env variables
+  env_vars:                 # influence DAOS IO Server behavior by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30

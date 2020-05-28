@@ -588,7 +588,7 @@ enum {
 };
 
 /**
- * Initialise an iterator.
+ * Initialize an iterator.
  *
  * \param toh		[IN]	Tree open handle
  * \param options	[IN]	Options for the iterator.

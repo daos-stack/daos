@@ -214,7 +214,7 @@ struct crt_proto_rpc_format {
 	/** aggregation function for co-rpc */
 	struct crt_corpc_ops	*prf_co_ops;
 	/**
-	 * RPC feature bits to toggle RPC behaviour. Two flags are supported
+	 * RPC feature bits to toggle RPC behavior. Two flags are supported
 	 * now: \ref CRT_RPC_FEAT_NO_REPLY and \ref CRT_RPC_FEAT_NO_TIMEOUT
 	 */
 	uint32_t		 prf_flags;

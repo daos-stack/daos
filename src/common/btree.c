@@ -3363,7 +3363,7 @@ failed:
 /**** Iterator APIs *********************************************************/
 
 /**
- * Initialise iterator.
+ * Initialize iterator.
  *
  * \param toh		[IN]	Tree open handle
  * \param options	[IN]	Options for the iterator.
@@ -3816,7 +3816,7 @@ out:
 static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 
 /**
- * Initialise a tree instance from a registered tree class.
+ * Initialize a tree instance from a registered tree class.
  */
 static int
 btr_class_init(umem_off_t root_off, struct btr_root *root,

@@ -62,7 +62,7 @@ func (m *mockStorageFormatServer) Send(resp *StorageFormatResp) error {
 	return nil
 }
 
-// return config reference with customised storage config behaviour and params
+// return config reference with customised storage config behavior and params
 func newMockStorageConfig(
 	mountRet error, unmountRet error, mkdirRet error, removeRet error,
 	scmMount string, scmClass storage.ScmClass, scmDevs []string, scmSize int,
@@ -863,7 +863,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					t.Fatal(ctx.Err())
 				}
 				if !tc.scmMounted || inflight > 0 {
-					t.Fatal("unexpected behaviour of awaitStorageReady")
+					t.Fatal("unexpected behavior of awaitStorageReady")
 				}
 			}
 

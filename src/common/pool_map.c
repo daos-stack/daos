@@ -304,7 +304,7 @@ static int
 comp_sorter_init(struct pool_comp_sorter *sorter, int nr,
 		 pool_comp_type_t type)
 {
-	D_DEBUG(DB_TRACE, "Initialise sorter for %s, nr %d\n",
+	D_DEBUG(DB_TRACE, "Initialize sorter for %s, nr %d\n",
 		pool_comp_type2str(type), nr);
 
 	D_ALLOC(sorter->cs_comps, nr * sizeof(*sorter->cs_comps));
@@ -933,7 +933,7 @@ pool_map_finalise(struct pool_map *map)
 /**
  * Install a component tree to a pool map.
  *
- * \param map		[IN]	The pool map to be initialised.
+ * \param map		[IN]	The pool map to be initialized.
  * \param activate	[IN]	Activate pool components.
  * \param tree		[IN]	Component tree for the pool map.
  */

@@ -258,7 +258,7 @@ typedef struct {
 
 #define UMM_SLABS_CNT	5
 
-/** attributes to initialise an unified memory class */
+/** attributes to initialize an unified memory class */
 struct umem_attr {
 	umem_class_id_t			 uma_id;
 	PMEMobjpool			*uma_pool;

@@ -472,7 +472,7 @@ out:
 }
 
 /**
- * Initialise a scatter/gather list, create an array to store @nr iovecs.
+ * Initialize a scatter/gather list, create an array to store @nr iovecs.
  */
 int
 d_sgl_init(d_sg_list_t *sgl, unsigned int nr)

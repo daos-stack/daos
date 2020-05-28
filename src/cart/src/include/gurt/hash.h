@@ -253,7 +253,7 @@ int  d_hash_table_create(uint32_t feats, unsigned int bits,
 			  struct d_hash_table **htable_pp);
 
 /**
- * Initialise an inplace hash table.
+ * Initialize an inplace hash table.
  *
  * Does not allocate the htable pointer itself
  *
@@ -264,7 +264,7 @@ int  d_hash_table_create(uint32_t feats, unsigned int bits,
  * \param[in] bits		power2(bits) is the size of hash table
  * \param[in] priv		Private data for the hash table
  * \param[in] hops		Customized member functions
- * \param[in] htable		Hash table to be initialised
+ * \param[in] htable		Hash table to be initialized
  *
  * \return			0 on success, negative value on error
  */

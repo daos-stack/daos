@@ -769,7 +769,7 @@ class SoakTestBase(TestWithServers):
                 for job in job_id_list:
                     status = slurm_utils.cancel_jobs(int(job))
                     if status == 0:
-                        self.log.info("<<Job %s successfully cancelled>>", job)
+                        self.log.info("<<Job %s successfully canceled>>", job)
                     else:
                         self.log.info("<<Job %s could not be killed>>", job)
             # gather all the logfiles for this pass and cleanup test nodes

@@ -686,7 +686,7 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
  * VOS iterator APIs
  */
 /**
- * Initialise an iterator for VOS
+ * Initialize an iterator for VOS
  *
  * \param type  [IN]	Type of iterator
  * \param param	[IN]	Parameters for the iterator.

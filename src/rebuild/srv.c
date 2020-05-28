@@ -821,7 +821,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 		 */
 		if (!changed) {
 			rc = -DER_CANCELED;
-			D_ERROR("rebuild targets cancelled\n");
+			D_ERROR("rebuild targets canceled\n");
 		}
 	}
 

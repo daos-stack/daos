@@ -284,7 +284,7 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
 
 /**
  * Iterate over a list
- * Behaviour is undefined if \p pos is removed from the list in the body of the
+ * Behavior is undefined if \p pos is removed from the list in the body of the
  * loop.
  *
  * \param[in] pos	the iterator

@@ -634,7 +634,7 @@ servers:
   fabric_iface_port: 31416  # map to OFI_PORT=31416
   log_mask: ERR             # map to D_LOG_MASK=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
-  env_vars:                 # influence DAOS IO Server behaviour by setting env variables
+  env_vars:                 # influence DAOS IO Server behavior by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30
@@ -653,7 +653,7 @@ servers:
   fabric_iface_port: 31416  # map to OFI_PORT=31416
   log_mask: ERR             # map to D_LOG_MASK=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
-  env_vars:                 # influence DAOS IO Server behaviour by setting env variables
+  env_vars:                 # influence DAOS IO Server behavior by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30

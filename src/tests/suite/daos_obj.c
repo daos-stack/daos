@@ -661,7 +661,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	/* Alloc and set buffer to be a sting of all uppercase letters */
+	/* Alloc and set buffer to be a string of all uppercase letters */
 	D_ALLOC(ow_buf, size);
 	assert_non_null(ow_buf);
 	dts_buf_render_uppercase(ow_buf, size);
@@ -775,7 +775,7 @@ io_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 	sprintf(dkey, "ep_ow_full dkey_%d", (int)size);
 	sprintf(akey, "ep_ow_full akey_%d", (int)size);
 
-	/* Alloc and set buffer to be a sting of all uppercase letters */
+	/* Alloc and set buffer to be a string of all uppercase letters */
 	D_ALLOC(ow_buf, size);
 	assert_non_null(ow_buf);
 	dts_buf_render_uppercase(ow_buf, size);
@@ -864,7 +864,7 @@ io_rewritten_array_with_mixed_size(void **state)
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	/* Alloc and set buffer to be a sting*/
+	/* Alloc and set buffer to be a string*/
 	D_ALLOC(ow_buf, size);
 	assert_non_null(ow_buf);
 	dts_buf_render(ow_buf, size);

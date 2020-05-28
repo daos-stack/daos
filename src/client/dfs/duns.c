@@ -74,7 +74,7 @@ bind_liblustre()
 	if (lib == NULL) {
 		liblustre_notfound = true;
 		D_ERROR("unable to locate/bind %s, dlerror() says '%s', "
-			"reverting to non-lustre behaviour.\n",
+			"reverting to non-lustre behavior.\n",
 			LIBLUSTRE, dlerror());
 		return EINVAL;
 	}
@@ -91,7 +91,7 @@ bind_liblustre()
 		D_ERROR("unable to resolve llapi_dir_create_foreign symbol, "
 			"dlerror() says '%s', Lustre version do not seem to "
 			"support foreign LOV/LMV, reverting to non-lustre "
-			"behaviour.\n", dlerror());
+			"behavior.\n", dlerror());
 		return EINVAL;
 	}
 
@@ -105,7 +105,7 @@ bind_liblustre()
 		D_ERROR("unable to resolve llapi_unlink_foreign symbol, "
 			"dlerror() says '%s', Lustre version do not seem to "
 			"support foreign daos type, reverting to non-lustre "
-			"behaviour.\n", dlerror());
+			"behavior.\n", dlerror());
 		return EINVAL;
 	}
 

@@ -240,7 +240,7 @@ int vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
  *
  * \param vsi         [IN]	In-memory compound index
  * \param hint        [IN]	Hint data
- * \param resrvd_list [IN]	List of reserved extent(s) to be cancelled
+ * \param resrvd_list [IN]	List of reserved extent(s) to be canceled
  *
  * \return			Zero on success; Appropriated negative value
  *				on error
