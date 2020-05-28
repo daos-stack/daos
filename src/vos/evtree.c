@@ -1938,6 +1938,39 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent,
 	return 0;
 }
 
+/** For hole extents that are too large for a single entry, search the tree
+ *  first and only insert holes where an extent is visible
+ */
+static int
+evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
+{
+	struct evt_entry	*ent;
+	struct evt_entry_in	 hole;
+	daos_epoch_range_t	 epr = {0, entry->ei_rect.rc_epc};
+	struct evt_entry_array	 ent_array;
+	int			 rc = 0;
+
+	evt_ent_array_init(&ent_array);
+	rc = evt_find(toh, &epr, &entry->ei_rect.rc_ex, &ent_array);
+	if (rc != 0)
+		goto done;
+
+	evt_ent_array_for_each(ent, &ent_array) {
+		if (bio_addr_is_hole(&ent->en_addr))
+			continue; /* Skip holes */
+		/** Insert a hole to cover the record */
+		hole = *entry;
+		hole.ei_rect.rc_ex = ent->en_sel_ext;
+		rc = evt_insert(toh, &hole, NULL);
+		if (rc != 0)
+			break;
+	}
+done:
+	evt_ent_array_fini(&ent_array);
+
+	return rc;
+}
+
 /**
  * Insert a versioned extent (rectangle) and its data offset into the tree.
  *
@@ -1963,7 +1996,14 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	}
 
 	if (evt_rect_width(&entry->ei_rect) > MAX_RECT_WIDTH) {
-		D_ERROR("Large extents not presently supported\n");
+		if (bio_addr_is_hole(&entry->ei_addr)) {
+			/** csum_bufp is specific to aggregation case and we
+			 * should never do this with aggregation.
+			 */
+			D_ASSERT(csum_bufp == NULL);
+			return evt_large_hole_insert(toh, entry);
+		}
+		D_ERROR("Extent is too large\n");
 		/** If it's a punch, we can do a find on the rectangle and
 		 *  punch visible extents but for now, just reject the update
 		 */
