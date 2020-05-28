@@ -23,20 +23,38 @@
 '''
 from __future__ import print_function
 
-import traceback
-
 from apricot import TestWithServers
+from command_utils import CommandFailure
 
 import check_for_pool
-from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
-# pylint: disable = broad-except
 class MultipleCreatesTest(TestWithServers):
     """
     Tests DAOS pool creation, calling it repeatedly one after another
 
     :avocado: recursive
     """
+
+    def create_pool(self):
+        """Create and verify a pool."""
+        try:
+            pool = self.get_pool(connect=False)
+        except CommandFailure as error:
+            self.fail("Expecting to pass but test has failed with error '{}' \
+                .\n".format(error))
+        return pool
+
+
+    def verify_pool(self, host, uuid):
+        """Verify the pool.
+
+        Args:
+            host (str): Server host name
+            uuid (str): Pool UUID to verify
+        """
+        if check_for_pool.check_for_pool(host, uuid.lower()):
+            self.fail("Pool {0} not found on host {1}.".format(uuid, host))
+
 
     def test_create_one(self):
         """
@@ -45,244 +63,44 @@ class MultipleCreatesTest(TestWithServers):
         :avocado: tags=all,pool,smoke,pr,small,createone
         """
 
-        # Accumulate a list of pass/fail indicators representing
-        # what is expected for each parameter then "and" them
-        # to determine the expected result of the test
-        expected_for_param = []
+        self.pool = self.create_pool()
+        print("uuid is {0}\n".format(self.pool.uuid))
 
-        modelist = self.params.get("mode", '/run/tests/modes/*')
-        expected_for_param.append(modelist[1])
-
-        setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        setid = setidlist[0]
-        expected_for_param.append(setidlist[1])
-
-        scm_size = self.params.get("scm_size", "/run/pool*")
-
-        # if any parameter results in failure then the test should FAIL
-        expected_result = 'PASS'
-        for result in expected_for_param:
-            if result == 'FAIL':
-                expected_result = 'FAIL'
-                break
-        try:
-            dmg = self.get_dmg_command()
-            result = dmg.pool_create(scm_size=scm_size, group=setid)
-            if result.exit_status == 0:
-                uuid_str, _ = get_pool_uuid_service_replicas_from_stdout(
-                    result.stdout)
-            else:
-                self.fail("    Unable to parse the Pool's UUID and SVC.")
-
-            print("uuid is {0}\n".format(uuid_str))
-
-            host = self.hostlist_servers[0]
-            exists = check_for_pool.check_for_pool(host, uuid_str)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str,
-                                                                     host))
-
-            result = dmg.pool_destroy(pool=uuid_str)
-            if result.exit_status != 0:
-                self.fail("Unable to destroy pool %s", uuid_str)
-
-            exists = check_for_pool.check_for_pool(host, uuid_str)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str, host))
-
-            if expected_result == 'FAIL':
-                self.fail("Expected to fail but passed.\n")
-
-        except Exception as excep:
-            print(excep)
-            print(traceback.format_exc())
-            if expected_result == 'PASS':
-                self.fail("Expecting to pass but test has failed.\n")
+        host = self.hostlist_servers[0]
+        self.verify_pool(host, self.pool.uuid)
 
 
     def test_create_two(self):
-        # pylint: disable=too-many-statements
         """
         Test issuing multiple pool create commands at once.
 
         :avocado: tags=all,pool,smoke,pr,small,createtwo
         """
 
-        # Accumulate a list of pass/fail indicators representing
-        # what is expected for each parameter then "and" them to
-        # determine the expected result of the test
-        expected_for_param = []
+        self.pool = [self.create_pool() for _ in range(2)]
+        for pool in self.pool:
+            print("uuid is {0}\n".format(pool.uuid))
 
-        modelist = self.params.get("mode", '/run/tests/modes/*')
-        expected_for_param.append(modelist[1])
-
-        setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        setid = setidlist[0]
-        expected_for_param.append(setidlist[1])
-
-        scm_size = self.params.get("scm_size", "/run/pool*")
-
-        # if any parameter results in failure then the test should FAIL
-        expected_result = 'PASS'
-        for result in expected_for_param:
-            if result == 'FAIL':
-                expected_result = 'FAIL'
-                break
-        try:
-            dmg = self.get_dmg_command()
-            result = dmg.pool_create(scm_size=scm_size, group=setid)
-            if result.exit_status == 0:
-                uuid_str_1, _ = get_pool_uuid_service_replicas_from_stdout(
-                    result.stdout)
-            else:
-                self.fail("    Unable to parse the Pool's UUID and SVC.")
-
-            result = dmg.pool_create(scm_size=scm_size, group=setid)
-            if result.exit_status == 0:
-                uuid_str_2, _ = get_pool_uuid_service_replicas_from_stdout(
-                    result.stdout)
-            else:
-                self.fail("    Unable to parse the Pool's UUID and SVC.")
-
-            host = self.hostlist_servers[0]
-            exists = check_for_pool.check_for_pool(host, uuid_str_1)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1,
-                                                                     host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_2)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2,
-                                                                     host))
-
-            result = dmg.pool_destroy(pool=uuid_str_1)
-            if result.exit_status != 0:
-                self.fail("Unable to destroy pool %s", uuid_str_1)
-
-            result = dmg.pool_destroy(pool=uuid_str_2)
-            if result.exit_status != 0:
-                self.fail("Unable to destroy pool %s", uuid_str_2)
-
-
-            exists = check_for_pool.check_for_pool(host, uuid_str_1)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str_1, host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_2)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str_2, host))
-
-            if expected_result == 'FAIL':
-                self.fail("Expected to fail but passed.\n")
-
-        except Exception as excep:
-            print(excep)
-            print(traceback.format_exc())
-            if expected_result == 'PASS':
-                self.fail("Expecting to pass but test has failed.\n")
+        for host in self.hostlist_servers:
+            for pool in self.pool:
+                self.verify_pool(host, pool.uuid)
 
 
     def test_create_three(self):
-        # pylint: disable=too-many-statements
         """
         Test issuing multiple pool create commands at once.
 
         :avocado: tags=all,pool,pr,small,createthree
         """
 
-        # Accumulate a list of pass/fail indicators representing what is
-        # expected for each parameter then "and" them to determine the
-        # expected result of the test
-        expected_for_param = []
+        self.pool = [self.create_pool() for _ in range(3)]
+        for pool in self.pool:
+            print("uuid is {0}\n".format(pool.uuid))
 
-        modelist = self.params.get("mode", '/run/tests/modes/*')
-        expected_for_param.append(modelist[1])
+        for host in self.hostlist_servers:
+            for pool in self.pool:
+                self.verify_pool(host, pool.uuid)
 
-        setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        setid = setidlist[0]
-        expected_for_param.append(setidlist[1])
-
-        scm_size = self.params.get("scm_size", "/run/pool*")
-
-        # if any parameter results in failure then the test should FAIL
-        expected_result = 'PASS'
-        for result in expected_for_param:
-            if result == 'FAIL':
-                expected_result = 'FAIL'
-                break
-        try:
-            dmg = self.get_dmg_command()
-            result = dmg.pool_create(scm_size=scm_size, group=setid)
-            if result.exit_status == 0:
-                uuid_str_1, _ = get_pool_uuid_service_replicas_from_stdout(
-                    result.stdout)
-            else:
-                self.fail("    Unable to parse the Pool's UUID and SVC.")
-
-            result = dmg.pool_create(scm_size=scm_size, group=setid)
-            if result.exit_status == 0:
-                uuid_str_2, _ = get_pool_uuid_service_replicas_from_stdout(
-                    result.stdout)
-            else:
-                self.fail("    Unable to parse the Pool's UUID and SVC.")
-
-            result = dmg.pool_create(scm_size=scm_size, group=setid)
-            if result.exit_status == 0:
-                uuid_str_3, _ = get_pool_uuid_service_replicas_from_stdout(
-                    result.stdout)
-            else:
-                self.fail("    Unable to parse the Pool's UUID and SVC.")
-
-
-            host = self.hostlist_servers[0]
-            exists = check_for_pool.check_for_pool(host, uuid_str_1)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1,
-                                                                     host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_2)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2,
-                                                                     host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_3)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_3,
-                                                                     host))
-
-            result = dmg.pool_destroy(pool=uuid_str_1)
-            if result.exit_status != 0:
-                self.fail("Unable to destroy pool %s", uuid_str_1)
-
-            result = dmg.pool_destroy(pool=uuid_str_2)
-            if result.exit_status != 0:
-                self.fail("Unable to destroy pool %s", uuid_str_2)
-
-            result = dmg.pool_destroy(pool=uuid_str_3)
-            if result.exit_status != 0:
-                self.fail("Unable to destroy pool %s", uuid_str_3)
-
-
-            exists = check_for_pool.check_for_pool(host, uuid_str_1)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str_1, host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_2)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str_2, host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_3)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str_3, host))
-
-            if expected_result == 'FAIL':
-                self.fail("Expected to fail but passed.\n")
-
-        except Exception as excep:
-            print(excep)
-            print(traceback.format_exc())
-            if expected_result == 'PASS':
-                self.fail("Expecting to pass but test has failed.\n")
 
     # COMMENTED OUT because test environments don't always have enough
     # memory to run this

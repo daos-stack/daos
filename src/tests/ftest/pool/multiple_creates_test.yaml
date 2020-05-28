@@ -8,15 +8,6 @@ server_config:
    name: daos_server
 timeout: 240
 pool:
+    name: daos_server
     scm_size: 1073741824
-tests:
-   modes:
-      modeall:
-        mode:
-          - 511
-          - PASS
-   setnames:
-      validsetname:
-        setname:
-          - daos_server
-          - PASS
+    control_method: dmg
