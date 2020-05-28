@@ -70,18 +70,18 @@ def acl_principal(usergroup, name):
     return entry
 
 
-def add_del_user(hosts, ba_cmd, user):
+def add_del_user(hosts, bash_cmd, user):
     """Add or delete the daos user and group on host by sudo command.
 
     Args:
         hosts (list): list of host.
-        ba_cmd (str): linux bash command to create user or group.
+        bash_cmd (str): linux bash command to create user or group.
         user (str): user or group name to be created or cleaned.
 
     """
-    bash_cmd = os.path.join("/usr/sbin", ba_cmd)
+    bash_cmd = os.path.join("/usr/sbin", bash_cmd)
     homedir = ""
-    if "usermod" not in ba_cmd and "user" in ba_cmd:
+    if "usermod" not in bash_cmd and "user" in bash_cmd:
         homedir = "-r"
     cmd = " ".join(("sudo", bash_cmd, homedir, user))
     print("     =Clients/hosts {0}, exec cmd: {1}".format(hosts, cmd))

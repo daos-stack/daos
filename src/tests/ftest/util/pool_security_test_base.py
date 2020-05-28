@@ -24,12 +24,12 @@
 from __future__ import print_function
 
 import os
-from apricot import TestWithServers
-from daos_utils import DaosCommand
-import dmg_utils
 import random
 import grp
 import re
+from apricot import TestWithServers
+from daos_utils import DaosCommand
+import dmg_utils
 import security_test_base as secTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
@@ -394,11 +394,11 @@ class PoolSecurityTestBase(TestWithServers):
         # (6)Verify pool acl ace update and delete
         self.log.info("  (6)Verify update and delete of pool's acl entry.")
         tmp_ace = "daos_ci_test_new"
-        new_entrys = [secTestBase.acl_entry("user", tmp_ace, "", PERMISSIONS),
-                      secTestBase.acl_entry("group", tmp_ace, "", PERMISSIONS)]
+        new_entries = [secTestBase.acl_entry("user", tmp_ace, "", PERMISSIONS),
+                       secTestBase.acl_entry("group", tmp_ace, "", PERMISSIONS)]
         acl_principals = [secTestBase.acl_principal("user", tmp_ace),
                           secTestBase.acl_principal("group", tmp_ace)]
-        for new_entry in new_entrys:
+        for new_entry in new_entries:
             self.update_pool_acl_entry(uuid, "update", new_entry)
         for principal in acl_principals:
             self.update_pool_acl_entry(uuid, "delete", principal)

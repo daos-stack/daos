@@ -38,7 +38,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
         """Test basic container create/destroy/open/close/query.
 
             1. Create a pool (dmg tool) with no acl file passed.
-            2. Create a container (daos tool) with no acl file pased.
+            2. Create a container (daos tool) with no acl file passed.
             3. Destroy the container.
             4. Create a container (daos tool) with a valid acl file passed.
             5. Destroy the container.
@@ -81,7 +81,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
         self.log.info("===> Destroying the container")
         result = self.destroy_containers(self.container)
         if result:
-            self.fail("    Unable to destroy conatiner '{}'".format(
+            self.fail("    Unable to destroy container '{}'".format(
                 self.container_uuid))
         else:
             self.container_uuid = None
@@ -113,7 +113,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
         self.log.info("===> Destroying the container")
         result = self.destroy_containers(self.container)
         if result:
-            self.fail("    Unable to destroy conatiner '{}'".format(
+            self.fail("    Unable to destroy container '{}'".format(
                 self.container_uuid))
         else:
             self.container_uuid = None

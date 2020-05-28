@@ -544,7 +544,7 @@ def check_uuid_format(uuid):
     """Checks a correct UUID format.
 
     Args:
-        uuid (str): Pool or Conatiner UUID.
+        uuid (str): Pool or Container UUID.
 
     Returns:
         bool: status of valid or invalid uuid
