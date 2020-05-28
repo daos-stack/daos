@@ -37,15 +37,19 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func mockMember(t *testing.T, idx uint32, state MemberState) *Member {
+func mockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
 	addr, err := net.ResolveTCPAddr("tcp",
 		fmt.Sprintf("127.0.0.%d:10001", idx))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return NewMember(Rank(idx), fmt.Sprintf("abcd-efgh-ijkl-mno%d", idx),
+	m := NewMember(Rank(idx), fmt.Sprintf("abcd-efgh-ijkl-mno%d", idx),
 		addr, state)
+	if len(info) > 0 {
+		m.Info = info[0]
+	}
+	return m
 }
 
 func TestMember_Stringify(t *testing.T) {
@@ -360,7 +364,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 			},
 			expMembers: Members{
 				mockMember(t, 1, MemberStateJoined),
-				mockMember(t, 2, MemberStateErrored),
+				mockMember(t, 2, MemberStateErrored, "can't stop"),
 			},
 			expResults: MemberResults{
 				expMrDiffAddr1,
@@ -375,12 +379,14 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateStopped),
 				mockMember(t, 5, MemberStateJoined),
+				mockMember(t, 6, MemberStateJoined),
 			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
 				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
 				NewMemberResult(4, nil, MemberStateReady),
 				NewMemberResult(5, nil, MemberStateReady),
+				&MemberResult{Rank: 6, Msg: "exit 1", State: MemberStateStopped},
 			},
 			expMembers: Members{
 				mockMember(t, 1, MemberStateStopped),
@@ -388,6 +394,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateReady),
 				mockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
+				mockMember(t, 6, MemberStateStopped, "exit 1"),
 			},
 		},
 		"dont ignore errored results": {
@@ -397,19 +404,22 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateStopped),
 				mockMember(t, 5, MemberStateJoined),
+				mockMember(t, 6, MemberStateStopped),
 			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
 				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
 				NewMemberResult(4, nil, MemberStateReady),
 				NewMemberResult(5, nil, MemberStateReady),
+				&MemberResult{Rank: 6, Msg: "exit 1", State: MemberStateStopped},
 			},
 			expMembers: Members{
 				mockMember(t, 1, MemberStateStopped),
-				mockMember(t, 2, MemberStateErrored),
+				mockMember(t, 2, MemberStateErrored, "can't stop"),
 				mockMember(t, 3, MemberStateEvicted),
 				mockMember(t, 4, MemberStateReady),
 				mockMember(t, 5, MemberStateJoined),
+				mockMember(t, 6, MemberStateStopped),
 			},
 		},
 		"errored result with nonerrored state": {
@@ -449,8 +459,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				if diff := cmp.Diff(tc.expMembers[i], m, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 				}
-				AssertEqual(t, tc.expMembers[i].State().String(), m.State().String(),
-					m.Rank.String())
+				AssertEqual(t, tc.expMembers[i], m, m.Rank.String())
 			}
 
 			// verify result host address is updated to that of member if empty

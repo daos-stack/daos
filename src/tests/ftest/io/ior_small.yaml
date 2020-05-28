@@ -47,7 +47,7 @@ ior:
             - MPIIO
             - POSIX
           transfer_block_size:
-            - [256B, 4M]
+            - [256B, 2M]
             - [1M, 32M]
           obj_class:
             - "SX"

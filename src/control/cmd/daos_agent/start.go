@@ -65,14 +65,13 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
-	netdetect.SetLogger(cmd.log)
 	numaAware, err := netdetect.NumaAware()
 	if err != nil {
 		return err
 	}
 
 	if !numaAware {
-		cmd.log.Debugf("This system is not NUMA aware")
+		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.log, cmd.cfg.TransportConfig))
@@ -95,17 +94,23 @@ func (cmd *startCmd) Execute(_ []string) error {
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal)
 	finish := make(chan struct{})
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGPIPE)
 	// Anonymous goroutine to wait on the signals channel and tell the
-	// program to finish when it receives a signal. Since we only notify on
-	// SIGINT and SIGTERM we should only catch this on a kill or ctrl+c
+	// program to finish when it receives a signal. Since we notify on
+	// SIGINT and SIGTERM we should only catch these on a kill or ctrl+c
+	// SIGPIPE is caught and logged to avoid killing the agent.
 	// The syntax looks odd but <- Channel means wait on any input on the
 	// channel.
 	go func() {
 		sig := <-signals
-		cmd.log.Infof("Caught %s; shutting down", sig)
-		close(finish)
+		switch sig {
+		case syscall.SIGPIPE:
+			cmd.log.Infof("Signal received.  Caught non-fatal %s; continuing", sig)
+		default:
+			cmd.log.Infof("Signal received.  Caught %s; shutting down", sig)
+			close(finish)
+		}
 	}()
 	<-finish
 	drpcServer.Shutdown()

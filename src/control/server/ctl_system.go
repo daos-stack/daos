@@ -47,26 +47,30 @@ type ranksMethod string
 const (
 	prep  ranksMethod = "prep shutdown"
 	stop  ranksMethod = "stop"
-	reset ranksMethod = "reset"
+	reset ranksMethod = "reset format"
 	start ranksMethod = "start"
 	ping  ranksMethod = "ping"
 )
 
-func getRanksFunc(method ranksMethod) systemRanksFunc {
-	switch method {
+func (rm ranksMethod) Call(ctx context.Context, invoker control.Invoker, req *control.RanksReq) (*control.RanksResp, error) {
+	var fn systemRanksFunc
+
+	switch rm {
 	case prep:
-		return control.PrepShutdownRanks
+		fn = control.PrepShutdownRanks
 	case stop:
-		return control.StopRanks
+		fn = control.StopRanks
 	case reset:
-		return control.ResetFormatRanks
+		fn = control.ResetFormatRanks
 	case start:
-		return control.StartRanks
+		fn = control.StartRanks
 	case ping:
-		return control.PingRanks
+		fn = control.PingRanks
 	default:
-		panic(1) // shouldn't happen
+		return nil, errors.New("unrecognised system ranks method") // programming error
 	}
+
+	return fn(ctx, invoker, req)
 }
 
 // rpcToRanks sends requests to ranks in list on their respective host
@@ -83,7 +87,7 @@ func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq
 	}
 
 	req.SetHostList(svc.membership.Hosts(req.Ranks...))
-	resp, err := getRanksFunc(method)(ctx, svc.rpcClient, req)
+	resp, err := method.Call(ctx, svc.rpcClient, req)
 	if err != nil {
 		return nil, err
 	}
@@ -93,16 +97,17 @@ func (svc *ControlService) rpcToRanks(ctx context.Context, req *control.RanksReq
 
 	// synthesise "Stopped" rank results for any harness host errors
 	hostRanks := svc.membership.HostRanks(req.Ranks...)
-	for errMsg, hostSet := range resp.HostErrors {
-		for _, addr := range strings.Split(hostSet.DerangedString(), ",") {
-			// TODO: should annotate member state with "harness unresponsive" err
+	for _, hes := range resp.HostErrors {
+		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
 			for _, rank := range hostRanks[addr] {
 				results = append(results,
-					system.NewMemberResult(rank, errors.New(errMsg),
-						system.MemberStateUnresponsive))
+					&system.MemberResult{
+						Rank: rank, Msg: hes.HostError.Error(),
+						State: system.MemberStateUnresponsive,
+					})
 			}
 			svc.log.Debugf("harness %s (ranks %v) host error: %s",
-				addr, hostRanks[addr], errMsg)
+				addr, hostRanks[addr], hes.HostError)
 		}
 	}
 

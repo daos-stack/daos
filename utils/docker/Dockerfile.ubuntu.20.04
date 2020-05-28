@@ -6,7 +6,7 @@
 #
 
 # Pull base image
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 MAINTAINER <daos@daos.groups.io>
 
 # Build arguments can be set via -build-arg
@@ -28,13 +28,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             libssl-dev libtool-bin libyaml-dev                          \
             locales make meson nasm ninja-build pandoc patch            \
             pylint python-dev python3-dev scons sg3-utils uuid-dev      \
-            yasm valgrind libhwloc-dev man python-distro
+            yasm valgrind libhwloc-dev man fuse3 libfuse3-dev 		\
+	    openjdk-8-jdk maven
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
-    add-apt-repository ppa:jhli/libsafec;                               \
-    add-apt-repository ppa:jhli/ipmctl;                                 \
-    add-apt-repository ppa:longsleep/golang-backports;                  \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        libsafec-dev libipmctl-dev ndctl ipmctl golang-go
 
@@ -42,6 +40,23 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 RUN rm /bin/sh && ln -s bash /bin/sh
 
 RUN locale-gen en_US.UTF-8 || cat /usr/share/i18n/SUPPORTED
+
+# use Java 8 instead of default Java 11
+RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+
+# set maven mirror
+RUN mkdir -p /home/$USER/.m2
+
+RUN echo -e "<settings>\n\
+	<mirrors>\n\
+		<mirror>\n\
+			<id>google-maven-central</id>\n\
+			<name>GCS Maven Central mirror</name>\n\
+			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+			<mirrorOf>central</mirrorOf>\n\
+		</mirror>\n\
+	</mirrors>\n\
+</settings>" > /home/$USER/.m2/settings.xml
 
 # Dependencies
 
@@ -72,6 +87,4 @@ RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install PREFIX=/usr; 
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
-ENV CRT_PHY_ADDR_STR="ofi+sockets"
-ENV OFI_INTERFACE=eth0
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
