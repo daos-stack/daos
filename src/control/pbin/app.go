@@ -218,13 +218,13 @@ func (a *App) readRequest(rdr io.Reader) (*Request, error) {
 func (a *App) handleRequest(req *Request) *Response {
 	reqHandler, ok := a.handlers[req.Method]
 	if !ok {
-		err := a.logError(errors.Errorf("unhandled method '%s'", req.Method))
+		err := a.logError(errors.Errorf("unhandled method %q", req.Method))
 		return NewResponseWithError(err)
 	}
 
 	resp := reqHandler.Handle(a.log, req)
 	if resp == nil {
-		err := a.logError(errors.Errorf("handler for method '%s' returned nil", req.Method))
+		err := a.logError(errors.Errorf("handler for method %q returned nil", req.Method))
 		return NewResponseWithError(err)
 	}
 

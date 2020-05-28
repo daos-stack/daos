@@ -24,8 +24,8 @@
 package pbin
 
 import (
+	"bytes"
 	"encoding/json"
-	"io"
 	"testing"
 )
 
@@ -65,10 +65,9 @@ func defaultMockProcess() *mockProcess {
 // mockReadWriter is a mock of the io.ReadWriteCloser interface that provides
 // convenient access to pbin Request/Response data structures.
 type mockReadWriter struct {
-	toRead   []byte
+	toRead   bytes.Buffer
 	readErr  error
-	readDone bool
-	written  []byte
+	written  bytes.Buffer
 	writeErr error
 }
 
@@ -78,28 +77,27 @@ func (r *mockReadWriter) setRequestToRead(t *testing.T, req *Request) {
 		t.Fatalf("failed to marshal req: %v", err)
 	}
 
-	r.toRead = make([]byte, len(data))
-	_ = copy(r.toRead, data)
+	r.toRead.Write(data)
 }
 
 func (r *mockReadWriter) Read(p []byte) (n int, err error) {
 	if r.readErr != nil {
 		return 0, r.readErr
 	}
-	if r.readDone {
-		return 0, io.EOF
-	}
-	n = copy(p, r.toRead)
-	r.readDone = true
-	return
+	return r.toRead.Read(p)
 }
 
 func (r *mockReadWriter) getWrittenResponse(t *testing.T) *Response {
-	if len(r.written) == 0 {
+	if r.written.Len() == 0 {
 		return nil
 	}
+	buf := make([]byte, r.written.Len())
+	_, err := r.written.Read(buf)
+	if err != nil {
+		t.Fatalf("couldn't read written response: %v", err)
+	}
 	var res Response
-	if err := json.Unmarshal(r.written, &res); err != nil {
+	if err := json.Unmarshal(buf, &res); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
@@ -110,9 +108,7 @@ func (r *mockReadWriter) Write(p []byte) (n int, err error) {
 	if r.writeErr != nil {
 		return 0, r.writeErr
 	}
-	r.written = make([]byte, len(p))
-	n = copy(r.written, p)
-	return
+	return r.written.Write(p)
 }
 
 func (r *mockReadWriter) Close() error {

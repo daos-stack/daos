@@ -26,6 +26,7 @@ package pbin
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -237,14 +238,14 @@ func TestPbinApp_Run(t *testing.T) {
 			inputReq: &Request{
 				Method: "garbage",
 			},
-			expErr:  errors.New("unhandled method 'garbage'"),
-			expResp: NewResponseWithError(errors.New("unhandled method 'garbage'")),
+			expErr:  PrivilegedHelperRequestFailed("unhandled method \"garbage\""),
+			expResp: NewResponseWithError(errors.New("unhandled method \"garbage\"")),
 		},
 		"response nil": {
 			process:  defaultMockProcess(),
 			inputReq: defaultReq,
-			expResp:  NewResponseWithError(fmt.Errorf("handler for method '%s' returned nil", defaultReq.Method)),
-			expErr:   fmt.Errorf("handler for method '%s' returned nil", defaultReq.Method),
+			expResp:  NewResponseWithError(fmt.Errorf("handler for method %q returned nil", defaultReq.Method)),
+			expErr:   PrivilegedHelperRequestFailed(fmt.Sprintf("handler for method %q returned nil", defaultReq.Method)),
 		},
 		"response has error": {
 			process:    defaultMockProcess(),
@@ -296,5 +297,33 @@ func TestPbinApp_Run(t *testing.T) {
 				t.Errorf("bad response (-want, +got):\n%s\n", diff)
 			}
 		})
+	}
+}
+
+func TestPbinApp_ReadRequest_GiantPayload(t *testing.T) {
+	// Way bigger than the message buffer
+	alnum := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	giantPayload := make([]byte, (MessageBufferSize*5)+1)
+	for i := 0; i < len(giantPayload); i++ {
+		giantPayload[i] = alnum[rand.Intn(len(alnum))]
+	}
+
+	expReq := &Request{
+		Method:  "too big to fail",
+		Payload: append(append([]byte(`{"foo":"`), giantPayload...), []byte(`"}`)...),
+	}
+
+	rw := &mockReadWriter{}
+	rw.setRequestToRead(t, expReq)
+
+	app := NewApp()
+	req, err := app.readRequest(rw)
+
+	if err != nil {
+		t.Fatalf("readRequest failed: %v", err)
+	}
+
+	if diff := cmp.Diff(expReq, req); diff != "" {
+		t.Errorf("incorrect data read (-want, +got):\n%s\n", diff)
 	}
 }
