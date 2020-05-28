@@ -207,7 +207,7 @@ main(int argc, const char **argv)
 	int test_rc = setup(argc, (char **)argv);
 
 	if (test_rc) {
-		D_PRINT("Couldn't initialize DAOS.\n");
+		D_PRINT("Couldn't initialize DAOS: "DF_RC"\n", DP_RC(test_rc));
 		return 1;
 	}
 

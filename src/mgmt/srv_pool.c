@@ -165,7 +165,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 	D_DEBUG(DB_MGMT, DF_UUID" create %zu tgts pool\n",
 		DP_UUID(pool_uuid), tc_out->tc_tgt_uuids.ca_count);
 
-	/* Abort early if the caller does not need the new pool target UUIDs */
+	/* Abort early if the caller doesn't need the new pool target UUIDs */
 	if (tgt_uuids == NULL)
 		D_GOTO(decref, rc = DER_SUCCESS);
 
@@ -260,7 +260,7 @@ pool_rec_valid(d_iov_t *v)
 
 /*
  * Look up the pool record's SCM address.
- * Caller should be holding the lock! (read or write)
+ * Caller must be holding the read lock
  */
 static int
 pool_rec_lookup(struct rdb_tx *tx, struct mgmt_svc *svc, uuid_t uuid,
@@ -791,15 +791,22 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 		reint_ranks->rl_nr = 1;
 		reint_ranks->rl_ranks[0] = rank;
 
-		/* TODO: Set the sizes correctly - they are ignored only if
-		 * the pool already exists. Also set the tgt_dev dynamically,
-		 * instead of hardcoding "pmem" here
+		/* TODO: The size information and "pmem" type need to be
+		 * determined automatically, perhaps by querying the pool leader
+		 * This works for now because these parameters are ignored if
+		 * the pool already exists on the destination node. This is
+		 * just used to ensure the pool is started.
+		 *
+		 * Fixing this will add the ability to reintegrate with a new
+		 * node, rather than only the previously failed node.
+		 *
+		 * This is tracked in DAOS-5041
 		 */
 		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, "pmem",
 						   reint_ranks, 0, 0, NULL);
 		if (rc != 0) {
 			D_ERROR("creating pool on ranks "DF_UUID" failed: rc "
-				""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 	}

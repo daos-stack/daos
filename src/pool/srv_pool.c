@@ -3167,8 +3167,8 @@ rechoose:
 
 	rc = pool_req_create(info->dmi_ctx, &ep, opcode, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool add rpc: "
-			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		D_ERROR(DF_UUID": failed to create pool req: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_client, rc);
 	}
 
@@ -3205,9 +3205,10 @@ rechoose:
 
 	rc = out->pto_op.po_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": Failed to set targets to UP state for "
-				"reintegration: "DF_RC"\n", DP_UUID(pool_uuid),
-				DP_RC(rc));
+		D_ERROR(DF_UUID": Failed to set targets to %s state: "DF_RC"\n",
+			state == PO_COMP_ST_DOWN ? "DOWN" :
+			state == PO_COMP_ST_UP ? "UP" : "UNKNOWN",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_rpc, rc);
 	}
 
