@@ -116,12 +116,12 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
   @Test
   public void testMkdirsForExistingFile() throws Exception {
-    try{
-    Path testFile = this.path("/test/hadoop/file");
-    assertFalse(this.fs.exists(testFile));
-    this.createFile(testFile);
-    assertTrue(this.fs.exists(testFile));
-    this.fs.mkdirs(testFile);
+    try {
+      Path testFile = this.path("/test/hadoop/file");
+      assertFalse(this.fs.exists(testFile));
+      this.createFile(testFile);
+      assertTrue(this.fs.exists(testFile));
+      this.fs.mkdirs(testFile);
 //    fail("/test/hadoop/file is a file");
     } catch (FileAlreadyExistsException e) {
     }
