@@ -788,7 +788,7 @@ def run_tests(test_files, tag_filter, args):
                     return 128
             # dump ulimit 
             get_ulimit(test_file["yaml"], args)
-            
+
             # Execute this test
             test_command_list = list(command_list)
             test_command_list.extend([
@@ -912,7 +912,7 @@ def get_ulimit(test_yaml, args):
         args (argparse.Namespace): command line arguments for this program
     """
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "sudo ulimit -a"
+    command = "ulimit -a"
     print("Getting ulimit -a on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error getting ulimit, aborting")
