@@ -57,17 +57,7 @@
 #define atomic_store_release(ptr, value) \
 	atomic_store_explicit(ptr, value, memory_order_release)
 
-#define atomic_add(ptr, value) atomic_fetch_add_explicit(ptr,		\
-							 value,		\
-							 memory_order_relaxed)
-
-#define atomic_load(ptr) atomic_load_explicit(ptr, memory_order_relaxed)
-
-#define atomic_load_consume(ptr)			\
-	atomic_load_explicit(ptr, memory_order_consume)
-
-#define atomic_dec_release(ptr) \
-	atomic_fetch_sub_explicit(ptr, 1, memory_order_release)
+#define atomic_load_relaxed(ptr) atomic_load_explicit(ptr, memory_order_relaxed)
 
 #else
 
@@ -85,15 +75,10 @@
  * actual synchronization after the store as the store isn't
  * required.
  */
-#define atomic_load_consume(ptr) atomic_fetch_add(ptr, 0)
-#define atomic_load(ptr) atomic_fetch_add(ptr, 0)
-#define atomic_dec_release(ptr) __sync_fetch_and_sub(ptr, 1)
+#define atomic_load_relaxed(ptr) atomic_fetch_add(ptr, 0)
+
 #define ATOMIC
 
-#define atomic_add(ptr, value) atomic_fetch_add(ptr, value)
-
 #endif
-
-#define atomic_inc(ptr) atomic_add(ptr, 1)
 
 #endif /* __GURT_ATOMIC_H__ */

@@ -121,7 +121,7 @@ ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	do {
-		oldref = atomic_load(&ie->ie_ref);
+		oldref = atomic_load_relaxed(&ie->ie_ref);
 
 		newref = oldref - count;
 
@@ -359,7 +359,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 
 		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-		ref = atomic_load_consume(&ie->ie_ref);
+		ref = atomic_load_relaxed(&ie->ie_ref);
 
 		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 
