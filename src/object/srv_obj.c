@@ -329,8 +329,8 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			 * Skip the punched/empty record, let's also skip the
 			 * record in the input buffer instead of memset to 0.
 			 */
-			while (sgl->sg_iovs[idx].iov_buf == NULL &&
-			       idx < sgl->sg_nr_out) {
+			while (idx < sgl->sg_nr_out &&
+				sgl->sg_iovs[idx].iov_buf == NULL) {
 				offset += sgl->sg_iovs[idx].iov_len;
 				idx++;
 			}
