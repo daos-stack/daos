@@ -678,9 +678,10 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		break;
 	case RPC_STATE_QUEUED:
 		RPC_ERROR(rpc_priv,
-			  "timedout in waitq to group %s, rank %d, tgt_uri %s\n",
-			  grp_priv->gp_pub.cg_grpid,
-			  tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+			  "timedout in waitq to group %s, rank %d, tag %d, "
+			  "tgt_uri %s\n", grp_priv->gp_pub.cg_grpid,
+			  tgt_ep->ep_rank, tgt_ep->ep_tag,
+			  rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_CANCELED);
 		RPC_DECREF(rpc_priv);
@@ -731,6 +732,8 @@ crt_ctx_epi_timeout(d_list_t *rlink, void *arg)
 	d_list_for_each_entry_safe(rpc_priv, rpc_next, &epi->epi_req_waitq,
 				   crp_epi_link) {
 		if (rpc_priv->crp_timeout_ts < ept->ept_ts_now) {
+			/* +1 to prevent it from being released */
+			RPC_ADDREF(rpc_priv);
 			/* remove from waitq queue */
 			d_list_del_init(&rpc_priv->crp_epi_link);
 			d_list_add_tail(&rpc_priv->crp_tmp_link,
@@ -742,6 +745,8 @@ crt_ctx_epi_timeout(d_list_t *rlink, void *arg)
 	d_list_for_each_entry_safe(rpc_priv, rpc_next, &epi->epi_req_q,
 				   crp_epi_link) {
 		if (rpc_priv->crp_timeout_ts < ept->ept_ts_now) {
+			/* +1 to prevent it from being released */
+			RPC_ADDREF(rpc_priv);
 			/* remove from inflight queue */
 			d_list_del_init(&rpc_priv->crp_epi_link);
 			d_list_add_tail(&rpc_priv->crp_tmp_link,
@@ -782,6 +787,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		/* check for and execute RPC timeout callbacks here */
 		crt_exec_timeout_cb(rpc_priv);
 		crt_req_timeout_hdlr(rpc_priv);
+		RPC_DECREF(rpc_priv); /* +1 was in crt_ctx_epi_timeout() */
 	}
 }
 
@@ -973,6 +979,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		tmp_rpc = d_list_entry(epi->epi_req_waitq.next,
 					struct crt_rpc_priv, crp_epi_link);
 		tmp_rpc->crp_state = RPC_STATE_INITED;
+		crt_set_timeout(tmp_rpc);
 
 		/* remove from waitq and add to in-flight queue */
 		d_list_move_tail(&tmp_rpc->crp_epi_link, &epi->epi_req_q);

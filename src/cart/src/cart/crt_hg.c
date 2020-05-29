@@ -1115,6 +1115,9 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				     rpc_pub->cr_ep.ep_rank)) {
 			RPC_TRACE(DB_NET, rpc_priv, "request target evicted\n");
 			rc = -DER_EVICTED;
+		} else if (rpc_priv->crp_timeout_ts < d_timeus_secdiff(0)) {
+			RPC_TRACE(DB_NET, rpc_priv, "request timedout\n");
+			rc = -DER_TIMEDOUT;
 		} else {
 			RPC_TRACE(DB_NET, rpc_priv, "request canceled\n");
 			rc = -DER_CANCELED;
