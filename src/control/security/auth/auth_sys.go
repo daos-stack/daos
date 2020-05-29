@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"crypto"
 	"os"
 	"os/user"
+	"strconv"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -35,20 +36,82 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
-// User is an interface wrapping a representation of a specific system user
+// User is an interface wrapping a representation of a specific system user.
 type User interface {
 	Username() string
 	GroupIDs() ([]uint32, error)
+	Gid() (uint32, error)
 }
 
-// UserExt is an interface that wraps system user-related external functions
+// UserExt is an interface that wraps system user-related external functions.
 type UserExt interface {
+	Current() (User, error)
 	LookupUserID(uid uint32) (User, error)
 	LookupGroupID(gid uint32) (*user.Group, error)
 }
 
-//VerifierFromToken will return a SHA512 hash of the token data. If a signing key
-//is passed in it will additionally sign the hash of the token.
+// UserInfo is an internal implementation of the security.User interface
+type UserInfo struct {
+	Info *user.User
+}
+
+func (u *UserInfo) Username() string {
+	return u.Info.Username
+}
+
+func (u *UserInfo) GroupIDs() ([]uint32, error) {
+	gidStrs, err := u.Info.GroupIds()
+	if err != nil {
+		return nil, err
+	}
+
+	gids := []uint32{}
+	for _, gstr := range gidStrs {
+		gid, err := strconv.Atoi(gstr)
+		if err != nil {
+			continue
+		}
+		gids = append(gids, uint32(gid))
+	}
+
+	return gids, nil
+}
+
+func (u *UserInfo) Gid() (uint32, error) {
+	gid, err := strconv.Atoi(u.Info.Gid)
+
+	return uint32(gid), errors.Wrap(err, "user gid")
+}
+
+// External is an internal implementation of the UserExt interface
+type External struct{}
+
+// LookupUserId is a wrapper for user.LookupId
+func (e *External) LookupUserID(uid uint32) (User, error) {
+	uidStr := strconv.FormatUint(uint64(uid), 10)
+	info, err := user.LookupId(uidStr)
+	if err != nil {
+		return nil, err
+	}
+	return &UserInfo{Info: info}, nil
+}
+
+// LookupGroupId is a wrapper for user.LookupGroupId
+func (e *External) LookupGroupID(gid uint32) (*user.Group, error) {
+	gidStr := strconv.FormatUint(uint64(gid), 10)
+	return user.LookupGroupId(gidStr)
+}
+
+func (e *External) Current() (User, error) {
+	info, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+	return &UserInfo{Info: info}, nil
+}
+
+// VerifierFromToken will return a SHA512 hash of the token data. If a signing key
+// is passed in it will additionally sign the hash of the token.
 func VerifierFromToken(key crypto.PublicKey, token *Token) ([]byte, error) {
 	var sig []byte
 	tokenBytes, err := proto.Marshal(token)
@@ -65,9 +128,9 @@ func VerifierFromToken(key crypto.PublicKey, token *Token) ([]byte, error) {
 	return sig, errors.Wrap(err, "signing verifier failed")
 }
 
-//VerifyToken takes the auth token and the signature bytes in the verifier and
-//verifies it against the public key provided for the agent who claims to have
-//provided the token.
+// VerifyToken takes the auth token and the signature bytes in the verifier and
+// verifies it against the public key provided for the agent who claims to have
+// provided the token.
 func VerifyToken(key crypto.PublicKey, token *Token, sig []byte) error {
 	tokenBytes, err := proto.Marshal(token)
 	if err != nil {
