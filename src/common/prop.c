@@ -352,6 +352,19 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_CO_DEDUP:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_PROP_CO_DEDUP_OFF &&
+			    val != DAOS_PROP_CO_DEDUP_MEMCMP &&
+			    val != DAOS_PROP_CO_DEDUP_HASH) {
+				D_ERROR("invalid deduplication parameter"
+						DF_U64".\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_CO_DEDUP_THRESHOLD:
+			/** Accepting anything right now */
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_REDUN_RF0 &&

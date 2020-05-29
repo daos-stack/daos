@@ -848,13 +848,15 @@ cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 	 * Need the pool for the IV namespace
 	 */
 	hdl->sch_csummer = NULL;
-	props = daos_prop_alloc(3);
+	props = daos_prop_alloc(5);
 	if (props == NULL) {
 		return -DER_NOMEM;
 	}
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_DEDUP;
+	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 	rc = cont_iv_prop_fetch(hdl->sch_cont->sc_pool->spc_pool->sp_iv_ns,
 				hdl->sch_uuid, props);
 	if (rc != 0)
@@ -862,11 +864,15 @@ cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 	csum_val = daos_cont_prop2csum(props);
 
 	/** If enabled, initialize the csummer for the container */
-	if (daos_cont_csum_prop_is_enabled(csum_val))
+	if (daos_cont_csum_prop_is_enabled(csum_val)) {
 		rc = daos_csummer_type_init(&hdl->sch_csummer,
 					    daos_contprop2csumtype(csum_val),
 					    daos_cont_prop2chunksize(props),
-					    daos_cont_prop2serververify(props));
+					    daos_cont_prop2serververify(props),
+					    daos_cont_prop2dedup(props),
+					    daos_cont_prop2dedupverify(props),
+					    daos_cont_prop2dedupsize(props));
+	}
 done:
 	daos_prop_free(props);
 

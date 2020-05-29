@@ -116,6 +116,34 @@ daos_cont_prop2serververify(daos_prop_t *props)
 }
 
 bool
+daos_cont_prop2dedup(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP);
+
+	return prop == NULL ? false : prop->dpe_val != DAOS_PROP_CO_DEDUP_OFF;
+}
+
+bool
+daos_cont_prop2dedupverify(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP);
+
+	return prop == NULL ? false
+			    : prop->dpe_val == DAOS_PROP_CO_DEDUP_MEMCMP;
+}
+
+uint64_t
+daos_cont_prop2dedupsize(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP_THRESHOLD);
+
+	return prop == NULL ? 0 : prop->dpe_val;
+}
+
+bool
 daos_cont_csum_prop_is_valid(uint16_t val)
 {
 	if (daos_cont_csum_prop_is_enabled(val) || val == DAOS_PROP_CO_CSUM_OFF)
@@ -236,7 +264,8 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type)
 
 int
 daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
-		  size_t chunk_bytes, bool srv_verify)
+		  size_t chunk_bytes, bool srv_verify, bool dedup,
+		  bool dedup_verify, size_t dedup_bytes)
 {
 	struct daos_csummer	*result;
 	int			 rc = 0;
@@ -251,6 +280,9 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 	result->dcs_algo = ft;
 	result->dcs_chunk_size = chunk_bytes;
 	result->dcs_srv_verify = srv_verify;
+	result->dcs_dedup = dedup;
+	result->dcs_dedup_verify = dedup_verify;
+	result->dcs_dedup_size = dedup_bytes;
 
 	if (result->dcs_algo->cf_init)
 		rc = result->dcs_algo->cf_init(result);
@@ -263,10 +295,11 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 
 int
 daos_csummer_type_init(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
-		       size_t chunk_bytes, bool srv_verify)
+		       size_t chunk_bytes, bool srv_verify, bool dedup,
+		       bool dedup_verify, size_t dedup_bytes)
 {
 	return daos_csummer_init(obj, daos_csum_type2algo(type), chunk_bytes,
-				 srv_verify);
+				 srv_verify, dedup, dedup_verify, dedup_bytes);
 }
 
 void daos_csummer_destroy(struct daos_csummer **obj)
@@ -318,6 +351,30 @@ daos_csummer_get_srv_verify(struct daos_csummer *obj)
 	if (daos_csummer_initialized(obj))
 		return obj->dcs_srv_verify;
 	return false;
+}
+
+bool
+daos_csummer_get_dedup(struct daos_csummer *obj)
+{
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_dedup;
+	return false;
+}
+
+bool
+daos_csummer_get_dedupverify(struct daos_csummer *obj)
+{
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_dedup_verify;
+	return false;
+}
+
+uint32_t
+daos_csummer_get_dedupsize(struct daos_csummer *obj)
+{
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_dedup_size;
+	return 4096;
 }
 
 uint32_t

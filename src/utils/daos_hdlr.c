@@ -808,6 +808,20 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 	D_PRINT("checksum verification on server -> "DF_U64"\n",
 		entry->dpe_val);
 
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_DEDUP);
+	if (entry == NULL) {
+		fprintf(stderr, "dedup property not found\n");
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("deduplication -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_DEDUP_THRESHOLD);
+	if (entry == NULL) {
+		fprintf(stderr, "dedup threashold property not found\n");
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("deduplication threshold -> "DF_U64"\n", entry->dpe_val);
+
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_REDUN_FAC);
 	if (entry == NULL) {
 		fprintf(stderr, "redundancy factor property not found\n");

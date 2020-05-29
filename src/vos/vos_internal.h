@@ -161,6 +161,8 @@ struct vos_pool {
 	struct bio_io_context	*vp_io_ctxt;
 	/** In-memory free space tracking for NVMe device */
 	struct vea_space_info	*vp_vea_info;
+	/** Dedup hash */
+	struct d_hash_table	*vp_dedup_hash;
 };
 
 /**
@@ -973,6 +975,15 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       struct vos_ilog_info *info);
 
 /* vos_io.c */
+int
+vos_dedup_init(struct vos_pool *pool);
+
+void
+vos_dedup_fini(struct vos_pool *pool);
+
+void
+vos_dedup_invalidate(struct vos_pool *pool);
+
 uint16_t
 vos_media_select(struct vos_container *cont, daos_iod_type_t type,
 		 daos_size_t size);

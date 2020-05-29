@@ -466,7 +466,7 @@ dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
 	chunksize = daos_cont_prop2chunksize(props);
 	daos_csummer_init(&cont->dc_csummer,
 			  daos_csum_type2algo(csum_type),
-			  chunksize, 0);
+			  chunksize, 0, 0, 0, 0);
 }
 
 struct cont_open_args {
@@ -912,6 +912,11 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 			bits |= DAOS_CO_QUERY_PROP_CSUM_SERVER;
 			break;
+		case DAOS_PROP_CO_DEDUP:
+			bits |= DAOS_CO_QUERY_PROP_DEDUP;
+			break;
+		case DAOS_PROP_CO_DEDUP_THRESHOLD:
+			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
@@ -1707,7 +1712,7 @@ csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
 	if (csum_algo != NULL)
 		daos_csummer_init(&cont->dc_csummer, csum_algo,
 				  cont_glob->dcg_csum_chunksize,
-				  cont_glob->dcg_csum_srv_verify);
+				  cont_glob->dcg_csum_srv_verify, 0, 0, 0);
 	else
 		cont->dc_csummer = NULL;
 }
