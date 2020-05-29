@@ -176,6 +176,8 @@ struct vos_pool {
 	daos_size_t		vp_space_sys[DAOS_MEDIA_MAX];
 	/** Held space by inflight updates. In bytes */
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
+	/** Dedup hash */
+	struct d_hash_table	*vp_dedup_hash;
 };
 
 /**
@@ -964,6 +966,13 @@ vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 	return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
 }
 
+int
+vos_dedup_init(struct vos_pool *pool);
+void
+vos_dedup_fini(struct vos_pool *pool);
+void
+vos_dedup_invalidate(struct vos_pool *pool);
+
 /* Reserve SCM through umem_reserve() for a PMDK transaction */
 struct vos_rsrvd_scm {
 	unsigned int		 rs_actv_cnt;
@@ -980,6 +989,7 @@ vos_publish_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 int
 vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
 		   daos_size_t size, enum vos_io_stream ios, uint64_t *off);
+
 int
 vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 		   enum vos_io_stream ios);

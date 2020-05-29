@@ -170,7 +170,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	int			 rc = 0;
 
 	csummer = dc_cont_hdl2csummer(rw_args->dobj->do_co_hdl);
-	if (!daos_csummer_initialized(csummer))
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
 		return 0;
 
 	orw = crt_req_get(rw_args->rpc);
@@ -780,7 +780,7 @@ int csum_enum_verify_keys(const struct obj_enum_args *enum_args,
 		return 0; /** no keys to verify */
 
 	csummer = dc_cont_hdl2csummer(enum_args->eaa_obj->do_co_hdl);
-	if (!daos_csummer_initialized(csummer))
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
 		return 0; /** csums not enabled */
 
 	csum_ptr = oeo->oeo_csum_iov.iov_buf;

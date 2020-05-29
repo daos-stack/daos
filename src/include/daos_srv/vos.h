@@ -547,6 +547,8 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
+ * \param dedup [IN]	Whether deduplication is enabled for this I/O
+ * \param dedup_th [IN]	Deduplication threshold size
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
  *
@@ -556,7 +558,8 @@ int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-		 daos_handle_t *ioh, struct dtx_handle *dth);
+		 bool dedup, uint32_t dedup_th, daos_handle_t *ioh,
+		 struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -912,4 +915,14 @@ int
 vos_profile_start(char *path, int avg);
 void
 vos_profile_stop(void);
+
+/**
+ * Helper functions to create/free duplicated bsgl for dedup verify.
+ */
+int
+vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
+		   struct bio_sglist *bsgl_dup);
+void
+vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+
 #endif /* __VOS_API_H */

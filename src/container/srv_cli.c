@@ -27,6 +27,7 @@
 
 #include <daos/pool.h>
 #include <daos/container.h>
+#include <daos/cont_props.h>
 #include <daos/event.h>
 #include <daos/task.h>
 #include <daos_types.h>

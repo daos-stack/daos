@@ -47,6 +47,8 @@
 #include <daos_srv/iv.h>
 #include "rpc.h"
 #include "srv_internal.h"
+#include <daos/cont_props.h>
+#include <daos/dedup.h>
 
 /* Per VOS container aggregation ULT ***************************************/
 
@@ -70,10 +72,82 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	return vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc);
 }
 
+static int
+cont_csummer_init(struct ds_cont_child *cont)
+{
+	daos_prop_t	*props;
+	uint32_t	 csum_val;
+	int		 rc;
+	struct cont_props *cont_props;
+
+	D_ASSERT(cont != NULL);
+	cont_props = &cont->sc_props;
+
+	if (cont->sc_props_fetched)
+		return 0;
+
+	/** Get the container csum related properties
+	 * Need the pool for the IV namespace
+	 */
+	D_ASSERT(cont->sc_csummer == NULL);
+	props = daos_prop_alloc(5);
+	if (props == NULL) {
+		return -DER_NOMEM;
+	}
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_DEDUP;
+	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+	rc = cont_iv_prop_fetch(cont->sc_pool->spc_pool->sp_iv_ns,
+				cont->sc_uuid, props);
+	if (rc != 0)
+		goto done;
+
+	/* Check again since IV fetch yield */
+	if (cont->sc_props_fetched)
+		goto done;
+	cont->sc_props_fetched = 1;
+
+	daos_props_2cont_props(props, cont_props);
+
+	csum_val = cont_props->dcp_csum_type;
+	bool dedup_only = false;
+	if (!daos_cont_csum_prop_is_enabled(csum_val)) {
+		dedup_only = true;
+		csum_val = dedup_get_csum_algo(cont_props);
+	}
+
+	/** If enabled, initialize the csummer for the container */
+	if (daos_cont_csum_prop_is_enabled(csum_val)) {
+		rc = daos_csummer_type_init(&cont->sc_csummer,
+					    daos_contprop2csumtype(csum_val),
+					    cont_props->dcp_chunksize,
+					    cont_props->dcp_srv_verify);
+		if (dedup_only)
+			dedup_configure_csummer(cont->sc_csummer, cont_props);
+	}
+done:
+	daos_prop_free(props);
+
+	return rc;
+}
+
+
 static bool
 cont_aggregate_runnable(struct ds_cont_child *cont)
 {
 	struct ds_pool	*pool = cont->sc_pool->spc_pool;
+
+	if (!cont->sc_props_fetched)
+		cont_csummer_init(cont);
+
+	if (cont->sc_props.dcp_dedup) {
+		D_DEBUG(DB_EPC, DF_CONT": skip aggregation for deduped "
+			"container\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		return false;
+	}
 
 	/* snapshot list isn't fetched yet */
 	if (cont->sc_aggregation_max == 0) {
@@ -491,6 +565,7 @@ cont_child_free_ref(struct daos_llink *llink)
 
 	vos_cont_close(cont->sc_hdl);
 	ds_pool_child_put(cont->sc_pool);
+	daos_csummer_destroy(&cont->sc_csummer);
 
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_mutex_free(&cont->sc_mutex);
@@ -833,43 +908,6 @@ ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 	struct d_hash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
 	cont_hdl_put_internal(hash, hdl);
-}
-
-static int
-cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
-{
-	daos_prop_t	*props;
-	uint32_t	 csum_val;
-	int		 rc;
-
-	D_ASSERT(hdl->sch_cont != NULL);
-	/** Get the container csum related properties
-	 * Need the pool for the IV namespace
-	 */
-	hdl->sch_csummer = NULL;
-	props = daos_prop_alloc(3);
-	if (props == NULL) {
-		return -DER_NOMEM;
-	}
-	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
-	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
-	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	rc = cont_iv_prop_fetch(hdl->sch_cont->sc_pool->spc_pool->sp_iv_ns,
-				hdl->sch_cont->sc_uuid, props);
-	if (rc != 0)
-		goto done;
-	csum_val = daos_cont_prop2csum(props);
-
-	/** If enabled, initialize the csummer for the container */
-	if (daos_cont_csum_prop_is_enabled(csum_val))
-		rc = daos_csummer_type_init(&hdl->sch_csummer,
-					    daos_contprop2csumtype(csum_val),
-					    daos_cont_prop2chunksize(props),
-					    daos_cont_prop2serververify(props));
-done:
-	daos_prop_free(props);
-
-	return rc;
 }
 
 /**
@@ -1234,7 +1272,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		hdl->sch_cont->sc_open++;
 
 		if (hdl->sch_cont->sc_open > 1)
-			goto csummer;
+			goto opened;
 
 		rc = cont_start_dtx_reindex_ult(hdl->sch_cont);
 		if (rc != 0) {
@@ -1266,12 +1304,11 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_register, rc);
 		}
 
-csummer:
-		rc = cont_hdl_csummer_init(hdl);
+		rc = cont_csummer_init(hdl->sch_cont);
 		if (rc != 0)
 			D_GOTO(err_register, rc);
 	}
-
+opened:
 	if (cont_hdl != NULL) {
 		cont_hdl_get_internal(&tls->dt_cont_hdl_hash, hdl);
 		*cont_hdl = hdl;
@@ -1408,8 +1445,6 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 
 	/* Remove the handle from hash first, following steps may yield */
 	ds_cont_local_close(cont_hdl_uuid);
-
-	daos_csummer_destroy(&hdl->sch_csummer);
 
 	D_ASSERT(cont_child->sc_open > 0);
 	cont_child->sc_open--;

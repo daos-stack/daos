@@ -26,8 +26,8 @@ def scons():
                   'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
                   'drpc.c', 'drpc.pb-c.c', 'proc.c',
-                  'acl_api.c', 'acl_util.c', 'acl_principal.c',
-                  'profile.c']
+                  'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
+                  'dedup.c', 'profile.c']
 
     common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib64/', common)

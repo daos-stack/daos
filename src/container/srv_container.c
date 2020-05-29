@@ -366,6 +366,8 @@ cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_COMPRESS:
 		case DAOS_PROP_CO_ENCRYPT:
+		case DAOS_PROP_CO_DEDUP:
+		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_CO_ACL:
@@ -452,6 +454,22 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs,
 				&ds_cont_prop_csum_server_verify, &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_DEDUP:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs,
+				&ds_cont_prop_dedup, &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_DEDUP_THRESHOLD:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs,
+				&ds_cont_prop_dedup_threshold, &value);
 			if (rc)
 				return rc;
 			break;
@@ -1609,7 +1627,29 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 			D_GOTO(out, rc = -DER_NOMEM);
 		idx++;
 	}
-
+	if (bits & DAOS_CO_QUERY_PROP_DEDUP) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_dedup,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_DEDUP;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop,
+				   &ds_cont_prop_dedup_threshold,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
 out:
 	if (rc)
 		daos_prop_free(prop);

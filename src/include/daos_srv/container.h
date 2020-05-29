@@ -36,6 +36,8 @@
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/evtree.h>
+#include <daos/container.h>
+#include <daos/cont_props.h>
 
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
@@ -66,6 +68,8 @@ struct ds_cont_child {
 	uuid_t			 sc_uuid;	/* container UUID */
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
+	struct daos_csummer	*sc_csummer;
+	struct cont_props	 sc_props;
 
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
@@ -75,6 +79,7 @@ struct ds_cont_child {
 				 sc_dtx_reindex_abort:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
+				 sc_props_fetched:1,
 				 sc_stopping:1;
 	/* Aggregate ULT */
 	struct dss_sleep_ult	 *sc_agg_ult;
@@ -126,7 +131,6 @@ struct ds_cont_hdl {
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
-	struct daos_csummer	*sch_csummer;
 	int			sch_ref;
 };
 

@@ -35,20 +35,10 @@
  * Container Property Knowledge
  * -----------------------------------------------------------
  */
-uint32_t
-daos_cont_prop2csum(daos_prop_t *props);
 
-uint64_t
-daos_cont_prop2chunksize(daos_prop_t *props);
-
-bool
-daos_cont_prop2serververify(daos_prop_t *props);
-
-bool
-daos_cont_csum_prop_is_valid(uint16_t val);
-
-bool
-daos_cont_csum_prop_is_enabled(uint16_t val);
+/** Convert a string into a property value for csum property */
+int
+daos_str2csumcontprop(const char *value);
 
 /** Convert a string into a property value for csum property */
 int
@@ -75,6 +65,9 @@ enum DAOS_CSUM_TYPE {
 	CSUM_TYPE_END = 7,
 };
 
+
+
+
 struct dcs_csum_info {
 	/** buffer to store the checksums */
 	uint8_t		*cs_csum;
@@ -91,7 +84,6 @@ struct dcs_csum_info {
 	/** bytes of data each checksum verifies (if value type is array) */
 	uint32_t	 cs_chunksize;
 };
-
 
 struct dcs_iod_csums {
 	/** akey checksum */
@@ -127,7 +119,12 @@ struct daos_csummer {
 	void		*dcs_ctx;
 	/** Points to the buffer where the  calculated csum is to be written */
 	uint8_t		*dcs_csum_buf;
+	/** Whether or not to verify on the server on an update */
 	bool		 dcs_srv_verify;
+	/** Disable aspects of the checksum process */
+	bool		 dcs_skip_key_calc;
+	bool		 dcs_skip_key_verify;
+	bool		 dcs_skip_data_verify;
 };
 
 struct csum_ft {
@@ -166,6 +163,10 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type);
  *			for it.
  * @param ft		Pointer to the function table for checksum calculations
  * @param chunk_bytes	Chunksize, typically from the container configuration
+ * @param srv_verify	whether server-side checksum verification is enabled
+ * @param dedup		whether deduplication is enabled on the server
+ * @param dedup_verify	whether to memcmp data on the server for deduplication
+ * @param dedup_bytes	deduplication size threashold in bytes
  *
  * @return		0 for success, or an error code
  */
@@ -180,6 +181,10 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
  *			for it.
  * @param type		Type of the checksum algorithm that will be used
  * @param chunk_bytes	Chunksize, typically from the container configuration
+ * @param srv_verify	Whether to verify checksum on the server on update
+ * @param dedup		Whether deduplication is enabled
+ * @param dedup_verify	Whether to memcmp data on the server for deduplication
+ * @param dedup_bytes	Deduplication size threshold
  *
  * @return		0 for success, or an error code
  */

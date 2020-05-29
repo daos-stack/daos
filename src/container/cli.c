@@ -29,6 +29,8 @@
 #define D_LOGFAC	DD_FAC(container)
 
 #include <daos/container.h>
+#include <daos/cont_props.h>
+#include <daos/dedup.h>
 #include <daos/event.h>
 #include <daos/mgmt.h>
 #include <daos/pool.h>
@@ -450,23 +452,25 @@ dc_cont_alloc(const uuid_t uuid)
 }
 
 static void
-dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
+dc_cont_csum_init(struct dc_cont *cont, struct cont_props cont_props)
 {
-	uint32_t		csum_type_prop;
-	enum DAOS_CSUM_TYPE	csum_type;
-	uint64_t		chunksize;
+	uint32_t csum_type = cont_props.dcp_csum_type;
+	bool dedup_only = false;
 
-	csum_type_prop = daos_cont_prop2csum(props);
-	if (csum_type_prop == DAOS_PROP_CO_CSUM_OFF) {
-		cont->dc_csummer = NULL;
-		return;
+	if (csum_type == DAOS_PROP_CO_CSUM_OFF) {
+		dedup_only = true;
+		csum_type = dedup_get_csum_algo(&cont_props);
 	}
 
-	csum_type = daos_contprop2csumtype(csum_type_prop);
-	chunksize = daos_cont_prop2chunksize(props);
-	daos_csummer_init(&cont->dc_csummer,
-			  daos_csum_type2algo(csum_type),
-			  chunksize, 0);
+	if (!daos_cont_csum_prop_is_enabled(csum_type))
+		return;
+
+	daos_csummer_type_init(&cont->dc_csummer,
+			       csum_type,
+			       cont_props.dcp_chunksize, 0);
+
+	if (dedup_only)
+		dedup_configure_csummer(cont->dc_csummer, &cont_props);
 }
 
 struct cont_open_args {
@@ -524,7 +528,9 @@ cont_open_complete(tse_task_t *task, void *data)
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = arg->hdl;
 
-	dc_cont_csum_init(cont, out->coo_prop);
+	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
+
+	dc_cont_csum_init(cont, cont->dc_props);
 
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
@@ -612,7 +618,9 @@ dc_cont_open(tse_task_t *task)
 	 * opening the container
 	 */
 	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
-				  DAOS_CO_QUERY_PROP_CSUM_CHUNK;
+				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
+				  DAOS_CO_QUERY_PROP_DEDUP |
+				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 	arg.coa_pool		= pool;
 	arg.coa_info		= args->info;
 	arg.rpc			= rpc;
@@ -912,6 +920,11 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 			bits |= DAOS_CO_QUERY_PROP_CSUM_SERVER;
 			break;
+		case DAOS_PROP_CO_DEDUP:
+			bits |= DAOS_CO_QUERY_PROP_DEDUP;
+			break;
+		case DAOS_PROP_CO_DEDUP_THRESHOLD:
+			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
@@ -1598,6 +1611,9 @@ struct dc_cont_glob {
 	uint16_t	dcg_csum_type;
 	uint32_t	dcg_csum_chunksize;
 	bool		dcg_csum_srv_verify;
+	bool		dcg_dedup;
+	bool		dcg_dedup_verify;
+	uint32_t        dcg_dedup_th;
 };
 
 static inline daos_size_t
@@ -1659,11 +1675,13 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	uuid_copy(cont_glob->dcg_uuid, cont->dc_uuid);
 	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
 	cont_glob->dcg_capas = cont->dc_capas;
-	cont_glob->dcg_csum_type = daos_csummer_get_type(cont->dc_csummer);
-	cont_glob->dcg_csum_chunksize =
-		daos_csummer_get_chunksize(cont->dc_csummer);
-	cont_glob->dcg_csum_srv_verify =
-		daos_csummer_get_srv_verify(cont->dc_csummer);
+
+	cont_glob->dcg_csum_type = cont->dc_props.dcp_csum_type;
+	cont_glob->dcg_csum_chunksize = cont->dc_props.dcp_chunksize;
+	cont_glob->dcg_csum_srv_verify = cont->dc_props.dcp_srv_verify;
+	cont_glob->dcg_dedup = cont->dc_props.dcp_dedup;
+	cont_glob->dcg_dedup_verify = cont->dc_props.dcp_dedup_verify;
+	cont_glob->dcg_dedup_th = cont->dc_props.dcp_dedup_size;
 
 	dc_pool_put(pool);
 out_cont:
@@ -1703,12 +1721,9 @@ csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
 	struct csum_ft *csum_algo;
 
 	csum_algo = daos_csum_type2algo(cont_glob->dcg_csum_type);
-	if (csum_algo != NULL)
-		daos_csummer_init(&cont->dc_csummer, csum_algo,
-				  cont_glob->dcg_csum_chunksize,
-				  cont_glob->dcg_csum_srv_verify);
-	else
-		cont->dc_csummer = NULL;
+	daos_csummer_init(&cont->dc_csummer, csum_algo,
+			  cont_glob->dcg_csum_chunksize,
+			  cont_glob->dcg_csum_srv_verify);
 }
 
 static int
@@ -1752,6 +1767,12 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
+	cont->dc_props.dcp_dedup = cont_glob->dcg_dedup;
+	cont->dc_props.dcp_csum_type = cont_glob->dcg_csum_type;
+	cont->dc_props.dcp_srv_verify = cont_glob->dcg_csum_srv_verify;
+	cont->dc_props.dcp_chunksize = cont_glob->dcg_csum_chunksize;
+	cont->dc_props.dcp_dedup_size = cont_glob->dcg_dedup_th;
+	cont->dc_props.dcp_dedup_verify = cont_glob->dcg_dedup_verify;
 	csum_cont_g2l(cont_glob, cont);
 
 	dc_cont_hdl_link(cont);
@@ -2574,5 +2595,22 @@ dc_cont_hdl2csummer(daos_handle_t coh)
 	dc_cont_put(dc);
 
 	return csum;
+
+}
+
+struct cont_props
+dc_cont_hdl2props(daos_handle_t coh)
+{
+	struct dc_cont	*dc = NULL;
+	struct cont_props result = {0};
+
+	dc = dc_hdl2cont(coh);
+	if (dc == NULL)
+		return result;
+
+	result = dc->dc_props;
+	dc_cont_put(dc);
+
+	return result;
 
 }

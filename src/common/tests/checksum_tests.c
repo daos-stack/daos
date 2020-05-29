@@ -31,8 +31,9 @@
 #include <stdint.h>
 #include <cmocka.h>
 #include <gurt/types.h>
-#include <daos/common.h>
 #include <daos/checksum.h>
+#include <daos/common.h>
+#include <daos/cont_props.h>
 #include <daos/tests_lib.h>
 
 static bool verbose;
@@ -514,6 +515,60 @@ get_map_test(void **state)
 	result = get_maps_idx_nr_for_range(&range, &map);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(1, result.dcr_nr);
+}
+
+static void
+skip_stuff(void **state)
+{
+	struct daos_csummer	*csummer;
+	d_sg_list_t		 sgl;
+	daos_recx_t		 recx;
+	struct dcs_iod_csums	*iod_csums;
+	daos_iod_t		 iod = {0};
+	int			 rc = 0;
+
+	fake_get_size_result = 4;
+	daos_csummer_init(&csummer, &fake_algo, 16, 0);
+	fake_algo.cf_get_size = fake_get_size;
+
+	dts_sgl_init_with_strings(&sgl, 1, "abcdef");
+	sgl.sg_iovs->iov_len --; /** remove ending '\0' */
+
+	recx.rx_idx = 0;
+	recx.rx_nr = daos_sgl_buf_size(&sgl);
+	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+	iod.iod_size = 1;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+
+	/** skip key calculation */
+	csummer->dcs_skip_key_calc = true;
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
+				    &iod_csums);
+	assert_int_equal(0, rc);
+	/** with key calculation would look like this ...
+	 * assert_string_equal("akey|abcdef|", fake_update_buf_copy);
+	 */
+	assert_string_equal("abcdef|", fake_update_buf_copy);
+
+	/**
+	 * skipping the data verification means that the csummer won't try
+	 * to calculate the checksum again to verify.
+	 */
+	/** reset */
+	memset(fake_update_buf_copy, 0, FAKE_UPDATE_BUF_LEN);
+	fake_update_buf = fake_update_buf_copy;
+
+	csummer->dcs_skip_data_verify = true;
+	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL,
+				     0, NULL);
+	assert_int_equal(0, rc);
+	assert_string_equal("", fake_update_buf_copy); /** update not called */
+
+	daos_csummer_free_ic(csummer, &iod_csums);
+	daos_sgl_fini(&sgl, true);
+	daos_csummer_destroy(&csummer);
 }
 
 #define MAP_MAX 10
@@ -1734,6 +1789,7 @@ static const struct CMUnitTest tests[] = {
 	TEST("CSUM28: Formatter",
 	     test_formatter),
 	TEST("CSUM28: Get the recxes from a map", get_map_test),
+	TEST("CSUM29: Skip calculations based on csummer settings", skip_stuff),
 	TEST("CSUM_HOLES01: With 2 mapped extents that leave a hole "
 	     "at the beginning, in between and "
 	     "at the end, all within a single chunk.", holes_1),

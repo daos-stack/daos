@@ -297,6 +297,8 @@ int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
+int run_daos_dedup_test(int rank, int size, int *sub_tests,
+			   int sub_tests_size);
 unsigned int daos_checksum_test_arg2type(char *optarg);
 int run_daos_fs_test(int rank, int size, int *tests, int test_size);
 int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,

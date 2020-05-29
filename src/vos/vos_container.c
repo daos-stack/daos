@@ -569,6 +569,8 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	}
 	uuid_copy(pkey.uuid, pool->vp_id);
 
+	vos_dedup_invalidate(pool);
+
 	rc = cont_lookup(&key, &pkey, &cont);
 	if (rc != -DER_NONEXIST) {
 		D_ASSERT(rc == 0);

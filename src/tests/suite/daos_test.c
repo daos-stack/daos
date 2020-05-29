@@ -34,7 +34,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpceXVizADKCoROdrFNv"
+#define TESTS "mpceXVizuADKCoROdrFNv"
 /**
  * These tests will only be run if explicitly specified. They don't get
  * run if no test is specified.
@@ -62,6 +62,8 @@ print_usage(int rank)
 	print_message("daos_test -p|--daos_pool_tests\n");
 	print_message("daos_test -c|--daos_container_tests\n");
 	print_message("daos_test -C|--capa\n");
+	print_message("daos_test -u|--dedup\n");
+	print_message("daos_test -z|--checksum\n");
 	print_message("daos_test -X|--dtx\n");
 	print_message("daos_test -i|--daos_io_tests\n");
 	print_message("daos_test -x|--epoch_io\n");
@@ -148,6 +150,13 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "DAOS checksum tests..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_checksum_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
+		case 'u':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS dedup tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_dedup_test(rank, size,
 						sub_tests, sub_tests_size);
 			break;
 		case 'x':
@@ -287,6 +296,7 @@ main(int argc, char **argv)
 		{"verify",	no_argument,		NULL,	'V'},
 		{"io",		no_argument,		NULL,	'i'},
 		{"checksum",	no_argument,		NULL,	'z'},
+		{"dedup",	no_argument,		NULL,	'u'},
 		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"obj_array",	no_argument,		NULL,	'A'},
 		{"array",	no_argument,		NULL,	'D'},
@@ -327,7 +337,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNv",
+				  "ampcCdXVizuxADKeoROg:n:s:u:E:f:Fw:W:hrNv",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
