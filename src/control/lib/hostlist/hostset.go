@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package hostlist
 
 import (
@@ -36,6 +37,7 @@ type (
 	}
 )
 
+// MarshalJSON outputs JSON representation of HostSet.
 func (hs *HostSet) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + hs.RangedString() + `"`), nil
 }

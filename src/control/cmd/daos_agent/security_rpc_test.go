@@ -56,7 +56,7 @@ func defaultTestTransportConfig() *security.TransportConfig {
 	return &security.TransportConfig{AllowInsecure: true}
 }
 
-func TestAgentSecurityModule_HandleCall_BadMethod(t *testing.T) {
+func TestAgentSecurityModule_BadMethod(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 

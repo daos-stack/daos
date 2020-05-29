@@ -145,6 +145,18 @@ def daos_packages_version(String distro) {
     error "Don't know how to determine package version for " + distro
 }
 
+def parallel_build() {
+    // defaults to false
+    // true if Quick-build: true unless Parallel-build: false
+    def pb = cachedCommitPragma(pragma: 'Parallel-build')
+    if (pb == "true" ||
+        (quickbuild() && pb != "false")) {
+        return true
+    }
+
+    return false
+}
+
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -584,6 +596,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-centos7-gcc'
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
@@ -680,6 +693,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-centos7-clang'
                     }
                     post {
@@ -741,6 +755,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-ubuntu20.04-gcc'
                     }
                     post {
@@ -803,6 +818,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-ubuntu20.04-clag'
                     }
                     post {
@@ -864,6 +880,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-leap15-gcc'
                     }
                     post {
@@ -925,6 +942,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-leap15-clang'
                     }
                     post {
@@ -988,6 +1006,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
+                                   parallel_build: parallel_build(),
                                    TARGET_PREFIX: 'install/opt', failure_artifacts: 'config.log-leap15-icc'
                     }
                     post {
@@ -1247,6 +1266,7 @@ pipeline {
                     steps {
                         sh "rm -f coverity/daos_coverity.tgz"
                         sconsBuild coverity: "daos-stack/daos",
+                                   parallel_build: parallel_build(),
                                    clean: "_build.external${arch}",
                                    failure_artifacts: 'config.log-centos7-cov'
                     }

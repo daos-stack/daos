@@ -212,8 +212,13 @@ struct vos_container {
 	 * durable hints in vos_cont_df
 	 */
 	struct vea_hint_context	*vc_hint_ctxt[VOS_IOS_CNT];
+	/* Current ongoing aggregation ERR */
+	daos_epoch_range_t	vc_epr_aggregation;
+	/* Current ongoing discard EPR */
+	daos_epoch_range_t	vc_epr_discard;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
+				vc_in_discard:1,
 				vc_abort_aggregation:1,
 				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
