@@ -208,7 +208,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
-getent passwd daos_server >/dev/null || useradd -g daos_admins daos_server
+getent passwd daos_server >/dev/null || useradd -M -g daos_admins daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
