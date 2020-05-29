@@ -616,8 +616,6 @@ static int
 crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
 			 struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_context	*crt_ctx;
-	crt_rpc_t		*rpc_pub = &rpc_priv->crp_pub;
 	int			 rc;
 
 	/* destroy previous URI_LOOKUP req, addref in crt_req_uri_lookup_psr */
@@ -632,21 +630,7 @@ crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
 		D_GOTO(out, rc);
 	}
 
-	crt_ctx = rpc_pub->cr_ctx;
-
-	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-	if (!crt_req_timedout(rpc_priv))
-		crt_req_timeout_untrack(rpc_priv);
 	crt_set_timeout(rpc_priv);
-	rc = crt_req_timeout_track(rpc_priv);
-	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_req_timeout_track failed, rc: %d\n",
-			  rc);
-		D_GOTO(out, rc);
-	}
-
 	rpc_priv->crp_state = RPC_STATE_INITED;
 	rc = crt_req_send_internal(rpc_priv);
 
@@ -1542,57 +1526,6 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 out:
 	return rc;
 }
-
-static int
-timeout_bp_node_enter(struct d_binheap *h, struct d_binheap_node *e)
-{
-	struct crt_rpc_priv	*rpc_priv;
-
-	D_ASSERT(h != NULL);
-	D_ASSERT(e != NULL);
-
-	rpc_priv = container_of(e, struct crt_rpc_priv, crp_timeout_bp_node);
-
-	RPC_TRACE(DB_NET, rpc_priv, "entering the timeout binheap.\n");
-
-	return 0;
-}
-
-static int
-timeout_bp_node_exit(struct d_binheap *h, struct d_binheap_node *e)
-{
-	struct crt_rpc_priv	*rpc_priv;
-
-	D_ASSERT(h != NULL);
-	D_ASSERT(e != NULL);
-
-	rpc_priv = container_of(e, struct crt_rpc_priv, crp_timeout_bp_node);
-
-	RPC_TRACE(DB_NET, rpc_priv, "exiting the timeout binheap.\n");
-
-	return 0;
-}
-
-static bool
-timeout_bp_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
-{
-	struct crt_rpc_priv	*rpc_priv_a;
-	struct crt_rpc_priv	*rpc_priv_b;
-
-	D_ASSERT(a != NULL);
-	D_ASSERT(b != NULL);
-
-	rpc_priv_a = container_of(a, struct crt_rpc_priv, crp_timeout_bp_node);
-	rpc_priv_b = container_of(b, struct crt_rpc_priv, crp_timeout_bp_node);
-
-	return rpc_priv_a->crp_timeout_ts < rpc_priv_b->crp_timeout_ts;
-}
-
-struct d_binheap_ops crt_timeout_bh_ops = {
-	.hop_enter	= timeout_bp_node_enter,
-	.hop_exit	= timeout_bp_node_exit,
-	.hop_compare	= timeout_bp_node_cmp
-};
 
 int
 crt_req_src_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
