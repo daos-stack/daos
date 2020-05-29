@@ -32,18 +32,11 @@
 #define V_TRACE(...) D_DEBUG(__VA_ARGS__)
 #endif
 
-#define RECT_LO_BITS 32
-#define RECT_LO_MASK (((uint64_t)1 << RECT_LO_BITS) - 1)
-
 static inline void
 evt_ext_read(struct evt_extent *ext, const struct evt_rect_df *rin)
 {
-	uint64_t	len;
-
-	len = rin->rd_len_lo + (((uint64_t)rin->rd_len_hi) << RECT_LO_BITS);
-
 	ext->ex_lo = rin->rd_lo;
-	ext->ex_hi = rin->rd_lo + len - 1;
+	ext->ex_hi = rin->rd_lo + rin->rd_len - 1;
 }
 
 /** Read and translate the rectangle in durable format to in-memory format */
@@ -61,13 +54,10 @@ evt_rect_write(struct evt_rect_df *rout, const struct evt_rect *rin)
 {
 	uint64_t	len;
 
-	len = rin->rc_ex.ex_hi - rin->rc_ex.ex_lo + 1;
-
+	rout->rd_len = rin->rc_ex.ex_hi - rin->rc_ex.ex_lo + 1;
 	rout->rd_epc = rin->rc_epc;
 	rout->rd_minor_epc = rin->rc_minor_epc;
 	rout->rd_lo = rin->rc_ex.ex_lo;
-	rout->rd_len_hi = len >> RECT_LO_BITS;
-	rout->rd_len_lo = len & RECT_LO_MASK;
 };
 
 #define DF_BUF_LEN	128
