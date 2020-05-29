@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -16,9 +16,9 @@
  *    code must carry prominent notices stating that the original code was
  *    changed and the date of the change.
  *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
+ * 4. All publications or advertising materials mentioning features or use of
+ *    this software are asked, but not required, to acknowledge that it was
+ *    developed by Intel Corporation and credit the contributors.
  *
  * 5. Neither the name of Intel Corporation, nor the name of any Contributor
  *    may be used to endorse or promote products derived from this software
@@ -61,7 +61,7 @@
 #define D_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
 
 static __thread char thread_uuid_str_buf[CF_UUID_MAX][D_UUID_STR_SIZE];
-static __thread int thread_uuid_str_buf_idx;
+static __thread int  thread_uuid_str_buf_idx;
 
 static char *
 CP_UUID(const void *uuid)
@@ -221,10 +221,12 @@ ch_lock_init(struct d_hash_table *htable)
 	if (htable->ht_feats & D_HASH_FT_NOLOCK)
 		return 0;
 
-	if (htable->ht_feats & D_HASH_FT_RWLOCK)
+	if (htable->ht_feats & D_HASH_FT_MUTEX)
+		return D_MUTEX_INIT(&htable->ht_mutex, NULL);
+	else if (htable->ht_feats & D_HASH_FT_RWLOCK)
 		return D_RWLOCK_INIT(&htable->ht_rwlock, NULL);
 	else
-		return D_MUTEX_INIT(&htable->ht_lock, NULL);
+		return D_SPIN_INIT(&htable->ht_spin, PTHREAD_PROCESS_PRIVATE);
 }
 
 static void
@@ -233,10 +235,12 @@ ch_lock_fini(struct d_hash_table *htable)
 	if (htable->ht_feats & D_HASH_FT_NOLOCK)
 		return;
 
-	if (htable->ht_feats & D_HASH_FT_RWLOCK)
+	if (htable->ht_feats & D_HASH_FT_MUTEX)
+		D_MUTEX_DESTROY(&htable->ht_mutex);
+	else if (htable->ht_feats & D_HASH_FT_RWLOCK)
 		D_RWLOCK_DESTROY(&htable->ht_rwlock);
 	else
-		D_MUTEX_DESTROY(&htable->ht_lock);
+		D_SPIN_DESTROY(&htable->ht_spin);
 }
 
 /**
@@ -246,35 +250,39 @@ ch_lock_fini(struct d_hash_table *htable)
  * reference-only operations and caller should protect refcount.
  * see D_HASH_FT_RWLOCK for the details.
  */
-static void
+static inline void
 ch_lock(struct d_hash_table *htable, bool read_only)
 {
 
 	if (htable->ht_feats & D_HASH_FT_NOLOCK)
 		return;
 
-	if (htable->ht_feats & D_HASH_FT_RWLOCK) {
+	if (htable->ht_feats & D_HASH_FT_MUTEX) {
+		D_MUTEX_LOCK(&htable->ht_mutex);
+	} else if (htable->ht_feats & D_HASH_FT_RWLOCK) {
 		if (read_only)
 			D_RWLOCK_RDLOCK(&htable->ht_rwlock);
 		else
 			D_RWLOCK_WRLOCK(&htable->ht_rwlock);
 
 	} else {
-		D_MUTEX_LOCK(&htable->ht_lock);
+		D_SPIN_LOCK(&htable->ht_spin);
 	}
 }
 
 /** unlock the hash table */
-static void
+static inline void
 ch_unlock(struct d_hash_table *htable, bool read_only)
 {
 	if (htable->ht_feats & D_HASH_FT_NOLOCK)
 		return;
 
-	if (htable->ht_feats & D_HASH_FT_RWLOCK)
+	if (htable->ht_feats & D_HASH_FT_MUTEX)
+		D_MUTEX_UNLOCK(&htable->ht_mutex);
+	else if (htable->ht_feats & D_HASH_FT_RWLOCK)
 		D_RWLOCK_UNLOCK(&htable->ht_rwlock);
 	else
-		D_MUTEX_UNLOCK(&htable->ht_lock);
+		D_SPIN_UNLOCK(&htable->ht_spin);
 }
 
 /**
@@ -286,7 +294,7 @@ ch_unlock(struct d_hash_table *htable, bool read_only)
  *
  * It calls DJB2 hash if no customized hash function is provided.
  */
-static unsigned int
+static inline unsigned int
 ch_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	unsigned int idx;
@@ -299,14 +307,14 @@ ch_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 	return idx & ((1U << htable->ht_bits) - 1);
 }
 
-static void
+static inline void
 ch_key_init(struct d_hash_table *htable, d_list_t *rlink, void *arg)
 {
 	D_ASSERT(htable->ht_ops->hop_key_init);
 	htable->ht_ops->hop_key_init(htable, rlink, arg);
 }
 
-static bool
+static inline bool
 ch_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	   const void *key, unsigned int ksize)
 {
@@ -314,14 +322,14 @@ ch_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	return htable->ht_ops->hop_key_cmp(htable, rlink, key, ksize);
 }
 
-static unsigned int
+static inline unsigned int
 ch_key_get(struct d_hash_table *htable, d_list_t *rlink, void **key_pp)
 {
 	D_ASSERT(htable->ht_ops->hop_key_get);
 	return htable->ht_ops->hop_key_get(htable, rlink, key_pp);
 }
 
-static void
+static inline void
 ch_rec_insert(struct d_hash_table *htable, unsigned idx, d_list_t *rlink)
 {
 	struct d_hash_bucket *bucket = &htable->ht_buckets[idx];
@@ -344,7 +352,7 @@ ch_rec_insert(struct d_hash_table *htable, unsigned idx, d_list_t *rlink)
 #endif
 }
 
-static void
+static inline void
 ch_rec_delete(struct d_hash_table *htable, d_list_t *rlink)
 {
 	d_list_del_init(rlink);
@@ -362,7 +370,7 @@ ch_rec_delete(struct d_hash_table *htable, d_list_t *rlink)
 #endif
 }
 
-static d_list_t *
+static inline d_list_t *
 ch_rec_find(struct d_hash_table *htable, unsigned idx, const void *key,
 	    unsigned int ksize)
 {
@@ -376,21 +384,21 @@ ch_rec_find(struct d_hash_table *htable, unsigned idx, const void *key,
 	return NULL;
 }
 
-static void
+static inline void
 ch_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	if (htable->ht_ops->hop_rec_addref)
 		htable->ht_ops->hop_rec_addref(htable, rlink);
 }
 
-static bool
+static inline bool
 ch_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	return htable->ht_ops->hop_rec_decref ?
 	       htable->ht_ops->hop_rec_decref(htable, rlink) : false;
 }
 
-static void
+static inline void
 ch_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	if (htable->ht_ops->hop_rec_free)
@@ -401,7 +409,7 @@ ch_rec_free(struct d_hash_table *htable, d_list_t *rlink)
  * Insert the record into the hash table and take refcount on it if
  * "ephemeral" is not set.
  */
-static void
+static inline void
 ch_rec_insert_addref(struct d_hash_table *htable, int bucket_idx,
 		     d_list_t *rlink)
 {
@@ -415,7 +423,7 @@ ch_rec_insert_addref(struct d_hash_table *htable, int bucket_idx,
  * Delete the record from the hash table, it also releases refcount of it if
  * "ephemeral" is not set.
  */
-static bool
+static inline bool
 ch_rec_del_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	bool zombie = false;
@@ -632,7 +640,7 @@ d_hash_rec_unlinked(d_list_t *rlink)
  * This way we can iterate over the entries in the hash table and delete every
  * one.
  */
-static int
+static inline int
 d_hash_find_single(d_list_t *rlink, void *arg)
 {
 	d_list_t **p = arg;
@@ -834,13 +842,13 @@ d_hash_table_debug(struct d_hash_table *htable)
  ******************************************************************************/
 
 struct d_hhash {
-	uint64_t                ch_cookie;
+	uint64_t		ch_cookie;
 	struct d_hash_table	ch_htable;
 	/* server-side uses D_HTYPE_PTR handle */
 	bool			ch_ptrtype;
 };
 
-static struct d_rlink*
+static inline struct d_rlink*
 link2rlink(d_list_t *link)
 {
 	D_ASSERT(link != NULL);
@@ -880,21 +888,20 @@ rlink_op_empty(struct d_rlink *rlink)
 	return d_hash_rec_unlinked(&rlink->rl_link);
 }
 
-static struct d_hlink *
+static inline struct d_hlink *
 hh_link2ptr(d_list_t *link)
 {
-	struct d_rlink	*rlink;
+	struct d_rlink	*rlink = link2rlink(link);
 
-	rlink = link2rlink(link);
 	return	container_of(rlink, struct d_hlink, hl_link);
 }
 
 static void
 hh_op_key_init(struct d_hash_table *hhtab, d_list_t *rlink, void *arg)
 {
-	struct d_hhash *dht;
-	struct d_hlink *hlink = hh_link2ptr(rlink);
-	int		   type = *(int *)arg;
+	struct d_hhash	*dht;
+	struct d_hlink	*hlink = hh_link2ptr(rlink);
+	int		 type  = *(int *)arg;
 
 	dht = container_of(hhtab, struct d_hhash, ch_htable);
 	hlink->hl_key = ((dht->ch_cookie++) << D_HTYPE_BITS) | type;
@@ -903,7 +910,7 @@ hh_op_key_init(struct d_hash_table *hhtab, d_list_t *rlink, void *arg)
 static int
 hh_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
 {
-	struct d_hlink *hlink = hh_link2ptr(rlink);
+	struct d_hlink	*hlink = hh_link2ptr(rlink);
 
 	*key_pp = (void *)&hlink->hl_key;
 	return sizeof(hlink->hl_key);
@@ -919,9 +926,9 @@ hh_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 
 static bool
 hh_op_key_cmp(struct d_hash_table *hhtab, d_list_t *link,
-	  const void *key, unsigned int ksize)
+	      const void *key, unsigned int ksize)
 {
-	struct d_hlink *hlink = hh_link2ptr(link);
+	struct d_hlink	*hlink = hh_link2ptr(link);
 
 	D_ASSERT(ksize == sizeof(uint64_t));
 	return hlink->hl_key == *(uint64_t *)key;
@@ -942,10 +949,9 @@ hh_op_rec_decref(struct d_hash_table *hhtab, d_list_t *link)
 static void
 hh_op_rec_free(struct d_hash_table *hhtab, d_list_t *link)
 {
-	struct d_hlink *hlink = hh_link2ptr(link);
+	struct d_hlink	*hlink = hh_link2ptr(link);
 
-	if (hlink->hl_ops != NULL &&
-	    hlink->hl_ops->hop_free != NULL)
+	if (hlink->hl_ops != NULL && hlink->hl_ops->hop_free != NULL)
 		hlink->hl_ops->hop_free(hlink);
 }
 
@@ -960,21 +966,21 @@ static d_hash_table_ops_t hh_ops = {
 };
 
 int
-d_hhash_create(unsigned int bits, struct d_hhash **htable_pp)
+d_hhash_create(uint32_t feats, unsigned int bits, struct d_hhash **htable_pp)
 {
-	struct d_hhash		*hhtab;
-	int			 rc;
+	struct d_hhash	*hhtab;
+	int		 rc;
 
 	D_ALLOC_PTR(hhtab);
 	if (hhtab == NULL)
 		return -DER_NOMEM;
 
-	rc = d_hash_table_create_inplace(0, bits, NULL, &hh_ops,
+	rc = d_hash_table_create_inplace(feats, bits, NULL, &hh_ops,
 					 &hhtab->ch_htable);
 	if (rc != 0)
 		goto failed;
 
-	hhtab->ch_cookie = 1;
+	hhtab->ch_cookie  = 1;
 	hhtab->ch_ptrtype = false;
 	*htable_pp = hhtab;
 	return 0;
@@ -1041,14 +1047,15 @@ d_hhash_link_insert(struct d_hhash *hhtab, struct d_hlink *hlink, int type)
 			  "only contain D_HTYPE_PTR type entries");
 		D_ASSERTF(d_hhash_key_isptr(ptr_key), "hlink ptr %p is invalid "
 			  "D_HTYPE_PTR type", hlink);
+
 		ch_lock(&hhtab->ch_htable, false);
 		ch_rec_addref(&hhtab->ch_htable, &hlink->hl_link.rl_link);
 		hlink->hl_key = ptr_key;
 		ch_unlock(&hhtab->ch_htable, false);
-
 	} else {
 		D_ASSERTF(type != D_HTYPE_PTR, "PTR type key being inserted "
 			  "in a non ptr-based htable.\n");
+
 		d_hash_rec_insert_anonym(&hhtab->ch_htable,
 			&hlink->hl_link.rl_link, (void *)&type);
 	}
@@ -1057,7 +1064,7 @@ d_hhash_link_insert(struct d_hhash *hhtab, struct d_hlink *hlink, int type)
 static inline struct d_hlink*
 d_hlink_find(struct d_hash_table *htable, void *key, size_t size)
 {
-	d_list_t		*link;
+	d_list_t	*link;
 
 	link = d_hash_rec_find(htable, key, size);
 	return link == NULL ? NULL : hh_link2ptr(link);
@@ -1162,12 +1169,11 @@ struct d_uhash_bundle {
 	void		*cmp_args;
 };
 
-static struct d_ulink *
+static inline struct d_ulink *
 uh_link2ptr(d_list_t *link)
 {
-	struct d_rlink	*rlink;
+	struct d_rlink	*rlink = link2rlink(link);
 
-	rlink = link2rlink(link);
 	return container_of(rlink, struct d_ulink, ul_link);
 }
 
@@ -1181,7 +1187,7 @@ uh_op_key_hash(struct d_hash_table *uhtab, const void *key, unsigned int ksize)
 	D_DEBUG(DB_TRACE, "uuid_key: "CF_UUID"\n", CP_UUID(lkey->uuid));
 
 	return (unsigned int)(d_hash_string_u32((const char *)lkey->uuid,
-						   sizeof(uuid_t)));
+						sizeof(uuid_t)));
 }
 
 static bool
@@ -1199,8 +1205,7 @@ uh_op_key_cmp(struct d_hash_table *uhtab, d_list_t *link, const void *key,
 		CP_UUID(ulink->ul_uuid.uuid));
 
 	res = ((uuid_compare(ulink->ul_uuid.uuid, lkey->uuid)) == 0);
-	if (res && ulink->ul_ops != NULL &&
-	    ulink->ul_ops->uop_cmp != NULL)
+	if (res && ulink->ul_ops != NULL && ulink->ul_ops->uop_cmp != NULL)
 		res = ulink->ul_ops->uop_cmp(ulink, uhbund->cmp_args);
 
 	return res;
@@ -1209,25 +1214,23 @@ uh_op_key_cmp(struct d_hash_table *uhtab, d_list_t *link, const void *key,
 static void
 uh_op_rec_free(struct d_hash_table *hhtab, d_list_t *link)
 {
-	struct d_ulink *ulink = uh_link2ptr(link);
+	struct d_ulink	*ulink = uh_link2ptr(link);
 
-	if (ulink->ul_ops != NULL &&
-	    ulink->ul_ops->uop_free != NULL)
+	if (ulink->ul_ops != NULL && ulink->ul_ops->uop_free != NULL)
 		ulink->ul_ops->uop_free(ulink);
 }
-
-
 
 static d_hash_table_ops_t uh_ops = {
 	.hop_key_hash	= uh_op_key_hash,
 	.hop_key_cmp	= uh_op_key_cmp,
 	.hop_rec_addref	= hh_op_rec_addref, /* Reuse hh_op_add/decref */
-	.hop_rec_decref = hh_op_rec_decref,
+	.hop_rec_decref	= hh_op_rec_decref,
 	.hop_rec_free	= uh_op_rec_free,
 };
 
 int
-d_uhash_create(int feats, unsigned int bits, struct d_hash_table **htable_pp)
+d_uhash_create(uint32_t feats, unsigned int bits,
+	       struct d_hash_table **htable_pp)
 {
 	struct d_hash_table	*uhtab;
 	int			rc;
@@ -1260,7 +1263,7 @@ d_uhash_ulink_init(struct d_ulink *ulink, struct d_ulink_ops *ops)
 static inline struct d_ulink*
 d_ulink_find(struct d_hash_table *htable, void *key, size_t size)
 {
-	d_list_t		*link;
+	d_list_t	*link;
 
 	link = d_hash_rec_find(htable, key, size);
 	return link == NULL ? NULL : uh_link2ptr(link);
@@ -1306,7 +1309,6 @@ d_uhash_link_insert(struct d_hash_table *uhtab, struct d_uuid *key,
 	rc = d_hash_rec_insert(uhtab, (void *)(&uhbund),
 			       sizeof(struct d_uhash_bundle),
 			       &ulink->ul_link.rl_link, true);
-
 	if (rc)
 		D_ERROR("Error Inserting handle in UUID in-memory hash\n");
 

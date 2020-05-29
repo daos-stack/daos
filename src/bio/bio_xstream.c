@@ -204,6 +204,9 @@ bio_spdk_env_init(void)
 	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 		opts.shm_id = nvme_glb.bd_shm_id;
 
+	/* quiet DPDK logging by setting level to ERROR */
+	opts.env_context = "--log-level=lib.eal:4";
+
 	rc = spdk_env_init(&opts);
 	if (opts.pci_whitelist != NULL)
 		D_FREE(opts.pci_whitelist);
