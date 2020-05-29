@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,14 +31,15 @@ package spdk
 #cgo LDFLAGS: -lspdk_env_dpdk -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
 #cgo LDFLAGS: -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs -ldl -lnuma
 
-#include "stdlib.h"
-#include "spdk/stdinc.h"
-#include "spdk/env.h"
+#include <stdlib.h>
+#include <spdk/stdinc.h>
+#include <spdk/env.h>
 */
 import "C"
 
 import (
 	"fmt"
+	"unsafe"
 )
 
 // ENV is the interface that provides SPDK environment management.
@@ -79,6 +80,9 @@ func (e *Env) InitSPDKEnv(shmID int) (err error) {
 	if shmID > 0 {
 		opts.shm_id = C.int(shmID)
 	}
+
+	// quiet DPDK EAL logging by setting log level to ERROR
+	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
 
 	rc := C.spdk_env_init(opts)
 	if err = Rc2err("spdk_env_opts_init", rc); err != nil {

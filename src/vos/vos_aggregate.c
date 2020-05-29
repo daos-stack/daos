@@ -543,6 +543,7 @@ prepare_segments(struct agg_merge_window *mw)
 		/* Merge to highest pool map version */
 		if (ent_in->ei_ver < phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
+		ent_in->ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
 	}
 
 	if (mw->mw_csum_support) {
@@ -585,6 +586,7 @@ prepare_segments(struct agg_merge_window *mw)
 		ent_in->ei_rect.rc_ex.ex_lo = mw->mw_ext.ex_hi + 1;
 		ent_in->ei_rect.rc_ex.ex_hi = ext.ex_hi;
 		ent_in->ei_rect.rc_epc = phy_ent->pe_rect.rc_epc;
+		ent_in->ei_rect.rc_minor_epc = phy_ent->pe_rect.rc_minor_epc;
 		ent_in->ei_ver = phy_ent->pe_ver;
 
 		hole = bio_addr_is_hole(&phy_ent->pe_addr);
@@ -1202,6 +1204,9 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	for (i = 0; i < io->ic_seg_cnt; i++) {
 		ent_in = &io->ic_segs[i].ls_ent_in;
 
+		/** For insertion, no tx will be inserting anything at this
+		 *  epoch so just use the max value for the minor epoch.
+		 */
 		rc = evt_insert(oiter->it_hdl, ent_in,
 				&ent_in->ei_csum.cs_csum);
 		if (rc) {
@@ -1382,7 +1387,7 @@ trigger_flush(struct agg_merge_window *mw, struct evt_extent *lgc_ext)
 
 static struct agg_phy_ent *
 enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
-		daos_epoch_t epoch, bio_addr_t *addr,
+		const vos_iter_entry_t *entry, bio_addr_t *addr,
 		struct dcs_csum_info *csum_info, uint32_t ver)
 {
 	struct agg_phy_ent *phy_ent;
@@ -1392,7 +1397,8 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 		return NULL;
 
 	phy_ent->pe_rect.rc_ex = *phy_ext;
-	phy_ent->pe_rect.rc_epc = epoch;
+	phy_ent->pe_rect.rc_epc = entry->ie_epoch;
+	phy_ent->pe_rect.rc_minor_epc = entry->ie_minor_epc;
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
 	phy_ent->pe_off = 0;
@@ -1537,7 +1543,7 @@ recx2ext(daos_recx_t *recx, struct evt_extent *ext)
 
 static struct agg_phy_ent *
 lookup_phy_ent(struct agg_merge_window *mw, const struct evt_extent *phy_ext,
-	       daos_epoch_t epoch)
+	       const vos_iter_entry_t *entry)
 {
 	struct agg_phy_ent *phy_ent;
 
@@ -1546,7 +1552,8 @@ lookup_phy_ent(struct agg_merge_window *mw, const struct evt_extent *phy_ext,
 		if (phy_ent->pe_rect.rc_ex.ex_lo < phy_ext->ex_lo)
 			break;
 
-		if (phy_ent->pe_rect.rc_epc == epoch &&
+		if (phy_ent->pe_rect.rc_epc == entry->ie_epoch &&
+		    phy_ent->pe_rect.rc_minor_epc == entry->ie_minor_epc &&
 		    phy_ent->pe_rect.rc_ex.ex_hi == phy_ext->ex_hi)
 			return phy_ent;
 	}
@@ -1584,6 +1591,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rect.rc_ex = phy_ext;
 		rect.rc_epc = entry->ie_epoch;
+		rect.rc_minor_epc = entry->ie_minor_epc;
 		mark_yield(&entry->ie_biov.bi_addr, acts);
 
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
@@ -1608,11 +1616,11 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	/* Lookup physical entry, enqueue if it doesn't exist */
-	phy_ent = lookup_phy_ent(mw, &phy_ext, entry->ie_epoch);
+	phy_ent = lookup_phy_ent(mw, &phy_ext, entry);
 	if (phy_ent == NULL) {
 		D_ASSERT(phy_ext.ex_lo == lgc_ext.ex_lo);
 
-		phy_ent = enqueue_phy_ent(mw, &phy_ext, entry->ie_epoch,
+		phy_ent = enqueue_phy_ent(mw, &phy_ext, entry,
 					  &entry->ie_biov.bi_addr,
 					  &entry->ie_csum, entry->ie_ver);
 		if (phy_ent == NULL) {
@@ -1717,6 +1725,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (phy_ext.ex_lo == lgc_ext.ex_lo) {
 			rect.rc_ex = phy_ext;
 			rect.rc_epc = entry->ie_epoch;
+			rect.rc_minor_epc = entry->ie_minor_epc;
 			mark_yield(&entry->ie_biov.bi_addr, acts);
 
 			rc = evt_delete(oiter->it_hdl, &rect, NULL);
@@ -1738,9 +1747,10 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	/* Aggregation */
 	D_DEBUG(DB_EPC, "oid:"DF_UOID", lgc_ext:"DF_EXT", "
-		"phy_ext:"DF_EXT", epoch:"DF_U64", flags: %x\n",
+		"phy_ext:"DF_EXT", epoch:"DF_U64".%d, flags: %x\n",
 		DP_UOID(agg_param->ap_oid), DP_EXT(&lgc_ext),
-		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_vis_flags);
+		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_minor_epc,
+		entry->ie_vis_flags);
 
 	rc = set_window_size(mw, entry->ie_rsize);
 	if (rc)
