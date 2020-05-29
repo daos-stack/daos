@@ -7,6 +7,7 @@ It wraps most of common APIs from daos_fs.h and daos_uns.h, as well as some pool
 from daos_pool.h and daos_cont.h. There are three main classes, DaosFsClient, DaosFile and DaosUns.
 
 * DaosFsClient
+
 There will be single instance of DaosFsClient per pool and container. All DAOS DFS/UNS calls and init/finalize, are from
 this class which has all native methods implementations in jni which call DAOS APIs directly. It provides a few public
 APIs, move, delete, mkdir, exists, for simple non-repetitive file operations. They release all opened files, if any,
@@ -15,6 +16,7 @@ instantiated by calling getFile methods.
 It also has some DAOS UNS native methods which should be indirectly accessed via DaosUns.
 
 * DaosFile
+
 It's a simple and efficient representative of underlying DAOS file. You just need to give a posix-compatible path to
 create a DaosFile instance. All later file operations can be done via this instance. It provides java File-like APIs to
 make it friendly to Java developers. And you don't need to release DaosFile explicitly since it will be released
@@ -24,6 +26,7 @@ object is cached and remain open until being released. Later DFS operations don'
 operation.
 
 * DaosUns
+
 It wraps some DAOS UNS APIs, like creating, resolving and destroying UNS path, as well as parsing DAOS UNS string
 attribute. Besides, this class can be run from command line in which you can call all DAOS UNS APIs with different
 parameters. Use below command to show its usage in details.
@@ -44,9 +47,11 @@ DaosInputStream and DaosOutputStream.
 DAOS FileSystem binds to schema, "daos". And there are two ways to instantiate Hadoop DAOS FileSystem, DAOS UNS path and 
 configuration file, daos-site.xml.
 * daos-site.xml
+
 make sure daos-site.xml can be loaded by Hadoop. Please check
 [example](hadoop-daos/src/main/resources/daos-site-example.xml) for configuration items, defaults and their description.
 * DAOS UNS path
+
 The URI should be in format of "daos://uns/your path". "your path" is your OS file path created by DAOS UNS method,
 DaosUns.create(). You can create the UNS path with below command.
     ```bash
@@ -102,6 +107,16 @@ Beside DAOS setup and environment variables, one more environment for JVM signal
 
     export LD_PRELOAD=<YOUR JDK HOME>/jre/lib/amd64/libjsig.so
 
+* daos-java Jars
+
+There are three choices when put daos-java jar, depending on your application.<br/>
+1, daos-java-\<version\>.jar, if your app has protobuf 3 in your classpath.<br/>
+2, daos-java-\<version\>-protobuf3-shaded.jar, if your app don't have protobuf 3 or have protobuf 2 in your classpath.
+<br/>
+3, daos-java-\<version\>-shaded.jar, if you want to run daos-jar as standalone app.<br/>
+
+* YARN
+
 When run with Hadoop yarn, you need to add below configuration to core-site.xml.
 
 ```xml
@@ -109,7 +124,7 @@ When run with Hadoop yarn, you need to add below configuration to core-site.xml.
 <name>fs.AbstractFileSystem.daos.impl</name>
 <value>io.daos.fs.hadoop.DaosAbsFsImpl</value>
 </property>
-  ```
+```
 
 DAOS has no data locality since it is remote storage. You need to add below configuration to scheduler configuration
 file, like capacity-scheduler.xml in yarn.
