@@ -51,21 +51,26 @@ func checkUUID(uuidStr string) error {
 	return errors.Wrapf(err, "invalid UUID %q", uuidStr)
 }
 
-// formatNameGroup converts system names to principal and if both user and group
-// are unspecified, takes effective user name and that user's primary group.
+// formatNameGroup converts system names to principal and ensures both user and
+// group are, takes effective user name and that user's primary group.
 func formatNameGroup(usr string, grp string) (string, string, error) {
-	if usr == "" && grp == "" {
+	if usr == "" || grp == "" {
 		eUsr, err := user.Current()
 		if err != nil {
 			return "", "", err
 		}
 
-		eGrp, err := user.LookupGroupId(eUsr.Gid)
-		if err != nil {
-			return "", "", err
+		if usr == "" {
+			usr = eUsr.Username
 		}
+		if grp == "" {
+			eGrp, err := user.LookupGroupId(eUsr.Gid)
+			if err != nil {
+				return "", "", err
+			}
 
-		usr, grp = eUsr.Username, eGrp.Name
+			grp = eGrp.Name
+		}
 	}
 
 	if usr != "" && !strings.Contains(usr, "@") {
