@@ -17,6 +17,7 @@
   <properties>
     <native.build.path>${project.basedir}/build</native.build.path>
     <daos.install.path>/usr/local/daos</daos.install.path>
+    <compile.proto>false</compile.proto>
   </properties>
 
   <dependencies>
@@ -83,11 +84,11 @@
             <id>compile-proto</id>
             <phase>generate-sources</phase>
             <configuration>
-              <tasks>
+              <target name="compile-proto" if="${compile.proto}">
                 <mkdir dir="${native.build.path}"/>
                 <exec dir="${native.build.path}"
                       failonerror="true"
-                      executable="protoc">
+                      executable="protocc">
                   <arg value="-I=${project.basedir}/src/main/resources/"/>
                   <arg value="--c_out=."/>
                   <arg value="--java_out=."/>
@@ -98,7 +99,7 @@
                 </copy>
                 <copy file="${native.build.path}/DunsAttribute.pb-c.h" todir="${project.basedir}/src/main/native/include"/>
                 <copy file="${native.build.path}/DunsAttribute.pb-c.c" todir="${project.basedir}/src/main/native"/>
-              </tasks>
+              </target>
             </configuration>
             <goals>
               <goal>run</goal>
