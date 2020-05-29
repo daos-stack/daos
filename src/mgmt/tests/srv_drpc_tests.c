@@ -1677,6 +1677,16 @@ test_drpc_reintegrate_bad_uuid(void **state)
 }
 
 /*
+ * Pool evict test setup
+ */
+static int
+drpc_evict_setup(void **state)
+{
+	mock_ds_mgmt_pool_evict_setup();
+	return 0;
+}
+
+/*
  * dRPC pool evict tests
  */
 static void
@@ -1696,11 +1706,12 @@ pack_pool_evict_req(Drpc__Call *call, Mgmt__PoolEvictReq *req)
 }
 
 static void
-setup_evict_drpc_call(Drpc__Call *call, char *uuid)
+setup_evict_drpc_call(Drpc__Call *call, char *uuid, char *sys_name)
 {
 	Mgmt__PoolEvictReq req = MGMT__POOL_EVICT_REQ__INIT;
 
 	req.uuid = uuid;
+	req.sys = sys_name;
 	pack_pool_evict_req(call, &req);
 }
 
@@ -1726,11 +1737,28 @@ test_drpc_pool_evict_bad_uuid(void **state)
 	Drpc__Call	call = DRPC__CALL__INIT;
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
-	setup_evict_drpc_call(&call, "BAD");
+	setup_evict_drpc_call(&call, "BAD", "DaosSys");
 
 	ds_mgmt_drpc_pool_evict(&call, &resp);
 
 	expect_drpc_evict_resp_with_status(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+	static void
+test_drpc_pool_evict_mgmt_svc_fails(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_evict_drpc_call(&call, TEST_UUID, "DaosSys");
+	ds_mgmt_pool_evict_return = -DER_UNKNOWN;
+
+	ds_mgmt_drpc_pool_evict(&call, &resp);
+	expect_drpc_evict_resp_with_status(&resp,
+					       ds_mgmt_pool_evict_return);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -1742,7 +1770,7 @@ test_drpc_pool_evict_success(void **state)
 	Drpc__Call	call = DRPC__CALL__INIT;
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
-	setup_evict_drpc_call(&call, TEST_UUID);
+	setup_evict_drpc_call(&call, TEST_UUID, "DaosSys");
 	ds_mgmt_drpc_pool_evict(&call, &resp);
 
 	expect_drpc_evict_resp_with_status(&resp, 0);
@@ -2036,7 +2064,9 @@ test_drpc_cont_set_owner_success(void **state)
 
 #define POOL_CREATE_TEST(x)	cmocka_unit_test(x)
 
-#define POOL_EVICT_TEST(x)	cmocka_unit_test(x)
+#define POOL_EVICT_TEST(x)	cmocka_unit_test_setup(x, \
+						drpc_evict_setup)
+
 
 #define PING_RANK_TEST(x)	cmocka_unit_test(x)
 
@@ -2092,6 +2122,7 @@ main(void)
 		QUERY_TEST(test_drpc_pool_query_success_rebuild_err),
 		POOL_CREATE_TEST(test_drpc_pool_create_invalid_acl),
 		POOL_EVICT_TEST(test_drpc_pool_evict_bad_uuid),
+		POOL_EVICT_TEST(test_drpc_pool_evict_mgmt_svc_fails),
 		POOL_EVICT_TEST(test_drpc_pool_evict_success),
 		PING_RANK_TEST(test_drpc_ping_rank_success),
 		PREP_SHUTDOWN_TEST(test_drpc_prep_shutdown_success),

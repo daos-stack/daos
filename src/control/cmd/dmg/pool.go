@@ -165,15 +165,15 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 type PoolEvictCmd struct {
 	logCmd
 	ctlInvokerCmd
-	// TODO: implement --sys & --svc options (currently unsupported server side)
 	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to evict connection to"`
+	Sys  string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that the pools connections be evicted from."`
 }
 
 // Execute is run when PoolEvictCmd subcommand is activated
 func (d *PoolEvictCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	req := &control.PoolEvictReq{UUID: d.UUID}
+	req := &control.PoolEvictReq{UUID: d.UUID, Sys: d.Sys}
 
 	ctx := context.Background()
 	err := control.PoolEvict(ctx, d.ctlInvoker, req)

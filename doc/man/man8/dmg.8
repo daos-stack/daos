@@ -1,4 +1,4 @@
-.TH dmg 1 "26 May 2020"
+.TH dmg 1 "28 May 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -155,6 +155,9 @@ Evict all pool connections to a DAOS pool
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
 UUID of DAOS pool to evict connection to
+.TP
+\fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
+DAOS system that the pools connections be evicted from.
 .SS pool exclude
 Exclude a list of targets from a rank
 

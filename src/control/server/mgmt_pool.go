@@ -147,7 +147,6 @@ func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*m
 		return nil, errors.New("nil request")
 	}
 	if req.GetUuid() == "" {
-		// TODO: do we want to validate pool exists via ListPools?
 		return nil, errors.New("nil UUID")
 	}
 
