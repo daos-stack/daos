@@ -786,6 +786,9 @@ def run_tests(test_files, tag_filter, args):
             if args.clean:
                 if not clean_logs(test_file["yaml"], args):
                     return 128
+            # read limit.conf
+            read_limit(test_file["yaml"], args)
+
             # dump ulimit 
             get_ulimit(test_file["yaml"], args)
 
@@ -903,6 +906,24 @@ def clean_logs(test_yaml, args):
         return False
 
     return True
+
+
+def read_limit(test_yaml, args):
+    """Read /etc/security/limits.conf
+
+    Args:
+        test_yaml (str): yaml file containing host names
+        args (argparse.Namespace): command line arguments for this program
+    """
+    host_list = get_hosts_from_yaml(test_yaml, args)
+    command = "cat /etc/security/limits.conf"
+    print("Getting limits file on {}".format(host_list))
+    if not spawn_commands(host_list, command):
+        print("Error reading limits file, aborting")
+        return False
+
+    return True
+
 
 def get_ulimit(test_yaml, args):
     """Get ulimit -a

@@ -156,6 +156,10 @@ if [ \\\"\\\$(ulimit -c)\\\" != \\\"unlimited\\\" ]; then
 fi
 if [ \\\"\\\$(ulimit -l)\\\" != \\\"unlimited\\\" ]; then
     echo \\\"*  soft  memlock  unlimited\\\" >> /etc/security/limits.conf
+    echo \\\"root  soft  memlock  unlimited\\\" >> /etc/security/limits.conf
+    echo \\\"session required pam_limits.so\\\" > /etc/pam.d/common-session-noninteractive
+    echo \\\"session required pam_limits.so\\\" > /etc/pam.d/common-session
+    echo \\\"session required pam_limits.so\\\" >> /etc/pam.d/login
 fi
 echo \\\"/var/tmp/core.%e.%t.%p\\\" > /proc/sys/kernel/core_pattern\"
 rm -f /var/tmp/core.*
