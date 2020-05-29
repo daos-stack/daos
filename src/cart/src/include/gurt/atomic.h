@@ -91,8 +91,6 @@
 #define atomic_load_relaxed(ptr) atomic_fetch_add(ptr, 0)
 #define ATOMIC
 
-#define ATOMIC
-
 #endif
 
 #endif /* __GURT_ATOMIC_H__ */

@@ -1136,7 +1136,8 @@ test_gurt_hash_decref(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(entry->tl_ref, 2);
 
-	/* Drop 20 refs, which should fail but not remove or free the descriptor */
+	/* Drop 20 refs, which should fail but not
+	 * remove or free the descriptor */
 	rc = d_hash_rec_ndecref(thtab, 20, test);
 	assert_int_equal(rc, -DER_INVAL);
 
