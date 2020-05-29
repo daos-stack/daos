@@ -35,8 +35,6 @@ on boot if start-up scripts are registered with systemd.
 
 The following subsections will cover each step in more detail.
 
-Before getting started, please make sure to review and complete the
-[pre-flight checklist](#preflight-checklist) below.
 
 ## DAOS Server Setup
 
