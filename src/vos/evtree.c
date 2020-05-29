@@ -52,8 +52,6 @@ evt_rect_read(struct evt_rect *rout, const struct evt_rect_df *rin)
 static inline void
 evt_rect_write(struct evt_rect_df *rout, const struct evt_rect *rin)
 {
-	uint64_t	len;
-
 	rout->rd_len = rin->rc_ex.ex_hi - rin->rc_ex.ex_lo + 1;
 	rout->rd_epc = rin->rc_epc;
 	rout->rd_minor_epc = rin->rc_minor_epc;
