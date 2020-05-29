@@ -36,9 +36,15 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
+	// minScmNvmeRatio indicates the minimum storage size ratio SCM:NVMe
+	// (requested on pool creation), warning issued if ratio is lower
+	minScmNvmeRatio = 0.01
+	// maxNumSvcReps is the maximum number of pool service replicas
+	// that can be requested when creating a pool
 	maxNumSvcReps = 13
 )
 
@@ -91,6 +97,19 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		}
 	}
 
+	ratio := 1.00
+	if nvmeBytes > 0 {
+		ratio = float64(scmBytes) / float64(nvmeBytes)
+	}
+
+	if ratio < minScmNvmeRatio {
+		c.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
+			"performance will suffer!\n", ratio*100)
+	}
+	c.log.Infof("Creating DAOS pool with %s SCM and %s NVMe storage "+
+		"(%0.2f %% ratio)\n", humanize.IBytes(scmBytes),
+		humanize.IBytes(nvmeBytes), ratio*100)
+
 	var acl *control.AccessControlList
 	if c.ACLFile != "" {
 		acl, err = control.ReadACLFile(c.ACLFile)
@@ -104,9 +123,9 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 			maxNumSvcReps, c.NumSvcReps)
 	}
 
-	var ranks []uint32
-	if err := common.ParseNumberList(c.RankList, &ranks); err != nil {
-		return errors.WithMessage(err, "parsing rank list")
+	ranks, err := system.ParseRanks(c.RankList)
+	if err != nil {
+		return errors.Wrap(err, "parsing rank list")
 	}
 
 	req := &control.PoolCreateReq{
@@ -204,7 +223,7 @@ func (r *PoolExcludeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing rank list")
 	}
 
-	req := &control.PoolExcludeReq{UUID: r.UUID, Rank: r.Rank, Targetidx: idxlist}
+	req := &control.PoolExcludeReq{UUID: r.UUID, Rank: system.Rank(r.Rank), Targetidx: idxlist}
 
 	ctx := context.Background()
 	err := control.PoolExclude(ctx, r.ctlInvoker, req)
@@ -235,7 +254,7 @@ func (r *PoolReintegrateCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing rank list")
 	}
 
-	req := &control.PoolReintegrateReq{UUID: r.UUID, Rank: r.Rank, Targetidx: idxlist}
+	req := &control.PoolReintegrateReq{UUID: r.UUID, Rank: system.Rank(r.Rank), Targetidx: idxlist}
 
 	ctx := context.Background()
 	err := control.PoolReintegrate(ctx, r.ctlInvoker, req)

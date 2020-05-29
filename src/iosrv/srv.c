@@ -306,6 +306,19 @@ dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool error)
 }
 
 static int
+dss_iv_resp_hdlr(crt_context_t *ctx, void *hdlr_arg,
+		 void (*real_rpc_hdlr)(void *), void *arg)
+{
+	ABT_pool	pool, *pools = arg;
+	int		rc;
+
+	pool = pools[DSS_POOL_IO];
+	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
+			       ABT_THREAD_ATTR_NULL, NULL);
+	return dss_abterr2der(rc);
+}
+
+static int
 dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	     void (*real_rpc_hdlr)(void *), void *arg)
 {
@@ -428,6 +441,7 @@ dss_srv_handler(void *arg)
 		}
 
 		rc = crt_context_register_rpc_task(dmi->dmi_ctx, dss_rpc_hdlr,
+						   dss_iv_resp_hdlr,
 						   dx->dx_pools);
 		if (rc != 0) {
 			D_ERROR("failed to register process cb "DF_RC"\n",
