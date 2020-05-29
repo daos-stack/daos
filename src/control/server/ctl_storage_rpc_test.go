@@ -828,8 +828,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			}
 
 			awaitingFormat := make(chan struct{})
+			t.Log("waiting for awaiting format state")
 			go func(ctxIn context.Context) {
-				t.Log("waiting for awaiting format state")
 				for {
 					ready := true
 					for _, srv := range instances {

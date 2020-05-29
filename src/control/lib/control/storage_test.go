@@ -28,14 +28,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -155,49 +153,6 @@ func mockHostStorageMap(t *testing.T, scans ...*mockStorageScan) HostStorageMap 
 	}
 
 	return hsm
-}
-
-type mockHostError struct {
-	Hosts string
-	Error string
-}
-
-func mockHostErrorsMap(t *testing.T, hostErrors ...*mockHostError) HostErrorsMap {
-	hem := make(HostErrorsMap)
-
-	for _, he := range hostErrors {
-		hem[he.Error] = mockHostSet(t, he.Hosts)
-	}
-
-	return hem
-}
-
-func mockHostErrorsResp(t *testing.T, hostErrors ...*mockHostError) HostErrorsResp {
-	if len(hostErrors) == 0 {
-		return HostErrorsResp{}
-	}
-	return HostErrorsResp{
-		HostErrors: mockHostErrorsMap(t, hostErrors...),
-	}
-}
-
-func mockHostSet(t *testing.T, hosts string) *hostlist.HostSet {
-	hs, err := hostlist.CreateSet(hosts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return hs
-}
-
-func mockHostResponses(t *testing.T, count int, fmtStr string, respMsg proto.Message) []*HostResponse {
-	hrs := make([]*HostResponse, count)
-	for i := 0; i < count; i++ {
-		hrs[i] = &HostResponse{
-			Addr:    fmt.Sprintf(fmtStr, i),
-			Message: respMsg,
-		}
-	}
-	return hrs
 }
 
 func TestControl_StorageScan(t *testing.T) {
@@ -440,13 +395,7 @@ func TestControl_StorageScan(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmp.Comparer(func(x, y *hostlist.HostSet) bool {
-					return x.RangedString() == y.RangedString()
-				}),
-			}
-
-			if diff := cmp.Diff(tc.expResponse, gotResponse, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expResponse, gotResponse, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -827,13 +776,7 @@ func TestControl_StorageFormat(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmp.Comparer(func(x, y *hostlist.HostSet) bool {
-					return x.RangedString() == y.RangedString()
-				}),
-			}
-
-			if diff := cmp.Diff(tc.expResponse, gotResponse, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expResponse, gotResponse, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})

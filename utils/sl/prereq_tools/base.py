@@ -1407,19 +1407,11 @@ class _Component():
             return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
-        patches = self.resolve_patches()
         if self.src_exists():
             self.prereqs.update_src_path(self.name, self.src_path)
             print('Using existing sources at %s for %s' \
                 % (self.src_path, self.name))
-            if self.prereqs.build_deps:
-                for patch in patches:
-                    # Apply patch to existing source.
-                    print("Applying patch %s" % (patch))
-                    commands = ['patch -p 1 -N -t < %s ; if [ $? -gt 1 ]; then '
-                                'false; else true; fi;' % (patch)]
-                    if not RUNNER.run_commands(commands, subdir=self.src_path):
-                        raise BuildFailure(patch)
+            # NB: Don't apply patches to existing sources
             return
 
         if not self.retriever:
@@ -1433,6 +1425,7 @@ class _Component():
 
         print('Downloading source for %s' % self.name)
         self._delete_old_file(self.crc_file)
+        patches = self.resolve_patches()
         self.retriever.get(self.src_path, commit_sha=commit_sha,
                            patches=patches, branch=branch)
 
