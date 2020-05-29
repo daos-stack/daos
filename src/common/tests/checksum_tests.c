@@ -31,8 +31,9 @@
 #include <stdint.h>
 #include <cmocka.h>
 #include <gurt/types.h>
-#include <daos/common.h>
 #include <daos/checksum.h>
+#include <daos/common.h>
+#include <daos/cont_props.h>
 #include <daos/tests_lib.h>
 
 static bool verbose;
@@ -84,10 +85,11 @@ fake_get_size(struct daos_csummer *obj)
 	return fake_get_size_result;
 }
 
-void
+int
 fake_reset(struct daos_csummer *obj)
 {
 	obj->dcs_csum_buf[0] = 0;
+	return 0;
 }
 
 static struct csum_ft fake_algo = {
@@ -515,6 +517,60 @@ get_map_test(void **state)
 	assert_int_equal(1, result.dcr_nr);
 }
 
+static void
+skip_stuff(void **state)
+{
+	struct daos_csummer	*csummer;
+	d_sg_list_t		 sgl;
+	daos_recx_t		 recx;
+	struct dcs_iod_csums	*iod_csums;
+	daos_iod_t		 iod = {0};
+	int			 rc = 0;
+
+	fake_get_size_result = 4;
+	daos_csummer_init(&csummer, &fake_algo, 16, 0);
+	fake_algo.cf_get_size = fake_get_size;
+
+	dts_sgl_init_with_strings(&sgl, 1, "abcdef");
+	sgl.sg_iovs->iov_len --; /** remove ending '\0' */
+
+	recx.rx_idx = 0;
+	recx.rx_nr = daos_sgl_buf_size(&sgl);
+	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+	iod.iod_size = 1;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+
+	/** skip key calculation */
+	csummer->dcs_skip_key_calc = true;
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
+				    &iod_csums);
+	assert_int_equal(0, rc);
+	/** with key calculation would look like this ...
+	 * assert_string_equal("akey|abcdef|", fake_update_buf_copy);
+	 */
+	assert_string_equal("abcdef|", fake_update_buf_copy);
+
+	/**
+	 * skipping the data verification means that the csummer won't try
+	 * to calculate the checksum again to verify.
+	 */
+	/** reset */
+	memset(fake_update_buf_copy, 0, FAKE_UPDATE_BUF_LEN);
+	fake_update_buf = fake_update_buf_copy;
+
+	csummer->dcs_skip_data_verify = true;
+	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL,
+				     0, NULL);
+	assert_int_equal(0, rc);
+	assert_string_equal("", fake_update_buf_copy); /** update not called */
+
+	daos_csummer_free_ic(csummer, &iod_csums);
+	daos_sgl_fini(&sgl, true);
+	daos_csummer_destroy(&csummer);
+}
+
 #define MAP_MAX 10
 #define	HOLES_TESTCASE(...) \
 	holes_test_case(&(struct holes_test_args)__VA_ARGS__)
@@ -835,21 +891,22 @@ print_checksum(struct daos_csummer *csummer, struct dcs_csum_info *csum)
 {
 	uint32_t i, c;
 
-	D_PRINT("Type: %d\n", csum->cs_type);
-	D_PRINT("Name: %s\n", daos_csummer_get_name(csummer));
-	D_PRINT("Count: %d\n", csum->cs_nr);
-	D_PRINT("Len: %d\n", csum->cs_len);
-	D_PRINT("Buf Len: %d\n", csum->cs_buf_len);
-	D_PRINT("Chunk: %d\n", csum->cs_chunksize);
+	print_message("Type: %d\n", csum->cs_type);
+	print_message("Name: %s\n", daos_csummer_get_name(csummer));
+	print_message("Count: %d\n", csum->cs_nr);
+	print_message("Len: %d\n", csum->cs_len);
+	print_message("Buf Len: %d\n", csum->cs_buf_len);
+	print_message("Chunk: %d\n", csum->cs_chunksize);
 	for (c = 0; c < csum->cs_nr; c++) {
 		uint8_t *csum_bytes = ci_idx2csum(csum, c);
 
-		D_PRINT("Checksum[%02d]: 0x", c);
+		print_message("Checksum[%02d]: 0x", c);
 		for (i = 0; i < csum->cs_len; i++)
-			D_PRINT("%02x", csum_bytes[i]);
-		D_PRINT("\n");
+			print_message("%02x", csum_bytes[i]);
+		print_message("\n");
 	}
-	D_PRINT("\n");
+	print_message("\n");
+	fflush(stdout);
 }
 
 /**
@@ -864,7 +921,8 @@ test_all_checksum_types(void **state)
 	daos_recx_t		 recxs;
 	enum DAOS_CSUM_TYPE	 type;
 	struct daos_csummer	*csummer = NULL;
-	struct dcs_iod_csums	*csums = NULL;
+	struct dcs_iod_csums	*csums1 = NULL;
+	struct dcs_iod_csums	*csums2 = NULL;
 	int			 csum_lens[CSUM_TYPE_END];
 	daos_iod_t		 iod = {0};
 	int			 rc;
@@ -873,14 +931,11 @@ test_all_checksum_types(void **state)
 	csum_lens[CSUM_TYPE_ISAL_CRC16_T10DIF]	= 2;
 	csum_lens[CSUM_TYPE_ISAL_CRC32_ISCSI]	= 4;
 	csum_lens[CSUM_TYPE_ISAL_CRC64_REFL]	= 8;
+	csum_lens[CSUM_TYPE_ISAL_SHA1]		= 20;
+	csum_lens[CSUM_TYPE_ISAL_SHA256]	= 256 / 8;
+	csum_lens[CSUM_TYPE_ISAL_SHA512]	= 512 / 8;
 
-	dts_sgl_init_with_strings(&sgl, 1, "Lorem ipsum dolor sit amet, "
-"consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
-"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation "
-"ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure "
-"dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
-"pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui "
-"officia deserunt mollit anim id est laborum.");
+	dts_sgl_init_with_strings(&sgl, 1, "Data");
 
 	recxs.rx_idx = 0;
 	recxs.rx_nr = daos_sgl_buf_size(&sgl);
@@ -888,8 +943,11 @@ test_all_checksum_types(void **state)
 	for (type = CSUM_TYPE_UNKNOWN + 1; type < CSUM_TYPE_END; type++) {
 		rc = daos_csummer_init(&csummer,
 				       daos_csum_type2algo(type), 128, 0);
-		assert_int_equal(0, rc);
+		if (rc != 0)
+			fail_msg("init failed for type: %d. " DF_RC,
+				type, DP_RC(rc));
 
+		d_iov_set(&iod.iod_name, "akey", sizeof("akey"));
 		iod.iod_nr = 1;
 		iod.iod_recxs = &recxs;
 		iod.iod_size = 1;
@@ -897,20 +955,71 @@ test_all_checksum_types(void **state)
 
 		rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0,
 					    NULL, 0,
-					    &csums);
+					    &csums1);
+		assert_int_equal(0, rc);
+		assert_int_equal(csum_lens[type],
+				 daos_csummer_get_csum_len(csummer));
+
+		/** run it a second time to make sure that checksums
+		 * are calculated the same and the reset, update, finish flow
+		 * works
+		 */
+		rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0,
+					    NULL, 0,
+					    &csums2);
 
 		assert_int_equal(0, rc);
 		assert_int_equal(csum_lens[type],
 				 daos_csummer_get_csum_len(csummer));
 
-		if (verbose)
-			print_checksum(csummer, &csums->ic_data[0]);
+		assert_memory_equal(csums1->ic_akey.cs_csum,
+				    csums2->ic_akey.cs_csum,
+				    csums1->ic_akey.cs_len);
+		assert_memory_equal(csums1->ic_data[0].cs_csum,
+				    csums2->ic_data[0].cs_csum,
+				    csums1->ic_data[0].cs_len);
 
-		daos_csummer_free_ic(csummer, &csums);
+		if (verbose) {
+			print_checksum(csummer, &csums1->ic_akey);
+			print_checksum(csummer, &csums1->ic_data[0]);
+		}
+
+		daos_csummer_free_ic(csummer, &csums1);
+		daos_csummer_free_ic(csummer, &csums2);
 		daos_csummer_destroy(&csummer);
 	}
 
 	daos_sgl_fini(&sgl, true);
+}
+static void
+test_all_checksum_types2(void **state)
+{
+	enum DAOS_CSUM_TYPE	 type;
+	struct daos_csummer	*csummer = NULL;
+	const daos_size_t	 buffer_len = 512;
+	uint8_t			 buffer[512];
+	int			 i;
+	int			 rc;
+
+	for (type = CSUM_TYPE_ISAL_SHA256; type < CSUM_TYPE_END; type++) {
+		memset(buffer, 0, buffer_len);
+		rc = daos_csummer_init(&csummer,
+				       daos_csum_type2algo(type), 128, 0);
+		assert_int_equal(0, rc);
+
+		daos_csummer_set_buffer(csummer, buffer, buffer_len);
+		rc = daos_csummer_reset(csummer);
+		assert_int_equal(0, rc);
+
+		rc = daos_csummer_finish(csummer);
+		assert_int_equal(0, rc);
+		for (i = 0; i < buffer_len; i++) {
+			if (buffer[i] != 0)
+				fail_msg("checksum type %d, buffer[%d] (%d) "
+					 "!= 0", type, i, buffer[i] != 0);
+		}
+		daos_csummer_destroy(&csummer);
+	}
 }
 
 /**
@@ -1287,6 +1396,12 @@ test_container_prop_to_csum_type(void **state)
 			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_CRC32));
 	assert_int_equal(CSUM_TYPE_ISAL_CRC64_REFL,
 			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_CRC64));
+	assert_int_equal(CSUM_TYPE_ISAL_SHA1,
+			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_SHA1));
+	assert_int_equal(CSUM_TYPE_ISAL_SHA256,
+			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_SHA256));
+	assert_int_equal(CSUM_TYPE_ISAL_SHA512,
+			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_SHA512));
 }
 
 static void
@@ -1295,9 +1410,11 @@ test_is_valid_csum(void **state)
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_OFF));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC32));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA1));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA256));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA512));
 
 	/** Not supported yet */
-	assert_false(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA1));
 	assert_false(daos_cont_csum_prop_is_valid(99));
 }
 
@@ -1306,9 +1423,11 @@ test_is_csum_enabled(void **state)
 {
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC32));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA1));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA256));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA512));
 
 	/** Not supported yet */
-	assert_false(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA1));
 	assert_false(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_OFF));
 	assert_false(daos_cont_csum_prop_is_enabled(9999));
 }
@@ -1495,15 +1614,6 @@ test_calc_rec_chunksize(void **state)
 		csum_record_chunksize(UINT_MAX, UINT_MAX - 1));
 }
 
-uint64_t
-ci2csum(struct dcs_csum_info ci)
-{
-	uint16_t len = ci.cs_len;
-	uint8_t *buf = ci.cs_csum;
-
-	return ci_buf2uint64(buf, len);
-}
-
 static void
 test_formatter(void **state)
 {
@@ -1557,6 +1667,9 @@ static const struct CMUnitTest tests[] = {
 		test_daos_checksummer_with_multiple_chunks),
 	TEST("CSUM09: Test the different types of checksums",
 		test_all_checksum_types),
+	TEST("CSUM09.1: Test the different types of checksums when no "
+	     "update is done",
+		test_all_checksum_types2),
 	TEST("CSUM10: Test map from container prop to csum type",
 		test_container_prop_to_csum_type),
 	TEST("CSUM11: Some helper function tests",
@@ -1596,6 +1709,7 @@ static const struct CMUnitTest tests[] = {
 	TEST("CSUM28: Formatter",
 		test_formatter),
 	TEST("CSUM28: Get the recxes from a map", get_map_test),
+	TEST("CSUM29: Skip calculations based on csummer settings", skip_stuff),
 	TEST("CSUM_HOLES01: With 2 mapped extents that leave a hole "
 	     "at the beginning, in between and "
 	     "at the end, all within a single chunk.", holes_1),

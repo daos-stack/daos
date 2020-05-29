@@ -34,8 +34,20 @@
 		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
 	} while (0)
 
+unsigned int
+daos_checksum_test_arg2type(char *str)
+{
+	int result = daos_str2csumcontprop(str);
+
+	if (result < 0)
+		fail_msg("Invalid csum type: %s", str);
+
+	return (unsigned int) result;
+}
+
 /** by default for replica object test */
 static daos_oclass_id_t dts_csum_oc = OC_SX;
+static uint32_t dts_csum_prop_type = DAOS_PROP_CO_CSUM_SHA256;
 
 /** enable EC obj csum test or replica obj csum test */
 static inline int
@@ -314,7 +326,7 @@ checksum_disabled(void **state)
 
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	assert_memory_equal(ctx.update_sgl.sg_iovs->iov_buf,
 			    ctx.fetch_sgl.sg_iovs->iov_buf,
 			    ctx.update_sgl.sg_iovs->iov_buf_len);
@@ -360,14 +372,14 @@ io_with_server_side_verify(void **state)
 	 *
 	 */
 	/** 1. Server verify disabled, no corruption */
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_cont_obj(&ctx);
 
 	/** 2. Server verify enabled, no corruption */
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, true, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
@@ -375,7 +387,7 @@ io_with_server_side_verify(void **state)
 
 	/** 3. Server verify disabled, corruption occurs, update should work */
 	client_corrupt_on_update();
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
@@ -384,7 +396,7 @@ io_with_server_side_verify(void **state)
 
 	/** 4. Server verify enabled, corruption occurs, update should fail */
 	client_corrupt_on_update();
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, true, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, -DER_CSUM);
@@ -403,7 +415,7 @@ test_server_data_corruption(void **state)
 	int			 rc;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*8, oc);
 
 	/**1. Simple server data corruption after RDMA */
 	setup_multiple_extent_data(&ctx);
@@ -437,7 +449,7 @@ test_fetch_array(void **state)
 	 */
 	setup_from_test_args(&ctx, (test_arg_t *) *state);
 
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*8, oc);
 
 	/**
 	 * Act
@@ -499,7 +511,7 @@ test_fetch_array(void **state)
 	if (test_runable(*state, 2)) {
 		/** 5. Replicated object with corruption */
 		cleanup_cont_obj(&ctx);
-		setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false,
+		setup_cont_obj(&ctx, dts_csum_prop_type, false,
 			       1024*8, OC_RP_2GX);
 		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 				     &ctx.update_iod, &ctx.update_sgl, NULL);
@@ -713,7 +725,7 @@ fetch_with_multiple_extents(void **state)
 	/** Fetching a subset of original extent (not chunk aligned) */
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 8,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 8,
 		.recx_cfgs = {
@@ -725,7 +737,7 @@ fetch_with_multiple_extents(void **state)
 	/** Extents not aligned with chunksize */
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 2,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 1,
 		.recx_cfgs = {
@@ -738,7 +750,7 @@ fetch_with_multiple_extents(void **state)
 	/** Heavily overlapping extents broken up into many chunks */
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 8,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC32,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 1,
 		.recx_cfgs = {
@@ -751,7 +763,7 @@ fetch_with_multiple_extents(void **state)
 	/** Extents with small overlap */
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 1024,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC16,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 1,
 		.recx_cfgs = {
@@ -764,7 +776,7 @@ fetch_with_multiple_extents(void **state)
 	/** several smallish extents within a single chunk */
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 1024 * 32,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 8,
 		.recx_cfgs = {
@@ -782,7 +794,7 @@ overwrites_after_first_chunk(void **state)
 {
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 32,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 4,
 		.recx_cfgs = {
@@ -799,7 +811,7 @@ unaligned_record_size(void **state)
 {
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 4,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 3,
 		.recx_cfgs = {
@@ -815,7 +827,7 @@ record_size_larger_than_chunksize(void **state)
 	/** Overwrites after the first chunk */
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 4,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 20,
 		.recx_cfgs = {
@@ -830,7 +842,7 @@ overlapping_after_first_chunk(void **state)
 {
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 4,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 1,
 		.recx_cfgs = {
@@ -846,7 +858,7 @@ extents_with_holes_1(void **state)
 {
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 1024 * 32,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 1,
 		.recx_cfgs = {
@@ -862,7 +874,7 @@ extents_with_holes_2(void **state)
 {
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 1024 * 32,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 1,
 		.recx_cfgs = {
@@ -878,7 +890,7 @@ extents_with_holes_3(void **state)
 {
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 8,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 1,
 		.recx_cfgs = {
@@ -894,7 +906,7 @@ extents_with_holes_4(void **state)
 {
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 100,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 1,
 		.recx_cfgs = {
@@ -913,7 +925,7 @@ extents_with_holes_5(void **state)
 {
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 4,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 1,
 		.recx_cfgs = {
@@ -929,7 +941,7 @@ extents_with_holes_6(void **state)
 {
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.chunksize = 256,
-		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64,
+		.csum_prop_type = dts_csum_prop_type,
 		.server_verify = false,
 		.rec_size = 8,
 		.recx_cfgs = {
@@ -973,7 +985,7 @@ extents_with_holes_7(void **state)
 	ctx.update_iod.iod_type  = DAOS_IOD_ARRAY;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, chunksize, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, chunksize, oc);
 
 	ctx.recx[0].rx_idx = 0;
 	ctx.recx->rx_nr = data_size;
@@ -1020,7 +1032,7 @@ single_value_test(void **state, bool large_buf)
 
 	setup_from_test_args(&ctx, *state);
 
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 4, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 4, oc);
 	setup_obj_data_for_sv(&ctx, large_buf);
 
 	/** Base case ... no fault injection */
@@ -1067,7 +1079,7 @@ single_value_test(void **state, bool large_buf)
 
 	/** Reset the container with server side verification enabled */
 	cleanup_cont_obj(&ctx);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 4, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, true, 4, oc);
 
 	/**
 	 * fault injection on update
@@ -1126,7 +1138,7 @@ mix_test(void **state)
 
 	setup_from_test_args(&ctx, *state);
 
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 4, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 4, oc);
 
 	iov_alloc_str(&dkey, "dkey");
 
@@ -1196,7 +1208,7 @@ mix_test(void **state)
 
 	/** Reset the container with server side verification enabled */
 	cleanup_cont_obj(&ctx);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 4, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, true, 4, oc);
 
 	/**
 	 * fault injection on update
@@ -1238,7 +1250,7 @@ key_csum_fetch_update(void **state, int update_fi_flag, int fetch_fi_flag)
 	int			rc;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024, oc);
 	setup_simple_data(&ctx);
 
 	/**
@@ -1302,7 +1314,7 @@ many_iovs_with_single_values(void **state)
 	daos_oclass_id_t	oc = dts_csum_oc;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024, oc);
 	setup_simple_data(&ctx);
 
 	i = 0;
@@ -1388,7 +1400,7 @@ test_enumerate_a_key(void **state)
 	uint32_t		nr = KDS_NR;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024, oc);
 	setup_simple_data(&ctx);
 
 	/** insert multiple keys to enumerate */
@@ -1440,7 +1452,7 @@ test_enumerate_d_key(void **state)
 	uint32_t		key_count = 0;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024, oc);
 	setup_simple_data(&ctx);
 
 	/** insert multiple keys to enumerate */

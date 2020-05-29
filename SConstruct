@@ -126,10 +126,10 @@ def set_defaults(env):
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
-    env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
+    env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=1'])
     if env.get('BUILD_TYPE') == 'debug':
         if env.get("COMPILER") == 'gcc':
-            env.AppendUnique(CCFLAGS=['-Og'])
+            env.AppendUnique(CCFLAGS=['-O0'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     else:
@@ -152,7 +152,7 @@ def preload_prereqs(prereqs):
     reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
-        reqs.extend(['spdk', 'isal'])
+        reqs.extend(['spdk', 'isal', 'isal_crypto'])
     prereqs.load_definitions(prebuild=reqs)
 
 def scons(): # pylint: disable=too-many-locals

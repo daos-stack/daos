@@ -43,6 +43,8 @@ RDB_STRING_KEY(ds_cont_prop_, layout_ver);
 RDB_STRING_KEY(ds_cont_prop_, csum);
 RDB_STRING_KEY(ds_cont_prop_, csum_chunk_size);
 RDB_STRING_KEY(ds_cont_prop_, csum_server_verify);
+RDB_STRING_KEY(ds_cont_prop_, dedup);
+RDB_STRING_KEY(ds_cont_prop_, dedup_threshold);
 RDB_STRING_KEY(ds_cont_prop_, redun_fac);
 RDB_STRING_KEY(ds_cont_prop_, redun_lvl);
 RDB_STRING_KEY(ds_cont_prop_, snapshot_max);
@@ -101,6 +103,12 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_OWNER_GROUP,
 		.dpe_str	= "NOBODY@",
+	}, {
+		.dpe_type	= DAOS_PROP_CO_DEDUP,
+		.dpe_val	= DAOS_PROP_CO_DEDUP_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_DEDUP_THRESHOLD,
+		.dpe_val	= 4096,
 	}
 };
 

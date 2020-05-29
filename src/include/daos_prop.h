@@ -176,6 +176,18 @@ enum daos_cont_props {
 	 * Format: group@[domain]
 	 */
 	DAOS_PROP_CO_OWNER_GROUP,
+	/**
+	 * Determine whether deduplication is enabled
+	 * Require checksum to be enabled
+	 * Value DAOS_PROP_CO_DEDUP_OFF/MEMCMP/HASH
+	 * Default: DAOS_PROP_CO_DEDUP_OFF
+	 */
+	DAOS_PROP_CO_DEDUP,
+	/**
+	 * Deduplication threshold size
+	 * Default: 4K
+	 */
+	DAOS_PROP_CO_DEDUP_THRESHOLD,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -199,7 +211,9 @@ enum {
 	DAOS_PROP_CO_CSUM_CRC16,
 	DAOS_PROP_CO_CSUM_CRC32,
 	DAOS_PROP_CO_CSUM_CRC64,
-	DAOS_PROP_CO_CSUM_SHA1
+	DAOS_PROP_CO_CSUM_SHA1,
+	DAOS_PROP_CO_CSUM_SHA256,
+	DAOS_PROP_CO_CSUM_SHA512
 };
 
 /** container checksum server verify */
@@ -208,6 +222,12 @@ enum {
 	DAOS_PROP_CO_CSUM_SV_ON
 };
 
+/** container deduplication */
+enum {
+	DAOS_PROP_CO_DEDUP_OFF,
+	DAOS_PROP_CO_DEDUP_MEMCMP,
+	DAOS_PROP_CO_DEDUP_HASH
+};
 
 /** container compress type */
 enum {
