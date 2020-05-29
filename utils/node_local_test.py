@@ -42,19 +42,148 @@ class NLT_Conf():
     """Helper class for configuration"""
     def __init__(self, bc):
         self.bc = bc
-        self.output_fd = None
         self.agent_dir = None
+        self.wf = None
 
-    def set_output_file(self, filename):
-        """Set the name of a output file for error logging
-
-        This is used to save the lines or src that report issues
-        for use with the Jenkins warnings-ng plugin
-        """
-        self.output_fd = open(filename, 'w')
+    def set_wf(self, wf):
+        """Set the WarningsFactory object"""
+        self.wf = wf
 
     def __getitem__(self, key):
         return self.bc[key]
+
+class WarningsFactory():
+    """Class to parse warnings, and save to JSON output file
+
+    Take a list of failures, and output the data in a way that is best
+    displayed according to
+    https://github.com/jenkinsci/warnings-ng-plugin/blob/master/doc/Documentation.md
+    """
+
+    # Error levels are LOW, NORMAL, HIGH, ERROR
+    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'vos_tls_fini', 'rdb_timerd')
+
+    def __init__(self, filename):
+        self._fd = open(filename, 'w')
+        self.issues = []
+        self.pending = []
+        self._running = True
+        # Save the filename of the object, as __file__ does not
+        # work in __del__
+        self._file = __file__.lstrip('./')
+        self._flush()
+
+    def __del__(self):
+        """Ensure the file is flushed on exit, but if it hasn't already
+        been closed then mark an error"""
+        if not self._fd:
+            return
+
+        entry = {}
+        entry['fileName'] = os.path.basename(self._file)
+        entry['directory'] = os.path.dirname(self._file)
+        entry['lineStart'] = sys._getframe().f_lineno
+        entry['message'] = 'Tests exited without shutting down properly'
+        entry['severity'] = 'ERROR'
+        self.issues.append(entry)
+        self.close()
+
+    def explain(self, line, log_file, esignal):
+        """Log an error, along with the other errors it caused
+
+        Log the line as an error, and reference everything in the pending
+        array.
+        """
+        count = len(self.pending)
+        symptoms = set()
+        locs = set()
+        mtype = 'Fault injection'
+
+        sev = 'LOW'
+        if esignal:
+            symptoms.add('Process died with signal {}'.format(esignal))
+            sev = 'ERROR'
+            mtype = 'Fault injection caused crash'
+            count += 1
+
+        if count == 0:
+            print('Nothing to explain')
+            return
+
+        for (sline, smessage) in self.pending:
+            locs.add('{}:{}'.format(sline.filename, sline.lineno))
+            symptoms.add(smessage)
+
+        preamble = 'Fault injected here caused {} errors,' \
+                   ' logfile {}:'.format(count, log_file)
+
+        message = '{} {} {}'.format(preamble,
+                                    ' '.join(sorted(symptoms)),
+                                    ' '.join(sorted(locs)))
+        self.add(line,
+                 sev,
+                 message,
+                 cat='Fault injection location',
+                 mtype=mtype)
+        self.pending = []
+
+    def add(self, line, sev, message, cat=None, mtype=None):
+        """Log an error
+
+        Describe an error and add it to the issues array.
+        Add it to the pending array, for later clarification
+        """
+        entry = {}
+        entry['directory'] = os.path.dirname(line.filename)
+        entry['fileName'] = os.path.basename(line.filename)
+        if mtype:
+            entry['type'] = mtype
+        else:
+            entry['type'] = message
+        if cat:
+            entry['category'] = cat
+        entry['lineStart'] = line.lineno
+        entry['description'] = message
+        entry['message'] = line.get_anon_msg()
+        entry['severity'] = sev
+        if line.function in self.FLAKY_FUNCTIONS and \
+           entry['severity'] == 'NORMAL':
+            entry['severity'] = 'LOW'
+        self.issues.append(entry)
+        self.pending.append((line, message))
+        self._flush()
+
+    def _flush(self):
+        """Write the current list to the json file
+
+        This is done just in case of crash.  This function might get called
+        from the __del__ method of DaosServer, so do not use __file__ here
+        either.
+        """
+        self._fd.seek(0)
+        self._fd.truncate(0)
+        data = {}
+        data['issues'] = list(self.issues)
+        if self._running:
+            # When the test is running insert an error in case of abnormal
+            # exit, so that crashes in this code can be identified.
+            entry = {}
+            entry['fileName'] = os.path.basename(self._file)
+            entry['directory'] = os.path.dirname(self._file)
+            entry['lineStart'] = sys._getframe().f_lineno
+            entry['severity'] = 'ERROR'
+            entry['message'] = 'Tests are still running'
+            data['issues'].append(entry)
+        json.dump(data, self._fd, indent=2)
+        self._fd.flush()
+
+    def close(self):
+        """Save, and close the log file"""
+        self._running = False
+        self._flush()
+        self._fd.close()
+        self._fd = None
+        print('Closed JSON file with {} errors'.format(len(self.issues)))
 
 def load_conf():
     """Load the build config file"""
@@ -77,9 +206,7 @@ def get_base_env():
     """Return the base set of env vars needed for DAOS"""
 
     env = os.environ.copy()
-    env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     env['DD_MASK'] = 'all'
-    env['OFI_INTERFACE'] = 'lo'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
     env['FI_UNIVERSE_SIZE'] = '128'
@@ -147,6 +274,7 @@ class DaosServer():
         self._agent = subprocess.Popen([agent_bin,
                                         '--config-path', agent_config,
                                         '--insecure',
+                                        '--debug',
                                         '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
                                        env=agent_env)
@@ -207,8 +335,9 @@ class DaosServer():
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
             # TODO: Enable memleak checking when server shutdown works.
-            log_test(self._log_file, show_memleaks=False)
+            log_test(self.conf, self._log_file, show_memleaks=False)
         self.running = False
+        return ret
 
 def il_cmd(dfuse, cmd):
     """Run a command under the interception library"""
@@ -224,7 +353,7 @@ def il_cmd(dfuse, cmd):
     print('Logged il to {}'.format(log_file.name))
     print(ret)
     print('Log results for il')
-    log_test(log_file.name)
+    log_test(dfuse.conf, log_file.name)
     return ret
 
 class ValgrindHelper():
@@ -361,7 +490,7 @@ class DFuse():
                 print('dfuse command exited with {}'.format(ret))
                 self._sp = None
                 if os.path.exists(self.log_file):
-                    log_test(self.log_file)
+                    log_test(self.conf, self.log_file)
                 raise Exception('dfuse died waiting for start')
             except subprocess.TimeoutExpired:
                 pass
@@ -403,7 +532,7 @@ class DFuse():
         except subprocess.TimeoutExpired:
             self._sp.send_signal(signal.SIGTERM)
         self._sp = None
-        log_test(self.log_file)
+        log_test(self.conf, self.log_file)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -449,8 +578,6 @@ def import_daos(server, conf):
                                  pydir,
                                  'site-packages'))
 
-    os.environ['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-    os.environ['OFI_INTERFACE'] = 'lo'
     os.environ["DAOS_AGENT_DRPC_DIR"] = server.agent_dir
 
     daos = __import__('pydaos')
@@ -500,13 +627,19 @@ def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
     if fi_file:
         skip_fi = True
 
+    fi_signal = None
     # A negative return code means the process exited with a signal so do not
     # check for memory leaks in this case as it adds noise, right when it's
     # least wanted.
     if rc.returncode < 0:
         show_memleaks = False
+        fi_signal = -rc.returncode
 
-    log_test(log_file.name, show_memleaks=show_memleaks, skip_fi=skip_fi)
+    log_test(conf,
+             log_file.name,
+             show_memleaks=show_memleaks,
+             skip_fi=skip_fi,
+             fi_signal=fi_signal)
     valgrind.convert_xml()
     return rc
 
@@ -602,15 +735,16 @@ def setup_log_test(conf):
     lp = __import__('cart_logparse')
     lt = __import__('cart_logtest')
 
-    lt.output_file = conf.output_fd
+    lt.wf = conf.wf
 
-def log_test(filename, show_memleaks=True, skip_fi=False):
+def log_test(conf,
+             filename,
+             show_memleaks=True,
+             skip_fi=False,
+             fi_signal=None):
     """Run the log checker on filename, logging to stdout"""
 
     print('Running log_test on {}'.format(filename))
-
-    global lp
-    global lt
 
     log_iter = lp.LogIter(filename)
     lto = lt.LogTest(log_iter)
@@ -622,14 +756,15 @@ def log_test(filename, show_memleaks=True, skip_fi=False):
                            show_memleaks=show_memleaks)
     except lt.LogCheckError:
         if lto.fi_location:
-            lt.show_line(lto.fi_location, 'error',
-                         'Fault injected here caused error')
-        print('Error detected')
+            conf.wf.explain(lto.fi_location,
+                            os.path.basename(filename),
+                            fi_signal)
 
     if skip_fi:
         if not show_memleaks:
-            lt.show_line(lto.fi_location, 'error',
-                         'Fault injected here caused error')
+            conf.wf.explain(lto.fi_location,
+                            os.path.basename(filename),
+                            fi_signal)
         if not lto.fi_triggered:
             raise DFTestNoFi
 
@@ -646,6 +781,20 @@ def create_and_read_via_il(dfuse, path):
     print(os.fstat(ofd.fileno()))
     ofd.close()
     il_cmd(dfuse, ['cat', fname])
+
+def run_container_query(conf, path):
+    """Query a path to extract container information"""
+
+    cmd = ['container', 'query', '--svc', '0', '--path', path]
+
+    rc = run_daos_cmd(conf, cmd)
+
+    assert rc.returncode == 0
+
+    print(rc)
+    output = rc.stdout.decode('utf-8')
+    for line in output.splitlines():
+        print(line)
 
 def run_duns_overlay_test(server, conf):
     """Create a DUNS entry point, and then start fuse over it
@@ -766,6 +915,12 @@ def run_dfuse(server, conf):
     print(os.stat(uns_path))
     print(os.stat(uns_path))
     print(os.listdir(dfuse.dir))
+
+    run_container_query(conf, uns_path)
+
+    child_path = os.path.join(uns_path, 'child')
+    os.mkdir(child_path)
+    run_container_query(conf, child_path)
 
     dfuse.stop()
 
@@ -916,7 +1071,7 @@ def test_pydaos_kv(server, conf):
 
     print(container)
     c_uuid = container.decode().split(' ')[-1]
-    kvg = dbm.daos_named_kv('ofi+sockets', 'lo', pool, c_uuid)
+    kvg = dbm.daos_named_kv(pool, c_uuid)
 
     kv = kvg.get_kv_by_name('Dave')
     kv['a'] = 'a'
@@ -1023,8 +1178,9 @@ def main():
 
     conf = load_conf()
 
-    conf.set_output_file('nlt-errors.out')
+    wf = WarningsFactory('nlt-errors.json')
 
+    conf.set_wf(wf)
     setup_log_test(conf)
 
     server = DaosServer(conf)
@@ -1049,9 +1205,13 @@ def main():
     else:
         run_il_test(server, conf)
         run_dfuse(server, conf)
-    server.stop()
+
+    if server.stop() != 0:
+        fatal_errors = True
+
+    wf.close()
     if fatal_errors:
-        sys.exit(1)
+        print("Significant errors encountered")
 
 if __name__ == '__main__':
     main()

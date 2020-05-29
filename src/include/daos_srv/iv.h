@@ -283,6 +283,7 @@ int ds_iv_class_unregister(unsigned int class_id);
 enum iv_key {
 	IV_POOL_MAP = 1,
 	IV_POOL_PROP,
+	IV_POOL_CONN,
 	IV_REBUILD,
 	IV_OID,
 	IV_CONT_SNAP,

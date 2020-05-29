@@ -259,7 +259,7 @@ out:
 
 int
 crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
-			      void *arg)
+			      crt_rpc_task_t iv_resp_cb, void *arg)
 {
 	struct crt_context *crt_ctx = ctx;
 
@@ -270,6 +270,7 @@ crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
 	}
 
 	crt_ctx->cc_rpc_cb = process_cb;
+	crt_ctx->cc_iv_resp_cb = iv_resp_cb;
 	crt_ctx->cc_rpc_cb_arg = arg;
 	return 0;
 }

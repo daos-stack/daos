@@ -210,8 +210,13 @@ struct vos_container {
 	 * durable hints in vos_cont_df
 	 */
 	struct vea_hint_context	*vc_hint_ctxt[VOS_IOS_CNT];
+	/* Current ongoing aggregation ERR */
+	daos_epoch_range_t	vc_epr_aggregation;
+	/* Current ongoing discard EPR */
+	daos_epoch_range_t	vc_epr_discard;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
+				vc_in_discard:1,
 				vc_abort_aggregation:1,
 				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
@@ -227,6 +232,35 @@ struct vos_dtx_act_ent {
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
 };
+
+extern struct vos_tls	*standalone_tls;
+#ifdef VOS_STANDALONE
+unsigned int tmp_count;
+#define VOS_TIME_START(start, op)		\
+do {						\
+	if (standalone_tls->vtl_dp == NULL)	\
+		break;				\
+	start = daos_get_ntime();		\
+} while (0)
+
+#define VOS_TIME_END(start, op)			\
+do {						\
+	struct daos_profile *dp;		\
+	int time_msec;				\
+						\
+	dp = standalone_tls->vtl_dp;		\
+	if ((dp) == NULL || start == 0)		\
+		break;				\
+	time_msec = (daos_get_ntime() - start)/1000; \
+	daos_profile_count(dp, op, time_msec);	\
+} while (0)
+
+#else
+
+#define VOS_TIME_START(start, op) D_TIME_START(start, op)
+#define VOS_TIME_END(start, op) D_TIME_END(start, op)
+
+#endif
 
 #define DAE_XID(dae)		((dae)->dae_base.dae_xid)
 #define DAE_OID(dae)		((dae)->dae_base.dae_oid)

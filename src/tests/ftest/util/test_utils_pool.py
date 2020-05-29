@@ -75,6 +75,7 @@ class TestPool(TestDaosApiBase):
         self.pool = None
         self.uuid = None
         self.info = None
+        self.cmd_output = None
         self.svc_ranks = None
         self.connected = False
         self.dmg = dmg_command
@@ -136,6 +137,9 @@ class TestPool(TestDaosApiBase):
             # Create a pool with the dmg command
             self._log_method("dmg.pool_create", kwargs)
             result = self.dmg.pool_create(**kwargs)
+            # self.cmd_output to keep the actual stdout of dmg command for
+            # checking the negative/warning message.
+            self.cmd_output = result.stdout
             uuid, svc = get_pool_uuid_service_replicas_from_stdout(
                 result.stdout)
 

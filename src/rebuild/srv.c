@@ -625,10 +625,9 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 		    ((!is_rebuild_global_pull_done(rgt) &&
 		      is_rebuild_global_scan_done(rgt)) ||
 		      !rgt->rgt_notify_stable_epoch)) {
-			struct rebuild_iv iv;
+			struct rebuild_iv iv = { 0 };
 
 			D_ASSERT(rgt->rgt_stable_epoch != 0);
-			memset(&iv, 0, sizeof(iv));
 			uuid_copy(iv.riv_pool_uuid, rgt->rgt_pool_uuid);
 			iv.riv_master_rank = pool->sp_iv_ns->iv_master_rank;
 			iv.riv_global_scan_done =
@@ -1151,7 +1150,7 @@ rebuild_task_ult(void *arg)
 	struct rebuild_task			*task = arg;
 	struct ds_pool				*pool;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
-	struct rebuild_iv			 iv;
+	struct rebuild_iv			iv = { 0 };
 	int					 rc;
 
 	pool = ds_pool_lookup(task->dst_pool_uuid);
@@ -1251,21 +1250,19 @@ iv_stop:
 	 * still notify all other servers to stop their local
 	 * rebuild.
 	 */
-	memset(&iv, 0, sizeof(iv));
 	uuid_copy(iv.riv_pool_uuid, task->dst_pool_uuid);
 	iv.riv_master_rank	= pool->sp_iv_ns->iv_master_rank;
 	iv.riv_ver		= rgt->rgt_rebuild_ver;
 	iv.riv_global_scan_done = is_rebuild_global_scan_done(rgt);
 	iv.riv_global_done	= 1;
 	iv.riv_leader_term	= rgt->rgt_leader_term;
-	iv.riv_toberb_obj_count	= rgt->rgt_status.rs_toberb_obj_nr;
+	iv.riv_toberb_obj_count = rgt->rgt_status.rs_toberb_obj_nr;
 	iv.riv_obj_count	= rgt->rgt_status.rs_obj_nr;
 	iv.riv_rec_count	= rgt->rgt_status.rs_rec_nr;
 	iv.riv_size		= rgt->rgt_status.rs_size;
 	iv.riv_seconds          = rgt->rgt_status.rs_seconds;
 
-	rc = rebuild_iv_update(pool->sp_iv_ns,
-			       &iv, CRT_IV_SHORTCUT_NONE,
+	rc = rebuild_iv_update(pool->sp_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
 			       CRT_IV_SYNC_LAZY);
 	if (rc)
 		D_ERROR("rebuild_iv final update fails"DF_UUID": rc %d\n",
@@ -1950,7 +1947,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	struct ds_pool			*pool;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
-	daos_prop_t			*prop = NULL;
+	daos_prop_t			prop = { 0 };
 	struct daos_prop_entry		*entry;
 	int				rc;
 
@@ -2008,19 +2005,14 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_ASSERT(pool->sp_iv_ns != NULL);
 	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
 
-	D_ALLOC_PTR(prop);
-	if (prop == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	rc = ds_pool_iv_prop_fetch(pool, prop);
-	if (rc) {
-		daos_prop_free(prop);
+	rc = ds_pool_iv_prop_fetch(pool, &prop);
+	if (rc)
 		D_GOTO(out, rc);
-	}
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
+
+	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
 	rc = daos_rank_list_dup(&rpt->rt_svc_list,
 				(d_rank_list_t *)entry->dpe_val_ptr);
-	daos_prop_free(prop);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -2052,6 +2044,7 @@ out:
 
 		ds_pool_put(pool);
 	}
+	daos_prop_entries_free(&prop);
 
 	return rc;
 }

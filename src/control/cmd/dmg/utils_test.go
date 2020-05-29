@@ -34,6 +34,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestFlattenAddrs(t *testing.T) {
@@ -260,39 +261,56 @@ func TestFormatHostGroups(t *testing.T) {
 	}
 }
 
-func TestTabulateHostGroups(t *testing.T) {
-	mockColumnTitles := []string{"Hosts", "SCM", "NVME"}
+func mockRankGroups(t *testing.T) system.RankGroups {
+	groups := make(system.RankGroups)
+
+	rs1, err := system.NewRankSet("0-9,11-19")
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups["foo/OK"] = rs1
+
+	rs2, err := system.NewRankSet("10,20-299")
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups["bar/BAD"] = rs2
+
+	return groups
+}
+
+func TestTabulateRankGroups(t *testing.T) {
+	mockColumnTitles := []string{"Ranks", "Action", "Result"}
 
 	for name, tt := range map[string]struct {
-		g         hostlist.HostGroups
+		g         system.RankGroups
 		cTitles   []string
 		out       string
 		expErrMsg string
 	}{
 		"formatted results": {
-			g:       mockHostGroups(t),
+			g:       mockRankGroups(t),
 			cTitles: mockColumnTitles,
 			out: `
-Hosts     SCM              NVME              
------     ---              ----              
-host5     10GB (2 devices) 200TB (1 devices) 
-host[1-2] 13GB (3 devices) 200TB (4 devices) 
-host[3-4] 13GB (3 devices) 400TB (4 devices) 
+Ranks       Action Result 
+-----       ------ ------ 
+[10,20-299] bar    BAD    
+[0-9,11-19] foo    OK     
 `,
 		},
 		"column number mismatch": {
-			g:         mockHostGroups(t),
-			cTitles:   []string{"Hosts", "SCM", "NVME", "???"},
+			g:         mockRankGroups(t),
+			cTitles:   []string{"Ranks", "SCM", "NVME", "???"},
 			expErrMsg: "unexpected summary format",
 		},
 		"too few columns": {
-			g:         mockHostGroups(t),
-			cTitles:   []string{"Hosts"},
+			g:         mockRankGroups(t),
+			cTitles:   []string{"Ranks"},
 			expErrMsg: "insufficient number of column titles",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			table, err := tabulateHostGroups(tt.g, tt.cTitles...)
+			table, err := tabulateRankGroups(tt.g, tt.cTitles...)
 			ExpectError(t, err, tt.expErrMsg, name)
 			if diff := cmp.Diff(strings.TrimLeft(tt.out, "\n"), table); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)

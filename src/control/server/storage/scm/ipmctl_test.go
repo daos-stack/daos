@@ -230,7 +230,7 @@ func TestGetState(t *testing.T) {
 			desc: "unexpected output",
 			showRegionOut: "\n" +
 				"---ISetID=0x2aba7f4828ef2ccc---\n",
-			expGetStateErrMsg: "expecting at least 4 lines, got 3",
+			expGetStateErrMsg: "checking scm region capacity: expecting at least 4 lines, got 3",
 		},
 	}
 

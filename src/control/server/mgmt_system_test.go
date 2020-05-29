@@ -778,7 +778,6 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 				// mimic srv.run, set "ready" on startLoop rx
 				go func(s *IOServerInstance, startFails bool) {
 					<-s.startLoop
-					t.Logf("instance %d: start signal received", s.Index())
 					if startFails {
 						return
 					}
