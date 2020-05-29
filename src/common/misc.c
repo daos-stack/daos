@@ -223,6 +223,33 @@ daos_sgls_buf_size(d_sg_list_t *sgls, int nr)
 	return size;
 }
 
+int
+daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size)
+{
+	char	*new_buf;
+
+	if (sgl == NULL || sgl->sg_iovs == NULL)
+		return 0;
+
+	D_ASSERT(sgl->sg_nr > idx);
+	if (sgl->sg_iovs[idx].iov_buf_len >= new_size)
+		return 0;
+
+	D_ALLOC(new_buf, new_size);
+	if (new_buf == NULL)
+		return -DER_NOMEM;
+
+	if (sgl->sg_iovs[idx].iov_buf) {
+		memcpy(new_buf, sgl->sg_iovs[idx].iov_buf,
+		       sgl->sg_iovs[idx].iov_buf_len);
+		D_FREE(sgl->sg_iovs[idx].iov_buf);
+	}
+	sgl->sg_iovs[idx].iov_buf = new_buf;
+	sgl->sg_iovs[idx].iov_buf_len = new_size;
+
+	return 0;
+}
+
 /**
  * Query the size of packed sgls, if the \a buf_size != NULL then will set its
  * value as buffer size as well.
