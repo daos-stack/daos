@@ -462,13 +462,15 @@ static int
 svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	     struct vos_svt_key *key, struct vos_rec_bundle *rbund)
 {
-	struct vos_svt_key	*skey = (struct vos_svt_key *)&rec->rec_hkey[0];
+	daos_epoch_t		*epc  = (daos_epoch_t *)&rec->rec_hkey[0];
 	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
 	struct dcs_csum_info	*csum = rbund->rb_csum;
 	struct bio_iov		*biov = rbund->rb_biov;
 
-	if (key != NULL) /* called from iterator */
-		*key = *skey;
+	if (key != NULL) {/* called from iterator */
+		key->sk_epoch = *epc;
+		key->sk_minor_epc = irec->ir_minor_epc;
+	}
 
 	/* NB: return record address, caller should copy/rma data for it */
 	bio_iov_set_len(biov, irec->ir_size);
@@ -655,12 +657,12 @@ static int
 svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 		       uint32_t intent)
 {
-	struct vos_svt_key *skey = (struct vos_svt_key *)&rec->rec_hkey[0];
+	daos_epoch_t		*epc = (daos_epoch_t *)&rec->rec_hkey[0];
 	struct vos_irec_df	*svt;
 
 	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-					  svt->ir_dtx, skey->sk_epoch, intent,
+					  svt->ir_dtx, *epc, intent,
 					  DTX_RT_SVT);
 }
 
