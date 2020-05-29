@@ -30,6 +30,7 @@ import re
 from apricot import TestWithServers
 from daos_utils import DaosCommand
 import dmg_utils
+import agent_utils as agu
 import security_test_base as secTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
@@ -357,6 +358,7 @@ class PoolSecurityTestBase(TestWithServers):
         acl_file = os.path.join(self.tmp, get_acl_file)
         num_user = self.params.get("num_user", "/run/pool_acl/*")
         num_group = self.params.get("num_group", "/run/pool_acl/*")
+        self.hostlist_clients = agu.include_local_host(self.hostlist_clients)
 
         # (2)Generate acl file with permissions
         self.log.info("  (1)Generate acl file with user/group permissions")

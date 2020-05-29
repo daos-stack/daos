@@ -37,6 +37,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -124,7 +125,7 @@ type (
 		unaryRequest
 		ScmBytes   uint64
 		NvmeBytes  uint64
-		Ranks      []uint32
+		Ranks      []system.Rank
 		NumSvcReps uint32
 		Sys        string
 		User       string
@@ -386,7 +387,7 @@ type PoolExcludeReq struct {
 	unaryRequest
 	msRequest
 	UUID      string
-	Rank      uint32
+	Rank      system.Rank
 	Targetidx []uint32
 }
 
@@ -402,7 +403,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, &mgmtpb.PoolExcludeReq{
 			Uuid:      req.UUID,
-			Rank:      req.Rank,
+			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,
 		})
 	})
@@ -428,7 +429,7 @@ type PoolReintegrateReq struct {
 	unaryRequest
 	msRequest
 	UUID      string
-	Rank      uint32
+	Rank      system.Rank
 	Targetidx []uint32
 }
 
@@ -444,7 +445,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, &mgmtpb.PoolReintegrateReq{
 			Uuid:      req.UUID,
-			Rank:      req.Rank,
+			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,
 		})
 	})
