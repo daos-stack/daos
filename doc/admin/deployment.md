@@ -87,21 +87,21 @@ typically stored under /run or /var/run (usually a symlink to /run) and
 are a mounted tmpfs file system. There are several methods for ensuring
 the necessary directories are setup.
 
-A sign that this step may have been missed is when starting daos_server
-or daos_agent, you may see the message:
+A sign that this step may have been missed is when starting `daos_server`
+or `daos_agent`, you may see the message:
 ```bash
 $ mkdir /var/run/daos_server: permission denied
 Unable to create socket directory: /var/run/daos_server
 ```
 #### Non-default Directory
 
-By default, daos_server and daos_agent will use the directories
-/var/run/daos_server and /var/run/daos_agent respectively. To change
-the default location that daos_server uses for its runtime directory,
-either uncomment and set the socket_dir configuration value in
-install/etc/daos_server.yml, or pass the location to daos_server on
-the command line using the -d flag. For the daos_agent, an alternate
-location can be passed on the command line using the --runtime_dir flag.
+By default, `daos_server` and `daos_agent` will use the directories
+`/var/run/daos_server` and `/var/run/daos_agent` respectively. To change
+the default location that `daos_server` uses for its runtime directory,
+either uncomment and set the `socket_dir` configuration value in
+`install/etc/daos_server.yml`, or pass the location to `daos_server` on
+the command line using the -d flag. For the `daos_agent`, an alternate
+location can be passed on the command line using the `--runtime_dir` flag.
 
 #### Default Directory (non-persistent)
 
@@ -110,14 +110,14 @@ the next reboot. However, if reboots are infrequent, an easy solution
 while still utilizing the default locations is to create the
 required directories manually. To do this execute the following commands.
 
-daos_server:
+`daos_server`:
 ```bash
 $ mkdir /var/run/daos_server
 $ chmod 0755 /var/run/daos_server
 $ chown user:user /var/run/daos_server (where user is the user you
     will run daos_server as)
 ```
-daos_agent:
+`daos_agent`:
 ```bash
 $ mkdir /var/run/daos_agent
 $ chmod 0755 /var/run/daos_agent
@@ -127,7 +127,7 @@ $ chown user:user /var/run/daos_agent (where user is the user you
 
 #### Default Directory (persistent)
 
-If the server hosting daos_server or daos_agent will be rebooted often,
+If the server hosting `daos_server` or `daos_agent` will be rebooted often,
 systemd provides a persistent mechanism for creating the required
 directories called tmpfiles.d. This mechanism will be required every
 time the system is provisioned and requires a reboot to take effect.
@@ -217,7 +217,7 @@ available at
 <https://github.com/daos-stack/daos/tree/master/utils/config/examples>
 
 The location of this configuration file is determined by first checking
-for the path specified through the -o option of the daos_server command
+for the path specified through the -o option of the `daos_server` command
 line. Otherwise, /etc/daos_server.conf is used.
 
 Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml))
@@ -365,7 +365,7 @@ The --enable-recovery is required for fault tolerance to guarantee that
 the fault of one server does not cause the others to be stopped.
 
 The --allow-run-as-root option can be added to the command line to
-allow the daos_server to run with root privileges on each storage
+allow the `daos_server` to run with root privileges on each storage
 nodes (for example when needing to perform privileged tasks relating
 to storage format). See the orterun(1) man page for additional options.
 
@@ -377,10 +377,10 @@ The DAOS Server will be run as `daos-server` user which will be created
 during RPM install.
 
 If you wish to use systemd with a development build, you must copy the service
-file from utils/systemd to `/usr/lib/systemd/system{`. Once the file is copied
-modify the ExecStart line to point to your in tree daos_server binary.
+file from utils/systemd to `/usr/lib/systemd/system`. Once the file is copied
+modify the ExecStart line to point to your in tree `daos_server` binary.
 
-Once the service file is installed you can start daos_server
+Once the service file is installed you can start `daos_server`
 with the following commands:
 
 ```bash
@@ -797,7 +797,7 @@ formatted and mounted based on the parameters provided in the server config file
 
 - `scm_mount` specifies the location of the mountpoint to create.
 - `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/DCPM
-is available (scm_size dictates the size of tmpfs in GB), when set to `dcpm` the device
+is available (`scm_size` dictates the size of tmpfs in GB), when set to `dcpm` the device
 specified under `scm_list` will be mounted at `scm_mount` path.
 
 ### NVMe Format
@@ -847,7 +847,7 @@ administrators. The security infrastructure is currently under
 development and will be delivered in DAOS v1.0. Initial support for certificates
 has been added to DAOS and can be disabled either via the command line or in the
 DAOS Agent configuration file. Currently, the easiest way to disable certificate
-support is to pass the -i flag to daos_agent.
+support is to pass the -i flag to `daos_agent`.
 
 ### Agent Configuration File
 
@@ -897,37 +897,38 @@ $ daos_agent -i -o <'path to agent configuration file/daos_agent.yml'> &
 
 Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
 unit file is installed in the correct location when installing from RPMs.
+
 If you wish to use systemd with a development build, you must copy the service
-file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
-modify the ExecStart line to point to your in tree daos_agent binary.
+file from utils/systemd to `/usr/lib/systemd/system`. Once the file is copied
+modify the ExecStart line to point to your in tree `daos_agent` binary.
 
-ExecStart=/usr/bin/daos_agent -i -o <'path to agent configuration file/daos_agent.yml'>
+`ExecStart=/usr/bin/daos_agent -i -o <'path to agent configuration file/daos_agent.yml'>`
 
-Once the service file is installed, you can start daos_agent
+Once the service file is installed, you can start `daos_agent`
 with the following commands:
 
 ```bash
-$ sudo systemctl enable daos-agent
-$ sudo systemctl start daos-agent
+$ sudo systemctl enable daos_agent
+$ sudo systemctl start daos_agent
 ```
 
 To check the component status use:
 
 ```bash
-$ sudo systemctl status daos-agent
+$ sudo systemctl status daos_agent
 ```
 
 If DAOS Agent failed to start check the logs with:
 
 ```bash
-$ sudo journalctl --unit daos-agent
+$ sudo journalctl --unit daos_agent
 ```
 
 ## System Validation
 
-To validate that the DAOS system is properly installed, the daos_test
+To validate that the DAOS system is properly installed, the `daos_test`
 suite can be executed. Ensure the DAOS Agent is configured before running
-daos_test and that the following environment variables are properly set:
+`daos_test` and that the following environment variables are properly set:
 
 - `CRT_PHY_ADDR_STR` must be set to match the provider specified in the server
   yaml configuration file (e.g. export `CRT_PHY_ADDR_STR="ofi+sockets"`)
