@@ -51,24 +51,6 @@ func TestNetworkCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Perform network scan all providers long",
-			"network scan --all",
-			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			nil,
-		},
-		{
-			"Perform network scan all providers short",
-			"network scan -a",
-			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			nil,
-		},
-		{
 			"Perform network scan with provider ofi+sockets (short)",
 			"network scan -p 'ofi+sockets'",
 			strings.Join([]string{

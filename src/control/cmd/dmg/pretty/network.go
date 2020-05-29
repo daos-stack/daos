@@ -32,6 +32,29 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
+const (
+	providerTitle  = "Provider"
+	interfaceTitle = "Interfaces"
+	socketTitle    = "NUMA Socket"
+)
+
+// dedupeStringSlice is responsible for returning a slice based on
+// the input with any duplicates removed.
+func dedupeStringSlice(in []string) []string {
+	keys := make(map[string]struct{})
+
+	for _, el := range in {
+		keys[el] = struct{}{}
+	}
+
+	out := make([]string, 0, len(keys))
+	for key := range keys {
+		out = append(out, key)
+	}
+
+	return out
+}
+
 // PrintHostFabricMap generates a human-readable representation of the supplied
 // HostFabricMap and writes it to the supplied io.Writer.
 func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, onlyProviders bool, opts ...control.PrintConfigOption) error {
@@ -40,27 +63,56 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, onlyProviders 
 	}
 
 	ew := txtfmt.NewErrWriter(out)
+
 	for _, key := range hfm.Keys() {
+		var hfiMap map[uint32]map[string][]string
+
 		hfs := hfm[key]
 		hosts := control.GetPrintHosts(hfs.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
+		iw := txtfmt.NewIndentWriter(ew, txtfmt.WithPadCount(4))
 		fmt.Fprintf(ew, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
-
-		iw := txtfmt.NewIndentWriter(ew, txtfmt.WithPadCount(8))
-		fmt.Fprintf(iw, "Providers: %s\n", strings.Join(hfs.HostFabric.Providers, ","))
 		fmt.Fprintln(ew)
+		fmt.Fprintf(iw, "Available providers: %s\n", strings.Join(hfs.HostFabric.Providers, ", "))
+		fmt.Fprintln(ew)
+
 		if onlyProviders {
 			continue
 		}
 
+		hfiMap = make(map[uint32]map[string][]string)
 		for _, fi := range hfs.HostFabric.Interfaces {
-			fmt.Fprintf(iw, "provider: %s\n", fi.Provider)
-			fmt.Fprintf(iw, "fabric_iface: %s\n", fi.Device)
-			fmt.Fprintf(iw, "pinned_numa_node: %d\n", fi.NumaNode)
-			fmt.Fprintln(ew)
+			if _, ok := hfiMap[fi.NumaNode]; !ok {
+				hfiMap[fi.NumaNode] = make(map[string][]string)
+			}
+			hfiMap[fi.NumaNode][fi.Provider] = append(hfiMap[fi.NumaNode][fi.Provider], fi.Device)
 		}
 
-		fmt.Fprintln(ew)
+		for _, hfi := range hfiMap {
+			for _, devices := range hfi {
+				devices = dedupeStringSlice(devices)
+			}
+		}
+
+		iwTable := txtfmt.NewIndentWriter(iw, txtfmt.WithPadCount(4))
+		for s, hfi := range hfiMap {
+			var table []txtfmt.TableRow
+
+			formatter := txtfmt.NewTableFormatter(providerTitle, interfaceTitle)
+			title := fmt.Sprintf("%s %d", socketTitle, s)
+			lineBreak := strings.Repeat("-", len(title))
+
+			fmt.Fprintf(iw, "%s\n%s\n%s\n", lineBreak, title, lineBreak)
+			fmt.Fprintln(ew)
+
+			for p, dev := range hfi {
+				row := txtfmt.TableRow{providerTitle: p, interfaceTitle: strings.Join(dev, ", ")}
+				table = append(table, row)
+			}
+
+			fmt.Fprintf(iwTable, fmt.Sprintf("%s", formatter.Format(table)))
+			fmt.Fprintln(ew)
+		}
 	}
 
 	return ew.Err

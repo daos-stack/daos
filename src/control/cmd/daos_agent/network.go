@@ -25,7 +25,9 @@ package main
 
 import (
 	"os"
+	"strings"
 
+	"github.com/daos-stack/daos/src/control/cmd/daos_agent/pretty"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
@@ -43,7 +45,6 @@ func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
 }
 
 func (cmd *netScanCmd) Execute(_ []string) error {
-	var provider string
 	defer os.Exit(0)
 
 	numaAware, err := netdetect.NumaAware()
@@ -56,33 +57,22 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		cmd.printUnlessJson("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
-	switch {
-	case len(cmd.FabricProvider) > 0:
-		provider = cmd.FabricProvider
-		cmd.printUnlessJson("Scanning fabric for provider: %s\n", provider)
-	default:
-		cmd.printUnlessJson("Scanning fabric for all providers\n")
-	}
-
-	results, err := netdetect.ScanFabric(provider)
+	results, err := netdetect.ScanFabric(cmd.FabricProvider)
 	if err != nil {
 		exitWithError(cmd.log, err)
 		return nil
 	}
 
-	if provider == "" {
-		provider = "All"
-	}
-
-	cmd.printUnlessJson("\nFabric scan found %d devices matching the provider spec: %s\n\n", len(results), provider)
-
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(os.Stdout, results)
 	}
 
-	for _, sr := range results {
-		cmd.printUnlessJson("OFI_INTERFACE: %-16sCRT_PHY_ADDR_STR: %-25sNUMA affinity: %d", sr.DeviceName, sr.Provider, sr.NUMANode)
+	var bld strings.Builder
+	if err := pretty.PrintFabricScan(results, &bld); err != nil {
+		return err
 	}
+
+	cmd.log.Info(bld.String())
 
 	return nil
 }

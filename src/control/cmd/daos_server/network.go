@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/daos_server/pretty"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
@@ -49,37 +50,28 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	var provider string
 
 	if len(args) > 0 {
-		cmd.log.Debugf("An invalid argument was provided: %+v", args)
 		return errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")
 	}
 
 	switch {
 	case cmd.AllProviders:
-		cmd.log.Info("Scanning fabric for all providers")
 	case len(cmd.FabricProvider) > 0:
 		provider = cmd.FabricProvider
-		cmd.log.Infof("Scanning fabric for cmdline specified provider: %s", provider)
 	case len(cmd.config.Fabric.Provider) > 0:
 		provider = cmd.config.Fabric.Provider
-		cmd.log.Infof("Scanning fabric for YML specified provider: %s", provider)
 	default:
-		// all providers case
-		cmd.log.Info("Scanning fabric for all providers")
 	}
 
-	results, err := netdetect.ScanFabric(provider)
+	results, err := netdetect.ScanFabric("")
 	if err != nil {
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
 
-	if provider == "" {
-		provider = "All"
+	var bld strings.Builder
+	if err := pretty.PrintFabricScan(results, &bld, false, provider); err != nil {
+		return err
 	}
-	cmd.log.Infof("Fabric scan found %d devices matching the provider spec: %s", len(results), provider)
-
-	for _, sr := range results {
-		cmd.log.Infof("\n%v\n\n", sr)
-	}
+	cmd.log.Info(bld.String())
 
 	return nil
 }
@@ -89,10 +81,18 @@ type networkListCmd struct {
 	logCmd
 }
 
-// List the supported providers
+// List the available providers
 func (cmd *networkListCmd) Execute(args []string) error {
-	providers := netdetect.GetSupportedProviders()
-	cmd.log.Info("Supported providers:\n")
-	cmd.log.Infof("\t%s", strings.Join(providers, ", "))
+	results, err := netdetect.ScanFabric("")
+	if err != nil {
+		return errors.WithMessage(err, "failed to execute the fabric and device scan")
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintFabricScan(results, &bld, true, ""); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
+
 	return nil
 }
