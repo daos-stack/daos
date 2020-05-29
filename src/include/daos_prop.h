@@ -277,7 +277,7 @@ daos_prop_alloc(uint32_t entries_nr);
 /**
  * Free the DAOS property entries.
  *
- * \param[in]	prop	propety entries to be freed.
+ * \param[in]	prop	property entries to be freed.
  */
 void
 daos_prop_entries_free(daos_prop_t *prop);
