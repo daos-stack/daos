@@ -87,7 +87,9 @@
  * actual synchronization after the store as the store isn't
  * required.
  */
+#define atomic_load_consume(ptr) atomic_fetch_add(ptr, 0)
 #define atomic_load_relaxed(ptr) atomic_fetch_add(ptr, 0)
+#define ATOMIC
 
 #define ATOMIC
 
