@@ -1141,8 +1141,8 @@ test_gurt_hash_decref(void **state)
 	assert_int_equal(rc, -DER_INVAL);
 
 	/* Drop 2 refs, which should remove and free the descriptor */
-	rc = d_hash_rec_ndecref(thtab, 20, test);
-	assert_int_equal(rc, -DER_INVAL);
+	rc = d_hash_rec_ndecref(thtab, 2, test);
+	assert_int_equal(rc, 0);
 
 	/* Get the first element in the table, which should be NULL */
 	assert_null(d_hash_rec_first(thtab));
