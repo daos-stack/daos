@@ -143,7 +143,6 @@ def set_test_environment(args):
 
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-    os.environ["CRT_CTX_SHARE_ADDR"] = "0"
 
     # Set the default location for daos log files written during testing if not
     # already defined.
