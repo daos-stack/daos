@@ -40,6 +40,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func createACLFile(t *testing.T, path string, acl *control.AccessControlList) {
@@ -124,7 +125,7 @@ func TestPoolCommands(t *testing.T) {
 					Sys:        "daos_server", // FIXME: This should be a constant
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []uint32{},
+					Ranks:      []system.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -142,7 +143,7 @@ func TestPoolCommands(t *testing.T) {
 					Sys:        "fnord",
 					User:       "foo@",
 					UserGroup:  "bar@",
-					Ranks:      []uint32{},
+					Ranks:      []system.Rank{},
 					ACL:        testACL,
 				}),
 			}, " "),
@@ -161,7 +162,7 @@ func TestPoolCommands(t *testing.T) {
 					Sys:        "fnord",
 					User:       "foo@",
 					UserGroup:  "bar@",
-					Ranks:      []uint32{},
+					Ranks:      []system.Rank{},
 					ACL:        testACL,
 				}),
 			}, " "),
@@ -178,7 +179,7 @@ func TestPoolCommands(t *testing.T) {
 					Sys:        "daos_server",
 					User:       "foo@home",
 					UserGroup:  "bar@home",
-					Ranks:      []uint32{},
+					Ranks:      []system.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -193,7 +194,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					Sys:        "daos_server",
 					User:       "foo@",
-					Ranks:      []uint32{},
+					Ranks:      []system.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -208,7 +209,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					Sys:        "daos_server",
 					UserGroup:  "foo@",
-					Ranks:      []uint32{},
+					Ranks:      []system.Rank{},
 				}),
 			}, " "),
 			nil,

@@ -33,6 +33,7 @@
 
 #include "daos_fs.h"
 #include "daos_api.h"
+#include "daos_uns.h"
 
 #include <gurt/common.h>
 
@@ -125,6 +126,7 @@ main(int argc, char **argv)
 	struct dfuse_pool	*dfpn;
 	struct dfuse_dfs	*dfs = NULL;
 	struct dfuse_dfs	*dfsn;
+	struct duns_attr_t	duns_attr;
 	uuid_t			tmp_uuid;
 	char			c;
 	int			ret = -DER_SUCCESS;
@@ -289,12 +291,42 @@ main(int argc, char **argv)
 	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
-	if (dfuse_info->di_pool) {
-
-		if (uuid_parse(dfuse_info->di_pool, dfp->dfp_pool) < 0) {
-			DFUSE_TRA_ERROR(dfp, "Invalid pool uuid");
-			D_GOTO(out_dfs, ret = -DER_INVAL);
+	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d", rc);
+	if (rc == 0) {
+		if (dfuse_info->di_pool) {
+			printf("UNS configured on mount point but pool provided\n");
+			exit(1);
 		}
+		uuid_copy(dfp->dfp_pool, duns_attr.da_puuid);
+		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
+	} else if (rc == ENODATA) {
+		if (dfuse_info->di_pool) {
+
+			if (uuid_parse(dfuse_info->di_pool,
+					dfp->dfp_pool) < 0) {
+				DFUSE_TRA_ERROR(dfp, "Invalid pool uuid");
+				D_GOTO(out_dfs, ret = -DER_INVAL);
+			}
+			if (dfuse_info->di_cont) {
+
+				if (uuid_parse(dfuse_info->di_cont,
+						dfs->dfs_cont) < 0) {
+					DFUSE_TRA_ERROR(dfp,
+							"Invalid container uuid");
+					D_GOTO(out_dfs, ret = -DER_INVAL);
+				}
+			}
+		}
+	} else if (rc == ENOENT) {
+		printf("Mount point does not exist\n");
+		D_GOTO(out_dfs, ret = rc);
+	} else {
+		/* Other errors from DUNS, it should have logged them already */
+		D_GOTO(out_dfs, ret = rc);
+	}
+
+	if (uuid_is_null(dfp->dfp_pool) == 0) {
 
 		/** Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
@@ -307,12 +339,7 @@ main(int argc, char **argv)
 			D_GOTO(out_dfs, 0);
 		}
 
-		if (dfuse_info->di_cont) {
-
-			if (uuid_parse(dfuse_info->di_cont, dfs->dfs_cont) < 0) {
-				DFUSE_TRA_ERROR(dfp, "Invalid container uuid");
-				D_GOTO(out_dfs, ret = -DER_INVAL);
-			}
+		if (uuid_is_null(dfs->dfs_cont) == 0) {
 
 			/** Try to open the DAOS container (the mountpoint) */
 			rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
