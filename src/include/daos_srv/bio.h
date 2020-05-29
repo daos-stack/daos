@@ -43,7 +43,8 @@ typedef struct {
 	uint16_t	ba_type;
 	/* Is the address a hole ? */
 	uint16_t	ba_hole;
-	uint32_t	ba_padding;
+	uint16_t	ba_dedup;
+	uint16_t	ba_padding;
 } bio_addr_t;
 
 /** Ensure this remains compatible */
@@ -279,7 +280,11 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		d_iov_t	*iov = &sgl->sg_iovs[i];
 
-		iov->iov_buf = bio_iov2req_buf(biov);
+		/* Skip bulk transfer for deduped extent */
+		if (biov->bi_addr.ba_dedup)
+			iov->iov_buf = NULL;
+		else
+			iov->iov_buf = bio_iov2req_buf(biov);
 		iov->iov_len = bio_iov2req_len(biov);
 		iov->iov_buf_len = bio_iov2req_len(biov);
 	}

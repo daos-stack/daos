@@ -138,6 +138,8 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_uma.uma_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_pool);
 
+	vos_dedup_fini(pool);
+
 	D_FREE(pool);
 }
 
@@ -695,6 +697,10 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 			goto failed;
 		}
 	}
+
+	rc = vos_dedup_init(pool);
+	if (rc)
+		goto failed;
 
 	/* Insert the opened pool to the uuid hash table */
 	rc = pool_link(pool, &ukey, poh);

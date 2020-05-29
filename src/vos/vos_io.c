@@ -78,6 +78,203 @@ struct vos_io_context {
 				 ic_size_fetch:1;
 };
 
+static inline daos_size_t
+recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
+	      daos_size_t rsize)
+{
+	if (!ci_is_valid(csum) || rsize == 0)
+		return 0;
+	return csum->cs_len * csum_chunk_count(csum->cs_chunksize,
+			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
+}
+
+struct dedup_entry {
+	d_list_t	 de_link;
+	uint8_t		*de_csum_buf;
+	int		 de_csum_len;
+	struct bio_iov	 de_biov;
+	int		 de_ref;
+};
+
+static inline struct dedup_entry *
+dedup_rlink2entry(d_list_t *rlink)
+{
+	return container_of(rlink, struct dedup_entry, de_link);
+}
+
+static bool
+dedup_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
+	      const void *key, unsigned int csum_len)
+{
+	struct dedup_entry	*entry = dedup_rlink2entry(rlink);
+	struct dcs_csum_info	*csum = (struct dcs_csum_info *)key;
+
+	D_ASSERT(entry->de_csum_len != 0);
+	D_ASSERT(csum_len != 0);
+
+	if (entry->de_csum_len != csum_len)
+		return false;
+
+	D_ASSERT(csum->cs_csum != NULL);
+	D_ASSERT(entry->de_csum_buf != NULL);
+
+	return memcmp(entry->de_csum_buf, csum->cs_csum, csum_len) == 0;
+}
+
+static uint32_t
+dedup_key_hash(struct d_hash_table *htable, const void *key,
+	       unsigned int csum_len)
+{
+	struct dcs_csum_info	*csum = (struct dcs_csum_info *)key;
+
+	D_ASSERT(csum_len != 0);
+	D_ASSERT(csum->cs_csum != NULL);
+
+	return d_hash_string_u32((const char *)csum->cs_csum, csum_len);
+}
+
+static void
+dedup_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct dedup_entry	*entry = dedup_rlink2entry(rlink);
+
+	entry->de_ref++;
+}
+
+static bool
+dedup_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct dedup_entry	*entry = dedup_rlink2entry(rlink);
+
+	D_ASSERT(entry->de_ref > 0);
+	entry->de_ref--;
+
+	return entry->de_ref == 0;
+}
+
+static void
+dedup_rec_free(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct dedup_entry	*entry = dedup_rlink2entry(rlink);
+
+	D_ASSERT(entry->de_ref == 0);
+	D_ASSERT(entry->de_csum_buf != NULL);
+
+	D_FREE(entry->de_csum_buf);
+	D_FREE(entry);
+}
+
+static d_hash_table_ops_t dedup_hash_ops = {
+	.hop_key_cmp	= dedup_key_cmp,
+	.hop_key_hash	= dedup_key_hash,
+	.hop_rec_addref	= dedup_rec_addref,
+	.hop_rec_decref	= dedup_rec_decref,
+	.hop_rec_free	= dedup_rec_free,
+};
+
+int
+vos_dedup_init(struct vos_pool *pool)
+{
+	int	rc;
+
+	rc = d_hash_table_create(D_HASH_FT_NOLOCK, 13, /* 8k buckets */
+				 NULL, &dedup_hash_ops,
+				 &pool->vp_dedup_hash);
+
+	if (rc)
+		D_ERROR(DF_UUID": Init dedup hash failed. "DF_RC".\n",
+			DP_UUID(pool->vp_id), DP_RC(rc));
+	return rc;
+}
+
+void
+vos_dedup_fini(struct vos_pool *pool)
+{
+	if (pool->vp_dedup_hash) {
+		d_hash_table_destroy(pool->vp_dedup_hash, true);
+		pool->vp_dedup_hash = NULL;
+	}
+}
+
+void
+vos_dedup_invalidate(struct vos_pool *pool)
+{
+	vos_dedup_fini(pool);
+	vos_dedup_init(pool);
+}
+
+static bool
+vos_dedup_lookup(struct vos_pool *pool, struct dcs_csum_info *csum,
+		 daos_size_t csum_len, struct bio_iov *biov)
+{
+	struct dedup_entry	*entry;
+	d_list_t		*rlink;
+
+	if (!ci_is_valid(csum))
+		return false;
+
+	rlink = d_hash_rec_find(pool->vp_dedup_hash, csum, csum_len);
+	if (rlink == NULL)
+		return false;
+
+	entry = dedup_rlink2entry(rlink);
+	*biov = entry->de_biov;
+
+	D_ASSERT(entry->de_ref > 1);
+	D_ASSERT(biov->bi_addr.ba_dedup);
+	D_ASSERT(biov->bi_buf == NULL);
+
+	d_hash_rec_decref(pool->vp_dedup_hash, rlink);
+
+	D_DEBUG(DB_IO, "Found dedup entry\n");
+	return true;
+}
+
+static void
+vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
+		 daos_size_t csum_len, struct bio_iov *biov)
+{
+	struct dedup_entry	*entry;
+	struct bio_iov		 tmp;
+	int			 rc;
+
+	if (!ci_is_valid(csum))
+		return;
+
+	if (bio_addr_is_hole(&biov->bi_addr))
+		return;
+
+	if (vos_dedup_lookup(pool, csum, csum_len, &tmp))
+		return;
+
+	D_ALLOC_PTR(entry);
+	if (entry == NULL) {
+		D_ERROR("Failed to allocate dedup entry\n");
+		return;
+	}
+	D_INIT_LIST_HEAD(&entry->de_link);
+
+	D_ASSERT(csum_len != 0);
+	D_ALLOC(entry->de_csum_buf, csum_len);
+	if (entry->de_csum_buf == NULL) {
+		D_ERROR("Failed to allocate csum buf "DF_U64"\n", csum_len);
+		D_FREE(entry);
+		return;
+	}
+	entry->de_csum_len = csum_len;
+	memcpy(entry->de_csum_buf, csum->cs_csum, csum_len);
+	entry->de_biov = *biov;
+	entry->de_biov.bi_buf = NULL;
+	entry->de_biov.bi_addr.ba_dedup = 1;
+
+	rc = d_hash_rec_insert(pool->vp_dedup_hash, csum, csum_len,
+			       &entry->de_link, false);
+	if (rc)
+		D_ERROR("Insert dedup entry failed. "DF_RC"\n", DP_RC(rc));
+	else
+		D_DEBUG(DB_IO, "Inserted dedup entry\n");
+}
+
 static inline struct umem_instance *
 vos_ioc2umm(struct vos_io_context *ioc)
 {
@@ -978,6 +1175,8 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	return rc;
 }
 
+#define VOS_DEDUP_SIZE_THRESH	4096
+
 /**
  * Update a record extent.
  * See comment of vos_recx_fetch for explanation of @off_p.
@@ -1006,8 +1205,16 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
+	ent.ei_addr.ba_dedup = 0;	/* Don't make this flag persistent */
 	rc = evt_insert(toh, &ent, NULL);
 
+	/* Ignore transaction abort for this moment */
+	if ((rsize * recx->rx_nr) >= VOS_DEDUP_SIZE_THRESH) {
+		daos_size_t csum_len = recx_csum_len(recx, csum, rsize);
+
+		vos_dedup_update(vos_cont2pool(ioc->ic_cont), csum, csum_len,
+				 biov);
+	}
 	return rc;
 }
 
@@ -1332,7 +1539,8 @@ done:
 }
 
 static int
-vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
+vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
+		 struct dcs_csum_info *csum, daos_size_t csum_len)
 {
 	struct bio_iov	biov;
 	uint64_t	off = 0;
@@ -1347,6 +1555,15 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 			bio_addr_set_hole(&biov.bi_addr, 1);
 			goto done;
 		}
+	}
+
+	if (size >= VOS_DEDUP_SIZE_THRESH &&
+	    vos_dedup_lookup(vos_cont2pool(ioc->ic_cont), csum, csum_len,
+			     &biov)) {
+		D_ASSERT(biov.bi_addr.ba_off != 0);
+		ioc->ic_umoffs[ioc->ic_umoffs_cnt] = biov.bi_addr.ba_off;
+		ioc->ic_umoffs_cnt++;
+		return iod_reserve(ioc, &biov);
 	}
 
 	/*
@@ -1387,6 +1604,8 @@ vos_media_select(struct vos_container *cont, daos_iod_type_t type,
 static int
 akey_update_begin(struct vos_io_context *ioc)
 {
+	struct dcs_csum_info	*iod_csums = vos_ioc2csum(ioc);
+	struct dcs_csum_info	*recx_csum;
 	daos_iod_t *iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	int i, rc;
 
@@ -1404,10 +1623,18 @@ akey_update_begin(struct vos_io_context *ioc)
 
 		media = vos_media_select(ioc->ic_cont, iod->iod_type, size);
 
-		if (iod->iod_type == DAOS_IOD_SINGLE)
+		recx_csum = (iod_csums != NULL) ? &iod_csums[i] : NULL;
+
+		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			rc = vos_reserve_single(ioc, media, size);
-		else
-			rc = vos_reserve_recx(ioc, media, size);
+		} else {
+			daos_size_t csum_len;
+
+			csum_len = recx_csum_len(&iod->iod_recxs[i], recx_csum,
+						 iod->iod_size);
+			rc = vos_reserve_recx(ioc, media, size, recx_csum,
+					      csum_len);
+		}
 		if (rc)
 			return rc;
 	}
