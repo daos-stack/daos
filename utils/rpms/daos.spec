@@ -103,7 +103,6 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
-Requires: %{name}-client = %{version}-%{release}
 Requires: spdk-tools
 Requires: ndctl
 Requires: ipmctl
