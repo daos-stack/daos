@@ -63,6 +63,7 @@ enum cmd_t {
 	CMD_DISABLE_FI,
 	CMD_SET_FI_ATTR,
 	CMD_LOG_SET,
+	CMD_LOG_ADD_MSG,
 };
 
 struct cmd_info {
@@ -83,6 +84,7 @@ struct cmd_info cmds[] = {
 	DEF_CMD(CMD_DISABLE_FI, CRT_OPC_CTL_FI_TOGGLE),
 	DEF_CMD(CMD_SET_FI_ATTR, CRT_OPC_CTL_FI_SET_ATTR),
 	DEF_CMD(CMD_LOG_SET, CRT_OPC_CTL_LOG_SET),
+	DEF_CMD(CMD_LOG_ADD_MSG, CRT_OPC_CTL_LOG_ADD_MSG),
 };
 
 static char *cmd2str(enum cmd_t cmd)
@@ -132,6 +134,8 @@ struct ctl_g {
 	char				*cg_log_mask;
 	int				 cg_log_mask_set;
 	bool				 cg_no_wait_for_ranks;
+	char				*cg_log_msg;
+	bool				 cg_log_msg_set;
 };
 
 static struct ctl_g ctl_gdata;
@@ -156,6 +160,12 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 		D_ERROR("arg string too long.\n");
 		return;
 	}
+
+	if (strcmp(arg_str, "all") == 0) {
+		*num_ranks = -1;
+		return;
+	}
+
 	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
 	token = strtok_r(arg_str, ",", &saveptr);
 	while (token != NULL) {
@@ -255,7 +265,7 @@ print_usage_msg(const char *msg)
 	printf("Usage: cart_ctl <cmd> --group-name name --rank "
 	       "start-end,start-end,rank,rank\n");
 	printf("\ncmds: get_uri_cache, list_ctx, get_hostname, get_pid, ");
-	printf("set_log, set_fi_attr\n");
+	printf("set_log, set_fi_attr, add_log_msg\n");
 	printf("\nset_log:\n");
 	printf("\tSet log to mask passed via -l <mask> argument\n");
 	printf("\nget_uri_cache:\n");
@@ -277,11 +287,13 @@ print_usage_msg(const char *msg)
 	printf("--cfg_path\n");
 	printf("\tPath to group config file\n");
 	printf("--rank start-end,start-end,rank,rank\n");
-	printf("\tspecify target ranks\n");
+	printf("\tspecify target ranks; 'all' specifies every known rank\n");
 	printf("-l log_mask\n");
 	printf("\tSpecify log_mask to be set remotely\n");
 	printf("-n\n");
 	printf("\tdon't perfom 'wait for ranks' sync\n");
+	printf("-m 'log_message'\n");
+	printf("\tSpecify log message to be sent to remote server\n");
 }
 
 static int
@@ -312,6 +324,8 @@ parse_args(int argc, char **argv)
 		ctl_gdata.cg_cmd_code = CMD_SET_FI_ATTR;
 	else if (strcmp(argv[1], "set_log") == 0)
 		ctl_gdata.cg_cmd_code = CMD_LOG_SET;
+	else if (strcmp(argv[1], "add_log_msg") == 0)
+		ctl_gdata.cg_cmd_code = CMD_LOG_ADD_MSG;
 	else {
 		print_usage_msg("Invalid command\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -326,11 +340,12 @@ parse_args(int argc, char **argv)
 		{"cfg_path", required_argument, 0, 's'},
 		{"log_mask", required_argument, 0, 'l'},
 		{"no_sync", optional_argument, 0, 'n'},
+		{"message", required_argument, 0, 'm'},
 		{0, 0, 0, 0},
 	};
 
 	while (1) {
-		opt = getopt_long(argc, argv, "g:r:a:p:l:n", long_options,
+		opt = getopt_long(argc, argv, "g:r:a:p:l:m:n", long_options,
 				  &option_index);
 		if (opt == -1)
 			break;
@@ -360,21 +375,31 @@ parse_args(int argc, char **argv)
 		case 'n':
 			ctl_gdata.cg_no_wait_for_ranks = true;
 			break;
+		case 'm':
+			ctl_gdata.cg_log_msg = optarg;
+			ctl_gdata.cg_log_msg_set = true;
+			break;
 		default:
 			break;
 		}
 	}
 
+	if (ctl_gdata.cg_cmd_code == CMD_LOG_ADD_MSG &&
+	    ctl_gdata.cg_log_msg_set == false) {
+		D_ERROR("log msg (-m 'message') missing for add_log_msg\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
 	if (ctl_gdata.cg_cmd_code == CMD_LOG_SET &&
 	    ctl_gdata.cg_log_mask_set == 0) {
 		D_ERROR("log mask (-l mask) missing for set_log\n");
-		rc = -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR &&
 	    ctl_gdata.cg_fi_attr_inited == 0) {
 		D_ERROR("fault attributes missing for set_fi_attr.\n");
-		rc = -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 out:
@@ -436,6 +461,7 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 		out_log_set_args = crt_reply_get(cb_info->cci_rpc);
 		fprintf(stdout, "rc: %d (%s)\n", out_log_set_args->rc,
 				d_errstr(out_log_set_args->rc));
+	} else if (info->cmd == CMD_LOG_ADD_MSG) {
 	} else if (cb_info->cci_rc == 0) {
 		fprintf(stdout, "group: %s, rank: %d\n",
 			in_args->cel_grp_id, in_args->cel_rank);
@@ -499,6 +525,15 @@ ctl_fill_fi_toggle_rpc_args(crt_rpc_t *rpc_req, int op)
 }
 
 static void
+crt_fill_log_add_msg(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_log_add_msg_in	*in_args;
+
+	in_args = crt_req_get(rpc_req);
+	in_args->log_msg = ctl_gdata.cg_log_msg;
+}
+
+static void
 crt_fill_set_log(crt_rpc_t *rpc_req)
 {
 	struct crt_ctl_log_set_in	*in_args;
@@ -544,7 +579,9 @@ ctl_init()
 	crt_endpoint_t		 ep;
 	struct cb_info		 info;
 	crt_group_t		*grp = NULL;
+	d_rank_t		*ranks_to_send = NULL;
 	d_rank_list_t		*rank_list = NULL;
+	int			 num_ranks;
 	int			 rc = 0;
 
 	if (ctl_gdata.cg_save_cfg) {
@@ -578,9 +615,17 @@ ctl_init()
 
 	info.cmd = ctl_gdata.cg_cmd_code;
 
-	for (i = 0; i < ctl_gdata.cg_num_ranks; i++) {
+	if (ctl_gdata.cg_num_ranks == -1) {
+		num_ranks = rank_list->rl_nr;
+		ranks_to_send = rank_list->rl_ranks;
+	} else {
+		num_ranks = ctl_gdata.cg_num_ranks;
+		ranks_to_send = ctl_gdata.cg_ranks;
+	}
+
+	for (i = 0; i < num_ranks; i++) {
 		ep.ep_grp = grp;
-		ep.ep_rank = ctl_gdata.cg_ranks[i];
+		ep.ep_rank = ranks_to_send[i];
 		ep.ep_tag = 0;
 		rc = crt_req_create(ctl_gdata.cg_crt_ctx, &ep,
 				    cmd2opcode(info.cmd), &rpc_req);
@@ -601,6 +646,9 @@ ctl_init()
 			break;
 		case (CMD_LOG_SET):
 			crt_fill_set_log(rpc_req);
+			break;
+		case (CMD_LOG_ADD_MSG):
+			crt_fill_log_add_msg(rpc_req);
 			break;
 		default:
 			ctl_fill_rpc_args(rpc_req, i);
