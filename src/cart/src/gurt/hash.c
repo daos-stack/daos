@@ -611,7 +611,7 @@ d_hash_rec_ndecref(struct d_hash_table *htable, int count, d_list_t *rlink)
 
 	if (htable->ht_ops->hop_rec_ndecref) {
 		rc = htable->ht_ops->hop_rec_ndecref(htable, rlink, count);
-		if (rc > 1) {
+		if (rc >= 1) {
 			zombie = true;
 			rc = 0;
 		}
