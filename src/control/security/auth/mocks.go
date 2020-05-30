@@ -25,6 +25,8 @@ package auth
 
 import (
 	"os/user"
+
+	"github.com/pkg/errors"
 )
 
 // Mocks
@@ -43,11 +45,11 @@ func (u *MockUser) GroupIDs() ([]uint32, error) {
 	return u.groupIDs, u.groupIDErr
 }
 
-func (u *MockUser) Gid() uint32 {
+func (u *MockUser) Gid() (uint32, error) {
 	if len(u.groupIDs) == 0 {
-		return 1
+		return 0, errors.New("no mock gids to return")
 	}
-	return u.groupIDs[0]
+	return u.groupIDs[0], nil
 }
 
 type MockExt struct {
