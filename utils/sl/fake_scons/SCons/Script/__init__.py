@@ -294,6 +294,10 @@ class Configure():
         """Fake CheckFlag"""
         return True
 
+    def CheckASan(self, *args, **kw):
+        """Fake CheckASan"""
+        return True
+
     def Finish(self):
         """Fake finish"""
 

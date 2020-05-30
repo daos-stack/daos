@@ -37,6 +37,7 @@
 """Unit tests"""
 
 import os
+import daos_build
 
 TEST_SRC = ['test_linkage.cpp', 'test_gurt.c', 'utest_hlc.c', 'utest_swim.c']
 LIBPATH = [Dir('../cart'), Dir('../gurt')]
@@ -76,15 +77,16 @@ def scons():
 
     for test in TEST_SRC:
         flags = []
+        if env["BUILD_TYPE"] == "asan":
+            flags.append("-fsanitize=address")
+            flags.append("-O1")
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
-        testprog = test_env.Program(target=testname,
-                                    source=testobj + \
-                                    cart_targets + \
-                                    swim_targets + \
-                                    gurt_targets,
-                                    LIBS=test_env["LIBS"] + ['yaml'],
-                                    LINKFLAGS=flags)
+        testprog = daos_build.program(test_env, testname,
+                                      testobj + cart_targets +
+                                      swim_targets + gurt_targets,
+                                      LIBS=test_env["LIBS"] + ['yaml'],
+                                      LINKFLAGS=flags)
         tests.append(testprog)
 
     test_env.Requires(tests, cart_lib)

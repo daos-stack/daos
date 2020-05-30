@@ -114,6 +114,25 @@ def is_platform_arm():
         return True
     return False
 
+def check_asan_helper(context):
+    """configure callback to check for address sanitizer"""
+    context.Message("Checking for AddressSanitizer... ")
+    ret = context.TryLink("int main() { return 0; }", ".c")
+    context.Result(ret)
+    return ret
+
+def check_asan(env):
+    """Check for address sanitizer support"""
+    result = False
+    cenv = env.Clone()
+    config = Configure(cenv, custom_tests={"CheckASan" : check_asan_helper})
+    if config.CheckASan():
+        result = True
+
+    config.Finish()
+    return result
+
+
 def set_defaults(env):
     """set compiler defaults"""
     AddOption('--preprocess',
@@ -132,6 +151,17 @@ def set_defaults(env):
             env.AppendUnique(CCFLAGS=['-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
+    elif env.get('BUILD_TYPE') == 'asan':
+        flags = ['-fsanitize=address', '-O1', '-fno-omit-frame-pointer']
+        env.AppendUnique(CCFLAGS=flags)
+        env.AppendUnique(CFLAGS=flags)
+        env.AppendUnique(CXXFLAGS=flags)
+        env.AppendUnique(LINKFLAGS=['-fsanitize=address', '-O1'])
+        env.AppendENVPath("CGO_LDFLAGS", "-fsanitize=address -O1", sep=" ")
+        if not check_asan(env):
+            print("AddressSanitizer is not supported on this platform.")
+            print("Use later version of compiler and/or install libasan-devel")
+            sys.exit(1)
     else:
         if env.get('BUILD_TYPE') == 'release':
             env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])

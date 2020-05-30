@@ -819,8 +819,13 @@ class PreReqComponent():
     def _setup_build_type(self):
         """set build type"""
         self.add_opts(EnumVariable('BUILD_TYPE', "Set the build type",
-                                   'dev', ['dev', 'debug', 'release'],
+                                   'dev', ['dev', 'debug', 'release', 'asan'],
                                    ignorecase=1))
+
+        if self.__env["BUILD_TYPE"] == "asan":
+            if self.__env["COMPILER"] not in ["gcc", "clang"]:
+                raise UserError("AddressSanitizer doesn't work with COMPILER=%s"
+                                % self.__env["COMPILER"])
 
         return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
 

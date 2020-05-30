@@ -761,7 +761,10 @@ static int
 ts_test_fini(void **state)
 {
 	struct ts_test_arg	*ts_arg = *state;
+	struct vos_ts_table	*ts_table;
 
+	ts_table = vos_ts_table_get();
+	vos_ts_table_free(&ts_table);
 	vos_ts_set_free(ts_arg->ta_ts_set);
 	vos_ts_table_set(ts_arg->old_table);
 	D_FREE(ts_arg);
