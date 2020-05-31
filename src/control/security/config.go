@@ -33,9 +33,9 @@ import (
 )
 
 const (
-	defaultCACert        = ".daos/daosCA.crt"
-	defaultServerCert    = ".daos/daos_server.crt"
-	defaultServerKey     = ".daos/daos_server.key"
+	defaultCACert        = "/etc/daos/daosCA.crt"
+	defaultServerCert    = "/etc/daos/server.crt"
+	defaultServerKey     = "/etc/daos/server.key"
 	defaultClientCert    = ".daos/client.crt"
 	defaultClientKey     = ".daos/client.key"
 	defaultAgentCert     = ".daos/agent.crt"
