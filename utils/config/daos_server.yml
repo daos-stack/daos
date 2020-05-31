@@ -8,7 +8,7 @@
 ## Name associated with the DAOS system.
 ## Immutable after reformat.
 #
-#name: daos
+name: daos
 #
 #
 ## Access points
@@ -72,6 +72,7 @@
 ## ofi+psm2 for Omni-Path, ofi+verbs;ofi_rxm for Infiniband/RoCE and finally
 ## ofi+socket for non-RDMA-capable Ethernet.
 #
+provider: ofi+socket
 #provider: ofi+verbs;ofi_rxm
 #
 #
