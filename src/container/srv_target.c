@@ -754,7 +754,8 @@ static d_hash_table_ops_t cont_hdl_hash_ops = {
 int
 ds_cont_hdl_hash_create(struct d_hash_table *hash)
 {
-	return d_hash_table_create_inplace(0 /* feats */, 8 /* bits */,
+	return d_hash_table_create_inplace(D_HASH_FT_NOLOCK /* feats */,
+					   8 /* bits */,
 					   NULL /* priv */,
 					   &cont_hdl_hash_ops, hash);
 }

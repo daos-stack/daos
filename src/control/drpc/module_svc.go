@@ -64,7 +64,7 @@ func (r *ModuleService) RegisterModule(mod Module) error {
 	return nil
 }
 
-// GetMethod fetches the module for the given ID. Returns true if found, false
+// GetModule fetches the module for the given ID. Returns true if found, false
 // otherwise.
 func (r *ModuleService) GetModule(id ModuleID) (Module, bool) {
 	mod, found := r.modules[id]

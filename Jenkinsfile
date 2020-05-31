@@ -41,20 +41,25 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 def doc_only_change() {
+
+    if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
+        return true
+    }
+
     def rc = sh script: 'if [ "' + env.CHANGE_ID + '''" = "null" ]; then
                               mb_modifier="^"
                          fi
                          git diff-tree --no-commit-id --name-only \
                            $(git merge-base origin/''' + target_branch +
                       '''$mb_modifier HEAD) HEAD | \
-                           grep -v -e "^doc$"''',
+                           grep -v -e "^doc$" -e "\\.md$"''',
                 returnStatus: true
 
     return rc == 1
 }
 
 def skip_stage(String stage) {
-    return cachedCommitPragma(pragma: 'Skip-' + stage).contains('true')
+    return cachedCommitPragma(pragma: 'Skip-' + stage) == 'true'
 }
 
 def quickbuild() {
@@ -138,6 +143,18 @@ def daos_packages_version(String distro) {
     }
 
     error "Don't know how to determine package version for " + distro
+}
+
+def parallel_build() {
+    // defaults to false
+    // true if Quick-build: true unless Parallel-build: false
+    def pb = cachedCommitPragma(pragma: 'Parallel-build')
+    if (pb == "true" ||
+        (quickbuild() && pb != "false")) {
+        return true
+    }
+
+    return false
 }
 
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -579,6 +596,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-centos7-gcc'
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
@@ -675,6 +693,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-centos7-clang'
                     }
                     post {
@@ -736,6 +755,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-ubuntu20.04-gcc'
                     }
                     post {
@@ -798,6 +818,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-ubuntu20.04-clag'
                     }
                     post {
@@ -859,6 +880,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-leap15-gcc'
                     }
                     post {
@@ -920,6 +942,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   parallel_build: parallel_build(),
                                    failure_artifacts: 'config.log-leap15-clang'
                     }
                     post {
@@ -983,6 +1006,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
+                                   parallel_build: parallel_build(),
                                    TARGET_PREFIX: 'install/opt', failure_artifacts: 'config.log-leap15-icc'
                     }
                     post {
@@ -1077,7 +1101,7 @@ pipeline {
                                            mkdir -p ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/
                                            ln -s ../../../../../../../../src/control ${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control
                                            DAOS_BASE=${SL_PREFIX%/install*}
-                                           rm -f dnt.*.memcheck.xml vm_test.out nlt-errors.out
+                                           rm -f dnt.*.memcheck.xml nlt-errors.json
                                            NODE=${NODELIST%%,*}
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
@@ -1103,7 +1127,7 @@ pipeline {
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
                                                IS_CI=true OLD_CI=false utils/run_test.sh
-                                               ./utils/node_local_test.py all | tee vm_test.out"''',
+                                               ./utils/node_local_test.py all"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
@@ -1141,7 +1165,7 @@ pipeline {
                                           cd $DAOS_BASE
                                           mkdir run_test.sh
                                           mkdir vm_test
-                                          mv vm_test.out nlt-errors.out vm_test/
+                                          mv nlt-errors.json vm_test/
                                           if ls /tmp/daos*.log > /dev/null; then
                                               mv /tmp/daos*.log run_test.sh/
                                           fi
@@ -1186,22 +1210,24 @@ pipeline {
                                     unstableThresholdTotal: '0'
                             )
                             recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
                                          failOnError: true,
                                          referenceJobName: 'daos-stack/daos/master',
-                                         ignoreFailedBuilds: true,
+                                         ignoreFailedBuilds: false,
                                          ignoreQualityGate: true,
-					 /* TODO: master is currently not determanistic and
-					 there is one message which appears occasionally
-					 so set the threshold to 2, which will not warn for
-					 stable builds against master, but might miss some
-					 individual issues.
-					 */
-                                         qualityGates: [[threshold: 2, type: 'NEW', unstable: true]],
-                                         name: "VM Testing",
-                                         tool: clang(pattern: 'vm_test/nlt-errors.out',
-                                                     name: 'VM test results',
-                                                     id: 'VM_test')
+                                         /* Set qualitygate to 1 new "NORMAL" priority message
+                                           * Supporting messages to help identify causes of
+                                           * problems are set to "LOW", and there are a
+                                           * number of intermittent issues during server
+                                           * shutdown that would normally be NORMAL but in
+                                           * order to have stable results are set to LOW.
+                                           */
+                                         qualityGates: [[threshold: 1, type: 'TOTAL_HIGH', unstable: true],
+                                                        [threshold: 1, type: 'TOTAL_ERROR', unstable: true],
+                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true]],
+                                         name: "Node local testing",
+                                         tool: issues(pattern: 'vm_test/nlt-errors.json',
+                                                      name: 'NLT results',
+                                                      id: 'VM_test')
                         }
                     }
                 }
@@ -1240,6 +1266,7 @@ pipeline {
                     steps {
                         sh "rm -f coverity/daos_coverity.tgz"
                         sconsBuild coverity: "daos-stack/daos",
+                                   parallel_build: parallel_build(),
                                    clean: "_build.external${arch}",
                                    failure_artifacts: 'config.log-centos7-cov'
                     }
