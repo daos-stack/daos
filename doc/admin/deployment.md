@@ -384,20 +384,20 @@ Once the service file is installed you can start `daos_server`
 with the following commands:
 
 ```bash
-$ systemctl enable daos_server
-$ systemctl start daos_server
+$ systemctl enable daos_server.service
+$ systemctl start daos_server.service
 ```
 
 To check the component status use:
 
 ```bash
-$ systemctl status daos_server
+$ systemctl status daos_server.service
 ```
 
 If DAOS Server failed to start, check the logs with:
 
 ```bash
-$ journalctl --unit daos_server
+$ journalctl --unit daos_server.service
 ```
 
 #### Kubernetes Pod
@@ -899,7 +899,7 @@ Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agen
 unit file is installed in the correct location when installing from RPMs.
 
 If you wish to use systemd with a development build, you must copy the service
-file from utils/systemd to `/usr/lib/systemd/system`. Once the file is copied
+file from `utils/systemd` to `/usr/lib/systemd/system`. Once the file is copied
 modify the ExecStart line to point to your in tree `daos_agent` binary.
 
 `ExecStart=/usr/bin/daos_agent -i -o <'path to agent configuration file/daos_agent.yml'>`
@@ -908,20 +908,20 @@ Once the service file is installed, you can start `daos_agent`
 with the following commands:
 
 ```bash
-$ sudo systemctl enable daos_agent
-$ sudo systemctl start daos_agent
+$ sudo systemctl enable daos_agent.service
+$ sudo systemctl start daos_agent.service
 ```
 
 To check the component status use:
 
 ```bash
-$ sudo systemctl status daos_agent
+$ sudo systemctl status daos_agent.service
 ```
 
 If DAOS Agent failed to start check the logs with:
 
 ```bash
-$ sudo journalctl --unit daos_agent
+$ sudo journalctl --unit daos_agent.service
 ```
 
 ## System Validation
