@@ -148,17 +148,11 @@ DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
 sudo bash -c \"set -ex
-if [ \\\"\\\$(ulimit -l)\\\" != \\\"unlimited\\\" ]; then
-    echo \\\"*  soft  memlock  unlimited\\\" >> /etc/security/limits.conf
-    echo \\\"root  soft  memlock  unlimited\\\" >> /etc/security/limits.conf
-    echo \\\"session required pam_limits.so\\\" > /etc/pam.d/common-session-noninteractive
-    echo \\\"session required pam_limits.so\\\" > /etc/pam.d/common-session
-    echo \\\"session required pam_limits.so\\\" >> /etc/pam.d/login
-fi
 # allow core files to be generated
 if [ \\\"\\\$(ulimit -c)\\\" != \\\"unlimited\\\" ]; then
     echo \\\"*  soft  core  unlimited\\\" >> /etc/security/limits.conf
 fi
+prlimit --pid \$\$ --memlock=\"unlimited\"
 echo \\\"/var/tmp/core.%e.%t.%p\\\" > /proc/sys/kernel/core_pattern\"
 rm -f /var/tmp/core.*
 if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
