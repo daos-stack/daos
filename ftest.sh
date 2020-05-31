@@ -155,7 +155,8 @@ if [ \\\"\\\$(ulimit -l)\\\" != \\\"unlimited\\\" ]; then
     echo \\\"session required pam_limits.so\\\" > /etc/pam.d/common-session-noninteractive
     echo \\\"session required pam_limits.so\\\" > /etc/pam.d/common-session
     echo \\\"session required pam_limits.so\\\" >> /etc/pam.d/login\"
-fi"
+fi"; then
+break
 fi
 
 DAOS_BASE=${SL_PREFIX%/install}
