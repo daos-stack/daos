@@ -384,8 +384,8 @@ Once the service file is installed you can start `daos_server`
 with the following commands:
 
 ```bash
-$ systemctl enable daos_server
-$ systemctl start daos_server
+$ systemctl enable daos_server.service
+$ systemctl start daos_server.service
 ```
 
 To check the component status use:
