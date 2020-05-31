@@ -208,7 +208,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
-getent passwd daos_server >/dev/null || useradd -M -g daos_admins daos_server
+getent passwd daos >/dev/null || useradd -M daos
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -258,7 +258,7 @@ getent passwd daos_server >/dev/null || useradd -M -g daos_admins daos_server
 
 %files server
 %config(noreplace) %{conf_dir}/daos_server.yml
-%attr(0660,root,daos_admins) %{conf_dir}/daos_server.yml
+%attr(0664,root,root) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin

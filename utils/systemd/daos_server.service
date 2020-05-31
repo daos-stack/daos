@@ -5,7 +5,7 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=daos_server
+User=daos
 Group=daos_admins
 RuntimeDirectory=daos_server
 RuntimeDirectoryMode=0755
