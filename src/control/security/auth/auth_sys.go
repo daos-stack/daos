@@ -50,15 +50,17 @@ type UserExt interface {
 	LookupGroupID(gid uint32) (*user.Group, error)
 }
 
-// UserInfo is an internal implementation of the security.User interface
+// UserInfo is an exported implementation of the security.User interface.
 type UserInfo struct {
 	Info *user.User
 }
 
+// Username is a wrapper for user.Username.
 func (u *UserInfo) Username() string {
 	return u.Info.Username
 }
 
+// GroupIDs is a wrapper for user.GroupIds.
 func (u *UserInfo) GroupIDs() ([]uint32, error) {
 	gidStrs, err := u.Info.GroupIds()
 	if err != nil {
@@ -77,16 +79,17 @@ func (u *UserInfo) GroupIDs() ([]uint32, error) {
 	return gids, nil
 }
 
+// Gid is a wrapper for user.Gid.
 func (u *UserInfo) Gid() (uint32, error) {
 	gid, err := strconv.Atoi(u.Info.Gid)
 
 	return uint32(gid), errors.Wrap(err, "user gid")
 }
 
-// External is an internal implementation of the UserExt interface
+// External is an exported implementation of the UserExt interface.
 type External struct{}
 
-// LookupUserId is a wrapper for user.LookupId
+// LookupUserId is a wrapper for user.LookupId.
 func (e *External) LookupUserID(uid uint32) (User, error) {
 	uidStr := strconv.FormatUint(uint64(uid), 10)
 	info, err := user.LookupId(uidStr)
@@ -96,12 +99,13 @@ func (e *External) LookupUserID(uid uint32) (User, error) {
 	return &UserInfo{Info: info}, nil
 }
 
-// LookupGroupId is a wrapper for user.LookupGroupId
+// LookupGroupId is a wrapper for user.LookupGroupId.
 func (e *External) LookupGroupID(gid uint32) (*user.Group, error) {
 	gidStr := strconv.FormatUint(uint64(gid), 10)
 	return user.LookupGroupId(gidStr)
 }
 
+// Current is a wrapper for user.Current.
 func (e *External) Current() (User, error) {
 	info, err := user.Current()
 	if err != nil {
