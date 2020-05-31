@@ -147,16 +147,15 @@ trap 'set +e; cleanup' EXIT
 CLUSH_ARGS=($CLUSH_ARGS)
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
-# allow ulimit files
+# set memlock to unlimited
 sudo bash -c \"set -ex
 if [ \\\"\\\$(ulimit -l)\\\" != \\\"unlimited\\\" ]; then
     echo \\\"*  soft  memlock  unlimited\\\" >> /etc/security/limits.conf
     echo \\\"root  soft  memlock  unlimited\\\" >> /etc/security/limits.conf
     echo \\\"session required pam_limits.so\\\" > /etc/pam.d/common-session-noninteractive
     echo \\\"session required pam_limits.so\\\" > /etc/pam.d/common-session
-    echo \\\"session required pam_limits.so\\\" >> /etc/pam.d/login\"
-fi"; then
-break
+    echo \\\"session required pam_limits.so\\\" >> /etc/pam.d/login
+fi\""; then
 fi
 
 DAOS_BASE=${SL_PREFIX%/install}
