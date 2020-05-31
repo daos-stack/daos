@@ -394,6 +394,14 @@ func saveActiveConfig(log logging.Logger, config *Configuration) {
 
 // Validate asserts that config meets minimum requirements.
 func (c *Configuration) Validate(log logging.Logger) (err error) {
+	// config without servers is valid when initially discovering hardware
+	// prior to providing a fully populated configu
+	if len(c.Servers) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode",
+			DataPlaneName, ControlPlaneName)
+		return nil
+	}
+
 	// append the user-friendly message to any error
 	// TODO: use a fault/resolution
 	defer func() {
@@ -430,10 +438,6 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		}
 
 		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
-	}
-
-	if len(c.Servers) == 0 {
-		return FaultConfigNoServers
 	}
 
 	for i, srv := range c.Servers {
