@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,43 +21,44 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package pbin
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 
-	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/pkg/errors"
 )
 
-func main() {
-	app := pbin.NewApp().
-		WithAllowedCallers("daos_server")
+// Process is a mechanism to interact with the current process.
+type Process struct{}
 
-	if logPath, set := os.LookupEnv(pbin.DaosAdminLogFileEnvVar); set {
-		app = app.WithLogFile(logPath)
-	}
-
-	addMethodHandlers(app)
-
-	err := app.Run()
-	if err != nil {
-		os.Exit(1)
-	}
+// CurrentProcessName fetches the name of the running process.
+func (p *Process) CurrentProcessName() string {
+	return filepath.Base(os.Args[0])
 }
 
-// addMethodHandlers adds all of daos_admin's supported handler functions.
-func addMethodHandlers(app *pbin.App) {
-	app.AddHandler("Ping", &pingHandler{})
+// ParentProcessName fetches the name of the parent process, or returns an error otherwise.
+func (p *Process) ParentProcessName() (string, error) {
+	pPath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", os.Getppid()))
+	if err != nil {
+		return "", errors.Wrap(err, "failed to identify parent process binary")
+	}
 
-	app.AddHandler("ScmMount", &scmMountUnmountHandler{})
-	app.AddHandler("ScmUnmount", &scmMountUnmountHandler{})
-	app.AddHandler("ScmFormat", &scmFormatCheckHandler{})
-	app.AddHandler("ScmCheckFormat", &scmFormatCheckHandler{})
-	app.AddHandler("ScmScan", &scmScanHandler{})
-	app.AddHandler("ScmPrepare", &scmPrepHandler{})
+	return filepath.Base(pPath), nil
+}
 
-	app.AddHandler("BdevInit", &bdevInitHandler{})
-	app.AddHandler("BdevScan", &bdevScanHandler{})
-	app.AddHandler("BdevPrepare", &bdevPrepHandler{})
-	app.AddHandler("BdevFormat", &bdevFormatHandler{})
+// IsPrivileged determines whether the process is running as a privileged user.
+func (p *Process) IsPrivileged() bool {
+	return os.Geteuid() == 0
+}
+
+// ElevatePrivileges raises the process privileges.
+func (p *Process) ElevatePrivileges() error {
+	if err := setuid(0); err != nil {
+		return errors.Wrap(err, "unable to setuid(0)")
+	}
+
+	return nil
 }
