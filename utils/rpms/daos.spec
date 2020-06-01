@@ -287,7 +287,6 @@ getent passwd daos >/dev/null || useradd -M daos
 %{_bindir}/self_test
 %{_bindir}/dmg
 %{_bindir}/dmg_old
-%{_bindir}/daosctl
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos

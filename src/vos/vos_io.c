@@ -348,6 +348,9 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	struct dcs_csum_info	*saved_csum_info;
 	int			 rc;
 
+	if (ioc->ic_size_fetch)
+		return 0;
+
 	rc = bsgl_csums_resize(ioc);
 	if (rc != 0)
 		return rc;
@@ -934,7 +937,8 @@ iod_update_biov(struct vos_io_context *ioc)
 
 static int
 akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
-		   daos_size_t gsize, struct vos_io_context *ioc)
+		   daos_size_t gsize, struct vos_io_context *ioc,
+		   uint16_t minor_epc)
 {
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
@@ -985,7 +989,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 static int
 akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 		 struct dcs_csum_info *csum, daos_size_t rsize,
-		 struct vos_io_context *ioc)
+		 struct vos_io_context *ioc, uint16_t minor_epc)
 {
 	struct evt_entry_in	 ent;
 	struct bio_iov		*biov;
@@ -997,6 +1001,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	ent.ei_rect.rc_epc = epoch;
 	ent.ei_rect.rc_ex.ex_lo = recx->rx_idx;
 	ent.ei_rect.rc_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
+	ent.ei_rect.rc_minor_epc = minor_epc;
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
 
@@ -1012,7 +1017,8 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 }
 
 static int
-akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
+akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
+	    uint16_t minor_epc)
 {
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec = NULL;
@@ -1078,7 +1084,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 
 		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
 						   (uintptr_t)iod->iod_recxs;
-		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc);
+		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc,
+					minor_epc);
 		goto out;
 	} /* else: array */
 
@@ -1097,7 +1104,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 		if (iod_csums != NULL)
 			recx_csum = &iod_csums[i];
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
-				      recx_csum, iod->iod_size, ioc);
+				      recx_csum, iod->iod_size, ioc,
+				      minor_epc);
 		if (rc != 0)
 			goto out;
 	}
@@ -1109,7 +1117,8 @@ out:
 }
 
 static int
-dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
+dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
+	    uint16_t minor_epc)
 {
 	struct vos_object	*obj = ioc->ic_obj;
 	daos_handle_t		 ak_toh;
@@ -1161,7 +1170,7 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
 		iod_set_cursor(ioc, i);
 
-		rc = akey_update(ioc, pm_ver, ak_toh);
+		rc = akey_update(ioc, pm_ver, ak_toh, minor_epc);
 		if (rc != 0)
 			goto out;
 	}
@@ -1598,7 +1607,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	}
 
 	/* Update tree index */
-	err = dkey_update(ioc, pm_ver, dkey);
+	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ? dth->dth_op_seq : 1);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
 				DP_RC(err));
