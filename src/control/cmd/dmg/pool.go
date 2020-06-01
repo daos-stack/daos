@@ -107,8 +107,8 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 			"performance will suffer!\n", ratio*100)
 	}
 	c.log.Infof("Creating DAOS pool with %s SCM and %s NVMe storage "+
-		"(%0.2f %% ratio)\n", humanize.IBytes(scmBytes),
-		humanize.IBytes(nvmeBytes), ratio*100)
+		"(%0.2f %% ratio)\n", humanize.Bytes(scmBytes),
+		humanize.Bytes(nvmeBytes), ratio*100)
 
 	var acl *control.AccessControlList
 	if c.ACLFile != "" {

@@ -159,7 +159,6 @@ class TestWithoutServers(Test):
         self.prefix = None
         self.bin = None
         self.daos_test = None
-        self.daosctl = None
         self.cart_prefix = None
         self.cart_bin = None
         self.tmp = None
@@ -194,7 +193,6 @@ class TestWithoutServers(Test):
             self.ofi_prefix = "/usr"
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
-        self.daosctl = os.path.join(self.bin, 'daosctl')
 
         # set default shared dir for daos tests in case DAOS_TEST_SHARED_DIR
         # is not set, for RPM env and non-RPM env.
