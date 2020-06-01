@@ -299,7 +299,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			D_ASSERT(bsgl != NULL);
 
 			sgl = &tmp_sgl;
-			rc = bio_sgl_convert(bsgl, sgl);
+			rc = bio_sgl_convert(bsgl, sgl, true);
 			if (rc)
 				break;
 		}
@@ -426,7 +426,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 
 			D_DEBUG(DB_IO, "Data corruption after RDMA\n");
 			fbsgl = vos_iod_sgl_at(ioh, 0);
-			bio_sgl_convert(fbsgl, &fsgl);
+			bio_sgl_convert(fbsgl, &fsgl, false);
 			fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
 			*fbuffer += 0x2;
 			daos_sgl_fini(&fsgl, false);
@@ -671,7 +671,7 @@ ec_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		D_ASSERT(bsgl != NULL);
 
 		sgl = &tmp_sgl;
-		rc = bio_sgl_convert(bsgl, sgl);
+		rc = bio_sgl_convert(bsgl, sgl, true);
 		if (rc)
 			break;
 
@@ -2370,7 +2370,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 			return -DER_CSUM;
 		}
 
-		rc = bio_sgl_convert(bsgl, &sgl);
+		rc = bio_sgl_convert(bsgl, &sgl, false);
 
 		if (rc == 0)
 			rc = daos_csummer_verify_iod(csummer, iod, &sgl,

@@ -263,7 +263,7 @@ bio_sgl_fini(struct bio_sglist *sgl)
  * call daos_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
-bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
+bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
 {
 	int i, rc;
 
@@ -281,7 +281,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 		d_iov_t	*iov = &sgl->sg_iovs[i];
 
 		/* Skip bulk transfer for deduped extent */
-		if (biov->bi_addr.ba_dedup)
+		if (biov->bi_addr.ba_dedup && deduped_skip)
 			iov->iov_buf = NULL;
 		else
 			iov->iov_buf = bio_iov2req_buf(biov);

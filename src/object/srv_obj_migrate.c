@@ -593,7 +593,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		D_ASSERT(bsgl != NULL);
 		sgl = &sgls[i];
 
-		rc = bio_sgl_convert(bsgl, sgl);
+		rc = bio_sgl_convert(bsgl, sgl, false);
 		if (rc)
 			goto post;
 		sgl_cnt++;

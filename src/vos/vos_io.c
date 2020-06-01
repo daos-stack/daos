@@ -91,8 +91,10 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 struct dedup_entry {
 	d_list_t	 de_link;
 	uint8_t		*de_csum_buf;
+	uint16_t	 de_csum_type;
 	int		 de_csum_len;
-	struct bio_iov	 de_biov;
+	bio_addr_t	 de_addr;
+	size_t           de_data_len;
 	int		 de_ref;
 };
 
@@ -112,6 +114,11 @@ dedup_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	D_ASSERT(entry->de_csum_len != 0);
 	D_ASSERT(csum_len != 0);
 
+	/** different containers might use different checksum algorithm */
+	if (entry->de_csum_type != csum->cs_type)
+		return false;
+
+	/** overall checksum size (for all chunks) should match */
 	if (entry->de_csum_len != csum_len)
 		return false;
 
@@ -218,15 +225,17 @@ vos_dedup_lookup(struct vos_pool *pool, struct dcs_csum_info *csum,
 		return false;
 
 	entry = dedup_rlink2entry(rlink);
-	*biov = entry->de_biov;
+	if (biov) {
+		biov->bi_addr = entry->de_addr;
+		biov->bi_addr.ba_dedup = true;
+		biov->bi_data_len = entry->de_data_len;
+		D_DEBUG(DB_IO, "Found dedup entry\n");
+	}
 
 	D_ASSERT(entry->de_ref > 1);
-	D_ASSERT(biov->bi_addr.ba_dedup);
-	D_ASSERT(biov->bi_buf == NULL);
 
 	d_hash_rec_decref(pool->vp_dedup_hash, rlink);
 
-	D_DEBUG(DB_IO, "Found dedup entry\n");
 	return true;
 }
 
@@ -235,16 +244,15 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 		 daos_size_t csum_len, struct bio_iov *biov)
 {
 	struct dedup_entry	*entry;
-	struct bio_iov		 tmp;
 	int			 rc;
 
-	if (!ci_is_valid(csum))
+	if (!ci_is_valid(csum) || csum_len == 0 || biov->bi_addr.ba_dedup)
 		return;
 
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return;
 
-	if (vos_dedup_lookup(pool, csum, csum_len, &tmp))
+	if (vos_dedup_lookup(pool, csum, csum_len, NULL))
 		return;
 
 	D_ALLOC_PTR(entry);
@@ -261,18 +269,21 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 		D_FREE(entry);
 		return;
 	}
-	entry->de_csum_len = csum_len;
+	entry->de_csum_len	= csum_len;
+	entry->de_csum_type	= csum->cs_type;
+	entry->de_addr		= biov->bi_addr;
+	entry->de_data_len	= biov->bi_data_len;
 	memcpy(entry->de_csum_buf, csum->cs_csum, csum_len);
-	entry->de_biov = *biov;
-	entry->de_biov.bi_buf = NULL;
-	entry->de_biov.bi_addr.ba_dedup = 1;
 
 	rc = d_hash_rec_insert(pool->vp_dedup_hash, csum, csum_len,
 			       &entry->de_link, false);
-	if (rc)
+	if (rc) {
 		D_ERROR("Insert dedup entry failed. "DF_RC"\n", DP_RC(rc));
-	else
+		D_FREE(entry->de_csum_buf);
+		D_FREE(entry);
+	} else {
 		D_DEBUG(DB_IO, "Inserted dedup entry\n");
+	}
 }
 
 static inline struct umem_instance *
@@ -1205,11 +1216,11 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
-	ent.ei_addr.ba_dedup = 0;	/* Don't make this flag persistent */
+	ent.ei_addr.ba_dedup = false;	/* Don't make this flag persistent */
 	rc = evt_insert(toh, &ent, NULL);
 
 	/* Ignore transaction abort for this moment */
-	if ((rsize * recx->rx_nr) >= VOS_DEDUP_SIZE_THRESH) {
+	if (!rc && (rsize * recx->rx_nr) >= VOS_DEDUP_SIZE_THRESH) {
 		daos_size_t csum_len = recx_csum_len(recx, csum, rsize);
 
 		vos_dedup_update(vos_cont2pool(ioc->ic_cont), csum, csum_len,
@@ -1560,10 +1571,15 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	if (size >= VOS_DEDUP_SIZE_THRESH &&
 	    vos_dedup_lookup(vos_cont2pool(ioc->ic_cont), csum, csum_len,
 			     &biov)) {
-		D_ASSERT(biov.bi_addr.ba_off != 0);
-		ioc->ic_umoffs[ioc->ic_umoffs_cnt] = biov.bi_addr.ba_off;
-		ioc->ic_umoffs_cnt++;
-		return iod_reserve(ioc, &biov);
+		if (biov.bi_data_len == size) {
+			D_ASSERT(biov.bi_addr.ba_off != 0);
+			ioc->ic_umoffs[ioc->ic_umoffs_cnt] =
+							biov.bi_addr.ba_off;
+			ioc->ic_umoffs_cnt++;
+			return iod_reserve(ioc, &biov);
+		} else {
+			memset(&biov, 0, sizeof(biov));
+		}
 	}
 
 	/*
