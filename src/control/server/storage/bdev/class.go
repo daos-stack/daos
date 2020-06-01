@@ -49,6 +49,19 @@ const (
     HotplugEnable No
     HotplugPollRate 0
 `
+	vmdTempl = `[VMD]
+    Enable True
+
+[Nvme]
+{{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
+{{ end }}    RetryCount 4
+    TimeoutUsec 0
+    ActionOnTimeout None
+    AdminPollRate 100000
+    HotplugEnable No
+    HotplugPollRate 0
+
+`
 	// device block size hardcoded to 4096
 	fileTempl = `[AIO]
 {{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    AIO {{$e}} AIO_{{$host}}_{{$i}} 4096
@@ -183,8 +196,14 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 	}
 
 	switch cfg.Class {
-	case storage.BdevClassNone, storage.BdevClassNvme:
+	case storage.BdevClassNone:
 		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilPrep}
+	case storage.BdevClassNvme:
+		if cfg.EnableVmd {
+			p.bdev = bdev{vmdTempl, "VMD", isEmptyList, isValidList, nilPrep}
+		} else {
+			p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, nilPrep}
+		}
 	case storage.BdevClassMalloc:
 		p.bdev = bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilPrep}
 	case storage.BdevClassKdev:

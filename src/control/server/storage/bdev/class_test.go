@@ -43,6 +43,7 @@ func TestParseBdev(t *testing.T) {
 	tests := map[string]struct {
 		bdevClass  storage.BdevClass
 		bdevList   []string
+		enableVMD  string
 		bdevSize   int // relevant for MALLOC/FILE
 		bdevNumber int // relevant for MALLOC
 		vosEnv     string
@@ -77,6 +78,52 @@ func TestParseBdev(t *testing.T) {
 				`    HotplugPollRate 0`,
 				``,
 			},
+			vosEnv: "NVME",
+		},
+		"VMD devices": {
+			bdevClass: storage.BdevClassNvme,
+			enableVMD: "true",
+			bdevList:  []string{"5d0505:01:00.0", "5d0505:03:00.0"},
+			wantBuf: []string{
+				`[VMD]`,
+				`    Enable True`,
+				``,
+				`[Nvme]`,
+				`    TransportID "trtype:PCIe traddr:5d0505:01:00.0" Nvme__0`,
+				`    TransportID "trtype:PCIe traddr:5d0505:03:00.0" Nvme__1`,
+				`    RetryCount 4`,
+				`    TimeoutUsec 0`,
+				`    ActionOnTimeout None`,
+				`    AdminPollRate 100000`,
+				`    HotplugEnable No`,
+				`    HotplugPollRate 0`,
+				``,
+				``,
+			},
+			vosEnv: "VMD",
+		},
+		"multiple VMD and NVMe controllers": {
+			bdevClass: storage.BdevClassNvme,
+			enableVMD: "true",
+			bdevList:  []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
+			wantBuf: []string{
+				`[VMD]`,
+				`    Enable True`,
+				``,
+				`[Nvme]`,
+				`    TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme__0`,
+				`    TransportID "trtype:PCIe traddr:5d0505:01:00.0" Nvme__1`,
+				`    TransportID "trtype:PCIe traddr:5d0505:03:00.0" Nvme__2`,
+				`    RetryCount 4`,
+				`    TimeoutUsec 0`,
+				`    ActionOnTimeout None`,
+				`    AdminPollRate 100000`,
+				`    HotplugEnable No`,
+				`    HotplugPollRate 0`,
+				``,
+				``,
+			},
+			vosEnv: "VMD",
 		},
 		"AIO file": {
 			bdevClass: storage.BdevClassFile,
@@ -144,6 +191,11 @@ func TestParseBdev(t *testing.T) {
 					config.DeviceList = tt.bdevList
 				}
 			}
+
+			if tt.enableVMD == "true" {
+				config.EnableVmd = true
+			}
+
 			if tt.bdevSize != 0 {
 				config.FileSize = tt.bdevSize
 			}

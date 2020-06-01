@@ -135,6 +135,7 @@ func (b BdevClass) String() string {
 type BdevConfig struct {
 	ConfigPath  string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	Class       BdevClass `yaml:"bdev_class,omitempty"`
+	EnableVmd   bool      `yaml:"enable_vmd,omitempty"`
 	DeviceList  []string  `yaml:"bdev_list,omitempty"`
 	DeviceCount int       `yaml:"bdev_number,omitempty"`
 	FileSize    int       `yaml:"bdev_size,omitempty"`
@@ -154,4 +155,12 @@ func (bc *BdevConfig) GetNvmeDevs() []string {
 	}
 
 	return []string{}
+}
+
+func (bc *BdevConfig) IsVMDEnabled() bool {
+	if bc.EnableVmd {
+		return true
+	}
+
+	return false
 }

@@ -106,6 +106,11 @@ func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 
+	// TODO: Only call init when VMD is enabled in config
+	if err := w.InitVMDEnv(); err != nil {
+		return errors.Wrap(err, "failed to initialize VMD")
+	}
+
 	cs, err := w.Discover(log)
 	if err != nil {
 		return errors.Wrap(err, "failed to discover NVMe")

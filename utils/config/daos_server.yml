@@ -92,6 +92,15 @@
 #
 #bdev_include: ["0000:81:00.1","0000:81:00.2","0000:81:00.3"]
 #
+## VMD PCI whitelist
+#
+## Allow use of NVMe SSDs behind listed VMD PCI addresses.
+## If Volume Management Devices (VMD) are to be used, then the VMD address
+## needs to be explicitly listed for use. VMD whitelist can be used alone
+## or in addition to the NVMe SSD whitelist.
+#
+vmd_include: ["0000:5d:05.5"]
+#
 #
 ## NVMe SSD blacklist
 #
@@ -342,6 +351,15 @@
 #  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
 #  # Immutable after reformat.
 #
+#  # If Volume Management Devices (VMD) are used, then the enable_vmd flag
+#  # needs to be set. The bdev_class will remain the default "nvme" type,
+#  # and similar to NVMe, bdev_list will include the NVMe SSD address behind
+#  # the VMD. vmd_include also needs to be set to the VMD address in order for
+#  # the BDF address of the NVMe VMD SSD (ie "5d0505:01:00.0") to be parsed.
+#  bdev_class: nvme
+#  enable_vmd: true
+#  bdev_list: ["0000:81:00.0","5d0505:01:00.0","5d0505:03:00.0"]
+#
 #  # When bdev_class is set to malloc, bdev_number is the number of devices
 #  # to allocate and bdev_size is the size in GB of each LUN/device.
 #  bdev_class: malloc
@@ -359,3 +377,4 @@
 #  # block devices that should be different across different server instance.
 #  bdev_class: kdev
 #  bdev_list: [/dev/sdc,/dev/sdd]
+

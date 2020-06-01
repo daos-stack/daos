@@ -161,6 +161,21 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 	}
 
+	// If VMD devices are set in config, then need to run a separate
+	// SPDK setup with the VMD address as the PCI_WHITELIST
+	if len(cfg.VmdInclude) > 0 {
+		prepReqVmd := bdev.PrepareRequest{
+			PCIWhitelist:  strings.Join(cfg.VmdInclude, ","),
+			SkipReset:     true,
+			HugePageCount: prepReq.HugePageCount,
+			TargetUser:    prepReq.TargetUser,
+		}
+		log.Debugf("automatic VMD prepare req: %+v", prepReqVmd)
+		if _, err := bdevProvider.Prepare(prepReqVmd); err != nil {
+			log.Errorf("automatic NVMe prepare for VMD failed (check configuration?)\n%s", err)
+		}
+	}
+
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
 	membership := system.NewMembership(log)

@@ -58,6 +58,7 @@ type (
 		PCIWhitelist  string
 		TargetUser    string
 		ResetOnly     bool
+		SkipReset     bool
 	}
 
 	// PrepareResponse contains the results of a successful Prepare operation.
@@ -157,9 +158,11 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 		return p.fwd.Prepare(req)
 	}
 
-	// run reset first to ensure reallocation of hugepages
-	if err := p.backend.Reset(); err != nil {
-		return nil, errors.WithMessage(err, "SPDK setup reset")
+	if !req.SkipReset {
+		// run reset first to ensure reallocation of hugepages
+		if err := p.backend.Reset(); err != nil {
+			return nil, errors.WithMessage(err, "SPDK setup reset")
+		}
 	}
 
 	res := &PrepareResponse{}
