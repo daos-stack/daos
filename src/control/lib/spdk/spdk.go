@@ -28,12 +28,13 @@ package spdk
 // to specify additional dirs.
 
 /*
-#cgo LDFLAGS: -lspdk_env_dpdk -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
+#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_vmd  -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
 #cgo LDFLAGS: -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs -ldl -lnuma
 
 #include <stdlib.h>
 #include <spdk/stdinc.h>
 #include <spdk/env.h>
+#include <spdk/vmd.h>
 */
 import "C"
 
@@ -45,6 +46,7 @@ import (
 // ENV is the interface that provides SPDK environment management.
 type ENV interface {
 	InitSPDKEnv(int) error
+	InitVMDEnv() error
 }
 
 // Env is a simple ENV implementation.
@@ -86,6 +88,18 @@ func (e *Env) InitSPDKEnv(shmID int) (err error) {
 
 	rc := C.spdk_env_init(opts)
 	if err = Rc2err("spdk_env_opts_init", rc); err != nil {
+		return
+	}
+
+	return
+}
+
+// InitVMDEnv initializes the VMD environment in SPDK
+
+// Enumerate VMD devices and hook them into the SPDK PCI subsystem.
+func (e *Env) InitVMDEnv() (err error) {
+	rc := C.spdk_vmd_init()
+	if err = Rc2err("spdk_vmd_init", rc); err != nil {
 		return
 	}
 

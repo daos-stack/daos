@@ -208,7 +208,8 @@ func TestServer_ConstructedConfig(t *testing.T) {
 	constructed := NewConfiguration().
 		WithControlPort(10001).
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
-		WithBdevExclude("0000:81:00.1").
+		WithVmdInclude("0000:5d:05.5")
+	WithBdevExclude("0000:81:00.1").
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_control.log").
@@ -234,7 +235,8 @@ func TestServer_ConstructedConfig(t *testing.T) {
 				WithScmClass("ram").
 				WithScmRamdiskSize(16).
 				WithBdevClass("nvme").
-				WithBdevDeviceList("0000:81:00.0").
+				WithEnableVmd(true).
+				WithBdevDeviceList("0000:81:00.0", "5d0505:01:00.0").
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode0).

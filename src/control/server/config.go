@@ -69,6 +69,7 @@ type Configuration struct {
 	Servers             []*ioserver.Config        `yaml:"servers"`
 	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
+	VmdInclude          []string                  `yaml:"vmd_include,omitempty"`
 	NrHugepages         int                       `yaml:"nr_hugepages"`
 	SetHugepages        bool                      `yaml:"set_hugepages"`
 	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
@@ -260,6 +261,12 @@ func (c *Configuration) WithBdevExclude(bList ...string) *Configuration {
 // WithBdevInclude sets the block device include list.
 func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
 	c.BdevInclude = bList
+	return c
+}
+
+// WithVmdInclude sets the VMD address include list.
+func (c *Configuration) WithVmdInclude(vList ...string) *Configuration {
+	c.VmdInclude = vList
 	return c
 }
 

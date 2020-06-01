@@ -268,6 +268,12 @@ func (c *Config) WithBdevClass(bdevClass string) *Config {
 	return c
 }
 
+// WithEnableVmd defines if VMD devices will be used.
+func (c *Config) WithEnableVmd(enable bool) *Config {
+	c.Storage.Bdev.EnableVmd = enable
+	return c
+}
+
 // WithBdevDeviceList sets the list of block devices to be used.
 func (c *Config) WithBdevDeviceList(devices ...string) *Config {
 	c.Storage.Bdev.DeviceList = devices
