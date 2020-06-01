@@ -35,7 +35,7 @@
 #include <daos/checksum.h>
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
-#define C_TRACE_ENABLED() D_LOG_ENABLED(DB_TRACE)
+#define C_TRACE_ENABLED() true
 
 /** File function signatures */
 static int
@@ -239,6 +239,12 @@ sha1_init(struct daos_csummer *obj)
 	return rc;
 }
 
+static int
+sha1_reset(struct daos_csummer *obj)
+{
+	return mh_sha1_init(obj->dcs_ctx);
+}
+
 static void
 sha1_destroy(struct daos_csummer *obj)
 {
@@ -253,8 +259,7 @@ sha1_finish(struct daos_csummer *obj)
 }
 
 static int
-sha1_update(struct daos_csummer *obj,
-	    uint8_t *buf, size_t buf_len)
+sha1_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	struct mh_sha1_ctx *ctx = obj->dcs_ctx;
 
@@ -264,6 +269,7 @@ sha1_update(struct daos_csummer *obj,
 struct csum_ft sha1_algo = {
 	.cf_update = sha1_update,
 	.cf_init = sha1_init,
+	.cf_reset = sha1_reset,
 	.cf_destroy = sha1_destroy,
 	.cf_finish = sha1_finish,
 	.cf_csum_len = 20,
@@ -285,6 +291,12 @@ sha256_init(struct daos_csummer *obj)
 	if (rc == 0)
 		obj->dcs_ctx = ctx;
 	return rc;
+}
+
+static int
+sha256_reset(struct daos_csummer *obj)
+{
+	return mh_sha256_init(obj->dcs_ctx);
 }
 
 static void
@@ -310,6 +322,7 @@ sha256_update(struct daos_csummer *obj,
 struct csum_ft sha256_algo = {
 	.cf_update = sha256_update,
 	.cf_init = sha256_init,
+	.cf_reset = sha256_reset,
 	.cf_destroy = sha256_destroy,
 	.cf_finish = sha256_finish,
 	.cf_csum_len = 256 / 8,
@@ -338,6 +351,16 @@ sha512_init(struct daos_csummer *obj)
 
 	obj->dcs_ctx = ctx;
 	return rc;
+}
+
+static int
+sha512_reset(struct daos_csummer *obj)
+{
+	struct sha512_ctx *ctx = obj->dcs_ctx;
+
+	sha512_ctx_mgr_init(&ctx->mgr);
+	return ctx->ctx.error;
+
 }
 
 static void
@@ -376,13 +399,12 @@ sha512_update(struct daos_csummer *obj,
 struct csum_ft sha512_algo = {
 	.cf_update = sha512_update,
 	.cf_init = sha512_init,
+	.cf_reset = sha512_reset,
 	.cf_destroy = sha512_destroy,
 	.cf_finish = sha512_finish,
 	.cf_csum_len = 512 / 8,
 	.cf_name = "sha512"
 };
-
-
 
 /** ------------------------------------------------------------- */
 static char *csum_unknown_name = "unknown checksum type";
@@ -588,10 +610,8 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 		d_iov_t tmp;
 
 		d_iov_set(&tmp, buf, buf_len);
-		C_TRACE("Updated csum(type=%s) for '"DF_KEY"'->"DF_CI_BUF"\n",
-			daos_csummer_get_name(obj),
-			DP_KEY(&tmp),
-			DP_CI_BUF(obj->dcs_csum_buf, obj->dcs_csum_buf_size));
+		C_TRACE("Updated csum(type=%s) for'"DF_KEY"'\n",
+			daos_csummer_get_name(obj), DP_KEY(&tmp));
 	}
 
 	return rc;
@@ -600,9 +620,20 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 int
 daos_csummer_finish(struct daos_csummer *obj)
 {
+	int rc = 0;
+
 	if (obj->dcs_algo->cf_finish)
-		return obj->dcs_algo->cf_finish(obj);
-	return 0;
+		rc = obj->dcs_algo->cf_finish(obj);
+
+	if (C_TRACE_ENABLED()) {
+		C_TRACE("Checksum(type=%s) is: "DF_CI_BUF"\n",
+			daos_csummer_get_name(obj),
+
+			DP_CI_BUF(obj->dcs_csum_buf, obj->dcs_csum_buf_size));
+	}
+
+
+	return rc;
 }
 
 bool
@@ -1069,6 +1100,7 @@ calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
 	memset(csum_buf, 0, csum_buf_len);
 
 	daos_csummer_set_buffer(csummer, csum_buf, csum_buf_len);
+	daos_csummer_reset(csummer);
 	rc = daos_csummer_update(csummer, iov->iov_buf, iov->iov_len);
 	if (rc != 0) {
 		D_ERROR("daos_csummer_update error: %d\n", rc);
@@ -1403,6 +1435,9 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len)
 	case 4:
 		return *(uint32_t *) buf;
 	case 8:
+	case 20:
+	case 256/8:
+	case 512/8:
 		return *(uint64_t *) buf;
 	default:
 		return 0;

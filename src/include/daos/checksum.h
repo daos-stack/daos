@@ -151,7 +151,7 @@ struct csum_ft {
 	int		(*cf_finish)(struct daos_csummer *obj);
 	int		(*cf_update)(struct daos_csummer *obj,
 				     uint8_t *buf, size_t buf_len);
-	void		(*cf_reset)(struct daos_csummer *obj);
+	int		(*cf_reset)(struct daos_csummer *obj);
 	void		(*cf_get)(struct daos_csummer *obj);
 	uint16_t	(*cf_get_size)(struct daos_csummer *obj);
 	bool		(*cf_compare)(struct daos_csummer *obj,

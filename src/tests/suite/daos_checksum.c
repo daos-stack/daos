@@ -325,7 +325,7 @@ checksum_disabled(void **state)
 
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	assert_memory_equal(ctx.update_sgl.sg_iovs->iov_buf,
 			    ctx.fetch_sgl.sg_iovs->iov_buf,
 			    ctx.update_sgl.sg_iovs->iov_buf_len);
@@ -448,7 +448,7 @@ test_fetch_array(void **state)
 	 */
 	setup_from_test_args(&ctx, (test_arg_t *) *state);
 
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, oc);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_SHA1, false, 1024*8, oc);
 
 	/**
 	 * Act
