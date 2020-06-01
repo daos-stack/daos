@@ -258,6 +258,10 @@ getent passwd daos >/dev/null || useradd -M daos
 
 %files server
 %config(noreplace) %{conf_dir}/daos_server.yml
+%dir %{conf_dir}/certs
+%attr(0700,daos,daos) %{conf_dir}/certs
+%dir %{conf_dir}/certs/clients
+%attr(0700,daos,daos) %{conf_dir}/certs/clients
 %attr(0664,root,root) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
