@@ -984,4 +984,14 @@ int
 vos_profile_start(char *path, int avg);
 void
 vos_profile_stop(void);
+
+/**
+ * Helper functions to create/free duplicated bsgl for dedup verify.
+ */
+int
+vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
+		   struct bio_sglist *bsgl_dup);
+void
+vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+
 #endif /* __VOS_API_H */

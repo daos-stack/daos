@@ -1953,6 +1953,67 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx)
 	return bio_iod_sgl(ioc->ic_biod, idx);
 }
 
+/* Duplicate bio_sglist for landing RDMA transfer data */
+int
+vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
+		   struct bio_sglist *bsgl_dup)
+{
+	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
+	umem_off_t		 umoff;
+	int			 i, rc;
+
+	D_ASSERT(!daos_handle_is_inval(ioh));
+	D_ASSERT(bsgl != NULL);
+	D_ASSERT(bsgl_dup != NULL);
+
+	rc = bio_sgl_init(bsgl_dup, bsgl->bs_nr_out);
+	if (rc != 0)
+		return -DER_NOMEM;
+
+	bsgl_dup->bs_nr_out = bsgl->bs_nr_out;
+
+	for (i = 0; i < bsgl->bs_nr_out; i++) {
+		struct bio_iov	*biov = &bsgl->bs_iovs[i];
+		struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[i];
+
+		if (bio_iov2buf(biov) == NULL)
+			continue;
+
+		*biov_dup = *biov;
+		biov_dup->bi_addr.ba_dedup = false;
+
+		D_ASSERT(bio_iov2len(biov) != 0);
+		/* Support SCM only for this moment */
+		umoff = umem_alloc(vos_ioc2umm(ioc), bio_iov2len(biov));
+		if (UMOFF_IS_NULL(umoff)) {
+			D_ERROR("Failed to alloc "DF_U64" bytes SCM\n",
+				bio_iov2len(biov));
+			return -DER_NOMEM;
+		}
+		biov_dup->bi_addr.ba_off = umem_off2offset(umoff);
+		biov_dup->bi_buf = umem_off2ptr(vos_ioc2umm(ioc),
+						bio_iov2off(biov_dup));
+	}
+
+	return 0;
+}
+
+void
+vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl)
+{
+	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
+	int			 i;
+
+	D_ASSERT(!daos_handle_is_inval(ioh));
+	for (i = 0; i < bsgl->bs_nr_out; i++) {
+		struct bio_iov	*biov = &bsgl->bs_iovs[i];
+
+		if (UMOFF_IS_NULL(bio_iov2off(biov)))
+			continue;
+		umem_free(vos_ioc2umm(ioc), bio_iov2off(biov));
+	}
+}
+
 /**
  * @defgroup vos_obj_update() & vos_obj_fetch() functions
  * @{
