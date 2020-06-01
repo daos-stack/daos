@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,9 @@ enum evt_iter_state {
 	EVT_ITER_READY,			/**< probed, ready to iterate */
 	EVT_ITER_FINI,			/**< reach at the end of iteration */
 };
+
+/** We store 48 bit length in the tree so an extent can't be larger */
+#define MAX_RECT_WIDTH	(((uint64_t)1 << 48) - 1)
 
 struct evt_iterator {
 	/* Epoch range for the iterator */
@@ -144,7 +147,8 @@ evt_off2desc(struct evt_context *tcx, umem_off_t offset)
 }
 
 int
-evt_desc_log_status(struct evt_context *tcx, struct evt_desc *desc, int intent);
+evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
+		    struct evt_desc *desc, int intent);
 
 /** Helper function for starting a PMDK transaction, if applicable */
 static inline int
@@ -203,6 +207,15 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
  */
 struct evt_extent
 evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size);
+
+/**
+ * Update the csum info for an entry so it takes into account the selected
+ * extent.
+ */
+void
+evt_entry_csum_update(const struct evt_extent *const ext,
+		      const struct evt_extent *const sel,
+		      struct dcs_csum_info *csum_info);
 
 /* By definition, all rectangles overlap in the epoch range because all
  * are from start to infinity.  However, for common queries, we often only want
@@ -304,6 +317,7 @@ evt_ent2rect(struct evt_rect *rect, const struct evt_entry *ent)
 {
 	rect->rc_ex = ent->en_sel_ext;
 	rect->rc_epc = ent->en_epoch;
+	rect->rc_minor_epc = ent->en_minor_epc;
 }
 
 /** Sort entries in an entry array
@@ -334,10 +348,11 @@ int evt_ent_array_sort(struct evt_context *tcx,
  * Returns 0 if successful, error otherwise.  The tree trace will point at last
  * scanned record.
  */
-int evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
-		       uint32_t intent, const struct evt_filter *filter,
-		       const struct evt_rect *rect,
-		       struct evt_entry_array *ent_array);
+int
+evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
+		   uint32_t intent, const struct evt_filter *filter,
+		   const struct evt_rect *rect,
+		   struct evt_entry_array *ent_array);
 
 /** Compare two rectanglesConvert a context to a daos_handle
  * \param[IN]		rt1	The first rectangle
@@ -349,53 +364,60 @@ int evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
  *
  * Order is lower high offset, higher epoch, lower high offset
  */
-int evt_rect_cmp(const struct evt_rect *rt1, const struct evt_rect *rt2);
+int
+evt_rect_cmp(const struct evt_rect *rt1, const struct evt_rect *rt2);
 
 /** Convert a context to a daos_handle
  * \param[IN]	tcx	The evtree context
  *
  * Returns the converted handle
  */
-daos_handle_t evt_tcx2hdl(struct evt_context *tcx);
+daos_handle_t
+evt_tcx2hdl(struct evt_context *tcx);
 
 /** Convert a handle to an evtree context
  * \param[IN]	handle	The daos handle
  *
  * Returns the converted handle
  */
-struct evt_context *evt_hdl2tcx(daos_handle_t toh);
+struct evt_context *
+evt_hdl2tcx(daos_handle_t toh);
 
 /** Move the trace forward.
  * \param[IN]	tcx	The evtree context
  */
-bool evt_move_trace(struct evt_context *tcx);
+bool
+evt_move_trace(struct evt_context *tcx);
 
 /** Get a pointer to the rectangle corresponding to an index in a tree node
  * \param[IN]	tcx	The evtree context
  * \param[IN]	node	The tree node
  * \param[IN]	at	The index in the node entry
+ * \param[out]	rout	Returned rectangle
  *
  * Returns the rectangle at the index
  */
-struct evt_rect *evt_node_rect_at(struct evt_context *tcx,
-				  struct evt_node *node, unsigned int at);
+void
+evt_node_read_rect_at(struct evt_context *tcx, struct evt_node *node,
+		      unsigned int at, struct evt_rect *rout);
 
 /** Get a pointer to the rectangle corresponding to an index in a tree node
  * \param[IN]	tcx	The evtree context
  * \param[IN]	nd_off	The offset of the tree node
  * \param[IN]	at	The index in the node entry
+ * \param[out]	rout	Returned rectangle
  *
  * Returns the rectangle at the index
  */
-static inline struct evt_rect *evt_nd_off_rect_at(struct evt_context *tcx,
-						  umem_off_t nd_off,
-						  unsigned int at)
+static inline void
+evt_nd_off_read_rect_at(struct evt_context *tcx, umem_off_t nd_off,
+			unsigned int at, struct evt_rect *rout)
 {
 	struct evt_node	*node;
 
 	node = evt_off2node(tcx, nd_off);
 
-	return evt_node_rect_at(tcx, node, at);
+	evt_node_read_rect_at(tcx, node, at, rout);
 }
 
 /** Fill an evt_entry from the record at an index in a tree node
@@ -409,9 +431,10 @@ static inline struct evt_rect *evt_nd_off_rect_at(struct evt_context *tcx,
  *
  * The selected extent will be trimmed by the search rectangle used.
  */
-void evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
-		    unsigned int at, const struct evt_rect *rect_srch,
-		    uint32_t intent, struct evt_entry *entry);
+void
+evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
+	       unsigned int at, const struct evt_rect *rect_srch,
+	       uint32_t intent, struct evt_entry *entry);
 
 /**
  * Check whether the EVT record is available or not.
@@ -431,8 +454,9 @@ void evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
  *					time later.
  *		Other negative values on error.
  */
-int evt_dtx_check_availability(struct evt_context *tcx, umem_off_t entry,
-			       uint32_t intent);
+int
+evt_dtx_check_availability(struct evt_context *tcx, umem_off_t entry,
+			   uint32_t intent);
 
 static inline bool
 evt_node_is_set(struct evt_context *tcx, struct evt_node *node,
@@ -472,4 +496,5 @@ evt_node_desc_at(struct evt_context *tcx, struct evt_node *node,
 
 	return evt_off2desc(tcx, ne->ne_child);
 }
+
 #endif /* __EVT_PRIV_H__ */

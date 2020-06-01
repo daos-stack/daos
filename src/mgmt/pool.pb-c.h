@@ -19,6 +19,8 @@ typedef struct _Mgmt__PoolCreateReq Mgmt__PoolCreateReq;
 typedef struct _Mgmt__PoolCreateResp Mgmt__PoolCreateResp;
 typedef struct _Mgmt__PoolDestroyReq Mgmt__PoolDestroyReq;
 typedef struct _Mgmt__PoolDestroyResp Mgmt__PoolDestroyResp;
+typedef struct _Mgmt__PoolExcludeReq Mgmt__PoolExcludeReq;
+typedef struct _Mgmt__PoolExcludeResp Mgmt__PoolExcludeResp;
 typedef struct _Mgmt__PoolReintegrateReq Mgmt__PoolReintegrateReq;
 typedef struct _Mgmt__PoolReintegrateResp Mgmt__PoolReintegrateResp;
 typedef struct _Mgmt__ListPoolsReq Mgmt__ListPoolsReq;
@@ -158,7 +160,48 @@ struct  _Mgmt__PoolDestroyResp
 
 
 /*
- * PoolReintegrateReq supplies pool identifier and force flag.
+ * PoolExcludeReq supplies pool identifier, rank, and target_idxs.
+ */
+struct  _Mgmt__PoolExcludeReq
+{
+  ProtobufCMessage base;
+  /*
+   * uuid of pool to add target up to
+   */
+  char *uuid;
+  /*
+   * target to move to the up state
+   */
+  uint32_t rank;
+  /*
+   * target ranks
+   */
+  size_t n_targetidx;
+  uint32_t *targetidx;
+};
+#define MGMT__POOL_EXCLUDE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_exclude_req__descriptor) \
+    , (char *)protobuf_c_empty_string, 0, 0,NULL }
+
+
+/*
+ * PoolExcludeResp returns resultant state of Exclude operation.
+ */
+struct  _Mgmt__PoolExcludeResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+};
+#define MGMT__POOL_EXCLUDE_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_exclude_resp__descriptor) \
+    , 0 }
+
+
+/*
+ * PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
  */
 struct  _Mgmt__PoolReintegrateReq
 {
@@ -174,8 +217,8 @@ struct  _Mgmt__PoolReintegrateReq
   /*
    * target ranks
    */
-  size_t n_targets;
-  uint32_t *targets;
+  size_t n_targetidx;
+  uint32_t *targetidx;
 };
 #define MGMT__POOL_REINTEGRATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
@@ -493,10 +536,22 @@ struct  _Mgmt__PoolQueryResp
    * NVMe storage usage stats
    */
   Mgmt__StorageUsageStats *nvme;
+  /*
+   * total nodes in pool
+   */
+  uint32_t totalnodes;
+  /*
+   * latest pool map version
+   */
+  uint32_t version;
+  /*
+   * current raft leader
+   */
+  uint32_t leader;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL }
+    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL, 0, 0, 0 }
 
 
 /* Mgmt__PoolCreateReq methods */
@@ -574,6 +629,44 @@ Mgmt__PoolDestroyResp *
                       const uint8_t       *data);
 void   mgmt__pool_destroy_resp__free_unpacked
                      (Mgmt__PoolDestroyResp *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolExcludeReq methods */
+void   mgmt__pool_exclude_req__init
+                     (Mgmt__PoolExcludeReq         *message);
+size_t mgmt__pool_exclude_req__get_packed_size
+                     (const Mgmt__PoolExcludeReq   *message);
+size_t mgmt__pool_exclude_req__pack
+                     (const Mgmt__PoolExcludeReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_exclude_req__pack_to_buffer
+                     (const Mgmt__PoolExcludeReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolExcludeReq *
+       mgmt__pool_exclude_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_exclude_req__free_unpacked
+                     (Mgmt__PoolExcludeReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolExcludeResp methods */
+void   mgmt__pool_exclude_resp__init
+                     (Mgmt__PoolExcludeResp         *message);
+size_t mgmt__pool_exclude_resp__get_packed_size
+                     (const Mgmt__PoolExcludeResp   *message);
+size_t mgmt__pool_exclude_resp__pack
+                     (const Mgmt__PoolExcludeResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_exclude_resp__pack_to_buffer
+                     (const Mgmt__PoolExcludeResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolExcludeResp *
+       mgmt__pool_exclude_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_exclude_resp__free_unpacked
+                     (Mgmt__PoolExcludeResp *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__PoolReintegrateReq methods */
 void   mgmt__pool_reintegrate_req__init
@@ -823,6 +916,12 @@ typedef void (*Mgmt__PoolDestroyReq_Closure)
 typedef void (*Mgmt__PoolDestroyResp_Closure)
                  (const Mgmt__PoolDestroyResp *message,
                   void *closure_data);
+typedef void (*Mgmt__PoolExcludeReq_Closure)
+                 (const Mgmt__PoolExcludeReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolExcludeResp_Closure)
+                 (const Mgmt__PoolExcludeResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__PoolReintegrateReq_Closure)
                  (const Mgmt__PoolReintegrateReq *message,
                   void *closure_data);
@@ -875,6 +974,8 @@ extern const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_exclude_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_exclude_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_reintegrate_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor;

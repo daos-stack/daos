@@ -38,11 +38,6 @@ struct dtx_entry {
 	daos_unit_oid_t		dte_oid;
 };
 
-enum dtx_cos_list_types {
-	DCLT_UPDATE		= (1 << 0),
-	DCLT_PUNCH		= (1 << 1),
-};
-
 /**
  * DAOS two-phase commit transaction handle in DRAM.
  */
@@ -78,28 +73,25 @@ struct dtx_handle {
 					 dth_solo:1,
 					 /* dti_cos has been committed. */
 					 dth_dti_cos_done:1,
-					 /* XXX: touch ilog entry. */
-					 dth_has_ilog:1,
-					 /* epoch conflict, need to renew. */
-					 dth_renew:1,
+					 /* Modified shared items: object/key */
+					 dth_modify_shared:1,
 					 /* The DTX entry is in active table. */
 					 dth_actived:1;
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
 	/* The array of the DTXs for Commit on Share (conflcit). */
 	struct dtx_id			*dth_dti_cos;
-	/* The identifier of the DTX that conflict with current one. */
-	struct dtx_conflict_entry	*dth_conflict;
 	/** Pointer to the DTX entry in DRAM. */
 	void				*dth_ent;
 	/** The address (offset) of the (new) object to be modified. */
 	umem_off_t			 dth_obj;
+	/** Modification sequence in the distributed transaction. */
+	uint16_t			 dth_op_seq;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
 struct dtx_sub_status {
 	struct daos_shard_tgt		dss_tgt;
-	struct dtx_conflict_entry	dss_dce;
 	int				dss_result;
 };
 
@@ -144,7 +136,7 @@ int
 dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
 		 uint32_t intent, struct daos_shard_tgt *tgts, int tgts_cnt,
-		 bool cond_check, struct dtx_leader_handle *dlh);
+		 struct dtx_leader_handle *dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	       int result);
@@ -158,8 +150,7 @@ int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
 	       uint32_t ver, bool block);
 int
 dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-	  daos_epoch_t epoch, uint64_t dkey_hash,
-	  struct dtx_conflict_entry *conflict, struct dtx_id *dti_cos,
+	  daos_epoch_t epoch, uint64_t dkey_hash, struct dtx_id *dti_cos,
 	  int dti_cos_cnt, uint32_t pm_ver, uint32_t intent,
 	  struct dtx_handle *dth);
 int
@@ -183,7 +174,6 @@ int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
  * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
- * \param punch		[IN]	For punch operation or not.
  * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
@@ -199,7 +189,7 @@ int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
  */
 int dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
 		      struct dtx_id *dti, uint64_t dkey_hash,
-		      bool punch, daos_epoch_t *epoch);
+		      daos_epoch_t *epoch);
 
 /* XXX: The higher 48 bits of HLC is the wall clock, the lower bits are for
  *	logic clock that will be hidden when divided by NSEC_PER_SEC.

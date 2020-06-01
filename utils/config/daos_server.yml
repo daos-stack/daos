@@ -1,7 +1,7 @@
 ## DAOS server configuration file.
 #
 ## Location of this configuration file is determined by first checking for the
-## path specified through the -f option of the daos_server command line.
+## path specified through the -o option of the daos_server command line.
 ## Otherwise, /etc/daos_server.conf is used.
 #
 #

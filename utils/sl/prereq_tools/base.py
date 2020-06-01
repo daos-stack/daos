@@ -678,6 +678,7 @@ class PreReqComponent():
         if self.__env['PLATFORM'] == 'darwin':
             libtoolize = 'glibtoolize'
 
+        self.__dry_run = GetOption('no_exec')
         self.add_options()
         self.__setup_unit_test_builders()
         self.__env.AddMethod(append_if_supported, "AppendIfSupported")
@@ -689,7 +690,7 @@ class PreReqComponent():
         self.__parse_build_deps()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
-        warning_level = GetOption('warning_level')
+        warning_level = self.__env.subst("$WARNING_LEVEL")
         pre_path = GetOption('prepend_path')
         if pre_path:
             old_path = self.__env['ENV']['PATH']
@@ -701,7 +702,6 @@ class PreReqComponent():
         if self.__check_only:
             # This is mostly a no_exec request.
             SetOption('no_exec', True)
-        self.__dry_run = GetOption('no_exec')
         if config_file is None:
             config_file = GetOption('build_config')
 
@@ -752,6 +752,7 @@ class PreReqComponent():
                                    'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
+        self._setup_compiler(warning_level)
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       ('PREBUILT_PREFIX',
@@ -769,9 +770,13 @@ class PreReqComponent():
                                    'Location of your GOPATH for the build',
                                    "%s/go" % self.__build_dir,
                                    PathVariable.PathIsDirCreate),
-                      PathVariable('BUILD_DIR',
-                                   'Location of temporary build files',
-                                   'build', PathVariable.PathIsDirCreate))
+                      PathVariable('BUILD_ROOT',
+                                   'Alternative build root dierctory',
+                                   "build", PathVariable.PathIsDirCreate))
+        bdir = self._setup_build_type()
+        self.__env["BUILD_DIR"] = bdir
+        if not os.path.exists(bdir):
+            os.makedirs(bdir)
         self.setup_path_var('PREFIX')
         self.setup_path_var('BUILD_DIR')
         self.setup_path_var('PREBUILT_PREFIX', True)
@@ -779,9 +784,9 @@ class PreReqComponent():
         self.setup_path_var('SRC_PREFIX', True)
         self.setup_path_var('GOPATH')
         self.__build_info = BuildInfo()
+        self.__build_info.update("BUILD_DIR", self.__env.subst("$BUILD_DIR"))
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
 
-        self._setup_compiler(warning_level)
         self.setup_parallel_build()
 
         self.config_file = config_file
@@ -810,6 +815,15 @@ class PreReqComponent():
         return True
 
 # pylint: enable=too-many-branches
+
+    def _setup_build_type(self):
+        """set build type"""
+        self.add_opts(EnumVariable('BUILD_TYPE', "Set the build type",
+                                   'dev', ['dev', 'debug', 'release'],
+                                   ignorecase=1))
+
+        return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
+
     def _setup_intelc(self):
         """Setup environment to use intel compilers"""
         env = self.__env.Clone(tools=['intelc'])
@@ -899,8 +913,7 @@ class PreReqComponent():
         """Retrieve the Config File"""
         return self.config_file
 
-    @staticmethod
-    def add_options():
+    def add_options(self):
         """Add common options to environment"""
 
         AddOption('--require-optional',
@@ -951,15 +964,11 @@ class PreReqComponent():
                   default='en_US.UTF8',
                   help='locale to use for building. [%default]')
 
-        # This option sets a hint as to if -Werror should be used.
-        AddOption('--warning-level',
-                  dest='warning_level',
-                  type='choice',
-                  choices=['warning', 'error'],
-                  default='error',
-                  help='Treatment for a compiler warning.  ' \
-                       '(warning|error} [error]')
         SetOption("implicit_cache", True)
+
+        self.add_opts(EnumVariable('WARNING_LEVEL', "Set default warning level",
+                                   'error', ['warning', 'warn', 'error'],
+                                   ignorecase=1))
 
     def __setup_unit_test_builders(self):
         """Setup unit test builders for general use"""
@@ -1398,19 +1407,11 @@ class _Component():
             return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
-        patches = self.resolve_patches()
         if self.src_exists():
             self.prereqs.update_src_path(self.name, self.src_path)
             print('Using existing sources at %s for %s' \
                 % (self.src_path, self.name))
-            if self.prereqs.build_deps:
-                for patch in patches:
-                    # Apply patch to existing source.
-                    print("Applying patch %s" % (patch))
-                    commands = ['patch -p 1 -N -t < %s ; if [ $? -gt 1 ]; then '
-                                'false; else true; fi;' % (patch)]
-                    if not RUNNER.run_commands(commands, subdir=self.src_path):
-                        raise BuildFailure(patch)
+            # NB: Don't apply patches to existing sources
             return
 
         if not self.retriever:
@@ -1424,6 +1425,7 @@ class _Component():
 
         print('Downloading source for %s' % self.name)
         self._delete_old_file(self.crc_file)
+        patches = self.resolve_patches()
         self.retriever.get(self.src_path, commit_sha=commit_sha,
                            patches=patches, branch=branch)
 

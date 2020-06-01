@@ -66,7 +66,7 @@ type mockDrpcClient struct {
 	cfg              mockDrpcClientConfig
 	CloseCallCount   int
 	SendMsgInputCall *drpc.Call
-	Calls            []int32
+	Calls            []drpc.Method
 }
 
 func (c *mockDrpcClient) IsConnected() bool {
@@ -84,7 +84,11 @@ func (c *mockDrpcClient) Close() error {
 
 func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
 	c.SendMsgInputCall = call
-	c.Calls = append(c.Calls, call.GetMethod())
+	method, err := drpc.ModuleMgmt.GetMethod(call.GetMethod())
+	if err != nil {
+		return nil, err
+	}
+	c.Calls = append(c.Calls, method)
 
 	<-time.After(c.cfg.ResponseDelay)
 

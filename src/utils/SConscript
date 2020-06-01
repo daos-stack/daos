@@ -11,10 +11,10 @@ def scons():
 
     daos_extra_files = denv.Object('daos_hdlr.c')
 
-    dcont = daos_build.program(denv, 'dcont', 'dcont.c', LIBS=libs)
+    dmg_old = daos_build.program(denv, 'dmg_old', 'dmg.c', LIBS=libs)
     daos = daos_build.program(denv, 'daos',
                               ['daos.c', daos_extra_files], LIBS=libs)
-    denv.Install('$PREFIX/bin/', dcont)
+    denv.Install('$PREFIX/bin/', dmg_old)
     denv.Install('$PREFIX/bin/', daos)
 
 if __name__ == "SCons.Script":

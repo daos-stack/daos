@@ -247,10 +247,16 @@ typedef struct {
 	/** type of akey value (SV or AR)*/
 	daos_iod_type_t		 iom_type;
 	/**
-	 * Number of extents in the mapping, that's the size of all the
-	 * external arrays listed below. 1 for SV.
+	 * Number of elements allocated in iom_recxs.
 	 */
 	unsigned int		 iom_nr;
+	/**
+	 * Number of extents in the mapping. If iom_nr_out is greater than
+	 * iom_nr, iom_recxs will still be populated, but it will be a
+	 * truncated list.
+	 * 1 for SV.
+	 */
+	unsigned int		 iom_nr_out;
 	/** Size of the single value or the record size */
 	daos_size_t		 iom_size;
 	/**
@@ -264,7 +270,9 @@ typedef struct {
 	 * or there is only one returned recx.
 	 */
 	daos_recx_t		 iom_recx_hi;
-	/** All the returned recxs within the requested extents */
+	/** All the returned recxs within the requested extents. Must be
+	 * allocated and freed by caller.
+	 */
 	daos_recx_t		*iom_recxs;
 } daos_iom_t;
 
@@ -832,6 +840,50 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  */
 int
 daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch);
+
+/**
+ * Provide a function for objects to split an anchor to be able to execute a
+ * parallel listing/enumeration. This routine suggests the optimal number of
+ * anchors to use instead of just 1 and optionally returns all those
+ * anchors. The user would allocate the array of anchors after querying the
+ * number of anchors needed. Alternatively, user does not provide an array and
+ * can call daos_obj_anchor_set() for every anchor to set.
+ *
+ * The user could suggest how many anchors to split the iteration over. This
+ * feature is not supported yet.
+ *
+ * \param[in]	oh	Open object handle.
+ * \param[in/out]
+ *		nr	[in]: Number of anchors requested and allocated in
+ *			\a anchors. Pass 0 for DAOS to recommend split num.
+ *			[out]: Number of anchors recommended if 0 is passed in.
+ * \param[in]	anchors	Optional array of anchors that are split.
+ *
+ * \return		These values will be returned:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors);
+
+/**
+ * Set an anchor with an index based on split done with daos_obj_anchor_split.
+ * The anchor passed will be re-intialized and set to start and finish iteration
+ * based on the specified index.
+ *
+ * \param[in]   oh	Open object handle.
+ * \param[in]	index	Index of set this anchor for iteration.
+ * \param[in,out]
+ *		anchor	Hash anchor to set.
+ *
+ * \return		These values will be returned:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor);
 
 #if defined(__cplusplus)
 }

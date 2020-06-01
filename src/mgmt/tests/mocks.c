@@ -384,6 +384,60 @@ mock_ds_mgmt_pool_query_setup(void)
 	memset(&ds_mgmt_pool_query_info_out, 0, sizeof(daos_pool_info_t));
 }
 
+int	ds_mgmt_cont_set_owner_return;
+uuid_t	ds_mgmt_cont_set_owner_pool;
+uuid_t	ds_mgmt_cont_set_owner_cont;
+char	*ds_mgmt_cont_set_owner_user;
+char	*ds_mgmt_cont_set_owner_group;
+int
+ds_mgmt_cont_set_owner(uuid_t pool_uuid, uuid_t cont_uuid, const char *user,
+		       const char *group)
+{
+	uuid_copy(ds_mgmt_cont_set_owner_pool, pool_uuid);
+	uuid_copy(ds_mgmt_cont_set_owner_cont, cont_uuid);
+	if (user != NULL)
+		D_STRNDUP(ds_mgmt_cont_set_owner_user, user,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	if (group != NULL)
+		D_STRNDUP(ds_mgmt_cont_set_owner_group, group,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+
+	return ds_mgmt_cont_set_owner_return;
+}
+
+void
+mock_ds_mgmt_cont_set_owner_setup(void)
+{
+	ds_mgmt_cont_set_owner_return = 0;
+
+	uuid_clear(ds_mgmt_cont_set_owner_pool);
+	uuid_clear(ds_mgmt_cont_set_owner_cont);
+	ds_mgmt_cont_set_owner_user = NULL;
+	ds_mgmt_cont_set_owner_group = NULL;
+}
+void mock_ds_mgmt_cont_set_owner_teardown(void)
+{
+	D_FREE(ds_mgmt_cont_set_owner_user);
+	D_FREE(ds_mgmt_cont_set_owner_group);
+}
+
+int     ds_mgmt_target_update_return;
+uuid_t  ds_mgmt_target_update_uuid;
+int
+ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
+				struct pool_target_id_list *target_list,
+				pool_comp_state_t state)
+{
+	uuid_copy(ds_mgmt_target_update_uuid, pool_uuid);
+	return ds_mgmt_target_update_return;
+}
+
+void
+mock_ds_mgmt_exclude_setup(void)
+{
+	ds_mgmt_target_update_return = 0;
+	uuid_clear(ds_mgmt_target_update_uuid);
+}
 /*
  * Stubs, to avoid linker errors
  * TODO: Implement mocks when there is a test that uses these
@@ -413,7 +467,7 @@ ds_rsvc_get_md_cap(void)
 }
 
 int
-ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
+ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp, bool all_ranks)
 {
 	return 0;
 }
@@ -435,13 +489,6 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 
 int
 ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
-{
-	return 0;
-}
-
-int
-ds_mgmt_pool_reintegrate(uuid_t pool_uuid, uint32_t reint_rank,
-		struct pool_target_id_list *reint_list)
 {
 	return 0;
 }

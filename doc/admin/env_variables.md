@@ -45,16 +45,29 @@ Environment variables in this section only apply to the server-side.
 |DAOS\_START\_POOL\_SVC|Determines whether to start existing pool services when starting a daos\_server. BOOL. Default to true.|
 |DAOS\_IMPLICIT\_PURGE|Whether to aggregate unreferenced epochs. BOOL. Default to false.|
 |DAOS\_PURGE\_CREDITS|The number of credits for probing object trees when aggregating unreferenced epochs. INTEGER. Default to 1000.|
-                               
+|CRT\_DISABLE\_MEM\_PIN|Disable memory pinning workaround on a server side. BOOL. Default to 0.|
+
   --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+## Server and Client
+
+Environment variables in this section apply to both server-side and client.
+
+|Variable|Description|
+|----|----|
+|FI\_OFI\_RXM\_USE\_SRX|Enable shared receive buffers for RXM-based providers (verbs, tcp). BOOL. Auto-defaults to 1.|
+|FI\_UNIVERSE\_SIZE|Sets expected universe size in OFI layer to be more than expected number of clients. INTEGER. Auto-defaults to 2048.|
+
 
 ## Client
 
 Environment variables in this section only apply to the client-side.
 
 |Variable|Description|
-|----|----| 
-|N/A |N/A|
+|----|----|
+|FI\_MR\_CACHE\_MAX\_COUNT|Enable MR caching in OFI layer. Recommended to be set to 0 (disable) when CRT\_DISABLE\_MEM\_PIN is NOT set to 1. INTEGER. Default to unset.|
+
 
 ## Debug System (Client & Server)
 |Variable |Description|
@@ -64,5 +77,5 @@ Environment variables in this section only apply to the client-side.
 |DD\_STDERR|Used to specify the priority level to output to stderr. Options in decreasing priority level order: FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG. By default, all CRIT and more severe DAOS messages will log to stderr ("DD\_STDERR=CRIT"), and the default for CaRT/GURT is FATAL.|
 |D\_LOG\_MASK|Used to specify what type/level of logging will be present for either all of the registered subsystems or a select few. Options in decreasing priority level order: FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG. DEBUG option is used to enable all logging (debug messages as well as all higher priority level messages). Note that if D\_LOG\_MASK is not set, it will default to logging all messages excluding debug ("D\_LOG\_MASK=INFO"). EX: "D\_LOG\_MASK=DEBUG" This will set the logging level for all facilities to DEBUG, meaning that all debug messages, as well as higher priority messages will be logged (INFO, NOTE, WARN, ERR, CRIT, FATAL) EX: "D\_LOG\_MASK=DEBUG,MEM=ERR,RPC=ERR" This will set the logging level to DEBUG for all facilities except MEM & RPC (which will now only log ERR and higher priority level messages, skipping all DEBUG, INFO, NOTE & WARN messages)|
 |DD\_MASK|Used to enable different debug streams for finer-grained debug messages, essentially allowing the user to specify an area of interest to debug (possibly involving many different subsystems) as opposed to parsing through many lines of generic DEBUG messages. All debug streams will be enabled by default ("DD\_MASK=all"). Single debug masks can be set ("DD\_MASK=trace") or multiple masks ("DD\_MASK=trace,test,mgmt"). Note that since these debug streams are strictly related to the debug log messages, DD\_LOG\_MASK must be set to DEBUG. Priority messages higher than DEBUG will still be logged for all facilities unless otherwise specified by D\_LOG\_MASK (not affected by enabling debug masks).|
- 
+
 

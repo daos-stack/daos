@@ -36,6 +36,7 @@
 #include <uuid/uuid.h>
 #include "../acl.pb-c.h"
 #include "../pool.pb-c.h"
+#include "../cont.pb-c.h"
 #include "../srv.pb-c.h"
 #include "../drpc_internal.h"
 #include "mocks.h"
@@ -48,6 +49,7 @@
 #define UUID_STR_LEN	37
 #endif
 
+static uint32_t		TEST_IDXS[] = {0, 1, 2};
 static const char	*TEST_ACES[] = {"A::OWNER@:rw",
 					"A::niceuser@:rw",
 					"A:G:GROUP@:r"};
@@ -108,8 +110,9 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_get_attach_info);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_join);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_create);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_reintegrate);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_destroy);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_exclude);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_reintegrate);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_get_acl);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_overwrite_acl);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_update_acl);
@@ -121,6 +124,7 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_list_pools);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_list_cont);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_set_prop);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_cont_set_owner);
 }
 
 static daos_prop_t *
@@ -1507,6 +1511,111 @@ test_drpc_pool_create_invalid_acl(void **state)
 }
 
 /*
+ * Pool exclude test setup
+ */
+static int
+drpc_exclude_setup(void **state)
+{
+	mock_ds_mgmt_exclude_setup();
+	return 0;
+}
+
+/*
+ * dRPC pool exclude tests
+ */
+static void
+pack_pool_exclude_req(Drpc__Call *call, Mgmt__PoolExcludeReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__pool_exclude_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_exclude_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
+{
+	Mgmt__PoolExcludeReq req = MGMT__POOL_EXCLUDE_REQ__INIT;
+
+	req.uuid = uuid;
+	req.n_targetidx = 1;
+	req.rank = rank;
+	req.targetidx = TEST_IDXS;
+	pack_pool_exclude_req(call, &req);
+}
+
+static void
+expect_drpc_exclude_resp_with_error(Drpc__Response *resp, int exp_error)
+{
+	Mgmt__PoolExcludeResp	*pc_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pc_resp = mgmt__pool_exclude_resp__unpack(NULL, resp->body.len,
+						 resp->body.data);
+	assert_non_null(pc_resp);
+	assert_int_equal(pc_resp->status, exp_error);
+
+	mgmt__pool_exclude_resp__free_unpacked(pc_resp, NULL);
+}
+
+static void
+test_drpc_exclude_bad_uuid(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_exclude_drpc_call(&call, "BAD", 0);
+
+	ds_mgmt_drpc_pool_exclude(&call, &resp);
+
+	expect_drpc_exclude_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_exclude_mgmt_svc_fails(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_exclude_drpc_call(&call, TEST_UUID, 0);
+	ds_mgmt_target_update_return = -DER_UNKNOWN;
+
+	ds_mgmt_drpc_pool_exclude(&call, &resp);
+	expect_drpc_exclude_resp_with_error(&resp,
+					       ds_mgmt_target_update_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_exclude_success(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_exclude_drpc_call(&call, TEST_UUID, 0);
+	ds_mgmt_drpc_pool_exclude(&call, &resp);
+
+	expect_drpc_exclude_resp_with_error(&resp, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
  * dRPC pool reintegrate tests
  */
 static void
@@ -1658,6 +1767,172 @@ test_drpc_prep_shutdown_success(void **state)
 	D_FREE(resp.body.data);
 }
 
+/*
+ * dRPC cont set owner setup/teardown
+ */
+
+static int
+drpc_cont_set_owner_setup(void **state)
+{
+	mock_ds_mgmt_cont_set_owner_setup();
+
+	return 0;
+}
+
+static int
+drpc_cont_set_owner_teardown(void **state)
+{
+	mock_ds_mgmt_cont_set_owner_teardown();
+
+	return 0;
+}
+
+/*
+ * dRPC cont set owner tests
+ */
+
+static void
+setup_cont_set_owner_drpc_call(Drpc__Call *call, Mgmt__ContSetOwnerReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__cont_set_owner_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__cont_set_owner_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+expect_drpc_cont_set_owner_resp_with_status(Drpc__Response *resp,
+					   int expected_err)
+{
+	Mgmt__ContSetOwnerResp *payload_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	payload_resp = mgmt__cont_set_owner_resp__unpack(NULL, resp->body.len,
+							 resp->body.data);
+	assert_non_null(payload_resp);
+	assert_int_equal(payload_resp->status, expected_err);
+
+	mgmt__cont_set_owner_resp__free_unpacked(payload_resp, NULL);
+}
+
+static void
+test_drpc_cont_set_owner_bad_pool_uuid(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__ContSetOwnerReq	req = MGMT__CONT_SET_OWNER_REQ__INIT;
+
+	req.pooluuid = "this isn't really a uuid";
+	req.contuuid = "11111111-1111-1111-1111-111111111111";
+	req.owneruser = "user@";
+	req.ownergroup = "group@";
+
+	setup_cont_set_owner_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_cont_set_owner(&call, &resp);
+
+	expect_drpc_cont_set_owner_resp_with_status(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_cont_set_owner_bad_cont_uuid(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__ContSetOwnerReq	req = MGMT__CONT_SET_OWNER_REQ__INIT;
+
+	req.pooluuid = "11111111-1111-1111-1111-111111111111";
+	req.contuuid = "this isn't really a uuid";
+	req.owneruser = "user@";
+	req.ownergroup = "group@";
+
+	setup_cont_set_owner_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_cont_set_owner(&call, &resp);
+
+	expect_drpc_cont_set_owner_resp_with_status(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_cont_set_owner_failed(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__ContSetOwnerReq	req = MGMT__CONT_SET_OWNER_REQ__INIT;
+	int			exp_rc = -DER_UNKNOWN;
+
+	req.pooluuid = "11111111-1111-1111-1111-111111111111";
+	req.contuuid = "22222222-2222-2222-2222-222222222222";
+	req.owneruser = "user@";
+	req.ownergroup = "group@";
+
+	setup_cont_set_owner_drpc_call(&call, &req);
+	ds_mgmt_cont_set_owner_return = exp_rc;
+
+	ds_mgmt_drpc_cont_set_owner(&call, &resp);
+
+	expect_drpc_cont_set_owner_resp_with_status(&resp, exp_rc);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_cont_set_owner_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__ContSetOwnerReq	req = MGMT__CONT_SET_OWNER_REQ__INIT;
+	char			*pool_uuid_str;
+	uuid_t			pool_uuid;
+	char			*cont_uuid_str;
+	uuid_t			cont_uuid;
+
+	pool_uuid_str = "11111111-1111-1111-1111-111111111111";
+	uuid_parse(pool_uuid_str, pool_uuid);
+	cont_uuid_str = "22222222-2222-2222-2222-222222222222";
+	uuid_parse(cont_uuid_str, cont_uuid);
+
+	req.pooluuid = pool_uuid_str;
+	req.contuuid = cont_uuid_str;
+	req.owneruser = "user@";
+	req.ownergroup = "group@";
+
+	setup_cont_set_owner_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_cont_set_owner(&call, &resp);
+
+	expect_drpc_cont_set_owner_resp_with_status(&resp, 0);
+
+	/* Verify mgmt_cont_set_owner called with correct params */
+	assert_int_equal(uuid_compare(pool_uuid, ds_mgmt_cont_set_owner_pool),
+			 0);
+	assert_int_equal(uuid_compare(cont_uuid, ds_mgmt_cont_set_owner_cont),
+			 0);
+	assert_non_null(ds_mgmt_cont_set_owner_user);
+	assert_string_equal(req.owneruser, ds_mgmt_cont_set_owner_user);
+	assert_non_null(ds_mgmt_cont_set_owner_group);
+	assert_string_equal(req.ownergroup, ds_mgmt_cont_set_owner_group);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
 #define ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
 						drpc_pool_acl_setup, \
 						drpc_pool_acl_teardown)
@@ -1678,6 +1953,9 @@ test_drpc_prep_shutdown_success(void **state)
 #define QUERY_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_pool_query_setup)
 
+#define EXCLUDE_TEST(x)	cmocka_unit_test_setup(x, \
+						drpc_exclude_setup)
+
 #define REINTEGRATE_TEST(x)	cmocka_unit_test(x)
 
 #define POOL_CREATE_TEST(x)	cmocka_unit_test(x)
@@ -1685,6 +1963,10 @@ test_drpc_prep_shutdown_success(void **state)
 #define PING_RANK_TEST(x)	cmocka_unit_test(x)
 
 #define PREP_SHUTDOWN_TEST(x)	cmocka_unit_test(x)
+
+#define CONT_SET_OWNER_TEST(x) cmocka_unit_test_setup_teardown(x, \
+						drpc_cont_set_owner_setup, \
+						drpc_cont_set_owner_teardown)
 
 int
 main(void)
@@ -1720,6 +2002,9 @@ main(void)
 			test_drpc_pool_set_prop_invalid_value_type),
 		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_uuid),
 		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_success),
+		EXCLUDE_TEST(test_drpc_exclude_bad_uuid),
+		EXCLUDE_TEST(test_drpc_exclude_mgmt_svc_fails),
+		EXCLUDE_TEST(test_drpc_exclude_success),
 		REINTEGRATE_TEST(test_drpc_reintegrate_bad_uuid),
 		QUERY_TEST(test_drpc_pool_query_bad_uuid),
 		QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),
@@ -1730,6 +2015,10 @@ main(void)
 		POOL_CREATE_TEST(test_drpc_pool_create_invalid_acl),
 		PING_RANK_TEST(test_drpc_ping_rank_success),
 		PREP_SHUTDOWN_TEST(test_drpc_prep_shutdown_success),
+		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_bad_cont_uuid),
+		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_bad_pool_uuid),
+		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_failed),
+		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_success),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

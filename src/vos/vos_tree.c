@@ -379,6 +379,15 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static umem_off_t
+ktr_node_alloc(struct btr_instance *tins, int size)
+{
+	/* Dynamic root could have smaller size */
+	if (size == umem_slab_usize(&tins->ti_umm, VOS_SLAB_KEY_NODE))
+		return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_KEY_NODE);
+	return umem_zalloc(&tins->ti_umm, size);
+}
+
 static btr_ops_t key_btr_ops = {
 	.to_rec_msize		= ktr_rec_msize,
 	.to_hkey_size		= ktr_hkey_size,
@@ -391,6 +400,7 @@ static btr_ops_t key_btr_ops = {
 	.to_rec_free		= ktr_rec_free,
 	.to_rec_fetch		= ktr_rec_fetch,
 	.to_rec_update		= ktr_rec_update,
+	.to_node_alloc		= ktr_node_alloc,
 };
 
 /**
@@ -580,6 +590,7 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 static int
 svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
+	struct svt_hkey *skey = (struct svt_hkey *)&rec->rec_hkey[0];
 	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
 	bio_addr_t	   *addr = &irec->ir_ex_addr;
 
@@ -587,7 +598,7 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		return 0;
 
 	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
-				  irec->ir_dtx, rec->rec_off);
+				  irec->ir_dtx, skey->sv_epoch, rec->rec_off);
 
 	/* SCM value is stored together with vos_irec_df */
 	if (addr->ba_type == DAOS_MEDIA_NVME) {
@@ -650,11 +661,22 @@ static int
 svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 		       uint32_t intent)
 {
+	struct svt_hkey *skey = (struct svt_hkey *)&rec->rec_hkey[0];
 	struct vos_irec_df	*svt;
 
 	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-					  svt->ir_dtx, intent, DTX_RT_SVT);
+					  svt->ir_dtx, skey->sv_epoch, intent,
+					  DTX_RT_SVT);
+}
+
+static umem_off_t
+svt_node_alloc(struct btr_instance *tins, int size)
+{
+	/* Dynamic root could have smaller size */
+	if (size == umem_slab_usize(&tins->ti_umm, VOS_SLAB_SV_NODE))
+		return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_SV_NODE);
+	return umem_zalloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t singv_btr_ops = {
@@ -667,6 +689,7 @@ static btr_ops_t singv_btr_ops = {
 	.to_rec_fetch		= svt_rec_fetch,
 	.to_rec_update		= svt_rec_update,
 	.to_check_availability	= svt_check_availability,
+	.to_node_alloc		= svt_node_alloc,
 };
 
 /**
@@ -712,15 +735,15 @@ evt_dop_bio_free(struct umem_instance *umm, struct evt_desc *desc,
 }
 
 static int
-evt_dop_log_status(struct umem_instance *umm, struct evt_desc *desc,
-		   int intent, void *args)
+evt_dop_log_status(struct umem_instance *umm, daos_epoch_t epoch,
+		   struct evt_desc *desc, int intent, void *args)
 {
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
 	D_ASSERT(coh.cookie != 0);
 	return vos_dtx_check_availability(umm, coh, desc->dc_dtx,
-					  intent, DTX_RT_EVT);
+					  epoch, intent, DTX_RT_EVT);
 }
 
 int
@@ -731,12 +754,13 @@ evt_dop_log_add(struct umem_instance *umm, struct evt_desc *desc, void *args)
 }
 
 static int
-evt_dop_log_del(struct umem_instance *umm, struct evt_desc *desc, void *args)
+evt_dop_log_del(struct umem_instance *umm, daos_epoch_t epoch,
+		struct evt_desc *desc, void *args)
 {
 	daos_handle_t	coh;
 
 	coh.cookie = (unsigned long)args;
-	vos_dtx_deregister_record(umm, coh, desc->dc_dtx,
+	vos_dtx_deregister_record(umm, coh, desc->dc_dtx, epoch,
 				  umem_ptr2off(umm, desc));
 	return 0;
 }
@@ -1034,12 +1058,9 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			    info, ts_set, true);
 
 	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
-		rc = -DER_AGAIN;
+		rc = -DER_TX_RESTART;
 done:
-	if (rc != 0)
-		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 "Failed to punch key: "DF_RC"\n",
-			 DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

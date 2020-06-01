@@ -68,12 +68,6 @@ var (
 			State:    &MockState,
 		},
 	}
-	MockACL = &common.MockACLResult{
-		Acl: []string{
-			"A::OWNER@:rw",
-			"A::GROUP@:r",
-		},
-	}
 	MockErr = errors.New("unknown failure")
 )
 
@@ -152,12 +146,8 @@ func (m *mgmtCtlNetworkScanDevicesClient) Recv() (*ctlpb.DeviceScanReply, error)
 	return &ctlpb.DeviceScanReply{}, nil
 }
 
-func (m *mockMgmtCtlClient) NetworkScanDevices(ctx context.Context, in *ctlpb.DeviceScanRequest, o ...grpc.CallOption) (ctlpb.MgmtCtl_NetworkScanDevicesClient, error) {
-	return &mgmtCtlNetworkScanDevicesClient{}, nil
-}
-
-func (m *mockMgmtCtlClient) NetworkListProviders(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
-	return &ctlpb.ProviderListReply{}, nil
+func (m *mockMgmtCtlClient) NetworkScan(ctx context.Context, in *ctlpb.NetworkScanReq, o ...grpc.CallOption) (*ctlpb.NetworkScanResp, error) {
+	return &ctlpb.NetworkScanResp{}, nil
 }
 
 func (m *mockMgmtCtlClient) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq, o ...grpc.CallOption) (*ctlpb.SystemQueryResp, error) {
@@ -166,6 +156,10 @@ func (m *mockMgmtCtlClient) SystemQuery(ctx context.Context, req *ctlpb.SystemQu
 
 func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq, o ...grpc.CallOption) (*ctlpb.SystemStopResp, error) {
 	return &ctlpb.SystemStopResp{}, nil
+}
+
+func (m *mockMgmtCtlClient) SystemResetFormat(ctx context.Context, req *ctlpb.SystemResetFormatReq, o ...grpc.CallOption) (*ctlpb.SystemResetFormatResp, error) {
+	return &ctlpb.SystemResetFormatResp{}, nil
 }
 
 func (m *mockMgmtCtlClient) SystemStart(ctx context.Context, req *ctlpb.SystemStartReq, o ...grpc.CallOption) (*ctlpb.SystemStartResp, error) {
@@ -275,7 +269,7 @@ func newMockConnect(log logging.Logger,
 	state connectivity.State, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems ScmNamespaces, mountResults ScmMountResults,
-	scanRet error, formatRet error, killRet error, connectRet error, ACLRet *common.MockACLResult,
+	scanRet error, formatRet error, killRet error, connectRet error,
 	listPoolsRet *common.MockListPoolsResult) *connList {
 
 	return &connList{
@@ -297,7 +291,6 @@ func newMockConnect(log logging.Logger,
 				formatRet:             formatRet,
 			},
 			svcClientCfg: MockMgmtSvcClientConfig{
-				ACLRet:       ACLRet,
 				ListPoolsRet: listPoolsRet,
 				KillErr:      killRet,
 			},
@@ -309,5 +302,5 @@ func defaultMockConnect(log logging.Logger) Connect {
 	return newMockConnect(
 		log, connectivity.Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
 		MockModuleResults, MockScmNamespaces, MockMountResults,
-		nil, nil, nil, nil, MockACL, nil)
+		nil, nil, nil, nil, nil)
 }

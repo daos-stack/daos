@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package bdev
 
 import (
@@ -172,6 +173,10 @@ func (b *spdkBackend) Scan() (storage.NvmeControllers, error) {
 }
 
 func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeController, error) {
+	if pciAddr == "" {
+		return nil, FaultBadPCIAddr("")
+	}
+
 	var spdkController *spdk.Controller
 	for _, bc := range bcs {
 		if bc.PCIAddr == pciAddr {
@@ -181,7 +186,7 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 	}
 
 	if spdkController == nil {
-		return nil, errors.Errorf("unable to resolve %s after format", pciAddr)
+		return nil, FaultPCIAddrNotFound(pciAddr)
 	}
 
 	scs, err := convertControllers([]spdk.Controller{*spdkController})
@@ -196,32 +201,20 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 }
 
 func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
-	if pciAddr == "" {
-		return nil, FaultFormatBadPciAddr("")
-	}
-
-	controllers, err := b.Scan()
-	if err != nil {
+	if err := b.Init(); err != nil {
 		return nil, err
 	}
 
-	foundAddr := false
-	for _, c := range controllers {
-		if c.PciAddr == pciAddr {
-			foundAddr = true
-			break
-		}
-	}
-
-	if !foundAddr {
-		return nil, FaultFormatBadPciAddr(pciAddr)
+	ctrlr, err := getController(pciAddr, b.binding.controllers)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := b.binding.Format(b.log, pciAddr); err != nil {
 		return nil, err
 	}
 
-	return getController(pciAddr, b.binding.controllers)
+	return ctrlr, nil
 }
 
 func (b *spdkBackend) Prepare(nrHugePages int, targetUser, pciWhiteList string) error {

@@ -37,6 +37,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -124,7 +125,7 @@ type (
 		unaryRequest
 		ScmBytes   uint64
 		NvmeBytes  uint64
-		Ranks      []uint32
+		Ranks      []system.Rank
 		NumSvcReps uint32
 		Sys        string
 		User       string
@@ -244,7 +245,10 @@ type (
 		UUID            string
 		TotalTargets    uint32
 		ActiveTargets   uint32
+		TotalNodes      uint32
 		DisabledTargets uint32
+		Version         uint32
+		Leader          uint32
 		Rebuild         *PoolRebuildStatus
 		Scm             *StorageUsageStats
 		Nvme            *StorageUsageStats
@@ -376,4 +380,88 @@ func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropRe
 	}
 
 	return pspr, nil
+}
+
+// PoolExcludeReq struct contains request
+type PoolExcludeReq struct {
+	unaryRequest
+	msRequest
+	UUID      string
+	Rank      system.Rank
+	Targetidx []uint32
+}
+
+// ExcludeResp has no other parameters other than success/failure for now.
+
+// PoolExclude will set a pool target for a specific rank to down.
+// This should automatically start the rebuildiing process.
+// Returns an error (including any DER code from DAOS).
+func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, &mgmtpb.PoolExcludeReq{
+			Uuid:      req.UUID,
+			Rank:      req.Rank.Uint32(),
+			Targetidx: req.Targetidx,
+		})
+	})
+
+	rpcClient.Debugf("Exclude DAOS pool target request: %v\n", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool Exclude failed")
+	}
+	rpcClient.Debugf("Exclude DAOS pool target response: %s\n", msResp)
+
+	return nil
+}
+
+// PoolReintegrateReq struct contains request
+type PoolReintegrateReq struct {
+	unaryRequest
+	msRequest
+	UUID      string
+	Rank      system.Rank
+	Targetidx []uint32
+}
+
+// ReintegrateResp has no other parameters other than success/failure for now.
+
+// PoolReintegrate will set a pool target for a specific rank back to up.
+// This should automatically start the reintegration process.
+// Returns an error (including any DER code from DAOS).
+func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, &mgmtpb.PoolReintegrateReq{
+			Uuid:      req.UUID,
+			Rank:      req.Rank.Uint32(),
+			Targetidx: req.Targetidx,
+		})
+	})
+
+	rpcClient.Debugf("Reintegrate DAOS pool target request: %v\n", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool reintegrate failed")
+	}
+	rpcClient.Debugf("Reintegrate DAOS pool target response: %s\n", msResp)
+
+	return nil
 }

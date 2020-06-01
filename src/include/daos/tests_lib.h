@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,5 +189,21 @@ dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
 void
 dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 	uint32_t count, char *d, ...);
+
+#define DTS_CFG_MAX 128
+__attribute__ ((__format__(__printf__, 2, 3)))
+static inline void
+dts_create_config(char buf[DTS_CFG_MAX], const char *format, ...)
+{
+	va_list	ap;
+	int	count;
+
+	va_start(ap, format);
+	count = vsnprintf(buf, DTS_CFG_MAX, format, ap);
+	va_end(ap);
+
+	if (count >= DTS_CFG_MAX)
+		buf[DTS_CFG_MAX - 1] = 0;
+}
 
 #endif /* __DAOS_TESTS_LIB_H__ */

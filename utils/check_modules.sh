@@ -56,8 +56,11 @@ if [ -z "$*" ]; then
     flist+=" -s $file "
   done
   # the functional test code
-  flist+=$(find src/tests/ftest/ -name \*.py | sort)
-  flist+=$(find src/client/pydaos/ -name \*.py | sort)
+  flist+=" $(find src/tests/ftest/ -name \*.py | sort)"
+  flist+=" $(find src/client/pydaos/ -name \*.py | sort)"
+  flist+=" $(find src/client/dfuse/test/ -name \*.py | sort)"
+  flist+=" $(find src/cart/ -name \*.py | sort)"
+  flist+=" $(find utils/ -name \*.py | sort)"
 else
   flist=$*
 fi

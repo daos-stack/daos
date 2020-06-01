@@ -243,6 +243,7 @@ async_disable(void **state)
 	return 0;
 }
 
+#if 0
 static inline int
 async_overlap(void **state)
 {
@@ -252,6 +253,7 @@ async_overlap(void **state)
 	arg->async   = true;
 	return 0;
 }
+#endif
 
 static inline int
 test_case_teardown(void **state)
@@ -337,6 +339,10 @@ void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			 bool discard);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt);
+
+void reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+				int failed_tgt);
+
 void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
 			   int *failed_tgts, int nr);
 
