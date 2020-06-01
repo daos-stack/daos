@@ -576,7 +576,7 @@ pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 			 uint32_t rank, pool_comp_state_t state)
 {
 	uuid_t				uuid;
-	struct pool_target_id_list	reint_list;
+	struct pool_target_id_list	target_id_list;
 	int				rc, i;
 
 	rc = uuid_parse(id, uuid);
@@ -586,20 +586,21 @@ pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 		return -DER_INVAL;
 	}
 
-	rc = pool_target_id_list_alloc(n_targetidx, &reint_list);
+	rc = pool_target_id_list_alloc(n_targetidx, &target_id_list);
 	if (rc)
 		return rc;
 
 	for (i = 0; i < n_targetidx; ++i)
-		reint_list.pti_ids[i].pti_id = targetidx[i];
+		target_id_list.pti_ids[i].pti_id = targetidx[i];
 
-	rc = ds_mgmt_pool_target_update_state(uuid, rank, &reint_list, state);
+	rc = ds_mgmt_pool_target_update_state(uuid, rank, &target_id_list,
+					      state);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", uuid,
 			DP_RC(rc));
 	}
 
-	pool_target_id_list_free(&reint_list);
+	pool_target_id_list_free(&target_id_list);
 	return rc;
 }
 
