@@ -34,6 +34,17 @@
 		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
 	} while (0)
 
+unsigned int
+daos_checksum_test_arg2type(char *str)
+{
+	int result = daos_str2csumcontprop(str);
+
+	if (result < 0)
+		fail_msg("Invalid csum type: %s", str);
+
+	return (unsigned int) result;
+}
+
 /** by default for replica object test */
 static daos_oclass_id_t dts_csum_oc = OC_SX;
 

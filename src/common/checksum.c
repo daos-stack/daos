@@ -124,6 +124,27 @@ daos_cont_csum_prop_is_enabled(uint16_t val)
 	return true;
 }
 
+int
+daos_str2csumcontprop(const char *value)
+{
+	if (!strcmp(value, "off"))
+		return DAOS_PROP_CO_CSUM_OFF;
+	else if (!strcmp(value, "crc16"))
+		return DAOS_PROP_CO_CSUM_CRC16;
+	else if (!strcmp(value, "crc32"))
+		return DAOS_PROP_CO_CSUM_CRC32;
+	else if (!strcmp(value, "crc64"))
+		return DAOS_PROP_CO_CSUM_CRC64;
+	else if (!strcmp(value, "sha1"))
+		return DAOS_PROP_CO_CSUM_SHA1;
+	else if (!strcmp(value, "sha256"))
+		return DAOS_PROP_CO_CSUM_SHA256;
+	else if (!strcmp(value, "sha512"))
+		return DAOS_PROP_CO_CSUM_SHA512;
+
+	return -DER_INVAL;
+}
+
 enum DAOS_CSUM_TYPE
 daos_contprop2csumtype(int contprop_csum_val)
 {
