@@ -1953,13 +1953,39 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx)
 	return bio_iod_sgl(ioc->ic_biod, idx);
 }
 
+/*
+ * XXX Dup these two helper functions for this moment, implement
+ * non-transactional umem_alloc/free() later.
+ */
+static inline umem_off_t
+umem_id2off(const struct umem_instance *umm, PMEMoid oid)
+{
+	if (OID_IS_NULL(oid))
+		return UMOFF_NULL;
+
+	return oid.off;
+}
+
+static inline PMEMoid
+umem_off2id(const struct umem_instance *umm, umem_off_t umoff)
+{
+	PMEMoid	oid;
+
+	if (UMOFF_IS_NULL(umoff))
+		return OID_NULL;
+
+	oid.pool_uuid_lo = umm->umm_pool_uuid_lo;
+	oid.off = umem_off2offset(umoff);
+
+	return oid;
+}
+
 /* Duplicate bio_sglist for landing RDMA transfer data */
 int
 vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 		   struct bio_sglist *bsgl_dup)
 {
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
-	umem_off_t		 umoff;
 	int			 i, rc;
 
 	D_ASSERT(!daos_handle_is_inval(ioh));
@@ -1975,22 +2001,28 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[i];
+		PMEMoid		 oid;
 
 		if (bio_iov2buf(biov) == NULL)
 			continue;
 
 		*biov_dup = *biov;
-		biov_dup->bi_addr.ba_dedup = false;
+		/* Original biov isn't deduped, don't duplicate buffer */
+		if (!biov->bi_addr.ba_dedup)
+			continue;
 
 		D_ASSERT(bio_iov2len(biov) != 0);
 		/* Support SCM only for this moment */
-		umoff = umem_alloc(vos_ioc2umm(ioc), bio_iov2len(biov));
-		if (UMOFF_IS_NULL(umoff)) {
+		rc = pmemobj_alloc(vos_ioc2umm(ioc)->umm_pool, &oid,
+				   bio_iov2len(biov), UMEM_TYPE_ANY, NULL,
+				   NULL);
+		if (rc) {
 			D_ERROR("Failed to alloc "DF_U64" bytes SCM\n",
 				bio_iov2len(biov));
 			return -DER_NOMEM;
 		}
-		biov_dup->bi_addr.ba_off = umem_off2offset(umoff);
+
+		biov_dup->bi_addr.ba_off = umem_id2off(vos_ioc2umm(ioc), oid);
 		biov_dup->bi_buf = umem_off2ptr(vos_ioc2umm(ioc),
 						bio_iov2off(biov_dup));
 	}
@@ -2007,10 +2039,16 @@ vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl)
 	D_ASSERT(!daos_handle_is_inval(ioh));
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
+		PMEMoid		 oid;
 
 		if (UMOFF_IS_NULL(bio_iov2off(biov)))
 			continue;
-		umem_free(vos_ioc2umm(ioc), bio_iov2off(biov));
+		/* Not duplicated buffer, don't free it */
+		if (!biov->bi_addr.ba_dedup)
+			continue;
+
+		oid = umem_off2id(vos_ioc2umm(ioc), bio_iov2off(biov));
+		pmemobj_free(&oid);
 	}
 }
 

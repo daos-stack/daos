@@ -295,6 +295,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			sgl = sgls[i];
 		} else {
 			struct bio_sglist *bsgl;
+			bool deduped_skip = true;
 
 			D_ASSERT(!daos_handle_is_inval(ioh));
 			bsgl = vos_iod_sgl_at(ioh, i);
@@ -304,11 +305,12 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 				if (rc)
 					break;
 				bsgl = &bsgls_dup[i];
+				deduped_skip = false;
 			}
 			D_ASSERT(bsgl != NULL);
 
 			sgl = &tmp_sgl;
-			rc = bio_sgl_convert(bsgl, sgl, true);
+			rc = bio_sgl_convert(bsgl, sgl, deduped_skip);
 			if (rc)
 				break;
 		}
@@ -1039,12 +1041,21 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 				continue;
 			}
 
+			/* Didn't use deduped extent */
+			if (!biov->bi_addr.ba_dedup) {
+				D_ASSERT(!biov_dup->bi_addr.ba_dedup);
+				continue;
+			}
+			D_ASSERT(biov_dup->bi_addr.ba_dedup);
+
 			D_ASSERT(bio_iov2len(biov) == bio_iov2len(biov_dup));
 			rc = memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
 				    bio_iov2len(biov));
 
-			if (rc == 0)	/* verify succeeded */
+			if (rc == 0) {	/* verify succeeded */
+				D_DEBUG(DB_IO, "Verify dedup succeeded\n");
 				continue;
+			}
 
 			/*
 			 * Replace the dedup addr in VOS tree with the temporal
