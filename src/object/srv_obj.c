@@ -1135,7 +1135,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				    orw->orw_sgls.ca_count);
 		}
 
-		if (daos_csummer_get_dedup(cont_hdl->sch_csummer) &&
+		if (rma && daos_csummer_get_dedup(cont_hdl->sch_csummer) &&
 		    daos_csummer_get_dedupverify(cont_hdl->sch_csummer)) {
 			/**
 			 * If dedped data need to be compared, then perform
