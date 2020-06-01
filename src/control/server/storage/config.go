@@ -102,6 +102,7 @@ const (
 	BdevClassMalloc BdevClass = "malloc"
 	BdevClassKdev   BdevClass = "kdev"
 	BdevClassFile   BdevClass = "file"
+	BdevClassVmd	BdevClass = "vmd"
 )
 
 // BdevClass specifies block device type for block device storage
@@ -119,7 +120,7 @@ func (b *BdevClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	// harness have no bdev entries and are expected to work.
 	case BdevClassNone:
 		*b = BdevClassNvme
-	case BdevClassNvme, BdevClassMalloc, BdevClassKdev, BdevClassFile:
+	case BdevClassNvme, BdevClassMalloc, BdevClassKdev, BdevClassFile, BdevClassVmd:
 		*b = bdevClass
 	default:
 		return errors.Errorf("bdev_class value %q not supported in config (nvme/malloc/kdev/file)", bdevClass)
@@ -149,7 +150,7 @@ func (bc *BdevConfig) Validate() error {
 }
 
 func (bc *BdevConfig) GetNvmeDevs() []string {
-	if bc.Class == BdevClassNvme {
+	if bc.Class == BdevClassNvme || bc.Class == BdevClassVmd {
 		return bc.DeviceList
 	}
 

@@ -137,7 +137,8 @@ func (p *Provider) Init(req InitRequest) error {
 // Scan attempts to perform a scan to discover NVMe components in the system.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	if p.shouldForward(req) {
-		return p.fwd.Scan(req)
+		// TODO: figure out reason for forwarding request
+		//return p.fwd.Scan(req)
 	}
 
 	cs, err := p.backend.Scan()
@@ -199,7 +200,7 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 		case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
 			res.DeviceResponses[dev].Formatted = true
 			p.log.Infof("%s format for non-NVMe bdev skipped (%s)", req.Class, dev)
-		case storage.BdevClassNvme:
+		case storage.BdevClassNvme, storage.BdevClassVmd:
 			p.log.Infof("%s format starting (%s)", req.Class, dev)
 			c, err := p.backend.Format(dev)
 			if err != nil {
