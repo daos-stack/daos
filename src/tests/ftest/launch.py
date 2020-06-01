@@ -192,7 +192,7 @@ def set_test_environment(args):
     os.environ["CRT_CTX_SHARE_ADDR"] = "0"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
 
-    # Update the default provider,domain based on the OFI_INTEFACE
+    # Update the default provider,domain based on the OFI_INTERFACE
     print("Before Environment:")
     for name in ("OFI_INTERFACE", "OFI_DOMAIN", "CRT_PHY_ADDR_STR"):
         print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
