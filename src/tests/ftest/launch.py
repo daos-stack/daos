@@ -786,9 +786,6 @@ def run_tests(test_files, tag_filter, args):
             if args.clean:
                 if not clean_logs(test_file["yaml"], args):
                     return 128
-            # Set prlimit
-            set_ulimit(test_file["yaml"], args)
-
             # read limit.conf
             read_limit(test_file["yaml"], args)
 
@@ -940,23 +937,6 @@ def get_ulimit(test_yaml, args):
     print("Getting ulimit -a on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error getting ulimit, aborting")
-        return False
-
-    return True
-
-
-def set_ulimit(test_yaml, args):
-    """Set ulimit -l
-
-    Args:
-        test_yaml (str): yaml file containing host names
-        args (argparse.Namespace): command line arguments for this program
-    """
-    host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "sudo prlimit --pid=$$ --memlock=unlimited"
-    print("Set memlock using prlimit on {}".format(host_list))
-    if not spawn_commands(host_list, command):
-        print("Error setting ulimit, aborting")
         return False
 
     return True
