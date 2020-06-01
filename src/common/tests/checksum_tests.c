@@ -873,6 +873,9 @@ test_all_checksum_types(void **state)
 	csum_lens[CSUM_TYPE_ISAL_CRC16_T10DIF]	= 2;
 	csum_lens[CSUM_TYPE_ISAL_CRC32_ISCSI]	= 4;
 	csum_lens[CSUM_TYPE_ISAL_CRC64_REFL]	= 8;
+	csum_lens[CSUM_TYPE_ISAL_SHA1]		= 20;
+	csum_lens[CSUM_TYPE_ISAL_SHA256]	= 256 / 8;
+	csum_lens[CSUM_TYPE_ISAL_SHA512]	= 512 / 8;
 
 	dts_sgl_init_with_strings(&sgl, 1, "Lorem ipsum dolor sit amet, "
 "consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
@@ -1288,6 +1291,12 @@ test_container_prop_to_csum_type(void **state)
 			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_CRC32));
 	assert_int_equal(CSUM_TYPE_ISAL_CRC64_REFL,
 			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_CRC64));
+	assert_int_equal(CSUM_TYPE_ISAL_SHA1,
+			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_SHA1));
+	assert_int_equal(CSUM_TYPE_ISAL_SHA256,
+			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_SHA256));
+	assert_int_equal(CSUM_TYPE_ISAL_SHA512,
+			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_SHA512));
 }
 
 static void
@@ -1296,9 +1305,11 @@ test_is_valid_csum(void **state)
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_OFF));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC32));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA1));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA256));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA512));
 
 	/** Not supported yet */
-	assert_false(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA1));
 	assert_false(daos_cont_csum_prop_is_valid(99));
 }
 
@@ -1307,9 +1318,11 @@ test_is_csum_enabled(void **state)
 {
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC32));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA1));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA256));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA512));
 
 	/** Not supported yet */
-	assert_false(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA1));
 	assert_false(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_OFF));
 	assert_false(daos_cont_csum_prop_is_enabled(9999));
 }

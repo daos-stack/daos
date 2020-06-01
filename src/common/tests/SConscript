@@ -4,7 +4,7 @@ from prereq_tools import GitRepoRetriever
 
 def define_checksum_timing(build, env, prereqs):
     """Define the Checksum Timing build"""
-    checksum_timing_libs = ['daos_common']
+    checksum_timing_libs = ['daos_common', 'gurt']
     AddOption('--mchecksum',
               dest='mchecksum',
               action='store_true',
