@@ -180,7 +180,15 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	iods_csums = orwo->orw_iod_csums.ca_arrays;
 	maps = orwo->orw_maps.ca_arrays;
 
-	D_ASSERT(orwo->orw_maps.ca_count == orw->orw_iod_array.oia_iod_nr);
+	if (daos_obj_is_echo(orw->orw_oid.id_pub))
+		return 0; /** currently don't verify echo classes */
+
+	if (sgls == NULL)
+		return 0; /** no data to verify ... size only */
+	D_ASSERTF(orwo->orw_maps.ca_count == orw->orw_iod_array.oia_iod_nr,
+		  "orwo->orw_maps.ca_count(%lu) == "
+		  "orw->orw_iod_array.oia_iod_nr(%d)",
+		  orwo->orw_maps.ca_count, orw->orw_iod_array.oia_iod_nr);
 
 	/** fault injection - corrupt data after getting from server and before
 	 * verifying on client - simulates corruption over network
@@ -741,7 +749,9 @@ int csum_enum_verify_keys(const struct obj_enum_args *enum_args,
 	struct daos_sgl_idx	 sgl_idx = {0};
 	d_sg_list_t		 sgl = oeo->oeo_sgl;
 
-	if (enum_args->eaa_nr == NULL || *enum_args->eaa_nr == 0)
+	if (enum_args->eaa_nr == NULL ||
+	    *enum_args->eaa_nr == 0 ||
+	    sgl.sg_nr_out == 0)
 		return 0; /** no keys to verify */
 
 	csummer = dc_cont_hdl2csummer(enum_args->eaa_obj->do_co_hdl);

@@ -291,8 +291,10 @@ static void
 cc_insert_remembered_csums(struct csum_context *ctx)
 {
 	if (ctx->cc_csums_to_copy_to != NULL) {
-		C_TRACE("Inserting csum (len=%lu)\n",
-			ctx->cc_csum_buf_to_copy_len);
+		C_TRACE("Inserting csum (len=%"PRIu64"): "DF_CI_BUF"\n",
+			ctx->cc_csum_buf_to_copy_len,
+			DP_CI_BUF(ctx->cc_csum_buf_to_copy,
+				  ctx->cc_csum_buf_to_copy_len));
 		ci_insert(ctx->cc_csums_to_copy_to,
 			  ctx->cc_csums_to_copy_to_csum_idx,
 			  ctx->cc_csum_buf_to_copy,
@@ -484,7 +486,7 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 static uint64_t
 cc2biov_csums_nr(struct csum_context *ctx)
 {
-	return ctx->cc_biov_csum_idx;
+	return ctx->cc_biov_csum_idx + 1;
 }
 
 int
@@ -496,6 +498,9 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 	struct daos_sgl_idx	bsgl_idx = {0};
 	int			rc = 0;
 	uint32_t		i, j;
+
+	if (biov_csums_used != NULL)
+		*biov_csums_used = 0;
 
 	if (!(daos_csummer_initialized(csummer) && bsgl))
 		return 0;

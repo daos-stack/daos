@@ -348,6 +348,9 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	struct dcs_csum_info	*saved_csum_info;
 	int			 rc;
 
+	if (ioc->ic_size_fetch)
+		return 0;
+
 	rc = bsgl_csums_resize(ioc);
 	if (rc != 0)
 		return rc;
