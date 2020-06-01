@@ -124,6 +124,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 	unsigned int			i;
 	int				topo;
 	int				rc;
+	int				rc_cleanup;
 
 	/* Collective RPC to all of targets of the pool */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
@@ -195,8 +196,13 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 
 decref:
 	crt_req_decref(tc_req);
-	if (rc)
-		ds_mgmt_tgt_pool_destroy(pool_uuid);
+	if (rc) {
+		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
+							    rank_list);
+		if (rc_cleanup)
+			D_ERROR(DF_UUID": failed to clean up failed pool: "
+				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+	}
 
 	return rc;
 }
@@ -484,6 +490,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	d_rank_list_t			*rank_list;
 	uuid_t				*tgt_uuids = NULL;
 	int				rc;
+	int				rc_cleanup;
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
@@ -530,6 +537,12 @@ out_svcp:
 	if (rc) {
 		d_rank_list_free(*svcp);
 		*svcp = NULL;
+
+		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
+							    rank_list);
+		if (rc_cleanup)
+			D_ERROR(DF_UUID": failed to clean up failed pool: "
+				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 	}
 out_uuids:
 	D_FREE(tgt_uuids);
@@ -716,7 +729,6 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 {
 	int			rc;
 	d_rank_list_t		*ranks;
-	d_rank_list_t		*reint_ranks = NULL;
 	struct mgmt_svc		*svc;
 
 	if (state == PO_COMP_ST_UP) {
@@ -724,12 +736,13 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 		 * created and started on the target rank
 		 */
 
-		reint_ranks = d_rank_list_alloc(1);
-		if (reint_ranks == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+		d_rank_list_t reint_ranks;
 
-		reint_ranks->rl_nr = 1;
-		reint_ranks->rl_ranks[0] = rank;
+		/* Just one list element - so reference it directly, rather
+		 * than allocating an actual list array and populating it
+		 */
+		reint_ranks.rl_nr = 1;
+		reint_ranks.rl_ranks = &rank;
 
 		/* TODO: The size information and "pmem" type need to be
 		 * determined automatically, perhaps by querying the pool leader
@@ -743,32 +756,29 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 		 * This is tracked in DAOS-5041
 		 */
 		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, "pmem",
-						   reint_ranks, 0, 0, NULL);
+						   &reint_ranks, 0, 0, NULL);
 		if (rc != 0) {
 			D_ERROR("creating pool on ranks "DF_UUID" failed: rc "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
-			D_GOTO(out, rc);
+			return rc;
 		}
 	}
 
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
-		goto out;
+		return rc;
 
 	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
-	rc = ds_pool_target_update_state(pool_uuid, ranks, rank, target_list,
-					 state);
+	rc = ds_pool_target_update_state(pool_uuid, ranks, rank,
+					 target_list, state);
 
 	d_rank_list_free(ranks);
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
-out:
-	if (reint_ranks != NULL)
-		d_rank_list_free(reint_ranks);
 	return rc;
 }
 
