@@ -1162,7 +1162,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
 				      orw->orw_epoch,
-				      orw->orw_api_flags,
+				      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
 				      dkey, orw->orw_nr, iods, iod_csums,
 				daos_csummer_get_dedup(cont_hdl->sch_csummer),
 				daos_csummer_get_dedupsize(cont_hdl->sch_csummer),
@@ -1177,7 +1177,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		bulk_op = CRT_BULK_PUT;
 
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
-				     orw->orw_api_flags,
+				     orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
 				     dkey, orw->orw_nr, iods, size_fetch, &ioh);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
@@ -2088,7 +2088,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 	case DAOS_OBJ_RPC_TGT_PUNCH:
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
 				   opi->opi_epoch, opi->opi_map_ver,
-				   0, NULL, 0, NULL, dth);
+				   VOS_OF_USE_TIMESTAMPS, NULL, 0, NULL, dth);
 		break;
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -2103,7 +2103,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 		dkey = &((daos_key_t *)opi->opi_dkeys.ca_arrays)[0];
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
 				   opi->opi_epoch, opi->opi_map_ver,
-				   opi->opi_api_flags,
+				   opi->opi_api_flags | VOS_OF_USE_TIMESTAMPS,
 				   dkey, opi->opi_akeys.ca_count,
 				   opi->opi_akeys.ca_arrays, dth);
 		break;
