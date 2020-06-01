@@ -286,7 +286,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
 		else
 			iov->iov_buf = bio_iov2req_buf(biov);
 		iov->iov_len = bio_iov2req_len(biov);
-		iov->iov_buf_len = bio_iov2req_len(biov);
+		iov->iov_buf_len = iov->iov_len;
 	}
 
 	return 0;

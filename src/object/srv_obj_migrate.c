@@ -572,7 +572,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, mrone->mo_epoch,
 			      0, &mrone->mo_dkey, mrone->mo_iod_num,
-			      mrone->mo_iods, NULL, &ioh, NULL);
+			      mrone->mo_iods, NULL, false, 0, &ioh, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
 			DP_UOID(mrone->mo_oid), rc);

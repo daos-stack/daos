@@ -1061,6 +1061,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	/* Prepare IO descriptor */
 	if (obj_rpc_is_update(rpc)) {
+		bool dedup;
+
 		obj_singv_ec_rw_filter(orw, iods, offs, true);
 		bulk_op = CRT_BULK_GET;
 
@@ -1071,11 +1073,24 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				    orw->orw_sgls.ca_count);
 		}
 
+		dedup = daos_csummer_get_dedup(cont_hdl->sch_csummer);
+		if (dedup &&
+		    daos_csummer_get_dedupverify(cont_hdl->sch_csummer)) {
+			/**
+			 * If dedped data need to be compared, then perform
+			 * the I/O are a regular one, we will check for dedup
+			 * data after RDMA
+			 */
+			dedup = false;
+		}
+			
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
-			      orw->orw_epoch,
-			      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
-			      dkey, orw->orw_nr, iods,
-			      iod_csums, &ioh, dth);
+				      orw->orw_epoch,
+				      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
+				      dkey, orw->orw_nr, iods, iod_csums,
+				daos_csummer_get_dedup(cont_hdl->sch_csummer),
+				daos_csummer_get_dedupsize(cont_hdl->sch_csummer),
+				      &ioh, dth);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1160,6 +1175,15 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	}
 
 	if (obj_rpc_is_update(rpc)) {
+		if (daos_csummer_get_dedup(cont_hdl->sch_csummer) &&
+		    daos_csummer_get_dedupverify(cont_hdl->sch_csummer)) {
+			/**
+			 * XXX Need to check for dedup block here and memcmp
+			 * if memcmp fails, just go on with the original buffer,
+			 * otherwise, just drop it
+			 */
+		}
+
 		rc = obj_verify_bio_csum(rpc, iods, iod_csums, biod,
 					 cont_hdl->sch_csummer);
 		/** CSUM Verified on update, now corrupt to fake corruption

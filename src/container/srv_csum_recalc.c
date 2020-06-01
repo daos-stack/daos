@@ -215,7 +215,7 @@ ds_csum_agg_recalc(void *recalc_args)
 		return;
 	}
 	daos_csummer_type_init(&csummer, csum_info.cs_type,
-			       csum_info.cs_chunksize, 0);
+			       csum_info.cs_chunksize, 0, 0, 0, 0);
 	for (i = 0; i < args->cra_seg_cnt; i++) {
 		bool		is_valid = false;
 		unsigned int	this_buf_nr, this_buf_idx;

@@ -45,6 +45,15 @@ bool
 daos_cont_prop2serververify(daos_prop_t *props);
 
 bool
+daos_cont_prop2dedup(daos_prop_t *props);
+
+bool
+daos_cont_prop2dedupverify(daos_prop_t *props);
+
+uint64_t
+daos_cont_prop2dedupsize(daos_prop_t *props);
+
+bool
 daos_cont_csum_prop_is_valid(uint16_t val);
 
 bool
@@ -121,6 +130,9 @@ struct daos_csummer {
 	/** Points to the buffer where the  calculated csum is to be written */
 	uint8_t		*dcs_csum_buf;
 	bool		 dcs_srv_verify;
+	bool		 dcs_dedup;
+	bool		 dcs_dedup_verify;
+	uint32_t	 dcs_dedup_size;
 };
 
 struct csum_ft {
@@ -159,12 +171,17 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type);
  *			for it.
  * @param ft		Pointer to the function table for checksum calculations
  * @param chunk_bytes	Chunksize, typically from the container configuration
+ * @param srv_verify	whether server-side checksum verification is enabled
+ * @param dedup		whether deduplication is enabled on the server
+ * @param dedup_verify	whether to memcmp data on the server for deduplication
+ * @param dedup_bytes	deduplication size threashold in bytes
  *
  * @return		0 for success, or an error code
  */
 int
 daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
-		  size_t chunk_bytes, bool srv_verify);
+		  size_t chunk_bytes, bool srv_verify, bool dedup,
+		  bool dedup_verify, size_t dedup_bytes);
 
 /**
  * Initialize the daos_csummer with a known DAOS_CSUM_TYPE
@@ -173,12 +190,17 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
  *			for it.
  * @param type		Type of the checksum algorithm that will be used
  * @param chunk_bytes	Chunksize, typically from the container configuration
+ * @param srv_verify	Whether to verify checksum on the server on update
+ * @param dedup		Whether deduplication is enabled
+ * @param dedup_verify	Whether to memcmp data on the server for deduplication
+ * @param dedup_bytes	Deduplication size threshold
  *
  * @return		0 for success, or an error code
  */
 int
 daos_csummer_type_init(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
-		       size_t chunk_bytes, bool srv_verify);
+		       size_t chunk_bytes, bool srv_verify, bool dedup,
+		       bool dedup_verify, size_t dedup_bytes);
 
 /** Destroy the daos_csummer */
 void
@@ -205,6 +227,15 @@ daos_csummer_get_rec_chunksize(struct daos_csummer *obj, uint64_t rec_size);
 
 bool
 daos_csummer_get_srv_verify(struct daos_csummer *obj);
+
+bool
+daos_csummer_get_dedup(struct daos_csummer *obj);
+
+bool
+daos_csummer_get_dedupverify(struct daos_csummer *obj);
+
+uint32_t
+daos_csummer_get_dedupsize(struct daos_csummer *obj);
 
 /** Get a string representing the csum the csummer is configured with */
 char *

@@ -515,7 +515,7 @@ io_test_add_csums(daos_iod_t *iod, d_sg_list_t *sgl,
 	size_t			 chunk_size = 1 << 12;
 	int			 rc = 0;
 
-	rc = daos_csummer_type_init(p_csummer, type, chunk_size, 0);
+	rc = daos_csummer_type_init(p_csummer, type, chunk_size, 0, 0, 0, 0);
 	if (rc)
 		return rc;
 	rc = daos_csummer_calc_iods(*p_csummer, sgl, iod, NULL, 1, false,
@@ -556,7 +556,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	assert_true(iod->iod_size > 0);
 
 	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, flags, dkey,
-			      1, iod, iod_csums, &ioh, dth);
+			      1, iod, iod_csums, false, 0, &ioh, dth);
 	if (rc != 0) {
 		if (verbose && rc != -DER_INPROGRESS)
 			print_error("Failed to prepare ZC update: "DF_RC"\n",

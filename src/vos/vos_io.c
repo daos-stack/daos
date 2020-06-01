@@ -73,9 +73,12 @@ struct vos_io_context {
 	unsigned int		 ic_iod_nr;
 	/** IO had a read conflict */
 	bool			 ic_read_conflict;
+	/** deduplication threshold size */
+	uint32_t		 ic_dedup_th;
 	/** flags */
 	unsigned int		 ic_update:1,
-				 ic_size_fetch:1;
+				 ic_size_fetch:1,
+				 ic_dedup:1; /** candidate for dedup */
 };
 
 static inline daos_size_t
@@ -396,7 +399,8 @@ static int
 vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	       daos_epoch_t epoch, uint64_t flags, unsigned int iod_nr,
 	       daos_iod_t *iods, struct dcs_iod_csums *iod_csums,
-	       bool size_fetch, struct vos_io_context **ioc_pp)
+	       bool size_fetch, bool dedup, uint32_t dedup_th,
+	       struct vos_io_context **ioc_pp)
 {
 	struct vos_container *cont;
 	struct vos_io_context *ioc = NULL;
@@ -421,6 +425,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_cont = vos_hdl2cont(coh);
 	vos_cont_addref(ioc->ic_cont);
 	ioc->ic_update = !read_only;
+	ioc->ic_dedup = dedup;
+	ioc->ic_dedup_th = dedup_th;
 	ioc->ic_size_fetch = size_fetch;
 	ioc->ic_actv = NULL;
 	ioc->ic_read_conflict = false;
@@ -1069,7 +1075,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		DP_UOID(oid), iod_nr, epoch);
 
 	rc = vos_ioc_create(coh, oid, true, epoch, flags, iod_nr, iods, NULL,
-			    size_fetch, &ioc);
+			    size_fetch, false, 0, &ioc);
 	if (rc != 0)
 		return rc;
 
@@ -1186,8 +1192,6 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	return rc;
 }
 
-#define VOS_DEDUP_SIZE_THRESH	4096
-
 /**
  * Update a record extent.
  * See comment of vos_recx_fetch for explanation of @off_p.
@@ -1220,7 +1224,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	rc = evt_insert(toh, &ent, NULL);
 
 	/* Ignore transaction abort for this moment */
-	if (!rc && (rsize * recx->rx_nr) >= VOS_DEDUP_SIZE_THRESH) {
+	if (ioc->ic_dedup && !rc && (rsize * recx->rx_nr) >= ioc->ic_dedup_th) {
 		daos_size_t csum_len = recx_csum_len(recx, csum, rsize);
 
 		vos_dedup_update(vos_cont2pool(ioc->ic_cont), csum, csum_len,
@@ -1568,7 +1572,7 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 		}
 	}
 
-	if (size >= VOS_DEDUP_SIZE_THRESH &&
+	if (ioc->ic_dedup && size >= ioc->ic_dedup_th &&
 	    vos_dedup_lookup(vos_cont2pool(ioc->ic_cont), csum, csum_len,
 			     &biov)) {
 		if (biov.bi_data_len == size) {
@@ -1884,7 +1888,8 @@ int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-		 daos_handle_t *ioh, struct dtx_handle *dth)
+		 bool dedup, uint32_t dedup_th, daos_handle_t *ioh,
+		 struct dtx_handle *dth)
 {
 	struct vos_io_context	*ioc;
 	int			 rc;
@@ -1893,7 +1898,8 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		"\n", DP_UOID(oid), iod_nr, dth ? dth->dth_epoch :  epoch);
 
 	rc = vos_ioc_create(coh, oid, false, dth ? dth->dth_epoch : epoch,
-			    flags, iod_nr, iods, iods_csums, false, &ioc);
+			    flags, iod_nr, iods, iods_csums, false, dedup,
+			    dedup_th, &ioc);
 	if (rc != 0)
 		goto done;
 
@@ -1986,7 +1992,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	int rc;
 
 	rc = vos_update_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
-			      iods_csums, &ioh, NULL);
+			      iods_csums, false, 0, &ioh, NULL);
 	if (rc) {
 		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
 			DP_RC(rc));
