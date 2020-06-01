@@ -399,6 +399,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 	if len(c.Servers) == 0 {
 		log.Infof("No %ss in configuration, %s starting in discovery mode",
 			DataPlaneName, ControlPlaneName)
+		c.Servers = nil
 		return nil
 	}
 

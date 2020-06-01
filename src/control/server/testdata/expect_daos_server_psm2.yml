@@ -32,9 +32,9 @@ port: 10001
 transport_config:
   allow_insecure: false
   client_cert_dir: .daos/clients
-  ca_cert: .daos/daosCA.crt
-  cert: .daos/daos_server.crt
-  key: .daos/daos_server.key
+  ca_cert: /etc/daos/daosCA.crt
+  cert: /etc/daos/server.crt
+  key: /etc/daos/server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []

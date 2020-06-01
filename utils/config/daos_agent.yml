@@ -32,7 +32,7 @@
 #  allow_insecure: false
 #
 #  # Custom CA Root certificate for generated certs
-#  ca_cert: .daos/daosCA.crt
+#  ca_cert: /etc/daos/daosCA.crt
 #  # Agent certificate for use in TLS handshakes
 #  cert: .daos/agent.crt
 #  # Key portion of Agent Certificate

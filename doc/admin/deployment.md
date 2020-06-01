@@ -84,7 +84,7 @@ using NTP or any other equivalent protocol.
 DAOS uses a series of Unix Domain Sockets to communicate between its
 various components. On modern Linux systems, Unix Domain Sockets are
 typically stored under `/run` or `/var/run` (usually a symlink to `/run`)
-and are a mounted tmpfs file system. There are several methods fo
+and are a mounted tmpfs file system. There are several methods of
 ensuring the necessary directories are setup.
 
 A sign that this step may have been missed is when starting `daos_server`
