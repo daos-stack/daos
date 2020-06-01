@@ -1068,6 +1068,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	ext = &entry.en_sel_ext;
 	it_entry->ie_epoch	 = entry.en_epoch;
+	it_entry->ie_minor_epc	 = entry.en_minor_epc;
 	it_entry->ie_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_recx.rx_nr	 = evt_extent_width(ext);
 	ext = &entry.en_ext;
