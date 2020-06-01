@@ -38,23 +38,6 @@ const (
 	socketTitle    = "NUMA Socket"
 )
 
-// dedupeStringSlice is responsible for returning a slice based on
-// the input with any duplicates removed.
-func dedupeStringSlice(in []string) []string {
-	keys := make(map[string]struct{})
-
-	for _, el := range in {
-		keys[el] = struct{}{}
-	}
-
-	out := make([]string, 0, len(keys))
-	for key := range keys {
-		out = append(out, key)
-	}
-
-	return out
-}
-
 // PrintHostFabricMap generates a human-readable representation of the supplied
 // HostFabricMap and writes it to the supplied io.Writer.
 func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, onlyProviders bool, opts ...control.PrintConfigOption) error {
@@ -90,7 +73,7 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, onlyProviders 
 
 		for _, hfi := range hfiMap {
 			for _, devices := range hfi {
-				devices = dedupeStringSlice(devices)
+				devices = control.DedupeStringSlice(devices)
 			}
 		}
 

@@ -114,9 +114,9 @@ func (hfm HostFabricMap) Keys() []uint64 {
 	return keys
 }
 
-// dedupeStringSlice is responsible for returning a slice based on
+// DedupeStringSlice is responsible for returning a slice based on
 // the input with any duplicates removed.
-func dedupeStringSlice(in []string) []string {
+func DedupeStringSlice(in []string) []string {
 	keys := make(map[string]struct{})
 
 	for _, el := range in {
@@ -148,7 +148,7 @@ func (nsr *NetworkScanResp) AddHostResponse(hr *HostResponse) (err error) {
 	for _, hfi := range hf.Interfaces {
 		hf.Providers = append(hf.Providers, hfi.Provider)
 	}
-	hf.Providers = dedupeStringSlice(hf.Providers)
+	hf.Providers = DedupeStringSlice(hf.Providers)
 
 	if nsr.HostFabrics == nil {
 		nsr.HostFabrics = make(HostFabricMap)
