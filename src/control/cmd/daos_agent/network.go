@@ -27,14 +27,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/cmd/daos_agent/pretty"
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
 type netScanCmd struct {
 	logCmd
 	jsonOutputCmd
-	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is all providers)"`
+	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is all local providers)"`
 }
 
 func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
@@ -57,7 +59,12 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		cmd.printUnlessJson("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
-	results, err := netdetect.ScanFabric(cmd.FabricProvider)
+	provider := cmd.FabricProvider
+	if provider == "all" {
+		provider = ""
+	}
+
+	results, err := netdetect.ScanFabric(provider)
 	if err != nil {
 		exitWithError(cmd.log, err)
 		return nil
@@ -67,12 +74,27 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		return cmd.outputJSON(os.Stdout, results)
 	}
 
-	var bld strings.Builder
-	if err := pretty.PrintFabricScan(results, &bld); err != nil {
-		return err
+	interfaces := []*ctlpb.FabricInterface{}
+	for _, fi := range results {
+		interfaces = append(interfaces,
+			&ctlpb.FabricInterface{
+				Provider: fi.Provider,
+				Device:   fi.DeviceName,
+				Numanode: uint32(fi.NUMANode),
+			})
 	}
 
-	cmd.log.Info(bld.String())
+	nsr := new(control.NetworkScanResp)
+	hr := control.HostResponse{
+		Addr:    "localhost",
+		Message: &ctlpb.NetworkScanResp{Interfaces: interfaces},
+	}
+	nsr.AddHostResponse(&hr)
 
+	var bld strings.Builder
+	if err := pretty.PrintHostFabricMap(nsr.HostFabrics, &bld, false); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
 	return nil
 }

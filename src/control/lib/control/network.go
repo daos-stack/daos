@@ -131,9 +131,9 @@ func dedupeStringSlice(in []string) []string {
 	return out
 }
 
-// addHostResponse is responsible for validating the given HostResponse
+// AddHostResponse is responsible for validating the given HostResponse
 // and adding it to the NetworkScanResp.
-func (nsr *NetworkScanResp) addHostResponse(hr *HostResponse) (err error) {
+func (nsr *NetworkScanResp) AddHostResponse(hr *HostResponse) (err error) {
 	pbResp, ok := hr.Message.(*ctlpb.NetworkScanResp)
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
@@ -200,7 +200,7 @@ func NetworkScan(ctx context.Context, rpcClient Invoker, req *NetworkScanReq) (*
 			continue
 		}
 
-		if err := nsr.addHostResponse(hostResp); err != nil {
+		if err := nsr.AddHostResponse(hostResp); err != nil {
 			return nil, err
 		}
 	}

@@ -46,7 +46,7 @@ type networkScanCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is all)"`
+	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)"`
 }
 
 func (cmd *networkScanCmd) Execute(_ []string) error {

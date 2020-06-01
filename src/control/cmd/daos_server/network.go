@@ -28,7 +28,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/cmd/daos_server/pretty"
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
@@ -42,8 +44,7 @@ type networkCmd struct {
 type networkScanCmd struct {
 	cfgCmd
 	logCmd
-	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is the provider specified in daos_server.yml)"`
-	AllProviders   bool   `short:"a" long:"all" description:"Specify 'all' to see all devices on all providers.  Overrides --provider"`
+	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)"`
 }
 
 func (cmd *networkScanCmd) Execute(args []string) error {
@@ -53,22 +54,38 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		return errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")
 	}
 
-	switch {
-	case cmd.AllProviders:
-	case len(cmd.FabricProvider) > 0:
-		provider = cmd.FabricProvider
-	case len(cmd.config.Fabric.Provider) > 0:
+	provider = cmd.FabricProvider
+	switch provider {
+	case "":
 		provider = cmd.config.Fabric.Provider
+	case "all":
+		provider = ""
 	default:
 	}
 
-	results, err := netdetect.ScanFabric("")
+	results, err := netdetect.ScanFabric(provider)
 	if err != nil {
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
 
+	interfaces := []*ctlpb.FabricInterface{}
+	for _, fi := range results {
+		interfaces = append(interfaces, &ctlpb.FabricInterface{
+			Provider: fi.Provider,
+			Device:   fi.DeviceName,
+			Numanode: uint32(fi.NUMANode),
+		})
+	}
+
+	nsr := new(control.NetworkScanResp)
+	hr := control.HostResponse{
+		Addr:    "localhost",
+		Message: &ctlpb.NetworkScanResp{Interfaces: interfaces},
+	}
+	nsr.AddHostResponse(&hr)
+
 	var bld strings.Builder
-	if err := pretty.PrintFabricScan(results, &bld, false, provider); err != nil {
+	if err := pretty.PrintHostFabricMap(nsr.HostFabrics, &bld, false); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -88,8 +105,24 @@ func (cmd *networkListCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
 
+	interfaces := []*ctlpb.FabricInterface{}
+	for _, fi := range results {
+		interfaces = append(interfaces, &ctlpb.FabricInterface{
+			Provider: fi.Provider,
+			Device:   fi.DeviceName,
+			Numanode: uint32(fi.NUMANode),
+		})
+	}
+
+	nsr := new(control.NetworkScanResp)
+	hr := control.HostResponse{
+		Addr:    "localhost",
+		Message: &ctlpb.NetworkScanResp{Interfaces: interfaces},
+	}
+	nsr.AddHostResponse(&hr)
+
 	var bld strings.Builder
-	if err := pretty.PrintFabricScan(results, &bld, true, ""); err != nil {
+	if err := pretty.PrintHostFabricMap(nsr.HostFabrics, &bld, true); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())

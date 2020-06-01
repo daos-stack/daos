@@ -39,7 +39,6 @@ const (
 
 func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
 	c.log.Debugf("NetworkScanDevices() Received request: %s", req.GetProvider())
-
 	excludes := req.GetExcludeinterfaces()
 	if excludes == "" {
 		excludes = defaultExcludeInterfaces
@@ -49,7 +48,16 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		excludeMap[iface] = struct{}{}
 	}
 
-	results, err := netdetect.ScanFabric(req.GetProvider())
+	provider := req.GetProvider()
+	switch provider {
+	case "":
+		provider = c.srvCfg.Fabric.Provider
+	case "all":
+		provider = ""
+	default:
+	}
+
+	results, err := netdetect.ScanFabric(provider)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
