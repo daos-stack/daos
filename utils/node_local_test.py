@@ -768,6 +768,8 @@ def log_test(conf,
         if not lto.fi_triggered:
             raise DFTestNoFi
 
+    lto.show_frees()
+
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and and read
     through the interception library"""
