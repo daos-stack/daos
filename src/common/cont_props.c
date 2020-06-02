@@ -1,0 +1,118 @@
+/**
+ * (C) Copyright 2020 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+
+#include <daos/cont_props.h>
+#include <common.h>
+
+void
+daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
+{
+	if (props == NULL || cont_prop == NULL)
+		return;
+
+	cont_prop->dcp_dedup = daos_cont_prop2dedup(props);
+	cont_prop->dcp_dedup_size = daos_cont_prop2dedupsize(props);
+	cont_prop->dcp_dedup_verify = daos_cont_prop2dedupverify(props);
+	cont_prop->dcp_srv_verify = daos_cont_prop2serververify(props);
+	cont_prop->dcp_csum_type = daos_cont_prop2csum(props);
+	cont_prop->dcp_csum_enabled =
+		daos_cont_csum_prop_is_enabled(cont_prop->dcp_csum_type);
+	cont_prop->dcp_chunksize = daos_cont_prop2chunksize(props);
+}
+
+
+uint32_t
+daos_cont_prop2csum(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_CSUM);
+
+	return prop == NULL ? DAOS_PROP_CO_CSUM_OFF : (uint32_t)prop->dpe_val;
+}
+
+uint64_t
+daos_cont_prop2chunksize(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
+
+	return prop == NULL ? 0 : prop->dpe_val;
+}
+
+bool
+daos_cont_prop2serververify(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_SERVER_VERIFY);
+
+	return prop == NULL ? false : prop->dpe_val == DAOS_PROP_CO_CSUM_SV_ON;
+}
+
+bool
+daos_cont_csum_prop_is_valid(uint16_t val)
+{
+	if (daos_cont_csum_prop_is_enabled(val) || val == DAOS_PROP_CO_CSUM_OFF)
+		return true;
+	return false;
+}
+
+bool
+daos_cont_csum_prop_is_enabled(uint16_t val)
+{
+	if (val != DAOS_PROP_CO_CSUM_CRC16 &&
+	    val != DAOS_PROP_CO_CSUM_CRC32 &&
+	    val != DAOS_PROP_CO_CSUM_CRC64 &&
+	    val != DAOS_PROP_CO_CSUM_SHA1 &&
+	    val != DAOS_PROP_CO_CSUM_SHA256 &&
+	    val != DAOS_PROP_CO_CSUM_SHA512)
+		return false;
+	return true;
+}
+
+bool
+daos_cont_prop2dedup(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP);
+
+	return prop == NULL ? false : prop->dpe_val != DAOS_PROP_CO_DEDUP_OFF;
+}
+
+bool
+daos_cont_prop2dedupverify(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP);
+
+	return prop == NULL ? false
+			    : prop->dpe_val == DAOS_PROP_CO_DEDUP_MEMCMP;
+}
+
+uint64_t
+daos_cont_prop2dedupsize(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP_THRESHOLD);
+
+	return prop == NULL ? 0 : prop->dpe_val;
+}

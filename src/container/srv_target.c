@@ -47,6 +47,8 @@
 #include <daos_srv/iv.h>
 #include "rpc.h"
 #include "srv_internal.h"
+#include <daos/cont_props.h>
+#include <daos/dedup.h>
 
 /* Per VOS container aggregation ULT ***************************************/
 
@@ -841,6 +843,9 @@ cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 	daos_prop_t	*props;
 	uint32_t	 csum_val;
 	int		 rc;
+	struct cont_props *cont_props;
+
+	cont_props = &hdl->sch_props;
 
 	D_ASSERT(hdl->sch_cont != NULL);
 	/** Get the container csum related properties
@@ -860,17 +865,24 @@ cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 				hdl->sch_uuid, props);
 	if (rc != 0)
 		goto done;
-	csum_val = daos_cont_prop2csum(props);
+
+	daos_props_2cont_props(props, cont_props);
+
+	csum_val = cont_props->dcp_csum_type;
+	bool dedup_only = false;
+	if (!daos_cont_csum_prop_is_enabled(csum_val)) {
+		dedup_only = true;
+		csum_val = dedup_get_csum_algo(cont_props);
+	}
 
 	/** If enabled, initialize the csummer for the container */
 	if (daos_cont_csum_prop_is_enabled(csum_val)) {
 		rc = daos_csummer_type_init(&hdl->sch_csummer,
 					    daos_contprop2csumtype(csum_val),
-					    daos_cont_prop2chunksize(props),
-					    daos_cont_prop2serververify(props),
-					    daos_cont_prop2dedup(props),
-					    daos_cont_prop2dedupverify(props),
-					    daos_cont_prop2dedupsize(props));
+					    cont_props->dcp_chunksize,
+					    cont_props->dcp_srv_verify);
+		if (dedup_only)
+			dedup_configure_csummer(hdl->sch_csummer, cont_props);
 	}
 done:
 	daos_prop_free(props);
