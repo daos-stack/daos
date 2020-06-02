@@ -1510,7 +1510,6 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		D_GOTO(send_error, rc = -DER_GRPVER);
 	}
 
-
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ifi_class_id);
 	if (iv_ops == NULL) {
 		D_ERROR("Returned iv_ops were NULL, class_id: %d\n",
