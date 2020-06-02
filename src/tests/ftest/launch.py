@@ -1019,7 +1019,9 @@ def install_debuginfos():
         if debug_pkg and debug_pkg not in install_pkgs:
             install_pkgs.append(debug_pkg)
 
-    cmds = []
+    # remove any "source tree" test hackery that might interfere with RPM
+    # installation
+    cmds = [["sudo", "rm", "-f", "/usr/share/spdk/include"]]
 
     if USE_DEBUGINFO_INSTALL:
         yum_args = [
