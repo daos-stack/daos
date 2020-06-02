@@ -321,7 +321,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Tue June 2 2020 Maureen Jean <maureen.jean@intel.com> - 1.0.0-2
+* Tue Jun 2 2020 Maureen Jean <maureen.jean@intel.com> - 1.0.0-2
 - Fix fuse3-libs -> libfuse3 for SLES/Leap 15
 
 * Sat May 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0.0-1
