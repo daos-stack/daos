@@ -51,7 +51,9 @@ type networkScanCmd struct {
 
 func (cmd *networkScanCmd) Execute(_ []string) error {
 	ctx := context.Background()
-	req := &control.NetworkScanReq{Provider: cmd.FabricProvider}
+	req := &control.NetworkScanReq{
+		Provider: cmd.FabricProvider,
+	}
 
 	req.SetHostList(cmd.hostlist)
 
