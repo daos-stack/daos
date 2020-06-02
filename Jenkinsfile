@@ -406,7 +406,8 @@ pipeline {
                         checkoutScm withSubmodules: true
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: '''bandit --format xml -o bandit.xml \
-                                                      -r $(git ls-tree --name-only HEAD)''',
+                                                      -r $(git ls-tree --name-only HEAD) \
+                                                      -c src/tests/ftest/security/bandit.config''',
                                     junit_files: "bandit.xml",
                                     ignore_failure: true
                         }

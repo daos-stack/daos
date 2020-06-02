@@ -439,7 +439,7 @@ class DaosCommand(CommandWithSubCommand):
                     self).__init__("destroy-snap")
                 self.snap = FormattedParameter("--snap={}")
                 self.epc = FormattedParameter("--epc={}")
-                self.eprange = FormattedParameter("--eprange={}")
+                self.epcrange = FormattedParameter("--epcrange={}")
 
         class RollbackSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container rollback command."""

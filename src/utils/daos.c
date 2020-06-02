@@ -1266,7 +1266,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"container options (snapshot and rollback-related):\n"
 			"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 			"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
-			"	--eprange=B-E      container epoch range (destroy-snap)\n");
+			"	--epcrange=B-E     container epoch range (destroy-snap)\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "set-prop") == 0) {
 			fprintf(stream,

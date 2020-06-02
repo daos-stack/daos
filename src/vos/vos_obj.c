@@ -765,12 +765,13 @@ static int
 singv_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 		       vos_iter_entry_t *entry)
 {
-	struct vos_key_bundle	kbund;
-	d_iov_t		kiov;
+	struct vos_svt_key	key;
+	d_iov_t			kiov;
 	int			rc;
 
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epoch = entry->ie_epoch;
+	d_iov_set(&kiov, &key, sizeof(key));
+	key.sk_epoch = entry->ie_epoch;
+	key.sk_minor_epc = entry->ie_minor_epc;
 
 	rc = dbtree_iter_probe(oiter->it_hdl, opc,
 			       vos_iter_intent(&oiter->it_iter), &kiov, NULL);
@@ -897,14 +898,13 @@ static int
 singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 		 daos_anchor_t *anchor)
 {
-	struct vos_key_bundle	kbund;
+	struct vos_svt_key	key;
 	struct vos_rec_bundle	rbund;
 	d_iov_t			kiov;
 	d_iov_t			riov;
 	int			rc;
 
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epoch	= it_entry->ie_epoch;
+	d_iov_set(&kiov, &key, sizeof(key));
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_biov	= &it_entry->ie_biov;
@@ -918,7 +918,8 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 		D_GOTO(out, rc);
 
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-	it_entry->ie_epoch	 = kbund.kb_epoch;
+	it_entry->ie_epoch	 = key.sk_epoch;
+	it_entry->ie_minor_epc	 = key.sk_minor_epc;
 	if (it_entry->ie_epoch <= oiter->it_punched)
 		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
 	it_entry->ie_rsize	 = rbund.rb_rsize;
@@ -1068,6 +1069,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	ext = &entry.en_sel_ext;
 	it_entry->ie_epoch	 = entry.en_epoch;
+	it_entry->ie_minor_epc	 = entry.en_minor_epc;
 	it_entry->ie_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_recx.rx_nr	 = evt_extent_width(ext);
 	ext = &entry.en_ext;

@@ -655,9 +655,9 @@ teardown_mvcc(void **state)
 int
 run_mvcc_tests(const char *cfg)
 {
-	char	test_name[CFG_MAX];
+	char	test_name[DTS_CFG_MAX];
 
-	create_config(test_name, "VOS MVCC Tests %s", cfg);
+	dts_create_config(test_name, "VOS MVCC Tests %s", cfg);
 
 	if (getenv("DAOS_IO_BYPASS")) {
 		print_message("Skipping MVCC tests: DAOS_IO_BYPASS is set\n");

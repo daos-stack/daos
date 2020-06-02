@@ -285,7 +285,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/self_test
 %{_bindir}/dmg
 %{_bindir}/dmg_old
-%{_bindir}/daosctl
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos

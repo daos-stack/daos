@@ -664,7 +664,7 @@ class DmgCommand(YamlCommand):
                 information.
 
         Raises:
-            CommandFailure: if the dmg pool destroy command fails.
+            CommandFailure: if the dmg pool query command fails.
 
         """
         self.set_sub_command("pool")

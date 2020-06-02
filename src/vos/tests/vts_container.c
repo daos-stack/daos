@@ -376,9 +376,9 @@ static const struct CMUnitTest vos_co_tests[] = {
 int
 run_co_test(const char *cfg)
 {
-	char	test_name[CFG_MAX];
+	char	test_name[DTS_CFG_MAX];
 
-	create_config(test_name, "VOS container tests %s", cfg);
+	dts_create_config(test_name, "VOS container tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   vos_co_tests,
 					   setup, teardown);
