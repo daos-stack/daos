@@ -94,7 +94,8 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	int			 rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
-	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df));
+	obj_off = vos_slab_alloc(&tins->ti_umm, sizeof(struct vos_obj_df),
+				 VOS_SLAB_OBJ_DF);
 	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOSPACE;
 
