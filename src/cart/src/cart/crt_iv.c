@@ -1501,7 +1501,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		D_GOTO(send_error, rc = -DER_NONEXIST);
 	}
 
-	/* Check group version match */
+	/* Check group version matching incoming version */
 	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 	if (local_grp_ver != input->ifi_grp_ver) {
 		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
