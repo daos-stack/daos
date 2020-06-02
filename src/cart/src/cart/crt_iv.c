@@ -1221,6 +1221,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 
 	input->ifi_ivns_id = ivns_internal->cii_gns.gn_ivns_id.ii_nsid;
 	input->ifi_ivns_group = ivns_internal->cii_gns.gn_ivns_id.ii_group_name;
+	input->ifi_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 
 	rc = crt_req_send(rpc, handle_response_cb, cb_info);
 
@@ -1313,6 +1314,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	bool				 put_needed = false;
 	void				*user_priv = NULL;
 	crt_rpc_t			*rpc_req;
+	uint32_t			 local_grp_ver;
 	int				 rc = 0;
 
 	rpc_req = arg;
@@ -1334,6 +1336,15 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	 * Reconsider creating wrapper function with passed ivns
 	 */
 	IVNS_DECREF(ivns_internal);
+
+	/* Check group version match */
+	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+	if (local_grp_ver != input->ifi_grp_ver) {
+		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
+			ivns_id.ii_group_name, local_grp_ver,
+			input->ifi_grp_ver);
+		D_GOTO(send_error, rc = -DER_GRPVER);
+	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ifi_class_id);
 	if (iv_ops == NULL) {
@@ -1473,6 +1484,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	struct crt_ivns_id		ivns_id;
 	struct crt_ivns_internal	*ivns_internal = NULL;
 	struct crt_iv_ops		*iv_ops;
+	uint32_t			 local_grp_ver;
 	int				 rc;
 
 	input = crt_req_get(rpc_req);
@@ -1488,6 +1500,16 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 			ivns_id.ii_group_name, ivns_id.ii_nsid);
 		D_GOTO(send_error, rc = -DER_NONEXIST);
 	}
+
+	/* Check group version match */
+	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+	if (local_grp_ver != input->ifi_grp_ver) {
+		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
+			ivns_id.ii_group_name, local_grp_ver,
+			input->ifi_grp_ver);
+		D_GOTO(send_error, rc = -DER_GRPVER);
+	}
+
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ifi_class_id);
 	if (iv_ops == NULL) {
@@ -1735,6 +1757,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 	bool				 need_put = false;
 	void				*user_priv = NULL;
 	crt_rpc_t			*rpc_req;
+	uint32_t			 local_grp_ver;
 
 	rpc_req = arg;
 	/* This is an internal call. All errors are fatal */
@@ -1764,6 +1787,14 @@ crt_hdlr_iv_sync_aux(void *arg)
 			D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
+	/* Check group version match */
+	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+	if (local_grp_ver != input->ivs_grp_ver) {
+		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
+			ivns_id.ii_group_name, local_grp_ver,
+			input->ivs_grp_ver);
+		D_GOTO(exit, rc = -DER_GRPVER);
+	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivs_class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -1866,6 +1897,7 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	struct crt_iv_ops		*iv_ops = NULL;
 	struct crt_ivns_id		ivns_id;
 	crt_iv_sync_t			*sync_type;
+	uint32_t			 local_grp_ver;
 	int				 rc = 0;
 
 	/* This is an internal call. All errors are fatal */
@@ -1892,6 +1924,15 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 		D_ASSERT(!(sync_type->ivs_flags &
 			   CRT_IV_SYNC_FLAG_NS_ERRORS_FATAL));
 		D_GOTO(exit, rc = -DER_NONEXIST);
+	}
+
+	/* Check group version match */
+	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+	if (local_grp_ver != input->ivs_grp_ver) {
+		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
+			ivns_id.ii_group_name, local_grp_ver,
+			input->ivs_grp_ver);
+		D_GOTO(exit, rc = -DER_GRPVER);
 	}
 
 
@@ -2205,6 +2246,8 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	iv_sync_cb->isc_sync_type = *sync_type;
 	input->ivs_ivns_id = ivns_internal->cii_gns.gn_ivns_id.ii_nsid;
 	input->ivs_ivns_group = ivns_internal->cii_gns.gn_ivns_id.ii_group_name;
+	input->ivs_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+
 	d_iov_set(&input->ivs_key, iv_key->iov_buf, iv_key->iov_buf_len);
 	d_iov_set(&input->ivs_sync_type, &iv_sync_cb->isc_sync_type,
 		sizeof(crt_iv_sync_t));
@@ -2560,6 +2603,7 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 
 	input->ivu_ivns_id = ivns_internal->cii_gns.gn_ivns_id.ii_nsid;
 	input->ivu_ivns_group = ivns_internal->cii_gns.gn_ivns_id.ii_group_name;
+	input->ivu_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 
 	/* Do not need sync comp cb for update */
 	cb_info->uci_sync_type = *sync_type;
@@ -2900,6 +2944,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	int				size;
 	void				*user_priv;
 	int				i;
+	uint32_t			local_grp_ver;
 	int				rc = 0;
 
 	input = crt_req_get(rpc_req);
@@ -2917,6 +2962,15 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	if (ivns_internal == NULL) {
 		D_ERROR("Invalid internal ivns\n");
 		D_GOTO(send_error, rc = -DER_NONEXIST);
+	}
+
+	/* Check group version match */
+	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+	if (local_grp_ver != input->ivu_grp_ver) {
+		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
+			ivns_id.ii_group_name, local_grp_ver,
+			input->ivu_grp_ver);
+		D_GOTO(send_error, rc = -DER_GRPVER);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivu_class_id);
