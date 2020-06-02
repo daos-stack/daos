@@ -2442,6 +2442,38 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return 0;
 
+	if (!daos_csummer_get_csum(csummer) &&
+	    daos_csummer_get_dedup(csummer)) {
+		uint32_t	dedup_th = daos_csummer_get_dedupsize(csummer);
+		int		i;
+		bool		candidate = false;
+
+		/**
+		 * Checksums are only enabled for dedup purpose.
+		 * Verify whether the I/O is a candidate for dedup.
+		 * If not, then no need to provide a checksum to the server
+		 */
+
+		for (i = 0; i < args->nr; i++) {
+			daos_iod_t	*iod = &args->iods[i];
+			int		 j = 0;
+
+			if (iod->iod_type == DAOS_IOD_SINGLE)
+				/** dedup does not support single value yet */
+				return 0;
+
+			for (j = 0; j < iod->iod_nr; j++) {
+				daos_recx_t	*recx = &iod->iod_recxs[j];
+				if (recx->rx_nr * iod->iod_size >= dedup_th)
+					candidate = true;
+			}
+		}
+		if (!candidate)
+			/** not a candidate for dedup, don't compute checksum */
+			return 0;
+	}
+
+
 	/** Calc 'd' key checksum */
 	rc = daos_csummer_calc_key(csummer, args->dkey, &dkey_csum);
 	if (rc != 0)
@@ -2483,7 +2515,9 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
 
-	if (!daos_csummer_initialized(csummer)) /** Not configured */
+	if (!daos_csummer_initialized(csummer) ||
+	    !daos_csummer_get_csum(csummer))
+		/** Checksum feature is turned off */
 		return 0;
 
 	/** dkey */

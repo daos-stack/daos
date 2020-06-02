@@ -131,6 +131,8 @@ struct csum_ft;
 struct daos_csummer {
 	/** Size of csum_buf. */
 	uint32_t	 dcs_csum_buf_size;
+	/** whether checksum is enabled */
+	bool		 dcs_csum;
 	/** Cached configuration for chunk size*/
 	uint32_t	 dcs_chunk_size;
 	/** Pointer to the function table to be used for calculating csums */
@@ -224,6 +226,10 @@ daos_csummer_get_csum_len(struct daos_csummer *obj);
 bool
 daos_csummer_initialized(struct daos_csummer *obj);
 
+/** report whether chechsum feature is enabled */
+bool
+daos_csummer_get_csum(struct daos_csummer *obj);
+
 /** Get an integer representing the csum type the csummer is configured with */
 uint16_t
 daos_csummer_get_type(struct daos_csummer *obj);
@@ -238,6 +244,7 @@ daos_csummer_get_rec_chunksize(struct daos_csummer *obj, uint64_t rec_size);
 bool
 daos_csummer_get_srv_verify(struct daos_csummer *obj);
 
+/** report whether dedup feature is enabled */
 bool
 daos_csummer_get_dedup(struct daos_csummer *obj);
 

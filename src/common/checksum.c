@@ -507,19 +507,40 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 	struct daos_csummer	*result;
 	int			 rc = 0;
 
-	if (!ft)
-		return -DER_INVAL;
+	if (!ft && !dedup) {
+		*obj = NULL;
+		return 0;
+	}
 
 	D_ALLOC(result, sizeof(*result));
 	if (result == NULL)
 		return -DER_NOMEM;
 
-	result->dcs_algo = ft;
-	result->dcs_chunk_size = chunk_bytes;
-	result->dcs_srv_verify = srv_verify;
+	/** deduplication parameters */
 	result->dcs_dedup = dedup;
 	result->dcs_dedup_verify = dedup_verify;
 	result->dcs_dedup_size = dedup_bytes;
+
+	if (!ft) {
+		/** dedup w/o checksum */
+		result->dcs_csum = false;
+		/** force SHA256 as the only approved checksum in this case */
+		result->dcs_algo =
+			daos_csum_type2algo(CSUM_TYPE_ISAL_SHA256);
+		if (chunk_bytes == 0)
+			result->dcs_chunk_size = 32 * 1024;
+		else if (chunk_bytes < result->dcs_dedup_size)
+			result->dcs_chunk_size = result->dcs_dedup_size;
+		else
+			result->dcs_chunk_size = chunk_bytes;
+		result->dcs_srv_verify = 0;
+	} else {
+		/** checksum parameters */
+		result->dcs_csum = true;
+		result->dcs_algo = ft;
+		result->dcs_chunk_size = chunk_bytes;
+		result->dcs_srv_verify = srv_verify;
+	}
 
 	if (result->dcs_algo->cf_init)
 		rc = result->dcs_algo->cf_init(result);
@@ -564,6 +585,14 @@ bool
 daos_csummer_initialized(struct daos_csummer *obj)
 {
 	return obj != NULL && obj->dcs_algo != NULL;
+}
+
+bool
+daos_csummer_get_csum(struct daos_csummer *obj)
+{
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_csum;
+	return false;
 }
 
 uint16_t

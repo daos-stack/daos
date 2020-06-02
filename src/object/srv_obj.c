@@ -851,7 +851,8 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 	uint32_t	i;
 	int		rc;
 
-	if (!daos_csummer_initialized(csummer))
+	if (!daos_csummer_initialized(csummer) ||
+	    !daos_csummer_get_csum(csummer))
 		return 0;
 
 	rc = daos_csummer_verify_key(csummer, &orw->orw_dkey,
@@ -2474,6 +2475,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 
 	if (!obj_rpc_is_update(rpc) ||
 	    !daos_csummer_initialized(csummer) ||
+	    !daos_csummer_get_csum(csummer) ||
 	    !csummer->dcs_srv_verify)
 		return 0;
 
