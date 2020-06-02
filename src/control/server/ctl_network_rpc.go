@@ -48,12 +48,12 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		excludeMap[iface] = struct{}{}
 	}
 
-	provider := req.GetProvider()
-	switch provider {
-	case "":
-		provider = c.srvCfg.Fabric.Provider
-	case "all":
+	provider := c.srvCfg.Fabric.Provider
+	switch {
+	case strings.EqualFold(req.GetProvider(), "all"):
 		provider = ""
+	case req.GetProvider() != "":
+		provider = req.GetProvider()
 	default:
 	}
 

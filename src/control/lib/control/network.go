@@ -59,6 +59,13 @@ func (hf *HostFabric) HashKey() (uint64, error) {
 	return hashstructure.Hash(hf, nil)
 }
 
+// AddInterface is a helper function that populates a HostFabric.
+func (hf *HostFabric) AddInterface(hfi *HostFabricInterface) {
+	hf.Interfaces = append(hf.Interfaces, hfi)
+	hf.Providers = append(hf.Providers, hfi.Provider)
+	hf.Providers = dedupeStringSlice(hf.Providers)
+}
+
 // HostFabricSet contains a HostFabric configuration and the
 // set of hosts matching this configuration.
 type HostFabricSet struct {
@@ -114,9 +121,9 @@ func (hfm HostFabricMap) Keys() []uint64 {
 	return keys
 }
 
-// DedupeStringSlice is responsible for returning a slice based on
+// dedupeStringSlice is responsible for returning a slice based on
 // the input with any duplicates removed.
-func DedupeStringSlice(in []string) []string {
+func dedupeStringSlice(in []string) []string {
 	keys := make(map[string]struct{})
 
 	for _, el := range in {
@@ -148,7 +155,7 @@ func (nsr *NetworkScanResp) AddHostResponse(hr *HostResponse) (err error) {
 	for _, hfi := range hf.Interfaces {
 		hf.Providers = append(hf.Providers, hfi.Provider)
 	}
-	hf.Providers = DedupeStringSlice(hf.Providers)
+	hf.Providers = dedupeStringSlice(hf.Providers)
 
 	if nsr.HostFabrics == nil {
 		nsr.HostFabrics = make(HostFabricMap)

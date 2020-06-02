@@ -32,11 +32,14 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
-const (
-	providerTitle  = "Provider"
-	interfaceTitle = "Interfaces"
-	socketTitle    = "NUMA Socket"
-)
+type hfiMap map[uint32]map[string][]string
+
+func (h hfiMap) addInterface(fi *control.HostFabricInterface) {
+	if _, ok := h[fi.NumaNode]; !ok {
+		h[fi.NumaNode] = make(map[string][]string)
+	}
+	h[fi.NumaNode][fi.Provider] = append(h[fi.NumaNode][fi.Provider], fi.Device)
+}
 
 // PrintHostFabricMap generates a human-readable representation of the supplied
 // HostFabricMap and writes it to the supplied io.Writer.
@@ -47,9 +50,11 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, onlyProviders 
 
 	ew := txtfmt.NewErrWriter(out)
 
-	for _, key := range hfm.Keys() {
-		var hfiMap map[uint32]map[string][]string
+	providerTitle := "Provider"
+	interfaceTitle := "Interfaces"
+	socketTitle := "NUMA Socket"
 
+	for _, key := range hfm.Keys() {
 		hfs := hfm[key]
 		hosts := control.GetPrintHosts(hfs.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
@@ -63,22 +68,13 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, onlyProviders 
 			continue
 		}
 
-		hfiMap = make(map[uint32]map[string][]string)
+		hfim := make(hfiMap)
 		for _, fi := range hfs.HostFabric.Interfaces {
-			if _, ok := hfiMap[fi.NumaNode]; !ok {
-				hfiMap[fi.NumaNode] = make(map[string][]string)
-			}
-			hfiMap[fi.NumaNode][fi.Provider] = append(hfiMap[fi.NumaNode][fi.Provider], fi.Device)
-		}
-
-		for _, hfi := range hfiMap {
-			for _, devices := range hfi {
-				devices = control.DedupeStringSlice(devices)
-			}
+			hfim.addInterface(fi)
 		}
 
 		iwTable := txtfmt.NewIndentWriter(iw, txtfmt.WithPadCount(4))
-		for s, hfi := range hfiMap {
+		for s, hfi := range hfim {
 			var table []txtfmt.TableRow
 
 			formatter := txtfmt.NewTableFormatter(providerTitle, interfaceTitle)

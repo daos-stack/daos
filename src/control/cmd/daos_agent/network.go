@@ -28,9 +28,12 @@ import (
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
+)
+
+const (
+	defaultExcludeInterfaces = "lo"
 )
 
 type netScanCmd struct {
@@ -60,7 +63,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 	}
 
 	provider := cmd.FabricProvider
-	if provider == "all" {
+	if strings.EqualFold(cmd.FabricProvider, "all") {
 		provider = ""
 	}
 
@@ -74,27 +77,36 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		return cmd.outputJSON(os.Stdout, results)
 	}
 
-	interfaces := []*ctlpb.FabricInterface{}
-	for _, fi := range results {
-		interfaces = append(interfaces,
-			&ctlpb.FabricInterface{
-				Provider: fi.Provider,
-				Device:   fi.DeviceName,
-				Numanode: uint32(fi.NUMANode),
-			})
+	excludes := defaultExcludeInterfaces
+
+	excludeMap := make(map[string]struct{})
+	for _, iface := range strings.Split(excludes, ",") {
+		excludeMap[iface] = struct{}{}
 	}
 
-	nsr := new(control.NetworkScanResp)
-	hr := control.HostResponse{
-		Addr:    "localhost",
-		Message: &ctlpb.NetworkScanResp{Interfaces: interfaces},
+	hf := &control.HostFabric{}
+	for _, fi := range results {
+		if _, skip := excludeMap[fi.DeviceName]; skip {
+			continue
+		}
+
+		hf.AddInterface(&control.HostFabricInterface{
+			Provider: fi.Provider,
+			Device:   fi.DeviceName,
+			NumaNode: uint32(fi.NUMANode),
+		})
 	}
-	nsr.AddHostResponse(&hr)
+
+	hfm := make(control.HostFabricMap)
+	if err := hfm.Add("localhost", hf); err != nil {
+		return err
+	}
 
 	var bld strings.Builder
-	if err := pretty.PrintHostFabricMap(nsr.HostFabrics, &bld, false); err != nil {
+	if err := pretty.PrintHostFabricMap(hfm, &bld, false); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
+
 	return nil
 }
