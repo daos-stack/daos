@@ -23,7 +23,7 @@ theme:
     feature:
         tabs: true
 
-docs_dir: doc
+docs_dir: doc/
 
 markdown_extensions:
     - admonition
@@ -44,6 +44,7 @@ nav:
     - Administration Guide:
         - 'Hardware Requirements': 'admin/hardware.md'
         - 'Software Installation': 'admin/installation.md'
+        - 'Pre-deployment Checklist': 'admin/predeployment_check.md'
         - 'System Deployment': 'admin/deployment.md'
         - 'System Administration': 'admin/administration.md'
         - 'Pool Operations': 'admin/pool_operations.md'
@@ -62,7 +63,7 @@ nav:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
         - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
-        - DAOS API Documentation: 'api/index.html'
+        - DAOS API Documentation: 'html/index.html'
     - Community Wiki: 'https://wiki.hpdd.intel.com'
     - Roadmap: 'https://wiki.hpdd.intel.com/display/DC/Roadmap/'
     - Mailing list: 'https://daos.groups.io/g/daos'
