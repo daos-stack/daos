@@ -937,6 +937,36 @@ test_all_checksum_types(void **state)
 
 	daos_sgl_fini(&sgl, true);
 }
+static void
+test_all_checksum_types2(void **state)
+{
+	enum DAOS_CSUM_TYPE	 type;
+	struct daos_csummer	*csummer = NULL;
+	const daos_size_t	 buffer_len = 512;
+	uint8_t			 buffer[512];
+	int			 i;
+	int			 rc;
+
+	for (type = CSUM_TYPE_ISAL_SHA256; type < CSUM_TYPE_END; type++) {
+		memset(buffer, 0, buffer_len);
+		rc = daos_csummer_init(&csummer,
+				       daos_csum_type2algo(type), 128, 0);
+		assert_int_equal(0, rc);
+
+		daos_csummer_set_buffer(csummer, buffer, buffer_len);
+		rc = daos_csummer_reset(csummer);
+		assert_int_equal(0, rc);
+
+		rc = daos_csummer_finish(csummer);
+		assert_int_equal(0, rc);
+		for (i = 0; i < buffer_len; i++) {
+			if (buffer[i] != 0)
+				fail_msg("checksum type %d, buffer[%d] (%d) "
+					 "!= 0", type, i, buffer[i] != 0);
+		}
+		daos_csummer_destroy(&csummer);
+	}
+}
 
 /**
  * -----------------------------------------------------------------------------
@@ -1592,6 +1622,9 @@ static const struct CMUnitTest tests[] = {
 		test_daos_checksummer_with_multiple_chunks),
 	TEST("CSUM09: Test the different types of checksums",
 		test_all_checksum_types),
+	TEST("CSUM09.1: Test the different types of checksums when no "
+	     "update is done",
+		test_all_checksum_types2),
 	TEST("CSUM10: Test map from container prop to csum type",
 		test_container_prop_to_csum_type),
 	TEST("CSUM11: Some helper function tests",

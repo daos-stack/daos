@@ -257,7 +257,7 @@ daos_csummer_set_buffer(struct daos_csummer *obj, uint8_t *buf,
 			uint32_t buf_len);
 
 /** Reset the csummer */
-void
+int
 daos_csummer_reset(struct daos_csummer *obj);
 
 /** Updates the checksum calculation with new input data. Can be called

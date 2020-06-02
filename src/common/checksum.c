@@ -223,17 +223,23 @@ struct csum_ft crc64_algo = {
 
 
 /** SHA1 */
+struct sha1_ctx {
+	struct mh_sha1_ctx	s1_ctx;
+	bool			s1_updated;
+};
+
 static int
 sha1_init(struct daos_csummer *obj)
 {
-	struct mh_sha1_ctx	*ctx;
+	struct sha1_ctx		*ctx;
 	int			 rc;
 
 	D_ALLOC(ctx, sizeof(*ctx));
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
-	rc = mh_sha1_init(ctx);
+	rc = mh_sha1_init(&ctx->s1_ctx);
+
 	if (rc == 0)
 		obj->dcs_ctx = ctx;
 	return rc;
@@ -242,7 +248,10 @@ sha1_init(struct daos_csummer *obj)
 static int
 sha1_reset(struct daos_csummer *obj)
 {
-	return mh_sha1_init(obj->dcs_ctx);
+	struct sha1_ctx *ctx = obj->dcs_ctx;
+
+	ctx->s1_updated = false;
+	return mh_sha1_init(&ctx->s1_ctx);
 }
 
 static void
@@ -255,15 +264,20 @@ sha1_destroy(struct daos_csummer *obj)
 static int
 sha1_finish(struct daos_csummer *obj)
 {
-	return mh_sha1_finalize(obj->dcs_ctx, obj->dcs_csum_buf);
+	struct sha1_ctx *ctx = obj->dcs_ctx;
+
+	if (ctx->s1_updated)
+		return mh_sha1_finalize(&ctx->s1_ctx, obj->dcs_csum_buf);
+	return 0;
 }
 
 static int
 sha1_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
-	struct mh_sha1_ctx *ctx = obj->dcs_ctx;
+	struct sha1_ctx *ctx = obj->dcs_ctx;
 
-	return mh_sha1_update(ctx, buf, buf_len);
+	ctx->s1_updated = true;
+	return mh_sha1_update(&ctx->s1_ctx, buf, buf_len);
 }
 
 struct csum_ft sha1_algo = {
@@ -277,17 +291,22 @@ struct csum_ft sha1_algo = {
 };
 
 /** SHA256 */
+struct sha256_ctx {
+	struct mh_sha256_ctx	s2_ctx;
+	bool			s2_updated;
+};
+
 static int
 sha256_init(struct daos_csummer *obj)
 {
-	struct mh_sha256_ctx	*ctx;
+	struct sha256_ctx	*ctx;
 	int			 rc;
 
 	D_ALLOC(ctx, sizeof(*ctx));
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
-	rc = mh_sha256_init(ctx);
+	rc = mh_sha256_init(&ctx->s2_ctx);
 	if (rc == 0)
 		obj->dcs_ctx = ctx;
 	return rc;
@@ -296,7 +315,10 @@ sha256_init(struct daos_csummer *obj)
 static int
 sha256_reset(struct daos_csummer *obj)
 {
-	return mh_sha256_init(obj->dcs_ctx);
+	struct sha256_ctx *ctx = obj->dcs_ctx;
+
+	ctx->s2_updated = false;
+	return mh_sha256_init(&ctx->s2_ctx);
 }
 
 static void
@@ -309,14 +331,21 @@ sha256_destroy(struct daos_csummer *obj)
 static int
 sha256_finish(struct daos_csummer *obj)
 {
-	return mh_sha256_finalize(obj->dcs_ctx, obj->dcs_csum_buf);
+	struct sha256_ctx *ctx = obj->dcs_ctx;
+
+	if (ctx->s2_updated)
+		return mh_sha256_finalize(&ctx->s2_ctx, obj->dcs_csum_buf);
+	return 0;
 }
 
 static int
 sha256_update(struct daos_csummer *obj,
 	      uint8_t *buf, size_t buf_len)
 {
-	return mh_sha256_update(obj->dcs_ctx, buf, buf_len);
+	struct sha256_ctx *ctx = obj->dcs_ctx;
+
+	ctx->s2_updated = true;
+	return mh_sha256_update(&ctx->s2_ctx, buf, buf_len);
 }
 
 struct csum_ft sha256_algo = {
@@ -331,9 +360,9 @@ struct csum_ft sha256_algo = {
 
 /** SHA512 */
 struct sha512_ctx {
-	SHA512_HASH_CTX_MGR	mgr;
-	SHA512_HASH_CTX	ctx;
-	bool		first;
+	SHA512_HASH_CTX_MGR	s5_mgr;
+	SHA512_HASH_CTX		s5_ctx;
+	bool			s5_updated;
 };
 static int
 sha512_init(struct daos_csummer *obj)
@@ -345,22 +374,11 @@ sha512_init(struct daos_csummer *obj)
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
-	sha512_ctx_mgr_init(&ctx->mgr);
-	hash_ctx_init(&ctx->ctx);
-	ctx->first = true;
+	sha512_ctx_mgr_init(&ctx->s5_mgr);
+	hash_ctx_init(&ctx->s5_ctx);
 
 	obj->dcs_ctx = ctx;
 	return rc;
-}
-
-static int
-sha512_reset(struct daos_csummer *obj)
-{
-	struct sha512_ctx *ctx = obj->dcs_ctx;
-
-	sha512_ctx_mgr_init(&ctx->mgr);
-	return ctx->ctx.error;
-
 }
 
 static void
@@ -371,14 +389,16 @@ sha512_destroy(struct daos_csummer *obj)
 }
 
 static int
-sha512_finish(struct daos_csummer *obj)
+sha512_reset(struct daos_csummer *obj)
 {
-	struct sha512_ctx	*ctx = obj->dcs_ctx;
+	struct sha512_ctx *ctx = obj->dcs_ctx;
 
-	SHA512_HASH_CTX *tmp = sha512_ctx_mgr_flush(&ctx->mgr);
-	memcpy(obj->dcs_csum_buf, tmp->job.result_digest, obj->dcs_csum_buf_size);
+	sha512_ctx_mgr_init(&ctx->s5_mgr);
+	ctx->s5_updated = false;
 
-	return ctx->ctx.error;
+
+	return ctx->s5_ctx.error;
+
 }
 
 static int
@@ -386,14 +406,47 @@ sha512_update(struct daos_csummer *obj,
 	      uint8_t *buf, size_t buf_len)
 {
 	struct sha512_ctx	*ctx = obj->dcs_ctx;
+//	SHA512_HASH_CTX		*tmp;
 
-	ctx->first = false;
-	SHA512_HASH_CTX *tmp = sha512_ctx_mgr_submit(&ctx->mgr, &ctx->ctx, buf,
-						     buf_len,
-						     HASH_ENTIRE);
-	if (tmp)
-		ctx->ctx = *tmp;
-	return ctx->ctx.error;
+	if (!ctx->s5_updated)
+		sha512_ctx_mgr_submit(&ctx->s5_mgr,
+					    &ctx->s5_ctx, buf,
+					    buf_len,
+					    HASH_FIRST);
+	else
+		sha512_ctx_mgr_submit(&ctx->s5_mgr,
+					    &ctx->s5_ctx, buf,
+					    buf_len,
+					    HASH_UPDATE);
+
+	ctx->s5_updated = true;
+//	if (tmp)
+//		ctx->s5_ctx = *tmp;
+	return ctx->s5_ctx.error;
+}
+
+static int
+sha512_finish(struct daos_csummer *obj)
+{
+	struct sha512_ctx	*ctx = obj->dcs_ctx;
+
+	if (ctx->s5_updated) {
+		SHA512_HASH_CTX *tmp;
+
+		tmp = sha512_ctx_mgr_submit(&ctx->s5_mgr,
+					    &ctx->s5_ctx, NULL,
+					    0,
+					    HASH_LAST);
+
+		tmp = sha512_ctx_mgr_flush(&ctx->s5_mgr);
+
+		memcpy(obj->dcs_csum_buf, tmp->job.result_digest,
+		       obj->dcs_csum_buf_size);
+
+		return ctx->s5_ctx.error;
+	}
+
+	return 0;
 }
 
 struct csum_ft sha512_algo = {
@@ -582,26 +635,25 @@ daos_csummer_set_buffer(struct daos_csummer *obj, uint8_t *buf,
 			uint32_t buf_len)
 {
 	D_ASSERT(buf_len >= daos_csummer_get_csum_len(obj));
+//	C_TRACE("Set Checksum Buffer");
 
 	obj->dcs_csum_buf = buf;
 	obj->dcs_csum_buf_size = buf_len;
 }
 
-void
+int
 daos_csummer_reset(struct daos_csummer *obj)
 {
+//	C_TRACE("Checksum Reset");
 	if (obj->dcs_algo->cf_reset)
-		obj->dcs_algo->cf_reset(obj);
+		return obj->dcs_algo->cf_reset(obj);
+	return 0;
 }
 
 int
 daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	int rc = 0;
-
-	if (C_TRACE_ENABLED())
-		C_TRACE("Buffer (buf=%p len=%zu) (type=%s)\n", buf, buf_len,
-			daos_csummer_get_name(obj));
 
 	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0)
 		rc = obj->dcs_algo->cf_update(obj, buf, buf_len);
@@ -621,6 +673,7 @@ int
 daos_csummer_finish(struct daos_csummer *obj)
 {
 	int rc = 0;
+	C_TRACE("Checksum Finish");
 
 	if (obj->dcs_algo->cf_finish)
 		rc = obj->dcs_algo->cf_finish(obj);
@@ -1428,20 +1481,16 @@ ci_off2csum(struct dcs_csum_info *csum_buf, uint32_t offset)
 uint64_t
 ci_buf2uint64(const uint8_t *buf, uint16_t len)
 {
-	switch (len) {
-	/** for csum_buffers should only be these lengths */
-	case 2:
-		return *(uint16_t *) buf;
-	case 4:
-		return *(uint32_t *) buf;
-	case 8:
-	case 20:
-	case 256/8:
-	case 512/8:
+	if (len >= 8)
 		return *(uint64_t *) buf;
-	default:
-		return 0;
-	}
+	if (len >= 4)
+		return *(uint32_t *) buf;
+	if (len >= 2)
+		return *(uint16_t *) buf;
+	if (len == 1)
+		return *(uint16_t *) buf;
+
+	return 0;
 }
 
 /** helper for printing csum as a 64bit value */
