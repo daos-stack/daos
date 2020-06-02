@@ -577,8 +577,10 @@ pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 {
 	uuid_t				uuid;
 	struct pool_target_id_list	target_id_list;
+	int				num_idxs;
 	int				rc, i;
 
+	num_idxs = (n_targetidx > 0) ? n_targetidx : 1;
 	rc = uuid_parse(id, uuid);
 	if (rc != 0) {
 		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", id,
@@ -586,12 +588,16 @@ pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 		return -DER_INVAL;
 	}
 
-	rc = pool_target_id_list_alloc(n_targetidx, &target_id_list);
+	rc = pool_target_id_list_alloc(num_idxs, &target_id_list);
 	if (rc)
 		return rc;
 
-	for (i = 0; i < n_targetidx; ++i)
-		target_id_list.pti_ids[i].pti_id = targetidx[i];
+	if (n_targetidx > 0) {
+		for (i = 0; i < n_targetidx; ++i)
+			target_id_list.pti_ids[i].pti_id = targetidx[i];
+	}
+	else
+		target_id_list.pti_ids[0].pti_id = -1;
 
 	rc = ds_mgmt_pool_target_update_state(uuid, rank, &target_id_list,
 					      state);

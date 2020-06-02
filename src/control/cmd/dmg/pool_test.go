@@ -262,7 +262,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolExcludeReq{
 					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{0xFFFFFFFF},
+					Targetidx: []uint32{},
 				}),
 			}, " "),
 			nil,
@@ -302,7 +302,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolReintegrateReq{
 					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{0xFFFFFFFF},
+					Targetidx: []uint32{},
 				}),
 			}, " "),
 			nil,

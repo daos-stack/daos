@@ -197,10 +197,6 @@ func (r *PoolExcludeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing rank list")
 	}
 
-	if len(idxlist) == 0 {
-		idxlist = append(idxlist, 0xFFFFFFFF)
-	}
-
 	req := &control.PoolExcludeReq{UUID: r.UUID, Rank: system.Rank(r.Rank), Targetidx: idxlist}
 
 	ctx := context.Background()
@@ -230,10 +226,6 @@ func (r *PoolReintegrateCmd) Execute(args []string) error {
 	var idxlist []uint32
 	if err := common.ParseNumberList(r.Targetidx, &idxlist); err != nil {
 		return errors.WithMessage(err, "parsing rank list")
-	}
-
-	if len(idxlist) == 0 {
-		idxlist = append(idxlist, 0xFFFFFFFF)
 	}
 
 	req := &control.PoolReintegrateReq{UUID: r.UUID, Rank: system.Rank(r.Rank), Targetidx: idxlist}
