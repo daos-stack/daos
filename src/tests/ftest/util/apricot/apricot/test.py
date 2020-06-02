@@ -774,7 +774,7 @@ class TestWithServers(TestWithoutServers):
         dmg_config_file = self.get_config_file("daos", "dmg")
         dmg_cfg = DmgYamlParameters(
             dmg_config_file, self.server_group, DmgTransportCredentials())
-        dmg_cfg.hostlist.update([self.hostlist_servers[0]])
+        dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
         return DmgCommand(self.bin, dmg_cfg)
 
     def prepare_pool(self):

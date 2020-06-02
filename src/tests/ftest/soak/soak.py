@@ -585,7 +585,6 @@ class SoakTestBase(TestWithServers):
 
         """
         commands = []
-        cmds = []
         fio_namespace = "/run/{}".format(job_spec)
         # test params
         bs_list = self.params.get("blocksize", fio_namespace + "/soak/*")
@@ -608,25 +607,31 @@ class SoakTestBase(TestWithServers):
                     fio_cmd.update(
                         "global", "rw", rw,
                         "fio --name=global --rw")
-                    # start dfuse if api is POSIX
+                    srun_cmds = []
+
+                    # add srun start dfuse cmds if api is POSIX
                     if fio_cmd.api.value == "POSIX":
                         # Connect to the pool, create container
                         # and then start dfuse
-                        dfuse, cmds = self.start_dfuse(pool)
-                        fio_cmd.update(
-                            "global", "directory",
-                            dfuse.mount_dir.value,
-                            "fio --name=global --directory")
-                    log_name = "{}_{}_{}".format(blocksize, size, rw)
-                    # self.dfuse_list.append(dfuse)
-                    cmds.append(slurm_utils.srun_str(
+                        dfuse, srun_cmds = self.start_dfuse(pool)
+                    # Update the FIO cmdline
+                    fio_cmd.update(
+                        "global", "directory",
+                        dfuse.mount_dir.value,
+                        "fio --name=global --directory")
+                    # add srun and srun params to fio cmline
+                    srun_cmds.append(slurm_utils.srun_str(
                         hosts=None,
                         cmd=str(fio_cmd.__str__()),
                         srun_params=None))
-                    cmds.extend(self.stop_dfuse(dfuse))
-                    commands.append([cmds, log_name])
+                    # If posix, add the srun dfuse stop cmds
+                    if fio_cmd.api.value == "POSIX":
+                        srun_cmds.extend(self.stop_dfuse(dfuse))
+
+                    log_name = "{}_{}_{}".format(blocksize, size, rw)
+                    commands.append([srun_cmds, log_name])
                     self.log.info("<<Fio cmdlines>>:")
-                    for cmd in cmds:
+                    for cmd in srun_cmds:
                         self.log.info("%s", cmd)
         return commands
 
