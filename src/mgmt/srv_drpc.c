@@ -595,8 +595,7 @@ pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 	if (n_targetidx > 0) {
 		for (i = 0; i < n_targetidx; ++i)
 			target_id_list.pti_ids[i].pti_id = targetidx[i];
-	}
-	else
+	} else
 		target_id_list.pti_ids[0].pti_id = -1;
 
 	rc = ds_mgmt_pool_target_update_state(uuid, rank, &target_id_list,
