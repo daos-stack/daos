@@ -14,13 +14,10 @@ NODE="${NODELIST%%,*}"
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-scp -i ci_key "$mydir/run_test_post_always_node.sh" \
-              jenkins@"$NODE":/var/tmp
-
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
   "DAOS_BASE=$DAOS_BASE             \
-   /var/tmp/run_test_post_always_node.sh"
+  $(cat "$mydir/run_test_post_always_node.sh")"
 
 # Note that we are taking advantage of the NFS mount here and if that
 # should ever go away, we need to pull run_test.sh/ from $NODE
