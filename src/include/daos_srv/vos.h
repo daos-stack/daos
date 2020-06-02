@@ -983,6 +983,7 @@ struct vos_agg_entry {
 	d_list_t	ae_link;
 	daos_unit_oid_t	ae_oid;
 	daos_epoch_t	ae_epoch;
+	daos_epoch_t	ae_epoch_lo;
 };
 
 #endif /* __VOS_API_H */
