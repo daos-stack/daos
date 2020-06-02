@@ -50,7 +50,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
 	if (rc)
