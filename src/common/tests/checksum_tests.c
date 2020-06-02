@@ -1496,6 +1496,32 @@ test_calc_rec_chunksize(void **state)
 		csum_record_chunksize(UINT_MAX, UINT_MAX - 1));
 }
 
+uint64_t
+ci2csum(struct dcs_csum_info ci)
+{
+	uint16_t len = ci.cs_len;
+	uint8_t *buf = ci.cs_csum;
+
+	return ci_buf2uint64(buf, len);
+}
+
+static void
+test_formatter(void **state)
+{
+	uint64_t csum_buf = 1234567890123456789;
+	char result[1024];
+	struct dcs_csum_info ci = {
+		.cs_csum = (uint8_t *)&csum_buf,
+		.cs_nr = 1,
+		.cs_chunksize = 1024,
+		.cs_buf_len = sizeof(csum_buf),
+		.cs_len = sizeof(csum_buf)
+		};
+
+	sprintf(result, DF_CI, DP_CI(ci));
+	assert_string_equal("{nr: 1, len: 8, first_csum: 1234567890123456789}",
+			    result);
+}
 
 static int test_setup(void **state)
 {
@@ -1568,6 +1594,8 @@ static const struct CMUnitTest tests[] = {
 		test_akey_csum),
 	TEST("CSUM27: Calc record chunk size",
 		test_calc_rec_chunksize),
+	TEST("CSUM28: Formatter",
+		test_formatter),
 	TEST("CSUM28: Get the recxes from a map", get_map_test),
 	TEST("CSUM_HOLES01: With 2 mapped extents that leave a hole "
 	     "at the beginning, in between and "

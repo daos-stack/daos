@@ -273,7 +273,6 @@ cont_aggregate_ult(void *arg)
 		    cont->sc_abort_vos_aggregating)
 			break;
 
-		sleep /= NSEC_PER_SEC; /* Convert to seconds */
 		if (sleep > 0)
 			dss_ult_sleep(cont->sc_agg_ult, sleep);
 		else

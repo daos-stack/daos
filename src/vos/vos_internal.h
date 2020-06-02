@@ -42,6 +42,8 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
+#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
+
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
 		bool	__is_err = true;		\
@@ -530,14 +532,13 @@ int obj_tree_fini(struct vos_object *obj);
 int obj_tree_register(void);
 
 /**
- * Data structure which carries the keys, epoch ranges to the multi-nested
- * btree.
+ * Single value key
  */
-struct vos_key_bundle {
-	/** key for the current tree, could be @kb_dkey or @kb_akey */
-	daos_key_t		*kb_key;
-	/** epoch of the I/O */
-	daos_epoch_t		 kb_epoch;
+struct vos_svt_key {
+	/** Epoch of entry */
+	uint64_t	sk_epoch;
+	/** Minor epoch of entry */
+	uint16_t	sk_minor_epc;
 };
 
 /**
@@ -577,9 +578,9 @@ struct vos_rec_bundle {
  */
 #define	EMBEDDED_KEY_MAX	96
 struct vos_embedded_key {
-	/** Inlined iov kbund references */
+	/** Inlined iov key references */
 	d_iov_t		ek_kiov;
-	/** Inlined buffer the kiov references*/
+	/** Inlined buffer the key references*/
 	unsigned char	ek_key[EMBEDDED_KEY_MAX];
 };
 D_CASSERT(sizeof(struct vos_embedded_key) == DAOS_ANCHOR_BUF_MAX);
@@ -923,17 +924,6 @@ static inline struct vos_obj_iter *
 vos_hdl2oiter(daos_handle_t hdl)
 {
 	return vos_iter2oiter(vos_hdl2iter(hdl));
-}
-
-/**
- * store a bundle of parameters into a iovec, which is going to be passed
- * into dbtree operations as a compound key.
- */
-static inline void
-tree_key_bundle2iov(struct vos_key_bundle *kbund, d_iov_t *iov)
-{
-	memset(kbund, 0, sizeof(*kbund));
-	d_iov_set(iov, kbund, sizeof(*kbund));
 }
 
 /**

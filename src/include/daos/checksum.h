@@ -481,6 +481,17 @@ ci_idx2csum(struct dcs_csum_info *csum_buf, uint32_t idx);
 uint8_t *
 ci_off2csum(struct dcs_csum_info *csum_buf, uint32_t offset);
 
+uint64_t
+ci_buf2uint64(const uint8_t *buf, uint16_t len);
+
+uint64_t
+ci2csum(struct dcs_csum_info ci);
+
+#define	DF_CI_BUF "%"PRIu64
+#define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
+#define	DF_CI "{nr: %d, len: %d, first_csum: %lu}"
+#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci)
+
 /**
  * -----------------------------------------------------------------------------
  * Helper Functions
