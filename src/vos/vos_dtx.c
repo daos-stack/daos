@@ -584,8 +584,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		goto out;
 
 	dtx_rec_release(cont, dae, false, &offset);
-	rc = vos_dtx_del_cos(cont, &DAE_OID(dae), dti, DAE_DKEY_HASH(dae),
-			DAE_INTENT(dae) == DAOS_INTENT_PUNCH ? true : false);
+	rc = vos_dtx_del_cos(cont, &DAE_OID(dae), dti, DAE_DKEY_HASH(dae));
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -741,7 +740,6 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 	DAE_DKEY_HASH(dae) = dth->dth_dkey_hash;
 	DAE_EPOCH(dae) = dth->dth_epoch;
 	DAE_FLAGS(dae) = dth->dth_leader ? DTX_EF_LEADER : 0;
-	DAE_INTENT(dae) = dth->dth_intent;
 	DAE_SRV_GEN(dae) = dth->dth_gen;
 
 	/* Will be set as dbd::dbd_index via vos_dtx_prepared(). */
@@ -887,8 +885,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 	}
 
 	rc = vos_dtx_lookup_cos(coh, &DAE_OID(dae), &DAE_XID(dae),
-			DAE_DKEY_HASH(dae),
-			DAE_INTENT(dae) == DAOS_INTENT_PUNCH ? true : false);
+				DAE_DKEY_HASH(dae));
 	if (rc == 0)
 		return ALB_AVAILABLE_CLEAN;
 
@@ -997,14 +994,14 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 		/* Incarnation log entry implies a share */
 		*tx_id = DAE_LID(dae);
 		if (type == DTX_RT_ILOG)
-			dth->dth_has_ilog = 1;
+			dth->dth_modify_shared = 1;
 	}
 
 	D_DEBUG(DB_TRACE, "Register DTX record for "DF_DTI
 		": lid=%d entry %p, type %d, %s ilog entry, rc %d\n",
 		DP_DTI(&dth->dth_xid),
 		DAE_LID((struct vos_dtx_act_ent *)dth->dth_ent), dth->dth_ent,
-		type, dth->dth_has_ilog ? "has" : "has not", rc);
+		type, dth->dth_modify_shared ? "has" : "has not", rc);
 
 	return rc;
 }
@@ -1218,12 +1215,12 @@ do_vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch)
 int
 vos_dtx_check_resend(daos_handle_t coh, daos_unit_oid_t *oid,
 		     struct dtx_id *xid, uint64_t dkey_hash,
-		     bool punch, daos_epoch_t *epoch)
+		     daos_epoch_t *epoch)
 {
 	struct vos_container	*cont;
 	int			 rc;
 
-	rc = vos_dtx_lookup_cos(coh, oid, xid, dkey_hash, punch);
+	rc = vos_dtx_lookup_cos(coh, oid, xid, dkey_hash);
 	if (rc == 0)
 		return DTX_ST_COMMITTED;
 
@@ -1567,6 +1564,35 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat)
 				   struct vos_dtx_cmt_ent, dce_committed_link);
 		stat->dtx_oldest_committed_time = DCE_EPOCH(dce);
 	}
+}
+
+int
+vos_dtx_check_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t *epoch)
+{
+	struct vos_container	*cont;
+	struct daos_lru_cache	*occ;
+	struct vos_object	*obj;
+	daos_epoch_range_t	 epr = {0, *epoch};
+	int			 rc;
+
+	cont = vos_hdl2cont(coh);
+	occ = vos_obj_cache_current();
+
+	/* Sync epoch check inside vos_obj_hold(). We do not
+	 * care about whether it is for punch or update, use
+	 * DAOS_INTENT_COS to bypass DTX conflict check.
+	 */
+	rc = vos_obj_hold(occ, cont, oid, &epr, true,
+			  DAOS_INTENT_COS, true, &obj, 0);
+	if (rc != 0) {
+		D_ERROR(DF_UOID" fail to check sync: rc = "DF_RC"\n",
+			DP_UOID(oid), DP_RC(rc));
+	} else {
+		*epoch = obj->obj_sync_epoch;
+		vos_obj_release(occ, obj, false);
+	}
+
+	return rc;
 }
 
 int

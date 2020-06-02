@@ -166,7 +166,8 @@ iv_key_unpack(struct ds_iv_key *key_iv, crt_iv_key_t *key_iov)
 	 * ds_iv_key, so it is safe to use before unpack
 	 */
 	class = iv_class_lookup(tmp_key->class_id);
-	D_ASSERT(class != NULL);
+	D_ASSERTF(class != NULL, "class_id/rank %d/%u\n", tmp_key->class_id,
+		  tmp_key->rank);
 
 	if (class->iv_class_ops->ivc_key_unpack)
 		rc = class->iv_class_ops->ivc_key_unpack(class, key_iov,
@@ -820,6 +821,7 @@ struct iv_cb_info {
 	d_sg_list_t	*value;
 	unsigned int	opc;
 	int		result;
+	crt_iv_sync_t	sync;
 };
 
 static int
@@ -870,8 +872,8 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
 	D_ASSERT(class != NULL);
-	D_DEBUG(DB_MD, "class_id %d crt class id %d opc %d\n",
-		key_iv->class_id, class->iv_cart_class_id, opc);
+	D_DEBUG(DB_MD, "class_id %d master %d crt class id %d opc %d\n",
+		key_iv->class_id, key_iv->rank, class->iv_cart_class_id, opc);
 
 	iv_key_pack(&key_iov, key_iv);
 	memset(&cb_info, 0, sizeof(cb_info));
@@ -950,10 +952,34 @@ ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	return iv_op(ns, key, value, NULL, 0, retry, IV_FETCH);
 }
 
+struct sync_comp_cb_arg {
+	d_sg_list_t iv_value;
+	struct ds_iv_key iv_key;
+};
+
+static void
+sync_comp_cb_arg_free(struct sync_comp_cb_arg *arg)
+{
+	if (arg == NULL)
+		return;
+
+	daos_sgl_fini(&arg->iv_value, true);
+	D_FREE(arg);
+}
+
+int
+sync_comp_cb(void *arg)
+{
+	sync_comp_cb_arg_free((struct sync_comp_cb_arg *)arg);
+	return 0;
+}
+
 /**
  * Update the value to the iv_entry through Cart IV, and it will mark the
  * entry to be valid, so the following fetch will retrieve the value from
  * local cache entry.
+ * NB: for lazy update, it will clone the key and buffer and free them in
+ * the complete callback, in case the caller release them right away.
  *
  * param ns[in]		iv namespace.
  * param key[in]	iv key
@@ -969,13 +995,35 @@ ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	     unsigned int shortcut, unsigned int sync_mode,
 	     unsigned int sync_flags, bool retry)
 {
-	crt_iv_sync_t	iv_sync = { 0 };
+	crt_iv_sync_t		iv_sync = { 0 };
+	struct sync_comp_cb_arg *arg = NULL;
+	int			rc;
 
 	iv_sync.ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;
+	if (sync_mode == CRT_IV_SYNC_LAZY) {
+		D_ALLOC_PTR(arg);
+		if (arg == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 
-	return iv_op(ns, key, value, &iv_sync, shortcut, retry, IV_UPDATE);
+		rc = daos_sgl_alloc_copy_data(&arg->iv_value, value);
+		if (rc)
+			D_GOTO(out, rc);
+		memcpy(&arg->iv_key, key, sizeof(*key));
+
+		iv_sync.ivs_comp_cb = sync_comp_cb;
+		iv_sync.ivs_comp_cb_arg = arg;
+		value = &arg->iv_value;
+		key = &arg->iv_key;
+	}
+
+	rc = iv_op(ns, key, value, &iv_sync, shortcut, retry, IV_UPDATE);
+out:
+	if (rc && arg != NULL)
+		sync_comp_cb_arg_free(arg);
+
+	return rc;
 }
 
 /**

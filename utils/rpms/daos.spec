@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       17%{?relval}%{?dist}
+Release:       19%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -37,7 +37,7 @@ BuildRequires: libisa-l-devel
 %else
 BuildRequires: libisal-devel
 %endif
-BuildRequires: raft-devel <= 0.5.0
+BuildRequires: raft-devel >= 0.6.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -51,7 +51,6 @@ BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
-BuildRequires: python-distro
 %else
 %if (0%{?suse_version} >= 1315)
 # see src/client/dfs/SConscript for why we need /etc/os-release
@@ -69,7 +68,6 @@ BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: Modules
 BuildRequires: systemd-rpm-macros
-BuildRequires: python3-distro
 %if 0%{?is_opensuse}
 %else
 # have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
@@ -185,14 +183,14 @@ sed -i -e '/AppendUnique(RPATH=.*)/d' $rpath_files
 
 %define conf_dir %{_sysconfdir}/daos
 
-scons %{?no_smp_mflags}    \
+scons %{?_smp_mflags}      \
       --config=force       \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot}
 
 %install
-scons %{?no_smp_mflags}               \
+scons %{?_smp_mflags}                 \
       --config=force                  \
       --install-sandbox=%{?buildroot} \
       %{?buildroot}%{_prefix}         \
@@ -287,7 +285,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/self_test
 %{_bindir}/dmg
 %{_bindir}/dmg_old
-%{_bindir}/daosctl
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
@@ -359,6 +356,12 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
+- Enable parallel building with _smp_mflags
+
+* Fri May 15 2020 Kenneth Cain <kenneth.c.cain@intel.com> - 1.1.0-18
+- Require raft-devel >= 0.6.0 that adds new API raft_election_start()
+
 * Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-17
 - Add cart-devel's Requires to daos-devel as they were forgotten
   during the cart merge

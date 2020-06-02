@@ -26,7 +26,6 @@ package main
 import (
 	"errors"
 	"net"
-	"os/user"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -44,7 +43,7 @@ func TestAgentSecurityModule_ID(t *testing.T) {
 
 	mod := NewSecurityModule(log, nil)
 
-	common.AssertEqual(t, mod.ID(), int32(drpc.ModuleSecurityAgent), "wrong drpc module")
+	common.AssertEqual(t, mod.ID(), drpc.ModuleSecurityAgent, "wrong drpc module")
 }
 
 func newTestSession(t *testing.T, log logging.Logger, conn net.Conn) *drpc.Session {
@@ -56,18 +55,17 @@ func defaultTestTransportConfig() *security.TransportConfig {
 	return &security.TransportConfig{AllowInsecure: true}
 }
 
-func TestAgentSecurityModule_HandleCall_BadMethod(t *testing.T) {
+func TestAgentSecurityModule_BadMethod(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, nil)
-	resp, err := mod.HandleCall(newTestSession(t, log, &net.UnixConn{}), -1, nil)
-
-	if resp != nil {
-		t.Errorf("Expected no response, got %+v", resp)
+	method, err := mod.ID().GetMethod(-1)
+	if method != nil {
+		t.Errorf("Expected no method, got %+v", method)
 	}
 
-	common.CmpErr(t, drpc.UnknownMethodFailure(), err)
+	common.CmpErr(t, errors.New("invalid method -1 for module Agent Security"), err)
 }
 
 func callRequestCreds(mod *SecurityModule, t *testing.T, log logging.Logger, conn net.Conn) ([]byte, error) {
@@ -184,17 +182,6 @@ func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
 	expectCredResp(t, respBytes, int32(drpc.DaosInvalidInput), false)
 }
 
-// Force an error when generating the cred from the domain info
-type errorExt struct{}
-
-func (e *errorExt) LookupUserID(uid uint32) (auth.User, error) {
-	return nil, errors.New("LookupUserID")
-}
-
-func (e *errorExt) LookupGroupID(gid uint32) (*user.Group, error) {
-	return nil, errors.New("LookupGroupID")
-}
-
 func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -204,7 +191,10 @@ func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	defer cleanup()
 
 	mod := NewSecurityModule(log, defaultTestTransportConfig())
-	mod.ext = &errorExt{}
+	mod.ext = &auth.MockExt{
+		LookupUserIDErr:  errors.New("LookupUserID"),
+		LookupGroupIDErr: errors.New("LookupGroupID"),
+	}
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
 	if err != nil {

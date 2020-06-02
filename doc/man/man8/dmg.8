@@ -1,4 +1,4 @@
-.TH dmg 1 "8 May 2020"
+.TH dmg 1 "25 May 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -289,7 +289,7 @@ Reformat an existing DAOS system
 Perform reformat of stopped DAOS servers in system
 .TP
 \fB\fB\-r\fR, \fB\-\-ranks\fR\fP
-Comma separated list of system ranks to format
+Comma separated list of system ranks to format, default is all ranks
 .SS storage prepare
 Prepare SCM and NVMe storage attached to remote servers.
 
@@ -423,7 +423,7 @@ Query DAOS system status
 Display more member details
 .TP
 \fB\fB\-r\fR, \fB\-\-ranks\fR\fP
-Comma separated list of system ranks to query
+Comma separated ranges or individual system ranks to query
 .SS system start
 Perform start of stopped DAOS system
 
