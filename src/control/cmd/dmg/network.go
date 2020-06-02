@@ -35,7 +35,6 @@ import (
 // NetCmd is the struct representing the top-level network subcommand.
 type NetCmd struct {
 	Scan networkScanCmd `command:"scan" description:"Scan for network interface devices on remote servers"`
-	List networkListCmd `command:"list" description:"List all known OFI providers on remote servers that are understood by 'scan'"`
 }
 
 // networkScanCmd is the struct representing the command to scan the machine for network interface devices
@@ -74,42 +73,6 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 	}
 
 	if err := pretty.PrintHostFabricMap(resp.HostFabrics, &bld, false); err != nil {
-		return err
-	}
-	cmd.log.Info(bld.String())
-
-	return resp.Errors()
-}
-
-type networkListCmd struct {
-	logCmd
-	ctlInvokerCmd
-	hostListCmd
-	jsonOutputCmd
-}
-
-// List the supported providers
-func (cmd *networkListCmd) Execute(_ []string) error {
-	ctx := context.Background()
-	req := &control.NetworkScanReq{}
-	req.SetHostList(cmd.hostlist)
-
-	cmd.log.Debugf("network scan req: %+v", req)
-
-	resp, err := control.NetworkScan(ctx, cmd.ctlInvoker, req)
-	if err != nil {
-		return err
-	}
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
-	}
-
-	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
-		return err
-	}
-	if err := pretty.PrintHostFabricMap(resp.HostFabrics, &bld, true); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())

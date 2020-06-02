@@ -39,7 +39,6 @@ const (
 
 type networkCmd struct {
 	Scan networkScanCmd `command:"scan" description:"Scan for network interface devices on local server"`
-	List networkListCmd `command:"list" description:"List all known OFI providers that are understood by 'scan'"`
 }
 
 // networkScanCmd is the struct representing the command to scan the machine for network interface devices
@@ -50,11 +49,23 @@ type networkScanCmd struct {
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)"`
 }
 
-func scanFabric(provider string, onlyProviders bool) (strings.Builder, error) {
-	var bld strings.Builder
+func (cmd *networkScanCmd) Execute(args []string) error {
+	if len(args) > 0 {
+		return errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")
+	}
+
+	provider := cmd.config.Fabric.Provider
+	switch {
+	case strings.EqualFold(cmd.FabricProvider, "all"):
+		provider = ""
+	case cmd.FabricProvider != "":
+		provider = cmd.FabricProvider
+	default:
+	}
+
 	results, err := netdetect.ScanFabric(provider)
 	if err != nil {
-		return bld, errors.WithMessage(err, "failed to execute the fabric and device scan")
+		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
 
 	excludes := defaultExcludeInterfaces
@@ -79,47 +90,11 @@ func scanFabric(provider string, onlyProviders bool) (strings.Builder, error) {
 
 	hfm := make(control.HostFabricMap)
 	if err := hfm.Add("localhost", hf); err != nil {
-		return bld, err
-	}
-
-	if err := pretty.PrintHostFabricMap(hfm, &bld, onlyProviders); err != nil {
-		return bld, err
-	}
-	return bld, nil
-}
-
-func (cmd *networkScanCmd) Execute(args []string) error {
-	if len(args) > 0 {
-		return errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")
-	}
-
-	provider := cmd.config.Fabric.Provider
-	switch {
-	case strings.EqualFold(cmd.FabricProvider, "all"):
-		provider = ""
-	case cmd.FabricProvider != "":
-		provider = cmd.FabricProvider
-	default:
-	}
-
-	bld, err := scanFabric(provider, false)
-	if err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
 
-	return nil
-}
-
-type networkListCmd struct {
-	cfgCmd
-	logCmd
-}
-
-// List the available providers
-func (cmd *networkListCmd) Execute(args []string) error {
-	bld, err := scanFabric("", true)
-	if err != nil {
+	var bld strings.Builder
+	if err := pretty.PrintHostFabricMap(hfm, &bld, false); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())

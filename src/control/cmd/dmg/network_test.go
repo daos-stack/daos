@@ -33,15 +33,6 @@ import (
 func TestNetworkCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"Get network provider list",
-			"network list",
-			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			nil,
-		},
-		{
 			"Perform network scan no provider",
 			"network scan",
 			strings.Join([]string{
