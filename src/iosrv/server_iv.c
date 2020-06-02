@@ -866,7 +866,7 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 
 	rc = ABT_future_create(1, NULL, &future);
 	if (rc) {
-		if (sync->ivs_comp_cb)
+		if (sync != NULL && sync->ivs_comp_cb)
 			sync->ivs_comp_cb(sync->ivs_comp_cb_arg);
 		return rc;
 	}
