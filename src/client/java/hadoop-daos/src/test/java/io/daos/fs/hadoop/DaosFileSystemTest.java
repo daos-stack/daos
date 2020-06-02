@@ -109,6 +109,8 @@ public class DaosFileSystemTest {
     Assert.assertEquals("123", cfg.get(Constants.DAOS_POOL_UUID));
     Assert.assertEquals("56", cfg.get(Constants.DAOS_CONTAINER_UUID));
     Assert.assertEquals("daos_=:group", cfg.get(Constants.DAOS_SERVER_GROUP));
+    Assert.assertEquals("8388608", cfg.get(Constants.DAOS_READ_BUFFER_SIZE));
+    Assert.assertEquals("0", cfg.get(Constants.DAOS_POOL_SVC));
   }
 
   @Test

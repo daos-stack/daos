@@ -204,6 +204,10 @@ public class DaosFileSystem extends FileSystem {
       throw new IllegalArgumentException("path should be started with /, " + path);
     }
 
+    Set<String> exProps = new HashSet<>();
+    exProps.add(Constants.DAOS_POOL_UUID);
+    exProps.add(Constants.DAOS_CONTAINER_UUID);
+    DaosConfigFile.getInstance().merge("", conf, exProps);
     parseUnsConfig(path, conf);
     super.initialize(name, conf);
     validateAndConnect(name, conf);
@@ -228,7 +232,9 @@ public class DaosFileSystem extends FileSystem {
         try {
           switch (kv[0]) {
             case Constants.DAOS_SERVER_GROUP:
-              conf.set(Constants.DAOS_SERVER_GROUP, StringEscapeUtils.unescapeJava(kv[1]));
+              if (StringUtils.isBlank(conf.get(Constants.DAOS_SERVER_GROUP))) {
+                conf.set(Constants.DAOS_SERVER_GROUP, StringEscapeUtils.unescapeJava(kv[1]));
+              }
               break;
             case Constants.DAOS_POOL_UUID:
               if (StringUtils.isBlank(poolId)) {
@@ -238,10 +244,14 @@ public class DaosFileSystem extends FileSystem {
               }
               break;
             case Constants.DAOS_POOL_SVC:
-              conf.set(Constants.DAOS_POOL_SVC, StringEscapeUtils.unescapeJava(kv[1]));
+              if (StringUtils.isBlank(conf.get(Constants.DAOS_POOL_SVC))) {
+                conf.set(Constants.DAOS_POOL_SVC, StringEscapeUtils.unescapeJava(kv[1]));
+              }
               break;
             case Constants.DAOS_POOL_FLAGS:
-              conf.set(Constants.DAOS_POOL_FLAGS, StringEscapeUtils.unescapeJava(kv[1]));
+              if (StringUtils.isBlank(conf.get(Constants.DAOS_POOL_FLAGS))) {
+                conf.set(Constants.DAOS_POOL_FLAGS, StringEscapeUtils.unescapeJava(kv[1]));
+              }
               break;
             case Constants.DAOS_CONTAINER_UUID:
               if (StringUtils.isBlank(contId)) {
@@ -255,7 +265,9 @@ public class DaosFileSystem extends FileSystem {
             case Constants.DAOS_BLOCK_SIZE:
             case Constants.DAOS_CHUNK_SIZE:
             case Constants.DAOS_PRELOAD_SIZE:
-              conf.setInt(kv[0], Integer.valueOf(kv[1]));
+              if (StringUtils.isBlank(conf.get(kv[0]))) {
+                conf.setInt(kv[0], Integer.valueOf(kv[1]));
+              }
               break;
             default:
               throw new IllegalArgumentException("unknown daos config, " + kv[0]);
@@ -265,6 +277,7 @@ public class DaosFileSystem extends FileSystem {
         }
       }
     }
+    // TODO: adjust logic after DAOS added more info to the ext attribute.
     conf.set(Constants.DAOS_POOL_UUID, poolId);
     conf.set(Constants.DAOS_CONTAINER_UUID, contId);
   }

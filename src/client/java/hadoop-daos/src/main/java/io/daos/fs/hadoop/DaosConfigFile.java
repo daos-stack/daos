@@ -26,6 +26,7 @@ package io.daos.fs.hadoop;
 import java.io.*;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -151,7 +152,7 @@ public class DaosConfigFile {
       sb.append('.');
     }
     //set other configurations after the UUIDs are set
-    return merge(sb.toString(), hadoopConfig);
+    return merge(sb.toString(), hadoopConfig, null);
   }
 
   private String setUuid(String key, String defaultKey, String configName, Configuration hadoopConfig) {
@@ -186,12 +187,12 @@ public class DaosConfigFile {
     return key;
   }
 
-  private Configuration merge(String prefix, Configuration hadoopConfig) {
+  public Configuration merge(String prefix, Configuration hadoopConfig, Set<String> excludeProps) {
     Iterator<Map.Entry<String, String>> it = defaultConfig.iterator();
     while (it.hasNext()) {
       Map.Entry<String, String> item = it.next();
       String name = item.getKey();
-      if (name.startsWith("fs.daos.")) {
+      if (name.startsWith("fs.daos.") && (excludeProps == null || !excludeProps.contains(name))) {
         if (hadoopConfig.get(name) == null) { //not set by user
           hadoopConfig.set(name, defaultConfig.get(prefix+name, item.getValue()));
         }

@@ -44,32 +44,60 @@ DaosInputStream and DaosOutputStream.
 * DaosOutputStream, for writing file.
 
 #### Hadoop DAOS FileSystem Configuration
-DAOS FileSystem binds to schema, "daos". And there are two ways to instantiate Hadoop DAOS FileSystem, DAOS UNS path and 
-configuration file, daos-site.xml.
-* daos-site.xml
 
-make sure daos-site.xml can be loaded by Hadoop. Please check
-[example](hadoop-daos/src/main/resources/daos-site-example.xml) for configuration items, defaults and their description.
-* DAOS UNS path
+##### DAOS URIs
+DAOS FileSystem binds to schema, "daos". And DAOS URIs are in the format of "daos://\<authority\>//\[optional path\]".
+There are two ways to connect to DAOS from Hadoop DAOS FileSystem, depending on the "\<authority\>".
 
-The URI should be in format of "daos://uns/your path". "your path" is your OS file path created by DAOS UNS method,
-DaosUns.create(). You can create the UNS path with below command.
+* Mapped DAOS pool/container UUIDs
+
+The URI is "daos://<mapped pool UUID>:<mapped container UUID>", such as "daos://default:1". Please check description of
+"fs.defaultFS" in [example](hadoop-daos/src/main/resources/daos-site-example.xml) for how to construct your URI by
+mapping your UUIDs. In this way, all configurations are in daos-site.xml which should be put in right place, e.g.,
+Java classpath, and loadable by Hadoop DAOS FileSystem.
+
+* DAOS UNS Path
+
+The URI is "daos://uns/<your path>". "<your path>" is your OS file path created by DAOS UNS method, DaosUns.create().
+You can create the UNS path with below command.
+
+    ```bash
+    daos cont create --pool <pool UUID> --svc <svc list> -path <your path> --type=POSIX
+    ```
+Or
+
     ```bash
     java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns create
     ```
-If you need to customize more parameters in [example](hadoop-daos/src/main/resources/daos-site-example.xml), you can
-set more info to the same UNS path with below command.
+
+After creation, you can use below command to see what DAOS properties set to the path.
+
+    ```path
+    getfattr -d -m - <your path>
+    ```
+
+##### Tune More Configurations
+
+If your DAOS URI is the mapped UUIDs, you can follow descriptions of each config item in
+[example](hadoop-daos/src/main/resources/daos-site-example.xml) to set your own values in loadable daos-site.xml.
+
+If your DAOS URI is the UNS path, your configurations, except those set by DAOS UNS creation, in daos-site.xml can still
+be effective. To make configuration source consistent, an alternative to configuration file, daos-site.xml, is to set
+all configurations to the UNS path. You put the configs to the same UNS path with below command.
    ```bash
    java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=daos_server:fs.daos.pool.svc=0"
         -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns setappinfo
    ```
-For value property, you need to follow pattern, key1=value1:key2=value2... And key* should be from
+For the "value" property, you need to follow pattern, key1=value1:key2=value2... And key* should be from
 [example](hadoop-daos/src/main/resources/daos-site-example.xml). If value* contains characters of '=' or ':', you need
 to escape the value with below command.
    ```bash
     java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns util
    ```
 You'll get escaped value, "daos_server\u003a1\u003d2", for "daos_server:1=2".
+
+If you configure the same property in both daos-site.mxl and UNS path, the value in daos-sitem.xml takes priority. If
+user set Hadoop configuration before initializing Hadoop DAOS FileSystem, the user's configuration takes priority.
 
 ## Build
 They are Java modules and built by Maven. Java 1.8 and Maven 3 are required to build these modules. After they are
@@ -88,6 +116,9 @@ put under src/main/java/io/daos/dfs/uns and src/main/native respectively. If you
 regenerate these codes, you can build with below command.
     
     mvn -DskipITs -Dcompile.proto=true clean install 
+
+Before issuing above command, you need [protobuf 3](https://github.com/protocolbuffers/protobuf.git) and its
+[C plugin](https://github.com/protobuf-c/protobuf-c.git) installed.
 
 If you have DAOS pool and DAOS container with type of posix, you can run integration test when build with below command.
 Before running it, make sure you have DAOS environment properly setup, including server and user environment variables.
