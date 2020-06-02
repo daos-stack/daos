@@ -375,7 +375,7 @@ static int
 akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		  daos_size_t *rsize, struct vos_io_context *ioc)
 {
-	struct vos_key_bundle	 kbund;
+	struct vos_svt_key	 key;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 kiov; /* iov to carry key bundle */
 	d_iov_t			 riov; /* iov to carry record bundle */
@@ -383,8 +383,9 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	int			 rc;
 	struct dcs_csum_info	csum_info = {0};
 
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epoch	= epr->epr_hi;
+	d_iov_set(&kiov, &key, sizeof(key));
+	key.sk_epoch	= epr->epr_hi;
+	key.sk_minor_epc = VOS_MINOR_EPC_MAX;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	memset(&biov, 0, sizeof(biov));
@@ -399,7 +400,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		rc = 0;
 	} else if (rc != 0) {
 		goto out;
-	} else if (kbund.kb_epoch < epr->epr_lo) {
+	} else if (key.sk_epoch < epr->epr_lo) {
 		/* The single value is before the valid epoch range (after a
 		 * punch when incarnation log is available
 		 */
@@ -940,7 +941,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 		   daos_size_t gsize, struct vos_io_context *ioc,
 		   uint16_t minor_epc)
 {
-	struct vos_key_bundle	 kbund;
+	struct vos_svt_key	 key;
 	struct vos_rec_bundle	 rbund;
 	struct dcs_csum_info	 csum;
 	d_iov_t			 kiov, riov;
@@ -950,9 +951,9 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	int			 rc;
 
 	ci_set_null(&csum);
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epoch	= epoch;
-
+	d_iov_set(&kiov, &key, sizeof(key));
+	key.sk_epoch		= epoch;
+	key.sk_minor_epc	= minor_epc;
 
 	umoff = iod_update_umoff(ioc);
 	D_ASSERT(!UMOFF_IS_NULL(umoff));
