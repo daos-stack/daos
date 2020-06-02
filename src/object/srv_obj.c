@@ -238,14 +238,14 @@ cont_prop_csum_enabled(struct ds_iv_ns *ns, uuid_t co_hdl)
 {
 	int			rc;
 	daos_prop_t		cont_prop = {0};
-	struct daos_prop_entry entry = {0};
+	struct daos_prop_entry	entry = {0};
 	uint32_t		csum_val;
 
 	entry.dpe_type = DAOS_PROP_CO_CSUM;
 	cont_prop.dpp_entries = &entry;
 	cont_prop.dpp_nr = 1;
 
-	rc = cont_iv_prop_fetch(ns, co_hdl, &cont_prop);
+	rc = ds_cont_fetch_prop(ns, co_hdl, &cont_prop);
 	if (rc != 0)
 		return false;
 	csum_val = daos_cont_prop2csum(&cont_prop);
@@ -813,8 +813,12 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 
 	struct bio_desc *biod = vos_ioh2desc(ioh);
 	struct dcs_csum_info *csum_infos = vos_ioh2ci(ioh);
+	uint32_t csum_info_nr = vos_ioh2ci_nr(ioh);
 
 	for (i = 0; i < iods_nr; i++) {
+		if (biov_csums_idx >= csum_info_nr)
+			break; /** no more csums to add */
+
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
 			bio_iod_sgl(biod, i),
@@ -924,9 +928,9 @@ obj_log_csum_err(void)
 }
 
 static void
-map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t byte_idx)
+map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t rec_idx)
 {
-	map->iom_recxs[map->iom_nr_out].rx_idx = byte_idx / map->iom_size;
+	map->iom_recxs[map->iom_nr_out].rx_idx = rec_idx;
 	map->iom_recxs[map->iom_nr_out].rx_nr = bio_iov2req_len(biov)
 						/ map->iom_size;
 	map->iom_nr_out++;
@@ -944,8 +948,9 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 	daos_iod_t		*iod;
 	struct bio_iov		*biov;
 	uint32_t		 iods_nr;
-	uint32_t		 i, j;
-	uint64_t		 byte_idx;
+	uint32_t		 i, r;
+	uint64_t		 rec_idx;
+	uint32_t		 bsgl_iov_idx;
 
 	/**
 	 * Allocate memory for the maps. There will be 1 per iod
@@ -975,21 +980,30 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 			bsgl->bs_nr_out == 0)
 			continue;
 
-		/** start byte_idx at first record of iod.recxs */
-		byte_idx = iod->iod_recxs[0].rx_idx;
-		for (i = 0; i < iods_nr; i++)
-			byte_idx = min(byte_idx, iod->iod_recxs[i].rx_idx);
-		byte_idx *= map->iom_size;
+		/** start rec_idx at first record of iod.recxs */
+		bsgl_iov_idx = 0;
+		for (r = 0; r < iod->iod_nr; r++) {
+			daos_recx_t recx = iod->iod_recxs[r];
 
-		for (j = 0; j < bsgl->bs_nr_out; j++) {
-			biov = bio_sgl_iov(bsgl, j);
-			if (!bio_addr_is_hole(&biov->bi_addr))
-				map_add_recx(map, biov, byte_idx);
+			rec_idx = recx.rx_idx;
 
-			byte_idx += bio_iov2req_len(biov);
+			while (rec_idx <= recx.rx_idx + recx.rx_nr - 1) {
+				biov = bio_sgl_iov(bsgl, bsgl_iov_idx);
+				if (biov == NULL) /** reached end of bsgl */
+					break;
+				if (!bio_addr_is_hole(&biov->bi_addr))
+					map_add_recx(map, biov, rec_idx);
+
+				rec_idx += (bio_iov2req_len(biov) /
+					    map->iom_size);
+				bsgl_iov_idx++;
+			}
 		}
+
 		/** allocated and used should be the same */
-		D_ASSERT(map->iom_nr == map->iom_nr_out);
+		D_ASSERTF(map->iom_nr == map->iom_nr_out,
+			  "map->iom_nr(%d) == map->iom_nr_out(%d)",
+			  map->iom_nr, map->iom_nr_out);
 		map->iom_recx_lo = map->iom_recxs[0];
 		map->iom_recx_hi = map->iom_recxs[map->iom_nr - 1];
 	}
@@ -1199,7 +1213,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	int		      rc;
 
 	memset(ioc, 0, sizeof(*ioc));
-	rc = cont_iv_capa_fetch(pool_uuid, coh_uuid, cont_uuid, &coh);
+	rc = ds_cont_find_hdl(pool_uuid, coh_uuid, &coh);
 	if (rc) {
 		if (rc == -DER_NONEXIST)
 			rc = -DER_NO_HDL;
@@ -1226,7 +1240,12 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	if (coh->sch_cont != NULL) {
 		ds_cont_child_get(coh->sch_cont);
 		coc = coh->sch_cont;
-		D_GOTO(out, rc = 0);
+		if (uuid_compare(cont_uuid, coc->sc_uuid) == 0)
+			D_GOTO(out, rc = 0);
+
+		D_ERROR("Stale container handle "DF_UUID" != "DF_UUID"\n",
+			DP_UUID(cont_uuid), DP_UUID(coh->sch_uuid));
+		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
 	if (!is_rebuild_container(pool_uuid, coh_uuid)) {
@@ -1393,8 +1412,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid,
-				       &orw->orw_dti,
-				       orw->orw_dkey_hash, false,
+				       &orw->orw_dti, orw->orw_dkey_hash,
 				       &orw->orw_epoch);
 
 		/* Do nothing if 'prepared' or 'committed'. */
@@ -1553,8 +1571,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		daos_epoch_t	tmp = 0;
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid,
-				       &orw->orw_dti, orw->orw_dkey_hash,
-				       false, &tmp);
+				       &orw->orw_dti, orw->orw_dkey_hash, &tmp);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
 
@@ -1589,8 +1606,7 @@ renew:
 			      orw->orw_epoch, orw->orw_dkey_hash,
 			      orw->orw_map_ver, DAOS_INTENT_UPDATE,
 			      orw->orw_shard_tgts.ca_arrays,
-			      orw->orw_shard_tgts.ca_count,
-			      orw->orw_api_flags & VOS_COND_UPDATE_MASK, &dlh);
+			      orw->orw_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -2031,7 +2047,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	if (opi->opi_flags & ORF_RESEND) {
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid,
 				       &opi->opi_dti, opi->opi_dkey_hash,
-				       true, &opi->opi_epoch);
+				       &opi->opi_epoch);
 
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc == -DER_ALREADY || rc == 0)
@@ -2170,8 +2186,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		daos_epoch_t	tmp = 0;
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid,
-				       &opi->opi_dti, opi->opi_dkey_hash,
-				       true, &tmp);
+				       &opi->opi_dti, opi->opi_dkey_hash, &tmp);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
 
@@ -2205,8 +2220,7 @@ renew:
 			      opi->opi_epoch, opi->opi_dkey_hash,
 			      opi->opi_map_ver, DAOS_INTENT_PUNCH,
 			      opi->opi_shard_tgts.ca_arrays,
-			      opi->opi_shard_tgts.ca_count,
-			      opi->opi_api_flags & VOS_OF_COND_PUNCH, &dlh);
+			      opi->opi_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));

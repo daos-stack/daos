@@ -273,7 +273,6 @@ cont_aggregate_ult(void *arg)
 		    cont->sc_abort_vos_aggregating)
 			break;
 
-		sleep /= NSEC_PER_SEC; /* Convert to seconds */
 		if (sleep > 0)
 			dss_ult_sleep(cont->sc_agg_ult, sleep);
 		else
@@ -753,7 +752,8 @@ static d_hash_table_ops_t cont_hdl_hash_ops = {
 int
 ds_cont_hdl_hash_create(struct d_hash_table *hash)
 {
-	return d_hash_table_create_inplace(0 /* feats */, 8 /* bits */,
+	return d_hash_table_create_inplace(D_HASH_FT_NOLOCK /* feats */,
+					   8 /* bits */,
 					   NULL /* priv */,
 					   &cont_hdl_hash_ops, hash);
 }

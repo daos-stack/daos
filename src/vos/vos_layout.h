@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 #define POOL_DF_VER_1				1
-#define POOL_DF_VERSION				6
+#define POOL_DF_VERSION				8
 
 /**
  * Durable format for VOS pool
@@ -169,8 +169,8 @@ struct vos_dtx_act_ent_df {
 	uint64_t			dae_srv_gen;
 	/** The allocated local id for the DTX entry */
 	uint32_t			dae_lid;
-	/** The intent of related modification. */
-	uint16_t			dae_intent;
+	/** For 32-bits alignment. */
+	uint16_t			dae_padding;
 	/** The index in the current vos_dtx_blob_df. */
 	int16_t				dae_index;
 	/** The inlined dtx records. */
@@ -182,16 +182,6 @@ struct vos_dtx_act_ent_df {
 	/** The offset for the list of dtx records if out of inline. */
 	umem_off_t			dae_rec_off;
 };
-
-/* Assume dae_rec_cnt is next to dae_flags. */
-D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_cnt) ==
-	  offsetof(struct vos_dtx_act_ent_df, dae_flags) +
-	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_flags));
-
-/* Assume dae_rec_off is next to dae_rec_cnt. */
-D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_off) ==
-	  offsetof(struct vos_dtx_act_ent_df, dae_rec_cnt) +
-	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_rec_cnt));
 
 /** Committed DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_cmt_ent_df {
@@ -318,8 +308,10 @@ struct vos_irec_df {
 	uint32_t			ir_ver;
 	/** The DTX entry in SCM. */
 	uint32_t			ir_dtx;
+	/** Minor epoch */
+	uint16_t			ir_minor_epc;
 	/** padding bytes */
-	uint32_t			ir_pad32;
+	uint16_t			ir_pad16;
 	/** length of value */
 	uint64_t			ir_size;
 	/**
