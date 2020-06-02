@@ -255,10 +255,15 @@ typedef struct {
 					       void *data);
 } umem_ops_t;
 
+
+#define UMM_SLABS_CNT	5
+
 /** attributes to initialise an unified memroy class */
 struct umem_attr {
-	umem_class_id_t		 uma_id;
-	PMEMobjpool		*uma_pool;
+	umem_class_id_t			 uma_id;
+	PMEMobjpool			*uma_pool;
+	/** Slabs of the umem pool */
+	struct pobj_alloc_class_desc	 uma_slabs[UMM_SLABS_CNT];
 };
 
 /** instance of an unified memory class */
@@ -273,7 +278,30 @@ struct umem_instance {
 	uint64_t		 umm_base;
 	/** class member functions */
 	umem_ops_t		*umm_ops;
+	/** Slabs of the umem pool */
+	struct pobj_alloc_class_desc	 umm_slabs[UMM_SLABS_CNT];
 };
+
+static inline bool
+umem_slab_registered(struct umem_instance *umm, unsigned int slab_id)
+{
+	D_ASSERT(slab_id < UMM_SLABS_CNT);
+	return umm->umm_slabs[slab_id].class_id != 0;
+}
+
+static inline uint64_t
+umem_slab_flags(struct umem_instance *umm, unsigned int slab_id)
+{
+	D_ASSERT(slab_id < UMM_SLABS_CNT);
+	return POBJ_CLASS_ID(umm->umm_slabs[slab_id].class_id);
+}
+
+static inline size_t
+umem_slab_usize(struct umem_instance *umm, unsigned int slab_id)
+{
+	D_ASSERT(slab_id < UMM_SLABS_CNT);
+	return umm->umm_slabs[slab_id].unit_size;
+}
 
 int  umem_class_init(struct umem_attr *uma, struct umem_instance *umm);
 void umem_attr_get(struct umem_instance *umm, struct umem_attr *uma);

@@ -346,6 +346,25 @@ static void dlog_cleanout(void)
 #endif
 }
 
+static __thread int	 pre_err;
+static __thread int	 pre_err_line;
+static __thread uint64_t pre_err_time;
+
+#define dlog_print_err(err, fmt, ...)				\
+do {								\
+	struct timeval	_tv;					\
+								\
+	gettimeofday(&_tv, NULL);				\
+	if (pre_err_line == __LINE__ &&				\
+	    pre_err == (err) &&	_tv.tv_sec <= pre_err_time)	\
+		break;						\
+	pre_err_time = _tv.tv_sec;				\
+	pre_err_line = __LINE__;				\
+	pre_err	     = err;					\
+	fprintf(stderr, "%s: %d: err=%d " fmt,			\
+		__func__, __LINE__, err,  ## __VA_ARGS__);	\
+} while (0)
+
 /**
  * d_vlog: core log function, front-ended by d_log
  * we vsnprintf the message into a holding buffer to format it.  then we
@@ -403,7 +422,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	(void) gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
 	if (tm == NULL) {
-		fprintf(stderr, "clog: localtime returned NULL\n");
+		dlog_print_err(errno, "localtime returned NULL\n");
 		clog_unlock();
 		return;
 	}
@@ -452,9 +471,9 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 */
 	if (hlen + 1 >= sizeof(b)) {
 		clog_unlock();	/* drop lock, this is the only early exit */
-		fprintf(stderr,
-			"clog: header overflowed %zd byte buffer (%d)\n",
-			sizeof(b), hlen + 1);
+		dlog_print_err(E2BIG,
+			       "header overflowed %zd byte buffer (%d)\n",
+			       sizeof(b), hlen + 1);
 		errno = save_errno;
 		return;
 	}
@@ -493,8 +512,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 */
 	if (mst.logfd >= 0)
 		if (write(mst.logfd, b, tlen) < 0) {
-			fprintf(stderr, "%s:%d, write failed %d(%s).\n",
-				__func__, __LINE__, errno, strerror(errno));
+			dlog_print_err(errno, "write log failed\n");
 			errno = save_errno;
 		}
 

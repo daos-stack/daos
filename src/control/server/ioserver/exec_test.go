@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -116,7 +116,7 @@ func TestRunnerContextExit(t *testing.T) {
 	cfg.Index = 9
 
 	runner := NewRunner(log, cfg)
-	errOut := make(chan InstanceError)
+	errOut := make(chan error)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	if err := runner.Start(ctx, errOut); err != nil {
@@ -124,14 +124,10 @@ func TestRunnerContextExit(t *testing.T) {
 	}
 	cancel()
 
-	exitErr := <-errOut
-	if errors.Cause(exitErr.Err) == NormalExit {
+	err := <-errOut
+	if errors.Cause(err) == NormalExit {
 		t.Fatal("expected process to not exit normally")
 	}
-	if exitErr.Idx != cfg.Index {
-		t.Fatal("expected exit error to contain instance index")
-	}
-
 }
 
 func TestRunnerNormalExit(t *testing.T) {
@@ -155,15 +151,15 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30)
 	runner := NewRunner(log, cfg)
-	errOut := make(chan InstanceError)
+	errOut := make(chan error)
 
 	if err := runner.Start(context.Background(), errOut); err != nil {
 		t.Fatal(err)
 	}
 
-	exitErr := <-errOut
-	if errors.Cause(exitErr.Err).Error() != NormalExit.Error() {
-		t.Fatalf("expected normal exit; got %s", exitErr.Err)
+	err := <-errOut
+	if errors.Cause(err).Error() != NormalExit.Error() {
+		t.Fatalf("expected normal exit; got %s", err)
 	}
 
 	// Light integration testing of arg/env generation; unit tests elsewhere.

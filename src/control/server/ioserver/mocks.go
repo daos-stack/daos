@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package ioserver
 
 import (
@@ -33,12 +34,11 @@ type (
 	TestRunnerConfig struct {
 		StartCb    func()
 		StartErr   error
-		WaitErr    error
 		Running    atm.Bool
 		SignalCb   func(uint32, os.Signal)
 		SignalErr  error
-		ErrChanCb  func(uint32) InstanceError
-		ErrChanErr InstanceError
+		ErrChanCb  func() error
+		ErrChanErr error
 	}
 
 	TestRunner struct {
@@ -57,12 +57,12 @@ func NewTestRunner(trc *TestRunnerConfig, sc *Config) *TestRunner {
 	}
 }
 
-func (tr *TestRunner) Start(ctx context.Context, errChan chan<- InstanceError) error {
+func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 	if tr.runnerCfg.StartCb != nil {
 		tr.runnerCfg.StartCb()
 	}
 	if tr.runnerCfg.ErrChanCb == nil {
-		tr.runnerCfg.ErrChanCb = func(idx uint32) InstanceError {
+		tr.runnerCfg.ErrChanCb = func() error {
 			return tr.runnerCfg.ErrChanErr
 		}
 	}
@@ -70,10 +70,11 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- InstanceError) e
 	go func() {
 		select {
 		case <-ctx.Done():
-		case errChan <- tr.runnerCfg.ErrChanCb(tr.serverCfg.Index):
+		case errChan <- tr.runnerCfg.ErrChanCb():
+			if tr.runnerCfg.ErrChanErr != nil {
+				tr.runnerCfg.Running.SetFalse()
+			}
 		}
-		tr.runnerCfg.Running.SetFalse()
-		return
 	}()
 
 	if tr.runnerCfg.StartErr == nil {
@@ -88,13 +89,6 @@ func (tr *TestRunner) Signal(sig os.Signal) error {
 		tr.runnerCfg.SignalCb(tr.serverCfg.Index, sig)
 	}
 	return tr.runnerCfg.SignalErr
-}
-
-func (tr *TestRunner) Wait() error {
-	if tr.runnerCfg.WaitErr == nil {
-		tr.runnerCfg.Running.SetFalse()
-	}
-	return tr.runnerCfg.WaitErr
 }
 
 func (tr *TestRunner) IsRunning() bool {

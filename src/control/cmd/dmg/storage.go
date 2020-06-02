@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,20 +24,20 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
+	"context"
+	"os"
+	"strings"
 
-	"github.com/daos-stack/daos/src/control/client"
-	"github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/pkg/errors"
+
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
 	rowFieldSep = "/"
-	successMsg  = "storage format ok"
 )
 
 // storageCmd is the struct representing the top-level storage subcommand.
@@ -52,26 +52,27 @@ type storageCmd struct {
 // storagePrepareCmd is the struct representing the prep storage subcommand.
 type storagePrepareCmd struct {
 	logCmd
-	connectedCmd
+	ctlInvokerCmd
+	hostListCmd
+	jsonOutputCmd
 	types.StoragePrepareCmd
 }
 
 // Execute is run when storagePrepareCmd activates
 func (cmd *storagePrepareCmd) Execute(args []string) error {
-	var nReq *ctlpb.PrepareNvmeReq
-	var sReq *ctlpb.PrepareScmReq
-
 	prepNvme, prepScm, err := cmd.Validate()
 	if err != nil {
 		return err
 	}
 
+	var nReq *control.NvmePrepareReq
+	var sReq *control.ScmPrepareReq
 	if prepNvme {
-		nReq = &ctlpb.PrepareNvmeReq{
-			Pciwhitelist: cmd.PCIWhiteList,
-			Nrhugepages:  int32(cmd.NrHugepages),
-			Targetuser:   cmd.TargetUser,
-			Reset_:       cmd.Reset,
+		nReq = &control.NvmePrepareReq{
+			PCIWhiteList: cmd.PCIWhiteList,
+			NrHugePages:  int32(cmd.NrHugepages),
+			TargetUser:   cmd.TargetUser,
+			Reset:        cmd.Reset,
 		}
 	}
 
@@ -80,127 +81,145 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return err
 		}
 
-		sReq = &ctlpb.PrepareScmReq{Reset_: cmd.Reset}
+		sReq = &control.ScmPrepareReq{Reset: cmd.Reset}
 	}
 
-	cmd.log.Infof("NVMe & SCM preparation:\n%s",
-		cmd.conns.StoragePrepare(&ctlpb.StoragePrepareReq{Nvme: nReq, Scm: sReq}))
+	ctx := context.Background()
+	req := &control.StoragePrepareReq{
+		NVMe: nReq,
+		SCM:  sReq,
+	}
+	req.SetHostList(cmd.hostlist)
+	resp, err := control.StoragePrepare(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err
+	}
 
-	return nil
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
+	}
+
+	var bld strings.Builder
+	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+		return err
+	}
+	if err := control.PrintStoragePrepareMap(resp.HostStorage, &bld); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
+
+	return resp.Errors()
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
 type storageScanCmd struct {
 	logCmd
-	connectedCmd
+	ctlInvokerCmd
+	hostListCmd
+	jsonOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
 }
 
 // Execute is run when storageScanCmd activates.
 //
 // Runs NVMe and SCM storage scan on all connected servers.
-func (cmd *storageScanCmd) Execute(args []string) error {
-	out, err := scanCmdDisplay(cmd.conns.StorageScan(nil), !cmd.Verbose)
+func (cmd *storageScanCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	req := &control.StorageScanReq{}
+	req.SetHostList(cmd.hostlist)
+	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
-	cmd.log.Info(out)
 
-	return nil
-}
-
-// scanCmdDisplay returns tabulated output of grouped host summaries or groups
-// matched on all tabulatd device details per host.
-func scanCmdDisplay(result *client.StorageScanResp, summary bool) (string, error) {
-	out := &bytes.Buffer{}
-
-	groups, err := groupScanResults(result, summary)
-	if err != nil {
-		return "", err
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
 	}
 
-	if summary {
-		if len(groups) == 0 {
-			return "no hosts found", nil
-		}
-		return tabulateHostGroups(groups, "Hosts", "SCM Total", "NVMe Total")
+	var bld strings.Builder
+	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
+	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+		return err
 	}
-
-	formatHostGroups(out, groups)
-
-	return out.String(), nil
-}
-
-// groupScanResults collects identical output keyed on hostset from
-// scan results. SCM namespaces will be displayed instead of modules if they
-// exist. SCM & NVMe device details will be tabulated and grouping will match
-// all tabulated output for a given host. Summary will provide storage capacity
-// totals and number of device.
-func groupScanResults(result *client.StorageScanResp, summary bool) (groups hostlist.HostGroups, err error) {
-	var host string
-	buf := &bytes.Buffer{}
-	groups = make(hostlist.HostGroups)
-
-	for _, srv := range result.Servers {
-		buf.Reset()
-
-		host, _, err = common.SplitPort(srv, 0) // disregard port when grouping output
-		if err != nil {
-			return
-		}
-
-		if summary {
-			fmt.Fprintf(buf, "%s%s%s", result.Scm[srv].Summary(),
-				rowFieldSep, result.Nvme[srv].Summary())
-			if err = groups.AddHost(buf.String(), host); err != nil {
-				return
-			}
-			continue
-		}
-
-		sres := result.Scm[srv]
-		switch {
-		case sres.Err != nil:
-			fmt.Fprintf(buf, "SCM Error: %s\n", sres.Err)
-		case len(sres.Namespaces) > 0:
-			fmt.Fprintf(buf, "%s\n", scmNsScanTable(sres.Namespaces))
-		default:
-			fmt.Fprintf(buf, "%s\n", scmModuleScanTable(sres.Modules))
-		}
-
-		if result.Nvme[srv].Err != nil {
-			fmt.Fprintf(buf, "NVMe Error: %s\n", result.Nvme[srv].Err)
-		} else {
-			fmt.Fprintf(buf, "%s", nvmeScanTable(result.Nvme[srv].Ctrlrs))
-		}
-
-		if err = groups.AddHost(buf.String(), host); err != nil {
-			return
-		}
+	if err := control.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
+		return err
 	}
+	cmd.log.Info(bld.String())
 
-	return
+	return resp.Errors()
 }
 
 // storageFormatCmd is the struct representing the format storage subcommand.
 type storageFormatCmd struct {
 	logCmd
-	connectedCmd
+	ctlInvokerCmd
+	hostListCmd
+	jsonOutputCmd
 	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
 	Reformat bool `long:"reformat" description:"Always reformat storage (CAUTION: Potentially destructive)"`
+	Group    struct {
+		System bool   `long:"system" description:"Perform reformat of stopped DAOS servers in system"`
+		Ranks  string `long:"ranks" short:"r" description:"Comma separated list of system ranks to format, default is all ranks"`
+	} `group:"System Format Options" description:"Reformat an existing DAOS system"`
 }
 
 // Execute is run when storageFormatCmd activates
 //
 // run NVMe and SCM storage format on all connected servers
-func (cmd *storageFormatCmd) Execute(args []string) error {
-	out, err := formatCmdDisplay(cmd.conns.StorageFormat(cmd.Reformat), !cmd.Verbose)
+func (cmd *storageFormatCmd) Execute(args []string) (err error) {
+	ctx := context.Background()
+
+	if cmd.Group.System {
+		cmd.log.Info("system reformat selected")
+
+		if cmd.Reformat {
+			cmd.log.Info("--reformat is already implied by --system")
+		}
+
+		ranks, err := system.ParseRanks(cmd.Group.Ranks)
+		if err != nil {
+			return errors.Wrap(err, "parsing rank list")
+		}
+
+		resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
+			&control.SystemResetFormatReq{Ranks: ranks})
+		if err != nil {
+			return err
+		}
+
+		return cmd.printFormatResp(resp)
+	}
+
+	if cmd.Group.Ranks != "" {
+		cmd.log.Info("--ranks are ignored unless --system is set")
+	}
+
+	req := &control.StorageFormatReq{Reformat: cmd.Reformat}
+	req.SetHostList(cmd.hostlist)
+	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
-	cmd.log.Info(out)
 
-	return nil
+	return cmd.printFormatResp(resp)
+}
+
+func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) error {
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp)
+	}
+
+	var bld strings.Builder
+	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
+	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+		return err
+	}
+	if err := control.PrintStorageFormatMap(resp.HostStorage, &bld, verbose); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
+
+	return resp.Errors()
 }
 
 // setFaultyCmd is the struct representing the set storage subcommand
@@ -224,65 +243,4 @@ func (s *nvmeSetFaultyCmd) Execute(args []string) error {
 	s.log.Infof("Device State Info:\n%s\n", s.conns.StorageSetFaulty(req))
 
 	return nil
-}
-
-// formatCmdDisplay returns tabulated output of grouped host summaries or groups
-// matched on all tabulatd device format results per host.
-func formatCmdDisplay(results client.StorageFormatResults, summary bool) (string, error) {
-	out := &bytes.Buffer{}
-
-	groups, mixedGroups, err := groupFormatResults(results, summary)
-	if err != nil {
-		return "", err
-	}
-
-	if len(groups) > 0 {
-		fmt.Fprintf(out, "\n%s\n", groups)
-	}
-
-	return formatHostGroups(out, mixedGroups), nil
-}
-
-// groupFormatResults collects identical output keyed on hostset from
-// format results and returns separate groups for host (as opposed to
-// storage subsystem) level errors. Summary will provide success/failure only.
-func groupFormatResults(results client.StorageFormatResults, summary bool) (groups, mixedGroups hostlist.HostGroups, err error) {
-	var host string
-	buf := &bytes.Buffer{}
-	groups = make(hostlist.HostGroups)      // result either complete success or failure
-	mixedGroups = make(hostlist.HostGroups) // result mix of device success/failure
-
-	for _, srv := range results.Keys() {
-		buf.Reset()
-		result := results[srv]
-
-		host, _, err = common.SplitPort(srv, 0) // disregard port when grouping output
-		if err != nil {
-			return
-		}
-
-		hostErr := result.Err
-		if hostErr != nil {
-			if err = groups.AddHost(hostErr.Error(), host); err != nil {
-				return
-			}
-			continue
-		}
-
-		if summary && !result.HasErrors() {
-			if err = groups.AddHost(successMsg, host); err != nil {
-				return
-			}
-			continue
-		}
-
-		fmt.Fprintf(buf, "%s\n", scmFormatTable(result.Scm))
-		fmt.Fprintf(buf, "%s\n", nvmeFormatTable(result.Nvme))
-
-		if err = mixedGroups.AddHost(buf.String(), host); err != nil {
-			return
-		}
-	}
-
-	return
 }

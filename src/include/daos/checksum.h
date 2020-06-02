@@ -279,9 +279,9 @@ daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
  */
 int
 daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
-		       daos_iod_t *iods, uint32_t nr, bool akey_only,
-		       struct dcs_singv_layout *singv_los, int singv_idx,
-		       struct dcs_iod_csums **p_iods_csums);
+		       daos_iod_t *iods, daos_iom_t *maps, uint32_t nr,
+		       bool akey_only, struct dcs_singv_layout *singv_los,
+		       int singv_idx, struct dcs_iod_csums **p_iods_csums);
 
 /**
  * Calculate a checksum for a daos key. Memory will be allocated for the
@@ -324,7 +324,8 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 int
 daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csum,
-			struct dcs_singv_layout *singv_lo, int singv_idx);
+			struct dcs_singv_layout *singv_lo, int singv_idx,
+			daos_iom_t *map);
 
 /**
  * Verify a single buffer to a checksum
@@ -449,6 +450,17 @@ ci_idx2csum(struct dcs_csum_info *csum_buf, uint32_t idx);
 uint8_t *
 ci_off2csum(struct dcs_csum_info *csum_buf, uint32_t offset);
 
+uint64_t
+ci_buf2uint64(const uint8_t *buf, uint16_t len);
+
+uint64_t
+ci2csum(struct dcs_csum_info ci);
+
+#define	DF_CI_BUF "%"PRIu64
+#define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
+#define	DF_CI "{nr: %d, len: %d, first_csum: %lu}"
+#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci)
+
 /**
  * -----------------------------------------------------------------------------
  * Helper Functions
@@ -552,6 +564,13 @@ struct daos_csum_range
 csum_align_boundaries(daos_off_t lo, daos_off_t hi, daos_off_t lo_boundary,
 		      daos_off_t hi_boundary, daos_off_t record_size,
 		      size_t chunksize);
+
+/**
+ * return start index and number of recxs within the map.recxs that have
+ * data for the provided range.
+ */
+struct daos_csum_range
+get_maps_idx_nr_for_range(struct daos_csum_range *req_range, daos_iom_t *map);
 
 /**
  * DAOS Checksum Fault Injection ... corrupt data

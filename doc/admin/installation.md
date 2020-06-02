@@ -1,7 +1,7 @@
 # Software Installation
 
 DAOS runs on both Intel 64 and ARM64 platforms and has been successfully tested
-on CentOS 7, OpenSUSE Leap 15.1, and Ubuntu 18.04 distributions.
+on CentOS 7, OpenSUSE Leap 15.1, and Ubuntu 20.04 distributions.
 
 ## Software Dependencies
 
@@ -61,9 +61,9 @@ version of at least 1.10 is required.
 An exhaustive list of packages for each supported Linux distribution is
 maintained in the Docker files:
 
--    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L72)
--    [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L16-L40)
--    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.18.04#L21-L38)
+-    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L76)
+-    [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L16-L42)
+-    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.20.04#L21-L39)
 
 The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command, which is specific to Docker.
@@ -157,7 +157,7 @@ $ curl -L https://raw.githubusercontent.com/daos-stack/daos/master/utils/docker/
 This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.centos.7 with
-Dockerfile.ubuntu.18.04 and the appropriate version of interest.
+Dockerfile.ubuntu.20.04 and the appropriate version of interest.
 
 Once the image created, one can start a container that will eventually run
 the DAOS service:

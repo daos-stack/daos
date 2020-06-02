@@ -549,7 +549,7 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	return rc;
 }
 
-int
+static int
 cont_iv_snapshot_invalidate(void *ns, uuid_t cont_uuid, unsigned int shortcut,
 			    unsigned int sync_mode)
 {
@@ -558,7 +558,6 @@ cont_iv_snapshot_invalidate(void *ns, uuid_t cont_uuid, unsigned int shortcut,
 	int			rc;
 
 	civ_key = key2priv(&key);
-	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	uuid_copy(civ_key->cont_uuid, cont_uuid);
 	key.class_id = IV_CONT_SNAP;
 	rc = ds_iv_invalidate(ns, &key, shortcut, sync_mode, 0, false);
@@ -630,7 +629,6 @@ cont_iv_snapshots_update(void *ns, uuid_t cont_uuid, uint64_t *snapshots,
 			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_EAGER,
 			    false /* retry */);
 	D_FREE(iv_entry);
-
 out:
 	return rc;
 }
@@ -696,9 +694,9 @@ out:
 	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
-int
-cont_iv_capa_fetch(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		   uuid_t cont_uuid, struct ds_cont_hdl **cont_hdl)
+static int
+cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
+		  struct ds_cont_hdl **cont_hdl)
 {
 	struct iv_capa_ult_arg	arg;
 	ABT_eventual		eventual;
@@ -736,12 +734,6 @@ cont_iv_capa_fetch(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
 	if (*status != 0)
 		D_GOTO(out_eventual, rc = *status);
-
-	if (uuid_compare(arg.cont_uuid, cont_uuid) != 0) {
-		D_ERROR("different cont "DF_UUID" != "DF_UUID"\n",
-			DP_UUID(arg.cont_uuid), DP_UUID(cont_uuid));
-		D_GOTO(out_eventual, rc = -DER_NONEXIST);
-	}
 
 	*cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
 	if (*cont_hdl == NULL) {
@@ -975,7 +967,7 @@ out:
 }
 
 int
-cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
+cont_iv_prop_update(void *ns, uuid_t iv_key_uuid, uuid_t cont_uuid,
 		    daos_prop_t *prop)
 {
 	struct cont_iv_entry	*iv_entry;
@@ -993,7 +985,7 @@ cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	uuid_copy(iv_entry->cont_uuid, cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
 
-	rc = cont_iv_update(ns, IV_CONT_PROP, cont_hdl_uuid, iv_entry,
+	rc = cont_iv_update(ns, IV_CONT_PROP, iv_key_uuid, iv_entry,
 			    entry_size, CRT_IV_SHORTCUT_TO_ROOT,
 			    CRT_IV_SYNC_EAGER, false /* retry */);
 	D_FREE(iv_entry);
@@ -1090,6 +1082,40 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_hdl_uuid,
 out:
 	ABT_eventual_free(&eventual);
 	return rc;
+}
+
+/*
+ * exported APIs
+ */
+int
+ds_cont_fetch_snaps(struct ds_iv_ns *ns, uuid_t cont_uuid,
+		    uint64_t **snapshots, int *snap_count)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	return cont_iv_snapshots_fetch(ns, cont_uuid, snapshots, snap_count);
+}
+
+int
+ds_cont_revoke_snaps(struct ds_iv_ns *ns, uuid_t cont_uuid,
+		     unsigned int shortcut, unsigned int sync_mode)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	return cont_iv_snapshot_invalidate(ns, cont_uuid, shortcut, sync_mode);
+}
+
+int
+ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t coh_uuid,
+		   daos_prop_t *cont_prop)
+{
+	/* NB: it can be called from any xstream */
+	return cont_iv_prop_fetch(ns, coh_uuid, cont_prop);
+}
+
+int
+ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
+{
+	/* NB: it can be called from any xstream */
+	return cont_iv_hdl_fetch(coh_uuid, po_uuid, coh_p);
 }
 
 int

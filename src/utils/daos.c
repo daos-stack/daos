@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <sys/ioctl.h>
 #include <errno.h>
 #include <stdint.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
@@ -42,6 +47,7 @@
 #include "daos_api.h"
 #include "daos_uns.h"
 #include "daos_hdlr.h"
+#include "dfuse_ioctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
@@ -529,7 +535,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	}
 	D_STRNDUP(cmdname, argv[2], strlen(argv[2]));
 	if (cmdname == NULL)
-		return RC_NO_HELP;
+		D_GOTO(out_free, rc = RC_NO_HELP);
 
 	/* Parse command options. Use goto on any errors here
 	 * since some options may result in resource allocation.
@@ -537,6 +543,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
 		case 'G':
+			D_FREE(ap->sysname);
 			D_STRNDUP(ap->sysname, optarg, strlen(optarg));
 			if (ap->sysname == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
@@ -735,6 +742,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	/* Verify pool svc provided */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
+	D_FREE(cmdname);
 	return 0;
 
 out_free:
@@ -818,6 +826,32 @@ out:
 }
 
 static int
+call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
+{
+	int fd;
+	int rc;
+
+	fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	if (fd < 0)
+		return ENOENT;
+
+	errno = 0;
+	rc = ioctl(fd, DFUSE_IOCTL_IL, reply);
+	if (rc != 0) {
+		int err = errno;
+
+		close(fd);
+		return err;
+	}
+	close(fd);
+
+	if (reply->fir_version != DFUSE_IOCTL_VERSION)
+		return EIO;
+
+	return 0;
+}
+
+static int
 cont_op_hdlr(struct cmd_args_s *ap)
 {
 	daos_cont_info_t	cont_info;
@@ -834,19 +868,37 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
+		struct dfuse_il_reply il_reply = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
 
-		/* Resolve pool, container UUIDs from path if needed */
+		/* Resolve pool, container UUIDs from path if needed
+		 *
+		 * Firtly check for a unified namespace entry point, then if
+		 * that isn't detected then check for dfuse backing the
+		 * path, and print pool/container/oid for the path.
+		 */
 		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
-			fprintf(stderr, "could not resolve pool, container "
-					"by path: %s\n", ap->path);
-			D_GOTO(out, rc);
+
+			rc = call_dfuse_ioctl(ap->path, &il_reply);
+			if (rc != 0) {
+				fprintf(stderr, "could not resolve pool, "
+					"container by path: %d %s %s\n",
+					rc, strerror(rc), ap->path);
+
+				D_GOTO(out, rc);
+			}
+
+			ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
+			uuid_copy(ap->p_uuid, il_reply.fir_pool);
+			uuid_copy(ap->c_uuid, il_reply.fir_cont);
+			ap->oid = il_reply.fir_oid;
+		} else {
+			ap->type = dattr.da_type;
+			uuid_copy(ap->p_uuid, dattr.da_puuid);
+			uuid_copy(ap->c_uuid, dattr.da_cuuid);
 		}
-		ap->type = dattr.da_type;
-		uuid_copy(ap->p_uuid, dattr.da_puuid);
-		uuid_copy(ap->c_uuid, dattr.da_cuuid);
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
@@ -1137,7 +1189,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	fprintf(stream, "daos command (v%s)\n", DAOS_VERSION);
 
-	if (argc == 2) {
+	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
 	} else if (strcmp(argv[2], "pool") == 0) {
 		fprintf(stream, "\n"
@@ -1214,7 +1266,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"container options (snapshot and rollback-related):\n"
 			"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 			"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
-			"	--eprange=B-E      container epoch range (destroy-snap)\n");
+			"	--epcrange=B-E     container epoch range (destroy-snap)\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "set-prop") == 0) {
 			fprintf(stream,
@@ -1289,13 +1341,17 @@ main(int argc, char *argv[])
 	/* argv[1] is RESOURCE or "help" or "version";
 	 * argv[2] if provided is a resource-specific command
 	 */
-	if (argc < 2 || strcmp(argv[1], "help") == 0) {
+	if (argc == 2 && strcmp(argv[1], "version") == 0) {
+		fprintf(stdout, "daos version %s\n", DAOS_VERSION);
+		return 0;
+	} else if (argc < 2 || strcmp(argv[1], "help") == 0) {
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);
 		return 0;
-	} else if (strcmp(argv[1], "version") == 0) {
-		fprintf(stdout, "daos version %s\n", DAOS_VERSION);
-		return 0;
+	} else if (argc <= 2) {
+		dargs.ostream = stdout;
+		help_hdlr(argc, argv, &dargs);
+		return 2;
 	} else if ((strcmp(argv[1], "container") == 0) ||
 		 (strcmp(argv[1], "cont") == 0))
 		hdlr = cont_op_hdlr;
@@ -1334,6 +1390,10 @@ main(int argc, char *argv[])
 
 	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
 	d_rank_list_free(dargs.mdsrv);
+
+	D_FREE(dargs.mdsrv_str);
+	D_FREE(dargs.sysname);
+	D_FREE(dargs.path);
 
 	daos_fini();
 

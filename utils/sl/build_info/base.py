@@ -88,6 +88,7 @@ class BuildInfo():
                          os.pathsep.join(lib_paths))
             script.write("SL_PATH=%s\n" % os.pathsep.join(paths))
             script.write('SL_COMPONENTS="%s"\n' % ' '.join(components))
+            script.write("SL_BUILD_DIR=%s\n" % self.info["BUILD_DIR"])
 
 
 __all__ = ["BuildInfo"]

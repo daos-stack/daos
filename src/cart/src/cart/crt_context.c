@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -259,7 +259,7 @@ out:
 
 int
 crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
-			      void *arg)
+			      crt_rpc_task_t iv_resp_cb, void *arg)
 {
 	struct crt_context *crt_ctx = ctx;
 
@@ -270,6 +270,7 @@ crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
 	}
 
 	crt_ctx->cc_rpc_cb = process_cb;
+	crt_ctx->cc_iv_resp_cb = iv_resp_cb;
 	crt_ctx->cc_rpc_cb_arg = arg;
 	return 0;
 }
@@ -406,7 +407,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 			wait = 0;
 		} else {
 			D_MUTEX_UNLOCK(&ctx->cc_mutex);
-			rc = crt_progress(ctx, 1, NULL, NULL);
+			rc = crt_progress(ctx, 1);
 			D_MUTEX_LOCK(&ctx->cc_mutex);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("crt_progress failed, rc %d.\n", rc);
@@ -521,7 +522,7 @@ crt_context_flush(crt_context_t crt_ctx, uint64_t timeout)
 		ts_deadline = d_timeus_secdiff(timeout);
 
 	do {
-		rc = crt_progress(crt_ctx, 1, NULL, NULL);
+		rc = crt_progress(crt_ctx, 1);
 		if (rc != DER_SUCCESS && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress() failed, rc: %d\n", rc);
 			break;
@@ -1212,8 +1213,8 @@ crt_exec_progress_cb(struct crt_context *ctx)
 }
 
 int
-crt_progress(crt_context_t crt_ctx, int64_t timeout,
-	     crt_progress_cond_cb_t cond_cb, void *arg)
+crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
+		  crt_progress_cond_cb_t cond_cb, void *arg)
 {
 	struct crt_context	*ctx;
 	int64_t			 hg_timeout;
@@ -1222,60 +1223,26 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	int			 rc = 0;
 
 	/** validate input parameters */
-	if (crt_ctx == CRT_CONTEXT_NULL) {
-		D_ERROR("invalid parameter (NULL crt_ctx).\n");
-		D_GOTO(out, rc = -DER_INVAL);
+	if (unlikely(crt_ctx == CRT_CONTEXT_NULL || cond_cb == NULL)) {
+		D_ERROR("invalid parameter (%p)\n", cond_cb);
+		return -DER_INVAL;
 	}
 
 	/**
 	 * Invoke the callback once first, in case the condition is met before
 	 * calling progress
 	 */
-	if (cond_cb) {
-		/** execute callback */
-		rc = cond_cb(arg);
-		if (rc > 0)
-			/** exit as per the callback request */
-			D_GOTO(out, rc = 0);
-		if (rc < 0)
-			/**
-			 * something wrong happened during the callback
-			 * execution
-			 */
-			D_GOTO(out, rc);
-	}
+	rc = cond_cb(arg);
+	if (rc > 0)
+		/** exit as per the callback request */
+		return 0;
+	if (unlikely(rc < 0))
+		/** something wrong happened during the callback execution */
+		return rc;
 
 	ctx = crt_ctx;
-	if (timeout == 0 || cond_cb == NULL) { /** fast path */
-		crt_context_timeout_check(ctx);
-		crt_exec_progress_cb(ctx);
-
-		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
-		if (rc && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
-			D_GOTO(out, rc);
-		}
-
-		if (cond_cb) {
-			int ret;
-
-			/**
-			 * Don't clobber rc which might be set to
-			 * -DER_TIMEDOUT
-			 */
-			ret = cond_cb(arg);
-			/** be careful with return code */
-			if (ret > 0)
-				D_GOTO(out, rc = 0);
-			if (ret < 0)
-				D_GOTO(out, rc = ret);
-		}
-
-		D_GOTO(out, rc);
-	}
 
 	/** Progress with callback and non-null timeout */
-	D_ASSERT(timeout != 0);
 	if (timeout < 0) {
 		/**
 		 * For infinite timeout, use a mercury timeout of 1 ms to avoid
@@ -1283,6 +1250,8 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 		 * crt_hg_progress() behind our back
 		 */
 		hg_timeout = 1000;
+	} else if (timeout == 0) {
+		hg_timeout = 0;
 	} else { /** timeout > 0 */
 		now = d_timeus_secdiff(0);
 		end = now + timeout;
@@ -1293,37 +1262,89 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 			hg_timeout = timeout;
 	}
 
-	while (true) {
+	/**
+	 * Call progress once before processing timeouts in case
+	 * any replies are pending in the queue
+	 */
+	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
+	if (unlikely(rc && rc != -DER_TIMEDOUT)) {
+		D_ERROR("crt_hg_progress failed with %d\n", rc);
+		return rc;
+	}
+
+	/** loop until callback returns non-null value */
+	while ((rc = cond_cb(arg)) == 0) {
 		crt_context_timeout_check(ctx);
 		crt_exec_progress_cb(ctx);
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
-		if (rc && rc != -DER_TIMEDOUT) {
+		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
 			D_ERROR("crt_hg_progress failed with %d\n", rc);
-			D_GOTO(out, rc = 0);
+			return rc;
 		}
 
-		/** execute callback */
-		rc = cond_cb(arg);
-		if (rc > 0)
-			D_GOTO(out, rc = 0);
-		if (rc < 0)
-			D_GOTO(out, rc);
+		/** check for timeout */
+		if (timeout < 0)
+			continue;
 
-		/** check for timeout, if not infinite */
-		if (timeout > 0) {
-			now = d_timeus_secdiff(0);
-			if (now >= end) {
-				rc = -DER_TIMEDOUT;
+		now = d_timeus_secdiff(0);
+		if (timeout == 0 || now >= end) {
+			/** try callback one last time just in case */
+			rc = cond_cb(arg);
+			if (unlikely(rc != 0))
 				break;
-			}
-			if (end - now > 1000 * 1000)
-				hg_timeout = 1000 * 1000;
-			else
-				hg_timeout = end - now;
+			return -DER_TIMEDOUT;
 		}
+
+		/** adjust timeout */
+		if (end - now > 1000 * 1000)
+			hg_timeout = 1000 * 1000;
+		else
+			hg_timeout = end - now;
 	}
-out:
+
+	if (rc > 0)
+		rc = 0;
+
+	return rc;
+}
+
+int
+crt_progress(crt_context_t crt_ctx, int64_t timeout)
+{
+	struct crt_context	*ctx;
+	int			 rc = 0;
+
+	/** validate input parameters */
+	if (unlikely(crt_ctx == CRT_CONTEXT_NULL)) {
+		D_ERROR("invalid parameter (NULL crt_ctx).\n");
+		return -DER_INVAL;
+	}
+
+	ctx = crt_ctx;
+
+	/**
+	 * call progress once w/o any timeout before processing timed out
+	 * requests in case any replies are pending in the queue
+	 */
+	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
+	if (unlikely(rc && rc != -DER_TIMEDOUT))
+		D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
+
+	/**
+	 * process timeout and progress callback after this initial call to
+	 * progress
+	 */
+	crt_context_timeout_check(ctx);
+	crt_exec_progress_cb(ctx);
+
+	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
+		/** call progress once again with the real timeout */
+		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
+		if (unlikely(rc && rc != -DER_TIMEDOUT))
+			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
+	}
+
 	return rc;
 }
 

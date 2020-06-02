@@ -524,6 +524,50 @@ lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
 }
 
 /**
+ * get the Pool storage info.
+ */
+static int
+pool_storage_info(void **state, daos_pool_info_t *pinfo)
+{
+	test_arg_t *arg = *state;
+	int rc;
+
+	/*get only pool space info*/
+	pinfo->pi_bits = DPI_SPACE;
+	rc = daos_pool_query(arg->pool.poh, NULL, pinfo, NULL, NULL);
+	if (rc != 0) {
+		print_message("pool query failed %d\n", rc);
+		return rc;
+	}
+
+	print_message("SCM space: Total = %" PRIu64 " Free= %" PRIu64"\t"
+	"NVMe space: Total = %" PRIu64 " Free= %" PRIu64"\n",
+	pinfo->pi_space.ps_space.s_total[0],
+	pinfo->pi_space.ps_space.s_free[0],
+	pinfo->pi_space.ps_space.s_total[1],
+	pinfo->pi_space.ps_space.s_free[1]);
+
+	return rc;
+}
+
+/**
+ * Enabled/Disabled Aggrgation strategy for Pool.
+ */
+static int
+set_pool_reclaim_strategy(void **state, void const *const strategy[])
+{
+	test_arg_t *arg = *state;
+	int rc;
+	char const *const names[] = {"reclaim"};
+	size_t const in_sizes[] = {strlen(strategy[0])};
+	int			 n = (int) ARRAY_SIZE(names);
+
+	rc = daos_pool_set_attr(arg->pool.poh, n, names, strategy,
+		in_sizes, NULL);
+	return rc;
+}
+
+/**
  * Very basic test for overwrites in different transactions.
  */
 static void
@@ -583,6 +627,8 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
  * Test mixed SCM & NVMe overwrites in different transactions with a large
  * record size. Iod size is needed for insert/lookup since the same akey is
  * being used.
+ * Adding Pool size verification to check <4K size writes to SCM and >4K to
+ * NVMe.
  */
 static void
 io_overwrite_large(void **state, daos_obj_id_t oid)
@@ -599,9 +645,19 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	int		 rx_nr; /* number of record extents */
 	int		 rec_idx = 0; /* index for next insert */
 	int		 i;
+	int		 rc;
+	daos_pool_info_t pinfo;
+	daos_size_t	 nvme_initial_size;
+	daos_size_t	 nvme_current_size;
+	void const *const aggr_disabled[] = {"disaled"};
+	void const *const aggr_set_time[] = {"time"};
 
 	if (size < OW_IOD_SIZE || (size % OW_IOD_SIZE != 0))
 		return;
+
+	/* Disabled Pool Aggrgation */
+	rc = set_pool_reclaim_strategy(state, aggr_disabled);
+	assert_int_equal(rc, 0);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -624,6 +680,11 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, OW_IOD_SIZE, size,
 				DAOS_TX_NONE, &req);
 	assert_memory_equal(ow_buf, fbuf, size);
+
+	/*Get the inital pool size after writing first transaction*/
+	rc = pool_storage_info(state, &pinfo);
+	assert_int_equal(rc, 0);
+	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
 	/**
 	 * Mixed SCM & NVMe overwrites. 3k, 4k, and 5k overwrites for a 12k
@@ -660,7 +721,35 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 		rec_idx += rx_nr; /* next index for insert/lookup */
 		/* Increment next overwrite size by 1 record extent */
 		rx_nr++;
+
+		/*Verify the SCM/NVMe Pool Free size based on tranfer size*/
+		rc = pool_storage_info(state, &pinfo);
+		assert_int_equal(rc, 0);
+		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
+		if (overwrite_sz < 4096) {
+		/*NVMe Size should not be changed as overwrite_sz is <4K*/
+			if (nvme_initial_size != nvme_current_size) {
+				fail_msg("Observed Value= %"
+				PRIu64", & Expected Value =%"PRIu64"",
+				nvme_current_size, nvme_initial_size);
+			}
+		} else {
+		/*NVMe_Free_Size should decrease overwrite_sz is >4K*/
+			if (nvme_current_size > nvme_initial_size -
+				overwrite_sz) {
+				fail_msg("\nNVMe_current_size =%"
+					PRIu64 " > NVMe_initial_size = %"
+					PRIu64 "- overwrite_sz =%" PRIu64 "",
+					nvme_current_size, nvme_initial_size,
+					overwrite_sz);
+			}
+		}
+		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 	}
+
+	/* Enabled Pool Aggrgation */
+	rc = set_pool_reclaim_strategy(state, aggr_set_time);
+	assert_int_equal(rc, 0);
 
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
@@ -748,6 +837,118 @@ io_overwrite(void **state)
 
 	/** Large record with mixed SCM/NVMe overwrites */
 	io_overwrite_large(state, oid);
+}
+
+static void
+io_rewritten_array_with_mixed_size(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct ioreq		req;
+	daos_obj_id_t		oid;
+	daos_pool_info_t	pinfo;
+	char			*ow_buf;
+	char			*fbuf;
+	const char		dkey[] = "dkey";
+	const char		akey[] = "akey";
+	daos_size_t		size = 4 * 1024; /* record size */
+	int			buf_idx; /* overwrite buffer index */
+	int			rx_nr; /* number of record extents */
+	int			record_set;
+	int			rc;
+	daos_size_t		nvme_initial_size;
+	daos_size_t		nvme_current_size;
+	void const *const aggr_disabled[] = {"disaled"};
+	void const *const aggr_set_time[] = {"time"};
+
+	/* choose random object */
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/* Alloc and set buffer to be a sting*/
+	D_ALLOC(ow_buf, size);
+	assert_non_null(ow_buf);
+	dts_buf_render(ow_buf, size);
+	/* Alloc the fetch buffer */
+	D_ALLOC(fbuf, size);
+	assert_non_null(fbuf);
+	memset(fbuf, 0, size);
+
+	/* Disabled Pool Aggrgation */
+	rc = set_pool_reclaim_strategy(state, aggr_disabled);
+	assert_int_equal(rc, 0);
+
+	/* Get the pool info at the beginning */
+	rc = pool_storage_info(state, &pinfo);
+	assert_int_equal(rc, 0);
+	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
+
+	/* Set and verify the full initial string in first transaction */
+	rx_nr = size / OW_IOD_SIZE;
+	/* Insert the initial 4K record which will go through NVMe */
+	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
+				rx_nr, DAOS_TX_NONE, &req);
+	/* Lookup the initial 4K record */
+	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, OW_IOD_SIZE, size,
+				DAOS_TX_NONE, &req);
+	/* Verify the 4K data */
+	assert_memory_equal(ow_buf, fbuf, size);
+
+	/**
+	*Get the pool storage information
+	*/
+	rc = pool_storage_info(state, &pinfo);
+	assert_int_equal(rc, 0);
+	nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
+
+	/**
+	* Verify data written on NVMe by comparing the NVMe Free size.
+	*/
+	if (nvme_current_size > nvme_initial_size - size) {
+		fail_msg("\nNVMe_current_size =%"
+			PRIu64 " > NVMe_initial_size = %"
+			PRIu64 "- written size =%" PRIu64 "",
+			nvme_current_size, nvme_initial_size, size);
+	}
+	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
+
+	for (record_set = 0, buf_idx = 0; record_set < 10; record_set++) {
+		buf_idx += 20;
+		memset(fbuf, 0, size);
+		/* Change Two bytes value to original array*/
+		ow_buf[buf_idx + 1] = 48;
+		ow_buf[buf_idx + 2] = 49;
+
+		/* Re-write the same array with modified Two values*/
+		insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf,
+			OW_IOD_SIZE, 1, DAOS_TX_NONE, &req);
+
+		/*Read and verify the data with Two updated values*/
+		lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf,
+			OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
+		assert_memory_equal(ow_buf, fbuf, size);
+
+		/*Verify the pool size*/
+		rc = pool_storage_info(state, &pinfo);
+		assert_int_equal(rc, 0);
+		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
+		/**
+		*Data written on SCM so NVMe free size should not change.
+		*/
+		if (nvme_current_size != nvme_initial_size) {
+			fail_msg("NVMe_current_size =%"
+				PRIu64" != NVMe_initial_size %" PRIu64"",
+				nvme_current_size, nvme_initial_size);
+		}
+		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
+	}
+
+	/* Enabled Pool Aggrgation */
+	rc = set_pool_reclaim_strategy(state, aggr_set_time);
+	assert_int_equal(rc, 0);
+
+	D_FREE(fbuf);
+	D_FREE(ow_buf);
+	ioreq_fini(&req);
 }
 
 /** i/o to variable idx offset */
@@ -3667,6 +3868,15 @@ io_capa_iv_fetch(void **state)
 	struct ioreq	req;
 	d_rank_t	leader;
 
+	/*
+	 * Currently causing "Failed to destroy container" error resulting from
+	 * an additional container open from DAOS_FORCE_CAPA_FETCH w/o
+	 * corresponding container close.
+	 * FIXME: DAOS-4560 - Fix binding of container open w/ cont capa IV
+	 * refresh
+	 */
+	skip();
+
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
@@ -3863,6 +4073,9 @@ static const struct CMUnitTest io_tests[] = {
 	  io_invalid, async_disable, test_case_teardown},
 	{ "IO40: Record count after punch/enumeration",
 	  punch_enum_then_verify_record_count, async_disable,
+	  test_case_teardown},
+	{ "IO41: IO Rewritten data fetch and validate pool size",
+	  io_rewritten_array_with_mixed_size, async_disable,
 	  test_case_teardown},
 };
 

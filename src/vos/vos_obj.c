@@ -123,8 +123,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 					    flags, ts_set, &dkey_info,
 					    &akey_info);
 			if (rc != 0) {
-				D_ERROR("Error punching akey: rc="DF_RC"\n",
-					DP_RC(rc));
+				VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
+						DF_RC"\n", DP_RC(rc));
 				break;
 			}
 		}
@@ -138,7 +138,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	}
 
 	if (rc == 0 && read_conflict)
-		rc = -DER_AGAIN;
+		rc = -DER_TX_RESTART;
 
 	return rc;
 }
@@ -230,26 +230,26 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
-	daos_epoch_range_t	 epr = {0, epoch};
+	daos_epoch_range_t	 epr = {0, dth ? dth->dth_epoch : epoch};
 	bool			 read_conflict = false;
 	int			 rc = 0;
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
-		DP_UOID(oid), epoch);
+		DP_UOID(oid), epr.epr_hi);
+
+	vos_dth_set(dth);
+	cont = vos_hdl2cont(coh);
 
 	rc = vos_ts_set_allocate(&ts_set, flags, akey_nr);
 	if (rc != 0)
 		goto reset;
-
-	vos_dth_set(dth);
-	cont = vos_hdl2cont(coh);
 
 	if (!vos_ts_lookup(ts_set, cont->vc_ts_idx, false, &entry)) {
 		/** Re-cache the container timestamps */
 		entry = vos_ts_alloc(ts_set, cont->vc_ts_idx, 0);
 	}
 
-	if (vos_ts_check_rl_conflict(ts_set, epoch))
+	if (vos_ts_check_rl_conflict(ts_set, epr.epr_hi))
 		read_conflict = true;
 
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
@@ -269,18 +269,18 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			  false, DAOS_INTENT_PUNCH, true, &obj, ts_set);
 	if (rc == 0) {
 		if (dkey) { /* key punch */
-			if (vos_ts_check_rl_conflict(ts_set, epoch))
+			if (vos_ts_check_rl_conflict(ts_set, epr.epr_hi))
 				read_conflict = true;
 
-			rc = key_punch(obj, epoch, pm_ver, dkey,
+			rc = key_punch(obj, epr.epr_hi, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
 		} else { /* object punch */
-			rc = obj_punch(coh, obj, epoch, flags, ts_set);
+			rc = obj_punch(coh, obj, epr.epr_hi, flags, ts_set);
 		}
 	}
 
 	if (rc == 0 && read_conflict)
-		rc = -DER_AGAIN;
+		rc = -DER_TX_RESTART;
 
 	if (dth != NULL && rc == 0)
 		rc = vos_dtx_prepared(dth);
@@ -297,7 +297,7 @@ reset:
 	}
 	vos_dth_set(NULL);
 
-	update_read_timestamps(ts_set, epoch, akey_nr, rc);
+	update_read_timestamps(ts_set, epr.epr_hi, akey_nr, rc);
 	vos_ts_set_free(ts_set);
 
 	return rc;
@@ -557,9 +557,8 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 
 	rc = key_iter_fetch(oiter, ent, NULL, true);
 	if (rc != 0) {
-		if (rc < 0)
-			D_ERROR("Failed to fetch the entry: "DF_RC"\n",
-				DP_RC(rc));
+		VOS_TX_TRACE_FAIL(rc, "Failed to fetch the entry: "DF_RC"\n",
+				  DP_RC(rc));
 		return rc;
 	}
 
@@ -615,7 +614,8 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 		switch (rc) {
 		default:
 			D_ASSERT(rc < 0);
-			D_ERROR("match failed, rc="DF_RC"\n", DP_RC(rc));
+			VOS_TX_TRACE_FAIL(rc, "match failed, rc="DF_RC"\n",
+					  DP_RC(rc));
 			goto out;
 
 		case IT_OPC_NOOP:
@@ -765,12 +765,13 @@ static int
 singv_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 		       vos_iter_entry_t *entry)
 {
-	struct vos_key_bundle	kbund;
-	d_iov_t		kiov;
+	struct vos_svt_key	key;
+	d_iov_t			kiov;
 	int			rc;
 
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epoch = entry->ie_epoch;
+	d_iov_set(&kiov, &key, sizeof(key));
+	key.sk_epoch = entry->ie_epoch;
+	key.sk_minor_epc = entry->ie_minor_epc;
 
 	rc = dbtree_iter_probe(oiter->it_hdl, opc,
 			       vos_iter_intent(&oiter->it_iter), &kiov, NULL);
@@ -897,14 +898,13 @@ static int
 singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 		 daos_anchor_t *anchor)
 {
-	struct vos_key_bundle	kbund;
+	struct vos_svt_key	key;
 	struct vos_rec_bundle	rbund;
 	d_iov_t			kiov;
 	d_iov_t			riov;
 	int			rc;
 
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epoch	= it_entry->ie_epoch;
+	d_iov_set(&kiov, &key, sizeof(key));
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_biov	= &it_entry->ie_biov;
@@ -918,7 +918,8 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 		D_GOTO(out, rc);
 
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-	it_entry->ie_epoch	 = kbund.kb_epoch;
+	it_entry->ie_epoch	 = key.sk_epoch;
+	it_entry->ie_minor_epc	 = key.sk_minor_epc;
 	if (it_entry->ie_epoch <= oiter->it_punched)
 		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
 	it_entry->ie_rsize	 = rbund.rb_rsize;
@@ -1068,6 +1069,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	ext = &entry.en_sel_ext;
 	it_entry->ie_epoch	 = entry.en_epoch;
+	it_entry->ie_minor_epc	 = entry.en_minor_epc;
 	it_entry->ie_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_recx.rx_nr	 = evt_extent_width(ext);
 	ext = &entry.en_ext;
@@ -1161,14 +1163,9 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 			  (oiter->it_flags & VOS_IT_PUNCHED) == 0,
 			  &oiter->it_obj, NULL);
 
-	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_IO, "Empty object, nothing to iterate\n");
-		D_GOTO(failed, rc);
-	}
-
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
-			 "Could not hold object: "DF_RC"\n", DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Could not hold object to iterate: "DF_RC
+				"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 

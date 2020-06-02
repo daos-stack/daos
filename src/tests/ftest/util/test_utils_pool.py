@@ -28,17 +28,17 @@ import ctypes
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from avocado.utils import process
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
                         daos_cref)
-from general_utils import check_pool_files, DaosTestError
+from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
 from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 
 class TestPool(TestDaosApiBase):
+    # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, log=None, cb_handler=None, dmg_command=None):
@@ -69,10 +69,13 @@ class TestPool(TestDaosApiBase):
         self.target_list = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
+        self.prop_name = BasicParameter(None)      # name of property to be set
+        self.prop_value = BasicParameter(None)     # value of property
 
         self.pool = None
         self.uuid = None
         self.info = None
+        self.cmd_output = None
         self.svc_ranks = None
         self.connected = False
         self.dmg = dmg_command
@@ -134,6 +137,9 @@ class TestPool(TestDaosApiBase):
             # Create a pool with the dmg command
             self._log_method("dmg.pool_create", kwargs)
             result = self.dmg.pool_create(**kwargs)
+            # self.cmd_output to keep the actual stdout of dmg command for
+            # checking the negative/warning message.
+            self.cmd_output = result.stdout
             uuid, svc = get_pool_uuid_service_replicas_from_stdout(
                 result.stdout)
 
@@ -253,6 +259,30 @@ class TestPool(TestDaosApiBase):
             self.svc_ranks = None
 
         return status
+
+    @fail_on(CommandFailure)
+    def set_property(self):
+        """Set Property.
+
+        It sets property for a given pool uuid using
+        dmg.
+
+        """
+        if self.pool:
+            self.log.info("Set-prop for Pool: %s", self.uuid)
+
+            if self.control_method.value == self.USE_DMG and self.dmg:
+                # set-prop for given pool using dmg
+                self.dmg.pool_set_prop(self.uuid, self.prop_name,
+                                       self.prop_value)
+
+            elif self.control_method.value == self.USE_DMG:
+                self.log.error("Error: Undefined dmg command")
+
+            else:
+                self.log.error(
+                    "Error: Undefined control_method: %s",
+                    self.control_method.value)
 
     @fail_on(DaosApiError)
     def get_info(self):
@@ -541,7 +571,7 @@ class TestPool(TestDaosApiBase):
         command = "{} --np {} --hostfile {} {} {} testfile".format(
             orterun, processes, hostfile,
             os.path.join(current_path, "write_some_data.py"), size)
-        return process.run(command, timeout, True, False, "both", True, env)
+        return run_command(command, timeout, True, env=env)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
@@ -553,6 +583,26 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         keys = ("s_total", "s_free")
         return {key: getattr(self.info.pi_space.ps_space, key) for key in keys}
+
+    def get_pool_free_space(self, device="scm"):
+        """Get SCM or NVME free space.
+
+        Args:
+            device (str, optional): device type, e.g. "scm" or "nvme". Defaults
+                to "scm".
+
+        Returns:
+            str: free SCM or NVME space
+
+        """
+        free_space = "0"
+        dev = device.lower()
+        daos_space = self.get_pool_daos_space()
+        if dev == "scm":
+            free_space = daos_space["s_free"][0]
+        elif dev == "nvme":
+            free_space = daos_space["s_free"][1]
+        return free_space
 
     def display_pool_daos_space(self, msg=None):
         """Display the pool info daos space attributes.
@@ -579,7 +629,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = (
-            "rs_version", "rs_pad_32", "rs_errno", "rs_done",
+            "rs_version", "rs_padding32", "rs_errno", "rs_done",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
         return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 

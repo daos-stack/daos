@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,6 +84,18 @@ struct dc_pool {
 	size_t			dp_map_sz;
 };
 
+static inline unsigned int
+dc_pool_get_version(struct dc_pool *pool)
+{
+	unsigned int	ver;
+
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	ver = pool_map_get_version(pool->dp_map);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+
+	return ver;
+}
+
 struct dc_pool *dc_hdl2pool(daos_handle_t hdl);
 void dc_pool_get(struct dc_pool *pool);
 void dc_pool_put(struct dc_pool *pool);
@@ -107,15 +119,7 @@ int dc_pool_list_cont(tse_task_t *task);
 int dc_pool_add_replicas(tse_task_t *task);
 int dc_pool_remove_replicas(tse_task_t *task);
 
-int
-dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
-
-int
-dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
-		   unsigned int flags, const char *grp,
-		   struct pool_map *map, d_rank_list_t *svc_list,
-		   daos_handle_t *ph);
-int dc_pool_local_close(daos_handle_t ph);
+int dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
 int dc_pool_update_map(daos_handle_t ph, struct pool_map *map);
 
 #endif /* __DD_POOL_H__ */

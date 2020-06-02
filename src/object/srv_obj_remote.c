@@ -57,7 +57,6 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 	struct obj_rw_out		*orwo = crt_reply_get(req);
 	struct obj_rw_in		*orw_parent = crt_req_get(parent_req);
 	struct dtx_leader_handle	*dlh = arg->dlh;
-	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
 	int				rc = cb_info->cci_rc;
 	int				rc1 = 0;
 
@@ -68,11 +67,6 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 		rc1 = -DER_STALE;
 	} else {
 		rc1 = orwo->orw_ret;
-		if (rc1 == -DER_INPROGRESS) {
-			daos_dti_copy(&sub->dss_dce.dce_xid,
-				      &orwo->orw_dti_conflict);
-			sub->dss_dce.dce_dkey = orwo->orw_dkey_conflict;
-		}
 	}
 
 	if (rc >= 0)
@@ -192,7 +186,6 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 	struct obj_punch_out		*opo = crt_reply_get(req);
 	struct obj_punch_in		*opi_parent = crt_req_get(req);
 	struct dtx_leader_handle	*dlh = arg->dlh;
-	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
 	int				rc = cb_info->cci_rc;
 	int				rc1 = 0;
 
@@ -203,11 +196,6 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 		rc1 = -DER_STALE;
 	} else {
 		rc1 = opo->opo_ret;
-		if (rc1 == -DER_INPROGRESS) {
-			daos_dti_copy(&sub->dss_dce.dce_xid,
-				      &opo->opo_dti_conflict);
-			sub->dss_dce.dce_dkey = opo->opo_dkey_conflict;
-		}
 	}
 
 	if (rc >= 0)
