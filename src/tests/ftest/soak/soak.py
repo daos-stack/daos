@@ -27,12 +27,10 @@ import time
 from apricot import TestWithServers
 from ior_utils import IorCommand
 from fio_utils import FioCommand
-from dmg_utils import DmgCommand
-from dmg_utils_params import \
-    DmgYamlParameters, DmgTransportCredentials
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
-from general_utils import get_random_string, run_command, DaosTestError
+from general_utils import get_random_string, \
+    run_command, DaosTestError, get_log_file
 import slurm_utils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -114,7 +112,7 @@ class SoakTestBase(TestWithServers):
         self.exclude_slurm_nodes = []
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
-        self.log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp") + "/soak"
+        self.log_dir = get_log_file("soak")
         self.outputsoakdir = self.outputdir + "/soak"
         # Fail if slurm partition daos_client is not defined
         if not self.client_partition:
@@ -138,12 +136,6 @@ class SoakTestBase(TestWithServers):
         if not self.hostlist_clients:
             self.fail("There are no nodes that are client only;"
                       "check if the partition also contains server nodes")
-        # create dmg command object for soak
-        dmg_config_file = self.get_config_file("daos", "dmg")
-        dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group, DmgTransportCredentials())
-        dmg_cfg.hostlist.update([self.hostlist_servers[0]])
-        self.dmg = DmgCommand(self.bin, dmg_cfg)
 
     def pre_tear_down(self):
         """Tear down any test-specific steps prior to running tearDown().
@@ -156,7 +148,7 @@ class SoakTestBase(TestWithServers):
         errors = []
         # clear out any jobs in squeue;
         if self.failed_job_id_list:
-            job_id = " ".join(str(job) for job in self.failed_job_id_list)
+            job_id = " ".join([str(job) for job in self.failed_job_id_list])
             self.log.info("<<Cancel jobs in queue with ids %s >>", job_id)
             try:
                 run_command(
@@ -211,7 +203,7 @@ class SoakTestBase(TestWithServers):
             path = "".join(["/run/", pool_name, "/*"])
             # Create a pool and add it to the overall list of pools
             self.pool.append(TestPool(
-                self.context, self.log, dmg_command=self.dmg))
+                self.context, self.log, dmg_command=self.get_dmg_command()))
             self.pool[-1].namespace = path
             self.pool[-1].get_params(self)
             self.pool[-1].create()

@@ -46,8 +46,8 @@ server_config:
 pool_ior:
     mode: 146
     name: daos_server
-    scm_size: 100000000000
-    nvme_size: 200000000000
+    scm_size: 200000000000
+    nvme_size: 300000000000
     svcn: 1
     control_method: dmg
 pool_fio:
@@ -88,7 +88,7 @@ soak_stress:
     # stress test timeout in hours
     test_timeout: 48
     # maximum timeout for a single job in test in minutes
-    job_timeout: 20
+    job_timeout: 30
     nodesperjob:
         - -1
         - 2

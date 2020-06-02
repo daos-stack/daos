@@ -45,6 +45,7 @@ from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
 from dmg_utils_params import \
     DmgYamlParameters, DmgTransportCredentials
+from dmg_utils import DmgCommand
 from server_utils import DaosServerCommand, DaosServerManager
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
@@ -137,7 +138,7 @@ class Test(avocadoTest):
     # pylint: enable=invalid-name
 
     def get_test_name(self):
-        """Obtain test name from self.__str__() """
+        """Obtain test name from self.__str__()."""
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
 
 
@@ -769,7 +770,14 @@ class TestWithServers(TestWithoutServers):
             DmgCommand: New DmgCommand object.
 
         """
-        return self.server_managers[index].dmg
+        if self.server_managers:
+            return self.server_managers[index].dmg
+
+        dmg_config_file = self.get_config_file("daos", "dmg")
+        dmg_cfg = DmgYamlParameters(
+            dmg_config_file, self.server_group, DmgTransportCredentials())
+        dmg_cfg.hostlist.update([self.hostlist_servers[0]])
+        return DmgCommand(self.bin, dmg_cfg)
 
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.
