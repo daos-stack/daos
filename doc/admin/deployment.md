@@ -295,13 +295,13 @@ that the configuration and certificate files have been installed under `/etc/dao
 
 transport_config:
   # Location where daos_server will look for Client certificates
-  client_cert_dir: /etc/daos/clients
+  client_cert_dir: /etc/daos/certs/clients
   # Custom CA Root certificate for generated certs
-  ca_cert: /etc/daos/daosCA.crt
+  ca_cert: /etc/daos/certs/daosCA.crt
   # Server certificate for use in TLS handshakes
-  cert: /etc/daos/server.crt
+  cert: /etc/daos/certs/server.crt
   # Key portion of Server Certificate
-  key: /etc/daos/server.key
+  key: /etc/daos/certs/server.key
 ```
 
 ```yaml
@@ -309,11 +309,11 @@ transport_config:
 
 transport_config:
   # Custom CA Root certificate for generated certs
-  ca_cert: /etc/daos/daosCA.crt
+  ca_cert: /etc/daos/certs/daosCA.crt
   # Agent certificate for use in TLS handshakes
-  cert: /etc/daos/agent.crt
+  cert: /etc/daos/certs/agent.crt
   # Key portion of Agent Certificate
-  key: /etc/daos/agent.key
+  key: /etc/daos/certs/agent.key
 ```
 
 ```yaml
@@ -321,11 +321,11 @@ transport_config:
 
 transport_config:
   # Custom CA Root certificate for generated certs
-  ca_cert: /etc/daos/daosCA.crt
+  ca_cert: /etc/daos/certs/daosCA.crt
   # Admin certificate for use in TLS handshakes
-  cert: /etc/daos/admin.crt
+  cert: /etc/daos/certs/admin.crt
   # Key portion of Admin Certificate
-  key: /etc/daos/admin.key
+  key: /etc/daos/certs/admin.key
 ```
 
 ### Server Startup
