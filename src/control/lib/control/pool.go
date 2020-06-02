@@ -25,7 +25,6 @@ package control
 
 import (
 	"context"
-	"os/user"
 	"strconv"
 	"strings"
 
@@ -37,6 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -51,21 +51,30 @@ func checkUUID(uuidStr string) error {
 	return errors.Wrapf(err, "invalid UUID %q", uuidStr)
 }
 
-// formatNameGroup converts system names to principal and if both user and group
-// are unspecified, takes effective user name and that user's primary group.
-func formatNameGroup(usr string, grp string) (string, string, error) {
-	if usr == "" && grp == "" {
-		eUsr, err := user.Current()
+// formatNameGroup converts system names to principals, If user or group is not
+// provided, the effective user and/or effective group will be used.
+func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, error) {
+	if usr == "" || grp == "" {
+		eUsr, err := ext.Current()
 		if err != nil {
 			return "", "", err
 		}
 
-		eGrp, err := user.LookupGroupId(eUsr.Gid)
-		if err != nil {
-			return "", "", err
+		if usr == "" {
+			usr = eUsr.Username()
 		}
+		if grp == "" {
+			gid, err := eUsr.Gid()
+			if err != nil {
+				return "", "", err
+			}
+			eGrp, err := ext.LookupGroupID(gid)
+			if err != nil {
+				return "", "", err
+			}
 
-		usr, grp = eUsr.Username, eGrp.Name
+			grp = eGrp.Name
+		}
 	}
 
 	if usr != "" && !strings.Contains(usr, "@") {
@@ -83,7 +92,7 @@ func formatNameGroup(usr string, grp string) (string, string, error) {
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
 	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(in.User, in.UserGroup)
+	in.User, in.UserGroup, err = formatNameGroup(&auth.External{}, in.User, in.UserGroup)
 	if err != nil {
 		return nil, err
 	}

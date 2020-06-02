@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       19%{?relval}%{?dist}
+Release:       20%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -284,7 +284,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
-%{_bindir}/daosctl
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
@@ -356,6 +355,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Tue June 2 2020 Hua Kuang <hua.kuang@intel.com> - 1.1.0-20
+- Remove dmg_old from DAOS RPM package
+
 * Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
 - Enable parallel building with _smp_mflags
 
