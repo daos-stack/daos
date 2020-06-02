@@ -38,7 +38,7 @@ package netdetect
 #include <rdma/fi_rma.h>
 #include <rdma/fi_errno.h>
 
-#if HWLOC_API_VERSION >= 0x00020000
+#if HWLOC_API_VERSION >= 0x00030000
 int cmpt_setFlags(hwloc_topology_t topology) {
 	return hwloc_topology_set_all_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_ALL);
 }
@@ -112,6 +112,7 @@ import "C"
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"strings"
 	"unsafe"
@@ -1206,4 +1207,13 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 		log.Debugf("libfabric found records matching provider \"%s\" but there were no valid system devices that matched.", provider)
 	}
 	return ScanResults, nil
+}
+
+func GetDeviceClass(netdev string) (string, error) {
+	devClass, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%s/type", netdev))
+	if err != nil {
+		return "", err
+	}
+	log.Debugf("The netdev type is: %v, string: %s", devClass, string(devClass))
+	return string(devClass), nil
 }

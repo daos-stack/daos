@@ -160,6 +160,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	membership := system.NewMembership(log)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
+	var netDevClass string
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIOServers {
 			break
@@ -176,6 +177,15 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			}
 			envVar := "OFI_DOMAIN=" + deviceAlias
 			srvCfg.WithEnvVars(envVar)
+		}
+
+		if i == 0 {
+			netDevClass, err := netdetect.GetDeviceClass(srvCfg.Fabric.Interface)
+			if err != nil {
+				return err
+			}
+			log.Debugf("Device class for %s is %s\n", srvCfg.Fabric.Interface, netDevClass)
+
 		}
 
 		// If the configuration specifies that we should explicitly set hugepage values
@@ -268,10 +278,15 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
+
+
+	log.Debugf("Using device class %s\n", netDevClass)
+
 	clientNetworkCfg := ClientNetworkCfg{
 		Provider:        cfg.Fabric.Provider,
 		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
 		CrtTimeout:      cfg.Fabric.CrtTimeout,
+		NetDevClass:     netDevClass,
 	}
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &clientNetworkCfg))
 
