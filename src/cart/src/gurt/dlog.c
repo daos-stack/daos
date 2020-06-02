@@ -602,21 +602,33 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	      char *logfile, int flags)
 {
 	int	tagblen;
-	char	*newtag, *cp;
-	int	truncate = 0;
+	char	*newtag = NULL, *cp;
+	int	truncate = 0, rc;
 	char	*env;
+	char	*buffer = NULL;
 
 	env = getenv(D_LOG_TRUNCATE_ENV);
-
 	if (env != NULL && atoi(env) > 0)
 		truncate = 1;
+
+	env = getenv(D_LOG_FILE_APPEND_PID_ENV);
+	if (logfile != NULL && env != NULL) {
+		if (strcmp(env, "0") != 0) {
+			/* Append pid/tgid to log file name */
+			rc = asprintf(&buffer, "%s.%d", logfile, getpid());
+			if (buffer != NULL && rc != -1)
+				logfile = buffer;
+			else
+				D_PRINT_ERR("Failed to append pid to DAOS debug log name, continuing.\n");
+		}
+	}
 
 	/* quick sanity check (mst.tag is non-null if already open) */
 	if (d_log_xst.tag || !tag ||
 	    (maxfac_hint < 0) || (default_mask & ~DLOG_PRIMASK) ||
 	    (stderr_mask & ~DLOG_PRIMASK)) {
 		fprintf(stderr, "d_log_open invalid parameter.\n");
-		return -1;
+		goto early_error;
 	}
 	/* init working area so we can use dlog_cleanout to bail out */
 	memset(&mst, 0, sizeof(mst));
@@ -626,14 +638,13 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	newtag = calloc(1, tagblen);
 	if (!newtag) {
 		fprintf(stderr, "d_log_open calloc failed.\n");
-		return -1;
+		goto early_error;
 	}
 #ifdef DLOG_MUTEX		/* create lock */
 	if (D_MUTEX_INIT(&mst.clogmux, NULL) != 0) {
 		/* XXX: consider cvt to PTHREAD_MUTEX_INITIALIZER */
-		free(newtag);
 		fprintf(stderr, "d_log_open D_MUTEX_INIT failed.\n");
-		return -1;
+		goto early_error;
 	}
 #endif
 	/* it is now safe to use dlog_cleanout() for error handling */
@@ -660,7 +671,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			goto error;
 		}
 		/* merge stderr into log file, to aggregate and order with
-		 * messages from Mercury/libfabric
+		    open(mst.logfile, log_flags, 0666);		 		 * messages from Mercury/libfabric
 		 */
 		if (freopen(mst.logfile, truncate ? "w" : "a",
 			    stderr) == NULL) {
@@ -696,14 +707,20 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.stderr_isatty = isatty(fileno(stderr));
 	d_log_xst.tag = newtag;
 	clog_unlock();
+	if (buffer)
+		free(buffer);
 	return 0;
 error:
 	/*
 	 * we failed.  dlog_cleanout can handle the cleanup for us.
 	 */
-	free(newtag);		/* was never installed */
 	clog_unlock();
 	dlog_cleanout();
+early_error:
+	if (buffer)
+		free(buffer);
+	if (newtag)
+		free(newtag);		/* was never installed */
 	return -1;
 }
 

@@ -146,8 +146,6 @@ daos_debug_fini(void)
 int
 daos_debug_init(char *logfile)
 {
-	char		*log_file_pid_append;
-	char		*buffer = NULL;
 	int		rc;
 
 	D_MUTEX_LOCK(&dd_lock);
@@ -162,26 +160,10 @@ daos_debug_init(char *logfile)
 	else if (logfile == NULL)
 		logfile = DAOS_LOG_DEFAULT;
 
-	log_file_pid_append = getenv(D_LOG_FILE_APPEND_PID_ENV);
-	if (logfile != NULL && log_file_pid_append != NULL) {
-		if (strcmp(log_file_pid_append, "0") != 0) {
-			/* Append pid/tgid to log file name */
-			rc = asprintf(&buffer, "%s.%d", logfile, getpid());
-			if (buffer != NULL)
-				logfile = buffer;
-			else
-				D_PRINT_ERR("Failed to append pid to DAOS debug log name, continuing.\n");
-		}
-	}
 
 	rc = d_log_init_adv("DAOS", logfile,
 			    DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG,
 			    DLOG_INFO, DLOG_CRIT);
-
-	/* don't need buffer anymore */
-	if (buffer)
-		free(buffer);
-
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
 			DP_RC(rc));
