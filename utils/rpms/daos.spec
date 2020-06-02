@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       18%{?relval}%{?dist}
+Release:       19%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -183,14 +183,14 @@ sed -i -e '/AppendUnique(RPATH=.*)/d' $rpath_files
 
 %define conf_dir %{_sysconfdir}/daos
 
-scons %{?no_smp_mflags}    \
+scons %{?_smp_mflags}      \
       --config=force       \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot}
 
 %install
-scons %{?no_smp_mflags}               \
+scons %{?_smp_mflags}                 \
       --config=force                  \
       --install-sandbox=%{?buildroot} \
       %{?buildroot}%{_prefix}         \
@@ -285,7 +285,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/self_test
 %{_bindir}/dmg
 %{_bindir}/dmg_old
-%{_bindir}/daosctl
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
@@ -357,6 +356,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
+- Enable parallel building with _smp_mflags
+
 * Fri May 15 2020 Kenneth Cain <kenneth.c.cain@intel.com> - 1.1.0-18
 - Require raft-devel >= 0.6.0 that adds new API raft_election_start()
 

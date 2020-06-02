@@ -112,9 +112,7 @@ struct agg_io_context {
 	unsigned int		 ic_seg_max;
 	unsigned int		 ic_seg_cnt;
 	/* Reserved SCM extents for new physical entries */
-	struct pobj_action	*ic_scm_exts;
-	unsigned int		 ic_scm_max;
-	unsigned int		 ic_scm_cnt;
+	struct vos_rsrvd_scm	 ic_rsrvd_scm;
 	/* Reserved NVMe extents for new physical entries */
 	d_list_t		 ic_nvme_exts;
 	void			 (*ic_csum_recalc_func)(void *);
@@ -294,7 +292,7 @@ merge_window_status(struct agg_merge_window *mw)
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
 
 	D_ASSERT(io->ic_seg_cnt == 0);
-	D_ASSERT(io->ic_scm_cnt == 0);
+	D_ASSERT(io->ic_rsrvd_scm.rs_actv_at == 0);
 	D_ASSERT(d_list_empty(&io->ic_nvme_exts));
 
 	D_ASSERT(mw->mw_ext.ex_lo <= mw->mw_ext.ex_hi);
@@ -327,8 +325,8 @@ merge_window_status(struct agg_merge_window *mw)
 	D_ASSERT(io->ic_buf == NULL);
 	D_ASSERT(io->ic_seg_max == 0);
 	D_ASSERT(io->ic_segs == NULL);
-	D_ASSERT(io->ic_scm_max == 0);
-	D_ASSERT(io->ic_scm_exts == NULL);
+	D_ASSERT(io->ic_rsrvd_scm.rs_actv_cnt == 0);
+	D_ASSERT(io->ic_rsrvd_scm.rs_actv == NULL);
 
 	return MW_CLOSED;
 }
@@ -543,6 +541,7 @@ prepare_segments(struct agg_merge_window *mw)
 		/* Merge to highest pool map version */
 		if (ent_in->ei_ver < phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
+		ent_in->ei_rect.rc_minor_epc = VOS_MINOR_EPC_MAX;
 	}
 
 	if (mw->mw_csum_support) {
@@ -585,6 +584,7 @@ prepare_segments(struct agg_merge_window *mw)
 		ent_in->ei_rect.rc_ex.ex_lo = mw->mw_ext.ex_hi + 1;
 		ent_in->ei_rect.rc_ex.ex_hi = ext.ex_hi;
 		ent_in->ei_rect.rc_epc = phy_ent->pe_rect.rc_epc;
+		ent_in->ei_rect.rc_minor_epc = phy_ent->pe_rect.rc_minor_epc;
 		ent_in->ei_ver = phy_ent->pe_ver;
 
 		hole = bio_addr_is_hole(&phy_ent->pe_addr);
@@ -622,63 +622,33 @@ static int
 reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 		daos_size_t size, bio_addr_t *addr)
 {
-	struct vea_space_info	*vsi;
-	struct vea_hint_context	*hint_ctxt;
-	struct vea_resrvd_ext	*nvme_ext;
-	uint32_t		 blk_cnt;
-	uint16_t		 media;
-	int			 rc;
+	uint64_t	off;
+	uint16_t	media;
+	int		rc;
 
 	memset(addr, 0, sizeof(*addr));
-	media = vos_media_select(obj->obj_cont, DAOS_IOD_ARRAY, size);
+	media = vos_media_select(vos_obj2pool(obj), DAOS_IOD_ARRAY, size);
 
 	if (media == DAOS_MEDIA_SCM) {
-		struct pobj_action	*scm_ext;
-		umem_off_t		 umoff;
-
-		D_ASSERT(io->ic_scm_max > io->ic_scm_cnt);
-		D_ASSERT(io->ic_scm_exts != NULL);
-		scm_ext = &io->ic_scm_exts[io->ic_scm_cnt];
-
-		if (vos_obj2umm(obj)->umm_ops->mo_reserve != NULL)
-			umoff = umem_reserve(vos_obj2umm(obj), scm_ext, size);
-		else
-			umoff = umem_alloc(vos_obj2umm(obj), size);
-
-		if (UMOFF_IS_NULL(umoff)) {
-			D_ERROR("Reserve "DF_U64" bytes on SCM failed.\n",
-				size);
+		off = vos_reserve_scm(obj->obj_cont, &io->ic_rsrvd_scm, size);
+		if (UMOFF_IS_NULL(off)) {
+			D_ERROR("Reserve "DF_U64" from SCM failed.\n", size);
 			return -DER_NOSPACE;
 		}
-
-		io->ic_scm_cnt++;
-		bio_addr_set(addr, media, umoff);
+		bio_addr_set(addr, media, off);
 		return 0;
 	}
 
 	D_ASSERT(media == DAOS_MEDIA_NVME);
+	rc = vos_reserve_blocks(obj->obj_cont, &io->ic_nvme_exts, size,
+				VOS_IOS_AGGREGATION, &off);
+	if (rc)
+		D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n",
+			size, DP_RC(rc));
+	else
+		bio_addr_set(addr, media, off);
 
-	vsi = obj->obj_cont->vc_pool->vp_vea_info;
-	D_ASSERT(vsi);
-	hint_ctxt = obj->obj_cont->vc_hint_ctxt[VOS_IOS_AGGREGATION];
-	D_ASSERT(hint_ctxt);
-	blk_cnt = vos_byte2blkcnt(size);
-
-	rc = vea_reserve(vsi, blk_cnt, hint_ctxt, &io->ic_nvme_exts);
-	if (rc) {
-		D_ERROR("Reserve %u blocks on NVMe failed: "DF_RC"\n", blk_cnt,
-		DP_RC(rc));
-		return rc;
-	}
-
-	nvme_ext = d_list_entry(io->ic_nvme_exts.prev, struct vea_resrvd_ext,
-				vre_link);
-	D_ASSERTF(nvme_ext->vre_blk_cnt == blk_cnt, "%u != %u\n",
-		  nvme_ext->vre_blk_cnt, blk_cnt);
-	D_ASSERT(nvme_ext->vre_blk_off != 0);
-
-	bio_addr_set(addr, media, nvme_ext->vre_blk_off << VOS_BLK_SHIFT);
-	return 0;
+	return rc;
 }
 
 static inline daos_size_t
@@ -1049,24 +1019,24 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	      unsigned int *acts)
 {
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
-	struct agg_lgc_seg		*lgc_seg;
-	unsigned int			 i, scm_max;
-	int				 rc = 0;
+	struct agg_lgc_seg	*lgc_seg;
+	struct pobj_action	*scm_exts;
+	unsigned int		 i, scm_max;
+	int			 rc = 0;
 
 	scm_max = MAX(io->ic_seg_cnt, 200);
-	if (io->ic_scm_max < scm_max) {
-		struct pobj_action *scm_exts;
-
-		D_REALLOC(scm_exts, io->ic_scm_exts,
+	if (io->ic_rsrvd_scm.rs_actv_cnt < scm_max) {
+		D_REALLOC(scm_exts, io->ic_rsrvd_scm.rs_actv,
 			  scm_max * sizeof(*scm_exts));
 		if (scm_exts == NULL)
 			return -DER_NOMEM;
 
-		io->ic_scm_exts = scm_exts;
-		io->ic_scm_max = scm_max;
+		io->ic_rsrvd_scm.rs_actv = scm_exts;
+		io->ic_rsrvd_scm.rs_actv_cnt = scm_max;
 	}
-	memset(io->ic_scm_exts, 0, io->ic_scm_max * sizeof(*io->ic_scm_exts));
-	D_ASSERT(io->ic_scm_cnt == 0);
+	memset(io->ic_rsrvd_scm.rs_actv, 0,
+	       io->ic_rsrvd_scm.rs_actv_cnt * sizeof(*scm_exts));
+	D_ASSERT(io->ic_rsrvd_scm.rs_actv_at == 0);
 
 	for (i = 0; i < io->ic_seg_cnt; i++) {
 		lgc_seg = &io->ic_segs[i];
@@ -1110,15 +1080,10 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		return rc;
 
 	/* Publish SCM reservations */
-	if (io->ic_scm_cnt) {
-		rc = umem_tx_publish(vos_obj2umm(obj), io->ic_scm_exts,
-				     io->ic_scm_cnt);
-		io->ic_scm_cnt = 0;
-		if (rc) {
-			D_ERROR("Publish %u SCM extents error: "DF_RC"\n",
-				io->ic_scm_cnt, DP_RC(rc));
-			goto abort;
-		}
+	rc = vos_publish_scm(obj->obj_cont, &io->ic_rsrvd_scm, true);
+	if (rc) {
+		D_ERROR("Publish SCM extents error: "DF_RC"\n", DP_RC(rc));
+		goto abort;
 	}
 
 	/* Adjust logical entry queue */
@@ -1202,6 +1167,9 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	for (i = 0; i < io->ic_seg_cnt; i++) {
 		ent_in = &io->ic_segs[i].ls_ent_in;
 
+		/** For insertion, no tx will be inserting anything at this
+		 *  epoch so just use the max value for the minor epoch.
+		 */
 		rc = evt_insert(oiter->it_hdl, ent_in,
 				&ent_in->ei_csum.cs_csum);
 		if (rc) {
@@ -1239,11 +1207,8 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 
 	D_ASSERT(obj != NULL);
 	if (rc) {
-		if (io->ic_scm_cnt) {
-			umem_cancel(vos_obj2umm(obj), io->ic_scm_exts,
-				    io->ic_scm_cnt);
-			io->ic_scm_cnt = 0;
-		}
+		vos_publish_scm(obj->obj_cont, &io->ic_rsrvd_scm, false);
+
 		if (!d_list_empty(&io->ic_nvme_exts))
 			vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts,
 					   false, VOS_IOS_AGGREGATION);
@@ -1251,7 +1216,7 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 
 	/* Reset io context */
 	D_ASSERT(d_list_empty(&io->ic_nvme_exts));
-	D_ASSERT(io->ic_scm_cnt == 0);
+	D_ASSERT(io->ic_rsrvd_scm.rs_actv_at == 0);
 	io->ic_seg_cnt = 0;
 }
 
@@ -1382,7 +1347,7 @@ trigger_flush(struct agg_merge_window *mw, struct evt_extent *lgc_ext)
 
 static struct agg_phy_ent *
 enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
-		daos_epoch_t epoch, bio_addr_t *addr,
+		const vos_iter_entry_t *entry, bio_addr_t *addr,
 		struct dcs_csum_info *csum_info, uint32_t ver)
 {
 	struct agg_phy_ent *phy_ent;
@@ -1392,7 +1357,8 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 		return NULL;
 
 	phy_ent->pe_rect.rc_ex = *phy_ext;
-	phy_ent->pe_rect.rc_epc = epoch;
+	phy_ent->pe_rect.rc_epc = entry->ie_epoch;
+	phy_ent->pe_rect.rc_minor_epc = entry->ie_minor_epc;
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
 	phy_ent->pe_off = 0;
@@ -1509,10 +1475,10 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 		io->ic_seg_max = 0;
 	}
 
-	if (io->ic_scm_exts != NULL) {
-		D_FREE(io->ic_scm_exts);
-		io->ic_scm_exts = NULL;
-		io->ic_scm_max = 0;
+	if (io->ic_rsrvd_scm.rs_actv != NULL) {
+		D_FREE(io->ic_rsrvd_scm.rs_actv);
+		io->ic_rsrvd_scm.rs_actv = NULL;
+		io->ic_rsrvd_scm.rs_actv_cnt = 0;
 	}
 
 	if (io->ic_csum_recalcs != NULL) {
@@ -1537,7 +1503,7 @@ recx2ext(daos_recx_t *recx, struct evt_extent *ext)
 
 static struct agg_phy_ent *
 lookup_phy_ent(struct agg_merge_window *mw, const struct evt_extent *phy_ext,
-	       daos_epoch_t epoch)
+	       const vos_iter_entry_t *entry)
 {
 	struct agg_phy_ent *phy_ent;
 
@@ -1546,7 +1512,8 @@ lookup_phy_ent(struct agg_merge_window *mw, const struct evt_extent *phy_ext,
 		if (phy_ent->pe_rect.rc_ex.ex_lo < phy_ext->ex_lo)
 			break;
 
-		if (phy_ent->pe_rect.rc_epc == epoch &&
+		if (phy_ent->pe_rect.rc_epc == entry->ie_epoch &&
+		    phy_ent->pe_rect.rc_minor_epc == entry->ie_minor_epc &&
 		    phy_ent->pe_rect.rc_ex.ex_hi == phy_ext->ex_hi)
 			return phy_ent;
 	}
@@ -1584,6 +1551,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rect.rc_ex = phy_ext;
 		rect.rc_epc = entry->ie_epoch;
+		rect.rc_minor_epc = entry->ie_minor_epc;
 		mark_yield(&entry->ie_biov.bi_addr, acts);
 
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
@@ -1608,11 +1576,11 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	/* Lookup physical entry, enqueue if it doesn't exist */
-	phy_ent = lookup_phy_ent(mw, &phy_ext, entry->ie_epoch);
+	phy_ent = lookup_phy_ent(mw, &phy_ext, entry);
 	if (phy_ent == NULL) {
 		D_ASSERT(phy_ext.ex_lo == lgc_ext.ex_lo);
 
-		phy_ent = enqueue_phy_ent(mw, &phy_ext, entry->ie_epoch,
+		phy_ent = enqueue_phy_ent(mw, &phy_ext, entry,
 					  &entry->ie_biov.bi_addr,
 					  &entry->ie_csum, entry->ie_ver);
 		if (phy_ent == NULL) {
@@ -1717,6 +1685,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (phy_ext.ex_lo == lgc_ext.ex_lo) {
 			rect.rc_ex = phy_ext;
 			rect.rc_epc = entry->ie_epoch;
+			rect.rc_minor_epc = entry->ie_minor_epc;
 			mark_yield(&entry->ie_biov.bi_addr, acts);
 
 			rc = evt_delete(oiter->it_hdl, &rect, NULL);
@@ -1738,9 +1707,10 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	/* Aggregation */
 	D_DEBUG(DB_EPC, "oid:"DF_UOID", lgc_ext:"DF_EXT", "
-		"phy_ext:"DF_EXT", epoch:"DF_U64", flags: %x\n",
+		"phy_ext:"DF_EXT", epoch:"DF_U64".%d, flags: %x\n",
 		DP_UOID(agg_param->ap_oid), DP_EXT(&lgc_ext),
-		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_vis_flags);
+		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_minor_epc,
+		entry->ie_vis_flags);
 
 	rc = set_window_size(mw, entry->ie_rsize);
 	if (rc)
@@ -1799,7 +1769,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (cont->vc_abort_aggregation) {
-		D_DEBUG(DB_EPC, "VOS aggregation aborted\n");
+		D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
 		return 1;
 	}
 
@@ -1866,15 +1836,51 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 }
 
 static int
-aggregate_enter(struct vos_container *cont, bool discard)
+aggregate_enter(struct vos_container *cont, bool discard,
+		daos_epoch_range_t *epr)
 {
-	if (cont->vc_in_aggregation) {
-		D_ERROR(DF_CONT": Already in aggregation. discard:%d\n",
-			DP_CONT(cont->vc_pool->vp_id, cont->vc_id), discard);
-		return -DER_BUSY;
+	if (discard) {
+		if (cont->vc_in_discard) {
+			D_ERROR(DF_CONT": Already in discard\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id));
+			return -DER_BUSY;
+		}
+
+		if (cont->vc_in_aggregation &&
+		    cont->vc_epr_aggregation.epr_hi >= epr->epr_lo) {
+			D_ERROR(DF_CONT": Aggregate epr["DF_U64", "DF_U64"], "
+				"discard epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_aggregation.epr_lo,
+				cont->vc_epr_aggregation.epr_hi,
+				epr->epr_lo, epr->epr_hi);
+			return -DER_BUSY;
+		}
+
+		cont->vc_in_discard = 1;
+		cont->vc_epr_discard = *epr;
+	} else {
+		if (cont->vc_in_aggregation) {
+			D_ERROR(DF_CONT": Already in aggregation\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id));
+			return -DER_BUSY;
+		}
+
+		if (cont->vc_in_discard &&
+		    cont->vc_epr_discard.epr_lo <= epr->epr_hi) {
+			D_ERROR(DF_CONT": Discard epr["DF_U64", "DF_U64"], "
+				"aggregation epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_discard.epr_lo,
+				cont->vc_epr_discard.epr_hi,
+				epr->epr_lo, epr->epr_hi);
+			return -DER_BUSY;
+		}
+
+		cont->vc_in_aggregation = 1;
+		cont->vc_epr_aggregation = *epr;
 	}
 
-	cont->vc_in_aggregation = 1;
 	cont->vc_abort_aggregation = 0;
 	return 0;
 }
@@ -1882,8 +1888,17 @@ aggregate_enter(struct vos_container *cont, bool discard)
 static void
 aggregate_exit(struct vos_container *cont, bool discard)
 {
-	D_ASSERT(cont->vc_in_aggregation);
-	cont->vc_in_aggregation = 0;
+	if (discard) {
+		D_ASSERT(cont->vc_in_discard);
+		cont->vc_in_discard = 0;
+		cont->vc_epr_discard.epr_lo = 0;
+		cont->vc_epr_discard.epr_hi = 0;
+	} else {
+		D_ASSERT(cont->vc_in_aggregation);
+		cont->vc_in_aggregation = 0;
+		cont->vc_epr_aggregation.epr_lo = 0;
+		cont->vc_epr_aggregation.epr_hi = 0;
+	}
 }
 
 static void
@@ -1911,7 +1926,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
 		  epr->epr_lo, epr->epr_hi);
 
-	rc = aggregate_enter(cont, false);
+	rc = aggregate_enter(cont, false, epr);
 	if (rc)
 		return rc;
 
@@ -1977,7 +1992,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
 		  epr->epr_lo, epr->epr_hi);
 
-	rc = aggregate_enter(cont, true);
+	rc = aggregate_enter(cont, true, epr);
 	if (rc != 0)
 		return rc;
 
