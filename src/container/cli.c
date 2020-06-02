@@ -455,7 +455,8 @@ dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
 	daos_csummer_type_init(&cont->dc_csummer,
 			       daos_cont_prop2csum(props),
 			       daos_cont_prop2chunksize(props), 0,
-			       daos_cont_prop2dedup(props), 0,
+			       daos_cont_prop2dedup(props),
+			       daos_cont_prop2dedupverify(props),
 			       daos_cont_prop2dedupsize(props));
 }
 
@@ -1597,6 +1598,7 @@ struct dc_cont_glob {
 	uint32_t	dcg_csum_chunksize;
 	bool		dcg_csum_srv_verify;
 	bool		dcg_dedup;
+	bool		dcg_dedup_verify;
 	uint32_t        dcg_dedup_th;
 };
 
@@ -1668,7 +1670,9 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 		daos_csummer_get_chunksize(cont->dc_csummer);
 	cont_glob->dcg_csum_srv_verify =
 		daos_csummer_get_srv_verify(cont->dc_csummer);
-	cont_glob->dcg_dedup= daos_csummer_get_dedup(cont->dc_csummer);
+	cont_glob->dcg_dedup = daos_csummer_get_dedup(cont->dc_csummer);
+	cont_glob->dcg_dedup_verify =
+				daos_csummer_get_dedupverify(cont->dc_csummer);
 	cont_glob->dcg_dedup_th = daos_csummer_get_dedupsize(cont->dc_csummer);
 
 	dc_pool_put(pool);
@@ -1712,7 +1716,8 @@ csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
 	daos_csummer_init(&cont->dc_csummer, csum_algo,
 			  cont_glob->dcg_csum_chunksize,
 			  cont_glob->dcg_csum_srv_verify,
-			  cont_glob->dcg_dedup, 0,
+			  cont_glob->dcg_dedup,
+			  cont_glob->dcg_dedup_verify,
 			  cont_glob->dcg_dedup_th);
 }
 

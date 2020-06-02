@@ -524,9 +524,17 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 	if (!ft) {
 		/** dedup w/o checksum */
 		result->dcs_csum = false;
-		/** force SHA256 as the only approved checksum in this case */
-		result->dcs_algo =
-			daos_csum_type2algo(CSUM_TYPE_ISAL_SHA256);
+		if (!dedup_verify)
+			/**
+			  * force SHA256 as the only approved checksum in this
+			  * case
+			  */
+			result->dcs_algo =
+				daos_csum_type2algo(CSUM_TYPE_ISAL_SHA256);
+		else
+			/** use crc64 in this case */
+			result->dcs_algo =
+				daos_csum_type2algo(CSUM_TYPE_ISAL_CRC64_REFL);
 		if (chunk_bytes == 0)
 			result->dcs_chunk_size = 32 * 1024;
 		else if (chunk_bytes < result->dcs_dedup_size)
