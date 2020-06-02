@@ -410,6 +410,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		bClass           storage.BdevClass
 		bDevs            [][]string
 		bmbc             *bdev.MockBackendConfig
+		awaitTimeout     time.Duration
 		expAwaitExit     bool
 		expAwaitErr      error
 		expResp          *StorageFormatResp
@@ -493,7 +494,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"io instances already running": {
+		"io instances already running": { // await should exit immediately
 			instancesStarted: true,
 			scmMounted:       true,
 			sMounts:          []string{"/mnt/daos"},
@@ -504,7 +505,9 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: storage.NvmeControllers{mockNvmeController0},
 			},
-			expAwaitErr: errors.New("can't wait for storage: instance 0 already started"),
+			expAwaitExit: true,
+			expAwaitErr:  errors.New("can't wait for storage: instance 0 already started"),
+			awaitTimeout: time.Second,
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
 					{
@@ -660,6 +663,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				ScanRes: storage.NvmeControllers{mockNvmeController0},
 			},
 			expAwaitExit: true,
+			awaitTimeout: time.Second,
 			expResp: &StorageFormatResp{
 				Mrets: []*ScmMountResult{
 					{
@@ -814,8 +818,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				srv.runner = ioserver.NewTestRunner(trc, config.Servers[i])
 			}
 
-			parent := context.Background()
-			ctx, cancel := context.WithTimeout(parent, testMediumTimeout)
+			ctx, cancel := context.WithCancel(context.Background())
+			if tc.awaitTimeout != 0 {
+				ctx, cancel = context.WithTimeout(ctx, tc.awaitTimeout)
+			}
 			defer cancel()
 
 			awaitCh := make(chan error)
@@ -855,11 +861,12 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			case err := <-awaitCh:
 				inflight--
 				common.CmpErr(t, tc.expAwaitErr, err)
-				if tc.expAwaitErr == nil && !tc.expAwaitExit {
-					t.Fatalf("unexpected return from awaitStorageReady() %v", err)
+				if !tc.expAwaitExit {
+					t.Fatal("unexpected exit from awaitStorageReady()")
 				}
 			case <-ctx.Done():
-				if ctx.Err() != context.DeadlineExceeded {
+				common.CmpErr(t, tc.expAwaitErr, ctx.Err())
+				if tc.expAwaitErr == nil {
 					t.Fatal(ctx.Err())
 				}
 				if !tc.scmMounted || inflight > 0 {
