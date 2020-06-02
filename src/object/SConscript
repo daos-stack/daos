@@ -19,13 +19,8 @@ def scons():
     srv = daos_build.library(denv, 'obj',
                              common_tgts + ['srv_obj.c', 'srv_mod.c',
                                             'srv_obj_remote.c', 'srv_ec.c',
-<<<<<<< HEAD
                                             'srv_csum.c', 'srv_obj_migrate.c',
-                                            'srv_ec_aggregate.c'])
-=======
-					    'srv_csum.c', 'srv_obj_migrate.c',
-					    'srv_cli.c'])
->>>>>>> master
+                                            'srv_ec_aggregate.c', 'srv_cli.c'])
     denv.Install('$PREFIX/lib64/daos_srv', srv)
 
     # Object client library
