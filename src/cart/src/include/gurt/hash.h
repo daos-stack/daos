@@ -151,6 +151,28 @@ typedef struct {
 	 */
 	bool	 (*hop_rec_decref)(struct d_hash_table *htable,
 				   d_list_t *rlink);
+
+	/**
+	 * Optional, release multiple refcount on the record \p rlink
+	 *
+	 * This function expands on hop_rec_decref() so the notes from that
+	 * function apply here.  If hop_rec_decref() is not provided then
+	 * hop_rec_ndecref() shouldn't be either.
+	 *
+	 * \param[in] htable	hash table
+	 * \param[in] rlink	The rlink being released.
+	 * \param[in] count	The number of refs to be dropped.
+	 *
+	 * \retval	0	Do nothing
+	 * \retval	1	Only if refcount is zero and the hash item
+	 *			can be freed. If this function can return
+	 *			true, then hop_rec_free() should be defined.
+	 *		negative value on error.
+	 */
+	int	 (*hop_rec_ndecref)(struct d_hash_table *htable,
+				    d_list_t *rlink,
+				    int count);
+
 	/**
 	 * Optional, free the record \p rlink
 	 * It is called if hop_decref() returns zero.

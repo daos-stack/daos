@@ -604,21 +604,32 @@ int
 d_hash_rec_ndecref(struct d_hash_table *htable, int count, d_list_t *rlink)
 {
 	bool ephemeral = (htable->ht_feats & D_HASH_FT_EPHEMERAL);
-	bool zombie;
+	bool zombie = false;
 	int rc = 0;
 
 	ch_lock(htable, !ephemeral);
-	do {
-		zombie = ch_rec_decref(htable, rlink);
-	} while (--count && !zombie);
 
-	if (count != 0)
-		rc = -DER_INVAL;
+	if (htable->ht_ops->hop_rec_ndecref) {
+		rc = htable->ht_ops->hop_rec_ndecref(htable, rlink, count);
+		if (rc >= 1) {
+			zombie = true;
+			rc = 0;
+		}
+	} else {
+		do {
+			zombie = ch_rec_decref(htable, rlink);
+		} while (--count && !zombie);
 
-	if (zombie && ephemeral && !d_list_empty(rlink))
-		ch_rec_delete(htable, rlink);
+		if (count != 0)
+			rc = -DER_INVAL;
+	}
 
-	D_ASSERT(!zombie || d_list_empty(rlink));
+	if (rc == 0) {
+		if (zombie && ephemeral && !d_list_empty(rlink))
+			ch_rec_delete(htable, rlink);
+
+		D_ASSERT(!zombie || d_list_empty(rlink));
+	}
 
 	ch_unlock(htable, !ephemeral);
 	if (zombie)

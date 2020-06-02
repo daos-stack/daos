@@ -175,7 +175,7 @@ alloc_ie:
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,

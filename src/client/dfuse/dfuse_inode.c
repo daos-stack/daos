@@ -47,7 +47,7 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		dfir->ir_id.irid_oid.hi = oid->hi;
 	}
 
-	dfir->ir_ino = atomic_fetch_add(&fs_handle->dpi_ino_next, 1);
+	dfir->ir_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
 	dfir->ir_id.irid_dfs = dfs;
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_irt,
@@ -114,7 +114,7 @@ void
 ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 {
 	int			rc;
-	int			ref = atomic_load_consume(&ie->ie_ref);
+	int			ref = atomic_load_relaxed(&ie->ie_ref);
 
 	DFUSE_TRA_DEBUG(ie, "closing, inode %lu ref %u, name '%s', parent %lu",
 			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);

@@ -306,7 +306,7 @@ grp_li_uri_get(struct crt_lookup_item *li, int tag)
 	ui = crt_ui_link2ptr(rlink);
 	d_hash_rec_decref(&grp_priv->gp_uri_lookup_cache, rlink);
 
-	return atomic_load_consume(&ui->ui_uri[tag]);
+	return atomic_load_relaxed(&ui->ui_uri[tag]);
 }
 
 static inline int

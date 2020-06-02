@@ -854,6 +854,20 @@ test_gurt_hash_op_rec_decref(struct d_hash_table *thtab, d_list_t *link)
 	return tlink->tl_ref == 0;
 }
 
+static int
+test_gurt_hash_op_rec_ndecref(struct d_hash_table *thtab,
+			      d_list_t *link, int count)
+{
+	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
+
+	if (count > tlink->tl_ref)
+		return -DER_INVAL;
+
+	tlink->tl_ref -= count;
+
+	return tlink->tl_ref == 0 ? 1 : 0;
+}
+
 static void
 test_gurt_hash_op_rec_free(struct d_hash_table *thtab, d_list_t *link)
 {
@@ -980,10 +994,11 @@ test_gurt_hash_empty(void **state)
 }
 
 static d_hash_table_ops_t th_ops_ref = {
-	.hop_key_cmp	= test_gurt_hash_op_key_cmp,
-	.hop_rec_addref	= test_gurt_hash_op_rec_addref,
-	.hop_rec_decref	= test_gurt_hash_op_rec_decref,
-	.hop_rec_free	= test_gurt_hash_op_rec_free,
+	.hop_key_cmp		= test_gurt_hash_op_key_cmp,
+	.hop_rec_addref		= test_gurt_hash_op_rec_addref,
+	.hop_rec_decref		= test_gurt_hash_op_rec_decref,
+	.hop_rec_ndecref	= test_gurt_hash_op_rec_ndecref,
+	.hop_rec_free		= test_gurt_hash_op_rec_free,
 };
 
 static void
@@ -1121,9 +1136,15 @@ test_gurt_hash_decref(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(entry->tl_ref, 2);
 
-	/* Drop 20 refs, which should fail but remove and free the descriptor */
+	/* Drop 20 refs, which should fail but not
+	 * remove or free the descriptor
+	 */
 	rc = d_hash_rec_ndecref(thtab, 20, test);
 	assert_int_equal(rc, -DER_INVAL);
+
+	/* Drop 2 refs, which should remove and free the descriptor */
+	rc = d_hash_rec_ndecref(thtab, 2, test);
+	assert_int_equal(rc, 0);
 
 	/* Get the first element in the table, which should be NULL */
 	assert_null(d_hash_rec_first(thtab));
