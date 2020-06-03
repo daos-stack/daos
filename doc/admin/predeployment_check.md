@@ -209,4 +209,4 @@ $ sudo ln -s $SL_PREFIX/include \
 !!! note
     The RPM installation is preferred for production scenarios. Manual
     installation is most appropriate for development and predeployment
-    proof-of-concept scenarios
+    proof-of-concept scenarios.
