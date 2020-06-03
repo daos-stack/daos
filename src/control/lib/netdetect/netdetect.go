@@ -70,9 +70,7 @@ hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
 	}
 	return child;
 }
-
 #else
-
 int cmpt_setFlags(hwloc_topology_t topology)
 {
 	return hwloc_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
@@ -97,7 +95,6 @@ hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
 {
 	return node->parent->children[idx];
 }
-
 #endif
 
 #define getHFIUnitError -2
