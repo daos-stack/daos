@@ -47,6 +47,8 @@ public class DaosClient implements ForceCloseable {
 
   private volatile boolean inited;
 
+  private static volatile boolean finalized;
+
   public static final String LIB_NAME = "daos-jni";
 
   public static final Runnable FINALIZER;
@@ -62,7 +64,7 @@ public class DaosClient implements ForceCloseable {
       public void run() {
         try {
           closeAll();
-          daosFinalize();
+          daosSafeFinalize();
           log.info("daos finalized");
           ShutdownHookManager.removeHook(this);
         } catch (IOException e) {
@@ -251,13 +253,28 @@ public class DaosClient implements ForceCloseable {
   }
 
   /**
+   * finalize DAOS safely to avoid finalizing multiple times
+   *
+   * @throws IOException
+   */
+  public static synchronized void daosSafeFinalize() throws IOException {
+    if (!finalized) {
+      daosFinalize();
+      finalized = true;
+    }
+  }
+
+  /**
    * finalize DAOS client.
    *
    * @throws IOException {@link DaosIOException}
    */
-  static synchronized native void daosFinalize() throws IOException;
+  private static native void daosFinalize() throws IOException;
 
-  public static class DaosClientBuilder implements Cloneable {
+  /**
+   * A builder to build {@link DaosClient}. A subclass can extend it to build its own client.
+   */
+  public static class DaosClientBuilder<T extends DaosClientBuilder<T>> implements Cloneable {
     private String poolId;
     private String contId;
     private String ranks = Constants.POOL_DEFAULT_RANKS;
@@ -267,18 +284,18 @@ public class DaosClient implements ForceCloseable {
     private int poolMode = Constants.MODE_POOL_GROUP_READWRITE | Constants.MODE_POOL_OTHER_READWRITE |
       Constants.MODE_POOL_USER_READWRITE;
 
-    public DaosClientBuilder poolId(String poolId) {
+    public T poolId(String poolId) {
       this.poolId = poolId;
-      return this;
+      return (T)this;
     }
 
     public String getPoolId() {
       return poolId;
     }
 
-    public DaosClientBuilder containerId(String contId) {
+    public T containerId(String contId) {
       this.contId = contId;
-      return this;
+      return (T)this;
     }
 
     public String getContId() {
@@ -292,9 +309,9 @@ public class DaosClient implements ForceCloseable {
      * default is "0"
      * @return DaosFsClientBuilder
      */
-    public DaosClientBuilder ranks(String ranks) {
+    public T ranks(String ranks) {
       this.ranks = ranks;
-      return this;
+      return (T)this;
     }
 
     /**
@@ -304,9 +321,9 @@ public class DaosClient implements ForceCloseable {
      * default is 'daos_server'
      * @return DaosFsClientBuilder
      */
-    public DaosClientBuilder serverGroup(String serverGroup) {
+    public T serverGroup(String serverGroup) {
       this.serverGroup = serverGroup;
-      return this;
+      return (T)this;
     }
 
     /**
@@ -318,9 +335,9 @@ public class DaosClient implements ForceCloseable {
      *                       Default value is {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE}
      * @return DaosFsClientBuilder
      */
-    public DaosClientBuilder containerFlags(int containerFlags) {
+    public T containerFlags(int containerFlags) {
       this.containerFlags = containerFlags;
-      return this;
+      return (T)this;
     }
 
     /**
@@ -347,9 +364,9 @@ public class DaosClient implements ForceCloseable {
      *                 </li>
      * @return DaosFsClientBuilder
      */
-    public DaosClientBuilder poolMode(int poolMode) {
+    public T poolMode(int poolMode) {
       this.poolMode = poolMode;
-      return this;
+      return (T)this;
     }
 
     /**
@@ -364,9 +381,9 @@ public class DaosClient implements ForceCloseable {
      *                  Default is {@link Constants#ACCESS_FLAG_POOL_READWRITE}
      * @return DaosFsClientBuilder
      */
-    public DaosClientBuilder poolFlags(int poolFlags) {
+    public T poolFlags(int poolFlags) {
       this.poolFlags = poolFlags;
-      return this;
+      return (T)this;
     }
 
     @Override
@@ -376,12 +393,13 @@ public class DaosClient implements ForceCloseable {
 
     /**
      * create new instance of {@link DaosClient} from this builder.
-     *
+     * Subclass may return object of different hierarchy. So return type is {@link Object}
+     * Instead of {@link DaosClient}.
      *
      * @return new instance of DaosClient
      * @throws IOException
      */
-    public DaosClient build() throws IOException {
+    public Object build() throws IOException {
       if (poolId == null) {
         throw new IllegalArgumentException("need pool UUID");
       }

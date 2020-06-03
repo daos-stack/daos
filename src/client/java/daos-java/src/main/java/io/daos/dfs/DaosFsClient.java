@@ -134,7 +134,7 @@ public final class DaosFsClient implements ForceCloseable {
     if (inited) {
       return;
     }
-    client = builder.clientBuilder.build();
+    client = builder.buildDaosClient();
     if (contId != null && !ROOT_CONT_UUID.equals(contId)) {
       dfsPtr = mountFileSystem(client.getPoolPtr(), client.getContPtr(), builder.readOnlyFs);
       if (log.isDebugEnabled()) {
@@ -1029,8 +1029,7 @@ public final class DaosFsClient implements ForceCloseable {
    * <p>
    * poolId should be set at least. ROOT container will be used if containerId is not set.
    */
-  public static class DaosFsClientBuilder implements Cloneable {
-    private DaosClient.DaosClientBuilder clientBuilder = new DaosClient.DaosClientBuilder();
+  public static class DaosFsClientBuilder extends DaosClient.DaosClientBuilder<DaosFsClientBuilder> {
     private int defaultFileChunkSize = Constants.FILE_DEFAULT_CHUNK_SIZE;
     private int defaultFileAccessFlags = Constants.ACCESS_FLAG_FILE_READWRITE;
     private int defaultFileMode = Constants.FILE_DEFAULT_FILE_MODE;
@@ -1222,9 +1221,10 @@ public final class DaosFsClient implements ForceCloseable {
      * @throws IOException
      * {@link DaosIOException}
      */
+    @Override
     public DaosFsClient build() throws IOException {
-      String poolId = clientBuilder.getPoolId();
-      String contId = clientBuilder.getContId();
+      String poolId = getPoolId();
+      String contId = getContId();
       DaosFsClientBuilder builder = (DaosFsClientBuilder) ObjectUtils.clone(this);
       DaosFsClient fsClient;
       if (!builder.shareFsClient) {
@@ -1248,6 +1248,10 @@ public final class DaosFsClient implements ForceCloseable {
       fsClient.init();
       fsClient.incrementRef();
       return fsClient;
+    }
+
+    protected DaosClient buildDaosClient() throws IOException {
+      return (DaosClient) super.build();
     }
   }
 }
