@@ -27,8 +27,8 @@ from apricot import TestWithServers
 
 class DynamicServer(TestWithServers):
     """Test Class Description:
-    Simple test to verify dmg execution given positive and negative values
-    to its configuration file.
+    Test to dynamically add a server, create a pool on it, kill it,
+    and restart and add it back.
     :avocado: recursive
     """
 
