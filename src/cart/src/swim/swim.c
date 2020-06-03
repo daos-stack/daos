@@ -1,5 +1,5 @@
 /* Copyright (c) 2016 UChicago Argonne, LLC
- * Copyright (C) 2018-2019 Intel Corporation
+ * Copyright (C) 2018-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,75 @@
 #include "swim_internal.h"
 #include <assert.h>
 
-static uint64_t swim_ping_timeout = SWIM_PING_TIMEOUT;
+static uint64_t swim_prot_period_len;
+static uint64_t swim_suspect_timeout;
+static uint64_t swim_ping_timeout;
+
+static inline uint64_t
+swim_prot_period_len_default(void)
+{
+	unsigned int val = SWIM_PROTOCOL_PERIOD_LEN;
+
+	d_getenv_int("SWIM_PROTOCOL_PERIOD_LEN", &val);
+	return val;
+}
+
+static inline uint64_t
+swim_suspect_timeout_default(void)
+{
+	unsigned int val = SWIM_SUSPECT_TIMEOUT;
+
+	d_getenv_int("SWIM_SUSPECT_TIMEOUT", &val);
+	return val;
+}
+
+static inline uint64_t
+swim_ping_timeout_default(void)
+{
+	unsigned int val = SWIM_PING_TIMEOUT;
+
+	d_getenv_int("SWIM_PING_TIMEOUT", &val);
+	return val;
+}
+
+void
+swim_period_set(uint64_t val)
+{
+	D_DEBUG(DB_TRACE, "swim_prot_period_len set as %lu\n", val);
+	swim_prot_period_len = val;
+}
+
+uint64_t
+swim_period_get(void)
+{
+	return swim_prot_period_len;
+}
+
+void
+swim_suspect_timeout_set(uint64_t val)
+{
+	D_DEBUG(DB_TRACE, "swim_suspect_timeout set as %lu\n", val);
+	swim_suspect_timeout = val;
+}
+
+uint64_t
+swim_suspect_timeout_get(void)
+{
+	return swim_suspect_timeout;
+}
+
+void
+swim_ping_timeout_set(uint64_t val)
+{
+	D_DEBUG(DB_TRACE, "swim_ping_timeout set as %lu\n", val);
+	swim_ping_timeout = val;
+}
+
+uint64_t
+swim_ping_timeout_get(void)
+{
+	return swim_ping_timeout;
+}
 
 static inline void
 swim_dump_updates(swim_id_t self_id, swim_id_t from, swim_id_t to,
@@ -52,7 +120,7 @@ swim_dump_updates(swim_id_t self_id, swim_id_t from, swim_id_t to,
 	size_t msg_size, i;
 	int rc;
 
-	if (!D_LOG_ENABLED(DLOG_INFO))
+	if (!D_LOG_ENABLED(DLOG_DBG))
 		return;
 
 	fp = open_memstream(&msg, &msg_size);
@@ -227,10 +295,11 @@ update:
 		if (item->si_id == id) {
 			/* remove this member from suspect list */
 			TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
-			if (swim_ping_timeout < SWIM_PROTOCOL_PERIOD_LEN) {
-				swim_ping_timeout += SWIM_PING_TIMEOUT;
+			if (swim_ping_timeout_get() < swim_period_get()) {
+				swim_ping_timeout_set(swim_ping_timeout_get() +
+						      SWIM_PING_TIMEOUT);
 				SWIM_INFO("%lu: increase ping timeout to %lu\n",
-					  ctx->sc_self, swim_ping_timeout);
+					 ctx->sc_self, swim_ping_timeout_get());
 			}
 			D_FREE(item);
 			break;
@@ -293,7 +362,7 @@ swim_member_suspect(struct swim_context *ctx, swim_id_t from,
 	int rc;
 
 	/* if there is no suspicion timeout, just kill the member */
-	if (SWIM_SUSPECT_TIMEOUT == 0)
+	if (swim_suspect_timeout_get() == 0)
 		return swim_member_dead(ctx, from, id, nr);
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
@@ -324,7 +393,7 @@ search:
 		D_GOTO(out, rc = -ENOMEM);
 	item->si_id = id;
 	item->si_from = from;
-	item->u.si_deadline = swim_now_ms() + SWIM_SUSPECT_TIMEOUT;
+	item->u.si_deadline = swim_now_ms() + swim_suspect_timeout_get();
 	TAILQ_INSERT_TAIL(&ctx->sc_suspects, item, si_link);
 
 update:
@@ -362,7 +431,7 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now)
 				from = item->si_from;
 
 				item->si_from = self_id;
-				item->u.si_deadline += swim_ping_timeout;
+				item->u.si_deadline += swim_ping_timeout_get();
 
 				D_ALLOC_PTR(item);
 				if (item == NULL)
@@ -520,6 +589,11 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	/* delay the first ping until all things will be initialized */
 	ctx->sc_next_tick_time = swim_now_ms() + 10 * SWIM_PROTOCOL_PERIOD_LEN;
 
+	/* set global tunable defaults */
+	swim_prot_period_len = swim_prot_period_len_default();
+	swim_suspect_timeout = swim_suspect_timeout_default();
+	swim_ping_timeout    = swim_ping_timeout_default();
+
 out:
 	return ctx;
 }
@@ -637,7 +711,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 		case SCS_BEGIN:
 			if (now > ctx->sc_next_tick_time) {
 				ctx->sc_next_tick_time = now
-						     + SWIM_PROTOCOL_PERIOD_LEN;
+							 + swim_period_get();
 
 				id_target = ctx->sc_target;
 				id_sendto = ctx->sc_target;
@@ -649,7 +723,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 					  target_state.sms_incarnation);
 
 				ctx->sc_dping_deadline = now
-							+ swim_ping_timeout;
+						      + swim_ping_timeout_get();
 				ctx_state = SCS_DPINGED;
 			}
 			break;
@@ -729,7 +803,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				item = TAILQ_FIRST(&ctx->sc_subgroup);
 				if (item == NULL) {
 					ctx->sc_iping_deadline = now
-							+ 2 * swim_ping_timeout;
+						  + 2 * swim_ping_timeout_get();
 					ctx_state = SCS_IPINGED;
 				}
 				break;
@@ -763,7 +837,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 	}
 	rc = (now > end) ? -ETIMEDOUT : -EINTR;
 out:
-	ctx->sc_expect_progress_time = now + SWIM_PROTOCOL_PERIOD_LEN / 2;
+	ctx->sc_expect_progress_time = now + swim_period_get() / 2;
 out_err:
 	return rc;
 }
@@ -928,7 +1002,7 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 				item->si_id   = to;
 				item->si_from = from;
 				item->u.si_deadline = swim_now_ms()
-						    + swim_ping_timeout;
+						      + swim_ping_timeout_get();
 				TAILQ_INSERT_TAIL(&ctx->sc_ipings, item,
 						  si_link);
 				SWIM_INFO("%lu: iping %lu => %lu\n",

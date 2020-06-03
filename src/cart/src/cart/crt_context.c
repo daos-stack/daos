@@ -464,10 +464,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		/* Flush SWIM RPC already sent */
-		rc = crt_context_flush(crt_ctx, CRT_SWIM_RPC_TIMEOUT);
+		rc = crt_context_flush(crt_ctx, crt_swim_rpc_timeout);
 		if (rc)
 			/* give a chance to other threads to complete */
-			sleep(CRT_SWIM_RPC_TIMEOUT);
+			usleep(1000); /* 1ms */
 		D_MUTEX_LOCK(&ctx->cc_mutex);
 	}
 
