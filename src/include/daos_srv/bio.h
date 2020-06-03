@@ -560,6 +560,15 @@ int bio_iod_post(struct bio_desc *biod);
 int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
 
 /*
+ * Helper function to flush memory vectors in SG lists of io descriptor
+ *
+ * \param biod       [IN]	io descriptor
+ *
+ * \return			N/A
+ */
+void bio_iod_flush(struct bio_desc *biod);
+
+/*
  * Helper function to get the specified SG list of an io descriptor
  *
  * \param biod       [IN]	io descriptor
