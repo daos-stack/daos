@@ -39,16 +39,11 @@ using NTP or any other equivalent protocol.
 
 ## User/Group Synchronization
 
-DAOS does not require user and group to be synchronized between client and
-and storage nodes.
-DAOS ACL stores the actual user and group name (instead of numeric ID) and does
-not verify group membership check on the storage node. The DAOS agent (running
-on the client nodes) is responsible for converting the UID/GID to name and to
-resolve the list of groups that the users belong to. This information is then
-signed by the agent and send to the storage node.
-
-As a result, DAOS does not require user and group to be synchronized between
-client and storge nodes.
+DAOS ACLs store the actual user and group names (instead of numeric IDs), and
+therefore the servers do not need access to a synchronized user/group database.
+The DAOS Agent (running on the client nodes) is responsible for resolving
+UID/GID to user/group names which are added to a signed credential and sent to
+the DAOS storage nodes.
 
 ## Multi-rail/NIC Setup
 
