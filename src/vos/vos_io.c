@@ -1047,8 +1047,12 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	if (rc != 0)
 		return rc;
 
-	if (vos_ts_check_rh_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
+	if (vos_ts_check_rh_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
+		D_DEBUG(DB_IO, "Read conflict detected on akey "DF_UOID
+			" epc "DF_X64"\n", DP_UOID(ioc->ic_oid),
+			ioc->ic_epr.epr_hi);
 		ioc->ic_read_conflict = true;
+	}
 
 	if (ioc->ic_ts_set) {
 		switch (ioc->ic_ts_set->ts_flags & VOS_COND_AKEY_UPDATE_MASK) {
@@ -1142,8 +1146,12 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 	}
 	subtr_created = true;
 
-	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
+	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
+		D_DEBUG(DB_IO, "Read conflict detected on dkey "DF_UOID
+			" epc "DF_X64"\n", DP_UOID(ioc->ic_oid),
+			ioc->ic_epr.epr_hi);
 		ioc->ic_read_conflict = true;
+	}
 
 	if (ioc->ic_ts_set) {
 		if (ioc->ic_ts_set->ts_flags & VOS_COND_UPDATE_OP_MASK)
@@ -1603,8 +1611,12 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 				     0);
 	}
 
-	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
+	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
+		D_DEBUG(DB_IO, "Read conflict detected on container "DF_UOID
+			" epc "DF_X64"\n", DP_UOID(ioc->ic_oid),
+			ioc->ic_epr.epr_hi);
 		ioc->ic_read_conflict = true;
+	}
 
 	umem = vos_ioc2umm(ioc);
 
@@ -1620,8 +1632,12 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 
 	/** Check object timestamp */
-	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
+	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
+		D_DEBUG(DB_IO, "Read conflict detected on object "DF_UOID
+			" epc "DF_X64"\n", DP_UOID(ioc->ic_oid),
+			ioc->ic_epr.epr_hi);
 		ioc->ic_read_conflict = true;
+	}
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
 	if (dth != NULL && dth->dth_dti_cos_count > 0 &&

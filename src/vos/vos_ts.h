@@ -508,6 +508,8 @@ vos_ts_check_rl_conflict(struct vos_ts_set *ts_set, daos_epoch_t write_time)
 	if (entry == NULL || write_time > entry->te_ts_rl)
 		return false;
 
+	D_DEBUG(DB_IO, "Read conflict detected "DF_X64" <= "DF_X64"\n",
+		write_time, entry->te_ts_rl);
 	/** TODO: Need to eventually handle == case but it should not be an
 	 * issue without MVCC.
 	 */
@@ -531,6 +533,8 @@ vos_ts_check_rh_conflict(struct vos_ts_set *ts_set, daos_epoch_t write_time)
 	if (entry == NULL || write_time > entry->te_ts_rh)
 		return false;
 
+	D_DEBUG(DB_IO, "Read conflict detected "DF_X64" <= "DF_X64"\n",
+		write_time, entry->te_ts_rh);
 	/** TODO: Need to eventually handle == case but it should not be an
 	 * issue without MVCC.
 	 */
