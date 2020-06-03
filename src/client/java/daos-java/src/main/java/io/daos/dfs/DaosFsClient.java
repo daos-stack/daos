@@ -29,8 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import io.daos.DaosClient;
-import io.daos.ForceCloseable;
+import io.daos.*;
 import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,7 +86,15 @@ import org.slf4j.LoggerFactory;
  */
 public final class DaosFsClient implements ForceCloseable {
 
+  private String poolId;
+
+  private String contId;
+
   private long dfsPtr;
+
+  private long contPtr;
+
+  private DaosClient client;
 
   private DaosFsClientBuilder builder;
 
@@ -126,27 +133,16 @@ public final class DaosFsClient implements ForceCloseable {
     if (inited) {
       return;
     }
-
-    poolPtr = daosOpenPool(poolId, builder.serverGroup,
-            builder.ranks,
-            builder.poolFlags);
-    if (log.isDebugEnabled()) {
-      log.debug("opened pool {}", poolPtr);
-    }
-
+    client = builder.clientBuilder.build();
     if (contId != null && !ROOT_CONT_UUID.equals(contId)) {
-      contPtr = daosOpenCont(poolPtr, contId, builder.containerFlags);
-      if (log.isDebugEnabled()) {
-        log.debug("opened container {}", contPtr);
-      }
-      dfsPtr = mountFileSystem(poolPtr, contPtr, builder.readOnlyFs);
+      dfsPtr = mountFileSystem(client.getPoolPtr(), client.getContPtr(), builder.readOnlyFs);
       if (log.isDebugEnabled()) {
         log.debug("mounted FS {}", dfsPtr);
       }
     } else {
       contId = ROOT_CONT_UUID;
       contPtr = -1;
-      dfsPtr = mountFileSystem(poolPtr, -1, builder.readOnlyFs);
+      dfsPtr = mountFileSystem(client.getPoolPtr(), -1, builder.readOnlyFs);
       if (log.isDebugEnabled()) {
         log.debug("mounted FS {} on root container", dfsPtr);
       }
@@ -156,7 +152,7 @@ public final class DaosFsClient implements ForceCloseable {
     if (log.isDebugEnabled()) {
       log.debug("cleaner task running");
     }
-
+    client.registerForShutdown(this);
     inited = true;
     log.info("DaosFsClient for {}, {} initialized", poolId, contId);
   }
@@ -242,12 +238,12 @@ public final class DaosFsClient implements ForceCloseable {
           if (log.isDebugEnabled()) {
             log.debug("FS unmounted {}", dfsPtr);
           }
-          daosCloseContainer(contPtr);
-          if (log.isDebugEnabled()) {
-            log.debug("closed container {}", contPtr);
-          }
         }
-        daosClosePool(poolPtr);
+        if (force) {
+          client.forceClose();
+        } else {
+          client.close();
+        }
         log.info("DaosFsClient for {}, {} disconnected", poolId, contId);
       }
       inited = false;
@@ -1138,34 +1134,31 @@ public final class DaosFsClient implements ForceCloseable {
      * {@link DaosIOException}
      */
     public DaosFsClient build() throws IOException {
-      DaosFsClientBuilder copied = (DaosFsClientBuilder) ObjectUtils.clone(this);
-      DaosFsClient client;
-      if (poolId != null) {
-        client = getClientForCont(copied);
-      } else {
-        throw new IllegalArgumentException("need pool UUID.");
-      }
-      client.init();
-      client.incrementRef();
-      return client;
-    }
-
-    private DaosFsClient getClientForCont(DaosFsClientBuilder builder) {
-      DaosFsClient client;
+      String poolId = clientBuilder.getPoolId();
+      String contId = clientBuilder.getContId();
+      DaosFsClientBuilder builder = (DaosFsClientBuilder) ObjectUtils.clone(this);
+      DaosFsClient fsClient;
       if (!builder.shareFsClient) {
-        return new DaosFsClient(poolId, contId, builder);
+        fsClient = new DaosFsClient(poolId, contId, builder);
+      } else {
+        //check existing client
+        if (poolId == null) {
+          throw new IllegalArgumentException("need pool UUID.");
+        }
+        if (contId == null) {
+          contId = ROOT_CONT_UUID;
+        }
+        String key = poolId + contId;
+        fsClient = pcFsMap.get(key);
+        if (fsClient == null) {
+          fsClient = new DaosFsClient(poolId, contId, builder);
+          pcFsMap.putIfAbsent(key, fsClient);
+        }
+        fsClient = pcFsMap.get(key);
       }
-      //check existing client
-      if (contId == null) {
-        contId = ROOT_CONT_UUID;
-      }
-      String key = poolId + contId;
-      client = pcFsMap.get(key);
-      if (client == null) {
-        client = new DaosFsClient(poolId, contId, builder);
-        pcFsMap.putIfAbsent(key, client);
-      }
-      return pcFsMap.get(key);
+      fsClient.init();
+      fsClient.incrementRef();
+      return fsClient;
     }
   }
 }

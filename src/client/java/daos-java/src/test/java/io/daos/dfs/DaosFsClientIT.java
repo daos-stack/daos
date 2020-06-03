@@ -27,7 +27,7 @@ public class DaosFsClientIT {
       Assert.assertTrue(client != null);
     }finally {
       if(client != null){
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -42,7 +42,7 @@ public class DaosFsClientIT {
       Assert.assertTrue(client != null);
     }finally {
       if(client != null){
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -71,7 +71,7 @@ public class DaosFsClientIT {
       thread.join();
       Assert.assertEquals(client, client2[0]);
     } finally {
-      client.disconnect();
+      client.close();
     }
   }
 
@@ -86,7 +86,7 @@ public class DaosFsClientIT {
       client.delete("/ddddddd/zyx", true);
     }finally {
       if(client != null){
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -103,7 +103,7 @@ public class DaosFsClientIT {
       client.mkdir("/mkdirs/1", true);
     }finally {
       if(client != null){
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -120,7 +120,7 @@ public class DaosFsClientIT {
       client.mkdir("/mkdir/1", false);
     }finally {
       if(client != null){
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -136,7 +136,7 @@ public class DaosFsClientIT {
       client.move(0, fileName, 0, "destFile");
     }finally {
       if(client != null){
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -152,7 +152,7 @@ public class DaosFsClientIT {
       client.move(0, fileName, 0, "/destFile");
     }finally {
       if(client != null){
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -178,7 +178,7 @@ public class DaosFsClientIT {
       Assert.assertTrue(client.getFile(destDir, destFileName).exists());
     }finally {
       if(client != null){
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -193,7 +193,7 @@ public class DaosFsClientIT {
       Assert.assertEquals(1, client.getRefCnt());
     }finally {
       if(client != null){
-        client.disconnect();
+        client.close();
         Assert.assertEquals(0, client.getRefCnt());
       }
     }
@@ -217,7 +217,7 @@ public class DaosFsClientIT {
       cnt = client.getRefCnt();
       builder.build();
       Assert.assertEquals(cnt + 1, client.getRefCnt());
-      client.disconnect();
+      client.close();
       client.incrementRef();
       Assert.assertEquals(cnt + 1, client.getRefCnt());
       client.decrementRef();
@@ -225,7 +225,7 @@ public class DaosFsClientIT {
       e.printStackTrace();
     }finally {
       if(client != null){
-        client.disconnect();
+        client.close();
         Assert.assertEquals(cnt - 1, client.getRefCnt());
       }
     }

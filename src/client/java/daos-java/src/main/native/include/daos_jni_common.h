@@ -21,6 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+#include <jni.h>
 #include <stdio.h>
 #include <daos.h>
 #include <daos_fs.h>
@@ -42,5 +43,59 @@ static const int CUSTOM_ERR1 = -1000001; // scm size and nvme size no greater th
 static const int CUSTOM_ERR2 = -1000002; // failed to parse service replics string
 static const int CUSTOM_ERR3 = -1000003; // malloc or realloc buffer failed
 static const int CUSTOM_ERR4 = -1000004; // value length greater than expected
+
+static jclass daos_io_exception_class;
+
+static jmethodID new_exception_msg;
+static jmethodID new_exception_cause;
+static jmethodID new_exception_msg_code_msg;
+static jmethodID new_exception_msg_code_cause;
+
+static int ERROR_PATH_LEN = 256;
+static int ERROR_NOT_EXIST = 2;
+static int ERROR_LOOKUP_MAX_RETRIES = 100;
+
+
+
+/**
+ * utility function to throw Java exception.
+ *
+ * \param[in]	env		JNI environment
+ * \param[in]	msg		error message provided by caller
+ * \param[in]	error_code	non-zero return code of DFS function or
+ * 				customized error code
+ * \param[in]	release_msg	is \a msg needed to be released, (0 or 1)
+ * \param[in]	posix_error	is \a error_code posix error,
+ * 				1 for true, 0 for false
+ *
+ * \return	return code of Throw function of \a env
+ */
+int
+throw_exception_base(JNIEnv *env, char *msg, int error_code,
+			int release_msg, int posix_error);
+
+/**
+ * throw Java exception with dynamically constructed message for posix error.
+ *
+ * \param[in]	env		JNI environment
+ * \param[in]	msg		error message provided by caller
+ * \param[in]	error_code	non-zero return code of DFS function
+ *
+ * \return	return code of throw_exception_base
+ */
+int
+throw_exception(JNIEnv *env, char *msg, int error_code);
+
+/**
+ * throw Java exception with constant message for posix error.
+ *
+ * \param[in]	env		JNI environment
+ * \param[in]	msg		error message provided by caller
+ * \param[in]	error_code	non-zero return code of DFS function
+ *
+ * \return	return code of throw_exception_base
+ */
+int
+throw_exception_const_msg(JNIEnv *env, char *msg, int error_code);
 
 #endif
