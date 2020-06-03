@@ -95,6 +95,10 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Power On Duration:%s
     Unsafe Shutdowns:0
     Media Errors:0
+    Read Errors:0
+    Write Errors:0
+    Unmap Errors:0
+    Checksum Errors:0
     Error Log Entries:0
   Critical Warnings:
     Temperature: WARNING
@@ -111,6 +115,10 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Power On Duration:%s
     Unsafe Shutdowns:0
     Media Errors:0
+    Read Errors:0
+    Write Errors:0
+    Unmap Errors:0
+    Checksum Errors:0
     Error Log Entries:0
   Critical Warnings:
     Temperature: WARNING
@@ -121,10 +129,10 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 
 `,
 				controllerA.PciAddr, controllerA.Model, controllerA.FwRev, controllerA.SocketID,
-				humanize.Bytes(controllerA.Capacity()), controllerA.HealthStats.Temp, controllerA.HealthStats.Temp-273,
+				humanize.Bytes(controllerA.Capacity()), controllerA.HealthStats.Temperature, controllerA.HealthStats.Temperature-273,
 				controllerA.HealthStats.PowerCycles, time.Duration(controllerA.HealthStats.PowerOnHours)*time.Hour,
 				controllerB.PciAddr, controllerB.Model, controllerB.FwRev, controllerB.SocketID,
-				humanize.Bytes(controllerB.Capacity()), controllerB.HealthStats.Temp, controllerB.HealthStats.Temp-273,
+				humanize.Bytes(controllerB.Capacity()), controllerB.HealthStats.Temperature, controllerB.HealthStats.Temperature-273,
 				controllerB.HealthStats.PowerCycles, time.Duration(controllerB.HealthStats.PowerOnHours)*time.Hour,
 			),
 		},

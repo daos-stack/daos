@@ -391,40 +391,88 @@ class DmgCommand(YamlCommand):
             def get_sub_command_class(self):
                 # pylint: disable=redefined-variable-type
                 """Get the dmg pool sub command object."""
-                if self.sub_command.value == "blobstore-health":
-                    self.sub_command_class = self.BlobstoreHealthSubCommand()
-                elif self.sub_command.value == "smd":
-                    self.sub_command_class = self.SmdSubCommand()
+                if self.sub_command.value == "nvme-health":
+                    self.sub_command_class = self.NvmeHealthSubCommand()
+                elif self.sub_command.value == "target-health":
+                    self.sub_command_class = self.TargetHealthSubCommand()
+                elif self.sub_command.value == "device-health":
+                    self.sub_command_class = self.DeviceHealthSubCommand()
+                elif self.sub_command.value == "list-pools":
+                    self.sub_command_class = self.ListPoolsSubCommand()
+                elif self.sub_command.value == "list-devices":
+                    self.sub_command_class = self.ListDevicesSubCommand()
                 else:
                     self.sub_command_class = None
 
-            class BlobstoreHealthSubCommand(CommandWithParameters):
-                """Defines a dmg storage query blobstore-health object."""
+            class NvmeHealthSubCommand(CommandWithParameters):
+                """Defines a dmg storage query nvme-health object."""
 
                 def __init__(self):
-                    """Create a dmg storage query blobstore-health object."""
+                    """Create a dmg storage query nvme-health object."""
                     super(
                         DmgCommand.StorageSubCommand.QuerySubCommand.
-                        BlobstoreHealthSubCommand,
+                        NvmeHealthSubCommand,
                         self).__init__(
-                            "/run/dmg/storage/query/blobstore-health/*",
-                            "blobstore-health")
+                            "/run/dmg/storage/query/nvme-health/*",
+                            "nvme-health")
                     self.devuuid = FormattedParameter("-u {}", None)
                     self.tgtid = FormattedParameter("-t {}", None)
 
-            class SmdSubCommand(CommandWithParameters):
-                """Defines a dmg storage query smd object."""
+            class TargetHealthSubCommand(CommandWithParameters):
+                """Defines a dmg storage query target-health object."""
 
                 def __init__(self):
-                    """Create a dmg storage query smd object."""
+                    """Create a dmg storage query target-health object."""
                     super(
                         DmgCommand.StorageSubCommand.QuerySubCommand.
-                        SmdSubCommand,
+                        TargetHealthSubCommand,
                         self).__init__(
-                            "/run/dmg/storage/query/smd/*",
-                            "smd")
-                    self.devices = FormattedParameter("-d", False)
-                    self.pools = FormattedParameter("-p", False)
+                            "/run/dmg/storage/query/target-health/*",
+                            "target-health")
+                    self.rank = FormattedParameter("-r {}", None)
+                    self.tgtid = FormattedParameter("-t {}", None)
+
+            class DeviceHealthSubCommand(CommandWithParameters):
+                """Defines a dmg storage query device-health object."""
+
+                def __init__(self):
+                    """Create a dmg storage query device-health object."""
+                    super(
+                        DmgCommand.StorageSubCommand.QuerySubCommand.
+                        DeviceHealthSubCommand,
+                        self).__init__(
+                            "/run/dmg/storage/query/device-health/*",
+                            "device-health")
+                    self.uuid = FormattedParameter("-u {}", None)
+
+            class ListDevicesSubCommand(CommandWithParameters):
+                """Defines a dmg storage query list-devices object."""
+
+                def __init__(self):
+                    """Create a dmg storage query list-devices object."""
+                    super(
+                        DmgCommand.StorageSubCommand.QuerySubCommand.
+                        ListDevicesSubCommand,
+                        self).__init__(
+                            "/run/dmg/storage/query/list-devices/*",
+                            "list-devices")
+                    self.rank = FormattedParameter("-r {}", None)
+                    self.uuid = FormattedParameter("-u {}", None)
+                    self.health = FormattedParameter("-b", False)
+
+            class ListPoolsSubCommand(CommandWithParameters):
+                """Defines a dmg storage query list-pools object."""
+
+                def __init__(self):
+                    """Create a dmg storage query list-pools object."""
+                    super(
+                        DmgCommand.StorageSubCommand.QuerySubCommand.
+                        ListPoolsSubCommand,
+                        self).__init__(
+                            "/run/dmg/storage/query/list-pools/*",
+                            "list-pools")
+                    self.rank = FormattedParameter("-r {}", None)
+                    self.uuid = FormattedParameter("-u {}", None)
 
         class ScanSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage scan command."""

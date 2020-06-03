@@ -42,9 +42,7 @@ func printNvmeController(nvme *storage.NvmeController, out io.Writer, opts ...co
 	return err
 }
 
-func printNvmeHealth(nvme *storage.NvmeController, out io.Writer, opts ...control.PrintConfigOption) error {
-	stat := nvme.HealthStats
-
+func printNvmeHealth(stat *storage.NvmeDeviceHealth, out io.Writer, opts ...control.PrintConfigOption) error {
 	if stat == nil {
 		fmt.Fprintln(out, "Health Stats Unavailable")
 		return nil
@@ -53,7 +51,7 @@ func printNvmeHealth(nvme *storage.NvmeController, out io.Writer, opts ...contro
 	fmt.Fprintln(out, "Health Stats:")
 
 	iw := txtfmt.NewIndentWriter(out)
-	fmt.Fprintf(iw, "Temperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
+	fmt.Fprintf(iw, "Temperature:%dK(%dC)\n", stat.Temperature, stat.Temperature-273)
 
 	if stat.TempWarnTime > 0 {
 		fmt.Fprintf(iw, "Temperature Warning Duration:%s\n",
@@ -69,6 +67,10 @@ func printNvmeHealth(nvme *storage.NvmeController, out io.Writer, opts ...contro
 	fmt.Fprintf(iw, "Power On Duration:%s\n", time.Duration(stat.PowerOnHours)*time.Hour)
 	fmt.Fprintf(iw, "Unsafe Shutdowns:%d\n", uint64(stat.UnsafeShutdowns))
 	fmt.Fprintf(iw, "Media Errors:%d\n", uint64(stat.MediaErrors))
+	fmt.Fprintf(iw, "Read Errors:%d\n", uint64(stat.ReadErrors))
+	fmt.Fprintf(iw, "Write Errors:%d\n", uint64(stat.WriteErrors))
+	fmt.Fprintf(iw, "Unmap Errors:%d\n", uint64(stat.UnmapErrors))
+	fmt.Fprintf(iw, "Checksum Errors:%d\n", uint64(stat.ChecksumErrors))
 	fmt.Fprintf(iw, "Error Log Entries:%d\n", uint64(stat.ErrorLogEntries))
 
 	fmt.Fprintf(out, "Critical Warnings:\n")
@@ -127,10 +129,72 @@ func PrintNvmeHealthMap(hsm control.HostStorageMap, out io.Writer, opts ...contr
 				return err
 			}
 			iw := txtfmt.NewIndentWriter(out)
-			if err := printNvmeHealth(controller, iw, opts...); err != nil {
+			if err := printNvmeHealth(controller.HealthStats, iw, opts...); err != nil {
 				return err
 			}
 			fmt.Fprintln(out)
+		}
+	}
+
+	return w.Err
+}
+
+func printSmdDevice(dev *control.SmdDevice, out io.Writer, opts ...control.PrintConfigOption) error {
+	_, err := fmt.Fprintf(out, "UUID:%s Targets:%+v Rank:%d State:%s\n",
+		dev.UUID, dev.TargetIDs, dev.Rank, dev.State)
+	return err
+}
+
+func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...control.PrintConfigOption) error {
+	_, err := fmt.Fprintf(out, "UUID:%s Targets:%+v Ranks:%+v Blobs:%+v\n",
+		pool.UUID, pool.TargetIDs, pool.Ranks, pool.Blobs)
+	return err
+}
+
+// PrintSmdInfoMap generates a human-readable representation of the supplied
+// HostStorageMap, with a focus on presenting the per-server metadata (SMD) information.
+func PrintSmdInfoMap(hsm control.HostStorageMap, out io.Writer, opts ...control.PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
+	for _, key := range hsm.Keys() {
+		hss := hsm[key]
+		hosts := control.GetPrintHosts(hss.HostSet.RangedString(), opts...)
+		lineBreak := strings.Repeat("-", len(hosts))
+		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
+
+		if hss.HostStorage.SmdInfo == nil {
+			fmt.Fprintln(out, "  No SMD info returned")
+			continue
+		}
+
+		if len(hss.HostStorage.SmdInfo.Devices) > 0 {
+			iw := txtfmt.NewIndentWriter(out)
+			fmt.Fprintln(iw, "Devices")
+
+			for _, device := range hss.HostStorage.SmdInfo.Devices {
+				iw1 := txtfmt.NewIndentWriter(iw)
+				if err := printSmdDevice(device, iw1, opts...); err != nil {
+					return err
+				}
+				iw2 := txtfmt.NewIndentWriter(iw1)
+				if err := printNvmeHealth(device.Health, iw2, opts...); err != nil {
+					return err
+				}
+				fmt.Fprintln(out)
+			}
+		}
+
+		if len(hss.HostStorage.SmdInfo.Pools) > 0 {
+			iw := txtfmt.NewIndentWriter(out)
+			fmt.Fprintln(iw, "Pools")
+
+			for _, pool := range hss.HostStorage.SmdInfo.Pools {
+				iw1 := txtfmt.NewIndentWriter(iw)
+				if err := printSmdPool(pool, iw1, opts...); err != nil {
+					return err
+				}
+				fmt.Fprintln(out)
+			}
 		}
 	}
 

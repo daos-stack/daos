@@ -25,10 +25,10 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestStorageQueryCommands(t *testing.T) {
@@ -36,71 +36,26 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"NVMe health query",
 			"storage query nvme-health",
-			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.StorageScanReq{}),
-			}, " "),
-			nil,
-		},
-		{
-			"blobstore health query none specified",
-			"storage query blobstore-health",
-			"ConnectClients BioHealthQuery",
-			fmt.Errorf("device UUID or target ID is required"),
-		},
-		{
-			"blobstore health query both specified",
-			"storage query blobstore-health --tgtid 123 --devuuid abc",
-			"ConnectClients BioHealthQuery",
-			fmt.Errorf("either device UUID OR target ID need to be specified not both"),
-		},
-		{
-			"blobstore health query tgtid",
-			"storage query blobstore-health --tgtid 123",
-			"ConnectClients BioHealthQuery-tgt_id:\"123\" ",
-			nil,
-		},
-		{
-			"blobstore health query devuuid",
-			"storage query blobstore-health --devuuid abcd",
-			"ConnectClients BioHealthQuery-dev_uuid:\"abcd\" ",
+			printRequest(t, &control.StorageScanReq{}),
 			nil,
 		},
 		{
 			"per-server metadata query pools",
-			"storage query smd --pools",
-			"ConnectClients SmdListPools-",
+			"storage query list-pools",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:        system.NilRank,
+				OmitDevices: true,
+			}),
 			nil,
 		},
 		{
 			"per-server metadata query devices",
-			"storage query smd --devices",
-			"ConnectClients SmdListDevs-",
+			"storage query list-devices",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:      system.NilRank,
+				OmitPools: true,
+			}),
 			nil,
-		},
-		{
-			"per-server metadata query not specified",
-			"storage query smd",
-			"ConnectClients SmdListDevs- SmdListPools-",
-			nil,
-		},
-		{
-			"per-server metadata query both specified",
-			"storage query smd --pools --devices",
-			"ConnectClients SmdListDevs- SmdListPools-",
-			nil,
-		},
-		{
-			"device state query",
-			"storage query device-state --devuuid abcd",
-			"ConnectClients DevStateQuery-dev_uuid:\"abcd\" ",
-			nil,
-		},
-		{
-			"device state query no device uuid specified",
-			"storage query device-state",
-			"ConnectClients DevStateQuery",
-			fmt.Errorf("the required flag `-u, --devuuid' was not specified"),
 		},
 		{
 			"Nonexistent subcommand",

@@ -46,7 +46,7 @@ func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
 		tWarn = true
 	}
 	return &NvmeDeviceHealth{
-		Temp:         uint32(getRandIdx()),
+		Temperature:  uint32(getRandIdx()),
 		PowerCycles:  uint64(getRandIdx()),
 		PowerOnHours: uint64(getRandIdx()),
 		TempWarn:     tWarn,

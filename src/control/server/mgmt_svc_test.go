@@ -29,13 +29,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -241,6 +239,7 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 	}
 }
 
+/*
 func TestServer_MgmtSvc_SmdListDevs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP   bool
@@ -841,6 +840,7 @@ func TestServer_MgmtSvc_StorageSetFaulty(t *testing.T) {
 		})
 	}
 }
+*/
 
 func newTestContSetOwnerReq() *mgmtpb.ContSetOwnerReq {
 	return &mgmtpb.ContSetOwnerReq{
