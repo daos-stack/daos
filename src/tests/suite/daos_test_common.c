@@ -506,7 +506,8 @@ test_teardown(void **state)
 		}
 	}
 
-	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave) {
+	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave &&
+	    !arg->pool.destroyed) {
 		if (arg->myrank != 0) {
 			if (!daos_handle_is_inval(arg->pool.poh))
 				rc = daos_pool_disconnect(arg->pool.poh, NULL);

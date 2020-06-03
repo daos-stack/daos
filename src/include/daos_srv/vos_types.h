@@ -25,6 +25,7 @@
 #define __VOS_TYPES_H__
 
 #include <daos_types.h>
+#include <daos_pool.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
 #include <daos/object.h>
@@ -57,24 +58,32 @@ struct vos_gc_stat {
 	uint64_t	gs_recxs;	/**< GCed array values */
 };
 
+struct vos_pool_space {
+	/** Total & free space */
+	struct daos_space	vps_space;
+	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */
+	daos_size_t		vps_space_sys[DAOS_MEDIA_MAX];
+	/** NVMe block allocator attributes */
+	struct vea_attr		vps_vea_attr;
+	/** NVMe block allocator statistics */
+	struct vea_stat		vps_vea_stat;
+};
+
+#define SCM_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_SCM])
+#define SCM_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_SCM])
+#define SCM_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_SCM])
+#define NVME_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_NVME])
+#define NVME_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_NVME])
+#define NVME_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_NVME])
+
 /**
  * pool attributes returned to query
  */
 typedef struct {
 	/** # of containers in this pool */
 	uint64_t		pif_cont_nr;
-	/** Total SCM space in bytes */
-	daos_size_t		pif_scm_sz;
-	/** Total NVMe space in bytes */
-	daos_size_t		pif_nvme_sz;
-	/** Current SCM free space in bytes */
-	daos_size_t		pif_scm_free;
-	/** Current NVMe free space in bytes */
-	daos_size_t		pif_nvme_free;
-	/** NVMe block allocator attributes */
-	struct vea_attr		pif_vea_attr;
-	/** NVMe block allocator statistics */
-	struct vea_stat		pif_vea_stat;
+	/** Space information */
+	struct vos_pool_space	pif_space;
 	/** garbage collector statistics */
 	struct vos_gc_stat	pif_gc_stat;
 	/** TODO */
