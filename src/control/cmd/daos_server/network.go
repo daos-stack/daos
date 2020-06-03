@@ -60,27 +60,15 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		provider = ""
 	case cmd.FabricProvider != "":
 		provider = cmd.FabricProvider
-	default:
 	}
 
-	results, err := netdetect.ScanFabric(provider)
+	results, err := netdetect.ScanFabric(provider, defaultExcludeInterfaces)
 	if err != nil {
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
 
-	excludes := defaultExcludeInterfaces
-
-	excludeMap := make(map[string]struct{})
-	for _, iface := range strings.Split(excludes, ",") {
-		excludeMap[iface] = struct{}{}
-	}
-
 	hf := &control.HostFabric{}
 	for _, fi := range results {
-		if _, skip := excludeMap[fi.DeviceName]; skip {
-			continue
-		}
-
 		hf.AddInterface(&control.HostFabricInterface{
 			Provider: fi.Provider,
 			Device:   fi.DeviceName,

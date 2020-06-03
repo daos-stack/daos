@@ -67,7 +67,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		provider = ""
 	}
 
-	results, err := netdetect.ScanFabric(provider)
+	results, err := netdetect.ScanFabric(provider, defaultExcludeInterfaces)
 	if err != nil {
 		exitWithError(cmd.log, err)
 		return nil
@@ -77,19 +77,8 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		return cmd.outputJSON(os.Stdout, results)
 	}
 
-	excludes := defaultExcludeInterfaces
-
-	excludeMap := make(map[string]struct{})
-	for _, iface := range strings.Split(excludes, ",") {
-		excludeMap[iface] = struct{}{}
-	}
-
 	hf := &control.HostFabric{}
 	for _, fi := range results {
-		if _, skip := excludeMap[fi.DeviceName]; skip {
-			continue
-		}
-
 		hf.AddInterface(&control.HostFabricInterface{
 			Provider: fi.Provider,
 			Device:   fi.DeviceName,
