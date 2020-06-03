@@ -121,10 +121,10 @@ specified when starting `daos_server` instances.
 
 The system membership can be queried using the command:
 
-`dmg system query [--verbose] [--ranks <rankset>]`
+`$ dmg system query [--verbose] [--ranks <rankset>]`
 
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
-- verbose flag gives more information on each rank
+- `--verbose` flag gives more information on each rank
 
 Output table will provide system rank mappings to host address and instance
 UUID, in addition to rank state.
@@ -133,7 +133,7 @@ UUID, in addition to rank state.
 
 When up and running, the entire system can be shutdown with the command:
 
-`dmg system stop [--ranks <rankset>]`
+`$ dmg system stop [--ranks <rankset>]`
 
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
 
@@ -146,7 +146,7 @@ network.
 
 To start the system after a controlled shutdown run the command:
 
-`dmg system start [--ranks <rankset>]`
+`$ dmg system start [--ranks <rankset>]`
 
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
 
@@ -158,15 +158,15 @@ DAOS I/O Servers will be started.
 
 To reformat the system after a controlled shutdown run the command:
 
-`dmg storage reformat --system [--ranks <rankset>]`
+`$ dmg storage format --system [--ranks <rankset>]`
 
-- `daos_control.yml` refers to the DMG config file containing hostlist and
-  certificate path info
+- `--system` flag indicates that the format operation should be performed on
+  provided set of system ranks or all ranks if `--ranks` is omitted.
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
 
 Output table will indicate action and result.
 
-DAOS I/O Servers will be started and pools will have been removed.
+DAOS I/O Servers will be started and all DAOS pools will have been removed.
 
 ### Manual Fresh Start
 
