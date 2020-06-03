@@ -58,6 +58,11 @@ two pool service replica on rank 0 and 1.
 ```bash
 $ dmg pool destroy --pool=${puuid}
 ```
+**To evict handles/connections to a pool:**
+
+```bash
+$ dmg pool evict --pool=${puuid}
+`
 
 **To see a list of the pools in your DAOS system:**
 

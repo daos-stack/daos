@@ -52,6 +52,7 @@ const (
 type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
+	Evict        PoolEvictCmd        `command:"evict" alias:"ev" description:"Evict all pool connections to a DAOS pool"`
 	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
 	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude targets from a rank"`
 	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate targets for a rank"`
@@ -175,6 +176,31 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-destroy command %s\n", msg)
+
+	return err
+}
+
+// PoolEvictCmd is the struct representing the command to evict a DAOS pool.
+type PoolEvictCmd struct {
+	logCmd
+	ctlInvokerCmd
+	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to evict connection to"`
+	Sys  string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that the pools connections be evicted from."`
+}
+
+// Execute is run when PoolEvictCmd subcommand is activated
+func (d *PoolEvictCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	req := &control.PoolEvictReq{UUID: d.UUID, Sys: d.Sys}
+
+	ctx := context.Background()
+	err := control.PoolEvict(ctx, d.ctlInvoker, req)
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	d.log.Infof("Pool-evict command %s\n", msg)
 
 	return err
 }

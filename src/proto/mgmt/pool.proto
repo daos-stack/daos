@@ -58,6 +58,17 @@ message PoolDestroyResp {
 	int32 status = 1; // DAOS error code
 }
 
+// PoolEvictReq supplies pool identifier.
+message PoolEvictReq {
+	string uuid = 1; // uuid of pool to evict
+	string sys = 2; // DAOS system identifier
+}
+
+// PoolEvictResp returns resultant state of evict operation.
+message PoolEvictResp {
+	int32 status = 1; // DAOS error code
+}
+
 // PoolExcludeReq supplies pool identifier, rank, and target_idxs.
 message PoolExcludeReq {
 	string uuid = 1; // uuid of pool to add target up to

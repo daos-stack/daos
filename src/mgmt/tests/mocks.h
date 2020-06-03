@@ -134,6 +134,13 @@ extern uuid_t		ds_mgmt_target_update_uuid;
 void mock_ds_mgmt_exclude_setup(void);
 
 /*
+ * Mock ds_mgmt_evict
+ */
+extern int		ds_mgmt_pool_evict_return;
+extern uuid_t		ds_mgmt_pool_evict_uuid;
+void mock_ds_mgmt_pool_evict_setup(void);
+
+/*
  * Mock ds_mgmt_cont_set_owner
  */
 extern int	ds_mgmt_cont_set_owner_return;

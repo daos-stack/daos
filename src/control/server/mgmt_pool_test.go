@@ -283,6 +283,90 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 	}
 }
 
+func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
+	missingSB := newTestMgmtSvc(nil)
+	missingSB.harness.instances[0]._superblock = nil
+	notAP := newTestMgmtSvc(nil)
+	notAP.harness.instances[0]._superblock.MS = false
+
+	for name, tc := range map[string]struct {
+		mgmtSvc       *mgmtSvc
+		setupMockDrpc func(_ *mgmtSvc, _ error)
+		req           *mgmtpb.PoolEvictReq
+		expResp       *mgmtpb.PoolEvictResp
+		expErr        error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing superblock": {
+			mgmtSvc: missingSB,
+			req:     &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			expErr:  errors.New("not an access point"),
+		},
+		"not access point": {
+			mgmtSvc: notAP,
+			req:     &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			expErr:  errors.New("not an access point"),
+		},
+		"dRPC send fails": {
+			req:    &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			expErr: errors.New("send failure"),
+		},
+		"zero target count": {
+			req:    &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			expErr: errors.New("zero target count"),
+		},
+		"garbage resp": {
+			req: &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				// dRPC call returns junk in the message body
+				badBytes := makeBadBytes(42)
+
+				setupMockDrpcClientBytes(svc, badBytes, err)
+			},
+			expErr: errors.New("unmarshal"),
+		},
+		"missing uuid": {
+			req:    &mgmtpb.PoolEvictReq{Sys: "daos"},
+			expErr: errors.New("nil UUID"),
+		},
+		"successful evicted": {
+			req:     &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			expResp: &mgmtpb.PoolEvictResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.mgmtSvc == nil {
+				tc.mgmtSvc = newTestMgmtSvc(log)
+			}
+			tc.mgmtSvc.log = log
+
+			if _, err := tc.mgmtSvc.harness.GetMSLeaderInstance(); err == nil {
+				if tc.setupMockDrpc == nil {
+					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+					}
+				}
+				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
+			}
+
+			gotResp, gotErr := tc.mgmtSvc.PoolEvict(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func newTestListPoolsReq() *mgmtpb.ListPoolsReq {
 	return &mgmtpb.ListPoolsReq{
 		Sys: "daos",

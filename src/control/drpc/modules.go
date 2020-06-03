@@ -181,6 +181,8 @@ const (
 	MethodPoolCreate mgmtMethod = C.DRPC_METHOD_MGMT_POOL_CREATE
 	// MethodPoolDestroy is a ModuleMgmt method
 	MethodPoolDestroy mgmtMethod = C.DRPC_METHOD_MGMT_POOL_DESTROY
+	// MethodPoolEvict is a ModuleMgmt method
+	MethodPoolEvict mgmtMethod = C.DRPC_METHOD_MGMT_POOL_EVICT
 	// MethodPoolExclude is a ModuleMgmt method
 	MethodPoolExclude mgmtMethod = C.DRPC_METHOD_MGMT_EXCLUDE
 	// MethodPoolReintegrate is a ModuleMgmt method
