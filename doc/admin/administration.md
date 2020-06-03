@@ -96,15 +96,15 @@ reside on the same host machine, accessible via the same network address.
 
 A DAOS system can be shutdown and restarted to perform maintenance and/or
 reboot hosts. Pool data and state will be maintained providing no changes are
-made to the instance metadata stored on persistent memory.
+made to the rank's metadata stored on persistent memory.
 
 Storage reformat can also be performed after system shutdown. Pools will be
 removed and storage wiped.
 
-System commands will be handled by the access point Control Server which should
-be listening at the address specified as the first entry in the DMG config file
-"hostlist" parameter. See
-[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml))
+System commands will be handled by the DAOS Server listening at the access point
+address specified as the first entry in the DMG config file "hostlist" parameter.
+See
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
 for details.
 
 The "access point" address should be the same as that specified in the server
@@ -121,10 +121,8 @@ specified when starting `daos_server` instances.
 
 The system membership can be queried using the command:
 
-`dmg -o daos_control.yml system query [--verbose] [--ranks <rankset>]`
+`dmg system query [--verbose] [--ranks <rankset>]`
 
-- `daos_control.yml` refers to the DMG config file containing hostlist and
-  certificate path info
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
 - verbose flag gives more information on each rank
 
@@ -135,10 +133,8 @@ UUID, in addition to rank state.
 
 When up and running, the entire system can be shutdown with the command:
 
-`dmg -o daos_control.yml system stop [--ranks <rankset>]`
+`dmg system stop [--ranks <rankset>]`
 
-- `daos_control.yml` refers to the DMG config file containing hostlist and
-  certificate path info
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
 
 Output table will indicate action and result.
@@ -150,10 +146,8 @@ network.
 
 To start the system after a controlled shutdown run the command:
 
-`dmg -o daos_control.yml system start [--ranks <rankset>]`
+`dmg system start [--ranks <rankset>]`
 
-- `daos_control.yml` refers to the DMG config file containing hostlist and
-  certificate path info
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
 
 Output table will indicate action and result.
@@ -164,7 +158,7 @@ DAOS I/O Servers will be started.
 
 To reformat the system after a controlled shutdown run the command:
 
-`dmg -o daos_control.yml storage reformat --system [--ranks <rankset>]`
+`dmg storage reformat --system [--ranks <rankset>]`
 
 - `daos_control.yml` refers to the DMG config file containing hostlist and
   certificate path info
