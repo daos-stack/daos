@@ -649,6 +649,10 @@ crt_ivns_internal_lookup(struct crt_ivns_id *ivns_id)
 	}
 	D_MUTEX_UNLOCK(&ns_list_lock);
 
+	D_ERROR("Failed to lookup IVNS for %s:%d\n",
+		ivns_id->ii_group_name,
+		ivns_id->ii_nsid);
+
 	return NULL;
 }
 
