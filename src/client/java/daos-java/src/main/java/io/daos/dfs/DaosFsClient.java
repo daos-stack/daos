@@ -133,7 +133,7 @@ public final class DaosFsClient implements ForceCloseable {
     if (inited) {
       return;
     }
-    client = builder.clientBuilder.build();
+    client = builder.buildDaosClient();
     if (contId != null && !ROOT_CONT_UUID.equals(contId)) {
       dfsPtr = mountFileSystem(client.getPoolPtr(), client.getContPtr(), builder.readOnlyFs);
       if (log.isDebugEnabled()) {
@@ -936,108 +936,13 @@ public final class DaosFsClient implements ForceCloseable {
    * <p>
    * poolId should be set at least. ROOT container will be used if containerId is not set.
    */
-  public static class DaosFsClientBuilder implements Cloneable {
-    private DaosClient.DaosClientBuilder clientBuilder = new DaosClient.DaosClientBuilder();
+  public static class DaosFsClientBuilder extends DaosClient.DaosClientBuilder<DaosFsClientBuilder> {
     private int defaultFileChunkSize = Constants.FILE_DEFAULT_CHUNK_SIZE;
     private int defaultFileAccessFlags = Constants.ACCESS_FLAG_FILE_READWRITE;
     private int defaultFileMode = Constants.FILE_DEFAULT_FILE_MODE;
     private DaosObjectType defaultFileObjType = DaosObjectType.OC_SX;
     private boolean readOnlyFs = false;
     private boolean shareFsClient = true;
-
-    public DaosFsClientBuilder poolId(String poolId) {
-      clientBuilder.poolId(poolId);
-      return this;
-    }
-
-    public DaosFsClientBuilder containerId(String contId) {
-      clientBuilder.containerId(contId);
-      return this;
-    }
-
-    /**
-     * one or more ranks separated by ":".
-     *
-     * @param ranks
-     * default is "0"
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder ranks(String ranks) {
-      clientBuilder.ranks(ranks);
-      return this;
-    }
-
-    /**
-     * set group name of server.
-     *
-     * @param serverGroup
-     * default is 'daos_server'
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder serverGroup(String serverGroup) {
-      clientBuilder.serverGroup(serverGroup);
-      return this;
-    }
-
-    /**
-     * set container mode when open container.
-     *
-     * @param containerFlags should be one of {@link Constants#ACCESS_FLAG_CONTAINER_READONLY},
-     *                       {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE} and
-     *                       {@link Constants#ACCESS_FLAG_CONTAINER_NOSLIP}
-     *                       Default value is {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE}
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder containerFlags(int containerFlags) {
-      clientBuilder.containerFlags(containerFlags);
-      return this;
-    }
-
-    /**
-     * set pool mode for creating pool
-     *
-     * @param poolMode should be one or combination of below three groups.
-     *                 <li>
-     *                 user:
-     *                 {@link Constants#MODE_POOL_USER_READONLY}
-     *                 {@link Constants#MODE_POOL_USER_READWRITE}
-     *                 {@link Constants#MODE_POOL_USER_EXECUTE}
-     *                 </li>
-     *                 <li>
-     *                 group:
-     *                 {@link Constants#MODE_POOL_GROUP_READONLY}
-     *                 {@link Constants#MODE_POOL_GROUP_READWRITE}
-     *                 {@link Constants#MODE_POOL_GROUP_EXECUTE}
-     *                 </li>
-     *                 <li>
-     *                 other:
-     *                 {@link Constants#MODE_POOL_OTHER_READONLY}
-     *                 {@link Constants#MODE_POOL_OTHER_READWRITE}
-     *                 {@link Constants#MODE_POOL_OTHER_EXECUTE}
-     *                 </li>
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder poolMode(int poolMode) {
-      clientBuilder.poolMode(poolMode);
-      return this;
-    }
-
-    /**
-     * set pool flags for opening pool.
-     *
-     * @param poolFlags should be one of
-     *                  {@link Constants#ACCESS_FLAG_POOL_READONLY}
-     *                  {@link Constants#ACCESS_FLAG_POOL_READWRITE}
-     *                  {@link Constants#ACCESS_FLAG_POOL_EXECUTE}
-     *
-     * <p>
-     *                  Default is {@link Constants#ACCESS_FLAG_POOL_READWRITE}
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder poolFlags(int poolFlags) {
-      clientBuilder.poolFlags(poolFlags);
-      return this;
-    }
 
     /**
      * set default file access flag.
@@ -1133,9 +1038,10 @@ public final class DaosFsClient implements ForceCloseable {
      * @throws IOException
      * {@link DaosIOException}
      */
+    @Override
     public DaosFsClient build() throws IOException {
-      String poolId = clientBuilder.getPoolId();
-      String contId = clientBuilder.getContId();
+      String poolId = getPoolId();
+      String contId = getContId();
       DaosFsClientBuilder builder = (DaosFsClientBuilder) ObjectUtils.clone(this);
       DaosFsClient fsClient;
       if (!builder.shareFsClient) {
@@ -1159,6 +1065,10 @@ public final class DaosFsClient implements ForceCloseable {
       fsClient.init();
       fsClient.incrementRef();
       return fsClient;
+    }
+
+    protected DaosClient buildDaosClient() throws IOException {
+      return (DaosClient) super.build();
     }
   }
 }
