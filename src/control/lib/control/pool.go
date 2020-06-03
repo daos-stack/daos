@@ -220,6 +220,47 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	return nil
 }
 
+// PoolEvictReq contains the parameters for a pool evict request.
+type PoolEvictReq struct {
+	msRequest
+	unaryRequest
+	UUID string
+	Sys  string
+}
+
+// PoolEvict performs a pool connection evict operation on a DAOS Management Server instance.
+func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+
+	// ensure we have a system name in the request
+	if req.Sys == "" {
+		req.Sys = build.DefaultSystemName
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
+			Uuid: req.UUID,
+			Sys:  req.Sys,
+		})
+	})
+
+	rpcClient.Debugf("Evict DAOS pool request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool evict failed")
+	}
+	rpcClient.Debugf("Evict DAOS pool response: %s\n", msResp)
+
+	return nil
+}
+
 type (
 	// PoolQueryReq contains the parameters for a pool query request.
 	PoolQueryReq struct {
