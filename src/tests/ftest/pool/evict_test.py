@@ -266,7 +266,7 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid server group name.
 
-        :avocado: tags=all,pool,full_regression,small,poolevict
+        :avocado: tags=all,pool,pr,full_regression,small,poolevict
         :avocado: tags=poolevict_bad_server_name
         """
         test_param = self.params.get("server_name", '/run/badparams/*')
