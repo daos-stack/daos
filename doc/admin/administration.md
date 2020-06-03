@@ -103,7 +103,7 @@ removed and storage wiped.
 
 System commands will be handled by the access point Control Server which should
 be listening at the address specified as the first entry in the DMG config file
-"hostlist" parameter. See [`daos_control.yml`](utils/config/daos_control.yml)
+"hostlist" parameter. See
 [`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml))
 for details.
 
