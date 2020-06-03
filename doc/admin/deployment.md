@@ -277,7 +277,7 @@ The first entry in the hostlist (after alphabetic then numeric sorting) will be
 assumed to be the access point as set in the server configuration file.
 
 Local configuration files stored in the user directory will be used in
-preference to the default location e.g. `~/.daos_server.yml`.
+preference to the default location e.g. `~/.daos_control.yml`.
 
 ## Hardware Provisioning
 
