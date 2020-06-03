@@ -355,7 +355,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Tue June 2 2020 Hua Kuang <hua.kuang@intel.com> - 1.1.0-20
+* Tue Jun 2 2020 Hua Kuang <hua.kuang@intel.com> - 1.1.0-20
 - Remove dmg_old from DAOS RPM package
 
 * Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
