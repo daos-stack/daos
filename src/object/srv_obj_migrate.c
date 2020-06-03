@@ -127,7 +127,7 @@ obj_tree_destroy(daos_handle_t btr_hdl)
 	rc = dbtree_iterate(btr_hdl, DAOS_INTENT_PUNCH, false,
 			    obj_tree_destory_cb, NULL);
 	if (rc) {
-		D_ERROR("dbtree iterate fails %d\n", rc);
+		D_ERROR("dbtree iterate failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -1372,13 +1372,16 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov,
 
 	rc = migrate_one_object(*oid, epoch, shard, tgt_idx, arg);
 	if (rc != 0) {
-		D_ERROR("obj "DF_UOID" migration rc %d\n", DP_UOID(*oid), rc);
+		D_ERROR("obj "DF_UOID" migration failed: "DF_RC"\n",
+			DP_UOID(*oid), DP_RC(rc));
 		return rc;
 	}
 
 	rc = dbtree_iter_delete(ih, NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("dbtree_iter_delete failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
 	if (--arg->yield_freq == 0) {
 		arg->yield_freq = DEFAULT_YIELD_FREQ;
@@ -1390,6 +1393,9 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov,
 			       NULL, NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
+	else if (rc != 0)
+		D_ERROR("dbtree_iter_probe failed: "DF_RC"\n", DP_RC(rc));
+
 	return rc;
 }
 
@@ -1478,8 +1484,10 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	D_ASSERT(dp != NULL);
 	rc = ds_cont_fetch_snaps(dp->sp_iv_ns, cont_uuid, &snapshots,
 				 &snap_cnt);
-	if (rc)
+	if (rc) {
+		D_ERROR("ds_cont_fetch_snaps failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_put, rc);
+	}
 
 	/* Create dc_pool locally */
 	if (daos_handle_is_inval(tls->mpt_pool_hdl)) {
@@ -1487,16 +1495,21 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 
 		rc = dsc_pool_open(tls->mpt_pool_uuid, tls->mpt_poh_uuid, 0,
 				   NULL, dp->sp_map, &tls->mpt_svc_list, &ph);
-		if (rc)
+		if (rc) {
+			D_ERROR("dsc_pool_open failed: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(free, rc);
+		}
 
 		tls->mpt_pool_hdl = ph;
 	}
 
 	if (tls->mpt_clear_conts) {
 		destroy_existing_container(tls, cont_uuid);
-		if (rc)
+		if (rc) {
+			D_ERROR("destroy_existing_container failed: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(free, rc);
+		}
 	}
 
 	/*
@@ -1505,8 +1518,10 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	 */
 	rc = dsc_cont_open(tls->mpt_pool_hdl, cont_uuid, tls->mpt_coh_uuid,
 			   0, &coh);
-	if (rc)
+	if (rc) {
+		D_ERROR("dsc_cont_open failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(free, rc);
+	}
 
 	arg.cont_hdl	= coh;
 	arg.yield_freq	= DEFAULT_YIELD_FREQ;
@@ -1542,8 +1557,10 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	}
 
 	rc = dbtree_iter_delete(ih, NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("dbtree_iter_delete failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(free, rc);
+	}
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD,
@@ -1577,7 +1594,7 @@ migrate_ult(void *arg)
 				    DAOS_INTENT_PURGE, false,
 				    migrate_cont_iter_cb, pool_tls);
 		if (rc < 0) {
-			D_ERROR("dbtree iterate fails %d\n", rc);
+			D_ERROR("dbtree iterate failed: "DF_RC"\n", DP_RC(rc));
 			if (pool_tls->mpt_status == 0)
 				pool_tls->mpt_status = rc;
 			break;
@@ -1606,7 +1623,7 @@ migrate_tree_get_hdl(struct migrate_pool_tls *tls, daos_handle_t *hdl)
 				   &tls->mpt_root,
 				   &tls->mpt_root_hdl);
 	if (rc != 0) {
-		D_ERROR("failed to create tree: %d\n", rc);
+		D_ERROR("failed to create tree: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1897,8 +1914,10 @@ ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 				 DAOS_OBJ_VERSION);
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opcode,
 			    &rpc);
-	if (rc)
+	if (rc) {
+		D_ERROR("crt_req_create failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
+	}
 
 	migrate_in = crt_req_get(rpc);
 	uuid_copy(migrate_in->om_pool_uuid, pool->sp_uuid);
@@ -1920,10 +1939,13 @@ ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 		migrate_in->om_shards.ca_count = cnt;
 	}
 	rc = dss_rpc_send(rpc);
+	if (rc) {
+		D_ERROR("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
 
 	migrate_out = crt_reply_get(rpc);
-	if (rc == 0)
-		rc = migrate_out->om_status;
+	rc = migrate_out->om_status;
 out:
 	D_DEBUG(DB_TRACE, DF_UUID" migrate object: %d\n",
 		DP_UUID(pool->sp_uuid), rc);
