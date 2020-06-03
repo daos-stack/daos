@@ -891,9 +891,12 @@ rebuild_destroy_pool_internal(void **state, uint64_t fail_loc)
 	rebuild_io(new_arg, oids, OBJ_NR);
 
 	/* hang the rebuild */
-	if (arg->myrank == 0)
+	if (arg->myrank == 0) {
 		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, fail_loc,
 				     0, NULL);
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 5,
+				     0, NULL);
+	}
 
 	new_arg->rebuild_cb = rebuild_destroy_pool_cb;
 

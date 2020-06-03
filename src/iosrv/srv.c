@@ -224,9 +224,9 @@ dss_ult_wakeup(struct dss_sleep_ult *dsu)
 	}
 }
 
-/* Schedule the ULT(dtu->ult) and reschedule in @expire_secs seconds */
+/* Schedule the ULT(dtu->ult) and reschedule in @expire_secs nano seconds */
 void
-dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
+dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_nsecs)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 	ABT_thread		thread;
@@ -237,9 +237,8 @@ dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
 	D_ASSERT(thread == dsu->dsu_thread);
 
 	D_ASSERT(d_list_empty(&dsu->dsu_list));
-	daos_gettime_coarse(&now);
-	dsu->dsu_expire_time = now + expire_secs;
-	D_DEBUG(DB_TRACE, "dsu %p expire in "DF_U64" secs\n", dsu, expire_secs);
+	now = daos_getntime_coarse();
+	dsu->dsu_expire_time = now + expire_nsecs;
 	add_sleep_list(dx, dsu);
 	ABT_self_suspend();
 }
@@ -257,13 +256,34 @@ check_sleep_list()
 	if (dss_xstream_exiting(dx))
 		shutdown = true;
 
-	daos_gettime_coarse(&now);
+	if (d_list_empty(&dx->dx_sleep_ult_list))
+		return;
+
+	now = daos_getntime_coarse();
 	d_list_for_each_entry_safe(dsu, tmp, &dx->dx_sleep_ult_list, dsu_list) {
 		if (dsu->dsu_expire_time <= now || shutdown)
 			dss_ult_wakeup(dsu);
 		else
 			break;
 	}
+}
+
+/**
+ * sleep micro seconds, then being rescheduled.
+ * \param[in]	us	milli seconds to sleep for
+ */
+int
+dss_sleep(uint64_t sleep_msec)
+{
+	struct dss_sleep_ult *dsu;
+
+	dsu = dss_sleep_ult_create();
+	if (dsu == NULL)
+		return -DER_NOMEM;
+
+	dss_ult_sleep(dsu, sleep_msec * 1000000);
+	dss_sleep_ult_destroy(dsu);
+	return 0;
 }
 
 struct dss_rpc_cntr *
