@@ -2,11 +2,10 @@ package io.daos.dfs;
 
 import org.junit.Test;
 
-public class zCleanerIT {
+public class yCleanerIT {
 
   @Test
   public void clean() throws Exception {
     DaosFsClient.closeAll();
-    DaosFsClient.daosFinalize();
   }
 }

@@ -1,5 +1,8 @@
 package io.daos.dfs;
 
+import io.daos.Constants;
+import io.daos.DaosIOException;
+import io.daos.DaosObjectType;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -94,9 +97,9 @@ public class DaosFileMultiThreadsIT {
   }
 
   @AfterClass
-  public static void teardown() throws Exception {
-    if (client != null) {
-      client.disconnect();
+  public static void teardown() throws Exception{
+    if(client != null) {
+      client.close();
     }
   }
 

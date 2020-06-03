@@ -21,25 +21,19 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos.dfs;
+package io.daos;
+
+import java.nio.ByteBuffer;
 
 /**
- * error code to message.
+ * Entry point for getting buffer.
+ *
+ * <p>
+ * TODO: buffer cache logic to be implemented
  */
-public class ErrorCode {
-  private final int code;
-  private final String msg;
+public class BufferAllocator {
 
-  public ErrorCode(int code, String msg) {
-    this.code = code;
-    this.msg = msg;
-  }
-
-  public int getCode() {
-    return code;
-  }
-
-  public String getMsg() {
-    return msg;
+  public static ByteBuffer directBuffer(int size) {
+    return ByteBuffer.allocateDirect(size);
   }
 }

@@ -1,4 +1,4 @@
-package io.daos.dfs;
+package io.daos;
 
 import org.junit.Assert;
 import org.junit.Test;

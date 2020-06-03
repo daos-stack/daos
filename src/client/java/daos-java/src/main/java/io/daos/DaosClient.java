@@ -23,10 +23,8 @@
 
 package io.daos;
 
-import io.daos.dfs.Constants;
-import io.daos.dfs.DaosFsClient;
-import io.daos.dfs.DaosIOException;
-import io.daos.dfs.ShutdownHookManager;
+import io.daos.dfs.*;
+import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,24 +34,24 @@ import java.io.InputStream;
 import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.Deque;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 public class DaosClient implements ForceCloseable {
 
-  private String poolId;
-
-  private String contId;
+  private DaosClientBuilder builder;
 
   private long poolPtr;
 
   private long contPtr;
 
+  private volatile boolean inited;
+
   public static final String LIB_NAME = "daos-jni";
 
   public static final Runnable FINALIZER;
 
-  private static final Queue<ForceCloseable> connections = new ConcurrentLinkedQueue<>();
+  private static final Deque<ForceCloseable> connections = new ConcurrentLinkedDeque<>();
 
   private static final Logger log = LoggerFactory.getLogger(DaosClient.class);
 
@@ -76,6 +74,10 @@ public class DaosClient implements ForceCloseable {
     if (log.isDebugEnabled()) {
       log.debug("daos finalizer hook added");
     }
+  }
+
+  private DaosClient(DaosClientBuilder builder) {
+    this.builder = builder;
   }
 
   private static void loadLib() {
@@ -174,19 +176,78 @@ public class DaosClient implements ForceCloseable {
   static native void daosClosePool(long poolPtr) throws IOException;
 
   static synchronized void closeAll() throws IOException {
-    for (ForceCloseable conn : connections) {
-      conn.forceClose();
+    ForceCloseable c;
+    while ((c = connections.peek()) != null) {
+      c.forceClose();
+      connections.remove(c);
     }
+  }
+
+  private void init() throws IOException {
+    if (inited) {
+      return;
+    }
+
+    poolPtr = daosOpenPool(builder.poolId, builder.serverGroup,
+      builder.ranks,
+      builder.poolFlags);
+    if (log.isDebugEnabled()) {
+      log.debug("opened pool {}", poolPtr);
+    }
+
+    if (builder.contId != null) {
+      contPtr = daosOpenCont(poolPtr, builder.contId, builder.containerFlags);
+      if (log.isDebugEnabled()) {
+        log.debug("opened container {}", contPtr);
+      }
+    } else {
+      log.warn("container UUID is not set");
+    }
+    inited = true;
+    registerForShutdown(this);
+    log.info("DaosClient for {}, {} initialized", builder.poolId, builder.contId);
+  }
+
+  public long getPoolPtr() {
+    return poolPtr;
+  }
+
+  public long getContPtr() {
+    return contPtr;
+  }
+
+  /**
+   * register {@link ForceCloseable} object to release resources in case of abnormal shutdown.
+   * The resource releasing will be performed in reverse order of registering.
+   *
+   * @param closeable
+   */
+  public void registerForShutdown(ForceCloseable closeable) {
+    connections.push(closeable);
   }
 
   @Override
   public void close() throws IOException {
-
+    disconnect();
   }
 
   @Override
   public void forceClose() throws IOException {
+    disconnect();
+  }
 
+  private synchronized void disconnect() throws IOException {
+    if (inited && poolPtr != 0) {
+      if (contPtr != 0) {
+        daosCloseContainer(contPtr);
+        if (log.isDebugEnabled()) {
+          log.debug("closed container {}", contPtr);
+        }
+      }
+      daosClosePool(poolPtr);
+      log.info("DaosFsClient for {}, {} disconnected", builder.poolId, builder.contId);
+    }
+    inited = false;
   }
 
   /**
@@ -211,9 +272,17 @@ public class DaosClient implements ForceCloseable {
       return this;
     }
 
+    public String getPoolId() {
+      return poolId;
+    }
+
     public DaosClientBuilder containerId(String contId) {
       this.contId = contId;
       return this;
+    }
+
+    public String getContId() {
+      return contId;
     }
 
     /**
@@ -298,6 +367,27 @@ public class DaosClient implements ForceCloseable {
     public DaosClientBuilder poolFlags(int poolFlags) {
       this.poolFlags = poolFlags;
       return this;
+    }
+
+    @Override
+    public DaosClientBuilder clone() throws CloneNotSupportedException {
+      return (DaosClientBuilder) super.clone();
+    }
+
+    /**
+     * create new instance of {@link DaosClient} from this builder.
+     *
+     *
+     * @return new instance of DaosClient
+     * @throws IOException
+     */
+    public DaosClient build() throws IOException {
+      if (poolId == null) {
+        throw new IllegalArgumentException("need pool UUID");
+      }
+      DaosClient client = new DaosClient((DaosClientBuilder) ObjectUtils.clone(this));
+      client.init();
+      return client;
     }
   }
 }

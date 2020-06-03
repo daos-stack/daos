@@ -1,6 +1,10 @@
 package io.daos.dfs;
 
 import com.sun.security.auth.module.UnixSystem;
+import io.daos.Constants;
+import io.daos.DaosIOException;
+import io.daos.DaosObjectType;
+import io.daos.DaosUtils;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -332,9 +336,9 @@ public class DaosFileIT {
   }
 
   @AfterClass
-  public static void teardown() throws Exception {
-    if (client != null) {
-      client.disconnect();
+  public static void teardown() throws Exception{
+    if(client != null) {
+      client.close();
     }
   }
 }
