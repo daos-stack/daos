@@ -42,6 +42,8 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
+#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
+
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
 		bool	__is_err = true;		\
@@ -134,6 +136,15 @@ static inline uint64_t vos_byte2blkoff(uint64_t bytes)
 	return bytes >> VOS_BLK_SHIFT;
 }
 
+static inline void
+agg_reserve_space(daos_size_t *rsrvd)
+{
+	daos_size_t	size = VOS_MW_FLUSH_THRESH * 5;
+
+	rsrvd[DAOS_MEDIA_SCM]	+= size;
+	rsrvd[DAOS_MEDIA_NVME]	+= size;
+}
+
 /**
  * VOS pool (DRAM)
  */
@@ -161,6 +172,10 @@ struct vos_pool {
 	struct bio_io_context	*vp_io_ctxt;
 	/** In-memory free space tracking for NVMe device */
 	struct vea_space_info	*vp_vea_info;
+	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */
+	daos_size_t		vp_space_sys[DAOS_MEDIA_MAX];
+	/** Held space by inflight updates. In bytes */
+	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 };
 
 /**
@@ -528,14 +543,13 @@ int obj_tree_fini(struct vos_object *obj);
 int obj_tree_register(void);
 
 /**
- * Data structure which carries the keys, epoch ranges to the multi-nested
- * btree.
+ * Single value key
  */
-struct vos_key_bundle {
-	/** key for the current tree, could be @kb_dkey or @kb_akey */
-	daos_key_t		*kb_key;
-	/** epoch of the I/O */
-	daos_epoch_t		 kb_epoch;
+struct vos_svt_key {
+	/** Epoch of entry */
+	uint64_t	sk_epoch;
+	/** Minor epoch of entry */
+	uint16_t	sk_minor_epc;
 };
 
 /**
@@ -575,9 +589,9 @@ struct vos_rec_bundle {
  */
 #define	EMBEDDED_KEY_MAX	96
 struct vos_embedded_key {
-	/** Inlined iov kbund references */
+	/** Inlined iov key references */
 	d_iov_t		ek_kiov;
-	/** Inlined buffer the kiov references*/
+	/** Inlined buffer the key references*/
 	unsigned char	ek_key[EMBEDDED_KEY_MAX];
 };
 D_CASSERT(sizeof(struct vos_embedded_key) == DAOS_ANCHOR_BUF_MAX);
@@ -925,17 +939,6 @@ vos_hdl2oiter(daos_handle_t hdl)
 
 /**
  * store a bundle of parameters into a iovec, which is going to be passed
- * into dbtree operations as a compound key.
- */
-static inline void
-tree_key_bundle2iov(struct vos_key_bundle *kbund, d_iov_t *iov)
-{
-	memset(kbund, 0, sizeof(*kbund));
-	d_iov_set(iov, kbund, sizeof(*kbund));
-}
-
-/**
- * store a bundle of parameters into a iovec, which is going to be passed
  * into dbtree operations as a compound value (data buffer address, or ZC
  * buffer umoff, checksum etc).
  */
@@ -973,9 +976,38 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       struct vos_ilog_info *info);
 
 /* vos_io.c */
-uint16_t
-vos_media_select(struct vos_container *cont, daos_iod_type_t type,
-		 daos_size_t size);
+daos_size_t
+vos_recx2irec_size(daos_size_t rsize, struct dcs_csum_info *csum);
+
+/*
+ * A simple media selection policy embedded in VOS, which select media by
+ * akey type and record size.
+ */
+static inline uint16_t
+vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
+{
+	if (pool->vp_vea_info == NULL)
+		return DAOS_MEDIA_SCM;
+
+	return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
+}
+
+/* Reserve SCM through umem_reserve() for a PMDK transaction */
+struct vos_rsrvd_scm {
+	unsigned int		 rs_actv_cnt;
+	unsigned int		 rs_actv_at;
+	struct pobj_action	*rs_actv;
+};
+
+umem_off_t
+vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
+		daos_size_t size);
+int
+vos_publish_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
+		bool publish);
+int
+vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
+		   daos_size_t size, enum vos_io_stream ios, uint64_t *off);
 int
 vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 		   enum vos_io_stream ios);
@@ -1015,6 +1047,9 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd);
 int
 gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 	    uint64_t args);
+void
+gc_reserve_space(daos_size_t *rsrvd);
+
 
 static inline uint64_t
 vos_hash_get(void *buf, uint64_t len)
@@ -1065,7 +1100,8 @@ enum {
 	VOS_SLAB_SV_NODE	= 2,
 	VOS_SLAB_EVT_NODE	= 3,
 	VOS_SLAB_EVT_DESC	= 4,
-	VOS_SLAB_MAX		= 5
+	VOS_SLAB_OBJ_DF		= 5,
+	VOS_SLAB_MAX		= 6
 };
 D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
 
@@ -1082,5 +1118,19 @@ vos_slab_alloc(struct umem_instance *umm, int size, int slab_id)
 	return umem_alloc_verb(umm, umem_slab_flags(umm, slab_id) |
 					POBJ_FLAG_ZERO, size);
 }
+
+/* vos_space.c */
+void
+vos_space_sys_init(struct vos_pool *pool);
+int
+vos_space_sys_set(struct vos_pool *pool, daos_size_t *space_sys);
+int
+vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow);
+int
+vos_space_hold(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
+	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
+	       daos_size_t *space_hld);
+void
+vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
 
 #endif /* __VOS_INTERNAL_H__ */
