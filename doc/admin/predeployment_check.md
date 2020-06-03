@@ -44,7 +44,7 @@ and storage nodes.
 DAOS ACL stores the actual user and group name (instead of numeric ID) and does
 not verify group membership check on the storage node. The DAOS agent (running
 on the client nodes) is responsible for converting the UID/GID to name and to
-resolve the list of groups that the users belong to. This informations are then
+resolve the list of groups that the users belong to. This information is then
 signed by the agent and send to the storage node.
 
 As a result, DAOS does not require user and group to be synchronized between
@@ -66,14 +66,15 @@ different subnet might be configured.
 Some special configuration is required to use librdmacm with multiple
 interfaces.
 
-Firstly, Linux must be congifured to only send ARP replies on the interface
-targeted in the ARP request. This can be done using the following command:
+Firstly, the accept_local feature must be enabled on the network interfaces
+to be used by DAOS. This can be done using the following command (<ifaces> must
+be replaced with the interface names):
 
 ```
-$ sysctl -w net.ipv4.conf.all.accept_local=1
+$ sysctl -w net.ipv4.conf.<ifaces>.accept_local=1
 ```
 
-Secondly, Linux must be congifured to only send ARP replies on the interface
+Secondly, Linux must be configured to only send ARP replies on the interface
 targeted in the ARP request. This is configured via the arp_ignore parameter.
 This should be set to 2 if all the interfaces on the client and storage nodes
 are in the same logical subnet (e.g. ib0 == 10.0.0.27, ib1 == 10.0.1.27,
@@ -83,7 +84,7 @@ prefix=16).
 $ sysctl -w net.ipv4.conf.all.arp_ignore=2
 ```
 
-If seperate logical subnets are used (e.g. prefix = 24), then the value must be
+If separate logical subnets are used (e.g. prefix = 24), then the value must be
 set to 1.
 
 ```
@@ -97,8 +98,9 @@ Finally, the rp_local parameter for the relevant interfaces (replace below
 $ sysctl -w net.ipv4.cong.<ifaces>.arp_ignore=1
 ```
 
-All those parameters can be made persistent by adding a new
-/etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf).
+All those parameters can be made persistent in /etc/sysctl.conf by adding a new
+under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf) with all the relevant
+settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
