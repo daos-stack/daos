@@ -118,7 +118,7 @@ See [link](#daossite) for details about this configuration.
 
 * DAOS UNS Path
 
-The URI is "daos://uns/<your path>". "<your path>" is your OS file path created
+The URI is "daos://uns/\<your path\>". "\<your path\>" is your OS file path created
 by DAOS UNS method, DaosUns.create(). You can create the UNS path with below
 command.
 
