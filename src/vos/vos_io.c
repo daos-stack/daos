@@ -75,6 +75,8 @@ struct vos_io_context {
 	bool			 ic_read_conflict;
 	/** deduplication threshold size */
 	uint32_t		 ic_dedup_th;
+	/** dedup entries to be inserted after transaction done */
+	d_list_t		 ic_dedup_entries;
 	/** flags */
 	unsigned int		 ic_update:1,
 				 ic_size_fetch:1,
@@ -244,10 +246,9 @@ vos_dedup_lookup(struct vos_pool *pool, struct dcs_csum_info *csum,
 
 static void
 vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
-		 daos_size_t csum_len, struct bio_iov *biov)
+		 daos_size_t csum_len, struct bio_iov *biov, d_list_t *list)
 {
 	struct dedup_entry	*entry;
-	int			 rc;
 
 	if (!ci_is_valid(csum) || csum_len == 0 || biov->bi_addr.ba_dedup)
 		return;
@@ -278,14 +279,41 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 	entry->de_data_len	= biov->bi_data_len;
 	memcpy(entry->de_csum_buf, csum->cs_csum, csum_len);
 
-	rc = d_hash_rec_insert(pool->vp_dedup_hash, csum, csum_len,
-			       &entry->de_link, false);
-	if (rc) {
+	d_list_add_tail(&entry->de_link, list);
+	D_DEBUG(DB_IO, "Inserted dedup entry in list\n");
+}
+
+static void
+vos_dedup_process(struct vos_pool *pool, d_list_t *list, bool abort)
+{
+	struct dedup_entry	*entry, *tmp;
+	struct dcs_csum_info	 csum = { 0 };
+	int			 rc;
+
+	d_list_for_each_entry_safe(entry, tmp, list, de_link) {
+		d_list_del_init(&entry->de_link);
+
+		if (abort)
+			goto free_entry;
+
+		/*
+		 * No yield since vos_dedup_update() is called, so it's safe
+		 * to insert entries to hash without checking.
+		 */
+		csum.cs_csum = entry->de_csum_buf;
+		csum.cs_type = entry->de_csum_type;
+
+		rc = d_hash_rec_insert(pool->vp_dedup_hash, &csum,
+				       entry->de_csum_len, &entry->de_link,
+				       false);
+		if (rc == 0) {
+			D_DEBUG(DB_IO, "Inserted dedup entry\n");
+			continue;
+		}
 		D_ERROR("Insert dedup entry failed. "DF_RC"\n", DP_RC(rc));
+free_entry:
 		D_FREE(entry->de_csum_buf);
 		D_FREE(entry);
-	} else {
-		D_DEBUG(DB_IO, "Inserted dedup entry\n");
 	}
 }
 
@@ -334,6 +362,7 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 {
 	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
 	D_ASSERT(ioc->ic_actv_at == 0);
+	D_ASSERT(d_list_empty(&ioc->ic_dedup_entries));
 
 	if (ioc->ic_actv_cnt != 0) {
 		D_FREE(ioc->ic_actv);
@@ -436,6 +465,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
 	vos_ilog_fetch_init(&ioc->ic_akey_info);
 	D_INIT_LIST_HEAD(&ioc->ic_blk_exts);
+	D_INIT_LIST_HEAD(&ioc->ic_dedup_entries);
 
 	rc = vos_ioc_reserve_init(ioc);
 	if (rc != 0)
@@ -1229,12 +1259,11 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	ent.ei_addr.ba_dedup = false;	/* Don't make this flag persistent */
 	rc = evt_insert(toh, &ent, NULL);
 
-	/* Ignore transaction abort for this moment */
 	if (ioc->ic_dedup && !rc && (rsize * recx->rx_nr) >= ioc->ic_dedup_th) {
 		daos_size_t csum_len = recx_csum_len(recx, csum, rsize);
 
 		vos_dedup_update(vos_cont2pool(ioc->ic_cont), csum, csum_len,
-				 biov);
+				 biov, &ioc->ic_dedup_entries);
 	}
 	return rc;
 }
@@ -1736,6 +1765,10 @@ update_cancel(struct vos_io_context *ioc)
 	/* Cancel NVMe reservations */
 	vos_publish_blocks(ioc->ic_cont, &ioc->ic_blk_exts, false,
 			   VOS_IOS_GENERIC);
+
+	/* Abort dedup entries */
+	vos_dedup_process(vos_cont2pool(ioc->ic_cont), &ioc->ic_dedup_entries,
+			  true /* abort */);
 }
 
 static void
@@ -1883,6 +1916,9 @@ out:
 	if (err != 0) {
 		vos_dtx_cleanup_dth(dth);
 		update_cancel(ioc);
+	} else {
+		vos_dedup_process(vos_cont2pool(ioc->ic_cont),
+				  &ioc->ic_dedup_entries, false);
 	}
 
 	update_ts_on_update(ioc, err);
