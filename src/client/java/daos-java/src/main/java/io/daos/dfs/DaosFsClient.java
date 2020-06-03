@@ -121,14 +121,6 @@ public final class DaosFsClient implements ForceCloseable {
     this.builder = builder;
   }
 
-  private DaosFsClient(String poolId, DaosFsClientBuilder builder) {
-    this(poolId, null, builder);
-  }
-
-  private DaosFsClient(DaosFsClientBuilder builder) {
-    this(null, null, builder);
-  }
-
   private synchronized void init() throws IOException {
     if (inited) {
       return;
