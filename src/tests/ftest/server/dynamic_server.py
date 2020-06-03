@@ -34,7 +34,7 @@ class DynamicServer(TestWithServers):
 
     def test_dynamic_server_addition(self):
         """
-        JIRA ID: DAOS-1508
+        JIRA ID: DAOS-3598
 
         Test Description: Test dmg tool executes with variant positive and
         negative inputs to its configuration file.
