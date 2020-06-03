@@ -87,11 +87,12 @@ boro-11:10001:
         State: FAULTY
 ```
 
-## System Administration
+## System Operations
 
-The DAOS Control Server instance acting as the management service leader and
-"access point" records DAOS I/O Server instances that join the DAOS system in
-a "membership".
+The DAOS Control Server acting as the access point records details of DAOS I/O
+Server instances that join the DAOS system. Once an I/O Server has joined the
+DAOS system, it is identified by a unique system "rank". Multiple ranks can
+reside on the same host machine, accessible via the same network address.
 
 A DAOS system can be shutdown and restarted to perform maintenance and/or
 reboot hosts. Pool data and state will be maintained providing no changes are
@@ -100,18 +101,21 @@ made to the instance metadata stored on persistent memory.
 Storage reformat can also be performed after system shutdown. Pools will be
 removed and storage wiped.
 
-System commands will be handled by the "access point" host which should be the
-first entry in the DMG config file "hostlist" parameter. See
-[`daos_control.yml`](utils/config/daos_control.yml) for details.
+System commands will be handled by the access point Control Server which should
+be listening at the address specified as the first entry in the DMG config file
+"hostlist" parameter. See [`daos_control.yml`](utils/config/daos_control.yml)
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml))
+for details.
 
 The "access point" address should be the same as that specified in the server
-config file [`daos_server.yml`](utils/config/daos_server.yml) specified when
-starting `daos_server` instances.
+config file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+specified when starting `daos_server` instances.
 
 !!! warning
-    Controlled start/stop has some known limitations.
-    Whilst individual ranks can be stopped, if subset is subsequently restarted,
-    existing pools will not yet reintegrate the ranks automatically.
+    Controlled start/stop/reformat have some known limitations.
+    Whilst individual system instances can be stopped, if a subset is restarted,
+    existing pools will not be automatically integrated with restarted instances.
 
 ### Query
 
@@ -129,8 +133,7 @@ UUID, in addition to rank state.
 
 ### Shutdown
 
-When up and running, the entire system (all I/O Server instances) can be
-shutdown with the command:
+When up and running, the entire system can be shutdown with the command:
 
 `dmg -o daos_control.yml system stop [--ranks <rankset>]`
 
@@ -145,8 +148,7 @@ network.
 
 ### Start
 
-To start the system (with no persistent memory changes) after a controlled
-shutdown run the command:
+To start the system after a controlled shutdown run the command:
 
 `dmg -o daos_control.yml system start [--ranks <rankset>]`
 
@@ -160,8 +162,7 @@ DAOS I/O Servers will be started.
 
 ### Reformat
 
-To reformat the system (with no persistent memory changes) after a controlled
-shutdown run the command:
+To reformat the system after a controlled shutdown run the command:
 
 `dmg -o daos_control.yml storage reformat --system [--ranks <rankset>]`
 
