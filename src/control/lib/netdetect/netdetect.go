@@ -39,6 +39,7 @@ package netdetect
 #include <rdma/fi_errno.h>
 
 #if HWLOC_API_VERSION >= 0x00020000
+
 int cmpt_setFlags(hwloc_topology_t topology)
 {
 	return hwloc_topology_set_all_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_ALL);
