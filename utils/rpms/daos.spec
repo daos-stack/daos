@@ -362,7 +362,7 @@ getent passwd daos >/dev/null || useradd -M daos
 %{_libdir}/*.a
 
 %changelog
-* Tue Jun 4 2020 Hua Kuang <hua.kuang@intel.com> - 1.1.0-21
+* Thu Jun 4 2020 Hua Kuang <hua.kuang@intel.com> - 1.1.0-21
 - Remove dmg_old from DAOS RPM package
 
 * Thu May 28 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-20
