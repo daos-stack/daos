@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       19%{?relval}%{?dist}
+Release:       20%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -205,9 +205,11 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
+mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
+getent passwd daos >/dev/null || useradd -M daos
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -257,6 +259,11 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 
 %files server
 %config(noreplace) %{conf_dir}/daos_server.yml
+%dir %{conf_dir}/certs
+%attr(0700,daos,daos) %{conf_dir}/certs
+%dir %{conf_dir}/certs/clients
+%attr(0700,daos,daos) %{conf_dir}/certs/clients
+%attr(0664,root,root) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
@@ -356,6 +363,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Thu May 28 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-20
+- Create daos_server group to run as in systemd unit file
+
 * Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
 - Enable parallel building with _smp_mflags
 
@@ -369,10 +379,10 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 * Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-16
 - Fix fuse3-libs -> libfuse3 for SLES/Leap 15
 
-* Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-15
+* Thu Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-15
 - Use new properly pre-release tagged mercury RPM
 
-* Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-14
+* Thu Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-14
 - Move fuse dependencies to the client subpackage
 
 * Mon Apr 27 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-13

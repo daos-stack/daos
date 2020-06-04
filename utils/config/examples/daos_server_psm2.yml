@@ -19,9 +19,9 @@ control_log_file: /tmp/daos_control.log
 #  # Custom CA Root certificate for generated certs
 #  ca_cert: .daos/daosCA.crt
 #  # Server certificate for use in TLS handshakes
-#  cert: .daos/daos_server.crt
+#  cert: /etc/daos/daos_server.crt
 #  # Key portion of Server Certificate
-#  key: .daos/daos_server.key
+#  key: /etc/daos/daos_server.key
 
 # single server instance per config file for now
 servers:

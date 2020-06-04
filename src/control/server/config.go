@@ -394,13 +394,19 @@ func saveActiveConfig(log logging.Logger, config *Configuration) {
 
 // Validate asserts that config meets minimum requirements.
 func (c *Configuration) Validate(log logging.Logger) (err error) {
+	// config without servers is valid when initially discovering hardware
+	// prior to adding per-server sections with device allocations
+	if len(c.Servers) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode", DataPlaneName, ControlPlaneName)
+		c.Servers = nil
+		return nil
+	}
+
 	// append the user-friendly message to any error
-	// TODO: use a fault/resolution
 	defer func() {
 		if err != nil && !fault.HasResolution(err) {
 			examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
-			err = errors.WithMessage(FaultBadConfig,
-				err.Error()+", examples: "+examplesPath)
+			err = errors.WithMessage(FaultBadConfig, err.Error()+", examples: "+examplesPath)
 		}
 	}()
 
@@ -421,8 +427,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 
 		// warn if access point port differs from config control port
 		if strconv.Itoa(c.ControlPort) != port {
-			log.Debugf("access point (%s) port (%s) differs from control port (%d)",
-				host, port, c.ControlPort)
+			log.Debugf("access point (%s) port (%s) differs from control port (%d)", host, port, c.ControlPort)
 		}
 
 		if port == "0" {
@@ -430,10 +435,6 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		}
 
 		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
-	}
-
-	if len(c.Servers) == 0 {
-		return FaultConfigNoServers
 	}
 
 	for i, srv := range c.Servers {
