@@ -2,9 +2,13 @@ package io.daos.fs.hadoop;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystemContractBaseTest;
+import org.apache.hadoop.fs.Path;
 import org.junit.Test;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 
 import static org.junit.Assume.assumeTrue;
@@ -42,19 +46,14 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
   @Test
   public void testRenameRootDirForbidden() throws Exception {
     assumeTrue(renameSupported());
-    try {
-      rename(super.path("/"),
+    rename(super.path("/"),
               super.path("/test/newRootDir"),
               false, true, false);
-      fail("should throw IOException");
-    }catch (IOException e){
-    }
   }
 
   @Test
   public void testDeleteSubdir() throws Exception {
     Path parentDir = this.path("/test/hadoop");
-    this.fs.mkdirs(parentDir);
 
     Path file = this.path("/test/hadoop/file");
     Path subdir = this.path("/test/hadoop/subdir");
@@ -70,8 +69,6 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
     assertTrue("Deleted file", this.fs.delete(file, false));
     assertTrue("Parent should exist", this.fs.exists(parentDir));
-
-
   }
 
   @Test
@@ -79,39 +76,10 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     return true;
   }
 
-  @Override
-  public void testRenameNonExistentPath() throws Exception {
-    assumeTrue(renameSupported());
-    Path src = this.path("/test/hadoop/path");
-    Path dst = this.path("/test/new/newpath");
-    try {
-      super.rename(src, dst, false, false, false);
-      fail("Should throw FileNotFoundException!");
-    } catch (IOException e) {
-      // expected
-    }
-  }
-
-  @Override
-  public void testRenameFileMoveToNonExistentDirectory() throws Exception {
-    assumeTrue(renameSupported());
-    Path src = this.path("/test/hadoop/file");
-    this.fs.mkdirs(new Path("/test/hadoop"));
-    this.createFile(src);
-    Path dst = this.path("/test/new/newfile");
-    try {
-      super.rename(src, dst, false, true, false);
-      fail("Should throw FileNotFoundException!");
-    } catch (IOException e) {
-      // expected
-    }
-  }
-
   @Test
   public void testRenameDirectoryConcurrent() throws Exception {
     assumeTrue(renameSupported());
     Path src = this.path("/test/hadoop/file/");
-    this.fs.mkdirs(src);
     Path child1 = this.path("/test/hadoop/file/1");
     Path child2 = this.path("/test/hadoop/file/2");
     Path child3 = this.path("/test/hadoop/file/3");
@@ -123,76 +91,17 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     this.createFile(child4);
 
     Path dst = this.path("/test/new");
-    Path dstChild = new Path(dst, src.getName());
+    fs.mkdirs(dst);
     super.rename(src, dst, true, false, true);
-    assertEquals(4, this.fs.listStatus(dst).length);
-    assertFalse(fs.exists(dstChild));
-
+    Path dstChild = new Path(dst, src.getName());
+    assertEquals(4, this.fs.listStatus(dstChild).length);
+    assertFalse(fs.exists(src));
   }
 
-  @Override
-  public void testRenameDirectoryMoveToNonExistentDirectory() throws Exception {
-    assumeTrue(renameSupported());
-    Path src = this.path("/test/hadoop/dir");
-    this.fs.mkdirs(src);
-    Path dst = this.path("/test/new/newdir");
-    try {
-      super.rename(src, dst, false, true, false);
-      fail("Should throw IOException!");
-    } catch (IOException e) {
-      // expected
-    }
-  }
-
-  @Override
-  public void testRenameFileMoveToExistingDirectory() throws Exception {
-    if (!renameSupported()) return;
-
-    Path src = path("/test/hadoop/file");
-    this.fs.mkdirs(new Path("/test/hadoop"));
-    createFile(src);
-    Path dst = path("/test/new/newfile");
-    this.fs.mkdirs(dst.getParent());
-    rename(src, dst, true, false, true);
-  }
-
-  @Override
-  public void testRenameFileAsExistingFile() throws Exception {
-    assumeTrue(renameSupported());
-    Path src = this.path("/test/hadoop/file");
-    this.fs.mkdirs(new Path("/test/hadoop"));
-    this.createFile(src);
-    Path dst = this.path("/test/new/newfile");
-    this.fs.mkdirs(new Path("/test/new"));
-    this.createFile(dst);
-    try {
-      super.rename(src, dst, false, true, true);
-      fail("Should throw IOException");
-    } catch (IOException e) {
-      // expected
-    }
-  }
-
-  @Override
-  public void testRenameDirectoryAsExistingFile() throws Exception {
-    assumeTrue(renameSupported());
-    Path src = this.path("/test/hadoop/dir");
-    this.fs.mkdirs(src);
-    Path dst = this.path("/test/new/newfile");
-    this.fs.mkdirs(new Path("/test/new"));
-    this.createFile(dst);
-    try {
-      super.rename(src, dst, false, true, true);
-      fail("Should throw FileAlreadyExistsException");
-    } catch (IOException e) {
-      // expected
-    }
-  }
 
   @Test
   public void testGetFileStatusFileAndDirectory() throws Exception {
     Path filePath = this.path("/test/daos/file1");
-    this.fs.mkdirs(new Path("/test/daos"));
     this.createFile(filePath);
     assertTrue("Should be file", this.fs.getFileStatus(filePath).isFile());
     assertFalse("Should not be directory",
@@ -207,15 +116,17 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
   @Test
   public void testMkdirsForExistingFile() throws Exception {
-    Path testFile = this.path("/test/hadoop/file");
-    assertFalse(this.fs.exists(testFile));
-    this.fs.mkdirs(new Path("/test/hadoop"));
-    this.createFile(testFile);
-    assertTrue(this.fs.exists(testFile));
-    this.fs.mkdirs(testFile);
+    try {
+      Path testFile = this.path("/test/hadoop/file");
+      assertFalse(this.fs.exists(testFile));
+      this.createFile(testFile);
+      assertTrue(this.fs.exists(testFile));
+      this.fs.mkdirs(testFile);
+//    fail("/test/hadoop/file is a file");
+    } catch (FileAlreadyExistsException e) {
+    }
   }
 
-  @Override
   public void testRenameDirectoryMoveToExistingDirectory() throws Exception {
     if (!renameSupported()) return;
 
@@ -265,17 +176,6 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
             fs.exists(path("/test/new/dir/subdir/file2")));
   }
 
-  @Override
-  public void testInputStreamClosedTwice() throws IOException {
-    //HADOOP-4760 according to Closeable#close() closing already-closed
-    //streams should have no effect.
-    Path src = path("/test/hadoop/file");
-    this.fs.mkdirs(new Path("/test/hadoop"));
-    createFile(src);
-    FSDataInputStream in = fs.open(src);
-    in.close();
-    in.close();
-  }
 
   @Override
   public void testRenameFileAsExistingDirectory() throws Exception {
@@ -304,7 +204,8 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertTrue("Parent exists", fs.exists(path.getParent()));
   }
 
- @Override
+
+  @Override
   public void testListStatus() throws Exception {
     Path[] testDirs = { path("/test/hadoop/a"),
             path("/test/hadoop/b"),
@@ -330,66 +231,40 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertEquals(0, paths.length);
   }
 
-  @Override
-  public void testOverwrite() throws IOException {
-    // not supported
+  public void testRenameDirMoveToDescentdantDir() throws Exception {
+    if (!renameSupported()) return;
+
+    Path src = path("/test/hadoop/dir");
+    fs.mkdirs(src);
+    Path dst = path("/test/hadoop/dir/subdir");
+    fs.mkdirs(dst);
+
+    rename(src, dst, false, true, true);
+    assertFalse("Destination changed",
+            fs.exists(path("/test/hadoop/dir/subdir/dir")));
   }
 
-  @Override
-  public void testDeleteRecursively() throws IOException {
-    Path dir = path("/test/hadoop");
-    this.fs.mkdirs(dir);
-    Path file = path("/test/hadoop/file");
-    Path subdir = path("/test/hadoop/subdir");
-    fs.mkdirs(subdir);
+  public void testRenameDirMoveToItSelf() throws Exception {
+    if (!renameSupported()) return;
 
-    createFile(file);
-    assertTrue("Created subdir", fs.mkdirs(subdir));
+    Path src = path("/test/hadoop/dir");
+    fs.mkdirs(src);
+    Path dst = path("/test/hadoop/dir");
 
-    assertTrue("File exists", fs.exists(file));
-    assertTrue("Dir exists", fs.exists(dir));
-    assertTrue("Subdir exists", fs.exists(subdir));
-
-    assertFalse("no delete", fs.delete(dir, false));
-    assertTrue("File still exists", fs.exists(file));
-    assertTrue("Dir still exists", fs.exists(dir));
-    assertTrue("Subdir still exists", fs.exists(subdir));
-
-    assertTrue("Deleted", fs.delete(dir, true));
-    assertFalse("File doesn't exist", fs.exists(file));
-    assertFalse("Dir doesn't exist", fs.exists(dir));
-    assertFalse("Subdir doesn't exist", fs.exists(subdir));
+    rename(src, dst, false, true, true);
+    assertTrue("Destination changed",
+            fs.exists(path("/test/hadoop/dir")));
   }
 
-  @Override
-  public void testOutputStreamClosedTwice() throws IOException {
-    //HADOOP-4760 according to Closeable#close() closing already-closed
-    //streams should have no effect.
+  public void testRenameFileToItSelf() throws Exception {
+    if (!renameSupported()) return;
+
     Path src = path("/test/hadoop/file");
-    this.fs.mkdirs(new Path("/test/hadoop"));
-    FSDataOutputStream out = fs.create(src);
-    out.writeChar('H'); //write some data
-    out.close();
-    out.close();
+    fs.createNewFile(src);
+    Path dst = path("/test/hadoop/file");
+
+    rename(src, dst, true, true, true);
+    assertTrue("Destination changed",
+            fs.exists(path("/test/hadoop/file")));
   }
-
-  /**
-   * Write a dataset, read it back in and verify that they match.
-   * Afterwards, the file is deleted.
-   * @param len length of data
-   * @throws IOException on IO failures
-   */
-  @Override
-  protected void writeReadAndDelete(int len) throws IOException {
-    Path path = path("/test/hadoop/file");
-    this.fs.mkdirs(new Path("/test/hadoop"));
-    writeAndRead(path, data, len, false, true);
-  }
-
-
-  @Override
-  public void testOverWriteAndRead() throws Exception {
-    // not supported
-  }
-
 }

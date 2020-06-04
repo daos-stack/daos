@@ -23,7 +23,7 @@
 
 package io.daos.fs.hadoop;
 
-import java.io.*;
+import java.io.InputStream;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -82,7 +82,7 @@ public class DaosConfig {
       Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(is);
       NodeList names = document.getElementsByTagName("name");
       Element targetNode = null;
-      for (int i=0; i<names.getLength(); i++) {
+      for (int i = 0; i < names.getLength(); i++) {
         Element node = (Element)names.item(i);
         if (Constants.DAOS_DEFAULT_FS.equals(node.getTextContent().trim())) {
           targetNode = (Element)node.getParentNode();
@@ -193,7 +193,7 @@ public class DaosConfig {
       String name = item.getKey();
       if (name.startsWith("fs.daos.")) {
         if (hadoopConfig.get(name) == null) { //not set by user
-          hadoopConfig.set(name, defaultConfig.get(prefix+name, item.getValue()));
+          hadoopConfig.set(name, defaultConfig.get(prefix + name, item.getValue()));
         }
       }
     }
