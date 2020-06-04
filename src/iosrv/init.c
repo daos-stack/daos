@@ -785,6 +785,7 @@ parse(int argc, char **argv)
 			break;
 		case 'h':
 			usage(argv[0], stdout);
+			rc = -DER_INVAL;
 			break;
 		case 'I':
 			dss_instance_idx = atoi(optarg);
