@@ -58,7 +58,10 @@ class DmgCommand(YamlCommand):
                       r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+)"
                       r",\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
                       r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)"
-                      r"\s+recs)"
+                      r"\s+recs)",
+        "system_query": r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)",
+        "system_start": r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
+        "system_stop": r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
     }
 
     def __init__(self, path, yaml_cfg=None):
@@ -91,9 +94,10 @@ class DmgCommand(YamlCommand):
         Returns a string list.
         """
         if self.yaml:
-            return self.yaml.hostlist.value
+            hosts = self.yaml.hostlist.value
         else:
-            return self._hostlist.value.split(",")
+            hosts = self._hostlist.value.split(",")
+        return hosts
 
     @hostlist.setter
     def hostlist(self, hostlist):
@@ -437,6 +441,7 @@ class DmgCommand(YamlCommand):
                     self).__init__(
                         "/run/dmg/storage/scan/*", "scan")
                 self.summary = FormattedParameter("-m", False)
+                self.verbose = FormattedParameter("--verbose", False)
 
         class SetSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage set command."""
@@ -547,8 +552,11 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.all.value = all_devs
         return self._get_result()
 
-    def storage_scan(self):
+    def storage_scan(self, verbose=False):
         """Get the result of the dmg storage scan command.
+
+        Args:
+            verbose (bool, optional): create verbose output. Defaults to False.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -560,6 +568,7 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("scan")
+        self.sub_command_class.sub_command_class.verbose.value = verbose
         return self._get_result()
 
     def storage_format(self, reformat=False):
@@ -618,7 +627,7 @@ class DmgCommand(YamlCommand):
         Args:
             scm_size (int): SCM pool size to create.
             uid (object, optional): User ID with privileges. Defaults to None.
-            gid (object, otional): Group ID with privileges. Defaults to None.
+            gid (object, optional): Group ID with privileges. Defaults to None.
             nvme_size (str, optional): NVMe size. Defaults to None.
             target_list (list, optional): a list of storage server unique
                 identifiers (ranks) for the DAOS pool
@@ -817,7 +826,7 @@ class DmgCommand(YamlCommand):
         return self._get_result()
 
     def pool_exclude(self, pool_uuid, rank, tgt_idx=None):
-        """Exclude a daos_server from the pool
+        """Exclude a daos_server from the pool.
 
         Args:
             pool (str): Pool uuid.
@@ -840,7 +849,7 @@ class DmgCommand(YamlCommand):
         return self._get_result()
 
     def pool_reintegrate(self, pool_uuid, rank, tgt_idx=None):
-        """Reintegrate a daos_server to the pool
+        """Reintegrate a daos_server to the pool.
 
         Args:
             pool (str): Pool uuid.
@@ -860,6 +869,62 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.pool.value = pool_uuid
         self.sub_command_class.sub_command_class.rank.value = rank
         self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
+        return self._get_result()
+
+    def system_query(self, rank=None, verbose=False):
+        """Query the state of the system.
+
+        Args:
+            rank (str, optional): rank to query. Defaults to None (query all).
+            verbose (bool, optional): create verbose output. Defaults to False.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        """
+        self.set_sub_command("system")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.rank.value = rank
+        self.sub_command_class.sub_command_class.verbose.value = verbose
+        return self._get_result()
+
+    def system_start(self):
+        """Start the system.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg system start command fails.
+
+        """
+        self.set_sub_command("system")
+        self.sub_command_class.set_sub_command("start")
+        return self._get_result()
+
+    def system_stop(self, force=False):
+        """Stop the system.
+
+        Args:
+            force (bool, optional): whether to force the stop. Defaults to
+                False.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg system stop command fails.
+
+        """
+        self.set_sub_command("system")
+        self.sub_command_class.set_sub_command("stop")
+        self.sub_command_class.sub_command_class.force.value = force
         return self._get_result()
 
 
