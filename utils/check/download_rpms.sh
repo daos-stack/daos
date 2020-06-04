@@ -41,6 +41,7 @@ job_url+="/${my_project}/job/${my_branch}/${my_build}/${my_art_dir}/"
 job_url+="${my_distro}/*zip*/${my_artifact}"
 
 # Get the RPM Artifacts
+sudo yum -y install curl unzip hardening-check
 rm -f "${my_prefix}${my_project}_${my_artifact}"
 curl --silent --show-error "${job_url}" \
      -o "${my_prefix}${my_project}_${my_artifact}"
