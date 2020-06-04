@@ -3,12 +3,12 @@
 hosts:
   test_servers:
     - server-A
-timeout: 50
+timeout: 60
 server_config:
   name: daos_server
 pool:
   mode: 511
-  scm_size: 10737418
+  scm_size: 1073741824
   name: daos_server
   control_method: dmg
 createtests:
@@ -20,31 +20,31 @@ createtests:
     nonexistingUUID:
       uuid:
         - INVALID
-        - PASS
-  # pass for opened should probably be fail when force works, DAOS-1935
+        - FAIL
   ConnectionOpened: !mux
-    #CTopened:
-    #  opened:
-    #    - TRUE
-    #    - PASS
+    # opened=TRUE and force=0 should FAIL (noForce below causes FAIL)
+    CTopened:
+      opened:
+        - TRUE
+        - PASS
     CTclosed:
       opened:
         - FALSE
         - PASS
-  # does not work at the moment, DAOS bug DAOS-1935
   ForceDestroy: !mux
-    #noForce:
-    #  force:
-    #    - 0
-    #    - FAIL
-        validForce:
-          force:
-            - 1
-            - PASS
-    #    randomForce:
-    #      force:
-    #        - 99999999
-    #        - PASS
+    # force=0 and opened=FALSE expected to PASS (delete.py overrides this FAIL)
+    noForce:
+      force:
+        - 0
+        - FAIL
+    validForce:
+      force:
+        - 1
+        - PASS
+    randomForce:
+      force:
+        - 99999999
+        - PASS
   PoolHandles: !mux
     validPH:
       poh:

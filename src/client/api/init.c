@@ -78,6 +78,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_query, sizeof(daos_cont_query_t)},
 	{dc_cont_set_prop, sizeof(daos_cont_set_prop_t)},
 	{dc_cont_update_acl, sizeof(daos_cont_update_acl_t)},
+	{dc_cont_delete_acl, sizeof(daos_cont_delete_acl_t)},
 	{dc_cont_aggregate, sizeof(daos_cont_aggregate_t)},
 	{dc_cont_rollback, sizeof(daos_cont_rollback_t)},
 	{dc_cont_subscribe, sizeof(daos_cont_subscribe_t)},
@@ -95,6 +96,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_tx_abort, sizeof(daos_tx_abort_t)},
 	{dc_tx_open_snap, sizeof(daos_tx_open_snap_t)},
 	{dc_tx_close, sizeof(daos_tx_close_t)},
+	{dc_tx_restart, sizeof(daos_tx_restart_t)},
 
 	/** Object */
 	{dc_obj_register_class, sizeof(daos_obj_register_class_t)},
@@ -102,15 +104,15 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_list_class, sizeof(daos_obj_list_class_t)},
 	{dc_obj_open, sizeof(daos_obj_open_t)},
 	{dc_obj_close, sizeof(daos_obj_close_t)},
-	{dc_obj_punch, sizeof(daos_obj_punch_t)},
-	{dc_obj_punch_dkeys, sizeof(daos_obj_punch_t)},
-	{dc_obj_punch_akeys, sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_task,		sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_dkeys_task,	sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_akeys_task,	sizeof(daos_obj_punch_t)},
 	{dc_obj_query, sizeof(daos_obj_query_t)},
 	{dc_obj_query_key, sizeof(daos_obj_query_key_t)},
 	{dc_obj_sync, sizeof(struct daos_obj_sync_args)},
-	{dc_obj_fetch_shard, sizeof(struct daos_obj_fetch_shard)},
-	{dc_obj_fetch, sizeof(daos_obj_fetch_t)},
-	{dc_obj_update, sizeof(daos_obj_update_t)},
+	{dc_obj_fetch_shard_task,	sizeof(struct daos_obj_fetch_shard)},
+	{dc_obj_fetch_task,		sizeof(daos_obj_fetch_t)},
+	{dc_obj_update_task,		sizeof(daos_obj_update_t)},
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},
 	{dc_obj_list_akey, sizeof(daos_obj_list_akey_t)},
 	{dc_obj_list_rec, sizeof(daos_obj_list_recx_t)},
@@ -155,11 +157,21 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_debug, rc);
 
+	/** set up agent */
+	rc = dc_agent_init();
+	if (rc != 0)
+		D_GOTO(out_hhash, rc);
+
+	/** get CaRT configuration */
+	rc = dc_mgmt_net_cfg(NULL);
+	if (rc != 0)
+		D_GOTO(out_agent, rc);
+
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_hhash, rc);
+		D_GOTO(out_agent, rc);
 	}
 
 	/** set up placement */
@@ -187,16 +199,9 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
-	/** set up agent */
-	rc = dc_agent_init();
-	if (rc != 0)
-		D_GOTO(out_obj, rc);
-
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);
 
-out_obj:
-	dc_obj_fini();
 out_co:
 	dc_cont_fini();
 out_pool:
@@ -207,6 +212,8 @@ out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_agent:
+	dc_agent_fini();
 out_hhash:
 	daos_hhash_fini();
 out_debug:

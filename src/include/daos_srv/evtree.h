@@ -62,7 +62,9 @@ struct evt_desc {
 	/** Magic number for validation */
 	uint32_t			dc_magic;
 	/** The DTX entry in SCM. */
-	umem_off_t			dc_dtx;
+	uint32_t			dc_dtx;
+	/** padding */
+	uint32_t			dc_pad;
 	/** placeholder for csum array buffer */
 	/** csum_count * csum_len (from tree root) is length of csum buf */
 	uint8_t				pt_csum[0];
@@ -97,8 +99,9 @@ struct evt_desc_cbs {
 	 * this method is absent.
 	 */
 	int		(*dc_log_status_cb)(struct umem_instance *umm,
-					    struct evt_desc *desc,
-					    int intent, void *args);
+					    daos_epoch_t epoch,
+					    struct evt_desc *desc, int intent,
+					    void *args);
 	void		 *dc_log_status_args;
 	/** Add a descriptor to undo log */
 	int		(*dc_log_add_cb)(struct umem_instance *umm,
@@ -106,6 +109,7 @@ struct evt_desc_cbs {
 	void		 *dc_log_add_args;
 	/** remove a descriptor to undo log */
 	int		(*dc_log_del_cb)(struct umem_instance *umm,
+					 daos_epoch_t epoch,
 					 struct evt_desc *desc, void *args);
 	void		 *dc_log_del_args;
 };
@@ -120,8 +124,9 @@ struct evt_extent {
  *  gives priority to later overwrites within the same epoch.
  */
 struct evt_rect {
-	struct evt_extent	rc_ex;	/**< extent range */
-	daos_epoch_t		rc_epc;	/**< update epoch */
+	struct evt_extent	rc_ex;		/**< extent range */
+	daos_epoch_t		rc_epc;		/**< update epoch */
+	uint16_t		rc_minor_epc;	/**< minor epoch */
 };
 
 /** A search rectangle to limit scope of a search */
@@ -138,7 +143,7 @@ struct evt_filter {
 
 /** Log format of rectangle */
 #define DF_RECT				\
-	DF_EXT"@"DF_U64"-INF"
+	DF_EXT"@"DF_X64".%d-INF"
 
 /** Expanded extent members for debug log */
 #define DP_EXT(ext)			\
@@ -146,16 +151,16 @@ struct evt_filter {
 
 /** Expanded rectangle members for debug log */
 #define DP_RECT(r)			\
-	DP_EXT(&(r)->rc_ex), (r)->rc_epc
+	DP_EXT(&(r)->rc_ex), (r)->rc_epc, (r)->rc_minor_epc
 
 /** Log format of evtree entry */
 #define DF_ENT				\
-	DF_EXT" from "DF_EXT"@"DF_U64"-INF (%c)"
+	DF_EXT" from "DF_EXT"@"DF_X64".%d-INF (%c)"
 
 /** Expanded format of evtree entry */
 #define DP_ENT(ent)			\
 	DP_EXT(&(ent)->en_sel_ext), DP_EXT(&(ent)->en_ext), (ent)->en_epoch, \
-	evt_debug_print_visibility(ent)
+	(ent)->en_minor_epc, evt_debug_print_visibility(ent)
 
 /** Log format of evtree filter */
 #define DF_FILTER			\
@@ -171,6 +176,8 @@ evt_extent_width(const struct evt_extent *ext)
 {
 	return ext->ex_hi - ext->ex_lo + 1;
 }
+
+#define EVT_MINOR_EPC_MAX	((uint16_t)-1)
 
 /** Return the width of a versioned extent */
 static inline daos_size_t
@@ -194,20 +201,31 @@ struct evt_weight {
 	int64_t				wt_minor; /**< minor weight value */
 };
 
+struct evt_rect_df {
+	/** Epoch of update */
+	uint64_t	rd_epc;
+	/** Length of record */
+	uint64_t	rd_len:48;
+	/** Minor epoch of update */
+	uint64_t	rd_minor_epc:16;
+	/** Low offset */
+	uint64_t	rd_lo;
+};
+
 struct evt_node_entry {
 	/* Rectangle for the entry */
-	struct evt_rect	ne_rect;
+	struct evt_rect_df	ne_rect;
 	/* Offset to child entry
 	 * Intermediate node:	struct evt_node
 	 * Leaf node:		struct evt_desc
 	 */
-	uint64_t	ne_child;
+	uint64_t		ne_child;
 };
 
 /** evtree node: */
 struct evt_node {
 	/** the Minimum Bounding Box (MBR) bounds all its children */
-	struct evt_rect			tn_mbr;
+	struct evt_rect_df		tn_mbr;
 	/** bits to indicate it's a root or leaf */
 	uint16_t			tn_flags;
 	/** number of children or leaf records */
@@ -302,7 +320,9 @@ struct evt_entry {
 	/** pool map version */
 	uint32_t			en_ver;
 	/** Visibility flags for extent */
-	uint32_t			en_visibility;
+	uint16_t			en_visibility;
+	/** minor epoch */
+	uint16_t			en_minor_epc;
 	/** Address of record to insert */
 	bio_addr_t			en_addr;
 	/** update epoch of extent */
@@ -422,7 +442,8 @@ struct evt_policy_ops {
 			     struct evt_node *node,
 			     uint64_t in_off,
 			     const struct evt_entry_in *entry,
-			     bool *mbr_changed);
+			     bool *mbr_changed,
+			     uint8_t **csum_bufp);
 	/**
 	 * move half entries of the current node \a nd_src to the new
 	 * node \a nd_dst.
@@ -509,8 +530,10 @@ int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
  *
  * \param toh		[IN]	The tree open handle
  * \param entry		[IN]	The entry to insert
+ * \param csum_bufp	[OUT]	The pointer for the csum copy location.
  */
-int evt_insert(daos_handle_t toh, const struct evt_entry_in *entry);
+int evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
+	       uint8_t **csum_bufp);
 
 /**
  * Delete an extent \a rect from an opened tree.

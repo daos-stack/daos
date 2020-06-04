@@ -179,6 +179,11 @@ enum daos_cont_props {
 	DAOS_PROP_CO_MAX,
 };
 
+/**
+ * Number of container property types
+ */
+#define DAOS_PROP_CO_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
+
 typedef uint16_t daos_cont_layout_t;
 
 /** container layout type */
@@ -268,6 +273,15 @@ typedef struct {
  */
 daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr);
+
+/**
+ * Free the DAOS property entries.
+ *
+ * \param[in]	prop	propety entries to be freed.
+ */
+void
+daos_prop_entries_free(daos_prop_t *prop);
+
 
 /**
  * Free the DAOS properties.

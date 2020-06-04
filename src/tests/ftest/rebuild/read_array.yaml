@@ -7,8 +7,6 @@ hosts:
     - server-E
   test_clients:
     - client-F
-  server_count: 5
-  client_count: 1
 timeout: 240
 server_config:
   name: daos_server
@@ -17,6 +15,7 @@ pool:
   name: daos_server
   scm_size: 1073741824
   svcn: 2
+  control_method: dmg
 container:
   object_qty: 10
   record_qty: 10

@@ -5,6 +5,8 @@ hosts:
   test_servers:
     - server-A
     - server-B
+    - server-C
+    - server-D
   test_clients:
     - client-C
 timeout: 1800
@@ -22,7 +24,7 @@ pool:
   createset:
     group: daos_server
   createsvc:
-    svcn: 1
+    svcn: 3
   createsize:
     scm_size: 1073741824
     nvme_size: 1073741824

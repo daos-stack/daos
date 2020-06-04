@@ -5,12 +5,187 @@
 System monitoring and telemetry data will be provided as part of the
 control plane and will be documented in a future revision.
 
+### NVMe SSD Health Monitoring
+
+Useful admin dmg commands to query NVMe SSD health:
+
+- Query Per-Server Metadata (SMD): `dmg storage query smd`
+
+Queries persistently stored device and pool metadata tables. The device table
+maps device UUID to attached VOS target IDs. The pool table maps VOS target IDs
+to attached SPDK blob IDs.
+```bash
+$ dmg -l boro-11 storage query smd --devices --pools
+boro-11:10001: connected
+SMD Device List:
+boro-11:10001:
+        Device:
+                UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+                VOS Target IDs: 0 1 2 3
+SMD Pool List:
+boro-11:10001:
+        Pool:
+                UUID: 01b41f76-a783-462f-bbd2-eb27c2f7e326
+                VOS Target IDs: 0 1 3 2
+                SPDK Blobs: 4294967404 4294967405 4294967407 4294967406
+```
+
+- Query Blobstore Health Data: `dmg storage query blobstore-health`
+
+Queries in-memory health data for the SPDK blobstore (i.e, NVMe SSD). This
+includes a subset of the SPDK device health stats, as well as I/O error and
+checksum counters.
+```bash
+$ dmg -l boro-11 storage query blobstore-health
+  --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 -l=boro-11:10001
+boro-11:10001: connected
+Blobstore Health Data:
+boro-11:10001:
+        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+        Read errors: 0
+        Write errors: 0
+        Unmap errors: 0
+        Checksum errors: 0
+        Device Health:
+                Error log entries: 0
+                Media errors: 0
+                Temperature: 289
+                Temperature: OK
+                Available Spare: OK
+                Device Reliability: OK
+                Read Only: OK
+                Volatile Memory Backup: OK
+```
+
+- Query Persistent Device State: `dmg storage query device-state`
+
+Queries the current persistently stored device state of the specified NVMe SSD
+(either NORMAL or FAULTY).
+```bash
+$ dmg storage query device-state --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+-l=boro-11:10001
+boro-11:10001: connected
+Device State Info:
+boro-11:10001:
+        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+        State: NORMAL
+```
+
+- Manually Set Device State to FAULTY: `dmg storage set nvme-faulty`
+
+Allows the admin to manually set the device state of the given device to FAULTY,
+which will trigger faulty device reaction (all targets on the SSD will be
+rebuilt and the SSD will remain in an OUT state until reintegration is
+supported).
+```bash
+$ dmg storage set nvme-faulty --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+-l=boro-11:10001
+boro-11:10001: connected
+Device State Info:
+boro-11:10001:
+        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+        State: FAULTY
+```
+
 ## System Operations
 
-### Full Shutdown and Restart
+The DAOS Control Server acting as the access point records details of DAOS I/O
+Server instances that join the DAOS system. Once an I/O Server has joined the
+DAOS system, it is identified by a unique system "rank". Multiple ranks can
+reside on the same host machine, accessible via the same network address.
 
-Details on how to support proper DAOS server shutdown will be provided
-in a future revision.
+A DAOS system can be shutdown and restarted to perform maintenance and/or
+reboot hosts. Pool data and state will be maintained providing no changes are
+made to the rank's metadata stored on persistent memory.
+
+Storage reformat can also be performed after system shutdown. Pools will be
+removed and storage wiped.
+
+System commands will be handled by the DAOS Server listening at the access point
+address specified as the first entry in the DMG config file "hostlist" parameter.
+See
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+for details.
+
+The "access point" address should be the same as that specified in the server
+config file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+specified when starting `daos_server` instances.
+
+!!! warning
+    Controlled start/stop/reformat have some known limitations.
+    Whilst individual system instances can be stopped, if a subset is restarted,
+    existing pools will not be automatically integrated with restarted instances.
+
+### Query
+
+The system membership can be queried using the command:
+
+`$ dmg system query [--verbose] [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+- `--verbose` flag gives more information on each rank
+
+Output table will provide system rank mappings to host address and instance
+UUID, in addition to rank state.
+
+### Shutdown
+
+When up and running, the entire system can be shutdown with the command:
+
+`$ dmg system stop [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS Control Servers will continue to operate and listen on the management
+network.
+
+### Start
+
+To start the system after a controlled shutdown run the command:
+
+`$ dmg system start [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS I/O Servers will be started.
+
+### Reformat
+
+To reformat the system after a controlled shutdown run the command:
+
+`$ dmg storage format --system [--ranks <rankset>]`
+
+- `--system` flag indicates that the format operation should be performed on
+  provided set of system ranks or all ranks if `--ranks` is omitted.
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS I/O Servers will be started and all DAOS pools will have been removed.
+
+### Manual Fresh Start
+
+To reset the DAOS metadata across all hosts, the system must be reformatted.
+First, ensure all `daos_server` processes on all hosts have been
+stopped, then for each SCM mount specified in the config file
+(`scm_mount` in the `servers` section) umount and wipe FS signatures.
+
+Example illustration with two IO instances specified in the config file:
+
+- `clush -w wolf-[118-121,130-133] umount /mnt/daos1`
+
+- `clush -w wolf-[118-121,130-133] umount /mnt/daos0`
+
+- `clush -w wolf-[118-121,130-133] wipefs -a /dev/pmem1`
+
+- `clush -w wolf-[118-121,130-133] wipefs -a /dev/pmem0`
+
+- Then restart DAOS Servers and format.
 
 ### Fault Domain Maintenance and Reintegration
 
@@ -47,7 +222,7 @@ this target will be rejected and re-routed.
 Once detected, the faulty target or servers (effectively a set of
 targets) must be excluded from each pool membership. This process is
 triggered either manually by the administrator or automatically (see
-next section for more information). Upon exclusion from the pool map,
+the next section for more information). Upon exclusion from the pool map,
 each target starts the collective rebuild process automatically to
 restore data redundancy. The rebuild process is designed to operate
 online while servers continue to process incoming I/O operations from
@@ -63,8 +238,8 @@ current logic relies on CPU cycles on the storage nodes. By default, the
 rebuild process is configured to consume up to 30% of the CPU cycles,
 leaving the other 70% for regular I/O operations.
 
-During the rebuild process, the user can set the throttle to guarantee the
-rebuild will not use more resource than the user setting. The user can
+During the rebuild process, the user can set the throttle to guarantee that
+the rebuild will not use more resources than the user setting. The user can
 only set the CPU cycle for now. For example, if the user set the
 throttle to 50, then the rebuild will at most use 50% of the CPU cycle to do
 the rebuild job. The default rebuild throttle for CPU cycle is 30. This

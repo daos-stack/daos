@@ -58,23 +58,22 @@ RUN yum -y install epel-release; \
         libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
         libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
         make meson nasm ninja-build numactl-devel openssl-devel        \
-        pandoc patch python python-devel python36-devel                \
+        pandoc patch python python-devel python36-devel python-magic   \
         python-pep8 python-pygit2 python2-pygithub python-requests     \
         readline-devel scons sg3_utils ShellCheck yasm pciutils        \
-        valgrind-devel python36-pylint man
+        valgrind-devel python36-pylint man java-1.8.0-openjdk maven
 
 # DAOS specific
 RUN yum -y install \
            python2-avocado python2-avocado-plugins-output-html \
            python2-avocado-plugins-varianter-yaml-to-mux       \
-           yum-plugin-copr python-pathlib                      \
+           python-pathlib                                      \
            ndctl ipmctl e2fsprogs                              \
            python2-clustershell python2-Cython python2-pip     \
            python36-clustershell python36-paramiko             \
-           python36-numpy python36-jira python3-pip;           \
-    yum -y copr enable jhli/ipmctl;                            \
-    yum -y copr enable jhli/safeclib;                          \
-    yum -y install libipmctl-devel openmpi3-devel hwloc-devel
+           python36-numpy python36-jira python3-pip            \
+           fuse3-devel libipmctl-devel openmpi3-devel          \
+           hwloc-devel
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
@@ -82,11 +81,27 @@ RUN pip3 install avocado-framework; \
     pip3 install avocado-framework-plugin-result-html; \
     pip3 install avocado-framework-plugin-varianter-yaml-to-mux
 
+RUN pip install codespell
+
 # Add DAOS user
 ENV USER daos
 ENV PASSWD daos
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
+
+# set maven mirror
+RUN mkdir -p /home/$USER/.m2
+
+RUN echo -e "<settings>\n\
+	<mirrors>\n\
+		<mirror>\n\
+			<id>google-maven-central</id>\n\
+			<name>GCS Maven Central mirror</name>\n\
+			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+			<mirrorOf>central</mirrorOf>\n\
+		</mirror>\n\
+	</mirrors>\n\
+</settings>" > /home/$USER/.m2/settings.xml
 
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
@@ -96,10 +111,10 @@ RUN chown daos.daos /mnt/daos
 # Packages for NVML exist in CentOS, but are
 # unfortunately outdated. The DAOS build system will rebuild those packages.
 ARG JENKINS_URL=""
-ARG QUICKBUILD=1
-ARG CART_COMMIT=""
+ARG QUICKBUILD=false
+ARG QUICKBUILD_DEPS=""
 ARG REPOS=""
-RUN if [ $QUICKBUILD -eq 0 ]; then                                               \
+RUN if $QUICKBUILD; then                                                         \
         echo -e "[repo.dc.hpdd.intel.com_repository_daos-stack-el-7-x86_64-stable-local]\n\
 name=created by dnf config-manager from https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local\n\
 baseurl=https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local\n\
@@ -122,18 +137,13 @@ baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifac
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;          \
         done;                                                                    \
-        pkgs="cart-devel$CART_COMMIT argobots-devel libpmem-devel                \
-              libpmemobj-devel fuse-devel protobuf-c-devel spdk-devel            \
-              fio-3.3-5.el7 libisa-l-devel mercury-devel-1.0.1-21.el7            \
-              openpa-devel libfabric-devel                                       \
-              dpdk-devel";                     \
-        echo "Installing: $pkgs";                                                \
-        yum -y install $pkgs;                                                    \
+        echo "Installing: $QUICKBUILD_DEPS";                                     \
+        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 yum -y install;        \
     fi
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
-RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury,cart-devel,cart,fio
+RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury
 
 # Switch to new user
 #USER $USER
@@ -155,5 +165,3 @@ ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
 ENV CRT_PHY_ADDR_STR="ofi+sockets"
 ENV OFI_INTERFACE=eth0
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
-ENV DAOS_SINGLETON_CLI=1
-ENV CRT_ATTACH_INFO_PATH=/tmp/uri

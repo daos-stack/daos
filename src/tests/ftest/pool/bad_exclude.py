@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,42 +23,20 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 import ctypes
-import agent_utils
-import server_utils
-import write_host_file
-from apricot import TestWithoutServers
-from pydaos.raw import DaosPool, DaosApiError, RankList
 
-class BadExcludeTest(TestWithoutServers):
+from apricot import TestWithServers
+from pydaos.raw import DaosApiError, RankList
+
+
+class BadExcludeTest(TestWithServers):
     """
     Tests target exclude calls passing NULL and otherwise inappropriate
-    parameters.  This can't be done with daosctl, need to use the python API.
+    parameters.  This use the python API.
 
     :avocado: recursive
     """
-
-    def setUp(self):
-        super(BadExcludeTest, self).setUp()
-        self.agent_sessions = None
-        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
-
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir)
-
-        server_group = self.params.get("name",
-                                       '/server_config/',
-                                       'daos_server')
-        self.agent_sessions = agent_utils.run_agent(self,
-                                                    self.hostlist_servers)
-        server_utils.run_server(self, self.hostfile_servers, server_group)
-
-    def tearDown(self):
-        if self.agent_sessions:
-            agent_utils.stop_agent(self.agent_sessions)
-        server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_exclude(self):
         """
@@ -66,14 +44,6 @@ class BadExcludeTest(TestWithoutServers):
 
         :avocado: tags=all,pool,full_regression,tiny,badexclude
         """
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/pool/createmode/')
-        createsetid = self.params.get("setname", '/run/pool/createset/')
-        createsize = self.params.get("size", '/run/pool/createsize/')
-
-        createuid = os.geteuid()
-        creategid = os.getegid()
-
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
         # expected result of the test
@@ -113,52 +83,47 @@ class BadExcludeTest(TestWithoutServers):
         saved_svc = None
         saved_grp = None
         saved_uuid = None
-        pool = None
-        try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
+        self.prepare_pool()
 
-            # trash the the pool service rank list
-            if not svc == 'VALID':
-                self.cancel("skipping this test until DAOS-1931 is fixed")
-                saved_svc = RankList(pool.svc.rl_ranks, pool.svc.rl_nr)
-                pool.svc = None
+        # trash the the pool service rank list
+        if not svc == 'VALID':
+            self.cancel("skipping this test until DAOS-1931 is fixed")
+            saved_svc = RankList(
+                self.pool.pool.svc.rl_ranks, self.pool.pool.svc.rl_nr)
+            self.pool.pool.svc = None
 
+        saved_grp = self.pool.pool.group
+        if connectset == 'NULLPTR':
             # trash the pool group value
-            if connectset == 'NULLPTR':
-                saved_grp = pool.group
-                pool.group = None
+            self.pool.pool.group = None
+        else:
+            self.pool.pool.set_group(connectset)
 
-            # trash the UUID value in various ways
-            if excludeuuid == 'NULLPTR':
-                self.cancel("skipping this test until DAOS-1932 is fixed")
-                ctypes.memmove(saved_uuid, pool.uuid, 16)
-                pool.uuid = 0
-            if excludeuuid == 'CRAP':
-                self.cancel("skipping this test until DAOS-1932 is fixed")
-                ctypes.memmove(saved_uuid, pool.uuid, 16)
-                pool.uuid[4] = 244
+        # trash the UUID value in various ways
+        if excludeuuid == 'NULLPTR':
+            self.cancel("skipping this test until DAOS-1932 is fixed")
+            ctypes.memmove(saved_uuid, self.pool.pool.uuid, 16)
+            self.pool.pool.uuid = 0
+        if excludeuuid == 'CRAP':
+            self.cancel("skipping this test until DAOS-1932 is fixed")
+            ctypes.memmove(saved_uuid, self.pool.pool.uuid, 16)
+            self.pool.pool.uuid[4] = 244
 
-            pool.exclude(targets)
+        try:
+            self.pool.pool.exclude(targets)
 
-            if expected_result in ['FAIL']:
+            if expected_result == 'FAIL':
                 self.fail("Test was expected to fail but it passed.\n")
 
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
-            if expected_result in ['PASS']:
+            if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
         finally:
-            if pool is not None:
-                if saved_svc is not None:
-                    pool.svc = saved_svc
-                if saved_grp is not None:
-                    pool.group = saved_grp
-                if saved_uuid is not None:
-                    ctypes.memmove(pool.uuid, saved_uuid, 16)
-                pool.disconnect()
-                pool.destroy(1)
+            if saved_svc is not None:
+                self.pool.pool.svc = saved_svc
+            if saved_grp is not None:
+                self.pool.pool.group = saved_grp
+            if saved_uuid is not None:
+                ctypes.memmove(self.pool.pool.uuid, saved_uuid, 16)

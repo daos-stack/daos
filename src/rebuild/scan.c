@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,7 +121,8 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 	rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
 			    rebuild_obj_fill_buf, arg);
 	if (rc < 0 || arg->count == 0) {
-		D_DEBUG(DB_REBUILD, "Can not get objects: rc %d\n", rc);
+		D_DEBUG(DB_REBUILD, "Can not get objects: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -136,7 +137,9 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       rpt->rt_coh_uuid, arg->cont_uuid,
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
-				       arg->ephs, arg->shards, arg->count);
+				       arg->ephs, arg->shards, arg->count,
+				       /* Clear containers for add/reint */
+				       rpt->rt_rebuild_op == RB_OP_ADD);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -163,23 +166,32 @@ rebuild_cont_send_cb(daos_handle_t ih, d_iov_t *key_iov,
 	root = val_iov->iov_buf;
 	while (!dbtree_is_empty(root->root_hdl)) {
 		rc = rebuild_obj_send_cb(root, arg);
-		if (rc < 0)
+		if (rc < 0) {
+			D_ERROR("rebuild_obj_send_cb failed: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
+		}
 	}
 
 	rc = dbtree_destroy(root->root_hdl, NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("dbtree_destroy failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
 	/* Some one might insert new record to the tree let's reprobe */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_REBUILD, key_iov,
 			       NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("dbtree_iter_probe failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
 	rc = dbtree_iter_delete(ih, NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("dbtree_iter_delete failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
@@ -232,7 +244,8 @@ rebuild_objects_send_ult(void *data)
 		rc = dbtree_iterate(tls->rebuild_tree_hdl, DAOS_INTENT_REBUILD,
 				    false, rebuild_cont_send_cb, &arg);
 		if (rc < 0) {
-			D_ERROR("dbtree iterate failed: rc %d\n", rc);
+			D_ERROR("dbtree iterate failed: rc "DF_RC"\n",
+				DP_RC(rc));
 			tls->rebuild_pool_status = rc;
 			break;
 		}
@@ -266,7 +279,7 @@ rebuild_scan_done(void *data)
 }
 
 /**
- * The rebuild objects will be gathered into a global objects arrary by
+ * The rebuild objects will be gathered into a global objects array by
  * target id.
  **/
 static int
@@ -318,10 +331,10 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	unsigned int			shard_array[LOCAL_ARRAY_SIZE];
 	unsigned int			*tgts = NULL;
 	unsigned int			*shards = NULL;
-	int				rebuild_nr;
+	int				rebuild_nr = 0;
 	d_rank_t			myrank;
 	int				i;
-	int				rc;
+	int				rc = 0;
 
 	if (rpt->rt_abort) {
 		D_DEBUG(DB_REBUILD, "rebuild is aborted\n");
@@ -356,9 +369,22 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		shards = shard_array;
 	}
 
-	rebuild_nr = pl_obj_find_rebuild(map, &md, NULL, rpt->rt_rebuild_ver,
-					 tgts, shards, rpt->rt_tgts_num,
-					 myrank);
+	if (rpt->rt_rebuild_op == RB_OP_FAIL
+	    || rpt->rt_rebuild_op == RB_OP_DRAIN) {
+		rebuild_nr = pl_obj_find_rebuild(map, &md, NULL,
+						 rpt->rt_rebuild_ver,
+						 tgts, shards,
+						 rpt->rt_tgts_num, myrank);
+	} else if (rpt->rt_rebuild_op == RB_OP_ADD) {
+		rebuild_nr = pl_obj_find_reint(map, &md, NULL,
+					       rpt->rt_rebuild_ver,
+					       tgts, shards,
+					       rpt->rt_tgts_num, myrank);
+	} else {
+		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
+			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
+			 rpt->rt_rebuild_op == RB_OP_ADD);
+	}
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
 
@@ -388,7 +414,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			if (rc)
 				D_GOTO(out, rc);
 		} else {
-			D_DEBUG(DB_REBUILD, "skip "DF_UOID".\n", DP_UOID(oid));
+			D_DEBUG(DB_REBUILD, "rebuild skip "DF_UOID".\n",
+				DP_UOID(oid));
 			rc = 0;
 		}
 	}
@@ -418,19 +445,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	daos_handle_t			coh;
 	int				rc;
 
-	/* resync DTXs' status firstly. */
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
 		D_DEBUG(DB_REBUILD, DF_UUID" already scan\n",
 			DP_UUID(arg->co_uuid));
 		return 0;
-	}
-
-	rc = dtx_resync(iter_param->ip_hdl, rpt->rt_pool_uuid, entry->ie_couuid,
-			rpt->rt_rebuild_ver, true);
-	if (rc) {
-		D_ERROR(DF_UUID" dtx resync failed: rc %d\n",
-			DP_UUID(rpt->rt_pool_uuid), rc);
-		return rc;
 	}
 
 	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
@@ -450,7 +468,6 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			 rebuild_obj_scan_cb, NULL, arg);
 	vos_cont_close(coh);
 
-	/* Since dtx_resync might yield, let's reprobe anyway */
 	*acts |= VOS_ITER_CB_YIELD;
 	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" iterate cont done: rc %d\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid), rc);
@@ -471,14 +488,14 @@ rebuild_scanner(void *data)
 	struct umem_attr		uma;
 	int				rc;
 
-	if (!is_current_tgt_up(rpt)) {
+	if (is_current_tgt_unavail(rpt)) {
 		D_DEBUG(DB_TRACE, DF_UUID" skip scan\n",
 			DP_UUID(rpt->rt_pool_uuid));
 		return 0;
 	}
 
-	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
-		ABT_thread_yield();
+	if (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
+		dss_sleep(daos_fail_value_get() * 1000000);
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
@@ -510,8 +527,10 @@ rebuild_scanner(void *data)
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	arg.rpt = rpt;
 	arg.yield_freq = DEFAULT_YIELD_FREQ;
-	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-			 rebuild_container_scan_cb, NULL, &arg);
+	if (!rebuild_status_match(rpt, PO_COMP_ST_UP)) {
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+				 rebuild_container_scan_cb, NULL, &arg);
+	}
 
 	ds_pool_child_put(child);
 
@@ -535,6 +554,14 @@ rebuild_scan_leader(void *data)
 	struct rebuild_tgt_pool_tracker *rpt = data;
 	struct rebuild_pool_tls	  *tls;
 	int			   rc;
+
+	D_DEBUG(DB_REBUILD, DF_UUID "check resync %u < %u\n",
+		DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_dtx_resync_version,
+		rpt->rt_rebuild_ver);
+
+	/* Wait for dtx resync to finish */
+	while (rpt->rt_pool->sp_dtx_resync_version < rpt->rt_rebuild_ver)
+		ABT_thread_yield();
 
 	rc = dss_thread_collective(rebuild_scanner, rpt, 0, DSS_ULT_REBUILD);
 	if (rc)

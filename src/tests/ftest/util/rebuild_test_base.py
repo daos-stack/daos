@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from command_utils import ObjectWithParameters, BasicParameter
+from command_utils_base import ObjectWithParameters, BasicParameter
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
@@ -67,7 +67,7 @@ class RebuildTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context)
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
     def setup_test_container(self):

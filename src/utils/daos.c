@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <sys/ioctl.h>
 #include <errno.h>
 #include <stdint.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
@@ -42,6 +47,7 @@
 #include "daos_api.h"
 #include "daos_uns.h"
 #include "daos_hdlr.h"
+#include "dfuse_ioctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
@@ -86,6 +92,10 @@ cont_op_parse(const char *str)
 		return CONT_OVERWRITE_ACL;
 	else if (strcmp(str, "update-acl") == 0)
 		return CONT_UPDATE_ACL;
+	else if (strcmp(str, "delete-acl") == 0)
+		return CONT_DELETE_ACL;
+	else if (strcmp(str, "set-owner") == 0)
+		return CONT_SET_OWNER;
 	return -1;
 }
 
@@ -165,9 +175,14 @@ tobytes(const char *str)
 	daos_size_t	 size;
 	char		*end;
 
+	if (str == NULL) {
+		fprintf(stderr, "passed NULL string\n");
+		return 0;
+	}
+
 	size = strtoull(str, &end, 0);
 	/* Prevent negative numbers from turning into unsigned */
-	if (str != NULL && str[0] == '-') {
+	if (str[0] == '-') {
 		fprintf(stderr, "WARNING bytes < 0 (string %s)"
 				"converted to "DF_U64" : using 0 instead\n",
 				str, size);
@@ -473,6 +488,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"entry",	required_argument,	NULL,	'E'},
 		{"user",	required_argument,	NULL,	'u'},
 		{"group",	required_argument,	NULL,	'g'},
+		{"principal",	required_argument,	NULL,	'P'},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -519,7 +535,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	}
 	D_STRNDUP(cmdname, argv[2], strlen(argv[2]));
 	if (cmdname == NULL)
-		return RC_NO_HELP;
+		D_GOTO(out_free, rc = RC_NO_HELP);
 
 	/* Parse command options. Use goto on any errors here
 	 * since some options may result in resource allocation.
@@ -527,6 +543,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
 		case 'G':
+			D_FREE(ap->sysname);
 			D_STRNDUP(ap->sysname, optarg, strlen(optarg));
 			if (ap->sysname == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
@@ -667,6 +684,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (ap->group == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
+		case 'P':
+			D_STRNDUP(ap->principal, optarg, strlen(optarg));
+			if (ap->principal == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
 		case DAOS_PROPERTIES_OPTION:
 			/* parse properties to be set at cont create time */
 			/* alloc max */
@@ -702,7 +724,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	if (ap->c_op != -1 &&
 	    (ap->c_op == CONT_LIST_OBJS ||
 	     ap->c_op == CONT_STAT ||
-	     ap->c_op == CONT_SET_PROP ||
 	     ap->c_op == CONT_DEL_ATTR ||
 	     ap->c_op == CONT_ROLLBACK)) {
 		fprintf(stderr,
@@ -721,6 +742,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	/* Verify pool svc provided */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
+	D_FREE(cmdname);
 	return 0;
 
 out_free:
@@ -750,6 +772,8 @@ out_free:
 		D_FREE(ap->aclfile);
 	if (ap->entry != NULL)
 		D_FREE(ap->entry);
+	if (ap->principal != NULL)
+		D_FREE(ap->principal);
 	D_FREE(cmdname);
 	return rc;
 }
@@ -802,6 +826,32 @@ out:
 }
 
 static int
+call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
+{
+	int fd;
+	int rc;
+
+	fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	if (fd < 0)
+		return ENOENT;
+
+	errno = 0;
+	rc = ioctl(fd, DFUSE_IOCTL_IL, reply);
+	if (rc != 0) {
+		int err = errno;
+
+		close(fd);
+		return err;
+	}
+	close(fd);
+
+	if (reply->fir_version != DFUSE_IOCTL_VERSION)
+		return EIO;
+
+	return 0;
+}
+
+static int
 cont_op_hdlr(struct cmd_args_s *ap)
 {
 	daos_cont_info_t	cont_info;
@@ -818,19 +868,37 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
+		struct dfuse_il_reply il_reply = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
 
-		/* Resolve pool, container UUIDs from path if needed */
+		/* Resolve pool, container UUIDs from path if needed
+		 *
+		 * Firtly check for a unified namespace entry point, then if
+		 * that isn't detected then check for dfuse backing the
+		 * path, and print pool/container/oid for the path.
+		 */
 		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
-			fprintf(stderr, "could not resolve pool, container "
-					"by path: %s\n", ap->path);
-			D_GOTO(out, rc);
+
+			rc = call_dfuse_ioctl(ap->path, &il_reply);
+			if (rc != 0) {
+				fprintf(stderr, "could not resolve pool, "
+					"container by path: %d %s %s\n",
+					rc, strerror(rc), ap->path);
+
+				D_GOTO(out, rc);
+			}
+
+			ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
+			uuid_copy(ap->p_uuid, il_reply.fir_pool);
+			uuid_copy(ap->c_uuid, il_reply.fir_cont);
+			ap->oid = il_reply.fir_oid;
+		} else {
+			ap->type = dattr.da_type;
+			uuid_copy(ap->p_uuid, dattr.da_puuid);
+			uuid_copy(ap->c_uuid, dattr.da_cuuid);
 		}
-		ap->type = dattr.da_type;
-		uuid_copy(ap->p_uuid, dattr.da_puuid);
-		uuid_copy(ap->c_uuid, dattr.da_cuuid);
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
@@ -894,7 +962,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_get_prop_hdlr(ap);
 		break;
 	case CONT_SET_PROP:
-		/* rc = cont_set_prop_hdlr(ap); */
+		rc = cont_set_prop_hdlr(ap);
 		break;
 	case CONT_LIST_ATTRS:
 		rc = cont_list_attrs_hdlr(ap);
@@ -928,6 +996,12 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case CONT_UPDATE_ACL:
 		rc = cont_update_acl_hdlr(ap);
+		break;
+	case CONT_DELETE_ACL:
+		rc = cont_delete_acl_hdlr(ap);
+		break;
+	case CONT_SET_OWNER:
+		rc = cont_set_owner_hdlr(ap);
 		break;
 	default:
 		break;
@@ -1049,8 +1123,63 @@ out:
 	free(str);
 }
 
+#define FIRST_LEVEL_HELP() \
+do { \
+	fprintf(stream, \
+	"usage: daos RESOURCE COMMAND [OPTIONS]\n" \
+	"resources:\n" \
+	"	  pool             pool\n" \
+	"	  container (cont) container\n" \
+	"	  object (obj)     object\n" \
+	"	  version          print command version\n" \
+	"	  help             print this message and exit\n"); \
+	fprintf(stream, "\n"); \
+	fprintf(stream, "use 'daos help RESOURCE' for resource specifics\n"); \
+} while (0)
+
+#define ALL_CONT_CMDS_HELP() \
+do { \
+	fprintf(stream, "\n" \
+	"container (cont) commands:\n" \
+	"	  create           create a container\n" \
+	"	  destroy          destroy a container\n" \
+	"	  list-objects     list all objects in container\n" \
+	"	  list-obj\n" \
+	"	  query            query a container\n" \
+	"	  get-prop         get all container's properties\n" \
+	"	  set-prop         set container's properties\n" \
+	"	  get-acl          get a container's ACL\n" \
+	"	  overwrite-acl    replace a container's ACL\n" \
+	"	  update-acl       add/modify entries in a container's ACL\n" \
+	"	  delete-acl       delete an entry from a container's ACL\n" \
+	"	  set-owner        change the user and/or group that own a container\n" \
+	"	  stat             get container statistics\n" \
+	"	  list-attrs       list container user-defined attributes\n" \
+	"	  del-attr         delete container user-defined attribute\n" \
+	"	  get-attr         get container user-defined attribute\n" \
+	"	  set-attr         set container user-defined attribute\n" \
+	"	  create-snap      create container snapshot (optional name)\n" \
+	"			   at most recent committed epoch\n" \
+	"	  list-snaps       list container snapshots taken\n" \
+	"	  destroy-snap     destroy container snapshots\n" \
+	"			   by name, epoch or range\n" \
+	"	  rollback         roll back container to specified snapshot\n"); \
+	fprintf(stream, "\n"); \
+	fprintf(stream, "use 'daos help cont|container COMMAND' for command specific options\n"); \
+} while (0)
+
+#define ALL_BUT_CONT_CREATE_OPTS_HELP() \
+do { \
+	fprintf(stream, \
+	"container options (query, and all commands except create):\n" \
+	"	  <pool options>   with --cont use: (--pool, --sys-name, --svc)\n" \
+	"	  <pool options>   with --path use: (--sys-name, --svc)\n" \
+	"	--cont=UUID        (mandatory, or use --path)\n" \
+	"	--path=PATHSTR     (mandatory, or use --cont)\n"); \
+} while (0)
+
 static int
-help_hdlr(struct cmd_args_s *ap)
+help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 {
 	FILE *stream;
 
@@ -1060,135 +1189,145 @@ help_hdlr(struct cmd_args_s *ap)
 
 	fprintf(stream, "daos command (v%s)\n", DAOS_VERSION);
 
-	fprintf(stream,
-"usage: daos RESOURCE COMMAND [OPTIONS]\n"
-"resources:\n"
-"	  pool             pool\n"
-"	  container (cont) container\n"
-"	  version          print command version\n"
-"	  help             print this message and exit\n");
+	if (argc <= 2) {
+		FIRST_LEVEL_HELP();
+	} else if (strcmp(argv[2], "pool") == 0) {
+		fprintf(stream, "\n"
+		"pool commands:\n"
+		"	  list-containers  list all containers in pool\n"
+		"	  list-cont\n"
+		"	  query            query a pool\n"
+		"	  stat             get pool statistics\n"
+		"	  list-attrs       list pool user-defined attributes\n"
+		"	  get-attr         get pool user-defined attribute\n");
 
-	fprintf(stream, "\n"
-"pool commands:\n"
-"	  list-containers  list all containers in pool\n"
-"	  list-cont\n"
-"	  query            query a pool\n"
-"	  stat             get pool statistics\n"
-"	  list-attrs       list pool user-defined attributes\n"
-"	  get-attr         get pool user-defined attribute\n");
+		fprintf(stream,
+		"pool options:\n"
+		"	--pool=UUID        pool UUID\n"
+		"	--sys-name=STR     DAOS system name context for servers (\"%s\")\n"
+		"	--sys=STR\n"
+		"	--svc=RANKS        pool service replicas like 1,2,3\n"
+		"	--attr=NAME        pool attribute name to get\n",
+			default_sysname);
 
-	fprintf(stream,
-"pool options:\n"
-"	--pool=UUID        pool UUID\n"
-"	--sys-name=STR     DAOS system name context for servers (\"%s\")\n"
-"	--sys=STR\n"
-"	--svc=RANKS        pool service replicas like 1,2,3\n"
-"	--attr=NAME        pool attribute name to get\n",
-	default_sysname);
+	} else if (strcmp(argv[2], "container") == 0 ||
+		   strcmp(argv[2], "cont") == 0) {
+		if (argc == 3) {
+			ALL_CONT_CMDS_HELP();
+		} else if (strcmp(argv[3], "create") == 0) {
+			fprintf(stream,
+			"container options (create by UUID):\n"
+			"	  <pool options>   (--pool, --sys-name, --svc)\n"
+			"	--cont=UUID        (optional) container UUID (or generated)\n"
+			"container options (create and link to namespace path):\n"
+			"	  <pool/cont opts> (--pool, --sys-name, --svc, --cont [optional])\n"
+			"	--path=PATHSTR     container namespace path\n"
+			"container create common optional options:\n"
+			"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
+			"	--oclass=OCLSSTR   container object class\n"
+			"			   (");
+			/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */
+			print_oclass_names_list(stream);
+			fprintf(stream, ")\n"
+			"	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
+			"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
+			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
+			"			   supported prop names are label, cksum,\n"
+			"				cksum_size, srv_cksum, rf\n"
+			"			   label value can be any string\n"
+			"			   cksum supported values are off, crc[16,32,64], sha1\n"
+			"			   cksum_size can be any size\n"
+			"			   srv_cksum values can be on, off\n"
+			"			   rf supported values are [0-4]\n"
+			"	--acl-file=PATH    input file containing ACL\n"
+			"	--user=ID          user who will own the container.\n"
+			"			   format: username@[domain]\n"
+			"			   default is the effective user\n"
+			"	--group=ID         group who will own the container.\n"
+			"			   format: groupname@[domain]\n"
+			"			   default is the effective group\n");
+		} else if (strcmp(argv[3], "destroy") == 0) {
+			fprintf(stream,
+			"container options (destroy):\n"
+			"	--force            destroy container regardless of state\n");
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
+		} else if (strcmp(argv[3], "get-attr") == 0 ||
+			   strcmp(argv[3], "set-attr") == 0 ||
+			   strcmp(argv[3], "del-attr") == 0) {
+			fprintf(stream,
+			"container options (attribute-related):\n"
+			"	--attr=NAME        container attribute name to set, get, del\n"
+			"	--value=VALUESTR   container attribute value to set\n");
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
+		} else if (strcmp(argv[3], "create-snap") == 0 ||
+			   strcmp(argv[3], "destroy-snap") == 0 ||
+			   strcmp(argv[3], "rollback") == 0) {
+			fprintf(stream,
+			"container options (snapshot and rollback-related):\n"
+			"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
+			"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
+			"	--epcrange=B-E     container epoch range (destroy-snap)\n");
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
+		} else if (strcmp(argv[3], "set-prop") == 0) {
+			fprintf(stream,
+			"container options (set-prop):\n"
+			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
+			"			   supported prop names: label\n"
+			"			   label value can be any string\n");
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
+		} else if (strcmp(argv[3], "get-acl") == 0 ||
+			   strcmp(argv[3], "overwrite-acl") == 0 ||
+			   strcmp(argv[3], "update-acl") == 0 ||
+			   strcmp(argv[3], "delete-acl") == 0) {
+			fprintf(stream,
+			"container options (ACL-related):\n"
+			"	--acl-file=PATH    input file containing ACL (overwrite-acl, "
+			"			   update-acl)\n"
+			"	--entry=ACE        add or modify a single ACL entry (update-acl)\n"
+			"	--principal=ID     principal of entry (delete-acl)\n"
+			"			   for users: u:name@[domain]\n"
+			"			   for groups: g:name@[domain]\n"
+			"			   special principals: OWNER@, GROUP@, EVERYONE@\n"
+			"	--verbose          verbose mode (get-acl)\n"
+			"	--outfile=PATH     write ACL to file (get-acl)\n");
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
+		} else if (strcmp(argv[3], "set-owner") == 0) {
+			fprintf(stream,
+			"container options (set-owner):\n"
+			"	--user=ID          user who will own the container.\n"
+			"			   format: username@[domain]\n"
+			"	--group=ID         group who will own the container.\n"
+			"			   format: groupname@[domain]\n");
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
+		} else if (strcmp(argv[3], "list-objects") == 0 ||
+			   strcmp(argv[3], "list-obj") == 0 ||
+			   strcmp(argv[3], "query") == 0 ||
+			   strcmp(argv[3], "get-prop") == 0 ||
+			   strcmp(argv[3], "stat") == 0 ||
+			   strcmp(argv[3], "list-attrs") == 0 ||
+			   strcmp(argv[3], "list-snaps") == 0) {
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
+		} else {
+			ALL_CONT_CMDS_HELP();
+		}
+	} else if (strcmp(argv[2], "obj") == 0 ||
+		   strcmp(argv[2], "object") == 0) {
+		fprintf(stream, "\n"
+		"object (obj) commands:\n"
+		"	  query            query an object's layout\n"
+		"	  list-keys        list an object's keys\n"
+		"	  dump             dump an object's contents\n");
 
-	fprintf(stream, "\n"
-"container (cont) commands:\n"
-"	  create           create a container\n"
-"	  destroy          destroy a container\n"
-"	  list-objects     list all objects in container\n"
-"	  list-obj\n"
-"	  query            query a container\n"
-"	  get-acl          get a container's ACL\n"
-"	  overwrite-acl    replace a container's ACL\n"
-"	  update-acl       add/modify entries in a container's ACL\n"
-"	  stat             get container statistics\n"
-"	  list-attrs       list container user-defined attributes\n"
-"	  del-attr         delete container user-defined attribute\n"
-"	  get-attr         get container user-defined attribute\n"
-"	  set-attr         set container user-defined attribute\n"
-"	  create-snap      create container snapshot (optional name)\n"
-"			   at most recent committed epoch\n"
-"	  list-snaps       list container snapshots taken\n"
-"	  destroy-snap     destroy container snapshots\n"
-"			   by name, epoch or range\n"
-"	  rollback         roll back container to specified snapshot\n");
+		fprintf(stream,
+		"object (obj) options:\n"
+		"	  <pool options>   (--pool, --sys-name, --svc)\n"
+		"	  <cont options>   (--cont)\n"
+		"	--oid=HI.LO        object ID\n");
 
-#if 0
-	fprintf(stream,
-"container (cont) options:\n"
-"	  <pool options>   (--pool, --sys-name, --svc)\n"
-"	--cont=UUID        container UUID\n"
-"	--attr=NAME        container attribute name to set, get, del\n"
-"	--value=VALUESTR   container attribute value to set\n"
-"	--path=PATHSTR     container namespace path\n"
-"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
-"	--oclass=OCLSSTR   container object class\n"
-"			   (tiny, small, large, R2, R2S, repl_max)\n"
-"	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
-"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
-"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
-"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
-"	--eprange=B-E      container epoch range (destroy-snap)\n"
-"	--force            destroy container regardless of state\n");
-#endif
+	} else {
+		FIRST_LEVEL_HELP();
+	}
 
-	fprintf(stream,
-"container options (create by UUID):\n"
-"	  <pool options>   (--pool, --sys-name, --svc)\n"
-"	--cont=UUID        (optional) container UUID (or generated)\n"
-"container options (create and link to namespace path):\n"
-"	  <pool/cont opts> (--pool, --sys-name, --svc, --cont [optional])\n"
-"	--path=PATHSTR     container namespace path\n"
-"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
-"	--oclass=OCLSSTR   container object class\n"
-"			   (");
-	/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */
-	print_oclass_names_list(stream);
-	fprintf(stream, ")\n"
-"	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
-"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
-"	--properties=<name>:<value>[,<name>:<value>,...]\n"
-"			   supported prop names are label, cksum,\n"
-"				cksum_size, srv_cksum, rf\n"
-"			   label value can be any string\n"
-"			   cksum supported values are off, crc[16,32,64], sha1\n"
-"			   cksum_size can be any size\n"
-"			   srv_cksum values can be on, off\n"
-"			   rf supported values are [0-4]\n"
-"	--acl-file=PATH    input file containing ACL\n"
-"	--user=ID          user who will own the container.\n"
-"			   format: username@[domain]\n"
-"			   default is the effective user\n"
-"	--group=ID         group who will own the container.\n"
-"			   format: groupname@[domain]\n"
-"			   default is the effective group\n"
-"container options (destroy):\n"
-"	--force            destroy container regardless of state\n"
-"container options (query, and all commands except create):\n"
-"	  <pool options>   with --cont use: (--pool, --sys-name, --svc)\n"
-"	  <pool options>   with --path use: (--sys-name, --svc)\n"
-"	--cont=UUID        (mandatory, or use --path)\n"
-"	--path=PATHSTR     (mandatory, or use --cont)\n"
-"container options (attribute-related):\n"
-"	--attr=NAME        container attribute name to set, get, del\n"
-"	--value=VALUESTR   container attribute value to set\n"
-"container options (snapshot and rollback-related):\n"
-"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
-"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
-"	--eprange=B-E      container epoch range (destroy-snap)\n"
-"container options (ACL-related):\n"
-"	--acl-file=PATH    input file containing ACL (overwrite-acl, "
-"			   update-acl)\n"
-"	--entry=ACE        add or modify a single ACL entry (update-acl)\n"
-"	--verbose          verbose mode (get-acl)\n"
-"	--outfile=PATH     write ACL to file (get-acl)\n");
-
-	fprintf(stream, "\n"
-"object (obj) commands:\n"
-"	  query            query an object's layout\n"
-"	  list-keys        list an object's keys\n"
-"	  dump             dump an object's contents\n");
-
-	fprintf(stream,
-"object (obj) options:\n"
-"	  <pool options>   (--pool, --sys-name, --svc)\n"
-"	  <cont options>   (--cont)\n"
-"	--oid=HI.LO        object ID\n");
 	return 0;
 }
 
@@ -1202,11 +1341,17 @@ main(int argc, char *argv[])
 	/* argv[1] is RESOURCE or "help" or "version";
 	 * argv[2] if provided is a resource-specific command
 	 */
-	if (argc < 2 || strcmp(argv[1], "help") == 0)
-		hdlr = help_hdlr;
-	else if (strcmp(argv[1], "version") == 0) {
+	if (argc == 2 && strcmp(argv[1], "version") == 0) {
 		fprintf(stdout, "daos version %s\n", DAOS_VERSION);
 		return 0;
+	} else if (argc < 2 || strcmp(argv[1], "help") == 0) {
+		dargs.ostream = stdout;
+		help_hdlr(argc, argv, &dargs);
+		return 0;
+	} else if (argc <= 2) {
+		dargs.ostream = stdout;
+		help_hdlr(argc, argv, &dargs);
+		return 2;
 	} else if ((strcmp(argv[1], "container") == 0) ||
 		 (strcmp(argv[1], "cont") == 0))
 		hdlr = cont_op_hdlr;
@@ -1218,14 +1363,8 @@ main(int argc, char *argv[])
 
 	if (hdlr == NULL) {
 		dargs.ostream = stderr;
-		help_hdlr(&dargs);
+		help_hdlr(argc, argv, &dargs);
 		return 2;
-	}
-
-	if (hdlr == help_hdlr) {
-		dargs.ostream = stdout;
-		help_hdlr(&dargs);
-		return 0;
 	}
 
 	rc = daos_init();
@@ -1240,7 +1379,7 @@ main(int argc, char *argv[])
 		fprintf(stderr, "error parsing command line arguments\n");
 		if (rc > 0) {
 			dargs.ostream = stderr;
-			help_hdlr(&dargs);
+			help_hdlr(argc, argv, &dargs);
 		}
 		daos_fini();
 		return -1;
@@ -1252,6 +1391,10 @@ main(int argc, char *argv[])
 	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
 	d_rank_list_free(dargs.mdsrv);
 
+	D_FREE(dargs.mdsrv_str);
+	D_FREE(dargs.sysname);
+	D_FREE(dargs.path);
+
 	daos_fini();
 
 	if (rc < 0)
@@ -1259,7 +1402,7 @@ main(int argc, char *argv[])
 	else if (rc > 0) {
 		printf("rc: %d\n", rc);
 		dargs.ostream = stderr;
-		help_hdlr(&dargs);
+		help_hdlr(argc, argv, &dargs);
 		return 2;
 	}
 

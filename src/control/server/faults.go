@@ -25,8 +25,13 @@ package server
 import (
 	"fmt"
 
+	"github.com/dustin/go-humanize"
+
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -63,7 +68,60 @@ var (
 		"no DAOS IO Servers specified in configuration",
 		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
 	)
+	FaultIommuDisabled = serverFault(
+		code.ServerIommuDisabled,
+		"no IOMMU detected while running as non-root user with NVMe devices",
+		"enable IOMMU per the DAOS Admin Guide or run daos_server as root",
+	)
+	FaultHarnessNotStarted = serverFault(
+		code.ServerHarnessNotStarted,
+		fmt.Sprintf("%s harness not started", DataPlaneName),
+		"retry the operation or check server logs for more details",
+	)
+	FaultDataPlaneNotStarted = serverFault(
+		code.ServerDataPlaneNotStarted,
+		fmt.Sprintf("%s instance not started or not responding on dRPC", DataPlaneName),
+		"retry the operation or check server logs for more details",
+	)
 )
+
+func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
+	return serverFault(
+		code.ServerInstancesNotStopped,
+		fmt.Sprintf("%s not supported when rank %d is running", action, rank),
+		fmt.Sprintf("retry %s operation after stopping rank %d", action, rank),
+	)
+}
+
+func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolNvmeTooSmall,
+		fmt.Sprintf("requested NVMe capacity (%s) is too small (min %s)",
+			humanize.IBytes(reqBytes),
+			humanize.IBytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("NVMe capacity should be larger than %s",
+			humanize.IBytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
+	)
+}
+
+func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolScmTooSmall,
+		fmt.Sprintf("requested SCM capacity (%s) is too small (min %s)",
+			humanize.IBytes(reqBytes),
+			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("SCM capacity should be larger than %s",
+			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+	)
+}
+
+func FaultInsufficientFreeHugePages(free, requested int) *fault.Fault {
+	return serverFault(
+		code.ServerInsufficientFreeHugePages,
+		fmt.Sprintf("requested %d hugepages; got %d", requested, free),
+		"reboot the system or manually clear /dev/hugepages as appropriate",
+	)
+}
 
 func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 	return serverFault(
@@ -74,24 +132,10 @@ func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 }
 
 func FaultBdevNotFound(bdevs []string) *fault.Fault {
-	plural := ""
-	if len(bdevs) > 1 {
-		plural = "s"
-	}
-
 	return serverFault(
 		code.ServerBdevNotFound,
-		fmt.Sprintf("NVMe SSD%s %v not found", plural, bdevs),
-		fmt.Sprintf("check SSD%s %v that are specified in server config "+
-			"exist and are accessible by SPDK", plural, bdevs),
-	)
-}
-
-func FaultBdevFormatSkipped(instanceIdx uint32) *fault.Fault {
-	return serverFault(
-		code.ServerBdevFormatSkipped,
-		fmt.Sprintf("NVMe format skipped on instance %d as SCM format did not complete", instanceIdx),
-		fmt.Sprintf("resolve SCM formatting issues on instance %d", instanceIdx),
+		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
+		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
 	)
 }
 

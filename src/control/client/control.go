@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,7 +63,10 @@ func (c *control) logger() logging.Logger {
 // It takes address and port in a string.
 //	addr: address and port number separated by a ":"
 func (c *control) connect(addr string, cfg *security.TransportConfig) (err error) {
-	var opts []grpc.DialOption
+	opts := []grpc.DialOption{
+		streamErrorInterceptor(),
+		unaryErrorInterceptor(),
+	}
 
 	creds, err := security.DialOptionForTransportConfig(cfg)
 	if err != nil {

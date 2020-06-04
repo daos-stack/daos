@@ -30,6 +30,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -39,7 +40,7 @@ import (
 
 const (
 	defaultUnmountFlags = 0
-	defaultMountFlags   = 0
+	defaultMountFlags   = unix.MS_NOATIME
 
 	defaultMountPointPerms = 0700
 
@@ -260,7 +261,13 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	// TODO: Think about a way to allow for some kind of progress
 	// callback so that the user has some visibility into long-running
 	// format operations (very large devices).
-	args := []string{device}
+	args := []string{
+		"-m", "0", // don't reserve blocks for super-user
+		"-E", "lazy_itable_init=0,lazy_journal_init=0", // disable lazy initialization (hurts perf)
+		"-O", "bigalloc", // bigalloc with 1M cluster size (reduce ext4 metadata overhead)
+		"-C", "1M",
+		device, // device always comes last
+	}
 	if force {
 		args = append([]string{"-F"}, args...)
 	}

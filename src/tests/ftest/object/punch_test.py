@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosContainer, DaosApiError
+
 
 class PunchTest(TestWithServers):
     """
@@ -35,27 +35,13 @@ class PunchTest(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
+        super(PunchTest, self).setUp()
+        self.prepare_pool()
+
         try:
-            super(PunchTest, self).setUp()
-
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/pool/createmode/')
-            createsetid = self.params.get("setname", '/run/pool/createset/')
-            createsize = self.params.get("size", '/run/pool/createsize/')
-
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-            self.pool.connect(1 << 1)
-
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
 
             # now open it
             self.container.open()
@@ -77,10 +63,13 @@ class PunchTest(TestWithServers):
             dkey = "this is the dkey"
             akey = "this is the akey"
             tx_handle = self.container.get_new_tx()
+            print("Created a new TX for punch dkey test")
 
             obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
                                               akey, obj_cls=1, txn=tx_handle)
+            print("Committing the TX for punch dkey test")
             self.container.commit_tx(tx_handle)
+            print("Committed the TX for punch dkey test")
 
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
@@ -101,6 +90,9 @@ class PunchTest(TestWithServers):
             pass
 
         try:
+            self.container.close_tx(tx_handle)
+            print("Closed TX for punch dkey test")
+
             # now punch this data
             obj.punch_dkeys(0, [dkey])
 
@@ -127,9 +119,12 @@ class PunchTest(TestWithServers):
                      ("this is akey 2", "this is data value 2"),
                      ("this is akey 3", "this is data value 3")]
             tx_handle = self.container.get_new_tx()
+            print("Created a new TX for punch akey test")
             obj = self.container.write_multi_akeys(dkey, data1, obj_cls=1,
                                                    txn=tx_handle)
+            print("Committing the TX for punch akey test")
             self.container.commit_tx(tx_handle)
+            print("Committed the TX for punch dkey test")
 
             # read back the 1st epoch's data and check 1 value just to make sure
             # everything is on the up and up
@@ -153,6 +148,9 @@ class PunchTest(TestWithServers):
             print(excep)
 
         try:
+            self.container.close_tx(tx_handle)
+            print("Closed TX for punch akey test")
+
             # now punch the object without a tx
             obj.punch_akeys(0, dkey, [data1[1][0]])
 
@@ -175,9 +173,12 @@ class PunchTest(TestWithServers):
             dkey = "this is the dkey"
             akey = "this is the akey"
             tx_handle = self.container.get_new_tx()
+            print("Created a new TX for punch obj test")
             obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
                                               akey, obj_cls=1, txn=tx_handle)
+            print("Committing the TX for punch obj test")
             self.container.commit_tx(tx_handle)
+            print("Committed the TX for punch obj test")
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
                                                   obj, txn=tx_handle)
@@ -197,6 +198,9 @@ class PunchTest(TestWithServers):
             print(excep)
 
         try:
+            self.container.close_tx(tx_handle)
+            print("Closed TX for punch obj test")
+
             obj.punch(0)
 
         # expecting it to work without a tx

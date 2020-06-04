@@ -19,12 +19,12 @@ $ dmg pool create --scm-size=xxG --nvme-size=yyT
 This command creates a pool distributed across the DAOS servers with a
 target size on each server with xxGB of SCM and yyTB of NVMe storage.
 The actual space allocated will be a base-2 representation for SCM
-(i.e. 20GB will be interpreted as 20GiB == `20*2^30` bytes) and base-10
+(i.e., 20GB will be interpreted as 20GiB == `20*2^30` bytes) and base-10
 representation for NVMe (i.e. 20GB will be interpreted as `20*10^9`
-bytes) following convention of units for memory and storage capacity.
+bytes) following the convention of units for memory and storage capacity.
 The UUID allocated to the newly created pool is printed to stdout
-(referred as ${puuid}) as well as the rank where the pool service is
-located (referred as ${svcl}).
+(referred to as ${puuid}) as well as the rank where the pool service is
+located (referred to as ${svcl}).
 
 ```bash
 $ dmg pool create --help
@@ -58,6 +58,11 @@ two pool service replica on rank 0 and 1.
 ```bash
 $ dmg pool destroy --pool=${puuid}
 ```
+**To evict handles/connections to a pool:**
+
+```bash
+$ dmg pool evict --pool=${puuid}
+`
 
 **To see a list of the pools in your DAOS system:**
 
@@ -83,100 +88,42 @@ a106d667-5c5d-4d6f-ac3a-89099196c41a	0
 At creation time, a list of pool properties can be specified through the
 API (not supported by the tool yet):
 
--   DAOS_PROP_CO_LABEL is a string that the administrator can
-    associate with a pool. e.g., project A, project B, IO500 test
-    pool
-
--   DAOS_PROP_PO_ACL is the access control list (ACL) associated with
-    the pool
-
--   DAOS_PROP_PO_SPACE_RB is the space to be reserved on each target
-    for rebuild purpose.
-
--   DAOS_PROP_PO_SELF_HEAL defines whether the pool wants
-    automatically-trigger, or manually-triggered self-healing.
-
--   DAOS_PROP_PO_RECLAIM is used to tune the space reclaim strategy
-    based on time interval, batched commits or snapshot creation.
+| **Pool Property**        | **Description** |
+| ------------------------ | --------------- |
+| `DAOS_PROP_PO_LABEL`<img width=80/>| A string that the administrator can associate with a pool.  e.g., project A, project B, IO500 test pool|
+| `DAOS_PROP_PO_ACL`       | Access control list (ACL) associated with the pool|
+| `DAOS_PROP_PO_SPACE_RB`  | Space reserved on each target for rebuild purpose|
+| `DAOS_PROP_PO_SELF_HEAL` | Define whether the pool wants automatically-trigger or manually-triggered self-healing|
+| `DAOS_PROP_PO_RECLAIM`   | Tune space reclaim strategy based on time interval, batched commits or snapshot creation|
 
 While those pool properties are currently stored persistently with pool
 metadata, many of them are still under development. Moreover, the
-ability to modify some of those properties on an existing pool will also
+ability to modify some of those properties on an existing pool will
 be provided in a future release.
 
-## Pool Access Control Lists
+## Access Control Lists
 
-User and group access for pools is controlled by Access Control Lists (ACLs).
-A DAOS ACL is a list of zero or more Access Control Entries (ACEs). ACEs are
-the individual rules applied to each access decision.
+Client user and group access for pools are controlled by
+[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
+Most pool-related tasks are performed using the DMG administrative tool, which
+is authenticated by the administrative certificate rather than user-specific
+credentials.
 
-If no ACL is provided when creating the pool, the default ACL grants read and
-write access to the pool's owner-user and owner-group.
+Access-controlled client pool accesses include:
 
-### Access Control Entries
+* Connecting to the pool.
 
-ACEs are designated by a colon-separated string format:
-`TYPE:FLAGS:IDENTITY:PERMISSIONS`
+* Querying the pool.
 
-Available values for these fields:
+* Creating containers in the pool.
 
-* TYPE: Allow (A)
-* FLAGS: Group (G)
-* IDENTITY: See below
-* PERMISSIONS: Read (r), Write (w)
+* Deleting containers in the pool.
 
-#### Identity
+This is reflected in the set of supported
+[pool permissions](https://daos-stack.github.io/overview/security/#permissions).
 
-The identity (also called the principal) is specified in the name@domain format.
-The domain should be left off if the name is a user/group on the local domain.
-Currently, this is the only case supported by DAOS.
-
-There are three special identities, `OWNER@`, `GROUP@` and `EVERYONE@`,
-which align with User, Group, and Other from traditional POSIX permission bits.
-When providing them in the ACE string format, they must be spelled exactly as
-written here, in uppercase with no domain appended.
-
-#### Examples
-
-* `A::daos_user@:rw`
-  * Allow the UNIX user named daos_user to have read-write access
-* `A:G:project_users@:r`
-  * Allow anyone in the UNIX group project_users to have read-only access
-* `A::EVERYONE@:r`
-  * Allow any user not covered by other rules to have read-only access
-
-### Enforcement
-
-Access Control Entries (ACEs) will be enforced in the following order:
-
-* Owner-User
-* Named users
-* Owner-Group and named groups
-* Everyone
-
-In general, enforcement will be based on the first match, ignoring
-lower-priority entries. For example, if the user has an ACE for their user
-identity, they will not receive the permissions for any of their groups, even if
-those group entries have broader permissions than the user entry does. The user
-is expected to match at most one user entry.
-
-If no matching user entry is found, but entries match one or more of the user's
-groups, enforcement will be based on the union of the permissions of all
-matching groups.
-
-By default, if a user matches no ACEs in the list, access will be denied.
-
-### Limitations
-
-The maximum length of the ACE list in a DAOS ACL structure is 64KiB.
-
-To calculate the actual length of an ACL, use the following formula for each
-ACE:
-
-* The base size of an ACE is 256B.
-* If the ACE principal is *not* one of the special principals:
-  * Add the length of the identity string + 1.
-  * If that value is not 64B aligned, round up to the nearest 64B boundary.
+A user must be able to connect to the pool in order to access any containers
+inside, regardless of their permissions on those containers.
 
 ### Creating a pool with a custom ACL
 
@@ -186,20 +133,9 @@ To create a pool with a custom ACL:
 $ dmg pool create --scm-size <size> --acl-file <path>
 ```
 
-The ACL file is expected to be a text file with one ACE listed on each line. For
-example:
+The ACL file format is detailed in the [here](https://daos-stack.github.io/overview/security/#acl-file).
 
-```bash
-# Entries:
-A::OWNER@:rw
-A:G:GROUP@:rw
-# Everyone should be allowed to read
-A::EVERYONE@:r
-```
-
-You may add comments to the ACL file by starting the line with `#`.
-
-### Displaying a pool's ACL
+### Displaying a Pool's ACL
 
 To view a pool's ACL:
 
@@ -208,9 +144,9 @@ $ dmg pool get-acl --pool <UUID>
 ```
 
 The output is in the same string format used in the ACL file during creation,
-with one ACE per line.
+with one Access Control Entry (i.e., ACE) per line.
 
-### Modifying a pool's ACL
+### Modifying a Pool's ACL
 
 For all of these commands using an ACL file, the ACL file must be in the format
 noted above for pool creation.
@@ -223,7 +159,7 @@ To replace a pool's ACL with a new ACL:
 $ dmg pool overwrite-acl --pool <UUID> --acl-file <path>
 ```
 
-#### Updating entries in an existing ACL
+#### Adding and Updating ACEs
 
 To add or update multiple entries in an existing pool ACL:
 
@@ -241,24 +177,21 @@ If there is no existing entry for the principal in the ACL, the new entry is
 added to the ACL. If there is already an entry for the principal, that entry
 is replaced with the new one.
 
-#### Removing an entry from the ACL
+#### Removing an ACE
 
-To delete an entry for a given principal, or identity, in an existing pool ACL:
+To delete an entry for a given principal in an existing pool ACL:
 
 ```bash
 $ dmg pool delete-acl --pool <UUID> --principal <principal>
 ```
 
-The principal corresponds to the principal/identity portion of an ACE that was
+The principal corresponds to the principal portion of an ACE that was
 set during pool creation or a previous pool ACL operation. For the delete
 operation, the principal argument must be formatted as follows:
 
 * Named user: `u:username@`
 * Named group: `g:groupname@`
-* Special principals:
-  * `OWNER@`
-  * `GROUP@`
-  * `EVERYONE@`
+* Special principals: `OWNER@`, `GROUP@`, and `EVERYONE@`
 
 The entry for that principal will be completely removed. This does not always
 mean that the principal will have no access. Rather, their access to the pool
@@ -277,6 +210,7 @@ $ dmg pool query --pool <UUID>
 
 Below is the output for a pool created with SCM space only.
 
+```bash
     pool=47293abe-aa6f-4147-97f6-42a9f796d64a
     Pool 47293abe-aa6f-4147-97f6-42a9f796d64a, ntarget=64, disabled=8
     Pool space info:
@@ -288,6 +222,7 @@ Below is the output for a pool created with SCM space only.
         Total size: 0
         Free: 0, min:0, max:0, mean:0
     Rebuild done, 10 objs, 1026 recs
+```
 
 The total and free sizes are the sum across all the targets whereas
 min/max/mean gives information about individual targets. A min value
@@ -295,6 +230,7 @@ close to 0 means that one target is running out of space.
 
 The example below shows a rebuild in progress and NVMe space allocated.
 
+```bash
     pool=95886b8b-7eb8-454d-845c-fc0ae0ba5671
     Pool 95886b8b-7eb8-454d-845c-fc0ae0ba5671, ntarget=64, disabled=8
     Pool space info:
@@ -306,6 +242,7 @@ The example below shows a rebuild in progress and NVMe space allocated.
         Total size: 56GB
         Free: 28GB, min:470MB, max:512MB, mean:509MB
     Rebuild busy, 75 objs, 9722 recs
+```
 
 Additional status and telemetry data are planned to be exported through
 the management API and tool and will be documented here once available.
@@ -314,10 +251,55 @@ the management API and tool and will be documented here once available.
 
 ### Target Exclusion and Self-Healing
 
+An operator can exclude one or more targets from a specific DAOS pool using the rank
+the target resides on as well as the target idx on that rank. If a target idx list is
+not provided then all targets on the rank will be excluded. Excluding a target will
+automatically start the rebuild process.
+
 **To exclude a target from a pool:**
 
+```bash
+$ dmg pool exclude --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
 ```
-$ dmg_old exclude --svc=${svcl} --pool=${puuid} --target=${rank}
+
+The pool target exclude command accepts 3 parameters:
+
+* The pool UUID of the pool that the targets will be excluded from.
+* The rank of the target(s) te be excluded.
+* The target Indices of the targets to be excluded from that rank (optional).
+
+### Target Reintegration
+
+After a target failure an operator can fix the underlying issue and reintegrate the
+affected targets to restore the pool to its original state. The operator can either
+reintegrate specific targets for a rank by supplying a target idx list, or reintegrate
+an entire rank by omitting the list.
+
+```
+$ dmg pool reintegrate --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
+```
+
+The pool reintegrate command accepts 3 parameters:
+
+* The pool UUID of the pool that the targets will be reintegrated into.
+* The rank of the affected targets.
+* The target Indices of the targets to be reintegrated on that rank (optional).
+
+When rebuild is triggered it will list the operations and their related targets by their rank ID
+and target index.
+
+```
+Target (rank 5 idx 0) is down.
+Target (rank 5 idx 1) is down.
+...
+(rank 5 idx 0) is excluded.
+(rank 5 idx 1) is excluded.
+```
+
+These should be the same values used when reintegrating the targets.
+
+```
+$ dmg pool reintegrate --pool=${puuid} --rank=5 --target-idx=0,1
 ```
 
 ### Pool Extension

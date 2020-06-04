@@ -110,9 +110,10 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!dfs)
 		D_GOTO(err_unlock, rc = ENOMEM);
 
+	dfuse_dfs_init(dfs, parent->ie_dfs);
+
 	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 	dfs->dfs_dfp = dfp;
-	dfs->dfs_attr_timeout = parent->ie_dfs->dfs_attr_timeout;
 
 	DFUSE_TRA_UP(dfp, parent->ie_dfs->dfs_dfp, "dfp");
 
@@ -146,7 +147,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
 	prop = daos_prop_alloc(0);

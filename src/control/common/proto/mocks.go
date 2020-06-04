@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,11 +20,21 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package proto
 
 import (
+	"context"
+	"fmt"
+
+	"google.golang.org/grpc"
+
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/system"
+	"github.com/pkg/errors"
 )
 
 // MockNvmeNamespace is a mock protobuf Namespace message used in tests for
@@ -111,4 +121,190 @@ func MockScmNamespace(varIdx ...int32) *ctlpb.ScmNamespace {
 // multiple packages.
 func MockScmMount() *ctlpb.ScmMount {
 	return &ctlpb.ScmMount{Mntpoint: "/mnt/daos"}
+}
+
+var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
+	{Uuid: "12345678-1234-1234-1234-123456789abc", Svcreps: []uint32{1, 2}},
+	{Uuid: "12345678-1234-1234-1234-cba987654321", Svcreps: []uint32{0}},
+}
+
+type MockMgmtSvcClientConfig struct {
+	ListPoolsRet      *common.MockListPoolsResult
+	KillErr           error
+	PoolQueryResult   *mgmtpb.PoolQueryResp
+	PoolQueryErr      error
+	PoolSetPropResult *mgmtpb.PoolSetPropResp
+	PoolSetPropErr    error
+}
+
+type MockMgmtSvcClient struct {
+	Cfg   MockMgmtSvcClientConfig
+	Calls []string
+}
+
+func NewMockMgmtSvcClient(cfg MockMgmtSvcClientConfig) mgmtpb.MgmtSvcClient {
+	return &MockMgmtSvcClient{Cfg: cfg}
+}
+
+func (m *MockMgmtSvcClient) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq, o ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
+	// return successful pool creation results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.PoolCreateResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq, o ...grpc.CallOption) (*mgmtpb.PoolDestroyResp, error) {
+	// return successful pool destroy results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.PoolDestroyResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq, o ...grpc.CallOption) (*mgmtpb.PoolEvictResp, error) {
+	return &mgmtpb.PoolEvictResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq, o ...grpc.CallOption) (*mgmtpb.PoolReintegrateResp, error) {
+	// return successful pool reintegrate results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.PoolReintegrateResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq, o ...grpc.CallOption) (*mgmtpb.PoolExcludeResp, error) {
+	// return successful pool Exclude results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.PoolExcludeResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq, _ ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
+	if m.Cfg.PoolQueryErr != nil {
+		return nil, m.Cfg.PoolQueryErr
+	}
+	return m.Cfg.PoolQueryResult, nil
+}
+
+func (m *MockMgmtSvcClient) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq, _ ...grpc.CallOption) (*mgmtpb.PoolSetPropResp, error) {
+	if m.Cfg.PoolSetPropErr != nil {
+		return nil, m.Cfg.PoolSetPropErr
+	}
+	return m.Cfg.PoolSetPropResult, nil
+}
+
+// returnACLResult returns the mock ACL results - either an error or an ACLResp
+func (m *MockMgmtSvcClient) returnACLResult() (*mgmtpb.ACLResp, error) {
+	return nil, nil
+}
+
+func (m *MockMgmtSvcClient) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return m.returnACLResult()
+}
+
+func (m *MockMgmtSvcClient) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return m.returnACLResult()
+}
+
+func (m *MockMgmtSvcClient) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return m.returnACLResult()
+}
+
+func (m *MockMgmtSvcClient) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return m.returnACLResult()
+}
+
+func (m *MockMgmtSvcClient) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq, o ...grpc.CallOption) (*mgmtpb.BioHealthResp, error) {
+
+	// return successful bio health results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.BioHealthResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq, o ...grpc.CallOption) (*mgmtpb.SmdDevResp, error) {
+
+	// return successful SMD device list
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.SmdDevResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq, o ...grpc.CallOption) (*mgmtpb.SmdPoolResp, error) {
+
+	// return successful SMD pool list
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.SmdPoolResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
+
+	// return successful device state
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &mgmtpb.DevStateResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
+
+	// return suscessful FAULTY device state
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &mgmtpb.DevStateResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...grpc.CallOption) (*mgmtpb.JoinResp, error) {
+	m.Calls = append(m.Calls, fmt.Sprintf("Join %d", req.GetRank()))
+
+	// if req rank == NilRank, map uuid to rank
+	// otherwise, simulate join where requested rank is valid and returned
+	rank := req.GetRank()
+	nilRank := system.NilRank
+	if nilRank.Uint32() == rank {
+		switch req.GetUuid() {
+		case common.MockUUID(0):
+			rank = 0
+		case common.MockUUID(1):
+			rank = 1
+		default:
+			return nil, errors.New("Mock Join doesn't recognise UUID")
+		}
+	}
+
+	return &mgmtpb.JoinResp{Rank: rank}, nil
+}
+
+func (m *MockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
+	return &mgmtpb.GetAttachInfoResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) StopRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PingRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) StartRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq, o ...grpc.CallOption) (*mgmtpb.ListPoolsResp, error) {
+	if m.Cfg.ListPoolsRet.Err != nil {
+		return nil, m.Cfg.ListPoolsRet.Err
+	}
+	return &mgmtpb.ListPoolsResp{Pools: MockPoolList, Status: m.Cfg.ListPoolsRet.Status}, nil
+}
+
+func (m *MockMgmtSvcClient) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq, _ ...grpc.CallOption) (*mgmtpb.LeaderQueryResp, error) {
+	return &mgmtpb.LeaderQueryResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) ListContainers(ctx context.Context, req *mgmtpb.ListContReq, o ...grpc.CallOption) (*mgmtpb.ListContResp, error) {
+	// return successful list containers results
+	return &mgmtpb.ListContResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerReq, o ...grpc.CallOption) (*mgmtpb.ContSetOwnerResp, error) {
+	return nil, nil
 }

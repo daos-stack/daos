@@ -4,6 +4,9 @@ import daos_build
 def build_shim_module(env, lib_prefix, version):
     """Build PyDAOS shim module for the specified python version"""
 
+    if GetOption('help'):
+        return
+
     new_env = env.Clone()
     extra_flags = ""
 
@@ -20,6 +23,8 @@ def build_shim_module(env, lib_prefix, version):
     new_env.Replace(LIBS=['daos', 'duns'])
     new_env.AppendUnique(LIBPATH=["../dfs"])
     new_env.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../../..')])
+
+    daos_build.clear_icc_env(new_env)
 
     obj = new_env.SharedObject(tgt_name, 'pydaos_shim.c',
                                CC='gcc -pthread',

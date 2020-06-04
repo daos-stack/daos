@@ -27,6 +27,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -40,14 +41,19 @@ const (
 	DaosAdminLogFileEnvVar = "DAOS_ADMIN_LOG_FILE"
 )
 
+type PingResp struct {
+	Version string
+}
+
 // CheckHelper attempts to invoke the helper to test for installation/setup
 // problems. This function can be used to proactively identify problems and
 // avoid console spam from multiple errors.
 func CheckHelper(log logging.Logger, helperName string) error {
 	fwd := NewForwarder(log, helperName)
 	dummy := struct{}{}
+	pingRes := PingResp{}
 
-	if err := fwd.SendReq("Ping", dummy, &dummy); err != nil {
+	if err := fwd.SendReq("Ping", dummy, &pingRes); err != nil {
 		err = errors.Cause(err)
 		switch {
 		case fault.IsFault(err):
@@ -57,6 +63,11 @@ func CheckHelper(log logging.Logger, helperName string) error {
 		default:
 			return PrivilegedHelperRequestFailed(err.Error())
 		}
+	}
+
+	if pingRes.Version != build.DaosVersion {
+		return errors.Errorf("version mismatch (server: %s; %s: %s)",
+			build.DaosVersion, helperName, pingRes.Version)
 	}
 
 	return nil

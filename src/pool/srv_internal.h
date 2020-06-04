@@ -71,6 +71,14 @@ struct pool_iv_prop {
 	char		pip_iv_buf[0];
 };
 
+struct pool_iv_conn {
+	uuid_t		pic_hdl;
+	uint64_t	pic_flags;
+	uint64_t	pic_capas;
+	uint32_t	pic_cred_size;
+	char		pic_creds[0];
+};
+
 struct pool_iv_key {
 	uint32_t	pik_entry_size; /* IV entry size */
 };
@@ -82,6 +90,7 @@ struct pool_iv_entry {
 	union	{
 		struct pool_iv_map	piv_map;
 		struct pool_iv_prop	piv_prop;
+		struct pool_iv_conn	piv_conn;
 	};
 };
 
@@ -122,9 +131,6 @@ int ds_pool_cache_init(void);
 void ds_pool_cache_fini(void);
 int ds_pool_hdl_hash_init(void);
 void ds_pool_hdl_hash_fini(void);
-void ds_pool_tgt_connect_handler(crt_rpc_t *rpc);
-int ds_pool_tgt_connect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-				   void *priv);
 void ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
@@ -134,12 +140,14 @@ int ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_pool_child_purge(struct pool_tls *tls);
 void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
+int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
 
 /*
  * srv_util.c
  */
 int ds_pool_map_tgts_update(struct pool_map *map,
-			    struct pool_target_id_list *tgts, int opc);
+			    struct pool_target_id_list *tgts, int opc,
+			    bool evict_rank);
 int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 				  d_rank_list_t *failed, d_rank_list_t *alt);
 extern struct bio_reaction_ops nvme_reaction_ops;
@@ -152,4 +160,7 @@ int ds_pool_iv_init(void);
 int ds_pool_iv_fini(void);
 int pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv);
 void ds_pool_map_refresh_ult(void *arg);
+
+int ds_pool_iv_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
+			  uint64_t flags, uint64_t capas, d_iov_t *cred);
 #endif /* __POOL_SRV_INTERNAL_H__ */

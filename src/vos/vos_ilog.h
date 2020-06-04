@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,22 +31,39 @@
 #define __VOS_ILOG_H__
 
 #include <daos/common.h>
-#include <ilog.h>
+#include "ilog.h"
+#include "vos_ts.h"
+
+/** Conditional mask for operation */
+enum {
+	/** No condition */
+	VOS_ILOG_COND_NONE,
+	/** Operation is conditional punch */
+	VOS_ILOG_COND_PUNCH,
+	/** Operation is conditional update */
+	VOS_ILOG_COND_UPDATE,
+	/** Operation is conditional insert */
+	VOS_ILOG_COND_INSERT,
+	/** Operation is conditional fetch */
+	VOS_ILOG_COND_FETCH,
+};
 
 struct vos_container;
 
 struct vos_ilog_info {
-	struct ilog_entries	ii_entries;
+	struct ilog_entries	 ii_entries;
+	/** Visible uncommitted epoch */
+	daos_epoch_t		 ii_uncommitted;
 	/** If non-zero, earliest creation timestamp in current incarnation. */
-	daos_epoch_t		ii_create;
+	daos_epoch_t		 ii_create;
 	/** If non-zero, prior committed punch */
-	daos_epoch_t		ii_prior_punch;
+	daos_epoch_t		 ii_prior_punch;
 	/** If non-zero, prior committed or uncommitted punch */
-	daos_epoch_t		ii_prior_any_punch;
+	daos_epoch_t		 ii_prior_any_punch;
 	/** If non-zero, subsequent committed punch */
-	daos_epoch_t		ii_next_punch;
+	daos_epoch_t		 ii_next_punch;
 	/** The entity has no valid log entries */
-	bool			ii_empty;
+	bool			 ii_empty;
 };
 
 /** Initialize the incarnation log globals */
@@ -99,6 +116,8 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
  *				log exists).  Fetch should have already been
  *				called at same epoch or parent.
  * \param	info[IN,OUT]	incarnation log info
+ * \param	cond[IN]	Conditional flags.
+ * \param	ts_set[IN]	timestamp set.
  *
  * \return	0		Successful update
  *		other		Appropriate error code
@@ -107,8 +126,33 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 int
 vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		 const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
-		 struct vos_ilog_info *info);
+		 struct vos_ilog_info *info, uint32_t cond_flag,
+		 struct vos_ts_set *ts_set);
 
+/**
+ * Punch the incarnation log entry if it's the leaf.  Do conditional check if
+ * necessary.   If it isn't a leaf and there is no condition, this is a noop.
+ * If there is no condition, \p parent and \p info are ignored.
+ *
+ * \param	cont[IN]	Pointer to vos container
+ * \param	ilog[IN]	The incarnation log root
+ * \param	epr[IN]		Range of update
+ * \param	parent[IN]	parent incarnation log info (NULL if no parent
+ *				log exists).  Fetch should have already been
+ *				called at same epoch or parent.
+ * \param	info[IN,OUT]	incarnation log info
+ * \param	ts_set[IN]	timestamp set.
+ * \param	leaf[IN]	The actual entry to punch
+ *
+ * \return	0		Successful update
+ *		other		Appropriate error code
+ */
+#define vos_ilog_punch vos_ilog_punch_
+int
+vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
+		const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
+		struct vos_ilog_info *info, struct vos_ts_set *ts_set,
+		bool leaf);
 
 /**
  * Check the incarnation log for existence and return important information
@@ -156,6 +200,7 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 #ifdef ILOG_TRACE
 #undef vos_ilog_fetch
 #undef vos_ilog_update
+#undef vos_ilog_punch
 #undef vos_ilog_check
 /* Useful for debugging the incarnation log but too much information for
  * normal debugging.
@@ -165,31 +210,47 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	int __rc;							\
 									\
 	D_DEBUG(DB_TRACE, "vos_ilog_fetch: log="DF_X64" intent=%d"	\
-		" epoch="DF_U64" punched="DF_U64"\n",			\
+		" epoch="DF_X64" punched="DF_X64"\n",			\
 		umem_ptr2off(umm, ilog), intent, epoch,			\
 		(uint64_t)punched);					\
 	__rc = vos_ilog_fetch_(umm, coh, intent, ilog, epoch, punched,	\
 			       parent, info);				\
 	D_DEBUG(DB_TRACE, "vos_ilog_fetch: returned "DF_RC" create="	\
-		DF_U64" pp="DF_U64" pap="DF_U64" np="DF_U64" %s\n",	\
+		DF_X64" pp="DF_X64" pap="DF_X64" np="DF_X64" %s\n",	\
 		DP_RC(__rc), (info)->ii_create, (info)->ii_prior_punch,	\
 		(info)->ii_prior_any_punch, (info)->ii_next_punch,	\
 		(info)->ii_empty ? "is empty" : "");			\
 	__rc;								\
 })
 
-#define vos_ilog_update(cont, ilog, epr, parent, info)			\
+#define vos_ilog_update(cont, ilog, epr, parent, info, cond, ts_set)	\
 ({									\
 	struct umem_instance	*__umm = vos_cont2umm(cont);		\
 	int			 __rc;					\
 									\
 	D_DEBUG(DB_TRACE, "vos_ilog_update: log="DF_X64" epr="		\
-		DF_U64"-"DF_U64"\n", umem_ptr2off(__umm, ilog),		\
-		(epr)->epr_lo, (epr)->epr_hi);				\
-	__rc = vos_ilog_update_(cont, ilog, epr, parent, info);		\
+		DF_X64"-"DF_X64" cond=%d\n", umem_ptr2off(__umm, ilog),	\
+		(epr)->epr_lo, (epr)->epr_hi, (cond));			\
+	__rc = vos_ilog_update_(cont, ilog, epr, parent, info,		\
+				cond, ts_set);				\
 	D_DEBUG(DB_TRACE, "vos_ilog_update: returned "DF_RC" create="	\
-		DF_U64" pap="DF_U64"\n", DP_RC(__rc), (info)->ii_create,\
+		DF_X64" pap="DF_X64"\n", DP_RC(__rc), (info)->ii_create,\
 		(info)->ii_prior_any_punch);				\
+	__rc;								\
+})
+
+#define vos_ilog_punch(cont, ilog, epr, parent, info, ts_set, leaf)	\
+({									\
+	struct umem_instance	*__umm = vos_cont2umm(cont);		\
+	int			 __rc;					\
+									\
+	D_DEBUG(DB_TRACE, "vos_ilog_punch: log="DF_X64" epr="		\
+		DF_X64"-"DF_X64" leaf=%d\n", umem_ptr2off(__umm, ilog),	\
+		(epr)->epr_lo, (epr)->epr_hi, (leaf));			\
+	__rc = vos_ilog_punch_(cont, ilog, epr, parent, info, ts_set,	\
+			       leaf);					\
+	D_DEBUG(DB_TRACE, "vos_ilog_punch: returned " DF_RC"\n",	\
+		DP_RC(__rc));						\
 	__rc;								\
 })
 
@@ -199,12 +260,12 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 									\
 	_Pragma("GCC diagnostic push")					\
 	_Pragma("GCC diagnostic ignored \"-Waddress\"")			\
-	D_DEBUG(DB_TRACE, "vos_ilog_check: epr_in="DF_U64"-"DF_U64	\
+	D_DEBUG(DB_TRACE, "vos_ilog_check: epr_in="DF_X64"-"DF_X64	\
 		" %s\n", (epr_in)->epr_lo, (epr_in)->epr_hi,		\
 		(visible_only) ? "visible" : "all");			\
 	__rc = vos_ilog_check_(info, epr_in, epr_out, visible_only);	\
 	D_DEBUG(DB_TRACE, "vos_ilog_check: returned "DF_RC" %s"		\
-		DF_U64"-"DF_U64"\n", DP_RC(__rc),			\
+		DF_X64"-"DF_X64"\n", DP_RC(__rc),			\
 		((epr_out) != NULL) ? " epr_out=" : " #",		\
 		((epr_out) != NULL) ? (epr_out)->epr_lo : 0,		\
 		((epr_out) != NULL) ? (epr_out)->epr_hi : 0);		\
@@ -214,5 +275,45 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 
 #endif
 
+/** Check if the timestamps associated with the ilog are in cache.  If so,
+ *  add them to the set.
+ *
+ *  \param	ts_set[in]	The timestamp set
+ *  \param	ilog[in]	The incarnation log
+ *
+ *  \return true if found or ts_set is NULL
+ */
+bool
+vos_ilog_ts_lookup(struct vos_ts_set *ts_set, struct ilog_df *ilog);
+
+/** Allocate timestamps for the entry and add them to the set.  If ilog is
+ *  NULL, it pulls in the negative entry.  The hash is calculated using
+ *  vos_hash_get.
+ *
+ *  \param	ts_set[in]	The timestmap set
+ *  \param	ilog[in]	The incarnation log
+ *  \param	record[in]	The record to hash
+ *  \param	rec_size[in]	The size of the record to hash
+ *
+ *  \return 0 on success or an error
+ */
+int
+vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
+		  void *record, daos_size_t rec_size);
+
+/** Mark the last timestamp entry corresponding to the ilog as newly created
+ *  \param	ts_set[in]	The timestmap set
+ *  \param	ilog[in]	The incarnation log
+ */
+void
+vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog);
+
+/** Evict the cached timestamp entry, if present
+ *
+ *  \param	ilog[in]	The incarnation log
+ *  \param	type[in]	The timestamp type
+ */
+void
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type);
 
 #endif /* __VOS_ILOG_H__ */

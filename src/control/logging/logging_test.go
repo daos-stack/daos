@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,13 +24,83 @@ package logging_test
 
 import (
 	"bytes"
+	"fmt"
 	"regexp"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestStandardFormat(t *testing.T) {
+type testWrap struct {
+	log logging.Logger
+}
+
+func (tw *testWrap) Debug(msg string) {
+	tw.log.Debug(msg)
+}
+
+func (tw *testWrap) Debugf(fmtStr string, args ...interface{}) {
+	tw.log.Debugf(fmtStr, args...)
+}
+
+func getLineNumber(t *testing.T) int {
+	pc := make([]uintptr, 2)
+	n := runtime.Callers(2, pc)
+	if n > 0 {
+		pc = pc[:n]
+		frames := runtime.CallersFrames(pc)
+		for {
+			frame, _ := frames.Next()
+			return frame.Line
+		}
+	}
+
+	t.Fatal("failed to get test line number")
+	return 0
+}
+
+func TestLogging_DebugOutputDepth(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+
+	// not a perfect diff, but good enough for this test
+	cmpOut := func(t *testing.T, want, got string) {
+		if !strings.Contains(got, want) {
+			t.Fatalf("incorrect caller info (-want, +got):\n-%s\n+%s\n", want, got)
+		}
+	}
+
+	line := getLineNumber(t) + 1
+	log.Debug("test 1")
+	wanted := fmt.Sprintf("logging_test.go:%d: test 1", line)
+	cmpOut(t, wanted, buf.String())
+	buf.Reset()
+
+	line = getLineNumber(t) + 1
+	log.Debugf("test 2")
+	wanted = fmt.Sprintf("logging_test.go:%d: test 2", line)
+	cmpOut(t, wanted, buf.String())
+	buf.Reset()
+
+	tw := &testWrap{
+		log: log,
+	}
+
+	line = getLineNumber(t) + 1
+	tw.Debug("test 3")
+	wanted = fmt.Sprintf("logging_test.go:%d: test 3", line)
+	cmpOut(t, wanted, buf.String())
+	buf.Reset()
+
+	line = getLineNumber(t) + 1
+	tw.Debugf("test 4")
+	wanted = fmt.Sprintf("logging_test.go:%d: test 4", line)
+	cmpOut(t, wanted, buf.String())
+	buf.Reset()
+}
+
+func TestLogging_StandardFormat(t *testing.T) {
 	logger, buf := logging.NewTestLogger("testPrefix")
 
 	tests := map[string]struct {
@@ -74,7 +144,7 @@ func TestStandardFormat(t *testing.T) {
 	}
 }
 
-func TestJSONFormat(t *testing.T) {
+func TestLogging_JSONFormat(t *testing.T) {
 	var buf bytes.Buffer
 
 	logger := logging.NewCombinedLogger("testPrefix", &buf).
@@ -122,7 +192,7 @@ func TestJSONFormat(t *testing.T) {
 	}
 }
 
-func TestMultipleFormats(t *testing.T) {
+func TestLogging_MultipleFormats(t *testing.T) {
 	var stdBuf bytes.Buffer
 	var jsonBuf bytes.Buffer
 
@@ -195,7 +265,7 @@ func TestMultipleFormats(t *testing.T) {
 	}
 }
 
-func TestLogLevels(t *testing.T) {
+func TestLogging_LogLevels(t *testing.T) {
 	var buf bytes.Buffer
 	logger := logging.NewCombinedLogger("testPrefix", &buf)
 

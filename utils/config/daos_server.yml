@@ -1,7 +1,7 @@
 ## DAOS server configuration file.
 #
 ## Location of this configuration file is determined by first checking for the
-## path specified through the -f option of the daos_server command line.
+## path specified through the -o option of the daos_server command line.
 ## Otherwise, /etc/daos_server.conf is used.
 #
 #
@@ -34,16 +34,18 @@
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
 #  allow_insecure: false
+#
 #  # Location where daos_server will look for Client certificates
-#  client_cert_dir: .daos/clients
+#  client_cert_dir: /etc/daos/certs/clients
 #  # Custom CA Root certificate for generated certs
-#  ca_cert: .daos/daosCA.crt
+#  ca_cert: /etc/daos/certs/daosCA.crt
 #  # Server certificate for use in TLS handshakes
-#  cert: .daos/daos_server.crt
+#  cert: /etc/daos/certs/server.crt
 #  # Key portion of Server Certificate
-#  key: .daos/daos_server.key
+#  key: /etc/daos/certs/server.key
 #
 #
 ## Fault domain path
@@ -72,6 +74,13 @@
 #
 #provider: ofi+verbs;ofi_rxm
 #
+#
+## global CRT_CTX_SHARE_ADDR shared with client
+#crt_ctx_share_addr: 1
+#
+#
+## global CRT_TIMEOUT shared with client
+#crt_timeout: 30
 #
 #
 ## NVMe SSD whitelist
@@ -116,11 +125,11 @@
 ## Number of hugepages to allocate for use by NVMe SSDs
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
-## through SPDK. This indicates the total number to be used by any spawned
-## servers. Default system hugepage size will be used and hugepages will be
-## evenly distributed between CPU nodes.
+## through SPDK. This indicates the number to be used for each spawned
+## I/O server, so the total will be this number * number of I/O servers.
+## Default system hugepage size will be used.
 #
-## default: 1024
+## default: 4096
 #nr_hugepages: 4096
 #
 #

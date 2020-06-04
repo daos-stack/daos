@@ -33,6 +33,7 @@ import (
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -44,14 +45,20 @@ import (
 const (
 	defaultRuntimeDir   = "/var/run/daos_server"
 	defaultConfigPath   = "../etc/daos_server.yml"
-	defaultSystemName   = "daos_server"
-	defaultPort         = 10001
 	configOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
 )
 
 type networkProviderValidation func(string, string) error
 type networkNUMAValidation func(string, uint) error
+
+// ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
+// These settings bring coherence between the client and server network configuration.
+type ClientNetworkCfg struct {
+	Provider        string
+	CrtCtxShareAddr uint32
+	CrtTimeout      uint32
+}
 
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
@@ -148,6 +155,24 @@ func (c *Configuration) WithModules(mList string) *Configuration {
 // WithFabricProvider sets the top-level fabric provider.
 func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 	c.Fabric.Provider = provider
+	for _, srv := range c.Servers {
+		srv.Fabric.Update(c.Fabric)
+	}
+	return c
+}
+
+// WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
+func (c *Configuration) WithCrtCtxShareAddr(addr uint32) *Configuration {
+	c.Fabric.CrtCtxShareAddr = addr
+	for _, srv := range c.Servers {
+		srv.Fabric.Update(c.Fabric)
+	}
+	return c
+}
+
+// WithCrtTimeout sets the top-level CrtTimeout.
+func (c *Configuration) WithCrtTimeout(timeout uint32) *Configuration {
+	c.Fabric.CrtTimeout = timeout
 	for _, srv := range c.Servers {
 		srv.Fabric.Update(c.Fabric)
 	}
@@ -278,10 +303,10 @@ func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
-		SystemName:         defaultSystemName,
+		SystemName:         build.DefaultSystemName,
 		SocketDir:          defaultRuntimeDir,
-		AccessPoints:       []string{fmt.Sprintf("localhost:%d", defaultPort)},
-		ControlPort:        defaultPort,
+		AccessPoints:       []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
+		ControlPort:        build.DefaultControlPort,
 		TransportConfig:    security.DefaultServerTransportConfig(),
 		Hyperthreads:       false,
 		Path:               defaultConfigPath,
@@ -369,13 +394,19 @@ func saveActiveConfig(log logging.Logger, config *Configuration) {
 
 // Validate asserts that config meets minimum requirements.
 func (c *Configuration) Validate(log logging.Logger) (err error) {
+	// config without servers is valid when initially discovering hardware
+	// prior to adding per-server sections with device allocations
+	if len(c.Servers) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode", DataPlaneName, ControlPlaneName)
+		c.Servers = nil
+		return nil
+	}
+
 	// append the user-friendly message to any error
-	// TODO: use a fault/resolution
 	defer func() {
 		if err != nil && !fault.HasResolution(err) {
 			examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
-			err = errors.WithMessage(FaultBadConfig,
-				err.Error()+", examples: "+examplesPath)
+			err = errors.WithMessage(FaultBadConfig, err.Error()+", examples: "+examplesPath)
 		}
 	}()
 
@@ -396,8 +427,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 
 		// warn if access point port differs from config control port
 		if strconv.Itoa(c.ControlPort) != port {
-			log.Debugf("access point (%s) port (%s) differs from control port (%d)",
-				host, port, c.ControlPort)
+			log.Debugf("access point (%s) port (%s) differs from control port (%d)", host, port, c.ControlPort)
 		}
 
 		if port == "0" {
@@ -405,10 +435,6 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		}
 
 		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
-	}
-
-	if len(c.Servers) == 0 {
-		return FaultConfigNoServers
 	}
 
 	for i, srv := range c.Servers {

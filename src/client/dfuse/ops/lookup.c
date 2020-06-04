@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		inode->ie_parent = ie->ie_parent;
 		strncpy(inode->ie_name, ie->ie_name, NAME_MAX+1);
 
-		atomic_fetch_sub(&ie->ie_ref, 1);
+		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		ie->ie_parent = 0;
 		ie->ie_root = 0;
 		ie_close(fs_handle, ie);
@@ -145,8 +145,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		return rc;
 
 	rc = duns_parse_attr(&str[0], str_len, &dattr);
-	if (rc != -DER_SUCCESS)
-		return daos_der2errno(rc);
+	if (rc)
+		return rc;
 
 	if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
 		return ENOTSUP;
@@ -213,7 +213,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);
-		dfs->dfs_attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+
+		dfuse_dfs_init(dfs, ie->ie_dfs);
 
 		/* Try to open the DAOS container (the mountpoint) */
 		rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont, DAOS_COO_RW,
@@ -255,7 +256,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
 
-	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
+	rc = dfuse_lookup_inode(fs_handle, dfs, NULL,
 				&ie->ie_stat.st_ino);
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
@@ -325,14 +326,24 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			    O_RDONLY, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: (%s)",
+		DFUSE_TRA_INFO(parent, "dfs_lookup() failed: (%s)",
 			       strerror(rc));
+
+		if (rc == ENOENT && ie->ie_dfs->dfs_attr_timeout > 0) {
+			struct fuse_entry_param entry = {};
+
+			entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+
+			DFUSE_REPLY_ENTRY(parent, req, entry);
+			D_GOTO(free, 0);
+		}
+
 		D_GOTO(err, rc);
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	if (S_ISDIR(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);
@@ -347,6 +358,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+free:
 	D_FREE(ie);
 	return;
 }

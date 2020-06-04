@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package scm
 
 import (
@@ -28,6 +29,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
@@ -37,7 +39,7 @@ import (
 
 const (
 	cmdScmShowRegions = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
-	outScmNoRegions   = "\nThere are no Regions defined in the system.\n"
+	outScmNoRegions   = "no Regions defined"
 	// creates a AppDirect/Interleaved memory allocation goal across all DCPMMs on a system.
 	cmdScmCreateRegions    = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdScmRemoveRegions    = "ipmctl create -f -goal MemoryMode=100"
@@ -125,20 +127,22 @@ func (r *cmdRunner) GetState() (storage.ScmState, error) {
 	// TODO: discovery should provide SCM region details
 	out, err := r.runCmd(cmdScmShowRegions)
 	if err != nil {
-		return storage.ScmStateUnknown, err
+		return storage.ScmStateUnknown,
+			errors.WithMessagef(err, "running cmd '%s'", cmdScmShowRegions)
 	}
 
 	r.log.Debugf("show region output: %s\n", out)
 
-	if out == outScmNoRegions {
+	if strings.Contains(out, outScmNoRegions) {
 		return storage.ScmStateNoRegions, nil
 	}
 
-	ok, err := hasFreeCapacity(out)
+	bytes, err := freeCapacity(out)
 	if err != nil {
-		return storage.ScmStateUnknown, err
+		return storage.ScmStateUnknown,
+			errors.WithMessage(err, "checking scm region capacity")
 	}
-	if ok {
+	if bytes > 0 {
 		return storage.ScmStateFreeCapacity, nil
 	}
 
@@ -250,7 +254,7 @@ func (r *cmdRunner) removeNamespace(devName string) (err error) {
 	return
 }
 
-// hasFreeCapacity takes output from ipmctl and checks for free capacity.
+// freeCapacity takes output from ipmctl and returns free capacity.
 //
 // external tool commands return:
 // $ ipmctl show -d PersistentMemoryType,FreeCapacity -region
@@ -263,13 +267,15 @@ func (r *cmdRunner) removeNamespace(devName string) (err error) {
 //    FreeCapacity=3012.0 GiB
 //
 // FIXME: implementation to be replaced by using libipmctl directly through bindings
-func hasFreeCapacity(text string) (hasCapacity bool, err error) {
+func freeCapacity(text string) (uint64, error) {
 	lines := strings.Split(text, "\n")
 	if len(lines) < 4 {
-		return false, errors.Errorf("expecting at least 4 lines, got %d",
+		return 0, errors.Errorf("expecting at least 4 lines, got %d",
 			len(lines))
 	}
 
+	var appDirect bool
+	var capacity uint64
 	for _, line := range lines {
 		entry := strings.TrimSpace(line)
 
@@ -278,23 +284,26 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 			continue
 		}
 
-		if kv[0] == "PersistentMemoryType" && kv[1] == "AppDirect" {
-			hasCapacity = true
-			continue
+		switch kv[0] {
+		case "PersistentMemoryType":
+			if kv[1] == "AppDirect" {
+				appDirect = true
+				continue
+			}
+		case "FreeCapacity":
+			if !appDirect {
+				continue
+			}
+			c, err := humanize.ParseBytes(kv[1])
+			if err != nil {
+				return 0, err
+			}
+			capacity += c
 		}
-
-		if kv[0] != "FreeCapacity" {
-			continue
-		}
-
-		if hasCapacity && kv[1] != "0.0 GiB" {
-			return
-		}
-
-		hasCapacity = false
+		appDirect = false
 	}
 
-	return
+	return capacity, nil
 }
 
 // createstorage.ScmNamespaces runs create until no free capacity.

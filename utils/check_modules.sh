@@ -38,7 +38,7 @@
 
 set -e
 
-if [ ! -d "scons_local" ];then
+if [ ! -d "utils/sl" ];then
   cd ..
 fi
 # Set PYTHONPATH for source files not installed files
@@ -48,16 +48,19 @@ PYTHONPATH=$PYTHONPATH:$PWD/src/client/
 export PYTHONPATH
 
 if [ -z "$*" ]; then
-  flist="utils/daos_build.py -s SConstruct"
-  # Exclude raft and scons_local
-  scripts=$(find . -name SConscript | grep -v scons_local| grep -v raft | \
-           grep -v _build.external | sort)
+  flist="-c utils/daos_build.py -s SConstruct"
+  # Exclude raft and utils/sl
+  scripts=$(find . -name SConscript | grep -v -e utils/sl -e raft \
+          -e _build.external | sort)
   for file in $scripts; do
     flist+=" -s $file "
   done
   # the functional test code
-  flist+=$(find src/tests/ftest/ -name \*.py | sort)
-  flist+=$(find src/client/pydaos/ -name \*.py | sort)
+  flist+=" $(find src/tests/ftest/ -name \*.py | sort)"
+  flist+=" $(find src/client/pydaos/ -name \*.py | sort)"
+  flist+=" $(find src/client/dfuse/test/ -name \*.py | sort)"
+  flist+=" $(find src/cart/ -name \*.py | sort)"
+  flist+=" $(find utils/ -name \*.py | sort)"
 else
   flist=$*
 fi
@@ -65,7 +68,7 @@ fi
 # $flist is a list of switches and arguments; quoting will make it a
 # single argument
 # shellcheck disable=SC2086
-if ! ./scons_local/check_python.sh $flist; then
+if ! ./utils/sl/check_python.sh $flist; then
   exit 1
 fi
 exit 0

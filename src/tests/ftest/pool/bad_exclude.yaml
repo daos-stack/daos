@@ -1,61 +1,62 @@
 server_config:
-   name: test_server
+   name: daos_server
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
+   test_servers:
+      - server-A
+      - server-B
+      - server-C
 timeout: 200
 testparams:
    tgtlist: !mux
-     goodlist:
-          ranklist:
-             - 2
-             - PASS
-     badlist:
-          ranklist:
-             - 44
-             - FAIL
-     nulllist:
-          ranklist:
-             - NULLPTR
-             - FAIL
+      goodlist:
+         ranklist:
+            - 2
+            - PASS
+      badlist:
+         ranklist:
+            - 44
+            - FAIL
+      nulllist:
+         ranklist:
+            - NULLPTR
+            - FAIL
    svrlist: !mux
-     goodlist:
-          ranklist:
-             - VALID
-             - PASS
-     badlist:
-          ranklist:
-             - NULLPTR
-             - FAIL
+      goodlist:
+         ranklist:
+            - VALID
+            - PASS
+      badlist:
+         ranklist:
+            - NULLPTR
+            - FAIL
    connectsetnames: !mux
-     goodname:
-          setname:
-             - test_server
-             - PASS
-     badname:
-          setname:
-             - NULLPTR
-             - FAIL
+      goodname:
+         setname:
+            - daos_server
+            - PASS
+      badname:
+         setname:
+            - bad_name_server
+            - FAIL
+      defaultname:
+         setname:
+            - NULLPTR
+            - PASS
    UUID: !mux
-     gooduuid:
-          uuid:
-             - VALID
-             - PASS
-     nulluuid:
-          uuid:
-             - NULLPTR
-             - FAIL
-     baduuid:
-          uuid:
-             - CRAP
-             - FAIL
+      gooduuid:
+         uuid:
+            - VALID
+            - PASS
+      nulluuid:
+         uuid:
+            - NULLPTR
+            - FAIL
+      baduuid:
+         uuid:
+            - CRAP
+            - FAIL
 pool:
-   createmode:
-     mode: 511
-   createset:
-     setname: test_server
-   createsize:
-     size: 1073741824
-
+   mode: 511
+   name: daos_server
+   scm_size: 1073741824
+   control_method: dmg

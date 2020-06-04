@@ -1,0 +1,94 @@
+# Copyright (C) 2016-2020 Intel Corporation
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted for any purpose (including commercial purposes)
+# provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions, and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions, and the following disclaimer in the
+#    documentation and/or materials provided with the distribution.
+#
+# 3. In addition, redistributions of modified forms of the source or binary
+#    code must carry prominent notices stating that the original code was
+#    changed and the date of the change.
+#
+#  4. All publications or advertising materials mentioning features or use of
+#     this software are asked, but not required, to acknowledge that it was
+#     developed by Intel Corporation and credit the contributors.
+#
+# 5. Neither the name of Intel Corporation, nor the name of any Contributor
+#    may be used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Unit tests"""
+
+import os
+
+TEST_SRC = ['test_linkage.cpp', 'test_gurt.c', 'utest_hlc.c', 'utest_swim.c']
+LIBPATH = [Dir('../cart'), Dir('../gurt')]
+
+def scons():
+    """Scons function"""
+    if GetOption('help'):
+        return
+
+    # pylint: disable=too-many-locals
+    Import('env', 'prereqs', 'cart_targets', 'swim_targets', 'gurt_targets')
+    Import('cart_lib')
+    # pylint: enable=too-many-locals
+
+    #Use full path to wrap_cmocka.h for configure test.  Since standalone
+    #cmocka header can't be included without including other headers,
+    #this test can't be generalized
+    wrap_cmocka = os.path.join(Dir('.').srcnode().abspath, 'wrap_cmocka.h')
+    prereqs.define('cmockawrap', headers=[wrap_cmocka], libs=['cmocka'],
+                   package='libcmocka-devel')
+    if not prereqs.check_component('cmocka'):
+        print("\n***************************************************")
+        print("libcmocka-devel package needed to enable unit tests")
+        print("***************************************************\n")
+        # Just returning is the desired behavior here.  The utest target
+        # has yet to be defined so the build will just fail.
+        return
+
+    test_env = env.Clone()
+    prereqs.require(test_env, "mercury", "uuid", "cmocka")
+    test_env.AppendUnique(LIBS=['pthread'])
+    test_env.AppendUnique(CPPPATH=['../include'])
+    test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
+    test_env.AppendUnique(LIBPATH=LIBPATH)
+    test_env.AppendUnique(RPATH=LIBPATH)
+    tests = []
+
+    for test in TEST_SRC:
+        flags = []
+        testobj = test_env.Object(test)
+        testname = os.path.splitext(test)[0]
+        testprog = test_env.Program(target=testname,
+                                    source=testobj + \
+                                    cart_targets + \
+                                    swim_targets + \
+                                    gurt_targets,
+                                    LIBS=test_env["LIBS"] + ['yaml'],
+                                    LINKFLAGS=flags)
+        tests.append(testprog)
+
+    test_env.Requires(tests, cart_lib)
+    Default(tests)
+
+if __name__ == "SCons.Script":
+    scons()

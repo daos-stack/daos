@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,14 +20,23 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package ioserver
 
-import "context"
+import (
+	"context"
+	"os"
+
+	"github.com/daos-stack/daos/src/control/lib/atm"
+)
 
 type (
 	TestRunnerConfig struct {
 		StartCb    func()
 		StartErr   error
+		Running    atm.Bool
+		SignalCb   func(uint32, os.Signal)
+		SignalErr  error
 		ErrChanCb  func() error
 		ErrChanErr error
 	}
@@ -61,18 +70,30 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 	go func() {
 		select {
 		case <-ctx.Done():
-			return
 		case errChan <- tr.runnerCfg.ErrChanCb():
-			return
+			if tr.runnerCfg.ErrChanErr != nil {
+				tr.runnerCfg.Running.SetFalse()
+			}
 		}
 	}()
+
+	if tr.runnerCfg.StartErr == nil {
+		tr.runnerCfg.Running.SetTrue()
+	}
 
 	return tr.runnerCfg.StartErr
 }
 
-func (tr *TestRunner) Stop(bool) error { return nil }
+func (tr *TestRunner) Signal(sig os.Signal) error {
+	if tr.runnerCfg.SignalCb != nil {
+		tr.runnerCfg.SignalCb(tr.serverCfg.Index, sig)
+	}
+	return tr.runnerCfg.SignalErr
+}
 
-func (tr *TestRunner) IsRunning() bool { return true }
+func (tr *TestRunner) IsRunning() bool {
+	return tr.runnerCfg.Running.IsTrue()
+}
 
 func (tr *TestRunner) GetConfig() *Config {
 	return tr.serverCfg

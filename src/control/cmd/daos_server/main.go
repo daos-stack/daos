@@ -27,10 +27,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -39,7 +41,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server"
 )
 
-var daosVersion string
+const (
+	defaultConfigFile = "daos_server.yml"
+)
 
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
@@ -47,8 +51,9 @@ type mainOpts struct {
 	ConfigPath string `short:"o" long:"config" description:"Server config file path"`
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
 	// subcommand's -d flag when we default to running it.
-	Debug bool `short:"b" long:"debug" description:"Enable debug output"`
-	JSON  bool `short:"j" long:"json" description:"Enable JSON output"`
+	Debug   bool `short:"b" long:"debug" description:"Enable debug output"`
+	JSONLog bool `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
 	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
@@ -60,7 +65,7 @@ type mainOpts struct {
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
-	fmt.Printf("daos_server version %s\n", daosVersion)
+	fmt.Printf("daos_server version %s\n", build.DaosVersion)
 	os.Exit(0)
 	return nil
 }
@@ -98,19 +103,31 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		if opts.Debug {
 			log.SetLevel(logging.LogLevelDebug)
 		}
-		if opts.JSON {
+		if opts.JSONLog {
 			log.WithJSONOutput()
+		}
+		if opts.Syslog {
+			// Don't log debug stuff to syslog.
+			log.WithInfoLogger((&logging.DefaultInfoLogger{}).WithSyslogOutput())
+			log.WithErrorLogger((&logging.DefaultErrorLogger{}).WithSyslogOutput())
 		}
 
 		if logCmd, ok := cmd.(cmdLogger); ok {
 			logCmd.setLog(log)
 		}
 
+		if opts.ConfigPath == "" {
+			defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
+			if _, err := os.Stat(defaultConfigPath); err == nil {
+				opts.ConfigPath = defaultConfigPath
+			}
+		}
+
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
 			}
-			log.Debugf("DAOS config loaded from %s", cfgCmd.configPath())
+			log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
 
 			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
 				if err := ovrCmd.setCLIOverrides(); err != nil {

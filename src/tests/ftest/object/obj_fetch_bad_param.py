@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,14 +23,12 @@
 '''
 from __future__ import print_function
 
-import os
 import time
 import traceback
-from avocado import main
+
 from apricot import TestWithServers
+from pydaos.raw import DaosContainer, DaosApiError
 
-
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
 class ObjFetchBadParam(TestWithServers):
     """
@@ -42,26 +40,12 @@ class ObjFetchBadParam(TestWithServers):
         super(ObjFetchBadParam, self).setUp()
         time.sleep(5)
 
+        self.prepare_pool()
+
         try:
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/pool/createmode/')
-            createsetid = self.params.get("setname", '/run/pool/createset/')
-            createsize = self.params.get("size", '/run/pool/createsize/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid, createsize,
-                             createsetid, None)
-
-            # need a connection to create container
-            self.pool.connect(1 << 1)
-
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
 
             # now open it
             self.container.open()
@@ -134,7 +118,6 @@ class ObjFetchBadParam(TestWithServers):
 
             self.container.close()
             self.container.destroy()
-            self.pool.disconnect()
             self.pool.destroy(1)
             self.fail("Test was expected to return a -1003 but it has not.\n")
 
@@ -146,22 +129,14 @@ class ObjFetchBadParam(TestWithServers):
 
         try:
             # now try it with a null sgl (iod_size is not set)
-            # expecting this to fail with -2013
             test_hints = ['sglnull']
             dummy_thedata2 = self.container.read_an_obj(self.datasize,
                                                         self.dkey, self.akey,
                                                         self.obj, test_hints)
-
-            # behavior not as expect so commented out for now
-            # when DAOS-1448 is complete, uncomment and retest
-
-            self.fail("Test was expected to return a -2013 but it has not.\n")
-
         except DaosApiError as excep:
-            if '-2013' not in str(excep):
-                print(excep)
-                print(traceback.format_exc())
-                self.fail("Test was expected to get -2013 but it has not.\n")
+            print(excep)
+            print(traceback.format_exc())
+            self.fail("Test was expected to pass but failed !\n")
 
         try:
             # when DAOS-1449 is complete, uncomment and retest
@@ -177,7 +152,3 @@ class ObjFetchBadParam(TestWithServers):
                 print(excep)
                 print(traceback.format_exc())
                 self.fail("Test was expected to get -1003 but it has not.\n")
-
-
-if __name__ == "__main__":
-    main()

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 
 #include "daos_fs.h"
 #include "daos_api.h"
+#include "daos_uns.h"
 
 #include <gurt/common.h>
 
@@ -125,6 +126,8 @@ main(int argc, char **argv)
 	struct dfuse_pool	*dfpn;
 	struct dfuse_dfs	*dfs = NULL;
 	struct dfuse_dfs	*dfsn;
+	struct duns_attr_t	duns_attr;
+	uuid_t			tmp_uuid;
 	char			c;
 	int			ret = -DER_SUCCESS;
 	int			rc;
@@ -206,6 +209,11 @@ main(int argc, char **argv)
 		}
 	}
 
+	if (dfuse_info->di_caching && !dfuse_info->di_threaded) {
+		printf("Caching not compatible with single-threaded mode\n");
+		exit(1);
+	}
+
 	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
 		DFUSE_TRA_WARNING(dfuse_info,
 				  "Not running in background under orterun");
@@ -225,6 +233,20 @@ main(int argc, char **argv)
 		printf("Svcl is required\n");
 		show_help(argv[0]);
 		exit(1);
+	}
+
+	if (dfuse_info->di_pool) {
+		if (uuid_parse(dfuse_info->di_pool, tmp_uuid) < 0) {
+			printf("Invalid pool uuid\n");
+			exit(1);
+		}
+
+		if (dfuse_info->di_cont) {
+			if (uuid_parse(dfuse_info->di_cont, tmp_uuid) < 0) {
+				printf("Invalid container uuid");
+				exit(1);
+			}
+		}
 	}
 
 	if (!dfuse_info->di_foreground) {
@@ -248,7 +270,7 @@ main(int argc, char **argv)
 
 	D_ALLOC_PTR(dfs);
 	if (!dfs) {
-		D_GOTO(out_svcl, 0);
+		D_GOTO(out_svcl, ret = -DER_NOMEM);
 	}
 
 	if (dfuse_info->di_caching)
@@ -256,7 +278,7 @@ main(int argc, char **argv)
 
 	D_ALLOC_PTR(dfp);
 	if (!dfp) {
-		D_GOTO(out_svcl, 0);
+		D_GOTO(out_svcl, ret = -DER_NOMEM);
 	}
 
 	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
@@ -269,12 +291,42 @@ main(int argc, char **argv)
 	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
-	if (dfuse_info->di_pool) {
-
-		if (uuid_parse(dfuse_info->di_pool, dfp->dfp_pool) < 0) {
-			DFUSE_TRA_ERROR(dfp, "Invalid pool uuid");
-			D_GOTO(out_dfs, ret = -DER_INVAL);
+	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d", rc);
+	if (rc == 0) {
+		if (dfuse_info->di_pool) {
+			printf("UNS configured on mount point but pool provided\n");
+			exit(1);
 		}
+		uuid_copy(dfp->dfp_pool, duns_attr.da_puuid);
+		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
+	} else if (rc == ENODATA) {
+		if (dfuse_info->di_pool) {
+
+			if (uuid_parse(dfuse_info->di_pool,
+					dfp->dfp_pool) < 0) {
+				DFUSE_TRA_ERROR(dfp, "Invalid pool uuid");
+				D_GOTO(out_dfs, ret = -DER_INVAL);
+			}
+			if (dfuse_info->di_cont) {
+
+				if (uuid_parse(dfuse_info->di_cont,
+						dfs->dfs_cont) < 0) {
+					DFUSE_TRA_ERROR(dfp,
+							"Invalid container uuid");
+					D_GOTO(out_dfs, ret = -DER_INVAL);
+				}
+			}
+		}
+	} else if (rc == ENOENT) {
+		printf("Mount point does not exist\n");
+		D_GOTO(out_dfs, ret = rc);
+	} else {
+		/* Other errors from DUNS, it should have logged them already */
+		D_GOTO(out_dfs, ret = rc);
+	}
+
+	if (uuid_is_null(dfp->dfp_pool) == 0) {
 
 		/** Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
@@ -287,12 +339,7 @@ main(int argc, char **argv)
 			D_GOTO(out_dfs, 0);
 		}
 
-		if (dfuse_info->di_cont) {
-
-			if (uuid_parse(dfuse_info->di_cont, dfs->dfs_cont) < 0) {
-				DFUSE_TRA_ERROR(dfp, "Invalid container uuid");
-				D_GOTO(out_pool, ret = -DER_INVAL);
-			}
+		if (uuid_is_null(dfs->dfs_cont) == 0) {
 
 			/** Try to open the DAOS container (the mountpoint) */
 			rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
@@ -302,7 +349,7 @@ main(int argc, char **argv)
 				DFUSE_TRA_ERROR(dfp,
 						"Failed container open (%d)",
 						rc);
-				D_GOTO(out_pool, 0);
+				D_GOTO(out_dfs, ret = rc);
 			}
 
 			rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
@@ -311,7 +358,7 @@ main(int argc, char **argv)
 				daos_cont_close(dfs->dfs_coh, NULL);
 				DFUSE_TRA_ERROR(dfp,
 						"dfs_mount failed (%d)", rc);
-				D_GOTO(out_pool, 0);
+				D_GOTO(out_dfs, ret = rc);
 			}
 			dfs->dfs_ops = &dfuse_dfs_ops;
 		} else {
@@ -321,25 +368,17 @@ main(int argc, char **argv)
 		dfs->dfs_ops = &dfuse_pool_ops;
 	}
 
+	dfuse_dfs_init(dfs, NULL);
+
 	rc = dfuse_start(dfuse_info, dfs);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(out_cont, ret = rc);
+		D_GOTO(out_dfs, ret = rc);
 
 	/* Remove all inodes from the hash tables */
 	ret = dfuse_destroy_fuse(dfuse_info->di_handle);
 
 	fuse_session_destroy(dfuse_info->di_session);
 
-	D_GOTO(out_dfs, 0);
-
-out_cont:
-	if (dfuse_info->di_cont) {
-		dfs_umount(dfs->dfs_ns);
-		daos_cont_close(dfs->dfs_coh, NULL);
-	}
-out_pool:
-	if (dfp && !daos_handle_is_inval(dfp->dfp_poh))
-		daos_pool_disconnect(dfp->dfp_poh, NULL);
 out_dfs:
 
 	d_list_for_each_entry_safe(dfp, dfpn, &dfuse_info->di_dfp_list,
@@ -363,6 +402,7 @@ out_dfs:
 							rc);
 				}
 			}
+			D_MUTEX_DESTROY(&dfs->dfs_read_mutex);
 			DFUSE_TRA_DOWN(dfs);
 			D_FREE(dfs);
 		}

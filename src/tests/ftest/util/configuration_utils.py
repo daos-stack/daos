@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2019-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -24,10 +24,8 @@
 from logging import getLogger
 import re
 
-from ClusterShell.NodeSet import NodeSet
-
-from command_utils import ObjectWithParameters, BasicParameter
-from general_utils import run_task
+from command_utils_base import BasicParameter, ObjectWithParameters
+from general_utils import get_host_data
 
 
 DATA_ERROR = "[ERROR]"
@@ -69,7 +67,7 @@ class ConfigurationData(object):
         cmd = r"free -b | sed -En 's/Mem:\s+([0-9]+).*/\1/p'"
         text = "memory"
         error = "Error obtaining total memory size"
-        return self.get_host_data(cmd, text, error)
+        return get_host_data(self.hosts, cmd, text, error, self.timeout)
 
     def get_host_nvme_data(self):
         """Get the largest NVMe capacity in bytes for each host.
@@ -81,7 +79,7 @@ class ConfigurationData(object):
         cmd = "lsblk -b -o SIZE,NAME | grep nvme"
         text = "NVMe"
         error = "No NVMe drives bound to the kernel driver detected"
-        return self.get_host_data(cmd, text, error)
+        return get_host_data(self.hosts, cmd, text, error, self.timeout)
 
     def get_host_scm_data(self):
         """Get the total SCM capacity in bytes for each host.
@@ -97,85 +95,7 @@ class ConfigurationData(object):
         cmd = " | ".join(cmd_list)
         text = "SCM"
         error = "No SCM devices detected"
-        return self.get_host_data(cmd, text, error)
-
-    def get_host_data(self, command, text, error):
-        """Get the data requested for each host using the specified command.
-
-        Args:
-            command (str): command used to obtain the data on each server
-            text (str): data identification string
-            error (str): data error string
-
-        Returns:
-            dict: a dictionary of data values for each NodeSet key
-
-        """
-        # Find the data for each specified servers
-        self.log.info("  Obtaining %s data on %s", text, self.hosts)
-        task = run_task(self.hosts, command, self.timeout)
-        host_data = {}
-
-        # Create a list of NodeSets with the same return code
-        data = {code: hosts for code, hosts in task.iter_retcodes()}
-
-        # Multiple return codes or a single non-zero return code
-        # indicate at least one error obtaining the data
-        if len(data) > 1 or 0 not in data:
-            # Report the errors
-            messages = []
-            for code, hosts in data.items():
-                if code != 0:
-                    output_data = list(task.iter_buffers(hosts))
-                    if len(output_data) == 0:
-                        messages.append(
-                            "{}: rc={}, command=\"{}\"".format(
-                                NodeSet.fromlist(hosts), code, command))
-                    else:
-                        for output, o_hosts in output_data:
-                            lines = str(output).splitlines()
-                            info = "rc={}{}".format(
-                                code,
-                                ", {}".format(output) if len(lines) < 2 else
-                                "\n  {}".format("\n  ".join(lines)))
-                            messages.append(
-                                "{}: {}".format(
-                                    NodeSet.fromlist(o_hosts), info))
-            self.log.error(
-                "    %s on the following hosts:\n      %s",
-                error, "\n      ".join(messages))
-
-            # Return an error data set for all of the hosts
-            host_data = {NodeSet.fromlist(self.hosts): DATA_ERROR}
-
-        else:
-            # The command completed successfully on all servers.
-            for output, hosts in task.iter_buffers(data[0]):
-                # Find the maximum size of the all the devices reported by
-                # this group of hosts as only one needs to meet the minimum
-                nodes = NodeSet.fromlist(hosts)
-                try:
-                    # The assumption here is that each line of command output
-                    # will begin with a number and that for the purposes of
-                    # checking this requirement the maximum of these numbers is
-                    # needed
-                    int_host_values = [
-                        int(line.split()[0])
-                        for line in str(output).splitlines()]
-                    host_data[nodes] = max(int_host_values)
-
-                except (IndexError, ValueError):
-                    # Log the error
-                    self.log.error(
-                        "    %s: Unable to obtain the maximum %s size due to "
-                        "unexpected output:\n      %s",
-                        nodes, text, "\n      ".join(str(output).splitlines()))
-
-                    # Return an error data set for all of the hosts
-                    host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
-                    break
-
-        return host_data
+        return get_host_data(self.hosts, cmd, text, error, self.timeout)
 
     def get_data(self, requirememt):
         """Get the specified requirement data.
@@ -219,7 +139,6 @@ class ConfigurationParameters(ObjectWithParameters):
         super(ConfigurationParameters, self).__init__(namespace + name + "/*")
         self.name = name
         self._config_data = data
-        self.log = getLogger(__name__)
 
         # Define the yaml entries that define the configuration
         #  - Make sure to add any new parameter names defined here in the

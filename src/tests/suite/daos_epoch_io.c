@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -230,7 +230,8 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 			rc = daos_tx_open_snap(arg->coh, *op->snap_epoch,
 					       &th_open, NULL);
 			D_ASSERT(rc == 0);
-			}
+		}
+
 		if (array)
 			lookup_recxs(dkey, akey, iod_size, th_open,
 				uf_arg->ua_recxs,
@@ -239,6 +240,11 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		else
 			lookup_single(dkey, akey, 0, buf, buf_size, th_open,
 				      &req);
+
+		if (uf_arg->snap == true) {
+			rc = daos_tx_close(th_open, NULL);
+			D_ASSERT(rc == 0);
+		}
 	}
 
 	if (uf_arg->ua_verify)
@@ -430,14 +436,6 @@ struct test_op_dict op_dict[] = {
 		.op_str		= "punch",
 		.op_cb		= {
 			daos_test_cb_punch,
-			test_cb_noop,
-			test_cb_noop,
-		},
-	}, {
-		.op_type	= TEST_OP_EPOCH_DISCARD,
-		.op_str		= "epoch_discard",
-		.op_cb		= {
-			test_cb_noop,
 			test_cb_noop,
 			test_cb_noop,
 		},
@@ -1187,13 +1185,15 @@ out:
 }
 
 static int
-cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
+cmd_line_parse(test_arg_t *arg, const char *cmd_line,
+	       struct test_op_record **op)
 {
 	char			 cmd[CMD_LINE_LEN_MAX] = { 0 };
 	struct test_op_record	*op_rec = NULL;
 	char			*argv[CMD_LINE_ARGC_MAX] = { 0 };
 	char			*dkey = NULL;
 	char			*akey = NULL;
+	size_t			 cmd_size;
 	int			 argc = 0;
 	int			 rc = 0;
 
@@ -1201,6 +1201,13 @@ cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
 #if CMD_LINE_DBG
 	print_message("parsing cmd: %s.\n", cmd);
 #endif
+	cmd_size = strnlen(cmd, CMD_LINE_LEN_MAX);
+	if (cmd_size == 0)
+		return 0;
+	if (cmd_size < 0 || cmd_size >= CMD_LINE_LEN_MAX) {
+		print_message("bad cmd_line.\n");
+		return -1;
+	}
 	rc = cmd_parse_argv(cmd, &argc, argv);
 	if (rc != 0) {
 		print_message("bad format %s.\n", cmd);
@@ -1461,10 +1468,18 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 	}
 
 	do {
+		size_t	cmd_size;
 		memset(cmd_line, 0, CMD_LINE_LEN_MAX);
 		if (cmd_line_get(fp, cmd_line) != 0)
 			break;
 
+		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX);
+		if (cmd_size == 0)
+			continue;
+		if (cmd_size < 0 || cmd_size >= CMD_LINE_LEN_MAX) {
+			print_message("bad cmd_line, exit.\n");
+			break;
+		}
 		rc = cmd_line_parse(arg, cmd_line, &op);
 		if (rc != 0) {
 			print_message("bad cmd_line %s, exit.\n", cmd_line);

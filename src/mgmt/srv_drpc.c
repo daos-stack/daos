@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 #include "srv.pb-c.h"
 #include "acl.pb-c.h"
 #include "pool.pb-c.h"
+#include "cont.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -168,7 +169,7 @@ ds_mgmt_drpc_create_mgmt_svc(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		if (rc != 0) {
 			D_ERROR("Unable to parse server UUID: %s\n",
 				req->uuid);
-			goto out;
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
 
@@ -217,6 +218,7 @@ ds_mgmt_drpc_get_attach_info(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc;
+	bool			 all_ranks = false;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__get_attach_info_req__unpack(
@@ -228,9 +230,13 @@ ds_mgmt_drpc_get_attach_info(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to get attach info\n");
+	D_INFO("Received request to get attach info (allranks=%d)\n",
+		req->allranks);
 
-	rc = ds_mgmt_get_attach_info_handler(&resp);
+	if (req->allranks)
+		all_ranks = true;
+
+	rc = ds_mgmt_get_attach_info_handler(&resp, all_ranks);
 	if (rc != 0)
 		D_ERROR("Failed to get attach info: "DF_RC"\n", DP_RC(rc));
 
@@ -279,7 +285,7 @@ ds_mgmt_drpc_join(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = uuid_parse(req->uuid, in.ji_server.sr_uuid);
 	if (rc != 0) {
 		D_ERROR("Failed to parse UUID: %s\n", req->uuid);
-		goto out;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	len = strnlen(req->addr, ADDR_STR_MAX_LEN);
 	if (len >= ADDR_STR_MAX_LEN) {
@@ -458,7 +464,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0) {
 		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
-		goto out;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
@@ -537,7 +543,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0) {
 		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
-		goto out;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/* Sys and force params are currently ignored in receiver. */
@@ -563,6 +569,175 @@ out:
 	}
 
 	mgmt__pool_destroy_req__free_unpacked(req, NULL);
+}
+
+void
+ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolEvictReq	*req = NULL;
+	Mgmt__PoolEvictResp	 resp = MGMT__POOL_EVICT_RESP__INIT;
+	uuid_t			 uuid;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_evict_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (evict pool_connections)\n");
+		return;
+	}
+
+	D_INFO("Received request to evict pool connections %s\n",
+		req->uuid);
+
+	rc = uuid_parse(req->uuid, uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
+			DP_RC(rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = ds_mgmt_evict_pool(uuid, req->sys);
+	if (rc != 0) {
+		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n",
+			req->uuid, DP_RC(rc));
+		goto out;
+	}
+
+out:
+	resp.status = rc;
+	len = mgmt__pool_evict_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_evict_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_evict_req__free_unpacked(req, NULL);
+}
+
+static int
+pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
+			 uint32_t rank, pool_comp_state_t state)
+{
+	uuid_t				uuid;
+	struct pool_target_id_list	target_id_list;
+	int				num_idxs;
+	int				rc, i;
+
+	num_idxs = (n_targetidx > 0) ? n_targetidx : 1;
+	rc = uuid_parse(id, uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", id,
+			DP_RC(rc));
+		return -DER_INVAL;
+	}
+
+	rc = pool_target_id_list_alloc(num_idxs, &target_id_list);
+	if (rc)
+		return rc;
+
+	if (n_targetidx > 0) {
+		for (i = 0; i < n_targetidx; ++i)
+			target_id_list.pti_ids[i].pti_id = targetidx[i];
+	} else
+		target_id_list.pti_ids[0].pti_id = -1;
+
+	rc = ds_mgmt_pool_target_update_state(uuid, rank, &target_id_list,
+					      state);
+	if (rc != 0) {
+		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", uuid,
+			DP_RC(rc));
+	}
+
+	pool_target_id_list_free(&target_id_list);
+	return rc;
+}
+
+void
+ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolExcludeReq	*req = NULL;
+	Mgmt__PoolExcludeResp	resp;
+	uint8_t			*body;
+	size_t			len;
+	int			rc;
+
+	mgmt__pool_exclude_resp__init(&resp);
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_exclude_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (Exclude target)\n");
+		return;
+	}
+
+	rc = pool_change_target_state(req->uuid, req->n_targetidx,
+			req->targetidx, req->rank, PO_COMP_ST_DOWN);
+
+	resp.status = rc;
+	len = mgmt__pool_exclude_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_exclude_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_exclude_req__free_unpacked(req, NULL);
+}
+
+void
+ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolReintegrateReq	*req = NULL;
+	Mgmt__PoolReintegrateResp	resp;
+	uint8_t				*body;
+	size_t				len;
+	int				rc;
+
+	mgmt__pool_reintegrate_resp__init(&resp);
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_reintegrate_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (Reintegrate target)\n");
+		return;
+	}
+
+	rc = pool_change_target_state(req->uuid, req->n_targetidx,
+			req->targetidx, req->rank, PO_COMP_ST_UP);
+
+	resp.status = rc;
+	len = mgmt__pool_reintegrate_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_reintegrate_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_reintegrate_req__free_unpacked(req, NULL);
 }
 
 void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
@@ -1253,6 +1428,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.totaltargets = pool_info.pi_ntargets;
 	resp.disabledtargets = pool_info.pi_ndisabled;
 	resp.activetargets = pool_info.pi_space.ps_ntargets;
+	resp.totalnodes = pool_info.pi_nnodes;
+	resp.leader = pool_info.pi_leader;
+	resp.version = pool_info.pi_map_ver;
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
 					    DAOS_MEDIA_SCM);
@@ -1460,7 +1638,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		if (rc != 0) {
 			D_ERROR("Unable to parse device UUID %s: "DF_RC"\n",
 				req->dev_uuid, DP_RC(rc));
-			goto out;
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	} else
 		uuid_clear(uuid); /* need to set uuid = NULL */
@@ -1672,5 +1850,57 @@ ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 
 	pack_daos_response(&resp, drpc_resp);
+}
+
+void
+ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__ContSetOwnerReq	*req = NULL;
+	Mgmt__ContSetOwnerResp	 resp = MGMT__CONT_SET_OWNER_RESP__INIT;
+	uint8_t			*body;
+	size_t			 len;
+	uuid_t			 pool_uuid, cont_uuid;
+	int			 rc = 0;
+
+	req = mgmt__cont_set_owner_req__unpack(NULL, drpc_req->body.len,
+					       drpc_req->body.data);
+
+	if (req == NULL) {
+		D_ERROR("Failed to unpack req (cont set owner)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to change container owner\n");
+
+	if (uuid_parse(req->contuuid, cont_uuid) != 0) {
+		D_ERROR("Container UUID is invalid\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (uuid_parse(req->pooluuid, pool_uuid) != 0) {
+		D_ERROR("Pool UUID is invalid\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = ds_mgmt_cont_set_owner(pool_uuid, cont_uuid, req->owneruser,
+				    req->ownergroup);
+	if (rc != 0)
+		D_ERROR("Set owner failed: %d\n", rc);
+
+out:
+	resp.status = rc;
+	len = mgmt__cont_set_owner_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__cont_set_owner_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__cont_set_owner_req__free_unpacked(req, NULL);
 }
 

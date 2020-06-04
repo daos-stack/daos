@@ -70,14 +70,6 @@ struct daos_rpc_status {
 	int status;
 };
 
-static int
-rpc_progress_cb(void *arg)
-{
-	struct daos_rpc_status *status = arg;
-
-	return status->completed;
-}
-
 static void
 daos_rpc_wait(crt_context_t *ctx, struct daos_rpc_status *status)
 {
@@ -85,10 +77,11 @@ daos_rpc_wait(crt_context_t *ctx, struct daos_rpc_status *status)
 	while (!status->completed) {
 		int rc = 0;
 
-		rc = crt_progress(ctx, DAOS_EQ_WAIT,
-				  rpc_progress_cb, status);
-		if (rc)
+		rc = crt_progress(ctx, 0);
+		if (rc && rc != -DER_TIMEDOUT) {
+			D_ERROR("failed to progress CART context: %d\n", rc);
 			break;
+		}
 	}
 }
 

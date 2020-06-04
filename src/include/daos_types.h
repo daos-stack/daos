@@ -46,6 +46,9 @@ extern "C" {
 /** Maximum length (excluding the '\0') of a DAOS system name */
 #define DAOS_SYS_NAME_MAX 15
 
+/** Maximum length (excluding the '\0') of info string info via GetAttachInfo */
+#define DAOS_SYS_INFO_STRING_MAX 63
+
 /**
  * Generic data type definition
  */
@@ -126,6 +129,12 @@ daos_handle_is_inval(daos_handle_t hdl)
 	return hdl.cookie == 0;
 }
 
+static inline bool
+daos_handle_is_valid(daos_handle_t hdl)
+{
+	return !daos_handle_is_inval(hdl);
+}
+
 /**
  * DAOS_PC_RO connects to the pool for reading only.
  *
@@ -201,7 +210,9 @@ typedef enum {
  * index within the rank
  */
 struct d_tgt_list {
+	/** array of ranks */
 	d_rank_t	*tl_ranks;
+	/** array of targets */
 	int32_t		*tl_tgts;
 	/** number of ranks & tgts */
 	uint32_t	tl_nr;

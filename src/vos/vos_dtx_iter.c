@@ -141,10 +141,8 @@ dtx_iter_next(struct vos_iterator *iter)
 		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
 		dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
 
-		/* Only need to return the DTX that was handled before the
-		 * latest DTX resync.
-		 */
-		if (DAE_SRV_GEN(dae) < oiter->oit_cont->vc_dtx_resync_gen)
+		/* Skip committable ones. */
+		if (!dae->dae_committable)
 			break;
 	}
 
@@ -173,13 +171,13 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
 	dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
 
-	it_entry->ie_xid = DAE_XID(dae);
-	it_entry->ie_oid = DAE_OID(dae);
 	it_entry->ie_epoch = DAE_EPOCH(dae);
-	it_entry->ie_dtx_intent = DAE_INTENT(dae);
-	it_entry->ie_dtx_hash = DAE_DKEY_HASH(dae);
+	it_entry->ie_dtx_xid = DAE_XID(dae);
+	it_entry->ie_dtx_oid = DAE_OID(dae);
+	it_entry->ie_dtx_ver = DAE_VER(dae);
+	it_entry->ie_dtx_flags = DAE_FLAGS(dae);
 
-	D_DEBUG(DB_TRACE, "DTX iterator fetch the one "DF_DTI"\n",
+	D_DEBUG(DB_IO, "DTX iterator fetch the one "DF_DTI"\n",
 		DP_DTI(&DAE_XID(dae)));
 
 	return 0;

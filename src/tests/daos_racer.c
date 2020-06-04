@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,13 @@ int			dkey_cnt = MAX_KEY_CNT;
 int			akey_cnt = MAX_KEY_CNT;
 int			max_akey_per_dkey = 5;
 int			obj_cnt_per_class = 2;
+
+/* The percentage for conditional operations:
+ * 0	means disable conditional operations.
+ * 100	means all are conditional operations.
+ * 20 by default.
+ */
+int			cond_pct = 20;
 
 static uint16_t
 oclass_get(unsigned int random)
@@ -177,16 +184,47 @@ update_or_fetch(bool update)
 
 	for (i = 0; i < round; i++) {
 		int iod_nr = random % max_akey_per_dkey;
+		int cond_rand = rand();
+		uint64_t flags = 0;
 
 		memset(iods, 0, max_akey_per_dkey * sizeof(daos_iod_t));
 		pack_dkey_iod_sgl(dkey, &dkey_iov, akeys, iods, recxs, sgls,
 				  sgl_iovs, sgl_bufs, iod_nr);
-		if (update)
-			daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey_iov, iod_nr,
-					iods, sgls, NULL);
-		else
-			daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey_iov, iod_nr,
-				       iods, sgls, NULL, NULL);
+		if (update) {
+			if ((cond_rand % 100) < cond_pct) {
+				switch (cond_rand % 4) {
+				case 0:
+					flags = DAOS_COND_DKEY_INSERT;
+					break;
+				case 1:
+					flags = DAOS_COND_DKEY_UPDATE;
+					break;
+				case 2:
+					flags = DAOS_COND_AKEY_INSERT;
+					break;
+				case 3:
+					flags = DAOS_COND_AKEY_UPDATE;
+					break;
+				}
+			}
+
+			daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey_iov,
+					iod_nr, iods, sgls, NULL);
+		} else {
+			if ((cond_rand % 100) < cond_pct) {
+				switch (cond_rand % 2) {
+				case 0:
+					flags = DAOS_COND_DKEY_FETCH;
+					break;
+				case 1:
+					flags = DAOS_COND_AKEY_FETCH;
+					break;
+				}
+			}
+
+			daos_obj_fetch(oh, DAOS_TX_NONE, flags, &dkey_iov,
+				       iod_nr, iods, sgls, NULL, NULL);
+		}
 	}
 
 	daos_obj_close(oh, NULL);
@@ -290,6 +328,7 @@ punch_internal(int op)
 	d_iov_t		akey_iov;
 	char		akey[MAX_KEY_SIZE];
 	daos_handle_t	oh;
+	uint64_t	flags = 0;
 	int		rc;
 
 	ts_oid = racer_oid_gen(rand());
@@ -297,19 +336,22 @@ punch_internal(int op)
 	if (rc)
 		return;
 
+	if ((rand() % 100) < cond_pct)
+		flags = DAOS_COND_PUNCH;
+
 	if (op == PUNCH_OBJ) {
-		daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
+		daos_obj_punch(oh, DAOS_TX_NONE, flags, NULL);
 	} else {
 		sprintf(dkey, "%d", rand() % dkey_cnt);
 		d_iov_set(&dkey_iov, dkey, strlen(dkey));
 		if (op == PUNCH_DKEY) {
-			daos_obj_punch_dkeys(oh, DAOS_TX_NONE, 0, 1, &dkey_iov,
-					     NULL);
+			daos_obj_punch_dkeys(oh, DAOS_TX_NONE, flags, 1,
+					     &dkey_iov, NULL);
 		} else {
 			sprintf(akey, "%d", rand() % max_akey_per_dkey);
 			d_iov_set(&akey_iov, akey, strlen(akey));
-			daos_obj_punch_akeys(oh, DAOS_TX_NONE, 0, &dkey_iov, 1,
-					     &akey_iov, NULL);
+			daos_obj_punch_akeys(oh, DAOS_TX_NONE, flags, &dkey_iov,
+					     1, &akey_iov, NULL);
 		}
 	}
 	daos_obj_close(oh, NULL);
@@ -415,6 +457,7 @@ static struct option ts_ops[] = {
 	{ "pool_uuid",	required_argument,	NULL,	'p' },
 	{ "cont_uuid",	required_argument,	NULL,	'c' },
 	{ "time",	required_argument,	NULL,	't' },
+	{ "cond_pct",	required_argument,	NULL,	'C' },
 	{ NULL,		0,			NULL,	0   },
 };
 
@@ -455,6 +498,16 @@ main(int argc, char **argv)
 			break;
 		case 't':
 			duration = strtoul(optarg, &endp, 0);
+			break;
+		case 'C':
+			cond_pct = atoi(optarg);
+			if (cond_pct > 100 || cond_pct < 0) {
+				fprintf(stderr, "Percentage for conditional "
+					"operation should be within [0 - 100], "
+					"20 is by default\n");
+				return -ERANGE;
+			}
+
 			break;
 		}
 	}
@@ -525,6 +578,22 @@ main(int argc, char **argv)
 			if (rc == -DER_NONEXIST) {
 				rc = 0;
 				continue;
+			}
+
+			if (rc == -DER_NOSPACE) {
+				/* XXX: There is not enough space to sync the
+				 *	object, that may cause some committable
+				 *	DTX entries cannot be committed on some
+				 *	replica(s), then subsequent fetch from
+				 *	related replica(s) for verification
+				 *	against those DTX entries will not get
+				 *	the right data as to the verification
+				 *	logic may report fake inconsistency.
+				 *
+				 *	So let's stop the verification.
+				 */
+				rc = 0;
+				break;
 			}
 
 			if (rc == -DER_MISMATCH) {

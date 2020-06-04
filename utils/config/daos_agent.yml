@@ -1,10 +1,10 @@
 # DAOS client configuration file.
 #
 # Location of this configuration file is determined by first checking for the
-# path specified through the -o option of the daos_agent and DMG command line.
-# Otherwise, etc/daos.yml is used.
+# path specified through the -o option of the daos_agent command line.
+# Otherwise, etc/daos_agent.yml is used.
 #
-# Section describing the client configuration
+# Section describing the agent configuration
 #
 # Although not supported for now, one might want to connect to multiple
 # DAOS installations from the same node in the future.
@@ -24,22 +24,19 @@
 # default: 10001
 #port: 10001
 
-# Hostlist
-# comma separated list of addresses <ipv4addr/hostname:port>
-# default: ['localhost:10001']
-#hostlist: ['localhost:10001']
-
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
 #  allow_insecure: false
+#
 #  # Custom CA Root certificate for generated certs
-#  ca_cert: .daos/daosCA.crt
+#  ca_cert: /etc/daos/certs/daosCA.crt
 #  # Agent certificate for use in TLS handshakes
-#  cert: .daos/agent.crt
+#  cert: /etc/daos/certs/agent.crt
 #  # Key portion of Agent Certificate
-#  key: .daos/agent.key
+#  key: /etc/daos/certs/agent.key
 
 # Use the given directory for creating unix domain sockets
 # default: /var/run/daos_agent

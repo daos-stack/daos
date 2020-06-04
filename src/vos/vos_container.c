@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,8 +71,13 @@ cont_df_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 static int
 cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
+	struct vos_cont_df	*cont_df;
+
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NONEXIST;
+
+	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	vos_ts_evict(&cont_df->cd_ts_idx, VOS_TS_TYPE_CONT);
 
 	return gc_add_item(tins->ti_priv, GC_CONT, rec->rec_off, 0);
 }
@@ -101,7 +106,6 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
-	cont_df->cd_dtx_resync_gen = 1;
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, 0, VOS_OBJ_ORDER,
 				      &pool->vp_uma, &cont_df->cd_obj_root,
@@ -179,26 +183,21 @@ cont_cmp(struct d_ulink *ulink, void *cmp_args)
 	return !uuid_compare(cont->vc_pool->vp_id, pkey->uuid);
 }
 
-/**
- * Container cache functions
- */
-void
-cont_free(struct d_ulink *ulink)
+static void
+cont_free_internal(struct vos_container *cont)
 {
-	struct vos_container		*cont;
-	int				 i;
+	int i;
 
-	cont = container_of(ulink, struct vos_container, vc_uhlink);
 	D_ASSERT(cont->vc_open_count == 0);
 
-	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
-		dbtree_destroy(cont->vc_dtx_cos_hdl, NULL);
 	if (!daos_handle_is_inval(cont->vc_dtx_active_hdl))
 		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
 	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
 		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
 
-	D_ASSERT(d_list_empty(&cont->vc_dtx_committable_list));
+	if (cont->vc_dtx_array)
+		lrua_array_free(cont->vc_dtx_array);
+
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_tmp_list));
 
@@ -210,6 +209,18 @@ cont_free(struct d_ulink *ulink)
 	}
 
 	D_FREE(cont);
+}
+
+/**
+ * Container cache functions
+ */
+void
+cont_free(struct d_ulink *ulink)
+{
+	struct vos_container		*cont;
+
+	cont = container_of(ulink, struct vos_container, vc_uhlink);
+	cont_free_internal(cont);
 }
 
 struct d_ulink_ops   co_hdl_uh_ops = {
@@ -365,16 +376,13 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	uuid_copy(cont->vc_id, co_uuid);
 	cont->vc_pool	 = pool;
 	cont->vc_cont_df = args.ca_cont_df;
+	cont->vc_ts_idx = &cont->vc_cont_df->cd_ts_idx;
 	cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
 	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
-	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
-	D_INIT_LIST_HEAD(&cont->vc_dtx_committable_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_tmp_list);
-	cont->vc_dtx_committable_count = 0;
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_dtx_committed_tmp_count = 0;
-	cont->vc_dtx_resync_gen = cont->vc_cont_df->cd_dtx_resync_gen;
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root,
@@ -387,6 +395,16 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
+
+	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
+			      sizeof(struct vos_dtx_act_ent),
+			      LRU_FLAG_REUSE_UNIQUE,
+			      NULL, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX active array: rc = "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(exit, rc);
+	}
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACT_TABLE, 0,
 				      DTX_BTREE_ORDER, &uma,
@@ -406,17 +424,6 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				      &cont->vc_dtx_committed_hdl);
 	if (rc != 0) {
 		D_ERROR("Failed to create DTX committed btree: rc = "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(exit, rc);
-	}
-
-	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_COS, 0,
-				      DTX_BTREE_ORDER, &uma,
-				      &cont->vc_dtx_cos_btr,
-				      DAOS_HDL_INVAL, cont,
-				      &cont->vc_dtx_cos_hdl);
-	if (rc != 0) {
-		D_ERROR("Failed to create DTX CoS btree: rc = "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
@@ -454,7 +461,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 exit:
 	if (rc != 0 && cont)
-		cont_decref(cont);
+		cont_free_internal(cont);
 
 	return rc;
 }
@@ -637,24 +644,6 @@ vos_cont_tab_register()
 	if (rc)
 		D_ERROR("dbtree create failed\n");
 	return rc;
-}
-
-int
-vos_dtx_update_resync_gen(daos_handle_t coh)
-{
-	struct vos_container	*cont;
-	struct vos_cont_df	*cont_df;
-
-	cont = vos_hdl2cont(coh);
-	D_ASSERT(cont != NULL);
-
-	cont_df = cont->vc_cont_df;
-	cont->vc_dtx_resync_gen = cont_df->cd_dtx_resync_gen + 1;
-	pmemobj_memcpy_persist(vos_cont2umm(cont)->umm_pool,
-			       &cont_df->cd_dtx_resync_gen,
-			       &cont->vc_dtx_resync_gen,
-			       sizeof(cont_df->cd_dtx_resync_gen));
-	return 0;
 }
 
 /** iterator for co_uuid */

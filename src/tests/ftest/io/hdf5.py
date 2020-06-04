@@ -21,11 +21,11 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from mpio_test_base import LlnlMpi4pyHdf5
+from mpio_test_base import MpiioTests
 
 
 # pylint: disable=too-many-ancestors
-class Hdf5(LlnlMpi4pyHdf5):
+class Hdf5(MpiioTests):
     """Runs HDF5 test suites.
 
     :avocado: recursive
@@ -79,7 +79,7 @@ class Hdf5(LlnlMpi4pyHdf5):
                 test_dense_attr
                 test_partial_no_selection_coll_md_read
 
-        :avocado: tags=all,pr,hw,tiny,mpio,llnlmpi4pyhdf5,hdf5
+        :avocado: tags=all,pr,hw,small,mpio,llnlmpi4pyhdf5,hdf5
         """
         test_repo = self.params.get("hdf5", '/run/test_repo/')
         self.run_test(test_repo, "hdf5")

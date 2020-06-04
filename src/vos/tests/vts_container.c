@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,14 +78,12 @@ co_ops_run(void **state)
 				break;
 			case QUERY:
 				ret = vos_cont_query(arg->coh[i], &cinfo);
-				assert_int_equal(ret, 0);
 				assert_int_equal(cinfo.ci_nobjs, 0);
 				assert_int_equal(cinfo.ci_used, 0);
 				break;
 			case DESTROY:
 				ret = vos_cont_destroy(arg->poh,
 						     arg->uuid[i].uuid);
-				assert_int_equal(ret, 0);
 				uuid_clear(arg->uuid[i].uuid);
 				if (!uuid_is_null(arg->uuid[i].uuid))
 					printf("UUID clear did not work\n");
@@ -94,9 +92,7 @@ co_ops_run(void **state)
 				fail_msg("Unkown Ops!\n");
 				break;
 			}
-			if (arg->ops_seq[i][j] != QUERY ||
-			    arg->ops_seq[i][j] != DESTROY)
-				assert_int_equal(ret, 0);
+			assert_int_equal(ret, 0);
 		}
 	}
 	D_PRINT("Finished all create and discards\n");
@@ -206,13 +202,13 @@ teardown(void **state)
 	ret = vos_pool_close(test_arg->poh);
 	assert_int_equal(ret, 0);
 
+	D_ASSERT(test_arg->fname != NULL);
 	ret = vos_pool_destroy(test_arg->fname, test_arg->pool_uuid);
 	assert_int_equal(ret, 0);
 
 	if (vts_file_exists(test_arg->fname))
 		remove(test_arg->fname);
-	if (test_arg->fname)
-		D_FREE(test_arg->fname);
+	D_FREE(test_arg->fname);
 
 	D_FREE(test_arg);
 	return 0;
@@ -378,9 +374,12 @@ static const struct CMUnitTest vos_co_tests[] = {
 };
 
 int
-run_co_test(void)
+run_co_test(const char *cfg)
 {
-	return cmocka_run_group_tests_name("VOS container tests",
+	char	test_name[DTS_CFG_MAX];
+
+	dts_create_config(test_name, "VOS container tests %s", cfg);
+	return cmocka_run_group_tests_name(test_name,
 					   vos_co_tests,
 					   setup, teardown);
 }

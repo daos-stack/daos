@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 #include <daos/btree.h>
 #include "vos_internal.h"
 #include "vos_layout.h"
+#include "vos_ts.h"
 #include "ilog.h"
 
 #define ILOG_TREE_ORDER 11
@@ -58,7 +59,7 @@ struct ilog_root {
 		struct ilog_id		lr_id;
 		struct ilog_tree	lr_tree;
 	};
-	bool				lr_punch;
+	uint32_t			lr_ts_idx;
 	uint32_t			lr_magic;
 };
 
@@ -79,43 +80,48 @@ struct ilog_context {
 	bool				 ic_ver_inc;
 };
 
-#define DF_ID		"epoch:"DF_U64" tx_id:0x"DF_X64
-#define DP_ID(id)	(id).id_epoch, (id).id_tx_id
-#define DF_VAL		"punch:%s"
-#define DP_VAL(punch)	punch ? " true" : "false"
-
-struct prec {
-	bool	p_punch;
-	int32_t	p_magic;
+union prec {
+	struct {
+		/** Transaction id */
+		uint32_t	p_tx_id;
+		/** Punch minor epoch */
+		uint16_t	p_punch_minor_eph;
+		/** Update minor epoch */
+		uint16_t	p_update_minor_eph;
+	};
+	uint64_t		p_value;
 };
 
-static inline struct prec *
-rec2prec(struct btr_record *rec)
+static inline void
+id2prec(union prec *prec, const struct ilog_id *id)
 {
-	return (struct prec *)&rec->rec_off;
+	D_ASSERT(id->id_update_minor_eph != id->id_punch_minor_eph);
+	prec->p_value = id->id_value;
 }
 
-static inline bool *
-rec2punch(struct btr_record *rec)
+static inline void
+prec2id(struct ilog_id *id, const union prec *prec)
 {
-	return &rec2prec(rec)->p_punch;
+	D_ASSERT(prec->p_update_minor_eph != prec->p_punch_minor_eph);
+	id->id_value = prec->p_value;
+}
+
+
+static inline union prec *
+rec2prec(struct btr_record *rec)
+{
+	return (union prec *)&rec->rec_off;
 }
 
 D_CASSERT(sizeof(struct ilog_id) == sizeof(struct ilog_tree));
 D_CASSERT(sizeof(struct ilog_root) == sizeof(struct ilog_df));
 /** We hijack the value offset to store the actual value inline */
-D_CASSERT(sizeof(struct prec) <= sizeof(((struct btr_record *)0)->rec_off));
+D_CASSERT(sizeof(union prec) <= sizeof(((struct btr_record *)0)->rec_off));
+D_CASSERT(sizeof(union prec) == sizeof(((struct ilog_id *)0)->id_value));
 
 /**
  * Customized functions for btree.
  */
-
-/** size of hashed-key */
-static int
-ilog_hkey_size(void)
-{
-	return sizeof(struct ilog_id);
-}
 
 static int
 ilog_rec_msize(int alloc_overhead)
@@ -124,54 +130,22 @@ ilog_rec_msize(int alloc_overhead)
 	return 0;
 }
 
-/** generate hkey */
-static void
-ilog_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
-{
-	D_ASSERT(key_iov->iov_len == sizeof(struct ilog_id));
-	memcpy(hkey, key_iov->iov_buf, sizeof(struct ilog_id));
-}
-
-/** compare the hashed key */
-static int
-ilog_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
-{
-	struct ilog_id	*k1 = (struct ilog_id *)&rec->rec_hkey[0];
-	struct ilog_id	*k2 = (struct ilog_id *)hkey;
-
-	if (k1->id_epoch < k2->id_epoch)
-		return BTR_CMP_LT;
-
-	if (k1->id_epoch > k2->id_epoch)
-		return BTR_CMP_GT;
-
-	return BTR_CMP_EQ;
-}
-
 /** create a new key-record, or install an externally allocated key-record */
 static int
 ilog_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-	      d_iov_t *val_iov, struct btr_record *rec)
+	       d_iov_t *val_iov, struct btr_record *rec)
 {
-	struct prec *prec = rec2prec(rec);
+	union prec		*prec = rec2prec(rec);
 
-	D_ASSERT(val_iov->iov_len == sizeof(bool));
-	/** Note the D_CASSERT above ensures that rec_off is large enough
-	 *  to fit the value without allocating new memory.
-	 */
-	prec->p_punch = *(bool *)val_iov->iov_buf;
-	/** Generic btree code will not call ilog_rec_free if rec->rec_off is
-	 * UMOFF_NULL.   Since we are using that field to store the data and
-	 * the data (p_punch) can be 0, set this flag to force rec_free to be
-	 * called.
-	 */
-	prec->p_magic = 1;
+	D_ASSERT(val_iov->iov_len == sizeof(*prec));
+	*prec = *(union prec *)val_iov->iov_buf;
 
 	return 0;
 }
 
 static inline int
-ilog_is_same_tx(struct ilog_context *lctx, umem_off_t tx_id, bool *same)
+ilog_is_same_tx(struct ilog_context *lctx, uint32_t tx_id, daos_epoch_t epoch,
+		bool *same)
 {
 	struct ilog_desc_cbs	*cbs = &lctx->ic_cbs;
 
@@ -180,13 +154,13 @@ ilog_is_same_tx(struct ilog_context *lctx, umem_off_t tx_id, bool *same)
 	if (!cbs->dc_is_same_tx_cb)
 		return 0;
 
-	return cbs->dc_is_same_tx_cb(&lctx->ic_umm, tx_id, same,
+	return cbs->dc_is_same_tx_cb(&lctx->ic_umm, tx_id, epoch, same,
 				     cbs->dc_is_same_tx_args);
 }
 
 static int
-ilog_status_get(struct ilog_context *lctx, umem_off_t tx_id,
-		uint32_t intent)
+ilog_status_get(struct ilog_context *lctx, uint32_t tx_id,
+		daos_epoch_t epoch, uint32_t intent)
 {
 	struct ilog_desc_cbs	*cbs = &lctx->ic_cbs;
 	int			 rc;
@@ -197,7 +171,7 @@ ilog_status_get(struct ilog_context *lctx, umem_off_t tx_id,
 	if (!cbs->dc_log_status_cb)
 		return ILOG_COMMITTED;
 
-	rc = cbs->dc_log_status_cb(&lctx->ic_umm, tx_id, intent,
+	rc = cbs->dc_log_status_cb(&lctx->ic_umm, tx_id, epoch, intent,
 				   cbs->dc_log_status_args);
 
 	if ((intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH)
@@ -217,22 +191,22 @@ ilog_log_add(struct ilog_context *lctx, struct ilog_id *id)
 		return 0;
 
 	rc = cbs->dc_log_add_cb(&lctx->ic_umm, lctx->ic_root_off, &id->id_tx_id,
-				cbs->dc_log_add_args);
+				id->id_epoch, cbs->dc_log_add_args);
 	if (rc != 0) {
 		D_ERROR("Failed to register incarnation log entry: "DF_RC"\n",
 			DP_RC(rc));
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "Registered ilog="DF_X64" epoch="DF_U64" tx_id="
-		DF_U64"\n", lctx->ic_root_off, id->id_epoch,
-		id->id_tx_id);
+	D_DEBUG(DB_TRACE, "Registered ilog="DF_X64" epoch="DF_X64" tx_id=%d\n",
+		lctx->ic_root_off, id->id_epoch, id->id_tx_id);
 
 	return 0;
 }
 
 static inline int
-ilog_log_del(struct ilog_context *lctx, const struct ilog_id *id)
+ilog_log_del(struct ilog_context *lctx, const struct ilog_id *id,
+	     bool deregister)
 {
 	struct ilog_desc_cbs	*cbs = &lctx->ic_cbs;
 	int			 rc;
@@ -241,69 +215,79 @@ ilog_log_del(struct ilog_context *lctx, const struct ilog_id *id)
 		return 0;
 
 	rc = cbs->dc_log_del_cb(&lctx->ic_umm, lctx->ic_root_off, id->id_tx_id,
-				cbs->dc_log_del_args);
+				id->id_epoch, deregister, cbs->dc_log_del_args);
 	if (rc != 0) {
 		D_ERROR("Failed to deregister incarnation log entry: "DF_RC"\n",
 			DP_RC(rc));
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "De-registered ilog="DF_X64" epoch="DF_U64" tx_id="
-		DF_U64"\n", lctx->ic_root_off, id->id_epoch,
-		id->id_tx_id);
+	D_DEBUG(DB_TRACE, "%s ilog="DF_X64" epoch="DF_X64
+		" tx_id=%d\n", deregister ? "Deregistered" : "Removed",
+		lctx->ic_root_off, id->id_epoch, id->id_tx_id);
 
 	return 0;
+}
+
+static inline void
+ilog_rec2id(struct ilog_id *id, struct btr_record *rec)
+{
+	union prec	*prec = rec2prec(rec);
+
+	id->id_epoch = rec->rec_ukey[0];
+	prec2id(id, prec);
 }
 
 static int
 ilog_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	struct ilog_id		*id = (struct ilog_id *)&rec->rec_hkey[0];
+	struct ilog_id		id;
 	struct ilog_context	*lctx = args;
 
 	if (lctx == NULL)
 		return 0;
 
+	ilog_rec2id(&id, rec);
+
 	/* For current DTX, we need to remove the forward reference.  I think
 	 * eventually, this callback will go away as we will undo the operation
 	 * on the key rather than specifically the incarnation log record.
 	 */
-	return ilog_log_del(lctx, id);
+	return ilog_log_del(lctx, &id, true);
 }
 
 static int
 ilog_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	      d_iov_t *key_iov, d_iov_t *val_iov)
+	       d_iov_t *key_iov, d_iov_t *val_iov)
 {
-	struct ilog_id	*key = (struct ilog_id *)&rec->rec_hkey[0];
-	bool		*punch = rec2punch(rec);
+	daos_epoch_t	*epoch = (daos_epoch_t *)&rec->rec_ukey[0];
+	union prec	*prec = rec2prec(rec);
 
-	if (key_iov != NULL) {
-		if (key_iov->iov_buf == NULL) {
-			d_iov_set(key_iov, key, sizeof(*key));
-		} else {
-			D_ASSERT(sizeof(*key) <= key_iov->iov_buf_len);
-			memcpy(key_iov->iov_buf, key, sizeof(*key));
-			key_iov->iov_len = sizeof(*key);
-		}
+	D_ASSERT(key_iov != NULL);
+	D_ASSERT(val_iov != NULL);
+
+	if (key_iov->iov_buf == NULL) {
+		d_iov_set(key_iov, epoch, sizeof(*epoch));
+	} else {
+		D_ASSERT(sizeof(*epoch) == key_iov->iov_buf_len);
+
+		memcpy(key_iov->iov_buf, epoch, sizeof(*epoch));
+		key_iov->iov_len = sizeof(*epoch);
 	}
-	if (val_iov != NULL) {
-		if (val_iov->iov_buf == NULL) {
-			d_iov_set(val_iov, punch, sizeof(*punch));
-		} else {
-			D_ASSERT(sizeof(*punch) <= val_iov->iov_buf_len);
-			memcpy(val_iov->iov_buf, punch, sizeof(*punch));
-			val_iov->iov_len = sizeof(*punch);
-		}
+	if (val_iov->iov_buf == NULL) {
+		d_iov_set(val_iov, prec, sizeof(*prec));
+	} else {
+		D_ASSERT(sizeof(*prec) == val_iov->iov_buf_len);
+
+		memcpy(val_iov->iov_buf, prec, sizeof(*prec));
+		val_iov->iov_len = sizeof(*prec);
 	}
+
 	return 0;
 }
 
 static btr_ops_t ilog_btr_ops = {
 	.to_rec_msize		= ilog_rec_msize,
-	.to_hkey_size		= ilog_hkey_size,
-	.to_hkey_gen		= ilog_hkey_gen,
-	.to_hkey_cmp		= ilog_hkey_cmp,
 	.to_rec_alloc		= ilog_rec_alloc,
 	.to_rec_free		= ilog_rec_free,
 	.to_rec_fetch		= ilog_rec_fetch,
@@ -314,7 +298,8 @@ ilog_init(void)
 {
 	int	rc;
 
-	rc = dbtree_class_register(VOS_BTR_ILOG, 0, &ilog_btr_ops);
+	rc = dbtree_class_register(VOS_BTR_ILOG, BTR_FEAT_UINT_KEY,
+				   &ilog_btr_ops);
 	if (rc != 0)
 		D_ERROR("Failed to register incarnation log btree class: %s\n",
 			d_errstr(rc));
@@ -323,16 +308,19 @@ ilog_init(void)
 }
 
 /* 4 bit magic number + version */
-#define ILOG_MAGIC		0x60000000
-#define ILOG_MAGIC_MASK		0xf0000000
-#define ILOG_VERSION_MASK	~(ILOG_MAGIC_MASK)
+#define ILOG_MAGIC		0x00000006
+#define ILOG_MAGIC_BITS		4
+#define ILOG_MAGIC_MASK		((1 << ILOG_MAGIC_BITS) - 1)
+#define ILOG_VERSION_INC	(1 << ILOG_MAGIC_BITS)
+#define ILOG_VERSION_MASK	~(ILOG_VERSION_INC - 1)
 #define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
 
-static inline int
+static inline uint32_t
 ilog_mag2ver(uint32_t magic) {
 	if (!ILOG_MAGIC_VALID(magic))
-		return -DER_INVAL;
-	return (magic & ILOG_VERSION_MASK);
+		return 0;
+
+	return (magic & ILOG_VERSION_MASK) >> ILOG_MAGIC_BITS;
 }
 
 /** Increment the version of the log.   The object tree in particular can
@@ -343,19 +331,20 @@ static inline uint32_t
 ilog_ver_inc(struct ilog_context *lctx)
 {
 	uint32_t        magic = lctx->ic_root->lr_magic;
-	uint32_t        next = (magic & ILOG_VERSION_MASK) + 1;
 
 	D_ASSERT(ILOG_MAGIC_VALID(magic));
 
-	if (next > ILOG_VERSION_MASK)
-		next = 1; /* Wrap around */
+	if ((magic & ILOG_VERSION_MASK) == ILOG_VERSION_MASK)
+		magic = (magic & ~ILOG_VERSION_MASK) + ILOG_VERSION_INC;
+	else
+		magic += ILOG_VERSION_INC;
 
 	/* This is only called when we will persist the new version so no need
 	* to update the version when finishing the transaction.
 	*/
 	lctx->ic_ver_inc = false;
 
-	return ILOG_MAGIC | next;
+	return magic;
 }
 
 /** Called when we know a txn is needed.  Subsequent calls are a noop. */
@@ -508,7 +497,7 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root)
 	struct ilog_root	tmp = {0};
 	int			rc = 0;
 
-	tmp.lr_magic = ILOG_MAGIC + 1;
+	tmp.lr_magic = ILOG_MAGIC + ILOG_VERSION_INC;
 
 	rc = ilog_ptr_set(&lctx, root, &tmp);
 	lctx.ic_ver_inc = false;
@@ -605,7 +594,7 @@ ilog_destroy(struct umem_instance *umm,
 			goto fail;
 		}
 	} else if (lctx.ic_root->lr_tree.it_embedded) {
-		D_DEBUG(DB_IO, "Removing destroyed entry "DF_U64" in root\n",
+		D_DEBUG(DB_TRACE, "Removing destroyed entry "DF_X64" in root\n",
 			lctx.ic_root->lr_id.id_epoch);
 		saved_id = lctx.ic_root->lr_id;
 	}
@@ -613,7 +602,7 @@ ilog_destroy(struct umem_instance *umm,
 	rc = ilog_ptr_set(&lctx, &lctx.ic_root->lr_magic, &tmp);
 
 	if (rc == 0)
-		rc = ilog_log_del(&lctx, &saved_id);
+		rc = ilog_log_del(&lctx, &saved_id, true);
 fail:
 	rc = ilog_tx_end(&lctx, rc);
 
@@ -621,18 +610,18 @@ fail:
 }
 
 static int
-ilog_root_migrate(struct ilog_context *lctx, daos_epoch_t epoch, bool new_punch)
+ilog_root_migrate(struct ilog_context *lctx, const struct ilog_id *id_in)
 {
+	union prec		 prec;
+	daos_epoch_t		 epoch;
 	struct ilog_root	*root;
 	struct ilog_root	 tmp = {0};
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
-	struct ilog_id		 key;
 	umem_off_t		 tree_root;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	struct umem_attr	 uma;
-	struct ilog_id		 id = {0, epoch};
-	bool			 punch;
+	struct ilog_id		 id = *id_in;
 	int			 rc = 0;
 
 	root = lctx->ic_root;
@@ -645,7 +634,7 @@ ilog_root_migrate(struct ilog_context *lctx, daos_epoch_t epoch, bool new_punch)
 	}
 
 	umem_attr_get(&lctx->ic_umm, &uma);
-	rc = dbtree_create(VOS_BTR_ILOG, 0, ILOG_TREE_ORDER,
+	rc = dbtree_create(VOS_BTR_ILOG, BTR_FEAT_UINT_KEY, ILOG_TREE_ORDER,
 			   &uma, &tree_root, &toh);
 	if (rc != 0) {
 		D_ERROR("Failed to create an incarnation log tree: rc = %s\n",
@@ -654,11 +643,11 @@ ilog_root_migrate(struct ilog_context *lctx, daos_epoch_t epoch, bool new_punch)
 	}
 
 	lctx->ic_ver_inc = true;
-	d_iov_set(&key_iov, &key, sizeof(key));
-	d_iov_set(&val_iov, &punch, sizeof(punch));
+	d_iov_set(&key_iov, &epoch, sizeof(epoch));
+	d_iov_set(&val_iov, &prec, sizeof(prec));
 
-	key = root->lr_id;
-	punch = root->lr_punch;
+	epoch = root->lr_id.id_epoch;
+	id2prec(&prec, &root->lr_id);
 
 	rc = dbtree_update(toh, &key_iov, &val_iov);
 	if (rc != 0) {
@@ -671,8 +660,8 @@ ilog_root_migrate(struct ilog_context *lctx, daos_epoch_t epoch, bool new_punch)
 	if (rc != 0)
 		goto done;
 
-	key = id;
-	punch = new_punch;
+	epoch = id.id_epoch;
+	prec.p_value = id.id_value;
 
 	rc = dbtree_update(toh, &key_iov, &val_iov);
 	if (rc != 0) {
@@ -684,8 +673,10 @@ ilog_root_migrate(struct ilog_context *lctx, daos_epoch_t epoch, bool new_punch)
 	tmp.lr_tree.it_root = tree_root;
 	tmp.lr_tree.it_embedded = 0;
 	tmp.lr_magic = ilog_ver_inc(lctx);
+	tmp.lr_ts_idx = root->lr_ts_idx;
 
 	rc = ilog_ptr_set(lctx, root, &tmp);
+
 done:
 	if (!daos_handle_is_inval(toh))
 		dbtree_close(toh);
@@ -694,21 +685,23 @@ done:
 }
 
 static int
-check_equal(struct ilog_context *lctx, struct ilog_id *id_out,
-	    const struct ilog_id *id_in, bool update, bool *is_equal)
+check_equal(struct ilog_context *lctx, daos_epoch_t *epoch_out,
+	    union prec *prec_out, const struct ilog_id *id_in, bool update,
+	    bool *is_equal)
 {
 	int	rc;
 
 	*is_equal = false;
 
-	if (id_in->id_epoch != id_out->id_epoch)
+	if (id_in->id_epoch != *epoch_out)
 		return 0;
 
 	if (update) {
-		rc = ilog_is_same_tx(lctx, id_out->id_tx_id, is_equal);
+		rc = ilog_is_same_tx(lctx, prec_out->p_tx_id, *epoch_out,
+				     is_equal);
 		if (rc != 0)
 			return rc;
-	} else if (id_in->id_tx_id == id_out->id_tx_id) {
+	} else if (id_in->id_tx_id == prec_out->p_tx_id) {
 		*is_equal = true;
 	}
 
@@ -717,9 +710,25 @@ check_equal(struct ilog_context *lctx, struct ilog_id *id_out,
 			D_DEBUG(DB_IO, "No entry found, done\n");
 			return 0;
 		}
+		if (id_in->id_tx_id == DTX_LID_COMMITTED) {
+			/** Need to differentiate between updates that are
+			 * overwrites and others that are conflicts.  Return
+			 * a different error code in this case if the result
+			 * would be the same (e.g. not mixing update with
+			 * punch
+			 */
+			if (id_in->id_punch_minor_eph &&
+			    prec_out->p_punch_minor_eph >
+			    prec_out->p_update_minor_eph)
+				return -DER_ALREADY;
+			if (id_in->id_update_minor_eph &&
+			    prec_out->p_update_minor_eph >
+			    prec_out->p_punch_minor_eph)
+				return -DER_ALREADY;
+		}
 		D_DEBUG(DB_IO, "Access of incarnation log from multiple DTX"
-			" at same time is not allowed: rc=DER_AGAIN\n");
-		return -DER_AGAIN;
+			" at same time is not allowed: rc=DER_TX_RESTART\n");
+		return -DER_TX_RESTART;
 	}
 
 	return 0;
@@ -732,87 +741,110 @@ enum {
 };
 
 static int
-update_inplace(struct ilog_context *lctx, struct ilog_id *id_out,
-	       bool *punch_out, const struct ilog_id *id_in, int opc,
-	       bool punch_in, bool *is_equal)
+update_inplace(struct ilog_context *lctx, daos_epoch_t *epoch_out,
+	       union prec *prec_out, const struct ilog_id *id_in, int opc,
+	       bool *is_equal)
 {
-	umem_off_t	null_off = UMOFF_NULL;
+	union prec	saved_prec;
 	int		rc;
 
-	rc = check_equal(lctx, id_out, id_in, opc == ILOG_OP_UPDATE, is_equal);
+	rc = check_equal(lctx, epoch_out, prec_out, id_in,
+			 opc == ILOG_OP_UPDATE, is_equal);
 	if (rc != 0 || !*is_equal || opc == ILOG_OP_ABORT)
 		return rc;
 
+	saved_prec.p_value = prec_out->p_value;
 	if (opc == ILOG_OP_PERSIST) {
-		D_DEBUG(DB_IO, "Setting "DF_U64" to persistent\n",
+		D_DEBUG(DB_TRACE, "Setting "DF_X64" to persistent\n",
 			id_in->id_epoch);
-		return ilog_ptr_set(lctx, &id_out->id_tx_id, &null_off);
+		saved_prec.p_tx_id = 0;
+		goto set_prec;
 	}
 
-	if (*punch_out || !punch_in)
-		return 0;
+	if (saved_prec.p_punch_minor_eph > saved_prec.p_update_minor_eph &&
+	    id_in->id_punch_minor_eph)
+		return 0; /** Already a punch */
+	if (saved_prec.p_update_minor_eph > saved_prec.p_punch_minor_eph &&
+	    id_in->id_update_minor_eph)
+		return 0; /** Already an update */
 
-	/* New operation in old DTX is a punch.  Update the old entry
+	if (saved_prec.p_punch_minor_eph < id_in->id_punch_minor_eph)
+		saved_prec.p_punch_minor_eph = id_in->id_punch_minor_eph;
+	else if (saved_prec.p_update_minor_eph < id_in->id_update_minor_eph)
+		saved_prec.p_update_minor_eph = id_in->id_update_minor_eph;
+
+	if (saved_prec.p_value == prec_out->p_value)
+		return 0; /* Nothing to do */
+
+	/* New operation has a new minor epoch.  Update the old entry
 	 * accordingly.
 	 */
-	D_DEBUG(DB_IO, "Updating "DF_U64" to a punch\n", id_in->id_epoch);
-	return ilog_ptr_set(lctx, punch_out, &punch_in);
+	D_DEBUG(DB_TRACE, "Updating "DF_X64
+		" lid=%d punch=(%d->%d) update=(%d-%d)\n", id_in->id_epoch,
+		prec_out->p_tx_id, prec_out->p_punch_minor_eph,
+		saved_prec.p_punch_minor_eph, prec_out->p_update_minor_eph,
+		saved_prec.p_update_minor_eph);
+
+set_prec:
+	if (saved_prec.p_update_minor_eph == saved_prec.p_punch_minor_eph) {
+		D_ERROR("Matching punch/update minor epoch not allowed\n");
+		return -DER_NO_PERM;
+	}
+	return ilog_ptr_set(lctx, prec_out, &saved_prec);
 }
 
 static int
 collapse_tree(struct ilog_context *lctx, daos_handle_t *toh)
 {
 	struct ilog_root	*root = lctx->ic_root;
-	int			 rc;
 	struct ilog_root	 tmp = {0};
-	struct ilog_id		 key = {0};
+	union prec		 prec = {0};
+	daos_epoch_t		 epoch = 0;
 	struct btr_attr		 attr;
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
-	bool			 punch;
+	int			 rc;
 
 	rc = dbtree_query(*toh, &attr, NULL);
 	if (attr.ba_count > 1)
 		return 0;
 
-	d_iov_set(&val_iov, &punch, sizeof(punch));
-	d_iov_set(&key_iov, &key, sizeof(key));
+	d_iov_set(&key_iov, &epoch, sizeof(epoch));
+	d_iov_set(&val_iov, &prec, sizeof(prec));
 	rc = dbtree_fetch(*toh, BTR_PROBE_GT, DAOS_INTENT_DEFAULT, &key_iov,
 			  &key_iov, &val_iov);
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-		key.id_epoch = 0;
-		key.id_tx_id = 0;
-		punch = 0;
-		goto set;
+	if (rc != 0 && rc != -DER_NONEXIST) {
+		D_ERROR("dbtree_fetch failed: rc = %s\n", d_errstr(rc));
+		return rc;
 	}
 
-	if (rc != 0) {
-		D_ERROR("dbtree_fetch failed: rc = %s\n", d_errstr(rc));
-		goto done;
-	}
-set:
 	rc = dbtree_destroy(*toh, NULL);
 	if (rc != 0) {
 		D_ERROR("Could not destroy table: rc = %s\n", d_errstr(rc));
-		goto done;
+		return rc;
 	}
+
 	*toh = DAOS_HDL_INVAL;
 
 	tmp.lr_magic = ilog_ver_inc(lctx);
-	tmp.lr_id = key;
-	tmp.lr_punch = punch;
+	tmp.lr_id.id_epoch = epoch;
+	tmp.lr_id.id_value = prec.p_value;
+	tmp.lr_ts_idx = root->lr_ts_idx;
+
 	rc = ilog_ptr_set(lctx, root, &tmp);
-done:
+
 	return rc;
 }
 
 static int
 consolidate_tree(struct ilog_context *lctx, const daos_epoch_range_t *epr,
-		 daos_handle_t *toh, int opc, const struct ilog_id *id_in,
-		 bool is_punch)
+		 daos_handle_t *toh, int opc, const struct ilog_id *id_in)
 {
 	int			 rc = 0;
+
+	rc = ilog_tx_begin(lctx);
+	if (rc != 0)
+		return rc;
 
 	D_ASSERT(opc == ILOG_OP_ABORT);
 
@@ -825,11 +857,12 @@ consolidate_tree(struct ilog_context *lctx, const daos_epoch_range_t *epr,
 
 static int
 ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
-		 bool punch, const daos_epoch_range_t *epr, int opc)
+		 const daos_epoch_range_t *epr, int opc)
 {
 	struct ilog_root	*root;
-	bool			*punchp;
-	struct ilog_id		*keyp;
+	union prec		*prec_out;
+	daos_epoch_t		*epoch_out;
+	daos_epoch_t		 epoch = id_in->id_epoch;
 	struct ilog_id		 id = *id_in;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	d_iov_t			 key_iov_in;
@@ -850,9 +883,9 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 		goto done;
 	}
 
-	d_iov_set(&key_iov_in, (struct ilog_id *)&id, sizeof(id));
-	d_iov_set(&val_iov, NULL, 0);
+	d_iov_set(&key_iov_in, &epoch, sizeof(epoch));
 	d_iov_set(&key_iov, NULL, 0);
+	d_iov_set(&val_iov, NULL, 0);
 	rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &key_iov_in,
 			  &key_iov, &val_iov);
 
@@ -864,23 +897,22 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 		goto done;
 	}
 
-	punchp = (bool *)val_iov.iov_buf;
-	keyp = (struct ilog_id *)key_iov.iov_buf;
+	epoch_out = key_iov.iov_buf;
+	prec_out = val_iov.iov_buf;
 
 	visibility = ILOG_UNCOMMITTED;
 
-	if (keyp->id_epoch <= epr->epr_hi &&
-	    keyp->id_epoch >= epr->epr_lo) {
-		visibility = ilog_status_get(lctx, keyp->id_tx_id,
-					     DAOS_INTENT_UPDATE);
+	if (*epoch_out <= epr->epr_hi &&
+	    *epoch_out >= epr->epr_lo) {
+		visibility = ilog_status_get(lctx, prec_out->p_tx_id,
+					     *epoch_out, DAOS_INTENT_UPDATE);
 		if (visibility < 0) {
 			rc = visibility;
 			goto done;
 		}
 	}
 
-	rc = update_inplace(lctx, keyp, punchp, id_in, opc, punch,
-			    &is_equal);
+	rc = update_inplace(lctx, epoch_out, prec_out, id_in, opc, &is_equal);
 	if (rc != 0)
 		goto done;
 
@@ -888,21 +920,20 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 		if (opc != ILOG_OP_ABORT)
 			goto done;
 
-		rc = consolidate_tree(lctx, epr, &toh, opc,
-				      id_in, *punchp);
+		rc = consolidate_tree(lctx, epr, &toh, opc, id_in);
 
 		goto done;
 	}
 
 	if (opc != ILOG_OP_UPDATE) {
-		D_DEBUG(DB_IO, "No entry found, done\n");
+		D_DEBUG(DB_TRACE, "No entry found, done\n");
 		goto done;
 	}
 
-	if (!punch && visibility != ILOG_UNCOMMITTED && !*punchp)
+	if (id_in->id_punch_minor_eph == 0 && visibility != ILOG_UNCOMMITTED &&
+	    prec_out->p_update_minor_eph > prec_out->p_punch_minor_eph)
 		goto done;
 insert:
-
 	rc = ilog_tx_begin(lctx);
 	if (rc != 0)
 		goto done;
@@ -911,7 +942,10 @@ insert:
 	if (rc != 0)
 		goto done;
 
-	d_iov_set(&val_iov, &punch, sizeof(punch));
+	D_ASSERT(id.id_punch_minor_eph == id_in->id_punch_minor_eph);
+	D_ASSERT(id.id_update_minor_eph == id_in->id_update_minor_eph);
+
+	d_iov_set(&val_iov, &id.id_value, sizeof(id.id_value));
 	/* Can't use BTR_PROBE_BYPASS because it inserts before existing
 	 * entry and we need it to append.   We could modify btree to
 	 * support this use case.
@@ -922,6 +956,7 @@ insert:
 			d_errstr(rc));
 		goto done;
 	}
+
 done:
 	if (!daos_handle_is_inval(toh))
 		dbtree_close(toh);
@@ -937,13 +972,15 @@ const char *opc_str[] = {
 
 static int
 ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
-	    bool punch, const daos_epoch_range_t *epr, int opc)
+	    const daos_epoch_range_t *epr, int opc)
 {
 	struct ilog_context	*lctx;
 	struct ilog_root	*root;
+	union prec		*prec;
 	struct ilog_root	 tmp = {0};
 	int			 rc = 0;
 	int			 visibility = ILOG_UNCOMMITTED;
+	uint32_t		 version;
 
 	lctx = ilog_hdl2lctx(loh);
 	if (lctx == NULL) {
@@ -955,13 +992,16 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 
 	root = lctx->ic_root;
 
-	D_DEBUG(DB_IO, "%s in incarnation log: log:"DF_X64 " epoch:" DF_U64
+	version = ilog_mag2ver(root->lr_magic);
+
+	D_DEBUG(DB_TRACE, "%s in incarnation log: log:"DF_X64 " epoch:" DF_X64
 		" tree_version: %d\n", opc_str[opc], lctx->ic_root_off,
-		id_in->id_epoch, ilog_mag2ver(root->lr_magic));
+		id_in->id_epoch, version);
 
 	if (root->lr_tree.it_embedded && root->lr_id.id_epoch <= epr->epr_hi
 	    && root->lr_id.id_epoch >= epr->epr_lo) {
 		visibility = ilog_status_get(lctx, root->lr_id.id_tx_id,
+					     root->lr_id.id_epoch,
 					     DAOS_INTENT_UPDATE);
 		if (visibility < 0) {
 			rc = visibility;
@@ -971,16 +1011,16 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 
 	if (ilog_empty(root)) {
 		if (opc != ILOG_OP_UPDATE) {
-			D_DEBUG(DB_IO, "ilog entry "DF_U64" not found\n",
+			D_DEBUG(DB_TRACE, "ilog entry "DF_X64" not found\n",
 				id_in->id_epoch);
 			goto done;
 		}
 
-		D_DEBUG(DB_IO, "Inserting "DF_U64" at ilog root\n",
+		D_DEBUG(DB_TRACE, "Inserting "DF_X64" at ilog root\n",
 			id_in->id_epoch);
 		tmp.lr_magic = ilog_ver_inc(lctx);
-		tmp.lr_id.id_epoch = id_in->id_epoch;
-		tmp.lr_punch = punch;
+		tmp.lr_ts_idx = root->lr_ts_idx;
+		tmp.lr_id = *id_in;
 		rc = ilog_ptr_set(lctx, root, &tmp);
 		if (rc != 0)
 			goto done;
@@ -990,14 +1030,15 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	} else if (root->lr_tree.it_embedded) {
 		bool	is_equal;
 
-		rc = update_inplace(lctx, &root->lr_id, &root->lr_punch,
-				    id_in, opc, punch, &is_equal);
+		prec = (union prec *)&root->lr_id.id_value;
+		rc = update_inplace(lctx, &root->lr_id.id_epoch, prec, id_in,
+				    opc, &is_equal);
 		if (rc != 0)
 			goto done;
 
 		if (is_equal) {
 			if (opc == ILOG_OP_ABORT) {
-				D_DEBUG(DB_IO, "Removing "DF_U64
+				D_DEBUG(DB_TRACE, "Removing "DF_X64
 					" from ilog root\n", id_in->id_epoch);
 				tmp.lr_magic = ilog_ver_inc(lctx);
 				rc = ilog_ptr_set(lctx, root, &tmp);
@@ -1006,45 +1047,69 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		}
 
 		if (opc != ILOG_OP_UPDATE) {
-			D_DEBUG(DB_IO, "Entry "DF_U64" not found in ilog\n",
+			D_DEBUG(DB_TRACE, "Entry "DF_X64" not found in ilog\n",
 				id_in->id_epoch);
 			goto done;
 		}
 
-		if (!punch && !root->lr_punch &&
+		if (id_in->id_punch_minor_eph == 0 &&
+		    root->lr_id.id_punch_minor_eph <
+		    root->lr_id.id_update_minor_eph &&
 		    id_in->id_epoch > root->lr_id.id_epoch &&
 		    visibility == ILOG_COMMITTED) {
-			D_DEBUG(DB_IO, "No update needed\n");
+			D_DEBUG(DB_TRACE, "No update needed\n");
 			goto done;
 		}
 		/* Either this entry is earlier or prior entry is uncommitted
 		 * or either entry is a punch
 		 */
-		rc = ilog_root_migrate(lctx, id_in->id_epoch, punch);
+		rc = ilog_root_migrate(lctx, id_in);
 	} else {
 		/** Ok, we have a tree.  Do the operation in the tree */
-		rc = ilog_tree_modify(lctx, id_in, punch, epr, opc);
+		rc = ilog_tree_modify(lctx, id_in, epr, opc);
 	}
 done:
 	rc = ilog_tx_end(lctx, rc);
-	D_DEBUG(DB_IO, "%s in incarnation log "DF_U64
+	D_DEBUG(DB_TRACE, "%s in incarnation log "DF_X64
 		" status: rc=%s tree_version: %d\n",
 		opc_str[opc], id_in->id_epoch, d_errstr(rc),
 		ilog_mag2ver(lctx->ic_root->lr_magic));
+
+	if (rc == 0 && version != ilog_mag2ver(lctx->ic_root->lr_magic) &&
+	    (opc == ILOG_OP_PERSIST || opc == ILOG_OP_ABORT)) {
+		/** If we persisted or aborted an entry successfully,
+		 *  invoke the callback, if applicable but without
+		 *  deregistration
+		 */
+		ilog_log_del(lctx, id_in, false);
+	}
 	return rc;
 }
 
 int
 ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
-	    daos_epoch_t epoch, bool punch)
+	    daos_epoch_t major_eph, uint16_t minor_eph, bool punch)
 {
 	daos_epoch_range_t	 range = {0, DAOS_EPOCH_MAX};
-	struct ilog_id		 id = {0, epoch};
+	struct ilog_id		 id = {
+		.id_tx_id = 0,
+		.id_epoch = major_eph,
+	};
+
+	D_ASSERT(minor_eph != 0);
+
+	if (punch) {
+		id.id_punch_minor_eph = minor_eph;
+		id.id_update_minor_eph = 0;
+	} else {
+		id.id_punch_minor_eph = 0;
+		id.id_update_minor_eph = minor_eph;
+	}
 
 	if (epr)
 		range = *epr;
 
-	return ilog_modify(loh, &id, punch, &range, ILOG_OP_UPDATE);
+	return ilog_modify(loh, &id, &range, ILOG_OP_UPDATE);
 
 }
 
@@ -1056,7 +1121,7 @@ ilog_persist(daos_handle_t loh, const struct ilog_id *id)
 {
 	daos_epoch_range_t	 range = {id->id_epoch, id->id_epoch};
 
-	return ilog_modify(loh, id, false, &range, ILOG_OP_PERSIST);
+	return ilog_modify(loh, id, &range, ILOG_OP_PERSIST);
 }
 
 /** Removes a specific entry from the incarnation log if it exists */
@@ -1065,7 +1130,9 @@ ilog_abort(daos_handle_t loh, const struct ilog_id *id)
 {
 	daos_epoch_range_t	 range = {0, DAOS_EPOCH_MAX};
 
-	return ilog_modify(loh, id, false, &range, ILOG_OP_ABORT);
+	D_DEBUG(DB_IO, "Aborting ilog entry %d "DF_X64"\n", id->id_tx_id,
+		id->id_epoch);
+	return ilog_modify(loh, id, &range, ILOG_OP_ABORT);
 }
 
 #define NUM_EMBEDDED 3
@@ -1121,7 +1188,8 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 		    (entry->ie_status == ILOG_COMMITTED ||
 		     entry->ie_status == ILOG_REMOVED))
 			continue;
-		status = ilog_status_get(lctx, entry->ie_id.id_tx_id, intent);
+		status = ilog_status_get(lctx, entry->ie_id.id_tx_id,
+					 entry->ie_id.id_epoch, intent);
 		if (status < 0) {
 			priv->ip_rc = status;
 			return;
@@ -1246,8 +1314,7 @@ out:
 }
 
 static int
-set_entry(struct ilog_entries *entries, const struct ilog_id *id, bool punch,
-	  int status)
+set_entry(struct ilog_entries *entries, const struct ilog_id *id, int status)
 {
 	struct ilog_entry *entry;
 
@@ -1256,7 +1323,6 @@ set_entry(struct ilog_entries *entries, const struct ilog_id *id, bool punch,
 		return -DER_NOMEM;
 
 	entry->ie_id = *id;
-	entry->ie_punch = punch;
 	entry->ie_status = status;
 
 	return 0;
@@ -1269,10 +1335,9 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 {
 	struct ilog_context	*lctx;
 	struct ilog_root	*root;
-	struct ilog_id		*id_out;
 	struct ilog_id		 id = {0};
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
-	d_iov_t			 id_iov;
+	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
 	bool			 in_progress = false;
 	int			 status;
@@ -1302,15 +1367,16 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 		D_GOTO(out, rc = 0);
 
 	if (root->lr_tree.it_embedded) {
-		status = ilog_status_get(lctx, root->lr_id.id_tx_id, intent);
+		status = ilog_status_get(lctx, root->lr_id.id_tx_id,
+					 root->lr_id.id_epoch, intent);
 		if (status == -DER_INPROGRESS)
 			in_progress = true;
 		else if (status < 0)
 			D_GOTO(fail, rc = status);
-		rc = set_entry(entries, &root->lr_id, root->lr_punch, status);
-
+		rc = set_entry(entries, &root->lr_id, status);
 		if (rc != 0)
 			goto fail;
+
 		goto out;
 	}
 
@@ -1318,11 +1384,10 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	if (rc != 0)
 		goto fail;
 
-	d_iov_set(&id_iov, &id, sizeof(id));
-	id.id_epoch = 0;
+	d_iov_set(&key_iov, &id.id_epoch, sizeof(id.id_epoch));
 
 	rc = dbtree_iter_probe(priv->ip_ih, BTR_PROBE_GE,
-			       DAOS_INTENT_DEFAULT, &id_iov, NULL);
+			       DAOS_INTENT_DEFAULT, &key_iov, NULL);
 	if (rc == -DER_NONEXIST)
 		D_GOTO(out, rc = 0);
 
@@ -1332,24 +1397,22 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	}
 
 	for (;;) {
-		d_iov_set(&id_iov, NULL, 0);
-		d_iov_set(&val_iov, NULL, 0);
-		rc = dbtree_iter_fetch(priv->ip_ih, &id_iov, &val_iov, NULL);
+		d_iov_set(&key_iov, &id.id_epoch, sizeof(id.id_epoch));
+		d_iov_set(&val_iov, &id.id_value, sizeof(id.id_value));
+		rc = dbtree_iter_fetch(priv->ip_ih, &key_iov, &val_iov, NULL);
 		if (rc != 0) {
 			D_ERROR("Error fetching ilog entry from tree:"
 				" rc = %s\n", d_errstr(rc));
 			goto fail;
 		}
 
-		id_out = (struct ilog_id *)id_iov.iov_buf;
-
-		status = ilog_status_get(lctx, id_out->id_tx_id, intent);
+		status = ilog_status_get(lctx, id.id_tx_id,
+					 id.id_epoch, intent);
 		if (status == -DER_INPROGRESS)
 			in_progress = true;
 		else if (status < 0)
 			D_GOTO(fail, rc = status);
-		rc = set_entry(entries, id_out, *(bool *)val_iov.iov_buf,
-			       status);
+		rc = set_entry(entries, &id, status);
 		if (rc != 0)
 			goto fail;
 
@@ -1404,16 +1467,16 @@ remove_ilog_entry(struct ilog_context *lctx, daos_handle_t *toh,
 	rc = ilog_tx_begin(lctx);
 	if (rc != 0)
 		return rc;
-	D_DEBUG(DB_IO, "Removing ilog entry at "DF_U64"\n",
+	D_DEBUG(DB_TRACE, "Removing ilog entry at "DF_X64"\n",
 		entry->ie_id.id_epoch);
-	d_iov_set(&iov, &id, sizeof(id));
+	d_iov_set(&iov, &id.id_epoch, sizeof(id.id_epoch));
 	rc = dbtree_delete(*toh, BTR_PROBE_EQ, &iov, lctx);
 	if (rc != 0) {
 		D_ERROR("Could not remove entry from tree: "DF_RC"\n",
 			DP_RC(rc));
 		return rc;
 	}
-	D_DEBUG(DB_IO, "Removed ilog entry at "DF_U64"\n",
+	D_DEBUG(DB_TRACE, "Removed ilog entry at "DF_X64"\n",
 		entry->ie_id.id_epoch);
 
 	(*removed)++;
@@ -1441,9 +1504,9 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 {
 	int	rc;
 
-	D_DEBUG(DB_TRACE, "Entry "DF_U64" punch=%s prev="DF_U64
-		" prior_punch="DF_U64"\n", entry->ie_id.id_epoch,
-		entry->ie_punch ? "yes" : "no",
+	D_DEBUG(DB_TRACE, "Entry "DF_X64" punch=%s prev="DF_X64
+		" prior_punch="DF_X64"\n", entry->ie_id.id_epoch,
+		ilog_is_punch(entry) ? "yes" : "no",
 		agg_arg->aa_prev ? agg_arg->aa_prev->ie_id.id_epoch : 0,
 		agg_arg->aa_prior_punch ?
 		agg_arg->aa_prior_punch->ie_id.id_epoch : 0);
@@ -1457,7 +1520,7 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 			 */
 			D_GOTO(done, rc = AGG_RC_NEXT);
 		}
-		if (entry->ie_punch) {
+		if (ilog_is_punch(entry)) {
 			/* Just save the prior punch entry */
 			agg_arg->aa_prior_punch = entry;
 		} else {
@@ -1478,19 +1541,19 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 
 	if (agg_arg->aa_prev != NULL) {
 		const struct ilog_entry	*prev = agg_arg->aa_prev;
-		bool			 punch = prev->ie_punch;
+		bool			 punch = ilog_is_punch(prev);
 
 		if (!punch) {
 			/* punched by outer level */
 			punch = prev->ie_id.id_epoch <= agg_arg->aa_punched;
 		}
-		if (entry->ie_punch == punch) {
+		if (ilog_is_punch(entry) == punch) {
 			/* Remove redundant entry */
 			D_GOTO(done, rc = AGG_RC_REMOVE);
 		}
 	}
 
-	if (!entry->ie_punch) {
+	if (!ilog_is_punch(entry)) {
 		/* Create is needed for now */
 		D_GOTO(done, rc = AGG_RC_NEXT);
 	}
@@ -1506,7 +1569,8 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 		D_GOTO(done, rc = AGG_RC_NEXT);
 	}
 
-	D_ASSERT(!agg_arg->aa_prev->ie_punch);
+	D_ASSERT(!ilog_is_punch(agg_arg->aa_prev));
+
 	/* Punch is redundant or covers nothing.  Remove it. */
 	rc = AGG_RC_REMOVE_PREV;
 done:
@@ -1534,8 +1598,8 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	D_ASSERT(epr != NULL);
 	D_ASSERT(punched <= epr->epr_hi);
 
-	D_DEBUG(DB_IO, "%s incarnation log: epr: "DF_U64"-"DF_U64" punched="
-		DF_U64"\n", discard ? "Discard" : "Aggregate", epr->epr_lo,
+	D_DEBUG(DB_TRACE, "%s incarnation log: epr: "DF_X64"-"DF_X64" punched="
+		DF_X64"\n", discard ? "Discard" : "Aggregate", epr->epr_lo,
 		epr->epr_hi, punched);
 
 	/* This can potentially be optimized but using ilog_fetch gets some code
@@ -1543,7 +1607,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	 */
 	rc = ilog_fetch(umm, ilog, cbs, DAOS_INTENT_PURGE, entries);
 	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_IO, "log is empty\n");
+		D_DEBUG(DB_TRACE, "log is empty\n");
 		/* Log is empty */
 		return 1;
 	}
@@ -1573,14 +1637,15 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			break;
 		case AGG_RC_REMOVE:
 			old_id = root->lr_id;
+			tmp.lr_ts_idx = root->lr_ts_idx;
 			tmp.lr_magic = ilog_ver_inc(lctx);
 			rc = ilog_ptr_set(lctx, root, &tmp);
 			if (rc != 0)
 				break;
 
 			empty = true;
-			rc = ilog_log_del(lctx, &old_id);
-			D_DEBUG(DB_IO, "Removed ilog entry at "DF_U64" "DF_RC
+			rc = ilog_log_del(lctx, &old_id, true);
+			D_DEBUG(DB_TRACE, "Removed ilog entry at "DF_X64" "DF_RC
 				"\n", entry->ie_id.id_epoch, DP_RC(rc));
 			if (rc == 0)
 				removed++;
@@ -1636,7 +1701,7 @@ done:
 		dbtree_close(toh);
 
 	rc = ilog_tx_end(lctx, rc);
-	D_DEBUG(DB_IO, "%s in incarnation log epr:"DF_U64"-"DF_U64
+	D_DEBUG(DB_TRACE, "%s in incarnation log epr:"DF_X64"-"DF_X64
 		" status: "DF_RC", removed %d entries\n",
 		discard ? "Discard" : "Aggregation", epr->epr_lo,
 		epr->epr_hi, DP_RC(rc), removed);
@@ -1646,3 +1711,27 @@ done:
 	return empty;
 }
 
+uint32_t *
+ilog_ts_idx_get(struct ilog_df *ilog_df)
+{
+	struct ilog_root	*root;
+
+	/** No validity check as index is just a constant offset */
+	root = (struct ilog_root *)ilog_df;
+
+	return &root->lr_ts_idx;
+}
+
+uint32_t
+ilog_version_get(daos_handle_t loh)
+{
+	struct ilog_context	*lctx;
+
+	lctx = ilog_hdl2lctx(loh);
+	if (lctx == NULL) {
+		D_ERROR("Invalid log handle\n");
+		return 0;
+	}
+
+	return ilog_mag2ver(lctx->ic_root->lr_magic);
+}

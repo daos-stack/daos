@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,21 +21,16 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
-import os
 import ctypes
 import time
 import avocado
 import random
-import agent_utils
-import server_utils
-import write_host_file
 
-from pydaos.raw import (DaosPool, DaosContainer, IORequest,
-                        DaosObj, DaosApiError)
-from apricot import skipForTicket, TestWithoutServers
+from pydaos.raw import (DaosContainer, IORequest, DaosObj, DaosApiError)
+from apricot import TestWithServers
 
-class ObjectDataValidation(TestWithoutServers):
+
+class ObjectDataValidation(TestWithServers):
     """
     Test Class Description:
         Tests that create Different length records,
@@ -47,42 +42,21 @@ class ObjectDataValidation(TestWithoutServers):
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
         super(ObjectDataValidation, self).setUp()
-        self.agent_sessions = None
-        self.pool = None
-        self.container = None
         self.obj = None
         self.ioreq = None
-        self.hostlist = None
-        self.hostfile = None
         self.no_of_dkeys = None
         self.no_of_akeys = None
         self.array_size = None
         self.record_length = None
-        server_group = self.params.get("name",
-                                       '/server_config/',
-                                       'daos_server')
-        self.hostlist = self.params.get("test_servers", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
-        self.agent_sessions = agent_utils.run_agent(
-            self, self.hostlist)
-        server_utils.run_server(self, self.hostfile, server_group)
 
-        self.pool = DaosPool(self.context)
-        self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
-                         os.geteuid(),
-                         os.getegid(),
-                         self.params.get("size", '/run/pool/createsize/*'),
-                         self.params.get("setname", '/run/pool/createset/*'),
-                         None)
-        self.pool.connect(2)
+        self.prepare_pool()
 
         self.container = DaosContainer(self.context)
-        self.container.create(self.pool.handle)
+        self.container.create(self.pool.pool.handle)
         self.container.open()
 
         self.obj = DaosObj(self.context, self.container)
@@ -91,19 +65,6 @@ class ObjectDataValidation(TestWithoutServers):
         self.ioreq = IORequest(self.context,
                                self.container,
                                self.obj, objtype=4)
-
-    def tearDown(self):
-        try:
-            if self.container:
-                self.container.close()
-                self.container.destroy()
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
 
     def reconnect(self):
         '''
@@ -232,9 +193,9 @@ class ObjectDataValidation(TestWithoutServers):
             self.log.info(str(excep))
             self.fail("##(6.2)Failed on abort_tx.")
 
+        self.container.close_tx(new_transaction2)
 
     @avocado.fail_on(DaosApiError)
-    @skipForTicket("DAOS-3208")
     def test_single_object_validation(self):
         """
         Test ID: DAOS-707
@@ -288,7 +249,6 @@ class ObjectDataValidation(TestWithoutServers):
                     record_index = 0
 
     @avocado.fail_on(DaosApiError)
-    @skipForTicket("DAOS-3208")
     def test_array_object_validation(self):
         """
         Test ID: DAOS-707

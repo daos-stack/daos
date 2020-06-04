@@ -4,78 +4,176 @@ This section will be expanded in a future revision.
 
 ## Network Performance
 
-Similar to the Lustre Network stack, the DAOS CART layer can validate and benchmark network communications in the same context as
-an application and using the same networks/tuning options as regular
-DAOS. The CART self_test can run against the DAOS servers in a production
-environment in a non-destructive manner. CART self_test supports
-different message sizes, bulk transfers, multiple targets, and the
-following test scenarios:
+The DAOS CART layer can validate and benchmark network communications in the
+same context as an application and using the same networks/tuning options as
+regular DAOS.
 
--   **Selftest client to servers** where self_test issues RPCs directly
+The CART self_test can run against the DAOS servers in a production environment
+in a non-destructive manner. CART self_test supports different message sizes,
+bulk transfers, multiple targets, and the following test scenarios:
+
+-   **Selftest client to servers** - where self_test issues RPCs directly
     to a list of servers
 
--   **Cross-servers** where self_test sends instructions to the different
+-   **Cross-servers** - where self_test sends instructions to the different
     servers that will issue cross-server RPCs. This model supports a
     many to many communication model.
 
-Instructions to run CaRT self_test with test_group as the target server are as follows. 
+Instructions to run CaRT self_test with test_group as the target server are as follows.
 
-git clone https://github.com/daos-stack/daos.git
-cd daos
-git submodule init
-git submodule update
-scons --build-deps=yes install
-cd install/TESTING
+```bash
+$ git clone https://github.com/daos-stack/daos.git
+$ cd daos
+$ git submodule init
+$ git submodule update
+$ scons --build-deps=yes install
+$ cd install/TESTING
+```
+
 **Prepare srvhostfile and clihostfile**
--   srvhostfile contains list of nodes from which servers will launch
+
+-   srvhostfile contains a list of nodes from which servers will launch
+
 -   clihostfile contains node from which self_test will launch
 
 The example below uses Ethernet interface and Sockets provider.
 In the self_test commands:
--   (client-to-servers) Replace the argument for "--endpoint" accordingly. 
--   (cross-servers)     Replace the argument for "--endpoint" and "--master-endpoint" accordingly. 
+
+-   (client-to-servers) Replace the argument for "--endpoint" accordingly.
+
+-   (cross-servers)     Replace the argument for "--endpoint" and "--master-endpoint" accordingly.
+
 -   For example, if you have 8 servers, you would specify "--endpoint 0-7:0" (and --master-endpoint 0-7:0)
-  
+
 The commands below will run self_test benchmark using the following message sizes:
+```bash
 b1048576     1Mb bulk transfer Get and Put
 b1048576 0   1Mb bulk transfer Get only
 0 b1048576   1Mb bulk transfer Put only
 I2048        2Kb iovec Input and Output
 i2048 0      2Kb iovec Input only
 0 i2048      2Kb iovec Output only
+```
 
 For full description of self_test usage, run:
-../bin/self_test --help
+```bash
+$ ../bin/self_test --help
+```
 
 **To start test_group server:**
-/usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile srvhostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/test_group_srv.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  ../bin/crt_launch -e tests/test_group_np_srv --name self_test_srv_grp --cfg_path=. &
+```bash
+$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile srvhostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/test_group_srv.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  ../bin/crt_launch -e tests/test_group_np_srv --name self_test_srv_grp --cfg_path=. &
+```
 
 **To run self_test in client-to-servers mode:**
-/usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile clihostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+```bash
+$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile clihostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+```
 
 **To run self_test in cross-servers mode:**
-/usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile clihostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 --master-endpoint 0-<MAX_SERVER-1>:0 --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+```bash
+$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile clihostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 --master-endpoint 0-<MAX_SERVER-1>:0 --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+```
 
 **To shutdown test_group server:**
-/usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile clihostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/test_group_cli.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0  tests/test_group_np_cli --name client-group --attach_to self_test_srv_grp --shut_only --cfg_path=.
+```bash
+$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile clihostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/test_group_cli.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0  tests/test_group_np_cli --name client-group --attach_to self_test_srv_grp --shut_only --cfg_path=.
+```
 
 ## Benchmarking DAOS
 
-DAOS can be benchmarked with both IOR and mdtest through the following
-backends:
+DAOS can be benchmarked using several widely used IO benchmarks like IOR,
+mdtest, and FIO. There are several backends that can be used with those
+benchmarks.
 
--   native MPI-IO plugin combined with the ROMIO DAOS ADIO driver
+IOR (https://github.com/hpc/ior) with the following backends:
 
--   native HDF5 plugin combined with the HDF5 DAOS connector (under
-    development)
+-   POSIX, MPIIO & HDF5 drivers over dfuse and the interception library.
 
--   native POSIX plugin over dfuse and interception library (under
-    development)
+-   MPI-IO plugin with the ROMIO DAOS ADIO driver to bypass POSIX and dfuse. The
+    MPIIO driver is available in the upstream MPICH repository.
 
--   a custom DFS plugin integrating mdtest & IOR directly with libfs
+-   HDF5 plugin with the HDF5 DAOS connector (under development). This maps the
+    HDF5 data model directly to the DAOS model bypassing POSIX.
+
+-   A custom DFS (DAOS File System) plugin, integrating IOR directly with libfs
     without requiring FUSE or an interception library
 
--   a custom DAOS plugin integrating IOR directly with the native DAOS
+-   A custom DAOS plugin, integrating IOR directly with the native DAOS
     array API.
 
+mdtest is released in the same repository as IOR. The corresponding backends that are
+listed above support mdtest, except for the MPI-IO and HDF5 backends that were
+only designed to support IOR.
 
+FIO can also be used to benchmark DAOS performance using dfuse and the
+interception library with all the POSIX based engines like sync and libaio. We
+do, however, provide a native DFS engine for FIO similar to what we do for
+IOR. That engine is available on GitHub: https://github.com/daos-stack/dfio
+
+Finally, DAOS provides a tool called daos_perf which allows benchmarking to the
+DAOS object API directly or to the internal VOS API, which bypasses the client
+and network stack and reports performance accessing the storage directy using
+VOS.
+
+## Client Performance Tuning
+
+For best performance, a DAOS client should specifically bind itself to a NUMA
+node instead of leaving core allocation and memory binding to chance.  This
+allows the DAOS Agent to detect the client's NUMA affinity from its PID and
+automatically assign a network interface with a matching NUMA node.  The network
+interface provided in the GetAttachInfo response is used to initialize CaRT.
+
+To override the automatically assigned interface, the client should set the
+environment variable ```OFI_INTERFACE``` to match the desired network
+interface.
+
+The DAOS Agent scans the client machine on the first GetAttachInfo request to
+determine the set of network interfaces available that support the DAOS Server's
+OFI provider.  This request occurs as part of the initialization sequence in the
+```libdaos daos_init()``` performed by each client.
+
+Upon receipt, the Agent populates a cache of responses indexed by NUMA affinity.
+Provided a client application has bound itself to a specific NUMA node and that
+NUMA node has a network device associated with it, the DAOS Agent will provide a
+GetAttachInfo response with a network interface corresponding to the client's
+NUMA node.
+
+When more than one appropriate network interface exists per NUMA node, the agent
+uses a round-robin resource allocation scheme to load balance the responses for
+that NUMA node.
+
+If a client is bound to a NUMA node that has no matching network interface, then
+a default NUMA node is used for the purpose of selecting a response.  Provided
+that the DAOS Agent can detect any valid network device on any NUMA node, the
+default response will contain a valid network interface for the client.  When a
+default response is provided, a message in the Agent's log is emitted:
+
+```
+No network devices bound to client NUMA node X.  Using response from NUMA Y
+```
+
+To improve performance, it is worth figuring out if the client bound itself to
+the wrong NUMA node, or if expected network devices for that NUMA node are
+missing from the Agent's fabric scan.
+
+In some situations, the Agent may detect no network devices and the response
+cache will be empty.  In such a situation, the GetAttachInfo response will
+contain no interface assignment and the following info message will be found in
+the Agent's log:
+
+```
+No network devices detected in fabric scan; default AttachInfo response may be incorrect
+```
+
+In either situation, the admin may execute the command
+```'daos_agent net-scan'``` with appropriate debug flags to gain more insight
+into the configuration problem.
+
+**Disabling the GetAttachInfo cache:**
+
+The default configuration enables the Agent GetAttachInfo cache.  If it is
+desired, the cache may be disabled prior to DAOS Agent startup by setting the
+Agent's environment variable ```DAOS_AGENT_DISABLE_CACHE=true```.  The cache is
+loaded only at Agent startup.  If the network configuration changes while the
+Agent is running, it must be restarted to gain visibility to these changes.

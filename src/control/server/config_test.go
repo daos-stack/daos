@@ -125,10 +125,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 		"uncommented default config": {inPath: "uncommentedDefault"},
 		"socket example config":      {inPath: socketsExample},
 		"psm2 example config":        {inPath: psm2Example},
-		"default empty config": {
-			inPath: defaultConfig,
-			expErr: FaultConfigNoProvider,
-		},
+		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
 			inPath: "/foo/bar/baz.yml",
 			expErr: errors.New("reading file: open /foo/bar/baz.yml: no such file or directory"),
@@ -219,6 +216,8 @@ func TestServer_ConstructedConfig(t *testing.T) {
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
+		WithCrtCtxShareAddr(1).
+		WithCrtTimeout(30).
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").

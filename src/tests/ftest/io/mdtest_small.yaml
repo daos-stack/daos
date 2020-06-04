@@ -16,6 +16,9 @@ pool:
   scm_size: 6000000000
   svcn: 1
   control_method: dmg
+container:
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 mdtest:
   client_processes:
     np_8:

@@ -33,6 +33,21 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
+def run_checks(env):
+    """Run all configure time checks"""
+    if GetOption('help') or GetOption('clean'):
+        return
+    cenv = env.Clone()
+    cenv.Append(CFLAGS='-Werror')
+    if cenv.get("COMPILER") == 'icc':
+        cenv.Replace(CC='gcc', CXX='g++')
+    config = Configure(cenv)
+
+    if config.CheckHeader('stdatomic.h'):
+        env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+
+    config.Finish()
+
 def get_version():
     """ Read version from VERSION file """
     with open("VERSION", "r") as version_file:
@@ -109,10 +124,19 @@ def set_defaults(env):
 
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
-    env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
-    env.Append(CCFLAGS=['-D_FORTIFY_SOURCE=2'])
+    if env.get('BUILD_TYPE') == 'debug':
+        if env.get("COMPILER") == 'gcc':
+            env.AppendUnique(CCFLAGS=['-Og'])
+        else:
+            env.AppendUnique(CCFLAGS=['-O0'])
+    else:
+        if env.get('BUILD_TYPE') == 'release':
+            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])
+        env.AppendUnique(CCFLAGS=['-O2', '-D_FORTIFY_SOURCE=2'])
+
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
     if GetOption("preprocess"):
@@ -125,7 +149,7 @@ def preload_prereqs(prereqs):
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
-    reqs = ['cart', 'argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc',
+    reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal'])
@@ -323,14 +347,8 @@ def scons(): # pylint: disable=too-many-locals
 
         exit(0)
 
-    try:
-        sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
-        from prereq_tools import PreReqComponent
-        print('Using scons_local build')
-    except ImportError:
-        print('scons_local submodule is needed in order to do DAOS build')
-        print('Use git submodule update --init')
-        sys.exit(-1)
+    sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
+    from prereq_tools import PreReqComponent
 
     env = Environment(TOOLS=['extra', 'default'])
 
@@ -345,15 +363,24 @@ def scons(): # pylint: disable=too-many-locals
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    daos_build.load_mpi_path(env)
+    if not GetOption('help') and not GetOption('clean'):
+        daos_build.load_mpi_path(env)
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
+
+    run_checks(env)
+
+    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
+
+    CONF_DIR = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
-    Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm', 'API_VERSION')
+    Export('DAOS_VERSION', 'API_VERSION',
+           'env', 'prereqs', 'platform_arm',
+           'CONF_DIR')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
@@ -377,7 +404,9 @@ def scons(): # pylint: disable=too-many-locals
 
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                ['scons_local/env_modules.py'])
+                ['utils/sl/env_modules.py'])
+    env.Install('$PREFIX/lib/daos/TESTING/ftest/',
+                ['ftest.sh'])
 
     # install the configuration files
     SConscript('utils/config/SConscript')
@@ -385,8 +414,14 @@ def scons(): # pylint: disable=too-many-locals
     # install certificate generation files
     SConscript('utils/certs/SConscript')
 
+    # install man pages
+    SConscript('doc/man/SConscript')
+
     Default(build_prefix)
     Depends('install', build_prefix)
+
+    # an "rpms" target
+    env.Command('rpms', '', 'make -C utils/rpms rpms')
 
     try:
         #if using SCons 2.4+, provide a more complete help

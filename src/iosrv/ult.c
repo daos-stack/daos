@@ -452,8 +452,18 @@ dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
 free:
 	if (attr != ABT_THREAD_ATTR_NULL) {
 		rc1 = ABT_thread_attr_free(&attr);
-		if (rc == ABT_SUCCESS)
-			rc = rc1;
+		if (rc1 != ABT_SUCCESS)
+			/* The child ULT has already been created,
+			 * we should not return the error for the
+			 * ABT_thread_attr_free() failure; otherwise,
+			 * the caller will free the parameters ("arg")
+			 * that is being used by the child ULT.
+			 *
+			 * So let's ignore the failure, the worse case
+			 * is that we may leak some DRAM.
+			 */
+			D_ERROR("ABT_thread_attr_free failed: %d\n",
+				dss_abterr2der(rc1));
 	}
 
 	return dss_abterr2der(rc);

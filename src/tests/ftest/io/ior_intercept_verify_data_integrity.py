@@ -36,14 +36,6 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up each test case."""
-        super(IorInterceptVerifyDataIntegrity, self).setUp()
-        # Following line can be removed once the constraint in the
-        # IorTestBase is resolved. #DAOS-3320
-        self.hostlist_clients = self.params.get(
-            "test_clients", "/run/hosts/*")
-
     def test_ior_intercept_verify_data(self):
         """Jira ID: DAOS-3502.
 
@@ -60,7 +52,8 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
             Run ior with read, write, read verify
             write verify for 30 minutes
 
-        :avocado: tags=all,daosio,hw,full_regression,iorinterceptverifydata
+        :avocado: tags=all,full_regression,hw,large
+        :avocado: tags=daosio,iorinterceptverifydata
         """
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         with_intercept = dict()

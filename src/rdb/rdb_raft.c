@@ -710,8 +710,9 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	}
 #endif
 	return vos_obj_update(unpack_arg->slc, io->ui_oid, unpack_arg->eph,
-			      io->ui_version, &io->ui_dkey, io->ui_iods_top + 1,
-			      io->ui_iods, NULL, io->ui_sgls);
+			      io->ui_version, 0 /* flags */, &io->ui_dkey,
+			      io->ui_iods_top + 1, io->ui_iods, NULL,
+			      io->ui_sgls);
 }
 
 static int
@@ -1341,6 +1342,31 @@ static raft_cbs_t rdb_raft_cbs = {
 	.log				= rdb_raft_cb_debug
 };
 
+static int
+rdb_raft_compact_to_index(struct rdb *db, uint64_t index)
+{
+	int rc;
+
+	D_DEBUG(DB_TRACE, DF_DB": snapping "DF_U64"\n", DP_DB(db),
+		index);
+	rc = raft_begin_snapshot(db->d_raft, index);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+	/*
+	 * VOS snaps every new index implicitly.
+	 *
+	 * raft_end_snapshot() only polls the log and wakes up
+	 * rdb_compactd(), which does the real compaction (i.e., VOS
+	 * aggregation) in the background.
+	 */
+	rc = raft_end_snapshot(db->d_raft);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to poll entries: %d\n",
+			DP_DB(db), rc);
+		rc = rdb_raft_rc(rc);
+	}
+
+	return rc;
+}
 /*
  * Check if the log should be compacted. If so, trigger the compaction by
  * taking a snapshot (i.e., simply increasing the log base index in our
@@ -1375,23 +1401,8 @@ rdb_raft_trigger_compaction(struct rdb *db)
 			index = base + 1;
 		else
 			index = base + n / 2;
-		D_DEBUG(DB_TRACE, DF_DB": snapping "DF_U64"\n", DP_DB(db),
-			index);
-		rc = raft_begin_snapshot(db->d_raft, index);
-		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-		/*
-		 * VOS snaps every new index implicitly.
-		 *
-		 * raft_end_snapshot() only polls the log and wakes up
-		 * rdb_compactd(), which does the real compaction (i.e., VOS
-		 * aggregation) in the background.
-		 */
-		rc = raft_end_snapshot(db->d_raft);
-		if (rc != 0) {
-			D_ERROR(DF_DB": failed to poll %d entries: %d\n",
-				DP_DB(db), n, rc);
-			rc = rdb_raft_rc(rc);
-		}
+
+		rc = rdb_raft_compact_to_index(db, index);
 	}
 	return rc;
 }
@@ -1719,7 +1730,11 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 		rc = compaction_rc;
 	switch (rc) {
 	case -DER_NOMEM:
+	case -DER_NOSPACE:
 		if (leader) {
+			/* No space / desperation: compact to committed idx */
+			rdb_raft_compact_to_index(db, committed);
+
 			raft_become_follower(db->d_raft);
 			leader = false;
 			/* If stepping up fails, don't step down. */
@@ -1729,7 +1744,6 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 		}
 		break;
 	case -DER_SHUTDOWN:
-	case -DER_NOSPACE:
 	case -DER_IO:
 		db->d_cbs->dc_stop(db, rc, db->d_arg);
 		break;
@@ -2505,6 +2519,27 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	raft_become_follower(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+}
+
+/* Call new election (campaign to be leader) by a follower */
+int
+rdb_raft_campaign(struct rdb *db)
+{
+	struct rdb_raft_state	state;
+	int			rc;
+
+	if (!raft_is_follower(db->d_raft)) {
+		D_DEBUG(DB_MD, DF_DB": no election called, must be follower\n",
+			DP_DB(db));
+		return 0;
+	}
+
+	rdb_raft_save_state(db, &state);
+	D_DEBUG(DB_MD, DF_DB": calling election from current term %d\n",
+		DP_DB(db), raft_get_current_term(db->d_raft));
+	rc = raft_election_start(db->d_raft);
+	rc = rdb_raft_check_state(db, &state, rc /* raft_rc */);
+	return rc;
 }
 
 /* Wait for index to be applied in term. For leaders only. */

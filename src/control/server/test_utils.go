@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ type mockDrpcClientConfig struct {
 	SendMsgResponse *drpc.Response
 	SendMsgError    error
 	ResponseDelay   time.Duration
+	SocketPath      string
 }
 
 func (cfg *mockDrpcClientConfig) setSendMsgResponse(status drpc.Status, body []byte, err error) {
@@ -65,6 +66,7 @@ type mockDrpcClient struct {
 	cfg              mockDrpcClientConfig
 	CloseCallCount   int
 	SendMsgInputCall *drpc.Call
+	Calls            []drpc.Method
 }
 
 func (c *mockDrpcClient) IsConnected() bool {
@@ -82,10 +84,19 @@ func (c *mockDrpcClient) Close() error {
 
 func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
 	c.SendMsgInputCall = call
+	method, err := drpc.ModuleMgmt.GetMethod(call.GetMethod())
+	if err != nil {
+		return nil, err
+	}
+	c.Calls = append(c.Calls, method)
 
 	<-time.After(c.cfg.ResponseDelay)
 
 	return c.cfg.SendMsgResponse, c.cfg.SendMsgError
+}
+
+func (c *mockDrpcClient) GetSocketPath() string {
+	return c.cfg.SocketPath
 }
 
 func newMockDrpcClient(cfg *mockDrpcClientConfig) *mockDrpcClient {
@@ -139,8 +150,9 @@ func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
 	if err := harness.AddInstance(srv); err != nil {
 		panic(err)
 	}
+	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil)
+	return newMgmtSvc(harness, nil, nil)
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
@@ -157,5 +169,5 @@ func newTestMgmtSvcMulti(log logging.Logger, count int, isAP bool) *mgmtSvc {
 		}
 	}
 
-	return newMgmtSvc(harness, nil)
+	return newMgmtSvc(harness, nil, nil)
 }

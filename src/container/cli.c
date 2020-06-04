@@ -243,9 +243,6 @@ dc_cont_create(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
-	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
-		D_GOTO(err_pool, rc = -DER_NO_PERM);
-
 	rc = dup_with_default_ownership_props(&rpc_prop, args->prop);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
@@ -255,8 +252,13 @@ dc_cont_create(tse_task_t *task)
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
+		goto err_prop;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -340,9 +342,6 @@ dc_cont_destroy(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
-	/* TODO: Implement "force". */
-	D_ASSERT(args->force != 0);
-
 	if (uuid_is_null(args->uuid))
 		D_GOTO(err, rc = -DER_INVAL);
 
@@ -350,16 +349,18 @@ dc_cont_destroy(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
-		D_GOTO(err_pool, rc = -DER_NO_PERM);
-
 	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
+		goto err_pool;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_DESTROY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -415,19 +416,19 @@ dc_cont_put(struct dc_cont *dc)
 	daos_hhash_link_putref(&dc->dc_hlink);
 }
 
-static void
+void
 dc_cont_hdl_link(struct dc_cont *dc)
 {
 	daos_hhash_link_insert(&dc->dc_hlink, DAOS_HTYPE_CO);
 }
 
-static void
+void
 dc_cont_hdl_unlink(struct dc_cont *dc)
 {
 	daos_hhash_link_delete(&dc->dc_hlink);
 }
 
-static struct dc_cont *
+struct dc_cont *
 dc_cont_alloc(const uuid_t uuid)
 {
 	struct dc_cont *dc;
@@ -465,7 +466,7 @@ dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
 	chunksize = daos_cont_prop2chunksize(props);
 	daos_csummer_init(&cont->dc_csummer,
 			  daos_csum_type2algo(csum_type),
-			  chunksize);
+			  chunksize, 0);
 }
 
 struct cont_open_args {
@@ -553,80 +554,6 @@ out:
 }
 
 int
-dc_cont_local_close(daos_handle_t ph, daos_handle_t coh)
-{
-	struct dc_cont *cont = NULL;
-	struct dc_pool *pool = NULL;
-	int		rc = 0;
-
-	cont = dc_hdl2cont(coh);
-	if (cont == NULL)
-		return 0;
-
-	pool = dc_hdl2pool(ph);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	dc_cont_put(cont);
-
-	/* Remove the container from pool container list */
-	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
-	d_list_del_init(&cont->dc_po_list);
-	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-
-out:
-	if (cont != NULL)
-		dc_cont_put(cont);
-	if (pool != NULL)
-		dc_pool_put(pool);
-
-	return rc;
-}
-
-int
-dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
-		   unsigned int flags, daos_handle_t ph,
-		   daos_handle_t *coh)
-{
-	struct dc_cont	*cont = NULL;
-	struct dc_pool	*pool = NULL;
-	int		rc = 0;
-
-	if (!daos_handle_is_inval(*coh)) {
-		cont = dc_hdl2cont(*coh);
-		if (cont != NULL)
-			D_GOTO(out, rc);
-	}
-
-	cont = dc_cont_alloc(cont_uuid);
-	if (cont == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	D_ASSERT(!daos_handle_is_inval(ph));
-	pool = dc_hdl2pool(ph);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	uuid_copy(cont->dc_cont_hdl, cont_hdl_uuid);
-	cont->dc_capas = flags;
-
-	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
-	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
-	cont->dc_pool_hdl = ph;
-	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-
-	dc_cont_hdl_link(cont);
-	dc_cont2hdl(cont, coh);
-out:
-	if (cont != NULL)
-		dc_cont_put(cont);
-	if (pool != NULL)
-		dc_pool_put(pool);
-
-	return rc;
-}
-
-int
 dc_cont_open(tse_task_t *task)
 {
 	daos_cont_open_t	*args;
@@ -648,9 +575,6 @@ dc_cont_open(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	if ((args->flags & DAOS_COO_RW) && (pool->dp_capas & DAOS_PC_RO))
-		D_GOTO(err_pool, rc = -DER_NO_PERM);
-
 	if (cont == NULL) {
 		cont = dc_cont_alloc(args->uuid);
 		if (cont == NULL)
@@ -666,8 +590,13 @@ dc_cont_open(tse_task_t *task)
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
+		goto err_cont;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OPEN, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -678,7 +607,7 @@ dc_cont_open(tse_task_t *task)
 	uuid_copy(in->coi_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->coi_op.ci_uuid, args->uuid);
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
-	in->coi_capas = args->flags;
+	in->coi_flags = args->flags;
 	/** Determine which container properties need to be retrieved while
 	 * opening the contianer
 	 */
@@ -749,6 +678,12 @@ cont_close_complete(tse_task_t *task, void *data)
 			" pool_hdl="DF_UUID"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid),
 			DP_UUID(cont->dc_cont_hdl), DP_UUID(pool->dp_pool_hdl));
+		rc = 0;
+	} else if (rc == -DER_NONEXIST) {
+		/* The container cannot be found on the server. */
+		D_DEBUG(DF_DSMC, DF_CONT": already destroyed: hdl="DF_UUID"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid),
+			DP_UUID(cont->dc_cont_hdl));
 		rc = 0;
 	} else if (rc != 0) {
 		D_ERROR("failed to close container: "DF_RC"\n", DP_RC(rc));
@@ -834,8 +769,13 @@ dc_cont_close(tse_task_t *task)
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
+		goto err_pool;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1032,8 +972,13 @@ dc_cont_query(tse_task_t *task)
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
+		goto err_cont;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1045,6 +990,8 @@ dc_cont_query(tse_task_t *task)
 	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
 	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
 	in->cqi_bits = cont_query_bits(args->prop);
+	if (args->info != NULL)
+		in->cqi_bits |= DAOS_CO_QUERY_TGT;
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
@@ -1151,8 +1098,13 @@ dc_cont_set_prop(tse_task_t *task)
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
+		goto err_cont;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_PROP_SET, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1269,8 +1221,13 @@ dc_cont_update_acl(tse_task_t *task)
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
+		goto err_cont;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_UPDATE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1305,6 +1262,130 @@ err_cont:
 err:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to update ACL on container: "DF_RC"\n",
+		DP_RC(rc));
+	return rc;
+}
+
+struct cont_delete_acl_args {
+	struct dc_pool		*cda_pool;
+	struct dc_cont		*cda_cont;
+	crt_rpc_t		*rpc;
+	daos_handle_t		hdl;
+};
+
+static int
+cont_delete_acl_complete(tse_task_t *task, void *data)
+{
+	struct cont_delete_acl_args	*arg = (struct cont_delete_acl_args *)
+						data;
+	struct cont_acl_delete_out	*out = crt_reply_get(arg->rpc);
+	struct dc_pool			*pool = arg->cda_pool;
+	struct dc_cont			*cont = arg->cda_cont;
+	int				 rc   = task->dt_result;
+
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &out->cado_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
+	if (rc != 0) {
+		D_ERROR("RPC error while deleting ACL on container: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = out->cado_op.co_rc;
+
+	if (rc != 0) {
+		D_DEBUG(DF_DSMC, DF_CONT": failed to delete ACL on container: "
+			"%d\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, DF_CONT": Delete ACL: using hdl="DF_UUID"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+out:
+	crt_req_decref(arg->rpc);
+	dc_cont_put(cont);
+	dc_pool_put(pool);
+	return rc;
+}
+
+int
+dc_cont_delete_acl(tse_task_t *task)
+{
+	daos_cont_delete_acl_t		*args;
+	struct cont_acl_delete_in	*in;
+	struct dc_pool			*pool;
+	struct dc_cont			*cont;
+	crt_endpoint_t			 ep;
+	crt_rpc_t			*rpc;
+	struct cont_delete_acl_args	 arg;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	cont = dc_hdl2cont(args->coh);
+	if (cont == NULL)
+		D_GOTO(err, rc = -DER_NO_HDL);
+
+	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	D_ASSERT(pool != NULL);
+
+	D_DEBUG(DF_DSMC, DF_CONT": deleting ACL: hdl="DF_UUID"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+	ep.ep_grp  = pool->dp_sys->sy_group;
+	D_MUTEX_LOCK(&pool->dp_client_lock);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
+		goto err_cont;
+	}
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_DELETE, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err_cont, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->cadi_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->cadi_op.ci_uuid, cont->dc_uuid);
+	uuid_copy(in->cadi_op.ci_hdl, cont->dc_cont_hdl);
+	in->cadi_principal_type = args->type;
+	in->cadi_principal_name = args->name;
+
+	arg.cda_pool = pool;
+	arg.cda_cont = cont;
+	arg.rpc	     = rpc;
+	arg.hdl	     = args->coh;
+	crt_req_addref(rpc);
+
+	rc = tse_task_register_comp_cb(task, cont_delete_acl_complete, &arg,
+				       sizeof(arg));
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, task);
+
+err_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+err_cont:
+	dc_cont_put(cont);
+	dc_pool_put(pool);
+err:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to delete ACL on container: "DF_RC"\n",
 		DP_RC(rc));
 	return rc;
 }
@@ -1517,6 +1598,7 @@ struct dc_cont_glob {
 	uint64_t	dcg_capas;
 	uint16_t	dcg_csum_type;
 	uint32_t	dcg_csum_chunksize;
+	bool		dcg_csum_srv_verify;
 };
 
 static inline daos_size_t
@@ -1581,6 +1663,8 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_csum_type = daos_csummer_get_type(cont->dc_csummer);
 	cont_glob->dcg_csum_chunksize =
 		daos_csummer_get_chunksize(cont->dc_csummer);
+	cont_glob->dcg_csum_srv_verify =
+		daos_csummer_get_srv_verify(cont->dc_csummer);
 
 	dc_pool_put(pool);
 out_cont:
@@ -1622,7 +1706,8 @@ csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
 	csum_algo = daos_csum_type2algo(cont_glob->dcg_csum_type);
 	if (csum_algo != NULL)
 		daos_csummer_init(&cont->dc_csummer, csum_algo,
-				  cont_glob->dcg_csum_chunksize);
+				  cont_glob->dcg_csum_chunksize,
+				  cont_glob->dcg_csum_srv_verify);
 	else
 		cont->dc_csummer = NULL;
 }
@@ -1648,10 +1733,6 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 			DP_UUID(cont_glob->dcg_pool_hdl));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-
-	if ((cont_glob->dcg_capas & DAOS_COO_RW) &&
-	    (pool->dp_capas & DAOS_PC_RO))
-		D_GOTO(out_pool, rc = -DER_NO_PERM);
 
 	cont = dc_cont_alloc(cont_glob->dcg_uuid);
 	if (cont == NULL)
@@ -1825,8 +1906,15 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
 
 	ep.ep_grp  = args->cra_pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&args->cra_pool->dp_client_lock);
-	rsvc_client_choose(&args->cra_pool->dp_client, &ep);
+	rc = rsvc_client_choose(&args->cra_pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&args->cra_pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(args->cra_pool->dp_pool,
+				args->cra_cont->dc_uuid), DP_RC(rc));
+		cont_req_cleanup(CLEANUP_POOL, args);
+		goto out;
+	}
 
 	rc = cont_req_create(ctx, &ep, opcode, &args->cra_rpc);
 	if (rc != 0) {
@@ -2019,7 +2107,7 @@ dc_cont_get_attr(tse_task_t *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	rc = attr_check_input(args->n, args->names,
-			      (void const *const) args->values,
+			      (const void *const*) args->values,
 			      (size_t *)args->sizes, true);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -2173,8 +2261,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	D_DEBUG(DF_DSMC, DF_CONT": op=%u; hdl="DF_UUID"; epoch="DF_U64"\n",
 		DP_CONT(arg.eoa_req.cra_pool->dp_pool_hdl,
 			arg.eoa_req.cra_cont->dc_uuid), opc,
-		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl),
-		epoch == NULL ? 0 : *epoch);
+		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl), *epoch);
 
 	in = crt_req_get(arg.eoa_req.cra_rpc);
 	in->cei_epoch = *epoch;
@@ -2197,8 +2284,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	return rc;
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc,
-		epoch == NULL ? 0 : *epoch, rc);
+	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc, *epoch, rc);
 	return rc;
 }
 

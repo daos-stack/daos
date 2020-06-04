@@ -114,20 +114,6 @@ dss_tls_get()
 		pthread_getspecific(dss_tls_key);
 }
 
-#define D_TIME_START(sp, start, op)		\
-do {						\
-	if ((sp) == NULL)			\
-		break;				\
-	start = daos_get_ntime();		\
-} while (0)
-
-#define D_TIME_END(sp, start, op)		\
-do {						\
-	if ((sp) == NULL || start == 0)		\
-		break;				\
-	srv_profile_count(sp, op, (int)(daos_get_ntime() - start)); \
-} while (0)
-
 /**
  * Get value from context by the key
  *
@@ -154,7 +140,52 @@ dss_module_key_get(struct dss_thread_local_storage *dtls,
 void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
-#define DSS_XS_NAME_LEN		64
+/** pthread names are limited to 16 chars */
+#define DSS_XS_NAME_LEN		16
+
+struct srv_profile_chunk {
+	d_list_t	spc_chunk_list;
+	uint32_t	spc_chunk_offset;
+	uint32_t	spc_chunk_size;
+	uint64_t	*spc_chunks;
+};
+
+/* The profile structure to record single operation */
+struct srv_profile_op {
+	int		pro_op;			/* operation */
+	char		*pro_op_name;		/* name of the op */
+	int		pro_acc_cnt;		/* total number of val */
+	int		pro_acc_val;		/* current total val */
+	d_list_t	pro_chunk_list;		/* list of all chunks */
+	d_list_t	pro_chunk_idle_list;	/* idle list of profile chunk */
+	int		pro_chunk_total_cnt;	/* Count in idle list & list */
+	int		pro_chunk_cnt;		/* count in list */
+	struct srv_profile_chunk *pro_current_chunk; /* current chunk */
+};
+
+/* Holding the total trunk list for a specific profiling module */
+
+#define D_TIME_START(start, op)			\
+do {						\
+	struct daos_profile *dp;		\
+						\
+	dp = dss_get_module_info()->dmi_dp;	\
+	if ((dp) == NULL)			\
+		break;				\
+	start = daos_get_ntime();		\
+} while (0)
+
+#define D_TIME_END(start, op)			\
+do {						\
+	struct daos_profile *dp;		\
+	int time_msec;				\
+						\
+	dp = dss_get_module_info()->dmi_dp;	\
+	if ((dp) == NULL || start == 0)		\
+		break;				\
+	time_msec = (daos_get_ntime() - start)/1000; \
+	daos_profile_count(dp, op, time_msec);	\
+} while (0)
 
 /* Opaque xstream configuration data */
 struct dss_xstream;
@@ -173,6 +204,8 @@ struct dss_module_info {
 	/* the cart context id */
 	int			dmi_ctx_id;
 	d_list_t		dmi_dtx_batched_list;
+	/* the profile information */
+	struct daos_profile	*dmi_dp;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -214,48 +247,17 @@ struct dss_drpc_handler {
 	drpc_handler_t	handler;	/** dRPC handler for the module */
 };
 
-/* The profile structure to record single operation */
-struct srv_profile_op {
-	int		pro_id;		/* id in obj_profile_op */
-	uint64_t	pro_time;	/* time cost for this id */
-};
-
-/* The chunk for a group of srv_profile */
-struct srv_profile_chunk {
-	d_list_t	      spc_chunk_list;
-	struct srv_profile_op *spc_profiles;
-	int		      spc_idx;
-	int		      spc_chunk_size;
-};
-
-/* Holding the total trunk list for a specific profiling module */
-struct srv_profile {
-	struct srv_profile_chunk *sp_current_chunk;
-	d_list_t	sp_list;	/* active list for profile chunk */
-	d_list_t	sp_idle_list;	/* idle list for profile chunk */
-	/* Count in idle list & list */
-	int		sp_chunk_total_cnt;
-	/* count in list */
-	int		sp_chunk_cnt;
-	char		*sp_dir_path;	/* Where to dump the profiling */
-	char		**sp_names;	/* profile name */
-	ABT_thread	sp_dump_thread;	/* dump thread for profile */
-	int		sp_stop:1;
-};
-
 struct dss_module_ops {
 	/* The callback for each module will choose ABT pool to handle RPC */
 	ABT_pool (*dms_abt_pool_choose_cb)(crt_rpc_t *rpc, ABT_pool *pools);
 
 	/* Each module to start/stop the profiling */
-	int	(*dms_profile_start)(char *path);
+	int	(*dms_profile_start)(char *path, int avg);
 	int	(*dms_profile_stop)(void);
 };
 
-int srv_profile_stop(struct srv_profile *sp);
-int srv_profile_count(struct srv_profile *sp, int id, int time);
-int srv_profile_start(struct srv_profile **sp_p, char *path, char **names);
-void srv_profile_destroy(struct srv_profile *sp);
+int srv_profile_stop();
+int srv_profile_start(char *path, int avg);
 
 /**
  * Each module should provide a dss_module structure which defines the module
@@ -358,6 +360,7 @@ struct dss_sleep_ult *dss_sleep_ult_create(void);
 void dss_sleep_ult_destroy(struct dss_sleep_ult *dsu);
 void dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs);
 void dss_ult_wakeup(struct dss_sleep_ult *dsu);
+int dss_sleep(uint64_t ms);
 
 /* Pack return codes with additional argument to reduce */
 struct dss_stream_arg_type {
@@ -470,6 +473,8 @@ struct dss_rpc_cntr {
 	 * workload.
 	 */
 	uint64_t		rc_stime;
+	/* the time when processing last active RPC */
+	uint64_t		rc_active_time;
 	/** number of active RPCs */
 	uint64_t		rc_active;
 	/** total number of processed RPCs since \a rc_stime */
@@ -483,7 +488,6 @@ void dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool failed);
 struct dss_rpc_cntr *dss_rpc_cntr_get(enum dss_rpc_cntr_id id);
 
 int dss_rpc_send(crt_rpc_t *rpc);
-void dss_sleep(int ms);
 int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
 enum {
@@ -547,6 +551,10 @@ int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
 		daos_anchor_t *akey_anchor);
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
+
+int dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg,
+		 int arg_size, bool sync);
+tse_sched_t *dsc_scheduler(void);
 
 struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
@@ -656,9 +664,12 @@ int
 ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
 		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
 		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		  unsigned int *shards, int cnt);
+		  unsigned int *shards, int cnt, int clear_conts);
 void
 ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
+
+void
+ds_migrate_abort(uuid_t pool_uuid, uint32_t ver);
 
 /** Server init state (see server_init) */
 enum dss_init_state {

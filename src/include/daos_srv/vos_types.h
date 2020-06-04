@@ -25,6 +25,7 @@
 #define __VOS_TYPES_H__
 
 #include <daos_types.h>
+#include <daos_pool.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
 #include <daos/object.h>
@@ -32,8 +33,26 @@
 #include <daos/checksum.h>
 
 enum dtx_cos_flags {
-	DCF_FOR_PUNCH	= (1 << 0),
-	DCF_HAS_ILOG	= (1 << 1),
+	DCF_SHARED	= (1 << 0),
+};
+
+struct dtx_cos_key {
+	daos_unit_oid_t		oid;
+	uint64_t		dkey_hash;
+};
+
+enum dtx_entry_flags {
+	/* The DTX is the leader */
+	DTE_LEADER		= (1 << 0),
+	/* The DTX entry is invalid. */
+	DTE_INVALID		= (1 << 1),
+};
+
+struct dtx_entry {
+	/** The identifier of the DTX */
+	struct dtx_id		dte_xid;
+	/** The identifier of the modified object (shard). */
+	daos_unit_oid_t		dte_oid;
 };
 
 enum vos_oi_attr {
@@ -58,24 +77,32 @@ struct vos_gc_stat {
 	uint64_t	gs_recxs;	/**< GCed array values */
 };
 
+struct vos_pool_space {
+	/** Total & free space */
+	struct daos_space	vps_space;
+	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */
+	daos_size_t		vps_space_sys[DAOS_MEDIA_MAX];
+	/** NVMe block allocator attributes */
+	struct vea_attr		vps_vea_attr;
+	/** NVMe block allocator statistics */
+	struct vea_stat		vps_vea_stat;
+};
+
+#define SCM_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_SCM])
+#define SCM_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_SCM])
+#define SCM_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_SCM])
+#define NVME_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_NVME])
+#define NVME_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_NVME])
+#define NVME_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_NVME])
+
 /**
  * pool attributes returned to query
  */
 typedef struct {
 	/** # of containers in this pool */
 	uint64_t		pif_cont_nr;
-	/** Total SCM space in bytes */
-	daos_size_t		pif_scm_sz;
-	/** Total NVMe space in bytes */
-	daos_size_t		pif_nvme_sz;
-	/** Current SCM free space in bytes */
-	daos_size_t		pif_scm_free;
-	/** Current NVMe free space in bytes */
-	daos_size_t		pif_nvme_free;
-	/** NVMe block allocator attributes */
-	struct vea_attr		pif_vea_attr;
-	/** NVMe block allocator statistics */
-	struct vea_stat		pif_vea_stat;
+	/** Space information */
+	struct vos_pool_space	pif_space;
 	/** garbage collector statistics */
 	struct vos_gc_stat	pif_gc_stat;
 	/** TODO */
@@ -158,9 +185,67 @@ typedef enum {
 } vos_it_epc_expr_t;
 
 enum {
+	/** Conditional Op: Punch key if it exists, fail otherwise */
+	VOS_OF_COND_PUNCH	= DAOS_COND_PUNCH,
+	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
+	VOS_OF_COND_DKEY_INSERT	= DAOS_COND_DKEY_INSERT,
+	/** Conditional Op: Update dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_UPDATE	= DAOS_COND_DKEY_UPDATE,
+	/** Conditional Op: Fetch dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_FETCH	= DAOS_COND_DKEY_FETCH,
+	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */
+	VOS_OF_COND_AKEY_INSERT	= DAOS_COND_AKEY_INSERT,
+	/** Conditional Op: Update akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_UPDATE	= DAOS_COND_AKEY_UPDATE,
+	/** Conditional Op: Fetch akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_FETCH	= DAOS_COND_AKEY_FETCH,
+	/** Indicates the operation should check mvcc timestamps */
+	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
 	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC	= (1 << 0),
+	VOS_OF_REPLAY_PC	= (1 << 8),
 };
+
+/** Mask for any conditionals passed to to the fetch */
+#define VOS_COND_FETCH_MASK	\
+	(VOS_OF_COND_AKEY_FETCH | VOS_OF_COND_DKEY_FETCH)
+
+/** Mask for akey conditionals passed to to the update */
+#define VOS_COND_AKEY_UPDATE_MASK					\
+	(VOS_OF_COND_AKEY_UPDATE | VOS_OF_COND_AKEY_INSERT)
+
+/** Mask for dkey conditionals passed to to the update */
+#define VOS_COND_DKEY_UPDATE_MASK					\
+	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_DKEY_INSERT)
+
+/** Mask for any conditionals passed to to the update */
+#define VOS_COND_UPDATE_MASK					\
+	(VOS_COND_DKEY_UPDATE_MASK | VOS_COND_AKEY_UPDATE_MASK)
+
+/** Mask for if the update has any conditional update */
+#define VOS_COND_UPDATE_OP_MASK					\
+	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
+
+D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
+D_CASSERT((VOS_OF_USE_TIMESTAMPS & DAOS_COND_MASK) == 0);
+
+/** vos definitions that match daos_obj_key_query flags */
+enum {
+	/** retrieve the max of dkey, akey, and/or idx of array value */
+	VOS_GET_MAX		= DAOS_GET_MAX,
+	/** retrieve the min of dkey, akey, and/or idx of array value */
+	VOS_GET_MIN		= DAOS_GET_MIN,
+	/** retrieve the dkey */
+	VOS_GET_DKEY		= DAOS_GET_DKEY,
+	/** retrieve the akey */
+	VOS_GET_AKEY		= DAOS_GET_AKEY,
+	/** retrieve the idx of array value */
+	VOS_GET_RECX		= DAOS_GET_RECX,
+	/** Internal flag to indicate timestamps are used */
+	VOS_USE_TIMESTAMPS	= (1 << 5),
+};
+
+D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
+				 VOS_GET_AKEY | VOS_GET_RECX)) == 0);
 
 enum {
 	/** The absence of any flags means iterate all unsorted extents */
@@ -237,22 +322,10 @@ typedef struct {
 			/** Non-zero if punched */
 			daos_epoch_t		ie_punch;
 			union {
-				/** dkey or akey */
-				struct {
-					/** key value */
-					daos_key_t		ie_key;
-				};
-				/** object or DTX entry */
-				struct {
-					/** The DTX identifier. */
-					struct dtx_id		ie_xid;
-					/** oid */
-					daos_unit_oid_t		ie_oid;
-					/* The dkey hash for DTX iteration. */
-					uint64_t		ie_dtx_hash;
-					/* The DTX intent for DTX iteration. */
-					uint32_t		ie_dtx_intent;
-				};
+				/** key value */
+				daos_key_t	ie_key;
+				/** oid */
+				daos_unit_oid_t	ie_oid;
 			};
 		};
 		/** Array entry */
@@ -269,6 +342,19 @@ typedef struct {
 			struct dcs_csum_info	ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
+			/** Minor epoch of extent */
+			uint16_t		ie_minor_epc;
+		};
+		/** Active DTX entry. */
+		struct {
+			/** The DTX identifier. */
+			struct dtx_id		ie_dtx_xid;
+			/** The OID. */
+			daos_unit_oid_t		ie_dtx_oid;
+			/** The pool map version when handling DTX on server. */
+			uint32_t		ie_dtx_ver;
+			/* The dkey hash for DTX iteration. */
+			uint16_t		ie_dtx_flags;
 		};
 	};
 	/* Flags to describe the entry */

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,8 @@ dss_ctx_nr_get(void)
 static void dss_gc_ult(void *args);
 
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
-#define DSS_TGT_XS_NAME_FMT	"daos_tgt_%d_xs_%d"
+#define DSS_IO_XS_NAME_FMT	"daos_io_%d"
+#define DSS_OFFLOAD_XS_NAME_FMT	"daos_off_%d"
 
 struct dss_xstream_data {
 	/** Initializing step, it is for cleanup of global states */
@@ -223,9 +224,9 @@ dss_ult_wakeup(struct dss_sleep_ult *dsu)
 	}
 }
 
-/* Schedule the ULT(dtu->ult) and reschedule in @expire_secs seconds */
+/* Schedule the ULT(dtu->ult) and reschedule in @expire_secs nano seconds */
 void
-dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
+dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_nsecs)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 	ABT_thread		thread;
@@ -236,9 +237,8 @@ dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
 	D_ASSERT(thread == dsu->dsu_thread);
 
 	D_ASSERT(d_list_empty(&dsu->dsu_list));
-	daos_gettime_coarse(&now);
-	dsu->dsu_expire_time = now + expire_secs;
-	D_DEBUG(DB_TRACE, "dsu %p expire in "DF_U64" secs\n", dsu, expire_secs);
+	now = daos_getntime_coarse();
+	dsu->dsu_expire_time = now + expire_nsecs;
 	add_sleep_list(dx, dsu);
 	ABT_self_suspend();
 }
@@ -256,13 +256,34 @@ check_sleep_list()
 	if (dss_xstream_exiting(dx))
 		shutdown = true;
 
-	daos_gettime_coarse(&now);
+	if (d_list_empty(&dx->dx_sleep_ult_list))
+		return;
+
+	now = daos_getntime_coarse();
 	d_list_for_each_entry_safe(dsu, tmp, &dx->dx_sleep_ult_list, dsu_list) {
 		if (dsu->dsu_expire_time <= now || shutdown)
 			dss_ult_wakeup(dsu);
 		else
 			break;
 	}
+}
+
+/**
+ * sleep micro seconds, then being rescheduled.
+ * \param[in]	us	milli seconds to sleep for
+ */
+int
+dss_sleep(uint64_t sleep_msec)
+{
+	struct dss_sleep_ult *dsu;
+
+	dsu = dss_sleep_ult_create();
+	if (dsu == NULL)
+		return -DER_NOMEM;
+
+	dss_ult_sleep(dsu, sleep_msec * 1000000);
+	dss_sleep_ult_destroy(dsu);
+	return 0;
 }
 
 struct dss_rpc_cntr *
@@ -280,12 +301,13 @@ dss_rpc_cntr_enter(enum dss_rpc_cntr_id id)
 {
 	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(id);
 
-	/* TODO: add interface to calculate average workload and reset stime */
-	if (cntr->rc_stime == 0)
-		daos_gettime_coarse(&cntr->rc_stime);
-
+	daos_gettime_coarse(&cntr->rc_active_time);
 	cntr->rc_active++;
 	cntr->rc_total++;
+
+	/* TODO: add interface to calculate average workload and reset stime */
+	if (cntr->rc_stime == 0)
+		cntr->rc_stime = cntr->rc_active_time;
 }
 
 /**
@@ -304,27 +326,33 @@ dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool error)
 }
 
 static int
-dss_rpc_hdlr(crt_context_t *ctx, crt_rpc_t *rpc,
+dss_iv_resp_hdlr(crt_context_t *ctx, void *hdlr_arg,
+		 void (*real_rpc_hdlr)(void *), void *arg)
+{
+	ABT_pool	pool, *pools = arg;
+	int		rc;
+
+	pool = pools[DSS_POOL_IO];
+	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
+			       ABT_THREAD_ATTR_NULL, NULL);
+	return dss_abterr2der(rc);
+}
+
+static int
+dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	     void (*real_rpc_hdlr)(void *), void *arg)
 {
-	unsigned int		 mod_id = opc_get_mod_id(rpc->cr_opc);
-	struct dss_module	*module = dss_module_get(mod_id);
-	ABT_pool		*pools = arg;
-	ABT_pool		 pool;
-	int			 rc;
+	ABT_pool	*pools = arg;
+	ABT_pool	 pool;
+	int		 rc;
 
-	/*
-	 * The mod_id for the RPC originated from CART is 0xfe, and 'module'
-	 * will be NULL for this case.
-	 */
-	if (module != NULL && module->sm_mod_ops != NULL &&
-	    module->sm_mod_ops->dms_abt_pool_choose_cb)
-		pool = module->sm_mod_ops->dms_abt_pool_choose_cb(rpc, pools);
-	else
-		pool = pools[DSS_POOL_IO];
+	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
+		return 0;
 
-	rc = ABT_thread_create(pool, real_rpc_hdlr, rpc, ABT_THREAD_ATTR_NULL,
-			       NULL);
+	pool = pools[DSS_POOL_IO];
+
+	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
+			       ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
 
@@ -349,12 +377,14 @@ dss_nvme_poll_ult(void *args)
 static void
 wait_all_exited(struct dss_xstream *dx)
 {
-	size_t	total_size = 0, pool_size;
-	int	rc, i;
-
 	D_DEBUG(DB_TRACE, "XS(%d) draining ULTs.\n", dx->dx_xs_id);
 	while (1) {
+		size_t	total_size = 0;
+		int	i;
+
 		for (i = 0; i < DSS_POOL_CNT; i++) {
+			size_t	pool_size;
+			int	rc;
 			rc = ABT_pool_get_total_size(dx->dx_pools[i],
 						     &pool_size);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
@@ -387,12 +417,23 @@ dss_srv_handler(void *arg)
 	int				 rc;
 	bool				 signal_caller = true;
 
-	/** set affinity */
+	/**
+	 * Set cpu affinity
+	 */
 	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
 	if (rc) {
-		D_ERROR("failed to set affinity: %d\n", errno);
+		D_ERROR("failed to set cpu affinity: %d\n", errno);
 		goto signal;
 	}
+
+	/**
+	 * Set memory affinity, but fail silently if it does not work since some
+	 * systems return ENOSYS.
+	 */
+	rc = hwloc_set_membind(dss_topo, dx->dx_cpuset, HWLOC_MEMBIND_BIND,
+			       HWLOC_MEMBIND_THREAD);
+	if (rc)
+		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG);
@@ -408,6 +449,8 @@ dss_srv_handler(void *arg)
 	dmi->dmi_ctx_id	= -1;
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_list);
 
+	(void)pthread_setname_np(pthread_self(), dx->dx_name);
+
 	if (dx->dx_comm) {
 		/* create private transport context */
 		rc = crt_context_create(&dmi->dmi_ctx);
@@ -418,6 +461,7 @@ dss_srv_handler(void *arg)
 		}
 
 		rc = crt_context_register_rpc_task(dmi->dmi_ctx, dss_rpc_hdlr,
+						   dss_iv_resp_hdlr,
 						   dx->dx_pools);
 		if (rc != 0) {
 			D_ERROR("failed to register process cb "DF_RC"\n",
@@ -513,8 +557,7 @@ dss_srv_handler(void *arg)
 	/* main service progress loop */
 	for (;;) {
 		if (dx->dx_comm) {
-			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */, NULL,
-					  NULL);
+			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("failed to progress CART context: %d\n",
 					rc);
@@ -524,17 +567,20 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		if (dss_xstream_exiting(dx)) {
-			check_sleep_list();
-			break;
-		}
-
 		check_sleep_list();
+
+		if (dss_xstream_exiting(dx))
+			break;
+
 		ABT_thread_yield();
 	}
 	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
 
 	wait_all_exited(dx);
+	if (dmi->dmi_dp) {
+		daos_profile_destroy(dmi->dmi_dp);
+		dmi->dmi_dp = NULL;
+	}
 nvme_fini:
 	if (dx->dx_main_xs)
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
@@ -647,14 +693,6 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 				 (helper_per_tgt + 1));
 		comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
 	}
-	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
-	if (xs_id < dss_sys_xs_nr) {
-		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
-			 xs_id);
-	} else {
-		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_TGT_XS_NAME_FMT,
-			 dx->dx_tgt_id, xs_id);
-	}
 	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
@@ -667,6 +705,26 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	dx->dx_dsc_started = false;
 	D_INIT_LIST_HEAD(&dx->dx_sleep_ult_list);
 
+	/**
+	 * Generate name for each xstreams so that they can be easily identified
+	 * and monitored independently (e.g. via ps(1))
+	 */
+	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
+	if (xs_id < dss_sys_xs_nr) {
+		/** system xtreams are named daos_sys_$num */
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
+			 xs_id);
+	} else if (dx->dx_main_xs) {
+		/** primary I/O xstreams are named daos_io_$tgtid */
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_IO_XS_NAME_FMT,
+			 dx->dx_tgt_id);
+	} else {
+		/** offload xstreams are named daos_off_$num */
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_OFFLOAD_XS_NAME_FMT,
+			 xs_id);
+	}
+
+	/** create ABT scheduler in charge of this xstream */
 	rc = dss_sched_init(dx);
 	if (rc != 0) {
 		D_ERROR("create scheduler fails: "DF_RC"\n", DP_RC(rc));
@@ -742,6 +800,7 @@ dss_xstreams_fini(bool force)
 	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
+	dss_xstreams_open_barrier();
 
 	/** Stop & free progress ULTs */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
@@ -807,9 +866,12 @@ dss_xstreams_empty(void)
 bool
 dss_xstream_is_busy(void)
 {
-	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(DSS_RC_OBJ);
+	struct dss_rpc_cntr	*cntr = dss_rpc_cntr_get(DSS_RC_OBJ);
+	uint64_t		 cur_sec = 0;
 
-	return cntr->rc_active != 0;
+	daos_gettime_coarse(&cur_sec);
+	/* No IO requests for more than 5 seconds */
+	return cur_sec < (cntr->rc_active_time + 5);
 }
 
 static int

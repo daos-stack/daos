@@ -58,6 +58,41 @@ message PoolDestroyResp {
 	int32 status = 1; // DAOS error code
 }
 
+// PoolEvictReq supplies pool identifier.
+message PoolEvictReq {
+	string uuid = 1; // uuid of pool to evict
+	string sys = 2; // DAOS system identifier
+}
+
+// PoolEvictResp returns resultant state of evict operation.
+message PoolEvictResp {
+	int32 status = 1; // DAOS error code
+}
+
+// PoolExcludeReq supplies pool identifier, rank, and target_idxs.
+message PoolExcludeReq {
+	string uuid = 1; // uuid of pool to add target up to
+	uint32 rank = 2; // target to move to the up state
+	repeated uint32 targetidx = 3; // target ranks
+}
+
+// PoolExcludeResp returns resultant state of Exclude operation.
+message PoolExcludeResp {
+	int32 status = 1; // DAOS error code
+}
+
+// PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
+message PoolReintegrateReq {
+	string uuid = 1; // uuid of pool to add target up to
+	uint32 rank = 2; // target to move to the up state
+	repeated uint32 targetidx = 3; // target ranks
+}
+
+// PoolReintegrateResp returns resultant state of Reintegrate operation.
+message PoolReintegrateResp {
+	int32 status = 1; // DAOS error code
+}
+
 // ListPoolsReq represents a request to list pools on a given DAOS system.
 message ListPoolsReq {
 	string sys = 1; // DAOS system identifier
@@ -151,5 +186,8 @@ message PoolQueryResp {
 	PoolRebuildStatus rebuild = 6; // pool rebuild status
 	StorageUsageStats scm = 7; // SCM storage usage stats
 	StorageUsageStats nvme = 8; // NVMe storage usage stats
+	uint32 totalnodes = 9; // total nodes in pool
+	uint32 version = 10; // latest pool map version
+	uint32 leader = 11; // current raft leader
 }
 

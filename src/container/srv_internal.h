@@ -82,9 +82,10 @@ struct cont_svc {
 struct cont {
 	uuid_t			c_uuid;
 	struct cont_svc	       *c_svc;
-	rdb_path_t		c_prop;		/* container properties KVS */
-	rdb_path_t		c_snaps;	/* Snapshots KVS */
-	rdb_path_t		c_user;		/* user attributes KVS */
+	rdb_path_t		c_prop;		/* container property KVS */
+	rdb_path_t		c_snaps;	/* snapshot KVS */
+	rdb_path_t		c_user;		/* user attribute KVS */
+	rdb_path_t		c_hdls;		/* handle index KVS */
 };
 
 /* OID range for allocator */
@@ -100,7 +101,8 @@ struct cont_iv_snapshot {
 };
 
 struct cont_iv_capa {
-	uint64_t	capas;
+	uint64_t	flags;
+	uint64_t	sec_capas;
 };
 
 /* flattened container properties */
@@ -144,6 +146,7 @@ struct cont_iv_key {
  * srv_container.c
  */
 void ds_cont_op_handler(crt_rpc_t *rpc);
+void ds_cont_set_prop_handler(crt_rpc_t *rpc);
 int ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 			 crt_opcode_t opcode, crt_rpc_t **rpc);
 int ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
@@ -152,11 +155,15 @@ int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 			   struct cont_svc **svcp, struct rsvc_hint *hint);
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
 		const uuid_t uuid, struct cont **cont);
+void cont_put(struct cont *cont);
 void cont_svc_put_leader(struct cont_svc *svc);
 int ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		     struct cont *cont, struct container_hdl *hdl,
 		     crt_rpc_t *rpc);
 int ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		       struct cont *cont, struct container_hdl *hdl,
+		       crt_rpc_t *rpc);
+int ds_cont_acl_delete(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		       struct cont *cont, struct container_hdl *hdl,
 		       crt_rpc_t *rpc);
 
@@ -170,9 +177,6 @@ int ds_cont_epoch_fini_hdl(struct rdb_tx *tx, struct cont *cont,
 int ds_cont_epoch_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			struct cont *cont, struct container_hdl *hdl,
 			crt_rpc_t *rpc);
-int ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			  struct cont *cont, struct container_hdl *hdl,
-			  crt_rpc_t *rpc);
 int ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			struct cont *cont, struct container_hdl *hdl,
 			crt_rpc_t *rpc);
@@ -185,13 +189,16 @@ int ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
 			 crt_rpc_t *rpc);
-
 int
 ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 		      daos_epoch_t **snapshots, int *snap_count);
+void
+ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
+
 /**
  * srv_target.c
  */
+int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
 void ds_cont_tgt_destroy_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				   void *priv);
@@ -201,9 +208,6 @@ int ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_cont_tgt_query_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
-void ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc);
-int ds_cont_tgt_epoch_discard_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-					 void *priv);
 void ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 					   void *priv);
@@ -217,7 +221,7 @@ void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
 
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		     uuid_t cont_uuid, uint64_t capas);
+		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas);
 int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
@@ -234,9 +238,14 @@ int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 int ds_cont_iv_init(void);
 int ds_cont_iv_fini(void);
 int cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-			      uint64_t capas);
+			      uint64_t flags, uint64_t sec_capas);
 int cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid);
-int cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
+int cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_hdl_uuid,
+		       daos_prop_t *cont_prop);
+int cont_iv_prop_update(void *ns, uuid_t iv_key_uuid, uuid_t cont_uuid,
 			daos_prop_t *prop);
+int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
+int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
+			     uint64_t *snapshots, int snap_count);
 
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

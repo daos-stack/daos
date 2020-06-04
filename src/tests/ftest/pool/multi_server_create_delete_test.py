@@ -24,8 +24,7 @@
 import os
 from apricot import TestWithServers
 import check_for_pool
-from dmg_utils import (pool_create, pool_destroy,
-                       get_pool_uuid_service_replicas_from_stdout)
+from dmg_utils import DmgCommand, get_pool_uuid_service_replicas_from_stdout
 
 RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
@@ -49,6 +48,12 @@ class MultiServerCreateDeleteTest(TestWithServers):
 
         :avocado: tags=all,pool,full_regression,small,multitarget
         """
+        # Create a dmg command object
+        dmg = self.get_dmg_command()
+
+        # Disable raising an exception if the dmg command fails
+        dmg.exit_status_exception = False
+
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
         # expected result of the test
@@ -79,18 +84,14 @@ class MultiServerCreateDeleteTest(TestWithServers):
         host1 = self.hostlist_servers[0]
         host2 = self.hostlist_servers[1]
         test_destroy = True
-        # Get the access point and pass it in to dmg -l
-        access_points = self.server_managers[0].runner.job.\
-            yaml_params.access_points.value
-        create_result = pool_create(
-            path=self.bin, scm_size="1GB", host_port=access_points,
-            group=group, user=user, ranks=tgtlist, sys=system_name)
-        if create_result is not None:
+        create_result = dmg.pool_create(
+            "1GB", user, group, None, tgtlist, None, system_name)
+        if create_result.exit_status == 0:
+            if expected_result == RESULT_FAIL:
+                self.fail(
+                    "Test was expected to fail but it passed at pool create.")
             uuid, _ = get_pool_uuid_service_replicas_from_stdout(
                 create_result.stdout)
-            if expected_result == RESULT_FAIL:
-                self.fail("Test was expected to fail but it passed at pool " +
-                          "create.")
             if '0' in tgtlist:
                 # check_for_pool checks if the uuid directory exists in host1
                 exists = check_for_pool.check_for_pool(host1, uuid)
@@ -109,9 +110,8 @@ class MultiServerCreateDeleteTest(TestWithServers):
                           "create.")
 
         if test_destroy:
-            destroy_result = pool_destroy(
-                path=self.bin, pool_uuid=uuid, host_port=access_points)
-            if destroy_result is not None:
+            destroy_result = dmg.pool_destroy(uuid)
+            if destroy_result.exit_status == 0:
                 if expected_result == RESULT_FAIL:
                     self.fail("Test was expected to fail but it passed at " +
                               "pool create.")

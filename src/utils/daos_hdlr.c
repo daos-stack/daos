@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@
 #include "daos_api.h"
 #include "daos_fs.h"
 #include "daos_uns.h"
+#include "daos_prop.h"
 
 #include "daos_hdlr.h"
 
@@ -435,9 +436,9 @@ pool_query_hdlr(struct cmd_args_s *ap)
 		fprintf(stderr, "pool query failed: %d\n", rc);
 		D_GOTO(out_disconnect, rc);
 	}
-	D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
+	D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u, version=%u\n",
 		DP_UUID(pinfo.pi_uuid), pinfo.pi_ntargets,
-		pinfo.pi_ndisabled);
+		pinfo.pi_ndisabled, pinfo.pi_map_ver);
 
 	D_PRINT("Pool space info:\n");
 	D_PRINT("- Target(VOS) count:%d\n", ps->ps_ntargets);
@@ -487,7 +488,6 @@ out:
  *
  * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_set_prop_hdlr()
  * int cont_del_attr_hdlr()
  * int cont_rollback_hdlr()
  */
@@ -510,8 +510,8 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	}
 
 	D_PRINT("Container's snapshots :\n");
-	if (daos_anchor_is_eof < 0) {
-		fprintf(stderr, "invalid number of snapshots returned\n");
+	if (!daos_anchor_is_eof(&anchor)) {
+		fprintf(stderr, "too many snapshots returned\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (snaps_count == 0) {
@@ -738,10 +738,23 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 	struct daos_prop_entry	*entry;
 	char			type[10] = {};
 	int			rc = 0;
+	uint32_t		i;
+	uint32_t		entry_type;
 
-	prop_query = daos_prop_alloc(0);
+	/*
+	 * Get all props except the ACL
+	 */
+	prop_query = daos_prop_alloc(DAOS_PROP_CO_NUM - 1);
 	if (prop_query == NULL)
 		return -DER_NOMEM;
+
+	entry_type = DAOS_PROP_CO_MIN + 1;
+	for (i = 0; i < prop_query->dpp_nr; entry_type++) {
+		if (entry_type == DAOS_PROP_CO_ACL)
+			continue; /* skip ACL */
+		prop_query->dpp_entries[i].dpe_type = entry_type;
+		i++;
+	}
 
 	rc = daos_cont_query(ap->cont, NULL, prop_query, NULL);
 	if (rc) {
@@ -816,15 +829,6 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 	}
 	D_PRINT("max snapshots -> "DF_U64"\n", entry->dpe_val);
 
-	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ACL);
-	if (entry == NULL || entry->dpe_val_ptr == NULL) {
-		fprintf(stderr, "acl property not found\n");
-		/* not an error */
-	} else {
-		D_PRINT("acl ->\n");
-		daos_acl_dump(entry->dpe_val_ptr);
-	}
-
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_COMPRESS);
 	if (entry == NULL) {
 		fprintf(stderr, "compression type property not found\n");
@@ -841,6 +845,39 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 
 err_out:
 	daos_prop_free(prop_query);
+	return rc;
+}
+
+int
+cont_set_prop_hdlr(struct cmd_args_s *ap)
+{
+	int			 rc;
+	struct daos_prop_entry	*entry;
+	uint32_t		 i;
+
+	if (ap->props == NULL || ap->props->dpp_nr == 0) {
+		fprintf(stderr, "at least one property must be requested\n");
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+
+	/* Validate the properties are supported for set */
+	for (i = 0; i < ap->props->dpp_nr; i++) {
+		entry = &(ap->props->dpp_entries[i]);
+		if (entry->dpe_type != DAOS_PROP_CO_LABEL) {
+			fprintf(stderr, "property not supported for set\n");
+			D_GOTO(err_out, rc = -DER_INVAL);
+		}
+	}
+
+	rc = daos_cont_set_prop(ap->cont, ap->props, NULL);
+	if (rc) {
+		fprintf(stderr, "Container set-prop failed, result: %d\n", rc);
+		D_GOTO(err_out, rc);
+	}
+
+	D_PRINT("Properties were successfully set\n");
+
+err_out:
 	return rc;
 }
 
@@ -1035,7 +1072,7 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 
 	rc = duns_create_path(ap->pool, ap->path, &dattr);
 	if (rc) {
-		fprintf(stderr, "duns_create_path() error: rc=%d\n", rc);
+		fprintf(stderr, "duns_create_path() error: %s\n", strerror(rc));
 		D_GOTO(err_rc, rc);
 	}
 
@@ -1070,6 +1107,11 @@ cont_query_hdlr(struct cmd_args_s *ap)
 		(int)cont_info.ci_lsnapshot);
 	printf("Highest Aggregated Epoch: "DF_U64"\n", cont_info.ci_hae);
 	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
+
+	if (ap->oid.hi || ap->oid.lo) {
+		printf("Path is within container, oid: " DF_OID "\n",
+			DP_OID(ap->oid));
+	}
 
 	if (ap->path != NULL) {
 		/* cont_op_hdlr() already did resolve_by_path()
@@ -1119,8 +1161,8 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 	if (ap->path) {
 		rc = duns_destroy_path(ap->pool, ap->path);
 		if (rc)
-			fprintf(stderr, "duns_destroy_path() failed %s (%d)\n",
-				ap->path, rc);
+			fprintf(stderr, "duns_destroy_path() failed %s (%s)\n",
+				ap->path, strerror(rc));
 		else
 			fprintf(stdout, "Successfully destroyed path %s\n",
 				ap->path);
@@ -1419,6 +1461,71 @@ cont_update_acl_hdlr(struct cmd_args_s *ap)
 	rc = print_acl(stdout, prop_out, false);
 
 	daos_prop_free(prop_out);
+	return rc;
+}
+
+int
+cont_delete_acl_hdlr(struct cmd_args_s *ap)
+{
+	int				rc;
+	enum daos_acl_principal_type	type;
+	char				*name;
+	daos_prop_t			*prop_out;
+
+	if (!ap->principal) {
+		fprintf(stderr,
+			"parameter --principal is required\n");
+		return -DER_INVAL;
+	}
+
+	rc = daos_acl_principal_from_str(ap->principal, &type, &name);
+	if (rc != 0) {
+		fprintf(stderr, "unable to parse principal string '%s': %d\n",
+			ap->principal, rc);
+		return rc;
+	}
+
+	rc = daos_cont_delete_acl(ap->cont, type, name, NULL);
+	D_FREE(name);
+	if (rc != 0) {
+		fprintf(stderr,
+			"failed to delete ACL entry for container: %d\n", rc);
+		return rc;
+	}
+
+	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"delete appeared to succeed, but cannot fetch ACL "
+			"for confirmation: %d\n", rc);
+		return rc;
+	}
+
+	rc = print_acl(stdout, prop_out, false);
+
+	daos_prop_free(prop_out);
+	return rc;
+}
+
+int
+cont_set_owner_hdlr(struct cmd_args_s *ap)
+{
+	int	rc;
+
+	if (!ap->user && !ap->group) {
+		fprintf(stderr,
+			"parameter --user or --group is required\n");
+		return -DER_INVAL;
+	}
+
+	rc = daos_cont_set_owner(ap->cont, ap->user, ap->group, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"failed to set owner for container: %d\n", rc);
+		return rc;
+	}
+
+	fprintf(stdout, "successfully updated owner for container\n");
 	return rc;
 }
 

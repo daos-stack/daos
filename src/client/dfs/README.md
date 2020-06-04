@@ -14,14 +14,15 @@ container handle where the namespace will be located.
 When the file system is created (i.e. when the DAOS container is initialized as
 an encapsulated namespace), a reserved object (with a predefined object ID) will
 be added to the container and will record superblock information about the
-namespace. The SB object is replicated and has the reserved OID 0.0.
+namespace. The SB object is replicated with object class OC_RP_XSF, and has the
+reserved OID 0.0.
 
 The SB object contains an entry with a magic value to indicate it's a POSIX
 filesystem. The SB object will contain also an entry to the root directory of
 the filesystem, which will be another reserved object with a predefined oid
-(1.0) and will have the same representation as a directory (see next
-section). The oid of the root id will be inserted as an entry in the superblock
-object.
+(1.0), replicated with object class OC_RP_XSF, and will have the same
+representation as a directory (see next section). The oid of the root id will be
+inserted as an entry in the superblock object.
 
 The SB will look like this:
 
@@ -31,10 +32,10 @@ A-key: "DFS_MAGIC"
 single-value (uint64_t): SB_MAGIC (0xda05df50da05df50)
 
 A-key: "DFS_SB_VERSION"
-single-value (uint64_t): Version number of the SB. This is used to determine the layout of the SB (the DKEYs and value sizes).
+single-value (uint16_t): Version number of the SB. This is used to determine the layout of the SB (the DKEYs and value sizes).
 
 A-key: "DFS_LAYOUT_VERSION"
-single-value (uint64_t): This is used to determine the format of the entries in the DFS namespace (DFS to DAOS mapping).
+single-value (uint16_t): This is used to determine the format of the entries in the DFS namespace (DFS to DAOS mapping).
 
 A-key: "DFS_SB_FEAT_COMPAT"
 single-value (uint64_t): flags to indicate feature set like extended attribute support, indexing
@@ -82,7 +83,7 @@ Directory Object
         mtime: modify time
         ctime: change time
         chunk_size: chunk_size of file (0 if default or not a file)
-        syml: symlink value (akey does not exist if not a symlink)
+        syml: symlink value (does not exist if not a symlink)
     A-key "x:xattr1"	// extended attribute name (if any)
     A-key "x:xattr2"	// extended attribute name (if any)
 ~~~~~~
@@ -172,8 +173,8 @@ depending on the type of access being requested (R, W, X) and the object mode,
 access permission is determined. In the source code, this is implemented in the
 function `check_access()`.
 
-setuid(), setgid() programs, supplementary groups, ACLs are not supported at the
-moment.
+setuid(), setgid() programs, supplementary groups, ACLs are not supported in the
+DFS namespace.
 
 ## DFUSE_HL
 

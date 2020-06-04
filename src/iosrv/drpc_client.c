@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ notify_ready(void)
 	/* Do not free, this string is managed by the dRPC listener */
 	req.drpclistenersock = drpc_listener_socket_path;
 	req.instanceidx = dss_instance_idx;
+	req.ntgts = dss_tgt_nr;
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
@@ -166,17 +167,15 @@ drpc_init(void)
 	char   *path;
 	int	rc;
 
-	rc = asprintf(&path, "%s/%s", dss_socket_dir, "daos_server.sock");
-	if (rc < 0) {
-		rc = -DER_NOMEM;
-		goto out;
+	D_ASPRINTF(path, "%s/%s", dss_socket_dir, "daos_server.sock");
+	if (path == NULL) {
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	D_ASSERT(dss_drpc_ctx == NULL);
 	dss_drpc_ctx = drpc_connect(path);
 	if (dss_drpc_ctx == NULL) {
-		rc = -DER_NOMEM;
-		goto out_path;
+		D_GOTO(out_path, rc = -DER_NOMEM);
 	}
 
 	rc = notify_ready();

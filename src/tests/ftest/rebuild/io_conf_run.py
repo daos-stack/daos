@@ -47,6 +47,6 @@ class DaosRunIoConf(IoConfTestBase):
         Use Cases:
             Verify rebuild with data verification.
 
-        :avocado: tags=all,medium,hw,rebuild,iorebuild,full_regression
+        :avocado: tags=all,full_regression,hw,large,rebuild,iorebuild
         """
         self.execute_io_conf_run_test()

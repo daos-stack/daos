@@ -12,19 +12,21 @@ def scons():
     # is correct, but set _libs to [] so that the library isn't
     # linked in.
 
-    prereqs.require(env, 'pmdk', 'cart')
+    prereqs.require(env, 'pmdk')
 
     if not platform_arm:
         prereqs.require(env, 'isal')
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'protobufc', 'cart')
+    prereqs.require(denv, 'protobufc')
+    denv.AppendUnique(LIBS=['cart', 'gurt'])
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                   'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
                   'drpc.c', 'drpc.pb-c.c', 'proc.c',
-                  'acl_api.c', 'acl_util.c', 'acl_principal.c', 'errno.c']
+                  'acl_api.c', 'acl_util.c', 'acl_principal.c',
+                  'profile.c']
 
     common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib64/', common)

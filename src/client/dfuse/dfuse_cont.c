@@ -50,7 +50,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc = ENOMEM);
 	}
 
-	dfs->dfs_attr_timeout = parent->ie_dfs->dfs_attr_timeout;
+	dfuse_dfs_init(dfs, parent->ie_dfs);
+
 	dfs->dfs_dfp = dfp;
 
 	/* Dentry names where are not valid uuids cannot possibly be added so in
@@ -118,8 +119,6 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 					DFUSE_TRA_ERROR(ie,
 							"dfs_ostat() failed: (%s)",
 							strerror(rc));
-					d_hash_rec_decref(&fs_handle->dpi_iet,
-							  &ie->ie_htl);
 					D_GOTO(err_unlock, rc);
 				}
 
@@ -176,7 +175,7 @@ alloc_ie:
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,

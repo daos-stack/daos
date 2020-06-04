@@ -27,7 +27,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -45,8 +44,9 @@ type (
 	}
 
 	MockSysProvider struct {
+		sync.RWMutex
 		cfg       MockSysConfig
-		isMounted map[string]*atm.Bool
+		isMounted map[string]bool
 	}
 )
 
@@ -65,33 +65,29 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 		target = mount
 	}
 
+	msp.RLock()
+	defer msp.RUnlock()
 	isMounted, exists := msp.isMounted[target]
 	if !exists {
 		return msp.cfg.IsMountedBool, err
 	}
-	return isMounted.Load(), err
+	return isMounted, err
 }
 
 func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) error {
 	if msp.cfg.MountErr == nil {
-		if _, exists := msp.isMounted[target]; !exists {
-			nb := atm.NewBool(true)
-			msp.isMounted[target] = &nb
-		} else {
-			msp.isMounted[target].SetTrue()
-		}
+		msp.Lock()
+		defer msp.Unlock()
+		msp.isMounted[target] = true
 	}
 	return msp.cfg.MountErr
 }
 
 func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
-		if _, exists := msp.isMounted[target]; !exists {
-			nb := atm.NewBool(false)
-			msp.isMounted[target] = &nb
-		} else {
-			msp.isMounted[target].SetFalse()
-		}
+		msp.Lock()
+		defer msp.Unlock()
+		msp.isMounted[target] = false
 	}
 	return msp.cfg.UnmountErr
 }
@@ -110,7 +106,7 @@ func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
 	}
 	return &MockSysProvider{
 		cfg:       *cfg,
-		isMounted: make(map[string]*atm.Bool),
+		isMounted: make(map[string]bool),
 	}
 }
 

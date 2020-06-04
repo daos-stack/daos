@@ -76,7 +76,7 @@ rebuild_dkeys(void **state)
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -110,7 +110,7 @@ rebuild_akeys(void **state)
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -147,7 +147,7 @@ rebuild_indexes(void **state)
 	/* Rebuild rank 1 */
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -202,7 +202,7 @@ rebuild_snap_update_recs(void **state)
 
 	ioreq_fini(&req);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -253,7 +253,7 @@ rebuild_snap_punch_recs(void **state)
 
 	ioreq_fini(&req);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -332,7 +332,7 @@ rebuild_snap_update_keys(void **state)
 	}
 
 	ioreq_fini(&req);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -423,7 +423,7 @@ rebuild_snap_punch_keys(void **state)
 	}
 
 	ioreq_fini(&req);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -465,7 +465,6 @@ rebuild_multiple(void **state)
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
 }
 
 static void
@@ -500,7 +499,6 @@ rebuild_large_rec(void **state)
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
 }
 
 static void
@@ -524,7 +522,7 @@ rebuild_objects(void **state)
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 /** create a new pool/container for each test */
@@ -563,9 +561,9 @@ run_daos_rebuild_simple_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	run_daos_sub_tests_only(rebuild_tests, ARRAY_SIZE(rebuild_tests),
-				REBUILD_POOL_SIZE, sub_tests, sub_tests_size,
-				NULL);
+	run_daos_sub_tests_only("DAOS rebuild simple tests", rebuild_tests,
+				ARRAY_SIZE(rebuild_tests), sub_tests,
+				sub_tests_size);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

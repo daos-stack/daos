@@ -41,7 +41,11 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  \fBobject \fR(\fBobj\fR)     object in a container
 .br
+	  \fBversion\fR          print command version
+.br
 	  \fBhelp\fR             print this message and exit
+.TP
+.I help \fR[\fBRESOURCE \fR[\fBCOMMAND\fR]] \h'4' per-resource/command help
 .TP
 .I pool \fBCOMMAND\fRs:
 	  \fBlist-containers\fR  list all containers in pool
@@ -55,6 +59,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBlist-attrs\fR       list pool user-defined attributes
 .br
 	  \fBget-attr\fR         get pool user-defined attribute
+.br
+	  \fBget-prop\fR         get pool properties
 .br
 .TP
 .I pool \fBOPTION\fRs:
@@ -90,6 +96,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  \fBset-attr\fR         set container user-defined attribute
 .br
+	  \fBget-prop\fR         get container properties
+.br
 	  \fBcreate-snap\fR      create container snapshot (optional name)
 .br
 				    at most recent committed epoch
@@ -121,6 +129,34 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fB--chunk_size=\fRBYTES chunk size of files created. Supports suffixes:
 .br
 				      K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)
+.br
+	  \fB--properties=\fR<name>:<value>[,<name>:<value>,...]      (optional) container properties
+.br
+				      Supported properties names:
+.br
+				      \fBlabel\fR (can be any string)
+.br
+				      \fBcksum\fR checksum type (can be {off,crc{16,32,64},sha1})
+.br
+				      \fBcksum_size\fR checksum chunk size (can be any value)
+.br
+				      \fBsrv_cksum\fR checksum server verify (can be {on,off})
+.br
+				      \fBrf\fR redundancy factor (can be {0,1,2,3,4})
+.br
+	  \fB--acl-file=\fRPATH    input file containing ACL
+.br
+	  \fB--user=\fRID		 user who will own the container.
+.br
+					 format: username@[domain]
+.br
+					 default is the effective user
+.br
+	  \fB--group=\fRID		 group who will own the container.
+.br
+					 format: groupname@[domain]
+.br
+					 default is the effective group
 .TP
 .I container \fBOPTION\fRs (destroy):
 	  \fB--force\fR            destroy container regardless of state
@@ -130,9 +166,9 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  <\fIpool\fR options>   with \fB--path\fR use: (\fB--sys-name\fR, \fB--svc\fR)
 .br
-	  \fB--cont=\fRUUID        (mandatory, or use \fB--path\fR)
+	  \fB--cont=\fRUUID        (mandatory, unless using \fB--path\fR)
 .br
-	  \fB--path=\fRPATHSTR     (mandatory, or use \fB--cont\fR)
+	  \fB--path=\fRPATHSTR     (mandatory, unless using \fB--cont\fR)
 .br
                         namespace path must provide direct link to DAOS container
 .TP
@@ -146,7 +182,7 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  \fB--epc=\fREPOCHNUM     container epoch (destroy-snap, rollback)
 .br
-	  \fB--eprange=\fRB-E      container epoch range (destroy-snap)
+	  \fB--epcrange=\fRB-E     container epoch range (destroy-snap)
 .TP
 .I object \fR(\fIobj\fR) \fBCOMMAND\fRs:
 	  \fBquery\fR            query an object's layout
