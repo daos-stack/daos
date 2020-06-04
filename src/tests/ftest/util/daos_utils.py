@@ -290,6 +290,9 @@ class DaosCommand(CommandWithSubCommand):
                 #               srv_cksum:  on, off
                 #               rf:         [0-4]
                 self.properties = FormattedParameter("--properties={}")
+                #   --acl-file=PATH
+                #           input file containing ACL
+                self.acl_file = FormattedParameter("--acl-file={}", None)
 
         class DestroySubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container destroy command."""
@@ -327,8 +330,13 @@ class DaosCommand(CommandWithSubCommand):
                 super(
                     DaosCommand.ContainerSubCommand.GetAclSubCommand,
                     self).__init__("get-acl")
-                self.outfile = FormattedParameter("--outfile={}")
+                # Additional daos container create parameters:
+                #   --verbose
+                #           verbose mode (get-acl)
                 self.verbose = FormattedParameter("--verbose", False)
+                #   --outfile=PATH
+                #           write ACL to file (get-acl)
+                self.outfile = FormattedParameter("--outfile={}")
 
         class OverwriteAclSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container overwrite-acl cmd."""
@@ -567,7 +575,8 @@ class DaosCommand(CommandWithSubCommand):
 
     def container_create(self, pool, sys_name=None, svc=None, cont=None,
                          path=None, cont_type=None, oclass=None,
-                         chunk_size=None, properties=None):
+                         chunk_size=None, properties=None, acl_file=None):
+        # pylint: disable=too-many-arguments
         """Create a container.
 
         Args:
@@ -586,6 +595,7 @@ class DaosCommand(CommandWithSubCommand):
                 Defaults to None.
             properties (str, optional): String of comma-separated <name>:<value>
                 pairs defining the container properties. Defaults to None
+            acl_file (str, optional): ACL file. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -606,6 +616,7 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.oclass.value = oclass
         self.sub_command_class.sub_command_class.chunk_size.value = chunk_size
         self.sub_command_class.sub_command_class.properties.value = properties
+        self.sub_command_class.sub_command_class.acl_file.value = acl_file
         return self._get_result()
 
     def container_destroy(self, pool, svc, cont, force=None, sys_name=None):
@@ -635,6 +646,34 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.svc.value = svc
         self.sub_command_class.sub_command_class.cont.value = cont
         self.sub_command_class.sub_command_class.force.value = force
+        return self._get_result()
+
+    def container_get_acl(self, pool, svc, cont,
+                          verbose=False, outfile=None):
+        """Get the ACL for a given container.
+
+        Args:
+            pool (str): Pool UUID
+            svc (str): Service replicas
+            cont (str): Container for which to get the ACL.
+            verbose (bool, optional): Verbose mode.
+            outfile (str, optional): Write ACL to file.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container get-acl command fails.
+
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("get-acl")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.verbose.value = verbose
+        self.sub_command_class.sub_command_class.outfile.value = outfile
         return self._get_result()
 
     def pool_list_cont(self, pool, svc, sys_name=None):

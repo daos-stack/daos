@@ -26,8 +26,10 @@ from __future__ import print_function
 import os
 import pwd
 import grp
-import pool_security_test_base as poolSec
+import security_test_base as secTestBase
 from pool_security_test_base import PoolSecurityTestBase
+
+PERMISSIONS = ["", "r", "w", "rw"]
 
 class DaosRunPoolSecurityTest(PoolSecurityTestBase):
     """Test daos_pool acl for primary and secondary groups.
@@ -66,15 +68,17 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
 
         user_types = ["owner", "user", "ownergroup", "group", "everyone"]
         default_acl_entries = ["A::OWNER@:",
-                               poolSec.acl_entry("user", current_user, ""),
+                               secTestBase.acl_entry("user", current_user, "",
+                                                     PERMISSIONS),
                                "A:G:GROUP@:",
-                               poolSec.acl_entry("group", current_group, ""),
+                               secTestBase.acl_entry("group", current_group, "",
+                                                     PERMISSIONS),
                                "A::EVERYONE@:"]
         test_acl_entries = ["", "", "", "", ""]
 
         if permission.lower() == "none":
             permission = ""
-        if permission not in poolSec.PERMISSIONS:
+        if permission not in PERMISSIONS:
             self.fail("##permission %s is invalid, valid permissions are:"
                       "'none', 'r', w', 'rw'", permission)
         if user_type not in user_types:
