@@ -25,15 +25,9 @@ public class DaosFsClientIT {
     try {
       client = builder.build();
       Assert.assertTrue(client != null);
-<<<<<<< HEAD
-    } finally {
-      if (client != null) {
-        client.disconnect();
-=======
     }finally {
       if(client != null){
         client.close();
->>>>>>> refactored DaosFsClient and its native to make DAOS pool/container/init/finalize common to both FS and Object APIs
       }
     }
   }
@@ -230,6 +224,7 @@ public class DaosFsClientIT {
       }
     }
   }
+<<<<<<< HEAD
 
   @Test
   public void testFsClientReferenceOne() throws Exception {
@@ -290,4 +285,6 @@ public class DaosFsClientIT {
       }
     }
   }
+=======
+>>>>>>> add new sharableclient
 }
