@@ -1088,8 +1088,6 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	struct rdb_tx		tx;
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version;
-	daos_prop_t	       *prop = NULL;
-	uint64_t		prop_bits;
 	bool			cont_svc_up = false;
 	bool			event_cb_registered = false;
 	d_rank_t		rank;
@@ -1100,6 +1098,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 	ABT_rwlock_rdlock(svc->ps_lock);
+
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
@@ -1110,16 +1109,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 			D_ERROR(DF_UUID": failed to read pool map buffer: "
 				""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		}
-		D_GOTO(unlock, rc);
 	}
-	prop_bits = DAOS_PO_QUERY_PROP_ALL;
-	rc = pool_prop_read(&tx, svc, prop_bits, &prop);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot get access data for pool, "
-			"rc="DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-		D_GOTO(unlock, rc);
-	}
-unlock:
+
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (rc != 0)
@@ -1144,12 +1135,6 @@ unlock:
 		goto out;
 	event_cb_registered = true;
 
-	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
-	if (rc) {
-		D_ERROR("ds_pool_iv_prop_update failed %d.\n", rc);
-		D_GOTO(out, rc);
-	}
-
 	rc = ds_rebuild_regenerate_task(svc->ps_pool);
 	if (rc != 0)
 		goto out;
@@ -1169,8 +1154,6 @@ out:
 	}
 	if (map_buf != NULL)
 		D_FREE(map_buf);
-	if (prop != NULL)
-		daos_prop_free(prop);
 	return rc;
 }
 
@@ -1207,6 +1190,8 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 	struct rdb_tx		tx;
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version;
+	daos_prop_t	       *prop = NULL;
+	uint64_t		prop_bits;
 	int			rc;
 
 	/* Read the pool map into map_buf and map_version. */
@@ -1214,23 +1199,46 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 	ABT_rwlock_rdlock(svc->ps_lock);
+
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
-	ABT_rwlock_unlock(svc->ps_lock);
-	rdb_tx_end(&tx);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map buffer: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
+		goto unlock;
+	}
+
+	prop_bits = DAOS_PO_QUERY_PROP_ALL;
+	rc = pool_prop_read(&tx, svc, prop_bits, &prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": read prop failed for pool, rc="DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto unlock;
+	}
+
+unlock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_pool_iv_map_update(svc->ps_pool, map_buf, map_version);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to distribute pool map %u: %d\n",
+			DP_UUID(svc->ps_uuid), map_version, rc);
 		goto out;
 	}
 
-	rc = ds_pool_iv_map_update(svc->ps_pool, map_buf, map_version);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to distribute pool map %u: %d\n",
-			DP_UUID(svc->ps_uuid), map_version, rc);
+	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
+	if (rc) {
+		D_ERROR("ds_pool_iv_prop_update failed %d.\n", rc);
+		goto out;
+	}
 
 out:
 	if (map_buf != NULL)
 		D_FREE(map_buf);
+	if (prop != NULL)
+		daos_prop_free(prop);
 	return rc;
 }
 
