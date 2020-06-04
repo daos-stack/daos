@@ -904,7 +904,8 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d --force",
 			  rank);
 	rc = system(dmg_cmd);
-	assert_int_equal(rc, 0);
+	assert_int_equal(rc, -1);
+	assert_int_equal(WEXITSTATUS(rc), 1);
 }
 
 struct daos_acl *
