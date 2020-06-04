@@ -571,14 +571,69 @@ out:
 	mgmt__pool_destroy_req__free_unpacked(req, NULL);
 }
 
+void
+ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolEvictReq	*req = NULL;
+	Mgmt__PoolEvictResp	 resp = MGMT__POOL_EVICT_RESP__INIT;
+	uuid_t			 uuid;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_evict_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (evict pool_connections)\n");
+		return;
+	}
+
+	D_INFO("Received request to evict pool connections %s\n",
+		req->uuid);
+
+	rc = uuid_parse(req->uuid, uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
+			DP_RC(rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = ds_mgmt_evict_pool(uuid, req->sys);
+	if (rc != 0) {
+		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n",
+			req->uuid, DP_RC(rc));
+		goto out;
+	}
+
+out:
+	resp.status = rc;
+	len = mgmt__pool_evict_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_evict_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_evict_req__free_unpacked(req, NULL);
+}
+
 static int
 pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 			 uint32_t rank, pool_comp_state_t state)
 {
 	uuid_t				uuid;
-	struct pool_target_id_list	reint_list;
+	struct pool_target_id_list	target_id_list;
+	int				num_idxs;
 	int				rc, i;
 
+	num_idxs = (n_targetidx > 0) ? n_targetidx : 1;
 	rc = uuid_parse(id, uuid);
 	if (rc != 0) {
 		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", id,
@@ -586,20 +641,24 @@ pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 		return -DER_INVAL;
 	}
 
-	rc = pool_target_id_list_alloc(n_targetidx, &reint_list);
+	rc = pool_target_id_list_alloc(num_idxs, &target_id_list);
 	if (rc)
 		return rc;
 
-	for (i = 0; i < n_targetidx; ++i)
-		reint_list.pti_ids[i].pti_id = targetidx[i];
+	if (n_targetidx > 0) {
+		for (i = 0; i < n_targetidx; ++i)
+			target_id_list.pti_ids[i].pti_id = targetidx[i];
+	} else
+		target_id_list.pti_ids[0].pti_id = -1;
 
-	rc = ds_mgmt_pool_target_update_state(uuid, rank, &reint_list, state);
+	rc = ds_mgmt_pool_target_update_state(uuid, rank, &target_id_list,
+					      state);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", uuid,
 			DP_RC(rc));
 	}
 
-	pool_target_id_list_free(&reint_list);
+	pool_target_id_list_free(&target_id_list);
 	return rc;
 }
 
