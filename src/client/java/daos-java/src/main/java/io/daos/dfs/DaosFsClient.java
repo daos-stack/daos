@@ -35,16 +35,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Java DAOS FS Client for all local/remote DAOS operations which is indirectly invoked via JNI.
- *
- * <p>
- * Before any operation, there is some preparation work to be done in this class.
- * <li>load dynamic library, libdaos-jni.so</li>
- * <li>load error code</li>
- * <li>start cleaner thread</li>
- * <li>register shutdown hook for DAOS finalization</li>
- * <li>create/open pool and container</li>
- * <li>mount DAOS FS on container</li>
+ * A sharable Java DAOS DFS client to wrap all DFS related operations, including
+ * <li>mount/unmount DAOS FS on container</li>
+ * <li>call DFS methods, including release DFS files in the cleaner executor</li>
+ * <li>construct {@link DaosFile} instance</li>
+ * It registers itself to shutdown manager in {@link DaosClient} to release resources in case of abnormal shutdown.
  *
  * <p>
  * If you have <code>poolId</code> specified, but no <code>containerId</code>, DAOS FS will be mounted on
@@ -84,23 +79,11 @@ import org.slf4j.LoggerFactory;
  * @see DaosFile
  * @see Cleaner
  */
-public final class DaosFsClient implements ForceCloseable {
-
-  private String poolId;
-
-  private String contId;
+public final class DaosFsClient extends SharableClient implements ForceCloseable {
 
   private long dfsPtr;
 
   private long contPtr;
-
-  private DaosClient client;
-
-  private DaosFsClientBuilder builder;
-
-  private volatile boolean inited;
-
-  private int refCnt;
 
   public static final String ROOT_CONT_UUID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 
@@ -116,23 +99,23 @@ public final class DaosFsClient implements ForceCloseable {
   private static final Map<String, DaosFsClient> pcFsMap = new ConcurrentHashMap<>();
 
   private DaosFsClient(String poolId, String contId, DaosFsClientBuilder builder) {
-    this.poolId = poolId;
-    this.contId = contId;
-    this.builder = builder;
+    super(poolId, contId, builder);
   }
 
   private synchronized void init() throws IOException {
-    if (inited) {
+    if (isInited()) {
       return;
     }
-    client = builder.buildDaosClient();
-    if (contId != null && !ROOT_CONT_UUID.equals(contId)) {
+    DaosFsClientBuilder builder = getBuilder();
+    setClient(builder.buildDaosClient());
+    DaosClient client = getClient();
+    if (builder.getContId() != null && !ROOT_CONT_UUID.equals(builder.getContId())) {
       dfsPtr = mountFileSystem(client.getPoolPtr(), client.getContPtr(), builder.readOnlyFs);
       if (log.isDebugEnabled()) {
         log.debug("mounted FS {}", dfsPtr);
       }
     } else {
-      contId = ROOT_CONT_UUID;
+      setContId(ROOT_CONT_UUID);
       contPtr = -1;
       dfsPtr = mountFileSystem(client.getPoolPtr(), -1, builder.readOnlyFs);
       if (log.isDebugEnabled()) {
@@ -145,20 +128,17 @@ public final class DaosFsClient implements ForceCloseable {
       log.debug("cleaner task running");
     }
     client.registerForShutdown(this);
-    inited = true;
-    log.info("DaosFsClient for {}, {} initialized", poolId, contId);
+    setInited(true);
+    log.info("DaosFsClient for {}, {} initialized", builder.getPoolId(), builder.getContId());
   }
 
   public long getDfsPtr() {
     return dfsPtr;
   }
 
-  public String getPoolId() {
-    return poolId;
-  }
-
-  public String getContId() {
-    return contId;
+  @Override
+  protected DaosFsClientBuilder getBuilder() {
+    return (DaosFsClientBuilder)super.getBuilder();
   }
 
   /**
@@ -199,23 +179,17 @@ public final class DaosFsClient implements ForceCloseable {
    * If there are still references to this object, no actual disconnect will be called. User can call
    * {@link #getRefCnt()} method to double-check the reference count of this object.
    *
+   * @param force
+   * close client forcibly?
    * @throws IOException
    * {@link DaosIOException}
    */
   @Override
-  public synchronized void close() throws IOException {
-    disconnect(false);
-  }
-
-  @Override
-  public synchronized void forceClose() throws IOException {
-    disconnect(true);
-  }
-
-  private synchronized void disconnect(boolean force) throws IOException {
+  protected synchronized void disconnect(boolean force) throws IOException {
     decrementRef();
-    if (force || refCnt <= 0) {
-      if (inited && dfsPtr != 0) {
+    DaosFsClientBuilder builder = getBuilder();
+    if (force || getRefCnt() <= 0) {
+      if (isInited() && dfsPtr != 0) {
         cleanerExe.shutdownNow();
         if (log.isDebugEnabled()) {
           log.debug("cleaner stopped");
@@ -232,14 +206,14 @@ public final class DaosFsClient implements ForceCloseable {
           }
         }
         if (force) {
-          client.forceClose();
+          getClient().forceClose();
         } else {
-          client.close();
+          getClient().close();
         }
-        log.info("DaosFsClient for {}, {} disconnected", poolId, contId);
+        log.info("DaosFsClient for {}, {} disconnected", builder.getPoolId(), builder.getContId());
       }
-      inited = false;
-      pcFsMap.remove(poolId + contId);
+      setInited(false);
+      pcFsMap.remove(builder.getPoolId() + builder.getContId());
     }
   }
 
@@ -251,7 +225,7 @@ public final class DaosFsClient implements ForceCloseable {
    * @return DaosFile
    */
   public DaosFile getFile(String path) {
-    return getFile(path, builder.defaultFileAccessFlags);
+    return getFile(path, getBuilder().defaultFileAccessFlags);
   }
 
   /**
@@ -277,7 +251,7 @@ public final class DaosFsClient implements ForceCloseable {
    * @return DaosFile
    */
   public DaosFile getFile(String parent, String path) {
-    return getFile(parent, path, builder.defaultFileAccessFlags);
+    return getFile(parent, path, getBuilder().defaultFileAccessFlags);
   }
 
   /**
@@ -305,7 +279,7 @@ public final class DaosFsClient implements ForceCloseable {
    * @return DaosFile
    */
   public DaosFile getFile(DaosFile parent, String path) {
-    return getFile(parent, path, builder.defaultFileAccessFlags);
+    return getFile(parent, path, getBuilder().defaultFileAccessFlags);
   }
 
   /**
@@ -409,7 +383,7 @@ public final class DaosFsClient implements ForceCloseable {
    * {@link DaosIOException}
    */
   public void mkdir(String path, boolean recursive) throws IOException {
-    mkdir(DaosUtils.normalize(path), builder.defaultFileMode, recursive);
+    mkdir(DaosUtils.normalize(path), getBuilder().defaultFileMode, recursive);
   }
 
   /**
@@ -450,7 +424,7 @@ public final class DaosFsClient implements ForceCloseable {
   public boolean exists(String path) throws IOException {
     long objId = 0;
     try {
-      objId = dfsLookup(dfsPtr, DaosUtils.normalize(path), builder.defaultFileAccessFlags, -1);
+      objId = dfsLookup(dfsPtr, DaosUtils.normalize(path), getBuilder().defaultFileAccessFlags, -1);
       return true;
     } catch (Exception e) {
       if (!(e instanceof DaosIOException)) { //unexpected exception
@@ -466,12 +440,6 @@ public final class DaosFsClient implements ForceCloseable {
       if (objId > 0) {
         dfsRelease(objId);
       }
-    }
-  }
-
-  static synchronized void closeAll() throws IOException {
-    for (Map.Entry<String, DaosFsClient> entry : pcFsMap.entrySet()) {
-      entry.getValue().disconnect(true);
     }
   }
 
@@ -878,47 +846,19 @@ public final class DaosFsClient implements ForceCloseable {
 
 
   int getDefaultFileAccessFlags() {
-    return builder.defaultFileAccessFlags;
+    return getBuilder().defaultFileAccessFlags;
   }
 
   int getDefaultFileMode() {
-    return builder.defaultFileMode;
+    return getBuilder().defaultFileMode;
   }
 
   DaosObjectType getDefaultFileObjType() {
-    return builder.defaultFileObjType;
+    return getBuilder().defaultFileObjType;
   }
 
   int getDefaultFileChunkSize() {
-    return builder.defaultFileChunkSize;
-  }
-
-  /**
-   * increase reference count by one.
-   *
-   * @throws IllegalStateException if this client is disconnected.
-   */
-  public synchronized void incrementRef() {
-    if (!inited) {
-      throw new IllegalStateException("DaosFsClient is not initialized or disconnected.");
-    }
-    refCnt++;
-  }
-
-  /**
-   * decrease reference count by one.
-   */
-  public synchronized void decrementRef() {
-    refCnt--;
-  }
-
-  /**
-   * get reference count.
-   *
-   * @return reference count
-   */
-  public synchronized int getRefCnt() {
-    return refCnt;
+    return getBuilder().defaultFileChunkSize;
   }
 
   /**

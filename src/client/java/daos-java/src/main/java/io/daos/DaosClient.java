@@ -37,6 +37,17 @@ import java.nio.file.StandardCopyOption;
 import java.util.Deque;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
+/**
+ * Java DAOS client for common pool/container operations which is indirectly invoked via JNI.
+ * Other types of client, like DFS client and Object client, should reference this base client
+ * for pool/container related operations.
+ *
+ * <p>
+ * Besides, it also does some common works, like,
+ * <li>load dynamic library, libdaos-jni.so, at startup</li>
+ * <li>register shutdown hook for closing all registered clients and finalize DAOS safely</li>
+ *
+ */
 public class DaosClient implements ForceCloseable {
 
   private DaosClientBuilder builder;
