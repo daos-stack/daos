@@ -398,6 +398,8 @@ daos_event_launch(struct daos_event *ev)
 	struct daos_eq_private		*eqx = NULL;
 	int				  rc = 0;
 
+	D_INFO("EJMM event.c: daos_event_launch()");
+
 	if (evx->evx_status != DAOS_EVS_READY) {
 		D_ERROR("Event status should be INIT: %d\n", evx->evx_status);
 		return -DER_NO_PERM;

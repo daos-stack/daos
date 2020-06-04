@@ -280,6 +280,8 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 {
 	D_ASSERT(rpc_priv != NULL);
 
+	D_INFO("EJMM: crt_context.c crt_rpc_complete()");
+
 	if (rc == -DER_CANCELED)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
 	else if (rc == -DER_TIMEDOUT)
@@ -954,6 +956,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	struct crt_rpc_priv	*tmp_rpc;
 	int			 rc;
 
+	D_INFO("EJMM crt_context.c: crt_context_req_untrack()");
 	D_ASSERT(crt_ctx != NULL);
 
 	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP) {
@@ -1058,6 +1061,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		tmp_rpc->crp_state = RPC_STATE_INITED;
 		crt_context_req_untrack(tmp_rpc);
 		/* for error case here */
+		D_INFO("EJMM crt_context.c: while: crt_rpc_complete()");
 		crt_rpc_complete(tmp_rpc, rc);
 		RPC_DECREF(tmp_rpc);
 	}

@@ -246,19 +246,26 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 	tse_task_t              *task;
 	int                      rc;
 
+	D_INFO("EJMM pool.c: daos_pool_evict()");
+	D_INFO("EJMM pool.c: grp: %s", grp);
 	DAOS_API_ARG_ASSERT(*args, POOL_EVICT);
-	if (!daos_uuid_valid(uuid))
+	if (!daos_uuid_valid(uuid)) {
+		D_INFO("EJMM pool.c: daos_uuid_valid");
 		return -DER_INVAL;
+	}
 
+	D_INFO("EJMM pool.c: dc_task_create()");
 	rc = dc_task_create(dc_pool_evict, NULL, ev, &task);
 	if (rc)
 		return rc;
 
+	D_INFO("EJMM pool.c: dc_task_get_args()");
 	args = dc_task_get_args(task);
 	args->grp       = grp;
 	args->svc       = (d_rank_list_t *)svc;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
+	D_INFO("EJMM pool.c: dc_task_schedule()");
 	return dc_task_schedule(task, true);
 }
 

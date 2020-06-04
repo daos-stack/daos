@@ -72,6 +72,8 @@ dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev,
 	tse_task_t	      *task;
 	int		       rc;
 
+	D_INFO("EJMM task.c: dc_task_create()");
+
 	if (sched == NULL) {
 		if (ev == NULL) {
 			rc = daos_event_priv_get(&ev);
@@ -116,6 +118,7 @@ dc_task_schedule(tse_task_t *task, bool instant)
 	daos_event_t *ev;
 	int	      rc;
 
+	D_INFO("EJMM task.c: dc_task_schedule()");
 	D_ASSERT(task_is_valid(task));
 
 	ev = task_ptr2args(task)->ta_ev;
@@ -158,6 +161,7 @@ void *
 dc_task_get_args(tse_task_t *task)
 {
 	D_ASSERT(task_is_valid(task));
+	D_INFO("EJMM task.c: dc_task_get_args()");
 	return &task_ptr2args(task)->ta_u;
 }
 

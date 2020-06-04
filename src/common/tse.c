@@ -101,6 +101,8 @@ tse_task_buf_embedded(tse_task_t *task, int size)
 	struct tse_task_private	*dtp = tse_task2priv(task);
 	uint32_t		 avail_size;
 
+	D_INFO("EJMM tse.c: tse_task_buf_embedded()");
+
 	/** Let's assume dtp_buf is always enough at the moment */
 	/** MSC - should malloc if size requested is bigger */
 	size = tse_task_buf_size(size);

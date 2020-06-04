@@ -50,12 +50,15 @@ class EvictTests(TestWithServers):
             TestPool (object)
 
         """
+        self.log.info("EJMM: connected_pool()")
         pool = TestPool(self.context, self.log,
                         dmg_command=self.get_dmg_command())
+        self.log.info("EJMM: TestPool()")
         pool.get_params(self)
         if targets is not None:
             pool.target_list.value = targets
         # create pool
+        self.log.info("EJMM: create()")
         pool.create()
         # Commented out due to DAOS-3836. Remove the pylint disable at the top
         # of this method when the following lines are uncommented.
@@ -64,6 +67,7 @@ class EvictTests(TestWithServers):
         #if not status:
         #    self.fail("Invalid pool - pool data not detected on servers")
         # Connect to the pool
+        self.log.info("EJMM: connect()")
         status = pool.connect()
         if not status:
             self.fail("Pool connect failed or already connected")
@@ -81,6 +85,7 @@ class EvictTests(TestWithServers):
 
         """
         # setup pool and connect
+        self.log.info("EJMM: connected_pool()")
         self.pool = self.connected_pool(self.hostlist_servers)
 
         self.log.info(
@@ -108,7 +113,9 @@ class EvictTests(TestWithServers):
             self.fail("Invalid yaml parameters - check \"params\" values")
         try:
             # call daos evict api directly
+            self.log.info("EJMM: call daos evict api directly")
             self.pool.pool.evict()
+            self.log.info("EJMM: no exception")
         # exception is expected
         except DaosApiError as result:
             if test_param == "BAD_SERVER_NAME":

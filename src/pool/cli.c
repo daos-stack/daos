@@ -1525,6 +1525,8 @@ dc_pool_evict(tse_task_t *task)
 	struct pool_evict_in	*in;
 	int			 rc;
 
+	D_INFO("EJMM cli.c: dc_pool_evict()");
+
 	args = dc_task_get_args(task);
 	state = dc_task_get_priv(task);
 

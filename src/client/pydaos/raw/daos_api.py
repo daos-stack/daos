@@ -272,14 +272,18 @@ class DaosPool(object):
 
     def evict(self, cb_func=None):
         """Evict all connections to a pool."""
+        print("EJMM: evict()")
+        print("EJMM: get_function()")
         func = self.context.get_function('evict-client')
 
         if cb_func is None:
+            print("EJMM: if cb_func")
             ret = func(self.uuid, self.group, ctypes.byref(self.svc), None)
             if ret != 0:
                 raise DaosApiError("Pool evict returned non-zero. "
                                    "RC: {0}".format(ret))
         else:
+            print("EJMM: daos_cref.DaosEvent()")
             event = daos_cref.DaosEvent()
             params = [self.uuid, self.group, ctypes.byref(self.svc), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
