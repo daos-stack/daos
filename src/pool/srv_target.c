@@ -658,6 +658,7 @@ pool_query_one(void *vin)
 	struct ds_pool_child		*pool_child;
 	struct daos_pool_space		*x_ps = &x_arg->qxa_space;
 	vos_pool_info_t			 vos_pool_info = { 0 };
+	struct vos_pool_space		*vps = &vos_pool_info.pif_space;
 	int				 rc, i;
 
 	pool_child = ds_pool_child_lookup(pool->sp_uuid);
@@ -673,10 +674,10 @@ pool_query_one(void *vin)
 	}
 
 	x_ps->ps_ntargets = 1;
-	x_ps->ps_space.s_total[DAOS_MEDIA_SCM] = vos_pool_info.pif_scm_sz;
-	x_ps->ps_space.s_total[DAOS_MEDIA_NVME] = vos_pool_info.pif_nvme_sz;
-	x_ps->ps_space.s_free[DAOS_MEDIA_SCM] = vos_pool_info.pif_scm_free;
-	x_ps->ps_space.s_free[DAOS_MEDIA_NVME] = vos_pool_info.pif_nvme_free;
+	x_ps->ps_space.s_total[DAOS_MEDIA_SCM] = SCM_TOTAL(vps);
+	x_ps->ps_space.s_total[DAOS_MEDIA_NVME] = NVME_TOTAL(vps);
+	x_ps->ps_space.s_free[DAOS_MEDIA_SCM] = SCM_FREE(vps);
+	x_ps->ps_space.s_free[DAOS_MEDIA_NVME] = NVME_FREE(vps);
 
 	for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
 		x_ps->ps_free_max[i] = x_ps->ps_space.s_free[i];

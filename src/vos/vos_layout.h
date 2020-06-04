@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 #define POOL_DF_VER_1				1
-#define POOL_DF_VERSION				6
+#define POOL_DF_VERSION				8
 
 /**
  * Durable format for VOS pool
@@ -308,8 +308,10 @@ struct vos_irec_df {
 	uint32_t			ir_ver;
 	/** The DTX entry in SCM. */
 	uint32_t			ir_dtx;
+	/** Minor epoch */
+	uint16_t			ir_minor_epc;
 	/** padding bytes */
-	uint32_t			ir_pad32;
+	uint16_t			ir_pad16;
 	/** length of value */
 	uint64_t			ir_size;
 	/**

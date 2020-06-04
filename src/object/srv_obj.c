@@ -813,8 +813,12 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 
 	struct bio_desc *biod = vos_ioh2desc(ioh);
 	struct dcs_csum_info *csum_infos = vos_ioh2ci(ioh);
+	uint32_t csum_info_nr = vos_ioh2ci_nr(ioh);
 
 	for (i = 0; i < iods_nr; i++) {
+		if (biov_csums_idx >= csum_info_nr)
+			break; /** no more csums to add */
+
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
 			bio_iod_sgl(biod, i),
@@ -924,9 +928,9 @@ obj_log_csum_err(void)
 }
 
 static void
-map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t byte_idx)
+map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t rec_idx)
 {
-	map->iom_recxs[map->iom_nr_out].rx_idx = byte_idx / map->iom_size;
+	map->iom_recxs[map->iom_nr_out].rx_idx = rec_idx;
 	map->iom_recxs[map->iom_nr_out].rx_nr = bio_iov2req_len(biov)
 						/ map->iom_size;
 	map->iom_nr_out++;
@@ -944,8 +948,9 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 	daos_iod_t		*iod;
 	struct bio_iov		*biov;
 	uint32_t		 iods_nr;
-	uint32_t		 i, j;
-	uint64_t		 byte_idx;
+	uint32_t		 i, r;
+	uint64_t		 rec_idx;
+	uint32_t		 bsgl_iov_idx;
 
 	/**
 	 * Allocate memory for the maps. There will be 1 per iod
@@ -975,21 +980,30 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 			bsgl->bs_nr_out == 0)
 			continue;
 
-		/** start byte_idx at first record of iod.recxs */
-		byte_idx = iod->iod_recxs[0].rx_idx;
-		for (i = 0; i < iods_nr; i++)
-			byte_idx = min(byte_idx, iod->iod_recxs[i].rx_idx);
-		byte_idx *= map->iom_size;
+		/** start rec_idx at first record of iod.recxs */
+		bsgl_iov_idx = 0;
+		for (r = 0; r < iod->iod_nr; r++) {
+			daos_recx_t recx = iod->iod_recxs[r];
 
-		for (j = 0; j < bsgl->bs_nr_out; j++) {
-			biov = bio_sgl_iov(bsgl, j);
-			if (!bio_addr_is_hole(&biov->bi_addr))
-				map_add_recx(map, biov, byte_idx);
+			rec_idx = recx.rx_idx;
 
-			byte_idx += bio_iov2req_len(biov);
+			while (rec_idx <= recx.rx_idx + recx.rx_nr - 1) {
+				biov = bio_sgl_iov(bsgl, bsgl_iov_idx);
+				if (biov == NULL) /** reached end of bsgl */
+					break;
+				if (!bio_addr_is_hole(&biov->bi_addr))
+					map_add_recx(map, biov, rec_idx);
+
+				rec_idx += (bio_iov2req_len(biov) /
+					    map->iom_size);
+				bsgl_iov_idx++;
+			}
 		}
+
 		/** allocated and used should be the same */
-		D_ASSERT(map->iom_nr == map->iom_nr_out);
+		D_ASSERTF(map->iom_nr == map->iom_nr_out,
+			  "map->iom_nr(%d) == map->iom_nr_out(%d)",
+			  map->iom_nr, map->iom_nr_out);
 		map->iom_recx_lo = map->iom_recxs[0];
 		map->iom_recx_hi = map->iom_recxs[map->iom_nr - 1];
 	}
@@ -1146,6 +1160,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind,
 				       orw->orw_bulks.ca_arrays, offs,
 				       ioh, NULL, orw->orw_nr);
+		if (!rc)
+			bio_iod_flush(biod);
 	} else if (orw->orw_sgls.ca_arrays != NULL) {
 		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
 	}
