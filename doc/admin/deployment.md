@@ -249,10 +249,37 @@ If DAOS Server failed to start, check the logs with:
 $ journalctl --unit daos_server.service
 ```
 
+After RPM install, `daos_server` service starts automatically running as user
+"daos". Server config is read from `/etc/daos` and certificates from `/etc/daos/certs`.
+With no other admin intervention other than the loading of certificates,
+`daos_server` will enter a listening state enabling discovery of storage and
+network hardware through the `dmg` tool without any I/O Servers specified in the
+configuration file. After device discovery and provisioning, an updated
+configuration with a populated per-server section can be provided and the service
+restarted ready for DAOS servers to be formatted.
+
 #### Kubernetes Pod
 
 DAOS service integration with Kubernetes is planned and will be
 supported in a future DAOS version.
+
+## DAOS Server Remote Access
+
+Remote tasking of the DAOS system and individual DAOS Server processes can be
+performed via the `dmg` utility.
+
+To set the addresses of which DAOS Servers to task, provide either:
+- `-l <hostlist>` on the commandline when invoking, or
+- `hostlist: <hostlist>` in the control configuration file
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+
+Where `<hostlist>` represents a slurm-style hostlist string e.g.
+`foo-1[28-63],bar[256-511]`.
+The first entry in the hostlist (after alphabetic then numeric sorting) will be
+assumed to be the access point as set in the server configuration file.
+
+Local configuration files stored in the user directory will be used in
+preference to the default location e.g. `~/.daos_control.yml`.
 
 ## Hardware Provisioning
 
