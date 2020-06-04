@@ -50,6 +50,10 @@ daos_cont_csum_prop_is_valid(uint16_t val);
 bool
 daos_cont_csum_prop_is_enabled(uint16_t val);
 
+/** Convert a string into a property value for csum property */
+int
+daos_str2csumcontprop(const char *value);
+
 /**
  * -----------------------------------------------------------
  * DAOS Checksummer
@@ -64,8 +68,11 @@ enum DAOS_CSUM_TYPE {
 	CSUM_TYPE_ISAL_CRC16_T10DIF = 1,
 	CSUM_TYPE_ISAL_CRC32_ISCSI = 2,
 	CSUM_TYPE_ISAL_CRC64_REFL = 3,
+	CSUM_TYPE_ISAL_SHA1 = 4,
+	CSUM_TYPE_ISAL_SHA256 = 5,
+	CSUM_TYPE_ISAL_SHA512 = 6,
 
-	CSUM_TYPE_END = 4,
+	CSUM_TYPE_END = 7,
 };
 
 struct dcs_csum_info {
@@ -129,7 +136,7 @@ struct csum_ft {
 	int		(*cf_finish)(struct daos_csummer *obj);
 	int		(*cf_update)(struct daos_csummer *obj,
 				     uint8_t *buf, size_t buf_len);
-	void		(*cf_reset)(struct daos_csummer *obj);
+	int		(*cf_reset)(struct daos_csummer *obj);
 	void		(*cf_get)(struct daos_csummer *obj);
 	uint16_t	(*cf_get_size)(struct daos_csummer *obj);
 	bool		(*cf_compare)(struct daos_csummer *obj,
@@ -216,7 +223,7 @@ daos_csummer_set_buffer(struct daos_csummer *obj, uint8_t *buf,
 			uint32_t buf_len);
 
 /** Reset the csummer */
-void
+int
 daos_csummer_reset(struct daos_csummer *obj);
 
 /** Updates the checksum calculation with new input data. Can be called

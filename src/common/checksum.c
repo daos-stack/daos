@@ -29,6 +29,7 @@
 #include <stdint.h>
 
 #include <isa-l.h>
+#include <isa-l_crypto.h>
 #include <gurt/types.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -87,9 +88,33 @@ daos_cont_csum_prop_is_enabled(uint16_t val)
 {
 	if (val != DAOS_PROP_CO_CSUM_CRC16 &&
 	    val != DAOS_PROP_CO_CSUM_CRC32 &&
-	    val != DAOS_PROP_CO_CSUM_CRC64)
+	    val != DAOS_PROP_CO_CSUM_CRC64 &&
+	    val != DAOS_PROP_CO_CSUM_SHA1 &&
+	    val != DAOS_PROP_CO_CSUM_SHA256 &&
+	    val != DAOS_PROP_CO_CSUM_SHA512)
 		return false;
 	return true;
+}
+
+int
+daos_str2csumcontprop(const char *value)
+{
+	if (!strcmp(value, "off"))
+		return DAOS_PROP_CO_CSUM_OFF;
+	else if (!strcmp(value, "crc16"))
+		return DAOS_PROP_CO_CSUM_CRC16;
+	else if (!strcmp(value, "crc32"))
+		return DAOS_PROP_CO_CSUM_CRC32;
+	else if (!strcmp(value, "crc64"))
+		return DAOS_PROP_CO_CSUM_CRC64;
+	else if (!strcmp(value, "sha1"))
+		return DAOS_PROP_CO_CSUM_SHA1;
+	else if (!strcmp(value, "sha256"))
+		return DAOS_PROP_CO_CSUM_SHA256;
+	else if (!strcmp(value, "sha512"))
+		return DAOS_PROP_CO_CSUM_SHA512;
+
+	return -DER_INVAL;
 }
 
 enum DAOS_CSUM_TYPE
@@ -103,6 +128,11 @@ daos_contprop2csumtype(int contprop_csum_val)
 	case DAOS_PROP_CO_CSUM_CRC64:
 		return CSUM_TYPE_ISAL_CRC64_REFL;
 	case DAOS_PROP_CO_CSUM_SHA1:
+		return CSUM_TYPE_ISAL_SHA1;
+	case DAOS_PROP_CO_CSUM_SHA256:
+		return CSUM_TYPE_ISAL_SHA256;
+	case DAOS_PROP_CO_CSUM_SHA512:
+		return CSUM_TYPE_ISAL_SHA512;
 	default:
 		return CSUM_TYPE_UNKNOWN;
 	}
@@ -162,6 +192,240 @@ struct csum_ft crc64_algo = {
 	.cf_name = "crc64"
 };
 
+/** SHA1 */
+struct sha1_ctx {
+	struct mh_sha1_ctx	s1_ctx;
+	bool			s1_updated;
+};
+
+static int
+sha1_init(struct daos_csummer *obj)
+{
+	struct sha1_ctx		*ctx;
+	int			 rc;
+
+	D_ALLOC(ctx, sizeof(*ctx));
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = mh_sha1_init(&ctx->s1_ctx);
+	if (rc == 0)
+		obj->dcs_ctx = ctx;
+	return rc;
+}
+
+static int
+sha1_reset(struct daos_csummer *obj)
+{
+	struct sha1_ctx *ctx = obj->dcs_ctx;
+
+	ctx->s1_updated = false;
+	return mh_sha1_init(&ctx->s1_ctx);
+}
+
+static void
+sha1_destroy(struct daos_csummer *obj)
+{
+	D_FREE(obj->dcs_ctx);
+	obj->dcs_ctx = NULL;
+}
+
+static int
+sha1_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
+{
+	struct sha1_ctx *ctx = obj->dcs_ctx;
+
+	ctx->s1_updated = true;
+	return mh_sha1_update(&ctx->s1_ctx, buf, buf_len);
+}
+
+static int
+sha1_finish(struct daos_csummer *obj)
+{
+	struct sha1_ctx *ctx = obj->dcs_ctx;
+
+	if (ctx->s1_updated)
+		return mh_sha1_finalize(&ctx->s1_ctx, obj->dcs_csum_buf);
+	return 0;
+}
+
+struct csum_ft sha1_algo = {
+	.cf_update = sha1_update,
+	.cf_init = sha1_init,
+	.cf_reset = sha1_reset,
+	.cf_destroy = sha1_destroy,
+	.cf_finish = sha1_finish,
+	.cf_csum_len = 20,
+	.cf_name = "sha1"
+};
+
+/** SHA256 */
+struct sha256_ctx {
+	struct mh_sha256_ctx	s2_ctx;
+	bool			s2_updated;
+};
+
+static int
+sha256_init(struct daos_csummer *obj)
+{
+	struct sha256_ctx	*ctx;
+	int			 rc;
+
+	D_ALLOC(ctx, sizeof(*ctx));
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = mh_sha256_init(&ctx->s2_ctx);
+	if (rc == 0)
+		obj->dcs_ctx = ctx;
+	return rc;
+}
+
+static int
+sha256_reset(struct daos_csummer *obj)
+{
+	struct sha256_ctx *ctx = obj->dcs_ctx;
+
+	ctx->s2_updated = false;
+	return mh_sha256_init(&ctx->s2_ctx);
+}
+
+static void
+sha256_destroy(struct daos_csummer *obj)
+{
+	D_FREE(obj->dcs_ctx);
+	obj->dcs_ctx = NULL;
+}
+
+static int
+sha256_update(struct daos_csummer *obj,
+	      uint8_t *buf, size_t buf_len)
+{
+	struct sha256_ctx *ctx = obj->dcs_ctx;
+
+	ctx->s2_updated = true;
+	return mh_sha256_update(&ctx->s2_ctx, buf, buf_len);
+}
+
+static int
+sha256_finish(struct daos_csummer *obj)
+{
+	struct sha256_ctx *ctx = obj->dcs_ctx;
+
+	if (ctx->s2_updated)
+		return mh_sha256_finalize(&ctx->s2_ctx, obj->dcs_csum_buf);
+	return 0;
+}
+
+struct csum_ft sha256_algo = {
+	.cf_update = sha256_update,
+	.cf_init = sha256_init,
+	.cf_reset = sha256_reset,
+	.cf_destroy = sha256_destroy,
+	.cf_finish = sha256_finish,
+	.cf_csum_len = 256 / 8,
+	.cf_name = "sha256"
+};
+
+/** SHA512 */
+struct sha512_ctx {
+	SHA512_HASH_CTX_MGR	s5_mgr;
+	SHA512_HASH_CTX		s5_ctx;
+	bool			s5_updated;
+};
+
+static int
+sha512_init(struct daos_csummer *obj)
+{
+	struct sha512_ctx	*ctx;
+
+	D_ALLOC(ctx, sizeof(*ctx));
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	sha512_ctx_mgr_init(&ctx->s5_mgr);
+	hash_ctx_init(&ctx->s5_ctx);
+
+	obj->dcs_ctx = ctx;
+	return 0;
+}
+
+static void
+sha512_destroy(struct daos_csummer *obj)
+{
+	D_FREE(obj->dcs_ctx);
+	obj->dcs_ctx = NULL;
+}
+
+static int
+sha512_reset(struct daos_csummer *obj)
+{
+	struct sha512_ctx *ctx = obj->dcs_ctx;
+
+	ctx->s5_updated = false;
+	return 0;
+}
+
+static int
+sha512_update(struct daos_csummer *obj,
+	      uint8_t *buf, size_t buf_len)
+{
+	struct sha512_ctx	*ctx = obj->dcs_ctx;
+	SHA512_HASH_CTX		*tmp;
+
+	if (!ctx->s5_updated)
+		tmp = sha512_ctx_mgr_submit(&ctx->s5_mgr,
+					    &ctx->s5_ctx, buf,
+					    buf_len,
+					    HASH_FIRST);
+	else
+		tmp = sha512_ctx_mgr_submit(&ctx->s5_mgr,
+					    &ctx->s5_ctx, buf,
+					    buf_len,
+					    HASH_UPDATE);
+
+	if (tmp == NULL)
+		sha512_ctx_mgr_flush(&ctx->s5_mgr);
+
+	ctx->s5_updated = true;
+	return ctx->s5_ctx.error;
+}
+
+static int
+sha512_finish(struct daos_csummer *obj)
+{
+	struct sha512_ctx	*ctx = obj->dcs_ctx;
+
+	if (ctx->s5_updated) {
+		SHA512_HASH_CTX *tmp;
+
+		tmp = sha512_ctx_mgr_submit(&ctx->s5_mgr,
+					    &ctx->s5_ctx, NULL,
+					    0,
+					    HASH_LAST);
+
+		if (tmp == NULL)
+			sha512_ctx_mgr_flush(&ctx->s5_mgr);
+
+		memcpy(obj->dcs_csum_buf, ctx->s5_ctx.job.result_digest,
+		       obj->dcs_csum_buf_size);
+
+		return ctx->s5_ctx.error;
+	}
+
+	return 0;
+}
+
+struct csum_ft sha512_algo = {
+	.cf_update = sha512_update,
+	.cf_init = sha512_init,
+	.cf_reset = sha512_reset,
+	.cf_destroy = sha512_destroy,
+	.cf_finish = sha512_finish,
+	.cf_csum_len = 512 / 8,
+	.cf_name = "sha512"
+};
+
 /** ------------------------------------------------------------- */
 static char *csum_unknown_name = "unknown checksum type";
 
@@ -179,6 +443,15 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type)
 		break;
 	case CSUM_TYPE_ISAL_CRC64_REFL:
 		result = &crc64_algo;
+		break;
+	case CSUM_TYPE_ISAL_SHA1:
+		result = &sha1_algo;
+		break;
+	case CSUM_TYPE_ISAL_SHA256:
+		result = &sha256_algo;
+		break;
+	case CSUM_TYPE_ISAL_SHA512:
+		result = &sha512_algo;
 		break;
 	case CSUM_TYPE_UNKNOWN:
 	case CSUM_TYPE_END:
@@ -305,21 +578,18 @@ daos_csummer_set_buffer(struct daos_csummer *obj, uint8_t *buf,
 	obj->dcs_csum_buf_size = buf_len;
 }
 
-void
+int
 daos_csummer_reset(struct daos_csummer *obj)
 {
 	if (obj->dcs_algo->cf_reset)
-		obj->dcs_algo->cf_reset(obj);
+		return obj->dcs_algo->cf_reset(obj);
+	return 0;
 }
 
 int
 daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	int rc = 0;
-
-	if (C_TRACE_ENABLED())
-		C_TRACE("Buffer (buf=%p len=%zu) (type=%s)\n", buf, buf_len,
-			daos_csummer_get_name(obj));
 
 	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0)
 		rc = obj->dcs_algo->cf_update(obj, buf, buf_len);
@@ -328,10 +598,8 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 		d_iov_t tmp;
 
 		d_iov_set(&tmp, buf, buf_len);
-		C_TRACE("Updated csum(type=%s) for '"DF_KEY"'->"DF_CI_BUF"\n",
-			daos_csummer_get_name(obj),
-			DP_KEY(&tmp),
-			DP_CI_BUF(obj->dcs_csum_buf, obj->dcs_csum_buf_size));
+		C_TRACE("Updated csum(type=%s) for'"DF_KEY"'\n",
+			daos_csummer_get_name(obj), DP_KEY(&tmp));
 	}
 
 	return rc;
@@ -340,9 +608,19 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 int
 daos_csummer_finish(struct daos_csummer *obj)
 {
+	int rc = 0;
+
 	if (obj->dcs_algo->cf_finish)
-		return obj->dcs_algo->cf_finish(obj);
-	return 0;
+		rc = obj->dcs_algo->cf_finish(obj);
+
+	if (C_TRACE_ENABLED()) {
+		C_TRACE("Finished - Checksum (type=%s) is: "DF_CI_BUF"\n",
+			daos_csummer_get_name(obj),
+
+			DP_CI_BUF(obj->dcs_csum_buf, obj->dcs_csum_buf_size));
+	}
+
+	return rc;
 }
 
 bool
@@ -809,11 +1087,19 @@ calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
 	memset(csum_buf, 0, csum_buf_len);
 
 	daos_csummer_set_buffer(csummer, csum_buf, csum_buf_len);
+
+	rc = daos_csummer_reset(csummer);
+	if (rc != 0) {
+		D_ERROR("daos_csummer_reset error: %d\n", rc);
+		return rc;
+	}
+
 	rc = daos_csummer_update(csummer, iov->iov_buf, iov->iov_len);
 	if (rc != 0) {
 		D_ERROR("daos_csummer_update error: %d\n", rc);
 		return rc;
 	}
+
 	rc = daos_csummer_finish(csummer);
 	if (rc != 0) {
 		D_ERROR("daos_csummer_finish error: %d\n", rc);
@@ -1136,17 +1422,16 @@ ci_off2csum(struct dcs_csum_info *csum_buf, uint32_t offset)
 uint64_t
 ci_buf2uint64(const uint8_t *buf, uint16_t len)
 {
-	switch (len) {
-	/** for csum_buffers should only be these lengths */
-	case 2:
-		return *(uint16_t *) buf;
-	case 4:
-		return *(uint32_t *) buf;
-	case 8:
+	if (len >= 8)
 		return *(uint64_t *) buf;
-	default:
-		return 0;
-	}
+	if (len >= 4)
+		return *(uint32_t *) buf;
+	if (len >= 2)
+		return *(uint16_t *) buf;
+	if (len == 1)
+		return *(uint16_t *) buf;
+
+	return 0;
 }
 
 /** helper for printing csum as a 64bit value */
