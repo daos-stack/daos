@@ -139,9 +139,6 @@ open_retry:
 		D_GOTO(unlock, rc = -DER_NONEXIST);
 	}
 
-	/* XXX could be otherwise for some object classes? */
-	D_ASSERT(obj_shard->do_shard == shard);
-
 	D_DEBUG(DB_IO, "Open object shard %d\n", shard);
 
 	if (obj_shard->do_obj == NULL) {

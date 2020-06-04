@@ -598,18 +598,23 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 	start = rdg_idx * replicas;
 	replica_idx = (oid.lo + rdg_idx) % replicas;
 	preferred = start + replica_idx;
+
 	for (i = 0, off = preferred, pos = -1; i < replicas;
 	     i++, replica_idx = (replica_idx + 1) % replicas,
 	     off = start + replica_idx) {
 		shard = pl_get_shard(data, off);
-		if (shard->po_target == -1 || shard->po_rebuilding)
+		/*
+		 * shard->po_shard != off is necessary because during
+		 * reintegration we may have an extended layout and we don't
+		 * want the extended target to be the leader.
+		 */
+		if (shard->po_target == -1 || shard->po_rebuilding
+		    || shard->po_shard != off)
 			continue;
-
 		if (pos == -1 ||
 		    pl_get_shard(data, pos)->po_fseq > shard->po_fseq)
 			pos = off;
 	}
-
 	if (pos != -1) {
 		D_ASSERT(pl_get_shard(data, pos)->po_shard == pos);
 
