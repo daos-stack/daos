@@ -187,6 +187,96 @@ void   mgmt__pool_destroy_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__pool_destroy_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__pool_evict_req__init
+                     (Mgmt__PoolEvictReq         *message)
+{
+  static const Mgmt__PoolEvictReq init_value = MGMT__POOL_EVICT_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__pool_evict_req__get_packed_size
+                     (const Mgmt__PoolEvictReq *message)
+{
+  assert(message->base.descriptor == &mgmt__pool_evict_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__pool_evict_req__pack
+                     (const Mgmt__PoolEvictReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__pool_evict_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__pool_evict_req__pack_to_buffer
+                     (const Mgmt__PoolEvictReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__pool_evict_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__PoolEvictReq *
+       mgmt__pool_evict_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__PoolEvictReq *)
+     protobuf_c_message_unpack (&mgmt__pool_evict_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__pool_evict_req__free_unpacked
+                     (Mgmt__PoolEvictReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__pool_evict_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__pool_evict_resp__init
+                     (Mgmt__PoolEvictResp         *message)
+{
+  static const Mgmt__PoolEvictResp init_value = MGMT__POOL_EVICT_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__pool_evict_resp__get_packed_size
+                     (const Mgmt__PoolEvictResp *message)
+{
+  assert(message->base.descriptor == &mgmt__pool_evict_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__pool_evict_resp__pack
+                     (const Mgmt__PoolEvictResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__pool_evict_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__pool_evict_resp__pack_to_buffer
+                     (const Mgmt__PoolEvictResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__pool_evict_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__PoolEvictResp *
+       mgmt__pool_evict_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__PoolEvictResp *)
+     protobuf_c_message_unpack (&mgmt__pool_evict_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__pool_evict_resp__free_unpacked
+                     (Mgmt__PoolEvictResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__pool_evict_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__pool_exclude_req__init
                      (Mgmt__PoolExcludeReq         *message)
 {
@@ -1212,6 +1302,95 @@ const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor =
   mgmt__pool_destroy_resp__field_indices_by_name,
   1,  mgmt__pool_destroy_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__pool_destroy_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[2] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolEvictReq, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "sys",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolEvictReq, sys),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__pool_evict_req__field_indices_by_name[] = {
+  1,   /* field[1] = sys */
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange mgmt__pool_evict_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.PoolEvictReq",
+  "PoolEvictReq",
+  "Mgmt__PoolEvictReq",
+  "mgmt",
+  sizeof(Mgmt__PoolEvictReq),
+  2,
+  mgmt__pool_evict_req__field_descriptors,
+  mgmt__pool_evict_req__field_indices_by_name,
+  1,  mgmt__pool_evict_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__pool_evict_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__pool_evict_resp__field_descriptors[1] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolEvictResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__pool_evict_resp__field_indices_by_name[] = {
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange mgmt__pool_evict_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__pool_evict_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.PoolEvictResp",
+  "PoolEvictResp",
+  "Mgmt__PoolEvictResp",
+  "mgmt",
+  sizeof(Mgmt__PoolEvictResp),
+  1,
+  mgmt__pool_evict_resp__field_descriptors,
+  mgmt__pool_evict_resp__field_indices_by_name,
+  1,  mgmt__pool_evict_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__pool_evict_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__pool_exclude_req__field_descriptors[3] =

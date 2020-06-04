@@ -457,6 +457,22 @@ mock_ds_mgmt_pool_extend_setup(void)
 	uuid_clear(ds_mgmt_pool_extend_uuid);
 }
 
+int     ds_mgmt_pool_evict_return;
+uuid_t  ds_mgmt_pool_evict_uuid;
+int
+ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group)
+{
+	uuid_copy(ds_mgmt_pool_evict_uuid, pool_uuid);
+	return ds_mgmt_pool_evict_return;
+}
+
+void
+mock_ds_mgmt_pool_evict_setup(void)
+{
+	ds_mgmt_pool_evict_return = 0;
+	uuid_clear(ds_mgmt_pool_evict_uuid);
+}
+
 /*
  * Stubs, to avoid linker errors
  * TODO: Implement mocks when there is a test that uses these

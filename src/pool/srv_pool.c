@@ -2023,6 +2023,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, in->pci_flags,
 				  sec_capas, &in->pci_cred);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: "DF_RC"\n",
 			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
@@ -3021,8 +3023,8 @@ rechoose:
 
 	rc = pool_req_create(info->dmi_ctx, &ep, opcode, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool add rpc: "
-			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		D_ERROR(DF_UUID": failed to create pool req: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_client, rc);
 	}
 
@@ -3059,9 +3061,10 @@ rechoose:
 
 	rc = out->pto_op.po_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": Failed to set targets to UP state for "
-				"reintegration: "DF_RC"\n", DP_UUID(pool_uuid),
-				DP_RC(rc));
+		D_ERROR(DF_UUID": Failed to set targets to %s state: "DF_RC"\n",
+			state == PO_COMP_ST_DOWN ? "DOWN" :
+			state == PO_COMP_ST_UP ? "UP" : "UNKNOWN",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_rpc, rc);
 	}
 

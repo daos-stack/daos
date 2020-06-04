@@ -58,6 +58,11 @@ two pool service replica on rank 0 and 1.
 ```bash
 $ dmg pool destroy --pool=${puuid}
 ```
+**To evict handles/connections to a pool:**
+
+```bash
+$ dmg pool evict --pool=${puuid}
+`
 
 **To see a list of the pools in your DAOS system:**
 
@@ -247,7 +252,8 @@ the management API and tool and will be documented here once available.
 ### Target Exclusion and Self-Healing
 
 An operator can exclude one or more targets from a specific DAOS pool using the rank
-the target resides on as well as the target idx on that rank. Excluding a target will
+the target resides on as well as the target idx on that rank. If a target idx list is
+not provided then all targets on the rank will be excluded. Excluding a target will
 automatically start the rebuild process.
 
 **To exclude a target from a pool:**
@@ -256,26 +262,28 @@ automatically start the rebuild process.
 $ dmg pool exclude --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
 ```
 
-The pool target exclude command accepts 3 required parameters:
+The pool target exclude command accepts 3 parameters:
 
 * The pool UUID of the pool that the targets will be excluded from.
 * The rank of the target(s) te be excluded.
-* The target Indices of the targets to be excluded from that rank.
+* The target Indices of the targets to be excluded from that rank (optional).
 
 ### Target Reintegration
 
 After a target failure an operator can fix the underlying issue and reintegrate the
-affected targets to restore the pool to its original state.
+affected targets to restore the pool to its original state. The operator can either
+reintegrate specific targets for a rank by supplying a target idx list, or reintegrate
+an entire rank by omitting the list.
 
 ```
 $ dmg pool reintegrate --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
 ```
 
-The pool reintegrate command accepts 3 required parameters:
+The pool reintegrate command accepts 3 parameters:
 
 * The pool UUID of the pool that the targets will be reintegrated into.
 * The rank of the affected targets.
-* The target Indices of the targets to be reintegrated on that rank.
+* The target Indices of the targets to be reintegrated on that rank (optional).
 
 When rebuild is triggered it will list the operations and their related targets by their rank ID
 and target index.
