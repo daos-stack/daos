@@ -30,7 +30,7 @@ lock_test()
         flock 9
         find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
              xargs -0r rm -vrf
-        eval "${VALGRIND_CMD} $@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
+        eval "${VALGRIND_CMD}" "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
         exit "${PIPESTATUS[0]}"
     ) 9>/mnt/daos/jenkins.lock
 }
@@ -92,8 +92,11 @@ if [ -d "/mnt/daos" ]; then
         run_test src/control/run_go_tests.sh
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
-            [ -z "$VALGRIND_SUPP" ] && VALGRIND_SUPP="$(pwd)/utils/valgrind_memcheck.supp"
-            VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no --gen-suppressions=all --suppressions=${VALGRIND_SUPP}"
+            [ -z "$VALGRIND_SUPP" ] &&
+                VALGRIND_SUPP="$(pwd)/utils/valgrind_memcheck.supp"
+            VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
+                          --error-limit=no --gen-suppressions=all \
+                          --suppressions=${VALGRIND_SUPP}"
         else
             VALGRIND_SUPP=""
             VALGRIND_CMD=""

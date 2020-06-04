@@ -6,7 +6,8 @@ source "${DAOS_DIR}/.build_vars.sh"
 BTR=${SL_BUILD_DIR}/src/common/tests/btree
 VCMD=()
 if [ "$USE_VALGRIND" = "memcheck" ]; then
-    VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no --gen-suppressions=all --suppressions=${VALGRIND_SUPP}"
+    VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
+          --gen-suppressions=all --suppressions=${VALGRIND_SUPP}"
 elif [ "$USE_VALGRIND" = "pmemcheck" ]; then
     VCMD="valgrind --tool=pmemcheck"
 fi
