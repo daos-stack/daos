@@ -49,6 +49,7 @@
 #include <daos_types.h>
 #include <daos_prop.h>
 #include <daos_security.h>
+#include <daos/profile.h>
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -181,6 +182,27 @@ daos_get_ntime(void)
 
 	d_gettime(&tv);
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
+static inline uint64_t
+daos_getntime_coarse(void)
+{
+	struct timespec	tv;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
+	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
+static inline int daos_gettime_coarse(uint64_t *time)
+{
+	struct timespec	now;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	if (rc == 0)
+		*time = now.tv_sec;
+
+	return rc;
 }
 
 /** Function table for combsort and binary search */
@@ -693,18 +715,6 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		strcpy(string, "unknown");
 		break;
 	}
-}
-
-static inline int daos_gettime_coarse(uint64_t *time)
-{
-	struct timespec	now;
-	int		rc;
-
-	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-	if (rc == 0)
-		*time = now.tv_sec;
-
-	return rc;
 }
 
 #endif /* __DAOS_COMMON_H__ */

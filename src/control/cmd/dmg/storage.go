@@ -30,7 +30,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -177,18 +176,18 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 			cmd.log.Info("--reformat is already implied by --system")
 		}
 
-		var ranks []uint32
-		if err = common.ParseNumberList(cmd.Group.Ranks, &ranks); err != nil {
-			return errors.Wrap(err, "parsing input ranklist")
+		ranks, err := system.ParseRanks(cmd.Group.Ranks)
+		if err != nil {
+			return errors.Wrap(err, "parsing rank list")
 		}
 
 		resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
-			&control.SystemResetFormatReq{Ranks: system.RanksFromUint32(ranks)})
+			&control.SystemResetFormatReq{Ranks: ranks})
 		if err != nil {
 			return err
 		}
 
-		return cmd.printResp(resp)
+		return cmd.printFormatResp(resp)
 	}
 
 	if cmd.Group.Ranks != "" {
@@ -202,10 +201,10 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		return err
 	}
 
-	return cmd.printResp(resp)
+	return cmd.printFormatResp(resp)
 }
 
-func (cmd *storageFormatCmd) printResp(resp *control.StorageFormatResp) error {
+func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) error {
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(os.Stdout, resp)
 	}
