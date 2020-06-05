@@ -21,12 +21,13 @@ provided in Contract No. B609815.
 Any reproduction of computer software, computer software documentation, or
 portions thereof marked with this legend must also reproduce the markings.
 """
+from logging import getLogger
 
 
 class Bytes(object):
     """Defines a byte capacity with its units.
 
-    Allows comparision values with different units, e.g. '1.6T' to '750G'.
+    Allows comparison values with different units, e.g. '1.6T' to '750G'.
     """
 
     SIZES = ["", "K", "M", "G", "T", "P", "E", "Z", "Y"]
@@ -155,6 +156,7 @@ class Bytes(object):
             ValueError: if the unit is not valid
 
         """
+        log = getLogger()
         original = self.__str__()
         if unit not in self.SIZES:
             raise ValueError(
@@ -164,18 +166,20 @@ class Bytes(object):
         if int(self.amount) == self.amount or str(self.amount).endswith(".0"):
             self.amount = int(self.amount)
         self.units = unit
-        print("Bytes conversion: {}B -> {}B".format(original, self))
+        log.debug("Bytes conversion: %sB -> %sB", original, str(self))
 
     def convert_down(self):
         """Decrement the units until the amount is greater than 1000."""
+        log = getLogger()
         while self.amount < 1000 and self.units != self.SIZES[0]:
             previous_unit = self.SIZES[self.SIZES.index(self.units) - 1]
             self.convert(previous_unit)
-        print("Updated whole number Bytes: {}".format(self))
+        log.debug("Updated whole number Bytes: %s", str(self))
 
     def convert_up(self):
         """Increment the units until the amount is less than 1000."""
+        log = getLogger()
         while self.amount > 1000 and self.units != self.SIZES[-1]:
             next_unit = self.SIZES[self.SIZES.index(self.units) + 1]
             self.convert(next_unit)
-        print("Updated whole number Bytes: {}".format(self))
+        log.debug("Updated whole number Bytes: %s", str(self))

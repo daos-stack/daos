@@ -134,9 +134,12 @@ class PoolCreateTests(TestWithServers):
                 self.fail("Error obtaining DAOS storage:\n{}".format(result))
 
             # Find the sizes of the SCM and NVMe storage configured for use by
-            # the DAOS IO servers.
-            scm_key = self.server_managers[0].get_config_value("scm_list")
-            nvme_key = self.server_managers[0].get_config_value("bdev_list")
+            # the DAOS IO servers.  Convert the lists into hashable tuples so
+            # they can be used as dictionary keys.
+            scm_key = tuple(
+                self.server_managers[0].get_config_value("scm_list"))
+            nvme_key = tuple(
+                self.server_managers[0].get_config_value("bdev_list"))
             device_capacities = {scm_key: None, nvme_key: None}
             for devices in device_capacities:
                 regex = r"(?:{})\s+.*\d+\s+([0-9\.]+)\s+([A-Z])B".format(
