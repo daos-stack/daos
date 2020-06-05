@@ -29,17 +29,11 @@ under distribution/target.
 After unzipping `daos-java-<version>-assemble.tgz`, you will get the
 following files.
 
-### `daos-java-<version>-*.jar` and `hadoop-daos-<version>.jar`<br/>
+### `daos-java-<version>.jar` and `hadoop-daos-<version>.jar`<br/>
 They need to be deployed on every compute node that runs Spark or Hadoop.
 Place them in a directory, e.g., $SPARK_HOME/jars for Spark and
 $HADOOP_HOME/share/hadoop/common/lib for Hadoop, which are accessible to all
 the nodes or copy them to every node.<br/>
-For `daos-java-<version>-*.jar`, you have two choices depending on your app.
-<br/>
-* daos-java-\<version\>.jar, if your app has protobuf 3 in your classpath.
-<br/>
-* daos-java-\<version\>-protobuf3-shaded.jar, if your app don't have protobuf
-3 or have protobuf 2 in your classpath.<br/>
 
 ### `daos-site-example.xml`<br/>
 You have two choices, mapped pool/container UUIDs and DAOS UNS path, to
@@ -75,7 +69,7 @@ DAOS from Hadoop DAOS FileSystem, depending on the "\<authority\>".
 
 * Mapped DAOS pool/container UUIDs
 
-The URI is "daos://<mapped pool UUID>:<mapped container UUID>", such as
+The URI is "daos://\<mapped pool UUID\>:\<mapped container UUID\>", such as
 "daos://default:1". Please check description of "fs.defaultFS" in
 [example](hadoop-daos/src/main/resources/daos-site-example.xml) for how to
 construct your URI by mapping your UUIDs. In this way, all configurations are
@@ -122,21 +116,21 @@ The URI is "daos://uns/\<your path\>". "\<your path\>" is your OS file path crea
 by DAOS UNS method, DaosUns.create(). You can create the UNS path with below
 command.
 
-    ```bash
-    daos cont create --pool <pool UUID> --svc <svc list> -path <your path> --type=POSIX
-    ```
+```bash
+$ daos cont create --pool <pool UUID> --svc <svc list> -path <your path> --type=POSIX
+```
 Or
 
-    ```bash
-    java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns create
-    ```
+```bash
+$ java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns create
+```
 
 After creation, you can use below command to see what DAOS properties set to
 the path.
 
-    ```path
-    getfattr -d -m - <your path>
-    ```
+```path
+$ getfattr -d -m - <your path>
+```
 
 ### Tune More Configurations
 
@@ -150,10 +144,16 @@ source consistent, an alternative to configuration file, daos-site.xml, is to
 set all configurations to the UNS path. You put the configs to the same UNS
 path with below command.
 
-   ```bash
-   java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=daos_server:fs.daos.pool.svc=0"
-        -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns setappinfo
-   ```
+```bash
+# install attr package if get "command not found" error
+$ setfattr -n user.daos.hadoop -v "fs.daos.server.group=daos_server:fs.daos.pool.svc=0" <your path>
+```
+Or
+
+```bash
+$ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=daos_server:fs.daos.pool.svc=0"
+    -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns setappinfo
+```
 
 For the "value" property, you need to follow pattern, key1=value1:key2=value2..
 .. And key* should be from
@@ -161,9 +161,9 @@ For the "value" property, you need to follow pattern, key1=value1:key2=value2..
 contains characters of '=' or ':', you need to escape the value with below
 command.
 
-   ```bash
-    java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns util
-   ```
+```bash
+$ java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns util
+```
 
 You'll get escaped value, "daos_server\u003a1\u003d2", for "daos_server:1=2".
 
@@ -196,7 +196,7 @@ df = spark.read.json("daos://default:1/people.json")
 ### Configure Hadoop to Use DAOS
 
 Edit $HADOOP_HOME/etc/hadoop/core-site.xml to change fs.defaultFS to
-“daos://default:1” or "daos://uns/<your path>". Then append below configuration
+“daos://default:1” or "daos://uns/\<your path\>". Then append below configuration
 to this file and $HADOOP_HOME/etc/hadoop/yarn-site.xml.
 
 ```xml
