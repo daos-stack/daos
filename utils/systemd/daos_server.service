@@ -13,6 +13,7 @@ ExecStart=/usr/bin/daos_server start
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
+LimitMEMLOCK=infinity
 
 [Install]
 WantedBy = multi-user.target
