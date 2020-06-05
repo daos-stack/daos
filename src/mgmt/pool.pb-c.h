@@ -263,27 +263,10 @@ struct  _Mgmt__PoolExtendReq
    * NVMe size in bytes
    */
   uint64_t nvmebytes;
-  /*
-   * formatted user e.g. "bob@"
-   */
-  char *user;
-  /*
-   * formatted group e.g. "builders@"
-   */
-  char *usergroup;
-  /*
-   * DAOS system identifier
-   */
-  char *sys;
-  /*
-   * Access Control Entries in short string format
-   */
-  size_t n_acl;
-  char **acl;
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0, 0 }
 
 
 /*

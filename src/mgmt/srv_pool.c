@@ -724,8 +724,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 
 int
 ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
-			const char *group, char *tgt_dev,  size_t scm_size,
-			size_t nvme_size, daos_prop_t *prop)
+			char *tgt_dev,  size_t scm_size, size_t nvme_size)
 {
 	int			rc;
 	d_rank_list_t		*ranks;
@@ -763,6 +762,10 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group)
 
 	D_DEBUG(DB_MGMT, "evict pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
 	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &psvcranks);
 	if (rc != 0) {
 		D_ERROR("Failed to get pool service ranks "DF_UUID" rc: %d\n",
@@ -784,7 +787,7 @@ out_ranks:
 	d_rank_list_free(psvcranks);
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
-
+out:
 	return rc;
 }
 

@@ -1656,8 +1656,6 @@ setup_extend_drpc_call(Drpc__Call *call, char *uuid)
 	req.n_ranks = 3;
 	req.scmbytes = 1000000000;
 	req.ranks = TEST_RANKS;
-	req.user = TEST_OWNER;
-	req.usergroup = TEST_GROUP;
 	pack_pool_extend_req(call, &req);
 }
 

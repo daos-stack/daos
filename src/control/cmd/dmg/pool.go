@@ -241,11 +241,11 @@ func (r *PoolExcludeCmd) Execute(args []string) error {
 type PoolExtendCmd struct {
 	logCmd
 	ctlInvokerCmd
-	UUID  string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
-	Ranks string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
+	UUID     string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
+	RankList string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
 	// Everything after this needs to be removed when pool info can be fetched
-	ScmSize   string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
-	NVMeSize  string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
+	ScmSize  string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
+	NVMeSize string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
 	// END TEMPORARY SECTION
 }
 
@@ -253,7 +253,7 @@ type PoolExtendCmd struct {
 func (e *PoolExtendCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	ranks, err := system.ParseRanks(c.RankList)
+	ranks, err := system.ParseRanks(e.RankList)
 	if err != nil {
 		return errors.Wrap(err, "parsing rank list")
 	}

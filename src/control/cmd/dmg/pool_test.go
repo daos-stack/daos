@@ -267,12 +267,9 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				"ConnectClients",
 				printRequest(t, &control.PoolExtendReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks:     []uint32{1},
-					ScmBytes:  uint64(testScmSize),
-					User:      eUsr.Username + "@",
-					UserGroup: eGrp.Name + "@",
-					Sys:       "daos_server",
+					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:    []system.Rank{1},
+					ScmBytes: uint64(testScmSize),
 				}),
 			}, " "),
 			nil,
@@ -283,12 +280,9 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				"ConnectClients",
 				printRequest(t, &control.PoolExtendReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks:     []uint32{1, 2, 3},
-					ScmBytes:  uint64(testScmSize),
-					User:      eUsr.Username + "@",
-					UserGroup: eGrp.Name + "@",
-					Sys:       "daos_server",
+					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:    []system.Rank{1, 2, 3},
+					ScmBytes: uint64(testScmSize),
 				}),
 			}, " "),
 			nil,

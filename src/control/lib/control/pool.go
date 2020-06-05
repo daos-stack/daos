@@ -474,20 +474,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 	return nil
 }
 
-// genPoolExtendRequest takes a *PoolExtendRequest and generates a valid protobuf
-// request, filling in any missing fields with reasonable defaults.
 func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err error) {
-	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(in.User, in.UserGroup)
-	if err != nil {
-		return nil, err
-	}
-
-	// ensure we have a system name in the request
-	if in.Sys == "" {
-		in.Sys = build.DefaultSystemName
-	}
-
 	out = new(mgmtpb.PoolExtendReq)
 	if err = convert.Types(in, out); err != nil {
 		return nil, err
@@ -501,14 +488,10 @@ type PoolExtendReq struct {
 	unaryRequest
 	msRequest
 	UUID  string
-	Ranks []uint32
+	Ranks []system.Rank
 	// TEMP SECTION
 	ScmBytes  uint64
 	NvmeBytes uint64
-	Sys       string
-	User      string
-	UserGroup string
-	ACL       *AccessControlList
 	// END TEMP SECTION
 }
 
