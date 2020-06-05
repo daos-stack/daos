@@ -21,6 +21,7 @@ provided in Contract No. B609815.
 Any reproduction of computer software, computer software documentation, or
 portions thereof marked with this legend must also reproduce the markings.
 """
+import os
 import re
 import time
 
@@ -83,7 +84,6 @@ class PoolCreateTests(TestWithServers):
         """
         checks = 0
         daos_state = None
-        valid_states = ("started", "joined")
         while daos_state not in valid_states and checks < max_checks:
             daos_state = self.get_system_state().lower()
             checks += 1
@@ -137,9 +137,12 @@ class PoolCreateTests(TestWithServers):
             # the DAOS IO servers.  Convert the lists into hashable tuples so
             # they can be used as dictionary keys.
             scm_key = tuple(
-                self.server_managers[0].get_config_value("scm_list"))
+                [os.path.basename(path) for path in
+                 self.server_managers[0].get_config_value("scm_list")]
+            )
             nvme_key = tuple(
-                self.server_managers[0].get_config_value("bdev_list"))
+                self.server_managers[0].get_config_value("bdev_list")
+            )
             device_capacities = {scm_key: None, nvme_key: None}
             for devices in device_capacities:
                 regex = r"(?:{})\s+.*\d+\s+([0-9\.]+)\s+([A-Z])B".format(
