@@ -669,7 +669,7 @@ daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
 }
 
 static uint32_t
-daos_singv_calc_chunks(struct dcs_singv_layout *singv_los, int idx)
+daos_singv_calc_chunks(struct dcs_layout *singv_los, int idx)
 {
 	if (singv_los == NULL || singv_los[idx].cs_even_dist == 0)
 		return 1;
@@ -681,7 +681,7 @@ daos_singv_calc_chunks(struct dcs_singv_layout *singv_los, int idx)
 uint64_t
 daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 			     uint32_t nr, bool akey_only,
-			     struct dcs_singv_layout *singv_los)
+			     struct dcs_layout *singv_los)
 {
 	int		i, j;
 	uint64_t	result = 0;
@@ -730,7 +730,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 int
 daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			      uint32_t nr, bool akey_only,
-			      struct dcs_singv_layout *singv_los,
+			      struct dcs_layout *singv_los,
 			      struct dcs_iod_csums **p_iods_csums)
 {
 	int			 i, j, rc = 0;
@@ -1018,7 +1018,7 @@ calc_csum_recx(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 
 static int
 calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
-	     struct dcs_singv_layout *singv_lo, int singv_idx,
+	     struct dcs_layout *singv_lo, int singv_idx,
 	     struct dcs_csum_info *csums)
 {
 	size_t			 bytes_for_csum, csum_buf_len;
@@ -1129,13 +1129,13 @@ daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
 int
 daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 		       daos_iod_t *iods, daos_iom_t *maps, uint32_t nr,
-		       bool akey_only, struct dcs_singv_layout *singv_los,
+		       bool akey_only, struct dcs_layout *singv_los,
 		       int singv_idx, struct dcs_iod_csums **p_iods_csums)
 {
 	int			 rc = 0;
 	int			 i;
 	struct dcs_iod_csums	*iods_csums = NULL;
-	struct dcs_singv_layout	*singv_lo, *los;
+	struct dcs_layout	*singv_lo, *los;
 	uint32_t		 iods_csums_nr;
 	uint16_t		 csum_len = daos_csummer_get_csum_len(obj);
 
@@ -1257,7 +1257,7 @@ daos_csummer_free_ci(struct daos_csummer *obj, struct dcs_csum_info **p_cis)
 int
 daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csum,
-			struct dcs_singv_layout *singv_lo, int singv_idx,
+			struct dcs_layout *singv_lo, int singv_idx,
 			daos_iom_t *map)
 {
 	struct dcs_iod_csums	*new_iod_csums;

@@ -5,6 +5,8 @@
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/4163f52ec65e4ba8991208288a9a15a6)](https://www.codacy.com/app/johann.lombardi/daos?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=daos-stack/daos&amp;utm_campaign=Badge_Grade)
 
 
+Please file issues in our [Jira issue tracker](https://jira.hpdd.intel.com/secure/CreateIssue!default.jspa?selectedProjectId=11116)
+
 ## What is DAOS?
 
 The **D**istributed **A**synchronous **O**bject **S**torage (DAOS) is an

@@ -1158,6 +1158,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind,
 				       orw->orw_bulks.ca_arrays, offs,
 				       ioh, NULL, orw->orw_nr);
+		if (!rc)
+			bio_iod_flush(biod);
 	} else if (orw->orw_sgls.ca_arrays != NULL) {
 		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
 	}
@@ -1409,9 +1411,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid,
-				       &orw->orw_dti, orw->orw_dkey_hash,
-				       &orw->orw_epoch);
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
+				       &orw->orw_epoch, NULL);
 
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc == -DER_ALREADY || rc == 0)
@@ -1438,15 +1439,16 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		if (orw->orw_dti_cos.ca_count > 0)
 			vos_dtx_commit(ioc.ioc_vos_coh,
 				       orw->orw_dti_cos.ca_arrays,
-				       orw->orw_dti_cos.ca_count);
+				       orw->orw_dti_cos.ca_count, NULL);
 
 		D_GOTO(out, rc = 0);
 	}
 
-	rc = dtx_begin(&orw->orw_dti, &orw->orw_oid, ioc.ioc_vos_coh,
-		       orw->orw_epoch, orw->orw_dkey_hash,
+	rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti,
+		       orw->orw_epoch, orw->orw_map_ver,
+		       &orw->orw_oid, orw->orw_dkey_hash, DAOS_INTENT_UPDATE,
 		       orw->orw_dti_cos.ca_arrays, orw->orw_dti_cos.ca_count,
-		       orw->orw_map_ver, DAOS_INTENT_UPDATE, &dth);
+		       &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1465,7 +1467,7 @@ out:
 	    DAOS_FAIL_CHECK(DAOS_DTX_NONLEADER_ERROR))
 		rc = -DER_IO;
 
-	rc = dtx_end(&dth, ioc.ioc_coh, ioc.ioc_coc, rc);
+	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coh);
 	obj_ioc_end(&ioc, rc);
 }
@@ -1520,6 +1522,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	uint32_t			flags = 0;
 	uint32_t			opc = opc_get(rpc->cr_opc);
 	struct obj_ec_split_req		*split_req = NULL;
+	uint32_t			version;
 	int				rc;
 
 	D_ASSERT(orw != NULL);
@@ -1564,18 +1567,20 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		}
 	}
 
+	version = orw->orw_map_ver;
+
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
-		daos_epoch_t	tmp = 0;
+		daos_epoch_t	epoch = 0;
 
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_oid,
-				       &orw->orw_dti, orw->orw_dkey_hash, &tmp);
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
+				       &epoch, &version);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
 
 		if (rc == 0) {
 			flags |= ORF_RESEND;
-			orw->orw_epoch = tmp;
+			orw->orw_epoch = epoch;
 		} else if (rc == -DER_NONEXIST) {
 			rc = 0;
 		} else {
@@ -1600,9 +1605,10 @@ renew:
 	 * modification or not, so still need to dispatch
 	 * the RPC to other replicas.
 	 */
-	rc = dtx_leader_begin(&orw->orw_dti, &orw->orw_oid, ioc.ioc_vos_coh,
-			      orw->orw_epoch, orw->orw_dkey_hash,
-			      orw->orw_map_ver, DAOS_INTENT_UPDATE,
+	rc = dtx_leader_begin(ioc.ioc_coc, &orw->orw_dti,
+			      orw->orw_epoch, version,
+			      &orw->orw_oid, orw->orw_dkey_hash,
+			      DAOS_INTENT_UPDATE,
 			      orw->orw_shard_tgts.ca_arrays,
 			      orw->orw_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
@@ -2043,9 +2049,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid,
-				       &opi->opi_dti, opi->opi_dkey_hash,
-				       &opi->opi_epoch);
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti,
+				       &opi->opi_epoch, NULL);
 
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc == -DER_ALREADY || rc == 0)
@@ -2066,10 +2071,11 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	}
 
 	/* Start the local transaction */
-	rc = dtx_begin(&opi->opi_dti, &opi->opi_oid, ioc.ioc_vos_coh,
-		       opi->opi_epoch, opi->opi_dkey_hash,
+	rc = dtx_begin(ioc.ioc_coc, &opi->opi_dti,
+		       opi->opi_epoch, opi->opi_map_ver,
+		       &opi->opi_oid, opi->opi_dkey_hash, DAOS_INTENT_PUNCH,
 		       opi->opi_dti_cos.ca_arrays, opi->opi_dti_cos.ca_count,
-		       opi->opi_map_ver, DAOS_INTENT_PUNCH, &dth);
+		       &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -2089,7 +2095,7 @@ out:
 		rc = -DER_IO;
 
 	/* Stop the local transaction */
-	rc = dtx_end(&dth, ioc.ioc_coh, ioc.ioc_coc, rc);
+	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
 }
@@ -2130,6 +2136,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc;
 	uint32_t			flags = 0;
+	uint32_t			version;
 	int				rc;
 
 	opi = crt_req_get(rpc);
@@ -2166,30 +2173,19 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
 
-	if (opi->opi_shard_tgts.ca_arrays == NULL) {
-		/* local RPC handler */
-		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), ioc.ioc_coh,
-				     ioc.ioc_coc, NULL);
-		if (rc != 0) {
-			D_ERROR(DF_UOID": error="DF_RC".\n",
-				DP_UOID(opi->opi_oid), DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-
-		D_GOTO(out, rc);
-	}
+	version = opi->opi_map_ver;
 
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
-		daos_epoch_t	tmp = 0;
+		daos_epoch_t	epoch = 0;
 
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_oid,
-				       &opi->opi_dti, opi->opi_dkey_hash, &tmp);
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti,
+				       &epoch, &version);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
 
 		if (rc == 0) {
-			opi->opi_epoch = tmp;
+			opi->opi_epoch = epoch;
 			flags |= ORF_RESEND;
 		} else if (rc == -DER_NONEXIST) {
 			rc = 0;
@@ -2214,9 +2210,10 @@ renew:
 	 * modification or not, so still need to dispatch
 	 * the RPC to other replicas.
 	 */
-	rc = dtx_leader_begin(&opi->opi_dti, &opi->opi_oid, ioc.ioc_vos_coh,
-			      opi->opi_epoch, opi->opi_dkey_hash,
-			      opi->opi_map_ver, DAOS_INTENT_PUNCH,
+	rc = dtx_leader_begin(ioc.ioc_coc, &opi->opi_dti,
+			      opi->opi_epoch, version,
+			      &opi->opi_oid, opi->opi_dkey_hash,
+			      DAOS_INTENT_PUNCH,
 			      opi->opi_shard_tgts.ca_arrays,
 			      opi->opi_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
@@ -2340,8 +2337,8 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = dtx_obj_sync(osi->osi_pool_uuid, osi->osi_co_uuid, ioc.ioc_vos_coh,
-			  osi->osi_oid, oso->oso_epoch, ioc.ioc_map_ver);
+	rc = dtx_obj_sync(osi->osi_pool_uuid, osi->osi_co_uuid, ioc.ioc_coc,
+			  &osi->osi_oid, oso->oso_epoch, ioc.ioc_map_ver);
 
 out:
 	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);

@@ -1,1 +1,0 @@
-[{Rank:<nil> Targets:0 NrXsHelpers:2 FirstCore:0 FabricIface: FabricIfacePort:0 LogMask: LogFile: EnvVars:[] ScmMount:/mnt/daos ScmClass:dcpm ScmList:[] ScmSize:0 BdevClass:nvme BdevList:[] BdevNumber:0 BdevSize:0 CliOpts:[-t 0 -g daos_server -s /mnt/daos -d /var/run/daos_server] formatted:<nil>}]
