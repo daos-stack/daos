@@ -872,8 +872,8 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	int		i;
 	int		rc;
 	char		dmg_cmd[DTS_CFG_MAX];
-        char            path_to_dmg[DTS_CFG_MAX];
-        FILE            *fp;
+	char		path_to_dmg[DTS_CFG_MAX];
+	FILE		*fp;
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
