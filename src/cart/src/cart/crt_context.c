@@ -1275,6 +1275,7 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	 * Call progress once before processing timeouts in case
 	 * any replies are pending in the queue
 	 */
+	D_INFO("EJMM crt_context.c: crt_hg_progress()");
 	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
 	if (unlikely(rc && rc != -DER_TIMEDOUT)) {
 		D_ERROR("crt_hg_progress failed with %d\n", rc);
@@ -1288,6 +1289,7 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 		crt_context_timeout_check(ctx);
 		crt_exec_progress_cb(ctx);
 
+		D_INFO("EJMM crt_context.c: crt_hg_progress() while");
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
 		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
 			D_ERROR("crt_hg_progress failed with %d\n", rc);

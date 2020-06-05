@@ -1331,7 +1331,7 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 	unsigned int		hg_timeout;
 	unsigned int		total = 256;
 
-	D_INFO("EJMM crt_hg.c: crt_hg_progress()");
+	//D_INFO("EJMM crt_hg.c: crt_hg_progress()");
 
 	hg_context = hg_ctx->chc_hgctx;
 
