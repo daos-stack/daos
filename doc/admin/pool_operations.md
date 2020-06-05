@@ -200,7 +200,7 @@ will be decided based on the remaining ACL rules.
 ## Pool Query
 The pool query operation retrieves information (i.e., the number of targets,
 space usage, rebuild status, property list, and more) about a created pool. It
-is integrated into the dmg_old utility.
+is integrated into the dmg utility.
 
 **To query a pool:**
 
