@@ -83,7 +83,7 @@ class PoolCreateTests(TestWithServers):
 
         """
         checks = 0
-        daos_state = None
+        daos_state = "????"
         while daos_state not in valid_states and checks < max_checks:
             daos_state = self.get_system_state().lower()
             checks += 1
