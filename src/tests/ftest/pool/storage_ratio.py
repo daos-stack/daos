@@ -25,6 +25,7 @@ from apricot import TestWithServers
 from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
+
 class StorageRatio(TestWithServers):
     """Storage Ratio test cases.
 
@@ -33,6 +34,7 @@ class StorageRatio(TestWithServers):
 
     :avocado: recursive
     """
+
     def test_storage_ratio(self):
         """Jira ID: DAOS-2332.
 
@@ -50,7 +52,7 @@ class StorageRatio(TestWithServers):
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=storage_ratio
         """
-        tests = self.params.get("stoage_ratio", '/run/pool/*')
+        tests = self.params.get("storage_ratio", '/run/pool/*')
         results = {}
         for num, test in enumerate(tests):
             pool = TestPool(
@@ -61,12 +63,13 @@ class StorageRatio(TestWithServers):
             try:
                 # Create a pool
                 pool.create()
+                dmg_output = pool.dmg_result.stdout
                 if 'FAIL' in test[2]:
                     results[num] = 'FAIL'
                 elif 'PASS' in test[2]:
                     results[num] = 'PASS'
                 elif ('WARNING' in test[2] and
-                      'SCM:NVMe ratio is less than' in pool.cmd_output):
+                      'SCM:NVMe ratio is less than' in dmg_output):
                     results[num] = 'PASS'
                 else:
                     results[num] = 'FAIL'
