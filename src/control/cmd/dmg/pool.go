@@ -244,8 +244,8 @@ type PoolExtendCmd struct {
 	UUID     string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
 	RankList string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
 	// Everything after this needs to be removed when pool info can be fetched
-	ScmSize  string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
-	NVMeSize string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
+	ScmSize  string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of the original DAOS pool being extended"`
+	NVMeSize string `short:"n" long:"nvme-size" description:"Size of NVMe component of the original DAOS pool being extended, or none if not originally supplied to pool create."`
 	// END TEMPORARY SECTION
 }
 

@@ -191,10 +191,10 @@ UUID of the DAOS pool to extend
 Comma-separated list of ranks to add to the pool
 .TP
 \fB\fB\-s\fR, \fB\-\-scm-size\fR (\fIrequired\fR)\fP
-Size of SCM component of DAOS pool
+Size of SCM component of the original DAOS pool being extended
 .TP
 \fB\fB\-n\fR, \fB\-\-nvme-size\fR\fP
-Size of NVMe component of DAOS pool
+Size of NVMe component of the original DAOS pool being extended, or none if not originally supplied to pool create.
 .SS pool get-acl
 Get a DAOS pool's Access Control List
 
