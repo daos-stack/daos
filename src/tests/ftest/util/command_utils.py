@@ -287,6 +287,15 @@ class ExecutableCommand(CommandWithParameters):
                 "{}() did not return a CmdResult".format(method_name))
         return re.findall(pattern, result.stdout)
 
+    def update_env_names(self, new_names):
+        """Update environment variable names to export for the command.
+
+        Args:
+            env_names (list): list of environment variable names to add to
+                existing self._env_names variable.
+        """
+        self._env_names.extend(new_names)
+
     def get_environment(self, manager, log_file=None):
         """Get the environment variables to export for the command.
 
@@ -299,7 +308,7 @@ class ExecutableCommand(CommandWithParameters):
 
         Returns:
             EnvironmentVariables: a dictionary of environment variable names and
-                values to export prior to running daos_racer
+                values to export.
 
         """
         env = EnvironmentVariables()
