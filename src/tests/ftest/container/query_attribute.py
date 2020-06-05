@@ -49,9 +49,7 @@ class ContainerQueryAttributeTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a ContainerQueryAttribute object."""
         super(ContainerQueryAttributeTest, self).__init__(*args, **kwargs)
-        self.expected_pool_uuid = None
         self.expected_cont_uuid = None
-        self.sr = None
         self.daos_cmd = None
 
     def create_pool_container(self):
@@ -59,13 +57,11 @@ class ContainerQueryAttributeTest(TestWithServers):
 
         Save some variables so that we can use them in the tests.
         """
-        pool_create_result = self.get_dmg_command().get_output(
-            "pool_create", scm_size="1G")
-        self.expected_pool_uuid = pool_create_result[0]
-        self.sr = pool_create_result[1]
+        self.add_pool()
         self.daos_cmd = DaosCommand(self.bin)
         self.expected_cont_uuid = self.daos_cmd.get_output(
-            "container_create", pool=self.expected_pool_uuid, svc=self.sr)[0]
+            "container_create", pool=self.pool.uuid,
+            svc=self.pool.svc_ranks[0])[0]
 
     def test_container_query_attr(self):
         """JIRA ID: DAOS-4640
@@ -84,14 +80,14 @@ class ContainerQueryAttributeTest(TestWithServers):
         # Call daos container query, obtain pool and container UUID, and
         # compare against those used when creating the pool and the container.
         kwargs = {
-            "pool": self.expected_pool_uuid,
-            "svc": self.sr,
+            "pool": self.pool.uuid,
+            "svc": self.pool.svc_ranks[0],
             "cont": self.expected_cont_uuid
         }
         query_output = self.daos_cmd.get_output("container_query", **kwargs)[0]
         actual_pool_uuid = query_output[0]
         actual_cont_uuid = query_output[1]
-        self.assertEqual(actual_pool_uuid, self.expected_pool_uuid)
+        self.assertEqual(actual_pool_uuid, self.pool.uuid.lower())
         self.assertEqual(actual_cont_uuid, self.expected_cont_uuid)
 
         # Test container set-attr, get-attr, and list-attrs with different
@@ -135,11 +131,10 @@ class ContainerQueryAttributeTest(TestWithServers):
         for attr_value in attr_values:
             _ = self.daos_cmd.container_set_attr(
                 pool=actual_pool_uuid, cont=actual_cont_uuid,
-                attr=attr_value[0], val=attr_value[1], svc=self.sr)
+                attr=attr_value[0], val=attr_value[1], svc=self.pool.svc_ranks[0])
             kwargs["attr"] = attr_value[0]
             actual_val = self.daos_cmd.get_output(
                 "container_get_attr", **kwargs)[0]
-            #self.log.debug("## value = %s", actual_val)
             if attr_value[1] in escape_to_not:
                 # Special character string.
                 if actual_val != escape_to_not[attr_value[1]]:
@@ -163,7 +158,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         expected_attrs.sort()
         kwargs = {
             "pool": actual_pool_uuid,
-            "svc": self.sr,
+            "svc": self.pool.svc_ranks[0],
             "cont": actual_cont_uuid
         }
         actual_attrs = self.daos_cmd.get_output(
@@ -191,12 +186,12 @@ class ContainerQueryAttributeTest(TestWithServers):
             vals.append("val" + str(i))
         for expected_attr, val in zip(expected_attrs, vals):
             _ = self.daos_cmd.container_set_attr(
-                pool=self.expected_pool_uuid, cont=self.expected_cont_uuid,
-                attr=expected_attr, val=val, svc=self.sr)
+                pool=self.pool.uuid, cont=self.expected_cont_uuid,
+                attr=expected_attr, val=val, svc=self.pool.svc_ranks[0])
         expected_attrs.sort()
         kwargs = {
-            "pool": self.expected_pool_uuid,
-            "svc": self.sr,
+            "pool": self.pool.uuid,
+            "svc": self.pool.svc_ranks[0],
             "cont": self.expected_cont_uuid
         }
         actual_attrs = self.daos_cmd.get_output(
