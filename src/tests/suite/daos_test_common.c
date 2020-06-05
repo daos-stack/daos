@@ -872,6 +872,8 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	int		i;
 	int		rc;
 	char		dmg_cmd[DTS_CFG_MAX];
+        char            path_to_dmg[DTS_CFG_MAX];
+        FILE            *fp;
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -900,15 +902,14 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
-	/* build and invoke dmg cmd to stop the server */
-	dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d --force",
-			  rank);
-        rc = system("which dmg");
-        if (rc == -1 || WEXITSTATUS(rc) != 0) {
-                print_message("which dmg failed rc=%d\n", rc);
-                return;
-        }
+	fp = popen("which dmg", "r");
+	if (fgets(path_to_dmg, DTS_CFG_MAX, fp) != NULL)
+		print_message("path_to_dmg %s\n", path_to_dmg);
+	pclose(fp);
 
+	/* build and invoke dmg cmd to stop the server */
+	dts_create_config(dmg_cmd, "%s system stop -i --ranks=%d --force",
+			  path_to_dmg, rank);
 	rc = system(dmg_cmd);
 	if (rc == -1 || WEXITSTATUS(rc) != 0) {
 		print_message("%s failed rc=%d\n", dmg_cmd, rc);
