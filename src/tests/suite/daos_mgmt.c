@@ -56,7 +56,7 @@ pool_create_all(void **state)
 	print_message("creating pool %ssynchronously ... ",
 		      arg->async ? "a" : "");
 	rc = daos_pool_create(0700 /* mode */, 0 /* uid */, 0 /* gid */,
-			      arg->group, NULL /* tgts */, "pmem" /* dev */,
+			      arg->group, NULL /* tgts */,
 			      0 /* minimal size */, 0 /* nvme size */,
 			      NULL /* properties */, &arg->pool.svc /* svc */,
 			      uuid, arg->async ? &ev : NULL);
@@ -406,7 +406,7 @@ pool_create_and_destroy_retry(void **state)
 
 	print_message("creating pool synchronously ... ");
 	rc = daos_pool_create(0700 /* mode */, 0 /* uid */, 0 /* gid */,
-			      arg->group, NULL /* tgts */, "pmem" /* dev */,
+			      arg->group, NULL /* tgts */,
 			      0 /* minimal size */, 0 /* nvme size */,
 			      NULL /* properties */, &arg->pool.svc /* svc */,
 			      uuid, NULL /* ev */);

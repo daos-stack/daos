@@ -195,7 +195,7 @@ create_hdlr(int argc, char *argv[])
 		return 2;
 	}
 
-	rc = daos_pool_create(mode, uid, gid, sysname, targets, "pmem",
+	rc = daos_pool_create(mode, uid, gid, sysname, targets,
 			      scm_size, nvme_size, NULL, &svc, pool_uuid,
 			      NULL /* ev */);
 	if (targets != NULL)

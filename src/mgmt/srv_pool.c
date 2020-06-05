@@ -111,9 +111,9 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 }
 
 static int
-ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
-			      d_rank_list_t *rank_list, size_t scm_size,
-			      size_t nvme_size, uuid_t **tgt_uuids)
+ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, d_rank_list_t *rank_list,
+			      size_t scm_size, size_t nvme_size,
+			      uuid_t **tgt_uuids)
 {
 	crt_rpc_t			*tc_req;
 	crt_opcode_t			opc;
@@ -124,7 +124,6 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 	unsigned int			i;
 	int				topo;
 	int				rc;
-	int				rc_cleanup;
 
 	/* Collective RPC to all of targets of the pool */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
@@ -142,12 +141,11 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
 	uuid_copy(tc_in->tc_pool_uuid, pool_uuid);
-	tc_in->tc_tgt_dev = tgt_dev;
 	tc_in->tc_scm_size = scm_size;
 	tc_in->tc_nvme_size = nvme_size;
 	rc = dss_rpc_send(tc_req);
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_CORPC))
-		rc = -DER_TIMEDOUT;
+		D_GOTO(decref, rc = -DER_TIMEDOUT);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": dss_rpc_send MGMT_TGT_CREATE: rc="DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -172,10 +170,8 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 
 	/* Gather target uuids ranks from collective RPC to start pool svc. */
 	D_ALLOC_ARRAY(*tgt_uuids, rank_list->rl_nr);
-	if (*tgt_uuids == NULL) {
-		rc = -DER_NOMEM;
-		D_GOTO(decref, rc);
-	}
+	if (*tgt_uuids == NULL)
+		D_GOTO(decref, rc = -DER_NOMEM);
 	tc_out_ranks = tc_out->tc_ranks.ca_arrays;
 	tc_out_uuids = tc_out->tc_tgt_uuids.ca_arrays;
 	for (i = 0; i < tc_out->tc_tgt_uuids.ca_count; i++) {
@@ -197,6 +193,8 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 decref:
 	crt_req_decref(tc_req);
 	if (rc) {
+		int rc_cleanup;
+
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
 							    rank_list);
 		if (rc_cleanup)
@@ -482,7 +480,7 @@ out:
 }
 
 int
-ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
+ds_mgmt_create_pool(uuid_t pool_uuid, const char *group,
 		    d_rank_list_t *targets, size_t scm_size, size_t nvme_size,
 		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp)
 {
@@ -503,8 +501,8 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		goto out_svc;
 	}
 
-	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, rank_list,
-					   scm_size, nvme_size, &tgt_uuids);
+	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, rank_list, scm_size,
+					   nvme_size, &tgt_uuids);
 	if (rc != 0) {
 		D_ERROR("creating pool on ranks "DF_UUID" failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -570,15 +568,13 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	D_ASSERT(pc_out != NULL);
 
 	rc = ds_mgmt_create_pool(pc_in->pc_pool_uuid, pc_in->pc_grp,
-				 pc_in->pc_tgt_dev, pc_in->pc_tgts,
-				 pc_in->pc_scm_size, pc_in->pc_nvme_size,
-				 pc_in->pc_prop, pc_in->pc_svc_nr,
-				 &pc_out->pc_svc);
+				 pc_in->pc_tgts, pc_in->pc_scm_size,
+				 pc_in->pc_nvme_size, pc_in->pc_prop,
+				 pc_in->pc_svc_nr, &pc_out->pc_svc);
 	pc_out->pc_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d (pc_tgt_dev: %s).\n",
-			rc, pc_in->pc_tgt_dev);
+		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
 	if (pc_out->pc_rc == 0)
 		d_rank_list_free(pc_out->pc_svc);
 }
@@ -783,8 +779,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 		reint_ranks.rl_nr = 1;
 		reint_ranks.rl_ranks = &rank;
 
-		/* TODO: The size information and "pmem" type need to be
-		 * determined automatically, perhaps by querying the pool leader
+		/* TODO: The size information needs to be determined
+		 * automatically, perhaps by querying the pool leader
 		 * This works for now because these parameters are ignored if
 		 * the pool already exists on the destination node. This is
 		 * just used to ensure the pool is started.
@@ -794,8 +790,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 		 *
 		 * This is tracked in DAOS-5041
 		 */
-		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, "pmem",
-						   &reint_ranks, 0, 0, NULL);
+		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, &reint_ranks, 0,
+						   0, NULL);
 		if (rc != 0) {
 			D_ERROR("creating pool on ranks "DF_UUID" failed: rc "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));

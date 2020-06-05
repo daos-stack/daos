@@ -148,7 +148,6 @@ pool_create(void)
 			      getegid() /* group owner */,
 			      DSS_PSETID /* daos server process set ID */,
 			      NULL /* list of targets, NULL = all */,
-			      NULL /* storage type to use, use default */,
 			      10ULL << 30 /* target SCM size, 10G */,
 			      40ULL << 30 /* target NVMe size, 40G */,
 			      NULL, /* pool properties */

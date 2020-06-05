@@ -164,7 +164,6 @@ CRT_RPC_DECLARE(mgmt_profile, DAOS_ISEQ_MGMT_PROFILE,
 
 #define DAOS_ISEQ_MGMT_TGT_CREATE /* input fields */		 \
 	((uuid_t)		(tc_pool_uuid)		CRT_VAR) \
-	((d_string_t)		(tc_tgt_dev)		CRT_VAR) \
 	((daos_size_t)		(tc_scm_size)		CRT_VAR) \
 	((daos_size_t)		(tc_nvme_size)		CRT_VAR)
 

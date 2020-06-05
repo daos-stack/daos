@@ -107,7 +107,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 			      "NVMe size="DF_U64" GB\n",
 			      (outpool->pool_size >> 30), nvme_size >> 30);
 		rc = daos_pool_create(0, arg->uid, arg->gid, arg->group,
-				      NULL, "pmem", outpool->pool_size,
+				      NULL, outpool->pool_size,
 				      nvme_size, prop, &outpool->svc,
 				      outpool->pool_uuid, NULL);
 		if (rc)

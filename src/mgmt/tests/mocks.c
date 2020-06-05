@@ -496,7 +496,7 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 }
 
 int
-ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
+ds_mgmt_create_pool(uuid_t pool_uuid, const char *group,
 		    d_rank_list_t *targets, size_t scm_size,
 		    size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
 		    d_rank_list_t **svcp)

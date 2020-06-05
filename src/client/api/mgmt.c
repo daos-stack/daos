@@ -75,10 +75,9 @@ daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 
 int
 daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
-		 const d_rank_list_t *tgts, const char *dev,
-		 daos_size_t scm_size, daos_size_t nvme_size,
-		 daos_prop_t *pool_prop, d_rank_list_t *svc,
-		 uuid_t uuid, daos_event_t *ev)
+		 const d_rank_list_t *tgts, daos_size_t scm_size,
+		 daos_size_t nvme_size, daos_prop_t *pool_prop,
+		 d_rank_list_t *svc, uuid_t uuid, daos_event_t *ev)
 {
 	daos_pool_create_t	*args;
 	tse_task_t		*task;
@@ -100,7 +99,6 @@ daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 	args->gid	= gid;
 	args->grp	= grp;
 	args->tgts	= tgts;
-	args->dev	= dev;
 	args->scm_size	= scm_size;
 	args->nvme_size	= nvme_size;
 	args->prop	= pool_prop;

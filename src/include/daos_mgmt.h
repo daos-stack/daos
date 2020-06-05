@@ -67,7 +67,6 @@ typedef struct {
  * \param tgts	[IN]	Optional, allocate targets on this list of ranks
  *			If set to NULL, create the pool over all the ranks
  *			available in the service group.
- * \param dev	[IN]	String identifying the target devices to use
  * \param scm_size [IN]	Target SCM (Storage Class Memory) size in bytes (i.e.,
  *			maximum amounts of SCM storage space targets can
  *			consume) in bytes. Passing 0 will use the minimal
@@ -89,10 +88,9 @@ typedef struct {
  */
 int
 daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
-		 const d_rank_list_t *tgts, const char *dev,
-		 daos_size_t scm_size, daos_size_t nvme_size,
-		 daos_prop_t *pool_prop, d_rank_list_t *svc, uuid_t uuid,
-		 daos_event_t *ev);
+		 const d_rank_list_t *tgts, daos_size_t scm_size,
+		 daos_size_t nvme_size, daos_prop_t *pool_prop,
+		 d_rank_list_t *svc, uuid_t uuid, daos_event_t *ev);
 
 /**
  * Destroy a pool with \a uuid. If there is at least one connection to this

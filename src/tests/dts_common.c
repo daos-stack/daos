@@ -228,7 +228,7 @@ pool_init(struct dts_context *tsc)
 		d_rank_list_t	*svc = &tsc->tsc_svc;
 
 		rc = daos_pool_create(0731, geteuid(), getegid(),
-				      NULL, NULL, "pmem",
+				      NULL, NULL,
 				      tsc->tsc_scm_size, tsc->tsc_nvme_size,
 				      NULL, svc, tsc->tsc_pool_uuid, NULL);
 		if (rc)

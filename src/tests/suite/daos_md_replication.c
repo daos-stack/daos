@@ -42,7 +42,7 @@ mdr_stop_pool_svc(void **argv)
 	if (arg->myrank == 0) {
 		print_message("creating pool\n");
 		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
-				      NULL, "pmem", 128*1024*1024, 0, NULL,
+				      NULL, 128*1024*1024, 0, NULL,
 				      &arg->pool.svc, uuid, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -135,7 +135,7 @@ mdr_stop_cont_svc(void **argv)
 
 	print_message("creating pool\n");
 	rc = daos_pool_create(0731, geteuid(), getegid(), arg->group, NULL,
-			      "pmem", 128*1024*1024, 0, NULL, &arg->pool.svc,
+			      128*1024*1024, 0, NULL, &arg->pool.svc,
 			      pool_uuid, NULL);
 	assert_int_equal(rc, 0);
 

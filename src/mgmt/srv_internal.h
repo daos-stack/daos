@@ -88,7 +88,7 @@ int ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp,
 				    bool all_ranks);
 
 /** srv_pool.c */
-int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
+int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group,
 			d_rank_list_t *targets, size_t scm_size,
 			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
 			d_rank_list_t **svcp);
