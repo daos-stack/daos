@@ -324,7 +324,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 
 		if (csum_type < 0) {
 			fprintf(stderr,
-				"curently supported checksum types are "
+				"currently supported checksum types are "
 				"'off, crc[16,32,64], sha[1,256,512]'\n");
 			return -DER_INVAL;
 		}

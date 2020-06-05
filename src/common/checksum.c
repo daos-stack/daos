@@ -86,35 +86,9 @@ daos_cont_csum_prop_is_valid(uint16_t val)
 bool
 daos_cont_csum_prop_is_enabled(uint16_t val)
 {
-	if (val != DAOS_PROP_CO_CSUM_CRC16 &&
-	    val != DAOS_PROP_CO_CSUM_CRC32 &&
-	    val != DAOS_PROP_CO_CSUM_CRC64 &&
-	    val != DAOS_PROP_CO_CSUM_SHA1 &&
-	    val != DAOS_PROP_CO_CSUM_SHA256 &&
-	    val != DAOS_PROP_CO_CSUM_SHA512)
-		return false;
-	return true;
-}
-
-int
-daos_str2csumcontprop(const char *value)
-{
-	if (!strcmp(value, "off"))
-		return DAOS_PROP_CO_CSUM_OFF;
-	else if (!strcmp(value, "crc16"))
-		return DAOS_PROP_CO_CSUM_CRC16;
-	else if (!strcmp(value, "crc32"))
-		return DAOS_PROP_CO_CSUM_CRC32;
-	else if (!strcmp(value, "crc64"))
-		return DAOS_PROP_CO_CSUM_CRC64;
-	else if (!strcmp(value, "sha1"))
-		return DAOS_PROP_CO_CSUM_SHA1;
-	else if (!strcmp(value, "sha256"))
-		return DAOS_PROP_CO_CSUM_SHA256;
-	else if (!strcmp(value, "sha512"))
-		return DAOS_PROP_CO_CSUM_SHA512;
-
-	return -DER_INVAL;
+	if (val > DAOS_PROP_CO_CSUM_OFF && val <= DAOS_PROP_CO_CSUM_SHA512)
+		return true;
+	return false;
 }
 
 enum DAOS_CSUM_TYPE
@@ -135,6 +109,27 @@ daos_contprop2csumtype(int contprop_csum_val)
 		return CSUM_TYPE_ISAL_SHA512;
 	default:
 		return CSUM_TYPE_UNKNOWN;
+	}
+}
+
+uint32_t
+daos_csumtype2contprop(enum DAOS_CSUM_TYPE daos_csum_type)
+{
+	switch (daos_csum_type) {
+	case  CSUM_TYPE_ISAL_CRC16_T10DIF:
+		return DAOS_PROP_CO_CSUM_CRC16;
+	case CSUM_TYPE_ISAL_CRC32_ISCSI:
+		return DAOS_PROP_CO_CSUM_CRC32;
+	case CSUM_TYPE_ISAL_CRC64_REFL:
+		return DAOS_PROP_CO_CSUM_CRC64;
+	case CSUM_TYPE_ISAL_SHA1:
+		return DAOS_PROP_CO_CSUM_SHA1;
+	case CSUM_TYPE_ISAL_SHA256:
+		return DAOS_PROP_CO_CSUM_SHA256;
+	case CSUM_TYPE_ISAL_SHA512:
+		return DAOS_PROP_CO_CSUM_SHA512;
+	default:
+		return DAOS_PROP_CO_CSUM_OFF;
 	}
 }
 
@@ -429,37 +424,47 @@ struct csum_ft sha512_algo = {
 /** ------------------------------------------------------------- */
 static char *csum_unknown_name = "unknown checksum type";
 
+/** Index to algo table should align with enum DAOS_CSUM_TYPE - 1 */
+struct csum_ft *algo_table[] = {
+	&crc16_algo,
+	&crc32_algo,
+	&crc64_algo,
+	&sha1_algo,
+	&sha256_algo,
+	&sha512_algo,
+};
+
 struct csum_ft *
 daos_csum_type2algo(enum DAOS_CSUM_TYPE type)
 {
 	struct csum_ft *result = NULL;
 
-	switch (type) {
-	case CSUM_TYPE_ISAL_CRC16_T10DIF:
-		result = &crc16_algo;
-		break;
-	case CSUM_TYPE_ISAL_CRC32_ISCSI:
-		result = &crc32_algo;
-		break;
-	case CSUM_TYPE_ISAL_CRC64_REFL:
-		result = &crc64_algo;
-		break;
-	case CSUM_TYPE_ISAL_SHA1:
-		result = &sha1_algo;
-		break;
-	case CSUM_TYPE_ISAL_SHA256:
-		result = &sha256_algo;
-		break;
-	case CSUM_TYPE_ISAL_SHA512:
-		result = &sha512_algo;
-		break;
-	case CSUM_TYPE_UNKNOWN:
-	case CSUM_TYPE_END:
-		break;
+	if (type > CSUM_TYPE_UNKNOWN && type < CSUM_TYPE_END) {
+		result = algo_table[type - 1];
 	}
 	if (result && result->cf_type == CSUM_TYPE_UNKNOWN)
 		result->cf_type = type;
 	return result;
+}
+
+int
+daos_str2csumcontprop(const char *value)
+{
+	int t;
+
+	for (t = CSUM_TYPE_UNKNOWN + 1; t < CSUM_TYPE_END; t++) {
+		char *name = algo_table[t]->cf_name;
+
+		if (!strncmp(name, value,
+			     min(strlen(name), strlen(value)) + 1)) {
+			return daos_csumtype2contprop(t);
+		}
+	}
+
+	if (!strncmp(value, "off", min(strlen("off"), strlen(value)) + 1))
+		return DAOS_PROP_CO_CSUM_OFF;
+
+	return -DER_INVAL;
 }
 
 /**

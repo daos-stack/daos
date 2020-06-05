@@ -358,6 +358,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Fri June 05 2020 Ryon Jensen <ryon.jensen@intel.com> - 1.1.0-20
+- Enable parallel building with _smp_mflags
+
 * Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
 - Enable parallel building with _smp_mflags
 
