@@ -182,11 +182,12 @@ pool_ops_run(void **state)
 				ret = vos_pool_query(arg->poh[j], &pinfo);
 				assert_int_equal(ret, 0);
 				assert_int_equal(pinfo.pif_cont_nr, 0);
-				assert_false(pinfo.pif_scm_sz != VPOOL_16M);
-				assert_false(pinfo.pif_nvme_sz != 0);
-				assert_false(pinfo.pif_scm_free >
+				assert_false(SCM_TOTAL(&pinfo.pif_space) !=
+						VPOOL_16M);
+				assert_false(NVME_TOTAL(&pinfo.pif_space) != 0);
+				assert_false(SCM_FREE(&pinfo.pif_space) >
 				     (VPOOL_16M - sizeof(struct vos_pool_df)));
-				assert_false(pinfo.pif_nvme_free != 0);
+				assert_false(NVME_FREE(&pinfo.pif_space) != 0);
 				break;
 			default:
 				fail_msg("Shoudln't be here Unkown ops?\n");

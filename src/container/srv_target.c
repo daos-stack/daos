@@ -273,7 +273,6 @@ cont_aggregate_ult(void *arg)
 		    cont->sc_abort_vos_aggregating)
 			break;
 
-		sleep /= NSEC_PER_SEC; /* Convert to seconds */
 		if (sleep > 0)
 			dss_ult_sleep(cont->sc_agg_ult, sleep);
 		else
@@ -1110,7 +1109,8 @@ ds_dtx_resync(void *arg)
 	int				 rc;
 
 	rc = dtx_resync(ddra->pool->spc_hdl, ddra->pool->spc_uuid,
-			ddra->co_uuid, ddra->pool->spc_map_version, false);
+			ddra->co_uuid, ddra->pool->spc_map_version,
+			false, true);
 	if (rc != 0)
 		D_WARN("Fail to resync some DTX(s) for the pool/cont "
 		       DF_UUID"/"DF_UUID" that may affect subsequent "
