@@ -16,8 +16,8 @@ srun:
 srun_params:
     reservation:
 # This timeout must be longer than the test_timeout param (+15minutes)
-# 1 hour test
-timeout: 24H15M
+# 48 hour test
+timeout: 48H15M
 setup:
     start_servers: True
     start_agents: True
@@ -29,9 +29,10 @@ server_config:
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:
-        log_mask: INFO
+        log_mask: ERR
         fabric_iface: ib0
         fabric_iface_port: 31416
+        log_mask: ERR
         log_file: daos_io0.log
         # Storage definitions for AEP and NVMe
         scm_mount: /mnt/daos0
@@ -39,11 +40,20 @@ server_config:
         scm_list: [/dev/pmem0]
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        env_vars:
+            - FI_UNIVERSE_SIZE=2048
 # pool_params - attributes of the pools to create; Currently only create one
 pool_ior:
     mode: 146
     name: daos_server
-    scm_size: 80000000000
+    scm_size: 200000000000
+    nvme_size: 300000000000
+    svcn: 1
+    control_method: dmg
+pool_fio:
+    mode: 146
+    name: daos_server
+    scm_size: 100000000000
     nvme_size: 200000000000
     svcn: 1
     control_method: dmg
@@ -61,21 +71,6 @@ container_reserved:
     record_qty: 1
     record_size: 100
     array_size: 1
-faults:
-    fault_list:
-    #    - DAOS_DTX_LOST_RPC_REQUEST
-    #    - DAOS_DTX_LOST_RPC_REPLY
-    #    - DAOS_DTX_LONG_TIME_RESEND
-       - DAOS_SHARD_OBJ_UPDATE_TIMEOUT
-       - DAOS_SHARD_OBJ_FETCH_TIMEOUT
-    #    - DAOS_SHARD_OBJ_FAIL
-    #    - DAOS_OBJ_UPDATE_NOSPACE
-    #    - DAOS_SHARD_OBJ_RW_CRT_ERROR
-    #    - DAOS_OBJ_REQ_CREATE_TIMEOUT
-    #    - DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE
-    #    - DAOS_OBJ_SPECIAL_SHARD
-    #    - DAOS_OBJ_TGT_IDX_CHANGE
-
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -88,29 +83,32 @@ faults:
 #               poollist:            defines pools to create for jobs
 #               joblist:             defines workload per slurm scripts
 #               harasserlist:        defines the harassers to run in test
-soak_faults:
-    name: soak_faults
-    # harasser test timeout in hours
-    test_timeout: 24
+soak_stress:
+    name: soak_stress
+    # stress test timeout in hours
+    test_timeout: 48
     # maximum timeout for a single job in test in minutes
-    job_timeout: 20
+    job_timeout: 30
     nodesperjob:
         - -1
         - 2
         - 4
+    # used for performance benchmarks
     taskspernode:
         - 1
         - 16
         - 32
     poollist:
         - pool_ior
+        - pool_fio
     joblist:
-        - ior_faults
+        - ior_stress
+        - fio_stress
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DAOS and -a MPIIO
 # sequential
-ior_faults:
+ior_stress:
     api:
         - DAOS
         - MPIIO
@@ -118,13 +116,41 @@ ior_faults:
     flags: -v -w -W -r -R -q
     block_size:
         - '64M'
-    repetitions: 1
+        - '4M'
+        - '32M'
+    repetitions: 5
     transfer_size:
         - '4k'
         - '128k'
         - '1m'
-    segment_count: 1
+        - '512K'
+        - '64k'
     daos_oclass:
-        - 'SX'
-
+        - "SX"
+fio_stress:
+  names:
+    - global
+    - test
+  global:
+    directory: "/tmp/daos_dfuse"
+    ioengine: 'libaio'
+    thread: 1
+    group_reporting: 1
+    direct: 1
+    verify: 'crc64'
+    iodepth: 16
+  test:
+    numjobs: 16
+  soak:
+    blocksize:
+        - '64K'
+        - '1M'
+    size:
+        - '500M'
+        - '1G'
+    rw:
+        - 'rw'
+        - 'randrw'
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"
 
