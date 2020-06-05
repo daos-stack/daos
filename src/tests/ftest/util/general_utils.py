@@ -214,31 +214,8 @@ def get_host_data(hosts, command, text, error, timeout=None):
         host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
 
     else:
-        # The command completed successfully on all servers.
         for output, hosts in task.iter_buffers(data[0]):
-            # Find the maximum size of the all the devices reported by
-            # this group of hosts as only one needs to meet the minimum
-            nodes = NodeSet.fromlist(hosts)
-            try:
-                # The assumption here is that each line of command output
-                # will begin with a number and that for the purposes of
-                # checking this requirement the maximum of these numbers is
-                # needed
-                int_host_values = [
-                    int(line.split()[0])
-                    for line in str(output).splitlines()]
-                host_data[nodes] = max(int_host_values)
-
-            except (IndexError, ValueError):
-                # Log the error
-                print(
-                    "    {}: Unable to obtain the maximum {} size due to "
-                    "unexpected output:\n      {}".format(
-                        nodes, text, "\n      ".join(str(output).splitlines())))
-
-                # Return an error data set for all of the hosts
-                host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
-                break
+            host_data[NodeSet.fromlist(hosts)] = str(output)
 
     return host_data
 

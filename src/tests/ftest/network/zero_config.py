@@ -28,6 +28,7 @@ from avocado import fail_on
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
 from command_utils import CommandFailure
+from general_utils import pcmd, get_host_data
 
 
 class ZeroConfigTest(TestWithServers):
@@ -40,23 +41,31 @@ class ZeroConfigTest(TestWithServers):
     :avocado: recursive
     """
 
-    def get_port_cnt(self, dev_names, port_counter):
+    def get_port_cnt(self, hosts, dev, port_counter):
         """Get the port count info for device names specified.
 
         Args:
-            dev_names (list): list of devices to get counter information for.
+            hosts (list): list of hosts
+            dev (str): device to get counter information for.
             port_counter (str): port counter to get information from
 
         Returns:
-            list: count values specifying the port_counter value respective to
-                dev_names passed.
+            dict: a dictionary of data values for each NodeSet key
 
         """
-        for dev in dev_names:
-            if listdir("/sys/class/infiniband/"):
+        b_path = "/sys/class/infiniband"
+        file = os.path.join(b_path, "ports/1/counters", port_counter)
+        # Check if if exists for the host
+        check_cmd = "test -f {}".format(file)
+        result = pcmd(hosts, check_cmd, True, None, 0)
+        if len(result) > 1 or 0 not in result:
+            self.fail("Could not find {} on {}".format(
+                file, self.hostlist_clients[0]))
 
-"cat /sys/class/infiniband/hfi1_0/ports/*/counters/port_rcv_data"
-        return []
+        cmd = "cat {}".format(file)
+        text = "port_counter"
+        error = "Error obtaining {} info".format(port_counter)
+        return get_host_data(hosts, cmd, text, error, 20)
 
     @fail_on(CommandFailure)
     def verify_client_run(self, server_idx, exp_iface, env=False):
@@ -64,12 +73,19 @@ class ZeroConfigTest(TestWithServers):
 
         Args:
             server_idx (int): server to get config from.
+            exp_iface (str): expected iterface to check.
             env (bool): add OFI_INTERFACE variable to exported variables of
                 client command. Defaults to False.
+
+        Returns:
+            bool: returns status
+
         """
+        hfi_map = {"ib0": "hfi1_0", "ib1": "hfi1_1"}
+
         # Get counter values for hfi devices before and after
-        hfi_map = {"hfi1_0": "ib0", "hfi1_1": "ib1"}
-        cnt_before = self.get_port_cnt(hfi_map.keys(), "port_rcv_data")
+        cnt_before = self.get_port_cnt(
+            self.hostlist_clients[0], hfi_map[exp_iface], "port_rcv_data")
 
         # Let's run daos_racer as a client
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
@@ -83,12 +99,22 @@ class ZeroConfigTest(TestWithServers):
         daos_racer.run()
 
         # Verify output and port count to check what iface CaRT init with.
-        cnt_after = self.get_port_cnt(hfi_map.keys(), "port_rcv_data")
+        cnt_after = self.get_port_cnt(
+            self.hostlist_clients[0], hfi_map[exp_iface], "port_rcv_data")
 
-        for i, dev in enumerate(hfi_map):
-            diff = cnt_after[i] - cnt_before[i]
-            self.log.info("%s port count difference: %s", dev, diff)
+        diff = None
+        for cnt_b, cnt_a in zip(cnt_before.values(), cnt_after.values()):
+            diff = cnt_a - cnt_b
+            self.log.info("%s port count difference: %s", exp_iface, diff)
 
+        # If we don't see data going through the device, fail
+        status = True
+        if diff <= 0:
+            self.log.info("No traffic seen through device: %s", exp_iface)
+            status = False
+        else:
+            status = True
+        return status
 
     def test_env_set_unset(self):
         """JIRA ID: DAOS-4880.
@@ -121,6 +147,6 @@ class ZeroConfigTest(TestWithServers):
             # Verify
             err = []
             if not self.verify_client_run(idx, exp_iface, env_state):
-                err.append("Failed to run with expected: {}".format(exp_iface))
+                err.append("Failed run with expected dev: {}".format(exp_iface))
 
         self.assertEqual(len(err), 0, "{}".format("\n".join(err)))
