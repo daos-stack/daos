@@ -141,9 +141,11 @@ struct obj_reasb_req {
 	struct obj_io_desc		*orr_oiods;
 	struct obj_ec_recx_array	*orr_recxs;
 	struct obj_ec_seg_sorter	*orr_sorters;
-	struct dcs_singv_layout		*orr_singv_los;
+	struct dcs_layout		*orr_singv_los;
 	uint32_t			 orr_tgt_nr;
 	struct daos_oclass_attr		*orr_oca;
+	struct obj_ec_recov		*orr_recov;
+	struct obj_ec_codec		*orr_codec;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */

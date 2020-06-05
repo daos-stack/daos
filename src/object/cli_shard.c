@@ -122,11 +122,11 @@ struct rw_cb_args {
 	struct shard_rw_args	*shard_args;
 };
 
-static struct dcs_singv_layout *
+static struct dcs_layout *
 dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 		      struct obj_reasb_req *reasb_req)
 {
-	struct dcs_singv_layout	*singv_lo, *singv_los;
+	struct dcs_layout	*singv_lo, *singv_los;
 	daos_iod_t		*iod;
 	d_sg_list_t		*sgl;
 	uint32_t		 i;
@@ -164,7 +164,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	daos_iod_t		*iods;
 	struct dcs_iod_csums	*iods_csums;
 	daos_iom_t		*maps;
-	struct dcs_singv_layout	*singv_lo, *singv_los;
+	struct dcs_layout	*singv_lo, *singv_los;
 	uint32_t		 shard_idx;
 	int			 i;
 	int			 rc = 0;

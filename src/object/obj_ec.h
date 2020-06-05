@@ -197,6 +197,19 @@ struct obj_ec_seg_sorter {
 };
 #define OBJ_EC_SEG_NIL		 (-1)
 
+/** for EC data recovery */
+struct obj_ec_recov {
+	unsigned char		*er_gftbls;	/* GF tables */
+	unsigned char		*er_de_matrix;	/* decode matrix */
+	unsigned char		*er_inv_matrix;	/* invert matrix */
+	unsigned char		*er_b_matrix;	/* temporary b matrix */
+	uint32_t		*er_dec_idx;	/* decode index */
+	uint32_t		*er_err_list;	/* target idx list in error */
+	bool			*er_in_err;	/* boolean array for targets */
+	uint32_t		 er_nerrs;	/* #targets in error */
+	uint32_t		 er_data_nerrs; /* #data-targets in error */
+};
+
 struct obj_reasb_req;
 
 /** Query the number of records in EC full stripe */
@@ -370,6 +383,10 @@ struct obj_tgt_oiod *obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods,
 			uint32_t tgt_max_idx, uint32_t tgt_nr);
 struct obj_tgt_oiod *obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods,
 			uint32_t tgt_nr, uint32_t tgt_idx);
+void obj_ec_recov_free(struct obj_reasb_req *reasb_req);
+int obj_ec_recov_prep(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
+		      struct daos_oclass_attr *oca, uint32_t nerrs,
+		      uint32_t *err_list);
 
 /* srv_ec.c */
 struct obj_rw_in;

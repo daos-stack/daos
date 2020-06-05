@@ -300,12 +300,9 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	if (iov_at == iov_nr - 1) {
 		struct bio_iov *biovs;
 
-		D_ALLOC_ARRAY(biovs, (iov_nr * 2));
+		D_REALLOC_ARRAY(biovs, bsgl->bs_iovs, (iov_nr * 2));
 		if (biovs == NULL)
 			return -DER_NOMEM;
-
-		memcpy(biovs, &bsgl->bs_iovs[0], iov_nr * sizeof(*biovs));
-		D_FREE(bsgl->bs_iovs);
 
 		bsgl->bs_iovs = biovs;
 		bsgl->bs_nr = iov_nr * 2;
