@@ -24,6 +24,7 @@
 package io.daos.obj;
 
 import io.daos.DaosClient;
+import io.daos.DaosObjectType;
 import io.daos.ForceCloseable;
 import io.daos.SharableClient;
 import org.apache.commons.lang.ObjectUtils;
@@ -31,10 +32,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * A sharable Java DAOS Object client to wrap all object related APIs.
+ * {@link DaosObject} and {@link DaosObjectId} should be create from this client.
+ * It registers itself to shutdown manager in {@link DaosClient} to release resources in case of abnormal shutdown.
+ */
 public class DaosObjClient extends SharableClient implements ForceCloseable {
+
+  private long contPtr;
 
   // keyed by poolId+contId
   private static final Map<String, DaosObjClient> pcObjMap = new ConcurrentHashMap<>();
@@ -51,10 +60,76 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
     }
     DaosObjClientBuilder builder = getBuilder();
     setClient(builder.buildDaosClient());
-    getClient().registerForShutdown(this);
+    DaosClient client = getClient();
+    contPtr = client.getContPtr();
+    client.registerForShutdown(this);
     setInited(true);
     log.info("DaosObjClient for {}, {} initialized", builder.getPoolId(), builder.getContId());
   }
+
+  /**
+   * create new instance of un-encoded {@link DaosObjectId} with high and low value of 0.
+   *
+   * @return DaosObjectId object
+   */
+  public DaosObjectId newObjectId() {
+    return new DaosObjectId(contPtr);
+  }
+
+  /**
+   * create new instance of encoded {@link DaosObjectId} with high and low value of 0.
+   *
+   * @param feats
+   * object feature fits
+   * @param objectType
+   * object type
+   * @param args
+   * reserved
+   * @return DaosObjectId object
+   */
+  public DaosObjectId newEncodedObjectId(int feats, DaosObjectType objectType, int args) {
+    DaosObjectId id = new DaosObjectId(contPtr);
+    id.encode(feats, objectType, args);
+    return id;
+  }
+
+  /**
+   * create new instance of un-encoded {@link DaosObjectId} with specified high and low values.
+   *
+   * @param high
+   * high value of ID
+   * @param low
+   * low value of ID
+   * @return DaosObjectId object
+   */
+  public DaosObjectId newObjectId(long high, long low) {
+    return new DaosObjectId(contPtr, high, low);
+  }
+
+  /**
+   * create new instance of encoded {@link DaosObjectId} with specified high and low values.
+   *
+   * @param high
+   * high value of ID
+   * @param low
+   * low value of ID
+   * @param feats
+   * object feature bits
+   * @param objectType
+   * object type
+   * @param args
+   * reserved
+   * @return DaosObjectId object
+   */
+  public DaosObjectId newEncodedObjectId(long high, long low, int feats, DaosObjectType objectType, int args) {
+    DaosObjectId id = new DaosObjectId(contPtr, high, low);
+    id.encode(feats, objectType, args);
+    return id;
+  }
+
+  public native static void encode(long contPtr, ByteBuffer buffer, int feats, String name, int args);
+
+  public native static void open(long contPtr, ByteBuffer buffer, int feats, String name, int args);
 
   @Override
   protected synchronized void disconnect(boolean force) throws IOException {

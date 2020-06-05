@@ -110,7 +110,8 @@ public final class DaosFsClient extends SharableClient implements ForceCloseable
     setClient(builder.buildDaosClient());
     DaosClient client = getClient();
     if (builder.getContId() != null && !ROOT_CONT_UUID.equals(builder.getContId())) {
-      dfsPtr = mountFileSystem(client.getPoolPtr(), client.getContPtr(), builder.readOnlyFs);
+      contPtr = client.getContPtr();
+      dfsPtr = mountFileSystem(client.getPoolPtr(), contPtr, builder.readOnlyFs);
       if (log.isDebugEnabled()) {
         log.debug("mounted FS {}", dfsPtr);
       }
