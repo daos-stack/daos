@@ -42,9 +42,6 @@ def scons():
     # tests
     SConscript('suite/SConscript', exports=['denv'])
 
-    # Build daosctl
-    SConscript('daosctl/SConscript')
-
     # Build drpc_test
     SConscript('drpc/SConscript')
 
