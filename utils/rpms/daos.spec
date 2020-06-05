@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       20%{?relval}%{?dist}
+Release:       21%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -363,8 +363,11 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Fri Jun 05 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-21
+- Change server systemd run-as user to daos_server in unit file
+
 * Thu May 28 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-20
-- Create daos_server group to run as in systemd unit file
+- Create daos group to run as in systemd unit file
 
 * Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
 - Enable parallel building with _smp_mflags
