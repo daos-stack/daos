@@ -131,7 +131,8 @@ class ContainerQueryAttributeTest(TestWithServers):
         for attr_value in attr_values:
             _ = self.daos_cmd.container_set_attr(
                 pool=actual_pool_uuid, cont=actual_cont_uuid,
-                attr=attr_value[0], val=attr_value[1], svc=self.pool.svc_ranks[0])
+                attr=attr_value[0], val=attr_value[1],
+                svc=self.pool.svc_ranks[0])
             kwargs["attr"] = attr_value[0]
             actual_val = self.daos_cmd.get_output(
                 "container_get_attr", **kwargs)[0]
