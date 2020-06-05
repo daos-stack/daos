@@ -1,5 +1,6 @@
 package io.daos.fs.hadoop;
 
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
@@ -52,8 +53,11 @@ public class DaosOutputStreamIT {
     fs.mkdirs(p);
     Path file = new Path(p, "1");
     ContractTestUtils.generateTestFile(fs, file, size, 256, 255);
-    ContractTestUtils.generateTestFile(fs, file, size, 256, 255);
-
+    try {
+      ContractTestUtils.generateTestFile(fs, file, size, 256, 255);
+    } catch (FileAlreadyExistsException e ) {
+      // throw new FileAlreadyExistsException
+    }
     Assert.assertEquals(1024, fs.listStatus(file)[0].getLen());
   }
 

@@ -255,6 +255,20 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Exclude a target with no idx given",
+			"pool exclude --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.PoolExcludeReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{},
+				}),
+			}, " "),
+			nil,
+		},
+
+		{
 			"Reintegrate a target with single target idx",
 			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
 			strings.Join([]string{
@@ -281,6 +295,20 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Reintegrate a target with no idx given",
+			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.PoolReintegrateReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{},
+				}),
+			}, " "),
+			nil,
+		},
+
+		{
 			"Destroy pool with force",
 			"pool destroy --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
@@ -292,6 +320,19 @@ func TestPoolCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
+		{
+			"Evict pool",
+			"pool evict --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.PoolEvictReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Sys:  "daos_server",
+				}),
+			}, " "),
+			nil,
+		},
+
 		{
 			"List pools",
 			"pool list",
