@@ -123,22 +123,27 @@ dc_task_schedule(tse_task_t *task, bool instant)
 
 	ev = task_ptr2args(task)->ta_ev;
 	if (ev) {
+		D_INFO("EJMM task.c: daos_event_launch()");
 		rc = daos_event_launch(ev);
 		if (rc) {
+			D_INFO("EJMM task.c: tse_task_complete()");
 			tse_task_complete(task, rc);
 			/* error has been reported to event */
 			D_GOTO(out, rc = 0);
 		}
 	}
 
+	D_INFO("EJMM task.c: tse_task_schedule()");
 	rc = tse_task_schedule(task, instant);
 	if (rc) {
+		D_INFO("EJMM task.c: tse_task_schedule() rc=%d", rc);
 		/** user is responsible for completing event with error */
 		D_GOTO(out, rc = 0); /* error has been reported to event */
 	}
 
 out:
 	if (daos_event_is_priv(ev)) {
+		D_INFO("EJMM task.c: daos_event_priv_wait()");
 		daos_event_priv_wait();
 		rc = ev->ev_error;
 	}

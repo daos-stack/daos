@@ -427,6 +427,7 @@ daos_event_launch(struct daos_event *ev)
 		}
 	}
 
+	D_INFO("EJMM event.c: daos_event_launch_locked()");
 	daos_event_launch_locked(eqx, evx);
 
 	/*
@@ -436,14 +437,17 @@ daos_event_launch(struct daos_event *ev)
 	if (evx->is_barrier && evx->evx_nchild > 0 &&
 	    evx->evx_nchild == evx->evx_nchild_comp) {
 		D_ASSERT(evx->evx_nchild_running == 0);
+		D_INFO("EJMM event.c: daos_event_complete_locked()");
 		daos_event_complete_locked(eqx, evx, rc);
 	}
  out:
 	if (eqx != NULL)
 		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 
-	if (eqx != NULL)
+	if (eqx != NULL) {
+		D_INFO("EJMM event.c: daos_eq_putref()");
 		daos_eq_putref(eqx);
+	}
 
 	return rc;
 }
@@ -503,6 +507,8 @@ ev_progress_cb(void *arg)
 	struct ev_progress_arg		*epa = (struct ev_progress_arg  *)arg;
 	struct daos_event_private       *evx = epa->evx;
 	struct daos_eq_private		*eqx = epa->eqx;
+
+	D_INFO("EJMM event.c: ev_progress_cb()");
 
 	tse_sched_progress(evx->evx_sched);
 
@@ -1196,6 +1202,7 @@ daos_event_priv_wait()
 	struct daos_event_private *evx = daos_ev2evx(&ev_thpriv);
 	int rc = 0;
 
+	D_INFO("EJMM event.c: daos_event_priv_wait()");
 	D_ASSERT(ev_thpriv_is_init);
 
 	epa.evx = evx;
@@ -1203,13 +1210,18 @@ daos_event_priv_wait()
 
 	/* Wait on the event to complete */
 	while (evx->evx_status != DAOS_EVS_READY) {
+		D_INFO("EJMM event.c: crt_progress_cond()");
 		rc = crt_progress_cond(evx->evx_ctx, 0, ev_progress_cb, &epa);
+		D_INFO("EJMM event.c: crt_progress_cond() rc = %d", rc);
 		if (rc == 0)
 			rc = ev_thpriv.ev_error;
 
 		if (rc && rc != -DER_TIMEDOUT)
 			break;
 	}
+
+	D_INFO("EJMM event.c: daos_event_priv_wait() - END");
+
 	return rc;
 }
 

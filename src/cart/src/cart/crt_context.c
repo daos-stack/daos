@@ -780,6 +780,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
 
+	D_INFO("EJMM crt_context.c: crt_context_timeout_check()");
 	D_ASSERT(crt_ctx != NULL);
 
 	D_INIT_LIST_HEAD(&timeout_list);
@@ -1189,6 +1190,8 @@ crt_exec_progress_cb(struct crt_context *ctx)
 	int ctx_idx;
 	int rc;
 
+	D_INFO("EJMM crt_context.c: crt_exec_progress_cb()");
+
 	if (crt_plugin_gdata.cpg_inited == 0)
 		return;
 
@@ -1225,6 +1228,8 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	uint64_t		 now;
 	uint64_t		 end = 0;
 	int			 rc = 0;
+
+	D_INFO("EJMM crt_context.c: crt_progress_cond()");
 
 	/** validate input parameters */
 	if (unlikely(crt_ctx == CRT_CONTEXT_NULL || cond_cb == NULL)) {
@@ -1278,6 +1283,8 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 
 	/** loop until callback returns non-null value */
 	while ((rc = cond_cb(arg)) == 0) {
+		D_INFO("EJMM crt_context.c: crt_progress_cond() while loop");
+
 		crt_context_timeout_check(ctx);
 		crt_exec_progress_cb(ctx);
 

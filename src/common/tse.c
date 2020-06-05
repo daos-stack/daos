@@ -369,15 +369,22 @@ static void
 tse_task_complete_locked(struct tse_task_private *dtp,
 			 struct tse_sched_private *dsp)
 {
-	if (dtp->dtp_completed)
-		return;
+	D_INFO("EJMM tse.c: tse_task_complete_locked()");
 
-	if (!dtp->dtp_running)
+	if (dtp->dtp_completed) {
+ 		D_INFO("EJMM tse.c: dtp->dtp_completed");
 		return;
+	}
+
+	if (!dtp->dtp_running) {
+ 		D_INFO("EJMM tse.c: !dtp->dtp_running");
+		return;
+	}
 
 	dtp->dtp_running = 0;
 	dtp->dtp_completing = 0;
 	dtp->dtp_completed = 1;
+ 	D_INFO("EJMM tse.c: d_list_move_tail()");
 	d_list_move_tail(&dtp->dtp_list, &dsp->dsp_complete_list);
 }
 
@@ -811,6 +818,8 @@ tse_task_complete(tse_task_t *task, int ret)
 	struct tse_sched_private	*dsp	= dtp->dtp_sched;
 	bool				done;
 
+	D_INFO("EJMM tse.c: tse_task_complete()");
+
 	if (dtp->dtp_completed)
 		return;
 
@@ -935,6 +944,7 @@ tse_task_schedule(tse_task_t *task, bool instant)
 	int rc = 0;
 
 	D_ASSERT(!instant || dtp->dtp_func);
+	D_INFO("EJMM tse.c: tse_task_schedule()");
 
 	/* Add task to scheduler */
 	D_MUTEX_LOCK(&dsp->dsp_lock);
@@ -942,16 +952,20 @@ tse_task_schedule(tse_task_t *task, bool instant)
 		/** If task has no body function, mark it as running */
 		dsp->dsp_inflight++;
 		dtp->dtp_running = 1;
+		D_INFO("EJMM tse.c: d_list_add_tail()");
 		d_list_add_tail(&dtp->dtp_list, &dsp->dsp_running_list);
 
 		/** +1 in case task is completed in body function */
-		if (instant)
+		if (instant) {
+			D_INFO("EJMM tse.c: tse_task_addref_locked()");
 			tse_task_addref_locked(dtp);
+		}
 	} else {
 		/** Otherwise, scheduler will process it from init list */
 		d_list_add_tail(&dtp->dtp_list, &dsp->dsp_init_list);
 	}
 	/* decref when remove the task from dsp (tse_sched_process_complete) */
+	D_INFO("EJMM tse.c: tse_sched_priv_addref_locked()");
 	tse_sched_priv_addref_locked(dsp);
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
@@ -959,6 +973,7 @@ tse_task_schedule(tse_task_t *task, bool instant)
 	 * function now.
 	 */
 	if (instant) {
+		D_INFO("EJMM tse.c: dtp->dtp_func(task)");
 		dtp->dtp_func(task);
 
 		/** If task was completed return the task result */
@@ -978,6 +993,8 @@ tse_task_reinit(tse_task_t *task)
 	tse_sched_t			*sched = tse_task2sched(task);
 	struct tse_sched_private	*dsp = tse_sched2priv(sched);
 	int				rc;
+
+	D_INFO("EJMM tse.c: tse_task_reinit()");
 
 	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
 
