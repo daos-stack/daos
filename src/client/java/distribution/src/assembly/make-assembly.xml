@@ -4,14 +4,14 @@
     <format>tgz</format>
   </formats>
   <includeBaseDirectory>false</includeBaseDirectory>
-  <fileSets>
-    <fileSet>
-      <directory>${project.parent.basedir}/daos-java/target</directory>
+  <files>
+    <file>
+      <source>${project.parent.basedir}/daos-java/target/daos-java-${project.version}-protobuf3-shaded.jar</source>
       <outputDirectory>.</outputDirectory>
-      <includes>
-        <include>daos-java-${project.version}*.jar</include>
-      </includes>
-    </fileSet>
+      <destName>daos-java-${project.version}.jar</destName>
+    </file>
+  </files>
+  <fileSets>
     <fileSet>
       <directory>${project.parent.basedir}/hadoop-daos/target</directory>
       <outputDirectory>.</outputDirectory>

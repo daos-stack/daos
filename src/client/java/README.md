@@ -30,9 +30,10 @@ operation.
 It wraps some DAOS UNS APIs, like creating, resolving and destroying UNS path, as well as parsing DAOS UNS string
 attribute. Besides, this class can be run from command line in which you can call all DAOS UNS APIs with different
 parameters. Use below command to show its usage in details.
-    ```bash
-    java -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns --help
-    ```
+
+```bash
+$ java -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns --help
+```
 
 ### hadoop-daos
 It's DAOS FS implementation of Hadoop FileSystem based on daos-java. There are three main classes, DaosFileSystem,
@@ -61,20 +62,20 @@ Java classpath, and loadable by Hadoop DAOS FileSystem.
 The URI is "daos://uns/<your path>". "<your path>" is your OS file path created by DAOS UNS method, DaosUns.create().
 You can create the UNS path with below command.
 
-    ```bash
-    daos cont create --pool <pool UUID> --svc <svc list> -path <your path> --type=POSIX
-    ```
+```bash
+$ daos cont create --pool <pool UUID> --svc <svc list> -path <your path> --type=POSIX
+```
 Or
 
-    ```bash
-    java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns create
-    ```
+```bash
+$ java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns create
+```
 
 After creation, you can use below command to see what DAOS properties set to the path.
 
-    ```path
-    getfattr -d -m - <your path>
-    ```
+```path
+$ getfattr -d -m - <your path>
+```
 
 ##### Tune More Configurations
 
@@ -84,16 +85,26 @@ If your DAOS URI is the mapped UUIDs, you can follow descriptions of each config
 If your DAOS URI is the UNS path, your configurations, except those set by DAOS UNS creation, in daos-site.xml can still
 be effective. To make configuration source consistent, an alternative to configuration file, daos-site.xml, is to set
 all configurations to the UNS path. You put the configs to the same UNS path with below command.
-   ```bash
-   java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=daos_server:fs.daos.pool.svc=0"
+
+```bash
+# install attr package if get "command not found" error
+$ setfattr -n user.daos.hadoop -v "fs.daos.server.group=daos_server:fs.daos.pool.svc=0" <your path>
+```
+Or
+
+```bash
+$ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=daos_server:fs.daos.pool.svc=0"
         -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns setappinfo
-   ```
+```
+
 For the "value" property, you need to follow pattern, key1=value1:key2=value2... And key* should be from
 [example](hadoop-daos/src/main/resources/daos-site-example.xml). If value* contains characters of '=' or ':', you need
 to escape the value with below command.
-   ```bash
-    java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns util
-   ```
+
+```bash
+$ java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns util
+```
+
 You'll get escaped value, "daos_server\u003a1\u003d2", for "daos_server:1=2".
 
 If you configure the same property in both daos-site.mxl and UNS path, the value in daos-sitem.xml takes priority. If
@@ -101,19 +112,22 @@ user set Hadoop configuration before initializing Hadoop DAOS FileSystem, the us
 
 ## Build
 They are Java modules and built by Maven. Java 1.8 and Maven 3 are required to build these modules. After they are
-installed, you can change to this <DAOS_INSTALL>/src/client/java folder and build by below command line.
+installed, you can change to this \<DAOS_INSTALL\>/src/client/java folder and build by below command line.
 
     mvn -DskipITs clean install
+    
+The `daos-java-<version>.jar` shades protobuf 3 dependency with its package renamed from "com.google.protobuf" to
+"com.google.protoshadebuf3".
 
 daos-java module depends on DAOS which is assumed being installed under /usr/local/daos. If you have different
-location, you need to set it with '-Ddaos.install.path=<your DAOS install dir>'. For example,
+location, you need to set it with '-Ddaos.install.path=\<your DAOS install dir\>'. For example,
 
     mvn -DskipITs -Ddaos.install.path=/code/daos/install clean install
     
-daos-java module also depends on protobuf 3.x and protobuf C plugin whose version should be in line with DAOS's protobuf
-version, which is 3.x for now. The Java code and C code are generated from src/main/resources/DunsAttribute.proto and
-put under src/main/java/io/daos/dfs/uns and src/main/native respectively. If you change DunsAttribute.proto or want to
-regenerate these codes, you can build with below command.
+daos-java module uses protobuf 3 to serialize/deserialize complex parameters between Java and C. The corresponding Java
+code and C code are generated from src/main/resources/DunsAttribute.proto and put under src/main/java/io/daos/dfs/uns
+and src/main/native respectively. If you change DunsAttribute.proto or want to regenerate these codes, you can build
+with below command.
     
     mvn -DskipITs -Dcompile.proto=true clean install 
 
@@ -125,7 +139,10 @@ Before running it, make sure you have DAOS environment properly setup, including
 
     mvn -Dpool_id=<your pool uuid> -Dcont_id=<your container uuid> clean install
 
-User can go to each submodule and build it separately too. 
+User can go to each submodule and build it separately too.
+
+For distribution, the default is for including two artifacts daos-jar and hadoop-daos. The other choice is to include
+all dependencies as well when build with "-P with-deps"
 
 ## Documentation
 You can run below command to generate JavaDoc. There could be some error message during build. Just ignore them if your
