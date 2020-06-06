@@ -146,7 +146,7 @@ trap 'set +e; cleanup' EXIT
 
 DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
-    -w "$(IFS=','; echo "${nodes[*]}"),wolf-53" "set -ex
+    -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
 sudo bash -c \"set -ex
 # allow core files to be generated
 if [ \\\"\\\$(ulimit -c)\\\" != \\\"unlimited\\\" ]; then

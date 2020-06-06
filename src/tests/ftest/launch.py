@@ -938,12 +938,6 @@ def get_ulimit(test_yaml, args):
     if not spawn_commands(host_list, command):
         print("Error getting ulimit, aborting")
         return False
-    test_node = "wolf-53"
-    print("Getting ulimit -a on wolf-53")
-    if not spawn_commands(test_node, command):
-        print("Error getting ulimit, aborting")
-        return False
-
     return True
 
 
