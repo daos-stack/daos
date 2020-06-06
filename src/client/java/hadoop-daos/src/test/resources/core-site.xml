@@ -1,7 +1,7 @@
 <configuration>
   <property>
     <name>fs.defaultFS</name>
-    <value>daos://default:1</value>
+    <value>daos://id:2</value>
   </property>
   <property>
     <name>fs.daos.pool.uuid</name>
@@ -12,11 +12,6 @@
     <name>fs.daos.container.uuid</name>
     <value>uuid of container</value>
     <description>UUID od DAOS container which created with "--type posix"</description>
-  </property>
-  <property>
-    <name>fs.daos.pool.svc</name>
-    <value>0</value>
-    <description>service list separated by ":" if more than one service</description>
   </property>
   <property>
     <name>fs.daos.read.buffer.size</name>
