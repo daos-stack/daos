@@ -151,7 +151,7 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	ssr, err := c.scm.Scan(scm.ScanRequest{})
+	ssr, err := c.scm.Scan(scm.ScanRequest{Rescan: true})
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg+"SCM"),
