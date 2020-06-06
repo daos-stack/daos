@@ -1070,7 +1070,7 @@ def test_pydaos_kv(server, conf):
     container = show_cont(conf, pool)
 
     print(container)
-    c_uuid = container.decode().split(' ')[-1]
+    c_uuid = container.decode().split()[-1]
     kvg = dbm.daos_named_kv(pool, c_uuid)
 
     kv = kvg.get_kv_by_name('Dave')
