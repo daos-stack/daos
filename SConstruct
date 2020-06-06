@@ -132,6 +132,10 @@ def set_defaults(env):
             env.AppendUnique(CCFLAGS=['-O0'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
+        env.Append(CCFLAGS=['-Wno-unused-function'])
+        env.Append(CCFLAGS=['-Wno-unused-label'])
+        env.Append(CCFLAGS=['-Wno-unused-variable'])
+        env.Append(CCFLAGS=['-Wno-unused-but-set-variable'])
     else:
         if env.get('BUILD_TYPE') == 'release':
             env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])

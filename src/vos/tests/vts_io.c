@@ -515,7 +515,7 @@ io_test_add_csums(daos_iod_t *iod, d_sg_list_t *sgl,
 	size_t			 chunk_size = 1 << 12;
 	int			 rc = 0;
 
-	rc = daos_csummer_type_init(p_csummer, type, chunk_size, 0, 0, 0, 0);
+	rc = daos_csummer_type_init(p_csummer, type, chunk_size, 0);
 	if (rc)
 		return rc;
 	rc = daos_csummer_calc_iods(*p_csummer, sgl, iod, NULL, 1, false,

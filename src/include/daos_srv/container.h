@@ -36,6 +36,7 @@
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/evtree.h>
+#include <daos/container.h>
 
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
@@ -117,6 +118,7 @@ struct ds_cont_hdl {
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
 	struct daos_csummer	*sch_csummer;
+	struct dc_cont_props	sch_props;
 	int			sch_ref;
 };
 

@@ -860,16 +860,31 @@ cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 				hdl->sch_uuid, props);
 	if (rc != 0)
 		goto done;
+
+	hdl->sch_props.dcp_dedup = daos_cont_prop2dedup(props);
+	hdl->sch_props.dcp_dedup_size = daos_cont_prop2dedupsize(props);
+	hdl->sch_props.dcp_dedup_verify = daos_cont_prop2dedupverify(props);
+	hdl->sch_props.dcp_srv_verify = daos_cont_prop2serververify(props);
+	hdl->sch_props.dcp_csum_type = daos_cont_prop2csum(props);
+	hdl->sch_props.dcp_chunksize = daos_cont_prop2chunksize(props);
+
 	csum_val = daos_cont_prop2csum(props);
+	bool dedup_only = false;
+	if (!daos_cont_csum_prop_is_enabled(csum_val)) {
+		dedup_only = true;
+		csum_val = dedup_get_csum_algo(&hdl->sch_props);
+	}
 
 	/** If enabled, initialize the csummer for the container */
-	rc = daos_csummer_type_init(&hdl->sch_csummer,
+	if (daos_cont_csum_prop_is_enabled(csum_val)) {
+		rc = daos_csummer_type_init(&hdl->sch_csummer,
 				    daos_contprop2csumtype(csum_val),
 				    daos_cont_prop2chunksize(props),
-				    daos_cont_prop2serververify(props),
-				    daos_cont_prop2dedup(props),
-				    daos_cont_prop2dedupverify(props),
-				    daos_cont_prop2dedupsize(props));
+				    daos_cont_prop2serververify(props));
+		if (dedup_only)
+			dedup_configure_csummer(hdl->sch_csummer,
+						&hdl->sch_props);
+	}
 done:
 	daos_prop_free(props);
 

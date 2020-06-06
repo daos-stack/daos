@@ -1369,6 +1369,97 @@ many_iovs_with_single_values(void **state)
 	assert_int_equal(0, rc);
 }
 
+static daos_size_t
+get_size(struct csum_test_ctx *ctx)
+{
+	int rc;
+	daos_pool_info_t info;
+	info.pi_bits = DPI_SPACE;
+	rc = daos_pool_query((*ctx).poh, NULL, &info, NULL, NULL);
+	assert_success(rc);
+	print_message("AEP space: Free= %" PRIu64"\n", info.pi_space.ps_space.s_free[0]);
+	return info.pi_space.ps_space.s_free[0];
+}
+
+static void
+dedup(void **state)
+{
+#define	AKEY_NR  5
+	d_sg_list_t		sgl;
+	daos_iod_t		iod;
+	daos_recx_t		recx;
+	int			rc;
+	daos_size_t size_1;
+	daos_size_t size_2;
+	daos_size_t size_3;
+
+
+	struct csum_test_ctx	ctx;
+	daos_oclass_id_t	oc = dts_csum_oc;
+
+	setup_from_test_args(&ctx, *state);
+
+	uuid_generate((&ctx)->uuid);
+
+	daos_prop_t *props = daos_prop_alloc(5);
+	assert_non_null(props);
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[0].dpe_val = DAOS_PROP_CO_CSUM_OFF; //dts_csum_prop_type;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	props->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_SV_OFF;
+	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	props->dpp_entries[2].dpe_val = 1024 * 16;
+
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_DEDUP;
+	props->dpp_entries[3].dpe_val = DAOS_PROP_CO_DEDUP_HASH;
+	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+	props->dpp_entries[4].dpe_val = 4;
+
+	rc = daos_cont_create((&ctx)->poh, (&ctx)->uuid, props, NULL);
+	daos_prop_free(props);
+	assert_success(rc);
+
+	rc = daos_cont_open((&ctx)->poh, (&ctx)->uuid, DAOS_COO_RW,
+			     &(&ctx)->coh, &(&ctx)->info, NULL);
+	assert_success(rc);
+
+	(&ctx)->oid = dts_oid_gen(oc, 0, 1);
+	rc = daos_obj_open((&ctx)->coh, (&ctx)->oid, 0, &(&ctx)->oh, NULL);
+	assert_success(rc);
+
+	setup_simple_data(&ctx);
+
+	dts_sgl_init_with_strings(&sgl, 1, "Bang");
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+
+	recx.rx_nr = daos_sgl_buf_size(&sgl);
+	recx.rx_idx = 0;
+
+	d_iov_set(&iod.iod_name, "AKEY", strlen("AKEY"));
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	size_1 = get_size(&ctx);
+
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0,
+			     &ctx.dkey, 1, &iod, &sgl, NULL);
+	assert_success(rc);
+	size_2 = get_size(&ctx);
+
+	D_PRINT("[RYON] %s:%d [%s()] > 1 - 2: %lu\n", __FILE__, __LINE__, __FUNCTION__, size_1 - size_2);
+
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0,
+			     &ctx.dkey, 1, &iod, &sgl, NULL);
+	assert_success(rc);
+
+	/* [todo-ryon]: how to know if dedup worked? Check size of something */
+	size_3 = get_size(&ctx);
+	D_PRINT("[RYON] %s:%d [%s()] > 2 - 3: %lu\n", __FILE__, __LINE__, __FUNCTION__, size_2 - size_3);
+	assert_int_equal(0, size_2 - size_3);
+}
+
 static void
 test_update_fetch_a_key(void **state)
 {
@@ -1552,6 +1643,7 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM10: Enumerate A Keys", test_enumerate_a_key),
 	CSUM_TEST("DAOS_CSUM11: Enumerate D Keys", test_enumerate_d_key),
 	CSUM_TEST("DAOS_CSUM12: Many IODs", many_iovs_with_single_values),
+	CSUM_TEST("DEDUP: ", dedup),
 
 	EC_CSUM_TEST("DAOS_EC_CSUM00: csum disabled", checksum_disabled),
 	EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",

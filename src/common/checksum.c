@@ -33,6 +33,7 @@
 #include <gurt/types.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
+#include <daos/container.h>
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 #define C_TRACE_ENABLED() true
@@ -501,54 +502,23 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type)
 
 int
 daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
-		  size_t chunk_bytes, bool srv_verify, bool dedup,
-		  bool dedup_verify, size_t dedup_bytes)
+		  size_t chunk_bytes, bool srv_verify)
 {
 	struct daos_csummer	*result;
 	int			 rc = 0;
 
-	if (!ft && !dedup) {
-		*obj = NULL;
-		return 0;
+	if (!ft) {
+		D_ERROR("No function table");
+		return -DER_INVAL;
 	}
 
 	D_ALLOC(result, sizeof(*result));
 	if (result == NULL)
 		return -DER_NOMEM;
 
-	/** deduplication parameters */
-	result->dcs_dedup = dedup;
-	result->dcs_dedup_verify = dedup_verify;
-	result->dcs_dedup_size = dedup_bytes;
-
-	if (!ft) {
-		/** dedup w/o checksum */
-		result->dcs_csum = false;
-		if (!dedup_verify)
-			/**
-			  * force SHA256 as the only approved checksum in this
-			  * case
-			  */
-			result->dcs_algo =
-				daos_csum_type2algo(CSUM_TYPE_ISAL_SHA256);
-		else
-			/** use crc64 in this case */
-			result->dcs_algo =
-				daos_csum_type2algo(CSUM_TYPE_ISAL_CRC64_REFL);
-		if (chunk_bytes == 0)
-			result->dcs_chunk_size = 32 * 1024;
-		else if (chunk_bytes < result->dcs_dedup_size)
-			result->dcs_chunk_size = result->dcs_dedup_size;
-		else
-			result->dcs_chunk_size = chunk_bytes;
-		result->dcs_srv_verify = 0;
-	} else {
-		/** checksum parameters */
-		result->dcs_csum = true;
-		result->dcs_algo = ft;
-		result->dcs_chunk_size = chunk_bytes;
-		result->dcs_srv_verify = srv_verify;
-	}
+	result->dcs_algo = ft;
+	result->dcs_chunk_size = chunk_bytes;
+	result->dcs_srv_verify = srv_verify;
 
 	if (result->dcs_algo->cf_init)
 		rc = result->dcs_algo->cf_init(result);
@@ -561,11 +531,10 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 
 int
 daos_csummer_type_init(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
-		       size_t chunk_bytes, bool srv_verify, bool dedup,
-		       bool dedup_verify, size_t dedup_bytes)
+		       size_t chunk_bytes, bool srv_verify)
 {
 	return daos_csummer_init(obj, daos_csum_type2algo(type), chunk_bytes,
-				 srv_verify, dedup, dedup_verify, dedup_bytes);
+				 srv_verify);
 }
 
 void daos_csummer_destroy(struct daos_csummer **obj)
@@ -595,14 +564,6 @@ daos_csummer_initialized(struct daos_csummer *obj)
 	return obj != NULL && obj->dcs_algo != NULL;
 }
 
-bool
-daos_csummer_get_csum(struct daos_csummer *obj)
-{
-	if (daos_csummer_initialized(obj))
-		return obj->dcs_csum;
-	return false;
-}
-
 uint16_t
 daos_csummer_get_type(struct daos_csummer *obj)
 {
@@ -625,30 +586,6 @@ daos_csummer_get_srv_verify(struct daos_csummer *obj)
 	if (daos_csummer_initialized(obj))
 		return obj->dcs_srv_verify;
 	return false;
-}
-
-bool
-daos_csummer_get_dedup(struct daos_csummer *obj)
-{
-	if (daos_csummer_initialized(obj))
-		return obj->dcs_dedup;
-	return false;
-}
-
-bool
-daos_csummer_get_dedupverify(struct daos_csummer *obj)
-{
-	if (daos_csummer_initialized(obj))
-		return obj->dcs_dedup_verify;
-	return false;
-}
-
-uint32_t
-daos_csummer_get_dedupsize(struct daos_csummer *obj)
-{
-	if (daos_csummer_initialized(obj))
-		return obj->dcs_dedup_size;
-	return 4096;
 }
 
 uint32_t
@@ -792,7 +729,8 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 		if (!csum_iod_is_supported(iod))
 			continue;
 
-		result += csum_size; /** akey csum */
+		if (!obj->dcs_skip_key_calc)
+			result += csum_size; /** akey csum */
 
 		if (akey_only)
 			continue;
@@ -868,10 +806,12 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			continue;
 
 		/** setup akey csum  */
-		ci_set(&iod_csum->ic_akey, NULL, csum_size, csum_size, 1,
-		       CSUM_NO_CHUNK, csum_type);
-		setptr(iod_csum->ic_akey.cs_csum, buf, csum_size, used,
-		       buf_len);
+		if (!obj->dcs_skip_key_calc) {
+			ci_set(&iod_csum->ic_akey, NULL, csum_size, csum_size, 1,
+			       CSUM_NO_CHUNK, csum_type);
+			setptr(iod_csum->ic_akey.cs_csum, buf, csum_size, used,
+			       buf_len);
+		}
 
 		if (akey_only)
 			continue;
@@ -1093,6 +1033,9 @@ calc_csum_recx(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 
 	rec_chunksize = daos_csummer_get_rec_chunksize(obj, rec_len);
 	for (i = 0; i < nr; i++) { /** for each extent/checksum info */
+		if (obj->dcs_data_threshold > 0 &&
+		    recxs[i].rx_nr * rec_len < obj->dcs_data_threshold)
+			continue;
 		csum_nr = daos_recx_calc_chunks(recxs[i], rec_len,
 						rec_chunksize);
 		C_TRACE("Calculating %zu checksum(s) for Array Value "
@@ -1256,11 +1199,14 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 			continue;
 
 		/** akey */
-		rc = calc_for_iov(obj, &iod->iod_name,
-			     csums->ic_akey.cs_csum, csum_len);
-		if (rc != 0) {
-			D_ERROR("calc_for_iov error: %d\n", rc);
-			goto error;
+		if (!obj->dcs_skip_key_calc) {
+			rc = calc_for_iov(obj, &iod->iod_name,
+					  csums->ic_akey.cs_csum, csum_len);
+			if (rc != 0) {
+				D_ERROR("calc_for_iov error: %d\n", rc);
+				goto error;
+			}
+
 		}
 
 		if (akey_only)
@@ -1304,7 +1250,7 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 	uint16_t		 type = daos_csummer_get_type(csummer);
 	int			 rc;
 
-	if (!daos_csummer_initialized(csummer))
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_calc)
 		return 0;
 
 	D_ALLOC(csum_info, sizeof(*csum_info) + size);
@@ -1693,5 +1639,34 @@ dcf_corrupt(d_sg_list_t *sgls, uint32_t nr)
 	for (i = 0; i < nr; i++) {
 		d_sg_list_t *sgl = &sgls[i];
 		((char *)sgl->sg_iovs->iov_buf)[0] += 2;
+	}
+}
+
+/** should probably go somewhere else */
+int
+dedup_get_csum_algo(struct dc_cont_props *cont_props)
+{
+	if (cont_props->dcp_dedup && cont_props->dcp_dedup_verify)
+		return DAOS_PROP_CO_CSUM_CRC64;
+	if (cont_props->dcp_dedup)
+		return  DAOS_PROP_CO_CSUM_SHA256;
+
+	return DAOS_PROP_CO_CSUM_OFF;
+}
+
+void
+dedup_configure_csummer(struct daos_csummer *csummer,
+			struct dc_cont_props *cont_props)
+{
+	if (cont_props->dcp_dedup) {
+		csummer->dcs_skip_data_verify = true;
+		csummer->dcs_skip_key_calc = true;
+		csummer->dcs_skip_key_verify = true;
+		csummer->dcs_data_threshold = cont_props->dcp_dedup_size;
+
+		if (csummer->dcs_chunk_size == 0)
+			csummer->dcs_chunk_size = 32 * 1024;
+		else if (csummer->dcs_chunk_size < cont_props->dcp_dedup_size)
+			csummer->dcs_chunk_size = cont_props->dcp_dedup_size;
 	}
 }

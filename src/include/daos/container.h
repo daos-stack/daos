@@ -33,6 +33,15 @@
 #include <daos_types.h>
 #include "checksum.h"
 
+struct dc_cont_props {
+	uint64_t	 dcp_chunksize;
+	uint32_t	 dcp_dedup_size;
+	uint32_t	 dcp_csum_type;
+	bool		 dcp_srv_verify;
+	bool		 dcp_dedup;
+	bool		 dcp_dedup_verify;
+};
+
 int dc_cont_init(void);
 void dc_cont_fini(void);
 
@@ -43,6 +52,7 @@ int dc_cont_node_id2ptr(daos_handle_t coh, uint32_t node_id,
 int dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *hdl_uuid, uuid_t *con_uuid);
 daos_handle_t dc_cont_hdl2pool_hdl(daos_handle_t coh);
 struct daos_csummer *dc_cont_hdl2csummer(daos_handle_t coh);
+struct dc_cont_props dc_cont_hdl2props(daos_handle_t coh);
 
 int dc_cont_local2global(daos_handle_t coh, d_iov_t *glob);
 int dc_cont_global2local(daos_handle_t poh, d_iov_t glob,
@@ -66,5 +76,16 @@ int dc_cont_alloc_oids(tse_task_t *task);
 int dc_cont_list_snap(tse_task_t *task);
 int dc_cont_create_snap(tse_task_t *task);
 int dc_cont_destroy_snap(tse_task_t *task);
+
+/**
+ * Dedup stuff ... probably should go in a different file
+ */
+
+int
+dedup_get_csum_algo(struct dc_cont_props *cont_props);
+
+void
+dedup_configure_csummer(struct daos_csummer *csummer,
+			struct dc_cont_props *cont_props);
 
 #endif /* __DD_CONT_H__ */

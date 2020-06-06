@@ -851,8 +851,7 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 	uint32_t	i;
 	int		rc;
 
-	if (!daos_csummer_initialized(csummer) ||
-	    !daos_csummer_get_csum(csummer))
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
 		return 0;
 
 	rc = daos_csummer_verify_key(csummer, &orw->orw_dkey,
@@ -1161,8 +1160,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				    orw->orw_sgls.ca_count);
 		}
 
-		if (rma && daos_csummer_get_dedup(cont_hdl->sch_csummer) &&
-		    daos_csummer_get_dedupverify(cont_hdl->sch_csummer)) {
+		if (rma && cont_hdl->sch_props.dcp_dedup &&
+		    cont_hdl->sch_props.dcp_dedup_verify) {
 			/**
 			 * If dedped data need to be compared, then perform
 			 * the I/O are a regular one, we will check for dedup
@@ -1179,8 +1178,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				      orw->orw_epoch,
 				      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
 				      dkey, orw->orw_nr, iods, iod_csums,
-				daos_csummer_get_dedup(cont_hdl->sch_csummer),
-				daos_csummer_get_dedupsize(cont_hdl->sch_csummer),
+				      cont_hdl->sch_props.dcp_dedup,
+				      cont_hdl->sch_props.dcp_dedup_size,
 				      &ioh, dth);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
@@ -1234,16 +1233,20 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				DP_UOID(orw->orw_oid), rc);
 			goto post;
 		}
-		rc = csum_add2iods(ioh,
-				   orw->orw_iod_array.oia_iods,
-				   orw->orw_iod_array.oia_iod_nr,
-				   cont_hdl->sch_csummer,
-				   orwo->orw_iod_csums.ca_arrays);
+		if (daos_cont_csum_prop_is_enabled(
+			cont_hdl->sch_props.dcp_csum_type)) {
+			rc = csum_add2iods(ioh,
+					   orw->orw_iod_array.oia_iods,
+					   orw->orw_iod_array.oia_iod_nr,
+					   cont_hdl->sch_csummer,
+					   orwo->orw_iod_csums.ca_arrays);
 
-		if (rc) {
-			D_ERROR(DF_UOID" fetch verify failed: %d.\n",
-				DP_UOID(orw->orw_oid), rc);
-			goto post;
+			if (rc) {
+				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
+					DP_UOID(orw->orw_oid), rc);
+				goto post;
+
+		}
 		}
 	}
 
@@ -2475,7 +2478,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 
 	if (!obj_rpc_is_update(rpc) ||
 	    !daos_csummer_initialized(csummer) ||
-	    !daos_csummer_get_csum(csummer) ||
+	    csummer->dcs_skip_data_verify ||
 	    !csummer->dcs_srv_verify)
 		return 0;
 
