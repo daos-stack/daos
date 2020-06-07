@@ -88,7 +88,8 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
  * \param dtis	[IN]	The array for DTX identifiers to be aborted.
  * \param count [IN]	The count of DTXs to be aborted.
  *
- * \return		Zero on success, negative value if error.
+ * \return		Negative value if error.
+ * \return		Others are for the count of aborted DTXs.
  */
 int
 vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
