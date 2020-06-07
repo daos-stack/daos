@@ -39,7 +39,7 @@ import (
 
 const (
 	cmdScmShowRegions = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
-	outScmNoRegions   = "\nThere are no Regions defined in the system.\n"
+	outScmNoRegions   = "no Regions defined"
 	// creates a AppDirect/Interleaved memory allocation goal across all DCPMMs on a system.
 	cmdScmCreateRegions    = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdScmRemoveRegions    = "ipmctl create -f -goal MemoryMode=100"
@@ -127,18 +127,20 @@ func (r *cmdRunner) GetState() (storage.ScmState, error) {
 	// TODO: discovery should provide SCM region details
 	out, err := r.runCmd(cmdScmShowRegions)
 	if err != nil {
-		return storage.ScmStateUnknown, err
+		return storage.ScmStateUnknown,
+			errors.WithMessagef(err, "running cmd '%s'", cmdScmShowRegions)
 	}
 
 	r.log.Debugf("show region output: %s\n", out)
 
-	if out == outScmNoRegions {
+	if strings.Contains(out, outScmNoRegions) {
 		return storage.ScmStateNoRegions, nil
 	}
 
 	bytes, err := freeCapacity(out)
 	if err != nil {
-		return storage.ScmStateUnknown, err
+		return storage.ScmStateUnknown,
+			errors.WithMessage(err, "checking scm region capacity")
 	}
 	if bytes > 0 {
 		return storage.ScmStateFreeCapacity, nil
