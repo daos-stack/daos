@@ -193,6 +193,7 @@ struct obj_iod_array {
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
 	((struct dcs_iod_csums)	(orw_iod_csums)		CRT_ARRAY) \
+	((struct daos_recx_ep_list)	(orw_rels)	CRT_ARRAY) \
 	((daos_iom_t)		(orw_maps)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
