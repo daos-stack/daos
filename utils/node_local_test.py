@@ -349,11 +349,12 @@ def il_cmd(dfuse, cmd):
     my_env['D_LOG_FILE'] = log_file.name
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
-    ret = subprocess.run(cmd, env=my_env)
+    ret = subprocess.run(cmd, env=my_env, stdout = subprocess.PIPE)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
     print('Log results for il')
     log_test(dfuse.conf, log_file.name)
+    assert ret.returncode == 0
     return ret
 
 class ValgrindHelper():
@@ -985,7 +986,7 @@ def run_il_test(server, conf):
 
     # TODO: This doesn't work with two pools, there appears to be a bug
     # relating to re-using container uuids across pools.
-    while len(pools) < 1:
+    while len(pools) < 2:
         pools = make_pool(daos, conf)
 
     print('pools are ', ','.join(pools))
@@ -1000,6 +1001,7 @@ def run_il_test(server, conf):
 
     for p in pools:
         for c in containers:
+            cl = str(uuid.uuid4())
             d = os.path.join(dfuse.dir, p, c)
             try:
                 print('Making directory {}'.format(d))
@@ -1014,17 +1016,20 @@ def run_il_test(server, conf):
     fd.write('Hello')
     fd.close()
     # Copy it across containers.
-    il_cmd(dfuse, ['cp', f, dirs[-1]])
-
+    ret = il_cmd(dfuse, ['cp', f, dirs[-1]])
+    assert ret.returncode == 0
+    
     # Copy it within the container.
     child_dir = os.path.join(dirs[0], 'new_dir')
     os.mkdir(child_dir)
     il_cmd(dfuse, ['cp', f, child_dir])
 
     # Copy something into a container
-    il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]])
+    ret = il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]])
+    assert ret.returncode == 0
     # Read it from within a container
-    il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
+    ret = il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
+    assert ret.returncode == 0
     dfuse.stop()
 
 def run_in_fg(server, conf):
@@ -1214,7 +1219,7 @@ def main():
         fatal_errors = test_alloc_fail(conf)
     else:
         run_il_test(server, conf)
-        run_dfuse(server, conf)
+#        run_dfuse(server, conf)
 
     if server.stop() != 0:
         fatal_errors = True

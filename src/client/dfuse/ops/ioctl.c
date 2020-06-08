@@ -245,6 +245,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	if (fc->uid != uid || fc->gid != gid)
 		D_GOTO(out_err, rc = EPERM);
 
+	D_GOTO(out_err, rc = EPERM);
 	DFUSE_TRA_INFO(oh, "trusted pid %d", fc->pid);
 
 	if (cmd == DFUSE_IOCTL_IL_SIZE) {

@@ -2629,7 +2629,7 @@ err:
 	return rc;
 }
 
-int
+static int
 dfs_read_int(tse_task_t *task)
 {
 	struct dfs_read_params	*params = daos_task_get_args(task);
