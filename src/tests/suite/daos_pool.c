@@ -165,14 +165,12 @@ pool_exclude(void **state)
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
 	daos_pool_info_t info = {0};
-//	struct d_tgt_list tgts;
+	struct d_tgt_list tgts;
 	d_rank_t	 rank;
-//	int		 tgt = -1;
+	int		 tgt = -1;
 	int		 rc;
-        char            dmg_cmd[150];
-        int             idx;
 
-	if (0) {
+	if (1) {
 		print_message("Skip it for now, because CaRT can't support "
 			      "subgroup membership, excluding a node w/o "
 			      "killing it will cause IV issue.\n");
@@ -186,47 +184,32 @@ pool_exclude(void **state)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-        /** connect to pool */
-        print_message("rank 0 connecting to pool %ssynchronously... ",
-                      arg->async ? "a" : "");
-        rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
-                               DAOS_PC_RW, &poh, &info,
-                               arg->async ? &ev : NULL /* ev */);
-        assert_int_equal(rc, 0);
-        WAIT_ON_ASYNC(arg, ev);
-        print_message("success\n");
 
-        /** exclude last non-svc rank */
-        if (info.pi_nnodes - 1 /* rank 0 */ <= arg->pool.svc.rl_nr) {
-                print_message("not enough non-svc targets; skipping\n");
-        //        goto disconnect;
-        }
-        rank = info.pi_nnodes - 1;
-	/*
-        tgts.tl_nr = 1;
-        tgts.tl_ranks = &rank;
-        tgts.tl_tgts = &tgt;
-	*/
-        print_message("rank 0 excluding rank %u... ", rank);
-        /* build rank_list */
-        for (idx = 0; idx < arg->pool.svc.rl_nr; idx++) {
-        	/* build tgt_list since tgt==-1, exclude all targets*/
+	/** connect to pool */
+	print_message("rank 0 connecting to pool %ssynchronously... ",
+		      arg->async ? "a" : "");
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+			       DAOS_PC_RW, &poh, &info,
+			       arg->async ? &ev : NULL /* ev */);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	print_message("success\n");
 
-	        /* build and invoke dmg cmd */
-        	snprintf(dmg_cmd, sizeof(dmg_cmd),
-                	"dmg pool exclude -i --pool=%s --rank=%d",
-                	DP_UUID(arg->pool.pool_uuid), arg->pool.svc.rl_ranks[idx]);
-        	print_message("dmg_cmd %s", dmg_cmd);
-
-        	rc = system(dmg_cmd);
-		assert_int_equal(rc, 0);
+	/** exclude last non-svc rank */
+	if (info.pi_nnodes - 1 /* rank 0 */ <= arg->pool.svc.rl_nr) {
+		print_message("not enough non-svc targets; skipping\n");
+		goto disconnect;
 	}
-/*
-        rc = daos_pool_tgt_exclude(arg->pool.pool_uuid, arg->group,
-                                   &arg->pool.svc, &tgts,
-                                   arg->async ? &ev : NULL );
-*/
+	rank = info.pi_nnodes - 1;
+	tgts.tl_nr = 1;
+	tgts.tl_ranks = &rank;
+	tgts.tl_tgts = &tgt;
 
+	print_message("rank 0 excluding rank %u... ", rank);
+	rc = daos_pool_tgt_exclude(arg->pool.pool_uuid, arg->group,
+				   &arg->pool.svc, &tgts,
+				   arg->async ? &ev : NULL /* ev */);
+	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
 
@@ -239,7 +222,7 @@ pool_exclude(void **state)
 	assert_int_equal(info.pi_ndisabled, 1);
 	print_message("success\n");
 
-// disconnect:
+disconnect:
 	/** disconnect from pool */
 	print_message("rank %d disconnecting from pool %ssynchronously ... ",
 		      arg->myrank, arg->async ? "a" : "");
