@@ -66,9 +66,10 @@ class Bytes(object):
             ValueError: if the value is invalid (not a number)
 
         """
-        self.amount = float(value)
-        if str(self.amount).endswith(".0"):
-            self.amount = int(self.amount)
+        try:
+            self.amount = float(value)
+        except ValueError as error:
+            raise ValueError("Invalid Bytes.amount: {}".format(error))
 
     @units.setter
     def units(self, value):
@@ -85,7 +86,8 @@ class Bytes(object):
             self.units = value.upper()[0]
         else:
             raise ValueError(
-                "Invalid units: {} is not one of {}".format(value, self.SIZES))
+                "Invalid Bytes.units: {} is not one of {}".format(
+                    value, self.SIZES))
 
     def __str__(self):
         """Return the string of the Bytes object.
@@ -94,7 +96,10 @@ class Bytes(object):
             str: the byte amount and its units
 
         """
-        return "{}{}".format(self.amount, self.units)
+        value = [str(self.amount), self.units]
+        if int(self.amount) == self.amount:
+            value[0] = str(int(self.amount))
+        return "".join(value)
 
     def __eq__(self, other):
         """Determine if this object is equal to the other object.
