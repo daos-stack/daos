@@ -74,6 +74,19 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	hs_reply.fsr_cont_size = iov.iov_buf_len;
 
+	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+	hs_reply.fsr_dfs_size = iov.iov_buf_len;
+
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
+				  &iov);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+	hs_reply.fsr_dobj_size = iov.iov_buf_len;
+
 	DFUSE_REPLY_IOCTL(oh, req, hs_reply);
 	return;
 err:
@@ -92,7 +105,8 @@ handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
+				    &iov);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
@@ -136,6 +150,62 @@ err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }
 
+static void
+handle_doh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
+{
+	d_iov_t iov = {};
+	int rc;
+
+	iov.iov_buf_len = size;
+
+	D_ALLOC(iov.iov_buf, size);
+	if (iov.iov_buf == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+	if (iov.iov_len != iov.iov_buf_len)
+		D_GOTO(free, rc = EAGAIN);
+
+	DFUSE_REPLY_IOCTL_SIZE(oh, req, iov.iov_buf, iov.iov_len);
+	D_FREE(iov.iov_buf);
+	return;
+free:
+	D_FREE(iov.iov_buf);
+err:
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+}
+
+static void
+handle_dooh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
+{
+	d_iov_t iov = {};
+	int rc;
+
+	iov.iov_buf_len = size;
+
+	D_ALLOC(iov.iov_buf, size);
+	if (iov.iov_buf == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
+				  &iov);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+	if (iov.iov_len != iov.iov_buf_len)
+		D_GOTO(free, rc = EAGAIN);
+
+	DFUSE_REPLY_IOCTL_SIZE(oh, req, iov.iov_buf, iov.iov_len);
+	D_FREE(iov.iov_buf);
+	return;
+free:
+	D_FREE(iov.iov_buf);
+err:
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+}
 
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
@@ -189,6 +259,17 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		size_t size = _IOC_SIZE(cmd);
 
 		handle_coh_ioctl(oh, size, req);
+
+	} else if (_IOC_NR(cmd) == DFUSE_IOCTL_REPLY_DOH) {
+		size_t size = _IOC_SIZE(cmd);
+
+		handle_doh_ioctl(oh, size, req);
+
+	} else if (_IOC_NR(cmd) == DFUSE_IOCTL_REPLY_DOOH) {
+		size_t size = _IOC_SIZE(cmd);
+
+		handle_dooh_ioctl(oh, size, req);
+
 	} else {
 		DFUSE_TRA_WARNING(oh, "Unknown IOCTL type %#x", cmd);
 		D_GOTO(out_err, rc = EIO);

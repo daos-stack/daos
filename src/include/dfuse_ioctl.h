@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,9 +31,16 @@
 #define DFUSE_IOCTL_VERSION 4       /* Version of ioctl protocol */
 
 #define DFUSE_IOCTL_REPLY_CORE (DFUSE_IOCTL_REPLY_BASE)
-#define DFUSE_IOCTL_REPLY_SIZE (DFUSE_IOCTL_REPLY_BASE + 1)
+
+/* (DFUSE_IOCTL_REPLY_BASE + 1) is reserved by an older version of
+ * IOCTL_REPLY_SIZE
+ */
 #define DFUSE_IOCTL_REPLY_POH (DFUSE_IOCTL_REPLY_BASE + 2)
 #define DFUSE_IOCTL_REPLY_COH (DFUSE_IOCTL_REPLY_BASE + 3)
+#define DFUSE_IOCTL_REPLY_DOH (DFUSE_IOCTL_REPLY_BASE + 4)
+#define DFUSE_IOCTL_REPLY_DOOH (DFUSE_IOCTL_REPLY_BASE + 5)
+#define DFUSE_IOCTL_REPLY_SIZE (DFUSE_IOCTL_REPLY_BASE + 6)
+
 
 /* Core IOCTL reply */
 struct dfuse_il_reply {
@@ -48,6 +55,8 @@ struct dfuse_hs_reply {
 	int		fsr_version;
 	size_t		fsr_pool_size;
 	size_t		fsr_cont_size;
+	size_t		fsr_dfs_size;
+	size_t		fsr_dobj_size;
 };
 
 /* Defines the IOCTL command to get the object ID for a open file */

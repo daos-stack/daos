@@ -85,11 +85,6 @@
 #define SB_HI		0
 #define ROOT_HI		1
 
-enum {
-	DFS_WRITE,
-	DFS_READ
-};
-
 /** object struct that is instantiated for a DFS open object */
 struct dfs_obj {
 	/** DAOS object ID */
