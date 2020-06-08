@@ -618,7 +618,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	}
 
 	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, flags, dkey,
-			     1, iod, false, &ioh, NULL);
+			     1, iod, false, &ioh);
 	if (rc != 0) {
 		if (verbose && rc != -DER_INPROGRESS)
 			print_error("Failed to prepare ZC update: "DF_RC"\n",

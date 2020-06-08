@@ -68,7 +68,7 @@ d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
  *
  * \param[in]	coh	Container handle.
  * \param[out]	th	Returned transaction handle.
- * \param[in]	flags	Transaction flags (DAOS_TF_RDONLY, etc.).
+ * \param[in]	flags	Transaction flags.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *

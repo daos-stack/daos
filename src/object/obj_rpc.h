@@ -141,8 +141,6 @@ enum obj_rpc_flags {
 	ORF_EC			= (1 << 4),
 	/** Include the map on fetch (daos_iom_t) */
 	ORF_CREATE_MAP		= (1 << 5),
-	/** The epoch (e.g., orw_epoch for OBJ_RW) is uncertain. */
-	ORF_EPOCH_UNCERTAIN	= (1 << 6),
 };
 
 struct obj_iod_array {
