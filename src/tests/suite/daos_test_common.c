@@ -817,25 +817,25 @@ daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 		    const d_rank_list_t *svc, d_rank_t rank,
 		    int tgt_idx)
 {
-	struct d_tgt_list	targets;
+//	struct d_tgt_list	targets;
 	char			dmg_cmd[DTS_CFG_MAX];
 	int			rc;
 
-	/** exclude from the pool */
+	/** exclude from the pool 
 	targets.tl_nr = 1;
 	targets.tl_ranks = &rank;
 	targets.tl_tgts = &tgt_idx;
-
+*/
 	/* build and invoke dmg cmd */
 	if (tgt_idx == -1)
 		dts_create_config(dmg_cmd,
 			"dmg pool exclude -i --pool=%s --rank=%d",
-			DP_UUID(arg->pool.pool_uuid), rank);
+			DP_UUID(pool_uuid), rank);
 	else
 		dts_create_config(dmg_cmd,
                         "dmg pool exclude -i --pool=%s --rank=%d "
 			"--target-idx=%d",
-                        DP_UUID(arg->pool.pool_uuid), rank, tgt_idx);
+                        DP_UUID(pool_uuid), rank, tgt_idx);
 
 	rc = system(dmg_cmd);
 //	rc = daos_pool_tgt_exclude(pool_uuid, grp, svc, &targets, NULL);
