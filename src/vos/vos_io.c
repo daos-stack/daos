@@ -229,8 +229,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_cont = vos_hdl2cont(coh);
 	vos_cont_addref(ioc->ic_cont);
 	ioc->ic_update = !read_only;
-	ioc->ic_size_fetch = fetch_flags & VOS_FETCH_SIZE_ONLY;
-	ioc->ic_save_recx = fetch_flags & VOS_FETCH_RECX_LIST;
+	ioc->ic_size_fetch = ((fetch_flags & VOS_FETCH_SIZE_ONLY) != 0);
+	ioc->ic_save_recx = ((fetch_flags & VOS_FETCH_RECX_LIST) != 0);
 	ioc->ic_read_conflict = false;
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->iod_csums = iod_csums;
@@ -684,11 +684,11 @@ akey_fetch_recx_get(daos_recx_t *iod_recx, struct daos_recx_ep_list *shadow,
 		fetch_recx->rx_nr = min((iod_recx->rx_idx + iod_recx->rx_nr),
 					(recx->rx_idx + recx->rx_nr)) -
 				    iod_recx->rx_idx;
+		D_ASSERT(fetch_recx->rx_nr > 0 &&
+			 fetch_recx->rx_nr <= iod_recx->rx_nr);
 		iod_recx->rx_idx += fetch_recx->rx_nr;
 		iod_recx->rx_nr -= fetch_recx->rx_nr;
 		*shadow_ep = recx_ep->re_ep;
-		D_ASSERT(fetch_recx->rx_nr > 0 &&
-			 fetch_recx->rx_nr <= iod_recx->rx_nr);
 		return;
 	}
 

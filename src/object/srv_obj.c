@@ -152,6 +152,9 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 				&orwo->orw_iod_csums.ca_arrays);
 			orwo->orw_iod_csums.ca_count = 0;
 		}
+
+		daos_recx_ep_list_free(orwo->orw_rels.ca_arrays,
+				       orwo->orw_rels.ca_count);
 	}
 }
 
@@ -1060,22 +1063,23 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	     struct dcs_iod_csums *split_csums, uint64_t *split_offs,
 	     struct dtx_handle *dth)
 {
-	struct obj_rw_in	*orw = crt_req_get(rpc);
-	struct obj_rw_out	*orwo = crt_reply_get(rpc);
-	struct dcs_iod_csums	*iod_csums;
-	uint32_t		tag = dss_get_module_info()->dmi_tgt_id;
-	daos_handle_t		ioh = DAOS_HDL_INVAL;
-	uint64_t		time_start = 0;
-	struct bio_desc		*biod;
-	daos_key_t		*dkey;
-	crt_bulk_op_t		bulk_op;
-	bool			rma;
-	bool			bulk_bind;
-	bool			create_map;
-	bool			size_fetch = false;
-	daos_iod_t		*iods;
-	uint64_t		*offs;
-	int			err, rc = 0;
+	struct obj_rw_in		*orw = crt_req_get(rpc);
+	struct obj_rw_out		*orwo = crt_reply_get(rpc);
+	struct dcs_iod_csums		*iod_csums;
+	uint32_t			tag = dss_get_module_info()->dmi_tgt_id;
+	daos_handle_t			ioh = DAOS_HDL_INVAL;
+	uint64_t			time_start = 0;
+	struct bio_desc			*biod;
+	daos_key_t			*dkey;
+	crt_bulk_op_t			bulk_op;
+	bool				rma;
+	bool				bulk_bind;
+	bool				create_map;
+	bool				size_fetch = false;
+	struct daos_recx_ep_list	*recov_lists = NULL;
+	daos_iod_t			*iods;
+	uint64_t			*offs;
+	int				err, rc = 0;
 
 	D_TIME_START(time_start, OBJ_PF_UPDATE_LOCAL);
 
@@ -1162,11 +1166,19 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				     cond_flags, dkey, orw->orw_nr, iods,
 				     fetch_flags, shadows, &ioh, dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
+		recov_lists = vos_ioh2recx_list(ioh);
 		if (rc) {
+			daos_recx_ep_list_free(recov_lists, orw->orw_nr);
 			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
+		}
+		if (recov_lists != NULL) {
+			daos_recx_ep_list_set_ep_valid(recov_lists,
+						       orw->orw_nr);
+			orwo->orw_rels.ca_arrays = recov_lists;
+			orwo->orw_rels.ca_count = orw->orw_nr;
 		}
 
 		rc = obj_set_reply_sizes(rpc);

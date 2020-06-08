@@ -474,8 +474,8 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * VOS_FETCH_SIZE_ONLY - only query iod_size
  * VOS_FETCH_RECX_LIST - query recx list
  */
-#define VOS_FETCH_SIZE_ONLY	(0x1UL << 0)
-#define VOS_FETCH_RECX_LIST	(0x1UL << 1)
+#define VOS_FETCH_SIZE_ONLY	(0x1U << 0)
+#define VOS_FETCH_RECX_LIST	(0x1U << 1)
 
 /**
  *
