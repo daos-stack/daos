@@ -568,7 +568,7 @@ dtx_16(void **state)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = vos_fetch_begin(args->ctx.tc_co_hdl, args->oid, epoch,
-			     0, &dkey_iov, 1, &iod, false, &ioh, NULL);
+			     0, &dkey_iov, 1, &iod, 0, NULL, &ioh, NULL);
 	/* The former DTX is not committed, so need to retry with leader. */
 	assert_int_equal(rc, -DER_INPROGRESS);
 

@@ -468,6 +468,15 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
 /**
  * I/O APIs
  */
+
+/**
+ * VOS fetch flags
+ * VOS_FETCH_SIZE_ONLY - only query iod_size
+ * VOS_FETCH_RECX_LIST - query recx list
+ */
+#define VOS_FETCH_SIZE_ONLY	(0x1UL << 0)
+#define VOS_FETCH_RECX_LIST	(0x1UL << 1)
+
 /**
  *
  * Find and return I/O source buffers for the data of the specified
@@ -483,14 +492,19 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
  *			is provided by \a iods.
- * \param flags [IN]	conditional flags
+ * \param cond_flags [IN]
+ *			conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of I/O descriptors in \a ios.
  * \param iods	[IN/OUT]
  *			Array of I/O descriptors. The returned record
  *			sizes are also restored in this parameter.
- * \param size_fetch[IN]
- *			Fetch size only
+ * \param fetch_flags [IN]
+ *			VOS fetch flags, VOS_FETCH_SIZE_ONLY or
+ *			VOS_FETCH_RECX_LIST.
+ * \param shadows [IN]	Optional shadow recx/epoch lists, one for each iod.
+ *			data of extents covered by these should not be returned
+ *			by fetch function. Only used for EC obj degraded fetch.
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
  *
@@ -498,8 +512,9 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  */
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t flags, daos_key_t *dkey, unsigned int nr,
-		daos_iod_t *iods, bool size_fetch, daos_handle_t *ioh,
+		uint64_t cond_flags, daos_key_t *dkey, unsigned int nr,
+		daos_iod_t *iods, uint32_t fetch_flags,
+		struct daos_recx_ep_list *shadows, daos_handle_t *ioh,
 		struct dtx_handle *dth);
 
 /**
@@ -559,6 +574,16 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       struct dtx_handle *dth);
+
+/**
+ * Get the recx/epoch list.
+ *
+ * \param ioh	[IN]	The I/O handle.
+ *
+ * \return		recx/epoch list.
+ */
+struct daos_recx_ep_list *
+vos_ioh2recx_list(daos_handle_t ioh);
 
 /**
  * Get the I/O descriptor.
