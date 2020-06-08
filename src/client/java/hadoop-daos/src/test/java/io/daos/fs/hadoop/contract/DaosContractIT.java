@@ -7,9 +7,9 @@ import org.apache.hadoop.fs.contract.AbstractBondedFSContract;
 
 import java.io.IOException;
 
-public class DaosContract  extends AbstractBondedFSContract {
+public class DaosContractIT extends AbstractBondedFSContract {
   private static final String CONTRACT_XML = "contract/daos.xml";
-  protected DaosContract(Configuration conf) {
+  protected DaosContractIT(Configuration conf) {
         super(conf);
         addConfResource(CONTRACT_XML);
     }

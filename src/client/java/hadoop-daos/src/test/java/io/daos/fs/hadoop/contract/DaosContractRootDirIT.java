@@ -6,14 +6,14 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.contract.AbstractContractRootDirectoryTest;
 import org.apache.hadoop.fs.contract.AbstractFSContract;
 
-public class TestDaosContractRootDir extends AbstractContractRootDirectoryTest {
+public class DaosContractRootDirIT extends AbstractContractRootDirectoryTest {
   @Override
   protected AbstractFSContract createContract(Configuration configuration) {
     configuration.addResource("daos-site.xml");
     configuration.set(Constants.DAOS_POOL_UUID, DaosFSFactory.pooluuid);
     configuration.set(Constants.DAOS_CONTAINER_UUID, DaosFSFactory.contuuid);
     configuration.set(Constants.DAOS_POOL_SVC, DaosFSFactory.svc);
-    return new DaosContract(configuration);
+    return new DaosContractIT(configuration);
   }
 
 }
