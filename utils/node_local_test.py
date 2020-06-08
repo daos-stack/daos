@@ -284,6 +284,8 @@ class DaosServer():
 
     def stop(self):
         """Stop a previously started DAOS server"""
+
+        print('Attempting to stop server')
         if self._agent:
             self._agent.send_signal(signal.SIGINT)
             ret = self._agent.wait(timeout=5)
@@ -617,6 +619,8 @@ def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
     if conf.agent_dir:
         cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
+    print('Running {}'.format(' '.join(exec_cmd)))
+
     rc = subprocess.run(exec_cmd,
                         stdout=subprocess.PIPE,
                         env=cmd_env)
@@ -643,12 +647,21 @@ def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
     valgrind.convert_xml()
     return rc
 
-def show_cont(conf, pool):
-    """Create a container and return a container list"""
+def create_cont(conf, pool, container=None, ctype=None):
+    """Create a container"""
     cmd = ['container', 'create', '--svc', '0', '--pool', pool]
+    if container:
+        cmd.extend(['--cont', container])
+    if ctype:
+        cmd.extend(['--type', ctype])
     rc = run_daos_cmd(conf, cmd)
     assert rc.returncode == 0
     print('rc is {}'.format(rc))
+
+def show_cont(conf, pool):
+    """Create a container and return a container list"""
+
+    create_cont(conf, pool)
 
     cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
@@ -977,6 +990,43 @@ def run_dfuse(server, conf):
 
     print('Reached the end, no errors')
 
+def double_container_test(server, conf):
+    # TODO: This doesn't work with two pools, there appears to be a bug
+    # relating to re-using container uuids across pools.
+
+    daos = import_daos(server, conf)
+
+    pools = get_pool_list()
+
+    while len(pools) < 2:
+        pools = make_pool(daos, conf)
+
+    print('pools are ', ','.join(pools))
+
+    containers = [str(uuid.uuid4())]
+
+    errors = False
+
+    for pool in pools:
+        for container in containers:
+            try:
+                create_cont(conf, pool, container=container, ctype='POSIX')
+            except AssertionError:
+                errors = True
+
+    dfuse = DFuse(server, conf)
+    dfuse.start()
+    for pool in pools:
+        for container in containers:
+            try:
+                print(os.stat(os.path.join(dfuse.dir, pool, container)))
+            except FileNotFoundError:
+                errors = True
+    dfuse.stop()
+
+    if errors:
+        print("There were errors running this test")
+
 def run_il_test(server, conf):
     """Run a basic interception library test"""
     daos = import_daos(server, conf)
@@ -985,7 +1035,7 @@ def run_il_test(server, conf):
 
     # TODO: This doesn't work with two pools, there appears to be a bug
     # relating to re-using container uuids across pools.
-    while len(pools) < 1:
+    while len(pools) < 2:
         pools = make_pool(daos, conf)
 
     print('pools are ', ','.join(pools))
@@ -1186,6 +1236,14 @@ def main():
     server = DaosServer(conf)
     server.start()
 
+    # The double_container_test can crash the server, so run this first and
+    # stop/start the server before running the rest of the tests.
+    if len(sys.argv) == 2 and sys.argv[1] == 'all':
+        double_container_test(server, conf)
+        server.stop()
+        server = DaosServer(conf)
+        server.start()
+
     fatal_errors = False
 
     if len(sys.argv) == 2 and sys.argv[1] == 'launch':
@@ -1196,6 +1254,8 @@ def main():
         run_duns_overlay_test(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'fi':
         fatal_errors = test_alloc_fail(conf)
+    elif len(sys.argv) == 2 and sys.argv[1] == 'dc':
+        double_container_test(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'all':
         run_il_test(server, conf)
         run_dfuse(server, conf)

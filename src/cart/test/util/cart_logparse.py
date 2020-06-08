@@ -414,7 +414,7 @@ class LogIter():
             self._fd = open(fname, 'r', encoding='utf-8')
             self._fd.read()
         except UnicodeDecodeError as err:
-            print('ERROR: Invalid data in server.log on following line')
+            print('ERROR: Invalid data in {} on following line'.format(fname))
             self._fd = open(fname, 'r', encoding='latin-1')
             self._fd.read(err.start - 200)
             data = self._fd.read(199)
