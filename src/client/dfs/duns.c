@@ -281,10 +281,9 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 #ifdef LUSTRE_INCLUDE
 	if (fs.f_type == LL_SUPER_MAGIC) {
 		rc = duns_resolve_lustre_path(path, attr);
-		if (rc == 0) {
-			free(dir);
+		if (rc == 0)
 			return 0;
-		}
+
 		/* if Lustre specific method fails, fallback to try
 		 * the normal way...
 		 */
