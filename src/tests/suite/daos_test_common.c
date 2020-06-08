@@ -834,7 +834,8 @@ daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 	rc = system(dmg_cmd);
 	if (rc == -1 || WEXITSTATUS(rc) != 0)
 		print_message("exclude pool failed rc %d\n", rc);
-	if (rc != -1) assert_int_equal(WEXITSTATUS(rc), 0);
+	if (rc != -1)
+		assert_int_equal(WEXITSTATUS(rc), 0);
 }
 
 void
