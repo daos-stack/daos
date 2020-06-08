@@ -121,7 +121,8 @@ class ZeroConfigTest(TestWithServers):
 
         Test Description:
             Test starting a single daos_server process on 2 different numa
-            nodes and verify that client can start when OFI_INTERFACE is set.
+            nodes and verify that client can start when OFI_INTERFACE is set
+            or unset.
 
         :avocado: tags=all,pr,hw,small,zero_config,env_set
         """
