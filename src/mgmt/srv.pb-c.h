@@ -200,10 +200,14 @@ struct  _Mgmt__GetAttachInfoResp
    * CaRT CRT_TIMEOUT
    */
   uint32_t crttimeout;
+  /*
+   * ARP protocol hardware identifier of the
+   */
+  int32_t netdevclass;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
-    , 0, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0 }
+    , 0, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0 }
 
 
 struct  _Mgmt__PrepShutdownReq

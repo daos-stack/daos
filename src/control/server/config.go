@@ -58,7 +58,7 @@ type ClientNetworkCfg struct {
 	Provider        string
 	CrtCtxShareAddr uint32
 	CrtTimeout      uint32
-	NetDevClass     string
+	NetDevClass     int32
 }
 
 // Configuration describes options for DAOS control plane.
@@ -465,8 +465,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		if err != nil {
 			return err
 		}
-		log.Debugf("Device class for %s is %s\n", srv.Fabric.Interface, devClass)
-
+		log.Debugf("Device class for %s is %d\n", srv.Fabric.Interface, devClass)
 
 	}
 

@@ -160,7 +160,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	membership := system.NewMembership(log)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
-	var netDevClass string
+	var netDevClass int32
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIOServers {
 			break
@@ -180,11 +180,11 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 
 		if i == 0 {
-			netDevClass, err := netdetect.GetDeviceClass(srvCfg.Fabric.Interface)
+			netDevClass, err = netdetect.GetDeviceClass(srvCfg.Fabric.Interface)
 			if err != nil {
 				return err
 			}
-			log.Debugf("Device class for %s is %s\n", srvCfg.Fabric.Interface, netDevClass)
+			log.Debugf("Device class for %s is %d\n", srvCfg.Fabric.Interface, netDevClass)
 
 		}
 
@@ -278,9 +278,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
-
-
-	log.Debugf("Using device class %s\n", netDevClass)
 
 	clientNetworkCfg := ClientNetworkCfg{
 		Provider:        cfg.Fabric.Provider,

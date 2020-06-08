@@ -3,11 +3,9 @@
 
 package ctl
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -18,7 +16,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type NetworkScanReq struct {
 	Provider             string   `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
@@ -32,17 +30,16 @@ func (m *NetworkScanReq) Reset()         { *m = NetworkScanReq{} }
 func (m *NetworkScanReq) String() string { return proto.CompactTextString(m) }
 func (*NetworkScanReq) ProtoMessage()    {}
 func (*NetworkScanReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8571034d60397816, []int{0}
+	return fileDescriptor_network_ae79f0809b317184, []int{0}
 }
-
 func (m *NetworkScanReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NetworkScanReq.Unmarshal(m, b)
 }
 func (m *NetworkScanReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NetworkScanReq.Marshal(b, m, deterministic)
 }
-func (m *NetworkScanReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NetworkScanReq.Merge(m, src)
+func (dst *NetworkScanReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NetworkScanReq.Merge(dst, src)
 }
 func (m *NetworkScanReq) XXX_Size() int {
 	return xxx_messageInfo_NetworkScanReq.Size(m)
@@ -78,17 +75,16 @@ func (m *NetworkScanResp) Reset()         { *m = NetworkScanResp{} }
 func (m *NetworkScanResp) String() string { return proto.CompactTextString(m) }
 func (*NetworkScanResp) ProtoMessage()    {}
 func (*NetworkScanResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8571034d60397816, []int{1}
+	return fileDescriptor_network_ae79f0809b317184, []int{1}
 }
-
 func (m *NetworkScanResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NetworkScanResp.Unmarshal(m, b)
 }
 func (m *NetworkScanResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NetworkScanResp.Marshal(b, m, deterministic)
 }
-func (m *NetworkScanResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NetworkScanResp.Merge(m, src)
+func (dst *NetworkScanResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NetworkScanResp.Merge(dst, src)
 }
 func (m *NetworkScanResp) XXX_Size() int {
 	return xxx_messageInfo_NetworkScanResp.Size(m)
@@ -119,17 +115,16 @@ func (m *FabricInterface) Reset()         { *m = FabricInterface{} }
 func (m *FabricInterface) String() string { return proto.CompactTextString(m) }
 func (*FabricInterface) ProtoMessage()    {}
 func (*FabricInterface) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8571034d60397816, []int{2}
+	return fileDescriptor_network_ae79f0809b317184, []int{2}
 }
-
 func (m *FabricInterface) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FabricInterface.Unmarshal(m, b)
 }
 func (m *FabricInterface) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_FabricInterface.Marshal(b, m, deterministic)
 }
-func (m *FabricInterface) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FabricInterface.Merge(m, src)
+func (dst *FabricInterface) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FabricInterface.Merge(dst, src)
 }
 func (m *FabricInterface) XXX_Size() int {
 	return xxx_messageInfo_FabricInterface.Size(m)
@@ -167,11 +162,9 @@ func init() {
 	proto.RegisterType((*FabricInterface)(nil), "ctl.FabricInterface")
 }
 
-func init() {
-	proto.RegisterFile("network.proto", fileDescriptor_8571034d60397816)
-}
+func init() { proto.RegisterFile("network.proto", fileDescriptor_network_ae79f0809b317184) }
 
-var fileDescriptor_8571034d60397816 = []byte{
+var fileDescriptor_network_ae79f0809b317184 = []byte{
 	// 190 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0xcd, 0x4b, 0x2d, 0x29,
 	0xcf, 0x2f, 0xca, 0xd6, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x4e, 0x2e, 0xc9, 0x51, 0x8a,

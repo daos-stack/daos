@@ -233,6 +233,7 @@ type (
 		Domain          string
 		CrtCtxShareAddr uint32
 		CrtTimeout      uint32
+		NetDevClass     int32
 	}
 )
 
@@ -243,9 +244,9 @@ func (gair *GetAttachInfoResp) String() string {
 	}
 
 	// Condensed format for debugging...
-	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d psrs(%d)=%s",
+	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d c=%d, psrs(%d)=%s",
 		gair.Provider, gair.Interface, gair.Domain,
-		gair.CrtCtxShareAddr, gair.CrtTimeout,
+		gair.CrtCtxShareAddr, gair.CrtTimeout, gair.NetDevClass,
 		len(psrs), strings.Join(psrs, ","),
 	)
 }

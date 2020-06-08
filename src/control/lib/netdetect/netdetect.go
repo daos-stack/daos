@@ -38,7 +38,7 @@ package netdetect
 #include <rdma/fi_rma.h>
 #include <rdma/fi_errno.h>
 
-#if HWLOC_API_VERSION >= 0x00030000
+#if HWLOC_API_VERSION >= 0x00020000
 int cmpt_setFlags(hwloc_topology_t topology) {
 	return hwloc_topology_set_all_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_ALL);
 }
@@ -114,6 +114,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"strconv"
 	"strings"
 	"unsafe"
 
@@ -142,10 +143,11 @@ type DeviceAffinity struct {
 
 // FabricScan data encapsulates the results of the fabric scanning
 type FabricScan struct {
-	Provider   string
-	DeviceName string
-	NUMANode   uint
-	Priority   int
+	Provider    string
+	DeviceName  string
+	NUMANode    uint
+	Priority    int
+	NetDevClass int32
 }
 
 func (fs FabricScan) String() string {
@@ -1079,11 +1081,17 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 	}
 	log.Debugf("Mercury provider list: %v", mercuryProviderList)
 
+	devClass, err := GetDeviceClass(deviceAffinity.DeviceName)
+	if err != nil {
+		return resultsMap, ScanResults, err
+	}
+
 	scanResults := FabricScan{
-		Provider:   mercuryProviderList,
-		DeviceName: deviceAffinity.DeviceName,
-		NUMANode:   deviceAffinity.NUMANode,
-		Priority:   devCount,
+		Provider:    mercuryProviderList,
+		DeviceName:  deviceAffinity.DeviceName,
+		NUMANode:    deviceAffinity.NUMANode,
+		Priority:    devCount,
+		NetDevClass: devClass,
 	}
 
 	results := scanResults.String()
@@ -1209,11 +1217,20 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 	return ScanResults, nil
 }
 
-func GetDeviceClass(netdev string) (string, error) {
+// GetDeviceClass determines the device type according to what's stored in the filesystem
+// Returns an integer value corresponding to its ARP protocol hardware identifier
+// found here: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
+func GetDeviceClass(netdev string) (int32, error) {
 	devClass, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%s/type", netdev))
 	if err != nil {
-		return "", err
+		return 0, err
 	}
-	log.Debugf("The netdev type is: %v, string: %s", devClass, string(devClass))
-	return string(devClass), nil
+
+	// minimally one byte of data and one newline character.
+	if len(devClass) < 2 {
+		return 0, errors.Errorf("/sys/class/net/%s/type has an unexpected format: %+v", netdev, devClass)
+	}
+
+	res, err := strconv.Atoi(string(devClass[:len(devClass)-1]))
+	return int32(res), err
 }

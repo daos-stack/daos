@@ -180,8 +180,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	resp.Provider = svc.clientNetworkCfg.Provider
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
-//	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
-
+	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
 	return resp, nil
 }
 
