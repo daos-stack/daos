@@ -27,14 +27,13 @@
  */
 #define D_LOGFAC	DD_FAC(array)
 
-#include <daos.h>
-#include <daos/tse.h>
+#include <daos/event.h>
 #include <daos/object.h>
 #include <daos/container.h>
 #include <daos/array.h>
 #include <daos_array.h>
 #include <daos_task.h>
-#include <daos_types.h>
+#include <daos.h>
 
 #define AKEY_MAGIC_V	0xdaca55a9daca55a9
 #define ARRAY_MD_KEY	"daos_array_metadata"
@@ -975,7 +974,8 @@ dc_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 }
 
 static bool
-io_extent_same(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size)
+io_extent_same(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size,
+	       daos_size_t *num_records)
 {
 	daos_size_t rgs_len;
 	daos_size_t sgl_len;
@@ -985,6 +985,7 @@ io_extent_same(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size)
 
 	for (u = 0 ; u < iod->arr_nr ; u++)
 		rgs_len += iod->arr_rgs[u].rg_len;
+	*num_records = rgs_len;
 
 	sgl_len = 0;
 	for (u = 0 ; u < sgl->sg_nr; u++)
@@ -1081,14 +1082,130 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 	return 0;
 }
 
+struct hole_params {
+	struct io_params	*io_list;
+	tse_task_t		*ptask;
+	daos_size_t		records_req;
+	daos_size_t		array_size;
+	daos_size_t		chunk_size;
+};
+
 static int
 set_short_read_cb(tse_task_t *task, void *data)
 {
-	daos_array_io_t		*args = daos_task_get_args(task);
-	struct io_params	*io_list = *((struct io_params **)data);
+	struct hole_params	*params;
+	struct io_params	*io_list;
+	daos_array_io_t		*args;
+	int			i;
+	int			rc = task->dt_result;
+
+	if (rc != 0) {
+		D_ERROR("Failed to get array size (%d)\n", rc);
+		return rc;
+	}
+
+	params = daos_task_get_priv(task);
+	D_ASSERT(params != NULL);
+
+	printf("Set short read. array size = %zu\n", params->array_size);
+
+	io_list = params->io_list;
+	args = daos_task_get_args(params->ptask);
+
+	/** adjust the read_nr based on the array size */
+	args->iod->arr_nr_short_read = 0;
+	args->iod->arr_nr_read = 0;
+
+	for (i = 0; i < args->iod->arr_nr; i++) {
+		daos_off_t idx = args->iod->arr_rgs[i].rg_idx;
+		daos_size_t len = args->iod->arr_rgs[i].rg_len;
+
+		if (params->array_size < idx) {
+			args->iod->arr_nr_short_read += len;
+		} else if (params->array_size >= idx + len) {
+			args->iod->arr_nr_read += len;
+		} else {
+			args->iod->arr_nr_read += params->array_size - idx;
+			args->iod->arr_nr_short_read += idx + len -
+				params->array_size;
+		}
+	}
+
+	D_FREE(params);
+#if 0
+	if (args->iod->arr_nr == 1)
+	/** if the array size is smaller than the lowest offset, nothing left to
+	 * do*/
+
+	/** if the array size is larger than the highest offset, total data read
+	 * should be adjusted to no short reads */
+	if (params->highest_valid_off <= params->array_size) {
+		args->iod->arr_nr_read += args->iod->arr_nr_short_read;
+		args->iod->arr_nr_short_read = 0;
+	}
+
+	/** memset holes to 0 */
+	while (current) {
+		int i;
+
+		if (current->user_sgl_used) {
+			D_ASSERT(args->sgl->sg_nr == 1);
+			current->sgl.sg_nr = args->sgl->sg_nr;
+			current->sgl.sg_nr_out = args->sgl->sg_nr_out;
+		}
+
+		/** if the sgl is empty then skip this entry */
+		if (current->sgl.sg_nr == 0)
+			goto next;
+
+		start_off = current->dkey_val * current->chunk_size;
+
+		for (i = 0; i < current->iod.iod_nr; i++) {
+			if (current->iod.iod_recxs[i].rx_idx + start_off >
+			    params->array_size)
+				continue;
+
+			if ((current->iod.iod_recxs[i].rx_idx +
+			     current->iod.iod_recxs[i].rx_nr) > hi_off) {
+
+		/*
+		 * if we moved to a lower dkey and the higher one is not empty
+		 * or all short-fetched, we can break here.
+		 */
+		if (break_on_lower && dkey_val > current->dkey_val)
+			break;
+
+
+
+		dkey_val = current->dkey_val;
+		hi_off = current->iom.iom_recx_hi.rx_idx +
+			current->iom.iom_recx_hi.rx_nr;
+		if (highest_off < hi_off)
+			highest_off = hi_off
+
+		for (i = 0; i < current->iod.iod_nr; i++) {
+			if ((current->iod.iod_recxs[i].rx_idx +
+			     current->iod.iod_recxs[i].rx_nr) > hi_off) {
+		*params->read_size = total_recs;
+	else if (params->off + params->buf_size <= params->array_size)
+		*params->read_size = params->buf_size;
+	else
+		*params->read_size = params->array_size - params->off;
+#endif
+	return 0;
+}
+			
+static int
+check_short_read_cb(tse_task_t *task, void *data)
+{
+	struct hole_params	*params = daos_task_get_priv(task);
+	daos_array_io_t		*args;
+	struct io_params	*io_list;
 	struct io_params	*current;
 	uint64_t		dkey_val;
-	daos_size_t		total_recs = 0;
+	daos_size_t		total_recs;
+	daos_size_t		nr_short_recs = 0;
+	daos_off_t		highest_off;
 	bool			break_on_lower = false;
 	int			rc = task->dt_result;
 
@@ -1096,6 +1213,12 @@ set_short_read_cb(tse_task_t *task, void *data)
 		D_ERROR("Array Read Failed (%d)\n", rc);
 		return rc;
 	}
+	printf("Check short read\n");
+
+	D_ASSERT(params);
+	io_list = params->io_list;
+	total_recs = params->records_req;
+	args = daos_task_get_args(params->ptask);
 
 	/*
 	 * List is already sorted in decreasing dkey order, so we just have to
@@ -1103,9 +1226,13 @@ set_short_read_cb(tse_task_t *task, void *data)
 	 */
 	dkey_val = io_list->dkey_val;
 	current = io_list;
+	highest_off = 0;
+
 	while (current) {
 		int i;
-		daos_size_t hi_off, num_recs = 0;
+		daos_size_t hi_off; /** high offset within dkey */
+		daos_size_t hi_off_arr; /** high offset relative to array */
+		daos_size_t num_recs = 0; /** num recs possibly short fetched */
 
 		if (current->user_sgl_used) {
 			D_ASSERT(args->sgl->sg_nr == 1);
@@ -1115,7 +1242,7 @@ set_short_read_cb(tse_task_t *task, void *data)
 
 		/*
 		 * if we moved to a lower dkey and the higher one is not empty
-		 * or all short-fetched, we can break here.
+		 * or not all short-fetched, we can break here.
 		 */
 		if (break_on_lower && dkey_val > current->dkey_val)
 			break;
@@ -1127,7 +1254,12 @@ set_short_read_cb(tse_task_t *task, void *data)
 		dkey_val = current->dkey_val;
 		hi_off = current->iom.iom_recx_hi.rx_idx +
 			current->iom.iom_recx_hi.rx_nr;
-		       
+		hi_off_arr = hi_off + dkey_val * params->chunk_size;
+
+		/** Maintain highest valid offset seen */
+		if (highest_off < hi_off_arr)
+			highest_off = hi_off_arr;
+
 		for (i = 0; i < current->iod.iod_nr; i++) {
 			if ((current->iod.iod_recxs[i].rx_idx +
 			     current->iod.iod_recxs[i].rx_nr) > hi_off) {
@@ -1156,15 +1288,44 @@ set_short_read_cb(tse_task_t *task, void *data)
 		if (num_recs != current->num_records)
 			break_on_lower = true;
 
-		total_recs += num_recs;
-		D_DEBUG(DB_IO, "DKEY "DF_U64": shortfetch %zu recs\n",
+		nr_short_recs += num_recs;
+		D_DEBUG(DB_IO, "DKEY "DF_U64": possible shortfetch %zu recs\n",
 			current->dkey_val, num_recs);
 
 next:
 		current = current->next;
 	}
 
-	args->iod->arr_nr_short_read = total_recs;
+	args->iod->arr_nr_short_read = nr_short_recs;
+	args->iod->arr_nr_read = total_recs - nr_short_recs;
+
+	//printf("NR short fetch  = %zu\n", args->iod->arr_nr_short_read);
+	//printf("NR READ  = %zu\n", args->iod->arr_nr_read);
+	if (nr_short_recs == 0) {
+		D_FREE(params);
+		tse_task_complete(task, 0);
+		return 0;
+	}
+
+	printf("scheduling GET size task\n");
+
+	daos_array_get_size_t	*size_args;
+
+	size_args	= daos_task_get_args(task);
+	size_args->oh	= args->oh;
+	size_args->th	= DAOS_TX_NONE;
+	size_args->size	= &params->array_size;
+
+	//params->highest_valid_off = highest_off;
+	rc = tse_task_register_comp_cb(task, set_short_read_cb, NULL, 0);
+	if (rc)
+		D_GOTO(err_params, rc);
+
+	return rc;
+
+err_params:
+	D_FREE(params);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -1185,6 +1346,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	struct io_params *head = NULL;
 	daos_size_t	num_ios;
 	d_list_t	io_task_list;
+	daos_size_t	tot_num_records;
+	tse_task_t	*stask; /* task for short read and hole mgmt */
 	int		rc;
 
 	if (rg_iod == NULL) {
@@ -1201,7 +1364,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	} else if (user_sgl == NULL) {
 		D_ERROR("NULL scatter-gather list passed\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
-	} else if (!io_extent_same(rg_iod, user_sgl, array->cell_size)) {
+	} else if (!io_extent_same(rg_iod, user_sgl, array->cell_size,
+				   &tot_num_records)) {
 		D_ERROR("Unequal extents of memory and array descriptors\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
 	}
@@ -1217,6 +1381,14 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 	head = NULL;
 	D_INIT_LIST_HEAD(&io_task_list);
+
+	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array) {
+		rc = daos_task_create(DAOS_OPC_ARRAY_GET_SIZE,
+				      tse_task2sched(task), 0, NULL,
+				      &stask);
+		if (rc)
+			D_GOTO(err_task, rc);
+	}
 
 	/*
 	 * Loop over every range, but at the same time combine consecutive
@@ -1249,7 +1421,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				  &dkey_val);
 		if (rc != 0) {
 			D_ERROR("Failed to compute dkey\n");
-			D_GOTO(err_task, rc);
+			D_GOTO(err_stask, rc);
 		}
 
 		D_DEBUG(DB_IO, "DKEY IOD "DF_U64": idx = %d\t num_records = %zu"
@@ -1260,13 +1432,13 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		D_ALLOC_PTR(params);
 		if (params == NULL) {
 			D_ERROR("Failed memory allocation\n");
-			D_GOTO(err_task, rc = -DER_NOMEM);
+			D_GOTO(err_stask, rc = -DER_NOMEM);
 		}
 		params->dkey_val = dkey_val;
 
 		/*
 		 * since we probably have multiple dkey ios, put them in linked
-		 * list to free later. Insert in decreasind order for easier
+		 * list to free later. Insert in decreasing order for easier
 		 * short fetch detection.
 		 */
 		if (num_ios == 0) {
@@ -1339,7 +1511,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			/** add another element to recxs */
 			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs, iod->iod_nr);
 			if (new_recxs == NULL) {
-				D_GOTO(err_task, rc = -DER_NOMEM);
+				D_GOTO(err_stask, rc = -DER_NOMEM);
 			}
 			iod->iod_recxs = new_recxs;
 
@@ -1401,7 +1573,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 						  &dkey_val);
 				if (rc != 0) {
 					D_ERROR("Failed to compute dkey\n");
-					D_GOTO(err_task, rc);
+					D_GOTO(err_stask, rc);
 				}
 
 				D_ASSERT(dkey_val == params->dkey_val);
@@ -1429,13 +1601,13 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 					dkey_records, &cur_off, &cur_i, sgl);
 			if (rc != 0) {
 				D_ERROR("Failed to create sgl\n");
-				D_GOTO(err_task, rc);
+				D_GOTO(err_stask, rc);
 			}
 		}
 
 		params->num_records = dkey_records;
 
-		/* issue IO to DAOS */
+		/* Create the Fetch or Update task */
 		if (op_type == DAOS_OPC_ARRAY_READ) {
 			daos_obj_fetch_t *io_arg;
 
@@ -1445,7 +1617,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			if (rc != 0) {
 				D_ERROR("Fetch dkey "DF_U64" failed (%d)\n",
 					params->dkey_val, rc);
-				D_GOTO(err_task, rc);
+				D_GOTO(err_iotask, rc);
 			}
 			io_arg = daos_task_get_args(io_task);
 			io_arg->oh	= oh;
@@ -1454,10 +1626,18 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			io_arg->nr	= 1;
 			io_arg->iods	= iod;
 			io_arg->sgls	= sgl;
-			if (array->byte_array)
+			if (array->byte_array) {
 				io_arg->ioms = iom;
-			else
+				rc = tse_task_register_deps(stask, 1,
+							    &io_task);
+				if (rc)
+					D_GOTO(err_iotask, rc);
+			} else {
 				io_arg->ioms = NULL;
+				rc = tse_task_register_deps(task, 1, &io_task);
+				if (rc)
+					D_GOTO(err_iotask, rc);
+			}
 		} else if (op_type == DAOS_OPC_ARRAY_WRITE ||
 			   op_type == DAOS_OPC_ARRAY_PUNCH) {
 			daos_obj_update_t *io_arg;
@@ -1468,7 +1648,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			if (rc != 0) {
 				D_ERROR("Update dkey "DF_U64" failed (%d)\n",
 					params->dkey_val, rc);
-				D_GOTO(err_task, rc);
+				D_GOTO(err_iotask, rc);
 			}
 			io_arg = daos_task_get_args(io_task);
 			io_arg->oh	= oh;
@@ -1477,26 +1657,70 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			io_arg->nr	= 1;
 			io_arg->iods	= iod;
 			io_arg->sgls	= sgl;
+			rc = tse_task_register_deps(task, 1, &io_task);
+			if (rc)
+				D_GOTO(err_iotask, rc);
 		} else {
 			D_ASSERTF(0, "Invalid array operation.\n");
 		}
-
-		tse_task_register_deps(task, 1, &io_task);
 		tse_task_list_add(io_task, &io_task_list);
 	} /* end while */
 
-	tse_task_register_comp_cb(task, free_io_params_cb, &head, sizeof(head));
-
-	rg_iod->arr_nr_short_read = 0;
-	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array)
-		tse_task_register_comp_cb(task, set_short_read_cb, &head,
-					  sizeof(head));
-
 	tse_task_list_sched(&io_task_list, false);
+	rc = tse_task_register_comp_cb(task, free_io_params_cb, &head,
+				       sizeof(head));
+	if (rc)
+		D_GOTO(err_iotask, rc);
+
+	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array) {
+		if (head == NULL) {
+			tse_task_complete(stask, rc);
+		} else {
+			struct hole_params	*sparams;
+
+			D_ALLOC_PTR(sparams);
+			if (sparams == NULL) {
+				D_ERROR("Failed memory allocation\n");
+				D_GOTO(err_iotask, rc = -DER_NOMEM);
+			}
+
+			sparams->io_list	= head;
+			sparams->records_req    = tot_num_records;
+			sparams->ptask		= task;
+			sparams->chunk_size	= array->chunk_size;
+
+			daos_task_set_priv(stask, sparams);
+			rc = tse_task_register_cbs(stask,
+						   check_short_read_cb, NULL, 0,
+						   NULL, NULL, 0);
+			if (rc) {
+				D_FREE(sparams);
+				D_GOTO(err_iotask, rc);
+			}
+
+			rc = tse_task_register_deps(task, 1, &stask);
+			if (rc != 0) {
+				D_FREE(sparams);
+				D_GOTO(err_iotask, rc);
+			}
+
+			rc = tse_task_schedule(stask, false);
+			if (rc != 0) {
+				D_FREE(sparams);
+				D_GOTO(err_iotask, rc);
+			}
+		}
+	}
+
 	array_decref(array);
 	tse_sched_progress(tse_task2sched(task));
 	return 0;
 
+err_iotask:
+	tse_task_list_abort(&io_task_list, rc);
+err_stask:
+	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array)
+		tse_task_complete(stask, rc);
 err_task:
 	if (head)
 		tse_task_register_comp_cb(task, free_io_params_cb, &head,

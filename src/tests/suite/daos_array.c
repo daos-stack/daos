@@ -37,6 +37,8 @@
 static daos_size_t chunk_size = 16;
 static daos_ofeat_t feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
 	DAOS_OF_ARRAY;
+static daos_ofeat_t featb = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
+	DAOS_OF_ARRAY | DAOS_OF_ARRAY_BYTE;
 
 static void simple_array_mgmt(void **state);
 static void contig_mem_contig_arr_io(void **state);
@@ -361,7 +363,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_array_iod_t iod;
 	daos_range_t	rg;
 	d_sg_list_t	sgl;
-	d_iov_t	iov;
+	d_iov_t		iov;
 	int		*wbuf = NULL, *rbuf = NULL;
 	daos_size_t	i;
 	daos_event_t	ev, *evp;
@@ -370,7 +372,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	MPI_Barrier(MPI_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(OC_SX, feat, 0);
+		oid = dts_oid_gen(OC_SX, (cell_size == 1) ? featb : feat, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
@@ -437,7 +439,8 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	/** Verify data */
-	assert_int_equal(iod.arr_nr_short_read, 0);
+	if (cell_size == 1)
+		assert_int_equal(iod.arr_nr_short_read, 0);
 	for (i = 0; i < NUM_ELEMS; i++) {
 		if (wbuf[i] != rbuf[i]) {
 			printf("Data verification failed\n");
@@ -526,7 +529,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(OC_SX, feat, 0);
+		oid = dts_oid_gen(OC_SX, (cell_size == 1) ? featb : feat, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
@@ -598,7 +601,8 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	/** Verify data */
-	assert_int_equal(iod.arr_nr_short_read, 0);
+	if (cell_size == 1)
+		assert_int_equal(iod.arr_nr_short_read, 0);
 	for (i = 0; i < NUM_ELEMS; i++) {
 		if (wbuf[i] != rbuf[i]) {
 			printf("Data verification failed\n");
@@ -681,7 +685,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	MPI_Barrier(MPI_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(OC_SX, feat, 0);
+		oid = dts_oid_gen(OC_SX, (cell_size == 1) ? featb : feat, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
@@ -763,7 +767,8 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	/** Verify data */
-	assert_int_equal(iod.arr_nr_short_read, 0);
+	if (cell_size == 1)
+		assert_int_equal(iod.arr_nr_short_read, 0);
 	for (i = 0; i < NUM_SEGS; i++) {
 		for (j = 0; j < NUM_ELEMS/NUM_SEGS; j++) {
 			if (wbuf[i][j] != rbuf[i][j]) {
@@ -830,13 +835,10 @@ read_empty_records(void **state)
 	int		*wbuf = NULL, *rbuf = NULL;
 	daos_size_t	i;
 	daos_event_t	ev;
-	daos_ofeat_t	ofeat;
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	ofeat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
-		DAOS_OF_ARRAY | DAOS_OF_ARRAY_BYTE;
-	oid = dts_oid_gen(OC_SX, ofeat, arg->myrank);
+	oid = dts_oid_gen(OC_SX, featb, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
@@ -911,7 +913,9 @@ read_empty_records(void **state)
 	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
-	assert_int_equal(iod.arr_nr_short_read, (NUM_ELEMS-1) * sizeof(int));
+
+	assert_int_equal(iod.arr_nr_short_read, 0);
+	assert_int_equal(iod.arr_nr_read, sizeof(int) * NUM_ELEMS);
 
 	/** Verify data */
 	assert_int_equal(wbuf[0], rbuf[0]);
@@ -947,7 +951,7 @@ strided_array(void **state)
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	oid = dts_oid_gen(OC_SX, featb, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
@@ -1034,7 +1038,7 @@ truncate_array(void **state)
 	daos_size_t	size;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	oid = dts_oid_gen(OC_SX, featb, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,

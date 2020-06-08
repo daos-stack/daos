@@ -2543,50 +2543,15 @@ dfs_release(dfs_obj_t *obj)
 }
 
 struct dfs_read_params {
-	dfs_t			*dfs;
-	dfs_obj_t		*obj;
-	d_sg_list_t		*sgl;
 	daos_size_t		*read_size;
-	dfs_iod_t		*iod;
-	daos_off_t		off;
-	daos_size_t		array_size;
-	daos_size_t		buf_size;
 	daos_array_iod_t	arr_iod;
 	daos_range_t		rg;
-	tse_task_t		*ptask;
 };
-
-static int
-get_size_cb(tse_task_t *task, void *data)
-{
-	struct dfs_read_params	*params;
-	int			rc = task->dt_result;
-
-	if (rc != 0) {
-		D_ERROR("Failed to get array size (%d)\n", rc);
-		return rc;
-	}
-
-	params = daos_task_get_priv(task);
-	D_ASSERT(params != NULL);
-
-	/** determine short read size */
-	if (params->off >= params->array_size)
-		*params->read_size = 0;
-	else if (params->off + params->buf_size <= params->array_size)
-		*params->read_size = params->buf_size;
-	else
-		*params->read_size = params->array_size - params->off;
-
-	return 0;
-}
 
 static int
 read_cb(tse_task_t *task, void *data)
 {
 	struct dfs_read_params	*params;
-	tse_task_t		*size_task = NULL;
-	daos_array_get_size_t	*size_args;
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
@@ -2597,96 +2562,59 @@ read_cb(tse_task_t *task, void *data)
 	params = daos_task_get_priv(task);
 	D_ASSERT(params != NULL);
 
-	/** if no short fetch detected, return all the read size */
-	if (params->arr_iod.arr_nr_short_read == 0) {
-		*params->read_size = params->buf_size;
-		return 0;
-	}
+	*params->read_size = params->arr_iod.arr_nr_read;
+	D_FREE(params);
 
-	/** get the file size to determine how much data was short-read */
-	rc = daos_task_create(DAOS_OPC_ARRAY_GET_SIZE,
-			      tse_task2sched(task), 0, NULL, &size_task);
-	if (rc)
-		D_GOTO(err, rc);
-
-	size_args	= daos_task_get_args(size_task);
-	size_args->oh	= params->obj->oh;
-	size_args->th	= DAOS_TX_NONE;
-	size_args->size	= &params->array_size;
-
-	daos_task_set_priv(size_task, params);
-	rc = tse_task_register_comp_cb(size_task, get_size_cb, NULL, 0);
-	if (rc)
-		D_GOTO(err_stask, rc);
-
-	rc = tse_task_register_deps(params->ptask, 1, &size_task);
-	if (rc != 0)
-		D_GOTO(err_stask, rc);
-
-	rc = tse_task_schedule(size_task, false);
-	if (rc != 0)
-		D_GOTO(err_stask, rc);
-
-	return 0;
-err_stask:
-	tse_task_complete(size_task, rc);
-err:
 	return rc;
 }
 
 int
-dfs_read_int(tse_task_t *task)
+dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
+	     d_sg_list_t *sgl, daos_size_t buf_size, daos_size_t *read_size,
+	     daos_event_t *ev)
 {
-	struct dfs_read_params	*params = daos_task_get_args(task);
-	tse_task_t		*read_task = NULL;
-	daos_array_io_t		*read_args;
+	tse_task_t		*task = NULL;
+	daos_array_io_t		*args;
+	struct dfs_read_params	*params;
 	int			rc;
 
-	/** Create task to read from array */
-	rc = daos_task_create(DAOS_OPC_ARRAY_READ,
-			      tse_task2sched(task), 0, NULL, &read_task);
+	rc = dc_task_create(dc_array_read, NULL, ev, &task);
 	if (rc != 0)
-		D_GOTO(err, rc);
+		return daos_der2errno(rc);
 
-	params->ptask = task;
+	D_ALLOC_PTR(params);
+	if (params == NULL)
+		D_GOTO(err_task, rc = ENOMEM);
+
+	params->read_size = read_size;
 
 	/** set array location */
-	if (params->iod == NULL) {
+	if (iod == NULL) {
 		params->arr_iod.arr_nr	= 1;
-		params->rg.rg_len	= params->buf_size;
-		params->rg.rg_idx	= params->off;
+		params->rg.rg_len	= buf_size;
+		params->rg.rg_idx	= off;
 		params->arr_iod.arr_rgs	= &params->rg;
 	} else {
-		params->arr_iod.arr_nr	= params->iod->iod_nr;
-		params->arr_iod.arr_rgs	= params->iod->iod_rgs;
+		params->arr_iod.arr_nr	= iod->iod_nr;
+		params->arr_iod.arr_rgs	= iod->iod_rgs;
 	}
 
-	read_args		= daos_task_get_args(read_task);
-	read_args->oh		= params->obj->oh;
-	read_args->th		= DAOS_TX_NONE;
-	read_args->iod		= &params->arr_iod;
-	read_args->sgl		= params->sgl;
+	args		= dc_task_get_args(task);
+	args->oh	= obj->oh;
+	args->th	= DAOS_TX_NONE;
+	args->sgl	= sgl;
+	args->iod	= &params->arr_iod;
 
-	daos_task_set_priv(read_task, params);
-	rc = tse_task_register_cbs(read_task, NULL, 0, 0, read_cb, NULL, 0);
+	daos_task_set_priv(task, params);
+	rc = tse_task_register_cbs(task, NULL, 0, 0, read_cb, NULL, 0);
 	if (rc)
-		D_GOTO(err_rtask, rc);
+		D_GOTO(err_params, rc);
 
-	rc = tse_task_register_deps(task, 1, &read_task);
-	if (rc != 0)
-		D_GOTO(err_rtask, rc);
+	return dc_task_schedule(task, true);
 
-	rc = tse_task_schedule(read_task, false);
-	if (rc != 0) {
-		tse_task_complete(read_task, rc);
-		return rc;
-	}
-	tse_sched_progress(tse_task2sched(task));
-	return rc;
-
-err_rtask:
-	tse_task_complete(read_task, rc);
-err:
+err_params:
+	D_FREE(params);
+err_task:
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -2695,14 +2623,14 @@ int
 dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	 daos_size_t *read_size, daos_event_t *ev)
 {
-	struct dfs_read_params	*args;
-	tse_task_t		*task;
 	daos_size_t		buf_size;
 	int			i, rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+	if (read_size == NULL)
 		return EINVAL;
 	if ((obj->flags & O_ACCMODE) == O_WRONLY)
 		return EPERM;
@@ -2721,43 +2649,45 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 
 	D_DEBUG(DB_TRACE, "DFS Read: Off %"PRIu64", Len %zu\n", off, buf_size);
 
-	rc = dc_task_create(dfs_read_int, NULL, ev, &task);
-	if (rc)
-		return rc;
+	if (ev == NULL) {
+		daos_array_iod_t	iod;
+		daos_range_t		rg;
 
-	args		= dc_task_get_args(task);
-	args->dfs	= dfs;
-	args->obj	= obj;
-	args->sgl	= sgl;
-	args->off	= off;
-	args->iod	= NULL;
-	args->read_size	= read_size;
-	args->buf_size	= buf_size;
+		/** set array location */
+		iod.arr_nr = 1;
+		rg.rg_len = buf_size;
+		rg.rg_idx = off;
+		iod.arr_rgs = &rg;
 
-	return dc_task_schedule(task, true);
+		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL);
+		if (rc) {
+			D_ERROR("daos_array_read() failed (%d)\n", rc);
+			return daos_der2errno(rc);
+		}
+
+		*read_size = iod.arr_nr_read;
+		return 0;
+	}
+
+	return dfs_read_int(dfs, obj, off, NULL, sgl, buf_size, read_size, ev);
 }
 
 int
 dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 	  daos_size_t *read_size, daos_event_t *ev)
 {
-	struct dfs_read_params	*args;
-	tse_task_t		*task;
-	daos_size_t		buf_size;
-	int			i, rc;
+	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
+	if (read_size == NULL)
+		return EINVAL;
 	if ((obj->flags & O_ACCMODE) == O_WRONLY)
 		return EPERM;
 
-	buf_size = 0;
-	for (i = 0; i < sgl->sg_nr; i++)
-		buf_size += sgl->sg_iovs[i].iov_len;
-	if (buf_size == 0) {
-		*read_size = 0;
+	if (iod->iod_nr == 0) {
 		if (ev) {
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
@@ -2765,19 +2695,22 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 		return 0;
 	}
 
-	rc = dc_task_create(dfs_read_int, NULL, ev, &task);
-	if (rc)
-		return rc;
+	if (ev == NULL) {
+		daos_array_iod_t	arr_iod;
 
-	args		= dc_task_get_args(task);
-	args->dfs	= dfs;
-	args->obj	= obj;
-	args->sgl	= sgl;
-	args->iod	= iod;
-	args->read_size	= read_size;
-	args->buf_size	= buf_size;
+		/** set array location */
+		arr_iod.arr_nr = iod->iod_nr;
+		arr_iod.arr_rgs = iod->iod_rgs;
 
-	return dc_task_schedule(task, true);
+		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
+		if (rc)
+			D_ERROR("daos_array_read() failed (%d)\n", rc);
+
+		*read_size = arr_iod.arr_nr_read;
+		return 0;
+	}
+
+	return dfs_read_int(dfs, obj, 0, iod, sgl, 0, read_size, ev);
 }
 
 int
