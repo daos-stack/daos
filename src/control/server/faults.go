@@ -89,7 +89,7 @@ func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
 	return serverFault(
 		code.ServerInstancesNotStopped,
 		fmt.Sprintf("%s not supported when rank %d is running", action, rank),
-		fmt.Sprintf("retry %s operation after stopping rank %d-", action, rank),
+		fmt.Sprintf("retry %s operation after stopping rank %d", action, rank),
 	)
 }
 
