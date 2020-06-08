@@ -81,6 +81,19 @@ message PoolExcludeResp {
 	int32 status = 1; // DAOS error code
 }
 
+// PoolExtendReq supplies pool identifier and rank list.
+message PoolExtendReq {
+	string uuid = 1; // uuid of pool to add target up to
+	repeated uint32 ranks = 2; // ranks
+	uint64 scmbytes = 3; // SCM size in bytes
+	uint64 nvmebytes = 4; // NVMe size in bytes
+}
+
+// PoolExtendResp returns resultant state of Extend operation.
+message PoolExtendResp {
+	int32 status = 1; // DAOS error code
+}
+
 // PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
 message PoolReintegrateReq {
 	string uuid = 1; // uuid of pool to add target up to

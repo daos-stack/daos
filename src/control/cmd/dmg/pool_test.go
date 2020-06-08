@@ -254,6 +254,39 @@ func TestPoolCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
+		/* TODO: Tests need to be fixed after pull pool info */
+		{
+			"Extend pool with missing arguments",
+			"pool extend",
+			"",
+			errMissingFlag,
+		},
+		{
+			"Extend a pool with a single rank",
+			fmt.Sprintf("pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1 --scm-size %s", testScmSizeStr),
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.PoolExtendReq{
+					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:    []system.Rank{1},
+					ScmBytes: uint64(testScmSize),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Extend a pool with multiple ranks",
+			fmt.Sprintf("pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1,2,3 --scm-size %s", testScmSizeStr),
+			strings.Join([]string{
+				"ConnectClients",
+				printRequest(t, &control.PoolExtendReq{
+					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:    []system.Rank{1, 2, 3},
+					ScmBytes: uint64(testScmSize),
+				}),
+			}, " "),
+			nil,
+		},
 		{
 			"Exclude a target with no idx given",
 			"pool exclude --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",

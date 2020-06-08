@@ -117,6 +117,13 @@ void mock_ds_mgmt_pool_set_prop_setup(void);
 void mock_ds_mgmt_pool_set_prop_teardown(void);
 
 /*
+ * Mock ds_mgmt_pool_extend
+ */
+extern int		ds_mgmt_pool_extend_return;
+extern uuid_t		ds_mgmt_pool_extend_uuid;
+void mock_ds_mgmt_pool_extend_setup(void);
+
+/*
  * Mock ds_mgmt_pool_query
  */
 extern int		ds_mgmt_pool_query_return;

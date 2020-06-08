@@ -185,6 +185,8 @@ const (
 	MethodPoolEvict mgmtMethod = C.DRPC_METHOD_MGMT_POOL_EVICT
 	// MethodPoolExclude is a ModuleMgmt method
 	MethodPoolExclude mgmtMethod = C.DRPC_METHOD_MGMT_EXCLUDE
+	// MethodPoolExtend is a ModuleMgmt method
+	MethodPoolExtend mgmtMethod = C.DRPC_METHOD_MGMT_EXTEND
 	// MethodPoolReintegrate is a ModuleMgmt method
 	MethodPoolReintegrate mgmtMethod = C.DRPC_METHOD_MGMT_REINTEGRATE
 	// MethodBioHealth is a ModuleMgmt method
