@@ -8,7 +8,7 @@
    fun:vos_ts_table_alloc
    fun:alloc_ts_cache
    fun:ts_test_init
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_ts_tests
    fun:run_all_tests
@@ -20,7 +20,7 @@
    ...
    fun:vea_reserve
    ...
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:(below main)
 }
@@ -31,7 +31,7 @@
    ...
    fun:dl_open_worker
    ...
-   obj:/usr/lib64/libibverbs.so.1.5.22.1
+   obj:/usr/lib64/libibverbs.so.*
 }
 {
    <insert_a_suppression_name_here>
@@ -39,7 +39,7 @@
    match-leak-kinds:possible
    fun:calloc
    fun:_dl_allocate_tls
-   fun:pthread_create@@GLIBC_2.2.5
+   fun:pthread_create@@GLIBC_*
    fun:eq_test_4
    fun:main
 }
@@ -75,15 +75,13 @@
    Memcheck:Leak
    match-leak-kinds:reachable
    fun:calloc
-   obj:/usr/lib64/librdmacm.so.1.1.22.1
-   obj:/usr/lib64/librdmacm.so.1.1.22.1
-   obj:/usr/lib64/librdmacm.so.1.1.22.1
-   obj:/usr/lib64/librdmacm.so.1.1.22.1
+   obj:/usr/lib64/librdmacm.so.*
+   ...
    fun:rdma_create_id
    fun:vrb_init_info
    fun:fi_verbs_ini
    fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.3
+   fun:fi_getinfo@@FABRIC_*
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
 }
@@ -92,15 +90,13 @@
    Memcheck:Leak
    match-leak-kinds:reachable
    fun:malloc
-   obj:/usr/lib64/librdmacm.so.1.1.22.1
-   obj:/usr/lib64/librdmacm.so.1.1.22.1
-   obj:/usr/lib64/librdmacm.so.1.1.22.1
-   obj:/usr/lib64/librdmacm.so.1.1.22.1
+   obj:/usr/lib64/librdmacm.so.*
+   ...
    fun:rdma_bind_addr
    fun:vrb_init_info
    fun:fi_verbs_ini
    fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.3
+   fun:fi_getinfo@@FABRIC_*
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
 }
@@ -121,7 +117,7 @@
    fun:__strncpy_sse2_unaligned
    fun:strncpy
    fun:test_evt_various_data_size_internal
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_internal_tests
    fun:main
@@ -137,11 +133,11 @@
    fun:key_tree_prepare
    fun:key_punch
    fun:vos_obj_punch
-   fun:puncha_with_flags.isra.7
+   fun:puncha_with_flags.isra.*
    fun:conflicting_rw_exec_one
    fun:conflicting_rw_exec
    fun:conflicting_rw
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_mvcc_tests
 }
@@ -152,7 +148,7 @@
    fun:malloc
    fun:vts_alloc_gen_fname
    fun:io_obj_cache_test
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_io_test
    fun:run_all_tests
@@ -179,7 +175,7 @@
    fun:strndup
    fun:prop_to_acl_response
    ...
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:main
 }
@@ -229,7 +225,7 @@
    fun:vos_ts_table_alloc
    fun:alloc_ts_cache
    fun:ts_test_init
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_ts_tests
    fun:run_all_tests
@@ -270,7 +266,7 @@
    fun:calloc
    fun:gc_cont_run
    fun:gc_cont_test
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_gc_tests
    fun:run_all_tests
@@ -280,7 +276,7 @@
    <insert_a_suppression_name_here>
    Memcheck:User
    fun:pmemobj_tx_add_snapshot
-   fun:pmemobj_tx_add_common.constprop.20
+   fun:pmemobj_tx_add_common.constprop.*
    ...
 }
 {
@@ -306,7 +302,7 @@
    match-leak-kinds:definite
    fun:calloc
    fun:test_evt_iter_flags
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_internal_tests
    fun:main
@@ -320,7 +316,7 @@
    fun:evt_tcx_clone
    fun:evt_iter_prepare
    fun:test_evt_overlap_split_internal
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_internal_tests
    fun:main
@@ -386,7 +382,7 @@
    ...
    fun:calloc
    fun:ent_array_resize
-   fun:ent_array_alloc.isra.33
+   fun:ent_array_alloc.isra.*
    fun:evt_ent_array_fill
    fun:evt_iter_probe_sorted
    fun:evt_iter_probe
@@ -404,7 +400,7 @@
    fun:ts_add_rect
    fun:ts_cmd_run
    fun:ts_group
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_cmd_line_test
    fun:main
@@ -415,7 +411,7 @@
    match-leak-kinds:definite
    fun:calloc
    fun:pool_file_setup
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_pool_test
    fun:run_all_tests
@@ -429,7 +425,7 @@
    fun:generate_view
    fun:aggregate_basic
    fun:aggregate_21
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_aggregate_tests
    fun:run_all_tests
@@ -451,7 +447,7 @@
    fun:calloc
    fun:vea_hint_load
    fun:ut_interleaved_ops
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:(below main)
 }
@@ -461,7 +457,7 @@
    match-leak-kinds:possible
    fun:calloc
    ...
-   obj:/usr/lib64/libmlx4.so.1.0.22.1
+   obj:/usr/lib64/libmlx4.so.*
    ...
 }
 {
@@ -473,7 +469,7 @@
    fun:vos_ts_table_alloc
    fun:alloc_ts_cache
    fun:ts_test_init
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_ts_tests
    fun:run_all_tests
@@ -496,7 +492,7 @@
    fun:init_valid_cred
    fun:init_default_cred
    fun:test_cont_can_delete
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:main
 }
@@ -553,7 +549,7 @@
    match-leak-kinds:indirect
    fun:calloc
    fun:ent_array_resize
-   fun:ent_array_alloc.isra.34
+   fun:ent_array_alloc.isra.*
    fun:evt_ent_array_fill
    fun:evt_iter_probe_sorted
    fun:evt_iter_probe
@@ -571,7 +567,7 @@
    fun:vos_ts_table_alloc
    fun:alloc_ts_cache
    fun:ts_test_init
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_ts_tests
    fun:run_all_tests
