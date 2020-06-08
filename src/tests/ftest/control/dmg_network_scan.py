@@ -233,7 +233,6 @@ class DmgNetworkScanTest(TestWithServers):
 
         # Get dmg info
         scan_info = self.dmg.get_output("network_scan")
-        print(scan_info)
 
         # Get index range to break up information by hostname
         r = [idx for idx, info in enumerate(scan_info) if info[0] != ""]
