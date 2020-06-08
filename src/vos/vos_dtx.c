@@ -617,7 +617,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		umem_free(vos_cont2umm(cont), offset);
 
 out:
-	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_TRACE,
+	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_IO,
 		 "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
 		 DP_DTI(dti), DP_RC(rc));
 	if (rc != 0) {
@@ -765,7 +765,7 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 			sizeof(struct vos_dtx_act_ent_df) * dbd->dbd_index;
 	dae->dae_dbd = dbd;
 	D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
-	D_DEBUG(DB_TRACE, "Allocated new lid DTX: "DF_DTI" lid=%d dae=%p"
+	D_DEBUG(DB_IO, "Allocated new lid DTX: "DF_DTI" lid=%d dae=%p"
 		" dae_dbd=%p\n", DP_DTI(&dth->dth_xid), DAE_LID(dae), dae, dbd);
 
 	d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));

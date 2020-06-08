@@ -1619,14 +1619,17 @@ renew:
 		D_GOTO(out, rc);
 	}
 
-	if (orw->orw_flags & ORF_DTX_SYNC)
-		dlh.dlh_handle.dth_sync = 1;
-
 	exec_arg.rpc	  = rpc;
 	exec_arg.cont_hdl = ioc.ioc_coh;
 	exec_arg.cont	  = ioc.ioc_coc;
 	exec_arg.args	  = split_req;
 again:
+	if (orw->orw_flags & ORF_DTX_SYNC)
+		dlh.dlh_handle.dth_sync = 1;
+
+	if (flags & ORF_RESEND)
+		dlh.dlh_handle.dth_resent = 1;
+
 	exec_arg.flags	  = flags;
 	/* Execute the operation on all targets */
 	rc = dtx_leader_exec_ops(&dlh, obj_tgt_update, &exec_arg);
@@ -2224,13 +2227,16 @@ renew:
 		D_GOTO(out, rc);
 	}
 
-	if (opi->opi_flags & ORF_DTX_SYNC)
-		dlh.dlh_handle.dth_sync = 1;
-
 	exec_arg.rpc = rpc;
 	exec_arg.cont_hdl = ioc.ioc_coh;
 	exec_arg.cont = ioc.ioc_coc;
 again:
+	if (opi->opi_flags & ORF_DTX_SYNC)
+		dlh.dlh_handle.dth_sync = 1;
+
+	if (flags & ORF_RESEND)
+		dlh.dlh_handle.dth_resent = 1;
+
 	exec_arg.flags = flags;
 	/* Execute the operation on all shards */
 	rc = dtx_leader_exec_ops(&dlh, obj_tgt_punch, &exec_arg);

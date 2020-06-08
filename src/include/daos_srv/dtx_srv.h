@@ -56,6 +56,7 @@ struct dtx_handle {
 	uint32_t			 dth_intent;
 
 	uint32_t			 dth_sync:1, /* commit synchronously. */
+					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
 					 /* dti_cos has been committed. */

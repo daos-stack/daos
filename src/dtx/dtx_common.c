@@ -247,6 +247,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
 	dth->dth_ent = NULL;
 
 	dth->dth_sync = 0;
+	dth->dth_resent = 0;
 	dth->dth_solo = solo ? 1 : 0;
 	dth->dth_dti_cos_done = 0;
 	dth->dth_modify_shared = 0;
@@ -331,7 +332,7 @@ init:
 			dti_cos, dti_cos_count, true,
 			tgt_cnt == 0 ? true : false, dth);
 
-	D_DEBUG(DB_TRACE, "Start DTX "DF_DTI" for object "DF_OID
+	D_DEBUG(DB_IO, "Start DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
 		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver,
 		(unsigned long long)dth->dth_dkey_hash, dti_cos_count,
@@ -349,7 +350,7 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
 
 	ABT_future_free(&dlh->dlh_future);
-	D_DEBUG(DB_TRACE, "dth "DF_DTI" rc "DF_RC"\n",
+	D_DEBUG(DB_IO, "dth "DF_DTI" rc "DF_RC"\n",
 		DP_DTI(&dlh->dlh_handle.dth_xid), DP_RC(dlh->dlh_result));
 
 	return dlh->dlh_result;
@@ -383,7 +384,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	 */
 
 	rc = dtx_leader_wait(dlh);
-	if (result < 0 || rc < 0 || !dth->dth_active ||
+	if (result < 0 || rc < 0 || (!dth->dth_active && !dth->dth_resent) ||
 	    daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
 
@@ -425,11 +426,11 @@ again:
 	if (rc == 0) {
 		/* When we come here, the modification on all participants have
 		 * been done successfully. If 'dth->dth_active' is false, means
-		 * that it is for resent caseC. Under such case, we have no way
+		 * that it is for resent case. Under such case, we have no way
 		 * to mark it as committable, then commit it sychronously.
 		 */
 		if (!dth->dth_active) {
-			D_ASSERT(dth->dth_ent == NULL);
+			D_ASSERT(dth->dth_resent);
 
 			dth->dth_sync = 1;
 		}
@@ -497,7 +498,7 @@ out:
 				  dth->dth_epoch, &dth->dth_dte, 1,
 				  cont->sc_pool->spc_map_version);
 
-		D_DEBUG(DB_TRACE,
+		D_DEBUG(DB_IO,
 			"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
 			"%s, %s participator(s): rc "DF_RC"\n",
 			DP_DTI(&dth->dth_xid), dth->dth_ver,
@@ -575,7 +576,7 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 			oid, dkey_hash, intent,
 			dti_cos, dti_cos_cnt, false, false, dth);
 
-	D_DEBUG(DB_TRACE, "Start the DTX "DF_DTI" for object "DF_OID
+	D_DEBUG(DB_IO, "Start the DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
 		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver,
 		(unsigned long long)dth->dth_dkey_hash, dti_cos_cnt,
@@ -613,7 +614,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		}
 	}
 
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, rc = %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver,
 		(unsigned long long)dth->dth_dkey_hash,
