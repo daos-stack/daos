@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -151,6 +151,28 @@ typedef struct {
 	 */
 	bool	 (*hop_rec_decref)(struct d_hash_table *htable,
 				   d_list_t *rlink);
+
+	/**
+	 * Optional, release multiple refcount on the record \p rlink
+	 *
+	 * This function expands on hop_rec_decref() so the notes from that
+	 * function apply here.  If hop_rec_decref() is not provided then
+	 * hop_rec_ndecref() shouldn't be either.
+	 *
+	 * \param[in] htable	hash table
+	 * \param[in] rlink	The rlink being released.
+	 * \param[in] count	The number of refs to be dropped.
+	 *
+	 * \retval	0	Do nothing
+	 * \retval	1	Only if refcount is zero and the hash item
+	 *			can be freed. If this function can return
+	 *			true, then hop_rec_free() should be defined.
+	 *		negative value on error.
+	 */
+	int	 (*hop_rec_ndecref)(struct d_hash_table *htable,
+				    d_list_t *rlink,
+				    int count);
+
 	/**
 	 * Optional, free the record \p rlink
 	 * It is called if hop_decref() returns zero.
@@ -163,14 +185,19 @@ typedef struct {
 
 enum d_hash_feats {
 	/**
-	 * By default, the hash table is protected by pthread_mutex.
+	 * By default, the hash table is protected by pthread_spinlock_t.
 	 */
 
 	/**
 	 * The hash table has no lock, it means the hash table is protected
 	 * by external lock, or only accessed by a single thread.
 	 */
-	D_HASH_FT_NOLOCK		= (1 << 0),
+	D_HASH_FT_NOLOCK	= (1 << 0),
+
+	/**
+	 * The hash table is protected by pthread_mutex_t.
+	 */
+	D_HASH_FT_MUTEX		= (1 << 1),
 
 	/**
 	 * It is a read-mostly hash table, so it is protected by RW lock.
@@ -179,7 +206,7 @@ enum d_hash_feats {
 	 * then he should guarantee refcount changes are atomic or protected
 	 * within hop_addref/decref, because RW lock can't protect refcount.
 	 */
-	D_HASH_FT_RWLOCK		= (1 << 1),
+	D_HASH_FT_RWLOCK	= (1 << 2),
 
 	/**
 	 * If the EPHEMERAL bit is zero:
@@ -197,7 +224,7 @@ enum d_hash_feats {
 	 *
 	 * Note that if addref/decref are not provided this bit has no effect
 	 */
-	D_HASH_FT_EPHEMERAL		= (1 << 2),
+	D_HASH_FT_EPHEMERAL	= (1 << 3),
 };
 
 struct d_hash_bucket {
@@ -210,13 +237,14 @@ struct d_hash_bucket {
 struct d_hash_table {
 	/** different type of locks based on ht_feats */
 	union {
-		pthread_mutex_t		ht_lock;
+		pthread_spinlock_t	ht_spin;
+		pthread_mutex_t		ht_mutex;
 		pthread_rwlock_t	ht_rwlock;
 	};
 	/** bits to generate number of buckets */
 	unsigned int		 ht_bits;
 	/** feature bits */
-	unsigned int		 ht_feats;
+	uint32_t		 ht_feats;
 #if D_HASH_DEBUG
 	/** maximum search depth ever */
 	unsigned int		 ht_dep_max;
@@ -249,8 +277,8 @@ struct d_hash_table {
  * \return			0 on success, negative value on error
  */
 int  d_hash_table_create(uint32_t feats, unsigned int bits,
-			  void *priv, d_hash_table_ops_t *hops,
-			  struct d_hash_table **htable_pp);
+			 void *priv, d_hash_table_ops_t *hops,
+			 struct d_hash_table **htable_pp);
 
 /**
  * Initialise an inplace hash table.
@@ -519,7 +547,7 @@ struct d_hlink {
 
 struct d_hhash;
 
-int  d_hhash_create(unsigned int bits, struct d_hhash **hhash);
+int  d_hhash_create(uint32_t feats, unsigned int bits, struct d_hhash **hhash);
 void d_hhash_destroy(struct d_hhash *hh);
 void d_hhash_hlink_init(struct d_hlink *hlink, struct d_hlink_ops *ops);
 /**
@@ -569,7 +597,8 @@ struct d_ulink {
 	struct d_ulink_ops	*ul_ops;
 };
 
-int d_uhash_create(int feats, unsigned int bits, struct d_hash_table **uhtab);
+int  d_uhash_create(uint32_t feats, unsigned int bits,
+		    struct d_hash_table **uhtab);
 void d_uhash_destroy(struct d_hash_table *uhtab);
 void d_uhash_ulink_init(struct d_ulink *ulink, struct d_ulink_ops *rl_ops);
 bool d_uhash_link_empty(struct d_ulink *ulink);

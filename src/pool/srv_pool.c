@@ -2103,6 +2103,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, in->pci_flags,
 				  sec_capas, &in->pci_cred);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: "DF_RC"\n",
 			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));

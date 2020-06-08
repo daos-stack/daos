@@ -146,7 +146,6 @@ int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
 /*
  * srv_util.c
  */
-
 int ds_pool_map_tgts_update(struct pool_map *map,
 			    struct pool_target_id_list *tgts, int opc,
 			    bool evict_rank);

@@ -166,7 +166,8 @@ iv_key_unpack(struct ds_iv_key *key_iv, crt_iv_key_t *key_iov)
 	 * ds_iv_key, so it is safe to use before unpack
 	 */
 	class = iv_class_lookup(tmp_key->class_id);
-	D_ASSERT(class != NULL);
+	D_ASSERTF(class != NULL, "class_id/rank %d/%u\n", tmp_key->class_id,
+		  tmp_key->rank);
 
 	if (class->iv_class_ops->ivc_key_unpack)
 		rc = class->iv_class_ops->ivc_key_unpack(class, key_iov,
@@ -866,7 +867,7 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 
 	rc = ABT_future_create(1, NULL, &future);
 	if (rc) {
-		if (sync->ivs_comp_cb)
+		if (sync != NULL && sync->ivs_comp_cb)
 			sync->ivs_comp_cb(sync->ivs_comp_cb_arg);
 		return rc;
 	}
@@ -977,6 +978,8 @@ sync_comp_cb(void *arg)
  * Update the value to the iv_entry through Cart IV, and it will mark the
  * entry to be valid, so the following fetch will retrieve the value from
  * local cache entry.
+ * NB: for lazy update, it will clone the key and buffer and free them in
+ * the complete callback, in case the caller release them right away.
  *
  * param ns[in]		iv namespace.
  * param key[in]	iv key

@@ -52,10 +52,11 @@ const (
 type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
+	Evict        PoolEvictCmd        `command:"evict" alias:"ev" description:"Evict all pool connections to a DAOS pool"`
 	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
-	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude a list of targets from a rank"`
 	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
-	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate a list of targets for a rank"`
+	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude targets from a rank"`
+	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate targets for a rank"`
 	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
 	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
@@ -107,8 +108,8 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 			"performance will suffer!\n", ratio*100)
 	}
 	c.log.Infof("Creating DAOS pool with %s SCM and %s NVMe storage "+
-		"(%0.2f %% ratio)\n", humanize.IBytes(scmBytes),
-		humanize.IBytes(nvmeBytes), ratio*100)
+		"(%0.2f %% ratio)\n", humanize.Bytes(scmBytes),
+		humanize.Bytes(nvmeBytes), ratio*100)
 
 	var acl *control.AccessControlList
 	if c.ACLFile != "" {
@@ -180,13 +181,38 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 	return err
 }
 
+// PoolEvictCmd is the struct representing the command to evict a DAOS pool.
+type PoolEvictCmd struct {
+	logCmd
+	ctlInvokerCmd
+	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to evict connection to"`
+	Sys  string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that the pools connections be evicted from."`
+}
+
+// Execute is run when PoolEvictCmd subcommand is activated
+func (d *PoolEvictCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	req := &control.PoolEvictReq{UUID: d.UUID, Sys: d.Sys}
+
+	ctx := context.Background()
+	err := control.PoolEvict(ctx, d.ctlInvoker, req)
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	d.log.Infof("Pool-evict command %s\n", msg)
+
+	return err
+}
+
 // PoolExcludeCmd is the struct representing the command to exclude a DAOS target.
 type PoolExcludeCmd struct {
 	logCmd
 	ctlInvokerCmd
 	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to exclude a target from"`
 	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be excluded"`
-	Targetidx string `long:"target-idx" required:"1" description:"Comma-seperated list of target idx(s) to be excluded from the rank"`
+	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
 }
 
 // Execute is run when PoolExcludeCmd subcommand is activated
@@ -215,15 +241,11 @@ func (r *PoolExcludeCmd) Execute(args []string) error {
 type PoolExtendCmd struct {
 	logCmd
 	ctlInvokerCmd
-	UUID  string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
-	Ranks string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
+	UUID     string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
+	RankList string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
 	// Everything after this needs to be removed when pool info can be fetched
-	GroupName string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
-	UserName  string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
-	ACLFile   string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
-	ScmSize   string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
-	NVMeSize  string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
-	Sys       string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
+	ScmSize  string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of the original DAOS pool being extended"`
+	NVMeSize string `short:"n" long:"nvme-size" description:"Size of NVMe component of the original DAOS pool being extended, or none if not originally supplied to pool create."`
 	// END TEMPORARY SECTION
 }
 
@@ -231,9 +253,9 @@ type PoolExtendCmd struct {
 func (e *PoolExtendCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	var ranklist []uint32
-	if err := common.ParseNumberList(e.Ranks, &ranklist); err != nil {
-		return errors.WithMessage(err, "parsing ranks list")
+	ranks, err := system.ParseRanks(e.RankList)
+	if err != nil {
+		return errors.Wrap(err, "parsing rank list")
 	}
 
 	// Everything below this needs to be removed once Pool Info can be fetched
@@ -251,18 +273,9 @@ func (e *PoolExtendCmd) Execute(args []string) error {
 		}
 	}
 
-	var acl *control.AccessControlList
-	if e.ACLFile != "" {
-		acl, err = control.ReadACLFile(e.ACLFile)
-		if err != nil {
-			return err
-		}
-	}
-
 	req := &control.PoolExtendReq{
-		UUID: e.UUID, Ranks: ranklist,
-		ScmBytes: scmBytes, NvmeBytes: nvmeBytes, Sys: e.Sys,
-		User: e.UserName, UserGroup: e.GroupName, ACL: acl,
+		UUID: e.UUID, Ranks: ranks,
+		ScmBytes: scmBytes, NvmeBytes: nvmeBytes,
 	}
 	// END TEMP SECTION
 
@@ -284,7 +297,7 @@ type PoolReintegrateCmd struct {
 	ctlInvokerCmd
 	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to start reintegration in"`
 	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
-	Targetidx string `long:"target-idx" required:"1" description:"Comma-seperated list of target idx(s) to be reintegrated into the rank"`
+	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
 }
 
 // Execute is run when PoolReintegrateCmd subcommand is activated
