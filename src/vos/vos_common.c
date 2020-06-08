@@ -38,7 +38,7 @@
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static bool vsa_nvme_init;
-static struct vos_tls	*standalone_tls;
+struct vos_tls	*standalone_tls;
 
 struct vos_tls *
 vos_tls_get(void)
@@ -54,6 +54,37 @@ vos_tls_get(void)
 	return tls;
 #endif /* VOS_STANDALONE */
 }
+
+#ifdef VOS_STANDALONE
+int
+vos_profile_start(char *path, int avg)
+{
+	struct daos_profile *dp;
+	int rc;
+
+	if (standalone_tls == NULL)
+		return 0;
+
+	rc = daos_profile_init(&dp, path, avg, 0, 0);
+	if (rc)
+		return rc;
+
+	standalone_tls->vtl_dp = dp;
+	return 0;
+}
+
+void
+vos_profile_stop()
+{
+	if (standalone_tls == NULL || standalone_tls->vtl_dp == NULL)
+		return;
+
+	daos_profile_dump(standalone_tls->vtl_dp);
+	daos_profile_destroy(standalone_tls->vtl_dp);
+	standalone_tls->vtl_dp = NULL;
+}
+
+#endif
 
 /**
  * Object cache based on mode of instantiation
@@ -131,7 +162,7 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		return rc;
 	}
 
-	rc = d_uhash_create(0 /* no locking */, VOS_POOL_HHASH_BITS,
+	rc = d_uhash_create(D_HASH_FT_NOLOCK, VOS_POOL_HHASH_BITS,
 			    &imem_inst->vis_pool_hhash);
 	if (rc) {
 		D_ERROR("Error in creating POOL ref hash: "DF_RC"\n",
@@ -139,8 +170,8 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		goto failed;
 	}
 
-	rc = d_uhash_create(D_HASH_FT_EPHEMERAL, VOS_CONT_HHASH_BITS,
-			    &imem_inst->vis_cont_hhash);
+	rc = d_uhash_create(D_HASH_FT_NOLOCK | D_HASH_FT_EPHEMERAL,
+			    VOS_CONT_HHASH_BITS, &imem_inst->vis_cont_hhash);
 	if (rc) {
 		D_ERROR("Error in creating CONT ref hash: "DF_RC"\n",
 			DP_RC(rc));
@@ -231,12 +262,6 @@ vos_mod_init(void)
 	rc = vos_dtx_table_register();
 	if (rc) {
 		D_ERROR("DTX btree initialization error\n");
-		return rc;
-	}
-
-	rc = vos_dtx_cos_register();
-	if (rc != 0) {
-		D_ERROR("DTX CoS btree initialization error\n");
 		return rc;
 	}
 

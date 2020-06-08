@@ -785,9 +785,9 @@ static const struct CMUnitTest ts_tests[] = {
 int
 run_ts_tests(const char *cfg)
 {
-	char	suite[CFG_MAX];
+	char	suite[DTS_CFG_MAX];
 
-	create_config(suite, "VOS Timestamp table tests %s", cfg);
+	dts_create_config(suite, "VOS Timestamp table tests %s", cfg);
 
 	return cmocka_run_group_tests_name(suite, ts_tests, NULL, NULL);
 }

@@ -94,6 +94,18 @@ requests to remote harnesses using the `rpcClient` functions in
 [`system.go`](/src/control/lib/control/system.go) which implement
 the UnaryInvoker interface.
 
+### System commands
+
+System commands use fan-out and send unary RPCs to selected ranks
+across the system for actions query, stop, start and reformat.
+
+These actions are initiated from client applications such as `dmg`
+and use the control API. For more details see code documentation
+in
+[`ctl_system.go`](/src/control/server/ctl_system.go),
+[`system.go`](/src/control/lib/control/system.go) and
+[`mgmt_system.go`](/src/control/server/mgmt_system.go).
+
 ### Storage
 
 Storage related RPCs, whose handlers are defined in
