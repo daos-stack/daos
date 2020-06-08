@@ -1015,6 +1015,46 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 }
 
 static int
+obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		uint64_t cond_flags, daos_key_t *dkey, unsigned int iod_nr,
+		daos_iod_t *iods, uint32_t tgt_idx,
+		struct daos_recx_ep_list **pshadows)
+{
+	struct daos_oclass_attr		*oca;
+	daos_handle_t			 ioh = DAOS_HDL_INVAL;
+	int				 rc;
+
+	obj_iod_idx_vos2parity(iod_nr, iods);
+	oca = daos_oclass_attr_find(oid.id_pub);
+	if (oca == NULL || !DAOS_OC_IS_EC(oca)) {
+		rc = -DER_INVAL;
+		D_ERROR(DF_UOID" oca not found or not EC obj: "DF_RC"\n",
+			DP_UOID(oid), DP_RC(rc));
+		goto out;
+	}
+
+	rc = vos_fetch_begin(coh, oid, epoch, cond_flags, dkey, iod_nr, iods,
+			     VOS_FETCH_RECX_LIST, NULL, &ioh, NULL);
+	if (rc) {
+		D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",
+			DP_UOID(oid), DP_RC(rc));
+		goto out;
+	}
+
+	*pshadows = vos_ioh2recx_list(ioh);
+	vos_fetch_end(ioh, 0);
+
+out:
+	obj_iod_idx_parity2vos(iod_nr, iods);
+	if (rc == 0) {
+		obj_iod_idx_vos2daos(iod_nr, iods, tgt_idx, oca);
+		obj_recx_ep_list_idx_parity2daos(iod_nr, *pshadows, tgt_idx,
+						 oca);
+	}
+	return rc;
+}
+
+static int
 obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	     struct ds_cont_child *cont, daos_iod_t *split_iods,
 	     struct dcs_iod_csums *split_csums, uint64_t *split_offs,
@@ -1096,16 +1136,32 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			goto out;
 		}
 	} else {
-		uint32_t	fetch_flags;
+		uint64_t			 cond_flags;
+		uint32_t			 fetch_flags;
+		bool				 ec_deg_fetch;
+		struct daos_recx_ep_list	*shadows = NULL;
 
 		size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
 		fetch_flags = size_fetch ? VOS_FETCH_SIZE_ONLY : 0;
+		cond_flags = orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS;
 		bulk_op = CRT_BULK_PUT;
 
+		ec_deg_fetch = orw->orw_flags & ORF_EC_DEGRADED;
+		if (ec_deg_fetch && !size_fetch) {
+			rc = obj_fetch_shadow(cont->sc_hdl, orw->orw_oid,
+				orw->orw_epoch, cond_flags, dkey, orw->orw_nr,
+				iods, orw->orw_tgt_idx, &shadows);
+			if (rc) {
+				D_ERROR(DF_UOID" Fetch shadow failed: "DF_RC
+					"\n", DP_UOID(orw->orw_oid), DP_RC(rc));
+				goto out;
+			}
+		}
+
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
-				     orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
-				     dkey, orw->orw_nr, iods, fetch_flags, NULL,
-				     &ioh, dth);
+				     cond_flags, dkey, orw->orw_nr, iods,
+				     fetch_flags, shadows, &ioh, dth);
+		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",

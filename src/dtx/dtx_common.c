@@ -854,7 +854,7 @@ dtx_leader_exec_ops_ult(void *arg)
 
 		sub->dss_result = 0;
 
-		if (sub->dss_tgt.st_rank == TGTS_IGNORE) {
+		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE) {
 			int ret;
 
 			ret = ABT_future_set(future, dlh);

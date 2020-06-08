@@ -38,6 +38,13 @@
 #define OBJ_TGT_BITMAP_LEN						\
 	(roundup(((OBJ_EC_MAX_M) / NBBY), 8))
 
+/* EC parity is stored in a private address range that is selected by setting
+ * the most-significant bit of the offset (an unsigned long). This effectively
+ * limits the addressing of user extents to the lower 63 bits of the offset
+ * range. The client stack should enforce this limitation.
+ */
+#define PARITY_INDICATOR (1ULL << 63)
+
 /** EC codec for object EC encoding/decoding */
 struct obj_ec_codec {
 	/** encode matrix, can be used to generate decode matrix */
@@ -240,10 +247,10 @@ struct obj_reasb_req;
  * Note that for replicated data on parity cells the VOS idx is unmapped
  * original daos recx idx to facilitate aggregation.
  */
-#define obj_ec_vos_recx_idx(idx, stripe_rec_nr, e_len)			\
+#define obj_ec_idx_daos2vos(idx, stripe_rec_nr, e_len)			\
 	((((idx) / (stripe_rec_nr)) * (e_len)) + ((idx) % (e_len)))
 /** Query the original daos idx of mapped VOS index */
-#define obj_ec_idx_of_vos_idx(vos_idx, stripe_rec_nr, e_len, tgt_idx)	       \
+#define obj_ec_idx_vos2daos(vos_idx, stripe_rec_nr, e_len, tgt_idx)	       \
 	((((vos_idx) / (e_len)) * stripe_rec_nr) + (tgt_idx) * (e_len) +       \
 	 (vos_idx) % (e_len))
 
@@ -364,6 +371,89 @@ obj_io_desc_fini(struct obj_io_desc *oiod)
 	if (oiod->oiod_siods != NULL)
 		D_FREE(oiod->oiod_siods);
 	memset(oiod, 0, sizeof(*oiod));
+}
+
+static inline void
+obj_recx_ep_list_idx_parity2daos(uint32_t nr, struct daos_recx_ep_list *lists,
+				 uint32_t tgt_idx, struct daos_oclass_attr *oca)
+{
+	struct daos_recx_ep_list	*list;
+	daos_recx_t			*recx;
+	uint64_t			 stripe_rec_nr =
+						obj_ec_stripe_rec_nr(oca);
+	uint64_t			 cell_rec_nr =
+						obj_ec_cell_rec_nr(oca);
+	uint32_t			 i, j;
+
+	if (lists == NULL)
+		return;
+	for (i = 0; i < nr; i++) {
+		list = &lists[i];
+		for (j = 0; j < list->re_nr; j++) {
+			recx = &list->re_items[j].re_recx;
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
+			recx->rx_idx &= ~PARITY_INDICATOR;
+			recx->rx_idx = obj_ec_idx_vos2daos(recx->rx_idx,
+						stripe_rec_nr, cell_rec_nr,
+						tgt_idx);
+		}
+	}
+}
+
+static inline void
+obj_iod_idx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
+		     struct daos_oclass_attr *oca)
+{
+	daos_iod_t	*iod;
+	daos_recx_t	*recx;
+	uint64_t	 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	uint64_t	 cell_rec_nr = obj_ec_cell_rec_nr(oca);
+	uint32_t	 i, j;
+
+	for (i = 0; i < iod_nr; i++) {
+		iod = &iods[i];
+		for (j = 0; j < iod->iod_nr; j++) {
+			recx = &iod->iod_recxs[j];
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) == 0);
+			recx->rx_idx = obj_ec_idx_vos2daos(recx->rx_idx,
+						stripe_rec_nr, cell_rec_nr,
+						tgt_idx);
+		}
+	}
+}
+
+static inline void
+obj_iod_idx_vos2parity(uint32_t iod_nr, daos_iod_t *iods)
+{
+	daos_iod_t	*iod;
+	daos_recx_t	*recx;
+	uint32_t	 i, j;
+
+	for (i = 0; i < iod_nr; i++) {
+		iod = &iods[i];
+		for (j = 0; j < iod->iod_nr; j++) {
+			recx = &iod->iod_recxs[j];
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) == 0);
+			recx->rx_idx |= PARITY_INDICATOR;
+		}
+	}
+}
+
+static inline void
+obj_iod_idx_parity2vos(uint32_t iod_nr, daos_iod_t *iods)
+{
+	daos_iod_t	*iod;
+	daos_recx_t	*recx;
+	uint32_t	 i, j;
+
+	for (i = 0; i < iod_nr; i++) {
+		iod = &iods[i];
+		for (j = 0; j < iod->iod_nr; j++) {
+			recx = &iod->iod_recxs[j];
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
+			recx->rx_idx &= ~PARITY_INDICATOR;
+		}
+	}
 }
 
 /* obj_class.c */
