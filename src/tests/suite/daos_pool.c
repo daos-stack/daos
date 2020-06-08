@@ -165,7 +165,6 @@ pool_exclude(void **state)
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
 	daos_pool_info_t info = {0};
-//	struct d_tgt_list tgts;
 	d_rank_t	 rank;
 	int		 tgt = -1;
 	int		 rc;
@@ -202,11 +201,6 @@ pool_exclude(void **state)
 		goto disconnect;
 	}
 	rank = info.pi_nnodes - 1;
-/*
-	tgts.tl_nr = 1;
-	tgts.tl_ranks = &rank;
-	tgts.tl_tgts = &tgt;
-*/
 	print_message("rank 0 excluding rank %u... ", rank);
 	for (idx = 0; idx < arg->pool.svc.rl_nr; idx++) {
 		daos_exclude_target(arg->pool.pool_uuid, arg->group,
