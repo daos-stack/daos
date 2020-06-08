@@ -364,7 +364,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
-* Fri June 05 2020 Ryon Jensen <ryon.jensen@intel.com> - 1.1.0-23
+* Fri Jun 05 2020 Ryon Jensen <ryon.jensen@intel.com> - 1.1.0-23
 - Add libisa-l_crypto dependency
 
 * Fri Jun 05 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-22
