@@ -28,22 +28,17 @@ def load_conf():
 class daos_named_kv():
     """Named KV generator"""
 
-    def __init__(self, transport, interface, puid, cuid):
+    def __init__(self, puid, cuid):
         conf = load_conf()
         if sys.version_info.major < 3:
             pydir = 'python{}.{}'.format(
                 sys.version_info.major, sys.version_info.minor)
         else:
             pydir = 'python{}'.format(sys.version_info.major)
-            sys.path.append(os.path.join(conf['PREFIX'],
-                                         'lib64',
-                                         pydir,
-                                         'site-packages'))
-
-        if 'CRT_PHY_ADDR_STR' not in os.environ:
-            os.environ['CRT_PHY_ADDR_STR'] = transport
-        if interface and 'OFI_INTERFACE' not in os.environ:
-            os.environ['OFI_INTERFACE'] = interface
+        sys.path.append(os.path.join(conf['PREFIX'],
+                                     'lib64',
+                                     pydir,
+                                     'site-packages'))
 
         self.daos = __import__('pydaos')
 
@@ -123,9 +118,7 @@ def main():
     PUID = sys.argv[1]
     CUID = sys.argv[2]
 
-    my_kv = daos_named_kv('ofi+sockets',
-                          'lo',
-                          PUID,
+    my_kv = daos_named_kv(PUID,
                           CUID)
 
     print('Kvs are {}'.format(','.join(sorted(my_kv.get_kv_list()))))

@@ -402,10 +402,8 @@ get_L3_map(struct crt_opc_map_L2 *L2_map, struct crt_proto_format *cpf)
 
 	if (L2_map->L2_num_slots_total < cpf->cpf_ver + 1) {
 		D_REALLOC_ARRAY(new_map, L2_map->L2_map, (cpf->cpf_ver + 1));
-		if (new_map == NULL) {
-			D_ERROR("not enough memory.\n");
+		if (new_map == NULL)
 			return NULL;
-		}
 		memset(&new_map[L2_map->L2_num_slots_total], 0,
 		       (cpf->cpf_ver + 1 - L2_map->L2_num_slots_total)
 		       *sizeof(struct crt_opc_map_L3));
@@ -427,7 +425,6 @@ crt_proto_reg_L2(struct crt_opc_map_L2 *L2_map,
 	/* get entry pointer, realloc if array not big enough */
 	L3_map = get_L3_map(L2_map, cpf);
 	if (L3_map == NULL) {
-		D_ERROR("get_L3_map() failed.\n");
 		return -DER_NOMEM;
 	}
 

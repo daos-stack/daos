@@ -55,7 +55,7 @@ func getHostAddr(i int) *net.TCPAddr {
 	return hostAddrs[i]
 }
 
-func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
+func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 	defaultMembers := system.Members{
 		system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
 		system.NewMember(1, "", getHostAddr(2), system.MemberStateJoined),
@@ -242,7 +242,7 @@ func TestServer_CtlSvc_rpcToRanks(t *testing.T) {
 			cs.rpcClient = mi
 
 			req := &control.RanksReq{Ranks: tc.ranks}
-			gotResults, gotErr := cs.rpcToRanks(ctx, req, start)
+			gotResults, gotErr := cs.rpcFanout(ctx, req, start)
 			common.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
 				return

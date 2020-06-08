@@ -857,3 +857,10 @@ vos_gc_pool(daos_handle_t poh, int *credits)
 
 	return 0;
 }
+
+inline void
+gc_reserve_space(daos_size_t *rsrvd)
+{
+	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * GC_CREDS_MAX;
+	rsrvd[DAOS_MEDIA_NVME]	+= 0;
+}

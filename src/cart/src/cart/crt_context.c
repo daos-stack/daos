@@ -259,7 +259,7 @@ out:
 
 int
 crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
-			      void *arg)
+			      crt_rpc_task_t iv_resp_cb, void *arg)
 {
 	struct crt_context *crt_ctx = ctx;
 
@@ -270,6 +270,7 @@ crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
 	}
 
 	crt_ctx->cc_rpc_cb = process_cb;
+	crt_ctx->cc_iv_resp_cb = iv_resp_cb;
 	crt_ctx->cc_rpc_cb_arg = arg;
 	return 0;
 }
@@ -463,10 +464,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		/* Flush SWIM RPC already sent */
-		rc = crt_context_flush(crt_ctx, CRT_SWIM_RPC_TIMEOUT);
+		rc = crt_context_flush(crt_ctx, crt_swim_rpc_timeout);
 		if (rc)
 			/* give a chance to other threads to complete */
-			sleep(CRT_SWIM_RPC_TIMEOUT);
+			usleep(1000); /* 1ms */
 		D_MUTEX_LOCK(&ctx->cc_mutex);
 	}
 
