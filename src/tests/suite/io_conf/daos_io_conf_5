@@ -71,6 +71,6 @@ update --tx 2 -r "[32812, 45777]7"
 
 update --tx 5 -r "[262144, 524288]9"
 update --tx 6 -r "[264559, 524111]11"
-fail_shard_fetch set 1 3
+fail_shard_fetch set 3 4
 fetch --tx 7 -r "[0, 524277]"
 fail_shard_fetch clear

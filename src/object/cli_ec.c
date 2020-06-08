@@ -1907,16 +1907,21 @@ obj_ec_recov_prep(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 	int			 rc;
 
 	D_ASSERT(iod_nr == fail_info->efi_nrecx_lists);
-	rc = obj_ec_stripe_list_init(fail_info->efi_recx_lists,
-				    fail_info->efi_nrecx_lists,
-				    reasb_req->orr_oca,
-				   &fail_info->efi_stripe_lists);
-	if (rc)
-		goto out;
+	/* when new target failed in recovery, the efi_stripe_lists and
+	 * efi_recov_tasks already initialized.
+	 */
+	if (fail_info->efi_stripe_lists == NULL) {
+		rc = obj_ec_stripe_list_init(fail_info->efi_recx_lists,
+					    fail_info->efi_nrecx_lists,
+					    reasb_req->orr_oca,
+					   &fail_info->efi_stripe_lists);
+		if (rc)
+			goto out;
 
-	rc = obj_ec_recov_task_init(reasb_req, oid, iods, iod_nr);
-	if (rc)
-		goto out;
+		rc = obj_ec_recov_task_init(reasb_req, oid, iods, iod_nr);
+		if (rc)
+			goto out;
+	}
 
 	rc = obj_ec_recov_codec_init(reasb_req, oid, fail_info->efi_ntgts,
 				     fail_info->efi_tgt_list);
