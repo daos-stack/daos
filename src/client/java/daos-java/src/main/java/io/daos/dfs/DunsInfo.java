@@ -28,31 +28,31 @@ package io.daos.dfs;
  */
 public class DunsInfo {
 
-    private String poolId;
-    private String contId;
-    private String layout;
-    private String appInfo;
+  private String poolId;
+  private String contId;
+  private String layout;
+  private String appInfo;
 
-    public DunsInfo(String poolId, String contId, String layout, String appInfo) {
-        this.poolId = poolId;
-        this.contId = contId;
-        this.layout = layout;
-        this.appInfo = appInfo;
-    }
+  public DunsInfo(String poolId, String contId, String layout, String appInfo) {
+    this.poolId = poolId;
+    this.contId = contId;
+    this.layout = layout;
+    this.appInfo = appInfo;
+  }
 
-    public String getAppInfo() {
-        return appInfo;
-    }
+  public String getAppInfo() {
+    return appInfo;
+  }
 
-    public String getContId() {
-        return contId;
-    }
+  public String getContId() {
+    return contId;
+  }
 
-    public String getLayout() {
-        return layout;
-    }
+  public String getLayout() {
+    return layout;
+  }
 
-    public String getPoolId() {
-        return poolId;
-    }
+  public String getPoolId() {
+    return poolId;
+  }
 }
