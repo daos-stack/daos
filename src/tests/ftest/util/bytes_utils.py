@@ -36,13 +36,56 @@ class Bytes(object):
         """Initialize a Bytes object.
 
         Args:
-            amount (int): number of bytes relative to the unit specified
+            amount (object): number of bytes relative to the unit specified
             units (str): units as a single letter
         """
+        self._amount = 0
+        self._units = self.SIZES[0]
+
         self.amount = amount
-        self.units = self.SIZES[0]
-        if isinstance(units, str) and units.upper()[0] in self.SIZES:
-            self.units = units.upper()[0]
+        self.units = units
+
+    @property
+    def amount(self):
+        """Get the bytes amount."""
+        return self._amount
+
+    @property
+    def units(self):
+        """Get the units amount."""
+        return self._units
+
+    @amount.setter
+    def amount(self, value):
+        """Set the bytes amount.
+
+        Args:
+            value (object): number of bytes relative to the unit specified
+
+        Raises:
+            ValueError: if the value is invalid (not a number)
+
+        """
+        self.amount = float(value)
+        if str(self.amount).endswith(".0"):
+            self.amount = int(self.amount)
+
+    @units.setter
+    def units(self, value):
+        """Set the units amount.
+
+        Args:
+            units (str): units as a single letter
+
+        Raises:
+            ValueError: if the value is not a supported size
+
+        """
+        if isinstance(value, str) and value.upper()[0] in self.SIZES:
+            self.units = value.upper()[0]
+        else:
+            raise ValueError(
+                "Invalid units: {} is not one of {}".format(value, self.SIZES))
 
     def __str__(self):
         """Return the string of the Bytes object.
