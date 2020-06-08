@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       20%{?relval}%{?dist}
+Release:       21%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -291,7 +291,6 @@ getent passwd daos >/dev/null || useradd -M daos
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
-%{_bindir}/dmg_old
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
@@ -363,6 +362,9 @@ getent passwd daos >/dev/null || useradd -M daos
 %{_libdir}/*.a
 
 %changelog
+* Thu Jun 04 2020 Hua Kuang <hua.kuang@intel.com> - 1.1.0-21
+- Remove dmg_old from DAOS RPM package
+
 * Thu May 28 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-20
 - Create daos_server group to run as in systemd unit file
 
