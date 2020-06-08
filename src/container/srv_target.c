@@ -540,6 +540,8 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
 	struct daos_llink      *llink;
 	int			rc;
 
+	D_DEBUG(DF_DSMS, "po_uuid %p \n", po_uuid);
+
 	rc = daos_lru_ref_hold(cache, (void *)co_uuid, sizeof(uuid_t),
 			       (void *)po_uuid, &llink);
 	if (rc != 0) {
