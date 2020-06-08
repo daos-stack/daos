@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       22%{?relval}%{?dist}
+Release:       23%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -211,7 +211,7 @@ mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
-getent passwd daos >/dev/null || useradd -M daos
+getent passwd daos_server >/dev/null || useradd -M daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -262,9 +262,9 @@ getent passwd daos >/dev/null || useradd -M daos
 %files server
 %config(noreplace) %{conf_dir}/daos_server.yml
 %dir %{conf_dir}/certs
-%attr(0700,daos,daos) %{conf_dir}/certs
+%attr(0700,daos_server,daos_server) %{conf_dir}/certs
 %dir %{conf_dir}/certs/clients
-%attr(0700,daos,daos) %{conf_dir}/certs/clients
+%attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 %attr(0664,root,root) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
@@ -364,14 +364,17 @@ getent passwd daos >/dev/null || useradd -M daos
 %{_libdir}/*.a
 
 %changelog
-* Fri June 05 2020 Ryon Jensen <ryon.jensen@intel.com> - 1.1.0-22
+* Fri June 05 2020 Ryon Jensen <ryon.jensen@intel.com> - 1.1.0-23
 - Add libisa-l_crypto dependency
+
+* Fri Jun 05 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-22
+- Change server systemd run-as user to daos_server in unit file
 
 * Thu Jun 04 2020 Hua Kuang <hua.kuang@intel.com> - 1.1.0-21
 - Remove dmg_old from DAOS RPM package
 
 * Thu May 28 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-20
-- Create daos_server group to run as in systemd unit file
+- Create daos group to run as in systemd unit file
 
 * Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
 - Enable parallel building with _smp_mflags

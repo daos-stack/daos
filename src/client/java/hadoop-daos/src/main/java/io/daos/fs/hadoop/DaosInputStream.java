@@ -198,15 +198,8 @@ public class DaosInputStream extends FSInputStream {
     }
     checkNotClose();
 
-    if (buf == null ) {
-      throw  new NullPointerException(" buf can't be null ");
-    }
     if (off < 0 || len < 0) {
       throw new IllegalArgumentException("offset/length is negative , offset = " + off + ", length = " + len);
-    }
-    if (off > buf.length ) {
-      throw new IndexOutOfBoundsException("offset out the length of buf , offset = " + off +
-              ", buf length = " + buf.length);
     }
     if (len > buf.length - off) {
       throw new IndexOutOfBoundsException("requested more bytes than destination buffer size " +
