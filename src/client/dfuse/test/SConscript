@@ -50,6 +50,7 @@ def scons():
     tenv.AppendUnique(CPPPATH='../il')
     tenv.AppendUnique(LIBPATH='../il')
     tenv.AppendUnique(RPATH='$PREFIX/lib64')
+    tenv.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('../../dfs').path])
 
     prereqs.require(tenv, 'cunit')
 
