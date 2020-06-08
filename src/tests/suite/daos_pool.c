@@ -214,7 +214,7 @@ pool_exclude(void **state)
 
 	        /* build and invoke dmg cmd */
         	snprintf(dmg_cmd, sizeof(dmg_cmd),
-                	"dmg pool exclude -i --pool=%s --rank=%d --target-idx=0,1,2,3",
+                	"dmg pool exclude -i --pool=%s --rank=%d",
                 	DP_UUID(arg->pool.pool_uuid), arg->pool.svc.rl_ranks[idx]);
         	print_message("dmg_cmd %s", dmg_cmd);
 
