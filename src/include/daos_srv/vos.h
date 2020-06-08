@@ -325,17 +325,6 @@ int
 vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 
 /**
- * Flush changes in the specified epoch to storage
- *
- * \param coh	[IN]	Container open handle
- * \param epoch	[IN]	Epoch to flush
- *
- * \return		Zero on success, negative value if error
- */
-int
-vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
-
-/**
  * Aggregates all epochs within the epoch range \a epr.
  * Data in all these epochs will be aggregated to the last epoch
  * \a epr::epr_hi, aggregated epochs will be discarded except the last one,
@@ -503,14 +492,15 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * \param size_fetch[IN]
  *			Fetch size only
  * \param ioh	[OUT]	The returned handle for the I/O.
+ * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t flags, daos_key_t *dkey, unsigned int nr,
-		daos_iod_t *iods,
-		bool size_fetch, daos_handle_t *ioh);
+		daos_iod_t *iods, bool size_fetch, daos_handle_t *ioh,
+		struct dtx_handle *dth);
 
 /**
  * Finish the fetch operation and release the responding resources.

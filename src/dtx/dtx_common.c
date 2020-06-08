@@ -223,12 +223,36 @@ check:
 	}
 }
 
+/* Return the epoch uncertainty upper bound. */
+static daos_epoch_t
+dtx_epoch_bound(daos_epoch_t epoch, daos_epoch_t epoch_orig, bool uncertain)
+{
+	daos_epoch_t limit;
+
+	if (!uncertain)
+		/*
+		 * We are told that the epoch has no uncertainty, even if it's
+		 * still within the potential uncertainty window.
+		 */
+		return epoch;
+
+	limit = epoch_orig + crt_hlc_epsilon_get();
+	if (epoch >= limit)
+		/*
+		 * The epoch is already out of the potential uncertainty
+		 * window.
+		 */
+		return epoch;
+
+	return limit;
+}
+
 /**
  * Init local dth handle.
  */
 static void
 dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
-		daos_epoch_t epoch,  uint32_t pm_ver,
+		daos_epoch_t epoch,  bool epoch_uncertain, uint32_t pm_ver,
 		daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t intent,
 		struct dtx_id *dti_cos, int dti_cos_count,
 		bool leader, bool solo, struct dtx_handle *dth)
@@ -236,6 +260,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
 	dth->dth_xid = *dti;
 	dth->dth_coh = coh;
 	dth->dth_epoch = epoch;
+	dth->dth_epoch_bound = dtx_epoch_bound(epoch, dti->dti_hlc,
+					       epoch_uncertain);
 	dth->dth_ver = pm_ver;
 
 	dth->dth_oid = *oid;
@@ -268,6 +294,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
  * \param cont		[IN]	Pointer to the container.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
+ * \param epoch_uncertain
+ *			[IN]	Epoch is uncertain.
  * \param pm_ver	[IN]	Pool map version for the DTX.
  * \param oid		[IN]	The target object (shard) ID.
  * \param dkey_hash	[IN]	Hash of the dkey to be modified if applicable.
@@ -280,7 +308,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
  */
 int
 dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
-		 daos_epoch_t epoch, uint32_t pm_ver,
+		 daos_epoch_t epoch, bool epoch_uncertain, uint32_t pm_ver,
 		 daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t intent,
 		 struct daos_shard_tgt *tgts, int tgt_cnt,
 		 struct dtx_leader_handle *dlh)
@@ -327,7 +355,7 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 	}
 
 init:
-	dtx_handle_init(dti, cont->sc_hdl, epoch, pm_ver,
+	dtx_handle_init(dti, cont->sc_hdl, epoch, epoch_uncertain, pm_ver,
 			oid, dkey_hash, intent,
 			dti_cos, dti_cos_count, true,
 			tgt_cnt == 0 ? true : false, dth);
@@ -549,10 +577,12 @@ out:
  * \param cont		[IN]	Pointer to the container.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
+ * \param epoch_uncertain
+ *			[IN]	Epoch is uncertain.
  * \param pm_ver	[IN]	Pool map version for the DTX.
  * \param oid		[IN]	The target object (shard) ID.
  * \param dkey_hash	[IN]	Hash of the dkey to be modified if applicable.
- * \param intent	[IN]	The intent of related modification.
+ * \param intent	[IN]	The intent of related operations.
  * \param dti_cos	[IN]	The DTX array to be committed because of shared.
  * \param dti_cos_count [IN]	The @dti_cos array size.
  * \param dth		[OUT]	Pointer to the DTX handle.
@@ -561,7 +591,7 @@ out:
  */
 int
 dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
-	  daos_epoch_t epoch, uint32_t pm_ver,
+	  daos_epoch_t epoch, bool epoch_uncertain, uint32_t pm_ver,
 	  daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t intent,
 	  struct dtx_id *dti_cos, int dti_cos_cnt, struct dtx_handle *dth)
 {
@@ -572,7 +602,7 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		return 0;
 	}
 
-	dtx_handle_init(dti, cont->sc_hdl, epoch, pm_ver,
+	dtx_handle_init(dti, cont->sc_hdl, epoch, epoch_uncertain, pm_ver,
 			oid, dkey_hash, intent,
 			dti_cos, dti_cos_cnt, false, false, dth);
 
