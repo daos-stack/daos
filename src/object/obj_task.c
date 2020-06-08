@@ -81,7 +81,7 @@ dc_obj_punch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	int		 rc;
 
 	DAOS_API_ARG_ASSERT(*args, OBJ_PUNCH);
-	rc = dc_task_create(dc_obj_punch, tse, ev, task);
+	rc = dc_task_create(dc_obj_punch_task, tse, ev, task);
 	if (rc)
 		return rc;
 
@@ -103,7 +103,7 @@ dc_obj_punch_dkeys_task_create(daos_handle_t oh, daos_handle_t th,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, OBJ_PUNCH_DKEYS);
-	rc = dc_task_create(dc_obj_punch_dkeys, tse, ev, task);
+	rc = dc_task_create(dc_obj_punch_dkeys_task, tse, ev, task);
 	if (rc)
 		return rc;
 
@@ -129,7 +129,7 @@ dc_obj_punch_akeys_task_create(daos_handle_t oh, daos_handle_t th,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, OBJ_PUNCH_AKEYS);
-	rc = dc_task_create(dc_obj_punch_akeys, tse, ev, task);
+	rc = dc_task_create(dc_obj_punch_akeys_task, tse, ev, task);
 	if (rc)
 		return rc;
 
@@ -192,10 +192,9 @@ dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
 }
 
 static void
-dc_obj_fetch_task_fill_args(daos_obj_fetch_t *args, daos_handle_t oh,
-			    daos_handle_t th, uint64_t flags, daos_key_t *dkey,
-			    unsigned int nr, daos_iod_t *iods,
-			    d_sg_list_t *sgls, daos_iom_t *ioms)
+obj_fetch_init_args(daos_obj_fetch_t *args, daos_handle_t oh, daos_handle_t th,
+		    uint64_t flags, daos_key_t *dkey, unsigned int nr,
+		    daos_iod_t *iods, d_sg_list_t *sgls, daos_iom_t *ioms)
 {
 	args->oh	= oh;
 	args->th	= th;
@@ -219,13 +218,12 @@ dc_obj_fetch_shard_task_create(daos_handle_t oh, daos_handle_t th,
 	int				 rc;
 
 	DAOS_API_ARG_ASSERT(*args, OBJ_FETCH_SHARD);
-	rc = dc_task_create(dc_obj_fetch_shard, tse, ev, task);
+	rc = dc_task_create(dc_obj_fetch_shard_task, tse, ev, task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(*task);
-	dc_obj_fetch_task_fill_args(&args->base, oh, th, 0, dkey, nr, iods,
-				    sgls, ioms);
+	obj_fetch_init_args(&args->base, oh, th, 0, dkey, nr, iods, sgls, ioms);
 	args->flags	= flags;
 	args->shard	= shard;
 
@@ -248,13 +246,12 @@ dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 				dkey, nr, iods, sgls, ioms, ev, tse, task);
 
 	DAOS_API_ARG_ASSERT(*args, OBJ_FETCH);
-	rc = dc_task_create(dc_obj_fetch, tse, ev, task);
+	rc = dc_task_create(dc_obj_fetch_task, tse, ev, task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(*task);
-	dc_obj_fetch_task_fill_args(args, oh, th, flags, dkey, nr, iods, sgls,
-				    ioms);
+	obj_fetch_init_args(args, oh, th, flags, dkey, nr, iods, sgls, ioms);
 
 	return 0;
 }
@@ -270,7 +267,7 @@ dc_obj_update_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, OBJ_UPDATE);
-	rc = dc_task_create(dc_obj_update, tse, ev, task);
+	rc = dc_task_create(dc_obj_update_task, tse, ev, task);
 	if (rc)
 		return rc;
 

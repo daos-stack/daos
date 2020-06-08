@@ -85,11 +85,6 @@
 #define SB_HI		0
 #define ROOT_HI		1
 
-enum {
-	DFS_WRITE,
-	DFS_READ
-};
-
 /** object struct that is instantiated for a DFS open object */
 struct dfs_obj {
 	/** DAOS object ID */
@@ -3888,4 +3883,22 @@ dfs_umount_root_cont(dfs_t *dfs)
 
 	rc = daos_cont_close(coh, NULL);
 	return daos_der2errno(rc);
+}
+
+int
+dfs_obj_anchor_split(dfs_obj_t *obj, uint32_t *nr, daos_anchor_t *anchors)
+{
+	if (obj == NULL || nr == NULL || !S_ISDIR(obj->mode))
+		return EINVAL;
+
+	return daos_obj_anchor_split(obj->oh, nr, anchors);
+}
+
+int
+dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor)
+{
+	if (obj == NULL || !S_ISDIR(obj->mode))
+		return EINVAL;
+
+	return daos_obj_anchor_set(obj->oh, index, anchor);
 }

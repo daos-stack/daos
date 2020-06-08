@@ -2521,6 +2521,27 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 }
 
+/* Call new election (campaign to be leader) by a follower */
+int
+rdb_raft_campaign(struct rdb *db)
+{
+	struct rdb_raft_state	state;
+	int			rc;
+
+	if (!raft_is_follower(db->d_raft)) {
+		D_DEBUG(DB_MD, DF_DB": no election called, must be follower\n",
+			DP_DB(db));
+		return 0;
+	}
+
+	rdb_raft_save_state(db, &state);
+	D_DEBUG(DB_MD, DF_DB": calling election from current term %d\n",
+		DP_DB(db), raft_get_current_term(db->d_raft));
+	rc = raft_election_start(db->d_raft);
+	rc = rdb_raft_check_state(db, &state, rc /* raft_rc */);
+	return rc;
+}
+
 /* Wait for index to be applied in term. For leaders only. */
 int
 rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)

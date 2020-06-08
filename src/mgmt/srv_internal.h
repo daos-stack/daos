@@ -93,6 +93,7 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
 			d_rank_list_t **svcp);
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
+int ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 		struct pool_target_id_list *tgt_list,
 		pool_comp_state_t new_state);

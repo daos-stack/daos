@@ -25,62 +25,12 @@ package main
 
 import (
 	"net"
-	"os/user"
-	"strconv"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
 )
-
-// userInfo is an internal implementation of the security.User interface
-type userInfo struct {
-	info *user.User
-}
-
-func (u *userInfo) Username() string {
-	return u.info.Username
-}
-
-func (u *userInfo) GroupIDs() ([]uint32, error) {
-	gidStrs, err := u.info.GroupIds()
-	if err != nil {
-		return nil, err
-	}
-
-	gids := []uint32{}
-	for _, gstr := range gidStrs {
-		gid, err := strconv.Atoi(gstr)
-		if err != nil {
-			continue
-		}
-		gids = append(gids, uint32(gid))
-	}
-
-	return gids, nil
-}
-
-// external is an internal implementation of the UserExt interface
-type external struct{}
-
-// LookupUserId is a wrapper for user.LookupId
-func (e *external) LookupUserID(uid uint32) (auth.User, error) {
-	uidStr := strconv.FormatUint(uint64(uid), 10)
-	info, err := user.LookupId(uidStr)
-	if err != nil {
-		return nil, err
-	}
-	return &userInfo{
-		info: info,
-	}, nil
-}
-
-// LookupGroupId is a wrapper for user.LookupGroupId
-func (e *external) LookupGroupID(gid uint32) (*user.Group, error) {
-	gidStr := strconv.FormatUint(uint64(gid), 10)
-	return user.LookupGroupId(gidStr)
-}
 
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
@@ -95,17 +45,17 @@ func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *Securi
 		log:    log,
 		config: tc,
 	}
-	mod.ext = &external{}
+	mod.ext = &auth.External{}
 	return &mod
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
-	if method == drpc.MethodRequestCredentials {
-		return m.getCredential(session)
+func (m *SecurityModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
+	if method != drpc.MethodRequestCredentials {
+		return nil, drpc.UnknownMethodFailure()
 	}
 
-	return nil, drpc.UnknownMethodFailure()
+	return m.getCredential(session)
 }
 
 // getCredentials generates a signed user credential based on the data attached to
@@ -145,6 +95,6 @@ func (m *SecurityModule) credRespWithStatus(status drpc.DaosStatus) ([]byte, err
 }
 
 // ID will return Security module ID
-func (m *SecurityModule) ID() int32 {
+func (m *SecurityModule) ID() drpc.ModuleID {
 	return drpc.ModuleSecurityAgent
 }

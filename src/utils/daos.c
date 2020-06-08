@@ -30,8 +30,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <sys/ioctl.h>
 #include <errno.h>
 #include <stdint.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
@@ -42,6 +47,7 @@
 #include "daos_api.h"
 #include "daos_uns.h"
 #include "daos_hdlr.h"
+#include "dfuse_ioctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
@@ -820,6 +826,32 @@ out:
 }
 
 static int
+call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
+{
+	int fd;
+	int rc;
+
+	fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	if (fd < 0)
+		return ENOENT;
+
+	errno = 0;
+	rc = ioctl(fd, DFUSE_IOCTL_IL, reply);
+	if (rc != 0) {
+		int err = errno;
+
+		close(fd);
+		return err;
+	}
+	close(fd);
+
+	if (reply->fir_version != DFUSE_IOCTL_VERSION)
+		return EIO;
+
+	return 0;
+}
+
+static int
 cont_op_hdlr(struct cmd_args_s *ap)
 {
 	daos_cont_info_t	cont_info;
@@ -836,19 +868,37 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
+		struct dfuse_il_reply il_reply = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
 
-		/* Resolve pool, container UUIDs from path if needed */
+		/* Resolve pool, container UUIDs from path if needed
+		 *
+		 * Firtly check for a unified namespace entry point, then if
+		 * that isn't detected then check for dfuse backing the
+		 * path, and print pool/container/oid for the path.
+		 */
 		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
-			fprintf(stderr, "could not resolve pool, container "
-					"by path: %s\n", ap->path);
-			D_GOTO(out, rc);
+
+			rc = call_dfuse_ioctl(ap->path, &il_reply);
+			if (rc != 0) {
+				fprintf(stderr, "could not resolve pool, "
+					"container by path: %d %s %s\n",
+					rc, strerror(rc), ap->path);
+
+				D_GOTO(out, rc);
+			}
+
+			ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
+			uuid_copy(ap->p_uuid, il_reply.fir_pool);
+			uuid_copy(ap->c_uuid, il_reply.fir_cont);
+			ap->oid = il_reply.fir_oid;
+		} else {
+			ap->type = dattr.da_type;
+			uuid_copy(ap->p_uuid, dattr.da_puuid);
+			uuid_copy(ap->c_uuid, dattr.da_cuuid);
 		}
-		ap->type = dattr.da_type;
-		uuid_copy(ap->p_uuid, dattr.da_puuid);
-		uuid_copy(ap->c_uuid, dattr.da_cuuid);
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
@@ -1216,7 +1266,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"container options (snapshot and rollback-related):\n"
 			"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 			"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
-			"	--eprange=B-E      container epoch range (destroy-snap)\n");
+			"	--epcrange=B-E     container epoch range (destroy-snap)\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "set-prop") == 0) {
 			fprintf(stream,

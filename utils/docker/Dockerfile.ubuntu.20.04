@@ -1,0 +1,93 @@
+#
+# Copyright 2018-2020, Intel Corporation
+#
+# 'recipe' for Docker to build an image of Ubuntu-based
+# environment for building the DAOS project.
+#
+
+# Pull base image
+FROM ubuntu:20.04
+MAINTAINER <daos@daos.groups.io>
+
+# Build arguments can be set via -build-arg
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
+# Update distribution
+# It's better to put the apt-get update in the same "cache layer" as the
+# apt-get install command so that the apt database is updated if/when the
+# installed packages list below is updated
+
+# Install basic tools
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            autoconf bash clang cmake curl doxygen flex                 \
+            gcc git graphviz                                            \
+            libaio-dev libboost-dev libcmocka0 libcmocka-dev            \
+            libcunit1-dev libevent-dev libibverbs-dev libiscsi-dev      \
+            libltdl-dev libnuma-dev librdmacm-dev libreadline6-dev      \
+            libssl-dev libtool-bin libyaml-dev                          \
+            locales make meson nasm ninja-build pandoc patch            \
+            pylint python-dev python3-dev scons sg3-utils uuid-dev      \
+            yasm valgrind libhwloc-dev man fuse3 libfuse3-dev 		\
+	    openjdk-8-jdk maven
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                       software-properties-common &&                    \
+    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                       libsafec-dev libipmctl-dev ndctl ipmctl golang-go
+
+# hack the default shell to bash instead of dash
+RUN rm /bin/sh && ln -s bash /bin/sh
+
+RUN locale-gen en_US.UTF-8 || cat /usr/share/i18n/SUPPORTED
+
+# use Java 8 instead of default Java 11
+RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+
+# set maven mirror
+RUN mkdir -p /home/$USER/.m2
+
+RUN echo -e "<settings>\n\
+	<mirrors>\n\
+		<mirror>\n\
+			<id>google-maven-central</id>\n\
+			<name>GCS Maven Central mirror</name>\n\
+			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+			<mirrorOf>central</mirrorOf>\n\
+		</mirror>\n\
+	</mirrors>\n\
+</settings>" > /home/$USER/.m2/settings.xml
+
+# Dependencies
+
+# Add DAOS user
+ENV USER daos
+ENV PASSWD daos
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+
+# Create directory for DAOS backend storage
+RUN mkdir /mnt/daos
+RUN chown daos.daos /mnt/daos
+
+# Switch to new user
+#USER $USER
+WORKDIR /home/$USER
+
+# set NOBUILD to disable git clone & build
+ARG NOBUILD
+
+# Fetch DAOS code
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+  git clone https://github.com/daos-stack/daos.git; fi
+WORKDIR /home/$USER/daos
+
+# Build DAOS & dependencies
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+  git submodule init && git submodule update; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+  scons --build-deps=yes install PREFIX=/usr; fi
+
+# Set environment variables
+ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
+ENV FI_SOCKETS_MAX_CONN_RETRY=1
