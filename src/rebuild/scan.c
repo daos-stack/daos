@@ -121,7 +121,8 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 	rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
 			    rebuild_obj_fill_buf, arg);
 	if (rc < 0 || arg->count == 0) {
-		D_DEBUG(DB_REBUILD, "Can not get objects: rc %d\n", rc);
+		D_DEBUG(DB_REBUILD, "Can not get objects: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -165,23 +166,32 @@ rebuild_cont_send_cb(daos_handle_t ih, d_iov_t *key_iov,
 	root = val_iov->iov_buf;
 	while (!dbtree_is_empty(root->root_hdl)) {
 		rc = rebuild_obj_send_cb(root, arg);
-		if (rc < 0)
+		if (rc < 0) {
+			D_ERROR("rebuild_obj_send_cb failed: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
+		}
 	}
 
 	rc = dbtree_destroy(root->root_hdl, NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("dbtree_destroy failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
 	/* Some one might insert new record to the tree let's reprobe */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_REBUILD, key_iov,
 			       NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("dbtree_iter_probe failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
 	rc = dbtree_iter_delete(ih, NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("dbtree_iter_delete failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
@@ -234,7 +244,8 @@ rebuild_objects_send_ult(void *data)
 		rc = dbtree_iterate(tls->rebuild_tree_hdl, DAOS_INTENT_REBUILD,
 				    false, rebuild_cont_send_cb, &arg);
 		if (rc < 0) {
-			D_ERROR("dbtree iterate failed: rc %d\n", rc);
+			D_ERROR("dbtree iterate failed: rc "DF_RC"\n",
+				DP_RC(rc));
 			tls->rebuild_pool_status = rc;
 			break;
 		}
@@ -483,8 +494,8 @@ rebuild_scanner(void *data)
 		return 0;
 	}
 
-	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
-		ABT_thread_yield();
+	if (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
+		dss_sleep(daos_fail_value_get() * 1000000);
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
