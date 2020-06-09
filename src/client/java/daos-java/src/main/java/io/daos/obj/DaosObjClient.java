@@ -127,9 +127,91 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
     return id;
   }
 
-  public native static void encode(long contPtr, ByteBuffer buffer, int feats, String name, int args);
+  /**
+   * encode object id with object feature bits and object type.
+   * encoded object id is set back to <code>buffer</code>.
+   *
+   * @param contPtr
+   * opened container handler
+   * @param oidBuffer
+   * direct byte buffer with original object id's high and low. encode object id is set back to this buffer.
+   * @param feats
+   * object feature bits
+   * @param objectTypeName
+   * object type name, see {@link DaosObjectType}
+   * @param args
+   * reserved
+   */
+  public native static void encodeObjectId(long contPtr, ByteBuffer oidBuffer, int feats, String objectTypeName,
+                                           int args);
 
-  public native static void open(long contPtr, ByteBuffer buffer, int feats, String name, int args);
+  /**
+   * open object denoted by object id stored in <code>buffer</code>.
+   *
+   * @param contPtr
+   * opened container handler
+   * @param oidBuffer
+   * direct byte buffer with original object id's high and low
+   * @param mode
+   * open mode, see {@link OpenMode}
+   * @return handle of opened object
+   */
+  public native static long openObject(long contPtr, ByteBuffer oidBuffer, int mode);
+
+  /**
+   * close object.
+   *
+   * @param objectPtr
+   * handle of opened object
+   */
+  public native static void closeObject(long objectPtr);
+
+  /**
+   * punch an entire object with all associated with it.
+   *
+   * @param objectPtr
+   * handle of opened object
+   * @param flags
+   * punch flags (currently ignored)
+   */
+  public native static void punchObject(long objectPtr, long flags);
+
+  /**
+   * punch dkeys (with all its akeys) from an object.
+   *
+   * @param objectPtr
+   * handle of opened object
+   * @param flags
+   * punch flags (currently ignored)
+   * @param nbrOfDkeys
+   * number of dkeys
+   * @param dkeysBuffer
+   * dkeys written into direct byte buffer in format, len1+key1+len2+key2...
+   */
+  public native static void punchObjectDkeys(long objectPtr, long flags, int nbrOfDkeys, ByteBuffer dkeysBuffer);
+
+  /**
+   * punch akeys (with all records) from an object.
+   * 
+   * @param objectPtr
+   * handle of opened object
+   * @param flags
+   * punch flags (currently ignored)
+   * @param nbrOfAkeys
+   * number of akeys
+   * @param keysBuffer
+   * dkey and akeys written into direct byte buffer in format, dkey len+dkey+akey1 len+akey1+akey2 len+akey2...
+   */
+  public native static void punchObjectAkeys(long objectPtr, long flags, int nbrOfAkeys, ByteBuffer keysBuffer);
+
+  /**
+   * query attributes of an object.
+   *
+   * @param objectPtr
+   * handle of opened object
+   * @return attributes serialized by protobuf. see DaosObjectAttribute.proto.
+   */
+  public native static byte[] queryObjectAttribute(long objectPtr);
 
   @Override
   protected synchronized void disconnect(boolean force) throws IOException {
