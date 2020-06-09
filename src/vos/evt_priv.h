@@ -59,7 +59,10 @@ struct evt_iterator {
 	struct evt_entry_array		it_entries;
 };
 
-#define EVT_TRACE_MAX                   32
+/* backtrace depth, evtree(order=8, depth=16) can store 4 billion rectangles,
+ * giving the actual order used by VOS is 23, this value is more than enough.
+ */
+#define EVT_TRACE_MAX                   16
 
 struct evt_trace {
 	/** the current node offset */

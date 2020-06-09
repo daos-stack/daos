@@ -98,6 +98,10 @@ umem_get_type(void)
 		D_PRINT("Ignore PMDK snapshot, data can be lost on failure.\n");
 		return UMEM_CLASS_PMEM_NO_SNAP;
 
+	} else if (daos_io_bypass & IOBP_PM_TX) {
+		D_PRINT("Ignore PMDK tx, data can be lost on failure.\n");
+		return UMEM_CLASS_PMEM_AA;
+
 	} else {
 		return UMEM_CLASS_PMEM;
 	}

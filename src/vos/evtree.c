@@ -1118,7 +1118,8 @@ evt_desc_log_del(struct evt_context *tcx, daos_epoch_t epoch,
 }
 
 static int
-evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
+evt_node_entry_free(struct evt_context *tcx, struct evt_node *nd,
+		    struct evt_node_entry *ne)
 {
 	struct evt_desc	*desc;
 	struct evt_rect	 rect;
@@ -1268,10 +1269,16 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 static inline int
 evt_node_tx_add(struct evt_context *tcx, struct evt_node *nd)
 {
+	int	 nob;
+
 	if (!evt_has_tx(tcx))
 		return 0;
 
-	return umem_tx_add_ptr(evt_umm(tcx), nd, evt_node_size(tcx));
+	/* NB: have an extra entry because assuming it's an insert */
+	nob = sizeof(struct evt_node) +
+	      sizeof(struct evt_node_entry) *
+	      min(tcx->tc_order, nd->tn_nr + 1);
+	return umem_tx_add_ptr(evt_umm(tcx), nd, nob);
 }
 
 static inline int
@@ -1306,7 +1313,7 @@ evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level,
 		ne = evt_node_entry_at(tcx, nd, i);
 		if (leaf) {
 			/* NB: This will be replaced with a callback */
-			rc = evt_node_entry_free(tcx, ne);
+			rc = evt_node_entry_free(tcx, nd, ne);
 			if (rc)
 				goto out;
 
@@ -1509,7 +1516,7 @@ evt_root_free(struct evt_context *tcx)
 	rc = evt_root_tx_add(tcx);
 	if (rc != 0)
 		goto out;
-	memset(tcx->tc_root, 0, sizeof(*tcx->tc_root));
+	umem_tx_memset(evt_umm(tcx), tcx->tc_root, 0, sizeof(*tcx->tc_root));
 out:
 	tcx->tc_root = NULL;
 	return rc;
@@ -2642,7 +2649,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 
 		if (!leaf) {
 			nr = nd->tn_nr - i;
-			memmove(ne + 1, ne, nr * sizeof(*ne));
+			umem_tx_memmove(evt_umm(tcx), ne + 1, ne,
+					nr * sizeof(*ne));
 			break;
 		}
 
@@ -2651,7 +2659,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 					 DAOS_INTENT_CHECK);
 		if (rc != ALB_UNAVAILABLE) {
 			nr = nd->tn_nr - i;
-			memmove(ne + 1, ne, nr * sizeof(*ne));
+			umem_tx_memmove(evt_umm(tcx), ne + 1, ne,
+					nr * sizeof(*ne));
 		} else {
 			umem_off_t	off = ne->ne_child;
 
@@ -2660,7 +2669,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			 * is large enough or not even if it had. So we have to
 			 * free the former @desc and re-allocate it properly.
 			 */
-			rc = evt_node_entry_free(tcx, ne);
+			rc = evt_node_entry_free(tcx, nd, ne);
 			if (rc != 0)
 				return rc;
 
@@ -2683,7 +2692,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			if (rc == ALB_UNAVAILABLE) {
 				umem_off_t	off = ne->ne_child;
 
-				rc = evt_node_entry_free(tcx, ne);
+				rc = evt_node_entry_free(tcx, nd, ne);
 				if (rc != 0)
 					return rc;
 
@@ -2770,8 +2779,8 @@ evt_even_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 
 	entry_src = evt_node_entry_at(tcx, nd_src, nr);
 	entry_dst = evt_node_entry_at(tcx, nd_dst, 0);
-	memcpy(entry_dst, entry_src, sizeof(*entry_dst) * (nd_src->tn_nr - nr));
-
+	umem_tx_memcpy(evt_umm(tcx), entry_dst, entry_src,
+		       sizeof(*entry_dst) * (nd_src->tn_nr - nr));
 	nd_dst->tn_nr = nd_src->tn_nr - nr;
 	nd_src->tn_nr = nr;
 	return 0;
@@ -2833,7 +2842,8 @@ evt_common_adjust(struct evt_context *tcx, struct evt_node *nd,
 	return 0;
 move:
 	/* Execute the move */
-	memmove(dst_entry, src_entry, sizeof(*dst_entry) * count);
+	umem_tx_memmove(evt_umm(tcx), dst_entry, src_entry,
+			sizeof(*dst_entry) * count);
 	*etmp = cached_entry;
 
 	return offset;
@@ -2963,8 +2973,8 @@ evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 done:
 	entry_src = evt_node_entry_at(tcx, nd_src, nr);
 	entry_dst = evt_node_entry_at(tcx, nd_dst, 0);
-	memcpy(entry_dst, entry_src, sizeof(*entry_dst) * (nd_src->tn_nr - nr));
-
+	umem_tx_memcpy(evt_umm(tcx), entry_dst, entry_src,
+		       sizeof(*entry_dst) * (nd_src->tn_nr - nr));
 	nd_dst->tn_nr = nd_src->tn_nr - nr;
 	nd_src->tn_nr = nr;
 	return 0;
@@ -3083,7 +3093,7 @@ evt_node_delete(struct evt_context *tcx)
 			D_ASSERT(old_cur == ne->ne_child);
 		if (leaf) {
 			/* Free the evt_desc */
-			rc = evt_node_entry_free(tcx, ne);
+			rc = evt_node_entry_free(tcx, node, ne);
 			if (rc != 0)
 				return rc;
 		}
@@ -3118,8 +3128,7 @@ evt_node_delete(struct evt_context *tcx)
 		if (count == 0)
 			break;
 
-		memmove(ne, ne + 1, sizeof(*ne) * count);
-
+		umem_tx_memmove(evt_umm(tcx), ne, ne + 1, sizeof(*ne) * count);
 		break;
 	};
 

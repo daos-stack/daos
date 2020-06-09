@@ -109,8 +109,10 @@ struct btr_trace {
 	unsigned int			tr_at;
 };
 
-/** backtrace depth */
-#define BTR_TRACE_MAX		40
+/* Backtrace depth, tree(order=5, dep=30) can index 1 billion record, giving
+ * the actual order used by VOS is 23, this value is more than enough.
+ */
+#define BTR_TRACE_MAX		30
 
 /**
  * Context for btree operations.
@@ -442,9 +444,14 @@ btr_hkey_gen(struct btr_context *tcx, d_iov_t *key, void *hkey)
 }
 
 static void
-btr_hkey_copy(struct btr_context *tcx, char *dst_key, char *src_key)
+btr_hkey_copy(struct btr_context *tcx, char *dst_key, char *src_key,
+	      bool umem_dst)
 {
-	memcpy(dst_key, src_key, btr_hkey_size(tcx));
+	if (umem_dst)
+		umem_tx_memcpy(btr_umm(tcx), dst_key, src_key,
+			       btr_hkey_size(tcx));
+	else
+		memcpy(dst_key, src_key, btr_hkey_size(tcx));
 }
 
 static int
@@ -576,21 +583,23 @@ static void
 btr_rec_copy(struct btr_context *tcx, struct btr_record *dst_rec,
 	     struct btr_record *src_rec, int rec_nr)
 {
-	memcpy(dst_rec, src_rec, rec_nr * btr_rec_size(tcx));
+	umem_tx_memcpy(btr_umm(tcx), dst_rec, src_rec,
+		       rec_nr * btr_rec_size(tcx));
 }
 
 static void
 btr_rec_move(struct btr_context *tcx, struct btr_record *dst_rec,
 	     struct btr_record *src_rec, int rec_nr)
 {
-	memmove(dst_rec, src_rec, rec_nr * btr_rec_size(tcx));
+	umem_tx_memmove(btr_umm(tcx), dst_rec, src_rec,
+			rec_nr * btr_rec_size(tcx));
 }
 
 static void
 btr_rec_copy_hkey(struct btr_context *tcx, struct btr_record *dst_rec,
 		  struct btr_record *src_rec)
 {
-	btr_hkey_copy(tcx, &dst_rec->rec_hkey[0], &src_rec->rec_hkey[0]);
+	btr_hkey_copy(tcx, &dst_rec->rec_hkey[0], &src_rec->rec_hkey[0], true);
 }
 
 static inline int
@@ -638,7 +647,12 @@ btr_node_free(struct btr_context *tcx, umem_off_t nd_off)
 static int
 btr_node_tx_add(struct btr_context *tcx, umem_off_t nd_off)
 {
-	return umem_tx_add(btr_umm(tcx), nd_off, btr_node_size(tcx));
+	struct btr_node *nd = btr_off2ptr(tcx, nd_off);
+
+	return umem_tx_add(btr_umm(tcx), nd_off,
+			   btr_rec_size(tcx) *
+			   min(tcx->tc_tins.ti_root->tr_node_size,
+			       nd->tn_keyn + 2)); /* assuming insert */
 }
 
 /* helper functions */
@@ -748,7 +762,7 @@ btr_root_free(struct btr_context *tcx)
 		if (btr_has_tx(tcx))
 			btr_root_tx_add(tcx);
 
-		memset(root, 0, sizeof(*root));
+		umem_tx_memset(btr_umm(tcx), root, 0, sizeof(*root));
 	} else {
 		D_DEBUG(DB_TRACE, "Destroy tree root\n");
 		rc = umem_free(btr_umm(tcx), tins->ti_root_off);
@@ -779,8 +793,7 @@ btr_root_init(struct btr_context *tcx, struct btr_root *root, bool in_place)
 			return rc;
 	}
 
-	if (in_place)
-		memset(root, 0, sizeof(*root));
+	root->tr_depth		= 0;
 	root->tr_class		= tcx->tc_class;
 	root->tr_feats		= tcx->tc_feats;
 	root->tr_order		= tcx->tc_order;
@@ -788,8 +801,9 @@ btr_root_init(struct btr_context *tcx, struct btr_root *root, bool in_place)
 		root->tr_node_size	= 1;
 	else
 		root->tr_node_size	= tcx->tc_order;
-	root->tr_node		= BTR_NODE_NULL;
 
+	root->tr_gen		= 0;
+	root->tr_node		= BTR_NODE_NULL;
 	return 0;
 }
 
@@ -1159,11 +1173,11 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	/* backup it because the below btr_node_insert_rec_only may
 	 * overwrite it.
 	 */
-	btr_hkey_copy(tcx, &hkey_buf[0], &rec_src->rec_hkey[0]);
+	btr_hkey_copy(tcx, &hkey_buf[0], &rec_src->rec_hkey[0], false);
 
 	btr_node_insert_rec_only(tcx, trace, rec);
 
-	btr_hkey_copy(tcx, &rec->rec_hkey[0], &hkey_buf[0]);
+	btr_hkey_copy(tcx, &rec->rec_hkey[0], &hkey_buf[0], true);
 
  bubble_up:
 	D_DEBUG(DB_TRACE, "left keyn %d, right keyn %d\n",
@@ -1230,7 +1244,7 @@ btr_root_resize(struct btr_context *tcx, struct btr_trace *trace,
 		return rc;
 	}
 	trace->tr_node = root->tr_node = nd_off;
-	memcpy(btr_off2ptr(tcx, nd_off), nd, old_size);
+	umem_tx_memcpy(btr_umm(tcx), btr_off2ptr(tcx, nd_off), nd, old_size);
 	/* NB: Both of the following routines can fail but neither presently
 	 * returns an error code.   For now, ignore this fact.   DAOS-2577
 	 */
@@ -3491,7 +3505,8 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 		if (key)
 			btr_hkey_gen(tcx, key, hkey);
 		else
-			btr_hkey_copy(tcx, hkey, (char *)&anchor->da_buf[0]);
+			btr_hkey_copy(tcx, hkey, (char *)&anchor->da_buf[0],
+				      false);
 		rc = btr_probe(tcx, opc, intent, key, hkey);
 	}
 
@@ -3666,7 +3681,7 @@ dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 
 	} else {
 		btr_hkey_copy(tcx, (char *)&anchor->da_buf[0],
-			      &rec->rec_hkey[0]);
+			      &rec->rec_hkey[0], false);
 		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
 	}
 
