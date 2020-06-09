@@ -118,6 +118,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_REINTEGRATE:
 		ds_mgmt_drpc_pool_reintegrate(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_EXTEND:
+		ds_mgmt_drpc_pool_extend(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_BIO_HEALTH_QUERY:
 		ds_mgmt_drpc_bio_health_query(drpc_req, drpc_resp);
 		break;
