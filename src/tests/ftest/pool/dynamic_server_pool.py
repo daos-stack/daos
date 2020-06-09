@@ -81,7 +81,7 @@ class DynamicServerPool(TestWithServers):
         self.expected_uuids.sort()
         self.assertEqual(self.expected_uuids, actual_uuids)
 
-    def test_dynamic_server_addition(self):
+    def test_dynamic_server_pool(self):
         """
         JIRA ID: DAOS-3598
 
