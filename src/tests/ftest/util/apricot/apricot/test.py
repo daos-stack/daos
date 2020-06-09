@@ -601,7 +601,7 @@ class TestWithServers(TestWithoutServers):
             super(TestWithServers, self).tearDown()
         except OSError as error:
             errors.append(
-                "Error running inheritted teardown(): {}".format(error))
+                "Error running inherited teardown(): {}".format(error))
 
         # Fail the test if any errors occurred during tear down
         if errors:
@@ -636,7 +636,7 @@ class TestWithServers(TestWithoutServers):
                 containers = [containers]
             self.test_log.info("Destroying containers")
             for container in containers:
-                # Only close a container that has been openned by the test
+                # Only close a container that has been opened by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
                         container.close()

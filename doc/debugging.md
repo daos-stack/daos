@@ -19,7 +19,7 @@ default all subsystems are enabled ("DD_SUBSYS=all").
 
 ## Priority Logging
 
-All macros which output logs have a priority level, shown in decending order
+All macros which output logs have a priority level, shown in descending order
 below.
 - D_FATAL(fmt, ...)		FATAL
 - D_CRIT(fmt, ...)		CRIT
