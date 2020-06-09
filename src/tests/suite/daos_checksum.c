@@ -664,7 +664,7 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 
 	/** Setup Update IOD */
 	ctx.update_iod.iod_size = rec_size;
-	/** These test cases always use 1 recx at a time */
+	/** These thest cases always use 1 recx at a time */
 	ctx.update_iod.iod_nr	= 1;
 	ctx.update_iod.iod_recxs = ctx.recx;
 	ctx.update_iod.iod_type  = DAOS_IOD_ARRAY;

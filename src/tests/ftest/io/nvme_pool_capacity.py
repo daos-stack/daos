@@ -171,7 +171,7 @@ class NvmePoolCapacity(TestWithServers):
 
     def test_run(self, num_pool=1):
         """
-        Method Description:
+        Method Descripton:
             This method is called with different test_cases.
             Args:
                num_pool (int): Total pools for running a test.
