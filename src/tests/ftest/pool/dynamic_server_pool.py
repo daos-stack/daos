@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from getpass import getuser
-
 from apricot import TestWithServers
 from test_utils_pool import TestPool
 from check_for_pool import check_for_pool
