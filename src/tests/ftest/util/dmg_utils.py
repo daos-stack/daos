@@ -835,7 +835,7 @@ def storage_format(path, hosts, insecure=True):
     dmg = DmgCommand(path)
 ##DH++ Here
 #    dmg.insecure.value = insecure
-    dmg.insecure.value = False 
+    dmg.insecure.value = False
     dmg.hostlist.value = hosts
 
     try:

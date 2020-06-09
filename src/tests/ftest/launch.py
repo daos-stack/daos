@@ -41,7 +41,7 @@ from ClusterShell.Task import task_self
 print(" ")
 print(" ")
 print(" ")
-print ("START launch.py")
+print(" STARTing launch.py")
 print(" ")
 print(" ")
 print(" ")
@@ -1142,7 +1142,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             pattern (str): the fnmatch/glob pattern of core files to
                            run gdb on
         """
-        import magic
+        import magic # pylint: disable=import-outside-toplevel
 
         for corefile in cores:
             if not fnmatch.fnmatch(corefile, pattern):

@@ -33,8 +33,8 @@ class DaosAgentTransportCredentials(TransportCredentials):
     def __init__(self):
         """Initialize a TransportConfig object."""
         super(DaosAgentTransportCredentials, self).__init__(
-#DH            "/run/agent_config/transport_config/*", "transport_config")
             "/run/transport_config/*", "transport_config")
+#DH         "/run/agent_config/transport_config/*", "transport_config")
 
         # Additional daos_agent transport credential parameters:
         #   - server_name: <str>, e.g. "daos_server"

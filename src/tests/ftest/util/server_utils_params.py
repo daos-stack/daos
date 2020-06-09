@@ -35,8 +35,8 @@ class DaosServerTransportCredentials(TransportCredentials):
     def __init__(self):
         """Initialize a TransportConfig object."""
         super(DaosServerTransportCredentials, self).__init__(
-##DH            "/run/server_config/transport_config/*", "transport_config")
             "/run/transport_config/*", "transport_config")
+##DH        "/run/server_config/transport_config/*", "transport_config")
 
         # Additional daos_server transport credential parameters:
         #   - client_cert_dir: <str>, e.g. "".daos/clients"
@@ -45,7 +45,7 @@ class DaosServerTransportCredentials(TransportCredentials):
 #        self.client_cert_dir = BasicParameter(None)
 ##DH++
         self.allow_insecure = BasicParameter(False, False)
-        self.client_cert_dir =  BasicParameter(None, "./daosCA/certs")
+        self.client_cert_dir = BasicParameter(None, "./daosCA/certs")
         self.ca_cert = BasicParameter(None, "./daosCA/certs/daosCA.crt")
         self.cert = BasicParameter(None, "./daosCA/certs/server.crt")
         self.key = BasicParameter(None, "./daosCA/certs/server.key")

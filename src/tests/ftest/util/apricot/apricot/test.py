@@ -54,10 +54,6 @@ from env_modules import load_mpi
 from distutils.spawn import find_executable
 from write_host_file import write_host_file
 
-##DH++
-from subprocess import call
-
-
 # pylint: disable=invalid-name
 def skipForTicket(ticket):
     """Skip a test with a comment about a ticket."""
@@ -354,7 +350,8 @@ class TestWithServers(TestWithoutServers):
             hosts.extend(self.hostlist_clients)
         self.stop_leftover_processes(["orterun"], hosts)
 ##DH++
-        self.insecure_mode = self.params.get("allow_insecure", "/run/transport_config/*")
+        self.insecure_mode = self.params.get("allow_insecure",
+                                             "/run/transport_config/*")
         print("=====>>")
         print("self.insecure_mode= ", self.insecure_mode)
         print("=====>>")
@@ -416,7 +413,10 @@ class TestWithServers(TestWithoutServers):
                 transport.allow_insecure.value = self.insecure_mode
 ##DH--
                 print("===>agent config_file= ")
-                call(["cat", config_file])
+                c_f = open(config_file, "r")
+                c_f_conts = c_f.read()
+                print(c_f_conts)
+                c_f.close()
                 print(" ")
                 print("===>")
 
@@ -428,7 +428,8 @@ class TestWithServers(TestWithoutServers):
                 print("===common_cfg obj.= ", common_cfg)
                 print("===group=       ", group)
                 print("===transport obj.=  ", transport)
-                print("==>agent transport.allow_insecure= ", transport.allow_insecure)
+                print("==>agent transport.allow_insecure= ",
+                    transport.allow_insecure)
                 print("==>self.insecure_mode= ", self.insecure_mode)
                 print(" ")
 
@@ -438,7 +439,8 @@ class TestWithServers(TestWithoutServers):
                 print("=====manager=====")
                 print("   self.agent_managers[-1]=", self.agent_managers[-1])
                 print("   hosts= ", hosts)
-                print("   self.hostfile_clients_slots=", self.hostfile_clients_slots)
+                print("   self.hostfile_clients_slots=",
+                    self.hostfile_clients_slots)
                 print("   servers=", servers)
                 self.configure_manager(
                     "agent",
@@ -489,7 +491,10 @@ class TestWithServers(TestWithoutServers):
                     self.hostfile_servers_slots,
                     hosts)
                 print("===>server config_file= ")
-                call(["cat", config_file])
+                c_f = open(config_file, "r")
+                c_f_conts = c_f.read()
+                print(c_f_conts)
+                c_f.close()
                 print(" ")
                 print("===>")
             print("===(5S)At start_server, self.start_server_managers===")
@@ -529,11 +534,9 @@ class TestWithServers(TestWithoutServers):
 ##DH++
             agent_transport = DaosAgentTransportCredentials()
             agent_transport.allow_insecure.value = self.insecure_mode
-            common_cfg = CommonConfig(
+#            common_cfg = CommonConfig(self.server_group, agent_transport)
 #                self.server_group, DaosAgentTransportCredentials())
-                self.server_group, agent_transport)
-            common_cfg = CommonConfig(
-                self.server_group, agent_transport())
+            common_cfg = CommonConfig(self.server_group, agent_transport())
 
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
@@ -544,7 +547,10 @@ class TestWithServers(TestWithoutServers):
         print("===>")
         print(" ")
         print("===>config_file= ")
-        call(["cat", config_file])
+        c_f = open(config_file, "r")
+        c_f_conts = c_f.read()
+        print(c_f_conts)
+        c_f.close()
         print(" ")
         print("At add_agent_manager, agent_cmd= ", agent_cmd)
         print("===>")
@@ -593,9 +599,9 @@ class TestWithServers(TestWithoutServers):
         transport_dmg.allow_insecure.value = self.insecure_mode
 ##DH--
 
-        dmg_cfg = DmgYamlParameters(
+        dmg_cfg = DmgYamlParameters(dmg_config_file, self.server_group,
+                                    transport_dmg)
 ##DH            dmg_config_file, self.server_group, DmgTransportCredentials())
-            dmg_config_file, self.server_group, transport_dmg)
         print("dmg_config_file = ", dmg_config_file)
         print("=======>")
 
@@ -605,7 +611,10 @@ class TestWithServers(TestWithoutServers):
         server_cfg = DaosServerYamlParameters(config_file, common_cfg)
         server_cmd = DaosServerCommand(self.bin, server_cfg, timeout)
         print("===>dmg config_file= ")
-        call(["cat", config_file])
+        c_f = open(config_file, "r")
+        c_f_conts = c_f.read()
+        print(c_f_conts)
+        c_f.close()
         print(" ")
         print("===>")
         self.server_managers.append(
