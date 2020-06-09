@@ -760,7 +760,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 	int	rc;
 
 	if (daos_is_zero_dti(dti))
-		/* If DTX is disabled, then means that the appplication does
+		/* If DTX is disabled, then means that the application does
 		 * not care about the replicas consistency. Under such case,
 		 * if client resends some modification RPC, then just handle
 		 * it as non-resent case, return -DER_NONEXIST.

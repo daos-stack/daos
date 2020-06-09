@@ -279,7 +279,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			trc:           &ioserver.TestRunnerConfig{StartErr: errors.New("no")},
 			waitTimeout:   10 * testShortTimeout,
 			expStartErr:   context.DeadlineExceeded,
-			expStartCount: 2, // both start but dont proceed so context times out
+			expStartCount: 2, // both start but don't proceed so context times out
 		},
 		"delayed failure occurs before notify ready": {
 			dontNotifyReady: true,

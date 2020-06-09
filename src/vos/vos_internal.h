@@ -91,8 +91,8 @@
 
 extern struct dss_module_key vos_module_key;
 
-#define VOS_POOL_HHASH_BITS 10 /* Upto 1024 pools */
-#define VOS_CONT_HHASH_BITS 20 /* Upto 1048576 containers */
+#define VOS_POOL_HHASH_BITS 10 /* Up to 1024 pools */
+#define VOS_CONT_HHASH_BITS 20 /* Up to 1048576 containers */
 
 #define VOS_BLK_SHIFT		12	/* 4k */
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
@@ -370,7 +370,7 @@ vos_obj_tab_register();
  * Called from vos_cont_destroy
  *
  * \param umm		[IN]	Instance of an unified memory class.
- * \param cont_df	[IN]	Pointer to the on-disk VOS containter.
+ * \param cont_df	[IN]	Pointer to the on-disk VOS container.
  */
 void
 vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
@@ -413,7 +413,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param record	[IN]	Address (offset) of the record (in SCM)
- *				to associate witht the transaction.
+ *				to associate with the transaction.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  * \param dtx		[OUT]	tx_id is returned.  Caller is responsible
  *				to save it in the record.
@@ -487,9 +487,9 @@ enum vos_tree_class {
 	VOS_BTR_OBJ_TABLE	= (VOS_BTR_BEGIN + 3),
 	/** container index table */
 	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
-	/** DAOS two-phase commit transation table (active) */
+	/** DAOS two-phase commit transaction table (active) */
 	VOS_BTR_DTX_ACT_TABLE	= (VOS_BTR_BEGIN + 5),
-	/** DAOS two-phase commit transation table (committed) */
+	/** DAOS two-phase commit transaction table (committed) */
 	VOS_BTR_DTX_CMT_TABLE	= (VOS_BTR_BEGIN + 6),
 	/** The VOS incarnation log tree */
 	VOS_BTR_ILOG		= (VOS_BTR_BEGIN + 7),
@@ -745,7 +745,7 @@ void vos_cont_decref(struct vos_container *cont);
 enum vos_iter_state {
 	/** iterator has no valid cursor */
 	VOS_ITS_NONE,
-	/** iterator has valide cursor (user can call next/probe) */
+	/** iterator has valid cursor (user can call next/probe) */
 	VOS_ITS_OK,
 	/** end of iteration, no more entries */
 	VOS_ITS_END,

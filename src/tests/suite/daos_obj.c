@@ -295,7 +295,7 @@ insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
 }
 
 /**
- * Helper funtion to insert a single record (nr=1). The number of record
+ * Helper function to insert a single record (nr=1). The number of record
  * extents is set to 1, meaning the iod size is equal to data size (record size(
  * in this simple use case.
  */
@@ -481,7 +481,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 }
 
 /**
- * Helper funtion to fetch a single record (nr=1). Iod size is set to
+ * Helper function to fetch a single record (nr=1). Iod size is set to
  * DAOS_REC_ANY, which indicates that extent is unknown, and the entire record
  * should be returned in a single extent (as it most likey was inserted that
  * way). This lookup will only return 1 extent, therefore is not appropriate to
@@ -499,7 +499,7 @@ lookup_single(const char *dkey, const char *akey, uint64_t idx,
 }
 
 /**
- * Helper funtion to fetch a single record (nr=1) with a known iod/extent size.
+ * Helper function to fetch a single record (nr=1) with a known iod/extent size.
  * The number of record extents is calculated before the fetch using the iod
  * size and the data size.
  */
@@ -649,7 +649,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	daos_pool_info_t pinfo;
 	daos_size_t	 nvme_initial_size;
 	daos_size_t	 nvme_current_size;
-	void const *const aggr_disabled[] = {"disaled"};
+	void const *const aggr_disabled[] = {"disabled"};
 	void const *const aggr_set_time[] = {"time"};
 
 	if (size < OW_IOD_SIZE || (size % OW_IOD_SIZE != 0))
@@ -661,7 +661,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	/* Alloc and set buffer to be a sting of all uppercase letters */
+	/* Alloc and set buffer to be a string of all uppercase letters */
 	D_ALLOC(ow_buf, size);
 	assert_non_null(ow_buf);
 	dts_buf_render_uppercase(ow_buf, size);
@@ -681,7 +681,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 				DAOS_TX_NONE, &req);
 	assert_memory_equal(ow_buf, fbuf, size);
 
-	/*Get the inital pool size after writing first transaction*/
+	/*Get the initial pool size after writing first transaction*/
 	rc = pool_storage_info(state, &pinfo);
 	assert_int_equal(rc, 0);
 	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
@@ -722,7 +722,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 		/* Increment next overwrite size by 1 record extent */
 		rx_nr++;
 
-		/*Verify the SCM/NVMe Pool Free size based on tranfer size*/
+		/*Verify the SCM/NVMe Pool Free size based on transfer size*/
 		rc = pool_storage_info(state, &pinfo);
 		assert_int_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
@@ -775,7 +775,7 @@ io_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 	sprintf(dkey, "ep_ow_full dkey_%d", (int)size);
 	sprintf(akey, "ep_ow_full akey_%d", (int)size);
 
-	/* Alloc and set buffer to be a sting of all uppercase letters */
+	/* Alloc and set buffer to be a string of all uppercase letters */
 	D_ALLOC(ow_buf, size);
 	assert_non_null(ow_buf);
 	dts_buf_render_uppercase(ow_buf, size);
@@ -857,14 +857,14 @@ io_rewritten_array_with_mixed_size(void **state)
 	int			rc;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
-	void const *const aggr_disabled[] = {"disaled"};
+	void const *const aggr_disabled[] = {"disabled"};
 	void const *const aggr_set_time[] = {"time"};
 
 	/* choose random object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	/* Alloc and set buffer to be a sting*/
+	/* Alloc and set buffer to be a string*/
 	D_ALLOC(ow_buf, size);
 	assert_non_null(ow_buf);
 	dts_buf_render(ow_buf, size);
@@ -1135,7 +1135,7 @@ io_var_rec_size(void **state)
 }
 
 /**
- * Test update/fetch with data verification of varing size and IOD type.
+ * Test update/fetch with data verification of varying size and IOD type.
  * Size is either small I/O to SCM or larger (>=4k) I/O to NVMe, and IOD
  * type is either array or single value.
  */
@@ -1882,7 +1882,7 @@ punch_simple(void **state)
 }
 
 /**
- * Test update/fetch with data verification of multiple records of varing size
+ * Test update/fetch with data verification of multiple records of varying size
  * and IOD type. Size is either small I/O to SCM or larger (>=4k) I/O to NVMe,
  * and IOD type is either array or single value.
  */
@@ -2609,7 +2609,7 @@ tx_discard(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	close_reopen_coh_oh(arg, &req, oid);
 
-	/** Verify record is the same as the last commited transaction. */
+	/** Verify record is the same as the last committed transaction. */
 	lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
 	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
 	print_message("verifying transaction after container re-open\n");
@@ -4048,7 +4048,7 @@ static const struct CMUnitTest io_tests[] = {
 	  read_empty_records, async_disable, test_case_teardown},
 	{ "IO26: Read from large unwritten records",
 	  read_large_empty_records, async_disable, test_case_teardown},
-	{ "IO27: written records repeatly",
+	{ "IO27: written records repeatedly",
 	  write_record_multiple_times, async_disable, test_case_teardown},
 	{ "IO28: echo fetch/update",
 	  echo_fetch_update, async_disable, test_case_teardown},
@@ -4070,7 +4070,7 @@ static const struct CMUnitTest io_tests[] = {
 	  io_pool_map_refresh_trigger, async_disable, test_case_teardown},
 	{ "IO37: Fetch existing and nonexistent akeys in single fetch call",
 	  fetch_mixed_keys, async_disable, test_case_teardown},
-	{ "IO38: force capablity IV fetch",
+	{ "IO38: force capability IV fetch",
 	  io_capa_iv_fetch, async_disable, test_case_teardown},
 	{ "IO39: Update with invalid sg and record",
 	  io_invalid, async_disable, test_case_teardown},

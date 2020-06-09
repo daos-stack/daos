@@ -107,7 +107,7 @@ struct pool_domain {
 	/**
 	 * all targets within this domain
 	 * for the last level domain, it points to the first direct targets
-	 * for the intermediate domain, it ponts to the first indirect targets
+	 * for the intermediate domain, it points to the first indirect targets
 	 */
 	struct pool_target	*do_targets;
 };
