@@ -61,14 +61,6 @@ crt_proc_daos_key_desc_t(crt_proc_t proc, daos_key_desc_t *key)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint16_t(proc, &key->kd_csum_type);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint16_t(proc, &key->kd_csum_len);
-	if (rc != 0)
-		return -DER_HG;
-
 	return 0;
 }
 

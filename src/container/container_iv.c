@@ -997,7 +997,7 @@ out:
 struct iv_prop_ult_arg {
 	struct ds_iv_ns		*iv_ns;
 	daos_prop_t		*prop;
-	uuid_t			 cont_hdl_uuid;
+	uuid_t			 cont_uuid;
 	ABT_eventual		 eventual;
 };
 
@@ -1022,7 +1022,7 @@ cont_iv_prop_fetch_ult(void *data)
 	if (prop_fetch == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_hdl_uuid,
+	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_uuid,
 			   iv_entry, iv_entry_size, false /* retry */);
 	if (rc) {
 		D_ERROR("cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
@@ -1065,7 +1065,7 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_hdl_uuid,
 		return dss_abterr2der(rc);
 
 	arg.iv_ns = ns;
-	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
+	uuid_copy(arg.cont_uuid, cont_hdl_uuid);
 	arg.prop = cont_prop;
 	arg.eventual = eventual;
 	rc = dss_ult_create(cont_iv_prop_fetch_ult, &arg,

@@ -776,6 +776,10 @@ typedef struct {
 	daos_anchor_t		*akey_anchor;
 	/** versions. */
 	uint32_t		*versions;
+	/** Serialized checksum info for enumerated keys and data in sgl.
+	 * (for internal use only)
+	 */
+	d_iov_t			*csum;
 	/** order. */
 	bool			incr_order;
 } daos_obj_list_t;

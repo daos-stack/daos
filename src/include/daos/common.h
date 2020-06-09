@@ -250,6 +250,10 @@ daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 /** Get the leftover space in an iov of sgl */
 #define daos_iov_left(sgl, iov_idx, iov_off)				\
 	((sgl)->sg_iovs[iov_idx].iov_len - (iov_off))
+/** get remaining space in an iov, assuming that iov_len is used and
+ * iov_buf_len is total in buf
+ */
+#define daos_iov_remaining(iov) (iov).iov_buf_len - (iov).iov_len
 /**
  * Move sgl forward from iov_idx/iov_off, with move_dist distance. It is
  * caller's responsibility to check the boundary.
@@ -348,6 +352,7 @@ char *daos_str_trimwhite(char *str);
 int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
 void daos_iov_free(d_iov_t *iov);
 bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
+void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 
 #define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
 

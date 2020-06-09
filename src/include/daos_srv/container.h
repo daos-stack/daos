@@ -147,6 +147,12 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
 
+/** initialize a csummer based on container properties. Will retrieve the
+ * checksum related properties from IV
+ */
+int ds_cont_csummer_init(struct daos_csummer **csummer,
+			 uuid_t pool_uuid, uuid_t cont_uuid);
+
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);
 

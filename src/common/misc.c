@@ -385,6 +385,14 @@ daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2)
 	return !memcmp(iov1->iov_buf, iov2->iov_buf, iov1->iov_len);
 }
 
+void
+daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len)
+{
+	D_ASSERT(iov->iov_len + buf_len <= iov->iov_buf_len);
+	memcpy(iov->iov_buf + iov->iov_len, buf, buf_len);
+	iov->iov_len += buf_len;
+}
+
 d_rank_list_t *
 daos_rank_list_parse(const char *str, const char *sep)
 {

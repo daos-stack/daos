@@ -1112,7 +1112,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* query the container properties from RDB and update to IV */
 	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
-				 in->coi_op.ci_hdl, in->coi_op.ci_uuid,
+				 in->coi_op.ci_uuid, in->coi_op.ci_uuid,
 				 prop);
 	daos_prop_free(prop);
 	if (rc != 0) {
@@ -1706,7 +1706,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			return -DER_NOMEM;
 
 		rc = cont_iv_prop_fetch(pool_hdl->sph_pool->sp_iv_ns,
-					in->cqi_op.ci_hdl, iv_prop);
+					in->cqi_op.ci_uuid, iv_prop);
 		if (rc) {
 			D_ERROR("cont_iv_prop_fetch failed "DF_RC"\n",
 				DP_RC(rc));
@@ -1874,7 +1874,7 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 
 	/* Update prop IV with merged prop */
 	rc = cont_iv_prop_update(pool->sp_iv_ns,
-				 hdl_uuid, cont->c_uuid, prop_iv);
+				 cont->c_uuid, cont->c_uuid, prop_iv);
 	if (rc)
 		D_ERROR(DF_UUID": failed to update prop IV for cont, "
 			"%d.\n", DP_UUID(cont->c_uuid), rc);
