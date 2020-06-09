@@ -73,7 +73,7 @@ public class DaosObjectId {
         // TODO: memory management for small buffer
         ByteBuffer buffer = BufferAllocator.directBuffer(32);
         buffer.putLong(high).putLong(low);
-        DaosObjClient.encode(contPtr, buffer, feats, objectType.name(), args);
+        DaosObjClient.encodeObjectId(contPtr, buffer, feats, objectType.name(), args);
         buffer.order(DEFAULT_ORDER);
         buffer.flip();
         high = buffer.getLong();
