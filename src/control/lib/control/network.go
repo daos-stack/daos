@@ -59,6 +59,13 @@ func (hf *HostFabric) HashKey() (uint64, error) {
 	return hashstructure.Hash(hf, nil)
 }
 
+// AddInterface is a helper function that populates a HostFabric.
+func (hf *HostFabric) AddInterface(hfi *HostFabricInterface) {
+	hf.Interfaces = append(hf.Interfaces, hfi)
+	hf.Providers = append(hf.Providers, hfi.Provider)
+	hf.Providers = dedupeStringSlice(hf.Providers)
+}
+
 // HostFabricSet contains a HostFabric configuration and the
 // set of hosts matching this configuration.
 type HostFabricSet struct {

@@ -38,9 +38,9 @@ class DmgCommand(YamlCommand):
 
     METHOD_REGEX = {
         "run": r"(.*)",
-        "network_scan": r"(?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))"
-                        r"(?:.*\s+(fabric_iface|provider|pinned_numa_node):\s+"
-                        r"([a-z0-9+;_]+))",
+        "network_scan": r"[-]+(?:\n|\n\r)([a-z0-9-]+)(?:\n|\n\r)[-]+|"
+                        r"Available\s+providers:\s+([a-z0-9+,;_ ]+)|NUMA\s+"
+                        r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
         # Sample output of dmg pool list.
         # wolf-3:10001: connected
         # Pool UUID                            Svc Replicas

@@ -39,6 +39,7 @@ type ControlService struct {
 	harness    *IOServerHarness
 	membership *system.Membership
 	rpcClient  control.Invoker
+	srvCfg     *Configuration
 }
 
 // NewControlService returns ControlService to be used as gRPC control service
@@ -60,5 +61,6 @@ func NewControlService(l logging.Logger, h *IOServerHarness,
 		harness:               h,
 		membership:            m,
 		rpcClient:             rc,
+		srvCfg:                cfg,
 	}, nil
 }

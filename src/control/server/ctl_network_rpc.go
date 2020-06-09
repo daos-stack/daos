@@ -39,27 +39,26 @@ const (
 
 func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
 	c.log.Debugf("NetworkScanDevices() Received request: %s", req.GetProvider())
-
 	excludes := req.GetExcludeinterfaces()
 	if excludes == "" {
 		excludes = defaultExcludeInterfaces
 	}
-	excludeMap := make(map[string]struct{})
-	for _, iface := range strings.Split(excludes, ",") {
-		excludeMap[iface] = struct{}{}
+
+	provider := c.srvCfg.Fabric.Provider
+	switch {
+	case strings.EqualFold(req.GetProvider(), "all"):
+		provider = ""
+	case req.GetProvider() != "":
+		provider = req.GetProvider()
 	}
 
-	results, err := netdetect.ScanFabric(req.GetProvider())
+	results, err := netdetect.ScanFabric(provider, excludes)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
 
 	resp := new(ctlpb.NetworkScanResp)
 	for _, sr := range results {
-		if _, skip := excludeMap[sr.DeviceName]; skip {
-			continue
-		}
-
 		resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
 			Provider: sr.Provider,
 			Device:   sr.DeviceName,
