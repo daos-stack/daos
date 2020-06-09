@@ -149,7 +149,7 @@ class WarningsFactory():
         entry['message'] = line.get_anon_msg()
         entry['severity'] = sev
         if line.function in self.FLAKY_FUNCTIONS and \
-           entry['severity'] == 'NORMAL':
+           entry['severity'] != 'ERROR':
             entry['severity'] = 'LOW'
         self.issues.append(entry)
         self.pending.append((line, message))
