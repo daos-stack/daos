@@ -349,7 +349,7 @@ def il_cmd(dfuse, cmd):
     my_env['D_LOG_FILE'] = log_file.name
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
-    ret = subprocess.run(cmd, env=my_env, stdout = subprocess.PIPE)
+    ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
     print('Log results for il')
@@ -986,7 +986,7 @@ def run_il_test(server, conf):
 
     # TODO: This doesn't work with two pools, there appears to be a bug
     # relating to re-using container uuids across pools.
-    while len(pools) < 2:
+    while len(pools) < 1:
         pools = make_pool(daos, conf)
 
     print('pools are ', ','.join(pools))
@@ -1001,7 +1001,6 @@ def run_il_test(server, conf):
 
     for p in pools:
         for c in containers:
-            cl = str(uuid.uuid4())
             d = os.path.join(dfuse.dir, p, c)
             try:
                 print('Making directory {}'.format(d))
@@ -1018,7 +1017,7 @@ def run_il_test(server, conf):
     # Copy it across containers.
     ret = il_cmd(dfuse, ['cp', f, dirs[-1]])
     assert ret.returncode == 0
-    
+
     # Copy it within the container.
     child_dir = os.path.join(dirs[0], 'new_dir')
     os.mkdir(child_dir)
@@ -1219,7 +1218,7 @@ def main():
         fatal_errors = test_alloc_fail(conf)
     else:
         run_il_test(server, conf)
-#        run_dfuse(server, conf)
+        run_dfuse(server, conf)
 
     if server.stop() != 0:
         fatal_errors = True
