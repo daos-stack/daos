@@ -308,7 +308,7 @@ class TestPool(TestDaosApiBase):
 
         Note:
             Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -322,7 +322,7 @@ class TestPool(TestDaosApiBase):
 
         Note:
             Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -347,7 +347,7 @@ class TestPool(TestDaosApiBase):
 
         Note:
             Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -362,7 +362,7 @@ class TestPool(TestDaosApiBase):
 
         Note:
             Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -392,7 +392,7 @@ class TestPool(TestDaosApiBase):
 
         Note:
             Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -401,7 +401,7 @@ class TestPool(TestDaosApiBase):
 
         Note:
             Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -429,7 +429,7 @@ class TestPool(TestDaosApiBase):
 
         Note:
             Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -449,7 +449,7 @@ class TestPool(TestDaosApiBase):
 
         Note:
             Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:

@@ -1,4 +1,4 @@
-# Unittests Name and Paramter to be mention in this file.
+# Unittests Name and Parameter to be mention in this file.
 hosts:
   test_servers:
     - server-A

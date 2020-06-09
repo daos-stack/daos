@@ -37,7 +37,7 @@
  * one per input segment. These segments are coalecsed into a single
  * output segment by the overall aggregation process.
  *
- * The input data is held in a buffer that is specifed by a bio sg_list.
+ * The input data is held in a buffer that is specified by a bio sg_list.
  * The data for the output segment is place within the initial range of
  * the buffer. Following this range, the additional data required for
  * checksum data is stored. These additional segments, either prefix
@@ -51,7 +51,7 @@
  * the data for each input segment.
  *
  * The calculated checksums, are then compared to the checksums
- * associatied with the input segments. These input checksums were
+ * associated with the input segments. These input checksums were
  * returned by the evtree iterator that generates the input extents.
  * Input segments that overlap a merge window are an exception to this.
  * Here, the checksums used for verification are from the overlapping
@@ -133,7 +133,7 @@ calc_csum_params(struct dcs_csum_info *csum_info, struct csum_recalc *recalc,
 	return low_idx;
 }
 
-/* Verifies checksums for an input segement. */
+/* Verifies checksums for an input segment. */
 static bool
 csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		unsigned int rec_size, unsigned int prefix_len)
@@ -180,7 +180,7 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	}
 
 	/* Comparison is for the full length of the output csum array,
-	 * starting a the corrent offset of the checksum array for the inout
+	 * starting at the correct offset of the checksum array for the input
 	 * segment.
 	 */
 	return !memcmp(new_csum->cs_csum,
@@ -188,8 +188,8 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		       new_csum->cs_nr * new_csum->cs_len);
 }
 
-/* Driver for the checksum verification of input segements, and calculation
- * of checksum array for the output segment. This fuction is called directly
+/* Driver for the checksum verification of input segments, and calculation
+ * of checksum array for the output segment. This function is called directly
  * from the VOS unit test, but is invoked in a ULT (running in a helper xstream
  * when available) for standard aggregation running within the DAOS server.
  */
