@@ -106,7 +106,7 @@ class _env_module():
 
         module = tmp_locals.get('module', default_func)
 
-        print("Detected newer 'module' command\n");
+        print("Detected newer 'module' command\n")
         return module
 
     def _init_mpi_module(self):
@@ -160,6 +160,8 @@ class _env_module():
             if find_executable('mpirun'):
                 print("Loaded %s" % to_load)
                 return True
+
+        os.system("module avail")
         return False
 
     @staticmethod
