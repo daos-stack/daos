@@ -812,36 +812,45 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 	return rc;
 }
 
-void
-daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-		    const d_rank_list_t *svc, d_rank_t rank,
-		    int tgt_idx)
+static void
+daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
+		    const char *grp, const d_rank_list_t *svc,
+		    d_rank_t rank, int tgt_idx)
 {
-	char			dmg_cmd[DTS_CFG_MAX];
-	int			rc;
+	char		dmg_cmd[DTS_CFG_MAX];
+	char		tgt[DTS_CFG_MAX];	
+	int		rc;
 
 	/* build and invoke dmg cmd */
 	if (tgt_idx == -1)
-		dts_create_config(dmg_cmd,
-			"dmg pool exclude -i --pool=%s --rank=%d",
-			DP_UUID(pool_uuid), rank);
+		tgt[0] = '\n';
 	else
-		dts_create_config(dmg_cmd,
-			"dmg pool exclude -i --pool=%s --rank=%d "
-			"--target-idx=%d",
-			 DP_UUID(pool_uuid), rank, tgt_idx);
+		dts_create_config(tgt, "--target-idx=%d", tgt_idx);
+ 
+	dts_create_config(dmg_cmd,
+			"dmg pool %s -i --pool=%s --rank=%d %s",
+			sub_cmd, DP_UUID(pool_uuid), rank, tgt);
 
 	rc = system(dmg_cmd);
 	if (rc == -1 || WEXITSTATUS(rc) != 0)
-		print_message("exclude pool failed rc %d\n", rc);
+		print_message("%s pool failed rc %d\n", sub_cmd, rc);
 	if (rc != -1)
 		assert_int_equal(WEXITSTATUS(rc), 0);
 }
 
 void
+daos_exclude_target(const uuid_t pool_uuid, const char *grp,
+                    const d_rank_list_t *svc, d_rank_t rank,
+                    int tgt_idx)
+{
+	daos_dmg_pool_target("exclude", pool_uuid, grp, svc,
+			rank, tgt_idx);
+}
+void
 daos_add_target(const uuid_t pool_uuid, const char *grp,
 		const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
 {
+#if 0
 	struct d_tgt_list	targets;
 	int			rc;
 
@@ -853,6 +862,10 @@ daos_add_target(const uuid_t pool_uuid, const char *grp,
 	if (rc)
 		print_message("add pool failed rc %d\n", rc);
 	assert_int_equal(rc, 0);
+#endif
+	daos_dmg_pool_target("reintegrate", pool_uuid, grp, svc,
+			 rank, tgt_idx);
+
 }
 
 void
