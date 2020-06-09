@@ -4,7 +4,7 @@ In DAOS, if the data is replicated with multiple copies on different
 targets, once one of the target failed, the data on it will be rebuilt
 on the other targets automatically, so the data redundancy will not be
 impacted due to the target failure. In future, DAOS will also support
-Erasure Codeing to protect the data, then the rebuild process might be
+Erasure Coding to protect the data, then the rebuild process might be
 updated accordingly.
 
 ## Rebuild Detection
@@ -84,11 +84,11 @@ might grow significantly and rebuilds may never end if new failures
 overlap with ongoing rebuilds. So for multiple failures, these rules
 are applied
 
-- If the rebuild initiator failes during rebuild, then the object shards
+- If the rebuild initiator fails during rebuild, then the object shards
 being rebuilt on the initiator should be ignored, which will be handled
 by next rebuild.
 - If rebuild initiator can not fetch the data from other replicas due to
-the failure, it will switch to other replicas if avaible.
+the failure, it will switch to other replicas if available.
 - A target in rebuild does not need to re-scan its objects or reset rebuild
 progress for the current failure if another failure has occurred.
 - When there are multiple failures, if the number of failed targets from

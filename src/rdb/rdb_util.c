@@ -274,7 +274,7 @@ static inline int
 rdb_vos_fetch_check(d_iov_t *value, d_iov_t *value_orig)
 {
 	/*
-	 * An emtpy value represents nonexistence. Keep the caller value intact
+	 * An empty value represents nonexistence. Keep the caller value intact
 	 * in this case.
 	 */
 	if (value->iov_len == 0) {
