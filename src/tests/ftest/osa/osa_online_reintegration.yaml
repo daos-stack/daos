@@ -1,0 +1,48 @@
+server_manager:
+  srv_timeout: 500
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+  test_clients:
+    - client-E
+timeout: 1000
+server_config:
+  name: daos_server
+  servers:
+      bdev_class: nvme
+      bdev_list: ["0000:81:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 6000000000
+    nvme_size: 54000000000
+    svcn: 4
+    control_method: dmg
+container:
+  properties:
+    enable_checksum: True
+ior:
+    no_parallel_job: 10
+    clientslots:
+      slots: 2
+    test_file: daos:testFile
+    repetitions: 1
+    daos_destroy: False
+    iorflags:
+          ior_flags:
+            - "-w -r -R -k -G 1"
+          ior_api:
+            - DAOS
+          obj_class:
+            - "SX"
+    ior_test_sequence:
+    #   - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
+    #    The values are set to be in the multiples of 10.
+    #    Values are appx GB.
+        - [4000000000, 18000000000, 1000000, 500000000, PASS]          #[4G, 18G, 1M, 512M, PASS]
