@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ package io.daos.fs.hadoop;
 import java.io.*;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -54,17 +55,17 @@ import org.w3c.dom.NodeList;
  * see {@link #getDaosUriDesc()} and {@link #parseConfig(String, String, Configuration)} for how configurations are
  * read and merged.
  */
-public class DaosConfig {
+public class DaosConfigFile {
 
   private Configuration defaultConfig;
 
   private String daosUriDesc;
 
-  private static final Logger log = LoggerFactory.getLogger(DaosConfig.class);
+  private static final Logger log = LoggerFactory.getLogger(DaosConfigFile.class);
 
-  private static final DaosConfig _INSTANCE = new DaosConfig();
+  private static final DaosConfigFile _INSTANCE = new DaosConfigFile();
 
-  private DaosConfig() {
+  private DaosConfigFile() {
     defaultConfig = new Configuration(false);
     defaultConfig.addResource("daos-site.xml");
     if (log.isDebugEnabled()) {
@@ -99,7 +100,7 @@ public class DaosConfig {
     }
   }
 
-  public static final DaosConfig getInstance() {
+  public static final DaosConfigFile getInstance() {
     return _INSTANCE;
   }
 
@@ -151,7 +152,7 @@ public class DaosConfig {
       sb.append('.');
     }
     //set other configurations after the UUIDs are set
-    return merge(sb.toString(), hadoopConfig);
+    return merge(sb.toString(), hadoopConfig, null);
   }
 
   private String setUuid(String key, String defaultKey, String configName, Configuration hadoopConfig) {
@@ -186,12 +187,12 @@ public class DaosConfig {
     return key;
   }
 
-  private Configuration merge(String prefix, Configuration hadoopConfig) {
+  public Configuration merge(String prefix, Configuration hadoopConfig, Set<String> excludeProps) {
     Iterator<Map.Entry<String, String>> it = defaultConfig.iterator();
     while (it.hasNext()) {
       Map.Entry<String, String> item = it.next();
       String name = item.getKey();
-      if (name.startsWith("fs.daos.")) {
+      if (name.startsWith("fs.daos.") && (excludeProps == null || !excludeProps.contains(name))) {
         if (hadoopConfig.get(name) == null) { //not set by user
           hadoopConfig.set(name, defaultConfig.get(prefix+name, item.getValue()));
         }
