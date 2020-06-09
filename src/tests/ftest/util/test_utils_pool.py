@@ -566,7 +566,7 @@ class TestPool(TestDaosApiBase):
             "DAOS_SVCL": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
-        load_mpi("openmpi")
+        load_mpi("mpirun")
         current_path = os.path.dirname(os.path.abspath(__file__))
         command = "{} --np {} --hostfile {} {} {} testfile".format(
             orterun, processes, hostfile,

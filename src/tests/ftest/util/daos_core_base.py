@@ -73,7 +73,7 @@ class DaosCoreBase(TestWithServers):
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
         env['POOL_SCM_SIZE'] = "{}".format(scm_size)
 
-        load_mpi("openmpi")
+        load_mpi("mpich")
         try:
             process.run(cmd, env=env)
         except process.CmdError as result:

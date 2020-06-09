@@ -203,8 +203,8 @@ class CartUtils():
                   "--show-reachable=yes "
 
 
-        self.init_mpi("openmpi")
-        orterun_bin = find_executable("orterun")
+        self.init_mpi("mpich")
+        orterun_bin = find_executable("mpirun")
         if orterun_bin is None:
             orterun_bin = "orterun_not_installed"
 
@@ -228,10 +228,11 @@ class CartUtils():
         else:
             hostfile = self.write_host_file(tst_host, tst_ppn)
 
-        mca_flags = "--mca btl self,tcp "
+        mca_flags = " "
+        #mca_flags = "--mca btl self,tcp "
 
-        if self.provider == "ofi+psm2":
-            mca_flags += "--mca pml ob1 "
+        #if self.provider == "ofi+psm2":
+        #    mca_flags += "--mca pml ob1 "
 
         tst_cmd = "{} {} -N {} --hostfile {} "\
                   .format(orterun_bin, mca_flags, tst_ppn, hostfile)

@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       21%{?relval}%{?dist}
+Release:       22%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -20,7 +20,7 @@ BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
-BuildRequires: openmpi3-devel
+BuildRequires: mpich-devel
 BuildRequires: hwloc-devel
 BuildRequires: libpsm2-devel
 %if (0%{?rhel} >= 7)
@@ -362,6 +362,9 @@ getent passwd daos >/dev/null || useradd -M daos
 %{_libdir}/*.a
 
 %changelog
+* Tue Jun 09 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-22
+- Use mpich-devel as build dependency instead of openmpi3-devel
+
 * Thu Jun 04 2020 Hua Kuang <hua.kuang@intel.com> - 1.1.0-21
 - Remove dmg_old from DAOS RPM package
 

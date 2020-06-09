@@ -151,7 +151,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             cat /etc/daos/daos_server.yml
                             cat /etc/daos/daos_agent.yml
                             cat /etc/daos/daos.yml
-                            module load mpi/openmpi3-x86_64
+                            module load mpi/mpich-x86_64
                             coproc daos_server --debug start -t 1 --recreate-superblocks
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
