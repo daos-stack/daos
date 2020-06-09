@@ -1481,7 +1481,7 @@ obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 		 struct daos_recx_ep_list *recx_lists, unsigned int nr)
 {
 	struct daos_recx_ep_list	*recov_lists;
-	struct daos_recx_ep_list	*dst_list;
+	struct daos_recx_ep_list	*dst_list = NULL;
 	struct daos_recx_ep_list	*src_list;
 	uint32_t			 i, j;
 	int				 rc;

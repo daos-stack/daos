@@ -37,6 +37,23 @@
 
 static bool verbose;
 
+#define assert_ci_equal(e, a) do {\
+	assert_int_equal((e).cs_nr, (a).cs_nr); \
+	assert_int_equal((e).cs_len, (a).cs_len); \
+	assert_int_equal((e).cs_buf_len, (a).cs_buf_len); \
+	assert_int_equal((e).cs_chunksize, (a).cs_chunksize); \
+	assert_int_equal((e).cs_type, (a).cs_type); \
+	assert_memory_equal((e).cs_csum, (a).cs_csum, (e).cs_len * (e).cs_nr); \
+	} while (0)
+
+#define assert_ic_equal(e, a) do {\
+	int __i; \
+	assert_int_equal((e).ic_nr, (a).ic_nr); \
+	assert_ci_equal((e).ic_akey, (a).ic_akey); \
+	for (__i = 0; __i < (e).ic_nr; __i++) \
+		assert_ci_equal((e).ic_data[__i], (a).ic_data[__i]);\
+} while (0)
+
 /**
  * -----------------------------------------------------------------------------
  * Setup some fake functions and veriables to track how the functions are
@@ -1534,8 +1551,9 @@ test_verify_sv_data(void **state)
 	int			 rc;
 	struct dcs_iod_csums	*iod_csums = NULL;
 
-	daos_csummer_type_init(&csummer, CSUM_TYPE_ISAL_CRC64_REFL, 1024 * 1024,
-			       0);
+	daos_csummer_init_with_type(&csummer, CSUM_TYPE_ISAL_CRC64_REFL,
+				    1024 * 1024,
+				    0);
 	dts_sgl_init_with_strings(&sgl, 1, "0123456789");
 
 
@@ -1650,19 +1668,143 @@ test_formatter(void **state)
 			    result);
 }
 
-static int test_setup(void **state)
+static void
+test_ci_serialize(void **state)
+{
+	const size_t		iov_buf_len = 64;
+	const uint32_t		csum_size = 8;
+	uint64_t		csum_buf = 0x1234567890ABCDEF;
+	uint8_t			iov_buf[iov_buf_len];
+	d_iov_t			iov = {0};
+	struct dcs_csum_info	*actual = NULL;
+	struct dcs_csum_info	expected = {
+		.cs_csum = (uint8_t *)&csum_buf,
+		.cs_buf_len = csum_size,
+		.cs_nr = 1,
+		.cs_type = 99,
+		.cs_len = csum_size,
+		.cs_chunksize = 1234
+	};
+
+	iov.iov_buf = iov_buf;
+	iov.iov_buf_len = iov_buf_len;
+	ci_serialize(&expected, &iov);
+
+	ci_cast(&actual, &iov);
+	assert_ci_equal(expected, *actual);
+
+	/** iov buf is too short */
+	iov.iov_len = iov.iov_len - 1;
+	ci_cast(&actual, &iov);
+	assert_null(actual);
+}
+
+static void
+test_ic_serialize(void **state)
+{
+	struct dcs_iod_csums	*result = NULL;
+	d_iov_t			 iov = {0};
+	const daos_size_t	 iov_buf_len = 100;
+	uint8_t			*iov_buf[iov_buf_len];
+	uint32_t		 csum_len = 8;
+	uint32_t		 csum_type = FAKE_CSUM_TYPE;
+	int			 rc = 0;
+
+	uint64_t		 csum_bufs[10] = {
+		0x1234567890A,
+		0x1234567890B,
+		0x1234567890C,
+		0x1234567890D,
+		0x1234567890E,
+		0x1234567890F,
+		0x1234567891A,
+		0x1234567891B,
+		0x1234567891C,
+		0x1234567891D,
+		};
+
+	struct dcs_csum_info	 data_csum_info[3] = {
+		{
+			.cs_nr = 1,
+			.cs_len = csum_len, .cs_buf_len = csum_len,
+			.cs_chunksize = CSUM_NO_CHUNK,
+			.cs_type = csum_type,
+			.cs_csum = (uint8_t *)&csum_bufs[0]
+		},
+		{
+			.cs_nr = 2,
+			.cs_len = csum_len,
+			.cs_buf_len = csum_len * 2,
+			.cs_chunksize = CSUM_NO_CHUNK,
+			.cs_type = csum_type,
+			.cs_csum = (uint8_t *)&csum_bufs[1]
+		},
+		{
+			.cs_nr = 3,
+			.cs_len = csum_len, .cs_buf_len = csum_len,
+			.cs_chunksize = CSUM_NO_CHUNK,
+			.cs_type = csum_type,
+			.cs_csum = (uint8_t *)&csum_bufs[3]
+		},
+	};
+
+	struct dcs_iod_csums iod_csum = {
+		.ic_nr = 1,
+		.ic_akey = { .cs_nr = 1,
+			.cs_len = csum_len, .cs_buf_len = csum_len,
+			.cs_chunksize = CSUM_NO_CHUNK,
+			.cs_type = csum_type,
+			.cs_csum = (uint8_t *)&csum_bufs[7]
+		},
+		.ic_data = data_csum_info
+	};
+
+	memset(iov_buf, 0, iov_buf_len);
+
+	d_iov_set(&iov, iov_buf, ic_size(&iod_csum) - 1);
+	iov.iov_len = 0;
+
+	rc = ic_serialize(&iod_csum, &iov);
+	assert_int_equal(-DER_TRUNC, rc);
+
+	if (iov_buf_len < ic_size(&iod_csum))
+		fail_msg("Test cannot continue because the iov "
+			 "buffer isn't big enough");
+
+	d_iov_set(&iov, iov_buf, iov_buf_len);
+	iov.iov_len = 0;
+
+	rc = ic_serialize(&iod_csum, &iov);
+	assert_int_equal(0, rc);
+	assert_true(iov.iov_len > 0);
+
+	ic_iov2iod_csum(&result, &iov);
+
+	assert_non_null(result);
+	assert_ic_equal(iod_csum, *result);
+
+	/** test casting iov to iod csum with too small iov_buf */
+	d_iov_set(&iov, iov_buf, 10);
+	rc = ic_iov2iod_csum(&result, &iov);
+	assert_int_equal(-DER_TRUNC, rc);
+	assert_null(result);
+}
+
+static int
+csum_test_setup(void **state)
 {
 	return 0;
 }
 
-static int test_teardown(void **state)
+static int
+csum_test_teardown(void **state)
 {
 	reset_fake_algo();
 	return 0;
 }
 
-#define TEST(dsc, test) { dsc, test, test_setup, \
-				test_teardown }
+#define TEST(dsc, test) { dsc, test, csum_test_setup, \
+				csum_test_teardown }
 
 static const struct CMUnitTest tests[] = {
 	TEST("CSUM01: Test initialize and destroy checksummer",
@@ -1734,6 +1876,8 @@ static const struct CMUnitTest tests[] = {
 	TEST("CSUM28: Formatter",
 	     test_formatter),
 	TEST("CSUM28: Get the recxes from a map", get_map_test),
+	TEST("CSUM29: csum_info serialization", test_ci_serialize),
+	TEST("CSUM30: csum_info serialization", test_ic_serialize),
 	TEST("CSUM_HOLES01: With 2 mapped extents that leave a hole "
 	     "at the beginning, in between and "
 	     "at the end, all within a single chunk.", holes_1),
@@ -1746,7 +1890,6 @@ static const struct CMUnitTest tests[] = {
 	     "multiple chunks", holes_4),
 	TEST("CSUM_HOLES05: With record size 2 and many holes within a "
 	     "single chunk", holes_5),
-
 };
 
 int

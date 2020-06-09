@@ -1314,6 +1314,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
+	/** A rebuild container */
 	if (!is_rebuild_container(pool_uuid, coh_uuid)) {
 		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
 			DP_UUID(cont_uuid), coh->sch_ref);
@@ -1329,6 +1330,13 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 
 	D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
 		DP_UUID(coh_uuid), coh);
+
+	/* load csummer on demand for rebuild - will be destroyed in
+	 * obj_ioc_fini if rebuild container
+	 */
+	rc = ds_cont_csummer_init(&coh->sch_csummer, pool_uuid, cont_uuid);
+	if (rc)
+		D_GOTO(failed, rc);
 
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
@@ -1347,9 +1355,24 @@ failed:
 	return rc;
 }
 
+static bool
+obj_ioc_is_rebuild_container(struct obj_io_context *ioc)
+{
+	if (ioc->ioc_coh == NULL ||
+	    ioc->ioc_coc == NULL ||
+	    ioc->ioc_coc->sc_pool == NULL)
+		return false;
+
+	return is_rebuild_container(ioc->ioc_coc->sc_pool->spc_uuid,
+				    ioc->ioc_coh->sch_uuid);
+}
+
 static void
 obj_ioc_fini(struct obj_io_context *ioc)
 {
+	if (obj_ioc_is_rebuild_container(ioc))
+		daos_csummer_destroy(&ioc->ioc_coh->sch_csummer);
+
 	if (ioc->ioc_coh != NULL) {
 		ds_cont_hdl_put(ioc->ioc_coh);
 		ioc->ioc_coh = NULL;
