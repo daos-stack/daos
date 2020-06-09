@@ -110,11 +110,7 @@ entry_array_close(void *arg) {
 	DFUSE_LOG_INFO("entry %p closing array fd_count %d",
 		       entry, ioil_ioc.ioc_open_fd_count);
 
-	if (entry->fd_dfsoh) {
-		dfs_release(entry->fd_dfsoh);
-	} else {
-		daos_array_close(entry->fd_aoh, NULL);
-	}
+	dfs_release(entry->fd_dfsoh);
 
 	ioil_ioc.ioc_open_fd_count -= 1;
 
@@ -451,6 +447,11 @@ connect_daos_cont(int fd, struct dfuse_il_reply *il_reply)
 	if (rc)
 		D_GOTO(pool_close, 0);
 
+	rc = dfs_mount(ioil_ioc.ioc_poh, ioil_ioc.ioc_coh, O_RDWR,
+		       &ioil_ioc.ioc_dfs);
+	if (rc)
+		D_GOTO(pool_close, 0);
+
 	return 0;
 
 pool_close:
@@ -462,8 +463,6 @@ static bool
 check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 {
 	struct dfuse_il_reply	il_reply;
-	daos_size_t		cell_size = 1;
-	daos_size_t		chunk_size = 1024 * 1024;
 	int			rc;
 
 	if (fd == -1)
@@ -522,14 +521,9 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (entry->fd_dfsoh) {
 		entry->fd_dfs = ioil_ioc.ioc_dfs;
 	} else {
-		rc = daos_array_open_with_attr(ioil_ioc.ioc_coh,
-					       il_reply.fir_oid,
-					       DAOS_TX_NONE, DAOS_OO_RW,
-					       cell_size, chunk_size,
-					       &entry->fd_aoh, NULL);
+		rc = fetch_dfs_obj_handle(fd, entry);
 		if (rc)
 			D_GOTO(cont_close, 0);
-
 	}
 
 	rc = vector_set(&fd_table, fd, entry);
@@ -538,7 +532,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 			       rc);
 		/* Disable kernel bypass */
 		entry->fd_status = DFUSE_IO_DIS_RSRC;
-		D_GOTO(array_close, 0);
+		D_GOTO(obj_close, 0);
 	}
 
 	DFUSE_LOG_INFO("Added entry for new fd %d", fd);
@@ -549,11 +543,19 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 
 	return true;
 
-array_close:
-	daos_array_close(entry->fd_aoh, NULL);
+obj_close:
+	dfs_release(entry->fd_dfsoh);
 
 cont_close:
 	if (ioil_ioc.ioc_open_fd_count == 0) {
+		if (ioil_ioc.ioc_dfs) {
+			rc = dfs_umount(ioil_ioc.ioc_dfs);
+			if (rc != 0) {
+				DFUSE_LOG_ERROR("Could not close dfs rc = %d",
+						rc);
+			}
+		}
+
 		CONT_CLOSE(ioil_ioc);
 		POOL_DISCONNECT(ioil_ioc);
 	}

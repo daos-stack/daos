@@ -1204,6 +1204,8 @@ def main():
 
     if len(sys.argv) == 2 and sys.argv[1] == 'launch':
         run_in_fg(server, conf)
+    elif len(sys.argv) == 2 and sys.argv[1] == 'il':
+        run_il_test(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
         test_pydaos_kv(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'overlay':
