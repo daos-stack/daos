@@ -260,7 +260,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
 	    dth->dth_dti_cos_done == 0) {
 		vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count, 0);
+					dth->dth_dti_cos_count, 0, NULL);
 		dth->dth_dti_cos_done = 1;
 	}
 
@@ -542,7 +542,7 @@ key_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 
 /**
  * Check if the current entry can match the iterator condition, this function
- * retuns IT_OPC_NOOP for true, returns IT_OPC_NEXT or IT_OPC_PROBE if further
+ * returns IT_OPC_NOOP for true, returns IT_OPC_NEXT or IT_OPC_PROBE if further
  * operation is required. If IT_OPC_PROBE is returned, then the key to be
  * probed and its epoch range are also returned to @ent.
  */

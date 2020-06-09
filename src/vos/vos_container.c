@@ -106,7 +106,6 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
-	cont_df->cd_dtx_resync_gen = 1;
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, 0, VOS_OBJ_ORDER,
 				      &pool->vp_uma, &cont_df->cd_obj_root,
@@ -191,8 +190,6 @@ cont_free_internal(struct vos_container *cont)
 
 	D_ASSERT(cont->vc_open_count == 0);
 
-	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
-		dbtree_destroy(cont->vc_dtx_cos_hdl, NULL);
 	if (!daos_handle_is_inval(cont->vc_dtx_active_hdl))
 		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
 	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
@@ -201,7 +198,6 @@ cont_free_internal(struct vos_container *cont)
 	if (cont->vc_dtx_array)
 		lrua_array_free(cont->vc_dtx_array);
 
-	D_ASSERT(d_list_empty(&cont->vc_dtx_committable_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_tmp_list));
 
@@ -306,7 +302,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 
 	rc = cont_df_lookup(vpool, &ukey, &args);
 	if (!rc) {
-		/* Check if attemt to reuse the same container uuid */
+		/* Check if attempt to reuse the same container uuid */
 		D_ERROR("Container already exists\n");
 		D_GOTO(exit, rc = -DER_EXIST);
 	}
@@ -383,14 +379,10 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_ts_idx = &cont->vc_cont_df->cd_ts_idx;
 	cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
 	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
-	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
-	D_INIT_LIST_HEAD(&cont->vc_dtx_committable_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_tmp_list);
-	cont->vc_dtx_committable_count = 0;
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_dtx_committed_tmp_count = 0;
-	cont->vc_dtx_resync_gen = cont->vc_cont_df->cd_dtx_resync_gen;
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root,
@@ -432,17 +424,6 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				      &cont->vc_dtx_committed_hdl);
 	if (rc != 0) {
 		D_ERROR("Failed to create DTX committed btree: rc = "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(exit, rc);
-	}
-
-	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_COS, 0,
-				      DTX_BTREE_ORDER, &uma,
-				      &cont->vc_dtx_cos_btr,
-				      DAOS_HDL_INVAL, cont,
-				      &cont->vc_dtx_cos_hdl);
-	if (rc != 0) {
-		D_ERROR("Failed to create DTX CoS btree: rc = "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
@@ -663,24 +644,6 @@ vos_cont_tab_register()
 	if (rc)
 		D_ERROR("dbtree create failed\n");
 	return rc;
-}
-
-int
-vos_dtx_update_resync_gen(daos_handle_t coh)
-{
-	struct vos_container	*cont;
-	struct vos_cont_df	*cont_df;
-
-	cont = vos_hdl2cont(coh);
-	D_ASSERT(cont != NULL);
-
-	cont_df = cont->vc_cont_df;
-	cont->vc_dtx_resync_gen = cont_df->cd_dtx_resync_gen + 1;
-	pmemobj_memcpy_persist(vos_cont2umm(cont)->umm_pool,
-			       &cont_df->cd_dtx_resync_gen,
-			       &cont->vc_dtx_resync_gen,
-			       sizeof(cont_df->cd_dtx_resync_gen));
-	return 0;
 }
 
 /** iterator for co_uuid */

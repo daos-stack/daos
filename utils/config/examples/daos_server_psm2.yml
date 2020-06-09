@@ -12,16 +12,16 @@ control_log_file: /tmp/daos_control.log
 ## Transport Credentials Specifying certificates to secure communications
 ##
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # Specify to bypass loading certificates and use insecure communications channels
 #  allow_insecure: false
 #  # Location where daos_server will look for Client certificates
 #  client_cert_dir: .daos/clients
 #  # Custom CA Root certificate for generated certs
 #  ca_cert: .daos/daosCA.crt
 #  # Server certificate for use in TLS handshakes
-#  cert: .daos/daos_server.crt
+#  cert: /etc/daos/daos_server.crt
 #  # Key portion of Server Certificate
-#  key: .daos/daos_server.key
+#  key: /etc/daos/daos_server.key
 
 # single server instance per config file for now
 servers:
@@ -35,7 +35,7 @@ servers:
   log_file: /tmp/server0.log # map to D_LOG_FILE=/tmp/server0.log
 
   # Environment variable values should be supplied without encapsulating quotes.
-  env_vars:                 # influence DAOS IO Server behaviour by setting env variables
+  env_vars:                 # influence DAOS IO Server behavior by setting env variables
   - CRT_TIMEOUT=30
   - CRT_CREDIT_EP_CTX=0
   - PSM2_MULTI_EP=1
@@ -91,7 +91,7 @@ servers:
   log_mask: ERR             # map to D_LOG_MASK=ERR
   log_file: /tmp/server1.log # map to D_LOG_FILE=/tmp/server1.log
 
-  env_vars:                 # influence DAOS IO Server behaviour by setting env variables
+  env_vars:                 # influence DAOS IO Server behavior by setting env variables
   - CRT_TIMEOUT=30
   - CRT_CREDIT_EP_CTX=0
   - PSM2_MULTI_EP=1

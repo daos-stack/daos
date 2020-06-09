@@ -52,7 +52,9 @@ const (
 type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
+	Evict        PoolEvictCmd        `command:"evict" alias:"ev" description:"Evict all pool connections to a DAOS pool"`
 	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
+	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
 	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude targets from a rank"`
 	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate targets for a rank"`
 	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
@@ -179,6 +181,31 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 	return err
 }
 
+// PoolEvictCmd is the struct representing the command to evict a DAOS pool.
+type PoolEvictCmd struct {
+	logCmd
+	ctlInvokerCmd
+	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to evict connection to"`
+	Sys  string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that the pools connections be evicted from."`
+}
+
+// Execute is run when PoolEvictCmd subcommand is activated
+func (d *PoolEvictCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	req := &control.PoolEvictReq{UUID: d.UUID, Sys: d.Sys}
+
+	ctx := context.Background()
+	err := control.PoolEvict(ctx, d.ctlInvoker, req)
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	d.log.Infof("Pool-evict command %s\n", msg)
+
+	return err
+}
+
 // PoolExcludeCmd is the struct representing the command to exclude a DAOS target.
 type PoolExcludeCmd struct {
 	logCmd
@@ -206,6 +233,60 @@ func (r *PoolExcludeCmd) Execute(args []string) error {
 	}
 
 	r.log.Infof("Exclude command %s\n", msg)
+
+	return err
+}
+
+// PoolExtendCmd is the struct representing the command to Extend a DAOS pool.
+type PoolExtendCmd struct {
+	logCmd
+	ctlInvokerCmd
+	UUID     string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
+	RankList string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
+	// Everything after this needs to be removed when pool info can be fetched
+	ScmSize  string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of the original DAOS pool being extended"`
+	NVMeSize string `short:"n" long:"nvme-size" description:"Size of NVMe component of the original DAOS pool being extended, or none if not originally supplied to pool create."`
+	// END TEMPORARY SECTION
+}
+
+// Execute is run when PoolExtendCmd subcommand is activated
+func (e *PoolExtendCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	ranks, err := system.ParseRanks(e.RankList)
+	if err != nil {
+		return errors.Wrap(err, "parsing rank list")
+	}
+
+	// Everything below this needs to be removed once Pool Info can be fetched
+
+	scmBytes, err := humanize.ParseBytes(e.ScmSize)
+	if err != nil {
+		return errors.Wrap(err, "pool SCM size")
+	}
+
+	var nvmeBytes uint64
+	if e.NVMeSize != "" {
+		nvmeBytes, err = humanize.ParseBytes(e.NVMeSize)
+		if err != nil {
+			return errors.Wrap(err, "pool NVMe size")
+		}
+	}
+
+	req := &control.PoolExtendReq{
+		UUID: e.UUID, Ranks: ranks,
+		ScmBytes: scmBytes, NvmeBytes: nvmeBytes,
+	}
+	// END TEMP SECTION
+
+	ctx := context.Background()
+	err = control.PoolExtend(ctx, e.ctlInvoker, req)
+
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	e.log.Infof("Extend command %s\n", msg)
 
 	return err
 }

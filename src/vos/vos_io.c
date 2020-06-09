@@ -300,12 +300,9 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	if (iov_at == iov_nr - 1) {
 		struct bio_iov *biovs;
 
-		D_ALLOC_ARRAY(biovs, (iov_nr * 2));
+		D_REALLOC_ARRAY(biovs, bsgl->bs_iovs, (iov_nr * 2));
 		if (biovs == NULL)
 			return -DER_NOMEM;
-
-		memcpy(biovs, &bsgl->bs_iovs[0], iov_nr * sizeof(*biovs));
-		D_FREE(bsgl->bs_iovs);
 
 		bsgl->bs_iovs = biovs;
 		bsgl->bs_nr = iov_nr * 2;
@@ -856,7 +853,8 @@ update_prev:
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
-		daos_iod_t *iods, bool size_fetch, daos_handle_t *ioh)
+		daos_iod_t *iods, bool size_fetch, daos_handle_t *ioh,
+		struct dtx_handle *dth)
 {
 	struct vos_io_context	*ioc;
 	struct vos_ts_entry	*entry;
@@ -1627,7 +1625,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
 	    dth->dth_dti_cos_done == 0) {
 		vos_dtx_commit_internal(ioc->ic_obj->obj_cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count, 0);
+					dth->dth_dti_cos_count, 0, NULL);
 		dth->dth_dti_cos_done = 1;
 	}
 
@@ -1823,7 +1821,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	int rc;
 
 	rc = vos_fetch_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
-			     size_fetch, &ioh);
+			     size_fetch, &ioh, NULL);
 	if (rc) {
 		if (rc == -DER_INPROGRESS)
 			D_DEBUG(DB_TRACE, "Cannot fetch "DF_UOID" because of "

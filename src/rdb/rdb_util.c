@@ -274,7 +274,7 @@ static inline int
 rdb_vos_fetch_check(d_iov_t *value, d_iov_t *value_orig)
 {
 	/*
-	 * An emtpy value represents nonexistence. Keep the caller value intact
+	 * An empty value represents nonexistence. Keep the caller value intact
 	 * in this case.
 	 */
 	if (value->iov_len == 0) {
@@ -334,7 +334,8 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
 	rc = vos_fetch_begin(cont, uoid, epoch, 0 /* flags */, &rdb_dkey,
-			     1 /* n */, &iod, false /* size_fetch */, &io);
+			     1 /* n */, &iod, false /* size_fetch */, &io,
+			     NULL /* dth */);
 	if (rc != 0)
 		return rc;
 
