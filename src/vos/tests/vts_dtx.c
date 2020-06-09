@@ -53,6 +53,7 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_dti_cos_count = 0;
 	dth->dth_ent = NULL;
 	dth->dth_sync = 0;
+	dth->dth_resent = 0;
 	dth->dth_solo = 0;
 	dth->dth_dti_cos_done = 0;
 	dth->dth_modify_shared = 0;
@@ -567,7 +568,7 @@ dtx_16(void **state)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = vos_fetch_begin(args->ctx.tc_co_hdl, args->oid, epoch,
-			     0, &dkey_iov, 1, &iod, false, &ioh);
+			     0, &dkey_iov, 1, &iod, false, &ioh, NULL);
 	/* The former DTX is not committed, so need to retry with leader. */
 	assert_int_equal(rc, -DER_INPROGRESS);
 
@@ -682,7 +683,7 @@ dtx_17(void **state)
 		vts_dtx_end(dth);
 	}
 
-	/* Commit the fisrt 4 DTXs. */
+	/* Commit the first 4 DTXs. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, xid, 4, NULL);
 	assert_int_equal(rc, 4);
 

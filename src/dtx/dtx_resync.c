@@ -336,7 +336,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 
 	rc = ds_cont_iter(po_hdl, co_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX);
 
-	/* Handle the DTXs that have been scanned even if some failure happend
+	/* Handle the DTXs that have been scanned even if some failure happened
 	 * in above ds_cont_iter() step.
 	 */
 	rc1 = dtx_status_handle(&dra);
@@ -360,8 +360,8 @@ out:
 }
 
 struct dtx_container_scan_arg {
-	uuid_t			 co_uuid;
-	struct dtx_scan_args	*arg;
+	uuid_t			co_uuid;
+	struct dtx_scan_args	arg;
 };
 
 static int
@@ -370,7 +370,7 @@ container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		  void *data, unsigned *acts)
 {
 	struct dtx_container_scan_arg	*scan_arg = data;
-	struct dtx_scan_args		*arg = scan_arg->arg;
+	struct dtx_scan_args		*arg = &scan_arg->arg;
 	int				rc;
 
 	if (uuid_compare(scan_arg->co_uuid, entry->ie_couuid) == 0) {
@@ -406,7 +406,7 @@ dtx_resync_one(void *data)
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
-	cb_arg.arg = arg;
+	cb_arg.arg = *arg;
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
