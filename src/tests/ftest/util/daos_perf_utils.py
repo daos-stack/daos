@@ -36,9 +36,7 @@ class DaosPerfCommand(ExecutableCommand):
         """Create a daos_perf command object.
 
         Args:
-            basepath (str): DAOS base path
-        Raises:
-            DaosPerfFailed: if an error occurred running the daos_perf command
+            path (str): path to the daos_perf command
         """
         super(DaosPerfCommand, self).__init__(
             "/run/daos_perf/*", "daos_perf", path)
