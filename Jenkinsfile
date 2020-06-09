@@ -960,13 +960,15 @@ pipeline {
                                                   'pmix numactl-devel ' +
                                                   'libipmctl-devel' +
                                                   qb_inst_rpms
-                        runTest stashes: [ 'centos7-gcc-tests',
+                        timeout(time:60, unit:'MINUTES') {
+                          runTest stashes: [ 'centos7-gcc-tests',
                                            'centos7-gcc-install',
                                            'centos7-gcc-build-vars' ],
                                 script: "SSH_KEY_ARGS=${env.SSH_KEY_ARGS} " +
                                         "NODELIST=${env.NODELIST} " +
                                         'ci/run_test_main.sh',
                                 junit_files: 'test_results/*.xml'
+                        }
                     }
                     post {
                       always {
