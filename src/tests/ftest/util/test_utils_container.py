@@ -307,7 +307,7 @@ class TestContainer(TestDaosApiBase):
         """Create a container.
 
         Args:
-            uuid (str, optional): contianer uuid. Defaults to None.
+            uuid (str, optional): container uuid. Defaults to None.
             con_in (optional): to be defined. Defaults to None.
             acl_file (str, optional): path of the ACL file. Defaults to None.
         """
