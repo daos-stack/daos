@@ -693,14 +693,14 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 
 static int
 obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
-		     struct daos_shard_tgt *shard_tgt)
+		     struct daos_shard_tgt *shard_tgt, bool ignore_nonexist)
 {
 	struct dc_obj_shard	*obj_shard;
 	int			 rc;
 
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0) {
-		if (rc == -DER_NONEXIST) {
+		if (rc == -DER_NONEXIST && ignore_nonexist) {
 			shard_tgt->st_rank = TGTS_IGNORE;
 			rc = 0;
 		} else {
@@ -817,7 +817,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 			}
 			leader_shard = rc;
 			rc = obj_shard_tgts_query(obj, map_ver, leader_shard,
-						  tgt++);
+						  tgt++, false);
 			if (rc != 0)
 				return rc;
 
@@ -830,7 +830,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 			    (bit_map != NIL_BITMAP && isclr(bit_map, j)))
 				continue;
 			rc = obj_shard_tgts_query(obj, map_ver, shard_idx,
-						  tgt++);
+						  tgt++, true);
 			if (rc != 0)
 				return rc;
 		}
@@ -1704,7 +1704,7 @@ obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, int *shard,
 		req_tgts->ort_grp_nr = 1;
 		req_tgts->ort_grp_size = 1;
 		rc = obj_shard_tgts_query(obj, map_ver, *shard,
-					  req_tgts->ort_shard_tgts);
+					  req_tgts->ort_shard_tgts, false);
 		if (rc != 0)
 			goto out;
 		break;
