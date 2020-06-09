@@ -839,8 +839,8 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 
 void
 daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-                    const d_rank_list_t *svc, d_rank_t rank,
-                    int tgt_idx)
+		 const d_rank_list_t *svc, d_rank_t rank,
+		 int tgt_idx)
 {
 	daos_dmg_pool_target("exclude", pool_uuid, grp, svc,
 			rank, tgt_idx);
