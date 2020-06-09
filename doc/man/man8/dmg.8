@@ -1,4 +1,4 @@
-.TH dmg 1 "29 May 2020"
+.TH dmg 1 "5 June 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -144,8 +144,22 @@ UUID of DAOS pool to destroy
 .TP
 \fB\fB\-f\fR, \fB\-\-force\fR\fP
 Force removal of DAOS pool
+.SS pool evict
+Evict all pool connections to a DAOS pool
+
+\fBUsage\fP: pool evict [evict-OPTIONS]
+.TP
+
+\fBAliases\fP: ev
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of DAOS pool to evict connection to
+.TP
+\fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
+DAOS system that the pools connections be evicted from.
 .SS pool exclude
-Exclude a list of targets from a rank
+Exclude targets from a rank
 
 \fBUsage\fP: pool exclude [exclude-OPTIONS]
 .TP
@@ -159,8 +173,8 @@ UUID of the DAOS pool to exclude a target from
 \fB\fB\-\-rank\fR (\fIrequired\fR)\fP
 Rank of the targets to be excluded
 .TP
-\fB\fB\-\-target-idx\fR (\fIrequired\fR)\fP
-Comma-seperated list of target idx(s) to be excluded from the rank
+\fB\fB\-\-target-idx\fR\fP
+Comma-separated list of target idx(s) to be excluded from the rank
 .SS pool extend
 Extend a DAOS pool to include new ranks.
 
@@ -176,23 +190,11 @@ UUID of the DAOS pool to extend
 \fB\fB\-\-ranks\fR (\fIrequired\fR)\fP
 Comma-separated list of ranks to add to the pool
 .TP
-\fB\fB\-g\fR, \fB\-\-group\fR\fP
-DAOS pool to be owned by given group, format name@domain
-.TP
-\fB\fB\-u\fR, \fB\-\-user\fR\fP
-DAOS pool to be owned by given user, format name@domain
-.TP
-\fB\fB\-a\fR, \fB\-\-acl-file\fR\fP
-Access Control List file path for DAOS pool
-.TP
 \fB\fB\-s\fR, \fB\-\-scm-size\fR (\fIrequired\fR)\fP
-Size of SCM component of DAOS pool
+Size of SCM component of the original DAOS pool being extended
 .TP
 \fB\fB\-n\fR, \fB\-\-nvme-size\fR\fP
-Size of NVMe component of DAOS pool
-.TP
-\fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
-DAOS system that pool is to be a part of
+Size of NVMe component of the original DAOS pool being extended, or none if not originally supplied to pool create.
 .SS pool get-acl
 Get a DAOS pool's Access Control List
 
@@ -244,7 +246,7 @@ Query a DAOS pool
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
 UUID of DAOS pool to query
 .SS pool reintegrate
-Reintegrate a list of targets for a rank
+Reintegrate targets for a rank
 
 \fBUsage\fP: pool reintegrate [reintegrate-OPTIONS]
 .TP
@@ -258,8 +260,8 @@ UUID of the DAOS pool to start reintegration in
 \fB\fB\-\-rank\fR (\fIrequired\fR)\fP
 Rank of the targets to be reintegrated
 .TP
-\fB\fB\-\-target-idx\fR (\fIrequired\fR)\fP
-Comma-seperated list of target idx(s) to be reintegrated into the rank
+\fB\fB\-\-target-idx\fR\fP
+Comma-separated list of target idx(s) to be reintegrated into the rank
 .SS pool set-prop
 Set pool property
 

@@ -652,7 +652,7 @@ ds_pool_iv_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid, uint64_t flags,
 	memcpy(&pic->pic_creds[0], cred->iov_buf, cred->iov_len);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_CONN, iv_entry, size,
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, true);
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, false);
 	D_DEBUG(DB_MD, DF_UUID" distribute hdl "DF_UUID" capas "DF_U64" %d\n",
 		DP_UUID(pool->sp_uuid), DP_UUID(hdl_uuid), sec_capas, rc);
 	D_FREE(iv_entry);

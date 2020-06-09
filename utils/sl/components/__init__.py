@@ -115,11 +115,16 @@ def define_mercury(reqs):
                 headers=['psm2.h'],
                 libs=['psm2'])
 
+    if reqs.build_type == 'debug':
+        OFI_DEBUG = '--enable-debug '
+    else:
+        OFI_DEBUG = '--disable-debug '
     retriever = GitRepoRetriever('https://github.com/ofiwg/libfabric')
     reqs.define('ofi',
                 retriever=retriever,
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
+                          OFI_DEBUG +
                           exclude(reqs, 'psm2',
                                   '--enable-psm2' +
                                   check(reqs, 'psm2',
@@ -143,6 +148,10 @@ def define_mercury(reqs):
                           'make install'], libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
 
+    if reqs.build_type == 'debug':
+        MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=ON '
+    else:
+        MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '
     retriever = \
         GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
                          True)
@@ -157,6 +166,7 @@ def define_mercury(reqs):
                           '-DMERCURY_USE_BOOST_PP=ON '
                           '-DMERCURY_USE_SELF_FORWARD=ON '
                           '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
+                          + MERCURY_DEBUG +
                           '-DBUILD_TESTING=ON '
                           '-DNA_USE_OFI=ON '
                           '-DBUILD_DOCUMENTATION=OFF '

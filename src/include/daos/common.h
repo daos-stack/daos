@@ -184,6 +184,27 @@ daos_get_ntime(void)
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
 }
 
+static inline uint64_t
+daos_getntime_coarse(void)
+{
+	struct timespec	tv;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
+	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
+static inline int daos_gettime_coarse(uint64_t *time)
+{
+	struct timespec	now;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	if (rc == 0)
+		*time = now.tv_sec;
+
+	return rc;
+}
+
 /** Function table for combsort and binary search */
 typedef struct {
 	void    (*so_swap)(void *array, int a, int b);
@@ -698,15 +719,4 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 	}
 }
 
-static inline int daos_gettime_coarse(uint64_t *time)
-{
-	struct timespec	now;
-	int		rc;
-
-	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-	if (rc == 0)
-		*time = now.tv_sec;
-
-	return rc;
-}
 #endif /* __DAOS_COMMON_H__ */

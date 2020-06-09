@@ -66,6 +66,8 @@ service MgmtSvc {
 	rpc PoolCreate(PoolCreateReq) returns (PoolCreateResp) {}
 	// Destroy a DAOS pool allocated across a number of ranks.
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
+	// Evict a DAOS pool's connections.
+	rpc PoolEvict(PoolEvictReq) returns (PoolEvictResp) {}
 	// Exclude a pool target.
 	rpc PoolExclude(PoolExcludeReq) returns (PoolExcludeResp) {}
 	// Extend a pool.

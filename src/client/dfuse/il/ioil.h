@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,21 +21,35 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-/* generic */
-#include <stdio.h>
-#include <errno.h>
-#include <stdlib.h>
-#include <unistd.h>
+#ifndef __IOIL_H__
+#define __IOIL_H__
+
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
+#include "daos_fs.h"
 
-/**
- * TODO, need to rewrite this, just a placeholder for now.
- */
+struct fd_entry {
+	daos_handle_t	fd_aoh;
+	dfs_obj_t	*fd_dfsoh;
+	dfs_t		*fd_dfs;
+	off_t		fd_pos;
+	int		fd_flags;
+	int		fd_status;
+};
 
-int cmd_help(int argc, const char **argv, void *ctx)
-{
-	int rc = 0;
-	return rc;
-}
+ssize_t
+ioil_do_pread(char *buff, size_t len, off_t position,
+	      struct fd_entry *entry, int *errcode);
+ssize_t
+ioil_do_preadv(const struct iovec *iov, int count, off_t position,
+	       struct fd_entry *entry, int *errcode);
+ssize_t
+ioil_do_writex(const char *buff, size_t len, off_t position,
+	       struct fd_entry *entry, int *errcode);
+ssize_t
+ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
+		struct fd_entry *entry, int *errcode);
+
+#endif /* __IOIL_H__ */
