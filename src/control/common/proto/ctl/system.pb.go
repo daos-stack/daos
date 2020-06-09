@@ -23,10 +23,11 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 // SystemMember refers to a data-plane instance that is a member of DAOS
 // system running on host with the control-plane listening at "Addr".
 type SystemMember struct {
-	Addr                 string   `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
-	Uuid                 string   `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	Rank                 uint32   `protobuf:"varint,3,opt,name=rank,proto3" json:"rank,omitempty"`
-	State                uint32   `protobuf:"varint,4,opt,name=state,proto3" json:"state,omitempty"`
+	Addr  string `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
+	Uuid  string `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Rank  uint32 `protobuf:"varint,3,opt,name=rank,proto3" json:"rank,omitempty"`
+	State uint32 `protobuf:"varint,4,opt,name=state,proto3" json:"state,omitempty"`
+	// ancillary info e.g. error msg or reason for state change
 	Info                 string   `protobuf:"bytes,5,opt,name=info,proto3" json:"info,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`

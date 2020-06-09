@@ -32,8 +32,8 @@
 #  allow_insecure: false
 #
 #  # Custom CA Root certificate for generated certs
-#  ca_cert: .daos/daosCA.crt
+#  ca_cert: /etc/daos/certs/daosCA.crt
 #  # Admin certificate for use in TLS handshakes
-#  cert: .daos/admin.crt
+#  cert: /etc/daos/certs/admin.crt
 #  # Key portion of Admin Certificate
-#  key: .daos/admin.key
+#  key: /etc/daos/certs/admin.key
