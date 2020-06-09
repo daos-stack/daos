@@ -32,11 +32,11 @@
 #  allow_insecure: false
 #
 #  # Custom CA Root certificate for generated certs
-#  ca_cert: .daos/daosCA.crt
+#  ca_cert: /etc/daos/certs/daosCA.crt
 #  # Agent certificate for use in TLS handshakes
-#  cert: .daos/agent.crt
+#  cert: /etc/daos/certs/agent.crt
 #  # Key portion of Agent Certificate
-#  key: .daos/agent.key
+#  key: /etc/daos/certs/agent.key
 
 # Use the given directory for creating unix domain sockets
 # default: /var/run/daos_agent

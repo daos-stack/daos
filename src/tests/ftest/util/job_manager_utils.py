@@ -370,6 +370,7 @@ class Srun(JobManager):
         self.nodefile = FormattedParameter("--nodefile={}", None)
         self.nodelist = FormattedParameter("--nodelist={}", None)
         self.ntasks_per_node = FormattedParameter("--ntasks-per-node={}", None)
+        self.nodes = FormattedParameter("--nodes={}", None)
         self.reservation = FormattedParameter("--reservation={}", None)
         self.partition = FormattedParameter("--partition={}", None)
         self.output = FormattedParameter("--output={}", None)

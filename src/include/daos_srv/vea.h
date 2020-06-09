@@ -127,6 +127,7 @@ struct vea_attr {
 	uint32_t	va_hdr_blks;	/* Blocks for header */
 	uint32_t	va_large_thresh;/* Large extent threshold in blocks */
 	uint64_t	va_tot_blks;	/* Total capacity in blocks */
+	uint64_t	va_free_blks;	/* Free blocks available for alloc */
 };
 
 /* VEA statistics */

@@ -3217,6 +3217,9 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 		rc = -DER_INVAL;
 		update_comp_cb(ivns, class_id, iv_key, NULL, iv_value,
 			rc, cb_arg);
+
+		if (sync_type.ivs_comp_cb)
+			sync_type.ivs_comp_cb(sync_type.ivs_comp_cb_arg);
 		D_GOTO(exit, rc);
 	}
 

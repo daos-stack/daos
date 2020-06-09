@@ -58,6 +58,11 @@ two pool service replica on rank 0 and 1.
 ```bash
 $ dmg pool destroy --pool=${puuid}
 ```
+**To evict handles/connections to a pool:**
+
+```bash
+$ dmg pool evict --pool=${puuid}
+`
 
 **To see a list of the pools in your DAOS system:**
 
@@ -195,7 +200,7 @@ will be decided based on the remaining ACL rules.
 ## Pool Query
 The pool query operation retrieves information (i.e., the number of targets,
 space usage, rebuild status, property list, and more) about a created pool. It
-is integrated into the dmg_old utility.
+is integrated into the dmg utility.
 
 **To query a pool:**
 
@@ -247,7 +252,8 @@ the management API and tool and will be documented here once available.
 ### Target Exclusion and Self-Healing
 
 An operator can exclude one or more targets from a specific DAOS pool using the rank
-the target resides on as well as the target idx on that rank. Excluding a target will
+the target resides on as well as the target idx on that rank. If a target idx list is
+not provided then all targets on the rank will be excluded. Excluding a target will
 automatically start the rebuild process.
 
 **To exclude a target from a pool:**
@@ -256,26 +262,28 @@ automatically start the rebuild process.
 $ dmg pool exclude --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
 ```
 
-The pool target exclude command accepts 3 required parameters:
+The pool target exclude command accepts 3 parameters:
 
 * The pool UUID of the pool that the targets will be excluded from.
-* The rank of the target(s) to be excluded.
-* The target Indices of the targets to be excluded from that rank.
+* The rank of the target(s) te be excluded.
+* The target Indices of the targets to be excluded from that rank (optional).
 
 ### Target Reintegration
 
 After a target failure an operator can fix the underlying issue and reintegrate the
-affected targets to restore the pool to its original state.
+affected targets to restore the pool to its original state. The operator can either
+reintegrate specific targets for a rank by supplying a target idx list, or reintegrate
+an entire rank by omitting the list.
 
 ```
 $ dmg pool reintegrate --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
 ```
 
-The pool reintegrate command accepts 3 required parameters:
+The pool reintegrate command accepts 3 parameters:
 
 * The pool UUID of the pool that the targets will be reintegrated into.
 * The rank of the affected targets.
-* The target Indices of the targets to be reintegrated on that rank.
+* The target Indices of the targets to be reintegrated on that rank (optional).
 
 When rebuild is triggered it will list the operations and their related targets by their rank ID
 and target index.
@@ -298,8 +306,27 @@ $ dmg pool reintegrate --pool=${puuid} --rank=5 --target-idx=0,1
 
 #### Target Addition & Space Rebalancing
 
-Support for online target addition and automatic space rebalancing is
+Full Support for online target addition and automatic space rebalancing is
 planned for DAOS v1.4 and will be documented here once available.
+
+Until then the following command(s) are placeholders and offer limited
+functionality related to Online Server Addition/Rebalancing operations.
+
+An operator can choose to extend a pool to include ranks not currently in the pool.
+This will automatically trigger a server rebalance operation where objects within the extended
+pool will be rebalanced across the new storage.
+
+```
+$ dmg pool extend --pool=${puuid} --ranks=${rank1},${rank2}...
+```
+
+The pool extend command accepts 2 required parameters:
+
+* The pool UUID of the pool to be extended.
+* A comma separated list of server ranks to include in the pool.
+
+The pool rebalance operation will work most efficiently when the pool is extended to its desired
+size in a single operation, as opposed to multiple, small extensions.
 
 #### Pool Shard Resize
 

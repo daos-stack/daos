@@ -29,7 +29,8 @@ from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
-from general_utils import get_random_string, run_command, DaosTestError
+from general_utils import get_random_string, \
+    run_command, DaosTestError, get_log_file
 import slurm_utils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -83,8 +84,6 @@ class SoakTestBase(TestWithServers):
         self.log_dir = None
         self.outputsoakdir = None
         self.test_name = None
-        self.local_pass_dir = None
-        self.dfuse = None
         self.test_timeout = None
         self.end_time = None
         self.job_timeout = None
@@ -101,13 +100,11 @@ class SoakTestBase(TestWithServers):
         self.harasser_timeout = None
         self.all_failed_jobs = None
         self.username = None
+        self.used = None
 
     def setUp(self):
         """Define test setup to be done."""
         self.log.info("<<setUp Started>> at %s", time.ctime())
-        # Start the daos_agents in the job scripts
-        self.setup_start_servers = True
-        self.setup_start_agents = False
         super(SoakTestBase, self).setUp()
         self.username = getuser()
         # Initialize loop param for all tests
@@ -115,11 +112,8 @@ class SoakTestBase(TestWithServers):
         self.exclude_slurm_nodes = []
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
-        self.log_dir = self.params.get("logdir", "/run/*")
+        self.log_dir = get_log_file("soak")
         self.outputsoakdir = self.outputdir + "/soak"
-        # Create the remote log directories on all client nodes
-        self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
-        self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
         # Fail if slurm partition daos_client is not defined
         if not self.client_partition:
             raise SoakTestError(
@@ -131,21 +125,17 @@ class SoakTestBase(TestWithServers):
             if host_server in self.hostlist_clients:
                 self.hostlist_clients.remove(host_server)
                 self.exclude_slurm_nodes.append(host_server)
+
+        # Include test node for log cleanup; remove from client list
+        local_host_list = include_local_host(None)
+        self.exclude_slurm_nodes.extend(local_host_list)
+        if local_host_list[0] in self.hostlist_clients:
+            self.hostlist_clients.remove((local_host_list[0]))
         self.log.info(
             "<<Updated hostlist_clients %s >>", self.hostlist_clients)
         if not self.hostlist_clients:
             self.fail("There are no nodes that are client only;"
                       "check if the partition also contains server nodes")
-
-        # Include test node for log cleanup; remove from client list
-        local_host_list = include_local_host(None)
-        self.exclude_slurm_nodes.extend(local_host_list)
-
-        # Start an agent on the test control host to enable API calls for
-        # reserved pool and containers.  The test control host should be the
-        # last host in the hostlist_clients list.
-        agent_groups = {self.server_group: local_host_list}
-        self.start_agents(agent_groups)
 
     def pre_tear_down(self):
         """Tear down any test-specific steps prior to running tearDown().
@@ -158,13 +148,12 @@ class SoakTestBase(TestWithServers):
         errors = []
         # clear out any jobs in squeue;
         if self.failed_job_id_list:
-            self.log.info(
-                "<<Cancel jobs in queue with ids %s >>",
-                self.failed_job_id_list)
+            job_id = " ".join([str(job) for job in self.failed_job_id_list])
+            self.log.info("<<Cancel jobs in queue with ids %s >>", job_id)
             try:
                 run_command(
-                    "scancel --partition {} -u {}".format(
-                        self.client_partition, self.username))
+                    "scancel --partition {} -u {} {}".format(
+                        self.client_partition, self.username, job_id))
             except DaosTestError as error:
                 # Exception was raised due to a non-zero exit status
                 errors.append("Failed to cancel jobs {}: {}".format(
@@ -172,7 +161,11 @@ class SoakTestBase(TestWithServers):
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
-
+        # Check if any dfuse mount points need to be cleaned
+        try:
+            self.cleanup_dfuse()
+        except SoakTestError as error:
+            self.log.info("Dfuse cleanup failed with %s", error)
         # One last attempt to copy any logfiles from client nodes
         try:
             self.get_remote_logs()
@@ -238,8 +231,8 @@ class SoakTestBase(TestWithServers):
             except DaosTestError as error:
                 raise SoakTestError(
                     "<<FAILED: Soak remote logfiles not copied to avocado data "
-                    "dir {} - check /tmp/soak on nodes {}>>".format(
-                        error, self.hostlist_clients))
+                    "dir {} - check {} on nodes {}>>".format(
+                        error, self.test_log_dir, self.hostlist_clients))
 
             command = "/usr/bin/rm -rf {0}/*".format(self.test_log_dir)
             slurm_utils.srun(
@@ -479,11 +472,12 @@ class SoakTestBase(TestWithServers):
                         cmd.assign_processes(nprocs)
                         cmd.assign_environment(env, True)
                         cmd.ntasks_per_node.update(ppn)
+                        cmd.nodes.update(nodesperjob)
                         log_name = "{}_{}_{}_{}".format(
                             api, b_size, t_size, o_type)
                         commands.append([cmd.__str__(), log_name])
                         self.log.info(
-                            "<<IOR cmdline>>: %s \n", commands[-1].__str__())
+                            "<<IOR cmdline>>:\n %s", cmd.__str__())
         return commands
 
     def create_dfuse_cont(self, pool):
@@ -511,44 +505,74 @@ class SoakTestBase(TestWithServers):
         return result.stdout.split()[3]
 
     def start_dfuse(self, pool):
-        """Create a DfuseCommand object to start dfuse.
+        """Create dfuse start command line for slurm.
 
         Args:
+            pool (obj):             TestPool obj
 
-            pool (obj):   TestPool obj
+        Returns dfuse(obj):         Dfuse obj
+                cmd(list):          list of dfuse commands to add to jobscript
         """
+        commands = []
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
-        self.dfuse.get_params(self)
-        # update dfuse params
-        self.dfuse.set_dfuse_params(pool)
-        self.dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
-
+        dfuse = Dfuse(self.hostlist_clients, self.tmp)
+        dfuse.get_params(self)
+        # update dfuse params; mountpoint for each container
+        unique = get_random_string(5, self.used)
+        self.used.append(unique)
+        mount_dir = dfuse.mount_dir.value + unique
+        dfuse.mount_dir.update(mount_dir)
+        dfuse.set_dfuse_params(pool)
+        dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
         # create dfuse mount point
-        cmd = "mkdir -p {}".format(self.dfuse.mount_dir.value)
-        params = self.srun_params
-        params["export"] = "all"
-        params["ntasks-per-node"] = 1
-        result = slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients), cmd, params)
-        if result.exit_status > 0:
-            raise SoakTestError(
-                "<<FAILED: Dfuse mountpoint {} not created>>".format(
-                    self.dfuse.mount_dir.value))
+        commands.append(slurm_utils.srun_str(
+            hosts=None,
+            cmd="mkdir -p {}".format(dfuse.mount_dir.value),
+            srun_params=None))
+        commands.append(slurm_utils.srun_str(
+            hosts=None,
+            cmd="{}".format(dfuse.__str__()),
+            srun_params=None))
+        return dfuse, commands
 
-        # Run dfuse command
-        dfuse_env = self.dfuse.get_environment(
-            self.server_managers[0], self.client_log)
-        params["export"] = ",".join(["all"] + dfuse_env.get_list())
-        cmd = self.dfuse.__str__()
-        result = slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients), cmd, params)
-        if result.exit_status > 0:
-            raise SoakTestError(
-                "<<FAILED: Dfuse failed to start>>")
+    def stop_dfuse(self, dfuse):
+        """Create dfuse stop command line for slurm.
+
+        Args:
+            dfuse (obj): Dfuse obj
+
+        Returns list:    list of cmds to pass to slurm script
+        """
+        self.log.info("\n")
+        dfuse_stop_cmds = [slurm_utils.srun_str(
+            hosts=None,
+            cmd="fusermount3 -u {0}".format(dfuse.mount_dir.value),
+            srun_params=None)]
+        dfuse_stop_cmds.append(slurm_utils.srun_str(
+            hosts=None,
+            cmd="rm -rf {0}".format(dfuse.mount_dir.value),
+            srun_params=None))
+        return dfuse_stop_cmds
+
+    def cleanup_dfuse(self):
+        """Cleanup and remove any dfuse mount points."""
+        cmd = [
+            "/usr/bin/bash -c 'pkill dfuse",
+            "for dir in /tmp/daos_dfuse*",
+            "do fusermount3 -u $dir",
+            "rm -rf $dir",
+            "done'"]
+        try:
+            slurm_utils.srun(
+                NodeSet.fromlist(
+                    self.hostlist_clients), "{}".format(
+                        ";".join(cmd)), self.srun_params)
+        except slurm_utils.SlurmFailed as error:
+            self.log.info(
+                "<<FAILED: Dfuse directories not deleted %s >>", error)
 
     def create_fio_cmdline(self, job_spec, pool):
-        """Create the FOI commandline.
+        """Create the FOI commandline for job script.
 
         Args:
 
@@ -561,7 +585,6 @@ class SoakTestBase(TestWithServers):
 
         """
         commands = []
-
         fio_namespace = "/run/{}".format(job_spec)
         # test params
         bs_list = self.params.get("blocksize", fio_namespace + "/soak/*")
@@ -584,20 +607,32 @@ class SoakTestBase(TestWithServers):
                     fio_cmd.update(
                         "global", "rw", rw,
                         "fio --name=global --rw")
-                    # start dfuse if api is POSIX
+                    srun_cmds = []
+
+                    # add srun start dfuse cmds if api is POSIX
                     if fio_cmd.api.value == "POSIX":
                         # Connect to the pool, create container
                         # and then start dfuse
-                        self.start_dfuse(pool)
-                        fio_cmd.update(
-                            "global", "directory",
-                            self.dfuse.mount_dir.value,
-                            "fio --name=global --directory")
-                    # fio command
+                        dfuse, srun_cmds = self.start_dfuse(pool)
+                    # Update the FIO cmdline
+                    fio_cmd.update(
+                        "global", "directory",
+                        dfuse.mount_dir.value,
+                        "fio --name=global --directory")
+                    # add srun and srun params to fio cmline
+                    srun_cmds.append(slurm_utils.srun_str(
+                        hosts=None,
+                        cmd=str(fio_cmd.__str__()),
+                        srun_params=None))
+                    # If posix, add the srun dfuse stop cmds
+                    if fio_cmd.api.value == "POSIX":
+                        srun_cmds.extend(self.stop_dfuse(dfuse))
+
                     log_name = "{}_{}_{}".format(blocksize, size, rw)
-                    commands.append([fio_cmd.__str__(), log_name])
-                    self.log.info(
-                        "<<FIO cmdline>>: %s \n", commands[-1])
+                    commands.append([srun_cmds, log_name])
+                    self.log.info("<<Fio cmdlines>>:")
+                    for cmd in srun_cmds:
+                        self.log.info("%s", cmd)
         return commands
 
     def build_job_script(self, commands, job, ppn, nodesperjob):
@@ -614,17 +649,12 @@ class SoakTestBase(TestWithServers):
         """
         self.log.info("<<Build Script>> at %s", time.ctime())
         script_list = []
-
-        # Start the daos_agent in the batch script for now
-        # TO-DO:  daos_agents start with systemd
-        agent_launch_cmds = [
-            "mkdir -p {}".format(os.environ.get("DAOS_TEST_LOG_DIR"))]
-        agent_launch_cmds.append(
-            " ".join([str(self.agent_managers[0].manager.job), "&"]))
-
-        # Create the sbatch script for each cmdline
-        used = []
+        # if additional cmds are needed in the batch script
+        additional_cmds = []
+        # Create the sbatch script for each list of cmdlines
         for cmd, log_name in commands:
+            if isinstance(cmd, str):
+                cmd = [cmd]
             output = os.path.join(self.test_log_dir, "%N_" +
                                   self.test_name + "_" + job + "_%j_%t_" +
                                   str(ppn*nodesperjob) + "_" + log_name + "_")
@@ -635,16 +665,17 @@ class SoakTestBase(TestWithServers):
             sbatch = {
                 "time": str(self.job_timeout) + ":00",
                 "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
-                "error": str(error)
+                "error": str(error),
+                "export": "ALL"
                 }
             # include the cluster specific params
             sbatch.update(self.srun_params)
-            unique = get_random_string(5, used)
+            unique = get_random_string(5, self.used)
             script = slurm_utils.write_slurm_script(
                 self.test_log_dir, job, output, nodesperjob,
-                agent_launch_cmds + [cmd], unique, sbatch)
+                additional_cmds + cmd, unique, sbatch)
             script_list.append(script)
-            used.append(unique)
+            self.used.append(unique)
         return script_list
 
     def job_setup(self, job, pool):
@@ -711,6 +742,7 @@ class SoakTestBase(TestWithServers):
             self.log.info("<< SOAK test timeout in Job Startup>>")
             return job_id_list
         # job_cmdlist is a list of batch script files
+
         for script in job_cmdlist:
             try:
                 job_id = slurm_utils.run_slurm_script(str(script))
@@ -752,26 +784,19 @@ class SoakTestBase(TestWithServers):
                 # wait for the jobs to complete.
                 # enter tearDown before hitting the avocado timeout
                 if time.time() > self.end_time:
-                    self.log.info("<< SOAK test timeout in Job Completion>>")
-                    break
+                    self.log.info(
+                        "<< SOAK test timeout in Job Completion at %s >>",
+                        time.ctime())
+                    for job in job_id_list:
+                        _ = slurm_utils.cancel_jobs(int(job))
                 time.sleep(5)
-            # check for job COMPLETED and remove it from the job queue
+            # check for JobStatus = COMPLETED or CANCELLED (i.e. TEST TO)
             for job, result in self.soak_results.items():
-                # The queue include status of "COMPLETING"
-                if result == "COMPLETED":
+                if result in ["COMPLETED", "CANCELLED"]:
                     job_id_list.remove(int(job))
                 else:
                     self.log.info(
                         "<< Job %s failed with status %s>>", job, result)
-            if job_id_list:
-                self.log.info(
-                    "<<Cancel jobs in queue with id's %s >>", job_id_list)
-                for job in job_id_list:
-                    status = slurm_utils.cancel_jobs(int(job))
-                    if status == 0:
-                        self.log.info("<<Job %s successfully canceled>>", job)
-                    else:
-                        self.log.info("<<Job %s could not be killed>>", job)
             # gather all the logfiles for this pass and cleanup test nodes
             try:
                 self.get_remote_logs()
@@ -791,9 +816,11 @@ class SoakTestBase(TestWithServers):
 
         """
         cmdlist = []
+        # unique numbers per pass
+        self.used = []
         # Create the remote log directories from new loop/pass
         self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
-        self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
+        local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), "mkdir -p {}".format(
                 self.test_log_dir), self.srun_params)
@@ -802,7 +829,7 @@ class SoakTestBase(TestWithServers):
                 "<<FAILED: logfile directory not"
                 "created on clients>>: {}".format(self.hostlist_clients))
         # Create local log directory
-        os.makedirs(self.local_pass_dir)
+        os.makedirs(local_pass_dir)
         # Setup cmdlines for job with specified pool
         if len(pools) < len(jobs):
             raise SoakTestError(
@@ -832,6 +859,8 @@ class SoakTestBase(TestWithServers):
                     str(j_id) for j_id in self.failed_job_id_list)))
             # accumulate failing job IDs
             self.all_failed_jobs.extend(self.failed_job_id_list)
+            # clear out the failed jobs for this pass
+            self.failed_job_id_list = []
 
     def run_soak(self, test_param):
         """Run the soak test specified by the test params.
@@ -889,7 +918,7 @@ class SoakTestBase(TestWithServers):
             raise SoakTestError(
                 "<<FAILED: Soak directories not removed"
                 "from clients>>: {}".format(self.hostlist_clients))
-        # cleanup test_node /tmp/soak
+        # cleanup test_node soak directory
         cmd = "rm -rf {}".format(self.log_dir)
         try:
             result = run_command(cmd, timeout=30)

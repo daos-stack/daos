@@ -19,6 +19,7 @@ set -uex
 
 : "${SOFILES:="daos_depends_libraries"}"
 : "${PACKAGES:="daos_depends_packages"}"
+: "${CHECKED_FILES:="daos_checked_files"}"
 
 repo_url="https://repo.dc.hpdd.intel.com/repository/"
 repo_url+="daos-stack-el-7-x86_64-stable-local"
@@ -64,11 +65,14 @@ done
 # Step 2. Identify which of the files are ELF executables and
 #         lookup what images that they depend on.
 rm -f raw_image_depends
+rm -f "${CHECKED_FILES}"
 
 for f in ${f_list}; do
   if [[ -x "${f}" ]]; then
-    if file "${f}" | grep ": ELF "; then
+    if file "${f}" | grep " ELF "; then
       ldd "${f}" >> raw_lib_depends
+      hardening-check --quiet --nopie --nobindnow --nofortify "${f}" | \
+        tee -a "${CHECKED_FILES}" || true
     fi
   fi
 done

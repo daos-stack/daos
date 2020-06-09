@@ -39,8 +39,6 @@ struct dtx_resync_entry {
 	d_list_t		dre_link;
 	struct dtx_entry	dre_dte;
 	daos_epoch_t		dre_epoch;
-	uint64_t		dre_hash;
-	uint32_t		dre_in_cache:1;
 };
 
 #define dre_oid		dre_dte.dte_oid
@@ -55,7 +53,9 @@ struct dtx_resync_args {
 	struct ds_cont_child	*cont;
 	uuid_t			 po_uuid;
 	struct dtx_resync_head	 tables;
+	daos_epoch_t		 epoch;
 	uint32_t		 version;
+	uint32_t		 resync_all:1;
 };
 
 static inline void
@@ -85,45 +85,22 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 	for (i = 0; i < count; i++) {
 		dre = d_list_entry(drh->drh_list.next,
 				   struct dtx_resync_entry, dre_link);
+
 		/* Someone (the DTX owner or batched commit ULT) may have
 		 * committed or aborted the DTX during we handling other
-		 * DTXs. So double check the on-disk status before current
-		 * commit.
+		 * DTXs. So double check the status before current commit.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid,
+				   NULL, NULL, false);
 
 		/* Skip this DTX since it has been committed or aggregated. */
 		if (rc == DTX_ST_COMMITTED || rc == -DER_NONEXIST)
 			goto next;
 
-		if (rc != DTX_ST_PREPARED) {
-			/* If we failed to check the on-disk status, commit
-			 * it again, that is harmless. But we cannot add it
-			 * to CoS cache.
-			 */
-			D_WARN("Fail to check DTX "DF_DTI" status: %d.\n",
-			       DP_DTI(&dre->dre_xid), rc);
-			goto commit;
-		}
+		/* If we failed to check the status, then assume that it is
+		 * not committed, then commit it (again), that is harmless.
+		 */
 
-		if (dre->dre_in_cache)
-			goto commit;
-
-		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
-					&dre->dre_xid, dre->dre_hash);
-		if (rc == -DER_NONEXIST) {
-			/* Not sure about whether the DTX modified shared
-			 * items or not, then just assume it is.
-			 */
-			rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_oid,
-					     &dre->dre_xid, dre->dre_hash,
-					     dre->dre_epoch, 0, DCF_SHARED);
-			if (rc < 0)
-				D_WARN("Fail to add DTX "DF_DTI" to CoS cache: "
-				       "rc = %d\n",  DP_DTI(&dre->dre_xid), rc);
-		}
-
-commit:
 		dte[j].dte_xid = dre->dre_xid;
 		dte[j].dte_oid = dre->dre_oid;
 		++j;
@@ -133,7 +110,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(po_uuid, cont->sc_uuid, dte, j, version);
+		rc = dtx_commit(po_uuid, cont->sc_uuid, dte, j, version, false);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -158,7 +135,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	int				 rc;
 
 	if (drh->drh_count == 0)
-		return 0;
+		goto out;
 
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (layout != NULL) {
@@ -166,27 +143,16 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			layout = NULL;
 		}
 
-		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
-					&dre->dre_xid, dre->dre_hash);
-		/* If it is in CoS cache, no need to check remote replicas. */
-		if (rc == 0) {
-			dre->dre_in_cache = 1;
-			goto commit;
-		}
-
 		rc = ds_pool_check_leader(dra->po_uuid, &dre->dre_oid,
 					  dra->version, &layout);
 		if (rc <= 0) {
 			if (rc < 0)
 				D_WARN("Not sure about the leader for the DTX "
-				       DF_UOID"/"DF_DTI" (ver = %u): rc = %d, "
-				       "skip it.\n",
-				       DP_UOID(dre->dre_oid),
+				       DF_DTI" (ver = %u): rc = %d, skip it.\n",
 				       DP_DTI(&dre->dre_xid), dra->version, rc);
 			else
 				D_DEBUG(DB_TRACE, "Not the leader for the DTX "
-					DF_UOID"/"DF_DTI" (ver = %u) skip it\n",
-					DP_UOID(dre->dre_oid),
+					DF_DTI" (ver = %u) skip it.\n",
 					DP_DTI(&dre->dre_xid), dra->version);
 			dtx_dre_release(drh, dre);
 			continue;
@@ -195,19 +161,15 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		rc = dtx_check(dra->po_uuid, cont->sc_uuid,
 			       &dre->dre_dte, layout);
 
-		/* The DTX has been committed (or) ready to be committed on
-		 * some remote replica(s), let's commit the it globally.
+		/* The DTX has been committed or ready to be committed on
+		 * some remote replica(s), let's commit the DTX globally.
 		 */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_PREPARED)
 			goto commit;
 
 		if (rc != -DER_NONEXIST) {
-			/* We are not sure about whether the DTX can be
-			 * committed or not, then we have to skip it.
-			 */
-			D_WARN("Not sure about whether the DTX "DF_UOID
-			       "/"DF_DTI" can be committed or not: %d\n",
-			       DP_UOID(dre->dre_oid),
+			D_WARN("Not sure about whether the DTX "DF_DTI
+			       " can be committed or not: %d, skip it.\n",
 			       DP_DTI(&dre->dre_xid), rc);
 			dtx_dre_release(drh, dre);
 			continue;
@@ -215,43 +177,43 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 		/* Someone (the DTX owner or batched commit ULT) may have
 		 * committed or aborted the DTX during we handling other
-		 * DTXs. So double check the on-disk status before current
-		 * commit.
+		 * DTXs. So double check the status before next action.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid,
+				   NULL, NULL, false);
 
-		/* Skip this DTX since it has been committed or aborted or
-		 * fail to get the status.
-		 */
-		if (rc != DTX_ST_PREPARED) {
-			if (rc < 0 && rc != -DER_NONEXIST)
-				D_WARN("Not sure about whether the DTX "DF_UOID
-				       "/"DF_DTI" can be abort or not: %d\n",
-				       DP_UOID(dre->dre_oid),
-				       DP_DTI(&dre->dre_xid), rc);
+		/* Skip this DTX that it may has been committed or aborted. */
+		if (rc == DTX_ST_COMMITTED || rc == -DER_NONEXIST) {
 			dtx_dre_release(drh, dre);
 			continue;
 		}
 
-		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
-					&dre->dre_xid, dre->dre_hash);
-		if (rc == 0) {
-			dre->dre_in_cache = 1;
-			goto commit;
+		/* Skip this DTX if failed to get the status. */
+		if (rc != DTX_ST_PREPARED) {
+			D_WARN("Not sure about whether the DTX "DF_DTI
+			       " can be abort or not: %d, skip it.\n",
+			       DP_DTI(&dre->dre_xid), rc);
+			dtx_dre_release(drh, dre);
+			continue;
 		}
 
-		if (rc == -DER_NONEXIST) {
-			/* If we abort multiple non-ready DTXs together, then
-			 * there is race that one DTX may become committable
-			 * when we abort some other DTX(s). To avoid complex
-			 * rollback logic, let's abort the DTXs one by one.
-			 */
-			rc = dtx_abort(dra->po_uuid, cont->sc_uuid,
-				       dre->dre_epoch, &dre->dre_dte, 1,
-				       dra->version);
-			if (rc < 0)
-				err = rc;
-		}
+		/* To be aborted. It is possible that the client has resent
+		 * related RPC to the new leader, but such DTX is still not
+		 * committable yet. Here, the resync logic will abort it by
+		 * race during the new leader waiting for other replica(s).
+		 * The dtx_abort() logic will abort the local DTX firstly.
+		 * When the leader get replies from other replicas, it will
+		 * check whether local DTX is still valid or not.
+		 *
+		 * If we abort multiple non-ready DTXs together, then there
+		 * is race that one DTX may become committable when we abort
+		 * some other DTX(s). To avoid complex rollback logic, let's
+		 * abort the DTXs one by one, not batched.
+		 */
+		rc = dtx_abort(dra->po_uuid, cont->sc_uuid, dre->dre_epoch,
+			       &dre->dre_dte, 1, dra->version);
+		if (rc < 0)
+			err = rc;
 
 		dtx_dre_release(drh, dre);
 		continue;
@@ -276,6 +238,12 @@ commit:
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
 
+out:
+	if (err >= 0)
+		/* Drain old committable DTX to help subsequent rebuild. */
+		err = dtx_obj_sync(dra->po_uuid, cont->sc_uuid, cont,
+				   NULL, dra->epoch, dra->version);
+
 	return err;
 }
 
@@ -292,14 +260,22 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	 * (or abort) the DTXs (that will change the active-DTX tree).
 	 */
 
+	D_ASSERT(!(ent->ie_dtx_flags & DTE_INVALID));
+
+	if (ent->ie_dtx_flags & DTE_LEADER && !dra->resync_all)
+		return 0;
+
+	/* Only handle the DTX that happened before the DTX resync. */
+	if (ent->ie_dtx_ver >= dra->version)
+		return 0;
+
 	D_ALLOC_PTR(dre);
 	if (dre == NULL)
 		return -DER_NOMEM;
 
 	dre->dre_epoch = ent->ie_epoch;
-	dre->dre_xid = ent->ie_xid;
-	dre->dre_oid = ent->ie_oid;
-	dre->dre_hash = ent->ie_dtx_hash;
+	dre->dre_xid = ent->ie_dtx_xid;
+	dre->dre_oid = ent->ie_dtx_oid;
 	d_list_add_tail(&dre->dre_link, &dra->tables.drh_list);
 	dra->tables.drh_count++;
 
@@ -308,7 +284,7 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 
 int
 dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
-	   bool block)
+	   bool block, bool resync_all)
 {
 	struct ds_cont_child		*cont = NULL;
 	struct dtx_resync_args		 dra = { 0 };
@@ -341,15 +317,17 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		goto out;
 	}
 	cont->sc_dtx_resyncing = 1;
+	cont->sc_dtx_resync_ver = ver;
 	ABT_mutex_unlock(cont->sc_mutex);
-
-	rc = vos_dtx_update_resync_gen(cont->sc_hdl);
-	if (rc != 0)
-		goto fail;
 
 	dra.cont = cont;
 	uuid_copy(dra.po_uuid, po_uuid);
 	dra.version = ver;
+	dra.epoch = crt_hlc_get();
+	if (resync_all)
+		dra.resync_all = 1;
+	else
+		dra.resync_all = 0;
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
@@ -368,7 +346,6 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	if (rc >= 0)
 		rc = rc1;
 
-fail:
 	D_DEBUG(DB_TRACE, "resync DTX scan "DF_UUID"/"DF_UUID" stop: rc = %d\n",
 		DP_UUID(po_uuid), DP_UUID(co_uuid), rc);
 
@@ -382,9 +359,9 @@ out:
 	return rc;
 }
 
-struct container_scan_arg {
-	uuid_t	co_uuid;
-	struct dtx_resync_arg *arg;
+struct dtx_container_scan_arg {
+	uuid_t			co_uuid;
+	struct dtx_scan_args	arg;
 };
 
 static int
@@ -392,8 +369,8 @@ container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		  vos_iter_type_t type, vos_iter_param_t *iter_param,
 		  void *data, unsigned *acts)
 {
-	struct container_scan_arg	*scan_arg = data;
-	struct dtx_resync_arg		*arg = scan_arg->arg;
+	struct dtx_container_scan_arg	*scan_arg = data;
+	struct dtx_scan_args		*arg = &scan_arg->arg;
 	int				rc;
 
 	if (uuid_compare(scan_arg->co_uuid, entry->ie_couuid) == 0) {
@@ -404,7 +381,7 @@ container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	uuid_copy(scan_arg->co_uuid, entry->ie_couuid);
 	rc = dtx_resync(iter_param->ip_hdl, arg->pool_uuid, entry->ie_couuid,
-			arg->version, true);
+			arg->version, true, false);
 	if (rc)
 		D_ERROR(DF_UUID" dtx resync failed: rc %d\n",
 			DP_UUID(arg->pool_uuid), rc);
@@ -418,18 +395,18 @@ container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 static int
 dtx_resync_one(void *data)
 {
-	struct dtx_resync_arg	*arg = data;
-	struct ds_pool_child	*child;
-	vos_iter_param_t	param = { 0 };
-	struct vos_iter_anchors	anchor = { 0 };
-	struct container_scan_arg cb_arg = { 0 };
-	int			rc;
+	struct dtx_scan_args		*arg = data;
+	struct ds_pool_child		*child;
+	vos_iter_param_t		 param = { 0 };
+	struct vos_iter_anchors		 anchor = { 0 };
+	struct dtx_container_scan_arg	 cb_arg = { 0 };
+	int				 rc;
 
 	child = ds_pool_child_lookup(arg->pool_uuid);
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
-	cb_arg.arg = arg;
+	cb_arg.arg = *arg;
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
@@ -446,7 +423,7 @@ out:
 void
 dtx_resync_ult(void *data)
 {
-	struct dtx_resync_arg	*arg = data;
+	struct dtx_scan_args	*arg = data;
 	struct ds_pool		*pool;
 	int			rc = 0;
 

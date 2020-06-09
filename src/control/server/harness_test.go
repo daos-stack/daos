@@ -50,10 +50,9 @@ import (
 )
 
 const (
-	testShortTimeout   = 60 * time.Millisecond
-	testMediumTimeout  = 30 * testShortTimeout
-	testLongTimeout    = 2 * testMediumTimeout
-	delayedFailTimeout = 5 * testShortTimeout
+	testShortTimeout   = 50 * time.Millisecond
+	testLongTimeout    = 1 * time.Minute
+	delayedFailTimeout = 20 * testShortTimeout
 )
 
 func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
@@ -171,6 +170,7 @@ func TestServer_Harness_Start(t *testing.T) {
 		rankInSuperblock bool                     // rank already set in superblock when starting
 		instanceUuids    map[int]string           // UUIDs for each instance.Index()
 		dontNotifyReady  bool                     // skip sending notify ready on dRPC channel
+		waitTimeout      time.Duration            // time after which test context is cancelled
 		expStartErr      error                    // error from harness.Start()
 		expStartCount    uint32                   // number of instance.runner.Start() calls
 		expDrpcCalls     map[uint32][]drpc.Method // method ids called for each instance.Index()
@@ -277,11 +277,13 @@ func TestServer_Harness_Start(t *testing.T) {
 		},
 		"fails to start": {
 			trc:           &ioserver.TestRunnerConfig{StartErr: errors.New("no")},
+			waitTimeout:   10 * testShortTimeout,
 			expStartErr:   context.DeadlineExceeded,
 			expStartCount: 2, // both start but don't proceed so context times out
 		},
 		"delayed failure occurs before notify ready": {
 			dontNotifyReady: true,
+			waitTimeout:     30 * testShortTimeout,
 			expStartErr:     context.DeadlineExceeded,
 			trc: &ioserver.TestRunnerConfig{
 				ErrChanCb: func() error {
@@ -300,6 +302,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			},
 		},
 		"delayed failure occurs after ready": {
+			waitTimeout: 100 * testShortTimeout,
 			expStartErr: context.DeadlineExceeded,
 			trc: &ioserver.TestRunnerConfig{
 				ErrChanCb: func() error {
@@ -435,7 +438,10 @@ func TestServer_Harness_Start(t *testing.T) {
 				}))
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), testMediumTimeout)
+			ctx, cancel := context.WithCancel(context.Background())
+			if tc.waitTimeout != 0 {
+				ctx, cancel = context.WithTimeout(ctx, tc.waitTimeout)
+			}
 			defer cancel()
 
 			// start harness async and signal completion
@@ -497,10 +503,10 @@ func TestServer_Harness_Start(t *testing.T) {
 				go func(ctxIn context.Context, i *IOServerInstance) {
 					select {
 					case i.drpcReady <- req:
-						t.Log("sending drpc ready")
 					case <-ctxIn.Done():
 					}
 				}(ctx, srv)
+				t.Logf("sent drpc ready to instance %d", srv.Index())
 			}
 
 			waitReady := make(chan struct{})
@@ -530,8 +536,11 @@ func TestServer_Harness_Start(t *testing.T) {
 				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)
 			}
 
+			if tc.waitTimeout == 0 { // if custom timeout, don't cancel
+				cancel() // all ranks have been started, run finished
+			}
 			<-done
-			if gotErr != context.DeadlineExceeded {
+			if gotErr != context.Canceled || tc.expStartErr != nil {
 				CmpErr(t, tc.expStartErr, gotErr)
 				if tc.expStartErr != nil {
 					return
@@ -541,7 +550,11 @@ func TestServer_Harness_Start(t *testing.T) {
 			// verify expected RPCs were made, ranks allocated and
 			// members added to membership
 			for _, srv := range instances {
-				gotDrpcCalls := srv._drpcClient.(*mockDrpcClient).Calls
+				dc, err := srv.getDrpcClient()
+				if err != nil {
+					t.Fatal(err)
+				}
+				gotDrpcCalls := dc.(*mockDrpcClient).Calls
 				AssertEqual(t, tc.expDrpcCalls[srv.Index()], gotDrpcCalls,
 					name+": unexpected dRPCs for instance "+string(srv.Index()))
 
