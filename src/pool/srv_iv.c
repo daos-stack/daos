@@ -419,7 +419,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 						 new_alloc_size);
 			if (rc)
 				return rc;
-		}	
+		}
 
 	} else if (entry->iv_class->iv_class_id == IV_POOL_PROP)
 		rc = ds_pool_tgt_prop_update(pool, &src_iv->piv_prop);
