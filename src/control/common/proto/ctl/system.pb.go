@@ -36,7 +36,7 @@ func (m *SystemMember) Reset()         { *m = SystemMember{} }
 func (m *SystemMember) String() string { return proto.CompactTextString(m) }
 func (*SystemMember) ProtoMessage()    {}
 func (*SystemMember) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_6ffe04b71a69ff79, []int{0}
+	return fileDescriptor_system_6a930be0eea67841, []int{0}
 }
 func (m *SystemMember) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemMember.Unmarshal(m, b)
@@ -109,7 +109,7 @@ func (m *RankResult) Reset()         { *m = RankResult{} }
 func (m *RankResult) String() string { return proto.CompactTextString(m) }
 func (*RankResult) ProtoMessage()    {}
 func (*RankResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_6ffe04b71a69ff79, []int{1}
+	return fileDescriptor_system_6a930be0eea67841, []int{1}
 }
 func (m *RankResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RankResult.Unmarshal(m, b)
@@ -186,7 +186,7 @@ func (m *SystemStopReq) Reset()         { *m = SystemStopReq{} }
 func (m *SystemStopReq) String() string { return proto.CompactTextString(m) }
 func (*SystemStopReq) ProtoMessage()    {}
 func (*SystemStopReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_6ffe04b71a69ff79, []int{2}
+	return fileDescriptor_system_6a930be0eea67841, []int{2}
 }
 func (m *SystemStopReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemStopReq.Unmarshal(m, b)
@@ -247,7 +247,7 @@ func (m *SystemStopResp) Reset()         { *m = SystemStopResp{} }
 func (m *SystemStopResp) String() string { return proto.CompactTextString(m) }
 func (*SystemStopResp) ProtoMessage()    {}
 func (*SystemStopResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_6ffe04b71a69ff79, []int{3}
+	return fileDescriptor_system_6a930be0eea67841, []int{3}
 }
 func (m *SystemStopResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemStopResp.Unmarshal(m, b)
@@ -286,7 +286,7 @@ func (m *SystemResetFormatReq) Reset()         { *m = SystemResetFormatReq{} }
 func (m *SystemResetFormatReq) String() string { return proto.CompactTextString(m) }
 func (*SystemResetFormatReq) ProtoMessage()    {}
 func (*SystemResetFormatReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_6ffe04b71a69ff79, []int{4}
+	return fileDescriptor_system_6a930be0eea67841, []int{4}
 }
 func (m *SystemResetFormatReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemResetFormatReq.Unmarshal(m, b)
@@ -326,7 +326,7 @@ func (m *SystemResetFormatResp) Reset()         { *m = SystemResetFormatResp{} }
 func (m *SystemResetFormatResp) String() string { return proto.CompactTextString(m) }
 func (*SystemResetFormatResp) ProtoMessage()    {}
 func (*SystemResetFormatResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_6ffe04b71a69ff79, []int{5}
+	return fileDescriptor_system_6a930be0eea67841, []int{5}
 }
 func (m *SystemResetFormatResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemResetFormatResp.Unmarshal(m, b)
@@ -365,7 +365,7 @@ func (m *SystemStartReq) Reset()         { *m = SystemStartReq{} }
 func (m *SystemStartReq) String() string { return proto.CompactTextString(m) }
 func (*SystemStartReq) ProtoMessage()    {}
 func (*SystemStartReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_6ffe04b71a69ff79, []int{6}
+	return fileDescriptor_system_6a930be0eea67841, []int{6}
 }
 func (m *SystemStartReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemStartReq.Unmarshal(m, b)
@@ -405,7 +405,7 @@ func (m *SystemStartResp) Reset()         { *m = SystemStartResp{} }
 func (m *SystemStartResp) String() string { return proto.CompactTextString(m) }
 func (*SystemStartResp) ProtoMessage()    {}
 func (*SystemStartResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_6ffe04b71a69ff79, []int{7}
+	return fileDescriptor_system_6a930be0eea67841, []int{7}
 }
 func (m *SystemStartResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemStartResp.Unmarshal(m, b)
@@ -444,7 +444,7 @@ func (m *SystemQueryReq) Reset()         { *m = SystemQueryReq{} }
 func (m *SystemQueryReq) String() string { return proto.CompactTextString(m) }
 func (*SystemQueryReq) ProtoMessage()    {}
 func (*SystemQueryReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_6ffe04b71a69ff79, []int{8}
+	return fileDescriptor_system_6a930be0eea67841, []int{8}
 }
 func (m *SystemQueryReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemQueryReq.Unmarshal(m, b)
@@ -483,7 +483,7 @@ func (m *SystemQueryResp) Reset()         { *m = SystemQueryResp{} }
 func (m *SystemQueryResp) String() string { return proto.CompactTextString(m) }
 func (*SystemQueryResp) ProtoMessage()    {}
 func (*SystemQueryResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_6ffe04b71a69ff79, []int{9}
+	return fileDescriptor_system_6a930be0eea67841, []int{9}
 }
 func (m *SystemQueryResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemQueryResp.Unmarshal(m, b)
@@ -523,9 +523,9 @@ func init() {
 	proto.RegisterType((*SystemQueryResp)(nil), "ctl.SystemQueryResp")
 }
 
-func init() { proto.RegisterFile("system.proto", fileDescriptor_system_6ffe04b71a69ff79) }
+func init() { proto.RegisterFile("system.proto", fileDescriptor_system_6a930be0eea67841) }
 
-var fileDescriptor_system_6ffe04b71a69ff79 = []byte{
+var fileDescriptor_system_6a930be0eea67841 = []byte{
 	// 354 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x92, 0x4f, 0x4f, 0xe3, 0x30,
 	0x10, 0xc5, 0xe5, 0x4d, 0xff, 0xce, 0xb6, 0xdb, 0x5d, 0xab, 0x8b, 0x7c, 0x8c, 0x72, 0x40, 0x45,

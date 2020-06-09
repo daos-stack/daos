@@ -30,7 +30,7 @@ func (m *NetworkScanReq) Reset()         { *m = NetworkScanReq{} }
 func (m *NetworkScanReq) String() string { return proto.CompactTextString(m) }
 func (*NetworkScanReq) ProtoMessage()    {}
 func (*NetworkScanReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_ae79f0809b317184, []int{0}
+	return fileDescriptor_network_d0617e925f15c0f9, []int{0}
 }
 func (m *NetworkScanReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NetworkScanReq.Unmarshal(m, b)
@@ -75,7 +75,7 @@ func (m *NetworkScanResp) Reset()         { *m = NetworkScanResp{} }
 func (m *NetworkScanResp) String() string { return proto.CompactTextString(m) }
 func (*NetworkScanResp) ProtoMessage()    {}
 func (*NetworkScanResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_ae79f0809b317184, []int{1}
+	return fileDescriptor_network_d0617e925f15c0f9, []int{1}
 }
 func (m *NetworkScanResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NetworkScanResp.Unmarshal(m, b)
@@ -115,7 +115,7 @@ func (m *FabricInterface) Reset()         { *m = FabricInterface{} }
 func (m *FabricInterface) String() string { return proto.CompactTextString(m) }
 func (*FabricInterface) ProtoMessage()    {}
 func (*FabricInterface) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_ae79f0809b317184, []int{2}
+	return fileDescriptor_network_d0617e925f15c0f9, []int{2}
 }
 func (m *FabricInterface) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FabricInterface.Unmarshal(m, b)
@@ -162,9 +162,9 @@ func init() {
 	proto.RegisterType((*FabricInterface)(nil), "ctl.FabricInterface")
 }
 
-func init() { proto.RegisterFile("network.proto", fileDescriptor_network_ae79f0809b317184) }
+func init() { proto.RegisterFile("network.proto", fileDescriptor_network_d0617e925f15c0f9) }
 
-var fileDescriptor_network_ae79f0809b317184 = []byte{
+var fileDescriptor_network_d0617e925f15c0f9 = []byte{
 	// 190 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0xcd, 0x4b, 0x2d, 0x29,
 	0xcf, 0x2f, 0xca, 0xd6, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x4e, 0x2e, 0xc9, 0x51, 0x8a,

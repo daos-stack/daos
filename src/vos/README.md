@@ -100,7 +100,7 @@ For example, when an array object is "punched" from 0 to infinity in a given epo
 Internally, the VOS maintains an index of container UUIDs that references each container stored in a particular pool.
 The container itself contains three indices.
 The first is an object index used to map an object ID and epoch to object metadata efficiently when servicing I/O requests.
-The other two indicies are for maintining active and committed <a href="#811">DTX</a> records for ensuring efficient updates across multiple replicas.
+The other two indices are for maintining active and committed <a href="#811">DTX</a> records for ensuring efficient updates across multiple replicas.
 
 DAOS supports two types of values, each associated with a Distribution Key (DKEY) and an Attribute Key (AKEY): Single value and Array value.
 The DKEY is used for placement, determining which VOS pool is used to store the data.
@@ -117,7 +117,7 @@ In other words, they shall describe the DKEY-AKEY-Value in a single VOS pool.
 VOS objects are not created explicitly but are created on the first write by creating the object metadata and inserting a reference to it in the owning container's object index.
 All object updates log the data for each update, which may be an object, DKEY, AKEY, a single value, or array value punch or an update to a single value or array value.
 Note that "punch" of an extent of an array object is logged as zeroed extents, rather than causing relevant array extents or key values to be discarded. A punch of an object, DKEY, AKEY, or single value is logged, so that reads at a later timestamp see no data.
-This ensures that the full version history of objects remain accessible.   The DAOS api, however, only allows accessing data at snapshots so VOS aggregation can aggresively remove objects, keys, and values that are no longer accessible at a known snapshot.
+This ensures that the full version history of objects remain accessible.   The DAOS api, however, only allows accessing data at snapshots so VOS aggregation can aggressively remove objects, keys, and values that are no longer accessible at a known snapshot.
 
 <a id="7a"></a>
 ![../../doc/graph/Fig_067.png](../../doc/graph/Fig_067.png "VOS Pool storage layout")
@@ -483,7 +483,7 @@ performs all operations using its epoch.
 
 The MVCC rules ensure that transactions execute as if they are serialized in
 their epoch order while complying with external consistency, as long as the
-system clock offsets are always within the expected maximal system clock offset
+system clock offsets are always within the expected maximum system clock offset
 (epsilon). For convenience, the rules classify the I/O operations into reads
 and writes:
 
@@ -513,7 +513,7 @@ A read at epoch e follows these rules:
 
     // Epoch uncertainty check
     if e is uncertain
-        if there is any overlapping, unaborted write in (e, e + epsilon]
+        if there is any overlapping, unaborted write in (e, e_orig + epsilon]
             reject
 
     find the highest overlapping, unaborted write in [0, e]
@@ -531,7 +531,7 @@ A write at epoch e follows these rules:
 
     // Epoch uncertainty check
     if e is uncertain
-        if there is any overlapping, unaborted write in (e, e + epsilon]
+        if there is any overlapping, unaborted write in (e, e_orig + epsilon]
             reject
 
     // Read timestamp check
@@ -546,9 +546,10 @@ A write at epoch e follows these rules:
         reject
 
 A transaction involving both reads and writes must follow both sets of rules.
-As an optimization, read-only transactions do not need to update read
-timestamps. Snapshot creations, however, must update the read timestamps as if
-it is a transaction reading the whole container.
+As optimizations, single-read transactions and snapshot (read) transactions
+do not need to update read timestamps. Snapshot creations, however, must
+update the read timestamps as if it is a transaction reading the whole
+container.
 
 When a transaction is rejected, it restarts with the same transaction ID but a
 higher epoch. If the epoch becomes higher than the original epoch plus epsilon,

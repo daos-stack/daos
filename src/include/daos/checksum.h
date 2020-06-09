@@ -96,7 +96,7 @@ struct dcs_iod_csums {
 };
 
 /** Single value layout info for checksum */
-struct dcs_singv_layout {
+struct dcs_layout {
 	/** #bytes on evenly distributed targets */
 	uint64_t	cs_bytes;
 	/** targets number */
@@ -261,7 +261,7 @@ daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
  * @param[in]	iods		I/O descriptors describing the data in sgls.
  * @param[in]	nr		Number of iods and sgls as well as number of
  *				daos_iod_csums that will be created.
- * @param[in]	akey_only	Only calcualte the checksum for the iod name
+ * @param[in]	akey_only	Only calculate the checksum for the iod name
  * @param[in]	singv_los	Optional layout description for single values,
  *				as for erasure-coding single value possibly
  *				distributed to multiple targets. When it is NULL
@@ -280,7 +280,7 @@ daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
 int
 daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 		       daos_iod_t *iods, daos_iom_t *maps, uint32_t nr,
-		       bool akey_only, struct dcs_singv_layout *singv_los,
+		       bool akey_only, struct dcs_layout *singv_los,
 		       int singv_idx, struct dcs_iod_csums **p_iods_csums);
 
 /**
@@ -316,7 +316,7 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
  *			it means replica object, or EC object located
  *			in single target.
  * @param singv_idx	single value target index, valid when singv_los
- *			is non-NULL. -1 means verifing csum for all shards.
+ *			is non-NULL. -1 means verifying csum for all shards.
  * @param iod_csum	checksum of the iod
  *
  * @return		0 for success, -DER_CSUM if corruption is detected
@@ -324,7 +324,7 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 int
 daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csum,
-			struct dcs_singv_layout *singv_lo, int singv_idx,
+			struct dcs_layout *singv_lo, int singv_idx,
 			daos_iom_t *map);
 
 /**
@@ -361,7 +361,7 @@ daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
 uint64_t
 daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 			     uint32_t nr, bool akey_only,
-			     struct dcs_singv_layout *singv_los);
+			     struct dcs_layout *singv_los);
 
 /**
  * Allocate the checksum structures needed for the iods. This will also
@@ -371,7 +371,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  * @param[in]	obj		the daos_csummer obj
  * @param[in]	iods		list of iods
  * @param[in]	nr		number of iods
- * @param[in]	akey_only	Only calcualte the checksum for the iod name
+ * @param[in]	akey_only	Only calculate the checksum for the iod name
  * @param[in]	singv_los	Optional layout description for single values,
  *				as for erasure-coding single value possibly
  *				distributed to multiple targets. When it is NULL
@@ -385,7 +385,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 int
 daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			      uint32_t nr, bool akey_only,
-			      struct dcs_singv_layout *singv_los,
+			      struct dcs_layout *singv_los,
 			      struct dcs_iod_csums **p_iods_csums);
 
 /** Destroy the iods csums */

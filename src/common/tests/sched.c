@@ -725,7 +725,7 @@ sched_test_6()
 		}
 	}
 
-	print_message("Register Dependecies\n");
+	print_message("Register Dependencies\n");
 	rc = tse_task_register_deps(task, NUM_DEPS, tasks);
 	if (rc != 0) {
 		print_error("Failed to register task Deps: %d\n", rc);
@@ -765,7 +765,7 @@ sched_test_6()
 		D_GOTO(out, rc);
 	}
 
-	print_message("Init tasks with Dependecies\n");
+	print_message("Init tasks with Dependencies\n");
 	for (i = 0; i < NUM_DEPS; i++) {
 		rc = tse_task_create(check_func_1, &sched, counter, &tasks[i]);
 		if (rc != 0) {

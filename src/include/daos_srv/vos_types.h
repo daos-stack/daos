@@ -25,6 +25,7 @@
 #define __VOS_TYPES_H__
 
 #include <daos_types.h>
+#include <daos_pool.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
 #include <daos/object.h>
@@ -33,6 +34,25 @@
 
 enum dtx_cos_flags {
 	DCF_SHARED	= (1 << 0),
+};
+
+struct dtx_cos_key {
+	daos_unit_oid_t		oid;
+	uint64_t		dkey_hash;
+};
+
+enum dtx_entry_flags {
+	/* The DTX is the leader */
+	DTE_LEADER		= (1 << 0),
+	/* The DTX entry is invalid. */
+	DTE_INVALID		= (1 << 1),
+};
+
+struct dtx_entry {
+	/** The identifier of the DTX */
+	struct dtx_id		dte_xid;
+	/** The identifier of the modified object (shard). */
+	daos_unit_oid_t		dte_oid;
 };
 
 enum vos_oi_attr {
@@ -57,24 +77,32 @@ struct vos_gc_stat {
 	uint64_t	gs_recxs;	/**< GCed array values */
 };
 
+struct vos_pool_space {
+	/** Total & free space */
+	struct daos_space	vps_space;
+	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */
+	daos_size_t		vps_space_sys[DAOS_MEDIA_MAX];
+	/** NVMe block allocator attributes */
+	struct vea_attr		vps_vea_attr;
+	/** NVMe block allocator statistics */
+	struct vea_stat		vps_vea_stat;
+};
+
+#define SCM_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_SCM])
+#define SCM_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_SCM])
+#define SCM_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_SCM])
+#define NVME_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_NVME])
+#define NVME_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_NVME])
+#define NVME_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_NVME])
+
 /**
  * pool attributes returned to query
  */
 typedef struct {
 	/** # of containers in this pool */
 	uint64_t		pif_cont_nr;
-	/** Total SCM space in bytes */
-	daos_size_t		pif_scm_sz;
-	/** Total NVMe space in bytes */
-	daos_size_t		pif_nvme_sz;
-	/** Current SCM free space in bytes */
-	daos_size_t		pif_scm_free;
-	/** Current NVMe free space in bytes */
-	daos_size_t		pif_nvme_free;
-	/** NVMe block allocator attributes */
-	struct vea_attr		pif_vea_attr;
-	/** NVMe block allocator statistics */
-	struct vea_stat		pif_vea_stat;
+	/** Space information */
+	struct vos_pool_space	pif_space;
 	/** garbage collector statistics */
 	struct vos_gc_stat	pif_gc_stat;
 	/** TODO */
@@ -242,7 +270,7 @@ enum {
 };
 
 /**
- * Parameters for initialising VOS iterator
+ * Parameters for initializing VOS iterator
  */
 typedef struct {
 	/** standalone prepare:	pool connection handle or container open handle
@@ -294,20 +322,10 @@ typedef struct {
 			/** Non-zero if punched */
 			daos_epoch_t		ie_punch;
 			union {
-				/** dkey or akey */
-				struct {
-					/** key value */
-					daos_key_t		ie_key;
-				};
-				/** object or DTX entry */
-				struct {
-					/** The DTX identifier. */
-					struct dtx_id		ie_xid;
-					/** oid */
-					daos_unit_oid_t		ie_oid;
-					/* The dkey hash for DTX iteration. */
-					uint64_t		ie_dtx_hash;
-				};
+				/** key value */
+				daos_key_t	ie_key;
+				/** oid */
+				daos_unit_oid_t	ie_oid;
 			};
 		};
 		/** Array entry */
@@ -326,6 +344,17 @@ typedef struct {
 			uint32_t		ie_ver;
 			/** Minor epoch of extent */
 			uint16_t		ie_minor_epc;
+		};
+		/** Active DTX entry. */
+		struct {
+			/** The DTX identifier. */
+			struct dtx_id		ie_dtx_xid;
+			/** The OID. */
+			daos_unit_oid_t		ie_dtx_oid;
+			/** The pool map version when handling DTX on server. */
+			uint32_t		ie_dtx_ver;
+			/* The dkey hash for DTX iteration. */
+			uint16_t		ie_dtx_flags;
 		};
 	};
 	/* Flags to describe the entry */

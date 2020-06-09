@@ -33,7 +33,7 @@ func (m *ContSetOwnerReq) Reset()         { *m = ContSetOwnerReq{} }
 func (m *ContSetOwnerReq) String() string { return proto.CompactTextString(m) }
 func (*ContSetOwnerReq) ProtoMessage()    {}
 func (*ContSetOwnerReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cont_c82c44482db48b06, []int{0}
+	return fileDescriptor_cont_8720bc3023f26b1e, []int{0}
 }
 func (m *ContSetOwnerReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ContSetOwnerReq.Unmarshal(m, b)
@@ -93,7 +93,7 @@ func (m *ContSetOwnerResp) Reset()         { *m = ContSetOwnerResp{} }
 func (m *ContSetOwnerResp) String() string { return proto.CompactTextString(m) }
 func (*ContSetOwnerResp) ProtoMessage()    {}
 func (*ContSetOwnerResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cont_c82c44482db48b06, []int{1}
+	return fileDescriptor_cont_8720bc3023f26b1e, []int{1}
 }
 func (m *ContSetOwnerResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ContSetOwnerResp.Unmarshal(m, b)
@@ -125,9 +125,9 @@ func init() {
 	proto.RegisterType((*ContSetOwnerResp)(nil), "mgmt.ContSetOwnerResp")
 }
 
-func init() { proto.RegisterFile("cont.proto", fileDescriptor_cont_c82c44482db48b06) }
+func init() { proto.RegisterFile("cont.proto", fileDescriptor_cont_8720bc3023f26b1e) }
 
-var fileDescriptor_cont_c82c44482db48b06 = []byte{
+var fileDescriptor_cont_8720bc3023f26b1e = []byte{
 	// 156 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4a, 0xce, 0xcf, 0x2b,
 	0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xc9, 0x4d, 0xcf, 0x2d, 0x51, 0x6a, 0x67, 0xe4,

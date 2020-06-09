@@ -35,7 +35,7 @@ func (x Module) String() string {
 	return proto.EnumName(Module_name, int32(x))
 }
 func (Module) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_test_3e62a822cdd81bd6, []int{0}
+	return fileDescriptor_drpc_test_525278b76c188682, []int{0}
 }
 
 type Function int32
@@ -55,7 +55,7 @@ func (x Function) String() string {
 	return proto.EnumName(Function_name, int32(x))
 }
 func (Function) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_test_3e62a822cdd81bd6, []int{1}
+	return fileDescriptor_drpc_test_525278b76c188682, []int{1}
 }
 
 // *
@@ -73,7 +73,7 @@ func (m *Hello) Reset()         { *m = Hello{} }
 func (m *Hello) String() string { return proto.CompactTextString(m) }
 func (*Hello) ProtoMessage()    {}
 func (*Hello) Descriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_test_3e62a822cdd81bd6, []int{0}
+	return fileDescriptor_drpc_test_525278b76c188682, []int{0}
 }
 func (m *Hello) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Hello.Unmarshal(m, b)
@@ -115,7 +115,7 @@ func (m *HelloResponse) Reset()         { *m = HelloResponse{} }
 func (m *HelloResponse) String() string { return proto.CompactTextString(m) }
 func (*HelloResponse) ProtoMessage()    {}
 func (*HelloResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_test_3e62a822cdd81bd6, []int{1}
+	return fileDescriptor_drpc_test_525278b76c188682, []int{1}
 }
 func (m *HelloResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HelloResponse.Unmarshal(m, b)
@@ -149,9 +149,9 @@ func init() {
 	proto.RegisterEnum("hello.Function", Function_name, Function_value)
 }
 
-func init() { proto.RegisterFile("drpc_test.proto", fileDescriptor_drpc_test_3e62a822cdd81bd6) }
+func init() { proto.RegisterFile("drpc_test.proto", fileDescriptor_drpc_test_525278b76c188682) }
 
-var fileDescriptor_drpc_test_3e62a822cdd81bd6 = []byte{
+var fileDescriptor_drpc_test_525278b76c188682 = []byte{
 	// 153 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4f, 0x29, 0x2a, 0x48,
 	0x8e, 0x2f, 0x49, 0x2d, 0x2e, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xcd, 0x48, 0xcd,

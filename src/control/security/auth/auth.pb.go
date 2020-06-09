@@ -3,11 +3,9 @@
 
 package auth
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -18,7 +16,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // Types of authentication token
 type Flavor int32
@@ -32,7 +30,6 @@ var Flavor_name = map[int32]string{
 	0: "AUTH_NONE",
 	1: "AUTH_SYS",
 }
-
 var Flavor_value = map[string]int32{
 	"AUTH_NONE": 0,
 	"AUTH_SYS":  1,
@@ -41,9 +38,8 @@ var Flavor_value = map[string]int32{
 func (x Flavor) String() string {
 	return proto.EnumName(Flavor_name, int32(x))
 }
-
 func (Flavor) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_8bbd6f3875b0e874, []int{0}
+	return fileDescriptor_auth_8c97702ea215422f, []int{0}
 }
 
 type Token struct {
@@ -58,17 +54,16 @@ func (m *Token) Reset()         { *m = Token{} }
 func (m *Token) String() string { return proto.CompactTextString(m) }
 func (*Token) ProtoMessage()    {}
 func (*Token) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8bbd6f3875b0e874, []int{0}
+	return fileDescriptor_auth_8c97702ea215422f, []int{0}
 }
-
 func (m *Token) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Token.Unmarshal(m, b)
 }
 func (m *Token) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Token.Marshal(b, m, deterministic)
 }
-func (m *Token) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Token.Merge(m, src)
+func (dst *Token) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Token.Merge(dst, src)
 }
 func (m *Token) XXX_Size() int {
 	return xxx_messageInfo_Token.Size(m)
@@ -110,17 +105,16 @@ func (m *Sys) Reset()         { *m = Sys{} }
 func (m *Sys) String() string { return proto.CompactTextString(m) }
 func (*Sys) ProtoMessage()    {}
 func (*Sys) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8bbd6f3875b0e874, []int{1}
+	return fileDescriptor_auth_8c97702ea215422f, []int{1}
 }
-
 func (m *Sys) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Sys.Unmarshal(m, b)
 }
 func (m *Sys) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Sys.Marshal(b, m, deterministic)
 }
-func (m *Sys) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Sys.Merge(m, src)
+func (dst *Sys) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Sys.Merge(dst, src)
 }
 func (m *Sys) XXX_Size() int {
 	return xxx_messageInfo_Sys.Size(m)
@@ -187,17 +181,16 @@ func (m *Credential) Reset()         { *m = Credential{} }
 func (m *Credential) String() string { return proto.CompactTextString(m) }
 func (*Credential) ProtoMessage()    {}
 func (*Credential) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8bbd6f3875b0e874, []int{2}
+	return fileDescriptor_auth_8c97702ea215422f, []int{2}
 }
-
 func (m *Credential) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Credential.Unmarshal(m, b)
 }
 func (m *Credential) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Credential.Marshal(b, m, deterministic)
 }
-func (m *Credential) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Credential.Merge(m, src)
+func (dst *Credential) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Credential.Merge(dst, src)
 }
 func (m *Credential) XXX_Size() int {
 	return xxx_messageInfo_Credential.Size(m)
@@ -243,17 +236,16 @@ func (m *GetCredResp) Reset()         { *m = GetCredResp{} }
 func (m *GetCredResp) String() string { return proto.CompactTextString(m) }
 func (*GetCredResp) ProtoMessage()    {}
 func (*GetCredResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8bbd6f3875b0e874, []int{3}
+	return fileDescriptor_auth_8c97702ea215422f, []int{3}
 }
-
 func (m *GetCredResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetCredResp.Unmarshal(m, b)
 }
 func (m *GetCredResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_GetCredResp.Marshal(b, m, deterministic)
 }
-func (m *GetCredResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetCredResp.Merge(m, src)
+func (dst *GetCredResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetCredResp.Merge(dst, src)
 }
 func (m *GetCredResp) XXX_Size() int {
 	return xxx_messageInfo_GetCredResp.Size(m)
@@ -291,17 +283,16 @@ func (m *ValidateCredReq) Reset()         { *m = ValidateCredReq{} }
 func (m *ValidateCredReq) String() string { return proto.CompactTextString(m) }
 func (*ValidateCredReq) ProtoMessage()    {}
 func (*ValidateCredReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8bbd6f3875b0e874, []int{4}
+	return fileDescriptor_auth_8c97702ea215422f, []int{4}
 }
-
 func (m *ValidateCredReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ValidateCredReq.Unmarshal(m, b)
 }
 func (m *ValidateCredReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ValidateCredReq.Marshal(b, m, deterministic)
 }
-func (m *ValidateCredReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ValidateCredReq.Merge(m, src)
+func (dst *ValidateCredReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ValidateCredReq.Merge(dst, src)
 }
 func (m *ValidateCredReq) XXX_Size() int {
 	return xxx_messageInfo_ValidateCredReq.Size(m)
@@ -333,17 +324,16 @@ func (m *ValidateCredResp) Reset()         { *m = ValidateCredResp{} }
 func (m *ValidateCredResp) String() string { return proto.CompactTextString(m) }
 func (*ValidateCredResp) ProtoMessage()    {}
 func (*ValidateCredResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8bbd6f3875b0e874, []int{5}
+	return fileDescriptor_auth_8c97702ea215422f, []int{5}
 }
-
 func (m *ValidateCredResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ValidateCredResp.Unmarshal(m, b)
 }
 func (m *ValidateCredResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ValidateCredResp.Marshal(b, m, deterministic)
 }
-func (m *ValidateCredResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ValidateCredResp.Merge(m, src)
+func (dst *ValidateCredResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ValidateCredResp.Merge(dst, src)
 }
 func (m *ValidateCredResp) XXX_Size() int {
 	return xxx_messageInfo_ValidateCredResp.Size(m)
@@ -369,18 +359,18 @@ func (m *ValidateCredResp) GetToken() *Token {
 }
 
 func init() {
-	proto.RegisterEnum("auth.Flavor", Flavor_name, Flavor_value)
 	proto.RegisterType((*Token)(nil), "auth.Token")
 	proto.RegisterType((*Sys)(nil), "auth.Sys")
 	proto.RegisterType((*Credential)(nil), "auth.Credential")
 	proto.RegisterType((*GetCredResp)(nil), "auth.GetCredResp")
 	proto.RegisterType((*ValidateCredReq)(nil), "auth.ValidateCredReq")
 	proto.RegisterType((*ValidateCredResp)(nil), "auth.ValidateCredResp")
+	proto.RegisterEnum("auth.Flavor", Flavor_name, Flavor_value)
 }
 
-func init() { proto.RegisterFile("auth.proto", fileDescriptor_8bbd6f3875b0e874) }
+func init() { proto.RegisterFile("auth.proto", fileDescriptor_auth_8c97702ea215422f) }
 
-var fileDescriptor_8bbd6f3875b0e874 = []byte{
+var fileDescriptor_auth_8c97702ea215422f = []byte{
 	// 348 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x52, 0x4d, 0x4b, 0xeb, 0x40,
 	0x14, 0x7d, 0x69, 0x93, 0xd0, 0xde, 0xf4, 0xbd, 0x17, 0x06, 0x91, 0x2c, 0x63, 0xa8, 0x58, 0x5c,

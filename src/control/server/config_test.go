@@ -125,10 +125,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 		"uncommented default config": {inPath: "uncommentedDefault"},
 		"socket example config":      {inPath: socketsExample},
 		"psm2 example config":        {inPath: psm2Example},
-		"default empty config": {
-			inPath: defaultConfig,
-			expErr: FaultConfigNoProvider,
-		},
+		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
 			inPath: "/foo/bar/baz.yml",
 			expErr: errors.New("reading file: open /foo/bar/baz.yml: no such file or directory"),
@@ -357,8 +354,8 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 		inPath    string
 		expErrMsg string
 	}{
-		"path exists":       {inPath: "uncommentedDefault"},
-		"path doesnt exist": {expErrMsg: "no such file or directory"},
+		"path exists":         {inPath: "uncommentedDefault"},
+		"path does not exist": {expErrMsg: "no such file or directory"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			testDir, cleanup := CreateTestDir(t)
