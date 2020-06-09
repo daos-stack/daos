@@ -32,7 +32,7 @@ import re
 class _env_module():
     """Class for utilizing Modules component to load environment modules"""
     env_module_init = None
-    _mpi_map = {"mpich":['mpi/mpich-x86_64', 'mpich'],
+    _mpi_map = {"mpich":['mpi/mpich-x86_64', 'mpich', 'mpi/mpich-3.0-x86_64'],
                 "openmpi":['mpi/openmpi3-x86_64', 'gnu-openmpi',
                            'mpi/openmpi-x86_64']}
 
@@ -90,6 +90,7 @@ class _env_module():
             subprocess.check_call(['/bin/sh', '-l', '-c', 'module -V'],
                                   stdout=DEVNULL, stderr=DEVNULL)
         except subprocess.CalledProcessError:
+            print("Detected old 'module' command\n")
             return self._setup_old(path_init, default_func)
 
         tmp_globals = {'os': os, 're': re, 'subprocess': subprocess}
@@ -105,6 +106,7 @@ class _env_module():
 
         module = tmp_locals.get('module', default_func)
 
+        print("Detected newer 'module' command\n");
         return module
 
     def _init_mpi_module(self):
