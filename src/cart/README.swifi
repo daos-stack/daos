@@ -2,7 +2,7 @@ Software Implemented Fault Injection (SWIFI)
 
 To inject faults:
 1) define attribute struct: e.g. my_attr
-2) init atribute struct from fault-inject-cart.yaml
+2) init attribute struct from fault-inject-cart.yaml
     read config file, pick the right line based on the id.
 3) annotate your code at the place where you want to inject faults.
     For example, you want to fail a malloc, you would do:

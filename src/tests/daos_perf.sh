@@ -13,7 +13,7 @@ RSIZE=${RSIZE:-"1M"}
 CREDITS=${CREDITS:-0}
 
 # misc options, see daos_perf -h
-OPTS=${OPTS:-"-t -z"} # default options: overwite, zero-copy
+OPTS=${OPTS:-"-t -z"} # default options: overwrite, zero-copy
 
 DAOS_PERF="${DAOS_PATH}/bin/daos_perf"
 TEST_DIR="${HOME}/scripts"
