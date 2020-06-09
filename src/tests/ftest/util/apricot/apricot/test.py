@@ -668,7 +668,7 @@ class TestWithServers(TestWithoutServers):
             manager_list (list): list of SubprocessManager objects to start
         """
         user = getuser()
-        # We probalby want to do this parallel if end up with multiple managers
+        # We probably want to do this parallel if end up with multiple managers
         for manager in manager_list:
             self.log.info(
                 "Starting %s: group=%s, hosts=%s, config=%s",
@@ -699,7 +699,7 @@ class TestWithServers(TestWithoutServers):
             super(TestWithServers, self).tearDown()
         except OSError as error:
             errors.append(
-                "Error running inheritted teardown(): {}".format(error))
+                "Error running inherited teardown(): {}".format(error))
 
         # Fail the test if any errors occurred during tear down
         if errors:
@@ -734,7 +734,7 @@ class TestWithServers(TestWithoutServers):
                 containers = [containers]
             self.test_log.info("Destroying containers")
             for container in containers:
-                # Only close a container that has been openned by the test
+                # Only close a container that has been opened by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
                         container.close()
@@ -843,7 +843,7 @@ class TestWithServers(TestWithoutServers):
             # Overwrite the test id with the specified test name
             self.test_id = test_name
 
-        # Update the log file names.  The path is defined throught the
+        # Update the log file names.  The path is defined through the
         # DAOS_TEST_LOG_DIR environment variable.
         self.agent_log = "{}_daos_agent.log".format(self.test_id)
         self.server_log = "{}_daos_server.log".format(self.test_id)

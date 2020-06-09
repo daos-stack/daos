@@ -66,7 +66,7 @@ class DmgYamlParameters(YamlParameters):
         #       at port 10001 for local testing
         #
         #   - port: <int>, e.g. 10001
-        #       Default port number with whith to bind the daos_server. This
+        #       Default port number with with to bind the daos_server. This
         #       will also be used when connecting to access points if the list
         #       only contains host names.
         #

@@ -106,7 +106,7 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 		oh->doh_cur_off += ns;
 		oh->doh_dir_off[oh->doh_idx]++;
 
-		/** no need to issue futher dfs_iterate() calls. */
+		/** no need to issue further dfs_iterate() calls. */
 		udata->stop = 1;
 		D_GOTO(out, rc = 0);
 	}
@@ -282,7 +282,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		/** if entry does not fit in buffer, just return */
 		if (rc == E2BIG)
 			break;
-		/** otherwise a different error occured */
+		/** otherwise a different error occurred */
 		if (rc)
 			D_GOTO(err, rc);
 

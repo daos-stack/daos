@@ -89,7 +89,7 @@ struct iv_fetch_cb_info {
 	/* Local bulk handle for iv value */
 	crt_bulk_t			 ifc_bulk_hdl;
 
-	/* Optional child's rpc and childs bulk handle, if child exists */
+	/* Optional child's rpc and child's bulk handle, if child exists */
 	crt_rpc_t			*ifc_child_rpc;
 	crt_bulk_t			 ifc_child_bulk;
 
@@ -115,7 +115,7 @@ struct pending_fetch {
 	d_list_t			 pf_link;
 };
 
-/* Struture for list of all pending fetches for given key */
+/* Structure for list of all pending fetches for given key */
 struct ivf_key_in_progress {
 	crt_iv_key_t	kip_key;
 	d_list_t	kip_pending_fetch_list;
@@ -1375,7 +1375,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 
 		rc = iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 		if (rc != 0) {
-			D_ERROR("ivo_on_put() returend rc = %d\n", rc);
+			D_ERROR("ivo_on_put() returned rc = %d\n", rc);
 			D_GOTO(send_error, rc);
 		}
 
@@ -2040,7 +2040,7 @@ crt_iv_sync_corpc_pre_forward(crt_rpc_t *rpc, void *arg)
 	return rc;
 }
 
-/* Calback structure for iv sync RPC */
+/* Callback structure for iv sync RPC */
 struct iv_sync_cb_info {
 	/* Local bulk handle to free in callback */
 	crt_bulk_t			isc_bulk_hdl;
