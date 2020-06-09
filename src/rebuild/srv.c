@@ -39,7 +39,7 @@
 #include "rpc.h"
 #include "rebuild_internal.h"
 
-#define RBLD_BCAST_INTV		2	/* seconds interval to retry bcast */
+#define RBLD_CHECK_INTV	 (2 * NSEC_PER_SEC)	/* seconds interval to check*/
 struct rebuild_global	rebuild_gst;
 
 struct pool_map *
@@ -692,7 +692,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			D_PRINT("%s", sbuf);
 		}
 
-		dss_ult_sleep(rgt->rgt_ult, RBLD_BCAST_INTV);
+		dss_ult_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
 	}
 
 	dss_sleep_ult_destroy(rgt->rgt_ult);
@@ -1694,7 +1694,6 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	return rc;
 }
 
-#define RBLD_CHECK_INTV		2	/* seconds interval to check*/
 void
 rebuild_tgt_status_check_ult(void *arg)
 {

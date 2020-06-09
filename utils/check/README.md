@@ -11,6 +11,8 @@ environment.
 The three scripts in this section can be used to make a list of packages
 that the libraries installed by DAOS depend on, and then check the if
 RedHat has any CVEs listed for them.
+It will also report if if any of the binaries installed by DAOS
+were built with out stack protection.
 
 To use these scripts the following should be set up.
 
@@ -40,6 +42,8 @@ This is a script that will do the following.
 
 1. Install the DAOS rpms that were previously downloaded.
 1. Find all the ELF executables and shared libaries that were installed.
+1. Run the hardening-check utility on all the ELF executables to check
+   if stack protection is on.  It will produce a file with results.
 1. Find all the shared libraries from other packages that DAOS depends on.
 1. Find all the packages that provide those shared libraries.
 
@@ -49,3 +53,37 @@ This is the third script to run.
 
 This script will use a file created by the first script to list any CVEs
 that Red Hat knows about for the packages that DAOS depends on.
+
+### Files created this script
+
+The following environment variables are used to set the filenames and
+directories used by these scripts.  There are default values used if the
+environment variables are not set.
+
+#### WORKSPACE
+
+Defaults to the current working directory.
+
+#### RPM_DIR
+
+Defaults to "$WORKSPACE/rpm_dir".
+
+#### SOFILES
+
+Defaults to "daos_depends_libraries".  This is a list of libraries that
+the downloaded RPMs depend on.
+
+#### PACKAGES
+
+Defaults to "daos_depends_packages".  This is a list of packages that
+the downloaded RPMs depend on.
+
+#### CHECKED_FILES
+
+Defaults to "daos_checked_files".  This is a listing of any issues found by
+the hardening-check program on the binaries in the downloaded RPMs.
+
+#### CVE_LIST
+
+Defaults to "daos_depends_cve_list".  This is a listing of any CVEs known
+to RedHat for the packages that DAOS depends on.
