@@ -198,7 +198,7 @@ enum {
 	DTS_INIT_MODULE,	/* modules have been loaded */
 	DTS_INIT_POOL,		/* pool has been created */
 	DTS_INIT_CONT,		/* container has been created */
-	DTS_INIT_CREDITS,	/* I/O credits have been initalized */
+	DTS_INIT_CREDITS,	/* I/O credits have been initialized */
 };
 
 /** try to obtain a free credit */

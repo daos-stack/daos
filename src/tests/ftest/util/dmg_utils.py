@@ -71,7 +71,7 @@ class DmgCommand(YamlCommand):
             path (str): path to the dmg command
             yaml_cfg (DmgYamlParameters, optional): dmg config file
                 settings. Defaults to None, in which case settings
-                must be supplied as command-line paramters.
+                must be supplied as command-line parameters.
         """
         super(DmgCommand, self).__init__("/run/dmg/*", "dmg", path, yaml_cfg)
 

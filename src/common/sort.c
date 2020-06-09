@@ -36,7 +36,7 @@
  *
  * It always returns zero if \a unique is false, which means array can
  * have multiple elements with the same key.
- * It returnes error if \a unique is true, and there are more than one
+ * It returns error if \a unique is true, and there are more than one
  * elements have the same key.
  */
 int
