@@ -406,7 +406,10 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(rc >= 0);
 	*spare_cnt = rc;
 
+	D_PRINT("reint_cnt %d for version %d -\n", *spare_cnt, *po_ver);
 	for (i = 0; i < *spare_cnt; i++)
+		D_PRINT("shard %d, spare target rank %d\n",
+			shard_ids[i], spare_tgt_ranks[i]);
 
 	pl_map_decref(pl_map);
 
