@@ -462,12 +462,6 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 					srv.Fabric.Interface, numaNode)
 			}
 		}
-		devClass, err := netdetect.GetDeviceClass(srv.Fabric.Interface)
-		if err != nil {
-			return err
-		}
-		log.Debugf("Device class for %s is %d\n", srv.Fabric.Interface, devClass)
-
 	}
 
 	if len(c.Servers) > 1 {

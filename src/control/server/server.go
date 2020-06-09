@@ -184,8 +184,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			if err != nil {
 				return err
 			}
-			log.Debugf("Device class for %s is %d\n", srvCfg.Fabric.Interface, netDevClass)
-
 		}
 
 		// If the configuration specifies that we should explicitly set hugepage values

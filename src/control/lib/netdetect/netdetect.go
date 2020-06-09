@@ -789,7 +789,7 @@ func mercuryToLibFabric(provider string) (string, error) {
 		return "gni", nil
 	default:
 	}
-	return "", errors.Errorf("fabric provider: %s not known by libfabric.  Use 'daos_server network list' to view supported providers", provider)
+	return "", errors.Errorf("fabric provider: %s not known by libfabric.  Use 'daos_server network scan -p all' to view supported providers", provider)
 }
 
 // convertMercuryToLibFabric converts a Mercury provider string containing one or more providers
@@ -806,7 +806,7 @@ func convertMercuryToLibFabric(provider string) (string, error) {
 	for _, subProvider := range tmp {
 		libFabricProvider, err := mercuryToLibFabric(subProvider)
 		if err != nil {
-			return "", errors.Errorf("fabric provider: '%s' is not known by libfabric.  Use 'daos_server network list' to view supported providers", subProvider)
+			return "", errors.Errorf("fabric provider: '%s' is not known by libfabric.  Use 'daos_server network scan -p all' to view supported providers", subProvider)
 		}
 		libFabricProviderList += libFabricProvider + ";"
 	}
