@@ -1245,7 +1245,7 @@ test_pool_get_capas_fall_thru_everyone(void **state)
 	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
 
 	/*
-	 * Cred doesn't match owner/group, falls thru to everyone
+	 * Cred doesn't match owner/group, falls through to everyone
 	 */
 	expect_pool_capas_with_acl(acl, &cred, DAOS_PC_RW, POOL_CAPA_READ |
 			      POOL_CAPA_CREATE_CONT | POOL_CAPA_DEL_CONT);

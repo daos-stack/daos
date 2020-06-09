@@ -270,7 +270,7 @@ enum {
 };
 
 /**
- * Parameters for initialising VOS iterator
+ * Parameters for initializing VOS iterator
  */
 typedef struct {
 	/** standalone prepare:	pool connection handle or container open handle

@@ -8,7 +8,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     # Hack alert, the argobots headers are required but the shared
-    # library isn't so add the dependancy so the include path
+    # library isn't so add the dependency so the include path
     # is correct, but set _libs to [] so that the library isn't
     # linked in.
 

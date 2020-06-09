@@ -77,7 +77,7 @@ struct vos_gc {
 	/**
 	 * free an item collected by the current GC
 	 * It is unused for now, but we might need it if we want to support
-	 * GC_BIO, see commments in vos_gc_type.
+	 * GC_BIO, see comments in vos_gc_type.
 	 */
 	int			(*gc_free)(struct vos_gc *gc,
 					   struct vos_pool *pool,
@@ -500,7 +500,7 @@ failed:
  * Add an item for garbage collection, this item and all its sub-items will
  * be freed by vos_gc_run.
  *
- * NB: this function must be called within pmdk transactoin.
+ * NB: this function must be called within pmdk transaction.
  */
 int
 gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
@@ -850,7 +850,7 @@ vos_gc_pool(daos_handle_t poh, int *credits)
 		D_CRIT("GC failed %s\n", d_errstr(rc));
 		return 0; /* caller can't do anything for it */
 	}
-	total -= *credits; /* substract the remained credits */
+	total -= *credits; /* subtract the remained credits */
 
 	if (empty && total != 0) /* did something */
 		gc_log_pool(pool);

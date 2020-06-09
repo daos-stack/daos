@@ -261,7 +261,7 @@ class IorCommand(ExecutableCommand):
         return total
 
     def get_default_env(self, manager_cmd, log_file=None):
-        """Get the default enviroment settings for running IOR.
+        """Get the default environment settings for running IOR.
 
         Args:
             manager_cmd (str): job manager command

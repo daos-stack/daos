@@ -209,12 +209,12 @@ typedef void (*crt_rpc_cb_t)(crt_rpc_t *rpc);
 struct crt_proto_rpc_format {
 	/** the input/output format of the member RPC */
 	struct crt_req_format	*prf_req_fmt;
-	/** the RPC hander on the server side */
+	/** the RPC handler on the server side */
 	crt_rpc_cb_t		 prf_hdlr;
 	/** aggregation function for co-rpc */
 	struct crt_corpc_ops	*prf_co_ops;
 	/**
-	 * RPC feature bits to toggle RPC behaviour. Two flags are supported
+	 * RPC feature bits to toggle RPC behavior. Two flags are supported
 	 * now: \ref CRT_RPC_FEAT_NO_REPLY and \ref CRT_RPC_FEAT_NO_TIMEOUT
 	 */
 	uint32_t		 prf_flags;
@@ -251,7 +251,7 @@ struct crt_proto_query_cb_info {
 	/** user data passed-in to crt_proto_query() as arg */
 	void	*pq_arg;
 	/**
-	 * contains the hightest version supported by the target
+	 * contains the highest version supported by the target
 	 * when pq_rc == DER_SUCCESS
 	 */
 	int	 pq_ver;

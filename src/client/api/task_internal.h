@@ -36,7 +36,7 @@ struct daos_task_args {
 	uint32_t			ta_magic;
 	uint32_t			ta_opc;
 	union {
-		/** Managment */
+		/** Management */
 		daos_svc_rip_t		svc_rip;
 		daos_pool_create_t	pool_create;
 		daos_pool_destroy_t	pool_destroy;

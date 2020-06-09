@@ -89,7 +89,7 @@ co_ops_run(void **state)
 					printf("UUID clear did not work\n");
 				break;
 			default:
-				fail_msg("Unkown Ops!\n");
+				fail_msg("Unknown Ops!\n");
 				break;
 			}
 			assert_int_equal(ret, 0);

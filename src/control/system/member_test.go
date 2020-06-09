@@ -381,7 +381,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				MockMember(t, 6, MemberStateStopped, "exit 1"),
 			},
 		},
-		"dont ignore errored results": {
+		"don't ignore errored results": {
 			members: Members{
 				MockMember(t, 1, MemberStateJoined),
 				MockMember(t, 2, MemberStateStopped),

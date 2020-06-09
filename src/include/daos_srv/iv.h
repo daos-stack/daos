@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * daos iv tree defination.
+ * daos iv tree definition.
  */
 #ifndef __DAOS_SRV_IV_H__
 #define __DAOS_SRV_IV_H__
@@ -30,7 +30,7 @@
 
 /* DAOS iv cache provide a general interface for daos to use cart IV.
  * Each pool has one iv namespace, which is created when the  pool is
- * connected, and destroyed when pool is disconneced. Each DAOS IV
+ * connected, and destroyed when pool is disconnected. Each DAOS IV
  * user will attach its entries to the iv namespace, and each user will
  * have a constant key id to locate its entry.
  */

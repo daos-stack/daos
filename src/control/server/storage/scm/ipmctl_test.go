@@ -111,7 +111,7 @@ func defaultMockIpmctl() *mockIpmctl {
 }
 
 // TestGetState tests the internals of ipmCtlRunner, pass in mock runCmd to verify
-// behaviour. Don't use mockPrepScm as we want to test prepScm logic.
+// behavior. Don't use mockPrepScm as we want to test prepScm logic.
 func TestGetState(t *testing.T) {
 	var regionsOut string  // variable cmd output
 	commands := []string{} // external commands issued
@@ -350,7 +350,7 @@ func TestParseNamespaces(t *testing.T) {
 }
 
 // TestGetNamespaces tests the internals of prepScm, pass in mock runCmd to verify
-// behaviour. Don't use mockPrepScm as we want to test prepScm logic.
+// behavior. Don't use mockPrepScm as we want to test prepScm logic.
 func TestGetNamespaces(t *testing.T) {
 	commands := []string{} // external commands issued
 	// ndctl create-namespace command return json format

@@ -151,7 +151,7 @@ struct daos_obj_md {
 	};
 };
 
-/** object shard metadata stored in each contianer shard */
+/** object shard metadata stored in each container shard */
 struct daos_obj_shard_md {
 	/** ID of the object shard */
 	daos_unit_oid_t		smd_id;

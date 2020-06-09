@@ -57,7 +57,7 @@ class MdtestBase(TestWithServers):
         # Start the servers and agents
         super(MdtestBase, self).setUp()
 
-        # initialise daos_cmd
+        # initialize daos_cmd
         self.daos_cmd = DaosCommand(self.bin)
 
         # Get the parameters for Mdtest

@@ -36,7 +36,7 @@
  */
 #define TESTS "mpceXVizADKCoROdrFNv"
 /**
- * These tests will only be run if explicity specified. They don't get
+ * These tests will only be run if explicitly specified. They don't get
  * run if no test is specified.
  */
 #define EXPLICIT_TESTS "x"

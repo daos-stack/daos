@@ -654,7 +654,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 		 * 1. Within HG_Forward -> hg_set_input ...,
 		 *    to pack (ENCODE) in the request.
 		 * 2. When received the RPC, if user calls HG_Get_input it call
-		 *    this funcion with DECODE, but the handling was changed to
+		 *    this function with DECODE, but the handling was changed to
 		 *    crt_hg_unpack_header + _unpack_body and the direct call
 		 *    of HG_Get_inputwas removed.
 		 *

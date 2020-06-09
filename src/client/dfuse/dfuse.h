@@ -223,7 +223,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	} while (0)
 
 /**
- * Dump the file open mode to the logile.
+ * Dump the file open mode to the logfile.
  *
  * On a 64 bit system O_LARGEFILE is assumed so always set but defined to zero
  * so set LARGEFILE here for debugging

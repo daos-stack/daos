@@ -52,7 +52,7 @@ tse_task_stack_push(tse_task_t *task, uint32_t size);
  * \param task [in] task to pop the buffer.
  * \param size [in] buffer size.
  *
- * \return	pointer to the poped buffer in task stack.
+ * \return	pointer to the popped buffer in task stack.
  */
 void *
 tse_task_stack_pop(tse_task_t *task, uint32_t size);
@@ -71,7 +71,7 @@ tse_task_stack_push_data(tse_task_t *task, void *data, uint32_t len);
  * Pop data from task stack space, will copy the data from stack.
  *
  * \param task [in]	task to push the buffer.
- * \param data [in/out]	pointer of value to store the poped data
+ * \param data [in/out]	pointer of value to store the popped data
  * \param len  [in]	length of data
  */
 void
@@ -100,7 +100,7 @@ extern const struct daos_task_api dc_funcs[DAOS_OPC_MAX];
 do {									\
 	int __opc = DAOS_OPC_##name;					\
 	D_ASSERTF(sizeof(args) == dc_funcs[__opc].arg_size,		\
-		  "Argument size %zu != predefiened arg size %zu\n",	\
+		  "Argument size %zu != predefined arg size %zu\n",	\
 		  sizeof(args), dc_funcs[__opc].arg_size);		\
 } while (0)
 

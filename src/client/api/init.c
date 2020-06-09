@@ -45,7 +45,7 @@ static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool		module_initialized;
 
 const struct daos_task_api dc_funcs[] = {
-	/** Managment */
+	/** Management */
 	{dc_mgmt_svc_rip, sizeof(daos_svc_rip_t)},
 	{dc_pool_create, sizeof(daos_pool_create_t)},
 	{dc_pool_destroy, sizeof(daos_pool_destroy_t)},

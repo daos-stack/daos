@@ -33,7 +33,7 @@
 #include "obj_internal.h"
 
 /**
- * Swtich of enable DTX or not, enabled by default.
+ * Switch of enable DTX or not, enabled by default.
  */
 static int
 obj_mod_init(void)

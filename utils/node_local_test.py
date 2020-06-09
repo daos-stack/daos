@@ -331,7 +331,7 @@ class DaosServer():
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        # Show errors from server logs bug supress memory leaks as the server
+        # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
             # TODO: Enable memleak checking when server shutdown works.
@@ -586,7 +586,7 @@ def import_daos(server, conf):
 def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
     """Run a DAOS command
 
-    Run a command, returing what subprocess.run() would.
+    Run a command, returning what subprocess.run() would.
 
     Enable logging, and valgrind for the command.
     """

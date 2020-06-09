@@ -344,7 +344,7 @@ out:
 		 * object with old epoch. Let's ask the caller to retry with
 		 * newer epoch.
 		 *
-		 * Fot rebuild case, the @dth will be NULL.
+		 * For rebuild case, the @dth will be NULL.
 		 */
 		D_ASSERT(obj->obj_sync_epoch > 0);
 

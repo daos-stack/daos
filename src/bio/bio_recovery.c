@@ -272,7 +272,7 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 		rc = 0;
 		break;
 	case BIO_BS_STATE_FAULTY:
-		/* reduce monitor period after faulty state has occured */
+		/* reduce monitor period after faulty state has occurred */
 		bbs->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_SHORT_PERIOD;
 		rc = on_faulty(bbs);
 		if (rc == 0)
@@ -339,7 +339,7 @@ bio_media_error(void *msg_arg)
 		goto out;
 	/*
 	 * Notify admin through Control Plane of BIO error callback.
-	 * TODO: CSUM errors not currently supporte by Control Plane.
+	 * TODO: CSUM errors not currently supported by Control Plane.
 	 */
 	if (mem->mem_err_type != MET_CSUM) {
 		rc = ract_ops->ioerr_reaction(mem->mem_err_type,

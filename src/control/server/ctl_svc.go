@@ -42,7 +42,7 @@ type ControlService struct {
 }
 
 // NewControlService returns ControlService to be used as gRPC control service
-// datastore. Initialised with sensible defaults and provided components.
+// datastore. Initialized with sensible defaults and provided components.
 func NewControlService(l logging.Logger, h *IOServerHarness,
 	bp *bdev.Provider, sp *scm.Provider,
 	cfg *Configuration, m *system.Membership,

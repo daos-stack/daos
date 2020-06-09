@@ -99,7 +99,7 @@ nvme_recov_1(void **state)
 
 	/*
 	 * FIXME: Due to lack of infrastructures for checking each target
-	 *	  status, let's just wait for an arbitray time and hope the
+	 *	  status, let's just wait for an arbitrary time and hope the
 	 *	  faulty reaction & rebuild is triggered.
 	 */
 	print_message("Waiting for faulty reaction being triggered...\n");

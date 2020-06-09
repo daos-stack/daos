@@ -1233,7 +1233,7 @@ err:
 	if (pool_task)
 		dc_task_decref(pool_task);
 
-	task->dt_result = result; /* restore the orignal error */
+	task->dt_result = result; /* restore the original error */
 	obj_auxi->io_retry = 0;
 	D_ERROR("Failed to retry task=%p(err=%d), io_retry=%d, rc "DF_RC".\n",
 		task, result, obj_auxi->io_retry, DP_RC(rc));

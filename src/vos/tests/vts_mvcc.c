@@ -69,7 +69,7 @@ enum write_type {
 	W_NE,	/* become nonempty */
 	W_E,	/* become empty */
 
-	W_COUNT,	/* nubmer of write types */
+	W_COUNT,	/* number of write types */
 	W_NIL		/* not applicable */
 };
 

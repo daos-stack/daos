@@ -542,7 +542,7 @@ key_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 
 /**
  * Check if the current entry can match the iterator condition, this function
- * retuns IT_OPC_NOOP for true, returns IT_OPC_NEXT or IT_OPC_PROBE if further
+ * returns IT_OPC_NOOP for true, returns IT_OPC_NEXT or IT_OPC_PROBE if further
  * operation is required. If IT_OPC_PROBE is returned, then the key to be
  * probed and its epoch range are also returned to @ent.
  */

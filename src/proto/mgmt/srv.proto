@@ -112,4 +112,4 @@ message CreateMsReq {
 
 // SetUpReq is nil.
 
-// SetUpResp is idential to DaosResp.
+// SetUpResp is identical to DaosResp.

@@ -71,7 +71,7 @@ import org.slf4j.LoggerFactory;
  *   <td></td>
  *   <td></td>
  *   <td>true</td>
- *   <td>UUID od DAOS container which created with "--type posix"</td>
+ *   <td>UUID of DAOS container which created with "--type posix"</td>
  * </tr>
  * <tr>
  * <td>{@value io.daos.fs.hadoop.Constants#DAOS_READ_BUFFER_SIZE}</td>

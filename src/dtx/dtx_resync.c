@@ -336,7 +336,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 
 	rc = ds_cont_iter(po_hdl, co_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX);
 
-	/* Handle the DTXs that have been scanned even if some failure happend
+	/* Handle the DTXs that have been scanned even if some failure happened
 	 * in above ds_cont_iter() step.
 	 */
 	rc1 = dtx_status_handle(&dra);

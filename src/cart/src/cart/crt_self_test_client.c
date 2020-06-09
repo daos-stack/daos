@@ -97,7 +97,7 @@ struct st_g_data {
 	/* Private arguments data for all RPC callback functions */
 	struct st_cb_args		**cb_args_ptrs;
 
-	/* Used to measure individial RPC latencies */
+	/* Used to measure individual RPC latencies */
 	struct st_latency		 *rep_latencies;
 
 	/* Bulk descriptor used to transfer the above latencies */

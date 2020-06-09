@@ -67,7 +67,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 	int		rc;
 
 	if (dc_agent_sockpath == NULL) {
-		D_ERROR("DAOS Socket Path is Unitialized\n");
+		D_ERROR("DAOS Socket Path is Uninitialized\n");
 		return -DER_UNINIT;
 	}
 

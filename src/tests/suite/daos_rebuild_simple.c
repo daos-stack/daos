@@ -527,7 +527,7 @@ rebuild_objects(void **state)
 
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
-	{"REBUILD1: rebuild small rec mulitple dkeys",
+	{"REBUILD1: rebuild small rec multiple dkeys",
 	 rebuild_dkeys, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD2: rebuild small rec multiple akeys",
 	 rebuild_akeys, rebuild_small_sub_setup, test_teardown},

@@ -418,7 +418,7 @@ cc_biov_bytes_left(const struct csum_context *ctx) {
 	return bio_iov2req_len(biov) - ctx->cc_bsgl_idx->iov_offset;
 }
 
-/** For a given recx, add checksums to the outupt csum info. Data will come
+/** For a given recx, add checksums to the output csum info. Data will come
  * from the bsgls in \ctx
  */
 static int

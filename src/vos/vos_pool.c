@@ -289,7 +289,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 
 	pool_df = vos_pool_pop2df(ph);
 
-	/* If the file is fallocated seperately we need the fallocated size
+	/* If the file is fallocated separately we need the fallocated size
 	 * for setting in the root object.
 	 */
 	if (!scm_sz) {

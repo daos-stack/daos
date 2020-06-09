@@ -683,7 +683,7 @@ dtx_17(void **state)
 		vts_dtx_end(dth);
 	}
 
-	/* Commit the fisrt 4 DTXs. */
+	/* Commit the first 4 DTXs. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, xid, 4, NULL);
 	assert_int_equal(rc, 4);
 

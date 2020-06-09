@@ -183,7 +183,7 @@ class MdtestCommand(ExecutableCommand):
         self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
     def get_default_env(self, manager_cmd, log_file=None):
-        """Get the default enviroment settings for running mdtest.
+        """Get the default environment settings for running mdtest.
 
         Args:
             manager_cmd (str): job manager command

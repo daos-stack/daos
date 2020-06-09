@@ -1226,7 +1226,7 @@ cond_test(void **state)
 	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);
-	/** Key doesn't exist still, that supercedes read conflict */
+	/** Key doesn't exist still, that supersedes read conflict */
 	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);

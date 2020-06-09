@@ -72,7 +72,7 @@ static void wait_for_namespace(void)
 	while (!namespace_attached) {
 		sched_yield();
 
-		/* namespace_attached doesnt get updated properly without
+		/* namespace_attached doesn't get updated properly without
 		 * this call being present
 		 */
 		__sync_synchronize();

@@ -44,7 +44,7 @@ enum {
 };
 
 /**
- * Generate a rank list from a string with a seprator argument. This is a
+ * Generate a rank list from a string with a separator argument. This is a
  * convenience function to generate the rank list required by
  * daos_pool_connect().
  *

@@ -34,7 +34,7 @@
   <property>
     <name>fs.daos.container.uuid</name>
     <value>uuid of container</value>
-    <description>UUID od DAOS container which created with "--type posix"</description>
+    <description>UUID of DAOS container which created with "--type posix"</description>
   </property>
   <property>
     <name>fs.daos.pool.svc</name>

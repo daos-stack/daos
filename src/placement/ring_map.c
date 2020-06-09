@@ -156,7 +156,7 @@ ring_comp_ver_cmp(struct pool_component *comp_a, struct pool_component *comp_b)
 	return 0;
 }
 
-/** compare versoin of two targets */
+/** compare version of two targets */
 static int
 ring_target_ver_cmp(void *array, int a, int b)
 {
@@ -588,7 +588,7 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 /* max to 8 million rings */
 #define RING_HASH_BITS		23
 
-/** for comparision of float/double */
+/** for comparison of float/double */
 #define RING_PRECISION		0.00001
 
 /**
@@ -822,7 +822,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	oc_attr = daos_oclass_attr_find(oid);
 
 	if (oc_attr == NULL) {
-		D_ERROR("Can not find obj class, invlaid oid="DF_OID"\n",
+		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
 			DP_OID(oid));
 		return -DER_INVAL;
 	}
@@ -1165,7 +1165,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	int			   rc;
 	bool			   for_reint = false;
 
-	/* Caller should guarantee the pl_map is uptodate */
+	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < rebuild_ver) {
 		D_ERROR("pl_map version(%u) < rebuild version(%u)\n",
 			pl_map_version(map), rebuild_ver);
@@ -1235,7 +1235,7 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	int                        index = 0;
 	int                        rc;
 
-	/* Caller should guarantee the pl_map is uptodate */
+	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < reint_ver) {
 		D_ERROR("pl_map version(%u) < reintegration version(%u)\n",
 			pl_map_version(map), reint_ver);

@@ -41,8 +41,8 @@
  *
  * Usage is mpirun -x OFI_INTERFACE=eth0 -H <hosts> crt_launch <app to run>
  *
- * crt_launch wil prepare environment for app and exec provided <app to run>
- * The enviornment consists of envariables:
+ * crt_launch will prepare environment for app and exec provided <app to run>
+ * The environment consists of envariables:
  *
  * CRT_L_RANK - rank for <app to run> to use. Rank is negotiated across all
  * instances of crt_launch so that each exec-ed app is passed a unique rank.

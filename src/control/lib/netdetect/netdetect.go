@@ -684,7 +684,7 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 	var nodeset *C.char
 
 	if deviceScanCfg.topology == nil {
-		return DeviceAffinity{}, errors.New("hwloc libary not yet initialized")
+		return DeviceAffinity{}, errors.New("hwloc library not yet initialized")
 	}
 
 	if deviceScanCfg.targetDevice == "" {

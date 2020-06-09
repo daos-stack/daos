@@ -2480,11 +2480,11 @@ run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators, const char *cfg)
 
 	feats = feats & DAOS_OF_MASK;
 	if ((feats & DAOS_OF_DKEY_UINT64) && (feats & DAOS_OF_DKEY_LEXICAL)) {
-		D_PRINT("Skipping ambigous ofeat mask\n");
+		D_PRINT("Skipping ambiguous ofeat mask\n");
 		return 0;
 	}
 	if ((feats & DAOS_OF_AKEY_UINT64) && (feats & DAOS_OF_AKEY_LEXICAL)) {
-		D_PRINT("Skipping ambigous ofeat mask\n");
+		D_PRINT("Skipping ambiguous ofeat mask\n");
 		return 0;
 	}
 

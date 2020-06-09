@@ -97,7 +97,7 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
     self.container[index].create()
     self.container[index].open()
 
-    # initialise dicts to hold threads
+    # initialize dicts to hold threads
     jobs = {"write": [], "read": []}
 
     # create read/write threads.
@@ -163,7 +163,7 @@ class NvmeObject(TestWithServers):
         """Set Up nodes for each test case."""
         super(NvmeObject, self).setUp()
 
-        # initialise self.pool and self.container as lists
+        # initialize self.pool and self.container as lists
         self.pool = []
         self.container = []
         # set common params

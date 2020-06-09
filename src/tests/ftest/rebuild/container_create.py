@@ -30,7 +30,7 @@ from test_utils_container import TestContainer
 
 
 class ContainerCreate(TestWithServers):
-    """Rebuild with conatiner creation test cases.
+    """Rebuild with container creation test cases.
 
     Test Class Description:
         These rebuild tests verify the ability to create additional containers
@@ -261,7 +261,7 @@ class ContainerCreate(TestWithServers):
                 status &= pool.check_rebuild_status(**rebuild_checks[index])
             self.assertTrue(status, "Error verifying pool info after rebuild")
 
-            # Verify that each of created containers exist by openning them
+            # Verify that each of created containers exist by opening them
             for index in range(start_index, len(self.container)):
                 count = "{}/{}".format(
                     index - start_index + 1, len(self.container) - start_index)

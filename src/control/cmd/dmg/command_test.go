@@ -195,7 +195,7 @@ type bridgeConnInvoker struct {
 }
 
 func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.UnaryRequest) (*control.UnaryResponse, error) {
-	// Use the testConn to fill out the calls slice for compatiblity
+	// Use the testConn to fill out the calls slice for compatibility
 	// with old-style Connection tests.
 	bci.conn.ConnectClients(nil)
 	bci.conn.appendInvocation(printRequest(bci.t, uReq))

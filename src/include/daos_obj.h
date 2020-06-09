@@ -198,7 +198,7 @@ typedef struct {
 typedef enum {
 	/** is a dkey */
 	DAOS_IOD_NONE		= 0,
-	/** one indivisble value udpate atomically */
+	/** one indivisble value update atomically */
 	DAOS_IOD_SINGLE		= 1,
 	/** an array of records where each record is update atomically */
 	DAOS_IOD_ARRAY		= 2,

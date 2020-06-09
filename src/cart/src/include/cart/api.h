@@ -123,7 +123,7 @@ crt_context_create(crt_context_t *crt_ctx);
  *
  * This is an optional function.
  *
- * The precendence order of timeouts:
+ * The precedence order of timeouts:
  * - crt_req_set_timeout()
  * - crt_context_set_timeout()
  * - CRT_TIMEOUT environment variable
@@ -1162,7 +1162,7 @@ int
 crt_group_config_save(crt_group_t *grp, bool forall);
 
 /**
- * Remove the attach info file for the sepcified group.
+ * Remove the attach info file for the specified group.
  *
  * \param[in] grp              Primary service group attach info to delete,
  *                             NULL indicates local primary group.
@@ -1203,7 +1203,7 @@ crt_group_rank_p2s(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  *
  * \param[in] subgrp           CRT subgroup handle. subgrp must be local, i.e.
  *                             not created by crt_group_attach()
- * \param[in] rank_in          rank number witin grp.
+ * \param[in] rank_in          rank number within grp.
  * \param[out] rank_out        the result rank number of the conversion.
  */
 int
@@ -1837,7 +1837,7 @@ int crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list);
 
 /**
  * Create local group view and return a handle to a group.
- * This call is only supported for cliens.
+ * This call is only supported for clients.
  *
  * \param[in] grp_id            Group id to create
  * \param[out] ret_grp          Returned group handle
@@ -1849,7 +1849,7 @@ int crt_group_view_create(crt_group_id_t grpid, crt_group_t **ret_grp);
 
 /**
  * Destroy group handle previously created by \a crt_Group_view_create
- * This call is only suppoted for clients
+ * This call is only supported for clients
  *
  * \param[in] grp               Group handle to destroy
  *

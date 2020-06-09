@@ -1,7 +1,7 @@
 # Object
 
 DAOS object stores user's data, it is identified by object ID which is unique
-within the DAOS conatiner it belongs to. Objects can be distributed across any
+within the DAOS container it belongs to. Objects can be distributed across any
 target of the pool for both performance and resilience.
 DAOS object in DAOS storage model is shown in the diagram -
 ![/doc/graph/Fig_002.png](/doc/graph/Fig_002.png "object in storage model")
@@ -108,7 +108,7 @@ forward shards embedded in the RPC request, when the leader shard gets that IO
 request it handles it as below steps:
 -   firstly forwards the IO request to others shards
     For the request forwarding, it is offload to the vos target's offload
-    extream to release the main IO service extream from IO request sending and
+    extreme to release the main IO service extreme from IO request sending and
     reply receiving (see shard_req_forward).
 -   then serves the IO request locally
 -   waits the forwarded IO's completion and reply client IO request.

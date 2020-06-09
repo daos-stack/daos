@@ -462,7 +462,7 @@ ctl_cmd_run(char opc, char *args)
 		rc = 0;
 		break;
 	case 'q':
-		printf("quiting ...\n");
+		printf("quitting ...\n");
 		rc = -ESHUTDOWN;
 		break;
 	default:

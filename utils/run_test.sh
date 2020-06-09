@@ -21,7 +21,7 @@ failed=0
 failures=()
 log_num=0
 
-# this can be rmeoved once we are no longer using the old CI system
+# this can be removed once we are no longer using the old CI system
 if ${OLD_CI:-true}; then
 lock_test()
 {

@@ -162,7 +162,7 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	if (sc)
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
 
-	/* Free I/O request in the competion callback */
+	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
 	/*Decrease inflights on error or successful callback completion chain*/
 	dev_health->bdh_inflights--;
@@ -233,7 +233,7 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	}
 
 out:
-	/* Free I/O request in the competion callback */
+	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
 }
 
@@ -307,7 +307,7 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	}
 
 out:
-	/* Free I/O request in the competion callback */
+	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
 }
 
@@ -344,7 +344,7 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	if (bdev == NULL) {
-		D_ERROR("No bdev assoicated with device health descriptor\n");
+		D_ERROR("No bdev associated with device health descriptor\n");
 		return;
 	}
 

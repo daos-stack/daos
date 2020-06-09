@@ -419,7 +419,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 - Remove cart as an external dependence
 
 * Mon Mar 23 2020 Jeffrey V. Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-4
-- Remove scons_local as depedency
+- Remove scons_local as dependency
 
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
 - bump up go minimum version to 1.12

@@ -504,7 +504,7 @@ enum {
 struct dss_acc_task {
 	/**
 	 * Type of offload for this operation
-	 * \param at_offload_type	[IN] type of accelaration
+	 * \param at_offload_type	[IN] type of acceleration
 	 */
 	int		at_offload_type;
 	/**
@@ -525,7 +525,7 @@ struct dss_acc_task {
 };
 
 /**
- * Generic offload call abstraction for accelaration with both
+ * Generic offload call abstraction for acceleration with both
  * ULT and FPGA
  */
 int dss_acc_offload(struct dss_acc_task *at_args);

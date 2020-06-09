@@ -382,7 +382,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 				       &pool->svc, DAOS_PC_RW,
 				       &poh, &pool->pool_info,
 				       NULL /* ev */);
-		if (rc != 0) { /* destroy straightaway */
+		if (rc != 0) { /* destroy straight away */
 			print_message("failed to connect pool: %d\n", rc);
 			poh = DAOS_HDL_INVAL;
 		}
@@ -498,8 +498,8 @@ test_teardown(void **state)
 			 * rebuild mechanism(REBUILD24/25), so even the
 			 * container is not closed, then delete will fail
 			 * here, but if we do not free the arg, then next
-			 * subtest might fail, expecially for rebuild test.
-			 * so let's destory the arg anyway. Though some pool
+			 * subtest might fail, especially for rebuild test.
+			 * so let's destroy the arg anyway. Though some pool
 			 * might be left here. XXX
 			 */
 			goto free;

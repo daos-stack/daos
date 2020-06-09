@@ -144,7 +144,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	int				tid;
 
 	if (ops == NULL || args == NULL || ops->co_func == NULL) {
-		D_DEBUG(DB_MD, "mandatory args mising dss_collective_reduce");
+		D_DEBUG(DB_MD, "mandatory args missing dss_collective_reduce");
 		return -DER_INVAL;
 	}
 

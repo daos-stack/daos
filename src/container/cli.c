@@ -609,7 +609,7 @@ dc_cont_open(tse_task_t *task)
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
 	in->coi_flags = args->flags;
 	/** Determine which container properties need to be retrieved while
-	 * opening the contianer
+	 * opening the container
 	 */
 	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
 				  DAOS_CO_QUERY_PROP_CSUM_CHUNK;
@@ -957,7 +957,7 @@ dc_cont_query(tse_task_t *task)
 	int			 rc;
 
 	args = dc_task_get_args(task);
-	D_ASSERTF(args != NULL, "Task Argumetn OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)

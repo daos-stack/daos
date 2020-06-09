@@ -114,7 +114,7 @@ func DefaultMockSysProvider() *MockSysProvider {
 	return NewMockSysProvider(nil)
 }
 
-// MockBackendConfig specifies behaviour for a mock SCM backend
+// MockBackendConfig specifies behavior for a mock SCM backend
 // implementation providing capability to access and configure
 // SCM modules and namespaces.
 type MockBackendConfig struct {

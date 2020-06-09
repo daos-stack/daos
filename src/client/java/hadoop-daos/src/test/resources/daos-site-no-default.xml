@@ -11,7 +11,7 @@
   <property>
     <name>fs.daos.container.uuid</name>
     <value>uuid of container</value>
-    <description>UUID od DAOS container which created with "--type posix"</description>
+    <description>UUID of DAOS container which created with "--type posix"</description>
   </property>
   <property>
     <name>fs.daos.read.buffer.size</name>
@@ -60,7 +60,7 @@
   <property>
     <name>c2.fs.daos.container.uuid</name>
     <value>c2 uuid</value>
-    <description>UUID od DAOS container which created with "--type posix"</description>
+    <description>UUID of DAOS container which created with "--type posix"</description>
   </property>
   <property>
     <name>pool2c2.fs.daos.read.buffer.size</name>

@@ -46,11 +46,11 @@ class NetDev(object):
         self.numa = numa
 
     def __repr__(self):
-        """Overwrite to display formated devices."""
+        """Overwrite to display formatted devices."""
         return self.__str__()
 
     def __str__(self):
-        """Overwrite to display formated devices."""
+        """Overwrite to display formatted devices."""
         return "\n".join("{}: {}".format(key, getattr(self, key, "MISSING"))
                          for key in self.__dict__)
 

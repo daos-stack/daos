@@ -27,7 +27,7 @@
 #include <daos/drpc.h>
 
 /**
- *  Called during libray initialization to craft socket path for agent.
+ *  Called during library initialization to craft socket path for agent.
  */
 int dc_agent_init(void);
 
