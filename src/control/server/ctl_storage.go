@@ -42,7 +42,7 @@ type StorageControlService struct {
 }
 
 // DefaultStorageControlService returns a initialized *StorageControlService
-// with default behaviour
+// with default behavior
 func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
 	return NewStorageControlService(log,
 		bdev.DefaultProvider(log),
@@ -114,7 +114,7 @@ func (c *StorageControlService) NvmePrepare(req bdev.PrepareRequest) (*bdev.Prep
 	return c.bdev.Prepare(req)
 }
 
-// GetScmState performs required initialisation and returns current state
+// GetScmState performs required initialization and returns current state
 // of SCM module preparation.
 func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
 	return c.scm.GetState()
