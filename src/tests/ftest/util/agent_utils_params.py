@@ -40,7 +40,6 @@ class DaosAgentTransportCredentials(TransportCredentials):
         #   - server_name: <str>, e.g. "daos_server"
         #       Name of server accodring to its certificate [daos_agent only]
         #
-        self.server_name = BasicParameter(None, "daos_server")
 #DH++
         self.allow_insecure = BasicParameter(False, False)
         self.ca_cert = BasicParameter(None, "./daosCA/certs/daosCA.crt")

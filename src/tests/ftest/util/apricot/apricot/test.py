@@ -429,7 +429,7 @@ class TestWithServers(TestWithoutServers):
                 print("===group=       ", group)
                 print("===transport obj.=  ", transport)
                 print("==>agent transport.allow_insecure= ",
-                    transport.allow_insecure)
+                      transport.allow_insecure)
                 print("==>self.insecure_mode= ", self.insecure_mode)
                 print(" ")
 
@@ -440,7 +440,7 @@ class TestWithServers(TestWithoutServers):
                 print("   self.agent_managers[-1]=", self.agent_managers[-1])
                 print("   hosts= ", hosts)
                 print("   self.hostfile_clients_slots=",
-                    self.hostfile_clients_slots)
+                      self.hostfile_clients_slots)
                 print("   servers=", servers)
                 self.configure_manager(
                     "agent",
@@ -536,7 +536,7 @@ class TestWithServers(TestWithoutServers):
             agent_transport.allow_insecure.value = self.insecure_mode
 #            common_cfg = CommonConfig(self.server_group, agent_transport)
 #                self.server_group, DaosAgentTransportCredentials())
-            common_cfg = CommonConfig(self.server_group, agent_transport())
+            common_cfg = CommonConfig(self.server_group, agent_transport)
 
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
@@ -668,7 +668,7 @@ class TestWithServers(TestWithoutServers):
             manager_list (list): list of SubprocessManager objects to start
         """
         user = getuser()
-        # We probably want to do this parallel if end up with multiple managers
+        # We probalby want to do this parallel if end up with multiple managers
         for manager in manager_list:
             self.log.info(
                 "Starting %s: group=%s, hosts=%s, config=%s",
@@ -699,7 +699,7 @@ class TestWithServers(TestWithoutServers):
             super(TestWithServers, self).tearDown()
         except OSError as error:
             errors.append(
-                "Error running inherited teardown(): {}".format(error))
+                "Error running inheritted teardown(): {}".format(error))
 
         # Fail the test if any errors occurred during tear down
         if errors:
@@ -734,7 +734,7 @@ class TestWithServers(TestWithoutServers):
                 containers = [containers]
             self.test_log.info("Destroying containers")
             for container in containers:
-                # Only close a container that has been opened by the test
+                # Only close a container that has been openned by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
                         container.close()
@@ -843,7 +843,7 @@ class TestWithServers(TestWithoutServers):
             # Overwrite the test id with the specified test name
             self.test_id = test_name
 
-        # Update the log file names.  The path is defined through the
+        # Update the log file names.  The path is defined throught the
         # DAOS_TEST_LOG_DIR environment variable.
         self.agent_log = "{}_daos_agent.log".format(self.test_id)
         self.server_log = "{}_daos_server.log".format(self.test_id)
