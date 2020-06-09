@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
  */
 
 package io.daos.dfs;
+
+import org.apache.commons.lang.StringUtils;
 
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -106,5 +108,13 @@ public final class DaosUtils {
   public static long toMilliSeconds(StatAttributes.TimeSpec timeSpec) {
     long ms = timeSpec.getSeconds() * 1000;
     return ms + timeSpec.getNano() / (1000 * 1000);
+  }
+
+  public static String escapeUnsValue(String value) {
+    if (StringUtils.isBlank(value)) {
+      return value;
+    }
+    value = value.replaceAll(":", "\\\\u003a");
+    return value.replaceAll("=", "\\\\u003d");
   }
 }
