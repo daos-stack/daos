@@ -122,6 +122,10 @@ struct crt_grp_priv {
 	d_rank_t		 gp_self;
 	/* PSR rank in attached group */
 	d_rank_t		 gp_psr_rank;
+	/* PSR rank list in attached group */
+	d_rank_list_t		 *gp_psr_rank_list;
+	/* index into above psr list */
+	uint32_t		 gp_psr_rank_index;
 	/* PSR phy addr address in attached group */
 	crt_phy_addr_t		 gp_psr_phy_addr;
 	/* address lookup cache, only valid for primary group */
@@ -381,6 +385,22 @@ crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n",
 		grp_priv->gp_pub.cg_grpid, psr_rank, psr_addr);
+}
+
+static inline void
+crt_grp_psr_list_set(struct crt_grp_priv *grp_priv, 
+		d_rank_list_t *psr_rank_list)
+//		crt_phy_addr_t psr_addr)
+{
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
+//	TBD D_FREE(grp_priv->gp_psr_phy_addr);
+	grp_priv->gp_psr_rank_list = psr_rank_list;
+	grp_priv->gp_psr_rank_index = 0;
+//	D_STRNDUP(grp_priv->gp_psr_phy_addr, psr_addr,
+//		CRT_ADDR_STR_MAX_LEN);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+//	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n",
+//		grp_priv->gp_pub.cg_grpid, psr_rank, psr_addr);
 }
 
 struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);

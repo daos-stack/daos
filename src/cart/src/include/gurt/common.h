@@ -317,6 +317,7 @@ bool d_rank_list_identical(d_rank_list_t *rank_list1,
 			   d_rank_list_t *rank_list2);
 bool d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank);
 int d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, uint32_t *idx);
+bool d_rank_list_idx(d_rank_list_t *rank_list, d_rank_t *rank, uint32_t idx);
 int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
 int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 int d_sgl_init(d_sg_list_t *sgl, unsigned int nr);

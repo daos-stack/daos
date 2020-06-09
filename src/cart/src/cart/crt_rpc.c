@@ -647,6 +647,17 @@ crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
 		D_GOTO(out, rc);
 	}
 
+	if (rpc_priv->crp_psr_state == PSR_STATE_LOOKUP_RANKTAG0)
+		rpc_priv->crp_psr_state = PSR_STATE_LOOKUP_GROUP;
+	else if (rpc_priv->crp_psr_state == PSR_STATE_LOOKUP_GROUP)
+		rpc_priv->crp_psr_state = PSR_STATE_LOOKUP_LIST;
+	else {
+		RPC_ERROR(rpc_priv,
+			  "crt lookup psr bad state, crp_psr_state: %d\n",
+			  rpc_priv->crp_psr_state);
+		D_GOTO(out, DER_INVAL);
+	}
+	
 	rpc_priv->crp_state = RPC_STATE_INITED;
 	rc = crt_req_send_internal(rpc_priv);
 
@@ -687,13 +698,13 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 		if (cb_info->cci_rc == -DER_OOG)
 			D_GOTO(out, rc = -DER_OOG);
 
-		if (rpc_priv->crp_ul_retry++ < CRT_URI_LOOKUP_RETRY_MAX) {
+	//	if (rpc_priv->crp_ul_retry++ < CRT_URI_LOOKUP_RETRY_MAX) {
 			rc = crt_req_uri_lookup_retry(grp_priv, rpc_priv);
 			ul_retried = true;
-		} else {
-			rc = cb_info->cci_rc;
-		}
-		D_GOTO(out, rc);
+	//	} else {
+	//		rc = cb_info->cci_rc;
+	//	}
+	//	D_GOTO(out, rc);
 	}
 
 	/* extract uri */
@@ -805,6 +816,51 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 	crt_endpoint_t			*tgt_ep;
 	struct crt_grp_priv		*grp_priv;
 	int				 rc = 0;
+	d_rank_t			 rank;
+	uint32_t			 tag=0;
+        d_rank_list_t           	*membs;
+	uint32_t			idx;
+
+	tgt_ep = &rpc_priv->crp_pub.cr_ep;
+	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
+
+	/* The uri lookup RPC will be sent to the same group as rpc_priv's
+	 * target group
+	 */
+	if (rpc_priv->crp_psr_state == PSR_STATE_INITED) {
+		/* Send lookup to rank:tag=0 */
+		rpc_priv->crp_psr_state = PSR_STATE_LOOKUP_RANKTAG0;
+		rank = tgt_ep->ep_rank;
+		tag = 0;
+	}
+	else if (rpc_priv->crp_psr_state == PSR_STATE_LOOKUP_RANKTAG0) {
+		rpc_priv->crp_psr_state = PSR_STATE_LOOKUP_GROUP;
+		
+		/* Lookup a random member of the group. */
+		membs = grp_priv_get_membs(grp_priv);
+		idx = random() % grp_priv->gp_size;	
+
+		//TBD check return value.
+		d_rank_list_idx(membs, &rank, idx); 
+	}
+	else if (rpc_priv->crp_psr_state == PSR_STATE_LOOKUP_GROUP) {
+		rpc_priv->crp_psr_state = PSR_STATE_LOOKUP_LIST;
+		/* Lookup the PSR list in a round robin fashion. */
+        	d_rank_list_idx(grp_priv->gp_psr_rank_list, &rank, 0); 
+		//TBD check return value.
+		 grp_priv->gp_psr_rank_index = (grp_priv->gp_psr_rank_index+1)
+						% grp_priv->gp_size;
+
+	}
+	else if (rpc_priv->crp_psr_state == PSR_STATE_LOOKUP_LIST) {
+		/* Lookup he next member of the PSR LIST. */
+        	d_rank_list_idx(grp_priv->gp_psr_rank_list, &rank,
+					grp_priv->gp_psr_rank_index); 
+		//TBD check return value.
+		 grp_priv->gp_psr_rank_index = (grp_priv->gp_psr_rank_index+1)
+						% grp_priv->gp_size;
+	}
+
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
@@ -813,7 +869,7 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 	 * target group
 	 */
 	rc = crt_req_uri_lookup_by_rpc(rpc_priv, complete_cb, arg,
-				       grp_priv->gp_psr_rank, 0);
+				       rank, tag);
 	if (rc != 0)
 		RPC_ERROR(rpc_priv, "URI_LOOKUP (for group %s rank %d through "
 			  "psr %d) failed, rc: %d.\n", tgt_ep->ep_grp->cg_grpid,
@@ -1009,6 +1065,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "Querying rank %d tag 0 for target NA address\n",
 			  rank);
+		rpc_priv->crp_psr_state = PSR_STATE_LOOKUP_RANKTAG0;
 		rc = crt_req_uri_lookup_by_rpc(rpc_priv,
 					       crt_req_uri_lookup_by_rpc_cb,
 					       rpc_priv, rank, 0);
@@ -1210,6 +1267,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 	rpc_priv->crp_complete_cb = complete_cb;
 	rpc_priv->crp_arg = arg;
+	rpc_priv->crp_psr_state = PSR_STATE_INITED;
 
 	if (rpc_priv->crp_coll) {
 		rc = crt_corpc_req_hdlr(rpc_priv);

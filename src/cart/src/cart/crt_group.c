@@ -2936,6 +2936,36 @@ out:
 }
 
 
+//TBD
+int
+crt_group_psr_list_set(crt_group_t *grp, d_rank_list_t *rank_list)
+{
+	struct crt_grp_priv	*grp_priv;
+	//char			*uri;
+	int			rc = 0;
+
+	if (!grp) {
+		D_ERROR("Passed grp is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
+
+//	rc = crt_rank_uri_get(grp, rank, 0, &uri);
+//	if (rc != 0) {
+//		D_ERROR("crt_rank_uri_get() failed; rc=%d\n", rc);
+//		D_GOTO(out, rc);
+//	}
+
+	//crt_grp_psr_set(grp_priv, rank, uri);
+	crt_grp_psr_list_set(grp_priv, rank_list);
+//	D_FREE(uri);
+
+out:
+	return rc;
+}
+
+
 int
 crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 				d_rank_list_t *ranks, crt_group_t **ret_grp)
