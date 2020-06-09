@@ -38,6 +38,15 @@ import errno
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
+print(" ")
+print(" ")
+print(" ")
+print ("START launch.py")
+print(" ")
+print(" ")
+print(" ")
+
+
 try:
     # For python versions >= 3.2
     from tempfile import TemporaryDirectory
@@ -463,6 +472,13 @@ def get_test_list(tags):
         tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", get_output(command))
         test_list.extend(list(set(tagged_tests)))
 
+##DH not here++
+    print(" ")
+    print(" ")
+    print("=At get_test_list=")
+    print("test_tags= ", test_tags)
+    print("test_list= ", test_list)
+
     return test_tags, test_list
 
 
@@ -486,6 +502,14 @@ def get_test_files(test_list, args, tmp_dir):
         base, _ = os.path.splitext(test_file["py"])
         test_file["yaml"] = replace_yaml_file(
             "{}.yaml".format(base), args, tmp_dir)
+
+        print("---")
+        print("--test_file =", test_file["yaml"])
+        from subprocess import call
+        print(" ")
+        ttt = test_file["yaml"]
+        call(["cat", ttt])
+        print("---")
 
     return test_files
 
@@ -693,6 +717,19 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                 "Error: Placeholders missing replacements in {}:\n  {}".format(
                     yaml_file, ", ".join(missing_replacements)))
             return None
+
+##DH++
+        yaml_data += "transport_config:\n"
+        if not args.insecure_mode:
+            yaml_data += "  allow_insecure: False"
+        else:
+            yaml_data += "  allow_insecure: True"
+        print("******")
+        print("yaml_data= ", yaml_data)
+        print("******")
+        print("******")
+##DH--
+
 
         # Write the modified yaml file into a temporary file.  Use the path to
         # ensure unique yaml files for tests with the same filename.
@@ -978,90 +1015,72 @@ def rename_logs(avocado_logs_dir, test_file):
 USE_DEBUGINFO_INSTALL = True
 
 
-def resolve_debuginfo(pkg):
-    """ given a package name, return it's debuginfo package """
-    import yum # pylint: disable=import-error,import-outside-toplevel
-
-    yum_base = yum.YumBase()
-    yum_base.conf.assumeyes = True
-    yum_base.setCacheDir(force=True, reuse=True)
-    yum_base.repos.enableRepo('*debug*')
-
-    debuginfo_map = {'glibc':   'glibc-debuginfo-common'}
-
-    try:
-        debug_pkg = debuginfo_map[pkg]
-    except KeyError:
-        debug_pkg = pkg + "-debuginfo"
-    try:
-        pkg_data = yum_base.rpmdb.returnNewestByName(name=pkg)[0]
-    except yum.Errors.PackageSackError as expn:
-        if expn.__str__().rstrip() == "No Package Matching " + pkg:
-            print("Package {} not installed, "
-                  "skipping debuginfo".format(pkg))
-            return None
-        else:
-            raise
-
-    return {'name': debug_pkg,
-            'version': pkg_data['version'],
-            'release': pkg_data['release'],
-            'epoch': pkg_data['epoch']}
-
 def install_debuginfos():
     """Install debuginfo packages."""
-    install_pkgs = [{'name': 'gdb'},
-                    {'name': 'python-magic'}]
-
-    # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury']:
-        debug_pkg = resolve_debuginfo(pkg)
-        if debug_pkg and debug_pkg not in install_pkgs:
-            install_pkgs.append(debug_pkg)
-
-    # remove any "source tree" test hackery that might interfere with RPM
-    # installation
-    cmds = [["sudo", "rm", "-f", "/usr/share/spdk/include"]]
+    install_pkgs = [{'name': 'gdb'}, {'name': 'python-magic'}]
+    cmds = []
 
     if USE_DEBUGINFO_INSTALL:
-        yum_args = [
-            "--exclude", "ompi-debuginfo",
-            "daos-server", "libpmemobj", "python", "openmpi3"]
-        cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
-        cmds.append(["sudo", "debuginfo-install", "--enablerepo=*-debuginfo",
-                     "-y"] + yum_args + ["gcc"])
+        cmds.extend([
+            "sudo", "debuginfo-install", "-y",
+            "--exclude", "ompi-debuginfo,gcc-debuginfo,gcc-base-debuginfo",
+            "daos-server", "libpmemobj", "python", "openmpi3"])
     else:
+        import yum # pylint: disable=import-error
+
+        yum_base = yum.YumBase()
+        yum_base.conf.assumeyes = True
+        yum_base.setCacheDir(force=True, reuse=True)
+        yum_base.repos.enableRepo('*debug*')
+
+        debuginfo_map = {'glibc':   'glibc-debuginfo-common',
+                         'libpmem': 'pmdk-debuginfo'}
+
         # We're not using the yum API to install packages
         # See the comments below.
         # kwarg = {'name': 'gdb'}
         # yum_base.install(**kwarg)
 
-        for debug_pkg in install_pkgs:
+        for pkg in ['python', 'glibc', 'daos', 'systemd', 'ndctl', 'libpmem',
+                    'mercury', 'libfabric', 'argobots']:
+            try:
+                debug_pkg = debuginfo_map[pkg]
+            except KeyError:
+                debug_pkg = pkg + "-debuginfo"
+            try:
+                pkg_data = yum_base.rpmdb.returnNewestByName(name=pkg)[0]
+            except yum.Errors.PackageSackError as expn:
+                if expn.__str__().rstrip() == "No Package Matching " + pkg:
+                    print("Package {} not installed, "
+                          "skipping debuginfo".format(pkg))
+                    continue
+                else:
+                    raise
             # This is how you actually use the API to add a package
             # But since we need sudo to do it, we need to call out to yum
-            # kwarg = debug_pkg
+            # kwarg = {'name': debug_pkg,
+            #         'version': pkg_data['version'],
+            #         'release': pkg_data['release']}
             # yum_base.install(**kwarg)
-            install_pkgs.append(debug_pkg)
+            install_pkgs.append({'name': debug_pkg,
+                                 'version': pkg_data['version'],
+                                 'release': pkg_data['release'],
+                                 'epoch': pkg_data['epoch']})
 
     # This is how you normally finish up a yum transaction, but
     # again, we need to employ sudo
     # yum_base.resolveDeps()
     # yum_base.buildTransaction()
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
-
-    # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = ["sudo", "yum", "-y", "--enablerepo=*debug*", "install"]
+    cmds.extend(["sudo", "yum", "-y", "--enablerepo=\\*debug\\*", "install"])
     for pkg in install_pkgs:
         try:
-            cmd.append(
+            cmds.append(
                 "{}-{}-{}".format(pkg['name'], pkg['version'], pkg['release']))
         except KeyError:
-            cmd.append(pkg['name'])
+            cmds.append(pkg['name'])
 
-    cmds.append(cmd)
-
-    for cmd in cmds:
-        print(get_output(cmd))
+    print(get_output(cmds))
 
 
 def process_the_cores(avocado_logs_dir, test_yaml, args):
@@ -1072,7 +1091,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
-    import fnmatch # pylint: disable=import-outside-toplevel
+    import fnmatch
 
     this_host = socket.gethostname().split(".")[0]
     host_list = get_hosts_from_yaml(test_yaml, args)
@@ -1092,8 +1111,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "copied=()",
         "for file in /var/tmp/core.*",
         "do if [ -e $file ]",
-        "then if sudo chmod 644 $file && "
-        "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+        "then if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_cores_dir),
         "then copied+=($file)",
         "if ! sudo rm -fr $file",
@@ -1124,7 +1142,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             pattern (str): the fnmatch/glob pattern of core files to
                            run gdb on
         """
-        import magic # pylint: disable=import-outside-toplevel
+        import magic
 
         for corefile in cores:
             if not fnmatch.fnmatch(corefile, pattern):
@@ -1134,31 +1152,20 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             exe_magic.load()
             exe_type = exe_magic.file(corefile_fqpn)
             exe_name_start = exe_type.find("execfn: '") + 9
-            exe_name_end = 0
-            if exe_name_start > 8:
-                exe_name_end = exe_type.find("', platform:")
-            else:
-                exe_name_start = exe_type.find("from '") + 6
-                if exe_name_start > 5:
-                    exe_name_end = exe_type[exe_name_start:].find(" ") + \
-                                   exe_name_start
-                else:
-                    print("Unable to determine executable name from: "
-                          "{}\nNot creating stacktrace".format(exe_type))
-            if exe_name_end:
-                exe_name = exe_type[exe_name_start:exe_name_end]
-                cmd = [
-                    "gdb", "-cd={}".format(daos_cores_dir),
-                    "-ex", "set pagination off",
-                    "-ex", "thread apply all bt full",
-                    "-ex", "detach",
-                    "-ex", "quit",
-                    exe_name, corefile
-                ]
-                stack_trace_file = os.path.join(
-                    daos_cores_dir, "{}.stacktrace".format(corefile))
-                with open(stack_trace_file, "w") as stack_trace:
-                    stack_trace.writelines(get_output(cmd))
+            exe_name_end = exe_type.find("', platform:")
+            exe_name = exe_type[exe_name_start:exe_name_end]
+            cmd = [
+                "gdb", "-cd={}".format(daos_cores_dir),
+                "-ex", "\"set pagination off\"",
+                "-ex", "\"thread apply all bt full\""
+                "-ex", "\"detach\"",
+                "-ex", "\"quit\"",
+                exe_name, corefile
+            ]
+            stack_trace_file = os.path.join(
+                daos_cores_dir, "{}.stacktrace".format(corefile))
+            with open(stack_trace_file, "w") as stack_trace:
+                stack_trace.writelines(get_output(cmd))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 
@@ -1279,6 +1286,12 @@ def main():
         "-s", "--sparse",
         action="store_true",
         help="limit output to pass/fail")
+##DH++
+    parser.add_argument(
+        "-insec", "--insecure_mode",
+        action="store_true",
+        help="test with insecure-mode")
+##DH--
     parser.add_argument(
         "tags",
         nargs="*",
@@ -1326,10 +1339,29 @@ def main():
     # Create a temporary directory
     tmp_dir = TemporaryDirectory()
 
+##DH++
+    # Generate certificates if not exist
+    from subprocess import call
+    print(" ")
+    print(" ")
+    if not args.insecure_mode:
+        call(["pwd"])
+        if not os.path.exists("./daosCA"):
+            call(["../../../../../utils/certs/gen_certificates.sh"])
+    print("args.test_servers= ", args.test_servers)
+    print("args.insecure_mode= ", args.insecure_mode)
+    print(" ")
+##DH--
+
     # Create a dictionary of test and their yaml files
     test_files = get_test_files(test_list, args, tmp_dir)
     if args.modify:
         exit(0)
+
+##DH++
+    print("test_files= ", test_files)
+    print(" ")
+    print(" ")
 
     # Run all the tests
     status = run_tests(test_files, tag_filter, args)

@@ -33,13 +33,19 @@ class DaosAgentTransportCredentials(TransportCredentials):
     def __init__(self):
         """Initialize a TransportConfig object."""
         super(DaosAgentTransportCredentials, self).__init__(
-            "/run/agent_config/transport_config/*", "transport_config")
+#DH            "/run/agent_config/transport_config/*", "transport_config")
+            "/run/transport_config/*", "transport_config")
 
         # Additional daos_agent transport credential parameters:
         #   - server_name: <str>, e.g. "daos_server"
         #       Name of server accodring to its certificate [daos_agent only]
         #
         self.server_name = BasicParameter(None, "daos_server")
+#DH++
+        self.allow_insecure = BasicParameter(False, False)
+        self.ca_cert = BasicParameter(None, "./daosCA/certs/daosCA.crt")
+        self.cert = BasicParameter(None, "./daosCA/certs/agent.crt")
+        self.key = BasicParameter(None, "./daosCA/certs/agent.key")
 
 
 class DaosAgentYamlParameters(YamlParameters):
