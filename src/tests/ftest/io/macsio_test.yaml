@@ -32,5 +32,4 @@ macsio:
   avg_num_parts: 2.5
   num_dumps: 2
 test_repo:
-  # macsio: /usr/lib64/macsio
-  macsio: /home/pahender/MACSio/install/bin
+  macsio: /usr/lib64/macsio

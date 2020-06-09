@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from apricot import skipForTicket
 from general_utils import convert_list
 from macsio_test_base import MacsioTestBase
 
@@ -32,6 +33,7 @@ class MacsioTest(MacsioTestBase):
     :avocado: recursive
     """
 
+    @skipForTicket("CORCI-938")
     def test_macsio(self):
         """JIRA ID: DAOS-3658.
 
@@ -42,7 +44,7 @@ class MacsioTest(MacsioTestBase):
         Use case:
             Six client and two servers.
 
-        :avocado: tags=all,pr,hw,large,daosio,macsio
+        :avocado: tags=all,pr,hw,large,io,macsio
         """
         # Create a pool
         self.add_pool()
