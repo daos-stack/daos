@@ -102,6 +102,16 @@ struct ds_cont_child {
 	uint64_t		*sc_snapshots;
 	uint32_t		 sc_snapshots_nr;
 	uint32_t		 sc_open;
+
+	uint64_t		 sc_dtx_committable_count;
+	/* The objects with committable DTXs in DRAM. */
+	daos_handle_t		 sc_dtx_cos_hdl;
+	/* The DTX COS-btree. */
+	struct btr_root		 sc_dtx_cos_btr;
+	/* The global list for committable DTXs. */
+	d_list_t		 sc_dtx_cos_list;
+	/* The pool map version for the latest DTX resync on the container. */
+	uint32_t		 sc_dtx_resync_ver;
 };
 
 /*
