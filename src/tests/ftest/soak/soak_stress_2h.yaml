@@ -89,7 +89,7 @@ soak_stress:
     job_timeout: 20
     nodesperjob:
         - -1
-    # used for perfomance benchmarks
+    # used for performance benchmarks
     taskspernode:
         - 1
         - 16

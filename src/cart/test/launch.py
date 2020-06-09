@@ -62,9 +62,9 @@ def printhelp():
     """
     print("\n")
     print("Usage: ./launch <tag>\n")
-    print("\ttag:  ")
-    print("\tall\tRun all tests ")
-    print("\tproto\tRun basic CaRT protocol test ")
+    print("        ttag:")
+    print("        all     Run all tests")
+    print("        proto   Run basic CaRT protocol test")
     print("\n")
     exit()
 
