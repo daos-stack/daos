@@ -22,8 +22,6 @@ BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
 BuildRequires: mpich-devel
 BuildRequires: environment-modules
-BuildRequires: librdmacm
-BuildRequires: libverbs
 BuildRequires: hwloc-devel
 BuildRequires: libpsm2-devel
 %if (0%{?rhel} >= 7)
