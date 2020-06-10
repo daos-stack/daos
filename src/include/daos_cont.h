@@ -46,7 +46,7 @@ extern "C" {
  * daos_epoch_commit().
  *
  * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
- * factor/level requirments of the container.
+ * factor/level requirements of the container.
  */
 #define DAOS_COO_RO	(1U << 0)
 #define DAOS_COO_RW	(1U << 1)
@@ -60,7 +60,7 @@ extern "C" {
 typedef struct {
 	/** Container UUID */
 	uuid_t			ci_uuid;
-	/** Epoch of latest persisten snapshot */
+	/** Epoch of latest persistent snapshot */
 	daos_epoch_t		ci_lsnapshot;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
@@ -73,7 +73,7 @@ typedef struct {
 
 
 /**
- * Generate a rank list from a string with a seprator argument. This is a
+ * Generate a rank list from a string with a separator argument. This is a
  * convenience function to generate the rank list required by
  * daos_pool_connect().
  *
