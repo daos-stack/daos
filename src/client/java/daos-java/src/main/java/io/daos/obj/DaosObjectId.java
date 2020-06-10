@@ -24,8 +24,11 @@
 package io.daos.obj;
 
 import io.daos.BufferAllocator;
+import io.daos.DaosClient;
 import io.daos.DaosObjectType;
+import sun.nio.ch.DirectBuffer;
 
+import javax.annotation.concurrent.NotThreadSafe;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -34,24 +37,22 @@ import java.nio.ByteOrder;
  * It contains 64-bit high and 64-bit low. Both will be encoded with feature bits and object type to get
  * final object ID.
  */
+@NotThreadSafe
 public class DaosObjectId {
 
     private long high;
 
     private long low;
 
-    private long contPtr;
-
     private boolean encoded;
+
+    private ByteBuffer buffer;
 
     private static final ByteOrder DEFAULT_ORDER = ByteOrder.nativeOrder();
 
-    protected DaosObjectId(long contPtr) {
-        this.contPtr = contPtr;
-    }
+    public DaosObjectId() {}
 
-    protected DaosObjectId(long contPtr, long high, long low) {
-        this(contPtr);
+    public DaosObjectId(long high, long low) {
         this.high = high;
         this.low = low;
     }
@@ -71,14 +72,27 @@ public class DaosObjectId {
             throw new IllegalStateException("already encoded");
         }
         // TODO: memory management for small buffer
-        ByteBuffer buffer = BufferAllocator.directBuffer(32);
-        buffer.putLong(high).putLong(low);
-        DaosObjClient.encodeObjectId(contPtr, buffer, feats, objectType.name(), args);
+        buffer = BufferAllocator.directBuffer(16);
         buffer.order(DEFAULT_ORDER);
+        buffer.putLong(high).putLong(low);
+        DaosObjClient.encodeObjectId(((DirectBuffer) buffer).address(), feats, objectType.name(), args);
         buffer.flip();
         high = buffer.getLong();
         low = buffer.getLong();
         encoded = true;
+    }
+
+    /**
+     * encode with default values.
+     * feats: 0
+     * objectType: {@linkplain DaosObjectType#OC_SX}
+     * args: 0
+     *
+     * <p>
+     * see {@link #encode(int, DaosObjectType, int)}
+     */
+    public void encode() {
+        encode(0, DaosObjectType.OC_SX, 0);
     }
 
     public long getHigh() {
@@ -87,5 +101,16 @@ public class DaosObjectId {
 
     public long getLow() {
         return low;
+    }
+
+    public boolean isEncoded() {
+        return encoded;
+    }
+
+    public ByteBuffer getBuffer() {
+        if (buffer == null) {
+            throw new IllegalStateException("DAOS object ID not encoded yet");
+        }
+        return buffer;
     }
 }

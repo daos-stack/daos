@@ -126,9 +126,21 @@ throw_exception(JNIEnv *env, char *msg, int error_code)
 }
 
 int
+throw_exception_object(JNIEnv *env, char *msg, int error_code)
+{
+	return throw_exception_base(env, msg, error_code, 1, 0);
+}
+
+int
 throw_exception_const_msg(JNIEnv *env, char *msg, int error_code)
 {
 	return throw_exception_base(env, msg, error_code, 0, 1);
+}
+
+int
+throw_exception_const_msg_object(JNIEnv *env, char *msg, int error_code)
+{
+	return throw_exception_base(env, msg, error_code, 0, 0);
 }
 
 /**

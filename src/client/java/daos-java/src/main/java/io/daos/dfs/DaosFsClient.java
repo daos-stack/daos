@@ -89,6 +89,10 @@ public final class DaosFsClient extends SharableClient implements ForceCloseable
 
   private static final Logger log = LoggerFactory.getLogger(DaosFsClient.class);
 
+  static {
+    DaosClient.initClient();
+  }
+
   private final ExecutorService cleanerExe = Executors.newSingleThreadExecutor((r) -> {
     Thread thread = new Thread(r, "DAOS file object cleaner thread");
     thread.setDaemon(true);

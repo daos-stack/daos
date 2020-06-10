@@ -50,6 +50,10 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
 
   private static final Logger log = LoggerFactory.getLogger(DaosObjClient.class);
 
+  static {
+    DaosClient.initClient();
+  }
+
   private DaosObjClient(String poolId, String contId, DaosObjClientBuilder builder) {
     super(poolId, contId, builder);
   }
@@ -68,73 +72,25 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
   }
 
   /**
-   * create new instance of un-encoded {@link DaosObjectId} with high and low value of 0.
+   * get a DAOS object with given <code>DaosObjectId</code>.
    *
-   * @return DaosObjectId object
+   * @param oid
+   * DAOS object id, either encoded or not
+   * @return a instance of {@link DaosObject}
    */
-  public DaosObjectId newObjectId() {
-    return new DaosObjectId(contPtr);
-  }
-
-  /**
-   * create new instance of encoded {@link DaosObjectId} with high and low value of 0.
-   *
-   * @param feats
-   * object feature fits
-   * @param objectType
-   * object type
-   * @param args
-   * reserved
-   * @return DaosObjectId object
-   */
-  public DaosObjectId newEncodedObjectId(int feats, DaosObjectType objectType, int args) {
-    DaosObjectId id = new DaosObjectId(contPtr);
-    id.encode(feats, objectType, args);
-    return id;
-  }
-
-  /**
-   * create new instance of un-encoded {@link DaosObjectId} with specified high and low values.
-   *
-   * @param high
-   * high value of ID
-   * @param low
-   * low value of ID
-   * @return DaosObjectId object
-   */
-  public DaosObjectId newObjectId(long high, long low) {
-    return new DaosObjectId(contPtr, high, low);
-  }
-
-  /**
-   * create new instance of encoded {@link DaosObjectId} with specified high and low values.
-   *
-   * @param high
-   * high value of ID
-   * @param low
-   * low value of ID
-   * @param feats
-   * object feature bits
-   * @param objectType
-   * object type
-   * @param args
-   * reserved
-   * @return DaosObjectId object
-   */
-  public DaosObjectId newEncodedObjectId(long high, long low, int feats, DaosObjectType objectType, int args) {
-    DaosObjectId id = new DaosObjectId(contPtr, high, low);
-    id.encode(feats, objectType, args);
-    return id;
+  public DaosObject getObject(DaosObjectId oid) {
+    if (!oid.isEncoded()) {
+      throw new IllegalArgumentException("DAOS object ID should be encoded.");
+    }
+    return new DaosObject(this, oid);
   }
 
   /**
    * encode object id with object feature bits and object type.
    * encoded object id is set back to <code>buffer</code>.
    *
-   * @param contPtr
-   * opened container handler
-   * @param oidBuffer
-   * direct byte buffer with original object id's high and low. encode object id is set back to this buffer.
+   * @param oidBufferAddress
+   * address of direct byte buffer with original object id's high and low. encode object id is set back to this buffer.
    * @param feats
    * object feature bits
    * @param objectTypeName
@@ -142,7 +98,7 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param args
    * reserved
    */
-  public native static void encodeObjectId(long contPtr, ByteBuffer oidBuffer, int feats, String objectTypeName,
+  native static void encodeObjectId(long oidBufferAddress, int feats, String objectTypeName,
                                            int args);
 
   /**
@@ -150,21 +106,25 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    *
    * @param contPtr
    * opened container handler
-   * @param oidBuffer
-   * direct byte buffer with original object id's high and low
+   * @param oidBufferAddress
+   * address of direct byte buffer with original object id's high and low
    * @param mode
    * open mode, see {@link OpenMode}
    * @return handle of opened object
+   * @throws IOException
+   * {@link io.daos.DaosIOException}
    */
-  public native static long openObject(long contPtr, ByteBuffer oidBuffer, int mode);
+  native long openObject(long contPtr, long oidBufferAddress, int mode) throws IOException;
 
   /**
    * close object.
    *
    * @param objectPtr
    * handle of opened object
+   * @throws IOException
+   * {@link io.daos.DaosIOException}
    */
-  public native static void closeObject(long objectPtr);
+  native void closeObject(long objectPtr) throws IOException;
 
   /**
    * punch an entire object with all associated with it.
@@ -174,7 +134,7 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param flags
    * punch flags (currently ignored)
    */
-  public native static void punchObject(long objectPtr, long flags);
+  native void punchObject(long objectPtr, long flags);
 
   /**
    * punch dkeys (with all its akeys) from an object.
@@ -185,10 +145,10 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * punch flags (currently ignored)
    * @param nbrOfDkeys
    * number of dkeys
-   * @param dkeysBuffer
-   * dkeys written into direct byte buffer in format, len1+key1+len2+key2...
+   * @param dkeysBufferAddress
+   * address of direct byte buffer into which dkeys written in format, len1+key1+len2+key2...
    */
-  public native static void punchObjectDkeys(long objectPtr, long flags, int nbrOfDkeys, ByteBuffer dkeysBuffer);
+  native void punchObjectDkeys(long objectPtr, long flags, int nbrOfDkeys, long dkeysBufferAddress);
 
   /**
    * punch akeys (with all records) from an object.
@@ -199,10 +159,11 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * punch flags (currently ignored)
    * @param nbrOfAkeys
    * number of akeys
-   * @param keysBuffer
-   * dkey and akeys written into direct byte buffer in format, dkey len+dkey+akey1 len+akey1+akey2 len+akey2...
+   * @param keysBufferAddress
+   * address of direct byte buffer dkey and akeys written into direct byte buffer in format,
+   * dkey len+dkey+akey1 len+akey1+akey2 len+akey2...
    */
-  public native static void punchObjectAkeys(long objectPtr, long flags, int nbrOfAkeys, ByteBuffer keysBuffer);
+  native void punchObjectAkeys(long objectPtr, long flags, int nbrOfAkeys, long keysBufferAddress);
 
   /**
    * query attributes of an object.
@@ -211,7 +172,85 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * handle of opened object
    * @return attributes serialized by protobuf. see DaosObjectAttribute.proto.
    */
-  public native static byte[] queryObjectAttribute(long objectPtr);
+  native byte[] queryObjectAttribute(long objectPtr);
+
+  /**
+   * fetch object records of given dkey and akeys.
+   *
+   * @param objectPtr
+   * handle of opened object
+   * @param flags
+   * Fetch flags (currently ignored)
+   * @param dkey
+   * Distribution key associated with the fetch operation
+   * @param nbrOfDesc
+   * number of description in <code>descBuffer</code>
+   * @param descBufferAddress
+   * address of direct byte buffer holds serialized list of {@link IODesc} of akeys, types, record sizes and how many
+   * records to fetch
+   * @param dataBufferAddress
+   * address of direct data buffer which holds all records described in <code>descBuffer</code>. Actual fetch lengths
+   * of each IODesc also updated in this buffer
+   */
+  native void fetchObject(long objectPtr, long flags, String dkey, int nbrOfDesc, long descBufferAddress,
+                                        long dataBufferAddress);
+
+  /**
+   * update object records of given dkey and akeys.
+   *
+   * @param objectPtr
+   * handle of opened object
+   * @param flags
+   * update flags (currently ignored)
+   * @param dkey
+   * Distribution key associated with the update operation
+   * @param nbrOfDesc
+   * number of description in <code>descBuffer</code>
+   * @param descBufferAddress
+   * address of direct byte buffer holds serialized list of {@link IODesc} of akeys, types, record sizes and how many
+   * records to update
+   * @param dataBufferAddress
+   * address of direct data buffer which holds all records described in <code>descBuffer</code>
+   */
+  native void updateObject(long objectPtr, long flags, String dkey, int nbrOfDesc, long descBufferAddress,
+                                        long dataBufferAddress);
+
+  /**
+   * list dkeys of given object.
+   *
+   * @param objectPtr
+   * handle of opened object
+   * @param keyBufferAddress
+   * address of direct byte buffer holds dkeys
+   * @param anchorBufferAddress
+   * address of direct byte buffer holds anchor
+   * @param maxNbr
+   * maximum number of dkeys to list. If actual number of dkeys exceed this value, user should call this method again
+   * with <code>anchorBuffer</code>
+   */
+  native void listDkeys(long objectPtr, long keyBufferAddress, long anchorBufferAddress, int maxNbr);
+
+  /**
+   * list akeys of given object and dkey.
+   *
+   * @param objectPtr
+   * handle of opened object
+   * @param dkey
+   * distribution key
+   * @param keyBufferAddress
+   * address of direct byte buffer holds akeys
+   * @param anchorBufferAddress
+   * address of direct byte buffer holds anchor
+   * @param maxNbr
+   * maximum number of akeys to list. If actual number of akeys exceed this value, user should call this method again
+   * with <code>anchorBuffer</code>
+   */
+  native void listAkeys(long objectPtr, String dkey, long keyBufferAddress, long anchorBufferAddress,
+                                      int maxNbr);
+
+  protected long getContPtr() {
+    return contPtr;
+  }
 
   @Override
   protected synchronized void disconnect(boolean force) throws IOException {

@@ -87,6 +87,18 @@ int
 throw_exception(JNIEnv *env, char *msg, int error_code);
 
 /**
+ * throw Java exception with dynamically constructed message for object error.
+ *
+ * \param[in]	env		JNI environment
+ * \param[in]	msg		error message provided by caller
+ * \param[in]	error_code	non-zero return code of DFS function
+ *
+ * \return	return code of throw_exception_base
+ */
+int
+throw_exception_object(JNIEnv *env, char *msg, int error_code);
+
+/**
  * throw Java exception with constant message for posix error.
  *
  * \param[in]	env		JNI environment
@@ -97,5 +109,17 @@ throw_exception(JNIEnv *env, char *msg, int error_code);
  */
 int
 throw_exception_const_msg(JNIEnv *env, char *msg, int error_code);
+
+/**
+ * throw Java exception with constant message for object error.
+ *
+ * \param[in]	env		JNI environment
+ * \param[in]	msg		error message provided by caller
+ * \param[in]	error_code	non-zero return code of DFS function
+ *
+ * \return	return code of throw_exception_base
+ */
+int
+throw_exception_const_msg_object(JNIEnv *env, char *msg, int error_code);
 
 #endif
