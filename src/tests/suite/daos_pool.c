@@ -169,10 +169,8 @@ pool_exclude(void **state)
 	d_rank_t	 rank;
 	int		 tgt = -1;
 	int		 rc;
-	char		dmg_cmd[150];
-	int		idx;
 
-	if (0) {
+	if (1) {
 		print_message("Skip it for now, because CaRT can't support "
 			      "subgroup membership, excluding a node w/o "
 			      "killing it will cause IV issue.\n");
@@ -208,31 +206,9 @@ pool_exclude(void **state)
 	tgts.tl_tgts = &tgt;
 
 	print_message("rank 0 excluding rank %u... ", rank);
-	/* build rank_list */
-	char rank_list[50];
-	for (idx = 0; idx < arg->pool.svc.rl_nr; idx++) {
-		snprintf(rank_list, 10, "%d,", arg->pool.svc.rl_ranks[idx]);
-	}
-	snprintf(rank_list, 1, "\n");
-	/* build tgt_list */
-	 char tgt_list[50];
-	 for (idx = 0; idx < tgts.tl_nr; idx++) {
-		 snprintf(tgt_list, 10, "%d,", tgts.tl_tgts[idx]);
-	 }
-	 snprintf(tgt_list, 1, "\n");
-
-	/* build and invoke dmg cmd */
-	snprintf(dmg_cmd, sizeof(dmg_cmd),
-		"dmg pool exclude -i --pool=%s --ranks=%s --target-idx=%s",
-		arg->pool.pool_uuid, rank_list, tgt_list);
-	print_message("rank_list %s tgt_list %s dmg_cmd %s", rank_list, tgt_list, dmg_cmd);
-
-	rc = system(dmg_cmd);
-/*
 	rc = daos_pool_tgt_exclude(arg->pool.pool_uuid, arg->group,
 				   &arg->pool.svc, &tgts,
-				   arg->async ? &ev : NULL );
-*/
+				   arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
