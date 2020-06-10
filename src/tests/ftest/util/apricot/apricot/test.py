@@ -413,7 +413,7 @@ class TestWithServers(TestWithoutServers):
                 transport.allow_insecure.value = self.insecure_mode
 ##DH--
                 print("===>agent config_file= ")
-                c_f = open(config_file, "r")
+                c_f = open(config_file, "w+")
                 c_f_conts = c_f.read()
                 print(c_f_conts)
                 c_f.close()
