@@ -58,7 +58,7 @@ function generate_ca_cert () {
 	echo "Generating Private CA Root Certificate"
 	# Generate Private key and set permissions
 	openssl genrsa -out $PRIVATE/daosCA.key 4096
-	chmod 0404 $PRIVATE/daosCA.key
+	chmod 0700 $PRIVATE/daosCA.key
 	# Generate CA Certificate
 	openssl req -new -x509 -config "$CONFIGS/ca.cnf" -days 1095  -sha512 \
 		-key $PRIVATE/daosCA.key \
@@ -74,7 +74,7 @@ function generate_agent_cert () {
 	echo "Generating Agent Certificate"
 	# Generate Private key and set its permissions
 	openssl genrsa -out $CERTS/agent.key 4096
-	chmod 0404 $CERTS/agent.key
+	chmod 0700 $CERTS/agent.key
 	# Generate a Certificate Signing Request (CRS)
 	openssl req -new -config "$CONFIGS/agent.cnf" -key $CERTS/agent.key \
 		-out agent.csr -batch
@@ -94,7 +94,7 @@ function generate_admin_cert () {
 	echo "Generating Admin Certificate"
 	# Generate Private key and set its permissions
 	openssl genrsa -out $CERTS/admin.key 4096
-	chmod 0404 $CERTS/admin.key
+	chmod 0700 $CERTS/admin.key
 	# Generate a Certificate Signing Request (CRS)
 	openssl req -new -config "$CONFIGS/admin.cnf" -key $CERTS/admin.key \
 		-out admin.csr -batch
@@ -114,7 +114,7 @@ function generate_server_cert () {
 	echo "Generating Server Certificate"
 	# Generate Private key and set its permissions
 	openssl genrsa -out $CERTS/server.key 4096
-	chmod 0404 $CERTS/server.key
+	chmod 0700 $CERTS/server.key
 	# Generate a Certificate Signing Request (CRS)
 	openssl req -new -config "$CONFIGS/server.cnf" -key $CERTS/server.key \
 		-out server.csr -batch
@@ -139,7 +139,7 @@ function generate_test_cert () {
 	echo "Generating Test Certificate"
 	# Generate Private key and set its permissions
 	openssl genrsa -out $CERTS/test.key 4096
-	chmod 0404 $CERTS/test.key
+	chmod 0700 $CERTS/test.key
 	# Generate a Certificate Signing Request (CRS)
 	openssl req -new -config "$CONFIGS/test.cnf" -key $CERTS/test.key \
 		-out test.csr -batch
@@ -165,7 +165,7 @@ function cleanup () {
 }
 
 function fixup_permissions() {
-	chmod 0404 $CERTS/*.key
+	chmod 0700 $CERTS/*.key
 	chmod 0664 $CERTS/*.crt
 }
 
