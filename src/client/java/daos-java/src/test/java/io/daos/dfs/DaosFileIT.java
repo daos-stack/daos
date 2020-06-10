@@ -1,10 +1,7 @@
 package io.daos.dfs;
 
 import com.sun.security.auth.module.UnixSystem;
-import io.daos.Constants;
-import io.daos.DaosIOException;
-import io.daos.DaosObjectType;
-import io.daos.DaosUtils;
+import io.daos.*;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -24,22 +21,22 @@ public class DaosFileIT {
   private static DaosFsClient client;
 
   @BeforeClass
-  public static void setup() throws Exception {
-    poolId = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
-    contId = System.getProperty("cont_id", DaosFsClientTestBase.DEFAULT_CONT_ID);
+  public static void setup() throws Exception{
+    poolId = DaosTestBase.getPoolId();
+    contId = DaosTestBase.getContId();
 
     client = DaosFsClientTestBase.prepareFs(poolId, contId);
   }
 
   @Test
-  public void testMkdir() throws Exception {
+  public void testMkdir() throws Exception{
     DaosFile daosFile = client.getFile("/root/");
     daosFile.mkdir();
     Assert.assertTrue(daosFile.exists());
   }
 
   @Test
-  public void testMkdirs() throws Exception {
+  public void testMkdirs() throws Exception{
     DaosFile daosFile = client.getFile("/d1/d2/d3");
     daosFile.mkdirs();
     DaosFile parentFile = client.getFile("/d1/d2");
@@ -48,7 +45,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testRenameFile() throws Exception {
+  public void testRenameFile() throws Exception{
     DaosFile dir1 = client.getFile("/src/dir");
     dir1.mkdirs();
     DaosFile srcFile = client.getFile(dir1, "data1");
@@ -63,7 +60,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testRenameToBeConfirmed() throws Exception {
+  public void testRenameToBeConfirmed() throws Exception{
     DaosFile dir1 = client.getFile("/src3/dir");
     dir1.mkdirs();
     DaosFile srcFile = client.getFile(dir1, "data1");
@@ -86,7 +83,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testRenameDir() throws Exception {
+  public void testRenameDir() throws Exception{
     DaosFile dir1 = client.getFile("/src2/dir");
     dir1.mkdirs();
     DaosFile srcFile = client.getFile(dir1, "subdir");
@@ -100,7 +97,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testVerifyEmptyDir() throws Exception {
+  public void testVerifyEmptyDir() throws Exception{
     DaosFile dir1 = client.getFile("/src11/");
     dir1.mkdirs();
     String[] children = dir1.listChildren();
@@ -126,12 +123,12 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testVerifyMultipleLongNameChildren() throws Exception {
+  public void testVerifyMultipleLongNameChildren() throws Exception{
     DaosFile dir1 = client.getFile("/src5/");
     dir1.mkdirs();
-    for (int i = 0; i < 20; i++) {
-      DaosFile child1 = client.getFile(dir1, i + "c10000000000000000000000000000000000c50000000000000000000000000000000000");
-      if (i % 2 == 0) {
+    for (int i=0; i<20; i++) {
+      DaosFile child1 = client.getFile(dir1, i+"c10000000000000000000000000000000000c50000000000000000000000000000000000");
+      if (i%2 == 0) {
         child1.mkdir();
       } else {
         child1.createNewFile();
@@ -143,14 +140,14 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testWriteFile() throws Exception {
+  public void testWriteFile() throws Exception{
     DaosFile daosFile = client.getFile("/data");
     daosFile.createNewFile();
     int length = 100;
     ByteBuffer buffer = ByteBuffer.allocateDirect(length);
     byte[] bytes = new byte[length];
-    for (int i = 0; i < length; i++) {
-      bytes[i] = (byte) i;
+    for (int i=0; i<length; i++) {
+      bytes[i] = (byte)i;
     }
     buffer.put(bytes);
 

@@ -23,6 +23,69 @@
 
 package io.daos.obj;
 
+import sun.nio.ch.DirectBuffer;
+
+import java.io.IOException;
+
 public class DaosObject {
 
+  private DaosObjClient client;
+
+  private long contPtr;
+
+  private DaosObjectId oid;
+
+  private long objectPtr = -1;
+
+  /**
+   * construct new instance of DaosObject with given <code>oid</code>.
+   * <code>oid</code> must be encoded.
+   *
+   * @param client
+   * initialized DAOS object client
+   * @param oid
+   * encoded DAOS object id
+   */
+  protected DaosObject(DaosObjClient client, DaosObjectId oid) {
+    this.oid = oid;
+    this.client = client;
+    this.contPtr = client.getContPtr();
+    if (!oid.isEncoded()) {
+      throw new IllegalArgumentException("DAOS object ID should be encoded.");
+    }
+  }
+
+  /**
+   * open object with default mode, {@linkplain OpenMode#UNKNOWN}.
+   *
+   * @throws IOException
+   */
+  public void open() throws IOException {
+    open(OpenMode.UNKNOWN);
+  }
+
+  /**
+   * open object with given <code>mode</code> if it hasn't been opened yet.
+   *
+   * @param mode
+   * open mode, see {@link OpenMode}
+   * @throws IOException
+   */
+  public void open(OpenMode mode) throws IOException {
+    if (objectPtr == -1) {
+      DirectBuffer buffer = (DirectBuffer) oid.getBuffer();
+      objectPtr = client.openObject(contPtr, buffer.address(), mode.getValue());
+    }
+  }
+
+  /**
+   * close object if it's open.
+   *
+   * @throws IOException
+   */
+  public void close() throws IOException {
+    if (objectPtr != -1) {
+      client.closeObject(objectPtr);
+    }
+  }
 }

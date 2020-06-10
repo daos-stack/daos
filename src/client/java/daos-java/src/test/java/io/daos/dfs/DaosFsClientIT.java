@@ -1,5 +1,6 @@
 package io.daos.dfs;
 
+import io.daos.DaosTestBase;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -13,8 +14,8 @@ public class DaosFsClientIT {
 
   @BeforeClass
   public static void setup() throws Exception {
-    poolId = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
-    contId = System.getProperty("cont_id", DaosFsClientTestBase.DEFAULT_CONT_ID);
+    poolId = DaosTestBase.getPoolId();
+    contId = DaosTestBase.getContId();
   }
 
   @Test
@@ -25,8 +26,8 @@ public class DaosFsClientIT {
     try {
       client = builder.build();
       Assert.assertTrue(client != null);
-    }finally {
-      if(client != null){
+    } finally {
+      if (client != null) {
         client.close();
       }
     }
@@ -40,15 +41,9 @@ public class DaosFsClientIT {
     try {
       client = builder.build();
       Assert.assertTrue(client != null);
-<<<<<<< HEAD
-    } finally {
-      if (client != null) {
-        client.disconnect();
-=======
     }finally {
       if(client != null){
         client.close();
->>>>>>> refactored DaosFsClient and its native to make DAOS pool/container/init/finalize common to both FS and Object APIs
       }
     }
   }
@@ -90,15 +85,9 @@ public class DaosFsClientIT {
       client = builder.build();
       Assert.assertTrue(client != null);
       client.delete("/ddddddd/zyx", true);
-<<<<<<< HEAD
     } finally {
       if (client != null) {
-        client.disconnect();
-=======
-    }finally {
-      if(client != null){
         client.close();
->>>>>>> refactored DaosFsClient and its native to make DAOS pool/container/init/finalize common to both FS and Object APIs
       }
     }
   }
@@ -113,16 +102,9 @@ public class DaosFsClientIT {
       Assert.assertTrue(client != null);
       client.mkdir("/mkdirs/1", true);
       client.mkdir("/mkdirs/1", true);
-<<<<<<< HEAD
     } finally {
       if (client != null) {
-        client.disconnect();
-=======
-    }finally {
-      if(client != null){
         client.close();
->>>>>>> refactored DaosFsClient and its native to make DAOS pool/container/init/finalize common to both FS and Object APIs
-      }
     }
   }
 
@@ -136,15 +118,9 @@ public class DaosFsClientIT {
       Assert.assertTrue(client != null);
       client.mkdir("/mkdir/1", false);
       client.mkdir("/mkdir/1", false);
-<<<<<<< HEAD
     } finally {
       if (client != null) {
-        client.disconnect();
-=======
-    }finally {
-      if(client != null){
         client.close();
->>>>>>> refactored DaosFsClient and its native to make DAOS pool/container/init/finalize common to both FS and Object APIs
       }
     }
   }
@@ -158,15 +134,9 @@ public class DaosFsClientIT {
       String fileName = "srcFile/zb";
       client = builder.build();
       client.move(0, fileName, 0, "destFile");
-<<<<<<< HEAD
     } finally {
       if (client != null) {
-        client.disconnect();
-=======
-    }finally {
-      if(client != null){
         client.close();
->>>>>>> refactored DaosFsClient and its native to make DAOS pool/container/init/finalize common to both FS and Object APIs
       }
     }
   }
@@ -180,15 +150,9 @@ public class DaosFsClientIT {
       String fileName = "srcFile";
       client = builder.build();
       client.move(0, fileName, 0, "/destFile");
-<<<<<<< HEAD
     } finally {
       if (client != null) {
-        client.disconnect();
-=======
-    }finally {
-      if(client != null){
         client.close();
->>>>>>> refactored DaosFsClient and its native to make DAOS pool/container/init/finalize common to both FS and Object APIs
       }
     }
   }
@@ -212,79 +176,10 @@ public class DaosFsClientIT {
       client.move(srcDir.getObjId(), fileName, destDir.getObjId(), destFileName);
       Assert.assertFalse(srcFile.exists());
       Assert.assertTrue(client.getFile(destDir, destFileName).exists());
-<<<<<<< HEAD
     } finally {
-      if (client != null) {
-        client.disconnect();
-=======
-    }finally {
       if(client != null){
         client.close();
->>>>>>> refactored DaosFsClient and its native to make DAOS pool/container/init/finalize common to both FS and Object APIs
       }
     }
   }
-<<<<<<< HEAD
-
-  @Test
-  public void testFsClientReferenceOne() throws Exception {
-    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
-    builder.poolId(poolId).containerId(contId);
-    DaosFsClient client = null;
-    try {
-      client = builder.build();
-      Assert.assertEquals(1, client.getRefCnt());
-<<<<<<< HEAD
-    } finally {
-      if (client != null) {
-        client.disconnect();
-=======
-    }finally {
-      if(client != null){
-        client.close();
->>>>>>> refactored DaosFsClient and its native to make DAOS pool/container/init/finalize common to both FS and Object APIs
-        Assert.assertEquals(0, client.getRefCnt());
-      }
-    }
-    Exception ee = null;
-    try {
-      client.incrementRef();
-    } catch (Exception e) {
-      ee = e;
-    }
-    Assert.assertTrue(ee instanceof IllegalStateException);
-  }
-
-  @Test
-  public void testFsClientReferenceMore() throws Exception {
-    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
-    builder.poolId(poolId).containerId(contId);
-    DaosFsClient client = null;
-    int cnt = 0;
-    try {
-      client = builder.build();
-      cnt = client.getRefCnt();
-      builder.build();
-      Assert.assertEquals(cnt + 1, client.getRefCnt());
-      client.close();
-      client.incrementRef();
-      Assert.assertEquals(cnt + 1, client.getRefCnt());
-      client.decrementRef();
-    } catch (Exception e) {
-      e.printStackTrace();
-<<<<<<< HEAD
-    } finally {
-      if (client != null) {
-        client.disconnect();
-=======
-    }finally {
-      if(client != null){
-        client.close();
->>>>>>> refactored DaosFsClient and its native to make DAOS pool/container/init/finalize common to both FS and Object APIs
-        Assert.assertEquals(cnt - 1, client.getRefCnt());
-      }
-    }
-  }
-=======
->>>>>>> add new sharableclient
 }

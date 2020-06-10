@@ -89,6 +89,11 @@ public class DaosClient implements ForceCloseable {
     }
   }
 
+  /**
+   * trigger static initializer
+   */
+  public static void initClient() {}
+
   private DaosClient(DaosClientBuilder builder) {
     this.builder = builder;
   }
