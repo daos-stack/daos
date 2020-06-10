@@ -212,6 +212,11 @@ class DmgNetworkScanTest(TestWithServers):
                     new_dev.providers = [provider]
                     f_net_devs.append(new_dev)
 
+        # Get the provider specified in server config
+        cfg_p = self.server_managers[0].get_config_value("provider")
+        if cfg_p:
+            f_net_devs = [dev for dev in f_net_devs if dev.providers == [cfg_p]]
+
         return f_net_devs
 
     def get_dmg_info(self):
@@ -222,16 +227,43 @@ class DmgNetworkScanTest(TestWithServers):
 
         """
         host = None
+        numa = None
+        temp_net_devs = []
         dmg_net_devs = []
+
+        # Get dmg info
         scan_info = self.dmg.get_output("network_scan")
 
-        # Get devices divided
-        info = [scan_info[dev:(dev + 3)] for dev in range(0, len(scan_info), 3)]
-        for dev in info:
-            if dev[0][0] != "":
-                host = dev[0][0]
-            dev_info = NetDev(host, dev[1][2], [dev[0][2]], dev[2][2])
-            dmg_net_devs.append(dev_info)
+        # Get index range to break up information by hostname
+        r = [idx for idx, info in enumerate(scan_info) if info[0] != ""]
+        r = r[1] - r[0] if len(r) > 1 else len(scan_info)
+
+        # Clean up the output, i.e. remove empty string items from lists
+        for idx, info in enumerate(scan_info):
+            scan_info[idx] = [i for i in info if i]
+
+        # Get devices divided into dictionaries, with iface being the key
+        info = [scan_info[dev:(dev + r)] for dev in range(0, len(scan_info), r)]
+        for host_info in info:
+            parsed_devs = {}
+            host = host_info[0][0]
+            for dev_info in host_info[2:]:
+                if len(dev_info) == 1:
+                    numa = dev_info[0]
+                    continue
+                for iface in dev_info[1].replace(" ", "").split(","):
+                    if iface in parsed_devs:
+                        parsed_devs[iface][0].extend(dev_info[0].split())
+                    else:
+                        parsed_devs[iface] = [dev_info[0].split(), host, numa]
+            temp_net_devs.append(parsed_devs)
+
+        # Create NetDev objects
+        for d in temp_net_devs:
+            for iface in d:
+                net_dev = [NetDev(d[iface][1], iface, [provider], d[iface][2])
+                           for provider in d[iface][0]]
+                dmg_net_devs.extend(net_dev)
 
         return dmg_net_devs
 
