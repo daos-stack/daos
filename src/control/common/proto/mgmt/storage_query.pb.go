@@ -3,9 +3,11 @@
 
 package mgmt
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type BioHealthReq struct {
 	DevUuid              string   `protobuf:"bytes,1,opt,name=dev_uuid,json=devUuid,proto3" json:"dev_uuid,omitempty"`
@@ -30,16 +32,17 @@ func (m *BioHealthReq) Reset()         { *m = BioHealthReq{} }
 func (m *BioHealthReq) String() string { return proto.CompactTextString(m) }
 func (*BioHealthReq) ProtoMessage()    {}
 func (*BioHealthReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_54181da01dc6cf17, []int{0}
+	return fileDescriptor_d87a8d20722a9416, []int{0}
 }
+
 func (m *BioHealthReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BioHealthReq.Unmarshal(m, b)
 }
 func (m *BioHealthReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_BioHealthReq.Marshal(b, m, deterministic)
 }
-func (dst *BioHealthReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BioHealthReq.Merge(dst, src)
+func (m *BioHealthReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BioHealthReq.Merge(m, src)
 }
 func (m *BioHealthReq) XXX_Size() int {
 	return xxx_messageInfo_BioHealthReq.Size(m)
@@ -88,16 +91,17 @@ func (m *BioHealthResp) Reset()         { *m = BioHealthResp{} }
 func (m *BioHealthResp) String() string { return proto.CompactTextString(m) }
 func (*BioHealthResp) ProtoMessage()    {}
 func (*BioHealthResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_54181da01dc6cf17, []int{1}
+	return fileDescriptor_d87a8d20722a9416, []int{1}
 }
+
 func (m *BioHealthResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BioHealthResp.Unmarshal(m, b)
 }
 func (m *BioHealthResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_BioHealthResp.Marshal(b, m, deterministic)
 }
-func (dst *BioHealthResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BioHealthResp.Merge(dst, src)
+func (m *BioHealthResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BioHealthResp.Merge(m, src)
 }
 func (m *BioHealthResp) XXX_Size() int {
 	return xxx_messageInfo_BioHealthResp.Size(m)
@@ -216,16 +220,17 @@ func (m *SmdDevReq) Reset()         { *m = SmdDevReq{} }
 func (m *SmdDevReq) String() string { return proto.CompactTextString(m) }
 func (*SmdDevReq) ProtoMessage()    {}
 func (*SmdDevReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_54181da01dc6cf17, []int{2}
+	return fileDescriptor_d87a8d20722a9416, []int{2}
 }
+
 func (m *SmdDevReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdDevReq.Unmarshal(m, b)
 }
 func (m *SmdDevReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SmdDevReq.Marshal(b, m, deterministic)
 }
-func (dst *SmdDevReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SmdDevReq.Merge(dst, src)
+func (m *SmdDevReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SmdDevReq.Merge(m, src)
 }
 func (m *SmdDevReq) XXX_Size() int {
 	return xxx_messageInfo_SmdDevReq.Size(m)
@@ -248,16 +253,17 @@ func (m *SmdDevResp) Reset()         { *m = SmdDevResp{} }
 func (m *SmdDevResp) String() string { return proto.CompactTextString(m) }
 func (*SmdDevResp) ProtoMessage()    {}
 func (*SmdDevResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_54181da01dc6cf17, []int{3}
+	return fileDescriptor_d87a8d20722a9416, []int{3}
 }
+
 func (m *SmdDevResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdDevResp.Unmarshal(m, b)
 }
 func (m *SmdDevResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SmdDevResp.Marshal(b, m, deterministic)
 }
-func (dst *SmdDevResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SmdDevResp.Merge(dst, src)
+func (m *SmdDevResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SmdDevResp.Merge(m, src)
 }
 func (m *SmdDevResp) XXX_Size() int {
 	return xxx_messageInfo_SmdDevResp.Size(m)
@@ -294,16 +300,17 @@ func (m *SmdDevResp_Device) Reset()         { *m = SmdDevResp_Device{} }
 func (m *SmdDevResp_Device) String() string { return proto.CompactTextString(m) }
 func (*SmdDevResp_Device) ProtoMessage()    {}
 func (*SmdDevResp_Device) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_54181da01dc6cf17, []int{3, 0}
+	return fileDescriptor_d87a8d20722a9416, []int{3, 0}
 }
+
 func (m *SmdDevResp_Device) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdDevResp_Device.Unmarshal(m, b)
 }
 func (m *SmdDevResp_Device) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SmdDevResp_Device.Marshal(b, m, deterministic)
 }
-func (dst *SmdDevResp_Device) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SmdDevResp_Device.Merge(dst, src)
+func (m *SmdDevResp_Device) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SmdDevResp_Device.Merge(m, src)
 }
 func (m *SmdDevResp_Device) XXX_Size() int {
 	return xxx_messageInfo_SmdDevResp_Device.Size(m)
@@ -338,16 +345,17 @@ func (m *SmdPoolReq) Reset()         { *m = SmdPoolReq{} }
 func (m *SmdPoolReq) String() string { return proto.CompactTextString(m) }
 func (*SmdPoolReq) ProtoMessage()    {}
 func (*SmdPoolReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_54181da01dc6cf17, []int{4}
+	return fileDescriptor_d87a8d20722a9416, []int{4}
 }
+
 func (m *SmdPoolReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdPoolReq.Unmarshal(m, b)
 }
 func (m *SmdPoolReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SmdPoolReq.Marshal(b, m, deterministic)
 }
-func (dst *SmdPoolReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SmdPoolReq.Merge(dst, src)
+func (m *SmdPoolReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SmdPoolReq.Merge(m, src)
 }
 func (m *SmdPoolReq) XXX_Size() int {
 	return xxx_messageInfo_SmdPoolReq.Size(m)
@@ -370,16 +378,17 @@ func (m *SmdPoolResp) Reset()         { *m = SmdPoolResp{} }
 func (m *SmdPoolResp) String() string { return proto.CompactTextString(m) }
 func (*SmdPoolResp) ProtoMessage()    {}
 func (*SmdPoolResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_54181da01dc6cf17, []int{5}
+	return fileDescriptor_d87a8d20722a9416, []int{5}
 }
+
 func (m *SmdPoolResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdPoolResp.Unmarshal(m, b)
 }
 func (m *SmdPoolResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SmdPoolResp.Marshal(b, m, deterministic)
 }
-func (dst *SmdPoolResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SmdPoolResp.Merge(dst, src)
+func (m *SmdPoolResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SmdPoolResp.Merge(m, src)
 }
 func (m *SmdPoolResp) XXX_Size() int {
 	return xxx_messageInfo_SmdPoolResp.Size(m)
@@ -417,16 +426,17 @@ func (m *SmdPoolResp_Pool) Reset()         { *m = SmdPoolResp_Pool{} }
 func (m *SmdPoolResp_Pool) String() string { return proto.CompactTextString(m) }
 func (*SmdPoolResp_Pool) ProtoMessage()    {}
 func (*SmdPoolResp_Pool) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_54181da01dc6cf17, []int{5, 0}
+	return fileDescriptor_d87a8d20722a9416, []int{5, 0}
 }
+
 func (m *SmdPoolResp_Pool) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdPoolResp_Pool.Unmarshal(m, b)
 }
 func (m *SmdPoolResp_Pool) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SmdPoolResp_Pool.Marshal(b, m, deterministic)
 }
-func (dst *SmdPoolResp_Pool) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SmdPoolResp_Pool.Merge(dst, src)
+func (m *SmdPoolResp_Pool) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SmdPoolResp_Pool.Merge(m, src)
 }
 func (m *SmdPoolResp_Pool) XXX_Size() int {
 	return xxx_messageInfo_SmdPoolResp_Pool.Size(m)
@@ -469,16 +479,17 @@ func (m *DevStateReq) Reset()         { *m = DevStateReq{} }
 func (m *DevStateReq) String() string { return proto.CompactTextString(m) }
 func (*DevStateReq) ProtoMessage()    {}
 func (*DevStateReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_54181da01dc6cf17, []int{6}
+	return fileDescriptor_d87a8d20722a9416, []int{6}
 }
+
 func (m *DevStateReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DevStateReq.Unmarshal(m, b)
 }
 func (m *DevStateReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DevStateReq.Marshal(b, m, deterministic)
 }
-func (dst *DevStateReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DevStateReq.Merge(dst, src)
+func (m *DevStateReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DevStateReq.Merge(m, src)
 }
 func (m *DevStateReq) XXX_Size() int {
 	return xxx_messageInfo_DevStateReq.Size(m)
@@ -509,16 +520,17 @@ func (m *DevStateResp) Reset()         { *m = DevStateResp{} }
 func (m *DevStateResp) String() string { return proto.CompactTextString(m) }
 func (*DevStateResp) ProtoMessage()    {}
 func (*DevStateResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_54181da01dc6cf17, []int{7}
+	return fileDescriptor_d87a8d20722a9416, []int{7}
 }
+
 func (m *DevStateResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DevStateResp.Unmarshal(m, b)
 }
 func (m *DevStateResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DevStateResp.Marshal(b, m, deterministic)
 }
-func (dst *DevStateResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DevStateResp.Merge(dst, src)
+func (m *DevStateResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DevStateResp.Merge(m, src)
 }
 func (m *DevStateResp) XXX_Size() int {
 	return xxx_messageInfo_DevStateResp.Size(m)
@@ -563,9 +575,9 @@ func init() {
 	proto.RegisterType((*DevStateResp)(nil), "mgmt.DevStateResp")
 }
 
-func init() { proto.RegisterFile("storage_query.proto", fileDescriptor_storage_query_54181da01dc6cf17) }
+func init() { proto.RegisterFile("storage_query.proto", fileDescriptor_d87a8d20722a9416) }
 
-var fileDescriptor_storage_query_54181da01dc6cf17 = []byte{
+var fileDescriptor_d87a8d20722a9416 = []byte{
 	// 514 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x53, 0xdd, 0x8e, 0x93, 0x40,
 	0x14, 0x0e, 0x5b, 0xa0, 0xe5, 0x40, 0xd7, 0x38, 0xea, 0xee, 0xb8, 0x1b, 0x23, 0xe2, 0x85, 0x5c,

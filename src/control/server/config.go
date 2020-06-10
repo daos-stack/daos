@@ -485,6 +485,7 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 	seenValues := make(map[string]int)
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
+	var netDevClass int32
 
 	for idx, srv := range c.Servers {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
@@ -530,6 +531,22 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
 			}
 			seenBdevSet[dev] = idx
+		}
+
+		ndc, err := netdetect.GetDeviceClass(srv.Fabric.Interface)
+		if err != nil {
+			return err
+		}
+
+		srv.Fabric.NetDevClass = ndc
+
+		switch idx {
+		case 0:
+			netDevClass = ndc
+		default:
+			if ndc != netDevClass {
+				return FaultConfigInvalidNetDevClass(idx, netDevClass, ndc, srv.Fabric.Interface)
+			}
 		}
 	}
 

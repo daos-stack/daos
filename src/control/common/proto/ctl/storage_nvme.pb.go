@@ -3,9 +3,11 @@
 
 package ctl
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 // NvmeController represents an NVMe Controller (SSD).
 type NvmeController struct {
@@ -36,16 +38,17 @@ func (m *NvmeController) Reset()         { *m = NvmeController{} }
 func (m *NvmeController) String() string { return proto.CompactTextString(m) }
 func (*NvmeController) ProtoMessage()    {}
 func (*NvmeController) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_9cda02db0b620e0b, []int{0}
+	return fileDescriptor_b4b1a62bc89112d2, []int{0}
 }
+
 func (m *NvmeController) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController.Unmarshal(m, b)
 }
 func (m *NvmeController) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NvmeController.Marshal(b, m, deterministic)
 }
-func (dst *NvmeController) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NvmeController.Merge(dst, src)
+func (m *NvmeController) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeController.Merge(m, src)
 }
 func (m *NvmeController) XXX_Size() int {
 	return xxx_messageInfo_NvmeController.Size(m)
@@ -119,16 +122,17 @@ func (m *NvmeController_Namespace) Reset()         { *m = NvmeController_Namespa
 func (m *NvmeController_Namespace) String() string { return proto.CompactTextString(m) }
 func (*NvmeController_Namespace) ProtoMessage()    {}
 func (*NvmeController_Namespace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_9cda02db0b620e0b, []int{0, 0}
+	return fileDescriptor_b4b1a62bc89112d2, []int{0, 0}
 }
+
 func (m *NvmeController_Namespace) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController_Namespace.Unmarshal(m, b)
 }
 func (m *NvmeController_Namespace) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NvmeController_Namespace.Marshal(b, m, deterministic)
 }
-func (dst *NvmeController_Namespace) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NvmeController_Namespace.Merge(dst, src)
+func (m *NvmeController_Namespace) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeController_Namespace.Merge(m, src)
 }
 func (m *NvmeController_Namespace) XXX_Size() int {
 	return xxx_messageInfo_NvmeController_Namespace.Size(m)
@@ -186,16 +190,17 @@ func (m *NvmeController_Health) Reset()         { *m = NvmeController_Health{} }
 func (m *NvmeController_Health) String() string { return proto.CompactTextString(m) }
 func (*NvmeController_Health) ProtoMessage()    {}
 func (*NvmeController_Health) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_9cda02db0b620e0b, []int{0, 1}
+	return fileDescriptor_b4b1a62bc89112d2, []int{0, 1}
 }
+
 func (m *NvmeController_Health) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController_Health.Unmarshal(m, b)
 }
 func (m *NvmeController_Health) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NvmeController_Health.Marshal(b, m, deterministic)
 }
-func (dst *NvmeController_Health) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NvmeController_Health.Merge(dst, src)
+func (m *NvmeController_Health) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeController_Health.Merge(m, src)
 }
 func (m *NvmeController_Health) XXX_Size() int {
 	return xxx_messageInfo_NvmeController_Health.Size(m)
@@ -324,16 +329,17 @@ func (m *NvmeControllerResult) Reset()         { *m = NvmeControllerResult{} }
 func (m *NvmeControllerResult) String() string { return proto.CompactTextString(m) }
 func (*NvmeControllerResult) ProtoMessage()    {}
 func (*NvmeControllerResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_9cda02db0b620e0b, []int{1}
+	return fileDescriptor_b4b1a62bc89112d2, []int{1}
 }
+
 func (m *NvmeControllerResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeControllerResult.Unmarshal(m, b)
 }
 func (m *NvmeControllerResult) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NvmeControllerResult.Marshal(b, m, deterministic)
 }
-func (dst *NvmeControllerResult) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NvmeControllerResult.Merge(dst, src)
+func (m *NvmeControllerResult) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeControllerResult.Merge(m, src)
 }
 func (m *NvmeControllerResult) XXX_Size() int {
 	return xxx_messageInfo_NvmeControllerResult.Size(m)
@@ -372,16 +378,17 @@ func (m *PrepareNvmeReq) Reset()         { *m = PrepareNvmeReq{} }
 func (m *PrepareNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*PrepareNvmeReq) ProtoMessage()    {}
 func (*PrepareNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_9cda02db0b620e0b, []int{2}
+	return fileDescriptor_b4b1a62bc89112d2, []int{2}
 }
+
 func (m *PrepareNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareNvmeReq.Unmarshal(m, b)
 }
 func (m *PrepareNvmeReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PrepareNvmeReq.Marshal(b, m, deterministic)
 }
-func (dst *PrepareNvmeReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PrepareNvmeReq.Merge(dst, src)
+func (m *PrepareNvmeReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PrepareNvmeReq.Merge(m, src)
 }
 func (m *PrepareNvmeReq) XXX_Size() int {
 	return xxx_messageInfo_PrepareNvmeReq.Size(m)
@@ -431,16 +438,17 @@ func (m *PrepareNvmeResp) Reset()         { *m = PrepareNvmeResp{} }
 func (m *PrepareNvmeResp) String() string { return proto.CompactTextString(m) }
 func (*PrepareNvmeResp) ProtoMessage()    {}
 func (*PrepareNvmeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_9cda02db0b620e0b, []int{3}
+	return fileDescriptor_b4b1a62bc89112d2, []int{3}
 }
+
 func (m *PrepareNvmeResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareNvmeResp.Unmarshal(m, b)
 }
 func (m *PrepareNvmeResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PrepareNvmeResp.Marshal(b, m, deterministic)
 }
-func (dst *PrepareNvmeResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PrepareNvmeResp.Merge(dst, src)
+func (m *PrepareNvmeResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PrepareNvmeResp.Merge(m, src)
 }
 func (m *PrepareNvmeResp) XXX_Size() int {
 	return xxx_messageInfo_PrepareNvmeResp.Size(m)
@@ -468,16 +476,17 @@ func (m *ScanNvmeReq) Reset()         { *m = ScanNvmeReq{} }
 func (m *ScanNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*ScanNvmeReq) ProtoMessage()    {}
 func (*ScanNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_9cda02db0b620e0b, []int{4}
+	return fileDescriptor_b4b1a62bc89112d2, []int{4}
 }
+
 func (m *ScanNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanNvmeReq.Unmarshal(m, b)
 }
 func (m *ScanNvmeReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScanNvmeReq.Marshal(b, m, deterministic)
 }
-func (dst *ScanNvmeReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScanNvmeReq.Merge(dst, src)
+func (m *ScanNvmeReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScanNvmeReq.Merge(m, src)
 }
 func (m *ScanNvmeReq) XXX_Size() int {
 	return xxx_messageInfo_ScanNvmeReq.Size(m)
@@ -500,16 +509,17 @@ func (m *ScanNvmeResp) Reset()         { *m = ScanNvmeResp{} }
 func (m *ScanNvmeResp) String() string { return proto.CompactTextString(m) }
 func (*ScanNvmeResp) ProtoMessage()    {}
 func (*ScanNvmeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_9cda02db0b620e0b, []int{5}
+	return fileDescriptor_b4b1a62bc89112d2, []int{5}
 }
+
 func (m *ScanNvmeResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanNvmeResp.Unmarshal(m, b)
 }
 func (m *ScanNvmeResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScanNvmeResp.Marshal(b, m, deterministic)
 }
-func (dst *ScanNvmeResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScanNvmeResp.Merge(dst, src)
+func (m *ScanNvmeResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScanNvmeResp.Merge(m, src)
 }
 func (m *ScanNvmeResp) XXX_Size() int {
 	return xxx_messageInfo_ScanNvmeResp.Size(m)
@@ -544,16 +554,17 @@ func (m *FormatNvmeReq) Reset()         { *m = FormatNvmeReq{} }
 func (m *FormatNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*FormatNvmeReq) ProtoMessage()    {}
 func (*FormatNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_9cda02db0b620e0b, []int{6}
+	return fileDescriptor_b4b1a62bc89112d2, []int{6}
 }
+
 func (m *FormatNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FormatNvmeReq.Unmarshal(m, b)
 }
 func (m *FormatNvmeReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_FormatNvmeReq.Marshal(b, m, deterministic)
 }
-func (dst *FormatNvmeReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FormatNvmeReq.Merge(dst, src)
+func (m *FormatNvmeReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FormatNvmeReq.Merge(m, src)
 }
 func (m *FormatNvmeReq) XXX_Size() int {
 	return xxx_messageInfo_FormatNvmeReq.Size(m)
@@ -576,9 +587,9 @@ func init() {
 	proto.RegisterType((*FormatNvmeReq)(nil), "ctl.FormatNvmeReq")
 }
 
-func init() { proto.RegisterFile("storage_nvme.proto", fileDescriptor_storage_nvme_9cda02db0b620e0b) }
+func init() { proto.RegisterFile("storage_nvme.proto", fileDescriptor_b4b1a62bc89112d2) }
 
-var fileDescriptor_storage_nvme_9cda02db0b620e0b = []byte{
+var fileDescriptor_b4b1a62bc89112d2 = []byte{
 	// 627 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0xcd, 0x6a, 0x1b, 0x3d,
 	0x14, 0x65, 0xe2, 0x9f, 0x38, 0x77, 0xfc, 0x03, 0xfa, 0xc2, 0xc7, 0x60, 0x68, 0x31, 0x5e, 0x94,

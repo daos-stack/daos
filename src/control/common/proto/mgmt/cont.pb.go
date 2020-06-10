@@ -3,9 +3,11 @@
 
 package mgmt
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 // ContSetOwnerReq supplies new pool parameters.
 type ContSetOwnerReq struct {
@@ -33,16 +35,17 @@ func (m *ContSetOwnerReq) Reset()         { *m = ContSetOwnerReq{} }
 func (m *ContSetOwnerReq) String() string { return proto.CompactTextString(m) }
 func (*ContSetOwnerReq) ProtoMessage()    {}
 func (*ContSetOwnerReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cont_8720bc3023f26b1e, []int{0}
+	return fileDescriptor_7e578f20ac30c5ed, []int{0}
 }
+
 func (m *ContSetOwnerReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ContSetOwnerReq.Unmarshal(m, b)
 }
 func (m *ContSetOwnerReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ContSetOwnerReq.Marshal(b, m, deterministic)
 }
-func (dst *ContSetOwnerReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ContSetOwnerReq.Merge(dst, src)
+func (m *ContSetOwnerReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ContSetOwnerReq.Merge(m, src)
 }
 func (m *ContSetOwnerReq) XXX_Size() int {
 	return xxx_messageInfo_ContSetOwnerReq.Size(m)
@@ -93,16 +96,17 @@ func (m *ContSetOwnerResp) Reset()         { *m = ContSetOwnerResp{} }
 func (m *ContSetOwnerResp) String() string { return proto.CompactTextString(m) }
 func (*ContSetOwnerResp) ProtoMessage()    {}
 func (*ContSetOwnerResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cont_8720bc3023f26b1e, []int{1}
+	return fileDescriptor_7e578f20ac30c5ed, []int{1}
 }
+
 func (m *ContSetOwnerResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ContSetOwnerResp.Unmarshal(m, b)
 }
 func (m *ContSetOwnerResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ContSetOwnerResp.Marshal(b, m, deterministic)
 }
-func (dst *ContSetOwnerResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ContSetOwnerResp.Merge(dst, src)
+func (m *ContSetOwnerResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ContSetOwnerResp.Merge(m, src)
 }
 func (m *ContSetOwnerResp) XXX_Size() int {
 	return xxx_messageInfo_ContSetOwnerResp.Size(m)
@@ -125,9 +129,9 @@ func init() {
 	proto.RegisterType((*ContSetOwnerResp)(nil), "mgmt.ContSetOwnerResp")
 }
 
-func init() { proto.RegisterFile("cont.proto", fileDescriptor_cont_8720bc3023f26b1e) }
+func init() { proto.RegisterFile("cont.proto", fileDescriptor_7e578f20ac30c5ed) }
 
-var fileDescriptor_cont_8720bc3023f26b1e = []byte{
+var fileDescriptor_7e578f20ac30c5ed = []byte{
 	// 156 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4a, 0xce, 0xcf, 0x2b,
 	0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xc9, 0x4d, 0xcf, 0x2d, 0x51, 0x6a, 0x67, 0xe4,

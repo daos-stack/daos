@@ -173,6 +173,15 @@ func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
+func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass int32, iface string) *fault.Fault {
+	return serverFault(
+		code.ServerConfigInvalidNetDevClass,
+		fmt.Sprintf("IO server %d specifies fabric_iface '%s' which has a different device class '%s' than the primary server's device class '%s'",
+		curIdx, iface, code.NetClassName(thisDevClass), code.NetClassName(primaryDevClass)),
+		"ensure that each IO server specifies a fabric_iface with a matching device class and restart",
+	)
+}
+
 func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
 	return serverFault(code,
 		fmt.Sprintf("the %s value in IO server %d is a duplicate of server %d", name, curIdx, seenIdx),

@@ -797,7 +797,7 @@ func mercuryToLibFabric(provider string) (string, error) {
 		return "gni", nil
 	default:
 	}
-	return "", errors.Errorf("fabric provider: %s not known by libfabric.  Use 'daos_server network scan -p all' to view supported providers", provider)
+	return "", errors.Errorf("unknown fabric provider %q", provider)
 }
 
 // convertMercuryToLibFabric converts a Mercury provider string containing one or more providers
@@ -814,7 +814,7 @@ func convertMercuryToLibFabric(provider string) (string, error) {
 	for _, subProvider := range tmp {
 		libFabricProvider, err := mercuryToLibFabric(subProvider)
 		if err != nil {
-			return "", errors.Errorf("fabric provider: '%s' is not known by libfabric.  Use 'daos_server network scan -p all' to view supported providers", subProvider)
+			return "", errors.Errorf("unknown fabric provider %q", subProvider)
 		}
 		libFabricProviderList += libFabricProvider + ";"
 	}
@@ -839,7 +839,7 @@ func libFabricToMercury(provider string) (string, error) {
 	default:
 	}
 
-	return "", errors.Errorf("fabric provider: %s not known by Mercury", provider)
+	return "", errors.Errorf("unknown fabric provider %q", provider)
 }
 
 // convertLibFabricToMercury converts a libfabric provider string containing one or more providers
@@ -1059,19 +1059,17 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 		return err
 	}
 	if deviceAffinity.NUMANode != numaNode {
-		return errors.Errorf("The NUMA node for device %s does not match the provided value %d. "+
-			"Remove the pinned_numa_node value from daos_server.yml then execute 'daos_server network scan' "+
-			"to see the valid NUMA node associated with the network device", device, numaNode)
+		return errors.Errorf("The NUMA node for device %s does not match the provided value %d.", device, numaNode)
 	}
 	log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
 	return nil
 }
 
-func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan, excludeMap map[string]struct{}) (map[string]struct{}, []FabricScan, error) {
+func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan, excludeMap map[string]struct{}) (FabricScan, error) {
 	log.Debugf("Device scan target device name: %s", deviceScanCfg.targetDevice)
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 	if err != nil {
-		return resultsMap, ScanResults, err
+		return FabricScan{}, err
 	}
 
 	if deviceScanCfg.targetDevice != deviceAffinity.DeviceName {
@@ -1085,13 +1083,13 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 		// In this case, we want to omit this libfabric record from our results because it has no
 		// mercury equivalent provider.  There are many providers in libfabric that have no mercury
 		// equivalent, and we want to filter those out right here.
-		return resultsMap, ScanResults, err
+		return FabricScan{}, err
 	}
 	log.Debugf("Mercury provider list: %v", mercuryProviderList)
 
 	devClass, err := GetDeviceClass(deviceAffinity.DeviceName)
 	if err != nil {
-		return resultsMap, ScanResults, err
+		return FabricScan{}, err
 	}
 
 	scanResults := FabricScan{
@@ -1103,20 +1101,18 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 	}
 
 	if _, skip := excludeMap[scanResults.DeviceName]; skip {
-		return resultsMap, ScanResults, nil
+		return FabricScan{}, errors.New("excluded device entry")
 	}
 
 	results := scanResults.String()
 
-	if _, found := resultsMap[results]; !found {
-		resultsMap[results] = struct{}{}
-		log.Debugf("\n%s", results)
-		ScanResults = append(ScanResults, scanResults)
-		devCount++
-	} else {
-		log.Debugf("Duplicate fabric scan record: \n%s", results)
+	if _, found := resultsMap[results]; found {
+		return FabricScan{}, errors.New("duplicate entry")
 	}
-	return resultsMap, ScanResults, nil
+
+	resultsMap[results] = struct{}{}
+	log.Debugf("\n%s", results)
+	return scanResults, nil
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
@@ -1203,10 +1199,11 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 				case allHFIUsed:
 					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
 						deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
-						resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
+						scanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
 						if err != nil {
 							continue
 						}
+						ScanResults = append(ScanResults, scanResults)
 						devCount++
 					}
 					continue
@@ -1221,10 +1218,11 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 			}
 		}
 
-		resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
+		scanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
 		if err != nil {
 			continue
 		}
+		ScanResults = append(ScanResults, scanResults)
 		devCount++
 	}
 
@@ -1243,11 +1241,6 @@ func GetDeviceClass(netdev string) (int32, error) {
 		return 0, err
 	}
 
-	// minimally one byte of data and one newline character.
-	if len(devClass) < 2 {
-		return 0, errors.Errorf("/sys/class/net/%s/type has an unexpected format: %+v", netdev, devClass)
-	}
-
-	res, err := strconv.Atoi(string(devClass[:len(devClass)-1]))
+	res, err := strconv.Atoi(strings.TrimSpace(string(devClass)))
 	return int32(res), err
 }

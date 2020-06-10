@@ -3,9 +3,11 @@
 
 package ctl
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type ResponseStatus int32
 
@@ -43,6 +45,7 @@ var ResponseStatus_name = map[int32]string{
 	-5: "CTL_ERR_UNKNOWN",
 	-6: "CTL_NO_IMPL",
 }
+
 var ResponseStatus_value = map[string]int32{
 	"CTL_SUCCESS":     0,
 	"CTL_IN_PROGRESS": 1,
@@ -58,8 +61,9 @@ var ResponseStatus_value = map[string]int32{
 func (x ResponseStatus) String() string {
 	return proto.EnumName(ResponseStatus_name, int32(x))
 }
+
 func (ResponseStatus) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_common_978731409843d145, []int{0}
+	return fileDescriptor_555bd8c177793206, []int{0}
 }
 
 type EmptyReq struct {
@@ -72,16 +76,17 @@ func (m *EmptyReq) Reset()         { *m = EmptyReq{} }
 func (m *EmptyReq) String() string { return proto.CompactTextString(m) }
 func (*EmptyReq) ProtoMessage()    {}
 func (*EmptyReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_978731409843d145, []int{0}
+	return fileDescriptor_555bd8c177793206, []int{0}
 }
+
 func (m *EmptyReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EmptyReq.Unmarshal(m, b)
 }
 func (m *EmptyReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_EmptyReq.Marshal(b, m, deterministic)
 }
-func (dst *EmptyReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_EmptyReq.Merge(dst, src)
+func (m *EmptyReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_EmptyReq.Merge(m, src)
 }
 func (m *EmptyReq) XXX_Size() int {
 	return xxx_messageInfo_EmptyReq.Size(m)
@@ -103,16 +108,17 @@ func (m *FilePath) Reset()         { *m = FilePath{} }
 func (m *FilePath) String() string { return proto.CompactTextString(m) }
 func (*FilePath) ProtoMessage()    {}
 func (*FilePath) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_978731409843d145, []int{1}
+	return fileDescriptor_555bd8c177793206, []int{1}
 }
+
 func (m *FilePath) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FilePath.Unmarshal(m, b)
 }
 func (m *FilePath) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_FilePath.Marshal(b, m, deterministic)
 }
-func (dst *FilePath) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FilePath.Merge(dst, src)
+func (m *FilePath) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FilePath.Merge(m, src)
 }
 func (m *FilePath) XXX_Size() int {
 	return xxx_messageInfo_FilePath.Size(m)
@@ -143,16 +149,17 @@ func (m *ResponseState) Reset()         { *m = ResponseState{} }
 func (m *ResponseState) String() string { return proto.CompactTextString(m) }
 func (*ResponseState) ProtoMessage()    {}
 func (*ResponseState) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_978731409843d145, []int{2}
+	return fileDescriptor_555bd8c177793206, []int{2}
 }
+
 func (m *ResponseState) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResponseState.Unmarshal(m, b)
 }
 func (m *ResponseState) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ResponseState.Marshal(b, m, deterministic)
 }
-func (dst *ResponseState) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ResponseState.Merge(dst, src)
+func (m *ResponseState) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ResponseState.Merge(m, src)
 }
 func (m *ResponseState) XXX_Size() int {
 	return xxx_messageInfo_ResponseState.Size(m)
@@ -185,15 +192,15 @@ func (m *ResponseState) GetInfo() string {
 }
 
 func init() {
+	proto.RegisterEnum("ctl.ResponseStatus", ResponseStatus_name, ResponseStatus_value)
 	proto.RegisterType((*EmptyReq)(nil), "ctl.EmptyReq")
 	proto.RegisterType((*FilePath)(nil), "ctl.FilePath")
 	proto.RegisterType((*ResponseState)(nil), "ctl.ResponseState")
-	proto.RegisterEnum("ctl.ResponseStatus", ResponseStatus_name, ResponseStatus_value)
 }
 
-func init() { proto.RegisterFile("common.proto", fileDescriptor_common_978731409843d145) }
+func init() { proto.RegisterFile("common.proto", fileDescriptor_555bd8c177793206) }
 
-var fileDescriptor_common_978731409843d145 = []byte{
+var fileDescriptor_555bd8c177793206 = []byte{
 	// 285 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x91, 0x5f, 0x4b, 0xc3, 0x30,
 	0x14, 0xc5, 0xed, 0xa6, 0x63, 0x5e, 0xe7, 0x16, 0x32, 0x1f, 0x2a, 0x88, 0xc8, 0x9e, 0x44, 0xa1,
