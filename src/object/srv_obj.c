@@ -59,19 +59,6 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
 		    struct daos_csummer *csummer);
 
-static bool
-obj_rpc_is_update(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE;
-}
-
-static bool
-obj_rpc_is_fetch(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
-}
-
 /* For single RDG based DTX, parse DTX participants information
  * from the client given dispatch targets information that does
  * NOT contains the original leader information.
