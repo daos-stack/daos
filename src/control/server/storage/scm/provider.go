@@ -262,10 +262,18 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	// callback so that the user has some visibility into long-running
 	// format operations (very large devices).
 	args := []string{
+		"-D", // use direct i/o to avoid polluting page cache
+		"-L", "daos", // use DAOS label
 		"-m", "0", // don't reserve blocks for super-user
-		"-E", "lazy_itable_init=0,lazy_journal_init=0", // disable lazy initialization (hurts perf)
-		"-O", "bigalloc", // bigalloc with 1M cluster size (reduce ext4 metadata overhead)
-		"-C", "1M",
+		"-b", "4096", // use large block size
+		// disable lazy initialization (hurts perf) and discard
+		"-E", "lazy_itable_init=0,lazy_journal_init=0,nodiscard",
+		// enable bigalloc to reduce metadata overhead
+		// enable flex_bg to allow larger contiguous space
+		// disable uninit_bg to initialize everything upfront
+		"-O", "bigalloc,flex_bg,^uninit_bg",
+		"-C", "16M",     // use 32M bigalloc cluster size
+		"-i", "16777216", // don't need that many inodes
 		device, // device always comes last
 	}
 	if force {
