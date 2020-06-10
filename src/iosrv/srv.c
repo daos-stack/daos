@@ -402,6 +402,55 @@ wait_all_exited(struct dss_xstream *dx)
 	D_DEBUG(DB_TRACE, "XS(%d) drained ULTs.\n", dx->dx_xs_id);
 }
 
+/** data structure passed to progress thread when leveraging hyperthread */
+struct dss_progress_info {
+	struct dss_xstream	*dx;
+	struct dss_module_info	*dmi;
+	bool			 should_stop;
+};
+
+/** handler of the progress thread when using SMT */
+static void *
+dss_progress_handler(void *arg)
+{
+	struct dss_progress_info	*info = (struct dss_progress_info *)arg;
+	int				 rc;
+
+	/**
+	 * Set cpu affinity
+	 */
+	rc = hwloc_set_cpubind(dss_topo, info->dx->dx_cpuset_net,
+			       HWLOC_CPUBIND_THREAD);
+	if (rc)
+		D_ERROR("failed to set cpu net affinity: %d\n", errno);
+
+	/**
+	 * Set memory affinity, but fail silently if it does not work since some
+	 * systems return ENOSYS.
+	 */
+	rc = hwloc_set_membind(dss_topo, info->dx->dx_cpuset_net,
+			       HWLOC_MEMBIND_BIND, HWLOC_MEMBIND_THREAD);
+	if (rc)
+		D_DEBUG(DB_TRACE, "failed to set memory net affinity: %d\n",
+			errno);
+
+	while (!info->should_stop) {
+		/**
+		 * could eventually afford to pass a non-null timeout here
+		 * since the thread is dedicated to progress
+		 */
+		rc = crt_progress(info->dmi->dmi_ctx, 0);
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
+			D_ERROR("failed to progress CART context: %d\n", rc);
+			/* XXX Sometimes the failure might be just
+			 * temporary, Let's keep progressing for now.
+			 */
+		}
+	}
+
+	return NULL;
+}
+
 /*
  * The server handler ULT first sets CPU affinity, initialize the per-xstream
  * TLS, CRT(comm) context, NVMe context, creates the long-run ULTs (GC & NVMe
@@ -416,6 +465,8 @@ dss_srv_handler(void *arg)
 	struct dss_module_info		*dmi;
 	int				 rc;
 	bool				 signal_caller = true;
+	struct dss_progress_info	 pinfo;
+	pthread_t			 thread;
 
 	/**
 	 * Set cpu affinity
@@ -539,6 +590,23 @@ dss_srv_handler(void *arg)
 	}
 
 	dmi->dmi_xstream = dx;
+
+	if (dx->dx_comm && dx->dx_cpuset_net) {
+		/**
+		 * Start network progress on 2nd hyperthread
+		 */
+		pinfo.dx	   = dx;
+		pinfo.dmi	   = dmi;
+		pinfo.should_stop  = false;
+		rc = pthread_create(&thread, NULL, dss_progress_handler,
+				    &pinfo);
+		if (rc != 0) {
+			rc = daos_errno2der(errno);
+			D_ERROR("failed to progress thread: %d\n", rc);
+			dx->dx_cpuset_net = NULL;
+		}
+	}
+
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creator */
 	D_ASSERT(!xstream_data.xd_ult_signal);
@@ -556,7 +624,7 @@ dss_srv_handler(void *arg)
 	signal_caller = false;
 	/* main service progress loop */
 	for (;;) {
-		if (dx->dx_comm) {
+		if (dx->dx_comm && dx->dx_cpuset_net == NULL) {
 			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("failed to progress CART context: %d\n",
@@ -566,6 +634,10 @@ dss_srv_handler(void *arg)
 				 */
 			}
 		}
+		/**
+		 * when using hyperthreading, should find a way to sleep here
+		 * waiting for incoming ULTs instead of busy looping
+		 */
 
 		check_sleep_list();
 
@@ -577,6 +649,17 @@ dss_srv_handler(void *arg)
 	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
 
 	wait_all_exited(dx);
+
+	if (dx->dx_comm && dx->dx_cpuset_net) {
+		pinfo.should_stop = true;
+		for (;;) {
+			rc = pthread_tryjoin_np(thread, NULL);
+			if (rc == 0)
+				break;
+			ABT_thread_yield();
+		}
+	}
+
 	if (dmi->dmi_dp) {
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
@@ -664,10 +747,30 @@ static int
 dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 {
 	struct dss_xstream	*dx;
+	hwloc_obj_t		pu;
 	ABT_thread_attr		attr = ABT_THREAD_ATTR_NULL;
 	int			rc = 0;
 	bool			comm; /* true to create cart ctx for RPC */
 	int			xs_offset = 0;
+
+	/** Retrieve first processing unit (i.e. hyperthread) */
+	pu = hwloc_get_obj_inside_cpuset_by_type(dss_topo, cpus, HWLOC_OBJ_PU,
+						 0);
+	if (pu == NULL) {
+		D_ERROR("No hyperthread found!\n");
+	} else {
+		hwloc_cpuset_t puset;
+
+		/** overwrite cpuset to bind xstream to the first hyperthread */
+		puset = pu->cpuset;
+		/** check whether a second hyperthread is available (SMT on) */
+		pu = hwloc_get_obj_inside_cpuset_by_type(dss_topo, cpus,
+							 HWLOC_OBJ_PU, 1);
+		if (pu == NULL)
+			D_ERROR("SMT is disabled\n");
+
+		cpus = puset;
+	}
 
 	/** allocate & init xstream configuration data */
 	dx = dss_xstream_alloc(cpus);
@@ -696,6 +799,12 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
+	if (comm && pu != NULL) {
+		/** offload cart progress to second hyperthread */
+		dx->dx_cpuset_net = hwloc_bitmap_dup(pu->cpuset);
+	} else {
+		dx->dx_cpuset_net = NULL;
+	}
 	if (dss_helper_pool) {
 		dx->dx_main_xs	= xs_id >= dss_sys_xs_nr &&
 				  xs_id < (dss_sys_xs_nr + dss_tgt_nr);
@@ -775,9 +884,9 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	ABT_thread_attr_free(&attr);
 
 	D_DEBUG(DB_TRACE, "created xstream name(%s)xs_id(%d)/tgt_id(%d)/"
-		"ctx_id(%d)/comm(%d)/is_main_xs(%d).\n",
+		"ctx_id(%d)/comm(%d)/is_main_xs(%d)/smt(%d).\n",
 		dx->dx_name, dx->dx_xs_id, dx->dx_tgt_id, dx->dx_ctx_id,
-		dx->dx_comm, dx->dx_main_xs);
+		dx->dx_comm, dx->dx_main_xs, dx->dx_cpuset_net ? 1 : 0);
 
 	return 0;
 out_xstream:

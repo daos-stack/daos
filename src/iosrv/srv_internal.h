@@ -51,6 +51,7 @@ struct dss_xstream {
 	char			dx_name[DSS_XS_NAME_LEN];
 	ABT_future		dx_shutdown;
 	hwloc_cpuset_t		dx_cpuset;
+	hwloc_cpuset_t		dx_cpuset_net;
 	ABT_xstream		dx_xstream;
 	ABT_pool		dx_pools[DSS_POOL_CNT];
 	ABT_sched		dx_sched;
@@ -66,9 +67,10 @@ struct dss_xstream {
 	int			dx_tgt_id;
 	/* CART context id, invalid (-1) for the offload XS w/o CART context */
 	int			dx_ctx_id;
-	bool			dx_main_xs;	/* true for main XS */
-	bool			dx_comm;	/* true with cart context */
-	bool			dx_dsc_started;	/* DSC progress ULT started */
+	/** vairous flags */
+	uint32_t		dx_main_xs:1,	 /* true for main XS */
+				dx_comm:1,	 /* true with cart context */
+				dx_dsc_started:1;/* DSC progress ULT started */
 };
 
 /** Server node topology */
