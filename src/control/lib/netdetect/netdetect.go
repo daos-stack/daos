@@ -39,23 +39,29 @@ package netdetect
 #include <rdma/fi_errno.h>
 
 #if HWLOC_API_VERSION >= 0x00020000
-int cmpt_setFlags(hwloc_topology_t topology) {
+
+int cmpt_setFlags(hwloc_topology_t topology)
+{
 	return hwloc_topology_set_all_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_ALL);
 }
 
-hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx) {
+hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx)
+{
 	return hwloc_get_obj_by_depth(topology, depth, idx);
 }
 
-uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth) {
+uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth)
+{
 	return (uint)hwloc_get_nbobjs_by_depth(topology, depth);
 }
 
-int cmpt_get_parent_arity(hwloc_obj_t node) {
+int cmpt_get_parent_arity(hwloc_obj_t node)
+{
 	return node->parent->io_arity;
 }
 
-hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx) {
+hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
+{
 	hwloc_obj_t child;
 	int i;
 
@@ -65,29 +71,31 @@ hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx) {
 	}
 	return child;
 }
-
 #else
-
-int cmpt_setFlags(hwloc_topology_t topology) {
+int cmpt_setFlags(hwloc_topology_t topology)
+{
 	return hwloc_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
 }
 
-hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx) {
+hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx)
+{
 	return hwloc_get_obj_by_depth(topology, (uint)depth, idx);
 }
 
-uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth) {
+uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth)
+{
 	return (uint)hwloc_get_nbobjs_by_depth(topology, (uint)depth);
 }
 
-int cmpt_get_parent_arity(hwloc_obj_t node) {
+int cmpt_get_parent_arity(hwloc_obj_t node)
+{
 	return node->parent->arity;
 }
 
-hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx) {
+hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
+{
 	return node->parent->children[idx];
 }
-
 #endif
 
 #define getHFIUnitError -2
@@ -1056,7 +1064,7 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	return nil
 }
 
-func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan) (map[string]struct{}, []FabricScan, error) {
+func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan, excludeMap map[string]struct{}) (map[string]struct{}, []FabricScan, error) {
 	log.Debugf("Device scan target device name: %s", deviceScanCfg.targetDevice)
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 	if err != nil {
@@ -1085,6 +1093,10 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 		Priority:   devCount,
 	}
 
+	if _, skip := excludeMap[scanResults.DeviceName]; skip {
+		return resultsMap, ScanResults, nil
+	}
+
 	results := scanResults.String()
 
 	if _, found := resultsMap[results]; !found {
@@ -1099,7 +1111,7 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
-func ScanFabric(provider string) ([]FabricScan, error) {
+func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 	var ScanResults []FabricScan
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
@@ -1145,6 +1157,11 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 	hfiDeviceCount := getHFIDeviceCount(deviceScanCfg.hwlocDeviceNames)
 	log.Debugf("There are %d hfi1 devices in the system", hfiDeviceCount)
 
+	excludeMap := make(map[string]struct{})
+	for _, iface := range excludes {
+		excludeMap[iface] = struct{}{}
+	}
+
 	for ; fi != nil; fi = fi.next {
 		if fi.domain_attr == nil || fi.domain_attr.name == nil || fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
 			continue
@@ -1177,7 +1194,7 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 				case allHFIUsed:
 					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
 						deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
-						resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults)
+						resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
 						if err != nil {
 							continue
 						}
@@ -1195,7 +1212,7 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 			}
 		}
 
-		resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults)
+		resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
 		if err != nil {
 			continue
 		}
