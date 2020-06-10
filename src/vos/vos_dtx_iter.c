@@ -141,8 +141,9 @@ dtx_iter_next(struct vos_iterator *iter)
 		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
 		dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
 
-		/* Skip committable ones. */
-		if (!dae->dae_committable)
+		/* Skip committable, committed, or aborted ones. */
+		if (!dae->dae_committable && !dae->dae_committed &&
+		    !dae->dae_aborted)
 			break;
 	}
 

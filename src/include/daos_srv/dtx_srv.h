@@ -64,8 +64,6 @@ struct dtx_handle {
 					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
-					 /* dti_cos has been committed. */
-					 dth_dti_cos_done:1,
 					 /* Modified shared items: object/key */
 					 dth_modify_shared:1,
 					 /* The DTX entry is in active table. */

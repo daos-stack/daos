@@ -1514,6 +1514,7 @@ update_cancel(struct vos_io_context *ioc)
 
 		for (i = 0; i < ioc->ic_umoffs_cnt; i++) {
 			if (!UMOFF_IS_NULL(ioc->ic_umoffs[i]))
+				/* Ignore umem_free failure. */
 				umem_free(umem, ioc->ic_umoffs[i]);
 		}
 	}
@@ -1583,6 +1584,7 @@ int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       struct dtx_handle *dth)
 {
+	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	struct vos_ts_entry	*entry;
@@ -1611,6 +1613,20 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto out;
 
 	vos_dth_set(dth);
+
+	/* Commit the CoS DTXs via the IO PMDK transaction. */
+	if (dth != NULL && dth->dth_dti_cos_count > 0) {
+		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
+		if (daes == NULL)
+			D_GOTO(abort, err = -DER_NOMEM);
+
+		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
+					      dth->dth_dti_cos_count,
+					      0, NULL, daes);
+		if (err <= 0)
+			D_FREE(daes);
+	}
+
 	err = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, ioc->ic_oid,
 			  &ioc->ic_epr, false, DAOS_INTENT_UPDATE, true,
 			  &ioc->ic_obj, ioc->ic_ts_set);
@@ -1620,14 +1636,6 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	/** Check object timestamp */
 	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
 		ioc->ic_read_conflict = true;
-
-	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
-	    dth->dth_dti_cos_done == 0) {
-		vos_dtx_commit_internal(ioc->ic_obj->obj_cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count, 0, NULL);
-		dth->dth_dti_cos_done = 1;
-	}
 
 	/* Publish SCM reservations */
 	err = vos_publish_scm(ioc->ic_cont, &ioc->ic_rsrvd_scm, true);
@@ -1665,7 +1673,12 @@ out:
 	if (err != 0) {
 		vos_dtx_cleanup_dth(dth);
 		update_cancel(ioc);
+	} else if (daes != NULL) {
+		vos_dtx_post_handle(ioc->ic_cont, daes,
+				    dth->dth_dti_cos_count, false);
 	}
+
+	D_FREE(daes);
 
 	update_ts_on_update(ioc, err);
 

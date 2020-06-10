@@ -226,6 +226,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
+	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_ts_entry	*entry;
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
@@ -257,11 +258,16 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto reset;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
-	    dth->dth_dti_cos_done == 0) {
-		vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count, 0, NULL);
-		dth->dth_dti_cos_done = 1;
+	if (dth != NULL && dth->dth_dti_cos_count > 0) {
+		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
+		if (daes == NULL)
+			D_GOTO(reset, rc = -DER_NOMEM);
+
+		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
+					     dth->dth_dti_cos_count,
+					     0, NULL, daes);
+		if (rc <= 0)
+			D_FREE(daes);
 	}
 
 	/* NB: punch always generate a new incarnation of the object */
@@ -294,7 +300,12 @@ reset:
 		vos_dtx_cleanup_dth(dth);
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
+	} else if (daes != NULL) {
+		vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count, false);
 	}
+
+	D_FREE(daes);
+
 	vos_dth_set(NULL);
 
 	update_read_timestamps(ts_set, epr.epr_hi, akey_nr, rc);

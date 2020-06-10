@@ -275,7 +275,6 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
 	dth->dth_sync = 0;
 	dth->dth_resent = 0;
 	dth->dth_solo = solo ? 1 : 0;
-	dth->dth_dti_cos_done = 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
 

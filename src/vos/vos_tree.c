@@ -607,8 +607,8 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		D_ASSERT(pool != NULL);
 		vos_bio_addr_free(pool, addr, irec->ir_size);
 	}
-	umem_free(&tins->ti_umm, rec->rec_off);
-	return 0;
+
+	return umem_free(&tins->ti_umm, rec->rec_off);
 }
 
 static int

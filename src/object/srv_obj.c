@@ -1431,7 +1431,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			rc = vos_dtx_abort(ioc.ioc_vos_coh, DAOS_EPOCH_MAX,
 					   &orw->orw_dti, 1);
 
-		if (rc != 0 && rc != -DER_NONEXIST)
+		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 	}
 
@@ -2098,7 +2098,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 			rc = vos_dtx_abort(ioc.ioc_vos_coh, DAOS_EPOCH_MAX,
 					   &opi->opi_dti, 1);
 
-		if (rc != 0 && rc != -DER_NONEXIST)
+		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 	}
 

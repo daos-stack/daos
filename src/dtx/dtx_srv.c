@@ -79,7 +79,7 @@ dtx_handler(crt_rpc_t *rpc)
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			rc1 = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
 					    dtis, count);
-			if (rc == 0 && rc1 != 0)
+			if (rc == 0 && rc1 < 0)
 				rc = rc1;
 
 			i += count;
