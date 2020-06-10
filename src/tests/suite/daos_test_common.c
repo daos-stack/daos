@@ -872,8 +872,6 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	int		i;
 	int		rc;
 	char		dmg_cmd[DTS_CFG_MAX];
-	char		path_to_dmg[DTS_CFG_MAX];
-	FILE		*fp;
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -902,17 +900,11 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
-	fp = popen("which dmg", "r");
-	if (fgets(path_to_dmg, DTS_CFG_MAX, fp) != NULL)
-		print_message("path_to_dmg %s\n", path_to_dmg);
-	pclose(fp);
-
 	/* build and invoke dmg cmd to stop the server */
-	dts_create_config(dmg_cmd, "%s system stop -i --ranks=%d --force",
-			  path_to_dmg, rank);
+	dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d --force",
+			  rank);
 	rc = system(dmg_cmd);
-	assert_int_not_equal(rc, -1);
-	assert_int_equal(WEXITSTATUS(rc), 0);
+	assert_int_equal(rc, 0);
 }
 
 struct daos_acl *
