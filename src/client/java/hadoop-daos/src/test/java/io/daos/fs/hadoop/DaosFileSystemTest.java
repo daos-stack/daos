@@ -321,9 +321,8 @@ public class DaosFileSystemTest {
     Path path4 = new Path("abc");
     System.out.println(path4.toUri().getPath());
 
-    String s = "daos://uns:2/tmp/uns_path#";
+    String s = "daos://uns:" + unsId.getAndIncrement() + "/tmp/uns_path#";
     Path p6 = new Path(s + path2.toString());
     System.out.println(p6);
   }
-
 }

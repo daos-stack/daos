@@ -3,7 +3,6 @@ package io.daos.dfs;
 import io.daos.dfs.uns.*;
 import org.junit.Assert;
 import org.junit.Test;
-
 import java.io.File;
 
 public class DaosUnsTest {
