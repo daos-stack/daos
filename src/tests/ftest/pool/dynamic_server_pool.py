@@ -75,7 +75,6 @@ class DynamicServerPool(TestWithServers):
         for uuid_sr in output_list:
             actual_uuids.append(uuid_sr[0])
         actual_uuids.sort()
-        self.log.debug(str(actual_uuids))
         self.expected_uuids.sort()
         self.assertEqual(self.expected_uuids, actual_uuids)
 

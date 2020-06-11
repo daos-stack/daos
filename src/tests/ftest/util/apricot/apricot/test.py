@@ -868,20 +868,22 @@ class TestWithServers(TestWithoutServers):
         """
         self.container = self.get_container(pool, namespace, create)
 
-    def start_additional_servers(self, additional_servers):
+    def start_additional_servers(self, additional_servers, index=0):
         """Start additional servers.
 
         This method can be used to start a new daos_server during a test.
 
         Args:
             additional_servers (list of str): List of hostnames to start
-            daos_server.
+                daos_server.
+            index (int): Determines which server_managers to use when creating
+                the new server.
         """
         self.server_managers.append(
             DaosServerManager(
-                self.server_managers[0].manager.job,
+                self.server_managers[index].manager.job,
                 self.manager_class,
-                self.server_managers[0].dmg.yaml
+                self.server_managers[index].dmg.yaml
             )
         )
         self.server_managers[-1].manager.assign_environment(
