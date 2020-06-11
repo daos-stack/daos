@@ -1065,11 +1065,11 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	return nil
 }
 
-func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan, excludeMap map[string]struct{}) (FabricScan, error) {
+func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan, excludeMap map[string]struct{}) (*FabricScan, error) {
 	log.Debugf("Device scan target device name: %s", deviceScanCfg.targetDevice)
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 	if err != nil {
-		return FabricScan{}, err
+		return nil, err
 	}
 
 	if deviceScanCfg.targetDevice != deviceAffinity.DeviceName {
@@ -1083,13 +1083,13 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 		// In this case, we want to omit this libfabric record from our results because it has no
 		// mercury equivalent provider.  There are many providers in libfabric that have no mercury
 		// equivalent, and we want to filter those out right here.
-		return FabricScan{}, err
+		return nil, err
 	}
 	log.Debugf("Mercury provider list: %v", mercuryProviderList)
 
 	devClass, err := GetDeviceClass(deviceAffinity.DeviceName)
 	if err != nil {
-		return FabricScan{}, err
+		return nil, err
 	}
 
 	scanResults := FabricScan{
@@ -1101,18 +1101,18 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 	}
 
 	if _, skip := excludeMap[scanResults.DeviceName]; skip {
-		return FabricScan{}, errors.New("excluded device entry")
+		return nil, errors.New("excluded device entry")
 	}
 
 	results := scanResults.String()
 
 	if _, found := resultsMap[results]; found {
-		return FabricScan{}, errors.New("duplicate entry")
+		return nil, errors.New("duplicate entry")
 	}
 
 	resultsMap[results] = struct{}{}
 	log.Debugf("\n%s", results)
-	return scanResults, nil
+	return &scanResults, nil
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
@@ -1203,7 +1203,7 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 						if err != nil {
 							continue
 						}
-						ScanResults = append(ScanResults, scanResults)
+						ScanResults = append(ScanResults, *scanResults)
 						devCount++
 					}
 					continue
@@ -1222,7 +1222,7 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 		if err != nil {
 			continue
 		}
-		ScanResults = append(ScanResults, scanResults)
+		ScanResults = append(ScanResults, *scanResults)
 		devCount++
 	}
 
@@ -1230,6 +1230,12 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 		log.Debugf("libfabric found records matching provider \"%s\" but there were no valid system devices that matched.", provider)
 	}
 	return ScanResults, nil
+}
+
+// GetDeviceClassStub is used for unit testing to replace GetDeviceClass where the network device
+// is not backed by physical hardware resources and does not have a corresponding entry in the file system.
+func GetDeviceClassStub(netdev string) (int32, error) {
+	return 0, nil
 }
 
 // GetDeviceClass determines the device type according to what's stored in the filesystem
@@ -1243,4 +1249,43 @@ func GetDeviceClass(netdev string) (int32, error) {
 
 	res, err := strconv.Atoi(strings.TrimSpace(string(devClass)))
 	return int32(res), err
+}
+
+// Convert a network device class ID to a string identifier according to the table
+// found here: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
+func DevClassName(class int32) string {
+	switch class {
+	case 0:
+		return "NETROM"
+	case 1:
+		return "ETHER"
+	case 2:
+		return "EETHER"
+	case 3:
+		return "AX25"
+	case 4:
+		return "PRONET"
+	case 5:
+		return "CHAOS"
+	case 6:
+		return "IEEE802"
+	case 7:
+		return "ARCNET"
+	case 8:
+		return "APPLETLK"
+	case 15:
+		return "DLCI"
+	case 19:
+		return "ATM"
+	case 23:
+		return "METRICOM"
+	case 24:
+		return "IEEE1394"
+	case 27:
+		return "EUI64"
+	case 32:
+		return "INFINIBAND"
+	default:
+		return "UNKNOWN"
+	}
 }

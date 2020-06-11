@@ -51,6 +51,7 @@ const (
 
 type networkProviderValidation func(string, string) error
 type networkNUMAValidation func(string, uint) error
+type networkDeviceClass func(string) (int32, error)
 
 // ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
 // These settings bring coherence between the client and server network configuration.
@@ -99,6 +100,9 @@ type Configuration struct {
 
 	//a pointer to a function that validates the chosen numa node
 	validateNUMAFn networkNUMAValidation
+
+	//a pointer to a function that retrieves the IO server network device class
+	getDeviceClassFn networkDeviceClass
 }
 
 // WithRecreateSuperblocks indicates that a missing superblock should not be treated as
@@ -109,7 +113,7 @@ func (c *Configuration) WithRecreateSuperblocks() *Configuration {
 }
 
 // WithProviderValidator is used for unit testing configurations that are not necessarily valid on the test machine.
-// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
+// We use the stub function ValidateProviderStub to avoid unnecessary failures
 // in those tests that are not concerned with testing a truly valid configuration
 // for the test system.
 func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Configuration {
@@ -118,11 +122,20 @@ func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Con
 }
 
 // WithNUMAValidator is used for unit testing configurations that are not necessarily valid on the test machine.
-// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
+// We use the stub function ValidateNUMAStub to avoid unnecessary failures
 // in those tests that are not concerned with testing a truly valid configuration
 // for the test system.
 func (c *Configuration) WithNUMAValidator(fn networkNUMAValidation) *Configuration {
 	c.validateNUMAFn = fn
+	return c
+}
+
+// WithGetNetworkDeviceClass is used for unit testing configurations that are not necessarily valid on the test machine.
+// We use the stub function GetDeviceClassStub to avoid unnecessary failures
+// in those tests that are not concerned with testing a truly valid configuration
+// for the test system.
+func (c *Configuration) WithGetNetworkDeviceClass(fn networkDeviceClass) *Configuration {
+	c.getDeviceClassFn = fn
 	return c
 }
 
@@ -315,6 +328,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 		ext:                ext,
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
+		getDeviceClassFn:   netdetect.GetDeviceClass,
 	}
 }
 
@@ -533,7 +547,7 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 			seenBdevSet[dev] = idx
 		}
 
-		ndc, err := netdetect.GetDeviceClass(srv.Fabric.Interface)
+		ndc, err := c.getDeviceClassFn(srv.Fabric.Interface)
 		if err != nil {
 			return err
 		}

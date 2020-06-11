@@ -30,6 +30,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -176,8 +177,8 @@ func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass int32, iface string) *fault.Fault {
 	return serverFault(
 		code.ServerConfigInvalidNetDevClass,
-		fmt.Sprintf("IO server %d specifies fabric_iface '%s' which has a different device class '%s' than the primary server's device class '%s'",
-		curIdx, iface, code.NetClassName(thisDevClass), code.NetClassName(primaryDevClass)),
+		fmt.Sprintf("IO server %d specifies fabric_iface `%s` of class `%s` that conflicts with the primary server's device class `%s`",
+			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
 		"ensure that each IO server specifies a fabric_iface with a matching device class and restart",
 	)
 }

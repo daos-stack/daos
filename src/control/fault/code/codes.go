@@ -139,26 +139,3 @@ const (
 	// security fault codes
 	SecurityUnknown Code = iota + 900
 )
-
-// Convert a network device class ID to a string identifier according to the table
-// found here: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
-func NetClassName(class int32) string {
-	switch class {
-	case 0: return "NETROM"
-	case 1: return "ETHER"
-	case 2: return "EETHER"
-	case 3: return "AX25"
-	case 4: return "PRONET"
-	case 5: return "CHAOS"
-	case 6: return "IEEE802"
-	case 7: return "ARCNET"
-	case 8: return "APPLETLK"
-	case 15: return "DLCI"
-	case 19: return "ATM"
-	case 23: return "METRICOM"
-	case 24: return "IEEE1394"
-	case 27: return "EUI64"
-	case 32: return "INFINIBAND"
-	default: return "UNKNOWN"
-	}
-}

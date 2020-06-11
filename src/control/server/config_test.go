@@ -107,7 +107,8 @@ func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	t.Helper()
 	c := newDefaultConfiguration(e).
 		WithProviderValidator(netdetect.ValidateProviderStub).
-		WithNUMAValidator(netdetect.ValidateNUMAStub)
+		WithNUMAValidator(netdetect.ValidateNUMAStub).
+		WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub)
 	c.Path = path
 
 	if err := c.Load(); err != nil {
@@ -146,7 +147,8 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 
 			configA := newDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub)
+				WithNUMAValidator(netdetect.ValidateNUMAStub).
+				WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub)
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
@@ -164,7 +166,8 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 
 			configB := newDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub)
+				WithNUMAValidator(netdetect.ValidateNUMAStub).
+				WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub)
 			if err := configB.SetPath(testFile); err != nil {
 				t.Fatal(err)
 			}
@@ -224,6 +227,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 		WithHyperthreads(true).
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
+		WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub).
 		WithServers(
 			ioserver.NewConfig().
 				WithRank(0).
@@ -382,7 +386,8 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 
 			config := newDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub)
+				WithNUMAValidator(netdetect.ValidateNUMAStub).
+				WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub)
 
 			err = config.SetPath(relPath)
 			if err != nil {
@@ -495,6 +500,7 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 
 			conf := NewConfiguration().
 				WithFabricProvider("test").
+				WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub).
 				WithServers(tc.configA, tc.configB)
 
 			gotErr := conf.Validate(log)
