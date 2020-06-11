@@ -56,9 +56,9 @@ def cancel_jobs(job_id):
 
 
 def create_slurm_partition(nodelist, name):
-    """Create a slurm partion for soak jobs.
+    """Create a slurm partition for soak jobs.
 
-    Client nodes will be allocated for this partiton.
+    Client nodes will be allocated for this partition.
 
     Args:
         nodelist (list): list of nodes for job allocation
@@ -185,7 +185,7 @@ def check_slurm_job(handle):
 
     """
     command = "scontrol show job {}".format(handle)
-    result = run_command(command, raise_exception=False)
+    result = run_command(command, raise_exception=False, verbose=False)
     match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
     if match is not None:
         state = match.group(1)
@@ -241,7 +241,31 @@ def watch_job(handle, maxwait, test_obj):
         test_obj.job_done(params)
 
 
-def srun(nodes, cmd, srun_params=None):
+def srun_str(hosts, cmd, srun_params=None):
+    """Create string of cmd with srun and params.
+
+    Args:
+        hosts (str): hosts to allocate
+        cmd (str): cmdline to execute
+        srun_params(dict): additional params for srun
+
+    Returns:
+        Cmd: str of cmdline wrapped in srun with params
+
+    """
+    params_list = []
+    params = ""
+    if hosts is not None:
+        params_list.append("--nodelist {}".format(hosts))
+    if srun_params is not None:
+        for key, value in srun_params.items():
+            params_list.extend(["--{}={}".format(key, value)])
+            params = " ".join(params_list)
+    cmd = "srun {} {}".format(params, cmd)
+    return str(cmd)
+
+
+def srun(hosts, cmd, srun_params=None):
     """Run srun cmd on slurm partition.
 
     Args:
@@ -254,13 +278,7 @@ def srun(nodes, cmd, srun_params=None):
             the srun command
 
     """
-    params_list = []
-    params = ""
-    if srun_params is not None:
-        for key, value in srun_params.items():
-            params_list.extend(["--{}={}".format(key, value)])
-            params = " ".join(params_list)
-    cmd = "srun --nodelist={} {} {}".format(nodes, params, cmd)
+    cmd = srun_str(hosts, cmd, srun_params)
     try:
         result = run_command(cmd, timeout=30)
     except DaosTestError as error:

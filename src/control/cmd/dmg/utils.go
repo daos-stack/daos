@@ -89,7 +89,7 @@ func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err
 	return
 }
 
-// checkConns analyses connection results and returns summary compressed active
+// checkConns analyzes connection results and returns summary compressed active
 // and inactive hostlists (but disregards connection port).
 func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err error) {
 	connStates = make(hostlist.HostGroups)

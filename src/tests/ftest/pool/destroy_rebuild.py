@@ -65,7 +65,7 @@ class DestroyRebuild(TestWithServers):
         }
         self.assertTrue(
             self.pool.check_pool_info(**checks),
-            "Invlaid pool information detected prior to rebuild")
+            "Invalid pool information detected prior to rebuild")
 
         # Start rebuild
         self.pool.start_rebuild([rank], self.d_log)

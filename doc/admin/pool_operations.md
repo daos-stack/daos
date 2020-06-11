@@ -200,7 +200,7 @@ will be decided based on the remaining ACL rules.
 ## Pool Query
 The pool query operation retrieves information (i.e., the number of targets,
 space usage, rebuild status, property list, and more) about a created pool. It
-is integrated into the dmg_old utility.
+is integrated into the dmg utility.
 
 **To query a pool:**
 
@@ -306,8 +306,27 @@ $ dmg pool reintegrate --pool=${puuid} --rank=5 --target-idx=0,1
 
 #### Target Addition & Space Rebalancing
 
-Support for online target addition and automatic space rebalancing is
+Full Support for online target addition and automatic space rebalancing is
 planned for DAOS v1.4 and will be documented here once available.
+
+Until then the following command(s) are placeholders and offer limited
+functionality related to Online Server Addition/Rebalancing operations.
+
+An operator can choose to extend a pool to include ranks not currently in the pool.
+This will automatically trigger a server rebalance operation where objects within the extended
+pool will be rebalanced across the new storage.
+
+```
+$ dmg pool extend --pool=${puuid} --ranks=${rank1},${rank2}...
+```
+
+The pool extend command accepts 2 required parameters:
+
+* The pool UUID of the pool to be extended.
+* A comma separated list of server ranks to include in the pool.
+
+The pool rebalance operation will work most efficiently when the pool is extended to its desired
+size in a single operation, as opposed to multiple, small extensions.
 
 #### Pool Shard Resize
 

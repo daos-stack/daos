@@ -110,8 +110,9 @@ class NvmePoolCapacity(TestWithServers):
                                                       api,
                                                       test[2])])
         env = ior_cmd.get_default_env(str(manager))
-        manager.setup_command(env, self.hostfile_clients,
-                              processes)
+        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        manager.assign_processes(processes)
+        manager.assign_environment(env, True)
 
         # run IOR Command
         try:
@@ -171,7 +172,7 @@ class NvmePoolCapacity(TestWithServers):
 
     def test_run(self, num_pool=1):
         """
-        Method Descripton:
+        Method Description:
             This method is called with different test_cases.
             Args:
                num_pool (int): Total pools for running a test.

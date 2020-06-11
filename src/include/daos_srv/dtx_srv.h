@@ -31,13 +31,6 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 
-struct dtx_entry {
-	/** The identifier of the DTX */
-	struct dtx_id		dte_xid;
-	/** The identifier of the modified object (shard). */
-	daos_unit_oid_t		dte_oid;
-};
-
 /**
  * DAOS two-phase commit transaction handle in DRAM.
  */
@@ -55,36 +48,35 @@ struct dtx_handle {
 	daos_handle_t			 dth_coh;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			 dth_epoch;
-	/* The generation when the DTX is handled on the server. */
-	uint64_t			 dth_gen;
-	/** The {obj/dkey/akey}-tree records that are created
-	 * by other DTXs, but not ready for commit yet.
+	/**
+	 * The upper bound of the epoch uncertainty. dth_epoch_bound ==
+	 * dth_epoch means that dth_epoch has no uncertainty.
 	 */
-	d_list_t			 dth_shares;
+	daos_epoch_t			 dth_epoch_bound;
 	/* The hash of the dkey to be modified if applicable */
 	uint64_t			 dth_dkey_hash;
 	/** Pool map version. */
 	uint32_t			 dth_ver;
 	/** The intent of related modification. */
 	uint32_t			 dth_intent;
+
 	uint32_t			 dth_sync:1, /* commit synchronously. */
-					 dth_leader:1, /* leader replica. */
+					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
-					 /* dti_cos has been committed. */
-					 dth_dti_cos_done:1,
 					 /* Modified shared items: object/key */
 					 dth_modify_shared:1,
 					 /* The DTX entry is in active table. */
-					 dth_actived:1;
+					 dth_active:1;
+
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
 	/* The array of the DTXs for Commit on Share (conflcit). */
 	struct dtx_id			*dth_dti_cos;
 	/** Pointer to the DTX entry in DRAM. */
 	void				*dth_ent;
-	/** The address (offset) of the (new) object to be modified. */
-	umem_off_t			 dth_obj;
+	/** The flags, see dtx_entry_flags. */
+	uint16_t			 dth_flags;
 	/** Modification sequence in the distributed transaction. */
 	uint16_t			 dth_op_seq;
 };
@@ -133,9 +125,10 @@ enum dtx_status {
 };
 
 int
-dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
-		 uint32_t intent, struct daos_shard_tgt *tgts, int tgts_cnt,
+dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+		 daos_epoch_t epoch, bool epoch_uncertain, uint32_t pm_ver,
+		 daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t intent,
+		 struct daos_shard_tgt *tgts, int tgt_cnt,
 		 struct dtx_leader_handle *dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
@@ -146,16 +139,13 @@ typedef void (*dtx_sub_comp_cb_t)(struct dtx_leader_handle *dlh, int idx,
 typedef int (*dtx_sub_func_t)(struct dtx_leader_handle *dlh, void *arg, int idx,
 			      dtx_sub_comp_cb_t comp_cb);
 
-int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
-	       uint32_t ver, bool block);
 int
-dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-	  daos_epoch_t epoch, uint64_t dkey_hash, struct dtx_id *dti_cos,
-	  int dti_cos_cnt, uint32_t pm_ver, uint32_t intent,
-	  struct dtx_handle *dth);
+dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+	  daos_epoch_t epoch, bool epoch_uncertain, uint32_t pm_ver,
+	  daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t intent,
+	  struct dtx_id *dti_cos, int dti_cos_cnt, struct dtx_handle *dth);
 int
-dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
-	struct ds_cont_child *cont, int result);
+dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result);
 
 int dtx_leader_exec_ops(struct dtx_leader_handle *dth, dtx_sub_func_t exec_func,
 			void *func_arg);
@@ -164,19 +154,18 @@ int dtx_batched_commit_register(struct ds_cont_child *cont);
 
 void dtx_batched_commit_deregister(struct ds_cont_child *cont);
 
-int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
-		 daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t map_ver);
+int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, struct ds_cont_child *cont,
+		 daos_unit_oid_t *oid, daos_epoch_t epoch, uint32_t map_ver);
 
 /**
  * Check whether the given DTX is resent one or not.
  *
  * \param coh		[IN]	Container open handle.
- * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
  * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
+ * \param mp_ver	[OUT]	Hold the DTX pool map version.
  *
  * \return		0		means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -187,9 +176,8 @@ int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
  *					processed with different epoch.
  *			Other negative value if error.
  */
-int dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
-		      struct dtx_id *dti, uint64_t dkey_hash,
-		      daos_epoch_t *epoch);
+int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti,
+		      daos_epoch_t *epoch, uint32_t *pm_ver);
 
 /* XXX: The higher 48 bits of HLC is the wall clock, the lower bits are for
  *	logic clock that will be hidden when divided by NSEC_PER_SEC.
@@ -200,12 +188,13 @@ dtx_hlc_age2sec(uint64_t hlc)
 	return (crt_hlc_get() - hlc) / NSEC_PER_SEC;
 }
 
-struct dtx_resync_arg {
+struct dtx_scan_args {
 	uuid_t		pool_uuid;
 	uint32_t	version;
 };
 
-/* resync all dtx inside the pool */
-void
-dtx_resync_ult(void *arg);
+int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
+	       uint32_t ver, bool block, bool resync_all);
+void dtx_resync_ult(void *arg);
+
 #endif /* __DAOS_DTX_SRV_H__ */
