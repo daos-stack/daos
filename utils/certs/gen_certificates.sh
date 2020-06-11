@@ -166,6 +166,8 @@ function cleanup () {
 
 function fixup_permissions() {
 	chmod 0707 $CERTS/*.key
+##DH++
+        chmod 0400 $CERTS/agent.key
 	chmod 0664 $CERTS/*.crt
 }
 
