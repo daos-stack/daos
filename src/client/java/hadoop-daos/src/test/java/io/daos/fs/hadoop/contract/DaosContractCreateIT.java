@@ -16,37 +16,21 @@
  * limitations under the License.
  */
 
-package io.daos.fs.hadoop.perf;
+package io.daos.fs.hadoop.contract;
 
-import java.util.Random;
+import io.daos.fs.hadoop.Constants;
+import io.daos.fs.hadoop.DaosFSFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.contract.AbstractContractCreateTest;
+import org.apache.hadoop.fs.contract.AbstractFSContract;
 
-public class Test {
-
-  public static void main(String args[]) {
-    int i=10;
-    while(i-->0) {
-      run();
-    }
-  }
-
-  private static void run() {
-    long fileSize = 1073741824;
-    Random rd = new Random();
-    int round = 0;
-    int exceed = 0;
-    long count = 0;
-    while (count < fileSize) {
-      long offset = (long)(fileSize*rd.nextFloat());
-      round++;
-      if (offset + 4*1024*1024 > fileSize) {
-        exceed++;
-      }
-//      System.out.println(offset);
-      count += 131072;
-    }
-
-    System.out.println("============");
-    System.out.println(exceed);
-    System.out.println(round);
+public class DaosContractCreateIT extends AbstractContractCreateTest {
+  @Override
+  protected AbstractFSContract createContract(Configuration configuration) {
+    configuration.addResource("daos-site.xml");
+    configuration.set(Constants.DAOS_POOL_UUID, DaosFSFactory.pooluuid);
+    configuration.set(Constants.DAOS_CONTAINER_UUID, DaosFSFactory.contuuid);
+    configuration.set(Constants.DAOS_POOL_SVC, DaosFSFactory.svc);
+    return new DaosContractIT(configuration);
   }
 }
