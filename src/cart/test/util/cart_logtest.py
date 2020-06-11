@@ -297,7 +297,9 @@ class LogTest():
                         if line.rpc_opcode == '0xfe000000':
                             show = False
                     if show:
-                        if line.level < cart_logparse.LOG_LEVELS['WARN']:
+                        # Allow WARNING or ERROR messages, but anything higher
+                        # like assert should trigger a failure.
+                        if line.level < cart_logparse.LOG_LEVELS['ERR']:
                             show_line(line, 'HIGH', 'error in strict mode')
                         else:
                             show_line(line, 'NORMAL', 'warning in strict mode')
