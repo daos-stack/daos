@@ -265,14 +265,14 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 		"-D", // use direct i/o to avoid polluting page cache
 		"-L", "daos", // use DAOS label
 		"-m", "0", // don't reserve blocks for super-user
-		"-b", "4096", // use large block size
+		"-b", "4096", // use largest possible block size
 		// disable lazy initialization (hurts perf) and discard
 		"-E", "lazy_itable_init=0,lazy_journal_init=0,nodiscard",
 		// enable bigalloc to reduce metadata overhead
-		// enable flex_bg to allow larger contiguous space
+		// enable flex_bg to allow larger contiguous block allocation
 		// disable uninit_bg to initialize everything upfront
 		"-O", "bigalloc,flex_bg,^uninit_bg",
-		"-C", "16M",     // use 32M bigalloc cluster size
+		"-C", "16M",     // use 16M bigalloc cluster size
 		"-i", "16777216", // don't need that many inodes
 		device, // device always comes last
 	}
