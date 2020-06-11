@@ -931,8 +931,11 @@ tse_task_schedule(tse_task_t *task, bool instant)
 	struct tse_task_private  *dtp = tse_task2priv(task);
 	struct tse_sched_private *dsp = dtp->dtp_sched;
 	int rc = 0;
+	int temp_rc = 0;
 
 	D_ASSERT(!instant || dtp->dtp_func);
+
+	D_INFO("EJMM: tse_task_schedule()");
 
 	/* Add task to scheduler */
 	D_MUTEX_LOCK(&dsp->dsp_lock);
@@ -958,7 +961,8 @@ tse_task_schedule(tse_task_t *task, bool instant)
 	 */
 	if (instant) {
 		D_INFO("EJMM: tse_task_schedule(instant=true):dtp->dtp_func(task)");
-		dtp->dtp_func(task);
+		temp_rc = dtp->dtp_func(task);
+		D_INFO("EJMM: dtp->dtp_completed: temp_rc = %d", temp_rc);
 
 		/** If task was completed return the task result */
 		if (dtp->dtp_completed) {

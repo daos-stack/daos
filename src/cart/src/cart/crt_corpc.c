@@ -551,6 +551,8 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 	bool			 am_root;
 	int			 rc;
 
+	/* D_INFO("EJMM: crt_corpc_complete()"); */
+
 	co_info = rpc_priv->crp_corpc_info;
 	D_ASSERT(co_info != NULL);
 

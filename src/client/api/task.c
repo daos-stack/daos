@@ -116,18 +116,22 @@ dc_task_schedule(tse_task_t *task, bool instant)
 	daos_event_t *ev;
 	int	      rc;
 
+	D_INFO("EJMM: dc_task_schedule()");
 	D_ASSERT(task_is_valid(task));
 
 	ev = task_ptr2args(task)->ta_ev;
 	if (ev) {
+	D_INFO("EJMM: dc_task_schedule() - A");
 		rc = daos_event_launch(ev);
 		if (rc) {
+			D_INFO("EJMM: dc_task_schedule() error has been reported to event");
 			tse_task_complete(task, rc);
 			/* error has been reported to event */
 			D_GOTO(out, rc = 0);
 		}
 	}
 
+	D_INFO("EJMM: dc_task_schedule() - B");
 	rc = tse_task_schedule(task, instant);
 	if (rc) {
 		/** user is responsible for completing event with error */

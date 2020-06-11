@@ -753,8 +753,10 @@ out_lock:
 int
 dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp)
 {
-	if (name == NULL)
+	if (name == NULL) {
+		D_INFO("using default sys name: %s", DAOS_DEFAULT_SYS_NAME);
 		name = DAOS_DEFAULT_SYS_NAME;
+	}
 
 	return sys_attach(name, 0 /* npsrs */, NULL /* psrs */, sysp);
 }

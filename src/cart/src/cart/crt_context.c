@@ -280,6 +280,8 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 {
 	D_ASSERT(rpc_priv != NULL);
 
+	/* D_INFO("EJMM: crt_rpc_complete() in:rc = %d", rc); */
+
 	if (rc == -DER_CANCELED)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
 	else if (rc == -DER_TIMEDOUT)
@@ -327,6 +329,8 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	int			 flags, force, wait;
 	uint64_t		 ts_start, ts_now;
 	int			 rc = 0;
+
+	/* D_INFO("EJMM: crt_ctx_epi_abort()"); */
 
 	D_ASSERT(rlink != NULL);
 	D_ASSERT(arg != NULL);
@@ -703,6 +707,8 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	struct crt_uri_lookup_in	*ul_in;
 	int				 rc;
 
+	/* D_INFO("EJMM: crt_req_timeout_hdlr()"); */
+
 	if (crt_req_timeout_reset(rpc_priv)) {
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "reached timeout. Renewed for another cycle.\n");
@@ -953,6 +959,8 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	d_list_t		 submit_list;
 	struct crt_rpc_priv	*tmp_rpc;
 	int			 rc;
+
+	/* D_INFO("EJMM: crt_context_req_untrack()"); */
 
 	D_ASSERT(crt_ctx != NULL);
 

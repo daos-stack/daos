@@ -668,6 +668,8 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 	struct pool_create_out *out;
 	int			rc;
 
+	D_INFO("EJMM: ds_pool_svc_create() name: %s\n", group);
+
 	D_ASSERTF(ntargets == target_addrs->rl_nr, "ntargets=%u num=%u\n",
 		  ntargets, target_addrs->rl_nr);
 

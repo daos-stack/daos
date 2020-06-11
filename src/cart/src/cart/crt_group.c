@@ -1582,6 +1582,8 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	bool				 should_decref = false;
 	int				rc = 0;
 
+	/* D_INFO("EJMM: crt_hdlr_uri_lookup()"); */
+
 	D_ASSERT(rpc_req != NULL);
 	ul_in = crt_req_get(rpc_req);
 	ul_out = crt_reply_get(rpc_req);
@@ -1611,8 +1613,8 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	}
 
 	if (rc != 0 || grp_priv == NULL) {
-		D_ERROR("Could not find the group %s specified\n",
-			ul_in->ul_grp_id);
+		D_ERROR("Could not find the group %s specified rc=%d\n",
+			ul_in->ul_grp_id, rc);
 		ul_out->ul_uri = NULL;
 		D_GOTO(out, rc);
 	}

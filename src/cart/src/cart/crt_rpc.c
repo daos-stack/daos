@@ -544,6 +544,8 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 	uint32_t			 tag;
 	int				 rc = 0;
 
+	/* D_INFO("EJMM: crt_req_hg_addr_lookup_cb()"); */
+
 	rpc_priv = arg;
 	D_ASSERT(rpc_priv != NULL);
 	rank = rpc_priv->crp_pub.cr_ep.ep_rank;
@@ -668,6 +670,8 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 	bool				 ul_retried = false;
 	int				 rc = 0;
 
+	/* D_INFO("EJMM: crt_req_uri_lookup_by_rpc_cb()"); */
+
 	rpc_priv = cb_info->cci_arg;
 	D_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP);
 	D_ASSERT(rpc_priv->crp_ul_req == cb_info->cci_rpc);
@@ -681,6 +685,7 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	if (cb_info->cci_rc != 0) {
+		D_INFO("EJMM: crt_req_uri_lookup_by_rpc_cb() cb_info->cci_rc = %d", cb_info->cci_rc);
 		RPC_ERROR(rpc_priv,
 			  "failed cci_rc: %d\n",
 			  cb_info->cci_rc);
@@ -1197,6 +1202,8 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		}
 	}
 
+	/* D_INFO("EJMM: crt_req_send()"); */
+
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	/* Take a reference to ensure rpc_priv is valid for duration of this
 	 * function.  Referenced dropped at end of this function.
@@ -1299,6 +1306,8 @@ crt_req_abort(crt_rpc_t *req)
 {
 	struct crt_rpc_priv	*rpc_priv;
 	int			 rc = 0;
+
+	/* D_INFO("EJMM: crt_req_abort()"); */
 
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");

@@ -1553,9 +1553,13 @@ dc_pool_evict(tse_task_t *task)
 		daos_task_set_priv(task, state);
 	}
 
+	D_INFO("EJMM: dc_pool_evict() Name state: %s", state->sys->sy_group->cg_grpid);
+	D_INFO("EJMM: dc_pool_evict() Name %s", args->grp);
+
 	ep.ep_grp = state->sys->sy_group;
 
 	rc = rsvc_client_choose(&state->client, &ep);
+	D_INFO("EJMM: dc_pool_evict() Name ep: %s", ep.ep_grp->cg_grpid);
 	D_INFO("EJMM: dc_pool_evict() rsvc_client_choose() rc=%d", rc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",

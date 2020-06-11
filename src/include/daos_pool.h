@@ -152,6 +152,8 @@ enum daos_pool_info_bit {
 typedef struct {
 	/** Pool UUID */
 	uuid_t				pi_uuid;
+	/** Group ID */
+	const char    *pi_group;
 	/** Number of targets */
 	uint32_t			pi_ntargets;
 	/** Number of nodes */

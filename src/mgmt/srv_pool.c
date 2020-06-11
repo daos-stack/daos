@@ -492,6 +492,8 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	int				rc;
 	int				rc_cleanup;
 
+	D_INFO("EJMM: ds_mgmt_create_pool() name: %s\n", group);
+
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
 		goto out;
@@ -645,6 +647,7 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 	d_rank_list_t	*psvcranks;
 	int		 rc;
 
+	D_INFO("EJMM: ds_mgmt_destroy_pool() name: %s", group);
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
@@ -761,6 +764,7 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group)
 	int		 rc;
 
 	D_DEBUG(DB_MGMT, "evict pool "DF_UUID"\n", DP_UUID(pool_uuid));
+	D_INFO("EJMM: ds_mgmt_evict_pool() name: %s", group);
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
