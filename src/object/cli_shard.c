@@ -994,14 +994,15 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_akey = *obj_args->akey;
 	oei->oei_oid		= obj_shard->do_id;
 	oei->oei_map_ver	= args->la_auxi.map_ver;
-	/*
-	 * If an epoch range is specified, we shall not assume any epoch
-	 * uncertainty.
-	 */
-	if (args->la_auxi.epoch.oe_uncertain && obj_args->eprs != NULL)
+	if (args->la_auxi.epoch.oe_uncertain)
 		oei->oei_flags |= ORF_EPOCH_UNCERTAIN;
 	if (obj_args->eprs != NULL && opc == DAOS_OBJ_RPC_ENUMERATE) {
 		oei->oei_epr = *obj_args->eprs;
+		/*
+		 * If an epoch range is specified, we shall not assume any
+		 * epoch uncertainty.
+		 */
+		oei->oei_flags &= ~ORF_EPOCH_UNCERTAIN;
 	} else {
 		oei->oei_epr.epr_lo = 0;
 		oei->oei_epr.epr_hi = args->la_auxi.epoch.oe_value;
