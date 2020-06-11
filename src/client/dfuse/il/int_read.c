@@ -31,10 +31,6 @@
 
 
 
-
-
-
-
 static ssize_t
 read_bulk(char *buff, size_t len, off_t position,
 	  struct fd_entry *entry, int *errcode)
