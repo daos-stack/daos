@@ -570,8 +570,6 @@ $ daos_server network scan -p all
 localhost
 ---------
 
-    Available providers: ofi+tcp, ofi+verbs;ofi_rxm, ofi+psm2, ofi+sockets, ofi+tcp;ofi_rxm, ofi+verbs
-
     -------------
     NUMA Socket 0
     -------------
@@ -598,9 +596,9 @@ localhost
         ofi+sockets       ib1
         ofi+psm2          ib1
 ```
-The results show 'Available providers', which is a list of all available OFI fabric providers associated with at least one network interface on the daos_server node.  Use one of these providers to configure the `provider` in the daos_server.yml.  Only one provider may be specified for the entire DAOS installation.  Client nodes must be capable of communicating to the daos_server nodes via the same provider.  Therefore, it is helpful to choose network settings for the daos_server that are compatible with the expected client node configuration.
+Use one of these providers to configure the `provider` in the daos_server.yml.  Only one provider may be specified for the entire DAOS installation. Client nodes must be capable of communicating to the daos_server nodes via the same provider. Therefore, it is helpful to choose network settings for the daos_server that are compatible with the expected client node configuration.
 
-After the daos_server.yml file has been edited and contains a provider, subsequent `daos_server network scan` commands will filter the results based on that provider.  If it is desired to view an unfiltered list again, issue `daos_server network scan -p all`.
+After the daos_server.yml file has been edited and contains a provider, subsequent `daos_server network scan` commands will filter the results based on that provider. If it is desired to view an unfiltered list again, issue `daos_server network scan -p all`.
 
 Regardless of the provider in the daos_server.yml file, the results may be filtered to the specified provider with the command `daos_server network scan -p ofi_provider` where `ofi_provider` is one of the available providers from the list.
 
@@ -608,22 +606,20 @@ The results of the network scan may be used to help configure the IO server
 instances for this daos_server node.
 
 Each IO server instance is configured with a unique `fabric_iface` and
-optional `pinned_numa_node`.  The interfaces and NUMA Sockets listed in the scan
+optional `pinned_numa_node`. The interfaces and NUMA Sockets listed in the scan
 results map to the daos_server.yml `fabric_iface` and `pinned_numa_node`
-respectively.  The use of `pinned_numa_node` is optional, but recommended for best performance.  When specified with the value that matches the network interface, the IO server will bind itself to that NUMA node and to cores purely within that NUMA node.  This configuration yields the fastest access to that network device.
+respectively. The use of `pinned_numa_node` is optional, but recommended for best performance. When specified with the value that matches the network interface, the IO server will bind itself to that NUMA node and to cores purely within that NUMA node. This configuration yields the fastest access to that network device.
 
 ## Network Scanning All DAOS Server Nodes
-While the `daos_server network scan` is useful for scanning the localhost, it does not provide results for any other daos_server instance on the network.  The DAOS Management tool, `dmg`, is used for that purpose.  The network scan operates the same way as the daos_server network scan, however, to use the dmg tool, at least one known daos_server instance must be running.
+While the `daos_server network scan` is useful for scanning the localhost, it does not provide results for any other daos_server instance on the network.  The DAOS Management tool, `dmg`, is used for that purpose. The network scan operates the same way as the daos_server network scan, however, to use the dmg tool, at least one known daos_server instance must be running.
 
-The command `dmg network scan` performs a query over all daos_servers in the daos_control.yml `hostlist`.  By default, the scan will return results that are filtered by the provider that is specified in the daos_server.yml.  Like the `daos_server network scan`, the `dmg network scan` supports the optional `-p/--provider` where a different provider may be specified, or `all` for an unfiltered list that is unrelated to what was already configured on the daos_server installation.
+The command `dmg network scan` performs a query over all daos_servers in the daos_control.yml `hostlist`. By default, the scan will return results that are filtered by the provider that is specified in the daos_server.yml. Like the `daos_server network scan`, the `dmg network scan` supports the optional `-p/--provider` where a different provider may be specified, or `all` for an unfiltered list that is unrelated to what was already configured on the daos_server installation.
 
 ```bash
 dmg network scan
 -------
 wolf-29
 -------
-
-    Available providers: ofi+sockets
 
     -------------
     NUMA Socket 1
@@ -636,8 +632,6 @@ wolf-29
 ---------
 localhost
 ---------
-
-    Available providers: ofi+sockets
 
     -------------
     NUMA Socket 0
@@ -660,8 +654,8 @@ localhost
 
 To aid in provider configuration and debug, it may be helpful to run the
 fi_pingpong test (delivered as part of OFI/libfabric).  To run that test,
-determine the name of the provider to test usually by removing the "ofi+" prefix from the network scan provider data.  Do use the "ofi+" prefix in the
-daos_server.yml.  Do not use the "ofi+" prefix with fi_pingpong.
+determine the name of the provider to test usually by removing the "ofi+" prefix from the network scan provider data. Do use the "ofi+" prefix in the
+daos_server.yml. Do not use the "ofi+" prefix with fi_pingpong.
 
 Then, the fi_pingpong test can be used to verify that the targeted OFI provider works fine:
 ```bash
