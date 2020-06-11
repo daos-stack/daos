@@ -85,7 +85,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     # pick up the vendored modules.
     denv.Command(build_bin, src + gurt_lib,
                  'cd %s; %s build -mod vendor -v %s %s -o %s %s' %
-                 (gosrc, GO_BIN, go_ldflags(), get_build_tags(denv), 
+                 (gosrc, GO_BIN, go_ldflags(), get_build_tags(denv),
                   build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
