@@ -530,8 +530,8 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	oid_number += 1;
 
 	/* Update the next object number. */
-	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, 1 /* n */,
-			   &rdb_lc_oid_next, &value);
+	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, false /* !crit */,
+			   1 /* n */, &rdb_lc_oid_next, &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update next object number"DF_X64
 			": %d\n", DP_DB(db), oid_number, rc);
@@ -540,7 +540,8 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 
 	/* Update the key in the parent object. */
 	d_iov_set(&value, &oid, sizeof(oid));
-	rc = rdb_lc_update(db->d_lc, index, parent, 1 /* n */, key, &value);
+	rc = rdb_lc_update(db->d_lc, index, parent, false /* !crit */,
+			   1 /* n */, key, &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update parent KVS: %d\n", DP_DB(db),
 			rc);
@@ -593,7 +594,8 @@ rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs,
 {
 	int rc;
 
-	rc = rdb_lc_update(db->d_lc, index, kvs, 1 /* n */, key, value);
+	rc = rdb_lc_update(db->d_lc, index, kvs, false /* !crit */, 1 /* n */,
+			   key, value);
 	if (rc != 0)
 		D_ERROR(DF_DB": failed to update KVS "DF_X64": %d\n", DP_DB(db),
 			kvs, rc);
@@ -726,12 +728,15 @@ rdb_tx_deterministic_error(int error)
 /*
  * Apply an entry and return the error only if a nondeterministic error
  * happens. This function tries to discard index if an error occurs.
+ * Set *critp=true on success and if any of the operations applied were
+ * "critical", for example destroy that can reclaim SCM space.
  */
 int
 rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-	     void *result)
+	     void *result, bool *critp)
 {
 	const void     *p = buf;
+	bool		crit = false;
 	int		rc = 0;
 
 	D_DEBUG(DB_TRACE, DF_DB": applying "DF_U64": buf=%p len="DF_U64"\n",
@@ -756,6 +761,15 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 					index, op.dto_opc, p - buf, n, rc);
 			break;
 		}
+
+		if ((op.dto_opc == RDB_TX_DELETE) ||
+		    (op.dto_opc == RDB_TX_DESTROY) ||
+		    (op.dto_opc == RDB_TX_DESTROY_ROOT))
+			crit = true;
+
+		D_ERROR(DF_DB": kccain intermed opc=%d crit=%d p=%p "
+			"(buf+len)=%p\n", DP_DB(db), op.dto_opc, crit, p,
+			(buf+len));
 		p += n;
 	}
 
@@ -791,6 +805,8 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	if (result != NULL)
 		*(int *)result = rc;
 
+	D_ERROR(DF_DB": kccain final crit=%d\n", DP_DB(db), crit);
+	*critp = crit;
 	return 0;
 }
 
