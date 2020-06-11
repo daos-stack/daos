@@ -67,7 +67,7 @@ class Bytes(object):
 
         """
         try:
-            self.amount = float(value)
+            self._amount = float(value)
         except ValueError as error:
             raise ValueError("Invalid Bytes.amount: {}".format(error))
 
@@ -83,7 +83,7 @@ class Bytes(object):
 
         """
         if isinstance(value, str) and value.upper()[0] in self.SIZES:
-            self.units = value.upper()[0]
+            self._units = value.upper()[0]
         else:
             raise ValueError(
                 "Invalid Bytes.units: {} is not one of {}".format(
