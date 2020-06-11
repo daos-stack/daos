@@ -694,7 +694,7 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 
 	/* Local abort firstly. */
 	rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count);
-	if (rc == -DER_NONEXIST)
+	if (rc > 0 || rc == -DER_NONEXIST)
 		rc = 0;
 
 	if (rc == 0 && !d_list_empty(&head)) {

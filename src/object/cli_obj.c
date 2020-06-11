@@ -1351,8 +1351,7 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 
 	if (nr == 0 || recxs == NULL)
 		return false;
-	/* only check recx overlap for update */
-	if (!update || nr == 1)
+	if (nr == 1)
 		return true;
 
 	switch (nr) {
