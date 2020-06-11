@@ -237,7 +237,9 @@ struct vos_dtx_act_ent {
 	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
-	unsigned int			 dae_committable:1;
+	unsigned int			 dae_committable:1,
+					 dae_committed:1,
+					 dae_aborted:1;
 };
 
 extern struct vos_tls	*standalone_tls;
@@ -371,8 +373,10 @@ vos_obj_tab_register();
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param cont_df	[IN]	Pointer to the on-disk VOS container.
+ *
+ * \return		0 on success and negative on failure.
  */
-void
+int
 vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
 
 /**
@@ -462,7 +466,11 @@ vos_dtx_prepared(struct dtx_handle *dth);
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int counti, daos_epoch_t epoch,
-			struct dtx_cos_key *dcks);
+			struct dtx_cos_key *dcks,
+			struct vos_dtx_act_ent **daes);
+void
+vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
+		    int count, bool abort);
 
 /**
  * Establish indexed active DTX table in DRAM.
