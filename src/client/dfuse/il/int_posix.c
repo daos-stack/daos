@@ -295,7 +295,7 @@ _fetch_dfs_obj(int fd,
 	iov.iov_buf_len = hs_reply->fsr_dobj_size;
 	iov.iov_len = iov.iov_buf_len;
 
-	rc = dfs_obj_global2local(ioil_ioc.ioc_dfs,
+	rc = dfs_obj_global2local(entry->fd_dfs,
 				  0,
 				  iov,
 				  &entry->fd_dfsoh);
@@ -521,6 +521,8 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (entry->fd_dfsoh) {
 		entry->fd_dfs = ioil_ioc.ioc_dfs;
 	} else {
+		entry->fd_dfs = ioil_ioc.ioc_dfs;
+
 		rc = fetch_dfs_obj_handle(fd, entry);
 		if (rc)
 			D_GOTO(cont_close, 0);

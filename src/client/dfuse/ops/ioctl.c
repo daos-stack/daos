@@ -238,6 +238,21 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		return;
 	}
 
+	/* These two are OK to pass across security domains */
+	if (cmd == DFUSE_IOCTL_IL_SIZE) {
+		if (out_bufsz < sizeof(struct dfuse_hs_reply))
+			D_GOTO(out_err, rc = EIO);
+		handle_size_ioctl(oh, req);
+
+		return;
+
+	} else if (_IOC_NR(cmd) == DFUSE_IOCTL_REPLY_DOOH) {
+		size_t size = _IOC_SIZE(cmd);
+
+		handle_dooh_ioctl(oh, size, req);
+		return;
+	}
+
 	fc = fuse_req_ctx(req);
 	uid = getuid();
 	gid = getgid();
