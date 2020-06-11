@@ -1528,7 +1528,10 @@ dc_pool_evict(tse_task_t *task)
 	args = dc_task_get_args(task);
 	state = dc_task_get_priv(task);
 
+	D_INFO("EJMM: dc_pool_evict()");
+ 
 	if (state == NULL) {
+		D_INFO("EJMM: dc_pool_evict() - A");
 		if (!daos_uuid_valid(args->uuid) ||
 		    !daos_rank_list_valid(args->svc))
 			D_GOTO(out_task, rc = -DER_INVAL);
@@ -1551,7 +1554,9 @@ dc_pool_evict(tse_task_t *task)
 	}
 
 	ep.ep_grp = state->sys->sy_group;
+
 	rc = rsvc_client_choose(&state->client, &ep);
+	D_INFO("EJMM: dc_pool_evict() rsvc_client_choose() rc=%d", rc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(args->uuid), DP_RC(rc));
@@ -1560,6 +1565,7 @@ dc_pool_evict(tse_task_t *task)
 		goto out_client;
 	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_EVICT, &rpc);
+	D_INFO("EJMM: dc_pool_evict() pool_req_create() rc=%d", rc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
 			DP_UUID(args->uuid), rc);
@@ -1576,6 +1582,7 @@ dc_pool_evict(tse_task_t *task)
 		D_GOTO(out_rpc, rc);
 
 	rc = daos_rpc_send(rpc, task);
+	D_INFO("EJMM: dc_pool_evict() daos_rpc_send() rc=%d", rc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 

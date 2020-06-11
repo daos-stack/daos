@@ -957,11 +957,14 @@ tse_task_schedule(tse_task_t *task, bool instant)
 	 * function now.
 	 */
 	if (instant) {
+		D_INFO("EJMM: tse_task_schedule(instant=true):dtp->dtp_func(task)");
 		dtp->dtp_func(task);
 
 		/** If task was completed return the task result */
-		if (dtp->dtp_completed)
-			rc = task->dt_result;
+		if (dtp->dtp_completed) {
+				rc = task->dt_result;
+				D_INFO("EJMM: dtp->dtp_completed: %d", rc);
+			}
 
 		tse_task_decref(task);
 	}

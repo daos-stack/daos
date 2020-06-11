@@ -257,6 +257,8 @@ daos_event_launch_locked(struct daos_eq_private *eqx,
 {
 	struct daos_eq *eq = NULL;
 
+	D_INFO("EJMM: daos_event_launch_locked()");
+
 	if (eqx != NULL)
 		eq = daos_eqx2eq(eqx);
 

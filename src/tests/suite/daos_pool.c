@@ -48,6 +48,68 @@ pool_connect_nonexist(void **state)
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
+const char *my_server_group = "daos_server";
+
+/** Connect to pool, connect and try to evict with a bad param */
+static void
+pool_evict(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_handle_t	 poh;
+	daos_event_t	 ev;
+	daos_pool_info_t info = {0};
+	int		 rc;
+
+	if (!arg->hdl_share && arg->myrank != 0)
+		return;
+
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	arg->group = my_server_group;
+
+	if (arg->myrank == 0) {
+		/** connect to pool */
+		print_message("rank 0 connecting to pool %ssynchronously ... ",
+			      arg->async ? "a" : "");
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       &arg->pool.svc, DAOS_PC_RW, &poh, &info,
+				       arg->async ? &ev : NULL /* ev */);
+		assert_int_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		assert_memory_equal(info.pi_uuid, arg->pool.pool_uuid,
+				    sizeof(info.pi_uuid));
+		/** TODO: assert_int_equal(info.pi_ntargets, arg->...); */
+		assert_int_equal(info.pi_ndisabled, 0);
+		print_message("success\n");
+	}
+
+	if (arg->hdl_share)
+		handle_share(&poh, HANDLE_POOL, arg->myrank, poh, 1);
+
+	if (arg->myrank == 0) {
+		print_message("sysname: %s\n", arg->group);
+		//rc = daos_pool_evict(pool_uuid, sysname, svc, NULL /* ev */);
+   	//print_message("rc: %d\n", rc);
+	}
+
+	/** disconnect from pool */
+	print_message("rank %d disconnecting from pool %ssynchronously ... ",
+		      arg->myrank, arg->async ? "a" : "");
+	rc = daos_pool_disconnect(poh, arg->async ? &ev : NULL /* ev */);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	if (arg->async) {
+		rc = daos_event_fini(&ev);
+		assert_int_equal(rc, 0);
+		/* disable the async after testing done */
+		arg->async = false;
+	}
+	print_message("rank %d success\n", arg->myrank);
+}
+
 /** connect/disconnect to/from a valid pool */
 static void
 pool_connect(void **state)
@@ -1062,8 +1124,27 @@ pool_connect_access(void **state)
 				   0);
 }
 
+static void wno_unused_myheadername(void)
+{
+	(void)&pool_connect_nonexist;
+	(void)&pool_connect;
+	(void)&pool_connect_exclusively;
+	(void)&pool_exclude;
+	(void)&pool_attribute;
+	(void)&init_fini_conn;
+	(void)&pool_properties;
+	(void)&pool_op_retry;
+	(void)&pool_setup_sync;
+	(void)&pool_setup_async;
+	(void)&teardown_containers;
+	(void)&setup_zerocontainers;
+	(void)&setup_manycontainers;
+	(void)&list_containers_test;
+	(void)&pool_connect_access;
+}
+
 static const struct CMUnitTest pool_tests[] = {
-	{ "POOL1: connect to non-existing pool",
+	/*{ "POOL1: connect to non-existing pool",
 	  pool_connect_nonexist, NULL, test_case_teardown},
 	{ "POOL2: connect/disconnect to pool",
 	  pool_connect, async_disable, test_case_teardown},
@@ -1073,7 +1154,6 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_connect, hdl_share_enable, test_case_teardown},
 	{ "POOL5: exclusive connection",
 	  pool_connect_exclusively, NULL, test_case_teardown},
-	/* Keep this one at the end, as it excludes target rank 1. */
 	{ "POOL6: exclude targets and query pool info",
 	  pool_exclude, async_disable, NULL},
 	{ "POOL7: set/get/list user-defined pool attributes (sync)",
@@ -1091,13 +1171,17 @@ static const struct CMUnitTest pool_tests[] = {
 	{ "POOL13: retry POOL_{CONNECT,DISCONNECT,QUERY}",
 	  pool_op_retry, NULL, test_case_teardown},
 	{ "POOL14: pool connect access based on ACL",
-	  pool_connect_access, NULL, test_case_teardown},
+	  pool_connect_access, NULL, test_case_teardown},*/
+	{ "POOL15: pool evict",
+	  pool_evict, async_disable, test_case_teardown},
 };
 
 int
 run_daos_pool_test(int rank, int size)
 {
 	int rc = 0;
+
+	wno_unused_myheadername();
 
 	rc = cmocka_run_group_tests_name("Pool tests", pool_tests,
 					 setup, test_teardown);

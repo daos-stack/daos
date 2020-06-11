@@ -246,6 +246,12 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 	tse_task_t              *task;
 	int                      rc;
 
+	char uuid_str[37];
+	uuid_unparse_lower(uuid, uuid_str);
+	D_INFO("EJMM: daos_pool_evict()");
+	D_INFO("EJMM: uuid: %s", uuid_str);
+	D_INFO("EJMM: name: %s", grp);
+
 	DAOS_API_ARG_ASSERT(*args, POOL_EVICT);
 	if (!daos_uuid_valid(uuid))
 		return -DER_INVAL;
