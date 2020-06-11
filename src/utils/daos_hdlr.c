@@ -58,81 +58,97 @@ static int
 pool_decode_props(daos_prop_t *props)
 {
 
-	struct daos_prop_entry          *entry;
-	int 				rc = 0;
+	struct daos_prop_entry		*entry;
+	int				rc = 0;
 
 	/* unset properties should get default value */
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || entry->dpe_str == NULL) {
 		fprintf(stderr, "label property not found\n");
-		D_GOTO(out_err, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("label:\t\t\t%s\n", entry->dpe_str);
 	}
-	D_PRINT("label\t\t\t%s\n", entry->dpe_str);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_SPACE_RB);
 	if (entry == NULL) {
 		fprintf(stderr, "rebuild space ratio property not found\n");
-		D_GOTO(out_err, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("rebuild space ratio:\t"DF_U64"%%\n", entry->dpe_val);
 	}
-	D_PRINT("rebuild space ratio\t"DF_U64"%%\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_SELF_HEAL);
 	if (entry == NULL) {
 		fprintf(stderr, "self-healing property not found\n");
-		D_GOTO(out_err, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("self-healing:\t\t");
+		D_PRINT("%s-exclude,", entry->dpe_val &
+				       DAOS_SELF_HEAL_AUTO_EXCLUDE ?
+				       "auto" : "manual");
+		D_PRINT("%s-rebuild\n", entry->dpe_val &
+					DAOS_SELF_HEAL_AUTO_REBUILD ?
+					"auto" : "manual");
+		if (entry->dpe_val & ~(DAOS_SELF_HEAL_AUTO_EXCLUDE |
+				       DAOS_SELF_HEAL_AUTO_REBUILD))
+			D_PRINT("unknown bits set in self-healing property ("DF_X64")\n",
+				entry->dpe_val);
 	}
-	D_PRINT("self-healing\t\t");
-	D_PRINT("%s-exclude,", entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE ?
-			       "auto" : "manual");
-	D_PRINT("%s-rebuild\n", entry->dpe_val & DAOS_SELF_HEAL_AUTO_REBUILD ?
-				"auto" : "manual");
-	if (entry->dpe_val & ~(DAOS_SELF_HEAL_AUTO_EXCLUDE |
-			       DAOS_SELF_HEAL_AUTO_REBUILD))
-		D_PRINT("unexpected bits found set in self-healing property ("DF_U64")\n",
-			entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_RECLAIM);
 	if (entry == NULL) {
 		fprintf(stderr, "reclaim property not found\n");
-		D_GOTO(out_err, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("reclaim strategy:\t");
+		switch (entry->dpe_val) {
+		case DAOS_RECLAIM_DISABLED:
+			D_PRINT("disabled\n");
+			break;
+		case DAOS_RECLAIM_LAZY:
+			D_PRINT("lazy\n");
+			break;
+		case DAOS_RECLAIM_SNAPSHOT:
+			D_PRINT("snapshot\n");
+			break;
+		case DAOS_RECLAIM_BATCH:
+			D_PRINT("batch\n");
+			break;
+		case DAOS_RECLAIM_TIME:
+			D_PRINT("time\n");
+			break;
+		default:
+			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
+			break;
+		}
 	}
-	D_PRINT("reclaim strategy\t");
-	if (entry->dpe_val == DAOS_RECLAIM_DISABLED)
-		D_PRINT("disabled\n");
-	else if (entry->dpe_val == DAOS_RECLAIM_LAZY)
-		D_PRINT("lazy\n");
-	else if (entry->dpe_val == DAOS_RECLAIM_SNAPSHOT)
-		D_PRINT("snapshot\n");
-	else if (entry->dpe_val == DAOS_RECLAIM_BATCH)
-		D_PRINT("batch\n");
-	else if (entry->dpe_val == DAOS_RECLAIM_TIME)
-		D_PRINT("time\n");
-	else
-		D_PRINT(DF_U64" (unknown)\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_OWNER);
 	if (entry == NULL || entry->dpe_str == NULL) {
 		fprintf(stderr, "owner property not found\n");
-		D_GOTO(out_err, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("owner:\t\t\t%s\n", entry->dpe_str);
 	}
-	D_PRINT("owner\t\t\t%s\n", entry->dpe_str);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_OWNER_GROUP);
 	if (entry == NULL || entry->dpe_str == NULL) {
 		fprintf(stderr, "owner-group property not found\n");
-		D_GOTO(out_err, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("owner-group:\t\t%s\n", entry->dpe_str);
 	}
-	D_PRINT("owner-group\t\t%s\n", entry->dpe_str);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_ACL);
 	if (entry == NULL || entry->dpe_val_ptr == NULL) {
 		fprintf(stderr, "acl property not found\n");
-		D_GOTO(out_err, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		daos_acl_dump(entry->dpe_val_ptr);
 	}
-	daos_acl_dump(entry->dpe_val_ptr);
 
-out_err:
 	return rc;
 }
 
@@ -766,135 +782,178 @@ static int
 cont_decode_props(daos_prop_t *props)
 {
 
-	struct daos_prop_entry          *entry;
+	struct daos_prop_entry		*entry;
 	char				type[10];
-	int 				rc = 0;
+	int				rc = 0;
 
 	/* unset properties should get default value */
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_LABEL);
 	if (entry == NULL || entry->dpe_str == NULL) {
 		fprintf(stderr, "label property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("label:\t\t\t%s\n", entry->dpe_str);
 	}
-	D_PRINT("label\t\t\t%s\n", entry->dpe_str);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_LAYOUT_TYPE);
 	if (entry == NULL) {
 		fprintf(stderr, "layout type property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		daos_unparse_ctype(entry->dpe_val, type);
+		D_PRINT("layout type:\t\t%s ("DF_X64")\n", type,
+			entry->dpe_val);
 	}
-	daos_unparse_ctype(entry->dpe_val, type);
-	D_PRINT("layout type\t\t%s ("DF_U64")\n", type, entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_LAYOUT_VER);
 	if (entry == NULL) {
 		fprintf(stderr, "layout version property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("layout version:\t\t"DF_U64"\n", entry->dpe_val);
 	}
-	D_PRINT("layout version\t\t"DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_CSUM);
 	if (entry == NULL) {
 		fprintf(stderr, "checksum type property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("checksum type:\t\t");
+		switch (entry->dpe_val) {
+		case DAOS_PROP_CO_CSUM_OFF:
+			D_PRINT("off\n");
+			break;
+		case DAOS_PROP_CO_CSUM_CRC16:
+			D_PRINT("crc16\n");
+			break;
+		case DAOS_PROP_CO_CSUM_CRC32:
+			D_PRINT("crc32\n");
+			break;
+		case DAOS_PROP_CO_CSUM_CRC64:
+			D_PRINT("crc64\n");
+			break;
+		case DAOS_PROP_CO_CSUM_SHA1:
+			D_PRINT("sha1\n");
+			break;
+		default:
+			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
+			break;
+		}
 	}
-	D_PRINT("checksum type\t\t");
-	if (entry->dpe_val == DAOS_PROP_CO_CSUM_OFF)
-		D_PRINT("off\n");
-	else if (entry->dpe_val == DAOS_PROP_CO_CSUM_CRC16)
-		D_PRINT("crc16\n");
-	else if (entry->dpe_val == DAOS_PROP_CO_CSUM_CRC32)
-		D_PRINT("crc32\n");
-	else if (entry->dpe_val == DAOS_PROP_CO_CSUM_CRC64)
-		D_PRINT("crc64\n");
-	else if (entry->dpe_val == DAOS_PROP_CO_CSUM_SHA1)
-		D_PRINT("sha1\n");
-	else
-		D_PRINT(DF_U64" (unknown)\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
 	if (entry == NULL) {
 		fprintf(stderr, "checksum chunk-size property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("checksum chunk-size:\t"DF_U64"\n", entry->dpe_val);
 	}
-	D_PRINT("checksum chunk-size\t"DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_SERVER_VERIFY);
 	if (entry == NULL) {
 		fprintf(stderr, "checksum verification on server property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("cksum verif. on-server:\t");
+		if (entry->dpe_val == DAOS_PROP_CO_CSUM_SV_OFF)
+			D_PRINT("off\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_CSUM_SV_ON)
+			D_PRINT("on\n");
+		else
+			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 	}
-	D_PRINT("cksum verif. on-server\t");
-	if (entry->dpe_val == DAOS_PROP_CO_CSUM_SV_OFF)
-		D_PRINT("off\n");
-	else if (entry->dpe_val == DAOS_PROP_CO_CSUM_SV_ON)
-		D_PRINT("on\n");
-	else
-		D_PRINT(DF_U64" (unknown)\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_FAC);
 	if (entry == NULL) {
 		fprintf(stderr, "redundancy factor property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("redundancy factor:\t");
+		switch (entry->dpe_val) {
+		case DAOS_PROP_CO_REDUN_RF0:
+			D_PRINT("rf0\n");
+			break;
+		case DAOS_PROP_CO_REDUN_RF1:
+			D_PRINT("rf1\n");
+			break;
+		case DAOS_PROP_CO_REDUN_RF2:
+			D_PRINT("rf2\n");
+			break;
+		case DAOS_PROP_CO_REDUN_RF3:
+			D_PRINT("rf3\n");
+			break;
+		case DAOS_PROP_CO_REDUN_RF4:
+			D_PRINT("rf4\n");
+			break;
+		default:
+			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
+			break;
+		}
 	}
-	D_PRINT("redundancy factor\t");
-	if (entry->dpe_val == DAOS_PROP_CO_REDUN_RF0)
-		D_PRINT("rf0\n");
-	else if (entry->dpe_val == DAOS_PROP_CO_REDUN_RF1)
-		D_PRINT("rf1\n");
-	else if (entry->dpe_val == DAOS_PROP_CO_REDUN_RF2)
-		D_PRINT("rf2\n");
-	else if (entry->dpe_val == DAOS_PROP_CO_REDUN_RF3)
-		D_PRINT("rf3\n");
-	else if (entry->dpe_val == DAOS_PROP_CO_REDUN_RF4)
-		D_PRINT("rf4\n");
-	else
-		D_PRINT(DF_U64" (unknown)\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_LVL);
 	if (entry == NULL) {
 		fprintf(stderr, "redundancy level property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("redundancy level:\t");
+		if (entry->dpe_val == DAOS_PROP_CO_REDUN_RACK)
+			D_PRINT("rack\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_REDUN_NODE)
+			D_PRINT("node\n");
+		else
+			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 	}
-	D_PRINT("redundancy level\t");
-	if (entry->dpe_val == DAOS_PROP_CO_REDUN_RACK)
-		D_PRINT("rack\n");
-	else if (entry->dpe_val == DAOS_PROP_CO_REDUN_NODE)
-		D_PRINT("node\n");
-	else
-		D_PRINT(DF_U64" (unknown)\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_SNAPSHOT_MAX);
 	if (entry == NULL) {
 		fprintf(stderr, "max snapshots property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("max snapshots:\t\t"DF_U64"\n", entry->dpe_val);
 	}
-	D_PRINT("max snapshots\t\t"DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_COMPRESS);
 	if (entry == NULL) {
 		fprintf(stderr, "compression type property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("compression type:\t");
+		if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_OFF)
+			D_PRINT("off\n");
+		else
+			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 	}
-	D_PRINT("compression type\t");
-	if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_OFF)
-		D_PRINT("off\n");
-	else
-		D_PRINT(DF_U64" (unknown)\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ENCRYPT);
 	if (entry == NULL) {
 		fprintf(stderr, "encryption type property not found\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("encryption type:\t");
+		if (entry->dpe_val == DAOS_PROP_CO_ENCRYPT_OFF)
+			D_PRINT("off\n");
+		else
+			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 	}
-	D_PRINT("encryption type\t\t");
-	if (entry->dpe_val == DAOS_PROP_CO_ENCRYPT_OFF)
-		D_PRINT("off\n");
-	else
-		D_PRINT(DF_U64" (unknown)\n", entry->dpe_val);
 
-err_out:
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_OWNER);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(stderr, "owner property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("owner:\t\t\t%s\n", entry->dpe_str);
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_OWNER_GROUP);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(stderr, "owner-group property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("owner-group:\t\t%s\n", entry->dpe_str);
+	}
+
 	return rc;
 }
 
