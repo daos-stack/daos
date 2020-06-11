@@ -43,7 +43,7 @@ func (h hfiMap) addInterface(fi *control.HostFabricInterface) {
 
 // PrintHostFabricMap generates a human-readable representation of the supplied
 // HostFabricMap and writes it to the supplied io.Writer.
-func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, onlyProviders bool, opts ...control.PrintConfigOption) error {
+func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...control.PrintConfigOption) error {
 	if len(hfm) == 0 {
 		return nil
 	}
@@ -61,12 +61,6 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, onlyProviders 
 		iw := txtfmt.NewIndentWriter(ew, txtfmt.WithPadCount(4))
 		fmt.Fprintf(ew, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
 		fmt.Fprintln(ew)
-		fmt.Fprintf(iw, "Available providers: %s\n", strings.Join(hfs.HostFabric.Providers, ", "))
-		fmt.Fprintln(ew)
-
-		if onlyProviders {
-			continue
-		}
 
 		hfim := make(hfiMap)
 		for _, fi := range hfs.HostFabric.Interfaces {

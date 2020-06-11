@@ -247,7 +247,7 @@ class DmgNetworkScanTest(TestWithServers):
         for host_info in info:
             parsed_devs = {}
             host = host_info[0][0]
-            for dev_info in host_info[2:]:
+            for dev_info in host_info[1:]:
                 if len(dev_info) == 1:
                     numa = dev_info[0]
                     continue

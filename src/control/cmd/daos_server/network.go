@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,7 +82,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := pretty.PrintHostFabricMap(hfm, &bld, false); err != nil {
+	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())

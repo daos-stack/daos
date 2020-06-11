@@ -50,8 +50,6 @@ func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
 }
 
 func (cmd *netScanCmd) Execute(_ []string) error {
-	defer os.Exit(0)
-
 	numaAware, err := netdetect.NumaAware()
 	if err != nil {
 		exitWithError(cmd.log, err)
@@ -92,7 +90,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 	}
 
 	var bld strings.Builder
-	if err := pretty.PrintHostFabricMap(hfm, &bld, false); err != nil {
+	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
