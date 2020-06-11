@@ -63,7 +63,7 @@ const (
 )
 
 type (
-	// PrepareRequest defines the parameters for a Prepare opration.
+	// PrepareRequest defines the parameters for a Prepare operation.
 	PrepareRequest struct {
 		pbin.ForwardableRequest
 		// Reset indicates that the operation should reset (clear) DCPM namespaces.
@@ -147,7 +147,7 @@ type (
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
-	// of SCM-specific system capabilties.
+	// of SCM-specific system capabilities.
 	SystemProvider interface {
 		system.IsMountedProvider
 		system.MountProvider

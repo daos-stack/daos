@@ -165,7 +165,7 @@ ut_reserve(void **state)
 	/*
 	 * Reserve two extents from I/O stream 0 and I/O stream 1 in
 	 * interleaved order, the reservation from I/O stream 0 will be
-	 * cancelled later, and the reservation from I/O stream 1 will
+	 * canceled later, and the reservation from I/O stream 1 will
 	 * be published.
 	 */
 	off_a = off_b = VEA_HINT_OFF_INVAL;
@@ -1186,7 +1186,7 @@ ut_fragmentation(void **state)
 		rc = vea_reserve(args.vua_vsi, block_count, NULL, r_list);
 	}
 
-	/* Free some of the fragments. The cancelled ones remain in r_list */
+	/* Free some of the fragments. The canceled ones remain in r_list */
 	D_INIT_LIST_HEAD(&persist_list);
 
 	d_list_for_each_entry_safe(ext, tmp_ext, r_list, vre_link) {

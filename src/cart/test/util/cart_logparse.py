@@ -225,7 +225,7 @@ class LogLine():
     def _is_type(self, text, trace=True):
         """Checks for text in a log message
 
-        Retuns True if the line starts with the text provided
+        Returns True if the line starts with the text provided
         """
         if trace and not self.trace:
             return False

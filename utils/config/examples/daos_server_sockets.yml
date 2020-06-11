@@ -12,7 +12,7 @@ control_log_file: /tmp/daos_control.log
 ## Transport Credentials Specifying certificates to secure communications
 ##
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # Specify to bypass loading certificates and use insecure communications channels
 #  allow_insecure: false
 #  # Location where daos_server will look for Client certificates
 #  client_cert_dir: .daos/clients
@@ -35,7 +35,7 @@ servers:
   log_file: /tmp/server0.log # map to D_LOG_FILE=/tmp/server.log
 
   # Environment variable values should be supplied without encapsulating quotes.
-  env_vars:                 # influence DAOS IO Server behaviour by setting env variables
+  env_vars:                 # influence DAOS IO Server behavior by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30
@@ -95,7 +95,7 @@ servers:
   log_mask: ERR             # map to D_LOG_MASK=ERR
   log_file: /tmp/server1.log # map to D_LOG_FILE=/tmp/server1.log
 
-  env_vars:                 # influence DAOS IO Server behaviour by setting env variables
+  env_vars:                 # influence DAOS IO Server behavior by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30

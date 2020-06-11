@@ -44,7 +44,7 @@ class RebuildWithIO(TestWithServers):
             Trigger a rebuild while I/O is ongoing.
 
         Use Cases:
-            single pool, single client performing continous read/write/verify
+            single pool, single client performing continuous read/write/verify
             sequence while failure/rebuild is triggered in another process
 
         :avocado: tags=all,pool,rebuild,pr,medium,rebuildwithio
@@ -75,7 +75,7 @@ class RebuildWithIO(TestWithServers):
         # Create and open the contaner
         container.create()
 
-        # Write data to the contianer for 30 seconds
+        # Write data to the container for 30 seconds
         self.log.info(
             "Wrote %s bytes to container %s",
             container.execute_io(30, rank, obj_class), container.uuid)
@@ -89,7 +89,7 @@ class RebuildWithIO(TestWithServers):
         # Wait for recovery to start
         pool.wait_for_rebuild(True)
 
-        # Write data to the contianer for another 30 seconds
+        # Write data to the container for another 30 seconds
         self.log.info(
             "Wrote an additional %s bytes to container %s",
             container.execute_io(30), container.uuid)
@@ -110,5 +110,5 @@ class RebuildWithIO(TestWithServers):
         # Verify the data after rebuild
         self.assertTrue(
             container.read_objects(),
-            "Data verifiaction error after rebuild")
+            "Data verification error after rebuild")
         self.log.info("Test Passed")
