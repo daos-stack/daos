@@ -1096,13 +1096,16 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			goto out;
 		}
 	} else {
+		uint32_t	fetch_flags;
+
 		size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
+		fetch_flags = size_fetch ? VOS_FETCH_SIZE_ONLY : 0;
 		bulk_op = CRT_BULK_PUT;
 
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
 				     orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
-				     dkey, orw->orw_nr, iods, size_fetch, &ioh,
-				     dth);
+				     dkey, orw->orw_nr, iods, fetch_flags, NULL,
+				     &ioh, dth);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
