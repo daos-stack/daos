@@ -84,6 +84,7 @@ class WarningsFactory():
         entry['directory'] = os.path.dirname(self._file)
         entry['lineStart'] = sys._getframe().f_lineno
         entry['message'] = 'Tests exited without shutting down properly'
+        entry['fingerprint'] = 'tests-died-while-running'
         entry['severity'] = 'ERROR'
         self.issues.append(entry)
         self.close()
@@ -145,6 +146,15 @@ class WarningsFactory():
         entry['lineStart'] = line.lineno
         entry['description'] = message
         entry['message'] = line.get_anon_msg()
+        if line.filename == 'src/security/cli_security.c':
+            entry['fingerprint'] = '2DAC808D8D0018ECCBBE168CA02DBC1A'
+        elif line.filename == 'src/rdb/rdb_raft.c':
+            entry['filename'] = '972353F8A37813C69F01058745322AA1'
+        else:
+            if cat == 'Fault injection location':
+                entry['fingerprint'] = '{} {}{}'.format(line.filename, line.get_anon_msg())
+            else:
+                entry['fingerprint'] = '{} {}{}'.format(line.filename, line.get_anon_msg(), message)
         entry['severity'] = sev
         if line.function in self.FLAKY_FUNCTIONS and \
            entry['severity'] == 'NORMAL':
@@ -173,6 +183,7 @@ class WarningsFactory():
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
             entry['message'] = 'Tests are still running'
+            entry['fingerprint'] = 'tests-still-running'
             data['issues'].append(entry)
         json.dump(data, self._fd, indent=2)
         self._fd.flush()
