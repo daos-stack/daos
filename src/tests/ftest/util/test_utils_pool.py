@@ -29,12 +29,62 @@ from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
+from bytes_utils import Bytes
 from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
                         daos_cref)
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
 from dmg_utils import get_pool_uuid_service_replicas_from_stdout
+
+
+class PoolSpace(object):
+    # pylint: disable=too-few-public-methods
+    """Stores the SCM and NVMe pool sizes from a dmg pool query."""
+
+    def __init__(self, total, free, free_min, free_max, free_mean):
+        """Initialize a PoolSpace object.
+
+        Args:
+            total (Bytes): total size
+            free (Bytes): free size
+            free_min (Bytes): minimum free size
+            free_max (Bytes): maximum free size
+            free_mean (Bytes): mean free size
+        """
+        self.total = total
+        self.free = free
+        self.free_min = free_min
+        self.free_max = free_max
+        self.free_mean = free_mean
+
+
+class PoolInfo(object):
+    # pylint: disable=too-few-public-methods
+    """Stores the pool information from a dmg pool query."""
+
+    def __init__(self, uuid, ntarget, disabled, leader, version, target_count,
+                 scm, nvme):
+        """Initialize a PoolInfo object.
+
+        Args:
+            uuid (str): pool UUID
+            ntarget (int): number of targets
+            disabled (int): whether or not the pool is disabled
+            leader (int): pool rank leader
+            version (int): pool version number
+            target_count (int): number of VOS targets
+            scm (PoolSpace): the SCM pool space information
+            nvme (PoolSpace): the NVMe pool space information
+        """
+        self.uuid = uuid
+        self.ntarget = ntarget
+        self.disabled = disabled
+        self.leader = leader
+        self.version = version
+        self.target_count = target_count
+        self.scm = scm
+        self.nvme = nvme
 
 
 class TestPool(TestDaosApiBase):
@@ -143,7 +193,7 @@ class TestPool(TestDaosApiBase):
             uuid, svc = get_pool_uuid_service_replicas_from_stdout(
                 result.stdout)
 
-            # Populte the empty DaosPool object with the properties of the pool
+            # Populate the empty DaosPool object with the properties of the pool
             # created with dmg pool create.
             if self.name.value:
                 self.pool.group = ctypes.create_string_buffer(self.name.value)
@@ -207,7 +257,7 @@ class TestPool(TestDaosApiBase):
 
         """
         if self.pool and self.connected:
-            self.log.info("Disonnecting from pool %s", self.uuid)
+            self.log.info("Disconnecting from pool %s", self.uuid)
             self._call_method(self.pool.disconnect, {})
             self.connected = False
             return True
@@ -284,16 +334,96 @@ class TestPool(TestDaosApiBase):
                     "Error: Undefined control_method: %s",
                     self.control_method.value)
 
+    @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     def get_info(self):
         """Query the pool for information.
 
         Sets the self.info attribute.
         """
+        # pylint: disable=too-many-nested-blocks
         if self.pool:
-            self.connect()
-            self._call_method(self.pool.pool_query, {})
-            self.info = self.pool.pool_info
+            self.log.info("Querying pool: %s", self.uuid)
+
+            if self.control_method.value == self.USE_DMG and self.dmg:
+                kwargs = {"pool": self.uuid}
+                self._log_method("dmg.pool_query", kwargs)
+                data = self.dmg.get_output("pool_query", **kwargs)
+                # When called through get_output() the 'dmg pool query' output
+                # is returned as a tuple of tuples after running through the
+                # regex.
+                #
+                # For example, running the regex against this output:
+                #   Pool <A>, ntarget=<B>, disabled=<C>, leader=<D>, version=<E>
+                #   Pool space info:
+                #   - Target(VOS) count:<F>
+                #   - SCM:
+                #     Total size: <G>
+                #     Free: <H>, min:<I>, max:<J>, mean:<K>
+                #   - NVMe:
+                #     Total size: <L>
+                #     Free: <M>, min:<N>, max:<O>, mean:<P>
+                #   Rebuild idle, <Q> objs, <R> recs
+                #
+                # Yields this tuple of tuples:
+                #   0: (<A>, <B>, <C>, <D>, <E>, '', '', '', '', '', '', '', '')
+                #   1: ('', '', '', '', '', <F>, '', '', '', '', '', '', '')
+                #   2: ('', '', '', '', '', '', <G>, <H>, <I>, <J>, <K>, '', '')
+                #   3: ('', '', '', '', '', '', <L>, <M>, <N>, <O>, <P>, '', '')
+                #   4: ('', '', '', '', '', '', '', '', '', '', '', <Q>, <R>)
+                #
+                # Mapping of the PoolInfo args to the data[0] indices
+                pool_map = {
+                    "uuid": 0,
+                    "ntarget": 1,
+                    "disabled": 2,
+                    "leader": 3,
+                    "version": 4
+                }
+                # Mapping of the PoolSpace args to the data[2|3] indices
+                space_map = {
+                    "total": 6,
+                    "free": 7,
+                    "free_min": 8,
+                    "free_max": 9,
+                    "free_mean": 10
+                }
+                # Mapping of the 2nd indices maps to the 1st data indices
+                map_values = [
+                    pool_map,
+                    {"target_count": 5},
+                    space_map,
+                    space_map
+                ]
+
+                # Define self.pool to a non-ctype version of PoolInfo
+                kwargs = {}
+                for index_1, data_index_1 in enumerate(data):
+                    if index_1 < len(map_values):
+                        ps_kwargs = {}
+                        for key, index_2 in map_values[index_1].items():
+                            if index_1 in (0, 1):
+                                kwargs[key] = data_index_1[index_2]
+                            else:
+                                ps_kwargs[key] = data_index_1[index_2]
+                        if index_1 == 2:
+                            kwargs["scm"] = PoolSpace(**ps_kwargs)
+                        elif index_1 == 3:
+                            kwargs["nvme"] = PoolSpace(**ps_kwargs)
+                self.info = PoolInfo(**kwargs)
+
+            elif self.control_method.value == self.USE_DMG:
+                raise CommandFailure("Error: Undefined dmg command")
+
+            elif self.control_method.value == self.USE_API:
+                self.connect()
+                self._call_method(self.pool.pool_query, {})
+                self.info = self.pool.pool_info
+
+            else:
+                raise CommandFailure(
+                    "Error: Undefined control_method: {}".format(
+                        self.control_method.value))
 
     def check_pool_info(self, pi_uuid=None, pi_ntargets=None, pi_nnodes=None,
                         pi_ndisabled=None, pi_map_ver=None, pi_leader=None,
@@ -326,6 +456,10 @@ class TestPool(TestDaosApiBase):
 
         """
         self.get_info()
+        if isinstance(self.info, PoolInfo):
+            raise NotImplementedError(
+                "Support for checking the test_utils_pool.PoolInfo object "
+                "(created via dmg) has not yet been implemented")
         checks = [
             (key,
              c_uuid_to_str(getattr(self.info, key))
@@ -366,6 +500,10 @@ class TestPool(TestDaosApiBase):
 
         """
         self.get_info()
+        if isinstance(self.info, PoolInfo):
+            raise NotImplementedError(
+                "Support for checking the test_utils_pool.PoolInfo object "
+                "(created via dmg) has not yet been implemented")
         checks = []
         for key in ("ps_free_min", "ps_free_max", "ps_free_mean"):
             val = locals()[key]
@@ -405,6 +543,10 @@ class TestPool(TestDaosApiBase):
 
         """
         self.get_info()
+        if isinstance(self.info, PoolInfo):
+            raise NotImplementedError(
+                "Support for checking the test_utils_pool.PoolInfo object "
+                "(created via dmg) has not yet been implemented")
         checks = [
             ("{}_{}".format(key, index),
              getattr(self.info.pi_space.ps_space, key)[index],
@@ -453,6 +595,10 @@ class TestPool(TestDaosApiBase):
 
         """
         self.get_info()
+        if isinstance(self.info, PoolInfo):
+            raise NotImplementedError(
+                "Support for checking the test_utils_pool.PoolInfo object "
+                "(created via dmg) has not yet been implemented")
         checks = [
             (key, getattr(self.info.pi_rebuild_st, key), val)
             for key, val in locals().items()
@@ -648,7 +794,7 @@ class TestPool(TestDaosApiBase):
             container (TestContainer): container from which to read data
 
         Returns:
-            bool: True if all the data is read successfully befoire rebuild
+            bool: True if all the data is read successfully before rebuild
                 completes; False otherwise
 
         """

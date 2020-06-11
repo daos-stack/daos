@@ -730,6 +730,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the daos pool query command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("set-attr")
@@ -753,6 +754,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the daos pool query command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("get-attr")
@@ -774,6 +776,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the daos pool query command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list-attrs")
@@ -798,6 +801,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the daos pool query command fails.
+
         """
         self.set_sub_command("container")
         self.sub_command_class.set_sub_command("query")
@@ -827,6 +831,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the daos pool query command fails.
+
         """
         self.set_sub_command("container")
         self.sub_command_class.set_sub_command("set-attr")
@@ -856,6 +861,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the daos pool query command fails.
+
         """
         self.set_sub_command("container")
         self.sub_command_class.set_sub_command("get-attr")
@@ -883,6 +889,7 @@ class DaosCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the daos pool query command fails.
+
         """
         self.set_sub_command("container")
         self.sub_command_class.set_sub_command("list-attrs")
@@ -890,4 +897,69 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.svc.value = svc
         self.sub_command_class.sub_command_class.cont.value = cont
         self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        return self._get_result()
+
+    def container_create_snap(self, pool, cont, svc=None, sys_name=None,
+                              snap=None):
+        """Crete a container snapshot.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            svc (str, optional): pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+            snap (str, optional): --snap <snap> argument to use with the command
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("create-snap")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        self.sub_command_class.sub_command_class.snap.value = snap
+        return self._get_result()
+
+    def container_destroy_snap(self, pool, cont, svc=None, sys_name=None,
+                               snap=None, epc=None, epcrange=None):
+        """Destroy a container snapshot.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            svc (str, optional): pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+            snap (str, optional): --snap <snap> argument to use with the command
+            epc (str, optional): --epc <epc> argument to use with the command
+            epcrange (str, optional): --epcrange <epcrange> argument to use with
+                the command
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("destroy-snap")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        self.sub_command_class.sub_command_class.snap.value = snap
+        self.sub_command_class.sub_command_class.epc.value = epc
+        self.sub_command_class.sub_command_class.epcrange.value = epcrange
         return self._get_result()

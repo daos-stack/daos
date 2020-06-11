@@ -80,7 +80,7 @@ class IorCommand(ExecutableCommand):
         self.block_size = FormattedParameter("-b {}")
         self.test_delay = FormattedParameter("-d {}")
         self.script = FormattedParameter("-f {}")
-        self.signatute = FormattedParameter("-G {}")
+        self.signature = FormattedParameter("-G {}")
         self.repetitions = FormattedParameter("-i {}")
         self.outlier_threshold = FormattedParameter("-j {}")
         self.alignment = FormattedParameter("-J {}")
