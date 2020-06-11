@@ -230,6 +230,31 @@ public class DaosUnsIT {
     }
   }
 
+  @Test(expected = DaosIOException.class)
+  public void testResolvePathNotExistsFailed() throws Exception {
+    File dir = Files.createTempDirectory("uns").toFile();
+    File file = new File(dir, "path");
+    try {
+      DaosUns.resolvePath(file.getAbsolutePath());
+    } finally {
+      file.delete();
+      dir.delete();
+    }
+  }
+
+  @Test(expected = DaosIOException.class)
+  public void testResolvePathWithoutAttributeFailed() throws Exception {
+    File dir = Files.createTempDirectory("uns").toFile();
+    File file = new File(dir, "path");
+    file.mkdir();
+    try {
+      DaosUns.resolvePath(file.getAbsolutePath());
+    } finally {
+      file.delete();
+      dir.delete();
+    }
+  }
+
   @Test
   public void testDestroyPath() throws Exception {
     File dir = Files.createTempDirectory("uns").toFile();

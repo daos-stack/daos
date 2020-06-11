@@ -4,6 +4,8 @@ import io.daos.dfs.uns.*;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.io.File;
+
 public class DaosUnsTest {
 
   @Test(expected = IllegalArgumentException.class)
@@ -45,6 +47,12 @@ public class DaosUnsTest {
     DaosUns uns = builder.build();
     Assert.assertEquals("/abc", uns.getPath());
     Assert.assertEquals("4567-rty-456", uns.getPoolUuid());
+  }
+
+  @Test
+  public void testRootFile() throws Exception {
+    File file = new File("/abc");
+    Assert.assertNull(file.getParentFile().getParentFile());
   }
 
   @Test

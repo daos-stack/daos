@@ -37,8 +37,10 @@ import org.powermock.core.classloader.annotations.SuppressStaticInitializationFo
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.mockito.Mockito.*;
 
@@ -47,6 +49,8 @@ import static org.mockito.Mockito.*;
 @PrepareForTest({DaosFsClient.DaosFsClientBuilder.class, DaosFileSystem.class, DaosUns.class})
 @SuppressStaticInitializationFor("io.daos.dfs.DaosFsClient")
 public class DaosFileSystemTest {
+
+  private static AtomicInteger unsId = new AtomicInteger(1);
 
   @Test
   public void testNewDaosFileSystemByDifferentURIs() throws Exception {
@@ -78,7 +82,7 @@ public class DaosFileSystemTest {
     PowerMockito.mockStatic(DaosUns.class);
     when(DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
             io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false)).thenReturn(info);
-    URI uri = URI.create("daos://" + Constants.DAOS_AUTHORITY_UNS + path);
+    URI uri = URI.create("daos://" + Constants.DAOS_AUTHORITY_UNS + ":" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();
 
@@ -120,7 +124,7 @@ public class DaosFileSystemTest {
     PowerMockito.mockStatic(DaosUns.class);
     when(DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
             io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false)).thenReturn(info);
-    URI uri = URI.create("daos://" + Constants.DAOS_AUTHORITY_UNS + path);
+    URI uri = URI.create("daos://" + Constants.DAOS_AUTHORITY_UNS + ":" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();
 
@@ -149,8 +153,10 @@ public class DaosFileSystemTest {
     cfg.set(Constants.DAOS_CONTAINER_UUID, "123");
     cfg.set(Constants.DAOS_POOL_SVC, "0");
     fs.initialize(URI.create("daos://1234:56/"), cfg);
-    Assert.assertEquals("daos://1234:56/user/"+System.getProperty("user.name"), fs.getWorkingDirectory().toString());
-    verify(client, times(1)).mkdir("/user/"+System.getProperty("user.name"), true);
+    Assert.assertEquals("daos://1234:56/user/"+System.getProperty("user.name"),
+      fs.getWorkingDirectory().toString());
+    verify(client, times(1))
+        .mkdir("/user/"+System.getProperty("user.name"), true);
     fs.close();
   }
 
@@ -291,6 +297,33 @@ public class DaosFileSystemTest {
     String s = cfg.get("fs.defaultFS");
     Assert.assertEquals("daos://id:2", s);
     Assert.assertEquals(8388608, cfg.getInt("fs.daos.read.buffer.size", 0));
+  }
+
+  @Test
+  public void testSpecialUnsPath() throws Exception {
+    URI uri = URI.create("daos://uns:1/tmp/uns_path#/abc");
+    Assert.assertEquals("/tmp/uns_path", uri.getPath());
+    Assert.assertEquals("/abc", uri.getFragment());
+
+    Path path = new Path("daos://uns:2/tmp/uns_path#abc");
+    Path path1 = path.makeQualified(uri, null);
+    System.out.println(path1);
+
+
+    Assert.assertEquals("/tmp/uns_path#abc", path.toUri().getPath());
+    Assert.assertEquals(null, path.toUri().getFragment());
+
+    Path path2 = new Path("/abc");
+    System.out.println(path2.toString());
+    Path path3 = path2.makeQualified(uri, new Path("/user/zjf"));
+    System.out.println(path3.toString());
+
+    Path path4 = new Path("abc");
+    System.out.println(path4.toUri().getPath());
+
+    String s = "daos://uns:2/tmp/uns_path#";
+    Path p6 = new Path(s + path2.toString());
+    System.out.println(p6);
   }
 
 }
