@@ -88,7 +88,8 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
  * \param dtis	[IN]	The array for DTX identifiers to be aborted.
  * \param count [IN]	The count of DTXs to be aborted.
  *
- * \return		Zero on success, negative value if error.
+ * \return		Negative value if error.
+ * \return		Others are for the count of aborted DTXs.
  */
 int
 vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
@@ -397,7 +398,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_iod_t *iods, d_sg_list_t *sgls);
 
 /**
- * Update records for the specfied object.
+ * Update records for the specified object.
  * If input buffer is not provided in \a sgl, then this function returns
  * the new allocated addresses to store the records, upper layer can
  * directly write data into these addresses (rdma mode).
@@ -591,7 +592,7 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
  * VOS iterator APIs
  */
 /**
- * Initialise an iterator for VOS
+ * Initialize an iterator for VOS
  *
  * \param type  [IN]	Type of iterator
  * \param param	[IN]	Parameters for the iterator.

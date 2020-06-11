@@ -55,7 +55,6 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_sync = 0;
 	dth->dth_resent = 0;
 	dth->dth_solo = 0;
-	dth->dth_dti_cos_done = 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
 	dth->dth_flags = DTE_LEADER;
@@ -301,7 +300,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* Aborted the update DTX. */
 	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
-	assert_int_equal(rc, 0);
+	assert_int_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -334,7 +333,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* Aborted the punch DTX. */
 	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
-	assert_int_equal(rc, 0);
+	assert_int_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -430,11 +429,9 @@ dtx_14(void **state)
 	/* Data record is not affected by double commit. */
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
-	/* Committed DTX cannot be aborted.
-	 * But we cannot check "assert_int_not_equal(rc, 0)" that depends
-	 * on the umem_tx_abort() which may return 0 for vmem based case.
-	 */
-	vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
+	/* Committed DTX cannot be aborted. */
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
+	assert_int_not_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -495,10 +492,11 @@ dtx_15(void **state)
 
 	/* Aborted the update DTX. */
 	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
-	assert_int_equal(rc, 0);
+	assert_int_equal(rc, 1);
 
 	/* Double aborted the DTX is harmless. */
-	vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
+	assert_int_not_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -683,7 +681,7 @@ dtx_17(void **state)
 		vts_dtx_end(dth);
 	}
 
-	/* Commit the fisrt 4 DTXs. */
+	/* Commit the first 4 DTXs. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, xid, 4, NULL);
 	assert_int_equal(rc, 4);
 

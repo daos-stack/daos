@@ -8,7 +8,7 @@ set -uex
 # The file ${PACKAGES} will contain a list of packages that the RPMs depend
 # on.
 
-# The file ${SOFILES} will contain a list of sharable images depended on by
+# The file ${SOFILES} will contain a list of shareable images depended on by
 # the RPMs.  The default name for ${SOFILES} is "daos_depends_libries".
 
 # This will likely need to be edited for other build systems.

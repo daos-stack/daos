@@ -1316,7 +1316,7 @@ obj_ioc_begin(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rpc_map_ver > ioc->ioc_map_ver || poc->spc_pool->sp_map == NULL ||
 	    DAOS_FAIL_CHECK(DAOS_FORCE_REFRESH_POOL_MAP)) {
 		/* XXX: Client (or leader replica) has newer pool map than
-		 *	current replica. Two possibile cases:
+		 *	current replica. Two possible cases:
 		 *
 		 *	1. The current replica was the old leader if with
 		 *	   the old pool map version. According to current
@@ -1429,7 +1429,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			rc = vos_dtx_abort(ioc.ioc_vos_coh, DAOS_EPOCH_MAX,
 					   &orw->orw_dti, 1);
 
-		if (rc != 0 && rc != -DER_NONEXIST)
+		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 	}
 
@@ -1479,7 +1479,7 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 {
 	struct ds_obj_exec_arg	*exec_arg = arg;
 
-	/* handle local operaion */
+	/* handle local operation */
 	if (idx == -1) {
 		struct obj_ec_split_req	*split_req = exec_arg->args;
 		daos_iod_t		*split_iods;
@@ -1611,7 +1611,7 @@ renew:
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
-	 * locally, we will start dtx and forward reqests to
+	 * locally, we will start dtx and forward requests to
 	 * all replicas.
 	 *
 	 * For new leader, even though the local replica
@@ -2096,7 +2096,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 			rc = vos_dtx_abort(ioc.ioc_vos_coh, DAOS_EPOCH_MAX,
 					   &opi->opi_dti, 1);
 
-		if (rc != 0 && rc != -DER_NONEXIST)
+		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 	}
 
@@ -2136,7 +2136,7 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 {
 	struct ds_obj_exec_arg	*exec_arg = arg;
 
-	/* handle local operaion */
+	/* handle local operation */
 	if (idx == -1) {
 		crt_rpc_t		*rpc = exec_arg->rpc;
 		struct obj_punch_in	*opi = crt_req_get(rpc);
@@ -2233,7 +2233,7 @@ renew:
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
-	 * locally, we will start dtx and forward reqests to
+	 * locally, we will start dtx and forward requests to
 	 * all replicas.
 	 *
 	 * For new leader, even though the local replica

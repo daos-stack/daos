@@ -220,7 +220,7 @@ struct csum_recalc_args {
 	ABT_eventual		 csum_eventual;
 };
 
-/* Callback funtion to pass to vos_aggregation */
+/* Callback function to pass to vos_aggregation */
 void
 ds_csum_recalc(void *args);
 

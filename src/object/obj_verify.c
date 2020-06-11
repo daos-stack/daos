@@ -675,7 +675,7 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 
 		memset(cursor, 0, sizeof(*cursor));
 		/* We merge the recxs if they can be merged.
-		 * So always signle IOD.
+		 * So always single IOD.
 		 */
 		cursor->iod.iod_nr = 1;
 		cursor->iod.iod_recxs = &cursor->recx;
