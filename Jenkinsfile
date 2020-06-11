@@ -997,7 +997,6 @@ pipeline {
                             )
                             recordIssues enabledForFailure: true,
                                          failOnError: true,
-                                         referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: false,
                                          ignoreQualityGate: true,
                                          /* Set qualitygate to 1 new "NORMAL" priority message
