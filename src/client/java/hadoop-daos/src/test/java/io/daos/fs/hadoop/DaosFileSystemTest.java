@@ -80,8 +80,8 @@ public class DaosFileSystemTest {
     String path = "/file/abc";
     DunsInfo info = new DunsInfo("123", "56", "POSIX", Constants.DAOS_POOL_SVC + "=0");
     PowerMockito.mockStatic(DaosUns.class);
-    when(DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
-            io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false)).thenReturn(info);
+    when(DaosUns.getAccessInfo(anyString(), eq(Constants.UNS_ATTR_NAME_HADOOP),
+            eq(io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
     URI uri = URI.create("daos://" + Constants.DAOS_AUTHORITY_UNS + ":" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();
@@ -94,6 +94,24 @@ public class DaosFileSystemTest {
     }
     Assert.assertNotNull(ee);
     Assert.assertTrue(ee.getMessage().contains("authority should be in format ip:port"));
+
+    ee = null;
+    try {
+      FileSystem.get(URI.create("daos://uns/abc"), cfg);
+    } catch (IllegalArgumentException e) {
+      ee = e;
+    }
+    Assert.assertNotNull(ee);
+    Assert.assertTrue(ee.getMessage().contains("need uns id in authority"));
+
+    ee = null;
+    try {
+      FileSystem.get(URI.create("daos://uns:abc/abc"), cfg);
+    } catch (IllegalArgumentException e) {
+      ee = e;
+    }
+    Assert.assertNotNull(ee);
+    Assert.assertTrue(ee.getMessage().contains("bad uns id. should be integer"));
   }
 
   @Test
@@ -122,8 +140,8 @@ public class DaosFileSystemTest {
     DunsInfo info = new DunsInfo("123", "56", "POSIX",
             sb.toString());
     PowerMockito.mockStatic(DaosUns.class);
-    when(DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
-            io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false)).thenReturn(info);
+    when(DaosUns.getAccessInfo(anyString(), eq(Constants.UNS_ATTR_NAME_HADOOP),
+      eq(io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
     URI uri = URI.create("daos://" + Constants.DAOS_AUTHORITY_UNS + ":" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();
@@ -301,11 +319,11 @@ public class DaosFileSystemTest {
 
   @Test
   public void testSpecialUnsPath() throws Exception {
-    URI uri = URI.create("daos://uns:1/tmp/uns_path#/abc");
+    URI uri = URI.create("daos://uns:" + unsId.getAndIncrement() + "/tmp/uns_path#/abc");
     Assert.assertEquals("/tmp/uns_path", uri.getPath());
     Assert.assertEquals("/abc", uri.getFragment());
 
-    Path path = new Path("daos://uns:2/tmp/uns_path#abc");
+    Path path = new Path("daos://uns:" + unsId.getAndIncrement() + "/tmp/uns_path#abc");
     Path path1 = path.makeQualified(uri, null);
     System.out.println(path1);
 

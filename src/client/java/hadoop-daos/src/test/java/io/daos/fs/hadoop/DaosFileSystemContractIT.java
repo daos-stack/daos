@@ -88,8 +88,6 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
     assertTrue("Deleted file", this.fs.delete(file, false));
     assertTrue("Parent should exist", this.fs.exists(parentDir));
-
-
   }
 
   @Test
