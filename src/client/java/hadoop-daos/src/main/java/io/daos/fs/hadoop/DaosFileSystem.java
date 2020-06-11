@@ -253,7 +253,7 @@ public class DaosFileSystem extends FileSystem {
     while (info == null && file != null) {
       if (file.exists()) {
         try {
-          info = DaosUns.getAccessInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
+          info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
             io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
           if (info != null) {
             break;
@@ -472,6 +472,10 @@ public class DaosFileSystem extends FileSystem {
     return uns;
   }
 
+  public String getUnsPrefix() {
+    return unsPrefix;
+  }
+
   @Override
   public int getDefaultPort() {
     return Integer.valueOf(Constants.DAOS_CONFIG_CONTAINER_KEY_DEFAULT);
@@ -532,15 +536,20 @@ public class DaosFileSystem extends FileSystem {
 
   private String getDaosRelativePath(Path path) {
     String p = path.toUri().getPath();
+    boolean truncated = false;
     if (uns && p.startsWith(unsPrefix)) {
       if (p.length() > unsPrefix.length()) {
         p = p.substring(unsPrefix.length());
+        truncated = true;
       } else {
         p = "";
       }
     }
-    if (StringUtils.isBlank(p)) {
-      p = workPath;
+    if (!p.startsWith("/")) {
+      if (truncated) { // ensure correct uns prefix, counter example, <unsPrefix>abc, is not on uns path
+        return path.toUri().getPath();
+      }
+      p = workPath + "/" + p;
     }
     return p;
   }
