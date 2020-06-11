@@ -146,15 +146,10 @@ class WarningsFactory():
         entry['lineStart'] = line.lineno
         entry['description'] = message
         entry['message'] = line.get_anon_msg()
-#        if line.filename == 'src/security/cli_security.c':
-#            entry['fingerprint'] = '2DAC808D8D0018ECCBBE168CA02DBC1A'
-#        elif line.filename == 'src/rdb/rdb_raft.c':
-#            entry['filename'] = '972353F8A37813C69F01058745322AA1'
-#        else:
-#            if cat == 'Fault injection location':
-#                entry['fingerprint'] = '{} {}'.format(line.filename, line.get_anon_msg())
-#            else:
-#                entry['fingerprint'] = '{} {}{}'.format(line.filename, line.get_anon_msg(), message)
+        if cat == 'Fault injection location':
+            entry['fingerprint'] = '{} {}'.format(line.filename, line.get_anon_msg())
+        else:
+            entry['fingerprint'] = '{} {}{}'.format(line.filename, line.get_anon_msg(), message)
         entry['severity'] = sev
         if line.function in self.FLAKY_FUNCTIONS and \
            entry['severity'] == 'NORMAL':

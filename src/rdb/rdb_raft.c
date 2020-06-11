@@ -51,6 +51,7 @@
 
 
 
+
 static int rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc,
 			      d_iov_t *key, uint64_t base,
 			      uint64_t base_term, uint64_t term,
