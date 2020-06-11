@@ -152,7 +152,7 @@ class WarningsFactory():
             entry['filename'] = '972353F8A37813C69F01058745322AA1'
         else:
             if cat == 'Fault injection location':
-                entry['fingerprint'] = '{} {}{}'.format(line.filename, line.get_anon_msg())
+                entry['fingerprint'] = '{} {}'.format(line.filename, line.get_anon_msg())
             else:
                 entry['fingerprint'] = '{} {}{}'.format(line.filename, line.get_anon_msg(), message)
         entry['severity'] = sev
