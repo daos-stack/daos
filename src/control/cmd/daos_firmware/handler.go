@@ -28,7 +28,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -97,6 +96,5 @@ func (h *scmUpdateHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.R
 		return pbin.NewResponseWithError(err)
 	}
 
-	fmt.Printf("%+v\n", res)
 	return pbin.NewResponseWithPayload(res)
 }

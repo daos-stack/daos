@@ -1,8 +1,8 @@
 #!/bin/env python
 """Build DAOS Control Plane"""
 #pylint: disable=too-many-locals
-import os
 import sys
+import os
 from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
@@ -34,11 +34,15 @@ def get_install_bin_path(benv, name):
     return join(benv.subst("$PREFIX"), "bin", name)
 
 def is_firmware_mgmt_build(benv):
+    "Check whether this build has firmware management enabled."
     fw_mgmt_enabled = benv.subst("$FIRMWARE_MGMT")
-    print(fw_mgmt_enabled)
-    return fw_mgmt_enabled and fw_mgmt_enabled != "false" and fw_mgmt_enabled != "0"
+    return (fw_mgmt_enabled and
+            fw_mgmt_enabled.lower() != "false" and
+            fw_mgmt_enabled.lower() != "0" and
+            fw_mgmt_enabled.lower() != "no")
 
 def get_build_tags(benv):
+    "Get custom go build tags."
     if not is_firmware_mgmt_build(benv):
         return ""
     return "-tags firmware"
@@ -72,6 +76,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
         return '0x' + buildid.decode()
 
     def go_ldflags():
+        "Create the ldflags option for the Go build."
         return ' '.join(['-ldflags',
                          '"-X github.com/daos-stack/daos/src/control/build.DaosVersion=%s' % DAOS_VERSION,
                          '-X github.com/daos-stack/daos/src/control/build.ConfigDir=%s' % CONF_DIR,
@@ -80,7 +85,8 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     # pick up the vendored modules.
     denv.Command(build_bin, src + gurt_lib,
                  'cd %s; %s build -mod vendor -v %s %s -o %s %s' %
-                 (gosrc, GO_BIN, go_ldflags(), get_build_tags(denv), build_bin, install_src))
+                 (gosrc, GO_BIN, go_ldflags(), get_build_tags(denv), 
+                  build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
     denv.InstallAs(install_bin, build_bin)
@@ -216,7 +222,7 @@ def scons():
 
     if is_firmware_mgmt_build(denv):
         fwbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_firmware",
-                              "daos_firmware")
+                               "daos_firmware")
         AlwaysBuild([fwbin])
 
 if __name__ == "SCons.Script":

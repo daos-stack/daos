@@ -32,14 +32,14 @@ import (
 )
 
 func main() {
-	app := pbin.NewApp().
-		WithAllowedCallers("daos_server")
+	app := pbin.NewApp().WithAllowedCallers("daos_server")
 
 	if logPath, set := os.LookupEnv(pbin.DaosFWLogFileEnvVar); set {
 		app = app.WithLogFile(logPath)
 	}
 
-	// TODO: Add handlers
+	app.AddHandler("ScmFirmwareQuery", &scmQueryHandler{})
+	app.AddHandler("ScmFirmwareUpdate", &scmUpdateHandler{})
 
 	err := app.Run()
 	if err != nil {
