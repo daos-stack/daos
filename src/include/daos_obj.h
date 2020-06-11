@@ -478,8 +478,6 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * Caller should provide at least one of the output parameters.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	th	Optional transaction handle to query with.
- *			Use DAOS_TX_NONE for an independent transaction.
  * \param[out]	oa	Returned object attributes.
  * \param[out]	ranks	Ordered list of ranks where the object is stored.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -493,8 +491,8 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
-	       d_rank_list_t *ranks, daos_event_t *ev);
+daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
+	       daos_event_t *ev);
 
 /*
  * Object I/O API
