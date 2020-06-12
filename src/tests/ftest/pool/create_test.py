@@ -136,28 +136,34 @@ class PoolCreateTests(TestWithServers):
             # Find the sizes of the SCM and NVMe storage configured for use by
             # the DAOS IO servers.  Convert the lists into hashable tuples so
             # they can be used as dictionary keys.
-            scm_key = tuple(
-                [os.path.basename(path) for path in
-                 self.server_managers[0].get_config_value("scm_list")]
-            )
-            nvme_key = tuple(
-                self.server_managers[0].get_config_value("bdev_list")
-            )
-            device_capacities = {scm_key: None, nvme_key: None}
-            for devices in device_capacities:
-                regex = r"(?:{})\s+.*\d+\s+([0-9\.]+)\s+([A-Z])B".format(
-                    "|".join(devices))
+            scm_keys = [
+                os.path.basename(path)
+                for path in self.server_managers[0].get_config_value("scm_list")
+                if path
+            ]
+            nvme_keys = self.server_managers[0].get_config_value("bdev_list")
+            device_capacities = {}
+            for key in scm_keys + nvme_keys:
+                device_capacities[key] = None
+            for key in device_capacities:
+                regex = r"(?:{})\s+.*\d+\s+([0-9\.]+)\s+([A-Z])B".format(key))
                 data = re.findall(regex, result.stdout)
-                self.log.debug("%s sizes: %s", devices, data)
-                self.log.info("Storage detected for %s:", devices)
+                self.log.info("Storage detected for %s in %s:", key, data)
                 for size in data:
                     capacity = Bytes(size[0], size[1])
                     self.log.info("  %s", capacity)
-                    if device_capacities[devices] is None:
-                        device_capacities[devices] = capacity
-                    elif capacity < device_capacities[devices]:
-                        device_capacities[devices] = capacity
-            storage = [device_capacities[scm_key], device_capacities[nvme_key]]
+                    if device_capacities[key] is None:
+                        # Store this value if no other value exists
+                        device_capacities[key] = capacity
+                    elif capacity < device_capacities[key]:
+                        # Replace an existing capacity with a lesser value
+                        device_capacities[key] = capacity
+
+            # Sum the minimum available capacities for each SCM and NVMe device
+            storage = [
+                sum([device_capacities[key] for key in scm_keys]).convert_up(),
+                sum([device_capacities[key] for key in nvme_keys]).convert_up()
+            ]
 
             # Restart the DAOS IO servers
             self.system_start()

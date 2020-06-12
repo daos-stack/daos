@@ -24,13 +24,138 @@ portions thereof marked with this legend must also reproduce the markings.
 from logging import getLogger
 
 
+class ByteUnit(object):
+    """Defines the unit for a Byte object."""
+
+    VALUES = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
+
+    def __init__(self, value=None):
+        """Initialize a ByteUnit object with a unit.
+
+        Args:
+            value (str, optional): unit value. Defaults to None.
+        """
+        self._value = None
+        if value is None:
+            self._value = self.VALUES[0]
+        elif value in self.VALUES:
+            self._value = str(value)
+        elif isinstance(value, str) and value.upper()[0] in self.VALUES:
+            self._value = value.upper()[0]
+        else:
+            raise ValueError(
+                "Invalid ByteUnit value; {} is not a {}".format(
+                    value, self.VALUES))
+
+    @property
+    def order(self):
+        """Get the unit order.
+
+        Returns:
+            int: unit order
+
+        """
+        return self.VALUES.index(self._value)
+
+    def __str__(self):
+        """Convert the ByteUnit object into a string.
+
+        Returns:
+            str: the unit
+
+        """
+        return self._value
+
+    def __repr__(self):
+        """Represent the ByteUnit object as a string.
+
+        Returns:
+            str: the unit
+
+        """
+        return self.__str__()
+
+    def __eq__(self, other):
+        """Determine if this object is equal to the other object.
+
+        Args:
+            other (ByteUnit): the other ByteUnit object to compare
+
+        Returns:
+            bool: whether this object equals the other object
+
+        """
+        return self.__str__() == str(other)
+
+    def __ne__(self, other):
+        """Determine if this object is not equal to the other object.
+
+        Args:
+            other (ByteUnit): the other ByteUnit object to compare
+
+        Returns:
+            bool: whether this object does not equal the other object
+
+        """
+        return not self.__eq__(other)
+
+    def __lt__(self, other):
+        """Determine if this object is less than the other object.
+
+        Args:
+            other (ByteUnit): the other Bytes object to compare
+
+        Returns:
+            bool: whether this object is less than the other object
+
+        """
+        return self.order < other.order
+
+    def __le__(self, other):
+        """Determine if this object is less than or equal to the other object.
+
+        Args:
+            other (ByteUnit): the other ByteUnit object to compare
+
+        Returns:
+            bool: whether this object is less than or equal to the other object
+
+        """
+        return self.order <= other.order
+
+    def __gt__(self, other):
+        """Determine if this object is greater than the other object.
+
+        Args:
+            other (ByteUnit): the other ByteUnit object to compare
+
+        Returns:
+            bool: whether this object is greater than the other object
+
+        """
+        return self.order > other.order
+
+    def __ge__(self, other):
+        """Determine if this object is greater or equal to the other object.
+
+        Args:
+            other (ByteUnit): the other ByteUnit object to compare
+
+        Returns:
+            bool: whether this object is greater than or equal to the other
+                object
+
+        """
+        return self.order >= other.order
+
+
 class Bytes(object):
-    """Defines a byte capacity with its units.
+    """Defines a decimal byte capacity with its units.
 
     Allows comparison values with different units, e.g. '1.6T' to '750G'.
     """
 
-    SIZES = ["", "K", "M", "G", "T", "P", "E", "Z", "Y"]
+    SIZES = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
 
     def __init__(self, amount, units):
         """Initialize a Bytes object.
@@ -39,8 +164,8 @@ class Bytes(object):
             amount (object): number of bytes relative to the unit specified
             units (str): units as a single letter
         """
-        self._amount = 0
-        self._units = self.SIZES[0]
+        self._amount = None
+        self._units = None
 
         self.amount = amount
         self.units = units
@@ -76,30 +201,34 @@ class Bytes(object):
         """Set the units amount.
 
         Args:
-            units (str): units as a single letter
+            units (str, ByteUnit): units to assign
 
         Raises:
-            ValueError: if the value is not a supported size
+            ValueError: if the value is not a supported ByteUnit value
 
         """
-        if isinstance(value, str) and value.upper()[0] in self.SIZES:
-            self._units = value.upper()[0]
-        else:
-            raise ValueError(
-                "Invalid Bytes.units: {} is not one of {}".format(
-                    value, self.SIZES))
+        self._units = ByteUnit(value)
 
     def __str__(self):
-        """Return the string of the Bytes object.
+        """Convert the Bytes object into a string.
 
         Returns:
             str: the byte amount and its units
 
         """
-        value = [str(self.amount), self.units]
-        if int(self.amount) == self.amount:
-            value[0] = str(int(self.amount))
-        return "".join(value)
+        amount = "{:f}".format(self.amount)
+        while "." in amount and (amount.endswith("0") or amount.endswith(".")):
+            amount = amount[:-1]
+        return "".join((amount, str(self.units)))
+
+    def __repr__(self):
+        """Represent the Byte object as a string.
+
+        Returns:
+            str: the byte amount and its units
+
+        """
+        return self.__str__()
 
     def __eq__(self, other):
         """Determine if this object is equal to the other object.
@@ -111,9 +240,18 @@ class Bytes(object):
             bool: whether this object equals the other object
 
         """
-        if isinstance(other, Bytes):
-            return self.__str__() == str(other)
-        return False
+        if not isinstance(other, Bytes):
+            other = Bytes(other, None)
+
+        # Convert the amounts to the smallest units
+        convert_units = self.units
+        if self.units > other.units:
+            convert_units = other.units
+        amount_a = self.get_converted_amount(convert_units)
+        amount_b = other.get_converted_amount(convert_units)
+
+        # Compare amounts of the same unit
+        return amount_a == amount_b
 
     def __ne__(self, other):
         """Determine if this object is not equal to the other object.
@@ -137,16 +275,18 @@ class Bytes(object):
             bool: whether this object is less than the other object
 
         """
-        compare = False
-        if isinstance(other, Bytes):
-            if self.units in self.SIZES and other.units in self.SIZES:
-                if self.units != other.units:
-                    self_order = self.SIZES.index(self.units)
-                    other_order = self.SIZES.index(other.units)
-                    compare = self_order < other_order
-                else:
-                    compare = self.amount < other.amount
-        return compare
+        if not isinstance(other, Bytes):
+            other = Bytes(other, None)
+
+        # Convert the amounts to the smallest units
+        convert_units = self.units
+        if self.units > other.units:
+            convert_units = other.units
+        amount_a = self.get_converted_amount(convert_units)
+        amount_b = other.get_converted_amount(convert_units)
+
+        # Compare amounts of the same unit
+        return amount_a < amount_b
 
     def __le__(self, other):
         """Determine if this object is less than or equal to the other object.
@@ -158,16 +298,7 @@ class Bytes(object):
             bool: whether this object is less than or equal to the other object
 
         """
-        compare = False
-        if isinstance(other, Bytes):
-            if self.units in self.SIZES and other.units in self.SIZES:
-                if self.units != other.units:
-                    self_order = self.SIZES.index(self.units)
-                    other_order = self.SIZES.index(other.units)
-                    compare = self_order <= other_order
-                else:
-                    compare = self.amount <= other.amount
-        return compare
+        return self.__eq__(other) or self.__lt__(other)
 
     def __gt__(self, other):
         """Determine if this object is greater than the other object.
@@ -194,6 +325,223 @@ class Bytes(object):
         """
         return self.__eq__(other) or not self.__lt__(other)
 
+    def __add__(self, other):
+        """Add to the Bytes.amount.
+
+        Args:
+            other (Bytes, int, float): amount to add
+
+        Raises:
+            TypeError: if an unsupported type is specified
+
+        Returns:
+            Bytes: a new Bytes object with the added amount
+
+        """
+        if not isinstance(other, Bytes):
+            # Support operations with other object types (e.g. int)
+            other = Bytes(other, None)
+
+        units = self.units
+        if self.units == other.units:
+            size = self.amount + other.amount
+        elif self.units < other.units:
+            size = self.amount + other.get_converted_amount(self.units)
+        else:
+            size = self.get_converted_amount(other.units) + other.amount
+            units = other.units
+
+        return Bytes(size, units)
+
+    def __sub__(self, other):
+        """Subtract the Bytes.amount.
+
+        Args:
+            other (Bytes, int, float): amount to subtract
+
+        Raises:
+            TypeError: if an unsupported type is specified
+
+        Returns:
+            Bytes: a new Bytes object with the subtracted amount
+
+        """
+        if not isinstance(other, Bytes):
+            # Support operations with other object types (e.g. int)
+            other = Bytes(other, None)
+
+        units = self.units
+        if self.units == other.units:
+            size = self.amount - other.amount
+        elif self.units < other.units:
+            size = self.amount - other.get_converted_amount(self.units)
+        else:
+            size = self.get_converted_amount(other.units) - other.amount
+            units = other.units
+
+        return Bytes(size, units)
+
+    def __mul__(self, other):
+        """Multiply the Bytes.amount.
+
+        Args:
+            other (Bytes, int, float): amount to multiply
+
+        Raises:
+            TypeError: if an unsupported type is specified
+
+        Returns:
+            Bytes: a new Bytes object with the multiplied amount
+
+        """
+        if not isinstance(other, Bytes):
+            # Support operations with other object types (e.g. int)
+            other = Bytes(other, None)
+
+        units = self.units
+        if self.units == other.units:
+            size = self.amount * other.amount
+        elif self.units < other.units:
+            size = self.amount * other.get_converted_amount(self.units)
+        else:
+            size = self.get_converted_amount(other.units) * other.amount
+            units = other.units
+
+        return Bytes(size, units)
+
+    def __div__(self, other):
+        """Divide the Bytes.amount.
+
+        Args:
+            other (Bytes, int, float): amount by which to divide
+
+        Raises:
+            TypeError: if an unsupported type is specified
+
+        Returns:
+            Bytes: a new Bytes object with the divided amount
+
+        """
+        if not isinstance(other, Bytes):
+            # Support operations with other object types (e.g. int)
+            other = Bytes(other, None)
+
+        units = self.units
+        if self.units == other.units:
+            size = self.amount / other.amount
+        elif self.units < other.units:
+            size = self.amount / other.get_converted_amount(self.units)
+        else:
+            size = self.get_converted_amount(other.units) / other.amount
+            units = other.units
+
+        return Bytes(size, units)
+
+    def __radd__(self, other):
+        """Perform reflective addition on the Bytes object.
+
+        Args:
+            other (Bytes, int, float): amount to add
+
+        Raises:
+            TypeError: if an unsupported type is specified
+
+        Returns:
+            Bytes: a new Bytes object with the reflective added amount
+
+        """
+        return self.__add__(other)
+
+    def __rsub__(self, other):
+        """Perform reflective subtraction on the Bytes object.
+
+        Args:
+            other (Bytes, int, float): amount from which to be subtracted
+
+        Raises:
+            TypeError: if an unsupported type is specified
+
+        Returns:
+            Bytes: a new Bytes object with the reflective subtracted amount
+
+        """
+        if not isinstance(other, Bytes):
+            # Support operations with other object types (e.g. int)
+            other = Bytes(other, None)
+
+        units = self.units
+        if self.units == other.units:
+            size = other.amount - self.amount
+        elif self.units < other.units:
+            size = other.get_converted_amount(self.units) - self.amount
+        else:
+            size = other.amount - self.get_converted_amount(other.units)
+            units = other.units
+
+        return Bytes(size, units)
+
+    def __rmul__(self, other):
+        """Perform reflective multiplication on the Bytes object.
+
+        Args:
+            other (Bytes, int, float): amount to multiply
+
+        Raises:
+            TypeError: if an unsupported type is specified
+
+        Returns:
+            Bytes: a new Bytes object with the reflective multiplied amount
+
+        """
+        return self.__mul__(other)
+
+    def __rdiv__(self, other):
+        """Perform reflective division on the Bytes object.
+
+        Args:
+            other (Bytes, int, float): amount to be divided
+
+        Raises:
+            TypeError: if an unsupported type is specified
+
+        Returns:
+            Bytes: a new Bytes object with the reflective divided amount
+
+        """
+        if not isinstance(other, Bytes):
+            # Support operations with other object types (e.g. int)
+            other = Bytes(other, None)
+
+        units = self.units
+        if self.units == other.units:
+            size = other.amount / self.amount
+        elif self.units < other.units:
+            size = other.get_converted_amount(self.units) / self.amount
+        else:
+            size = other.amount / self.get_converted_amount(other.units)
+            units = other.units
+
+        return Bytes(size, units)
+
+    def get_converted_amount(self, unit):
+        """Get the current amount converted to the specified units.
+
+        Args:
+            unit (str): unit to which to convert
+
+        Raises:
+            ValueError: if the unit is not valid
+
+        Returns:
+            float: the converted amount
+
+        """
+        if unit not in self.SIZES:
+            raise ValueError(
+                "Invalid 'unit'; must be {}: {}".format(self.SIZES, unit))
+        power = self.SIZES.index(self.units) - self.SIZES.index(unit)
+        return self.amount * (1000 ** power)
+
     def convert(self, unit):
         """Convert the current Bytes object to a different unit.
 
@@ -206,13 +554,7 @@ class Bytes(object):
         """
         log = getLogger()
         original = self.__str__()
-        if unit not in self.SIZES:
-            raise ValueError(
-                "Invalid 'unit'; must be {}: {}".format(self.SIZES, unit))
-        power = self.SIZES.index(self.units) - self.SIZES.index(unit)
-        self.amount *= 1000 ** power
-        if int(self.amount) == self.amount or str(self.amount).endswith(".0"):
-            self.amount = int(self.amount)
+        self.amount = self.get_converted_amount(unit)
         self.units = unit
         log.debug("Bytes conversion: %sB -> %sB", original, str(self))
 
@@ -222,7 +564,7 @@ class Bytes(object):
         while self.amount < 1000 and self.units != self.SIZES[0]:
             previous_unit = self.SIZES[self.SIZES.index(self.units) - 1]
             self.convert(previous_unit)
-        log.debug("Updated whole number Bytes: %s", str(self))
+        log.debug("Updated Bytes: %s", str(self))
 
     def convert_up(self):
         """Increment the units until the amount is less than 1000."""
@@ -230,4 +572,4 @@ class Bytes(object):
         while self.amount > 1000 and self.units != self.SIZES[-1]:
             next_unit = self.SIZES[self.SIZES.index(self.units) + 1]
             self.convert(next_unit)
-        log.debug("Updated whole number Bytes: %s", str(self))
+        log.debug("Updated Bytes: %s", str(self))
