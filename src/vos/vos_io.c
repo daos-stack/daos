@@ -1822,7 +1822,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			    iods, iods_csums, &ioc->ic_space_held[0]);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Hold space failed. "DF_RC"\n",
-				DP_UOID(oid), DP_RC(rc));
+			DP_UOID(oid), DP_RC(rc));
 		goto error;
 	}
 

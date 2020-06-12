@@ -125,7 +125,6 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 			DP_UUID(pool->vp_id), DP_RC(rc));
 		return rc;
 	}
-	D_ERROR("kccain: scm_used="DF_U64"\n", scm_used);
 
 	/*
 	 * FIXME: pmemobj_ctl_get() sometimes return an insane large value, it

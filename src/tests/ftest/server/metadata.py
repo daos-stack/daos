@@ -167,18 +167,21 @@ class ObjectMetadata(TestWithServers):
                     container_array.append(container)
 
                 # Phase 2 failed - stop here
-                self.fail("Phase 2: fail (container creates successful - but expected a failure)")
+                self.fail("Phase 2: fail (expected container create failure)")
 
             # Phase 2 DaosApiError (expected - proceed to Phase 3)
-            except DaosApiError as exe2:
-                self.log.info("Phase 2: pass (container create failed as expected)")
+            except DaosApiError:
+                self.log.info("Phase 2: pass (container create failed as "
+                              "expected)")
 
                 # Phase 3 clean up containers (expected to succeed)
                 try:
-                    self.log.info("Phase 3: Cleaning up containers after DaosApiError (expected to work)")
+                    self.log.info("Phase 3: Cleaning up containers after "
+                                  "DaosApiError (expected to work)")
                     for container in container_array:
                         container.destroy()
-                    self.log.info("Phase 3: pass (containers destroyed successfully)")
+                    self.log.info("Phase 3: pass (containers destroyed "
+                                  "successfully)")
                     return
 
                 except DaosApiError as exe3:
