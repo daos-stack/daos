@@ -991,17 +991,17 @@ def run_il_test(server, conf):
 
     print('pools are ', ','.join(pools))
 
-    containers = ['62176a51-8229-4e4c-ad1b-43aaace8a97a',
-                  '4ef12a58-c544-406c-8acf-56a2c0589cd6']
-
     dfuse = DFuse(server, conf)
     dfuse.start()
 
     dirs = []
 
     for p in pools:
-        for c in containers:
-            d = os.path.join(dfuse.dir, p, c)
+        for _ in range(2):
+            # Use a unique ID for each container to avoid DAOS-5109
+            container = str(uuid.uuid4())
+
+            d = os.path.join(dfuse.dir, p, container)
             try:
                 print('Making directory {}'.format(d))
                 os.mkdir(d)

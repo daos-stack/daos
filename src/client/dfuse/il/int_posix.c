@@ -222,6 +222,8 @@ ioil_init(void)
 	if (rc)
 		return;
 
+	DFUSE_TRA_ROOT(&ioil_ioc, "il");
+
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);
 	if (rc != 0) {
@@ -268,6 +270,7 @@ ioil_fini(void)
 	daos_fini();
 
 	vector_destroy(&fd_table);
+	DFUSE_TRA_DOWN(&ioil_ioc);
 }
 
 static int
@@ -527,6 +530,8 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		if (rc)
 			D_GOTO(cont_close, 0);
 	}
+
+	DFUSE_TRA_UP(entry->fd_dfsoh, &ioil_ioc, "dfs_obj");
 
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
