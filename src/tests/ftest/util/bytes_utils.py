@@ -25,6 +25,7 @@ from logging import getLogger
 
 
 class ByteUnit(object):
+    # pylint: disable=too-few-public-methods
     """Defines the unit for a Byte object."""
 
     VALUES = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")

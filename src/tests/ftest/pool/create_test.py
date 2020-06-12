@@ -146,7 +146,7 @@ class PoolCreateTests(TestWithServers):
             for key in scm_keys + nvme_keys:
                 device_capacities[key] = None
             for key in device_capacities:
-                regex = r"(?:{})\s+.*\d+\s+([0-9\.]+)\s+([A-Z])B".format(key))
+                regex = r"(?:{})\s+.*\d+\s+([0-9\.]+)\s+([A-Z])B".format(key)
                 data = re.findall(regex, result.stdout)
                 self.log.info("Storage detected for %s in %s:", key, data)
                 for size in data:
