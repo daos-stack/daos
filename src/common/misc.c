@@ -265,7 +265,7 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 	if (idx->iov_idx >= sgl->sg_nr)
 		return true; /** no data in sgl to get bytes from */
 
-	D_ASSERT(idx->iov_offset < sgl->sg_iovs[idx->iov_idx].iov_len);
+	D_ASSERT(idx->iov_offset < sgl->sg_iovs[idx->iov_idx].iov_buf_len);
 	/** Point to current idx */
 	if (p_buf != NULL)
 		*p_buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
@@ -275,13 +275,13 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 	 * minimum between requested bytes and bytes left in IOV buffer
 	 */
 	buf_len = MIN(buf_len_req,
-		       sgl->sg_iovs[idx->iov_idx].iov_len - idx->iov_offset);
+		      sgl->sg_iovs[idx->iov_idx].iov_buf_len - idx->iov_offset);
 
 	/** Increment index */
 	idx->iov_offset += buf_len;
 
 	/** If end of iov was reached, go to next iov */
-	if (idx->iov_offset == sgl->sg_iovs[idx->iov_idx].iov_len) {
+	if (idx->iov_offset == sgl->sg_iovs[idx->iov_idx].iov_buf_len) {
 		idx->iov_idx++;
 		idx->iov_offset = 0;
 	}
@@ -294,14 +294,14 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 
 int
 daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-		       size_t requested_bytes,
-		       daos_sgl_process_cb process_cb, void *cb_args)
+		   size_t requested_bytes, daos_sgl_process_cb process_cb,
+		   void *cb_args)
 {
 	uint8_t		*buf = NULL;
 	size_t		 len = 0;
 	bool		 end = false;
 	int		 rc  = 0;
-
+	
 	/**
 	 * loop until all bytes are consumed, the end of the sgl is reached,
 	 *  or an error occurs
@@ -313,8 +313,10 @@ daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 			rc = process_cb(buf, len, cb_args);
 	}
 
-	if (requested_bytes)
-		D_WARN("Requested more bytes than what's available in sgl");
+	if (requested_bytes) {
+		D_ERROR("Requested more bytes than what's available in sgl");
+		rc = -DER_INVAL;
+	}
 
 	return rc;
 }

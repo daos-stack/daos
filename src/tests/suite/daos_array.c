@@ -180,7 +180,6 @@ simple_array_mgmt(void **state)
 	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
-
 	/** Test the open_with_attr interface */
 
 	/** Open_with_attr with DAOS_OF_ARRAY, should fail */
@@ -857,7 +856,7 @@ read_empty_records(void **state)
 	assert_non_null(rbuf);
 	for (i = 0; i < NUM_ELEMS; i++) {
 		wbuf[i] = i+1;
-		rbuf[i] = wbuf[i];
+		rbuf[i] = -1;
 	}
 
 	/** set memory location */
@@ -883,14 +882,14 @@ read_empty_records(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	/** Verify data */
+	/** Verify data - rbuf should not be touched */
 	for (i = 0; i < NUM_ELEMS; i++) {
-		if (wbuf[i] != rbuf[i]) {
+		if (rbuf[i] != -1) {
 			printf("Data verification failed\n");
-			printf("%zu: written %d != read %d\n",
-				i, wbuf[i], rbuf[i]);
+			printf("%zu: expected %d != read %d\n",
+			       i, -1, rbuf[i]);
 		}
-		assert_int_equal(wbuf[i], rbuf[i]);
+		assert_int_equal(rbuf[i], -1);
 	}
 
 	/** Write segmented */
@@ -899,6 +898,7 @@ read_empty_records(void **state)
 			arg->myrank * sizeof(int) +
 			i * NUM_ELEMS * sizeof(int);
 	}
+	d_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
 	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
@@ -906,7 +906,6 @@ read_empty_records(void **state)
 
 	/** Read from empty records */
 	for (i = 0; i < NUM_ELEMS; i++) {
-		iod.arr_rgs[i].rg_len = sizeof(int);
 		iod.arr_rgs[i].rg_idx = i * sizeof(int) +
 			arg->myrank * sizeof(int);
 	}
@@ -920,7 +919,7 @@ read_empty_records(void **state)
 	/** Verify data */
 	assert_int_equal(wbuf[0], rbuf[0]);
 	for (i = 1; i < NUM_ELEMS; i++)
-		assert_int_equal(rbuf[i], wbuf[i]);
+		assert_int_equal(rbuf[i], 0);
 
 	D_FREE(rbuf);
 	D_FREE(wbuf);
@@ -1018,6 +1017,10 @@ strided_array(void **state)
 
 	D_FREE(buf);
 	D_FREE(iod.arr_rgs);
+	D_FREE(sgl.sg_iovs);
+
+	rc = daos_array_close(oh, NULL);
+	assert_int_equal(rc, 0);
 
 	assert_int_equal(nerrors, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -1081,6 +1084,9 @@ truncate_array(void **state)
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, 6);
+
+	rc = daos_array_close(oh, NULL);
+	assert_int_equal(rc, 0);
 
 	D_FREE(buf);
 

@@ -592,6 +592,179 @@ syml_stat:
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static void
+dfs_test_hole_mgmt(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	daos_size_t		read_size;
+	daos_size_t		chunk_size = 2000;
+	daos_size_t		buf_size = 1024;
+	char			*wbuf, *zbuf, *obuf, *rbuf[NUM_SEGS];
+	char			*name = "short_read_file";
+	d_sg_list_t		wsgl, rsgl;
+	d_iov_t			iov;
+	struct stat		stbuf;
+	int			i, rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	D_ALLOC(wbuf, buf_size);
+	assert_non_null(wbuf);
+	memset(wbuf, 'c', buf_size);
+
+	/** all 0 buf */
+	D_ALLOC(zbuf, buf_size + 100);
+	assert_non_null(zbuf);
+	memset(zbuf, 0, buf_size + 100);
+
+	/** buf with '-' data */
+	D_ALLOC(obuf, buf_size + 100);
+	assert_non_null(obuf);
+	memset(obuf, '-', buf_size + 100);
+
+	/** read buffers with orig data "-" */
+	for (i = 0; i < NUM_SEGS; i++) {
+		D_ALLOC(rbuf[i], buf_size + 100);
+		assert_non_null(rbuf[i]);
+		memset(rbuf[i], '-', buf_size + 100);
+	}
+
+	if (arg->myrank == 0) {
+		rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
+		assert_int_equal(rc, 0);
+	}
+
+	dfs_obj_share(dfs_mt, O_RDONLY, arg->myrank, &obj);
+
+	/** reading empty file should return 0 & not touch user buffer */
+	rsgl.sg_nr = 1;
+	d_iov_set(&iov, rbuf[0], buf_size);
+	rsgl.sg_iovs = &iov;
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 0);
+	rc = memcmp(rbuf[0], obuf, buf_size);
+	assert_int_equal(rc, 0);
+
+	/** write 1 byte at a large offset */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		d_iov_set(&iov, wbuf, 1);
+		wsgl.sg_nr = 1;
+		wsgl.sg_iovs = &iov;
+
+		rc = dfs_write(dfs_mt, obj, &wsgl, 10485760, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 10485761);
+
+	/** reading before the EOF should detect holes and set buf to 0 */
+	d_iov_set(&iov, rbuf[0], buf_size);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size);
+	rc = memcmp(rbuf[0], zbuf, buf_size);
+	assert_int_equal(rc, 0);
+
+	/** reset */
+	memset(rbuf[0], '-', buf_size + 100);
+
+	/** truncate buffer back to 0 */
+	rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+
+	/** reading before the EOF should detect holes and set buf to 0 */
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 0);
+	rc = memcmp(rbuf[0], obuf, buf_size);
+	assert_int_equal(rc, 0);
+
+	/** write a strided pattern, every 1k bytes */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		d_iov_set(&iov, wbuf, buf_size);
+		wsgl.sg_nr = 1;
+		wsgl.sg_iovs = &iov;
+
+		for (i = 0; i < NUM_SEGS; i++) {
+			rc = dfs_write(dfs_mt, obj, &wsgl, i*2*buf_size, NULL);
+			assert_int_equal(rc, 0);
+		}
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, buf_size * (NUM_SEGS * 2 -1));
+
+	/** read the first NUM_SEGS blocks. should get 1/2 data back */
+	/** set strided memory location */
+	rsgl.sg_nr = NUM_SEGS;
+	D_ALLOC_ARRAY(rsgl.sg_iovs, NUM_SEGS);
+	assert_non_null(rsgl.sg_iovs);
+	for (i = 0; i < NUM_SEGS; i++)
+		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * NUM_SEGS);
+	/** should get written data every other block, and 0s in between */
+	for (i = 0; i < NUM_SEGS; i++) {
+		if (i%2 == 0) {
+			rc = memcmp(rbuf[i], wbuf, buf_size);
+			assert_int_equal(rc, 0);
+		} else {
+			rc = memcmp(rbuf[i], zbuf, buf_size);
+			assert_int_equal(rc, 0);
+		}
+	}
+
+	/** reset */
+	for (i = 0; i < NUM_SEGS; i++)
+		memset(rbuf[i], '-', buf_size + 100);
+
+	/** read last 2 blocks of file + the rest 8 blocks beyond EOF */
+	rc = dfs_read(dfs_mt, obj, &rsgl, buf_size * (NUM_SEGS*2-3), &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * 2);
+	/** should get written data every other block, and 0s in between */
+	for (i = 0; i < NUM_SEGS; i++) {
+		if (i == 0) {
+			/** first block is a hole */
+			rc = memcmp(rbuf[i], zbuf, buf_size);
+			assert_int_equal(rc, 0);
+		} else if (i == 1) {
+			/** second block is valid data */
+			rc = memcmp(rbuf[i], wbuf, buf_size);
+			assert_int_equal(rc, 0);
+		} else {
+			/** the rest are beyond EOF */
+			rc = memcmp(rbuf[i], obuf, buf_size);
+			assert_int_equal(rc, 0);
+		}
+	}
+
+	rc = dfs_release(obj);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		dfs_test_file_del(name);
+
+	D_FREE(wbuf);
+	D_FREE(zbuf);
+	D_FREE(obuf);
+	for (i = 0; i < NUM_SEGS; i++)
+		D_FREE(rbuf[i]);
+	D_FREE(rsgl.sg_iovs);
+}
+
 static const struct CMUnitTest dfs_tests[] = {
 	{ "DFS_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -603,6 +776,8 @@ static const struct CMUnitTest dfs_tests[] = {
 	  dfs_test_cond, async_disable, test_case_teardown},
 	{ "DFS_TEST5: Simple Symlinks",
 	  dfs_test_syml, async_disable, test_case_teardown},
+	{ "DFS_TEST6: DFS hole managment",
+	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
 };
 
 static int

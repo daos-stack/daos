@@ -177,6 +177,10 @@ free_io_params_cb(tse_task_t *task, void *data)
 	while (io_list) {
 		struct io_params *current = io_list;
 
+		if (current->iom.iom_recxs) {
+			D_FREE(current->iom.iom_recxs);
+			current->iom.iom_recxs = NULL;
+		}
 		if (current->iod.iod_recxs) {
 			D_FREE(current->iod.iod_recxs);
 			current->iod.iod_recxs = NULL;
@@ -229,7 +233,7 @@ create_handle_cb(tse_task_t *task, void *data)
 	return 0;
 
 err_obj:
-	{
+	if (daos_handle_is_valid(*args->oh)) {
 		daos_obj_close_t *close_args;
 		tse_task_t *close_task;
 
@@ -237,8 +241,9 @@ err_obj:
 				 0, NULL, &close_task);
 		close_args = daos_task_get_args(close_task);
 		close_args->oh = *args->oh;
-		return rc;
+		tse_task_schedule(close_task, true);
 	}
+	return rc;
 }
 
 static int
@@ -675,8 +680,9 @@ open_handle_cb(tse_task_t *task, void *data)
 	*args->oh = array_ptr2hdl(array);
 
 	return 0;
+
 err_obj:
-	{
+	if (daos_handle_is_valid(*args->oh)) {
 		daos_obj_close_t *close_args;
 		tse_task_t	 *close_task;
 
@@ -684,8 +690,9 @@ err_obj:
 				 0, NULL, &close_task);
 		close_args = daos_task_get_args(close_task);
 		close_args->oh = *args->oh;
-		return rc;
+		tse_task_schedule(close_task, true);
 	}
+	return rc;
 }
 
 static int
@@ -1092,6 +1099,147 @@ struct hole_params {
 };
 
 static int
+memset_sgl(uint8_t *buf, size_t len, void *args)
+{
+	memset(buf, 0, len);
+	return 0;
+}
+
+static int
+noop_sgl(uint8_t *buf, size_t len, void *args)
+{
+	return 0;
+}
+
+static int
+process_iod(daos_off_t start_off, daos_size_t array_size,
+	    d_sg_list_t *sgl, struct daos_sgl_idx *sg_idx,
+	    daos_recx_t *iod_recx, daos_iom_t *iom, unsigned int *iom_idx)
+{
+	daos_off_t	idx = iod_recx->rx_idx;
+	daos_size_t	nr = iod_recx->rx_nr;
+	daos_off_t	end = idx + nr;
+	unsigned int	i = *iom_idx;
+	int		rc;
+
+	while (idx < end) {
+		daos_size_t bytes_proc;
+
+		/** no IOM, or no IOM in range */
+		if (i >= iom->iom_nr_out || idx > iom->iom_recxs[i].rx_idx) {
+			/** everything is a hole. */
+			bytes_proc = end - idx;
+
+			//printf("HERE: array size %zu, start_off = %zu, idx = %zu, end = %zu\n",
+			//array_size, start_off, idx, end);
+			if (array_size <= start_off + idx) {
+				/** Don't touch buf if beyond EOF */
+				rc = daos_sgl_processor(sgl, sg_idx, bytes_proc,
+							noop_sgl, NULL);
+			} else if (array_size > start_off + end) {
+				/** all 0s if within array size */
+				rc = daos_sgl_processor(sgl, sg_idx, bytes_proc,
+							memset_sgl, NULL);
+			} else {
+				daos_size_t temp;
+
+				/** partial fetch in regards to EOF */
+				temp = array_size - (start_off + idx);
+				rc = daos_sgl_processor(sgl, sg_idx,
+							temp, noop_sgl, NULL);
+				if (rc)
+					return rc;
+				rc = daos_sgl_processor(sgl, sg_idx,
+							bytes_proc - temp,
+							memset_sgl, NULL);
+			}
+			if (rc)
+				return rc;
+			break;
+		}
+
+		/** IOM is beyond the iod recx; this is a hole */
+		if (end <= iom->iom_recxs[i].rx_idx) {
+			bytes_proc = end - idx;
+			rc = daos_sgl_processor(sgl, sg_idx, bytes_proc,
+						memset_sgl, NULL);
+			if (rc)
+				return rc;
+			break;
+		}
+
+		if (idx == iom->iom_recxs[i].rx_idx) {
+			/** iom at current index, this is a valid extent */
+			bytes_proc = iom->iom_recxs[i].rx_nr;
+			rc = daos_sgl_processor(sgl, sg_idx, bytes_proc,
+						noop_sgl, NULL);
+			i++;
+		} else {
+			/** iom beyond current index, this is a hole */
+			bytes_proc = iom->iom_recxs[i].rx_idx - idx;
+			rc = daos_sgl_processor(sgl, sg_idx, bytes_proc,
+						memset_sgl, NULL);
+		}
+
+		if (rc)
+			return rc;
+		idx += bytes_proc;
+	}
+
+	*iom_idx = i;
+	return 0;
+}
+
+static int
+process_iomap(struct hole_params *params, daos_array_io_t *args)
+{
+	struct io_params        *io_list;
+	struct io_params        *current;
+	int			rc;
+
+	io_list = params->io_list;
+	current = io_list;
+
+	while (current) {
+		unsigned int		i, iom_nr;
+		d_sg_list_t		*sgl;
+		daos_off_t		start_off;
+		struct daos_sgl_idx	idx = {0};
+
+		if (current->user_sgl_used)
+			sgl = args->sgl;
+		else
+			sgl = &current->sgl;
+
+		/** if the sgl is empty then skip this entry */
+		if (sgl->sg_nr == 0)
+			goto next;
+
+		//printf("Processing dkey: %"PRIu64", chunk size %zu, IOD nr = %u, iomap nr = %u\n",
+		//current->dkey_val, params->chunk_size,
+		//current->iod.iod_nr, current->iom.iom_nr_out);
+
+		/** TODO - fix me. need to refetch with more ioms */
+		D_ASSERT(current->iom.iom_nr_out <= current->iom.iom_nr);
+		start_off = (current->dkey_val - 1) * params->chunk_size;
+
+		iom_nr = 0;
+		for (i = 0; i < current->iod.iod_nr; i++) {
+			//printf("RECX %u: {%zu - %zu}\n", i,
+			//current->iod.iod_recxs[i].rx_idx,
+			//current->iod.iod_recxs[i].rx_nr);
+			rc = process_iod(start_off, params->array_size, sgl,
+					 &idx, &current->iod.iod_recxs[i],
+					 &current->iom, &iom_nr);
+			if (rc)
+				return rc;
+		}
+next:
+		current = current->next;
+	}
+	return 0;
+}
+static int
 set_short_read_cb(tse_task_t *task, void *data)
 {
 	struct hole_params	*params;
@@ -1108,7 +1256,7 @@ set_short_read_cb(tse_task_t *task, void *data)
 	params = daos_task_get_priv(task);
 	D_ASSERT(params != NULL);
 
-	printf("Set short read. array size = %zu\n", params->array_size);
+	//printf("Set short read. array size = %zu\n", params->array_size);
 
 	io_list = params->io_list;
 	args = daos_task_get_args(params->ptask);
@@ -1132,67 +1280,15 @@ set_short_read_cb(tse_task_t *task, void *data)
 		}
 	}
 
-	D_FREE(params);
-#if 0
-	if (args->iod->arr_nr == 1)
-	/** if the array size is smaller than the lowest offset, nothing left to
-	 * do*/
-
-	/** if the array size is larger than the highest offset, total data read
-	 * should be adjusted to no short reads */
-	if (params->highest_valid_off <= params->array_size) {
-		args->iod->arr_nr_read += args->iod->arr_nr_short_read;
-		args->iod->arr_nr_short_read = 0;
-	}
+	//printf("NR short fetch  = %zu\n", args->iod->arr_nr_short_read);
+	//printf("NR READ  = %zu\n", args->iod->arr_nr_read);
 
 	/** memset holes to 0 */
-	while (current) {
-		int i;
+	rc = process_iomap(params, args);
+	if (rc)
+		return rc;
 
-		if (current->user_sgl_used) {
-			D_ASSERT(args->sgl->sg_nr == 1);
-			current->sgl.sg_nr = args->sgl->sg_nr;
-			current->sgl.sg_nr_out = args->sgl->sg_nr_out;
-		}
-
-		/** if the sgl is empty then skip this entry */
-		if (current->sgl.sg_nr == 0)
-			goto next;
-
-		start_off = current->dkey_val * current->chunk_size;
-
-		for (i = 0; i < current->iod.iod_nr; i++) {
-			if (current->iod.iod_recxs[i].rx_idx + start_off >
-			    params->array_size)
-				continue;
-
-			if ((current->iod.iod_recxs[i].rx_idx +
-			     current->iod.iod_recxs[i].rx_nr) > hi_off) {
-
-		/*
-		 * if we moved to a lower dkey and the higher one is not empty
-		 * or all short-fetched, we can break here.
-		 */
-		if (break_on_lower && dkey_val > current->dkey_val)
-			break;
-
-
-
-		dkey_val = current->dkey_val;
-		hi_off = current->iom.iom_recx_hi.rx_idx +
-			current->iom.iom_recx_hi.rx_nr;
-		if (highest_off < hi_off)
-			highest_off = hi_off
-
-		for (i = 0; i < current->iod.iod_nr; i++) {
-			if ((current->iod.iod_recxs[i].rx_idx +
-			     current->iod.iod_recxs[i].rx_nr) > hi_off) {
-		*params->read_size = total_recs;
-	else if (params->off + params->buf_size <= params->array_size)
-		*params->read_size = params->buf_size;
-	else
-		*params->read_size = params->array_size - params->off;
-#endif
+	D_FREE(params);
 	return 0;
 }
 			
@@ -1206,7 +1302,6 @@ check_short_read_cb(tse_task_t *task, void *data)
 	uint64_t		dkey_val;
 	daos_size_t		total_recs;
 	daos_size_t		nr_short_recs = 0;
-	daos_off_t		highest_off;
 	bool			break_on_lower = false;
 	int			rc = task->dt_result;
 
@@ -1214,7 +1309,6 @@ check_short_read_cb(tse_task_t *task, void *data)
 		D_ERROR("Array Read Failed (%d)\n", rc);
 		return rc;
 	}
-	printf("Check short read\n");
 
 	D_ASSERT(params);
 	io_list = params->io_list;
@@ -1227,7 +1321,6 @@ check_short_read_cb(tse_task_t *task, void *data)
 	 */
 	dkey_val = io_list->dkey_val;
 	current = io_list;
-	highest_off = 0;
 
 	while (current) {
 		int i;
@@ -1256,10 +1349,6 @@ check_short_read_cb(tse_task_t *task, void *data)
 		hi_off = current->iom.iom_recx_hi.rx_idx +
 			current->iom.iom_recx_hi.rx_nr;
 		hi_off_arr = hi_off + dkey_val * params->chunk_size;
-
-		/** Maintain highest valid offset seen */
-		if (highest_off < hi_off_arr)
-			highest_off = hi_off_arr;
 
 		for (i = 0; i < current->iod.iod_nr; i++) {
 			if ((current->iod.iod_recxs[i].rx_idx +
@@ -1300,16 +1389,20 @@ next:
 	args->iod->arr_nr_short_read = nr_short_recs;
 	args->iod->arr_nr_read = total_recs - nr_short_recs;
 
-	//printf("NR short fetch  = %zu\n", args->iod->arr_nr_short_read);
-	//printf("NR READ  = %zu\n", args->iod->arr_nr_read);
+	/** no possible short read, do not schedule the get_size */
 	if (nr_short_recs == 0) {
-		D_FREE(params);
+		/** memset all holes to 0 */
+		params->array_size = UINT64_MAX;
+		rc = process_iomap(params, args);
+		if (rc)
+			return rc;
+
 		tse_task_complete(task, 0);
+		D_FREE(params);
 		return 0;
 	}
 
-	printf("scheduling GET size task\n");
-
+	/** Schedule the get size to properly check for short reads */
 	daos_array_get_size_t	*size_args;
 
 	size_args	= daos_task_get_args(task);
@@ -1317,7 +1410,6 @@ next:
 	size_args->th	= DAOS_TX_NONE;
 	size_args->size	= &params->array_size;
 
-	//params->highest_valid_off = highest_off;
 	rc = tse_task_register_comp_cb(task, set_short_read_cb, NULL, 0);
 	if (rc)
 		D_GOTO(err_params, rc);
@@ -1628,6 +1720,10 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			io_arg->iods	= iod;
 			io_arg->sgls	= sgl;
 			if (array->byte_array) {
+				iom->iom_nr = iod->iod_nr * 2;
+				D_ALLOC_ARRAY(iom->iom_recxs, iom->iom_nr);
+				if (iom->iom_recxs == NULL)
+					D_GOTO(err_iotask, rc = -DER_NOMEM);
 				io_arg->ioms = iom;
 				rc = tse_task_register_deps(stask, 1,
 							    &io_task);
@@ -2000,7 +2096,6 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 		return -DER_NOMEM;
 	}
 
-
 	iod = &params->iod;
 	sgl = NULL;
 	params->akey_str = '0';
@@ -2066,12 +2161,17 @@ check_record_cb(tse_task_t *task, void *data)
 	char			*val;
 	int			rc = task->dt_result;
 
+	D_ASSERT(params);
+	iod = &params->iod;
+
 	/** Last record is there, no need to add it */
-	if (rc || params->iod.iod_size != 0)
+	if (rc || params->iod.iod_size != 0) {
+		D_FREE(iod->iod_recxs);
+		D_FREE(params);
 		D_GOTO(out, rc);
+	}
 
 	/** add record with value 0 */
-	iod = &params->iod;
 	sgl = &params->sgl;
 	dkey = &params->dkey;
 
