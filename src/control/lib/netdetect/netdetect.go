@@ -1065,7 +1065,7 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	return nil
 }
 
-func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan, excludeMap map[string]struct{}) (*FabricScan, error) {
+func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, excludeMap map[string]struct{}) (*FabricScan, error) {
 	log.Debugf("Device scan target device name: %s", deviceScanCfg.targetDevice)
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 	if err != nil {
@@ -1199,7 +1199,7 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 				case allHFIUsed:
 					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
 						deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
-						scanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
+						scanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
 						if err != nil {
 							continue
 						}
@@ -1218,7 +1218,7 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 			}
 		}
 
-		scanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
+		scanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
 		if err != nil {
 			continue
 		}
