@@ -278,7 +278,7 @@ def define_components(reqs):
                 libs=['abt'],
                 headers=['abt.h'])
 
-    reqs.define('fuse', libs=['fuse3'], defines=["FUSE_USE_VERSION=32"],
+    reqs.define('fuse', libs=['fuse3'], defines=["FUSE_USE_VERSION=35"],
                 headers=['fuse3/fuse.h'], package='fuse3-devel')
 
     reqs.define('fio',
