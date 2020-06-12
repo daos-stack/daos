@@ -7,7 +7,7 @@ public class DaosIOExceptionTest {
 
   @Test
   public void testLoadErrorCode(){
-    Assert.assertEquals(4, DaosIOException.errorMap.size());
+    Assert.assertEquals(5, DaosIOException.errorMap.size());
     ErrorCode errorCode = Constants.CUSTOM_ERR_NO_POOL_SIZE;
     Assert.assertEquals(errorCode.getMsg(), DaosIOException.errorMap.get(errorCode.getCode()));
 

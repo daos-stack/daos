@@ -43,6 +43,7 @@ static const int CUSTOM_ERR1 = -1000001; // scm size and nvme size no greater th
 static const int CUSTOM_ERR2 = -1000002; // failed to parse service replics string
 static const int CUSTOM_ERR3 = -1000003; // malloc or realloc buffer failed
 static const int CUSTOM_ERR4 = -1000004; // value length greater than expected
+static const int CUSTOM_ERR6 = -1000006; // invalid argument in object
 
 static jclass daos_io_exception_class;
 

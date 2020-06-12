@@ -23,9 +23,11 @@
 
 package io.daos.obj;
 
+import io.daos.DaosIOException;
 import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
+import java.util.List;
 
 public class DaosObject {
 
@@ -76,6 +78,17 @@ public class DaosObject {
       DirectBuffer buffer = (DirectBuffer) oid.getBuffer();
       objectPtr = client.openObject(contPtr, buffer.address(), mode.getValue());
     }
+  }
+
+  public void punchObject() throws IOException {
+    if (objectPtr == -1) {
+      throw new DaosIOException("object is not open");
+    }
+    client.punchObject(objectPtr, 0);
+  }
+
+  public void punchObjectDkeys(List<String> dkeys) throws IOException {
+    
   }
 
   /**
