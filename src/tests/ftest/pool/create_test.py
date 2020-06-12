@@ -160,10 +160,10 @@ class PoolCreateTests(TestWithServers):
                         device_capacities[key] = capacity
 
             # Sum the minimum available capacities for each SCM and NVMe device
-            storage = [
-                sum([device_capacities[key] for key in scm_keys]).convert_up(),
-                sum([device_capacities[key] for key in nvme_keys]).convert_up()
-            ]
+            storage = []
+            for keys in (scm_keys, nvme_keys):
+                storage.append(sum([device_capacities[key] for key in keys]))
+                storage[-1].convert_up()
 
             # Restart the DAOS IO servers
             self.system_start()
@@ -173,14 +173,19 @@ class PoolCreateTests(TestWithServers):
             scm_size = self.server_managers[0].get_config_value("scm_size")
             storage = [Bytes(scm_size, "G"), None]
 
+        self.log.info(
+            "Total available storage:  \nSCM:  %s\n  NVMe: %s", str(storage[0]),
+            str(storage[1]))
         return storage
 
-    def get_max_pool_sizes(self, percent=0.90):
+    def get_max_pool_sizes(self, scm_ratio=0.9, nvme_ratio=1):
         """Get the maximum pool sizes for the current server configuration.
 
         Args:
-            percent (float, optional): percentage of the maximum SCM/NVMe
+            scm_ratio (float, optional): percentage of the maximum SCM
                 capacity to use for the pool sizes. Defaults to 0.90 (90%).
+            nvme_ratio (float, optional): percentage of the maximum NVMe
+                capacity to use for the pool sizes. Defaults to 1 (100%).
 
         Returns:
             list: a list of Bytes objects representing the maximum pool creation
@@ -188,18 +193,15 @@ class PoolCreateTests(TestWithServers):
 
         """
         sizes = self.get_available_storage()
-        self.log.info(
-            "Detected capacities: SCM: %s, NVMe: %s",
-            str(sizes[0]), str(sizes[1]))
-        for size in sizes:
-            if size:
-                # Reduce the size, in MB, by the specified percentage
-                size.amount *= percent
-                if "." in str(size):
-                    size.convert_down()
-        self.log.info(
-            "Capacities after %s%% reduction: SCM: %s, NVMe: %s",
-            100 * percent, str(sizes[0]), str(sizes[1]))
+        ratios = (scm_ratio, nvme_ratio)
+        for index, size in enumerate(sizes):
+            if size and ratios[index] < 1:
+                # Reduce the size by the specified percentage
+                size.amount *= ratios[index]
+                self.log.info(
+                    "Adjusted %s size by %.2f%%: %s",
+                    "SCM" if index == 0 else "NVMe", 100 * ratios[index],
+                    str(sizes[index]))
         return sizes
 
     def define_pools(self, quantity, use_nvme):
@@ -209,7 +211,7 @@ class PoolCreateTests(TestWithServers):
             quantity (int): number of TestPool objects to create
             use_nvme (bool): whether to configure each pool with a nvme_size
         """
-        sizes = self.get_max_pool_sizes()
+        sizes = self.get_max_pool_sizes(0.9, 1.0)
         self.pool = [
             self.get_pool(create=False, connect=False) for _ in range(quantity)]
         if quantity > 1:
