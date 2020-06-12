@@ -167,6 +167,8 @@ class TestWithoutServers(Test):
         self.context = None
         self.d_log = None
         self.test_log = None
+##DH++ add just for baseline log
+#        self.insecure_mode = True
 
     def setUp(self):
         """Set up run before each test."""
@@ -274,6 +276,13 @@ class TestWithServers(TestWithoutServers):
             os.path.split(self.filename)[1], self.name.str_uid)
         # self.debug = False
         # self.config = None
+##DH++
+        print("=====>")
+        print("=====>")
+        self.insecure_mode = True
+        print("=====>Init self.insecure_mode = ", self.insecure_mode)
+        print("=====>")
+##DH--
 
     def setUp(self):
         """Set up each test case."""
@@ -330,7 +339,7 @@ class TestWithServers(TestWithoutServers):
                 self.hostfile_clients_slots)
 
         # Display host information
-        self.log.info("--- HOST INFORMATION ---")
+        self.log.info("---(1) HOST INFORMATION ---")
         self.log.info("hostlist_servers:  %s", self.hostlist_servers)
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
         self.log.info("server_partition:  %s", self.server_partition)
@@ -343,6 +352,14 @@ class TestWithServers(TestWithoutServers):
         if self.hostlist_clients:
             hosts.extend(self.hostlist_clients)
         self.stop_leftover_processes(["orterun"], hosts)
+##DH+here+
+        self.insecure_mode = self.params.get("allow_insecure",
+                                             "/run/transport_config/*")
+        print(" ")
+        print("=====>>")
+        print("self.insecure_mode= ", self.insecure_mode)
+        print("=====>>")
+##DH--
 
         # Start the clients (agents)
         if self.setup_start_agents:
@@ -388,22 +405,61 @@ class TestWithServers(TestWithoutServers):
             agent_groups = {
                 self.server_group: include_local_host(self.hostlist_clients)}
 
-        self.log.debug("--- STARTING AGENT GROUPS: %s ---", agent_groups)
+        self.log.debug("--- (2)STARTING AGENT GROUPS: %s ---", agent_groups)
 
         if isinstance(agent_groups, dict):
             for group, hosts in agent_groups.items():
                 transport = DaosAgentTransportCredentials()
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "agent")
+##DH++ here
+                transport.allow_insecure.value = self.insecure_mode
+                print("==>self.insecure_mode= ", self.insecure_mode)
+                print("==>agent transport.allow_insecure= ",
+                      transport.allow_insecure)                
+                print("===agent config_file name= ", config_file)
+                print(" ")
+#                print("===>agent config_file contents= ")
+#                c_f = open(config_file, "r")
+#                c_f_conts = c_f.read()
+#                print(c_f_conts)
+#                c_f.close()
+                print("===>")
+                print(" ")
+##DH--
+
                 # Setup the access points with the server hosts
                 common_cfg = CommonConfig(group, transport)
+##DH++
+                print(" ")
+                print("===(3)At start_agents, self.add_agent_manager===")
+                print("===config_file= ", config_file)
+                print("===common_cfg obj.= ", common_cfg)
+                print("===group=       ", group)
+                print("===transport obj.=  ", transport)
+                print("==>agent transport.allow_insecure= ",
+                      transport.allow_insecure)
+                print("==>self.insecure_mode= ", self.insecure_mode)
+                print(" ")
+##DH--
                 self.add_agent_manager(config_file, common_cfg)
+##DH++
+                print("===(4)At start_agents, self.configure_manager===")
+                print("=====manager=====")
+                print("   self.agent_managers[-1]=", self.agent_managers[-1])
+                print("   hosts= ", hosts)
+                print("   self.hostfile_clients_slots=",
+                      self.hostfile_clients_slots)
+                print("   servers=", servers)
+##DH--
                 self.configure_manager(
                     "agent",
                     self.agent_managers[-1],
                     hosts,
                     self.hostfile_clients_slots,
                     servers)
+##DH++
+            print("===(5)At start_agent, self.start_agent_managers===")
             self.start_agent_managers()
 
     def start_servers(self, server_groups=None):
@@ -434,6 +490,10 @@ class TestWithServers(TestWithoutServers):
                 dmg_config_file = self.get_config_file(group, "dmg")
                 # Setup the access points with the server hosts
                 common_cfg = CommonConfig(group, transport)
+##DH++
+                transport.allow_insecure.value = self.insecure_mode
+##DH--
+
                 self.add_server_manager(
                     config_file, dmg_config_file, common_cfg)
                 self.configure_manager(
@@ -442,6 +502,18 @@ class TestWithServers(TestWithoutServers):
                     hosts,
                     self.hostfile_servers_slots,
                     hosts)
+##DH++
+                print(" ")
+                print("===>server config_file contents= ")
+                print("===>")
+#                c_f = open(config_file, "r")
+#                c_f_conts = c_f.read()
+#                print(c_f_conts)
+#                c_f.close()
+#                print("===>")
+                print(" ")
+            print("===(5S)At start_server, self.start_server_managers===")
+##DH--
             self.start_server_managers()
 
     def get_config_file(self, name, command):
@@ -475,12 +547,32 @@ class TestWithServers(TestWithoutServers):
         if config_file is None:
             config_file = self.get_config_file("daos", "agent")
         if common_cfg is None:
-            common_cfg = CommonConfig(
-                self.server_group, DaosAgentTransportCredentials())
+##DH--            common_cfg = CommonConfig(
+##DH--                self.server_group, DaosAgentTransportCredentials())
+##DH++
+            agent_transport = DaosAgentTransportCredentials()
+            agent_transport.allow_insecure.value = self.insecure_mode
+            common_cfg = CommonConfig(self.server_group, agent_transport)
+##DH--
 
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
         agent_cmd = DaosAgentCommand(self.bin, agent_cfg, timeout)
+##DH++
+        print("===>")
+        print("agent_cfgi file name= ", agent_cfg)
+        print("===>")
+        print(" ")
+        print("===>agent config_file contents= ")
+#        c_f = open(config_file, "r")
+#        c_f_conts = c_f.read()
+#        print(c_f_conts)
+#        c_f.close()
+#        print("===>")
+        print(" ")
+        print("At add_agent_manager, agent_cmd= ", agent_cmd)
+        print("===>")
+##DH--
         self.agent_managers.append(
             DaosAgentManager(agent_cmd, self.manager_class))
 
@@ -513,8 +605,28 @@ class TestWithServers(TestWithoutServers):
 
         if dmg_config_file is None:
             dmg_config_file = self.get_config_file("daos", "dmg")
-        dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group, DmgTransportCredentials())
+##DH++
+        transport_dmg = DmgTransportCredentials()
+        transport_dmg.allow_insecure.value = self.insecure_mode
+
+##DH        dmg_cfg = DmgYamlParameters(
+##DH            dmg_config_file, self.server_group, DmgTransportCredentials())
+        dmg_cfg = DmgYamlParameters(dmg_config_file, self.server_group,
+                                    transport_dmg)
+        print("dmg_config_file name = ", dmg_config_file)
+        print("=======>")
+        print(" ")
+        print("===>dmg config_file contents= ")
+#        print("===>")
+#        c_f = open(dmg_config_file, "r")
+#        c_f_conts = c_f.read()
+#        print(c_f_conts)
+#        c_f.close()
+#        print("===>")
+        print(" ")
+        print("===(5S)At start_server, self.start_server_managers===")
+##DH--
+##DH--
         # Create a ServerCommand to manage with a new ServerManager object
         server_cfg = DaosServerYamlParameters(config_file, common_cfg)
         server_cmd = DaosServerCommand(self.bin, server_cfg, timeout)
@@ -548,13 +660,13 @@ class TestWithServers(TestWithoutServers):
     @fail_on(CommandFailure)
     def start_agent_managers(self):
         """Start the daos_agent processes on each specified list of hosts."""
-        self.log.info("--- STARTING AGENTS ---")
+        self.log.info("--- (5)STARTING AGENTS ---")
         self._start_manager_list("agent", self.agent_managers)
 
     @fail_on(CommandFailure)
     def start_server_managers(self):
         """Start the daos_server processes on each specified list of hosts."""
-        self.log.info("--- STARTING SERVERS ---")
+        self.log.info("--- (5S)STARTING SERVERS ---")
         self._start_manager_list("server", self.server_managers)
 
     def _start_manager_list(self, name, manager_list):

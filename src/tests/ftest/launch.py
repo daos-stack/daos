@@ -694,6 +694,19 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                     yaml_file, ", ".join(missing_replacements)))
             return None
 
+
+##DH++
+        yaml_data += "transport_config:\n"
+        if not args.insecure_mode:
+            yaml_data += "  allow_insecure: False"
+        else:
+            yaml_data += "  allow_insecure: True"
+        print("******")
+        print("yaml_data= ", yaml_data)
+        print("******")
+        print("******")
+##DH--
+
         # Write the modified yaml file into a temporary file.  Use the path to
         # ensure unique yaml files for tests with the same filename.
         orig_yaml_file = yaml_file
@@ -707,6 +720,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
         if args.verbose:
             cmd = ["diff", "-y", orig_yaml_file, yaml_file]
             print(get_output(cmd, False))
+
 
     # Return the untouched or modified yaml file
     return yaml_file
@@ -1333,6 +1347,22 @@ def main():
 
     # Create a temporary directory
     tmp_dir = TemporaryDirectory()
+
+##DH++
+    # Generate certificates if not exist
+    from subprocess import call
+    print(" ")
+    print(" ")
+    if not args.insecure_mode:
+        call(["pwd"])
+        if not os.path.exists("./daosCA"):
+            call(["../../../../../utils/certs/gen_certificates.sh"])
+    print("args.test_servers= ", args.test_servers)
+    print("args.insecure_mode= ", args.insecure_mode)
+    print(" ")
+    print(" ")
+##DH--
+
 
     # Create a dictionary of test and their yaml files
     test_files = get_test_files(test_list, args, tmp_dir)

@@ -491,10 +491,11 @@ class TransportCredentials(YamlParameters):
         #   - key: <file>, e.g. ".daos/daos_agent.key"
         #       Key portion of Server Certificate
         #
-        self.allow_insecure = BasicParameter(True, True)
-        self.ca_cert = BasicParameter(None)
-        self.cert = BasicParameter(None)
-        self.key = BasicParameter(None)
+##DH+
+#        self.allow_insecure = BasicParameter(True, True)
+#        self.ca_cert = BasicParameter(None)
+#        self.cert = BasicParameter(None)
+#        self.key = BasicParameter(None)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
