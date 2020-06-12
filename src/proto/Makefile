@@ -72,7 +72,7 @@ $(PROTOC):
 	@false
 
 GOPATH ?= $(shell go env GOPATH)
-PROTOC_GEN_GO_TAG ?= v1.2.0
+PROTOC_GEN_GO_TAG ?= v1.3.3
 PROTOC_GEN_GO_IMP := github.com/golang/protobuf/protoc-gen-go
 PROTOC_GEN_GO := $(GOPATH)/bin/protoc-gen-go
 
