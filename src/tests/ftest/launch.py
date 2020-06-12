@@ -1281,6 +1281,12 @@ def main():
         "-s", "--sparse",
         action="store_true",
         help="limit output to pass/fail")
+##DH++
+    parser.add_argument(
+        "-insec", "--insecure_mode",
+        action="store_true",
+        help="test with insecure-mode")
+##DH--
     parser.add_argument(
         "tags",
         nargs="*",
