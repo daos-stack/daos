@@ -252,6 +252,7 @@ class DaosServer():
             os.mkdir(self.agent_dir)
 
         self._yaml_file = None
+        self._io_server_dir = None
 
     def __del__(self):
         if self.running:
@@ -273,14 +274,15 @@ class DaosServer():
                                                       suffix='.log',
                                                       delete=False)
         control_log_file = tempfile.NamedTemporaryFile(prefix='dnt_control_',
-                                                      suffix='.log',
-                                                      delete=False)
+                                                       suffix='.log',
+                                                       delete=False)
         scyaml = yaml.load(scfd)
         scyaml['servers'][0]['log_file'] = server_log_file.name
         scyaml['control_log_file'] = control_log_file.name
 
-        self._yaml_file = tempfile.NamedTemporaryFile(prefix='nlt-server-config-',
-                                                      suffix='.yaml')
+        self._yaml_file = tempfile.NamedTemporaryFile(
+            prefix='nlt-server-config-',
+            suffix='.yaml')
 
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
         self._yaml_file.flush()
@@ -297,17 +299,19 @@ class DaosServer():
                              '--undef-value-errors=no']
             self.io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
-            fd = open(os.path.join(self.io_server_dir.name, 'daos_io_server'), 'w')
+            fd = open(os.path.join(self.io_server_dir.name,
+                                   'daos_io_server'), 'w')
             fd.write('#!/bin/sh\n')
             fd.write('export PATH=$REAL_PATH\n')
-            fd.write('exec valgrind {} daos_io_server "$@"\n'.format(' '.join(valgrind_args)))
+            fd.write('exec valgrind {} daos_io_server "$@"\n'.format(
+                ' '.join(valgrind_args)))
             fd.close()
 
             os.chmod(os.path.join(self.io_server_dir.name, 'daos_io_server'),
                      stat.S_IXUSR | stat.S_IRUSR)
 
-            server_env['REAL_PATH'] = '{}:{}'.format(os.path.join(self.conf['PREFIX'], 'bin'),
-                                                     server_env['PATH'])
+            server_env['REAL_PATH'] = '{}:{}'.format(
+                os.path.join(self.conf['PREFIX'], 'bin'), server_env['PATH'])
             server_env['PATH'] = '{}:{}'.format(self.io_server_dir.name,
                                                 server_env['PATH'])
 
@@ -329,8 +333,8 @@ class DaosServer():
         agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
         agent_log_file = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
-                                                      suffix='.log',
-                                                      delete=False)
+                                                     suffix='.log',
+                                                     delete=False)
 
         self._agent = subprocess.Popen([agent_bin,
                                         '--config-path', agent_config,
@@ -1300,7 +1304,7 @@ def main():
         pools = get_pool_list()
         for pool in pools:
             cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
-            rc = run_daos_cmd(conf, cmd, valgrind=False)
+            run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop() != 0:
             fatal_errors = True
 
