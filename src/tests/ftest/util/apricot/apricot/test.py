@@ -416,7 +416,7 @@ class TestWithServers(TestWithoutServers):
                 transport.allow_insecure.value = self.insecure_mode
                 print("==>self.insecure_mode= ", self.insecure_mode)
                 print("==>agent transport.allow_insecure= ",
-                      transport.allow_insecure)                
+                      transport.allow_insecure)
                 print("===agent config_file name= ", config_file)
                 print(" ")
 #                print("===>agent config_file contents= ")
