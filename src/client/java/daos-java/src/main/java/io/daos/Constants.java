@@ -62,6 +62,8 @@ public final class Constants {
           new ErrorCode(-1000004, "value length greater than expected");
   public static final ErrorCode CUSTOM_ERR_UNS_INVALID =
           new ErrorCode(-1000005, "invalid argument in UNS");
+  public static final ErrorCode CUSTOM_ERR_OBJECT_INVALID_ARG =
+          new ErrorCode(-1000006, "invalid argument in object");
 
   public static final int FILE_NAME_LEN_MAX = 255;
   public static final int FILE_PATH_LEN_MAX = 4096;

@@ -41,18 +41,21 @@ Java_io_daos_obj_DaosObjClient_encodeObjectId(JNIEnv *env, jclass clientClass,
     const char *oclass_name = (*env)->GetStringUTFChars(env, objectClass, NULL);
     char *buffer = (char *)oidBufferAddress;
 
-    printf("oclass: %s\n", oclass_name);
     type = daos_oclass_name2id(oclass_name);
-    printf("type: %d\n", type);
+    if (!type) {
+        char *tmp = "unsupported object class, %s";
+        char *msg = (char *)malloc(strlen(tmp) + strlen(oclass_name));
+
+        sprintf(msg, tmp, oclass_name);
+        throw_exception_object(env, msg, CUSTOM_ERR6);
+        goto out;
+    }
     parse_object_id(buffer, &oid);
-    printf("eh: %ld\n", oid.hi);
-    printf("el: %ld\n", oid.lo);
-    daos_obj_generate_id(&oid, feats, OC_SX, args);
-    printf("aeh: %ld\n", oid.hi);
-    printf("ael: %ld\n", oid.lo);
+    daos_obj_generate_id(&oid, feats, type, args);
     memcpy(buffer, &oid.hi, 8);
     memcpy(buffer+8, &oid.lo, 8);
 
+out:
     (*env)->ReleaseStringUTFChars(env, objectClass, oclass_name);
 }
 
@@ -69,8 +72,6 @@ Java_io_daos_obj_DaosObjClient_openObject(JNIEnv *env, jclass clientClass,
 
     memcpy(&coh, &contHandle, sizeof(coh));
     parse_object_id(buffer, &oid);
-    printf("h: %ld\n", oid.hi);
-    printf("l: %ld\n", oid.lo);
     rc = daos_obj_open(coh, oid, (unsigned int)mode, &oh, NULL);
     if (rc) {
         char *tmp = "Failed to open DAOS object with mode (%d)";

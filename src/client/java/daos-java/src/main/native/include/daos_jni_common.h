@@ -57,6 +57,8 @@ static const int CUSTOM_ERR3 = -1000003;
 static const int CUSTOM_ERR4 = -1000004;
 /* invalid argument in UNS */
 static const int CUSTOM_ERR5 = -1000005;
+/* invalid argument in object */
+static const int CUSTOM_ERR6 = -1000006;
 
 static jclass daos_io_exception_class;
 

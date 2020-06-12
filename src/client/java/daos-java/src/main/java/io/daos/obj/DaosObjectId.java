@@ -40,77 +40,75 @@ import java.nio.ByteOrder;
 @NotThreadSafe
 public class DaosObjectId {
 
-    private long high;
+  private long high;
 
-    private long low;
+  private long low;
 
-    private boolean encoded;
+  private boolean encoded;
 
-    private ByteBuffer buffer;
+  private ByteBuffer buffer;
 
-    private static final ByteOrder DEFAULT_ORDER = ByteOrder.nativeOrder();
+  private static final ByteOrder DEFAULT_ORDER = ByteOrder.nativeOrder();
 
-    public DaosObjectId() {}
+  public DaosObjectId() {
+  }
 
-    public DaosObjectId(long high, long low) {
-        this.high = high;
-        this.low = low;
+  public DaosObjectId(long high, long low) {
+    this.high = high;
+    this.low = low;
+  }
+
+  /**
+   * encode with object feature bits and object type.
+   *
+   * @param feats      feature bits
+   * @param objectType object type
+   * @param args       reserved
+   */
+  public void encode(int feats, DaosObjectType objectType, int args) {
+    if (encoded) {
+      throw new IllegalStateException("already encoded");
     }
+    // TODO: memory management for small buffer
+    buffer = BufferAllocator.directBuffer(16);
+    buffer.order(DEFAULT_ORDER);
+    buffer.putLong(high).putLong(low);
+    DaosObjClient.encodeObjectId(((DirectBuffer) buffer).address(), feats, objectType.nameWithoutOc(), args);
+    buffer.flip();
+    high = buffer.getLong();
+    low = buffer.getLong();
+    encoded = true;
+  }
 
-    /**
-     * encode with object feature bits and object type.
-     *
-     * @param feats
-     * feature bits
-     * @param objectType
-     * object type
-     * @param args
-     * reserved
-     */
-    public void encode(int feats, DaosObjectType objectType, int args) {
-        if (encoded) {
-            throw new IllegalStateException("already encoded");
-        }
-        // TODO: memory management for small buffer
-        buffer = BufferAllocator.directBuffer(16);
-        buffer.order(DEFAULT_ORDER);
-        buffer.putLong(high).putLong(low);
-        DaosObjClient.encodeObjectId(((DirectBuffer) buffer).address(), feats, objectType.name(), args);
-        buffer.flip();
-        high = buffer.getLong();
-        low = buffer.getLong();
-        encoded = true;
-    }
+  /**
+   * encode with default values.
+   * feats: 0
+   * objectType: {@linkplain DaosObjectType#OC_SX}
+   * args: 0
+   *
+   * <p>
+   * see {@link #encode(int, DaosObjectType, int)}
+   */
+  public void encode() {
+    encode(0, DaosObjectType.OC_SX, 0);
+  }
 
-    /**
-     * encode with default values.
-     * feats: 0
-     * objectType: {@linkplain DaosObjectType#OC_SX}
-     * args: 0
-     *
-     * <p>
-     * see {@link #encode(int, DaosObjectType, int)}
-     */
-    public void encode() {
-        encode(0, DaosObjectType.OC_SX, 0);
-    }
+  public long getHigh() {
+    return high;
+  }
 
-    public long getHigh() {
-        return high;
-    }
+  public long getLow() {
+    return low;
+  }
 
-    public long getLow() {
-        return low;
-    }
+  public boolean isEncoded() {
+    return encoded;
+  }
 
-    public boolean isEncoded() {
-        return encoded;
+  public ByteBuffer getBuffer() {
+    if (buffer == null) {
+      throw new IllegalStateException("DAOS object ID not encoded yet");
     }
-
-    public ByteBuffer getBuffer() {
-        if (buffer == null) {
-            throw new IllegalStateException("DAOS object ID not encoded yet");
-        }
-        return buffer;
-    }
+    return buffer;
+  }
 }
