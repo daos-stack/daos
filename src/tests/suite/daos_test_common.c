@@ -903,6 +903,9 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	/* build and invoke dmg cmd to stop the server */
 	dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d --force",
 			  rank);
+	print_message(" %s grp %s\n", dmg_cmd, grp);
+	rc = system("cat /etc/daos/daos.yml");
+	print_message(" %s grp %s rc 0x%x\n", dmg_cmd, grp, rc);
 	rc = system(dmg_cmd);
 	assert_int_equal(rc, 0);
 }
