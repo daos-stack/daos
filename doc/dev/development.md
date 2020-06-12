@@ -144,7 +144,7 @@ you may try relocating the repo to /var/tmp/ in order to build and install from 
 
 - [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.11.4. [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).
 - [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.3. [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/master/README.md).
-- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) v1.3.4. **Must match the proto version in
+- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) v1.3.5. **Must match the proto version in
 src/control/go.mod.** Install the specific version using GIT_TAG instructions
 [here](https://github.com/golang/protobuf/blob/master/README.md).
 
