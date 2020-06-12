@@ -274,6 +274,7 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 static int
 rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 {
+	size_t	op_len;
 	size_t	len;
 	int	rc;
 
@@ -293,8 +294,15 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 	if (rc != 0)
 		return rc;
 
-	/* Calculate and check the additional bytes required. */
-	len = rdb_tx_op_encode(op, NULL);
+	/* Calculate and check the additional bytes required (no encoding).
+	 * Before first op: insert one uint32_t (boolean) "critical"
+	 * interpreted by raft_log_offer_single() and NOT persisted.
+	 */
+	op_len = rdb_tx_op_encode(op, NULL);
+	len = op_len;
+	if (tx->dt_entry_len == 0)
+		len += sizeof(uint32_t);
+
 	if (len > tx->dt_entry_cap - tx->dt_entry_len) {
 		size_t	new_size = tx->dt_entry_cap;
 		void   *new_buf;
@@ -317,9 +325,19 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 		tx->dt_entry_cap = new_size;
 	}
 
+	/* encode "critical". update if any single tx component needs it. */
+	if (tx->dt_entry_len == 0) {
+		*((uint32_t *) tx->dt_entry) = 0;
+		tx->dt_entry_len = sizeof(uint32_t);
+	}
+	if ((op->dto_opc == RDB_TX_DESTROY_ROOT ||
+	    (op->dto_opc == RDB_TX_DESTROY) ||
+	    (op->dto_opc == RDB_TX_DELETE)))
+		*((uint32_t *) tx->dt_entry) = 1;
+
 	/* Now do the actual encoding. */
 	rdb_tx_op_encode(op, tx->dt_entry + tx->dt_entry_len);
-	tx->dt_entry_len += len;
+	tx->dt_entry_len += op_len;
 	return 0;
 }
 
@@ -481,7 +499,7 @@ rdb_oid_class(enum rdb_kvs_class class, rdb_oid_t *oid_class)
 
 static int
 rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
-		    d_iov_t *key, enum rdb_kvs_class class)
+		    d_iov_t *key, enum rdb_kvs_class class, bool crit)
 {
 	d_iov_t	value;
 	rdb_oid_t	oid_class;
@@ -530,8 +548,8 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	oid_number += 1;
 
 	/* Update the next object number. */
-	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, false /* !crit */,
-			   1 /* n */, &rdb_lc_oid_next, &value);
+	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, 1 /* n */,
+			   &rdb_lc_oid_next, &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update next object number"DF_X64
 			": %d\n", DP_DB(db), oid_number, rc);
@@ -540,8 +558,8 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 
 	/* Update the key in the parent object. */
 	d_iov_set(&value, &oid, sizeof(oid));
-	rc = rdb_lc_update(db->d_lc, index, parent, false /* !crit */,
-			   1 /* n */, key, &value);
+	rc = rdb_lc_update(db->d_lc, index, parent, crit, 1 /* n */,
+			   key, &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update parent KVS: %d\n", DP_DB(db),
 			rc);
@@ -590,11 +608,11 @@ rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent,
 
 static int
 rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs,
-		    d_iov_t *key, d_iov_t *value)
+		    d_iov_t *key, d_iov_t *value, bool crit)
 {
 	int rc;
 
-	rc = rdb_lc_update(db->d_lc, index, kvs, false /* !crit */, 1 /* n */,
+	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */,
 			   key, value);
 	if (rc != 0)
 		D_ERROR(DF_DB": failed to update KVS "DF_X64": %d\n", DP_DB(db),
@@ -616,7 +634,7 @@ rdb_tx_apply_delete(struct rdb *db, uint64_t index, rdb_oid_t kvs,
 }
 
 static int
-rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op)
+rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit)
 {
 	struct rdb_kvs *kvs = NULL;
 	rdb_path_t	victim_path;
@@ -653,11 +671,12 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op)
 	switch (op->dto_opc) {
 	case RDB_TX_CREATE_ROOT:
 		rc = rdb_tx_apply_create(db, index, RDB_LC_ATTRS, &rdb_lc_root,
-					 op->dto_attr->dsa_class);
+					 op->dto_attr->dsa_class, crit);
 		break;
 	case RDB_TX_CREATE:
 		rc = rdb_tx_apply_create(db, index, kvs->de_object,
-					 &op->dto_key, op->dto_attr->dsa_class);
+					 &op->dto_key, op->dto_attr->dsa_class,
+					 crit);
 		break;
 	case RDB_TX_DESTROY_ROOT:
 		rc = rdb_tx_apply_destroy(db, index, RDB_LC_ATTRS,
@@ -669,7 +688,7 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op)
 		break;
 	case RDB_TX_UPDATE:
 		rc = rdb_tx_apply_update(db, index, kvs->de_object,
-					 &op->dto_key, &op->dto_value);
+					 &op->dto_key, &op->dto_value, crit);
 		break;
 	case RDB_TX_DELETE:
 		rc = rdb_tx_apply_delete(db, index, kvs->de_object,
@@ -733,14 +752,14 @@ rdb_tx_deterministic_error(int error)
  */
 int
 rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-	     void *result, bool *critp)
+	     void *result, bool crit)
 {
 	const void     *p = buf;
-	bool		crit = false;
+	uint32_t	num_ops = 0;
 	int		rc = 0;
 
-	D_DEBUG(DB_TRACE, DF_DB": applying "DF_U64": buf=%p len="DF_U64"\n",
-		DP_DB(db), index, buf, len);
+	D_DEBUG(DB_TRACE, DF_DB": applying index "DF_U64": buf=%p len="DF_U64
+		" crit=%d\n", DP_DB(db), index, buf, len, crit);
 
 	while (p < buf + len) {
 		struct rdb_tx_op	op;
@@ -753,7 +772,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 			rc = n;
 			break;
 		}
-		rc = rdb_tx_apply_op(db, index, &op);
+		rc = rdb_tx_apply_op(db, index, &op, crit);
 		if (rc != 0) {
 			if (!rdb_tx_deterministic_error(rc))
 				D_ERROR(DF_DB": failed to apply entry "DF_U64
@@ -762,15 +781,8 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 			break;
 		}
 
-		if ((op.dto_opc == RDB_TX_DELETE) ||
-		    (op.dto_opc == RDB_TX_DESTROY) ||
-		    (op.dto_opc == RDB_TX_DESTROY_ROOT))
-			crit = true;
-
-		D_ERROR(DF_DB": kccain intermed opc=%d crit=%d p=%p "
-			"(buf+len)=%p\n", DP_DB(db), op.dto_opc, crit, p,
-			(buf+len));
 		p += n;
+		num_ops++;
 	}
 
 	/*
@@ -805,8 +817,6 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	if (result != NULL)
 		*(int *)result = rc;
 
-	D_ERROR(DF_DB": kccain final crit=%d\n", DP_DB(db), crit);
-	*critp = crit;
 	return 0;
 }
 

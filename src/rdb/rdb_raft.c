@@ -870,8 +870,8 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 		d_iov_set(&values[0], slc_record, sizeof(*slc_record));
 		keys[1] = rdb_mc_slc;
 		d_iov_set(&values[1], lc_record, sizeof(*lc_record));
-		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, true /* crit */,
-				   2 /* n */, keys, values);
+		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys,
+				   values);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to swap LC records: %d\n",
 				DP_DB(db), rc);
@@ -913,8 +913,8 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 			DP_DB(db), slc_record->dlr_base, slc_record->dlr_seq);
 
 		d_iov_set(&values[0], slc_record, sizeof(*slc_record));
-		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, true /* crit */,
-				   1 /* n */, &rdb_mc_slc, &values[0]);
+		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */,
+				   &rdb_mc_slc, &values[0]);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to update SLC record: %d\n",
 				DP_DB(db), rc);
@@ -990,8 +990,8 @@ rdb_raft_cb_persist_vote(raft_server_t *raft, void *arg, int vote)
 	int		rc;
 
 	d_iov_set(&value, &vote, sizeof(vote));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, true /* crit */, 1 /* n */,
-			   &rdb_mc_vote, &value);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_vote,
+			   &value);
 	if (rc != 0)
 		D_ERROR(DF_DB": failed to persist vote %d: %d\n", DP_DB(db),
 			vote, rc);
@@ -1011,8 +1011,7 @@ rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, int term, int vote)
 	d_iov_set(&values[0], &term, sizeof(term));
 	keys[1] = rdb_mc_vote;
 	d_iov_set(&values[1], &vote, sizeof(vote));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, true /* crit */, 2 /* n */,
-			   keys, values);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys, values);
 	if (rc != 0)
 		D_ERROR(DF_DB": failed to update term %d and vote %d: %d\n",
 			DP_DB(db), term, vote, rc);
@@ -1119,12 +1118,27 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	d_iov_t		values[2];
 	struct rdb_entry	header;
 	int			n = 0;
-	bool			crit = false;
+	uint32_t		crit;
 	int			rc;
 	int			rc_tmp;
 
 	D_ASSERTF(index == db->d_lc_record.dlr_tail, DF_U64" == "DF_U64"\n",
 		  index, db->d_lc_record.dlr_tail);
+
+	/* entry composition:
+	 * uint32_t "critical": NOT persisted - see rdb_tx_append()
+	 * a sequence of component operations for a compound tx.
+	 *
+	 * interpret boolean and adjust entry to refer only to the ops.
+	 */
+	crit = 1; /* for NULL data.buf entries such as "verify leadership" */
+	if (entry->data.buf) {
+		crit = *((uint32_t *) entry->data.buf);
+		entry->data.buf += sizeof(uint32_t);
+		entry->data.len -= sizeof(uint32_t);
+		D_DEBUG(DB_TRACE, DF_DB": index "DF_U64" will %s VOS_OF_CRIT\n",
+			DP_DB(db), index, crit ? "use" : "NOT use");
+	}
 	/*
 	 * If this is an rdb_tx entry, apply it. Note that the updates involved
 	 * won't become visible to queries until entry index is committed.
@@ -1134,18 +1148,14 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	 */
 	if (entry->type == RAFT_LOGTYPE_NORMAL) {
 		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
-				  rdb_raft_lookup_result(db, index), &crit);
+				  rdb_raft_lookup_result(db, index), crit);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to apply entry "DF_U64": %d\n",
 				DP_DB(db), index, rc);
 			goto err_discard;
 		}
-		D_ERROR(DF_DB": kccain normal log entry applied, crit=%d\n",
-			DP_DB(db), crit);
 	} else if (raft_entry_is_cfg_change(entry)) {
 		crit = true;
-		D_ERROR(DF_DB": kccain cfg_change entry set crit=true\n",
-			DP_DB(db));
 		rc = rdb_raft_update_node(db, index, entry);
 		if (rc != 0)
 			goto err_discard;
@@ -1192,8 +1202,8 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	/* Update the log tail. See the log tail assertion above. */
 	db->d_lc_record.dlr_tail++;
 	d_iov_set(&values[0], &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, crit, 1 /* n */,
-			   &rdb_mc_lc, &values[0]);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
+			   &values[0]);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update log tail "DF_U64": %d\n",
 			DP_DB(db), db->d_lc_record.dlr_tail, rc);
@@ -1250,8 +1260,8 @@ rdb_raft_cb_log_poll(raft_server_t *raft, void *arg, raft_entry_t *entries,
 	db->d_lc_record.dlr_base = index + *n_entries - 1;
 	db->d_lc_record.dlr_base_term = entries[*n_entries - 1].term;
 	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, true /* crit */, 1 /* n */,
-			   &rdb_mc_lc, &value);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
+			   &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update log base from "DF_U64" to "
 			DF_U64": %d\n", DP_DB(db), base,
@@ -1286,8 +1296,8 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	/* Update the log tail. */
 	db->d_lc_record.dlr_tail = i;
 	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, true /* crit */, 1 /* n */,
-			   &rdb_mc_lc, &value);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
+			   &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update log tail "DF_U64": %d\n",
 			DP_DB(db), db->d_lc_record.dlr_tail, rc);
@@ -1433,8 +1443,8 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 	/* Update the last aggregated index. */
 	db->d_lc_record.dlr_aggregated = index;
 	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, true /* crit */, 1 /* n */,
-			   &rdb_mc_lc, &value);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
+			   &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update last aggregated index to "
 			DF_U64": %d\n", DP_DB(db),
@@ -2017,8 +2027,7 @@ rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc, d_iov_t *key,
 	/* Create the record before creating the container. */
 	uuid_generate(r.dlr_uuid);
 	d_iov_set(&value, &r, sizeof(r));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, true /* crit */, 1 /* n */,
-			   key, &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, key, &value);
 	if (rc != 0) {
 		D_ERROR("failed to create %s record: %d\n",
 			key == &rdb_mc_lc ? "LC" : "SLC", rc);
@@ -2060,8 +2069,7 @@ rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc, d_iov_t *key,
 	/* Clear the record. We cannot rollback the destroy. */
 	uuid_clear(r.dlr_uuid);
 	d_iov_set(&value, &r, sizeof(r));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, true /* crit */, 1 /* n */,
-			   key, &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, key, &value);
 	if (rc != 0) {
 		D_ERROR("failed to clear %s record: %d\n",
 			key == &rdb_mc_lc ? "LC" : "SLC", rc);

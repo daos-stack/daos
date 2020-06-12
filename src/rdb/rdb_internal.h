@@ -261,7 +261,7 @@ void rdb_recvd(void *arg);
 /* rdb_tx.c *******************************************************************/
 
 int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-		 void *result, bool *critp);
+		 void *result, bool crit);
 
 /* rdb_kvs.c ******************************************************************/
 
@@ -340,13 +340,14 @@ int rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high);
 
 /* Update n (<= RDB_VOS_BATCH_MAX) a-keys atomically. */
 static inline int
-rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, bool crit, int n,
-	      d_iov_t akeys[], d_iov_t values[])
+rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, int n, d_iov_t akeys[],
+	      d_iov_t values[])
 {
 	D_DEBUG(DB_TRACE, "mc="DF_X64" oid="DF_X64" n=%d akeys[0]=<%p, %zd> "
 		"values[0]=<%p, %zd>\n", mc.cookie, oid, n, akeys[0].iov_buf,
 		akeys[0].iov_len, values[0].iov_buf, values[0].iov_len);
-	return rdb_vos_update(mc, RDB_MC_EPOCH, oid, crit, n, akeys, values);
+	return rdb_vos_update(mc, RDB_MC_EPOCH, oid, true /* crit */, n,
+			      akeys, values);
 }
 
 static inline int

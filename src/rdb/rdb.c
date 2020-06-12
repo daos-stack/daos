@@ -80,8 +80,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	 * rdb_start() checks this attribute when starting a DB.
 	 */
 	d_iov_set(&value, (void *)uuid, sizeof(uuid_t));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, true /* crit */, 1 /* n */,
-			   &rdb_mc_uuid, &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value);
 
 out_mc_hdl:
 	vos_cont_close(mc);
