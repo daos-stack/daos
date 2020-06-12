@@ -847,7 +847,7 @@ static const struct CMUnitTest dfs_tests[] = {
 	  dfs_test_cond, async_disable, test_case_teardown},
 	{ "DFS_TEST5: Simple Symlinks",
 	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_TEST6: DFS hole managment",
+	{ "DFS_TEST6: DFS hole management",
 	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
 };
 

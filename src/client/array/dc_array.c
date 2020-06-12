@@ -1443,7 +1443,7 @@ check_short_read_cb(tse_task_t *task, void *data)
 		 */
 		if (num_recs == 0) {
 			break_on_lower = true;
-			goto next; 
+			goto next;
 		}
 
 		/*
@@ -1552,9 +1552,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 	/*
 	 * for a read on a byte array, create a get_size task for short read
-	 * handling that will have a depedency on all the dkey IO tasks that are
-	 * created in the next loop. The get size operation is scheduled only
-	 * when a short read is possible (This check is done in the prep
+	 * handling that will have a dependency on all the dkey IO tasks that
+	 * are created in the next loop. The get size operation is scheduled
+	 * only when a short read is possible (This check is done in the prep
 	 * callback of that task).
 	 */
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array) {
