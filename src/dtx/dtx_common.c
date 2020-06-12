@@ -317,12 +317,13 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 	int			 dti_cos_count = 0;
 	int			 i;
 
+	memset(dlh, 0, sizeof(*dlh));
+
 	/* Single replica case. */
 	if (tgt_cnt == 0) {
 		if (!daos_is_zero_dti(dti))
 			goto init;
 
-		daos_dti_gen(&dth->dth_xid, true);
 		return 0;
 	}
 
@@ -335,10 +336,8 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		dlh->dlh_subs[i].dss_tgt = tgts[i];
 	dlh->dlh_sub_cnt = tgt_cnt;
 
-	if (daos_is_zero_dti(dti)) {
-		daos_dti_gen(&dth->dth_xid, true); /* zero it */
+	if (daos_is_zero_dti(dti))
 		return 0;
-	}
 
 	/* XXX: The leader needs to find out the DTXs in the CoS cache
 	 *	that modified potential shared items (object/dkey/akey),
@@ -411,9 +410,12 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	 */
 
 	rc = dtx_leader_wait(dlh);
-	if (result < 0 || rc < 0 || (!dth->dth_active && !dth->dth_resent) ||
-	    daos_is_zero_dti(&dth->dth_xid))
+
+	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
+
+	if (result < 0 || rc < 0 || (!dth->dth_active && !dth->dth_resent))
+		D_GOTO(abort, result = result < 0 ? result : rc);
 
 again:
 	/* If the DTX is started befoe DTX resync (for rebuild), then it is
@@ -426,7 +428,7 @@ again:
 				   NULL, NULL, false);
 		/* Committed by race, do nothing. */
 		if (rc == DTX_ST_COMMITTED)
-			D_GOTO(out, result = 0);
+			D_GOTO(abort, result = 0);
 
 		/* Aborted by race, restart it. */
 		if (rc == -DER_NONEXIST) {
@@ -434,7 +436,7 @@ again:
 			       "old epoch "DF_U64" by resync\n",
 			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 			       dth->dth_epoch);
-			D_GOTO(out, result = -DER_TX_RESTART);
+			D_GOTO(abort, result = -DER_TX_RESTART);
 		}
 
 		if (rc != DTX_ST_PREPARED) {
@@ -444,7 +446,7 @@ again:
 			       "status: "DF_RC"\n",
 			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 			       DP_RC(rc));
-			D_GOTO(out, result = rc);
+			D_GOTO(abort, result = rc);
 		}
 	}
 
@@ -480,7 +482,7 @@ again:
 		       "because of using old epoch "DF_U64"\n",
 		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 		       dth->dth_epoch);
-		D_GOTO(out, result = rc);
+		D_GOTO(abort, result = rc);
 	}
 
 	if (rc == -DER_NONEXIST) {
@@ -488,7 +490,7 @@ again:
 		       "because of target object disappeared unexpectedly.\n",
 		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid));
 		/* Handle it as IO failure. */
-		D_GOTO(out, result = -DER_IO);
+		D_GOTO(abort, result = -DER_IO);
 	}
 
 	if (rc == -DER_AGAIN) {
@@ -514,17 +516,22 @@ sync:
 			D_ERROR(DF_UUID": Fail to sync commit DTX "DF_DTI
 				": "DF_RC"\n", DP_UUID(cont->sc_uuid),
 				DP_DTI(&dth->dth_xid), DP_RC(rc));
-			D_GOTO(out, result = rc);
+			D_GOTO(abort, result = rc);
 		}
 	}
 
-out:
-	if (!daos_is_zero_dti(&dth->dth_xid) && rc != -DER_AGAIN) {
-		if (result < 0 && dlh->dlh_sub_cnt > 0)
-			dtx_abort(cont->sc_pool->spc_uuid, cont->sc_uuid,
-				  dth->dth_epoch, &dth->dth_dte, 1,
-				  cont->sc_pool->spc_map_version);
+abort:
+	/* Some remote replica(s) ask retry. We do not make such replica
+	 * to locally retry for avoiding RPC timeout. The leader replica
+	 * will trigger retry globally without aborting 'prepared' ones.
+	 */
+	if (result < 0 && result != -DER_AGAIN)
+		dtx_abort(cont->sc_pool->spc_uuid, cont->sc_uuid,
+			  dth->dth_epoch, &dth->dth_dte, 1,
+			  cont->sc_pool->spc_map_version);
 
+out:
+	if (!daos_is_zero_dti(&dth->dth_xid))
 		D_DEBUG(DB_IO,
 			"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
 			"%s, %s participator(s): rc "DF_RC"\n",
@@ -533,7 +540,6 @@ out:
 			dth->dth_intent == DAOS_INTENT_PUNCH ?
 			"Punch" : "Update", dth->dth_sync ? "sync" : "async",
 			dth->dth_solo ? "single" : "multiple", DP_RC(result));
-	}
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
@@ -547,22 +553,7 @@ out:
 	}
 
 	D_FREE(dth->dth_dti_cos);
-	dth->dth_dti_cos_count = 0;
-
-	/* Some remote replica(s) ask retry. We do not make such replica
-	 * to locally retry for avoiding RPC timeout. The leader replica
-	 * will trigger retry globally without aborting 'prepared' ones.
-	 * Reuse the DTX handle for that, so keep the 'dlh_subs'. It is
-	 * not necessary to keep the 'dth_dti_cos' because that we will
-	 * not re-init the transaction handle, then will not assign new
-	 * 'dth_dti_cos'. On the other hand, even if some replicas have
-	 * not executed related modification, the piggyback dth_dti_cos
-	 * still has been committed when dtx_end().
-	 */
-	if (result == -DER_AGAIN)
-		dlh->dlh_future = ABT_FUTURE_NULL;
-	else
-		D_FREE(dlh->dlh_subs);
+	D_FREE(dlh->dlh_subs);
 
 	return result;
 }
