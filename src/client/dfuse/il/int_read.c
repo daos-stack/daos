@@ -29,10 +29,6 @@
 
 #include "ioil.h"
 
-
-
-
-
 static ssize_t
 read_bulk(char *buff, size_t len, off_t position,
 	  struct fd_entry *entry, int *errcode)
@@ -44,7 +40,6 @@ read_bulk(char *buff, size_t len, off_t position,
 	d_iov_t			iov = {};
 	d_sg_list_t		sgl = {};
 	int rc;
-
 
 	DFUSE_TRA_INFO(entry, "%#zx-%#zx ", position, position + len - 1);
 

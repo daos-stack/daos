@@ -49,9 +49,6 @@
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
-
-
-
 static int rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc,
 			      d_iov_t *key, uint64_t base,
 			      uint64_t base_term, uint64_t term,
@@ -1658,12 +1655,8 @@ rdb_raft_step_up(struct rdb *db, uint64_t term)
 static void
 rdb_raft_step_down(struct rdb *db, uint64_t term)
 {
-
-
 	D_WARN(DF_DB": no longer leader of term "DF_U64"\n", DP_DB(db),
 	       term);
-
-
 	db->d_debut = 0;
 	rdb_raft_queue_event(db, RDB_RAFT_STEP_DOWN, term);
 }
