@@ -419,18 +419,16 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		pool = ds_pool_lookup(orw->orw_pool_uuid);
 		if (pool == NULL)
 			return -DER_NONEXIST;
-		if (cont_prop_csum_enabled(pool->sp_iv_ns, orw->orw_co_hdl)) {
-			struct bio_sglist	*fbsgl;
-			d_sg_list_t		 fsgl;
-			int			*fbuffer;
+		struct bio_sglist	*fbsgl;
+		d_sg_list_t		 fsgl;
+		int			*fbuffer;
 
-			D_DEBUG(DB_IO, "Data corruption after RDMA\n");
-			fbsgl = vos_iod_sgl_at(ioh, 0);
-			bio_sgl_convert(fbsgl, &fsgl);
-			fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
-			*fbuffer += 0x2;
-			daos_sgl_fini(&fsgl, false);
-		}
+		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
+		fbsgl = vos_iod_sgl_at(ioh, 0);
+		bio_sgl_convert(fbsgl, &fsgl);
+		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+		*fbuffer += 0x2;
+		daos_sgl_fini(&fsgl, false);
 		ds_pool_put(pool);
 	}
 	return rc;
