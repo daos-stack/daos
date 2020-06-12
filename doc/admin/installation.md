@@ -24,6 +24,7 @@ Moreover, the DAOS stack leverages the following open source projects:
     performance through fio-spdk plugin.
 
 -   [*ISA-L*](https://github.com/01org/isa-l) for checksum and erasure code
+-   [*ISA-L_Crypto*](https://github.com/01org/isa-l_crypto) for checksum
     computation.
 
 -   [*Argobots*](https://github.com/pmodels/argobots) for thread management.

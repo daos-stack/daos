@@ -16,6 +16,7 @@ def scons():
 
     if not platform_arm:
         prereqs.require(env, 'isal')
+        prereqs.require(env, 'isal_crypto')
 
     denv = env.Clone()
 

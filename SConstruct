@@ -152,7 +152,7 @@ def preload_prereqs(prereqs):
     reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
-        reqs.extend(['spdk', 'isal'])
+        reqs.extend(['spdk', 'isal', 'isal_crypto'])
     prereqs.load_definitions(prebuild=reqs)
 
 def scons(): # pylint: disable=too-many-locals
