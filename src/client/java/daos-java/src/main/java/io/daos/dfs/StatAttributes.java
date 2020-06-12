@@ -23,6 +23,8 @@
 
 package io.daos.dfs;
 
+import io.daos.Constants;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -73,10 +75,8 @@ public class StatAttributes {
 
   private final String groupname;
 
-  private static final ByteOrder DEFAULT_ORDER = ByteOrder.nativeOrder();
-
   protected StatAttributes(ByteBuffer buffer) {
-    buffer.order(DEFAULT_ORDER);
+    buffer.order(Constants.DEFAULT_ORDER);
     objId = buffer.getLong();
     mode = buffer.getInt();
     uid = buffer.getInt();

@@ -148,7 +148,7 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param dkeysBufferAddress
    * address of direct byte buffer into which dkeys written in format, len1+key1+len2+key2...
    */
-  native void punchObjectDkeys(long objectPtr, long flags, int nbrOfDkeys, long dkeysBufferAddress);
+  native void punchObjectDkeys(long objectPtr, long flags, int nbrOfDkeys, long dkeysBufferAddress, int bufferLen);
 
   /**
    * punch akeys (with all records) from an object.

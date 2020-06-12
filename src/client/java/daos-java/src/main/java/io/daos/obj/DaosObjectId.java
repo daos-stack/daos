@@ -24,6 +24,7 @@
 package io.daos.obj;
 
 import io.daos.BufferAllocator;
+import io.daos.Constants;
 import io.daos.DaosClient;
 import io.daos.DaosObjectType;
 import sun.nio.ch.DirectBuffer;
@@ -48,8 +49,6 @@ public class DaosObjectId {
 
   private ByteBuffer buffer;
 
-  private static final ByteOrder DEFAULT_ORDER = ByteOrder.nativeOrder();
-
   public DaosObjectId() {
   }
 
@@ -71,7 +70,7 @@ public class DaosObjectId {
     }
     // TODO: memory management for small buffer
     buffer = BufferAllocator.directBuffer(16);
-    buffer.order(DEFAULT_ORDER);
+    buffer.order(Constants.DEFAULT_ORDER);
     buffer.putLong(high).putLong(low);
     DaosObjClient.encodeObjectId(((DirectBuffer) buffer).address(), feats, objectType.nameWithoutOc(), args);
     buffer.flip();

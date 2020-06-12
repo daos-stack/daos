@@ -23,6 +23,8 @@
 
 package io.daos;
 
+import java.nio.ByteOrder;
+
 /**
  * value constants.
  */
@@ -30,6 +32,8 @@ public final class Constants {
 
   private Constants() {
   }
+
+  public static final ByteOrder DEFAULT_ORDER = ByteOrder.nativeOrder();
 
   public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";
   public static final String POOL_DEFAULT_RANKS = "0";

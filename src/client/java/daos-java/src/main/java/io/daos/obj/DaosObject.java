@@ -23,10 +23,15 @@
 
 package io.daos.obj;
 
+import io.daos.BufferAllocator;
+import io.daos.Constants;
 import io.daos.DaosIOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
 
 public class DaosObject {
@@ -38,6 +43,8 @@ public class DaosObject {
   private DaosObjectId oid;
 
   private long objectPtr = -1;
+
+  private static final Logger log = LoggerFactory.getLogger(DaosObject.class);
 
   /**
    * construct new instance of DaosObject with given <code>oid</code>.
@@ -81,14 +88,35 @@ public class DaosObject {
   }
 
   public void punchObject() throws IOException {
-    if (objectPtr == -1) {
-      throw new DaosIOException("object is not open");
-    }
+    checkOpen();
     client.punchObject(objectPtr, 0);
   }
 
   public void punchObjectDkeys(List<String> dkeys) throws IOException {
-    
+    checkOpen();
+    if (dkeys.isEmpty()) {
+      return;
+    }
+    int bufferLen = 0;
+    for (String key : dkeys) {
+      bufferLen += (key.length() + 4);
+    }
+    if (bufferLen == 0) {
+      log.warn("no dkeys specified when punch object dkeys");
+      return;
+    }
+    ByteBuffer buffer = BufferAllocator.directBuffer(bufferLen);
+    buffer.order(Constants.DEFAULT_ORDER);
+    for (String key : dkeys) {
+      buffer.putInt(key.length()).put(key.getBytes());
+    }
+    client.punchObjectDkeys(objectPtr, 0, dkeys.size(), ((DirectBuffer)buffer).address(), bufferLen);
+  }
+
+  private void checkOpen() throws IOException {
+    if (objectPtr == -1) {
+      throw new DaosIOException("object is not open");
+    }
   }
 
   /**
