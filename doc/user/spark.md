@@ -112,9 +112,10 @@ See [link](#daossite) for details about this configuration.
 
 * DAOS UNS Path
 
-The URI is "daos://uns/\<your path\>". "\<your path\>" is your OS file path created
-by DAOS UNS method, DaosUns.create(). You can create the UNS path with below
-command.
+The URI is "daos://uns:\<sequence\>/\<your uns path\>\[/sub path\]".
+"\<your path\>" is your OS file path created by DAOS UNS method,
+DaosUns.create(). "\[sub path\]" is optional. "\<sequence\>" is to identify the
+unique UNS path in Hadoop. You can create the UNS path with below command.
 
 ```bash
 $ daos cont create --pool <pool UUID> --svc <svc list> -path <your path> --type=POSIX
