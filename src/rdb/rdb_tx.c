@@ -755,7 +755,6 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	     void *result, bool crit)
 {
 	const void     *p = buf;
-	uint32_t	num_ops = 0;
 	int		rc = 0;
 
 	D_DEBUG(DB_TRACE, DF_DB": applying index "DF_U64": buf=%p len="DF_U64
@@ -782,7 +781,6 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		}
 
 		p += n;
-		num_ops++;
 	}
 
 	/*
