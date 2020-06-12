@@ -42,6 +42,9 @@ static void *drpc_alloc(void *allocator_date, size_t size)
 {
 	void *buf;
 
+
+
+
 	D_ALLOC(buf, size);
 	return buf;
 }

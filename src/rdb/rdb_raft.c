@@ -1658,8 +1658,12 @@ rdb_raft_step_up(struct rdb *db, uint64_t term)
 static void
 rdb_raft_step_down(struct rdb *db, uint64_t term)
 {
+
+
 	D_WARN(DF_DB": no longer leader of term "DF_U64"\n", DP_DB(db),
 	       term);
+
+
 	db->d_debut = 0;
 	rdb_raft_queue_event(db, RDB_RAFT_STEP_DOWN, term);
 }
