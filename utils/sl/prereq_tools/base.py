@@ -37,6 +37,7 @@ from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
 from SCons.Variables import ListVariable
+from SCons.Variables import BoolVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import SetOption
@@ -757,8 +758,8 @@ class PreReqComponent():
                                    'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
-        self.add_opts(('FIRMWARE_MGMT',
-                       'Build in device firmware management support.', None))
+        self.add_opts(BoolVariable('FIRMWARE_MGMT',
+                       'Build in device firmware management support.', 0))
         self._setup_compiler(warning_level)
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
