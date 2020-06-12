@@ -542,7 +542,7 @@ public class DaosFileSystem extends FileSystem {
         p = p.substring(unsPrefix.length());
         truncated = true;
       } else {
-        p = "";
+        p = "/";
       }
     }
     if (!p.startsWith("/")) {

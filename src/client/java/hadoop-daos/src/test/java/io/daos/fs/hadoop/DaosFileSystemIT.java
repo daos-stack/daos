@@ -216,6 +216,38 @@ public class DaosFileSystemIT {
     }
   }
 
+  @Test
+  public void testListRootFromUnsPath() throws Exception {
+    File file = Files.createTempDirectory("uns").toFile();
+    try {
+      String path = file.getAbsolutePath();
+      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+        DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
+      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      String originPath = path;
+      path += "";
+      String uriStr = "daos://" + Constants.DAOS_AUTHORITY_UNS + ":" + unsId.getAndIncrement() +
+        path;
+      Path uriPath = new Path(uriStr);
+      FileSystem fs = uriPath.getFileSystem(new Configuration());
+      Assert.assertNotNull(fs);
+      Assert.assertTrue(((DaosFileSystem)fs).isUns());
+      Assert.assertEquals(originPath, ((DaosFileSystem)fs).getUnsPrefix());
+
+      FileStatus children[] = fs.listStatus(uriPath);
+      Assert.assertTrue(children.length > 0);
+      boolean found = false;
+      for (int i = 0; i < children.length; i++) {
+        if ((uriStr + "/user").equals(children[i].getPath().toString())) {
+          found = true;
+        }
+      }
+      Assert.assertTrue(found);
+    } finally {
+      file.delete();
+    }
+  }
+
   @AfterClass
   public static void teardown() throws Exception {
     if (fs != null) {
