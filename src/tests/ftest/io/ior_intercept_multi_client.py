@@ -80,7 +80,7 @@ class IorInterceptMultiClient(IorTestBase):
 
         # Verifying read performance
         # The read performance is almost same with or without intercept
-        # library. But arbitarily the read performance with interception
+        # library. But arbitrarily the read performance with interception
         # library can be bit lower than without it. Verifying that it is
         # not drastically lower by checking it is at least  60% or above.
         read_x = 0.6

@@ -195,7 +195,7 @@ type bridgeConnInvoker struct {
 }
 
 func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.UnaryRequest) (*control.UnaryResponse, error) {
-	// Use the testConn to fill out the calls slice for compatiblity
+	// Use the testConn to fill out the calls slice for compatibility
 	// with old-style Connection tests.
 	bci.conn.ConnectClients(nil)
 	bci.conn.appendInvocation(printRequest(bci.t, uReq))
@@ -235,6 +235,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
 	case *control.PoolExcludeReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExcludeResp{})
+	case *control.PoolExtendReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
 	case *control.PoolReintegrateReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
 	}

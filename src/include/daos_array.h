@@ -168,7 +168,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			Record size of the array.
  * \param[out]	chunk_size
  *			Contiguous bytes to store per DKey before moving to a
- *			differen dkey.
+ *			different dkey.
  * \param[out]	oh	Returned array object open handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
@@ -203,7 +203,7 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			Record size of the array.
  * \param[in]	chunk_size
  *			Contiguous bytes to store per DKey before moving to a
- *			differen dkey.
+ *			different dkey.
  * \param[out]	oh	Returned array object open handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
@@ -287,7 +287,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  * \param[in]	th	Transaction handle.
  * \param[in]	iod	IO descriptor of ranges to read from the array.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
- *			Buffer sizes do not have to match the indiviual range
+ *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does. User allocates the
  *			buffer(s) and sets the length of each buffer.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -313,7 +313,7 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  * \param[in]	th	Transaction handle.
  * \param[in]	iod	IO descriptor of ranges to write to the array.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
- *			Buffer sizes do not have to match the indiviual range
+ *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -381,7 +381,7 @@ daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
  * daos_array_close(), but any other access with that handle, or other array
  * open handles, will fail. The destroy will happen regardless of any open
  * handle, so it's the user responsibility to ensure that there is no further
- * access to the array before the destory is called.
+ * access to the array before the destroy is called.
  *
  * \param[in]	oh	Array object open handle.
  * \param[in]	th	Transaction handle.

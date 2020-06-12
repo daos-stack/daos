@@ -687,7 +687,7 @@ class SoakTestBase(TestWithServers):
 
         Returns:
             job_cmdlist: list cmdline that can be launched
-                         by specifed job manager
+                         by specified job manager
 
         """
         job_cmdlist = []
