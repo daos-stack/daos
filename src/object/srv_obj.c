@@ -419,18 +419,16 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		pool = ds_pool_lookup(orw->orw_pool_uuid);
 		if (pool == NULL)
 			return -DER_NONEXIST;
-		if (cont_prop_csum_enabled(pool->sp_iv_ns, orw->orw_co_hdl)) {
-			struct bio_sglist	*fbsgl;
-			d_sg_list_t		 fsgl;
-			int			*fbuffer;
+		struct bio_sglist	*fbsgl;
+		d_sg_list_t		 fsgl;
+		int			*fbuffer;
 
-			D_DEBUG(DB_IO, "Data corruption after RDMA\n");
-			fbsgl = vos_iod_sgl_at(ioh, 0);
-			bio_sgl_convert(fbsgl, &fsgl);
-			fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
-			*fbuffer += 0x2;
-			daos_sgl_fini(&fsgl, false);
-		}
+		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
+		fbsgl = vos_iod_sgl_at(ioh, 0);
+		bio_sgl_convert(fbsgl, &fsgl);
+		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+		*fbuffer += 0x2;
+		daos_sgl_fini(&fsgl, false);
 		ds_pool_put(pool);
 	}
 	return rc;
@@ -1096,13 +1094,16 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			goto out;
 		}
 	} else {
+		uint32_t	fetch_flags;
+
 		size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
+		fetch_flags = size_fetch ? VOS_FETCH_SIZE_ONLY : 0;
 		bulk_op = CRT_BULK_PUT;
 
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
 				     orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
-				     dkey, orw->orw_nr, iods, size_fetch, &ioh,
-				     dth);
+				     dkey, orw->orw_nr, iods, fetch_flags, NULL,
+				     &ioh, dth);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
@@ -1518,7 +1519,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 {
 	struct obj_rw_in		*orw = crt_req_get(rpc);
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
-	struct dtx_leader_handle	dlh = { 0 };
+	struct dtx_leader_handle	dlh;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc;
 	uint64_t			time_start = 0;
@@ -1536,7 +1537,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			   orw->orw_co_uuid, opc_get(rpc->cr_opc), &ioc);
 	if (rc != 0) {
 		D_ASSERTF(rc < 0, "unexpected error# "DF_RC"\n", DP_RC(rc));
-		goto reply;
+		goto out;
 	}
 
 	D_DEBUG(DB_TRACE,
@@ -1571,20 +1572,14 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc, NULL, NULL,
 				  NULL, &dth);
-
 		rc = dtx_end(&dth, ioc.ioc_coc, rc);
+
 		D_GOTO(out, rc);
-	} else if (orw->orw_iod_array.oia_oiods != NULL) {
-		rc = obj_ec_rw_req_split(orw, &split_req);
-		if (rc != 0) {
-			D_ERROR(DF_UOID": obj_ec_rw_req_split failed, rc %d.\n",
-				DP_UOID(orw->orw_oid), rc);
-			D_GOTO(out, rc);
-		}
 	}
 
 	version = orw->orw_map_ver;
 
+again:
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
 		daos_epoch_t	epoch = 0;
@@ -1607,9 +1602,17 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		goto cleanup;
 	}
 
+	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
+		rc = obj_ec_rw_req_split(orw, &split_req);
+		if (rc != 0) {
+			D_ERROR(DF_UOID": obj_ec_rw_req_split failed, rc %d.\n",
+				DP_UOID(orw->orw_oid), rc);
+			D_GOTO(out, rc);
+		}
+	}
+
 	D_TIME_START(time_start, OBJ_PF_UPDATE);
 
-renew:
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
@@ -1637,24 +1640,24 @@ renew:
 	exec_arg.cont_hdl = ioc.ioc_coh;
 	exec_arg.cont	  = ioc.ioc_coc;
 	exec_arg.args	  = split_req;
-again:
+	exec_arg.flags	  = flags;
+
 	if (orw->orw_flags & ORF_DTX_SYNC)
 		dlh.dlh_handle.dth_sync = 1;
 
 	if (flags & ORF_RESEND)
 		dlh.dlh_handle.dth_resent = 1;
 
-	exec_arg.flags	  = flags;
 	/* Execute the operation on all targets */
 	rc = dtx_leader_exec_ops(&dlh, obj_tgt_update, &exec_arg);
-out:
-	if (opc == DAOS_OBJ_RPC_UPDATE &&
-	    DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 		rc = -DER_IO;
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
-	if (rc == -DER_TX_RESTART) {
+	switch (rc) {
+	case -DER_TX_RESTART:
 		/*
 		 * If this is a standalone operation, we can restart the
 		 * internal transaction right here. Otherwise, we have to defer
@@ -1666,23 +1669,27 @@ out:
 			 * newer epoch.
 			 */
 			orw->orw_epoch = crt_hlc_get();
-			flags &= ~ORF_RESEND;
-			memset(&dlh, 0, sizeof(dlh));
-			D_GOTO(renew, rc);
-		} else {
-			/* Standalone fetches do not get -DER_TX_RESTART. */
-			D_ASSERT(!daos_is_zero_dti(&orw->orw_dti));
+			orw->orw_flags &= ~ORF_RESEND;
+			flags = 0;
+			goto again;
 		}
-	} else if (rc == -DER_AGAIN) {
-		flags |= ORF_RESEND;
-		D_GOTO(again, rc);
+
+		/* Standalone fetches do not get -DER_TX_RESTART. */
+		D_ASSERT(!daos_is_zero_dti(&orw->orw_dti));
+
+		break;
+	case -DER_AGAIN:
+		orw->orw_flags |= ORF_RESEND;
+		goto again;
+	default:
+		break;
 	}
 
 	if (opc == DAOS_OBJ_RPC_UPDATE && !(orw->orw_flags & ORF_RESEND) &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		goto cleanup;
 
-reply:
+out:
 	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coh);
 
 cleanup:
@@ -2163,7 +2170,7 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 void
 ds_obj_punch_handler(crt_rpc_t *rpc)
 {
-	struct dtx_leader_handle	dlh = { 0 };
+	struct dtx_leader_handle	dlh;
 	struct obj_punch_in		*opi;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc;
@@ -2208,6 +2215,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	version = opi->opi_map_ver;
 
+again:
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
 		daos_epoch_t	epoch = 0;
@@ -2231,7 +2239,6 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		goto cleanup;
 	}
 
-renew:
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
@@ -2258,41 +2265,46 @@ renew:
 	exec_arg.rpc = rpc;
 	exec_arg.cont_hdl = ioc.ioc_coh;
 	exec_arg.cont = ioc.ioc_coc;
-again:
+	exec_arg.flags = flags;
+
 	if (opi->opi_flags & ORF_DTX_SYNC)
 		dlh.dlh_handle.dth_sync = 1;
 
 	if (flags & ORF_RESEND)
 		dlh.dlh_handle.dth_resent = 1;
 
-	exec_arg.flags = flags;
 	/* Execute the operation on all shards */
 	rc = dtx_leader_exec_ops(&dlh, obj_tgt_punch, &exec_arg);
-out:
+
 	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 		rc = -DER_IO;
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
-	if (rc == -DER_TX_RESTART) {
+	switch (rc) {
+	case -DER_TX_RESTART:
 		/*
 		 * Only standalone punches use this RPC. Retry with newer
 		 * epoch.
 		 */
 		opi->opi_epoch = crt_hlc_get();
-		flags &= ~ORF_RESEND;
-		memset(&dlh, 0, sizeof(dlh));
-		D_GOTO(renew, rc);
-	} else if (rc == -DER_AGAIN) {
-		flags |= ORF_RESEND;
-		D_GOTO(again, rc);
+		opi->opi_flags &= ~ORF_RESEND;
+		flags = 0;
+		goto again;
+	case -DER_AGAIN:
+		opi->opi_flags |= ORF_RESEND;
+		goto again;
+	default:
+		break;
 	}
 
 	if (!(opi->opi_flags & ORF_RESEND) &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		goto cleanup;
 
+out:
 	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
+
 cleanup:
 	obj_ioc_end(&ioc, rc);
 }

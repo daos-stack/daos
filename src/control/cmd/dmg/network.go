@@ -72,7 +72,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 		return err
 	}
 
-	if err := pretty.PrintHostFabricMap(resp.HostFabrics, &bld, false); err != nil {
+	if err := pretty.PrintHostFabricMap(resp.HostFabrics, &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
