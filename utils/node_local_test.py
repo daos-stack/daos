@@ -297,9 +297,9 @@ class DaosServer():
                              '--leak-check=no',
                              '--keep-stacktraces=none',
                              '--undef-value-errors=no']
-            self.io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
+            self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
-            fd = open(os.path.join(self.io_server_dir.name,
+            fd = open(os.path.join(self._io_server_dir.name,
                                    'daos_io_server'), 'w')
             fd.write('#!/bin/sh\n')
             fd.write('export PATH=$REAL_PATH\n')
@@ -307,12 +307,12 @@ class DaosServer():
                 ' '.join(valgrind_args)))
             fd.close()
 
-            os.chmod(os.path.join(self.io_server_dir.name, 'daos_io_server'),
+            os.chmod(os.path.join(self._io_server_dir.name, 'daos_io_server'),
                      stat.S_IXUSR | stat.S_IRUSR)
 
             server_env['REAL_PATH'] = '{}:{}'.format(
                 os.path.join(self.conf['PREFIX'], 'bin'), server_env['PATH'])
-            server_env['PATH'] = '{}:{}'.format(self.io_server_dir.name,
+            server_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
                                                 server_env['PATH'])
 
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
