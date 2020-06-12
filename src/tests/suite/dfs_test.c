@@ -674,7 +674,7 @@ dfs_test_hole_mgmt(void **state)
 	/** reset */
 	memset(rbuf[0], '-', buf_size + 100);
 
-	/** truncate buffer back to 0 */
+	/** truncate file back to 0 */
 	rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
 	assert_int_equal(rc, 0);
 	rc = dfs_ostat(dfs_mt, obj, &stbuf);
@@ -704,7 +704,7 @@ dfs_test_hole_mgmt(void **state)
 
 	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_size, buf_size * (NUM_SEGS * 2 -1));
+	assert_int_equal(stbuf.st_size, buf_size * (NUM_SEGS * 2 - 1));
 
 	/** read the first NUM_SEGS blocks. should get 1/2 data back */
 	/** set strided memory location */
@@ -732,7 +732,8 @@ dfs_test_hole_mgmt(void **state)
 		memset(rbuf[i], '-', buf_size + 100);
 
 	/** read last 2 blocks of file + the rest 8 blocks beyond EOF */
-	rc = dfs_read(dfs_mt, obj, &rsgl, buf_size * (NUM_SEGS*2-3), &read_size, NULL);
+	rc = dfs_read(dfs_mt, obj, &rsgl, buf_size * (NUM_SEGS*2-3),
+		      &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * 2);
 	/** should get written data every other block, and 0s in between */
@@ -750,6 +751,76 @@ dfs_test_hole_mgmt(void **state)
 			rc = memcmp(rbuf[i], obuf, buf_size);
 			assert_int_equal(rc, 0);
 		}
+	}
+
+	/** reset */
+	for (i = 0; i < NUM_SEGS; i++)
+		memset(rbuf[i], '-', buf_size + 100);
+
+	/** truncate file back to 0 */
+	rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+
+	/** write strided 64 byte blocks */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		char		*ptr = wbuf;
+		daos_off_t	off = 0;
+
+		for (i = 0; i < buf_size/64; i++) {
+			d_iov_set(&iov, ptr, 64);
+			wsgl.sg_nr = 1;
+			wsgl.sg_iovs = &iov;
+
+			rc = dfs_write(dfs_mt, obj, &wsgl, off, NULL);
+			assert_int_equal(rc, 0);
+			ptr += 64;
+			off += 64*2;
+		}
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, buf_size * 2 - 64);
+
+	/** read the first 2 blocks, should see a strided 64 block */
+	for (i = 0; i < 2; i++)
+		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
+	rsgl.sg_nr = 2;
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	/** should see a short read of the last 64 bytes */
+	assert_int_equal(read_size, buf_size * 2 - 64);
+
+	/** should get written data every other block, and 0s in between */
+	char *wptr = wbuf;
+	char *rptr = rbuf[0];
+
+	for (i = 0; i < (buf_size*2)/64; i++) {
+		if (i == buf_size/64)
+			rptr = rbuf[1];
+
+		if (i%2 == 0) {
+			printf("idx %u, check valid\n", i);
+			rc = memcmp(rptr, wptr, 64);
+			assert_int_equal(rc, 0);
+			wptr += 64;
+		} else {
+			printf("idx %u, check hole\n", i);
+			/** last block is beyond EOF */
+			if (i == (buf_size*2)/64 - 1) {
+				rc = memcmp(rptr, obuf, 64);
+				assert_int_equal(rc, 0);
+			} else {
+				rc = memcmp(rptr, zbuf, 64);
+				assert_int_equal(rc, 0);
+			}
+		}
+		rptr += 64;
 	}
 
 	rc = dfs_release(obj);

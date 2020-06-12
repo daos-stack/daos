@@ -301,10 +301,10 @@ daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 	size_t		 len = 0;
 	bool		 end = false;
 	int		 rc  = 0;
-	
-	/**
-	 * loop until all bytes are consumed, the end of the sgl is reached,
-	 *  or an error occurs
+
+	/*
+	 * loop until all bytes are consumed, the end of the sgl is reached, or
+	 * an error occurs
 	 */
 	while (requested_bytes > 0 && !end && !rc) {
 		end = daos_sgl_get_bytes(sgl, idx, requested_bytes, &buf, &len);
