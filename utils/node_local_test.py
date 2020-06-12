@@ -9,6 +9,7 @@ import uuid
 import yaml
 import json
 import signal
+import stat
 import subprocess
 import tempfile
 import pickle
@@ -215,15 +216,23 @@ def get_base_env():
 class DaosServer():
     """Manage a DAOS server instance"""
 
-    def __init__(self, conf):
+    def __init__(self, conf, valgrind=False):
         self.running = False
 
         self._sp = None
         self.conf = conf
+        self.valgrind = valgrind
         self._agent = None
         self.agent_dir = None
         # Also specified in the yaml file.
         self._log_file = '/tmp/dnt_server.log'
+        self.__process_name = 'daos_io_server'
+        self.__agent_sleep_time = 2
+        self.__start_sleep_time = 0
+        if self.valgrind:
+            self.__process_name = 'valgrind'
+            self.__start_sleep_time = 20
+            self.__agent_sleep_time = 10
 
         socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
@@ -233,7 +242,7 @@ class DaosServer():
 
         # self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
         # Disable this for now, as the filename is logged without a error in
-        # the fault injection testing so it's causing inconsisency in the
+        # the fault injection testing so it's causing inconsistency in the
         # errors generated.
         # self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
         # self.agent_dir = self._agent_dir.name
@@ -241,6 +250,8 @@ class DaosServer():
         self.agent_dir = '/tmp/dnt_agent_changeme'
         if not os.path.exists(self.agent_dir):
             os.mkdir(self.agent_dir)
+
+        self._yaml_file = None
 
     def __del__(self):
         if self.running:
@@ -253,15 +264,61 @@ class DaosServer():
 
         self_dir = os.path.dirname(os.path.abspath(__file__))
 
-        server_config = os.path.join(self_dir, 'nlt_server.yaml')
+        # Create a server yaml file.  To do this open and copy the
+        # nlt_server.yaml file in the current directory, but overwrite
+        # the server log file with a temporary file so that multiple
+        # server runs do not overwrite each other.
+        scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
+        server_log_file = tempfile.NamedTemporaryFile(prefix='dnt_server_',
+                                                      suffix='.log',
+                                                      delete=False)
+        control_log_file = tempfile.NamedTemporaryFile(prefix='dnt_control_',
+                                                      suffix='.log',
+                                                      delete=False)
+        scyaml = yaml.load(scfd)
+        scyaml['servers'][0]['log_file'] = server_log_file.name
+        scyaml['control_log_file'] = control_log_file.name
 
-        cmd = [daos_server, '--config={}'.format(server_config),
+        self._yaml_file = tempfile.NamedTemporaryFile(prefix='nlt-server-config-',
+                                                      suffix='.yaml')
+
+        self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
+        self._yaml_file.flush()
+
+        server_env = get_base_env()
+
+        if self.valgrind:
+            valgrind_args = ['--fair-sched=yes',
+                             '--xml=yes',
+                             '--xml-file=dnt_server.%p.memcheck.xml',
+                             '--num-callers=2',
+                             '--leak-check=no',
+                             '--keep-stacktraces=none',
+                             '--undef-value-errors=no']
+            self.io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
+
+            fd = open(os.path.join(self.io_server_dir.name, 'daos_io_server'), 'w')
+            fd.write('#!/bin/sh\n')
+            fd.write('export PATH=$REAL_PATH\n')
+            fd.write('exec valgrind {} daos_io_server "$@"\n'.format(' '.join(valgrind_args)))
+            fd.close()
+
+            os.chmod(os.path.join(self.io_server_dir.name, 'daos_io_server'),
+                     stat.S_IXUSR | stat.S_IRUSR)
+
+            server_env['REAL_PATH'] = '{}:{}'.format(os.path.join(self.conf['PREFIX'], 'bin'),
+                                                     server_env['PATH'])
+            server_env['PATH'] = '{}:{}'.format(self.io_server_dir.name,
+                                                server_env['PATH'])
+
+        cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t' '4', '--insecure', '-d', self.agent_dir,
                '--recreate-superblocks']
 
-        server_env = get_base_env()
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)
+
+        time.sleep(self.__start_sleep_time)
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
@@ -271,15 +328,19 @@ class DaosServer():
                                                     'lib64')
         agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
+        agent_log_file = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
+                                                      suffix='.log',
+                                                      delete=False)
+
         self._agent = subprocess.Popen([agent_bin,
                                         '--config-path', agent_config,
                                         '--insecure',
                                         '--debug',
                                         '--runtime_dir', self.agent_dir,
-                                        '--logfile', '/tmp/dnt_agent.log'],
+                                        '--logfile', agent_log_file.name],
                                        env=agent_env)
         self.conf.agent_dir = self.agent_dir
-        time.sleep(2)
+        time.sleep(self.__agent_sleep_time)
         self.running = True
 
     def stop(self):
@@ -301,6 +362,7 @@ class DaosServer():
         # it's not helpful at this stage to report that.
         # TODO: Remove this block when daos_server shutdown works.
         parent_pid = self._sp.pid
+        procs = []
         for proc_id in os.listdir('/proc/'):
             if proc_id == 'self':
                 continue
@@ -315,7 +377,7 @@ class DaosServer():
                 except ValueError:
                     continue
                 value = v.strip()
-                if key == 'Name' and value != 'daos_io_server':
+                if key == 'Name' and value != self.__process_name:
                     break
                 if key != 'PPid':
                     continue
@@ -325,12 +387,19 @@ class DaosServer():
             if not this_proc:
                 continue
             print('Target pid is {}'.format(proc_id))
+            procs.append(proc_id)
             os.kill(int(proc_id), signal.SIGTERM)
             time.sleep(5)
 
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
+
+        for proc_id in procs:
+            try:
+                os.kill(int(proc_id), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
@@ -583,24 +652,27 @@ def import_daos(server, conf):
     daos = __import__('pydaos')
     return daos
 
-def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
+def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
 
     Enable logging, and valgrind for the command.
     """
-    valgrind = ValgrindHelper()
+    vh = ValgrindHelper()
 
     if fi_file:
         # Turn off Valgrind for the fault injection testing unless it's
         # specifically requested (typically if a fault injection results
         # in a SEGV/assert), and then if it is turned on then just check
         # memory access, not memory leaks.
-        valgrind.use_valgrind = fi_valgrind
-        valgrind.full_check = False
+        vh.use_valgrind = fi_valgrind
+        vh.full_check = False
 
-    exec_cmd = valgrind.get_cmd_prefix()
+    if not valgrind:
+        vh.use_valgrind = False
+
+    exec_cmd = vh.get_cmd_prefix()
     exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
     exec_cmd.extend(cmd)
 
@@ -640,7 +712,7 @@ def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
              show_memleaks=show_memleaks,
              skip_fi=skip_fi,
              fi_signal=fi_signal)
-    valgrind.convert_xml()
+    vh.convert_xml()
     return rc
 
 def show_cont(conf, pool):
@@ -1218,6 +1290,19 @@ def main():
 
     if server.stop() != 0:
         fatal_errors = True
+
+    # If running all tests then restart the server under valgrind.
+    # This is really, really slow so just do list-containers, then
+    # exit again.
+    if len(sys.argv) == 2 and sys.argv[1] == 'all':
+        server = DaosServer(conf, valgrind=True)
+        server.start()
+        pools = get_pool_list()
+        for pool in pools:
+            cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+            rc = run_daos_cmd(conf, cmd, valgrind=False)
+        if server.stop() != 0:
+            fatal_errors = True
 
     wf.close()
     if fatal_errors:
