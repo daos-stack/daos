@@ -1323,7 +1323,6 @@ static int
 set_short_read_cb(tse_task_t *task, void *data)
 {
 	struct hole_params	*params;
-	struct io_params	*io_list;
 	daos_array_io_t		*args;
 	int			i;
 	int			rc = task->dt_result;
@@ -1335,9 +1334,8 @@ set_short_read_cb(tse_task_t *task, void *data)
 
 	params = daos_task_get_priv(task);
 	D_ASSERT(params != NULL);
-
-	io_list = params->io_list;
 	args = daos_task_get_args(params->ptask);
+	D_ASSERT(args);
 
 	/** adjust the read_nr based on the array size */
 	args->iod->arr_nr_short_read = 0;
@@ -1400,7 +1398,6 @@ check_short_read_cb(tse_task_t *task, void *data)
 	while (current) {
 		int i;
 		daos_size_t hi_off; /** high offset within dkey */
-		daos_size_t hi_off_arr; /** high offset relative to array */
 		daos_size_t num_recs = 0; /** num recs possibly short fetched */
 
 		if (current->user_sgl_used) {
@@ -1423,7 +1420,6 @@ check_short_read_cb(tse_task_t *task, void *data)
 		dkey_val = current->dkey_val;
 		hi_off = current->iom.iom_recx_hi.rx_idx +
 			current->iom.iom_recx_hi.rx_nr;
-		hi_off_arr = hi_off + dkey_val * current->chunk_size;
 
 		for (i = 0; i < current->iod.iod_nr; i++) {
 			if ((current->iod.iod_recxs[i].rx_idx +
