@@ -76,7 +76,7 @@ struct bio_nvme_data {
 	ABT_cond		 bd_barrier;
 	/* SPDK bdev type */
 	int			 bd_bdev_class;
-	/* How many xstreams has intialized NVMe context */
+	/* How many xstreams has initialized NVMe context */
 	int			 bd_xstream_cnt;
 	/* The thread responsible for SPDK bdevs init/fini */
 	struct spdk_thread	*bd_init_thread;
@@ -857,7 +857,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	D_DEBUG(DB_MGMT, "Get dev "DF_UUID" mapped to tgt %d.\n",
 		DP_UUID(dev_info->sdi_id), tgt_id);
 
-	/* Iterate thru device list to find matching dev */
+	/* Iterate through device list to find matching dev */
 	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
 		if (uuid_compare(d_bdev->bb_uuid, dev_info->sdi_id) == 0) {
 			found = true;

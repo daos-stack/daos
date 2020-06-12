@@ -75,7 +75,7 @@ class DaosServerCommand(YamlCommand):
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
 
-        # Include the daos_io_server command lauched by the daos_server command.
+        # Include the daos_io_server command launched by the daos_server command.
         self._exe_names.append("daos_io_server")
 
     def get_sub_command_class(self):

@@ -618,7 +618,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	}
 
 	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, flags, dkey,
-			     1, iod, false, &ioh, NULL);
+			     1, iod, 0, NULL, &ioh, NULL);
 	if (rc != 0) {
 		if (verbose && rc != -DER_INPROGRESS)
 			print_error("Failed to prepare ZC update: "DF_RC"\n",
@@ -2480,11 +2480,11 @@ run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators, const char *cfg)
 
 	feats = feats & DAOS_OF_MASK;
 	if ((feats & DAOS_OF_DKEY_UINT64) && (feats & DAOS_OF_DKEY_LEXICAL)) {
-		D_PRINT("Skipping ambigous ofeat mask\n");
+		D_PRINT("Skipping ambiguous ofeat mask\n");
 		return 0;
 	}
 	if ((feats & DAOS_OF_AKEY_UINT64) && (feats & DAOS_OF_AKEY_LEXICAL)) {
-		D_PRINT("Skipping ambigous ofeat mask\n");
+		D_PRINT("Skipping ambiguous ofeat mask\n");
 		return 0;
 	}
 
