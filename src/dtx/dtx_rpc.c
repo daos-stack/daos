@@ -305,7 +305,7 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 		rc = dtx_req_send(drr, epoch);
 		if (rc != 0) {
 			/* If the first sub-RPC failed, then break, otherwise
-			 * other remote replicas may have alread received the
+			 * other remote replicas may have already received the
 			 * RPC and executed it, so have to go ahead.
 			 */
 			if (i == 0) {
@@ -561,21 +561,22 @@ out:
  * For each DTX in the given array, classify its shards. It is quite possible
  * that the shards for different DTXs reside on the same server (rank + tag),
  * then they can be sent to remote server via single DTX_COMMIT RPC and then
- * be committed by remote server via signle PMDK transaction.
+ * be committed by remote server via single PMDK transaction.
  *
  * After the DTX classification, send DTX_COMMIT RPC to related servers, and
  * then call DTX commit locally. For a DTX, it is possible that some targets
  * have committed successfully, but others failed. That is no matter. As long
  * as one target has committed, then the DTX logic can re-sync those failed
- * targets when dtx_resync() is triggered next time
+ * targets when dtx_resync() is triggered next time.
  */
 int
 dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
-	   int count, uint32_t version)
+	   int count, uint32_t version, bool drop_cos)
 {
 	struct dtx_req_args	 dra;
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dti = NULL;
+	struct dtx_cos_key	*dcks = NULL;
 	struct umem_attr	 uma;
 	struct btr_root		 tree_root = { 0 };
 	daos_handle_t		 tree_hdl = DAOS_HDL_INVAL;
@@ -610,10 +611,29 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 			goto out;
 	}
 
-	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count);
+	if (drop_cos) {
+		D_ALLOC_ARRAY(dcks, count);
+		if (dcks == NULL)
+			D_GOTO(out, rc1 = -DER_NOMEM);
+	}
+
+	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count, dcks);
+
 	/* -DER_NONEXIST may be caused by race or repeated commit, ignore it. */
 	if (rc1 == -DER_NONEXIST)
 		rc1 = 0;
+
+	if (rc1 > 0 && drop_cos) {
+		int	i;
+
+		for (i = 0; i < rc1; i++) {
+			if (!daos_oid_is_null(dcks[i].oid.id_pub))
+				dtx_del_cos(cont, &dti[i], &dcks[i].oid,
+					    dcks[i].dkey_hash);
+		}
+	}
+
+	D_FREE(dcks);
 
 	if (dra.dra_future != ABT_FUTURE_NULL) {
 		rc2 = dtx_req_wait(&dra);
@@ -622,12 +642,11 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	}
 
 out:
-	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
+	D_CDEBUG(rc < 0 || rc1 < 0 || rc2 < 0, DLOG_ERR, DB_TRACE,
 		 "Commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
 		 DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
 
-	if (dti != NULL)
-		D_FREE(dti);
+	D_FREE(dti);
 
 	if (!daos_handle_is_inval(tree_hdl))
 		dbtree_destroy(tree_hdl, NULL);
@@ -653,8 +672,6 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 	d_list_t		 head;
 	int			 length;
 	int			 rc;
-	int			 rc1 = 0;
-	int			 rc2 = 0;
 
 	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0)
@@ -675,31 +692,28 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 
 	D_ASSERT(dti != NULL);
 
-	dra.dra_future = ABT_FUTURE_NULL;
-	if (!d_list_empty(&head)) {
+	/* Local abort firstly. */
+	rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count);
+	if (rc > 0 || rc == -DER_NONEXIST)
+		rc = 0;
+
+	if (rc == 0 && !d_list_empty(&head)) {
 		rc = dtx_req_list_send(&dra, DTX_ABORT, &head, length, po_uuid,
 				       co_uuid, epoch);
 		if (rc != 0)
 			goto out;
-	}
 
-	rc1 = vos_dtx_abort(cont->sc_hdl, epoch, dti, count);
-	if (rc1 == -DER_NONEXIST)
-		rc1 = 0;
-
-	if (dra.dra_future != ABT_FUTURE_NULL) {
-		rc2 = dtx_req_wait(&dra);
-		if (rc2 == -DER_NONEXIST)
-			rc2 = 0;
+		rc = dtx_req_wait(&dra);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 	}
 
 out:
-	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
-		 "Abort DTXs "DF_DTI", count %d: rc %d %d %d\n",
-		 DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
+	D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
+		 "Abort DTXs "DF_DTI", count %d: rc %d\n",
+		 DP_DTI(&dtes[0].dte_xid), count, rc);
 
-	if (dti != NULL)
-		D_FREE(dti);
+	D_FREE(dti);
 
 	if (!daos_handle_is_inval(tree_hdl))
 		dbtree_destroy(tree_hdl, NULL);
@@ -709,7 +723,7 @@ out:
 	if (cont != NULL)
 		ds_cont_child_put(cont);
 
-	return rc < 0 ? rc : (rc1 < 0 ? rc1 : (rc2 < 0 ? rc2 : 0));
+	return rc < 0 ? rc : 0;
 }
 
 int
