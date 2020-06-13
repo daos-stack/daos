@@ -81,7 +81,7 @@ class DynamicServerPool(TestWithServers):
             # appears that self.hostlist_servers[0] is always rank0, 1 is rank1,
             # and the extra server we'll be adding will be rank2.
             for rank, host in enumerate(hosts):
-                if(check_for_pool(host, pool.uuid.lower()) == RC_SUCCESS):
+                if check_for_pool(host, pool.uuid.lower()) == RC_SUCCESS:
                     pool_exists_on_host = True
                 else:
                     pool_exists_on_host = False
