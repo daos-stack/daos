@@ -697,14 +697,14 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
 ##DH++
         yaml_data += "transport_config:\n"
-        if not args.insecure_mode:
+        if args.secure_mode:
             yaml_data += "  allow_insecure: False"
         else:
             yaml_data += "  allow_insecure: True"
-        print("******")
-        print("yaml_data= ", yaml_data)
-        print("******")
-        print("******")
+        print("=====>")
+        print("==>yaml_data= ", yaml_data)
+        print("=====>")
+        print(" ")
 ##DH--
 
         # Write the modified yaml file into a temporary file.  Use the path to
@@ -1297,9 +1297,9 @@ def main():
         help="limit output to pass/fail")
 ##DH++
     parser.add_argument(
-        "-insec", "--insecure_mode",
+        "-sec", "--secure_mode",
         action="store_true",
-        help="test with insecure-mode")
+        help="test with secure-mode")
 ##DH--
     parser.add_argument(
         "tags",
@@ -1353,12 +1353,12 @@ def main():
     from subprocess import call
     print(" ")
     print(" ")
-    if not args.insecure_mode:
+    if args.secure_mode:
         call(["pwd"])
         if not os.path.exists("./daosCA"):
             call(["../../../../../utils/certs/gen_certificates.sh"])
-    print("args.test_servers= ", args.test_servers)
-    print("args.insecure_mode= ", args.insecure_mode)
+    print("==>args.test_servers= ", args.test_servers)
+    print("==>args.secure_mode= ", args.secure_mode)
     print(" ")
     print(" ")
 ##DH--
