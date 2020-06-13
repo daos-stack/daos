@@ -1354,7 +1354,7 @@ def main():
     print(" ")
     print(" ")
     if args.secure_mode:
-        call(["pwd"])
+#        call(["pwd"])
         if not os.path.exists("./daosCA"):
             call(["../../../../../utils/certs/gen_certificates.sh"])
     print("==>args.test_servers= ", args.test_servers)
