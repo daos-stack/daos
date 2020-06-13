@@ -453,7 +453,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	D_INFO("Received request to create pool\n");
-	D_INFO("EJMM: ds_mgmt_drpc_pool_create() name: %s\n", req->sys);
+	/* D_INFO("EJMM: ds_mgmt_drpc_pool_create() name: %s\n", req->sys); */
 
 	if (req->n_ranks > 0) {
 		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
@@ -593,7 +593,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	D_INFO("Received request to evict pool connections %s\n", req->uuid);
-	D_INFO("EJMM: ds_mgmt_drpc_pool_evict() name: %s\n", req->sys);
+	/* D_INFO("EJMM: ds_mgmt_drpc_pool_evict() name: %s\n", req->sys); */
 
 	rc = uuid_parse(req->uuid, uuid);
 	if (rc != 0) {
