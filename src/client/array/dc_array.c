@@ -1510,7 +1510,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	struct io_params *head = NULL;
 	daos_size_t	num_ios;
 	d_list_t	io_task_list;
-	daos_size_t	tot_num_records;
+	daos_size_t	tot_num_records = 0;
 	tse_task_t	*stask; /* task for short read and hole mgmt */
 	int		rc;
 
