@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from check_for_pool import check_for_pool
 
 
@@ -51,24 +50,13 @@ class DynamicServerPool(TestWithServers):
         super(DynamicServerPool, self).__init__(*args, **kwargs)
         self.expected_uuids = []
 
-    def create_new_pool(self, ranks=None):
-        """Create a new pool using ranks and append it to self.pool.
-
-        Args:
-            ranks (str, optional): Ranks value passed in to --ranks. Defaults to
-            None.
-        """
-        new_pool = TestPool(self.context, dmg_command=self.get_dmg_command())
-        new_pool.get_params(self)
-        if ranks:
-            new_pool.target_list.update(ranks)
-        new_pool.create()
-        self.expected_uuids.append(new_pool.uuid.lower())
-        self.pool.append(new_pool)
+    def setUp(self):
+        super(DynamicServerPool, self).setUp()
+        self.pool = []
 
     def verify_uuids(self):
         """Call dmg pool list to get the list of UUIDs and verify against the
-        expected UUIDs passed in.
+        expected UUIDs.
         """
         actual_uuids = []
         output_list = self.get_dmg_command().get_output("pool_list")
@@ -78,42 +66,58 @@ class DynamicServerPool(TestWithServers):
         self.expected_uuids.sort()
         self.assertEqual(self.expected_uuids, actual_uuids)
 
+    def check_pool_location(self, hosts, uuid_to_ranks):
+        """Iterate pools and verify that the UUID-named directory exists in
+        each hosts.
+
+        Args:
+            hosts (list of str): Hostnames to search the UUID-named directory.
+            uuid_to_ranks (str to list of int dictionary): UUID to rank list
+                dictionary.
+        """
+        RC_SUCCESS = 0
+        for pool in self.pool:
+            # Note that we don't check mapping between rank and hostname, but it
+            # appears that self.hostlist_servers[0] is always rank0, 1 is rank1,
+            # and the extra server we'll be adding will be rank2.
+            for rank, host in enumerate(hosts):
+                if(check_for_pool(host, pool.uuid.lower()) == RC_SUCCESS):
+                    pool_exists_on_host = True
+                else:
+                    pool_exists_on_host = False
+                # If this rank is in the rank list, there should be the
+                # UUID-named directory; i.e., pool_exist_on_host is True.
+                self.assertEqual(
+                    rank in uuid_to_ranks[pool.uuid.lower()],
+                    pool_exists_on_host)
+
     def test_dynamic_server_pool(self):
         """
-        JIRA ID: DAOS-3598
+        JIRA ID: DAOS-3595
 
         Test Description: See class description.
 
         :avocado: tags=all,medium,control,full_regression,dynamic_server_pool
         """
-        self.pool = []
+        uuid_to_ranks = {}
 
         # Create a pool on rank0.
-        self.create_new_pool("0")
+        self.pool.append(self.get_pool(create=False))
+        self.pool[-1].target_list.update([0], "pool.target_list")
+        self.pool[-1].create()
+        self.expected_uuids.append(self.pool[-1].uuid.lower())
+        uuid_to_ranks[self.pool[-1].uuid.lower()] = [0]
         # Create a pool across the 2 servers.
-        self.create_new_pool()
+        self.pool.append(self.get_pool())
+        self.pool[-1].create()
+        self.expected_uuids.append(self.pool[-1].uuid.lower())
+        uuid_to_ranks[self.pool[-1].uuid.lower()] = [0, 1]
         # Verify UUIDs by calling dmg pool list.
         self.verify_uuids()
 
         # Verify that the UUID-named directory is created, or not created, at
         # each host for the two pools.
-        # Note that there's no mapping between rank and hostname, but it appears
-        # that self.hostlist_servers[0] is always rank0, 1 is rank1, and the
-        # extra server we'll be adding will be rank2.
-        RC_SUCCESS = 0
-        RC_FAIL = 1
-        rc_p1h1 = check_for_pool(
-            self.hostlist_servers[0], self.pool[0].uuid.lower())
-        self.assertEqual(rc_p1h1, RC_SUCCESS)
-        rc_p1h2 = check_for_pool(
-            self.hostlist_servers[1], self.pool[0].uuid.lower())
-        self.assertEqual(rc_p1h2, RC_FAIL)
-        rc_p2h1 = check_for_pool(
-            self.hostlist_servers[0], self.pool[1].uuid.lower())
-        self.assertEqual(rc_p2h1, RC_SUCCESS)
-        rc_p2h2 = check_for_pool(
-            self.hostlist_servers[1], self.pool[1].uuid.lower())
-        self.assertEqual(rc_p2h2, RC_SUCCESS)
+        self.check_pool_location(self.hostlist_servers, uuid_to_ranks)
 
         # Start an additional server.
         extra_servers = self.params.get("test_servers", "/run/extra_servers/*")
@@ -122,30 +126,25 @@ class DynamicServerPool(TestWithServers):
 
         # Create a pool on the newly added server and verify the UUIDs with dmg
         # pool list.
-        self.create_new_pool("2")
+        self.pool.append(self.get_pool(create=False))
+        self.pool[-1].target_list.update([2], "pool.target_list")
+        self.pool[-1].create()
+        self.expected_uuids.append(self.pool[-1].uuid.lower())
+        uuid_to_ranks[self.pool[-1].uuid.lower()] = [2]
         self.verify_uuids()
-        # Verify that the UUID-named directory is created, or not created, at
-        # each host for the new pool.
-        rc_p3h1 = check_for_pool(
-            self.hostlist_servers[0], self.pool[2].uuid.lower())
-        self.assertEqual(rc_p3h1, RC_FAIL)
-        rc_p3h2 = check_for_pool(
-            self.hostlist_servers[1], self.pool[2].uuid.lower())
-        self.assertEqual(rc_p3h2, RC_FAIL)
-        rc_p3h3 = check_for_pool(extra_servers[0], self.pool[2].uuid.lower())
-        self.assertEqual(rc_p3h3, RC_SUCCESS)
+        # Verify that the UUID-named directory is created at each host including
+        # the new host.
+        self.check_pool_location(
+            self.hostlist_servers + extra_servers, uuid_to_ranks)
 
         # Create a new pool across all three servers and verify the UUIDs with
         # dmg pool list.
-        self.create_new_pool()
+        self.pool.append(self.get_pool())
+        self.pool[-1].create()
+        self.expected_uuids.append(self.pool[-1].uuid.lower())
+        uuid_to_ranks[self.pool[-1].uuid.lower()] = [0, 1, 2]
         self.verify_uuids()
-        # Verify that the UUID-named directory is created, or not created, at
-        # each host for the new pool.
-        rc_p4h1 = check_for_pool(
-            self.hostlist_servers[0], self.pool[3].uuid.lower())
-        self.assertEqual(rc_p4h1, RC_SUCCESS)
-        rc_p4h2 = check_for_pool(
-            self.hostlist_servers[1], self.pool[3].uuid.lower())
-        self.assertEqual(rc_p4h2, RC_SUCCESS)
-        rc_p4h3 = check_for_pool(extra_servers[0], self.pool[3].uuid.lower())
-        self.assertEqual(rc_p4h3, RC_SUCCESS)
+        # Verify that the UUID-named directory is created at each host for all
+        # pools.
+        self.check_pool_location(
+            self.hostlist_servers + extra_servers, uuid_to_ranks)
