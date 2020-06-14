@@ -316,10 +316,8 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 			rc = process_cb(buf, len, cb_args);
 	}
 
-	if (requested_bytes) {
-		D_ERROR("Requested more bytes than what's available in sgl");
-		rc = -DER_INVAL;
-	}
+	if (requested_bytes)
+		D_WARN("Requested more bytes than what's available in sgl");
 
 	return rc;
 }
