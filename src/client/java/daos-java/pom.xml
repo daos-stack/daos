@@ -95,12 +95,15 @@
                   <arg value="--c_out=."/>
                   <arg value="--java_out=."/>
                   <arg value="DunsAttribute.proto"/>
+                  <arg value="DaosObjectAttribute.proto"/>
                 </exec>
                 <copy todir="${project.basedir}/src/main/java/io">
                   <fileset dir="${native.build.path}/io"/>
                 </copy>
                 <copy file="${native.build.path}/DunsAttribute.pb-c.h" todir="${project.basedir}/src/main/native/include"/>
                 <copy file="${native.build.path}/DunsAttribute.pb-c.c" todir="${project.basedir}/src/main/native"/>
+                <copy file="${native.build.path}/DaosObjectAttribute.pb-c.h" todir="${project.basedir}/src/main/native/include"/>
+                <copy file="${native.build.path}/DaosObjectAttribute.pb-c.c" todir="${project.basedir}/src/main/native"/>
               </target>
             </configuration>
             <goals>
