@@ -632,7 +632,7 @@ ds_pool_iv_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid, uint64_t flags,
 	memcpy(&pic->pic_creds[0], cred->iov_buf, cred->iov_len);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_CONN, iv_entry, size,
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, true);
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, false);
 	D_DEBUG(DB_MD, DF_UUID" distribute hdl "DF_UUID" capas "DF_U64" %d\n",
 		DP_UUID(pool->sp_uuid), DP_UUID(hdl_uuid), sec_capas, rc);
 	D_FREE(iv_entry);
@@ -755,6 +755,7 @@ ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 	d_sg_list_t		 sgl = { 0 };
 	d_iov_t			 iov = { 0 };
 	struct ds_iv_key	 key;
+	struct pool_iv_key	*pool_key;
 	uint32_t		 size;
 	int			 rc;
 
@@ -778,6 +779,8 @@ ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_PROP;
+	pool_key = (struct pool_iv_key *)key.key_buf;
+	pool_key->pik_entry_size = size;
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
 		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));

@@ -150,7 +150,7 @@ class JobManager(ExecutableCommand):
 
             # Add a running state to the list of process states if any remote
             # process was found to be active.  The pcmd method will return a
-            # dictioanry with a single key, e.g. {1: <NodeSet>}, if there are
+            # dictionary with a single key, e.g. {1: <NodeSet>}, if there are
             # no remote processes running on any of the hosts.  If this value
             # is not returned, indicate there are processes running by adding
             # the "R" state to the process state list.
@@ -370,6 +370,7 @@ class Srun(JobManager):
         self.nodefile = FormattedParameter("--nodefile={}", None)
         self.nodelist = FormattedParameter("--nodelist={}", None)
         self.ntasks_per_node = FormattedParameter("--ntasks-per-node={}", None)
+        self.nodes = FormattedParameter("--nodes={}", None)
         self.reservation = FormattedParameter("--reservation={}", None)
         self.partition = FormattedParameter("--partition={}", None)
         self.output = FormattedParameter("--output={}", None)

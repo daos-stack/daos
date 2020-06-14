@@ -150,7 +150,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
 
         :avocado: tags=all,small,pr,hw,dmg,pool_query,basic,poolquerywrite
         """
-        # Store orignal pool info
+        # Store original pool info
         out_b = self.get_pool_query_info(self.uuid)
         self.log.info("==>   Pool info before write: \n%s", out_b)
 

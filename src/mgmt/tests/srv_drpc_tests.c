@@ -49,7 +49,8 @@
 #define UUID_STR_LEN	37
 #endif
 
-static uint32_t		TEST_IDXS[] = {0, 1, 2};
+static uint32_t	TEST_IDXS[] = {0, 1, 2};
+static uint32_t	TEST_RANKS[] = {0, 1, 2};
 static const char	*TEST_ACES[] = {"A::OWNER@:rw",
 					"A::niceuser@:rw",
 					"A:G:GROUP@:r"};
@@ -110,9 +111,11 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_get_attach_info);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_join);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_create);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_destroy);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_exclude);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_extend);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_reintegrate);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_destroy);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_evict);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_exclude);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_get_acl);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_overwrite_acl);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_update_acl);
@@ -1545,7 +1548,7 @@ setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 	Mgmt__PoolExcludeReq req = MGMT__POOL_EXCLUDE_REQ__INIT;
 
 	req.uuid = uuid;
-	req.n_targetidx = 1;
+	req.n_targetidx = 3;
 	req.rank = rank;
 	req.targetidx = TEST_IDXS;
 	pack_pool_exclude_req(call, &req);
@@ -1560,7 +1563,7 @@ expect_drpc_exclude_resp_with_error(Drpc__Response *resp, int exp_error)
 	assert_non_null(resp->body.data);
 
 	pc_resp = mgmt__pool_exclude_resp__unpack(NULL, resp->body.len,
-						 resp->body.data);
+						  resp->body.data);
 	assert_non_null(pc_resp);
 	assert_int_equal(pc_resp->status, exp_error);
 
@@ -1610,6 +1613,110 @@ test_drpc_exclude_success(void **state)
 	ds_mgmt_drpc_pool_exclude(&call, &resp);
 
 	expect_drpc_exclude_resp_with_error(&resp, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
+ * dRPC pool extend test setup
+ */
+static int
+drpc_pool_extend_setup(void **state)
+{
+	mock_ds_mgmt_pool_extend_setup();
+	return 0;
+}
+
+/*
+ * dRPC pool extend tests
+ */
+static void
+pack_pool_extend_req(Drpc__Call *call, Mgmt__PoolExtendReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__pool_extend_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_extend_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+setup_extend_drpc_call(Drpc__Call *call, char *uuid)
+{
+	Mgmt__PoolExtendReq req = MGMT__POOL_EXTEND_REQ__INIT;
+
+	req.uuid = uuid;
+	req.n_ranks = 3;
+	req.scmbytes = 1000000000;
+	req.ranks = TEST_RANKS;
+	pack_pool_extend_req(call, &req);
+}
+
+static void
+expect_drpc_extend_resp_with_error(Drpc__Response *resp, int exp_error)
+{
+	Mgmt__PoolExtendResp	*pc_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pc_resp = mgmt__pool_extend_resp__unpack(NULL, resp->body.len,
+						 resp->body.data);
+	assert_non_null(pc_resp);
+	assert_int_equal(pc_resp->status, exp_error);
+
+	mgmt__pool_extend_resp__free_unpacked(pc_resp, NULL);
+}
+
+static void
+test_drpc_extend_bad_uuid(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_extend_drpc_call(&call, "BAD");
+
+	ds_mgmt_drpc_pool_extend(&call, &resp);
+
+	expect_drpc_extend_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_extend_mgmt_svc_fails(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_extend_drpc_call(&call, TEST_UUID);
+	ds_mgmt_pool_extend_return = -DER_UNKNOWN;
+
+	ds_mgmt_drpc_pool_extend(&call, &resp);
+	expect_drpc_extend_resp_with_error(&resp, ds_mgmt_pool_extend_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_extend_success(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_extend_drpc_call(&call, TEST_UUID);
+	ds_mgmt_drpc_pool_extend(&call, &resp);
+
+	expect_drpc_extend_resp_with_error(&resp, 0);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -1670,6 +1777,109 @@ test_drpc_reintegrate_bad_uuid(void **state)
 	ds_mgmt_drpc_pool_reintegrate(&call, &resp);
 
 	expect_drpc_reintegrate_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
+ * Pool evict test setup
+ */
+static int
+drpc_evict_setup(void **state)
+{
+	mock_ds_mgmt_pool_evict_setup();
+	return 0;
+}
+
+/*
+ * dRPC pool evict tests
+ */
+static void
+pack_pool_evict_req(Drpc__Call *call, Mgmt__PoolEvictReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__pool_evict_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_evict_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+setup_evict_drpc_call(Drpc__Call *call, char *uuid, char *sys_name)
+{
+	Mgmt__PoolEvictReq req = MGMT__POOL_EVICT_REQ__INIT;
+
+	req.uuid = uuid;
+	req.sys = sys_name;
+	pack_pool_evict_req(call, &req);
+}
+
+static void
+expect_drpc_evict_resp_with_status(Drpc__Response *resp, int exp_status)
+{
+	Mgmt__PoolEvictResp	*pc_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pc_resp = mgmt__pool_evict_resp__unpack(NULL, resp->body.len,
+						 resp->body.data);
+	assert_non_null(pc_resp);
+	assert_int_equal(pc_resp->status, exp_status);
+
+	mgmt__pool_evict_resp__free_unpacked(pc_resp, NULL);
+}
+
+static void
+test_drpc_pool_evict_bad_uuid(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_evict_drpc_call(&call, "BAD", "DaosSys");
+
+	ds_mgmt_drpc_pool_evict(&call, &resp);
+
+	expect_drpc_evict_resp_with_status(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+	static void
+test_drpc_pool_evict_mgmt_svc_fails(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_evict_drpc_call(&call, TEST_UUID, "DaosSys");
+	ds_mgmt_pool_evict_return = -DER_UNKNOWN;
+
+	ds_mgmt_drpc_pool_evict(&call, &resp);
+	expect_drpc_evict_resp_with_status(&resp,
+					       ds_mgmt_pool_evict_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_evict_success(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_evict_drpc_call(&call, TEST_UUID, "DaosSys");
+	ds_mgmt_drpc_pool_evict(&call, &resp);
+
+	expect_drpc_evict_resp_with_status(&resp, 0);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -1956,9 +2166,16 @@ test_drpc_cont_set_owner_success(void **state)
 #define EXCLUDE_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_exclude_setup)
 
+#define POOL_EXTEND_TEST(x)	cmocka_unit_test_setup(x, \
+						drpc_pool_extend_setup)
+
 #define REINTEGRATE_TEST(x)	cmocka_unit_test(x)
 
 #define POOL_CREATE_TEST(x)	cmocka_unit_test(x)
+
+#define POOL_EVICT_TEST(x)	cmocka_unit_test_setup(x, \
+						drpc_evict_setup)
+
 
 #define PING_RANK_TEST(x)	cmocka_unit_test(x)
 
@@ -2005,6 +2222,9 @@ main(void)
 		EXCLUDE_TEST(test_drpc_exclude_bad_uuid),
 		EXCLUDE_TEST(test_drpc_exclude_mgmt_svc_fails),
 		EXCLUDE_TEST(test_drpc_exclude_success),
+		POOL_EXTEND_TEST(test_drpc_extend_bad_uuid),
+		POOL_EXTEND_TEST(test_drpc_extend_mgmt_svc_fails),
+		POOL_EXTEND_TEST(test_drpc_extend_success),
 		REINTEGRATE_TEST(test_drpc_reintegrate_bad_uuid),
 		QUERY_TEST(test_drpc_pool_query_bad_uuid),
 		QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),
@@ -2013,6 +2233,9 @@ main(void)
 		QUERY_TEST(test_drpc_pool_query_success_rebuild_done),
 		QUERY_TEST(test_drpc_pool_query_success_rebuild_err),
 		POOL_CREATE_TEST(test_drpc_pool_create_invalid_acl),
+		POOL_EVICT_TEST(test_drpc_pool_evict_bad_uuid),
+		POOL_EVICT_TEST(test_drpc_pool_evict_mgmt_svc_fails),
+		POOL_EVICT_TEST(test_drpc_pool_evict_success),
 		PING_RANK_TEST(test_drpc_ping_rank_success),
 		PREP_SHUTDOWN_TEST(test_drpc_prep_shutdown_success),
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_bad_cont_uuid),
