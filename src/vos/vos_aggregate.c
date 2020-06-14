@@ -1913,31 +1913,6 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 	io->ic_csum_recalc_func = func;
 }
 
-daos_unit_oid_t
-vos_cmt_get_oid(d_iov_t *value)
-{
-        struct vos_dtx_cmt_ent	*dce = value->iov_buf;
-
-	return dce->dce_base.dce_oid;
-}
-
-daos_epoch_t
-vos_cmt_get_epoch(d_iov_t *value)
-{
-        struct vos_dtx_cmt_ent	*dce = value->iov_buf;
-
-	return dce->dce_base.dce_epoch;
-}
-
-void
-vos_agg_iterate(daos_handle_t coh, dbtree_iterate_cb_t cb, void *arg)
-{
-	struct vos_container	*cont = vos_hdl2cont(coh);
-
-	dbtree_iterate(cont->vc_dtx_committed_hdl, DAOS_INTENT_DEFAULT, false,
-		       cb, arg);
-}
-
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
 {

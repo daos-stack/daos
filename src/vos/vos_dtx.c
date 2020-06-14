@@ -546,26 +546,18 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	int				 rc = 0;
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
-	/* For single replicated object, we trigger commit just after local
-	 * modification done. Under such case, the caller exactly knows the
-	 * @epoch and no need to lookup the active DTX table. On the other
-	 * hand, for modifying single replicated object, there is no DTX
-	 * entry in the active DTX table.
-	 */
-	//if (epoch == 0) {
-		d_iov_set(&riov, NULL, 0);
-		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
-		if (rc == -DER_NONEXIST) {
-			rc = dbtree_lookup(cont->vc_dtx_committed_hdl,
-					   &kiov, NULL);
-			goto out;
-		}
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc == -DER_NONEXIST) {
+		rc = dbtree_lookup(cont->vc_dtx_committed_hdl,
+				   &kiov, NULL);
+		goto out;
+	}
 
-		if (rc != 0)
-			goto out;
+	if (rc != 0)
+		goto out;
 
-		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-	//}
+	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
 
 	D_ALLOC_PTR(dce);
 	if (dce == NULL)
@@ -573,7 +565,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 	DCE_XID(dce) = *dti;
 	DCE_OID(dce) = DAE_OID(dae);
-	//DCE_EPOCH(dce) = epoch != 0 ? epoch : DAE_EPOCH(dae);
 	DCE_EPOCH(dce) = DAE_EPOCH(dae);
 	dce->dce_reindex = 0;
 
