@@ -57,7 +57,37 @@ class DmgCommand(YamlCommand):
                       r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+)"
                       r",\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
                       r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)"
-                      r"\s+recs)"
+                      r"\s+recs)",
+        # Sample output of dmg storage scan.
+        # wolf-130:10001: connected
+        # Hosts    SCM Total             NVMe Total
+        # -----    ---------             ----------
+        # wolf-130 6.4 TB (2 namespaces) 4.7 TB (4 controllers)
+        "storage_scan": r"([a-z0-9-]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
+                        r"namespaces\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
+                        r"controller",
+        # Sample output of dmg storage scan --verbose.
+        # wolf-130:10001: connected
+        # --------
+        # wolf-130
+        # --------
+        # SCM Namespace Socket ID Capacity
+        # ------------- --------- --------
+        # pmem0         0         3.2 TB
+        # pmem1         0         3.2 TB
+
+        # NVMe PCI     Model                FW Revision Socket ID Capacity
+        # --------     -----                ----------- --------- --------
+        # 0000:5e:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
+        # 0000:5f:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
+        # 0000:81:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
+        # 0000:da:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
+        "storage_scan_verbose": r"--------\n([a-z0-9-]+)\n--------|"
+                                r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+"
+                                r"([\d.]+) ([A-Z]+)|"
+                                r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
+                                r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
+                                r"[ ]+([A-Z]+)"
     }
 
     def __init__(self, path, yaml_cfg=None):
@@ -435,7 +465,7 @@ class DmgCommand(YamlCommand):
                     DmgCommand.StorageSubCommand.ScanSubCommand,
                     self).__init__(
                         "/run/dmg/storage/scan/*", "scan")
-                self.summary = FormattedParameter("-m", False)
+                self.verbose = FormattedParameter("-v", False)
 
         class SetSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage set command."""
@@ -559,6 +589,21 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("scan")
+        return self._get_result()
+
+    def storage_scan_verbose(self):
+        """Get the result of the dmg storage scan command with -v option.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage scan command fails.
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("scan")
+        self.sub_command_class.sub_command_class.verbose.value = True
         return self._get_result()
 
     def storage_format(self, reformat=False):

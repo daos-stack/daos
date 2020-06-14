@@ -1,0 +1,6 @@
+hosts:
+  test_servers:
+    - server-A
+timeout: 102 # 1.5 times of the m time.
+server_config:
+  name: daos_server
