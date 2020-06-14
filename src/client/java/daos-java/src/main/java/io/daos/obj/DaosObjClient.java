@@ -32,7 +32,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -147,8 +146,10 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * number of dkeys
    * @param dkeysBufferAddress
    * address of direct byte buffer into which dkeys written in format, len1+key1+len2+key2...
+   * @param dataLen
+   * data length in buffer
    */
-  native void punchObjectDkeys(long objectPtr, long flags, int nbrOfDkeys, long dkeysBufferAddress, int bufferLen);
+  native void punchObjectDkeys(long objectPtr, long flags, int nbrOfDkeys, long dkeysBufferAddress, int dataLen);
 
   /**
    * punch akeys (with all records) from an object.
@@ -162,8 +163,10 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param keysBufferAddress
    * address of direct byte buffer dkey and akeys written into direct byte buffer in format,
    * dkey len+dkey+akey1 len+akey1+akey2 len+akey2...
+   * @param dataLen
+   * data length in buffer
    */
-  native void punchObjectAkeys(long objectPtr, long flags, int nbrOfAkeys, long keysBufferAddress);
+  native void punchObjectAkeys(long objectPtr, long flags, int nbrOfAkeys, long keysBufferAddress, int dataLen);
 
   /**
    * query attributes of an object.
@@ -181,19 +184,16 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * handle of opened object
    * @param flags
    * Fetch flags (currently ignored)
-   * @param dkey
-   * Distribution key associated with the fetch operation
    * @param nbrOfDesc
    * number of description in <code>descBuffer</code>
    * @param descBufferAddress
-   * address of direct byte buffer holds serialized list of {@link IODesc} of akeys, types, record sizes and how many
-   * records to fetch
+   * address of direct byte buffer holds serialized dkey and list of {@link IOValueDesc} of akeys, types, record sizes,
+   * index in value buffer and how many records to fetch
    * @param dataBufferAddress
    * address of direct data buffer which holds all records described in <code>descBuffer</code>. Actual fetch lengths
-   * of each IODesc also updated in this buffer
+   * of each IODesc also updated in this buffer, like "actual len1+data1+actual len2+data2..."
    */
-  native void fetchObject(long objectPtr, long flags, String dkey, int nbrOfDesc, long descBufferAddress,
-                                        long dataBufferAddress);
+  native void fetchObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress, long dataBufferAddress);
 
   /**
    * update object records of given dkey and akeys.
@@ -202,51 +202,51 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * handle of opened object
    * @param flags
    * update flags (currently ignored)
-   * @param dkey
-   * Distribution key associated with the update operation
    * @param nbrOfDesc
    * number of description in <code>descBuffer</code>
    * @param descBufferAddress
-   * address of direct byte buffer holds serialized list of {@link IODesc} of akeys, types, record sizes and how many
+   * address of direct byte buffer holds serialized list of {@link IOValueDesc} of akeys, types, record sizes and how many
    * records to update
    * @param dataBufferAddress
    * address of direct data buffer which holds all records described in <code>descBuffer</code>
    */
-  native void updateObject(long objectPtr, long flags, String dkey, int nbrOfDesc, long descBufferAddress,
-                                        long dataBufferAddress);
+  native void updateObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress, long dataBufferAddress);
 
   /**
    * list dkeys of given object.
    *
    * @param objectPtr
    * handle of opened object
+   * @param descBufferAddress
+   * address of description buffer
    * @param keyBufferAddress
    * address of direct byte buffer holds dkeys
    * @param anchorBufferAddress
    * address of direct byte buffer holds anchor
-   * @param maxNbr
+   * @param nbrOfDesc
    * maximum number of dkeys to list. If actual number of dkeys exceed this value, user should call this method again
    * with <code>anchorBuffer</code>
    */
-  native void listDkeys(long objectPtr, long keyBufferAddress, long anchorBufferAddress, int maxNbr);
+  native void listObjectDkeys(long objectPtr, long descBufferAddress, long keyBufferAddress, long anchorBufferAddress,
+                              int nbrOfDesc);
 
   /**
    * list akeys of given object and dkey.
    *
    * @param objectPtr
    * handle of opened object
-   * @param dkey
-   * distribution key
+   * @param descBufferAddress
+   * address of description buffer, including dkey
    * @param keyBufferAddress
    * address of direct byte buffer holds akeys
    * @param anchorBufferAddress
    * address of direct byte buffer holds anchor
-   * @param maxNbr
+   * @param nbrOfDesc
    * maximum number of akeys to list. If actual number of akeys exceed this value, user should call this method again
    * with <code>anchorBuffer</code>
    */
-  native void listAkeys(long objectPtr, String dkey, long keyBufferAddress, long anchorBufferAddress,
-                                      int maxNbr);
+  native void listObjectAkeys(long objectPtr, long descBufferAddress, long keyBufferAddress,
+                              long anchorBufferAddress, int nbrOfDesc);
 
   protected long getContPtr() {
     return contPtr;

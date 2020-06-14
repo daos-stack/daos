@@ -37,6 +37,11 @@
       <artifactId>commons-lang</artifactId>
     </dependency>
     <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>3.11.4</version>
+    </dependency>
+    <dependency>
       <groupId>com.google.code.findbugs</groupId>
       <artifactId>jsr305</artifactId>
     </dependency>
@@ -76,6 +81,31 @@
         <artifactId>maven-antrun-plugin</artifactId>
         <version>1.8</version>
         <executions>
+          <execution>
+            <id>compile-proto</id>
+            <phase>generate-sources</phase>
+            <configuration>
+              <target name="compile-proto" if="${compile.proto}">
+                <mkdir dir="${native.build.path}"/>
+                <exec dir="${native.build.path}"
+                      failonerror="true"
+                      executable="protoc">
+                  <arg value="-I=${project.basedir}/src/main/resources/"/>
+                  <arg value="--c_out=."/>
+                  <arg value="--java_out=."/>
+                  <arg value="DaosObjectAttribute.proto"/>
+                </exec>
+                <copy todir="${project.basedir}/src/main/java/io">
+                  <fileset dir="${native.build.path}/io"/>
+                </copy>
+                <copy file="${native.build.path}/DaosObjectAttribute.pb-c.h" todir="${project.basedir}/src/main/native/include"/>
+                <copy file="${native.build.path}/DaosObjectAttribute.pb-c.c" todir="${project.basedir}/src/main/native"/>
+              </target>
+            </configuration>
+            <goals>
+              <goal>run</goal>
+            </goals>
+          </execution>
           <execution>
             <id>build-so</id>
             <phase>compile</phase>

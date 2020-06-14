@@ -1,5 +1,6 @@
 package io.daos.obj;
 
+import io.daos.Constants;
 import io.daos.DaosObjectType;
 import org.junit.Assert;
 import org.junit.Test;
@@ -20,5 +21,13 @@ public class DaosObjectIdTest {
     id.encode(0, DaosObjectType.OC_SX, 0);
     Assert.assertTrue(id.getHigh() != 0);
     Assert.assertTrue(id.getLow() != 0);
+  }
+
+  @Test
+  public void testKeyEncoding() throws Exception {
+    String s = "abc" + '\u90ed' + '\u5fb7' + '\u7eb2' + "&";
+    byte[] utfBytes = s.getBytes(Constants.KEY_CHARSET);
+    String decoded = new String(utfBytes, Constants.KEY_CHARSET);
+    Assert.assertEquals(s, decoded);
   }
 }
