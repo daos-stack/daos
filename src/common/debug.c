@@ -226,6 +226,7 @@ DP_UUID(const void *uuid)
 	return buf;
 }
 
+#ifndef DAOS_BUILD_RELEASE
 #define DF_KEY_MAX		8
 #define DF_KEY_STR_SIZE		64
 
@@ -263,3 +264,4 @@ daos_key2str(daos_key_t *key)
 	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;
 	return buf;
 }
+#endif
