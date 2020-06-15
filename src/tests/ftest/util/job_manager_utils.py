@@ -190,7 +190,7 @@ class Orterun(JobManager):
         self.display_map = FormattedParameter("--display-map", False)
         self.map_by = FormattedParameter("--map-by {}", "node")
         self.export = FormattedParameter("-x {}", None)
-        self.enable_recovery = FormattedParameter("--enable-recovery", True)
+        self.enable_recovery = FormattedParameter("--enable-recovery", False)
         self.report_uri = FormattedParameter("--report-uri {}", None)
         self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
         self.mca = " " # FormattedParameter("--mca {}", mca_default)
