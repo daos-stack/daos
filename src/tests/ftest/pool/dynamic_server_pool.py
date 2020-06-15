@@ -77,6 +77,7 @@ class DynamicServerPool(TestWithServers):
                 dictionary.
         """
         RC_SUCCESS = 0
+        errors = []
         for pool in self.pool:
             # Note that we don't check mapping between rank and hostname, but it
             # appears that self.hostlist_servers[0] is always rank0, 1 is rank1,
@@ -86,9 +87,12 @@ class DynamicServerPool(TestWithServers):
                 pool_exists_on_host = rc == RC_SUCCESS
                 # If this rank is in the rank list, there should be the
                 # UUID-named directory; i.e., pool_exist_on_host is True.
-                self.assertEqual(
-                    rank in uuid_to_ranks[pool.uuid.lower()],
-                    pool_exists_on_host)
+                pool_expected = rank in uuid_to_ranks[pool.uuid.lower()]
+                if pool_expected != pool_exists_on_host:
+                    errors.append(
+                        "Is the pool expected to exist? {}; " +
+                        "Actual: {}".format(pool_expected, pool_exists_on_host))
+        self.assertEqual(len(errors), 0, "\n".join(errors))
 
     def create_pool_with_ranks(self, ranks, tl_update=False):
         """Create a pool with possibly --ranks parameter.
