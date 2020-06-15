@@ -92,7 +92,7 @@ struct rebuild_tgt_pool_tracker {
 	/* global stable epoch to use for rebuilding the data */
 	uint64_t		rt_stable_epoch;
 	/* local rebuild epoch mainly to constrain the VOS aggregation
-	 * to make sure aggreation will not cross the epoch
+	 * to make sure aggregation will not cross the epoch
 	 */
 	uint64_t		rt_rebuild_fence;
 	unsigned int		rt_lead_puller_running:1,

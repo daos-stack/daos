@@ -828,7 +828,7 @@ out:
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	parentPath	directory from which file is deleted
  * \param[in]	name		file name
  * \param[in]	force		force delete if it's directory
@@ -870,7 +870,7 @@ out:
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	parentObjId	pointer to opened fs object
  * \param[in]	name		file name
  * \param[in]	flags		file flags
@@ -911,7 +911,7 @@ Java_io_daos_dfs_DaosFsClient_dfsLookup__JJLjava_lang_String_2IJ(
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	path		path of file
  * \param[in]	flags		file flags
  * \param[in]	bufferAddress	buffer to hold stat attributes, not implemented
@@ -947,7 +947,7 @@ Java_io_daos_dfs_DaosFsClient_dfsLookup__JLjava_lang_String_2IJ(
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  *
  * \return	size of file
@@ -975,7 +975,7 @@ Java_io_daos_dfs_DaosFsClient_dfsGetSize(JNIEnv *env, jobject client,
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	flags		flags of new file
  *
@@ -1004,7 +1004,7 @@ Java_io_daos_dfs_DaosFsClient_dfsDup(JNIEnv *env, jobject client,
  *
  * \param[in]	env		JNI environment
  * \param[in]	clientClass	DaosFsClient class
- * \parem[in]	objId		pointer to fs object
+ * \param[in]	objId		pointer to fs object
  */
 JNIEXPORT void JNICALL
 Java_io_daos_dfs_DaosFsClient_dfsRelease(JNIEnv *env,
@@ -1026,7 +1026,7 @@ Java_io_daos_dfs_DaosFsClient_dfsRelease(JNIEnv *env,
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	bufferAddress	buffer address
  * \param[in]	fileOffset	file offset
@@ -1072,7 +1072,7 @@ Java_io_daos_dfs_DaosFsClient_dfsRead(JNIEnv *env, jobject client,
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	bufferAddress	buffer address
  * \param[in]	fileOffset	file offset
@@ -1115,7 +1115,7 @@ Java_io_daos_dfs_DaosFsClient_dfsWrite(JNIEnv *env, jobject client,
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		ointer to dfs object
+ * \param[in]	dfsPtr		ointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	maxEntries	maximum entries to be read. not implemented yet
  *
@@ -1243,7 +1243,7 @@ static void set_user_group_name(JNIEnv *env, char *buffer, struct stat *stat)
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		ointer to dfs object
+ * \param[in]	dfsPtr		ointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	bufferAddress	pointer to opened fs object
  */
@@ -1297,7 +1297,7 @@ Java_io_daos_dfs_DaosFsClient_dfsOpenedObjStat(JNIEnv *env,
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		ointer to dfs object
+ * \param[in]	dfsPtr		ointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	name		attribute name
  * \param[in]	value		attribute value
@@ -1334,7 +1334,7 @@ Java_io_daos_dfs_DaosFsClient_dfsSetExtAttr(JNIEnv *env,
  *
  * \param[in]	env			JNI environment
  * \param[in]	client			DaosFsClient object
- * \parem[in]	dfsPtr			ointer to dfs object
+ * \param[in]	dfsPtr			ointer to dfs object
  * \param[in]	objId			pointer to opened fs object
  * \param[in]	name			attribute name
  * \param[in]	expectedValenLen	expected value length
@@ -1387,7 +1387,7 @@ out:
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	name		attribute name
  */

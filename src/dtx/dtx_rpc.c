@@ -305,7 +305,7 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 		rc = dtx_req_send(drr, epoch);
 		if (rc != 0) {
 			/* If the first sub-RPC failed, then break, otherwise
-			 * other remote replicas may have alread received the
+			 * other remote replicas may have already received the
 			 * RPC and executed it, so have to go ahead.
 			 */
 			if (i == 0) {
@@ -561,7 +561,7 @@ out:
  * For each DTX in the given array, classify its shards. It is quite possible
  * that the shards for different DTXs reside on the same server (rank + tag),
  * then they can be sent to remote server via single DTX_COMMIT RPC and then
- * be committed by remote server via signle PMDK transaction.
+ * be committed by remote server via single PMDK transaction.
  *
  * After the DTX classification, send DTX_COMMIT RPC to related servers, and
  * then call DTX commit locally. For a DTX, it is possible that some targets
@@ -694,7 +694,7 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 
 	/* Local abort firstly. */
 	rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count);
-	if (rc == -DER_NONEXIST)
+	if (rc > 0 || rc == -DER_NONEXIST)
 		rc = 0;
 
 	if (rc == 0 && !d_list_empty(&head)) {

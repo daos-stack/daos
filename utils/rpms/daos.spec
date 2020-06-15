@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       22%{?relval}%{?dist}
+Release:       23%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -34,8 +34,10 @@ BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
+BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
+BuildRequires: libisal_crypto-devel
 %endif
 BuildRequires: raft-devel >= 0.6.0
 BuildRequires: openssl-devel
@@ -362,6 +364,9 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Fri Jun 05 2020 Ryon Jensen <ryon.jensen@intel.com> - 1.1.0-23
+- Add libisa-l_crypto dependency
+
 * Fri Jun 05 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-22
 - Change server systemd run-as user to daos_server in unit file
 
@@ -419,7 +424,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 - Remove cart as an external dependence
 
 * Mon Mar 23 2020 Jeffrey V. Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-4
-- Remove scons_local as depedency
+- Remove scons_local as dependency
 
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
 - bump up go minimum version to 1.12

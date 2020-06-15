@@ -160,7 +160,7 @@ def scons():
     cenv = dfuse_env.Clone()
     # Set the define in SConscript so that it's in place for the prereqs.require
     # check which will verify fuse3/fuse.h can be loaded.
-    cenv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
+    cenv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=35'])
     cenv.AppendUnique(LIBPATH=["../dfs"])
 
     cenv.AppendUnique(LIBS=['dfs', 'duns'])

@@ -71,8 +71,8 @@ $ sysctl -w net.ipv4.conf.<ifaces>.accept_local=1
 
 Secondly, Linux must be configured to only send ARP replies on the interface
 targeted in the ARP request. This is configured via the arp_ignore parameter.
-This should be set to 2 if all the interfaces on the client and storage nodes
-are in the same logical subnet (e.g. ib0 == 10.0.0.27, ib1 == 10.0.1.27,
+This should be set to 2 if all the IPoIB interfaces on the client and storage
+nodes are in the same logical subnet (e.g. ib0 == 10.0.0.27, ib1 == 10.0.1.27,
 prefix=16).
 
 ```
@@ -86,16 +86,17 @@ set to 1.
 $ sysctl -w net.ipv4.conf.all.arp_ignore=1
 ```
 
-Finally, the rp_local parameter for the relevant interfaces (replace below
-<ifaces> with the different interface names) must be set to 0 or 2.
+Finally, the rp_filter is set to 1 by default on several distributions (e.g. on
+CentOS 7) and should be set to either 0 or 2, with 2 being more secure. This is
+true even if the configuration uses a single logical subnet.
 
 ```
-$ sysctl -w net.ipv4.cong.<ifaces>.arp_ignore=1
+$ sysctl -w net.ipv4.conf.<ifaces>.rp_filter=2
 ```
 
 All those parameters can be made persistent in /etc/sysctl.conf by adding a new
-under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf) with all the relevant
-settings.
+sysctl file under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf) with all
+the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 

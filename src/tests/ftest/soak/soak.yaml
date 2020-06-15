@@ -103,7 +103,7 @@ soak_stress:
     job_timeout: 20
     nodesperjob:
         - -1
-    # used for perfomance benchmarks
+    # used for performance benchmarks
     taskspernode:
         - 1
         - 16
@@ -123,7 +123,7 @@ soak_harassers:
     job_timeout: 20
     nodesperjob:
         - 1
-    # used for perfomance benchmarks
+    # used for performance benchmarks
     taskspernode:
         - 1
     poollist:
