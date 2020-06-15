@@ -116,7 +116,7 @@ ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 {
 	struct dfuse_inode_entry	*ie;
 	uint				oldref;
-	uint				newref;
+	uint				newref = 0;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
