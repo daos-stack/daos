@@ -89,10 +89,10 @@ class DynamicServerPool(TestWithServers):
                 # UUID-named directory; i.e., pool_exist_on_host is True.
                 pool_expected = rank in uuid_to_ranks[pool.uuid.lower()]
                 if pool_expected != pool_exists_on_host:
-                    errors.append( 
-                        "Is the pool expected to " +\
-                        "exist? {}; Actual" +\
-                        ": {}".format(pool_expected, pool_exists_on_host))
+                    error_message = "Is the pool expected to exist? " +\
+                        str(pool_expected) + "; Actual: " +\
+                        str(pool_exists_on_host)
+                    errors.append(error_message)
         self.assertEqual(len(errors), 0, "\n".join(errors))
 
     def create_pool_with_ranks(self, ranks, tl_update=False):
