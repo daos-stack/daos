@@ -75,6 +75,7 @@ type Configuration struct {
 	ControlLogFile      string                    `yaml:"control_log_file"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string                    `yaml:"helper_log_file"`
+	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
 
 	// duplicated in ioserver.Config
@@ -296,6 +297,12 @@ func (c *Configuration) WithControlLogJSON(enabled bool) *Configuration {
 // WithHelperLogFile sets the path to the daos_admin logfile.
 func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
 	c.HelperLogFile = filePath
+	return c
+}
+
+// WithFirmwareHelperLogFile sets the path to the daos_firmware logfile.
+func (c *Configuration) WithFirmwareHelperLogFile(filePath string) *Configuration {
+	c.FWHelperLogFile = filePath
 	return c
 }
 

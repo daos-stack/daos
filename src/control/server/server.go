@@ -103,6 +103,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 	}
 
+	if cfg.FWHelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosFWLogFileEnvVar, cfg.FWHelperLogFile); err != nil {
+			return errors.Wrap(err, "unable to configure privileged firmware helper logging")
+		}
+	}
+
 	// Create the root context here. All contexts should
 	// inherit from this one so that they can be shut down
 	// from one place.

@@ -31,7 +31,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -55,36 +54,6 @@ func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPa
 }
 
 var nilPayloadErr = pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input")
-
-func TestDaosAdmin_PingHandler(t *testing.T) {
-	for name, tc := range map[string]struct {
-		req        *pbin.Request
-		expPayload *pbin.PingResp
-		expErr     *fault.Fault
-	}{
-		"nil request": {
-			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
-		},
-		"success": {
-			req:        &pbin.Request{Method: "Ping"},
-			expPayload: &pbin.PingResp{Version: build.DaosVersion},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			handler := &pingHandler{}
-
-			resp := handler.Handle(nil, tc.req)
-
-			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
-				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
-			}
-			if tc.expPayload == nil {
-				tc.expPayload = &pbin.PingResp{}
-			}
-			expectPayload(t, resp, &pbin.PingResp{}, tc.expPayload)
-		})
-	}
-}
 
 func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 	testTarget, cleanup := common.CreateTestDir(t)

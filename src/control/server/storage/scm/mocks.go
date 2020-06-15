@@ -118,16 +118,19 @@ func DefaultMockSysProvider() *MockSysProvider {
 // implementation providing capability to access and configure
 // SCM modules and namespaces.
 type MockBackendConfig struct {
-	DiscoverRes      storage.ScmModules
-	DiscoverErr      error
-	GetNamespaceRes  storage.ScmNamespaces
-	GetNamespaceErr  error
-	GetStateErr      error
-	StartingState    storage.ScmState
-	NextState        storage.ScmState
-	PrepNeedsReboot  bool
-	PrepNamespaceRes storage.ScmNamespaces
-	PrepErr          error
+	DiscoverRes          storage.ScmModules
+	DiscoverErr          error
+	GetNamespaceRes      storage.ScmNamespaces
+	GetNamespaceErr      error
+	GetStateErr          error
+	StartingState        storage.ScmState
+	NextState            storage.ScmState
+	PrepNeedsReboot      bool
+	PrepNamespaceRes     storage.ScmNamespaces
+	PrepErr              error
+	GetFirmwareStatusErr error
+	GetFirmwareStatusRes *storage.ScmFirmwareInfo
+	UpdateFirmwareErr    error
 }
 
 type MockBackend struct {
@@ -169,6 +172,14 @@ func (mb *MockBackend) PrepReset(_ storage.ScmState) (bool, error) {
 		mb.Unlock()
 	}
 	return mb.cfg.PrepNeedsReboot, mb.cfg.PrepErr
+}
+
+func (mb *MockBackend) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error) {
+	return mb.cfg.GetFirmwareStatusRes, mb.cfg.GetFirmwareStatusErr
+}
+
+func (mb *MockBackend) UpdateFirmware(deviceUID string, firmwarePath string) error {
+	return mb.cfg.UpdateFirmwareErr
 }
 
 func NewMockBackend(cfg *MockBackendConfig) *MockBackend {

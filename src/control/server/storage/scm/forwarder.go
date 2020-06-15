@@ -23,23 +23,31 @@
 package scm
 
 import (
+	"os"
+
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
-type Forwarder struct {
+// AdminForwarder forwards requests to the DAOS admin binary.
+type AdminForwarder struct {
 	pbin.Forwarder
 }
 
-func NewForwarder(log logging.Logger) *Forwarder {
+// NewAdminForwarder creates a new AdminForwarder.
+func NewAdminForwarder(log logging.Logger) *AdminForwarder {
 	pf := pbin.NewForwarder(log, pbin.DaosAdminName)
 
-	return &Forwarder{
+	return &AdminForwarder{
 		Forwarder: *pf,
 	}
 }
 
-func (f *Forwarder) Mount(req MountRequest) (*MountResponse, error) {
+// Mount forwards an SCM mount request.
+func (f *AdminForwarder) Mount(req MountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
 	res := new(MountResponse)
@@ -50,7 +58,8 @@ func (f *Forwarder) Mount(req MountRequest) (*MountResponse, error) {
 	return res, nil
 }
 
-func (f *Forwarder) Unmount(req MountRequest) (*MountResponse, error) {
+// Unmount forwards an SCM unmount request.
+func (f *AdminForwarder) Unmount(req MountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
 	res := new(MountResponse)
@@ -61,7 +70,8 @@ func (f *Forwarder) Unmount(req MountRequest) (*MountResponse, error) {
 	return res, nil
 }
 
-func (f *Forwarder) Format(req FormatRequest) (*FormatResponse, error) {
+// Format forwards a request request to format SCM.
+func (f *AdminForwarder) Format(req FormatRequest) (*FormatResponse, error) {
 	req.Forwarded = true
 
 	res := new(FormatResponse)
@@ -72,7 +82,8 @@ func (f *Forwarder) Format(req FormatRequest) (*FormatResponse, error) {
 	return res, nil
 }
 
-func (f *Forwarder) CheckFormat(req FormatRequest) (*FormatResponse, error) {
+// CheckFormat forwards a request to check the SCM formatting.
+func (f *AdminForwarder) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	req.Forwarded = true
 
 	res := new(FormatResponse)
@@ -83,7 +94,8 @@ func (f *Forwarder) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	return res, nil
 }
 
-func (f *Forwarder) Scan(req ScanRequest) (*ScanResponse, error) {
+// Scan forwards an SCM scan request.
+func (f *AdminForwarder) Scan(req ScanRequest) (*ScanResponse, error) {
 	req.Forwarded = true
 
 	res := new(ScanResponse)
@@ -94,11 +106,65 @@ func (f *Forwarder) Scan(req ScanRequest) (*ScanResponse, error) {
 	return res, nil
 }
 
-func (f *Forwarder) Prepare(req PrepareRequest) (*PrepareResponse, error) {
+// Prepare forwards a request to prep the SCM.
+func (f *AdminForwarder) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	req.Forwarded = true
 
 	res := new(PrepareResponse)
 	if err := f.SendReq("ScmPrepare", req, res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// FirmwareForwarder forwards firmware requests to a privileged binary.
+type FirmwareForwarder struct {
+	pbin.Forwarder
+}
+
+// NewFirmwareForwarder returns a new FirmwareForwarder.
+func NewFirmwareForwarder(log logging.Logger) *FirmwareForwarder {
+	pf := pbin.NewForwarder(log, pbin.DaosFWName)
+
+	return &FirmwareForwarder{
+		Forwarder: *pf,
+	}
+}
+
+// checkSupport verifies that the firmware support binary is installed.
+func (f *FirmwareForwarder) checkSupport() error {
+	if _, err := common.FindBinary(f.Forwarder.GetBinaryName()); os.IsNotExist(err) {
+		return errors.Errorf("SCM firmware operations are not supported on this system")
+	}
+
+	return nil
+}
+
+// Query forwards an SCM firmware query request.
+func (f *FirmwareForwarder) Query(req FirmwareQueryRequest) (*FirmwareQueryResponse, error) {
+	if err := f.checkSupport(); err != nil {
+		return nil, err
+	}
+	req.Forwarded = true
+
+	res := new(FirmwareQueryResponse)
+	if err := f.SendReq("ScmFirmwareQuery", req, res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// Update forwards a request to update firmware on the SCM.
+func (f *FirmwareForwarder) Update(req FirmwareUpdateRequest) (*FirmwareUpdateResponse, error) {
+	if err := f.checkSupport(); err != nil {
+		return nil, err
+	}
+	req.Forwarded = true
+
+	res := new(FirmwareUpdateResponse)
+	if err := f.SendReq("ScmFirmwareUpdate", req, res); err != nil {
 		return nil, err
 	}
 

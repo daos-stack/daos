@@ -33,6 +33,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -65,7 +66,7 @@ func TestPbin_NewApp(t *testing.T) {
 	expectDefaultProcess(t, app)
 	common.AssertNotEqual(t, app.log, nil, "expected non-nil logger")
 	common.AssertEqual(t, len(app.allowedCallers), 0, "expected no callers by default")
-	common.AssertEqual(t, len(app.handlers), 0, "expected no handlers by default")
+	common.AssertEqual(t, len(app.handlers), 1, "expected only ping handler by default")
 	common.AssertEqual(t, app.input, os.Stdin, "default input should be stdin")
 	common.AssertEqual(t, app.output, os.Stdout, "default output should be stdout")
 }
@@ -150,9 +151,11 @@ func TestPbinApp_AddHandler(t *testing.T) {
 	h2 := &testHandler{outputResp: &Response{}}
 
 	app := NewApp()
-	expectHandlerAdded(t, app, "Method1", h1, 1)
-	expectHandlerAdded(t, app, "Method2", h2, 2)
-	expectHandlerAdded(t, app, "Method1", h2, 2) // Should overwrite original Method1 handler
+
+	baseNumHandlers := len(app.handlers)
+	expectHandlerAdded(t, app, "Method1", h1, baseNumHandlers+1)
+	expectHandlerAdded(t, app, "Method2", h2, baseNumHandlers+2)
+	expectHandlerAdded(t, app, "Method1", h2, baseNumHandlers+2) // Should overwrite original Method1 handler
 }
 
 func TestPbinApp_Name(t *testing.T) {
@@ -273,6 +276,18 @@ func TestPbinApp_Run(t *testing.T) {
 			inputReq:       defaultReq,
 			outputResp:     defaultResp,
 			expResp:        defaultResp,
+		},
+		"ping is built-in": {
+			process:  defaultMockProcess(),
+			inputReq: &Request{Method: PingMethod},
+			outputResp: NewResponseWithPayload(&PingResp{
+				Version: build.DaosVersion,
+				AppName: defaultMockProcess().name,
+			}),
+			expResp: NewResponseWithPayload(&PingResp{
+				Version: build.DaosVersion,
+				AppName: defaultMockProcess().name,
+			}),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

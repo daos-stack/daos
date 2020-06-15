@@ -30,7 +30,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
 )
 
 func TestPbin_NewResponseWithError(t *testing.T) {
@@ -61,5 +63,49 @@ func TestPbin_NewResponseWithPayload(t *testing.T) {
 
 	if diff := cmp.Diff(expPayload, resp.Payload); diff != "" {
 		t.Errorf("unexpected payload (-want, +got)\n%s\n", diff)
+	}
+}
+
+func TestPbin_PingHandler(t *testing.T) {
+	appName := "test_app"
+	for name, tc := range map[string]struct {
+		req        *Request
+		expPayload *PingResp
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: PrivilegedHelperRequestFailed("nil request"),
+		},
+		"success": {
+			req: &Request{Method: PingMethod},
+			expPayload: &PingResp{
+				Version: build.DaosVersion,
+				AppName: appName,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			handler := &pingHandler{
+				appName: appName,
+			}
+
+			resp := handler.Handle(nil, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+
+			if tc.expPayload == nil {
+				tc.expPayload = &PingResp{}
+			}
+			payload := &PingResp{}
+			err := json.Unmarshal(resp.Payload, payload)
+			if err != nil {
+				t.Fatalf("couldn't unmarshal response payload")
+			}
+			if diff := cmp.Diff(tc.expPayload, payload); diff != "" {
+				t.Errorf("got wrong payload (-want, +got)\n%s\n", diff)
+			}
+		})
 	}
 }

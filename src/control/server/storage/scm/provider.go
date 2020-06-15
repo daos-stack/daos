@@ -137,6 +137,29 @@ type (
 		Mounted bool
 	}
 
+	// FirmwareQueryRequest defines the parameters for a firmware query.
+	FirmwareQueryRequest struct {
+		pbin.ForwardableRequest
+		Devices []string // requested device UIDs, empty for all
+	}
+
+	// FirmwareQueryResponse contains the results of a successful firmware query.
+	FirmwareQueryResponse struct {
+		FirmwareInfo map[string]storage.ScmFirmwareInfo // info mapped by device UID
+	}
+
+	// FirmwareUpdateRequest defines the parameters for a firmware update.
+	FirmwareUpdateRequest struct {
+		pbin.ForwardableRequest
+		Devices      []string // requested device UIDs, empty for all
+		FirmwarePath string   // location of the firmware binary
+	}
+
+	// FirmwareUpdateResponse contains the results of the firmware update.
+	FirmwareUpdateResponse struct {
+		Results map[string]string // result error string mapped by device UID
+	}
+
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
 		Discover() (storage.ScmModules, error)
@@ -144,6 +167,8 @@ type (
 		PrepReset(storage.ScmState) (bool, error)
 		GetState() (storage.ScmState, error)
 		GetNamespaces() (storage.ScmNamespaces, error)
+		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
+		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
@@ -172,7 +197,8 @@ type (
 		log     logging.Logger
 		backend Backend
 		sys     SystemProvider
-		fwd     *Forwarder
+		fwd     *AdminForwarder
+		fwFwd   *FirmwareForwarder
 	}
 )
 
@@ -350,7 +376,8 @@ func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provi
 		log:     log,
 		backend: backend,
 		sys:     sys,
-		fwd:     NewForwarder(log),
+		fwd:     NewAdminForwarder(log),
+		fwFwd:   NewFirmwareForwarder(log),
 	}
 }
 
@@ -803,4 +830,81 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 // is mounted.
 func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
+}
+
+func (p *Provider) getUIDs(requested []string) ([]string, error) {
+	modules, err := p.backend.Discover()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(modules) == 0 {
+		return nil, errors.New("no SCM modules")
+	}
+
+	uids := make([]string, 0, len(modules))
+	if len(requested) == 0 {
+		for _, m := range modules {
+			uids = append(uids, m.UID)
+		}
+	} else {
+		uids = requested
+	}
+
+	return uids, nil
+}
+
+// QueryFirmware fetches the status of SCM device firmware.
+func (p *Provider) QueryFirmware(req FirmwareQueryRequest) (*FirmwareQueryResponse, error) {
+	if p.shouldForward(req) {
+		return p.fwFwd.Query(req)
+	}
+
+	uids, err := p.getUIDs(req.Devices)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &FirmwareQueryResponse{
+		FirmwareInfo: make(map[string]storage.ScmFirmwareInfo, len(uids)),
+	}
+	for _, uid := range uids {
+		fwInfo, err := p.backend.GetFirmwareStatus(uid)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error getting firmware status for device %s", uid)
+		}
+		resp.FirmwareInfo[uid] = *fwInfo
+	}
+
+	return resp, nil
+}
+
+// UpdateFirmware updates the SCM device firmware.
+func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateResponse, error) {
+	if p.shouldForward(req) {
+		return p.fwFwd.Update(req)
+	}
+
+	if len(req.FirmwarePath) == 0 {
+		return nil, errors.New("missing path to firmware file")
+	}
+
+	uids, err := p.getUIDs(req.Devices)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &FirmwareUpdateResponse{
+		Results: make(map[string]string, len(uids)),
+	}
+	for _, uid := range uids {
+		result := "OK"
+		err = p.backend.UpdateFirmware(uid, req.FirmwarePath)
+		if err != nil {
+			result = err.Error()
+		}
+		resp.Results[uid] = result
+	}
+
+	return resp, nil
 }

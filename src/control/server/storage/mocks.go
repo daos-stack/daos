@@ -85,6 +85,7 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 		SocketID:        idx,
 		PhysicalID:      idx,
 		Capacity:        uint64(idx),
+		UID:             fmt.Sprintf("Device%d", idx),
 	}
 }
 
