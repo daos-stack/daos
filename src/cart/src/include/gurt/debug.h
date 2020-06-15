@@ -83,6 +83,9 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 
 #define D_LOG_TRUNCATE_ENV		"D_LOG_TRUNCATE"
 
+/**< Env to specify stderr merge with logfile*/
+#define D_LOG_STDERR_IN_LOG_ENV	"D_LOG_STDERR_IN_LOG"
+
 /* Enable shadow warning where users use same variable name in nested
  * scope.   This enables use of a variable in the macro below and is
  * just good coding practice.

@@ -661,6 +661,11 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.stderr_mask = stderr_mask;
 	if (logfile) {
 		int log_flags = O_RDWR | O_CREAT;
+		bool	merge = false;
+
+		env = getenv(D_LOG_STDERR_IN_LOG_ENV);
+		if (env != NULL && atoi(env) > 0)
+			merge = true;
 
 		if (!truncate)
 			log_flags |= O_APPEND;
@@ -671,17 +676,21 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			goto error;
 		}
 		/* merge stderr into log file, to aggregate and order with
-		    open(mst.logfile, log_flags, 0666);		 		 * messages from Mercury/libfabric
+		 * messages from Mercury/libfabric
 		 */
-		if (freopen(mst.logfile, truncate ? "w" : "a",
-			    stderr) == NULL) {
-			fprintf(stderr, "d_log_open: cannot open %s: %s\n",
-				mst.logfile, strerror(errno));
-			goto error;
+		if (merge) {
+			if (freopen(mst.logfile, truncate ? "w" : "a",
+				    stderr) == NULL) {
+				fprintf(stderr, "d_log_open: cannot open %s: %s\n",
+					mst.logfile, strerror(errno));
+				goto error;
+			}
+			/* set per-line buffering to limit jumbling */
+			setlinebuf(stderr);
+			mst.logfd = fileno(stderr);
+		} else {
+			mst.logfd = open(mst.logfile, log_flags, 0666);
 		}
-		/* set per-line buffering to limit jumbling */
-		setlinebuf(stderr);
-		mst.logfd = fileno(stderr);
 		if (mst.logfd < 0) {
 			fprintf(stderr, "d_log_open: cannot open %s: %s\n",
 				mst.logfile, strerror(errno));
