@@ -115,8 +115,7 @@ class WarningsFactory():
             locs.add('{}:{}'.format(sline.filename, sline.lineno))
             symptoms.add(smessage)
 
-        preamble = 'Fault injected here caused {} errors,' \
-                   ' logfile {}:'.format(count, log_file)
+        preamble = 'Fault injected here caused {} errors,'.format(count)
 
         message = '{} {} {}'.format(preamble,
                                     ' '.join(sorted(symptoms)),
@@ -147,9 +146,11 @@ class WarningsFactory():
         entry['description'] = message
         entry['message'] = line.get_anon_msg()
         if cat == 'Fault injection location':
-            entry['fingerprint'] = '{} {}'.format(line.filename, line.get_anon_msg())
+            entry['fingerprint'] = '{} {}'.format(line.filename,
+                                                  line.get_anon_msg())
         else:
-            entry['fingerprint'] = '{} {}{}'.format(line.filename, line.get_anon_msg(), message)
+            entry['fingerprint'] = '{} {}{}'.format(line.filename,
+                                                    line.get_anon_msg(), message)
         entry['severity'] = sev
         if line.function in self.FLAKY_FUNCTIONS and \
            entry['severity'] == 'NORMAL':
