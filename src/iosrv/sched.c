@@ -981,6 +981,7 @@ struct sched_data {
 	struct sched_cycle	 sd_cycle;
 	struct dss_xstream	*sd_dx;
 	uint32_t		 sd_event_freq;
+	double			 sd_last;
 };
 
 /* #define SCHED_DEBUG */
@@ -1225,11 +1226,17 @@ sched_run(ABT_sched sched)
 	ABT_pool		 pool;
 	ABT_unit		 unit;
 	uint32_t		 work_count = 0;
+	double			 now = ABT_get_wtime();
 	int			 i, ret;
 
 	ABT_sched_get_data(sched, (void **)&data);
 	cycle = &data->sd_cycle;
 	dx = data->sd_dx;
+
+	if (data->sd_last != 0 && now - data->sd_last > 1 /* s */)
+		D_WARN("xstream %d hasn't scheduled for %f seconds\n",
+		       dx->dx_xs_id, now - data->sd_last);
+	data->sd_last = now;
 
 	ret = ABT_sched_get_pools(sched, DSS_POOL_CNT, 0, pools);
 	if (ret != ABT_SUCCESS) {

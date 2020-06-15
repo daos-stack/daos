@@ -87,6 +87,12 @@ daos_eq_lib_init()
 		D_GOTO(unlock, rc = 0);
 	}
 
+	D_INFO("Setting FI_LOG_LEVEL to debug\n");
+	rc = setenv("FI_LOG_LEVEL", "debug", 1 /* overwrite */);
+	if (rc != 0) {
+		rc = daos_errno2der(errno);
+		D_GOTO(unlock, rc);
+	}
 	rc = crt_init_opt(NULL, 0, daos_crt_init_opt_get(false, 1));
 	if (rc != 0) {
 		D_ERROR("failed to initialize crt: "DF_RC"\n", DP_RC(rc));

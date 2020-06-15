@@ -498,6 +498,12 @@ server_init(int argc, char *argv[])
 	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* initialize the network layer */
+	D_INFO("Setting FI_LOG_LEVEL to debug\n");
+	rc = setenv("FI_LOG_LEVEL", "debug", 1 /* overwrite */);
+	if (rc != 0) {
+		rc = daos_errno2der(errno);
+		goto exit_mod_init;
+	}
 	ctx_nr = dss_ctx_nr_get();
 	rc = crt_init_opt(daos_sysname,
 			  CRT_FLAG_BIT_SERVER,
@@ -557,6 +563,9 @@ server_init(int argc, char *argv[])
 			DP_RC(rc));
 		goto exit_daos_fini;
 	}
+
+	/* Sleep 2s to let the crt endpoints become fully ready. */
+	sleep(2);
 
 	rc = drpc_init();
 	if (rc != 0) {

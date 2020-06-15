@@ -429,6 +429,13 @@ dss_srv_handler(void *arg)
 	struct dss_module_info		*dmi;
 	int				 rc;
 	bool				 signal_caller = true;
+	double				 now = ABT_get_wtime();
+	static __thread double		 last;
+
+	if (last != 0 && now - last > 1 /* s */)
+		D_WARN("xstream %d hasn't progressed for %f seconds\n",
+		       dx->dx_xs_id, now - last);
+	last = now;
 
 	/**
 	 * Set cpu affinity
