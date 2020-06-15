@@ -178,14 +178,14 @@ class PoolCreateTests(TestWithServers):
             str(storage[1]))
         return storage
 
-    def get_max_pool_sizes(self, scm_ratio=0.9, nvme_ratio=1):
+    def get_max_pool_sizes(self, scm_ratio=0.9, nvme_ratio=0.9):
         """Get the maximum pool sizes for the current server configuration.
 
         Args:
             scm_ratio (float, optional): percentage of the maximum SCM
-                capacity to use for the pool sizes. Defaults to 0.90 (90%).
+                capacity to use for the pool sizes. Defaults to 0.9 (90%).
             nvme_ratio (float, optional): percentage of the maximum NVMe
-                capacity to use for the pool sizes. Defaults to 1 (100%).
+                capacity to use for the pool sizes. Defaults to 0.9 (90%).
 
         Returns:
             list: a list of Bytes objects representing the maximum pool creation
@@ -211,7 +211,7 @@ class PoolCreateTests(TestWithServers):
             quantity (int): number of TestPool objects to create
             use_nvme (bool): whether to configure each pool with a nvme_size
         """
-        sizes = self.get_max_pool_sizes(0.9, 1.0)
+        sizes = self.get_max_pool_sizes(0.9, 0.9)
         self.pool = [
             self.get_pool(create=False, connect=False) for _ in range(quantity)]
         if quantity > 1:
@@ -378,9 +378,9 @@ class PoolCreateTests(TestWithServers):
         #   - one using all of the available capacity of the other server
         self.define_pools(3, True)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
-        self.pool[0].target_list.value = ranks[0]
-        self.pool[1].target_list.value = ranks
-        self.pool[2].target_list.value = ranks[1:]
+        self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
+        self.pool[1].target_list.update(ranks, "pool[1].target_list")
+        self.pool[2].target_list.update(ranks[1:], "pool[2].target_list")
 
         # Disable failing the test if a pool create fails
         self.dmg.exit_status_exception = False
