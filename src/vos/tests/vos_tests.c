@@ -81,7 +81,7 @@ run_all_tests(int keys, bool nest_iterators)
 {
 	const char	*bypass = getenv("DAOS_IO_BYPASS");
 	const char	*it;
-	char		 cfg_desc_io[CFG_MAX];
+	char		 cfg_desc_io[DTS_CFG_MAX];
 	int		 failed = 0;
 	int		 feats;
 	int		 i;
@@ -89,14 +89,14 @@ run_all_tests(int keys, bool nest_iterators)
 
 	if (!bypass) {
 		if (!nest_iterators) {
-			create_config(cfg_desc_io, "keys=%d", keys);
+			dts_create_config(cfg_desc_io, "keys=%d", keys);
 			failed += run_ts_tests(cfg_desc_io);
 			failed += run_mvcc_tests(cfg_desc_io);
 		}
 		bypass = "none";
 	}
 
-	create_config(cfg_desc_io, "keys=%d bypass=%s", keys, bypass);
+	dts_create_config(cfg_desc_io, "keys=%d bypass=%s", keys, bypass);
 
 	if (nest_iterators == false) {
 		failed += run_pm_tests(cfg_desc_io);
@@ -113,7 +113,7 @@ run_all_tests(int keys, bool nest_iterators)
 	} else {
 		it = "nested";
 	}
-	create_config(cfg_desc_io, "keys=%d bypass=%s iterator=%s", keys,
+	dts_create_config(cfg_desc_io, "keys=%d bypass=%s iterator=%s", keys,
 		      bypass, it);
 
 	for (i = 0; dkey_feats[i] >= 0; i++) {
@@ -278,7 +278,7 @@ main(int argc, char **argv)
 			print_usage();
 			goto exit_1;
 		default:
-			print_error("Unkown option\n");
+			print_error("Unknown option\n");
 			print_usage();
 			goto exit_1;
 		}

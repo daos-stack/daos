@@ -32,35 +32,60 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
+type hfiMap map[uint32]map[string][]string
+
+func (h hfiMap) addInterface(fi *control.HostFabricInterface) {
+	if _, ok := h[fi.NumaNode]; !ok {
+		h[fi.NumaNode] = make(map[string][]string)
+	}
+	h[fi.NumaNode][fi.Provider] = append(h[fi.NumaNode][fi.Provider], fi.Device)
+}
+
 // PrintHostFabricMap generates a human-readable representation of the supplied
 // HostFabricMap and writes it to the supplied io.Writer.
-func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, onlyProviders bool, opts ...control.PrintConfigOption) error {
+func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...control.PrintConfigOption) error {
 	if len(hfm) == 0 {
 		return nil
 	}
 
 	ew := txtfmt.NewErrWriter(out)
+
+	providerTitle := "Provider"
+	interfaceTitle := "Interfaces"
+	socketTitle := "NUMA Socket"
+
 	for _, key := range hfm.Keys() {
 		hfs := hfm[key]
 		hosts := control.GetPrintHosts(hfs.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
+		iw := txtfmt.NewIndentWriter(ew, txtfmt.WithPadCount(4))
 		fmt.Fprintf(ew, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
-
-		iw := txtfmt.NewIndentWriter(ew, txtfmt.WithPadCount(8))
-		fmt.Fprintf(iw, "Providers: %s\n", strings.Join(hfs.HostFabric.Providers, ","))
 		fmt.Fprintln(ew)
-		if onlyProviders {
-			continue
+
+		hfim := make(hfiMap)
+		for _, fi := range hfs.HostFabric.Interfaces {
+			hfim.addInterface(fi)
 		}
 
-		for _, fi := range hfs.HostFabric.Interfaces {
-			fmt.Fprintf(iw, "provider: %s\n", fi.Provider)
-			fmt.Fprintf(iw, "fabric_iface: %s\n", fi.Device)
-			fmt.Fprintf(iw, "pinned_numa_node: %d\n", fi.NumaNode)
+		iwTable := txtfmt.NewIndentWriter(iw, txtfmt.WithPadCount(4))
+		for s, hfi := range hfim {
+			var table []txtfmt.TableRow
+
+			formatter := txtfmt.NewTableFormatter(providerTitle, interfaceTitle)
+			title := fmt.Sprintf("%s %d", socketTitle, s)
+			lineBreak := strings.Repeat("-", len(title))
+
+			fmt.Fprintf(iw, "%s\n%s\n%s\n", lineBreak, title, lineBreak)
+			fmt.Fprintln(ew)
+
+			for p, dev := range hfi {
+				row := txtfmt.TableRow{providerTitle: p, interfaceTitle: strings.Join(dev, ", ")}
+				table = append(table, row)
+			}
+
+			fmt.Fprintf(iwTable, fmt.Sprintf("%s", formatter.Format(table)))
 			fmt.Fprintln(ew)
 		}
-
-		fmt.Fprintln(ew)
 	}
 
 	return ew.Err

@@ -23,18 +23,17 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"io/ioutil"
-	"math/rand"
+	"errors"
+	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -42,27 +41,55 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-func parseResponse(t *testing.T, buf *bytes.Buffer) *pbin.Response {
+func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPayload interface{}) {
 	t.Helper()
 
-	var res pbin.Response
-	if err := json.Unmarshal(buf.Bytes(), &res); err != nil {
-		t.Fatalf("%s: %q", err, buf.String())
+	err := json.Unmarshal(resp.Payload, payload)
+	if err != nil {
+		t.Fatalf("couldn't unmarshal response payload")
 	}
-	return &res
+
+	if diff := cmp.Diff(expPayload, payload); diff != "" {
+		t.Errorf("got wrong payload (-want, +got)\n%s\n", diff)
+	}
 }
 
-func TestDaosAdmin_Handler(t *testing.T) {
-	testTarget, err := ioutil.TempDir("", t.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(testTarget)
+var nilPayloadErr = pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input")
 
-	nilPayloadResp := &pbin.Response{
-		Error: pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input"),
+func TestDaosAdmin_PingHandler(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		expPayload *pbin.PingResp
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"success": {
+			req:        &pbin.Request{Method: "Ping"},
+			expPayload: &pbin.PingResp{Version: build.DaosVersion},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			handler := &pingHandler{}
+
+			resp := handler.Handle(nil, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+			if tc.expPayload == nil {
+				tc.expPayload = &pbin.PingResp{}
+			}
+			expectPayload(t, resp, &pbin.PingResp{}, tc.expPayload)
+		})
 	}
-	successResp := &pbin.Response{}
+}
+
+func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
+	testTarget, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+
 	mountReqPayload, err := json.Marshal(scm.MountRequest{
 		Source: "/src",
 		Target: testTarget,
@@ -71,6 +98,88 @@ func TestDaosAdmin_Handler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		smbc       *scm.MockBackendConfig
+		smsc       *scm.MockSysConfig
+		expPayload *scm.MountResponse
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"ScmMount nil payload": {
+			req: &pbin.Request{
+				Method: "ScmMount",
+			},
+			expErr: nilPayloadErr,
+		},
+		"ScmMount success": {
+			req: &pbin.Request{
+				Method:  "ScmMount",
+				Payload: mountReqPayload,
+			},
+			expPayload: &scm.MountResponse{Target: testTarget, Mounted: true},
+		},
+		"ScmMount failure": {
+			req: &pbin.Request{
+				Method:  "ScmMount",
+				Payload: mountReqPayload,
+			},
+			smsc: &scm.MockSysConfig{
+				MountErr: errors.New("test mount failed"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("mount /src->%s failed: test mount failed", testTarget)),
+		},
+		"ScmUnmount nil payload": {
+			req: &pbin.Request{
+				Method: "ScmUnmount",
+			},
+			expErr: nilPayloadErr,
+		},
+		"ScmUnmount success": {
+			req: &pbin.Request{
+				Method:  "ScmUnmount",
+				Payload: mountReqPayload,
+			},
+			expPayload: &scm.MountResponse{Target: testTarget, Mounted: false},
+		},
+		"ScmUnmount failure": {
+			req: &pbin.Request{
+				Method:  "ScmUnmount",
+				Payload: mountReqPayload,
+			},
+			smsc: &scm.MockSysConfig{
+				UnmountErr: errors.New("test unmount failed"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("failed to unmount %s: test unmount failed", testTarget)),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			sp := scm.NewMockProvider(log, tc.smbc, tc.smsc)
+			handler := &scmMountUnmountHandler{scmHandler: scmHandler{scmProvider: sp}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+			if tc.expPayload == nil {
+				tc.expPayload = &scm.MountResponse{}
+			}
+			expectPayload(t, resp, &scm.MountResponse{}, tc.expPayload)
+		})
+	}
+}
+
+func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
+	testTarget, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+
 	scmFormatReqPayload, err := json.Marshal(scm.FormatRequest{
 		Mountpoint: testTarget,
 		OwnerUID:   os.Getuid(),
@@ -83,6 +192,90 @@ func TestDaosAdmin_Handler(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	nilPayloadErr := pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input")
+
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		smbc       *scm.MockBackendConfig
+		smsc       *scm.MockSysConfig
+		expPayload *scm.FormatResponse
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"ScmFormat nil payload": {
+			req: &pbin.Request{
+				Method: "ScmFormat",
+			},
+			expErr: nilPayloadErr,
+		},
+		"ScmFormat success": {
+			req: &pbin.Request{
+				Method:  "ScmFormat",
+				Payload: scmFormatReqPayload,
+			},
+			expPayload: &scm.FormatResponse{
+				Mountpoint: testTarget,
+				Mounted:    true,
+				Formatted:  true,
+			},
+		},
+		"ScmFormat failure": {
+			req: &pbin.Request{
+				Method:  "ScmFormat",
+				Payload: scmFormatReqPayload,
+			},
+			smsc: &scm.MockSysConfig{
+				MountErr: errors.New("test mount failed"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("mount tmpfs->%s failed: test mount failed", testTarget)),
+		},
+		"ScmCheckFormat nil payload": {
+			req: &pbin.Request{
+				Method: "ScmCheckFormat",
+			},
+			expErr: nilPayloadErr,
+		},
+		"ScmCheckFormat success": {
+			req: &pbin.Request{
+				Method:  "ScmCheckFormat",
+				Payload: scmFormatReqPayload,
+			},
+			expPayload: &scm.FormatResponse{Mountpoint: testTarget},
+		},
+		"ScmCheckFormat failure": {
+			req: &pbin.Request{
+				Method:  "ScmFormat",
+				Payload: scmFormatReqPayload,
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverErr: errors.New("scan failed"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("scan failed"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			sp := scm.NewMockProvider(log, tc.smbc, tc.smsc)
+			handler := &scmFormatCheckHandler{scmHandler: scmHandler{scmProvider: sp}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+			if tc.expPayload == nil {
+				tc.expPayload = &scm.FormatResponse{}
+			}
+			expectPayload(t, resp, &scm.FormatResponse{}, tc.expPayload)
+		})
+	}
+}
+
+func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 	scmPrepareReqPayload, err := json.Marshal(scm.PrepareRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
@@ -90,6 +283,61 @@ func TestDaosAdmin_Handler(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		smbc       *scm.MockBackendConfig
+		smsc       *scm.MockSysConfig
+		expPayload *scm.PrepareResponse
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"ScmPrepare nil payload": {
+			req: &pbin.Request{
+				Method: "ScmPrepare",
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input"),
+		},
+		"ScmPrepare success": {
+			req: &pbin.Request{
+				Method:  "ScmPrepare",
+				Payload: scmPrepareReqPayload,
+			},
+			expPayload: &scm.PrepareResponse{},
+		},
+		"ScmPrepare failure": {
+			req: &pbin.Request{
+				Method:  "ScmPrepare",
+				Payload: scmPrepareReqPayload,
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverErr: errors.New("scan failed"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("scan failed"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			sp := scm.NewMockProvider(log, tc.smbc, tc.smsc)
+			handler := &scmPrepHandler{scmHandler: scmHandler{scmProvider: sp}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+			if tc.expPayload == nil {
+				tc.expPayload = &scm.PrepareResponse{}
+			}
+			expectPayload(t, resp, &scm.PrepareResponse{}, tc.expPayload)
+		})
+	}
+}
+
+func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 	scmScanReqPayload, err := json.Marshal(scm.ScanRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
@@ -97,6 +345,61 @@ func TestDaosAdmin_Handler(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		smbc       *scm.MockBackendConfig
+		smsc       *scm.MockSysConfig
+		expPayload *scm.ScanResponse
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"ScmScan nil payload": {
+			req: &pbin.Request{
+				Method: "ScmScan",
+			},
+			expErr: nilPayloadErr,
+		},
+		"ScmScan success": {
+			req: &pbin.Request{
+				Method:  "ScmScan",
+				Payload: scmScanReqPayload,
+			},
+			expPayload: &scm.ScanResponse{},
+		},
+		"ScmScan failure": {
+			req: &pbin.Request{
+				Method:  "ScmScan",
+				Payload: scmScanReqPayload,
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverErr: errors.New("scan failed"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("scan failed"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			sp := scm.NewMockProvider(log, tc.smbc, tc.smsc)
+			handler := &scmScanHandler{scmHandler: scmHandler{scmProvider: sp}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+			if tc.expPayload == nil {
+				tc.expPayload = &scm.ScanResponse{}
+			}
+			expectPayload(t, resp, &scm.ScanResponse{}, tc.expPayload)
+		})
+	}
+}
+
+func TestDaosAdmin_BdevInitHandler(t *testing.T) {
 	bdevInitReqPayload, err := json.Marshal(bdev.InitRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
@@ -104,6 +407,60 @@ func TestDaosAdmin_Handler(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		bmbc       *bdev.MockBackendConfig
+		expPayload *bdev.InitResponse
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"BdevInit nil payload": {
+			req: &pbin.Request{
+				Method: "BdevInit",
+			},
+			expErr: nilPayloadErr,
+		},
+		"BdevInit success": {
+			req: &pbin.Request{
+				Method:  "BdevInit",
+				Payload: bdevInitReqPayload,
+			},
+			expPayload: &bdev.InitResponse{},
+		},
+		"BdevInit failure": {
+			req: &pbin.Request{
+				Method:  "BdevInit",
+				Payload: bdevInitReqPayload,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				InitErr: errors.New("init failed"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("init failed"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			bp := bdev.NewMockProvider(log, tc.bmbc)
+			handler := &bdevInitHandler{bdevHandler: bdevHandler{bdevProvider: bp}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+			if tc.expPayload == nil {
+				tc.expPayload = &bdev.InitResponse{}
+			}
+			expectPayload(t, resp, &bdev.InitResponse{}, tc.expPayload)
+		})
+	}
+}
+
+func TestDaosAdmin_BdevScanHandler(t *testing.T) {
 	bdevScanReqPayload, err := json.Marshal(bdev.ScanRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
@@ -111,6 +468,60 @@ func TestDaosAdmin_Handler(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		bmbc       *bdev.MockBackendConfig
+		expPayload *bdev.ScanResponse
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"BdevScan nil payload": {
+			req: &pbin.Request{
+				Method: "BdevScan",
+			},
+			expErr: nilPayloadErr,
+		},
+		"BdevScan success": {
+			req: &pbin.Request{
+				Method:  "BdevScan",
+				Payload: bdevScanReqPayload,
+			},
+			expPayload: &bdev.ScanResponse{},
+		},
+		"BdevScan failure": {
+			req: &pbin.Request{
+				Method:  "BdevScan",
+				Payload: bdevScanReqPayload,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: errors.New("scan failed"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("scan failed"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			bp := bdev.NewMockProvider(log, tc.bmbc)
+			handler := &bdevScanHandler{bdevHandler: bdevHandler{bdevProvider: bp}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+			if tc.expPayload == nil {
+				tc.expPayload = &bdev.ScanResponse{}
+			}
+			expectPayload(t, resp, &bdev.ScanResponse{}, tc.expPayload)
+		})
+	}
+}
+
+func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
 	bdevPrepareReqPayload, err := json.Marshal(bdev.PrepareRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
@@ -118,6 +529,60 @@ func TestDaosAdmin_Handler(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		bmbc       *bdev.MockBackendConfig
+		expPayload *bdev.PrepareResponse
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"BdevPrepare nil payload": {
+			req: &pbin.Request{
+				Method: "BdevPrepare",
+			},
+			expErr: nilPayloadErr,
+		},
+		"BdevPrepare success": {
+			req: &pbin.Request{
+				Method:  "BdevPrepare",
+				Payload: bdevPrepareReqPayload,
+			},
+			expPayload: &bdev.PrepareResponse{},
+		},
+		"BdevPrepare failure": {
+			req: &pbin.Request{
+				Method:  "BdevPrepare",
+				Payload: bdevPrepareReqPayload,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				PrepareErr: errors.New("test prepare failed"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("SPDK prepare: test prepare failed"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			bp := bdev.NewMockProvider(log, tc.bmbc)
+			handler := &bdevPrepHandler{bdevHandler: bdevHandler{bdevProvider: bp}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+			if tc.expPayload == nil {
+				tc.expPayload = &bdev.PrepareResponse{}
+			}
+			expectPayload(t, resp, &bdev.PrepareResponse{}, tc.expPayload)
+		})
+	}
+}
+
+func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 	bdevFormatReqPayload, err := json.Marshal(bdev.FormatRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 		Class:              storage.BdevClassNvme,
@@ -128,267 +593,33 @@ func TestDaosAdmin_Handler(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		req    *pbin.Request
-		smbc   *scm.MockBackendConfig
-		smsc   *scm.MockSysConfig
-		bmbc   *bdev.MockBackendConfig
-		expRes *pbin.Response
-		expErr error
+		req        *pbin.Request
+		bmbc       *bdev.MockBackendConfig
+		expPayload *bdev.FormatResponse
+		expErr     *fault.Fault
 	}{
 		"nil request": {
-			expErr: errors.New("nil request"),
-		},
-		"unknown method": {
-			req: &pbin.Request{
-				Method: "OopsKaboom",
-			},
-			expRes: &pbin.Response{
-				Error: pbin.PrivilegedHelperRequestFailed(`unhandled method "OopsKaboom"`),
-			},
-		},
-		"Ping": {
-			req: &pbin.Request{
-				Method: "Ping",
-			},
-			expRes: successResp,
-		},
-		"ScmMount nil payload": {
-			req: &pbin.Request{
-				Method: "ScmMount",
-			},
-			expRes: nilPayloadResp,
-		},
-		"ScmMount success": {
-			req: &pbin.Request{
-				Method:  "ScmMount",
-				Payload: mountReqPayload,
-			},
-			expRes: successResp,
-		},
-		"ScmMount failure": {
-			req: &pbin.Request{
-				Method:  "ScmMount",
-				Payload: mountReqPayload,
-			},
-			smsc: &scm.MockSysConfig{
-				MountErr: errors.New("mount failed"),
-			},
-			expRes: &pbin.Response{
-				Error: pbin.PrivilegedHelperRequestFailed("mount failed"),
-			},
-		},
-		"ScmUnmount nil payload": {
-			req: &pbin.Request{
-				Method: "ScmUnmount",
-			},
-			expRes: nilPayloadResp,
-		},
-		"ScmUnmount success": {
-			req: &pbin.Request{
-				Method:  "ScmUnmount",
-				Payload: mountReqPayload,
-			},
-			expRes: successResp,
-		},
-		"ScmUnmount failure": {
-			req: &pbin.Request{
-				Method:  "ScmUnmount",
-				Payload: mountReqPayload,
-			},
-			smsc: &scm.MockSysConfig{
-				UnmountErr: errors.New("unmount failed"),
-			},
-			expRes: &pbin.Response{
-				Error: pbin.PrivilegedHelperRequestFailed("unmount failed"),
-			},
-		},
-		"ScmFormat nil payload": {
-			req: &pbin.Request{
-				Method: "ScmFormat",
-			},
-			expRes: nilPayloadResp,
-		},
-		"ScmFormat success": {
-			req: &pbin.Request{
-				Method:  "ScmFormat",
-				Payload: scmFormatReqPayload,
-			},
-			expRes: successResp,
-		},
-		"ScmFormat failure": {
-			req: &pbin.Request{
-				Method:  "ScmFormat",
-				Payload: scmFormatReqPayload,
-			},
-			smsc: &scm.MockSysConfig{
-				MountErr: errors.New("mount failed"),
-			},
-			expRes: &pbin.Response{
-				Error: pbin.PrivilegedHelperRequestFailed("mount failed"),
-			},
-		},
-		"ScmCheckFormat nil payload": {
-			req: &pbin.Request{
-				Method: "ScmCheckFormat",
-			},
-			expRes: nilPayloadResp,
-		},
-		"ScmCheckFormat success": {
-			req: &pbin.Request{
-				Method:  "ScmCheckFormat",
-				Payload: scmFormatReqPayload,
-			},
-			expRes: successResp,
-		},
-		"ScmCheckFormat failure": {
-			req: &pbin.Request{
-				Method:  "ScmFormat",
-				Payload: scmFormatReqPayload,
-			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scan failed"),
-			},
-			expRes: &pbin.Response{
-				Error: pbin.PrivilegedHelperRequestFailed("scan failed"),
-			},
-		},
-		"ScmPrepare nil payload": {
-			req: &pbin.Request{
-				Method: "ScmPrepare",
-			},
-			expRes: nilPayloadResp,
-		},
-		"ScmPrepare success": {
-			req: &pbin.Request{
-				Method:  "ScmPrepare",
-				Payload: scmPrepareReqPayload,
-			},
-			expRes: successResp,
-		},
-		"ScmPrepare failure": {
-			req: &pbin.Request{
-				Method:  "ScmPrepare",
-				Payload: scmPrepareReqPayload,
-			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scan failed"),
-			},
-			expRes: &pbin.Response{
-				Error: pbin.PrivilegedHelperRequestFailed("scan failed"),
-			},
-		},
-		"ScmScan nil payload": {
-			req: &pbin.Request{
-				Method: "ScmScan",
-			},
-			expRes: nilPayloadResp,
-		},
-		"ScmScan success": {
-			req: &pbin.Request{
-				Method:  "ScmScan",
-				Payload: scmScanReqPayload,
-			},
-			expRes: successResp,
-		},
-		"ScmScan failure": {
-			req: &pbin.Request{
-				Method:  "ScmScan",
-				Payload: scmScanReqPayload,
-			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scan failed"),
-			},
-			expRes: &pbin.Response{
-				Error: pbin.PrivilegedHelperRequestFailed("scan failed"),
-			},
-		},
-		"BdevInit nil payload": {
-			req: &pbin.Request{
-				Method: "BdevInit",
-			},
-			expRes: nilPayloadResp,
-		},
-		"BdevInit success": {
-			req: &pbin.Request{
-				Method:  "BdevInit",
-				Payload: bdevInitReqPayload,
-			},
-			expRes: successResp,
-		},
-		"BdevInit failure": {
-			req: &pbin.Request{
-				Method:  "BdevInit",
-				Payload: bdevInitReqPayload,
-			},
-			bmbc: &bdev.MockBackendConfig{
-				InitErr: errors.New("init failed"),
-			},
-			expRes: &pbin.Response{
-				Error: pbin.PrivilegedHelperRequestFailed("init failed"),
-			},
-		},
-		"BdevScan nil payload": {
-			req: &pbin.Request{
-				Method: "BdevScan",
-			},
-			expRes: nilPayloadResp,
-		},
-		"BdevScan success": {
-			req: &pbin.Request{
-				Method:  "BdevScan",
-				Payload: bdevScanReqPayload,
-			},
-			expRes: successResp,
-		},
-		"BdevScan failure": {
-			req: &pbin.Request{
-				Method:  "BdevScan",
-				Payload: bdevScanReqPayload,
-			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanErr: errors.New("scan failed"),
-			},
-			expRes: &pbin.Response{
-				Error: pbin.PrivilegedHelperRequestFailed("scan failed"),
-			},
-		},
-		"BdevPrepare nil payload": {
-			req: &pbin.Request{
-				Method: "BdevPrepare",
-			},
-			expRes: nilPayloadResp,
-		},
-		"BdevPrepare success": {
-			req: &pbin.Request{
-				Method:  "BdevPrepare",
-				Payload: bdevPrepareReqPayload,
-			},
-			expRes: successResp,
-		},
-		"BdevPrepare failure": {
-			req: &pbin.Request{
-				Method:  "BdevPrepare",
-				Payload: bdevPrepareReqPayload,
-			},
-			bmbc: &bdev.MockBackendConfig{
-				PrepareErr: errors.New("prepare failed"),
-			},
-			expRes: &pbin.Response{
-				Error: pbin.PrivilegedHelperRequestFailed("prepare failed"),
-			},
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
 		},
 		"BdevFormat nil payload": {
 			req: &pbin.Request{
 				Method: "BdevFormat",
 			},
-			expRes: nilPayloadResp,
+			expErr: nilPayloadErr,
 		},
 		"BdevFormat success": {
 			req: &pbin.Request{
 				Method:  "BdevFormat",
 				Payload: bdevFormatReqPayload,
 			},
-			expRes: successResp,
+			expPayload: &bdev.FormatResponse{
+				DeviceResponses: bdev.DeviceFormatResponses{
+					"foo": &bdev.DeviceFormatResponse{
+						Formatted:  true,
+						Controller: &storage.NvmeController{PciAddr: "foo"},
+					},
+				},
+			},
 		},
 		"BdevFormat failure": {
 			req: &pbin.Request{
@@ -396,78 +627,33 @@ func TestDaosAdmin_Handler(t *testing.T) {
 				Payload: bdevFormatReqPayload,
 			},
 			bmbc: &bdev.MockBackendConfig{
-				FormatErr: errors.New("format failed"),
+				FormatErr: errors.New("test format failed"),
 			},
-			expRes: successResp, // The format error is handled at a higher layer
+			expPayload: &bdev.FormatResponse{
+				DeviceResponses: bdev.DeviceFormatResponses{
+					"foo": &bdev.DeviceFormatResponse{
+						Error: bdev.FaultFormatError(errors.New("test format failed")),
+					},
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			var destBuf bytes.Buffer
-			sp := scm.NewMockProvider(log, tc.smbc, tc.smsc)
 			bp := bdev.NewMockProvider(log, tc.bmbc)
+			handler := &bdevFormatHandler{bdevHandler: bdevHandler{bdevProvider: bp}}
 
-			gotErr := handleRequest(log, sp, bp, tc.req, &destBuf)
-			common.CmpErr(t, tc.expErr, gotErr)
+			resp := handler.Handle(log, tc.req)
 
-			if destBuf.Len() > 0 {
-				gotRes := parseResponse(t, &destBuf)
-
-				// We don't need to check the payload details here; we just
-				// want to check that a response came back and that the Error
-				// field was what we expected.
-				wantErr := tc.expRes.Error
-				gotErr := gotRes.Error
-				if gotErr == wantErr {
-					return
-				}
-				if (gotErr == nil || wantErr == nil) ||
-					!strings.Contains(gotErr.Description, wantErr.Description) {
-					t.Fatalf("unexpected error: wanted %s, got %s", wantErr, gotErr)
-				}
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
 			}
-		})
-	}
-}
-
-func TestDaosAdmin_ReadRequest(t *testing.T) {
-	alnum := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	giantPayload := make([]byte, (pbin.MessageBufferSize*5)+1)
-	for i := 0; i < len(giantPayload); i++ {
-		giantPayload[i] = alnum[rand.Intn(len(alnum))]
-	}
-
-	for name, tc := range map[string]struct {
-		req    *pbin.Request
-		expErr error
-	}{
-		"normal payload": {
-			req: &pbin.Request{
-				Method:  "whatever",
-				Payload: []byte(`{"foo":"bar"}`),
-			},
-		},
-		"giant payload": {
-			req: &pbin.Request{
-				Method:  "too big to fail",
-				Payload: append(append([]byte(`{"foo":"`), giantPayload...), []byte(`"}`)...),
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			data, err := json.Marshal(tc.req)
-			if err != nil {
-				t.Fatal(err)
+			if tc.expPayload == nil {
+				tc.expPayload = &bdev.FormatResponse{}
 			}
-
-			gotReq, gotErr := readRequest(bytes.NewBuffer(data))
-			common.CmpErr(t, tc.expErr, gotErr)
-
-			if diff := cmp.Diff(tc.req, gotReq); gotErr == nil && diff != "" {
-				t.Fatalf("request did not survive marshal/unmarshal (-want, +got):\n%s\n", diff)
-			}
+			expectPayload(t, resp, &bdev.FormatResponse{}, tc.expPayload)
 		})
 	}
 }

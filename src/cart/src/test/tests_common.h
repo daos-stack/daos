@@ -221,7 +221,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 
 	/* This is needed until hg cancel is fully working.
 	 * RPCs in wait_for_ranks are expected to fail
-	 * and needs to be cancelled correctly.
+	 * and needs to be canceled correctly.
 	 * It should be removed when hg cancel is fixed - HG PR #284
 	 */
 	sleep(2);

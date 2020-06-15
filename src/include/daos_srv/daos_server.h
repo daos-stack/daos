@@ -360,6 +360,7 @@ struct dss_sleep_ult *dss_sleep_ult_create(void);
 void dss_sleep_ult_destroy(struct dss_sleep_ult *dsu);
 void dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs);
 void dss_ult_wakeup(struct dss_sleep_ult *dsu);
+int dss_sleep(uint64_t ms);
 
 /* Pack return codes with additional argument to reduce */
 struct dss_stream_arg_type {
@@ -487,7 +488,6 @@ void dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool failed);
 struct dss_rpc_cntr *dss_rpc_cntr_get(enum dss_rpc_cntr_id id);
 
 int dss_rpc_send(crt_rpc_t *rpc);
-void dss_sleep(int ms);
 int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
 enum {
@@ -504,7 +504,7 @@ enum {
 struct dss_acc_task {
 	/**
 	 * Type of offload for this operation
-	 * \param at_offload_type	[IN] type of accelaration
+	 * \param at_offload_type	[IN] type of acceleration
 	 */
 	int		at_offload_type;
 	/**
@@ -525,7 +525,7 @@ struct dss_acc_task {
 };
 
 /**
- * Generic offload call abstraction for accelaration with both
+ * Generic offload call abstraction for acceleration with both
  * ULT and FPGA
  */
 int dss_acc_offload(struct dss_acc_task *at_args);

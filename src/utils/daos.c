@@ -30,10 +30,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <sys/ioctl.h>
 #include <errno.h>
 #include <stdint.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <daos.h>
 #include <daos/common.h>
+#include <daos/checksum.h>
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
@@ -42,6 +48,7 @@
 #include "daos_api.h"
 #include "daos_uns.h"
 #include "daos_hdlr.h"
+#include "dfuse_ioctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
@@ -313,24 +320,16 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
 		entry->dpe_str = strdup(value);
 	} else if (!strcmp(name, "cksum")) {
-		if (!strcmp(value, "off"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_OFF;
-		else if (!strcmp(value, "crc16"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC16;
-		else if (!strcmp(value, "crc32"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC32;
-		else if (!strcmp(value, "crc64"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC64;
-		else if (!strcmp(value, "sha1")) {
-			/* entry->dpe_val = DAOS_PROP_CO_CSUM_SHA1; */
-			fprintf(stderr, "'sha1' isn't supported yet, please use one of the CRC option\n");
-			return -DER_INVAL;
-		} else {
-			/* fprintf(stderr, "curently supported checksum types are 'off, crc[16,32,64], sha1'\n"); */
-			fprintf(stderr, "curently supported checksum types are 'off, crc[16,32,64]'\n");
+		int csum_type = daos_str2csumcontprop(value);
+
+		if (csum_type < 0) {
+			fprintf(stderr,
+				"currently supported checksum types are "
+				"'off, crc[16,32,64], sha[1,256,512]'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
+		entry->dpe_val = csum_type;
 	} else if (!strcmp(name, "cksum_size")) {
 		char *endp;
 		long val;
@@ -820,6 +819,32 @@ out:
 }
 
 static int
+call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
+{
+	int fd;
+	int rc;
+
+	fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	if (fd < 0)
+		return ENOENT;
+
+	errno = 0;
+	rc = ioctl(fd, DFUSE_IOCTL_IL, reply);
+	if (rc != 0) {
+		int err = errno;
+
+		close(fd);
+		return err;
+	}
+	close(fd);
+
+	if (reply->fir_version != DFUSE_IOCTL_VERSION)
+		return EIO;
+
+	return 0;
+}
+
+static int
 cont_op_hdlr(struct cmd_args_s *ap)
 {
 	daos_cont_info_t	cont_info;
@@ -836,19 +861,37 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
+		struct dfuse_il_reply il_reply = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
 
-		/* Resolve pool, container UUIDs from path if needed */
+		/* Resolve pool, container UUIDs from path if needed
+		 *
+		 * Firtly check for a unified namespace entry point, then if
+		 * that isn't detected then check for dfuse backing the
+		 * path, and print pool/container/oid for the path.
+		 */
 		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
-			fprintf(stderr, "could not resolve pool, container "
-					"by path: %s\n", ap->path);
-			D_GOTO(out, rc);
+
+			rc = call_dfuse_ioctl(ap->path, &il_reply);
+			if (rc != 0) {
+				fprintf(stderr, "could not resolve pool, "
+					"container by path: %d %s %s\n",
+					rc, strerror(rc), ap->path);
+
+				D_GOTO(out, rc);
+			}
+
+			ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
+			uuid_copy(ap->p_uuid, il_reply.fir_pool);
+			uuid_copy(ap->c_uuid, il_reply.fir_cont);
+			ap->oid = il_reply.fir_oid;
+		} else {
+			ap->type = dattr.da_type;
+			uuid_copy(ap->p_uuid, dattr.da_puuid);
+			uuid_copy(ap->c_uuid, dattr.da_cuuid);
 		}
-		ap->type = dattr.da_type;
-		uuid_copy(ap->p_uuid, dattr.da_puuid);
-		uuid_copy(ap->c_uuid, dattr.da_cuuid);
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
@@ -1216,7 +1259,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"container options (snapshot and rollback-related):\n"
 			"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 			"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
-			"	--eprange=B-E      container epoch range (destroy-snap)\n");
+			"	--epcrange=B-E     container epoch range (destroy-snap)\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "set-prop") == 0) {
 			fprintf(stream,

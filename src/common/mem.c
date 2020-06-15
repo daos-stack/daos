@@ -379,7 +379,7 @@ umem_tx_errno(int err)
 	return daos_errno2der(err);
 }
 
-/* volatile memroy operations */
+/* volatile memory operations */
 
 static int
 vmem_free(struct umem_instance *umm, umem_off_t umoff)
@@ -511,7 +511,7 @@ set_offsets(struct umem_instance *umm)
  * Instantiate a memory class \a umm by attributes in \a uma
  *
  * \param uma [IN]	Memory attributes to instantiate the memory class.
- * \param umm [OUT]	The instantiated memroy class.
+ * \param umm [OUT]	The instantiated memory class.
  */
 int
 umem_class_init(struct umem_attr *uma, struct umem_instance *umm)

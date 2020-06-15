@@ -464,10 +464,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		/* Flush SWIM RPC already sent */
-		rc = crt_context_flush(crt_ctx, CRT_SWIM_RPC_TIMEOUT);
+		rc = crt_context_flush(crt_ctx, crt_swim_rpc_timeout);
 		if (rc)
 			/* give a chance to other threads to complete */
-			sleep(CRT_SWIM_RPC_TIMEOUT);
+			usleep(1000); /* 1ms */
 		D_MUTEX_LOCK(&ctx->cc_mutex);
 	}
 
@@ -663,7 +663,7 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 	}
 	if (rpc_priv->crp_state == RPC_STATE_CANCELED ||
 	    rpc_priv->crp_state == RPC_STATE_COMPLETED) {
-		RPC_TRACE(DB_NET, rpc_priv, "state %#x, not reseting timer.\n",
+		RPC_TRACE(DB_NET, rpc_priv, "state %#x, not resetting timer.\n",
 			  rpc_priv->crp_state);
 		return false;
 	}
@@ -1415,7 +1415,7 @@ out:
 int
 crt_register_timeout_cb(crt_timeout_cb cb, void *arg)
 {
-	/* TODO: save the function pointer somewhere for retreival later on */
+	/* TODO: save the function pointer somewhere for retrieval later on */
 	struct crt_timeout_cb_priv	*timeout_cb_priv = NULL;
 	int				 rc = 0;
 
