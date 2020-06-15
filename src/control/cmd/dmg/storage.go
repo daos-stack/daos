@@ -168,6 +168,8 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 	if cmd.Reformat {
 		cmd.log.Info("processing system reformat request")
 
+		// only allow reformat if all ranks in membership are stopped,
+		// even if rank list has been supplied
 		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
 		if err != nil {
 			return false, errors.Wrap(err, "System-Query command failed")
@@ -176,7 +178,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 		if len(resp.Members) == 0 {
 			cmd.log.Debug("no system members, reformat host list")
 			if len(ranks) > 0 {
-				cmd.log.Info("--ranks parameter will be ignored as membership is empty")
+				return false, errors.New("--ranks parameter invalid as membership is empty")
 			}
 
 			return false, nil
@@ -194,7 +196,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 	}
 
 	if len(ranks) > 0 {
-		cmd.log.Info("--ranks parameter is ignored if --reformat is not set")
+		return false, errors.New("--ranks parameter invalid if --reformat is not set")
 	}
 
 	return false, nil
