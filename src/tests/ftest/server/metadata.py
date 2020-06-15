@@ -39,7 +39,7 @@ from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
-from job_manager_utils import Orterun
+from job_manager_utils import Mpirun
 from test_utils_pool import TestPool
 
 NO_OF_MAX_CONTAINER = 13034
@@ -214,7 +214,7 @@ class ObjectMetadata(TestWithServers):
                     "F", "/run/ior/ior{}flags/".format(operation))
 
                 # Define the job manager for the IOR command
-                manager = Orterun(ior_cmd)
+                manager = Mpirun(ior_cmd)
                 env = ior_cmd.get_default_env(str(manager))
                 manager.assign_hosts(self.hostlist_clients, self.workdir, None)
                 manager.assign_processes(processes)

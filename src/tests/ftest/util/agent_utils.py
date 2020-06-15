@@ -136,7 +136,7 @@ class DaosAgentCommand(YamlCommand):
 class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts."""
 
-    def __init__(self, agent_command, manager="Orterun"):
+    def __init__(self, agent_command, manager="Mpirun"):
         """Create a DaosAgentManager object.
 
         Args:

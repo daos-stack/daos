@@ -25,7 +25,7 @@ import re
 
 from apricot import TestWithServers
 from daos_perf_utils import DaosPerfCommand
-from job_manager_utils import Orterun
+from job_manager_utils import Mpirun
 
 
 class DaosPerfBase(TestWithServers):
@@ -49,14 +49,14 @@ class DaosPerfBase(TestWithServers):
         daos_perf_env = daos_perf.get_environment(self.server_managers[0])
 
         # Create the orterun command
-        orterun = Orterun(daos_perf)
-        orterun.assign_hosts(self.hostlist_clients, self.workdir, None)
-        orterun.assign_processes(processes)
-        orterun.assign_environment(daos_perf_env)
-        self.log.info("orterun command: %s", str(orterun))
+        mpirun = Mpirun(daos_perf)
+        mpirun.assign_hosts(self.hostlist_clients, self.workdir, None)
+        mpirun.assign_processes(processes)
+        mpirun.assign_environment(daos_perf_env)
+        self.log.info("Mpirun command: %s", str(orterun))
 
         # Run the daos_perf command and check for errors
-        result = orterun.run()
+        result = mpirun.run()
         errors = re.findall(
             r"(.*(?:non-zero exit code|errors|failed|Failed).*)", result.stdout)
         if errors:

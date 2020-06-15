@@ -654,7 +654,7 @@ class YamlCommand(SubProcessCommand):
 class SubprocessManager(object):
     """Defines an object that manages a sub process launched with orterun."""
 
-    def __init__(self, command, manager="Orterun"):
+    def __init__(self, command, manager="Mpirun"):
         """Create a SubprocessManager object.
 
         Args:
