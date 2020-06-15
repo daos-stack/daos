@@ -24,6 +24,8 @@
 #ifndef __DFUSE_H__
 #define __DFUSE_H__
 
+#include <semaphore.h>
+
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 
@@ -67,6 +69,10 @@ struct dfuse_projection_info {
 	struct d_hash_table		dpi_iet;
 	struct d_hash_table		dpi_irt;
 	ATOMIC uint64_t			dpi_ino_next;
+	daos_handle_t			dpi_eq;
+	sem_t				dpi_sem;
+	pthread_t			dpi_thread;
+	bool				dpi_shutdown;
 };
 
 /*
@@ -146,6 +152,13 @@ struct dfuse_inode_ops {
 	void (*removexattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			    const char *name);
 	void (*statfs)(fuse_req_t req, struct dfuse_inode_entry *inode);
+};
+
+struct dfuse_event {
+	fuse_req_t	de_req;
+	daos_event_t	de_ev;
+	void		(*de_complete_cb)(struct dfuse_event *ev);
+	size_t		de_len;
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;

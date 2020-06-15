@@ -24,14 +24,40 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+static void
+dfuse_cb_write_complete(struct dfuse_event *ev)
+{
+	if (ev->de_ev.ev_error == 0)
+		DFUSE_REPLY_WRITE(ev, ev->de_req, ev->de_len);
+	else
+		DFUSE_REPLY_ERR_RAW(ev, ev->de_req,
+				    daos_der2errno(ev->de_ev.ev_error));
+}
+
 void
 dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	       off_t position, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	d_iov_t				iov = {};
 	d_sg_list_t			sgl = {};
 	int				rc;
+	struct dfuse_event		*ev;
+
+	D_ALLOC_PTR(ev);
+	if (ev == NULL)
+		D_GOTO(err, rc = -ENOMEM);
+
+	DFUSE_TRA_UP(ev, oh, "write");
+
+	rc = daos_event_init(&ev->de_ev, fs_handle->dpi_eq, NULL);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+	ev->de_req = req;
+	ev->de_len = len;
+	ev->de_complete_cb = dfuse_cb_write_complete;
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
@@ -54,9 +80,14 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 		}
 	}
 
-	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &sgl, position, NULL);
-	if (rc == 0)
-		DFUSE_REPLY_WRITE(oh, req, len);
-	else
-		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &sgl, position, &ev->de_ev);
+	if (rc != 0)
+		D_GOTO(err, 0);
+
+	sem_post(&fs_handle->dpi_sem);
+	return;
+
+err:
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	D_FREE(ev);
 }
