@@ -296,7 +296,7 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 
 	/* Calculate and check the additional bytes required (no encoding).
 	 * Before first op: insert one uint32_t (boolean) "critical"
-	 * interpreted by raft_log_offer_single() and NOT persisted.
+	 * interpreted in the raft log_offer execution flow.
 	 */
 	op_len = rdb_tx_op_encode(op, NULL);
 	len = op_len;
@@ -747,8 +747,8 @@ rdb_tx_deterministic_error(int error)
 /*
  * Apply an entry and return the error only if a nondeterministic error
  * happens. This function tries to discard index if an error occurs.
- * Set *critp=true on success and if any of the operations applied were
- * "critical", for example destroy that can reclaim SCM space.
+ * Interpret first uint32_t of these RAFT_LOGTYPE_NORMAL entries
+ * as a boolean - whether all operations are deemed "critical".
  */
 int
 rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
@@ -756,6 +756,10 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 {
 	const void     *p = buf;
 	int		rc = 0;
+
+	/* Advance past encoded "critical" value in non-NULL buffer */
+	if (buf)
+		p = buf + sizeof(uint32_t);
 
 	D_DEBUG(DB_TRACE, DF_DB": applying index "DF_U64": buf=%p len="DF_U64
 		" crit=%d\n", DP_DB(db), index, buf, len, crit);

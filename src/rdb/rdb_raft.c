@@ -1118,27 +1118,13 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	d_iov_t		values[2];
 	struct rdb_entry	header;
 	int			n = 0;
-	uint32_t		crit;
+	bool			crit;
 	int			rc;
 	int			rc_tmp;
 
 	D_ASSERTF(index == db->d_lc_record.dlr_tail, DF_U64" == "DF_U64"\n",
 		  index, db->d_lc_record.dlr_tail);
 
-	/* entry composition:
-	 * uint32_t "critical": NOT persisted - see rdb_tx_append()
-	 * a sequence of component operations for a compound tx.
-	 *
-	 * interpret boolean and adjust entry to refer only to the ops.
-	 */
-	crit = 1; /* for NULL data.buf entries such as "verify leadership" */
-	if (entry->data.buf) {
-		crit = *((uint32_t *) entry->data.buf);
-		entry->data.buf += sizeof(uint32_t);
-		entry->data.len -= sizeof(uint32_t);
-		D_DEBUG(DB_TRACE, DF_DB": index "DF_U64" will %s VOS_OF_CRIT\n",
-			DP_DB(db), index, crit ? "use" : "NOT use");
-	}
 	/*
 	 * If this is an rdb_tx entry, apply it. Note that the updates involved
 	 * won't become visible to queries until entry index is committed.
@@ -1147,6 +1133,12 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	 * rdb_tx_commit() call returns.)
 	 */
 	if (entry->type == RAFT_LOGTYPE_NORMAL) {
+		/* RAFT_LOGTYPE_NORMAL entries, first uint32_t interpreted
+		 * as whether TX operations are all to be considered "critial".
+		 */
+		crit = true;	/* for NULL data.buf */
+		if (entry->data.buf)
+			crit = *((uint32_t *) entry->data.buf);
 		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
 				  rdb_raft_lookup_result(db, index), crit);
 		if (rc != 0) {
