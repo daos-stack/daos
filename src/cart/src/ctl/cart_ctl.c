@@ -291,7 +291,7 @@ print_usage_msg(const char *msg)
 	printf("-l log_mask\n");
 	printf("\tSpecify log_mask to be set remotely\n");
 	printf("-n\n");
-	printf("\tdon't perfom 'wait for ranks' sync\n");
+	printf("\tdon't perform 'wait for ranks' sync\n");
 	printf("-m 'log_message'\n");
 	printf("\tSpecify log message to be sent to remote server\n");
 }

@@ -96,7 +96,7 @@ int vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx,
  */
 int vector_decref(vector_t *vector, void *entry);
 
-/* Allocate and initialze an entry
+/* Allocate and initialize an entry
  * If index exists, it is removed.
  * \param vector[in] The vector
  * \param index[in] The index of the entry to allocate
@@ -109,7 +109,7 @@ int vector_decref(vector_t *vector, void *entry);
 #define vector_set(vector, index, entryp) \
 	vector_set_(vector, index, entryp, sizeof(*entryp))
 
-/* Allocate and initialze an entry.  Normally, the vector_set macro
+/* Allocate and initialize an entry.  Normally, the vector_set macro
  * will suffice.  However, if the size isn't determinable from the
  * pointer type, use this function instead.
  * If index exists, it is removed.

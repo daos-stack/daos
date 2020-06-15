@@ -73,7 +73,7 @@ class Permission(TestWithServers):
         # initialize a python pool object then create the underlying
         # daos storage
         self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
-        self.test_log.debug("Pool initialisation successful")
+        self.test_log.debug("Pool initialization successful")
         self.pool.get_params(self)
         self.pool.mode.value = createmode
         self.pool.create()
@@ -119,7 +119,7 @@ class Permission(TestWithServers):
         # initialize a python pool object then create the underlying
         # daos storage
         self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
-        self.test_log.debug("Pool initialisation successful")
+        self.test_log.debug("Pool initialization successful")
         self.pool.get_params(self)
         self.pool.mode.value = createmode
         self.test_log.debug("Pool Creation successful")
@@ -140,7 +140,7 @@ class Permission(TestWithServers):
 
         try:
             self.container = DaosContainer(self.context)
-            self.test_log.debug("Contianer initialisation successful")
+            self.test_log.debug("Container initialization successful")
 
             self.container.create(self.pool.pool.handle)
             self.test_log.debug("Container create successful")
