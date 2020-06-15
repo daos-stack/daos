@@ -220,6 +220,47 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	return nil
 }
 
+// PoolEvictReq contains the parameters for a pool evict request.
+type PoolEvictReq struct {
+	msRequest
+	unaryRequest
+	UUID string
+	Sys  string
+}
+
+// PoolEvict performs a pool connection evict operation on a DAOS Management Server instance.
+func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+
+	// ensure we have a system name in the request
+	if req.Sys == "" {
+		req.Sys = build.DefaultSystemName
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
+			Uuid: req.UUID,
+			Sys:  req.Sys,
+		})
+	})
+
+	rpcClient.Debugf("Evict DAOS pool request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool evict failed")
+	}
+	rpcClient.Debugf("Evict DAOS pool response: %s\n", msResp)
+
+	return nil
+}
+
 type (
 	// PoolQueryReq contains the parameters for a pool query request.
 	PoolQueryReq struct {
@@ -429,6 +470,59 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 		return errors.Wrap(err, "pool Exclude failed")
 	}
 	rpcClient.Debugf("Exclude DAOS pool target response: %s\n", msResp)
+
+	return nil
+}
+
+func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err error) {
+	out = new(mgmtpb.PoolExtendReq)
+	if err = convert.Types(in, out); err != nil {
+		return nil, err
+	}
+
+	return
+}
+
+// PoolExtendReq struct contains request
+type PoolExtendReq struct {
+	unaryRequest
+	msRequest
+	UUID  string
+	Ranks []system.Rank
+	// TEMP SECTION
+	ScmBytes  uint64
+	NvmeBytes uint64
+	// END TEMP SECTION
+}
+
+// PoolExtend will extend the DAOS pool by the specified ranks.
+// This should automatically start the rebalance process.
+// Returns an error (including any DER code from DAOS).
+func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq) error {
+	pbReq, err := genPoolExtendRequest(req)
+	if err != nil {
+		return errors.Wrap(err, "failed to generate PoolExtend request")
+	}
+
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolExtend(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("Extend DAOS pool request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool extend failed")
+	}
+	rpcClient.Debugf("Extend DAOS pool response: %s\n", msResp)
 
 	return nil
 }

@@ -89,36 +89,86 @@ boro-11:10001:
 
 ## System Operations
 
-### Full Shutdown and Restart
+The DAOS Control Server acting as the access point records details of DAOS I/O
+Server instances that join the DAOS system. Once an I/O Server has joined the
+DAOS system, it is identified by a unique system "rank". Multiple ranks can
+reside on the same host machine, accessible via the same network address.
 
-A DAOS system can be restarted after a controlled shutdown providing
-no configurations changes have been made after the initial format.
+A DAOS system can be shutdown and restarted to perform maintenance and/or
+reboot hosts. Pool data and state will be maintained providing no changes are
+made to the rank's metadata stored on persistent memory.
 
-The DAOS Control Server instance acting as access point records DAOS
-I/O Server instances that join the system in a "membership".
+Storage reformat can also be performed after system shutdown. Pools will be
+removed and storage wiped.
 
-When up and running, the entire system (all I/O Server instances)
-can be shut down with the command:
-`dmg -l <access_point_addr> system stop`, after which DAOS Control
-Servers will continue to operate and listen on the management network.
+System commands will be handled by the DAOS Server listening at the access point
+address specified as the first entry in the DMG config file "hostlist" parameter.
+See
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+for details.
 
-To start the system again (with no configuration changes) after a
-controlled shutdown, run the command
-`dmg -l <access_point_addr> system start`, DAOS I/O Servers
-managed by DAOS Control Servers will be started.
-
-To query the system membership, run the command
-`dmg -l <access_point_addr> system query`, this lists details
-(rank/uuid/control address/state) of DAOS I/O Servers in the
-system membership.
+The "access point" address should be the same as that specified in the server
+config file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+specified when starting `daos_server` instances.
 
 !!! warning
-    Controlled start/stop has some known limitations.
-    "start" restarts all configured instances on all harnesses that can
-    be located in the system membership, regardless of member state.
-    Moreover, supplying the list of ranks to "start" and "stop" is not yet supported
+    Controlled start/stop/reformat have some known limitations.
+    Whilst individual system instances can be stopped, if a subset is restarted,
+    existing pools will not be automatically integrated with restarted instances.
 
-### Fresh Start
+### Query
+
+The system membership can be queried using the command:
+
+`$ dmg system query [--verbose] [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+- `--verbose` flag gives more information on each rank
+
+Output table will provide system rank mappings to host address and instance
+UUID, in addition to rank state.
+
+### Shutdown
+
+When up and running, the entire system can be shutdown with the command:
+
+`$ dmg system stop [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS Control Servers will continue to operate and listen on the management
+network.
+
+### Start
+
+To start the system after a controlled shutdown run the command:
+
+`$ dmg system start [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS I/O Servers will be started.
+
+### Reformat
+
+To reformat the system after a controlled shutdown run the command:
+
+`$ dmg storage format --system [--ranks <rankset>]`
+
+- `--system` flag indicates that the format operation should be performed on
+  provided set of system ranks or all ranks if `--ranks` is omitted.
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS I/O Servers will be started and all DAOS pools will have been removed.
+
+### Manual Fresh Start
 
 To reset the DAOS metadata across all hosts, the system must be reformatted.
 First, ensure all `daos_server` processes on all hosts have been

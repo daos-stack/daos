@@ -105,7 +105,7 @@ class CreateManyDkeys(TestWithServers):
         Test ID: DAOS-1701
         Test Description: Test many of dkeys in same object.
         Use Cases: 1. large key counts
-                   2. space reclaimation after destroy
+                   2. space reclamation after destroy
         :avocado: tags=all,full,small,object,many_dkeys
 
         """
@@ -117,5 +117,5 @@ class CreateManyDkeys(TestWithServers):
 
 
         # do it again, which should verify the first container
-        # was truely destroyed because a second round won't fit otherwise
+        # was truly destroyed because a second round won't fit otherwise
         self.write_a_bunch_of_values(no_of_dkeys)

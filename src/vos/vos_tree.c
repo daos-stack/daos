@@ -439,7 +439,7 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	/** at this point, it's assumed that enough was allocated for the irec
 	 *  to hold a checksum of length csum->cs_len
 	 */
-	if (dth != NULL && dth->dth_leader &&
+	if (dth != NULL && dth->dth_flags & DTE_LEADER &&
 	    irec->ir_ex_addr.ba_type == DAOS_MEDIA_SCM &&
 	    DAOS_FAIL_CHECK(DAOS_VC_DIFF_REC)) {
 		void	*addr;
@@ -607,8 +607,8 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		D_ASSERT(pool != NULL);
 		vos_bio_addr_free(pool, addr, irec->ir_size);
 	}
-	umem_free(&tins->ti_umm, rec->rec_off);
-	return 0;
+
+	return umem_free(&tins->ti_umm, rec->rec_off);
 }
 
 static int

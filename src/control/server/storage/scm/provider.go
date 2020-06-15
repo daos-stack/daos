@@ -63,7 +63,7 @@ const (
 )
 
 type (
-	// PrepareRequest defines the parameters for a Prepare opration.
+	// PrepareRequest defines the parameters for a Prepare operation.
 	PrepareRequest struct {
 		pbin.ForwardableRequest
 		// Reset indicates that the operation should reset (clear) DCPM namespaces.
@@ -147,7 +147,7 @@ type (
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
-	// of SCM-specific system capabilties.
+	// of SCM-specific system capabilities.
 	SystemProvider interface {
 		system.IsMountedProvider
 		system.MountProvider
@@ -262,11 +262,26 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	// callback so that the user has some visibility into long-running
 	// format operations (very large devices).
 	args := []string{
-		"-m", "0", // don't reserve blocks for super-user
-		"-E", "lazy_itable_init=0,lazy_journal_init=0", // disable lazy initialization (hurts perf)
-		"-O", "bigalloc", // bigalloc with 1M cluster size (reduce ext4 metadata overhead)
-		"-C", "1M",
-		device, // device always comes last
+		// use direct i/o to avoid polluting page cache
+		"-D",
+		// use DAOS label
+		"-L", "daos",
+		// don't reserve blocks for super-user
+		"-m", "0",
+		// use largest possible block size
+		"-b", "4096",
+		// disable lazy initialization (hurts perf) and discard
+		"-E", "lazy_itable_init=0,lazy_journal_init=0,nodiscard",
+		// enable bigalloc to reduce metadata overhead
+		// enable flex_bg to allow larger contiguous block allocation
+		// disable uninit_bg to initialize everything upfront
+		"-O", "bigalloc,flex_bg,^uninit_bg",
+		// use 16M bigalloc cluster size
+		"-C", "16M",
+		// don't need that many inodes
+		"-i", "16777216",
+		// device always comes last
+		device,
 	}
 	if force {
 		args = append([]string{"-F"}, args...)

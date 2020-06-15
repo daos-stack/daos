@@ -64,8 +64,8 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 	void			*buf = NULL;
 	int			 rc = 0;
 
-	/* minimal K/P is 2/1, so at least 2 forward targets */
-	D_ASSERT(tgt_nr >= 2);
+	/* minimal K/P is 2/1, so at least 1 forward targets */
+	D_ASSERT(tgt_nr >= 1);
 	D_ASSERT(oiods != NULL);
 	/* as we select the last parity node as leader, and for any update
 	 * there must be a siod (the last siod) for leader except for singv.
