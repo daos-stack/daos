@@ -104,16 +104,16 @@ char *DP_UUID(const void *uuid);
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
 #define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
-#ifndef DAOS_BUILD_RELEASE
+#ifdef DAOS_BUILD_RELEASE
+#define DF_KEY			"[%d]"
+#define DP_KEY(key)		(int)((key)->iov_len)
+#else
 char *daos_key2str(daos_key_t *key);
 
 #define DF_KEY			"[%d] %.*s"
 #define DP_KEY(key)		(int)(key)->iov_len,	\
-		                (int)(key)->iov_len,	\
-		                daos_key2str(key)
-#else
-#define DF_KEY			"[%d]"
-#define DP_KEY(key)		(int)((key)->iov_len)
+				(int)(key)->iov_len,	\
+				daos_key2str(key)
 #endif
 
 #define DF_RECX			"["DF_U64"-"DF_U64"]"
