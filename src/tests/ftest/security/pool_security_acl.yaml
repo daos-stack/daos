@@ -60,3 +60,6 @@ pool_acl:
          - rw
          - pass
          - pass
+transport_config:
+  allow_insecure: False
+

@@ -37,6 +37,7 @@ import errno
 
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
+from subprocess import call
 
 try:
     # For python versions >= 3.2
@@ -613,6 +614,24 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
         new_values = {
             key: getattr(args, value).split(",") if getattr(args, value) else []
             for key, value in YAML_KEYS.items()}
+##DH++
+        print("")
+        print("==get_yaml_data=", yaml_data)
+        trans_conf_defined_in_yaml = False
+        if "transport_config" in yaml_data.keys():
+            trans_conf = yaml_data["transport_config"]
+            if "allow_insecure" in trans_conf.keys():
+                allow_insec_yaml = trans_conf["allow_insecure"]
+                print("allow_insec_yaml= ", allow_insec_yaml)
+                trans_conf_defined_in_yaml = True
+            else:
+                # Report an error for the missing allow_insecure under
+                # transport_config
+                print("Error: allow_insecure missing uner transport_config in "
+                      "the test yaml")
+                exit(1)
+        print("")
+##DH--
 
         # Assign replacement values for the test yaml entries to be replaced
         display(args, "Detecting replacements for {} in {}".format(
@@ -662,7 +681,8 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                         args,
                         "  - Replacement: {} -> {}".format(
                             value, replacements[value]))
-
+    print(" ")
+    print("===>replacements= ", replacements)
     if replacements:
         # Read in the contents of the yaml file to retain the !mux entries
         print("Reading {}".format(yaml_file))
@@ -686,7 +706,6 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                 # Keep track of any placeholders without a replacement value
                 display(args, "  - Missing:   {}".format(key))
                 missing_replacements.append(key)
-
         if missing_replacements:
             # Report an error for all of the placeholders w/o a replacement
             print(
@@ -694,13 +713,21 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                     yaml_file, ", ".join(missing_replacements)))
             return None
 
-
 ##DH++
-        yaml_data += "transport_config:\n"
-        if args.secure_mode:
-            yaml_data += "  allow_insecure: False"
+        print("<====>")
+        print("==>args.secure_mode= ", args.secure_mode)
+        print("")
+        if trans_conf_defined_in_yaml:
+            if not bool(allow_insec_yaml):
+                generate_certs()
         else:
-            yaml_data += "  allow_insecure: True"
+            yaml_data += "transport_config:\n"
+            if args.secure_mode:
+                yaml_data += "  allow_insecure: False"
+                generate_certs()
+            else:
+                yaml_data += "  allow_insecure: True"
+
         print("=====>")
         print("==>yaml_data= ", yaml_data)
         print("=====>")
@@ -724,6 +751,17 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
     # Return the untouched or modified yaml file
     return yaml_file
+
+##DH++
+def generate_certs():
+    # Generate certificates if not exist
+    print(" ")
+    print(" ")
+    if not os.path.exists("./daosCA"):
+        call(["../../../../../utils/certs/gen_certificates.sh"])
+    print(" ")
+    print(" ")
+##DH--
 
 
 def run_tests(test_files, tag_filter, args):
@@ -1350,19 +1388,13 @@ def main():
 
 ##DH++
     # Generate certificates if not exist
-    from subprocess import call
     print(" ")
     print(" ")
-    if args.secure_mode:
-#        call(["pwd"])
-        if not os.path.exists("./daosCA"):
-            call(["../../../../../utils/certs/gen_certificates.sh"])
     print("==>args.test_servers= ", args.test_servers)
     print("==>args.secure_mode= ", args.secure_mode)
     print(" ")
     print(" ")
 ##DH--
-
 
     # Create a dictionary of test and their yaml files
     test_files = get_test_files(test_list, args, tmp_dir)

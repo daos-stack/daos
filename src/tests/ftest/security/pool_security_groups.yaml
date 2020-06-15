@@ -76,3 +76,6 @@ pool_acl:
         sg_read_write:
           - deny
           - deny
+transport_config:
+  allow_insecure: False
+

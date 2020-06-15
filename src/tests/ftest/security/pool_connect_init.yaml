@@ -25,3 +25,6 @@ pool:
            - 0
            - 0
            - FAIL
+transport_config:
+  allow_insecure: False
+
