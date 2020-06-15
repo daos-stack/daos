@@ -116,8 +116,6 @@ class DynamicServerPool(TestWithServers):
 
         :avocado: tags=all,medium,control,full_regression,dynamic_server_pool
         """
-        uuid_to_ranks = {}
-
         # Create a pool on rank0.
         self.create_pool_with_ranks(ranks=[0], tl_update=True)
         # Create a pool across the 2 servers.
