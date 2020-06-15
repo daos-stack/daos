@@ -49,6 +49,7 @@ class DynamicServerPool(TestWithServers):
         """Initialize a DynamicServerPool object."""
         super(DynamicServerPool, self).__init__(*args, **kwargs)
         self.expected_uuids = []
+        self.uuid_to_ranks = {}
 
     def setUp(self):
         super(DynamicServerPool, self).setUp()
@@ -89,6 +90,24 @@ class DynamicServerPool(TestWithServers):
                     rank in uuid_to_ranks[pool.uuid.lower()],
                     pool_exists_on_host)
 
+    def create_pool_with_ranks(self, ranks, tl_update=False):
+        """Create a pool with possibly --ranks parameter.
+
+        Args:
+            ranks (list of int): --ranks value.
+            tl_update (bool, optional): Whether to update target_list, which
+                means pass in value to --ranks during pool create. Defaults to
+                False.
+        """
+        if tl_update:
+            self.pool.append(self.get_pool(create=False))
+            self.pool[-1].target_list.update(ranks, "pool.target_list")
+        else:
+            self.pool.append(self.get_pool())
+        self.pool[-1].create()
+        self.expected_uuids.append(self.pool[-1].uuid.lower())
+        self.uuid_to_ranks[self.pool[-1].uuid.lower()] = ranks
+
     def test_dynamic_server_pool(self):
         """
         JIRA ID: DAOS-3595
@@ -100,22 +119,15 @@ class DynamicServerPool(TestWithServers):
         uuid_to_ranks = {}
 
         # Create a pool on rank0.
-        self.pool.append(self.get_pool(create=False))
-        self.pool[-1].target_list.update([0], "pool.target_list")
-        self.pool[-1].create()
-        self.expected_uuids.append(self.pool[-1].uuid.lower())
-        uuid_to_ranks[self.pool[-1].uuid.lower()] = [0]
+        self.create_pool_with_ranks(ranks=[0], tl_update=True)
         # Create a pool across the 2 servers.
-        self.pool.append(self.get_pool())
-        self.pool[-1].create()
-        self.expected_uuids.append(self.pool[-1].uuid.lower())
-        uuid_to_ranks[self.pool[-1].uuid.lower()] = [0, 1]
+        self.create_pool_with_ranks(ranks=[0, 1])
         # Verify UUIDs by calling dmg pool list.
         self.verify_uuids()
 
         # Verify that the UUID-named directory is created, or not created, at
         # each host for the two pools.
-        self.check_pool_location(self.hostlist_servers, uuid_to_ranks)
+        self.check_pool_location(self.hostlist_servers, self.uuid_to_ranks)
 
         # Start an additional server.
         extra_servers = self.params.get("test_servers", "/run/extra_servers/*")
@@ -124,25 +136,18 @@ class DynamicServerPool(TestWithServers):
 
         # Create a pool on the newly added server and verify the UUIDs with dmg
         # pool list.
-        self.pool.append(self.get_pool(create=False))
-        self.pool[-1].target_list.update([2], "pool.target_list")
-        self.pool[-1].create()
-        self.expected_uuids.append(self.pool[-1].uuid.lower())
-        uuid_to_ranks[self.pool[-1].uuid.lower()] = [2]
+        self.create_pool_with_ranks(ranks=[2], tl_update=True)
         self.verify_uuids()
         # Verify that the UUID-named directory is created at each host including
         # the new host.
         self.check_pool_location(
-            self.hostlist_servers + extra_servers, uuid_to_ranks)
+            self.hostlist_servers + extra_servers, self.uuid_to_ranks)
 
         # Create a new pool across all three servers and verify the UUIDs with
         # dmg pool list.
-        self.pool.append(self.get_pool())
-        self.pool[-1].create()
-        self.expected_uuids.append(self.pool[-1].uuid.lower())
-        uuid_to_ranks[self.pool[-1].uuid.lower()] = [0, 1, 2]
+        self.create_pool_with_ranks(ranks=[0, 1, 2])
         self.verify_uuids()
         # Verify that the UUID-named directory is created at each host for all
         # pools.
         self.check_pool_location(
-            self.hostlist_servers + extra_servers, uuid_to_ranks)
+            self.hostlist_servers + extra_servers, self.uuid_to_ranks)
