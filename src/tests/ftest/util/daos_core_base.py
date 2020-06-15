@@ -64,11 +64,11 @@ class DaosCoreBase(TestWithServers):
         args = self.params.get("args", '/run/daos_tests/Tests/*', "")
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.vaml.filename
-        
+
         cmd = "{} {} -n {} -x D_LOG_FILE={} {} -s {} -{} --dmg_config={} {}"
-            .format( self.orterun, self.client_mca, num_clients,
-            get_log_file(self.client_log), self.daos_test, num_replicas,
-            subtest, dmg_config_file, args)
+              .format( self.orterun, self.client_mca, num_clients,
+              get_log_file(self.client_log), self.daos_test, num_replicas,
+              subtest, dmg_config_file, args)
 
         env = {}
         env['CMOCKA_XML_FILE'] = "%g_results.xml"
