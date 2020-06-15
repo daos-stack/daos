@@ -163,13 +163,11 @@ type storageFormatCmd struct {
 // shouldReformatSystem queries system to interrogate membership before deciding
 // whether a system reformat is appropriate.
 //
-// Only reformat system if membership is not empty and all ranks are stopped.
+// Reformat system if membership is not empty and all member ranks are stopped.
 func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []system.Rank) (bool, error) {
 	if cmd.Reformat {
 		cmd.log.Info("processing system reformat request")
 
-		// only allow reformat if all ranks in membership are stopped,
-		// even if rank list has been supplied
 		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
 		if err != nil {
 			return false, errors.Wrap(err, "System-Query command failed")
@@ -178,18 +176,25 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 		if len(resp.Members) == 0 {
 			cmd.log.Debug("no system members, reformat host list")
 			if len(ranks) > 0 {
-				return false, errors.New("--ranks parameter invalid as membership is empty")
+				return false, errors.New(
+					"--ranks parameter invalid as membership is empty")
 			}
 
 			return false, nil
 		}
 
+		notStoppedRanks := new(system.RankSet)
 		for _, member := range resp.Members {
 			if member.State() != system.MemberStateStopped {
-				return false, errors.Errorf(
-					"system reformat requires all system ranks to be stopped (%+v)",
-					member)
+				if err := notStoppedRanks.Add(member.Rank); err != nil {
+					return false, errors.Wrap(err, "adding to rank set")
+				}
 			}
+		}
+		if notStoppedRanks.Count() > 0 {
+			return false, errors.Errorf(
+				"system reformat requires the following ranks to be stopped: %+v",
+				notStoppedRanks)
 		}
 
 		return true, nil
@@ -202,7 +207,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 	return false, nil
 }
 
-// Execute is run swhen storageFormatCmd activates.
+// Execute is run when storageFormatCmd activates.
 //
 // Run NVMe and SCM storage format on all connected servers.
 func (cmd *storageFormatCmd) Execute(args []string) (err error) {

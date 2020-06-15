@@ -73,6 +73,24 @@ func NewRankSet(stringRanks string) (*RankSet, error) {
 	return &rs, nil
 }
 
+// Add adds rank to an existing RankSet.
+func (rs *RankSet) Add(rank Rank) error {
+	rs.HostSet.Lock()
+	defer rs.HostSet.Unlock()
+
+	stringRanks := fixBrackets(rs.HostSet.String(), true)
+	stringRanks += fmt.Sprintf(",%d", rank)
+
+	newHS, err := hostlist.CreateNumericSet(stringRanks)
+	if err != nil {
+		return err
+	}
+
+	rs.HostSet = *newHS
+
+	return nil
+}
+
 func (rs *RankSet) String() string {
 	return fixBrackets(rs.HostSet.String(), true)
 }
