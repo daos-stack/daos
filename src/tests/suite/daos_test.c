@@ -372,7 +372,7 @@ main(int argc, char **argv)
 			if (test_io_dir == NULL)
 				return -1;
 		case CHECKSUM_ARG_VAL_TYPE:
-			dt_csum_type = atoi(optarg);
+			dt_csum_type = daos_checksum_test_arg2type(optarg);
 			break;
 		case CHECKSUM_ARG_VAL_CHUNKSIZE:
 			dt_csum_chunksize = atoi(optarg);
