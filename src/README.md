@@ -30,7 +30,7 @@ As illustrated in the diagram below, a DAOS installation involves several compon
 <a id="11"></a>
 ### DAOS System
 
-A DAOS server is a multi-tenant daemon running on a Linux instance (i.e. physical node, VM or container) and managing the locally-attached NVM storage allocated to DAOS. It listens to a management port, addressed by an IP address and a TCP port number, plus one or more fabric endpoints, addressed by network URIs. The DAOS server is configured through a YAML file (i.e. /etc/daos_server.yml or different path provided on the command line) and can be integrated with different daemon management or orchestration frameworks (e.g. a systemd script, a Kunernetes service or even via a parallel launcher like pdsh or srun).
+A DAOS server is a multi-tenant daemon running on a Linux instance (i.e. physical node, VM or container) and managing the locally-attached NVM storage allocated to DAOS. It listens to a management port, addressed by an IP address and a TCP port number, plus one or more fabric endpoints, addressed by network URIs. The DAOS server is configured through a YAML file (i.e. /etc/daos_server.yml or different path provided on the command line) and can be integrated with different daemon management or orchestration frameworks (e.g. a systemd script, a Kubernetes service or even via a parallel launcher like pdsh or srun).
 
 A DAOS system is identified by a system name and consists of a set of DAOS servers connected to the same fabric. Two different systems comprise two disjoint sets of servers and do not coordinate with each other. DAOS pools cannot span across multiple systems.
 
