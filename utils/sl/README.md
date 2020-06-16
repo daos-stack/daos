@@ -30,37 +30,6 @@ PREFIX=<path>                      The installation path of the user's
                                    A user can do this via:
                                    ENV.Alias('install', "$PREFIX")
                                    ENV.Install("$PREFIX/bin", program).
-                                   By default, prerequisites will
-                                   also be installed here.   If a
-                                   user specifies TARGET_PREFIX,
-                                   only symbolic links for such
-                                   will be installed here.
-
-TARGET_PREFIX=<path>               An alternative location to place
-                                   prerequisite builds.  If set,
-                                   Each individual prerequisite
-                                   component will be installed in
-                                   $TARGET_PREFIX/<component> and
-                                   a symbolic link to the
-                                   installation targets will be
-                                   placed in $PREFIX.
-                                   will be installed here.
-
-PREBUILT_PREFIX=<path>[:<path>...] If set, the directories will be
-                                   searched for component builds.
-                                   Each component will be found
-                                   in $PREBUILT_PREFIX/<component>.
-                                   If a component is missing, it
-                                   will be fetched and built
-                                   using the definition of the
-                                   component.
-
-<COMPONENT>_PREBUILT=<path>        If set, the directory will be
-                                   used as the already installed
-                                   location for the component.
-                                   If the location doesn't exist,
-                                   the build will fail with an
-                                   error.
 
 SRC_PREFIX=<path>[:<path>...]      If set, the directories will be
                                    searched for component sources.
@@ -105,6 +74,17 @@ COMPILER=<compiler>                Specify an alternate compiler.
 BUILD_DIR=<path>                   Alternative path to place
                                    intermediate build targets.  Default
                                    is /path/to/daos_src/build
+
+BUILD_TYPE=dev|release|debug       Specify type of the build.
+
+TARGET_TYPE=default|dev|release|   Specify type of prerequisite build.
+            debug                  By default, prerequisites are
+                                   installed in
+                                   $PREFIX/prereq/$TARGET_TYPE/[component].
+                                   By default, TARGET_TYPE is same as
+                                   BUILD_TYPE.  If this is set, user can
+                                   mix and match build types for daos
+                                   vs prerequisites.
 
 EXCLUDE=<component>                Components that should not be built.
                                    Only option is psm2 at present.

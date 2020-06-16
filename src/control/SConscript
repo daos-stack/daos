@@ -3,6 +3,7 @@
 #pylint: disable=too-many-locals
 import sys
 import os
+import daos_build
 from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
@@ -160,14 +161,11 @@ def scons():
 
     # Version-controlled DAOS Go source directory src/control
     gosrc = Dir('.').srcnode().abspath
-    cartpath = Dir('#/src/cart/src/include').srcnode().abspath
 
-    prereqs.require(denv, 'ofi', 'hwloc')
+    prereqs.require(denv, 'ofi', 'hwloc', 'spdk')
 
-    denv.AppendENVPath("CGO_LDFLAGS",
-                       denv.subst("$_LIBDIRFLAGS "
-                                  "$_RPATH"),
-                       sep=" ")
+    # Sets CGO_LDFLAGS
+    daos_build.add_rpaths(denv, "..", True, True)
 
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
                        sep=" ")

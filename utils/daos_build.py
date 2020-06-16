@@ -1,26 +1,65 @@
 """Common DAOS build functions"""
-from SCons.Script import Literal
+from SCons.Subst import Literal
 from SCons.Script import GetOption
 from env_modules import load_mpi
 from distutils.spawn import find_executable
 import os
 
+# pylint: disable=too-few-public-methods
+class DaosLiteral(Literal):
+    """A wrapper for a Literal."""
+
+    def __hash__(self):
+        """Workaround for missing hash function"""
+        return hash(self.lstr)
+# pylint: enable=too-few-public-methods
+
+def add_rpaths(env, install_off, set_cgo_ld, is_bin):
+    """Add relative rpath entries"""
+    env.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
+    rpaths = env.subst("$RPATH_FULL").split()
+    prefix = env.get("PREFIX")
+    for rpath in rpaths:
+        if install_off is None:
+            env.AppendUnique(RPATH=[os.path.join(prefix, rpath)])
+            continue
+        relpath = os.path.relpath(rpath, prefix)
+        path = r'\$$ORIGIN/%s/%s' % (install_off, relpath)
+        if set_cgo_ld:
+            env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath=$ORIGIN/%s/%s" %
+                              (install_off, relpath), sep=" ")
+        else:
+            env.AppendUnique(RPATH=[DaosLiteral(path)])
+        if "prereq" in relpath:
+            path = os.path.join(prefix, rpath)
+            if is_bin:
+                # NB: Also use full path so intermediate linking works
+                env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
+            else:
+                # NB: Also use full path so intermediate linking works
+                env.AppendUnique(RPATH=[path])
+
+    if set_cgo_ld:
+        env.AppendENVPath("CGO_LDFLAGS",
+                          env.subst("$_LIBDIRFLAGS " "$_RPATH"),
+                          sep=" ")
+
 def library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
     denv = env.Clone()
-    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN')])
+    add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     return denv.SharedLibrary(*args, **kwargs)
 
 def program(env, *args, **kwargs):
     """build Program with relative RPATH"""
     denv = env.Clone()
-    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64')])
+    add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
     return denv.Program(*args, **kwargs)
 
 def test(env, *args, **kwargs):
     """build Program with fixed RPATH"""
     denv = env.Clone()
-    denv.AppendUnique(RPATH=["$PREFIX/lib64"])
+    add_rpaths(denv, kwargs.get("install_off", None), False, True)
     return denv.Program(*args, **kwargs)
 
 def install(env, subdir, files):
@@ -68,7 +107,7 @@ def _find_mpicc(env):
 def _configure_mpi_pkg(env, libs):
     """Configure MPI using pkg-config"""
     if GetOption('help'):
-        return
+        return "mpi"
     if _find_mpicc(env):
         return env.subst("$MPI_PKG")
     try:
@@ -84,7 +123,7 @@ def _configure_mpi_pkg(env, libs):
     libs.append('mpi')
     return env.subst("$MPI_PKG")
 
-def configure_mpi(prereqs, env, libs, required=None):
+def configure_mpi(env, libs, required=None):
     """Check if mpi exists and configure environment"""
     if env.subst("$MPI_PKG") != "":
         return _configure_mpi_pkg(env, libs)

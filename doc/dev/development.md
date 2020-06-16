@@ -7,14 +7,13 @@ only required for development purposes.
 
 ## Building DAOS for Development
 
-For development, it is recommended to build and install each dependency in a
-unique subdirectory. The DAOS build system supports this through the
-TARGET\_PREFIX variable. Once the submodules have been initialized and updated,
-run the following commands:
+Prerequisite when built using --build-deps are installed in component specific
+directories under PREFIX/prereq/$TARGET_TYPE.  Once the submodules have been
+initialized and updated, run the following commands:
 
 ```bash
 $ scons PREFIX=${daos_prefix_path}
-      TARGET_PREFIX=${daos_prefix_path}/opt install
+      install
       --build-deps=yes
       --config=force
 ```
@@ -26,30 +25,39 @@ configuration from before. For automated environment setup, source
 utils/sl/utils/setup_local.sh.
 
 ```bash
-ARGOBOTS=${daos_prefix_path}/opt/argobots
-CART=${daos_prefix_path}/opt/cart
-FIO=${daos_prefix_path}/opt/fio
-FUSE=${daos_prefix_path}/opt/fuse
-ISAL=${daos_prefix_path}/opt/isal
-MERCURY=${daos_prefix_path}/opt/mercury
-OFI=${daos_prefix_path}/opt/ofi
-OPENPA=${daos_prefix_path}/opt/openpa
-PMDK=${daos_prefix_path}/opt/pmdk
-PROTOBUFC=${daos_prefix_path}/opt/protobufc
-SPDK=${daos_prefix_path}/opt/spdk
+ARGOBOTS=${daos_prefix_path}/prereq/argobots
+CART=${daos_prefix_path}/prereq/cart
+FIO=${daos_prefix_path}/prereq/fio
+FUSE=${daos_prefix_path}/prereq/fuse
+ISAL=${daos_prefix_path}/prereq/isal
+MERCURY=${daos_prefix_path}/prereq/mercury
+OFI=${daos_prefix_path}/prereq/ofi
+OPENPA=${daos_prefix_path}/prereq/openpa
+PMDK=${daos_prefix_path}/prereq/pmdk
+PROTOBUFC=${daos_prefix_path}/prereq/protobufc
+SPDK=${daos_prefix_path}/prereq/spdk
 
 
 PATH=$CART/bin/:${daos_prefix_path}/bin/:$PATH
 ```
 
 With this approach, DAOS would get built using the prebuilt dependencies in
-${daos_prefix_path}/opt, and required options are saved for future compilations.
+${daos_prefix_path}/prereq, and required options are saved for future compilations.
 So, after the first time, during development, only "scons --config=force" and
 "scons --config=force install" would suffice for compiling changes to DAOS
 source code.
 
 If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on
 the scons command line.   This option is also saved for future com pilations.
+
+Additionally, users can specify BUILD_TYPE=[dev|release|debug] and scons will
+save the intermediate build for the various BUILD_TYPE, COMPILER, and TARGET_TYPE
+options so a user can switch between options without a full rebuild and thus
+with minimal cost.   By default, TARGET_TYPE is set to 'default' which means
+it uses the BUILD_TYPE setting.  To avoid rebuilding prerequisites for every
+BUILD_TYPE setting, TARGET_TYPE can be explicitly set to a BUILD_TYPE setting
+to always use that set of prerequisites.  These settings are stored in daos.conf
+so setting the values on subsequent builds is not necessary.
 
 ## Go dependencies
 
