@@ -48,7 +48,7 @@
 /** A-key name of DFS feature flags */
 #define FEAT_COMPAT_NAME "DFS_SB_FEAT_COMPAT"
 /** A-key name of DFS feature flags */
-#define FEAT_INCOMPAT_NAME "DFS_SB_FEAT_INCOMPAT"
+#define FEAT_INCO_NAME "DFS_SB_FEAT_INCOMPAT"
 /** A-key name of DFS namespace creation time */
 #define MKFS_TIME_NAME "DFS_SB_MKFS_TIME"
 /** A-key name of FS state*/
@@ -885,7 +885,7 @@ create_sb(bool create, daos_iod_t *iods, daos_key_t *dkey)
 	set_daos_iod(create, &iods[i++], CS_NAME, sizeof(daos_size_t));
 	set_daos_iod(create, &iods[i++], OC_NAME, sizeof(daos_oclass_id_t));
 	set_daos_iod(create, &iods[i++], FEAT_COMPAT_NAME, sizeof(daos_size_t));
-	set_daos_iod(create, &iods[i++], FEAT_INCOMPAT_NAME, sizeof(daos_size_t));
+	set_daos_iod(create, &iods[i++], FEAT_INCO_NAME, sizeof(daos_size_t));
 	set_daos_iod(create, &iods[i++], MKFS_TIME_NAME, sizeof(daos_size_t));
 	set_daos_iod(create, &iods[i++], STATE_NAME, sizeof(daos_size_t));
 }

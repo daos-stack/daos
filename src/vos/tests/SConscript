@@ -14,8 +14,7 @@ def scons():
     denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
     vtsenv = denv.Clone()
     vtsenv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/api"])
-    vtsenv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"]) 
-    
+    vtsenv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
 
     vtsenv.Append(CPPDEFINES={'VOS_UNIT_TEST' : '1'})
 
@@ -34,11 +33,11 @@ def scons():
                                   LIBS=libraries)
 
     libraries += ['daos', 'dfs']
-    vos_size_dfs_sample = daos_build.program(vtsenv, 'vos_size_dfs_sample',
-                                  ['vos_size_dfs_sample.c'], LIBS=libraries)
+    dfs_sample = daos_build.program(vtsenv, 'vos_size_dfs_sample',
+                                    ['vos_size_dfs_sample.c'], LIBS=libraries)
 
-    denv.Install('$PREFIX/bin/', [vos_tests, vos_size, evt_ctl, vos_size_dfs_sample,
-                                 'vos_size.py'])
+    denv.Install('$PREFIX/bin/', [vos_tests, vos_size, evt_ctl,
+                                  dfs_sample, 'vos_size.py'])
     denv.Install('$PREFIX/etc/', ['vos_size_input.yaml'])
 
 if __name__ == "SCons.Script":

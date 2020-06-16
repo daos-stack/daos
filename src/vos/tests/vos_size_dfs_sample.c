@@ -81,10 +81,10 @@ open_file(const char *fname)
 void
 print_usage(const char *name)
 {
-	printf("Usage: %s [OPTIONS]\n\
-	OPTIONS:\n\
-		--fname, -f <filename>		Output file (%s)\n\
-		-h				Print this help message\n",
+	printf("Usage: %s [OPTIONS]\n"
+		"OPTIONS:\n"
+		"--fname, -f <filename>		Output file (%s)\n"
+		"-h				Print this help message\n",
 		name, DEFAULT_DFS_EXAMPLE_NAME);
 }
 
@@ -113,7 +113,7 @@ print_list(FILE *fp, const char *key, char values[][DFS_MAX_PATH],
 
 	fprintf(fp, "  %s: [ ", key);
 
-	while(i < values_count) {
+	while (i < values_count) {
 		fprintf(fp, "%s", values[i]);
 
 		if (i == (values_count - 1)) {
@@ -136,11 +136,12 @@ print_dkey(FILE *fp, daos_key_t	*dkey, daos_iod_t *iods, int akey_count)
 
 	/* print all the A-Key values */
 	for (i = 0; i < akey_count; i++) {
-		to_lower(buf, iods[i].iod_name.iov_buf, iods[i].iod_name.iov_len);
+		to_lower(buf, iods[i].iod_name.iov_buf,
+			iods[i].iod_name.iov_len);
 
 		fprintf(fp, "%s: &%s\n", buf, buf);
 		sprintf(values[i], "*%s", buf);
-		
+
 		fprintf(fp, "  size: %zu\n", iods[i].iod_name.iov_len);
 		fprintf(fp, "  overhead: meta\n");
 
