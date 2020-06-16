@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 import os
-from apricot import TestWithServers
 from nvme_utils import ServerFillUp, get_device_ids
 from test_utils_pool import TestPool
 from dmg_utils import DmgCommand
