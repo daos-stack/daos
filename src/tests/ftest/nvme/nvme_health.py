@@ -23,12 +23,12 @@
 '''
 import os
 from apricot import TestWithServers
-from nvme_utils import get_server_capacity, get_device_ids
+from nvme_utils import ServerFillUp, get_device_ids
 from test_utils_pool import TestPool
 from dmg_utils import DmgCommand
 from command_utils_base import CommandFailure
 
-class NvmeHealth(TestWithServers):
+class NvmeHealth(ServerFillUp):
     """
     Test Class Description: To validate NVMe health test cases
     :avocado: recursive
@@ -49,8 +49,7 @@ class NvmeHealth(TestWithServers):
         no_of_pools = self.params.get("number_of_pools", '/run/pool/*')
         #Stop the servers to run SPDK too to get the server capacity
         self.stop_servers_noreset()
-        storage = get_server_capacity(self.hostlist_servers,
-                                      self.server_managers)
+        storage = self.get_server_capacity()
         self.start_servers()
 
         single_pool_nvme_size = int((storage * 0.80)/no_of_pools)
