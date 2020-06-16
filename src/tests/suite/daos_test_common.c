@@ -909,9 +909,8 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	else
 		dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
 				  "--force -o %s", rank, arg->dmg_config);
-	print_message(" %s config %s rc 0x%x\n", dmg_cmd,
-			arg->dmg_config, rc);
 	rc = system(dmg_cmd);
+	print_message(" %s rc 0x%x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 
