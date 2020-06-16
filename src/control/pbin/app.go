@@ -55,6 +55,7 @@ func NewApp() *App {
 		handlers: make(map[string]RequestHandler),
 	}
 
+	app.setupPing()
 	app.configureLogging("")
 	return app
 }
@@ -123,6 +124,11 @@ func (a *App) WithOutput(writer io.WriteCloser) *App {
 // There is at most one handler per method.
 func (a *App) AddHandler(method string, handler RequestHandler) {
 	a.handlers[method] = handler
+}
+
+// setupPing sets up the default Ping handler built into every App.
+func (a *App) setupPing() {
+	a.AddHandler(PingMethod, newPingHandler(a.process))
 }
 
 // logError is a convenience method that logs an error and returns the same error.
