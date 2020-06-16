@@ -91,10 +91,6 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 25
       args: -s3 -u subtests="25"
-    test_r_26:
-      daos_test: r
-      test_name: rebuild tests 26
-      args: -s3 -u subtests="26"
     test_r_27:
       daos_test: r
       test_name: rebuild tests 27
