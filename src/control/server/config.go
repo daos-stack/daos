@@ -547,19 +547,20 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 			seenBdevSet[dev] = idx
 		}
 
-		ndc, err := c.getDeviceClassFn(srv.Fabric.Interface)
-		if err != nil {
-			return err
+		var err error
+		if srv.Fabric.NetDevClass == 0 {
+			srv.Fabric.NetDevClass, err = c.getDeviceClassFn(srv.Fabric.Interface)
+			if err != nil {
+				return err
+			}
 		}
-
-		srv.Fabric.NetDevClass = ndc
 
 		switch idx {
 		case 0:
-			netDevClass = ndc
+			netDevClass = srv.Fabric.NetDevClass
 		default:
-			if ndc != netDevClass {
-				return FaultConfigInvalidNetDevClass(idx, netDevClass, ndc, srv.Fabric.Interface)
+			if srv.Fabric.NetDevClass != netDevClass {
+				return FaultConfigInvalidNetDevClass(idx, netDevClass, srv.Fabric.NetDevClass, srv.Fabric.Interface)
 			}
 		}
 	}

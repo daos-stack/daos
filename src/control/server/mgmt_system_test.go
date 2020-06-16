@@ -1001,3 +1001,55 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
+	const (
+		ETHER      = 1
+		INFINIBAND = 32
+	)
+
+	for name, tc := range map[string]struct {
+		mgmtSvc          *mgmtSvc
+		clientNetworkCfg *ClientNetworkCfg
+		req              *mgmtpb.GetAttachInfoReq
+		expResp          *mgmtpb.GetAttachInfoResp
+	}{
+		"Server uses verbs + Infiniband": {
+			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: INFINIBAND},
+			req:              &mgmtpb.GetAttachInfoReq{},
+			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: INFINIBAND},
+		},
+		"Server uses sockets + Ethernet": {
+			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: ETHER},
+			req:              &mgmtpb.GetAttachInfoReq{},
+			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: ETHER},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+			harness := NewIOServerHarness(log)
+			srv := newTestIOServer(log, true)
+
+			if err := harness.AddInstance(srv); err != nil {
+				panic(err)
+			}
+			srv.setDrpcClient(newMockDrpcClient(nil))
+			harness.started.SetTrue()
+
+			cfg := new(mockDrpcClientConfig)
+			rb, _ := proto.Marshal(&mgmtpb.GetAttachInfoResp{})
+			cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, nil)
+			srv.setDrpcClient(newMockDrpcClient(cfg))
+			tc.mgmtSvc = newMgmtSvc(harness, nil, tc.clientNetworkCfg)
+			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
+			if gotErr != nil {
+				t.Fatalf("unexpected error: %+v\n", gotErr)
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}

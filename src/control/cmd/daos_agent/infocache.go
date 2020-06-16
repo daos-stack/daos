@@ -127,7 +127,8 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 		}
 
 		if fs.NetDevClass != resp.NetDevClass {
-			aic.log.Debugf("Excluding device: %s from attachInfoCache with non-matching network device class: %d\n", fs.DeviceName, fs.NetDevClass)
+			aic.log.Debugf("Excluding device: %s, network device class: %s from attachInfoCache.  Does not match server network device class: %s\n",
+				fs.DeviceName, netdetect.DevClassName(fs.NetDevClass), netdetect.DevClassName(resp.NetDevClass))
 			continue
 		}
 

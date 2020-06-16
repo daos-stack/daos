@@ -508,3 +508,71 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
+	const (
+		ETHER      = 1
+		INFINIBAND = 32
+	)
+
+	configA := func() *ioserver.Config {
+		return ioserver.NewConfig().
+			WithLogFile("a").
+			WithFabricInterface("a").
+			WithScmClass("ram").
+			WithScmRamdiskSize(1).
+			WithScmMountPoint("a")
+	}
+	configB := func() *ioserver.Config {
+		return ioserver.NewConfig().
+			WithLogFile("b").
+			WithFabricInterface("b").
+			WithScmClass("ram").
+			WithScmRamdiskSize(1).
+			WithScmMountPoint("b")
+	}
+
+	for name, tc := range map[string]struct {
+		configA *ioserver.Config
+		configB *ioserver.Config
+		expErr  error
+	}{
+		"successful validation": {
+			configA: configA().
+				WithNetDevClass(ETHER),
+			configB: configB().
+				WithNetDevClass(ETHER),
+		},
+		"mismatching net dev class with primary INFINIBAND": {
+			configA: configA().
+				WithFabricInterface("netdev-infiniband").
+				WithNetDevClass(INFINIBAND),
+			configB: configB().
+				WithFabricInterface("netdev-ethernet").
+				WithNetDevClass(ETHER),
+			expErr: FaultConfigInvalidNetDevClass(1, INFINIBAND, ETHER, "netdev-ethernet"),
+		},
+		"mismatching net dev class with primary ETHERNET": {
+			configA: configA().
+				WithFabricInterface("netdev-ethernet").
+				WithNetDevClass(ETHER),
+			configB: configB().
+				WithFabricInterface("netdev-infiniband").
+				WithNetDevClass(INFINIBAND),
+			expErr: FaultConfigInvalidNetDevClass(1, ETHER, INFINIBAND, "netdev-infiniband"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			conf := NewConfiguration().
+				WithFabricProvider("test").
+				WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub).
+				WithServers(tc.configA, tc.configB)
+
+			gotErr := conf.Validate(log)
+			CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
