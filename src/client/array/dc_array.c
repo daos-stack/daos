@@ -179,18 +179,12 @@ free_io_params_cb(tse_task_t *task, void *data)
 	while (io_list) {
 		struct io_params *current = io_list;
 
-		if (current->iom.iom_recxs) {
+		if (current->iom.iom_recxs)
 			D_FREE(current->iom.iom_recxs);
-			current->iom.iom_recxs = NULL;
-		}
-		if (current->iod.iod_recxs) {
+		if (current->iod.iod_recxs)
 			D_FREE(current->iod.iod_recxs);
-			current->iod.iod_recxs = NULL;
-		}
-		if (!current->user_sgl_used && current->sgl.sg_iovs) {
+		if (!current->user_sgl_used && current->sgl.sg_iovs)
 			D_FREE(current->sgl.sg_iovs);
-			current->sgl.sg_iovs = NULL;
-		}
 
 		io_list = current->next;
 		D_FREE(current);
@@ -1101,14 +1095,14 @@ struct hole_params {
 };
 
 static int
-memset_sgl(uint8_t *buf, size_t len, void *args)
+zero_out_cb(uint8_t *buf, size_t len, void *args)
 {
 	memset(buf, 0, len);
 	return 0;
 }
 
 static int
-noop_sgl(uint8_t *buf, size_t len, void *args)
+noop_cb(uint8_t *buf, size_t len, void *args)
 {
 	return 0;
 }
@@ -1135,12 +1129,12 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 			if (array_size <= start_off + idx) {
 				/** Don't touch buf if beyond EOF */
 				rc = daos_sgl_processor(sgl, true, sg_idx,
-							bytes_proc, noop_sgl,
+							bytes_proc, noop_cb,
 							NULL);
 			} else if (array_size > start_off + end) {
 				/** all 0s if within array size */
 				rc = daos_sgl_processor(sgl, true, sg_idx,
-							bytes_proc, memset_sgl,
+							bytes_proc, zero_out_cb,
 							NULL);
 			} else {
 				daos_size_t temp;
@@ -1148,12 +1142,12 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 				/** partial fetch in regards to EOF */
 				temp = array_size - (start_off + idx);
 				rc = daos_sgl_processor(sgl, true, sg_idx,
-							temp, noop_sgl, NULL);
+							temp, noop_cb, NULL);
 				if (rc)
 					return rc;
 				rc = daos_sgl_processor(sgl, true, sg_idx,
 							bytes_proc - temp,
-							memset_sgl, NULL);
+							zero_out_cb, NULL);
 			}
 			if (rc)
 				return rc;
@@ -1164,7 +1158,7 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 		if (end <= iom->iom_recxs[i].rx_idx) {
 			bytes_proc = end - idx;
 			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc,
-						memset_sgl, NULL);
+						zero_out_cb, NULL);
 			if (rc)
 				return rc;
 			break;
@@ -1174,13 +1168,13 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 			/** iom at current index, this is a valid extent */
 			bytes_proc = iom->iom_recxs[i].rx_nr;
 			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc,
-						noop_sgl, NULL);
+						noop_cb, NULL);
 			i++;
 		} else {
 			/** iom beyond current index, this is a hole */
 			bytes_proc = iom->iom_recxs[i].rx_idx - idx;
 			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc,
-						memset_sgl, NULL);
+						zero_out_cb, NULL);
 		}
 
 		if (rc)
