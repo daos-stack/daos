@@ -614,6 +614,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
             key: getattr(args, value).split(",") if getattr(args, value) else []
             for key, value in YAML_KEYS.items()}
 ##DH++
+        #Check for transport_config and allow_insecure from the test yaml
         print("")
         print("==get_yaml_data=", yaml_data)
         trans_conf_defined_in_yaml = False
@@ -753,15 +754,13 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
 ##DH++
 def generate_certs():
-    """function to generate the certificates
+    """function to generate the certificates.
 
     """
     # Generate certificates if not exist
     print(" ")
-    print(" ")
     if not os.path.exists("./daosCA"):
         subprocess.call(["../../../../../utils/certs/gen_certificates.sh"])
-    print(" ")
     print(" ")
 ##DH--
 
@@ -1339,7 +1338,7 @@ def main():
     parser.add_argument(
         "-sec", "--secure_mode",
         action="store_true",
-        help="test with secure-mode")
+        help="Launch tests with secure-mode")
 ##DH--
     parser.add_argument(
         "tags",
@@ -1391,10 +1390,8 @@ def main():
 ##DH++
     # Generate certificates if not exist
     print(" ")
-    print(" ")
     print("==>args.test_servers= ", args.test_servers)
     print("==>args.secure_mode= ", args.secure_mode)
-    print(" ")
     print(" ")
 ##DH--
 
