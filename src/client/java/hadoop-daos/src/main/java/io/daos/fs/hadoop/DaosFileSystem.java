@@ -71,7 +71,7 @@ import org.slf4j.LoggerFactory;
  *   <td></td>
  *   <td></td>
  *   <td>true</td>
- *   <td>UUID od DAOS container which created with "--type posix"</td>
+ *   <td>UUID of DAOS container which created with "--type posix"</td>
  * </tr>
  * <tr>
  * <td>{@value io.daos.fs.hadoop.Constants#DAOS_READ_BUFFER_SIZE}</td>
@@ -137,6 +137,7 @@ public class DaosFileSystem extends FileSystem {
   private int writeBufferSize;
   private int blockSize;
   private int chunkSize;
+  private String bucket;
 
   static {
     if (ShutdownHookManager.removeHook(DaosFsClient.FINALIZER)) {
@@ -180,6 +181,7 @@ public class DaosFileSystem extends FileSystem {
     super.initialize(name, conf);
 
     try {
+      this.bucket = name.getHost();
       this.readBufferSize = conf.getInt(Constants.DAOS_READ_BUFFER_SIZE, Constants.DEFAULT_DAOS_READ_BUFFER_SIZE);
       this.writeBufferSize = conf.getInt(Constants.DAOS_WRITE_BUFFER_SIZE, Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE);
       this.blockSize = conf.getInt(Constants.DAOS_BLOCK_SIZE, Constants.DEFAULT_DAOS_BLOCK_SIZE);
@@ -307,6 +309,10 @@ public class DaosFileSystem extends FileSystem {
       throw new FileNotFoundException(f + " not exist");
     }
 
+    if (file.isDirectory()) {
+      throw  new FileNotFoundException("can't open " + f + " because it is a directory ");
+    }
+
     return new FSDataInputStream(new DaosInputStream(
             file, statistics, bufferSize, preLoadBufferSize));
   }
@@ -332,8 +338,16 @@ public class DaosFileSystem extends FileSystem {
 
     DaosFile daosFile = this.daos.getFile(key);
 
-    if (daosFile.exists() && (!daosFile.delete())) {
-      throw new IOException("failed to delete existing file " + daosFile);
+    if (daosFile.exists()) {
+      if (daosFile.isDirectory()) {
+        throw new FileAlreadyExistsException(f + " is a directory ");
+      }
+      if (!overwrite) {
+        throw new FileAlreadyExistsException(f + "already exists ");
+      }
+      if (!daosFile.delete()) {
+        throw new IOException("failed to delete existing file " + daosFile);
+      }
     }
 
     daosFile.createNewFile(
@@ -352,31 +366,128 @@ public class DaosFileSystem extends FileSystem {
     throw new IOException("Append is not supported");
   }
 
+  /**
+   * Renames Path src to Path dst. Can take place on remote DAOS.
+   *
+   * @param src path to be renamed
+   * @param dst new path after rename
+   * @return
+   * @throws IOException on IO failure
+   */
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem: rename old path {} to new path {}", src.toUri().getPath(), dst.toUri().getPath());
     }
-    String srcPath = src.toUri().getPath();
-    String destPath = dst.toUri().getPath();
-    // determine  if src is root dir and whether it exits
-    if (src.toUri().getPath().equals("/")) {
+    String srckey = src.toUri().getPath();
+    String dstkey = dst.toUri().getPath();
+    DaosFile srcDaosFile = this.daos.getFile(srckey);
+    DaosFile dstDaosFile = this.daos.getFile(dstkey);
+
+    try {
+      return innerRename(srcDaosFile, dstDaosFile);
+    } catch (FileNotFoundException e) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DaosFileSystem:  can not rename root path {}", src);
+        LOG.debug(e.toString());
+      }
+      return false;
+    } catch (IOException e) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(e.getMessage());
+      }
+      return false;
+    }
+  }
+
+  /**
+   * The inner rename operation. See {@link #rename(Path, Path)} for
+   * the description of the operation.
+   * This operation throws an exception on any failure  which needs to be
+   * reported and downgraded to a failure.
+   * @param srcDaosFile path to be renamed
+   * @param dstDaosFile new path after rename
+   * @return
+   * @throws IOException on IO failure
+   */
+
+  private boolean innerRename(DaosFile srcDaosFile, DaosFile dstDaosFile) throws IOException {
+    // determine  if src is root dir and whether it exits
+    Path src = new Path(srcDaosFile.getPath());
+    Path dst = new Path(dstDaosFile.getPath());
+    if (srcDaosFile.getPath().equals("/")) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem: can not rename root path {}", src);
       }
       throw new IOException("cannot move root / directory");
     }
 
-    if (srcPath.equals(destPath)) {
-      throw new IOException("dest and src paths are same. " + srcPath);
+    if (dst.toUri().getPath().equals("/")) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem: can not rename root path {}", dst);
+      }
+      throw new IOException("cannot move root / directory");
     }
 
-    if (daos.exists(destPath)) {
-      throw new IOException("dest file exists, " + destPath);
+    if (!srcDaosFile.exists()) {
+      throw new FileNotFoundException(String.format(
+              "Failed to rename %s to %s, src dir do not !", src ,dst));
     }
 
-    daos.move(srcPath, destPath);
+    if (!dstDaosFile.exists()) {
+      // if dst not exists and rename src to dst
+      innerMove(srcDaosFile, dst);
+      return true;
+    }
+
+    if (srcDaosFile.isDirectory() && !dstDaosFile.isDirectory()) {
+      // If dst exists and not a directory / not empty
+      throw new FileAlreadyExistsException(String.format(
+              "Failed to rename %s to %s, file already exists or not empty!",
+              src, dst));
+    } else if (srcDaosFile.getPath().equals(dstDaosFile.getPath())) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem:  src and dst refer to the same file or directory ");
+      }
+      return !srcDaosFile.isDirectory();
+    }
+    if (dstDaosFile.isDirectory() &&
+            srcDaosFile.isDirectory() &&
+            dstDaosFile.getPath().contains(srcDaosFile.getPath())) {
+      // If dst exists and not a directory / not empty
+      throw new IOException(String.format(
+                "Failed to rename %s to %s, source dir can't move to a subdirectory of itself!",
+                src, dst));
+    }
+    if (dstDaosFile.isDirectory()) {
+      // If dst is a directory
+      dst = new Path(dst, src.getName());
+    } else {
+      // If dst is not a directory
+      throw new FileAlreadyExistsException(String.format(
+                "Failed to rename %s to %s, file already exists ,%s is not a directory!", src, dst ,dst));
+    }
+    innerMove(srcDaosFile, dst);
     return true;
+  }
+
+  /**
+   * The DAOS move operation.
+   * This operation translate and throws an exception on any failure which
+   *
+   * @param srcDaosFile path to be renamed
+   * @param dst new path after rename
+   * @throws IOException
+   */
+  private void innerMove(DaosFile srcDaosFile, Path  dst) throws IOException {
+    try {
+      srcDaosFile.rename(dst.toUri().getPath());
+    } catch (IOException ioexception) {
+      if (ioexception instanceof DaosIOException ) {
+        DaosIOException daosIOException = (DaosIOException) ioexception;
+        throw HadoopDaosUtils.translateException(daosIOException);
+      }
+      throw ioexception;
+    }
   }
 
   @Override
@@ -384,7 +495,66 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem:   delete  path = {} - recursive = {}", f.toUri().getPath(), recursive);
     }
-    return daos.delete(f.toUri().getPath(), recursive);
+    DaosFile file = daos.getFile(f.toUri().getPath());
+
+    FileStatus[] statuses = null;
+
+    // indicating root directory "/".
+    if (f.toUri().getPath().equals("/")) {
+      statuses = listStatus(f);
+      boolean isEmptyDir = statuses.length <= 0;
+      return rejectRootDirectoryDelete(isEmptyDir, recursive);
+    }
+    if (!file.exists()) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(String.format(
+                "Failed to delete %s , path do not exists!", f));
+      }
+      return false;
+    }
+    if (file.isDirectory()) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem: Path is a directory");
+      }
+      if (recursive) {
+        // delete the dir and all files in the dir
+        return file.delete(recursive);
+      } else {
+        statuses = listStatus(f);
+        if (statuses != null && statuses.length > 0) {
+          throw new IOException("DaosFileSystem delete : There are files in dir ");
+        } else if (statuses != null && statuses.length == 0) {
+          // delete empty dir
+          return file.delete(recursive);
+        }
+      }
+    }
+    return file.delete(recursive);
+  }
+
+  /**
+   * Implements the specific logic to reject root directory deletion.
+   * The caller must return the result of this call, rather than
+   * attempt to continue with the delete operation: deleting root
+   * directories is never allowed. This method simply implements
+   * the policy of when to return an exit code versus raise an exception.
+   * @param isEmptyDir empty directory or not
+   * @param recursive recursive flag from command
+   * @return a return code for the operation
+   * @throws PathIOException if the operation was explicitly rejected.
+   */
+  private boolean rejectRootDirectoryDelete(boolean isEmptyDir,
+                                            boolean recursive) throws IOException {
+    LOG.info("oss delete the {} root directory of {}",this.bucket ,recursive);
+    if (isEmptyDir) {
+      return true;
+    }
+    if (recursive) {
+      return false;
+    } else {
+      // reject
+      throw new PathIOException(bucket, "Cannot delete root path");
+    }
   }
 
   @Override
@@ -408,14 +578,8 @@ public class DaosFileSystem extends FileSystem {
       } else {
         result.add(getFileStatus(f, file));
       }
-    } catch (IOException e) {
-      if (e instanceof DaosIOException) {
-        DaosIOException de = (DaosIOException) e;
-        if (de.getErrorCode() == io.daos.dfs.Constants.ERROR_CODE_NOT_EXIST) {
-          throw new FileNotFoundException(e.getMessage());
-        }
-      }
-      throw e;
+    } catch (DaosIOException e) {
+      throw HadoopDaosUtils.translateException(e);
     }
     return result.toArray(new FileStatus[result.size()]);
   }
@@ -435,8 +599,26 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem mkdirs: Making directory = {} ", f.toUri().getPath());
     }
-    String key = f.toUri().getPath();
-    daos.mkdir(key, io.daos.dfs.Constants.FILE_DEFAULT_FILE_MODE, true);
+
+    DaosFile file = daos.getFile(f.toUri().getPath());
+    if (file.exists()) {
+      // if the thread reaches here, there is something at the path
+      if (file.isDirectory()) {
+        return true;
+      } else {
+        throw new FileAlreadyExistsException("Not a directory: " + f);
+      }
+    } else {
+      try {
+        file.mkdirs();
+      } catch (IOException ioe) {
+        if (ioe instanceof DaosIOException ) {
+          DaosIOException daosIOException = (DaosIOException) ioe;
+          throw HadoopDaosUtils.translateException(daosIOException);
+        }
+        throw ioe;
+      }
+    }
     return true;
   }
 

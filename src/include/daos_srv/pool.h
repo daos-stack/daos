@@ -97,7 +97,7 @@ struct ds_pool_child {
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
 	 * vos aggregation can not cross this epoch during rebuild to avoid
-	 * interferring rebuild process.
+	 * interfering rebuild process.
 	 */
 	uint64_t	spc_rebuild_fence;
 

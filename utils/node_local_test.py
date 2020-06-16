@@ -331,7 +331,7 @@ class DaosServer():
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        # Show errors from server logs bug supress memory leaks as the server
+        # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
             # TODO: Enable memleak checking when server shutdown works.
@@ -586,7 +586,7 @@ def import_daos(server, conf):
 def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
     """Run a DAOS command
 
-    Run a command, returing what subprocess.run() would.
+    Run a command, returning what subprocess.run() would.
 
     Enable logging, and valgrind for the command.
     """
@@ -1010,12 +1010,22 @@ def run_il_test(server, conf):
                 pass
             dirs.append(d)
 
+    # Create a file natively.
     f = os.path.join(dirs[0], 'file')
     fd = open(f, 'w')
     fd.write('Hello')
     fd.close()
+    # Copy it across containers.
     il_cmd(dfuse, ['cp', f, dirs[-1]])
+
+    # Copy it within the container.
+    child_dir = os.path.join(dirs[0], 'new_dir')
+    os.mkdir(child_dir)
+    il_cmd(dfuse, ['cp', f, child_dir])
+
+    # Copy something into a container
     il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]])
+    # Read it from within a container
     il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
     dfuse.stop()
 
@@ -1072,7 +1082,7 @@ def test_pydaos_kv(server, conf):
     container = show_cont(conf, pool)
 
     print(container)
-    c_uuid = container.decode().split(' ')[-1]
+    c_uuid = container.decode().split()[-1]
     kvg = dbm.daos_named_kv(pool, c_uuid)
 
     kv = kvg.get_kv_by_name('Dave')

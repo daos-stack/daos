@@ -256,9 +256,9 @@ typedef struct {
 } umem_ops_t;
 
 
-#define UMM_SLABS_CNT	5
+#define UMM_SLABS_CNT	6
 
-/** attributes to initialise an unified memroy class */
+/** attributes to initialize an unified memory class */
 struct umem_attr {
 	umem_class_id_t			 uma_id;
 	PMEMobjpool			*uma_pool;

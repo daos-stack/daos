@@ -224,9 +224,9 @@ dss_ult_wakeup(struct dss_sleep_ult *dsu)
 	}
 }
 
-/* Schedule the ULT(dtu->ult) and reschedule in @expire_secs seconds */
+/* Schedule the ULT(dtu->ult) and reschedule in @expire_secs nano seconds */
 void
-dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
+dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_nsecs)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 	ABT_thread		thread;
@@ -237,9 +237,8 @@ dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
 	D_ASSERT(thread == dsu->dsu_thread);
 
 	D_ASSERT(d_list_empty(&dsu->dsu_list));
-	daos_gettime_coarse(&now);
-	dsu->dsu_expire_time = now + expire_secs;
-	D_DEBUG(DB_TRACE, "dsu %p expire in "DF_U64" secs\n", dsu, expire_secs);
+	now = daos_getntime_coarse();
+	dsu->dsu_expire_time = now + expire_nsecs;
 	add_sleep_list(dx, dsu);
 	ABT_self_suspend();
 }
@@ -257,13 +256,34 @@ check_sleep_list()
 	if (dss_xstream_exiting(dx))
 		shutdown = true;
 
-	daos_gettime_coarse(&now);
+	if (d_list_empty(&dx->dx_sleep_ult_list))
+		return;
+
+	now = daos_getntime_coarse();
 	d_list_for_each_entry_safe(dsu, tmp, &dx->dx_sleep_ult_list, dsu_list) {
 		if (dsu->dsu_expire_time <= now || shutdown)
 			dss_ult_wakeup(dsu);
 		else
 			break;
 	}
+}
+
+/**
+ * sleep micro seconds, then being rescheduled.
+ * \param[in]	us	milli seconds to sleep for
+ */
+int
+dss_sleep(uint64_t sleep_msec)
+{
+	struct dss_sleep_ult *dsu;
+
+	dsu = dss_sleep_ult_create();
+	if (dsu == NULL)
+		return -DER_NOMEM;
+
+	dss_ult_sleep(dsu, sleep_msec * 1000000);
+	dss_sleep_ult_destroy(dsu);
+	return 0;
 }
 
 struct dss_rpc_cntr *
@@ -292,7 +312,7 @@ dss_rpc_cntr_enter(enum dss_rpc_cntr_id id)
 
 /**
  * Decrease the active counter for the RPC type, also increase error counter
- * if @faield is true.
+ * if @failed is true.
  */
 void
 dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool error)
@@ -520,14 +540,14 @@ dss_srv_handler(void *arg)
 
 	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
-	/* initialized everything for the ULT, notify the creater */
+	/* initialized everything for the ULT, notify the creator */
 	D_ASSERT(!xstream_data.xd_ult_signal);
 	xstream_data.xd_ult_signal = true;
 	xstream_data.xd_ult_init_rc = 0;
 	ABT_cond_signal(xstream_data.xd_ult_init);
 
 	/* wait until all xstreams are ready, otherwise it is not safe
-	 * to run lock-free dss_collective, althought this race is not
+	 * to run lock-free dss_collective, although this race is not
 	 * realistically possible in the DAOS stack.
 	 */
 	ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
@@ -574,7 +594,7 @@ tls_fini:
 signal:
 	if (signal_caller) {
 		ABT_mutex_lock(xstream_data.xd_mutex);
-		/* initialized everything for the ULT, notify the creater */
+		/* initialized everything for the ULT, notify the creator */
 		D_ASSERT(!xstream_data.xd_ult_signal);
 		xstream_data.xd_ult_signal = true;
 		xstream_data.xd_ult_init_rc = rc;
@@ -1039,9 +1059,9 @@ compute_checksum_acc(void *args)
 }
 
 /**
- * Generic offload call - abstraction for accelaration with
+ * Generic offload call - abstraction for acceleration with
  *
- * \param[in] at_args	accelaration tasks with both ULT and FPGA
+ * \param[in] at_args	acceleration tasks with both ULT and FPGA
  */
 int
 dss_acc_offload(struct dss_acc_task *at_args)

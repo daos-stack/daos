@@ -254,16 +254,16 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 
 	while ((found = evt_move_trace(tcx))) {
 		struct evt_trace	*trace;
-		struct evt_rect		*rect;
 		struct evt_node		*nd;
 		struct evt_node_entry	*ne;
+		struct evt_rect		 rect;
 
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
 		nd = evt_off2node(tcx, trace->tr_node);
 		if (evt_node_is_leaf(tcx, nd)) {
 			ne = evt_node_entry_at(tcx, nd, trace->tr_at);
 			desc = evt_off2desc(tcx, ne->ne_child);
-			rc1 = evt_desc_log_status(tcx, ne->ne_rect.rc_epc, desc,
+			rc1 = evt_desc_log_status(tcx, ne->ne_rect.rd_epc, desc,
 						  intent);
 			if (rc1 < 0)
 				return rc1;
@@ -272,8 +272,9 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 				continue;
 		}
 
-		rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
-		if (evt_filter_rect(&iter->it_filter, rect, true))
+		evt_nd_off_read_rect_at(tcx, trace->tr_node, trace->tr_at,
+					&rect);
+		if (evt_filter_rect(&iter->it_filter, &rect, true))
 			continue;
 		break;
 	}
@@ -411,6 +412,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		rtmp.rc_ex.ex_lo = 0;
 		rtmp.rc_ex.ex_hi = ~0ULL;
 		rtmp.rc_epc = DAOS_EPOCH_MAX;
+		rtmp.rc_minor_epc = EVT_MINOR_EPC_MAX;
 		break;
 
 	case EVT_ITER_FIND:
@@ -492,8 +494,8 @@ int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent)
 {
 	struct evt_context	*tcx;
 	struct evt_iterator	*iter;
-	struct evt_rect		*rect;
 	struct evt_trace	*trace;
+	struct evt_rect		 rect;
 	int			 rc;
 	int			 i;
 	bool			 reset = false;
@@ -549,8 +551,8 @@ int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent)
 
 	iter->it_skip_move = 1;
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
-	if (!evt_filter_rect(&iter->it_filter, rect, true))
+	evt_nd_off_read_rect_at(tcx, trace->tr_node, trace->tr_at, &rect);
+	if (!evt_filter_rect(&iter->it_filter, &rect, true))
 		goto out;
 
 	D_DEBUG(DB_TRACE, "Skipping to next unfiltered entry\n");
@@ -561,6 +563,8 @@ int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent)
 out:
 	return rc;
 }
+
+D_CASSERT(sizeof(((daos_anchor_t *)0)->da_buf) >= sizeof(struct evt_rect));
 
 /**
  * Fetch the extent and its data address from the current iterator position.
@@ -573,9 +577,8 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
 	struct evt_node		*node;
-	struct evt_rect		*rect;
+	struct evt_rect		 rect;
 	struct evt_trace	*trace;
-	struct evt_rect		 saved;
 	int			 rc;
 
 	tcx = evt_hdl2tcx(ih);
@@ -592,19 +595,18 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 
 	if (evt_iter_is_sorted(iter)) {
 		*entry = *evt_ent_array_get(&iter->it_entries, iter->it_index);
-		rect = &saved;
-		evt_ent2rect(rect, entry);
+		evt_ent2rect(&rect, entry);
 		goto set_anchor;
 	}
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	node = evt_off2node(tcx, trace->tr_node);
-	rect  = evt_node_rect_at(tcx, node, trace->tr_at);
+	evt_node_read_rect_at(tcx, node, trace->tr_at, &rect);
 
 	if (entry)
 		evt_entry_fill(tcx, node, trace->tr_at, NULL,
 			       evt_iter_intent(iter), entry);
 
-	/* There is no visiblity flag for sorted entries but go ahead and set it
+	/* There is no visibility flag for sorted entries but go ahead and set it
 	 * EVT_COVERED if user has specified a punch epoch in the filter
 	 */
 	if (entry->en_epoch <= iter->it_filter.fr_punch)
@@ -613,10 +615,8 @@ set_anchor:
 	*inob = tcx->tc_inob;
 
 	if (anchor) {
-		struct evt_rect rtmp = *rect;
-
 		memset(anchor, 0, sizeof(*anchor));
-		memcpy(&anchor->da_buf[0], &rtmp, sizeof(rtmp));
+		memcpy(&anchor->da_buf[0], &rect, sizeof(rect));
 		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
 	}
 	rc = 0;

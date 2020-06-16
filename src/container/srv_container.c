@@ -1101,7 +1101,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		rc = cont_verify_redun_req(pmap, prop);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": Container does not meet redundancy "
-					"requirments, set DAOS_COO_FORCE to "
+					"requirements, set DAOS_COO_FORCE to "
 					"force container open rc: %d.\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid), rc);
