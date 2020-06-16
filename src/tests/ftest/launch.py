@@ -37,7 +37,6 @@ import errno
 
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
-from subprocess import call
 
 try:
     # For python versions >= 3.2
@@ -627,8 +626,8 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
             else:
                 # Report an error for the missing allow_insecure under
                 # transport_config
-                print("Error: allow_insecure missing uner transport_config in "
-                      "the test yaml")
+                print("Error: allow_insecure missing on transport_config in "
+                      "the test yaml file.")
                 exit(1)
         print("")
 ##DH--
@@ -754,6 +753,9 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
 ##DH++
 def generate_certs():
+    """function to generate the certificates
+
+    """
     # Generate certificates if not exist
     print(" ")
     print(" ")
