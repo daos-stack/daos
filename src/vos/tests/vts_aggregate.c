@@ -1692,14 +1692,15 @@ aggregate_13(void **state)
 static void
 print_space_info(vos_pool_info_t *pi, char *desc)
 {
-	struct vea_attr	*attr = &pi->pif_vea_attr;
-	struct vea_stat	*stat = &pi->pif_vea_stat;
+	struct vos_pool_space	*vps = &pi->pif_space;
+	struct vea_attr		*attr = &pi->pif_space.vps_vea_attr;
+	struct vea_stat		*stat = &pi->pif_space.vps_vea_stat;
 
 	VERBOSE_MSG("== Pool space information: %s ==\n", desc);
 	VERBOSE_MSG("  Total bytes: SCM["DF_U64"], NVMe["DF_U64"]\n",
-		    pi->pif_scm_sz, pi->pif_nvme_sz);
+		    SCM_TOTAL(vps), NVME_TOTAL(vps));
 	VERBOSE_MSG("  Free bytes : SCM["DF_U64"], NVMe["DF_U64"]\n",
-		    pi->pif_scm_free, pi->pif_nvme_free);
+		    SCM_FREE(vps), NVME_FREE(vps));
 
 	/* NVMe isn't enabled */
 	if (attr->va_tot_blks == 0)
@@ -1765,6 +1766,7 @@ aggregate_14(void **state)
 {
 	struct io_test_args	*arg = *state;
 	vos_pool_info_t		 pool_info;
+	struct vos_pool_space	*vps = &pool_info.pif_space;
 	daos_epoch_t		 epc_hi = 1;
 	daos_epoch_range_t	 epr;
 	daos_size_t		 fill_size;
@@ -1777,7 +1779,7 @@ aggregate_14(void **state)
 	assert_int_equal(rc, 0);
 	print_space_info(&pool_info, "INIT");
 
-	fill_size = pool_info.pif_nvme_free ? : pool_info.pif_scm_free;
+	fill_size = NVME_FREE(vps) ? : SCM_FREE(vps);
 	assert_true(fill_size > 0);
 
 	if (slow_test) {
@@ -2119,9 +2121,9 @@ static const struct CMUnitTest aggregate_tests[] = {
 int
 run_discard_tests(const char *cfg)
 {
-	char	test_name[CFG_MAX];
+	char	test_name[DTS_CFG_MAX];
 
-	create_config(test_name, "VOS Discard Tests %s", cfg);
+	dts_create_config(test_name, "VOS Discard Tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name, discard_tests,
 					   setup_io, teardown_io);
 }
@@ -2129,9 +2131,9 @@ run_discard_tests(const char *cfg)
 int
 run_aggregate_tests(bool slow, const char *cfg)
 {
-	char	test_name[CFG_MAX];
+	char	test_name[DTS_CFG_MAX];
 
-	create_config(test_name, "VOS Aggregate Tests %s", cfg);
+	dts_create_config(test_name, "VOS Aggregate Tests %s", cfg);
 
 	slow_test = slow;
 	return cmocka_run_group_tests_name(test_name,

@@ -156,10 +156,10 @@ func TestLoadConfigFailures(t *testing.T) {
 	}
 	testFile.Close()
 
-	t.Run("unparseable file", func(t *testing.T) {
+	t.Run("unparsable file", func(t *testing.T) {
 		_, err := client.GetConfig(log, testFile.Name())
 		if err == nil {
-			t.Fatal("Expected GetConfig() to fail on unparseable file")
+			t.Fatal("Expected GetConfig() to fail on unparsable file")
 		}
 	})
 

@@ -35,6 +35,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // hostsByPort takes slice of address patterns and returns a HostGroups mapping
@@ -88,7 +89,7 @@ func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err
 	return
 }
 
-// checkConns analyses connection results and returns summary compressed active
+// checkConns analyzes connection results and returns summary compressed active
 // and inactive hostlists (but disregards connection port).
 func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err error) {
 	connStates = make(hostlist.HostGroups)
@@ -120,8 +121,8 @@ func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
 	return buf.String()
 }
 
-// tabulateHostGroups is a helper function representing hostgroups in a tabular form.
-func tabulateHostGroups(groups hostlist.HostGroups, titles ...string) (string, error) {
+// tabulateRankGroups is a helper function representing rankgroups in a tabular form.
+func tabulateRankGroups(groups system.RankGroups, titles ...string) (string, error) {
 	if len(titles) < 2 {
 		return "", errors.New("insufficient number of column titles")
 	}

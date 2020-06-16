@@ -479,6 +479,7 @@ migrate_end_cb(void *data, bool noop)
 					vfe.vfe_blk_cnt, rc);
 				break;
 			}
+			vsi->vsi_stat[STAT_FREE_BLKS] += vfe.vfe_blk_cnt;
 		}
 	}
 
@@ -511,9 +512,12 @@ migrate_end_cb(void *data, bool noop)
 		vue->vue_ext.vfe_age = cur_time;
 		rc = compound_free(vsi, &vue->vue_ext, 0);
 		if (rc)
-			D_ERROR("Compund free ["DF_U64", %u] error: %d\n",
+			D_ERROR("Compound free ["DF_U64", %u] error: %d\n",
 				vue->vue_ext.vfe_blk_off,
 				vue->vue_ext.vfe_blk_cnt, rc);
+		else
+			vsi->vsi_stat[STAT_FREE_BLKS] +=
+				vue->vue_ext.vfe_blk_cnt;
 		D_FREE(vue);
 	}
 }

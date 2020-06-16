@@ -189,7 +189,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	 * how the server object layer already interfaces with VOS)
 	 */
 	vos_fetch_begin(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
-			false, &ioh);
+			0, NULL, &ioh, NULL);
 
 	biod = vos_ioh2desc(ioh);
 	bsgl = bio_iod_sgl(biod, 0);
@@ -774,16 +774,16 @@ static const struct CMUnitTest evt_checksums_tests[] = {
 int run_csum_extent_tests(const char *cfg)
 {
 	int rc = 0;
-	char	test_name[CFG_MAX];
+	char	test_name[DTS_CFG_MAX];
 
-	create_config(test_name,
+	dts_create_config(test_name,
 		"Storage and retrieval of checksums for Array Type %s", cfg);
 
 	rc = cmocka_run_group_tests_name(
 		test_name,
 		update_fetch_checksums_for_array_types, setup_io, teardown_io);
 
-	create_config(test_name,
+	dts_create_config(test_name,
 		"evtreen helper functions for alignment, counting, etc for csum  %s",
 		cfg);
 

@@ -216,7 +216,7 @@ class Dfuse(DfuseCommand):
         # A log file must be defined to ensure logs are captured
         if "D_LOG_FILE" not in self.env:
             raise CommandFailure(
-                "Dfuse missing environment varaibles for D_LOG_FILE")
+                "Dfuse missing environment variables for D_LOG_FILE")
 
         # create dfuse dir if does not exist
         self.create_mount_point()

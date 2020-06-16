@@ -229,7 +229,7 @@ func TestServer_MgmtSvc_PrepShutdownRanks(t *testing.T) {
 				{Rank: 2, State: uint32(MemberStateUnresponsive)},
 			},
 		},
-		"context cancel": { // dRPC req-resp duration > when parent context is cancelled
+		"context cancel": { // dRPC req-resp duration > when parent context is canceled
 			req:           &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			responseDelay: 40 * time.Millisecond,
 			ctxCancel:     10 * time.Millisecond,
@@ -570,7 +570,7 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: uint32(MemberStateUnresponsive)},
 			},
 		},
-		"context cancel": { // dRPC req-resp duration > when parent context is cancelled
+		"context cancel": { // dRPC req-resp duration > when parent context is canceled
 			req:           &mgmtpb.RanksReq{Ranks: []uint32{0, 1, 2, 3}},
 			responseDelay: 40 * time.Millisecond,
 			ctxCancel:     10 * time.Millisecond,
@@ -778,7 +778,6 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 				// mimic srv.run, set "ready" on startLoop rx
 				go func(s *IOServerInstance, startFails bool) {
 					<-s.startLoop
-					t.Logf("instance %d: start signal received", s.Index())
 					if startFails {
 						return
 					}

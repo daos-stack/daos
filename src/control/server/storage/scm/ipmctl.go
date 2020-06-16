@@ -39,7 +39,7 @@ import (
 
 const (
 	cmdScmShowRegions = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
-	outScmNoRegions   = "\nThere are no Regions defined in the system.\n"
+	outScmNoRegions   = "no Regions defined"
 	// creates a AppDirect/Interleaved memory allocation goal across all DCPMMs on a system.
 	cmdScmCreateRegions    = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdScmRemoveRegions    = "ipmctl create -f -goal MemoryMode=100"
@@ -96,6 +96,7 @@ func (r *cmdRunner) checkNdctl() error {
 	return nil
 }
 
+// Discover scans the system for SCM modules and returns a list of them.
 func (r *cmdRunner) Discover() (storage.ScmModules, error) {
 	discovery, err := r.binding.Discover()
 	if err != nil {
@@ -112,10 +113,66 @@ func (r *cmdRunner) Discover() (storage.ScmModules, error) {
 			SocketID:        uint32(d.Socket_id),
 			PhysicalID:      uint32(d.Physical_id),
 			Capacity:        d.Capacity,
+			UID:             d.Uid.String(),
 		})
 	}
 
 	return modules, nil
+}
+
+func scmFirmwareUpdateStatusFromIpmctl(ipmctlStatus uint32) storage.ScmFirmwareUpdateStatus {
+	switch ipmctlStatus {
+	case ipmctl.FWUpdateStatusFailed:
+		return storage.ScmUpdateStatusFailed
+	case ipmctl.FWUpdateStatusSuccess:
+		return storage.ScmUpdateStatusSuccess
+	case ipmctl.FWUpdateStatusStaged:
+		return storage.ScmUpdateStatusStaged
+	}
+	return storage.ScmUpdateStatusUnknown
+}
+
+func uidStringToIpmctl(uidStr string) (ipmctl.DeviceUID, error) {
+	var uid ipmctl.DeviceUID
+	n := copy(uid[:], uidStr)
+	if n == 0 {
+		return ipmctl.DeviceUID{}, errors.New("invalid SCM module UID")
+	}
+	return uid, nil
+}
+
+// GetFirmwareStatus gets the current firmware status for a specific device.
+func (r *cmdRunner) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error) {
+	uid, err := uidStringToIpmctl(deviceUID)
+	if err != nil {
+		return nil, errors.New("invalid SCM module UID")
+	}
+	info, err := r.binding.GetFirmwareInfo(uid)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get firmware info for device %q", deviceUID)
+	}
+
+	return &storage.ScmFirmwareInfo{
+		ActiveVersion:     info.ActiveFWVersion.String(),
+		StagedVersion:     info.StagedFWVersion.String(),
+		ImageMaxSizeBytes: info.FWImageMaxSize,
+		UpdateStatus:      scmFirmwareUpdateStatusFromIpmctl(info.FWUpdateStatus),
+	}, nil
+}
+
+// UpdateFirmware attempts to update the firmware on the given device with the binary at
+// the path provided.
+func (r *cmdRunner) UpdateFirmware(deviceUID string, firmwarePath string) error {
+	uid, err := uidStringToIpmctl(deviceUID)
+	if err != nil {
+		return errors.New("invalid SCM module UID")
+	}
+	// Force option permits minor version downgrade.
+	err = r.binding.UpdateFirmware(uid, firmwarePath, true)
+	if err != nil {
+		return errors.Wrapf(err, "failed to update firmware for device %q", deviceUID)
+	}
+	return nil
 }
 
 // getState establishes state of SCM regions and namespaces on local server.
@@ -127,18 +184,20 @@ func (r *cmdRunner) GetState() (storage.ScmState, error) {
 	// TODO: discovery should provide SCM region details
 	out, err := r.runCmd(cmdScmShowRegions)
 	if err != nil {
-		return storage.ScmStateUnknown, err
+		return storage.ScmStateUnknown,
+			errors.WithMessagef(err, "running cmd '%s'", cmdScmShowRegions)
 	}
 
 	r.log.Debugf("show region output: %s\n", out)
 
-	if out == outScmNoRegions {
+	if strings.Contains(out, outScmNoRegions) {
 		return storage.ScmStateNoRegions, nil
 	}
 
 	bytes, err := freeCapacity(out)
 	if err != nil {
-		return storage.ScmStateUnknown, err
+		return storage.ScmStateUnknown,
+			errors.WithMessage(err, "checking scm region capacity")
 	}
 	if bytes > 0 {
 		return storage.ScmStateFreeCapacity, nil

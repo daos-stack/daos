@@ -31,7 +31,7 @@
 #include <daos/dtx.h>
 
 /**
- * Initialise a scatter/gather list, create an array to store @nr iovecs.
+ * Initialize a scatter/gather list, create an array to store @nr iovecs.
  */
 int
 daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
@@ -462,7 +462,7 @@ daos_hhash_init(void)
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = d_hhash_create(D_HHASH_BITS, &daos_ht.dht_hhash);
+	rc = d_hhash_create(0, D_HHASH_BITS, &daos_ht.dht_hhash);
 	if (rc == 0) {
 		D_ASSERT(daos_ht.dht_hhash != NULL);
 		daos_ht_ref = 1;

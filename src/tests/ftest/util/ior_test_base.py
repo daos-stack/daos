@@ -211,6 +211,10 @@ class IorTestBase(TestWithServers):
         try:
             self.pool.display_pool_daos_space()
             out = manager.run()
+
+            for line in out.stdout.splitlines():
+                if 'WARNING' in line:
+                    self.fail("IOR command issued warnings.\n")
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))

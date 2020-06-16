@@ -37,6 +37,7 @@ from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
 from SCons.Variables import ListVariable
+from SCons.Variables import BoolVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import SetOption
@@ -154,7 +155,7 @@ class MissingDefinition(Exception):
 
 
 class MissingPath(Exception):
-    """Exception raised when user speficies a path that doesn't exist
+    """Exception raised when user specifies a path that doesn't exist
 
     Attributes:
         variable    -- Variable specified
@@ -219,7 +220,7 @@ class MissingSystemLibs(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "%s has unmet dependancies required for build" % self.component
+        return "%s has unmet dependencies required for build" % self.component
 
 
 class DownloadRequired(Exception):
@@ -501,9 +502,9 @@ class WebRetriever():
             hexdigest = hashlib.md5(src.read()).hexdigest()
 
         if hexdigest != self.md5:
-            print("Removing exising file %s: md5 %s != %s" % (filename,
-                                                              self.md5,
-                                                              hexdigest))
+            print("Removing existing file %s: md5 %s != %s" % (filename,
+                                                               self.md5,
+                                                               hexdigest))
             os.remove(filename)
             return False
 
@@ -549,7 +550,7 @@ class WebRetriever():
 
         if self.url.endswith('.tar.gz') or self.url.endswith('.tgz'):
             if self.__dry_run:
-                print('Would unpack gziped tar file: %s' % basename)
+                print('Would unpack gzipped tar file: %s' % basename)
                 return
             try:
                 tfile = tarfile.open(basename, 'r:gz')
@@ -688,6 +689,8 @@ class PreReqComponent():
         self.download_deps = False
         self.build_deps = False
         self.__parse_build_deps()
+        self.build_type = 'dev'
+        self.__parse_build_type()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
         warning_level = self.__env.subst("$WARNING_LEVEL")
@@ -721,6 +724,9 @@ class PreReqComponent():
             env.Replace(CONFIGUREDIR='#/.sconf-temp-%s' % arch,
                         CONFIGURELOG='#/config-%s.log' % arch)
 
+        # Build pre-reqs in sub-dir based on selected build type
+        build_dir_name = os.path.join(build_dir_name, self.build_type)
+
         self.add_opts(PathVariable('ENV_SCRIPT',
                                    "Location of environment script",
                                    os.path.expanduser('~/.scons_localrc'),
@@ -752,6 +758,8 @@ class PreReqComponent():
                                    'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
+        self.add_opts(BoolVariable('FIRMWARE_MGMT',
+                                   'Build in device firmware management.', 0))
         self._setup_compiler(warning_level)
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
@@ -934,6 +942,14 @@ class PreReqComponent():
                   help="Automatically download and build sources.  " \
                        "(yes|no|build-only) [no]")
 
+        AddOption('--build-type',
+                  dest='build_type',
+                  type='choice',
+                  choices=['dev', 'debug', 'release'],
+                  default='dev',
+                  help="Pre-reqs build type.  " \
+                       "(dev|debug|release) [dev]")
+
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
         # on the command line because it disables running the tests for the
@@ -994,6 +1010,10 @@ class PreReqComponent():
             self.build_deps = True
         elif build_deps == 'build-only':
             self.build_deps = True
+
+    def __parse_build_type(self):
+        """Parse the build dependances type command line flag"""
+        self.build_type = GetOption('build_type')
 
     def setup_path_var(self, var, multiple=False):
         """Create a command line variable for a path"""
@@ -1407,19 +1427,11 @@ class _Component():
             return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
-        patches = self.resolve_patches()
         if self.src_exists():
             self.prereqs.update_src_path(self.name, self.src_path)
             print('Using existing sources at %s for %s' \
                 % (self.src_path, self.name))
-            if self.prereqs.build_deps:
-                for patch in patches:
-                    # Apply patch to existing source.
-                    print("Applying patch %s" % (patch))
-                    commands = ['patch -p 1 -N -t < %s ; if [ $? -gt 1 ]; then '
-                                'false; else true; fi;' % (patch)]
-                    if not RUNNER.run_commands(commands, subdir=self.src_path):
-                        raise BuildFailure(patch)
+            # NB: Don't apply patches to existing sources
             return
 
         if not self.retriever:
@@ -1433,6 +1445,7 @@ class _Component():
 
         print('Downloading source for %s' % self.name)
         self._delete_old_file(self.crc_file)
+        patches = self.resolve_patches()
         self.retriever.get(self.src_path, commit_sha=commit_sha,
                            patches=patches, branch=branch)
 

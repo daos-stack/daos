@@ -46,7 +46,7 @@
 #include "cart/swim.h"
 
 #define CRT_SWIM_RPC_TIMEOUT		1	/* 1 sec */
-#define CRT_SWIM_FLUSH_ATTEMPTS		10
+#define CRT_SWIM_FLUSH_ATTEMPTS		100
 #define CRT_SWIM_PROGRESS_TIMEOUT	0	/* minimal progressing time */
 #define CRT_DEFAULT_PROGRESS_CTX_IDX	0
 
