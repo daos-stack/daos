@@ -1133,14 +1133,8 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	 * rdb_tx_commit() call returns.)
 	 */
 	if (entry->type == RAFT_LOGTYPE_NORMAL) {
-		/* RAFT_LOGTYPE_NORMAL entries, first uint32_t interpreted
-		 * as whether TX operations are all to be considered "critial".
-		 */
-		crit = true;	/* for NULL data.buf */
-		if (entry->data.buf)
-			crit = *((uint32_t *) entry->data.buf);
 		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
-				  rdb_raft_lookup_result(db, index), crit);
+				  rdb_raft_lookup_result(db, index), &crit);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to apply entry "DF_U64": %d\n",
 				DP_DB(db), index, rc);

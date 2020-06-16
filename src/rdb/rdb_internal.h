@@ -261,7 +261,7 @@ void rdb_recvd(void *arg);
 /* rdb_tx.c *******************************************************************/
 
 int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-		 void *result, bool crit);
+		 void *result, bool *critp);
 
 /* rdb_kvs.c ******************************************************************/
 
