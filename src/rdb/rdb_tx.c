@@ -313,6 +313,7 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 	struct rdb_tx_hdr	hdr;
 	size_t			op_len;
 	size_t			len;
+	bool			opc_is_critical;
 	const size_t		RDB_TX_CRITICAL_OPS_LIMIT = 8;
 	int			rc;
 
@@ -365,15 +366,16 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 
 	/* TX is critical if it is reasonably-sized, and any op is critical */
 	tx->dt_num_ops++;
+	opc_is_critical = ((op->dto_opc == RDB_TX_DESTROY_ROOT) ||
+			   (op->dto_opc == RDB_TX_DESTROY) ||
+			   (op->dto_opc == RDB_TX_DELETE));
 	if (tx->dt_entry_len == 0) {
-		hdr.critical = 0;
+		hdr.critical = opc_is_critical ? 1 : 0;
 		tx->dt_entry_len += rdb_tx_hdr_encode(&hdr, tx->dt_entry);
 	} else if (tx->dt_num_ops > RDB_TX_CRITICAL_OPS_LIMIT) {
 		hdr.critical = 0;
 		rdb_tx_hdr_encode(&hdr, tx->dt_entry);
-	} else if ((op->dto_opc == RDB_TX_DESTROY_ROOT) ||
-		   (op->dto_opc == RDB_TX_DESTROY) ||
-		   (op->dto_opc == RDB_TX_DELETE)) {
+	} else if (opc_is_critical) {
 		hdr.critical = 1;
 		rdb_tx_hdr_encode(&hdr, tx->dt_entry);
 	}
