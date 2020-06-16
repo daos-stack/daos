@@ -93,7 +93,7 @@ to_lower(char *buf, char *str, int size)
 {
 	int i;
 
-	if ( size >= DFS_MAX_PATH) {
+	if (size >= DFS_MAX_PATH) {
 		buf[0] = '\0';
 		return;
 	}
@@ -127,7 +127,7 @@ print_list(FILE *fp, const char *key, char values[][DFS_MAX_PATH],
 	fprintf(fp, " ]\n");
 }
 
-void 
+void
 print_dkey(FILE *fp, daos_key_t	*dkey, daos_iod_t *iods, int akey_count)
 {
 	int i = 0;
@@ -169,7 +169,7 @@ print_dkey(FILE *fp, daos_key_t	*dkey, daos_iod_t *iods, int akey_count)
 
 /**
 * TODO: add option to specify the number of files and its size
-*/ 
+*/
 void
 print_dfs_example_remainder(FILE *fp, int dfs_inode_size)
 {
