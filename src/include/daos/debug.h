@@ -117,6 +117,8 @@ enum {
 	IOBP_PM			= (1 << 4),
 	/** no PMDK snapshot (PMDK transaction will be broken) */
 	IOBP_PM_SNAP		= (1 << 5),
+	/** no PMDK transaction */
+	IOBP_PM_TX		= (1 << 6),
 };
 
 /**
@@ -131,6 +133,7 @@ enum {
 #define IOBP_ENV_NVME		"nvme"
 #define IOBP_ENV_PM		"pm"
 #define IOBP_ENV_PM_SNAP	"pm_snap"
+#define IOBP_ENV_PM_TX		"pm_tx"
 
 extern unsigned int daos_io_bypass;
 

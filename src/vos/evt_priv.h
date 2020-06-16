@@ -56,7 +56,7 @@ struct evt_iterator {
 	struct evt_entry_array		it_entries;
 };
 
-#define EVT_TRACE_MAX                   32
+#define EVT_TRACE_MAX                   16
 
 struct evt_trace {
 	/** the current node offset */

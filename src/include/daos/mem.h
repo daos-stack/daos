@@ -126,6 +126,8 @@ typedef enum {
 	UMEM_CLASS_PMEM,
 	/** persistent memory but ignore PMDK snapshot */
 	UMEM_CLASS_PMEM_NO_SNAP,
+	/** atomic allocator */
+	UMEM_CLASS_PMEM_AA,
 	/** unknown */
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;
@@ -253,6 +255,16 @@ typedef struct {
 					       struct umem_tx_stage_data *txd,
 					       int stage, umem_tx_cb_t cb,
 					       void *data);
+
+	/* NB: only safe in TX */
+	void		 (*mo_tx_memcpy)(struct umem_instance *umm,
+					 void *dst, void *src, size_t nob);
+
+	void		 (*mo_tx_memmove)(struct umem_instance *umm,
+					  void *dst, void *src, size_t nob);
+
+	void		 (*mo_tx_memset)(struct umem_instance *umm,
+					 void *addr, int c, size_t nob);
 } umem_ops_t;
 
 /** attributes to initialise an unified memroy class */
@@ -417,6 +429,33 @@ umem_tx_end(struct umem_instance *umm, int err)
 		return umem_tx_abort(umm, err);
 	else
 		return umem_tx_commit(umm);
+}
+
+static inline void
+umem_tx_memcpy(struct umem_instance *umm, void *dst, void *src, size_t nob)
+{
+	if (umm->umm_ops->mo_tx_memcpy)
+		umm->umm_ops->mo_tx_memcpy(umm, dst, src, nob);
+	else
+		memcpy(dst, src, nob);
+}
+
+static inline void
+umem_tx_memmove(struct umem_instance *umm, void *dst, void *src, size_t nob)
+{
+	if (umm->umm_ops->mo_tx_memmove)
+		umm->umm_ops->mo_tx_memmove(umm, dst, src, nob);
+	else
+		memmove(dst, src, nob);
+}
+
+static inline void
+umem_tx_memset(struct umem_instance *umm, void *addr, int c, size_t nob)
+{
+	if (umm->umm_ops->mo_tx_memset)
+		umm->umm_ops->mo_tx_memset(umm, addr, c, nob);
+	else
+		memset(addr, c, nob);
 }
 
 static inline umem_off_t

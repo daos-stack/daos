@@ -341,6 +341,32 @@ pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	return 0;
 }
 
+/* NB: tx_add_range will flush all dirty ranges */
+void
+pmem_tx_memcpy(struct umem_instance *umem, void *dst, void *src, size_t nob)
+{
+	pmemobj_memcpy(umem->umm_pool, dst, src, nob,
+		       PMEMOBJ_F_MEM_NOFLUSH | PMEMOBJ_F_MEM_NODRAIN);
+}
+
+void
+pmem_tx_memmove(struct umem_instance *umem, void *dst, void *src, size_t nob)
+{
+	pmemobj_memmove(umem->umm_pool, dst, src, nob,
+			PMEMOBJ_F_MEM_NOFLUSH | PMEMOBJ_F_MEM_NODRAIN);
+}
+
+void
+pmem_tx_memset(struct umem_instance *umem, void *addr, int c, size_t nob)
+{
+#if 0 /* this is very slow and don't know why */
+	pmemobj_memset(umem->umm_pool, addr, c, nob,
+		       PMEMOBJ_F_MEM_NOFLUSH | PMEMOBJ_F_MEM_NODRAIN);
+#else
+	memset(addr, c, nob);
+#endif
+}
+
 static umem_ops_t	pmem_ops = {
 	.mo_tx_free		= pmem_tx_free,
 	.mo_tx_alloc		= pmem_tx_alloc,
@@ -353,6 +379,70 @@ static umem_ops_t	pmem_ops = {
 	.mo_cancel		= pmem_cancel,
 	.mo_tx_publish		= pmem_tx_publish,
 	.mo_tx_add_callback	= pmem_tx_add_callback,
+	.mo_tx_memcpy		= pmem_tx_memcpy,
+	.mo_tx_memmove		= pmem_tx_memmove,
+	.mo_tx_memset		= pmem_tx_memset,
+};
+
+/** atomic allocator, no TX */
+static int
+pmem_aa_free(struct umem_instance *umm, umem_off_t umoff)
+{
+	if (!UMOFF_IS_NULL(umoff)) {
+		PMEMoid oid = umem_off2id(umm, umoff);
+		pmemobj_free(&oid);
+	}
+	return 0;
+}
+
+static umem_off_t
+pmem_aa_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
+	      unsigned int type_num)
+{
+	PMEMoid	oid;
+	int	rc;
+
+	rc = pmemobj_xalloc(umm->umm_pool, &oid, size, type_num, flags,
+			    NULL, NULL);
+	return umem_id2off(umm, rc ? OID_NULL : oid);
+}
+
+static int
+pmem_aa_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
+		     int stage, umem_tx_cb_t cb, void *data)
+{
+	if (cb == NULL)
+		return -DER_INVAL;
+
+	/*
+	 * vmem doesn't support transaction, so we just execute the commit
+	 * callback & end callback instantly and drop the abort callback.
+	 */
+	if (stage == TX_STAGE_ONCOMMIT || stage == TX_STAGE_NONE)
+		cb(data, false);
+	else if (stage == TX_STAGE_ONABORT)
+		cb(data, true);
+	else
+		return -DER_INVAL;
+
+	return 0;
+}
+
+static umem_ops_t	pmem_aa_ops = {
+	.mo_tx_free		= pmem_aa_free,
+	.mo_tx_alloc		= pmem_aa_alloc,
+	.mo_tx_add		= NULL,
+	.mo_tx_add_ptr		= NULL,
+	.mo_tx_abort		= NULL,
+	.mo_tx_begin		= NULL,
+	.mo_tx_commit		= NULL,
+	.mo_reserve		= NULL,
+	.mo_cancel		= NULL,
+	.mo_tx_publish		= NULL,
+	.mo_tx_add_callback	= pmem_aa_add_callback,
+	.mo_tx_memcpy		= pmem_tx_memcpy,
+	.mo_tx_memmove		= pmem_tx_memmove,
+	.mo_tx_memset		= pmem_tx_memset,
 };
 
 int
@@ -477,6 +567,11 @@ static struct umem_class umem_class_defined[] = {
 		.umc_id		= UMEM_CLASS_PMEM_NO_SNAP,
 		.umc_ops	= &pmem_no_snap_ops,
 		.umc_name	= "pmem_no_snap",
+	},
+	{
+		.umc_id		= UMEM_CLASS_PMEM_AA,
+		.umc_ops	= &pmem_aa_ops,
+		.umc_name	= "pmem_no_tx",
 	},
 	{
 		.umc_id		= UMEM_CLASS_UNKNOWN,
