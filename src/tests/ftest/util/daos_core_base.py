@@ -63,12 +63,7 @@ class DaosCoreBase(TestWithServers):
         scm_size = self.params.get("scm_size", '/run/pool/*')
         args = self.params.get("args", '/run/daos_tests/Tests/*', "")
         dmg = self.get_dmg_command()
-        dmg_config_file = dmg.vaml.filename
-
-        cmd = "{} {} -n {} -x D_LOG_FILE={} {} -s {} -{} {}".format(
-            self.orterun, self.client_mca, num_clients,
-            get_log_file(self.client_log), self.daos_test, num_replicas,
-            subtest, args)
+        dmg_config_file = dmg.yaml.filename
 
         cmd = "{} {} -n {} -x D_LOG_FILE={} {} -s {} -n {} -{} {}".format(
             self.orterun, self.client_mca, num_clients,
