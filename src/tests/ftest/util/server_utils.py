@@ -604,7 +604,7 @@ class DaosServerManager(SubprocessManager):
                 "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
 
     def stop_noreset(self):
-        """Stop the server through the runner without reseting the storage.
+        """Stop the server through the runner without resetting the storage.
         """
         self.log.info(
             "<SERVER> Stopping server %s command", self.manager.command)
