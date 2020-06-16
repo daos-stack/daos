@@ -795,7 +795,6 @@ ds_iv_fini(void)
 
 	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
 		iv_ns_destroy_internal(ns);
-		D_FREE(ns);
 	}
 
 	d_list_for_each_entry_safe(class, class_tmp, &ds_iv_class_list,
