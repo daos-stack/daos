@@ -216,6 +216,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_control.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
+		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
