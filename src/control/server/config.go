@@ -474,6 +474,13 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 					srv.Fabric.Interface, numaNode)
 			}
 		}
+
+		if srv.Fabric.NetDevClass == 0 {
+			srv.Fabric.NetDevClass, err = c.getDeviceClassFn(srv.Fabric.Interface)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	if len(c.Servers) > 1 {
@@ -497,8 +504,8 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 	seenValues := make(map[string]int)
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
-	var netDevClass uint32
 
+	var netDevClass uint32
 	for idx, srv := range c.Servers {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
 			srv.Fabric.Provider,
@@ -543,14 +550,6 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
 			}
 			seenBdevSet[dev] = idx
-		}
-
-		var err error
-		if srv.Fabric.NetDevClass == 0 {
-			srv.Fabric.NetDevClass, err = c.getDeviceClassFn(srv.Fabric.Interface)
-			if err != nil {
-				return err
-			}
 		}
 
 		switch idx {

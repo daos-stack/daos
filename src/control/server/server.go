@@ -166,7 +166,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	membership := system.NewMembership(log)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
-
 	var netDevClass uint32
 
 	for i, srvCfg := range cfg.Servers {
