@@ -28,6 +28,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -183,7 +184,10 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 			return false, nil
 		}
 
-		notStoppedRanks := new(system.RankSet)
+		notStoppedRanks, err := system.NewRankSet("")
+		if err != nil {
+			return false, err
+		}
 		for _, member := range resp.Members {
 			if member.State() != system.MemberStateStopped {
 				if err := notStoppedRanks.Add(member.Rank); err != nil {
@@ -193,8 +197,9 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 		}
 		if notStoppedRanks.Count() > 0 {
 			return false, errors.Errorf(
-				"system reformat requires the following ranks to be stopped: %+v",
-				notStoppedRanks)
+				"system reformat requires the following %s to be stopped: %s",
+				english.Plural(notStoppedRanks.Count(), "rank", "ranks"),
+				notStoppedRanks.String())
 		}
 
 		return true, nil
@@ -218,11 +223,11 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		return errors.Wrap(err, "parsing rank list")
 	}
 
-	ok, err := cmd.shouldReformatSystem(ctx, ranks)
+	sysReformat, err := cmd.shouldReformatSystem(ctx, ranks)
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if !sysReformat {
 		req := &control.StorageFormatReq{Reformat: cmd.Reformat}
 		req.SetHostList(cmd.hostlist)
 		resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)

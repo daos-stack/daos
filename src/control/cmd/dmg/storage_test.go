@@ -198,13 +198,26 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 			uErr:     errors.New("system failed"),
 			expErr:   errors.New("system failed"),
 		},
-		"ranks not stopped": {
+		"rank not stopped": {
 			reformat: true,
 			members: []*ctlpb.SystemMember{
 				{Rank: 0, State: uint32(system.MemberStateStopped)},
-				{Rank: 0, State: uint32(system.MemberStateJoined)},
+				{Rank: 1, State: uint32(system.MemberStateJoined)},
 			},
-			expErr: errors.New("requires all system ranks to be stopped"),
+			expErr: errors.New("system reformat requires the following 1 rank to be stopped: 1"),
+		},
+		"ranks not stopped": {
+			reformat: true,
+			members: []*ctlpb.SystemMember{
+				{Rank: 0, State: uint32(system.MemberStateJoined)},
+				{Rank: 1, State: uint32(system.MemberStateStopped)},
+				{Rank: 5, State: uint32(system.MemberStateJoined)},
+				{Rank: 2, State: uint32(system.MemberStateJoined)},
+				{Rank: 4, State: uint32(system.MemberStateJoined)},
+				{Rank: 3, State: uint32(system.MemberStateJoined)},
+				{Rank: 6, State: uint32(system.MemberStateStopped)},
+			},
+			expErr: errors.New("system reformat requires the following 5 ranks to be stopped: 0,2-5"),
 		},
 		"system reformat": {
 			reformat: true,
