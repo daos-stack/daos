@@ -66,7 +66,7 @@ class DaosCoreBase(TestWithServers):
         dmg_config_file = dmg.vaml.filename
 
         cmd = "{} {} -n {} -x D_LOG_FILE={} {} -s {} -{} --dmg_config={} {}"
-              .format( self.orterun, self.client_mca, num_clients,
+              .format(self.orterun, self.client_mca, num_clients,
               get_log_file(self.client_log), self.daos_test, num_replicas,
               subtest, dmg_config_file, args)
 
