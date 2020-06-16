@@ -204,14 +204,19 @@ class PoolCreateTests(TestWithServers):
                     str(sizes[index]))
         return sizes
 
-    def define_pools(self, quantity, use_nvme):
+    def define_pools(self, quantity, scm_ratio, nvme_ratio):
         """Define a list of TestPool objects.
 
         Args:
             quantity (int): number of TestPool objects to create
-            use_nvme (bool): whether to configure each pool with a nvme_size
+            scm_ratio (float): percentage of the maximum SCM capacity to use
+                for the pool sizes, e.g. 0.9 for 90%
+            nvme_ratio (float): percentage of the maximum NVMe capacity to use
+                for the pool sizes, e.g. 0.9 for 90%. Specifying None will
+                setup each pool without NVMe.
         """
-        sizes = self.get_max_pool_sizes(0.9, 0.9)
+        sizes = self.get_max_pool_sizes(
+            scm_ratio, 1 if nvme_ratio is None else nvme_ratio)
         self.pool = [
             self.get_pool(create=False, connect=False) for _ in range(quantity)]
         if quantity > 1:
@@ -223,7 +228,7 @@ class PoolCreateTests(TestWithServers):
                         size.convert_down()
         for pool in self.pool:
             pool.scm_size.update(str(sizes[0]), "scm_size")
-            if use_nvme:
+            if nvme_ratio is not None:
                 if sizes[1] is None:
                     self.fail(
                         "Unable to assign a max pool NVMe size; NVMe not "
@@ -265,7 +270,7 @@ class PoolCreateTests(TestWithServers):
 
         :avocado: tags=all,pr,hw,large,pool,create_max_pool_scm_only
         """
-        self.define_pools(1, False)
+        self.define_pools(1, 0.9, None)
         self.check_pool_creation(120)
 
     def test_create_max_pool(self):
@@ -278,7 +283,7 @@ class PoolCreateTests(TestWithServers):
 
         :avocado: tags=all,pr,hw,large,pool,create_max_pool
         """
-        self.define_pools(1, True)
+        self.define_pools(1, 0.9, 0.9)
         self.check_pool_creation(240)
 
     def test_create_pool_quantity(self):
@@ -292,7 +297,7 @@ class PoolCreateTests(TestWithServers):
 
         :avocado: tags=all,pr,hw,large,pool,create_performance
         """
-        self.define_pools(100, True)
+        self.define_pools(100, 0.75, 0.75)
         self.check_pool_creation(3)
         self.system_stop()
 
@@ -325,7 +330,7 @@ class PoolCreateTests(TestWithServers):
         #   - one using all of the available capacity of one server
         #   - one using all of the available capacity of all servers
         #   - one using all of the available capacity of the other server
-        self.define_pools(3, True)
+        self.define_pools(3, 0.9, 0.9)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.value = ranks[0]
         self.pool[1].target_list.value = ranks
@@ -376,7 +381,7 @@ class PoolCreateTests(TestWithServers):
         #   - one using all of the available capacity of one server
         #   - one using all of the available capacity of all servers
         #   - one using all of the available capacity of the other server
-        self.define_pools(3, True)
+        self.define_pools(3, 0.9, 0.9)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")

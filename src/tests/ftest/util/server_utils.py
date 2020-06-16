@@ -75,7 +75,7 @@ class DaosServerCommand(YamlCommand):
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
 
-        # Include the daos_io_server command launched by the daos_server command.
+        # Include the daos_io_server command launched by the daos_server command
         self._exe_names.append("daos_io_server")
 
     def get_sub_command_class(self):
@@ -323,7 +323,7 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.sub_command_override = "start"
 
         # Dmg command to access this group of servers which will be configured
-        # to access the doas_servers when they are started
+        # to access the daos_servers when they are started
         self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
 
     def get_interface_envs(self, index=0):
@@ -401,7 +401,7 @@ class DaosServerManager(SubprocessManager):
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
             # Remove the superblocks
-            cmd = "rm -fr {}/*".format(scm_mount)
+            cmd = "sudo rm -fr {}/*".format(scm_mount)
             if cmd not in clean_cmds:
                 clean_cmds.append(cmd)
 
@@ -564,7 +564,7 @@ class DaosServerManager(SubprocessManager):
             "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         self.dmg.storage_format()
 
-        # Wait for all the doas_io_servers to start
+        # Wait for all the daos_io_servers to start
         self.detect_io_server_start()
 
         return True
