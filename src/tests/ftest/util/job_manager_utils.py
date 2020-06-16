@@ -172,10 +172,10 @@ class Orterun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        load_mpi("mpich")
-        path = os.path.dirname(find_executable("mpirun"))
+        load_mpi("openmpi")
+        path = os.path.dirname(find_executable("orterun"))
         super(Orterun, self).__init__(
-            "/run/mpiru", "mpirun", job, path, subprocess)
+            "/run/orterun", "orterun", job, path, subprocess)
 
         # Default mca values to avoid queue pair errors
         mca_default = {
@@ -190,10 +190,10 @@ class Orterun(JobManager):
         self.display_map = FormattedParameter("--display-map", False)
         self.map_by = FormattedParameter("--map-by {}", "node")
         self.export = FormattedParameter("-x {}", None)
-        self.enable_recovery = FormattedParameter("--enable-recovery", False)
+        self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri {}", None)
         self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
-        self.mca = " " # FormattedParameter("--mca {}", mca_default)
+        self.mca = FormattedParameter("--mca {}", mca_default)
         self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
@@ -261,7 +261,7 @@ class Orterun(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        load_mpi("mpich")
+        load_mpi("openmpi")
         return super(Orterun, self).run()
 
 

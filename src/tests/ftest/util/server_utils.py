@@ -308,7 +308,7 @@ class DaosServerManager(SubprocessManager):
         "OFI_PORT": "fabric_iface_port",
     }
 
-    def __init__(self, server_command, manager="Mpirun", dmg_cfg=None):
+    def __init__(self, server_command, manager="Orterun", dmg_cfg=None):
         """Initialize a DaosServerManager object.
 
         Args:
