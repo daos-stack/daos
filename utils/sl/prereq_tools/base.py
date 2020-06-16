@@ -689,8 +689,6 @@ class PreReqComponent():
         self.download_deps = False
         self.build_deps = False
         self.__parse_build_deps()
-        self.build_type = 'dev'
-        self.__parse_build_type()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
         warning_level = self.__env.subst("$WARNING_LEVEL")
@@ -710,7 +708,20 @@ class PreReqComponent():
 
         RUNNER.initialize(self.__env)
 
+        self._setup_compiler(warning_level)
         self.__top_dir = Dir('#').abspath
+        self.add_opts(PathVariable('BUILD_ROOT',
+                                   'Alternative build root dierctory', "build",
+                                   PathVariable.PathIsDirCreate))
+
+        bdir = self._setup_build_type()
+        self.build_type = self.__env.get("BUILD_TYPE")
+        self.__env["BUILD_DIR"] = bdir
+        if not os.path.exists(bdir):
+            os.makedirs(bdir)
+        self.setup_path_var('BUILD_DIR')
+        self.__build_info = BuildInfo()
+        self.__build_info.update("BUILD_DIR", self.__env.subst("$BUILD_DIR"))
 
         build_dir_name = '_build.external'
         install_dir = os.path.join(self.__top_dir, 'install')
@@ -760,39 +771,19 @@ class PreReqComponent():
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
                                    'Build in device firmware management.', 0))
-        self._setup_compiler(warning_level)
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
-                      ('PREBUILT_PREFIX',
-                       'Colon separated list of paths to look for prebuilt '
-                       'components.',
-                       None),
                       ('SRC_PREFIX',
                        'Colon separated list of paths to look for source '
                        'of prebuilt components.',
                        None),
-                      PathVariable('TARGET_PREFIX',
-                                   'Installation root for prebuilt components',
-                                   None, PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
                                    'Location of your GOPATH for the build',
                                    "%s/go" % self.__build_dir,
-                                   PathVariable.PathIsDirCreate),
-                      PathVariable('BUILD_ROOT',
-                                   'Alternative build root dierctory',
-                                   "build", PathVariable.PathIsDirCreate))
-        bdir = self._setup_build_type()
-        self.__env["BUILD_DIR"] = bdir
-        if not os.path.exists(bdir):
-            os.makedirs(bdir)
+                                   PathVariable.PathIsDirCreate))
         self.setup_path_var('PREFIX')
-        self.setup_path_var('BUILD_DIR')
-        self.setup_path_var('PREBUILT_PREFIX', True)
-        self.setup_path_var('TARGET_PREFIX')
         self.setup_path_var('SRC_PREFIX', True)
         self.setup_path_var('GOPATH')
-        self.__build_info = BuildInfo()
-        self.__build_info.update("BUILD_DIR", self.__env.subst("$BUILD_DIR"))
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
 
         self.setup_parallel_build()
@@ -829,6 +820,14 @@ class PreReqComponent():
         self.add_opts(EnumVariable('BUILD_TYPE', "Set the build type",
                                    'dev', ['dev', 'debug', 'release'],
                                    ignorecase=1))
+        self.add_opts(EnumVariable('TARGET_TYPE', "Set the prerequisite type",
+                                   'default',
+                                   ['default', 'dev', 'debug', 'release'],
+                                   ignorecase=1))
+        ttype = self.__env["TARGET_TYPE"]
+        if ttype == "default":
+            ttype = self.__env["BUILD_TYPE"]
+        self.__env["TTYPE_REAL"] = ttype
 
         return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
 
@@ -942,14 +941,6 @@ class PreReqComponent():
                   help="Automatically download and build sources.  " \
                        "(yes|no|build-only) [no]")
 
-        AddOption('--build-type',
-                  dest='build_type',
-                  type='choice',
-                  choices=['dev', 'debug', 'release'],
-                  default='dev',
-                  help="Pre-reqs build type.  " \
-                       "(dev|debug|release) [dev]")
-
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
         # on the command line because it disables running the tests for the
@@ -1010,10 +1001,6 @@ class PreReqComponent():
             self.build_deps = True
         elif build_deps == 'build-only':
             self.build_deps = True
-
-    def __parse_build_type(self):
-        """Parse the build dependances type command line flag"""
-        self.build_type = GetOption('build_type')
 
     def setup_path_var(self, var, multiple=False):
         """Create a command line variable for a path"""
@@ -1102,18 +1089,14 @@ class PreReqComponent():
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
-        prebuilt1 = os.path.join(env.subst("$PREBUILT_PREFIX"),
+        prebuilt1 = os.path.join(env.subst("$PREFIX/prereq/$TTYPE_REAL"),
                                  comp_def.name)
-        # prebuilt2 can be None so add a default
-        prebuilt2 = self.__env.get('{}_PREBUILT'.format(comp_def.name.upper()),
-                                   "/__fake__")
-        prebuilt3 = self.__env.get('{}_PREFIX'.format(comp_def.name.upper()))
+        prebuilt2 = self.__env.get('{}_PREFIX'.format(comp_def.name.upper()))
 
         if comp_def.src_path and \
            not os.path.exists(comp_def.src_path) and \
            not os.path.exists(prebuilt1) and \
-           not os.path.exists(prebuilt2) and \
-           not os.path.exists(prebuilt3):
+           not os.path.exists(prebuilt2):
             self.save_component_prefix('%s_PREFIX' %
                                        comp_def.name.upper(),
                                        "/usr")
@@ -1212,25 +1195,11 @@ class PreReqComponent():
         if name in self.__prebuilt_path:
             return self.__prebuilt_path[name]
 
-        opt_name = '%s_PREBUILT' % name.upper()
-        self.add_opts(PathVariable(opt_name,
-                                   'Alternate installation '
-                                   'prefix for %s' % name,
-                                   None, PathVariable.PathIsDir))
-        self.setup_path_var(opt_name)
-        prebuilt = self.__env.get(opt_name)
-        if prebuilt and not os.path.exists(prebuilt):
-            raise MissingPath(opt_name)
-
-        if not prebuilt:
-            # check the global prebuilt area
-            prebuilt_path = self.__env.get('PREBUILT_PREFIX')
-            if prebuilt_path:
-                for path in prebuilt_path.split(os.pathsep):
-                    prebuilt = os.path.join(path, name)
-                    if os.path.exists(prebuilt):
-                        break
-                    prebuilt = None
+        # check the global prebuilt area
+        prebuilt_path = self.__env.subst('$PREFIX/prereq/$TTYPE_REAL')
+        prebuilt = os.path.join(prebuilt_path, name)
+        if not os.path.exists(prebuilt):
+            prebuilt = None
 
         self.__prebuilt_path[name] = prebuilt
         return prebuilt
@@ -1257,13 +1226,12 @@ class PreReqComponent():
         if prebuilt_path:
             self.save_component_prefix(comp_prefix, prebuilt_path)
             return (prebuilt_path, prefix)
-        target_prefix = self.__env.get('TARGET_PREFIX')
-        if target_prefix:
-            target_prefix = os.path.join(target_prefix, name)
-            self.save_component_prefix(comp_prefix, target_prefix)
-            return (target_prefix, prefix)
-        self.save_component_prefix(comp_prefix, prefix)
-        return (prefix, prefix)
+
+        target_prefix = self.__env.subst('$PREFIX/prereq/$TTYPE_REAL')
+        target_prefix = os.path.join(target_prefix, name)
+        self.save_component_prefix(comp_prefix, target_prefix)
+
+        return (target_prefix, prefix)
 
     def get_src_build_dir(self):
         """Get the location of a temporary directory for hosting
@@ -1378,7 +1346,6 @@ class _Component():
         self.include_path.extend(kw.get("extra_include_path", []))
         self.out_of_src_build = kw.get("out_of_src_build", False)
         self.src_opt = '%s_SRC' % name.upper()
-        self.prebuilt_opt = '%s_PREBUILT' % name.upper()
         self.crc_file = os.path.join(self.prereqs.get_build_dir(),
                                      '_%s.crc' % self.name)
         self.patch_path = self.prereqs.get_build_dir()
@@ -1625,7 +1592,6 @@ class _Component():
     def configure(self):
         """Setup paths for a required component"""
         self.prereqs.setup_path_var(self.src_opt)
-        self.prereqs.setup_path_var(self.prebuilt_opt)
         if not self.retriever:
             self.prebuilt_path = "/usr"
         else:
@@ -1670,7 +1636,8 @@ class _Component():
                 if not os.path.exists(full_path):
                     continue
                 lib_paths.append(full_path)
-                env.AppendUnique(RPATH=[full_path])
+                # will adjust this to be a relative rpath later
+                env.AppendUnique(RPATH_FULL=[full_path])
 
             # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
             # and this allows LD_LIBRARY_PATH to override RPATH
