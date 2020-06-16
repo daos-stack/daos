@@ -174,10 +174,10 @@ func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
-func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass int32, iface string) *fault.Fault {
+func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
 	return serverFault(
 		code.ServerConfigInvalidNetDevClass,
-		fmt.Sprintf("IO server %d specifies fabric_iface `%s` of class `%s` that conflicts with the primary server's device class `%s`",
+		fmt.Sprintf("IO server %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
 			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
 		"ensure that each IO server specifies a fabric_iface with a matching device class and restart",
 	)

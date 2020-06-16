@@ -160,7 +160,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	membership := system.NewMembership(log)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
-	netDevClass := cfg.Servers[0].Fabric.NetDevClass
+
+	var netDevClass uint32
 
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIOServers {
@@ -209,6 +210,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		srv := NewIOServerInstance(log, bp, scmProvider, msClient, ioserver.NewRunner(log, srvCfg))
 		if err := harness.AddInstance(srv); err != nil {
 			return err
+		}
+
+		if i == 0 {
+			netDevClass = srvCfg.Fabric.NetDevClass
 		}
 	}
 

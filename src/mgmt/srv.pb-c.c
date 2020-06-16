@@ -1009,7 +1009,7 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     "NetDevClass",
     8,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     offsetof(Mgmt__GetAttachInfoResp, netdevclass),
     NULL,

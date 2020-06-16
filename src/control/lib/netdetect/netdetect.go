@@ -155,7 +155,7 @@ type FabricScan struct {
 	DeviceName  string
 	NUMANode    uint
 	Priority    int
-	NetDevClass int32
+	NetDevClass uint32
 }
 
 func (fs FabricScan) String() string {
@@ -1234,26 +1234,26 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 
 // GetDeviceClassStub is used for unit testing to replace GetDeviceClass where the network device
 // is not backed by physical hardware resources and does not have a corresponding entry in the file system.
-func GetDeviceClassStub(netdev string) (int32, error) {
+func GetDeviceClassStub(netdev string) (uint32, error) {
 	return 0, nil
 }
 
 // GetDeviceClass determines the device type according to what's stored in the filesystem
 // Returns an integer value corresponding to its ARP protocol hardware identifier
 // found here: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
-func GetDeviceClass(netdev string) (int32, error) {
+func GetDeviceClass(netdev string) (uint32, error) {
 	devClass, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%s/type", netdev))
 	if err != nil {
 		return 0, err
 	}
 
 	res, err := strconv.Atoi(strings.TrimSpace(string(devClass)))
-	return int32(res), err
+	return uint32(res), err
 }
 
 // Convert a network device class ID to a string identifier according to the table
 // found here: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
-func DevClassName(class int32) string {
+func DevClassName(class uint32) string {
 	switch class {
 	case 0:
 		return "NETROM"

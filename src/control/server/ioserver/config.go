@@ -61,7 +61,7 @@ type FabricConfig struct {
 	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
-	NetDevClass     int32
+	NetDevClass     uint32
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -345,7 +345,7 @@ func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 }
 
 // WithNetDevClass defines the NetDevClass for this instance
-func (c *Config) WithNetDevClass(ndc int32) *Config {
+func (c *Config) WithNetDevClass(ndc uint32) *Config {
 	c.Fabric.NetDevClass = ndc
 	return c
 }

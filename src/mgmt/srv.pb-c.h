@@ -203,7 +203,7 @@ struct  _Mgmt__GetAttachInfoResp
   /*
    * ARP protocol hardware identifier of the
    */
-  int32_t netdevclass;
+  uint32_t netdevclass;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \

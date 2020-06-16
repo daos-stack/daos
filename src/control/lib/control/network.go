@@ -240,7 +240,7 @@ type (
 		Domain          string
 		CrtCtxShareAddr uint32
 		CrtTimeout      uint32
-		NetDevClass     int32
+		NetDevClass     uint32
 	}
 )
 
