@@ -223,12 +223,36 @@ check:
 	}
 }
 
+/* Return the epoch uncertainty upper bound. */
+static daos_epoch_t
+dtx_epoch_bound(daos_epoch_t epoch, daos_epoch_t epoch_orig, bool uncertain)
+{
+	daos_epoch_t limit;
+
+	if (!uncertain)
+		/*
+		 * We are told that the epoch has no uncertainty, even if it's
+		 * still within the potential uncertainty window.
+		 */
+		return epoch;
+
+	limit = epoch_orig + crt_hlc_epsilon_get();
+	if (epoch >= limit)
+		/*
+		 * The epoch is already out of the potential uncertainty
+		 * window.
+		 */
+		return epoch;
+
+	return limit;
+}
+
 /**
  * Init local dth handle.
  */
 static void
 dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
-		daos_epoch_t epoch,  uint32_t pm_ver,
+		daos_epoch_t epoch,  bool epoch_uncertain, uint32_t pm_ver,
 		daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t intent,
 		struct dtx_id *dti_cos, int dti_cos_count,
 		bool leader, bool solo, struct dtx_handle *dth)
@@ -236,6 +260,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
 	dth->dth_xid = *dti;
 	dth->dth_coh = coh;
 	dth->dth_epoch = epoch;
+	dth->dth_epoch_bound = dtx_epoch_bound(epoch, dti->dti_hlc,
+					       epoch_uncertain);
 	dth->dth_ver = pm_ver;
 
 	dth->dth_oid = *oid;
@@ -247,8 +273,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
 	dth->dth_ent = NULL;
 
 	dth->dth_sync = 0;
+	dth->dth_resent = 0;
 	dth->dth_solo = solo ? 1 : 0;
-	dth->dth_dti_cos_done = 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
 
@@ -267,6 +293,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
  * \param cont		[IN]	Pointer to the container.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
+ * \param epoch_uncertain
+ *			[IN]	Epoch is uncertain.
  * \param pm_ver	[IN]	Pool map version for the DTX.
  * \param oid		[IN]	The target object (shard) ID.
  * \param dkey_hash	[IN]	Hash of the dkey to be modified if applicable.
@@ -279,7 +307,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh,
  */
 int
 dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
-		 daos_epoch_t epoch, uint32_t pm_ver,
+		 daos_epoch_t epoch, bool epoch_uncertain, uint32_t pm_ver,
 		 daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t intent,
 		 struct daos_shard_tgt *tgts, int tgt_cnt,
 		 struct dtx_leader_handle *dlh)
@@ -289,12 +317,13 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 	int			 dti_cos_count = 0;
 	int			 i;
 
+	memset(dlh, 0, sizeof(*dlh));
+
 	/* Single replica case. */
 	if (tgt_cnt == 0) {
 		if (!daos_is_zero_dti(dti))
 			goto init;
 
-		daos_dti_gen(&dth->dth_xid, true);
 		return 0;
 	}
 
@@ -307,10 +336,8 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		dlh->dlh_subs[i].dss_tgt = tgts[i];
 	dlh->dlh_sub_cnt = tgt_cnt;
 
-	if (daos_is_zero_dti(dti)) {
-		daos_dti_gen(&dth->dth_xid, true); /* zero it */
+	if (daos_is_zero_dti(dti))
 		return 0;
-	}
 
 	/* XXX: The leader needs to find out the DTXs in the CoS cache
 	 *	that modified potential shared items (object/dkey/akey),
@@ -326,12 +353,12 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 	}
 
 init:
-	dtx_handle_init(dti, cont->sc_hdl, epoch, pm_ver,
+	dtx_handle_init(dti, cont->sc_hdl, epoch, epoch_uncertain, pm_ver,
 			oid, dkey_hash, intent,
 			dti_cos, dti_cos_count, true,
 			tgt_cnt == 0 ? true : false, dth);
 
-	D_DEBUG(DB_TRACE, "Start DTX "DF_DTI" for object "DF_OID
+	D_DEBUG(DB_IO, "Start DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
 		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver,
 		(unsigned long long)dth->dth_dkey_hash, dti_cos_count,
@@ -349,7 +376,7 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
 
 	ABT_future_free(&dlh->dlh_future);
-	D_DEBUG(DB_TRACE, "dth "DF_DTI" rc "DF_RC"\n",
+	D_DEBUG(DB_IO, "dth "DF_DTI" rc "DF_RC"\n",
 		DP_DTI(&dlh->dlh_handle.dth_xid), DP_RC(dlh->dlh_result));
 
 	return dlh->dlh_result;
@@ -383,9 +410,12 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	 */
 
 	rc = dtx_leader_wait(dlh);
-	if (result < 0 || rc < 0 || !dth->dth_active ||
-	    daos_is_zero_dti(&dth->dth_xid))
+
+	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
+
+	if (result < 0 || rc < 0 || (!dth->dth_active && !dth->dth_resent))
+		D_GOTO(abort, result = result < 0 ? result : rc);
 
 again:
 	/* If the DTX is started befoe DTX resync (for rebuild), then it is
@@ -398,7 +428,7 @@ again:
 				   NULL, NULL, false);
 		/* Committed by race, do nothing. */
 		if (rc == DTX_ST_COMMITTED)
-			D_GOTO(out, result = 0);
+			D_GOTO(abort, result = 0);
 
 		/* Aborted by race, restart it. */
 		if (rc == -DER_NONEXIST) {
@@ -406,7 +436,7 @@ again:
 			       "old epoch "DF_U64" by resync\n",
 			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 			       dth->dth_epoch);
-			D_GOTO(out, result = -DER_TX_RESTART);
+			D_GOTO(abort, result = -DER_TX_RESTART);
 		}
 
 		if (rc != DTX_ST_PREPARED) {
@@ -416,7 +446,7 @@ again:
 			       "status: "DF_RC"\n",
 			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 			       DP_RC(rc));
-			D_GOTO(out, result = rc);
+			D_GOTO(abort, result = rc);
 		}
 	}
 
@@ -425,11 +455,11 @@ again:
 	if (rc == 0) {
 		/* When we come here, the modification on all participants have
 		 * been done successfully. If 'dth->dth_active' is false, means
-		 * that it is for resent caseC. Under such case, we have no way
+		 * that it is for resent case. Under such case, we have no way
 		 * to mark it as committable, then commit it sychronously.
 		 */
 		if (!dth->dth_active) {
-			D_ASSERT(dth->dth_ent == NULL);
+			D_ASSERT(dth->dth_resent);
 
 			dth->dth_sync = 1;
 		}
@@ -452,7 +482,7 @@ again:
 		       "because of using old epoch "DF_U64"\n",
 		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 		       dth->dth_epoch);
-		D_GOTO(out, result = rc);
+		D_GOTO(abort, result = rc);
 	}
 
 	if (rc == -DER_NONEXIST) {
@@ -460,7 +490,7 @@ again:
 		       "because of target object disappeared unexpectedly.\n",
 		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid));
 		/* Handle it as IO failure. */
-		D_GOTO(out, result = -DER_IO);
+		D_GOTO(abort, result = -DER_IO);
 	}
 
 	if (rc == -DER_AGAIN) {
@@ -486,18 +516,23 @@ sync:
 			D_ERROR(DF_UUID": Fail to sync commit DTX "DF_DTI
 				": "DF_RC"\n", DP_UUID(cont->sc_uuid),
 				DP_DTI(&dth->dth_xid), DP_RC(rc));
-			D_GOTO(out, result = rc);
+			D_GOTO(abort, result = rc);
 		}
 	}
 
-out:
-	if (!daos_is_zero_dti(&dth->dth_xid) && rc != -DER_AGAIN) {
-		if (result < 0 && dlh->dlh_sub_cnt > 0)
-			dtx_abort(cont->sc_pool->spc_uuid, cont->sc_uuid,
-				  dth->dth_epoch, &dth->dth_dte, 1,
-				  cont->sc_pool->spc_map_version);
+abort:
+	/* Some remote replica(s) ask retry. We do not make such replica
+	 * to locally retry for avoiding RPC timeout. The leader replica
+	 * will trigger retry globally without aborting 'prepared' ones.
+	 */
+	if (result < 0 && result != -DER_AGAIN)
+		dtx_abort(cont->sc_pool->spc_uuid, cont->sc_uuid,
+			  dth->dth_epoch, &dth->dth_dte, 1,
+			  cont->sc_pool->spc_map_version);
 
-		D_DEBUG(DB_TRACE,
+out:
+	if (!daos_is_zero_dti(&dth->dth_xid))
+		D_DEBUG(DB_IO,
 			"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
 			"%s, %s participator(s): rc "DF_RC"\n",
 			DP_DTI(&dth->dth_xid), dth->dth_ver,
@@ -505,7 +540,6 @@ out:
 			dth->dth_intent == DAOS_INTENT_PUNCH ?
 			"Punch" : "Update", dth->dth_sync ? "sync" : "async",
 			dth->dth_solo ? "single" : "multiple", DP_RC(result));
-	}
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
@@ -519,22 +553,7 @@ out:
 	}
 
 	D_FREE(dth->dth_dti_cos);
-	dth->dth_dti_cos_count = 0;
-
-	/* Some remote replica(s) ask retry. We do not make such replica
-	 * to locally retry for avoiding RPC timeout. The leader replica
-	 * will trigger retry globally without aborting 'prepared' ones.
-	 * Reuse the DTX handle for that, so keep the 'dlh_subs'. It is
-	 * not necessary to keep the 'dth_dti_cos' because that we will
-	 * not re-init the transaction handle, then will not assign new
-	 * 'dth_dti_cos'. On the other hand, even if some replicas have
-	 * not executed related modification, the piggyback dth_dti_cos
-	 * still has been committed when dtx_end().
-	 */
-	if (result == -DER_AGAIN)
-		dlh->dlh_future = ABT_FUTURE_NULL;
-	else
-		D_FREE(dlh->dlh_subs);
+	D_FREE(dlh->dlh_subs);
 
 	return result;
 }
@@ -548,10 +567,12 @@ out:
  * \param cont		[IN]	Pointer to the container.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
+ * \param epoch_uncertain
+ *			[IN]	Epoch is uncertain.
  * \param pm_ver	[IN]	Pool map version for the DTX.
  * \param oid		[IN]	The target object (shard) ID.
  * \param dkey_hash	[IN]	Hash of the dkey to be modified if applicable.
- * \param intent	[IN]	The intent of related modification.
+ * \param intent	[IN]	The intent of related operations.
  * \param dti_cos	[IN]	The DTX array to be committed because of shared.
  * \param dti_cos_count [IN]	The @dti_cos array size.
  * \param dth		[OUT]	Pointer to the DTX handle.
@@ -560,7 +581,7 @@ out:
  */
 int
 dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
-	  daos_epoch_t epoch, uint32_t pm_ver,
+	  daos_epoch_t epoch, bool epoch_uncertain, uint32_t pm_ver,
 	  daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t intent,
 	  struct dtx_id *dti_cos, int dti_cos_cnt, struct dtx_handle *dth)
 {
@@ -571,11 +592,11 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		return 0;
 	}
 
-	dtx_handle_init(dti, cont->sc_hdl, epoch, pm_ver,
+	dtx_handle_init(dti, cont->sc_hdl, epoch, epoch_uncertain, pm_ver,
 			oid, dkey_hash, intent,
 			dti_cos, dti_cos_cnt, false, false, dth);
 
-	D_DEBUG(DB_TRACE, "Start the DTX "DF_DTI" for object "DF_OID
+	D_DEBUG(DB_IO, "Start the DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
 		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver,
 		(unsigned long long)dth->dth_dkey_hash, dti_cos_cnt,
@@ -613,7 +634,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		}
 	}
 
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, rc = %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver,
 		(unsigned long long)dth->dth_dkey_hash,
@@ -729,7 +750,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 	int	rc;
 
 	if (daos_is_zero_dti(dti))
-		/* If DTX is disabled, then means that the appplication does
+		/* If DTX is disabled, then means that the application does
 		 * not care about the replicas consistency. Under such case,
 		 * if client resends some modification RPC, then just handle
 		 * it as non-resent case, return -DER_NONEXIST.

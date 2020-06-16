@@ -329,8 +329,8 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			 * Skip the punched/empty record, let's also skip the
 			 * record in the input buffer instead of memset to 0.
 			 */
-			while (sgl->sg_iovs[idx].iov_buf == NULL &&
-			       idx < sgl->sg_nr_out) {
+			while (idx < sgl->sg_nr_out &&
+				sgl->sg_iovs[idx].iov_buf == NULL) {
 				offset += sgl->sg_iovs[idx].iov_len;
 				idx++;
 			}
@@ -419,18 +419,16 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		pool = ds_pool_lookup(orw->orw_pool_uuid);
 		if (pool == NULL)
 			return -DER_NONEXIST;
-		if (cont_prop_csum_enabled(pool->sp_iv_ns, orw->orw_co_hdl)) {
-			struct bio_sglist	*fbsgl;
-			d_sg_list_t		 fsgl;
-			int			*fbuffer;
+		struct bio_sglist	*fbsgl;
+		d_sg_list_t		 fsgl;
+		int			*fbuffer;
 
-			D_DEBUG(DB_IO, "Data corruption after RDMA\n");
-			fbsgl = vos_iod_sgl_at(ioh, 0);
-			bio_sgl_convert(fbsgl, &fsgl);
-			fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
-			*fbuffer += 0x2;
-			daos_sgl_fini(&fsgl, false);
-		}
+		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
+		fbsgl = vos_iod_sgl_at(ioh, 0);
+		bio_sgl_convert(fbsgl, &fsgl);
+		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+		*fbuffer += 0x2;
+		daos_sgl_fini(&fsgl, false);
 		ds_pool_put(pool);
 	}
 	return rc;
@@ -1096,12 +1094,16 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			goto out;
 		}
 	} else {
+		uint32_t	fetch_flags;
+
 		size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
+		fetch_flags = size_fetch ? VOS_FETCH_SIZE_ONLY : 0;
 		bulk_op = CRT_BULK_PUT;
 
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
 				     orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
-				     dkey, orw->orw_nr, iods, size_fetch, &ioh);
+				     dkey, orw->orw_nr, iods, fetch_flags, NULL,
+				     &ioh, dth);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
@@ -1317,7 +1319,7 @@ obj_ioc_begin(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rpc_map_ver > ioc->ioc_map_ver || poc->spc_pool->sp_map == NULL ||
 	    DAOS_FAIL_CHECK(DAOS_FORCE_REFRESH_POOL_MAP)) {
 		/* XXX: Client (or leader replica) has newer pool map than
-		 *	current replica. Two possibile cases:
+		 *	current replica. Two possible cases:
 		 *
 		 *	1. The current replica was the old leader if with
 		 *	   the old pool map version. According to current
@@ -1430,7 +1432,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			rc = vos_dtx_abort(ioc.ioc_vos_coh, DAOS_EPOCH_MAX,
 					   &orw->orw_dti, 1);
 
-		if (rc != 0 && rc != -DER_NONEXIST)
+		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 	}
 
@@ -1446,8 +1448,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = 0);
 	}
 
-	rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti,
-		       orw->orw_epoch, orw->orw_map_ver,
+	rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, orw->orw_epoch,
+		       orw->orw_flags & ORF_EPOCH_UNCERTAIN, orw->orw_map_ver,
 		       &orw->orw_oid, orw->orw_dkey_hash, DAOS_INTENT_UPDATE,
 		       orw->orw_dti_cos.ca_arrays, orw->orw_dti_cos.ca_count,
 		       &dth);
@@ -1480,7 +1482,7 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 {
 	struct ds_obj_exec_arg	*exec_arg = arg;
 
-	/* handle local operaion */
+	/* handle local operation */
 	if (idx == -1) {
 		struct obj_ec_split_req	*split_req = exec_arg->args;
 		daos_iod_t		*split_iods;
@@ -1517,7 +1519,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 {
 	struct obj_rw_in		*orw = crt_req_get(rpc);
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
-	struct dtx_leader_handle	dlh = { 0 };
+	struct dtx_leader_handle	dlh;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc;
 	uint64_t			time_start = 0;
@@ -1535,7 +1537,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			   orw->orw_co_uuid, opc_get(rpc->cr_opc), &ioc);
 	if (rc != 0) {
 		D_ASSERTF(rc < 0, "unexpected error# "DF_RC"\n", DP_RC(rc));
-		goto reply;
+		goto out;
 	}
 
 	D_DEBUG(DB_TRACE,
@@ -1548,29 +1550,36 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	if (orw->orw_epoch == DAOS_EPOCH_MAX || orw->orw_epoch == 0) {
 		orw->orw_epoch = crt_hlc_get();
+		orw->orw_flags &= ~ORF_EPOCH_UNCERTAIN;
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
 	}
 
 	if (obj_rpc_is_fetch(rpc)) {
+		struct dtx_handle dth = {0};
+
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
 			obj_log_csum_err();
 			D_GOTO(out, rc = -DER_CSUM);
 		}
 
-		rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc,
-				  NULL, NULL, NULL, NULL);
+		rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, orw->orw_epoch,
+			       orw->orw_flags & ORF_EPOCH_UNCERTAIN,
+			       orw->orw_map_ver, &orw->orw_oid,
+			       orw->orw_dkey_hash, DAOS_INTENT_DEFAULT,
+			       orw->orw_dti_cos.ca_arrays,
+			       orw->orw_dti_cos.ca_count, &dth);
+		D_ASSERTF(rc == 0, "%d\n", rc);
+
+		rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc, NULL, NULL,
+				  NULL, &dth);
+		rc = dtx_end(&dth, ioc.ioc_coc, rc);
+
 		D_GOTO(out, rc);
-	} else if (orw->orw_iod_array.oia_oiods != NULL) {
-		rc = obj_ec_rw_req_split(orw, &split_req);
-		if (rc != 0) {
-			D_ERROR(DF_UOID": obj_ec_rw_req_split failed, rc %d.\n",
-				DP_UOID(orw->orw_oid), rc);
-			D_GOTO(out, rc);
-		}
 	}
 
 	version = orw->orw_map_ver;
 
+again:
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
 		daos_epoch_t	epoch = 0;
@@ -1583,6 +1592,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		if (rc == 0) {
 			flags |= ORF_RESEND;
 			orw->orw_epoch = epoch;
+			/* TODO: Also recover the epoch uncertainty. */
 		} else if (rc == -DER_NONEXIST) {
 			rc = 0;
 		} else {
@@ -1592,13 +1602,21 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		goto cleanup;
 	}
 
+	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
+		rc = obj_ec_rw_req_split(orw, &split_req);
+		if (rc != 0) {
+			D_ERROR(DF_UOID": obj_ec_rw_req_split failed, rc %d.\n",
+				DP_UOID(orw->orw_oid), rc);
+			D_GOTO(out, rc);
+		}
+	}
+
 	D_TIME_START(time_start, OBJ_PF_UPDATE);
 
-renew:
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
-	 * locally, we will start dtx and forward reqests to
+	 * locally, we will start dtx and forward requests to
 	 * all replicas.
 	 *
 	 * For new leader, even though the local replica
@@ -1607,11 +1625,10 @@ renew:
 	 * modification or not, so still need to dispatch
 	 * the RPC to other replicas.
 	 */
-	rc = dtx_leader_begin(ioc.ioc_coc, &orw->orw_dti,
-			      orw->orw_epoch, version,
+	rc = dtx_leader_begin(ioc.ioc_coc, &orw->orw_dti, orw->orw_epoch,
+			      orw->orw_flags & ORF_EPOCH_UNCERTAIN, version,
 			      &orw->orw_oid, orw->orw_dkey_hash,
-			      DAOS_INTENT_UPDATE,
-			      orw->orw_shard_tgts.ca_arrays,
+			      DAOS_INTENT_UPDATE, orw->orw_shard_tgts.ca_arrays,
 			      orw->orw_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
@@ -1619,40 +1636,60 @@ renew:
 		D_GOTO(out, rc);
 	}
 
-	if (orw->orw_flags & ORF_DTX_SYNC)
-		dlh.dlh_handle.dth_sync = 1;
-
 	exec_arg.rpc	  = rpc;
 	exec_arg.cont_hdl = ioc.ioc_coh;
 	exec_arg.cont	  = ioc.ioc_coc;
 	exec_arg.args	  = split_req;
-again:
 	exec_arg.flags	  = flags;
+
+	if (orw->orw_flags & ORF_DTX_SYNC)
+		dlh.dlh_handle.dth_sync = 1;
+
+	if (flags & ORF_RESEND)
+		dlh.dlh_handle.dth_resent = 1;
+
 	/* Execute the operation on all targets */
 	rc = dtx_leader_exec_ops(&dlh, obj_tgt_update, &exec_arg);
-out:
-	if (opc == DAOS_OBJ_RPC_UPDATE &&
-	    DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 		rc = -DER_IO;
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
-	if (rc == -DER_TX_RESTART) {
-		/* Retry with newer epoch. */
-		orw->orw_epoch = crt_hlc_get();
-		flags &= ~ORF_RESEND;
-		memset(&dlh, 0, sizeof(dlh));
-		D_GOTO(renew, rc);
-	} else if (rc == -DER_AGAIN) {
-		flags |= ORF_RESEND;
-		D_GOTO(again, rc);
+	switch (rc) {
+	case -DER_TX_RESTART:
+		/*
+		 * If this is a standalone operation, we can restart the
+		 * internal transaction right here. Otherwise, we have to defer
+		 * the restart to the RPC client.
+		 */
+		if (opc == DAOS_OBJ_RPC_UPDATE) {
+			/*
+			 * Only standalone updates use this RPC. Retry with
+			 * newer epoch.
+			 */
+			orw->orw_epoch = crt_hlc_get();
+			orw->orw_flags &= ~ORF_RESEND;
+			flags = 0;
+			goto again;
+		}
+
+		/* Standalone fetches do not get -DER_TX_RESTART. */
+		D_ASSERT(!daos_is_zero_dti(&orw->orw_dti));
+
+		break;
+	case -DER_AGAIN:
+		orw->orw_flags |= ORF_RESEND;
+		goto again;
+	default:
+		break;
 	}
 
 	if (opc == DAOS_OBJ_RPC_UPDATE && !(orw->orw_flags & ORF_RESEND) &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		goto cleanup;
 
-reply:
+out:
 	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coh);
 
 cleanup:
@@ -2068,13 +2105,13 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 			rc = vos_dtx_abort(ioc.ioc_vos_coh, DAOS_EPOCH_MAX,
 					   &opi->opi_dti, 1);
 
-		if (rc != 0 && rc != -DER_NONEXIST)
+		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 	}
 
 	/* Start the local transaction */
-	rc = dtx_begin(ioc.ioc_coc, &opi->opi_dti,
-		       opi->opi_epoch, opi->opi_map_ver,
+	rc = dtx_begin(ioc.ioc_coc, &opi->opi_dti, opi->opi_epoch,
+		       opi->opi_flags & ORF_EPOCH_UNCERTAIN, opi->opi_map_ver,
 		       &opi->opi_oid, opi->opi_dkey_hash, DAOS_INTENT_PUNCH,
 		       opi->opi_dti_cos.ca_arrays, opi->opi_dti_cos.ca_count,
 		       &dth);
@@ -2108,7 +2145,7 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 {
 	struct ds_obj_exec_arg	*exec_arg = arg;
 
-	/* handle local operaion */
+	/* handle local operation */
 	if (idx == -1) {
 		crt_rpc_t		*rpc = exec_arg->rpc;
 		struct obj_punch_in	*opi = crt_req_get(rpc);
@@ -2133,7 +2170,7 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 void
 ds_obj_punch_handler(crt_rpc_t *rpc)
 {
-	struct dtx_leader_handle	dlh = { 0 };
+	struct dtx_leader_handle	dlh;
 	struct obj_punch_in		*opi;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc;
@@ -2172,11 +2209,13 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	if (opi->opi_epoch == DAOS_EPOCH_MAX || opi->opi_epoch == 0) {
 		opi->opi_epoch = crt_hlc_get();
+		opi->opi_flags &= ~ORF_EPOCH_UNCERTAIN;
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
 
 	version = opi->opi_map_ver;
 
+again:
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
 		daos_epoch_t	epoch = 0;
@@ -2188,6 +2227,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 		if (rc == 0) {
 			opi->opi_epoch = epoch;
+			/* TODO: Also recovery the epoch uncertainty. */
 			flags |= ORF_RESEND;
 		} else if (rc == -DER_NONEXIST) {
 			rc = 0;
@@ -2199,11 +2239,10 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		goto cleanup;
 	}
 
-renew:
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
-	 * locally, we will start dtx and forward reqests to
+	 * locally, we will start dtx and forward requests to
 	 * all replicas.
 	 *
 	 * For new leader, even though the local replica
@@ -2212,11 +2251,10 @@ renew:
 	 * modification or not, so still need to dispatch
 	 * the RPC to other replicas.
 	 */
-	rc = dtx_leader_begin(ioc.ioc_coc, &opi->opi_dti,
-			      opi->opi_epoch, version,
+	rc = dtx_leader_begin(ioc.ioc_coc, &opi->opi_dti, opi->opi_epoch,
+			      opi->opi_flags & ORF_EPOCH_UNCERTAIN, version,
 			      &opi->opi_oid, opi->opi_dkey_hash,
-			      DAOS_INTENT_PUNCH,
-			      opi->opi_shard_tgts.ca_arrays,
+			      DAOS_INTENT_PUNCH, opi->opi_shard_tgts.ca_arrays,
 			      opi->opi_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
@@ -2224,38 +2262,49 @@ renew:
 		D_GOTO(out, rc);
 	}
 
-	if (opi->opi_flags & ORF_DTX_SYNC)
-		dlh.dlh_handle.dth_sync = 1;
-
 	exec_arg.rpc = rpc;
 	exec_arg.cont_hdl = ioc.ioc_coh;
 	exec_arg.cont = ioc.ioc_coc;
-again:
 	exec_arg.flags = flags;
+
+	if (opi->opi_flags & ORF_DTX_SYNC)
+		dlh.dlh_handle.dth_sync = 1;
+
+	if (flags & ORF_RESEND)
+		dlh.dlh_handle.dth_resent = 1;
+
 	/* Execute the operation on all shards */
 	rc = dtx_leader_exec_ops(&dlh, obj_tgt_punch, &exec_arg);
-out:
+
 	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 		rc = -DER_IO;
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
-	if (rc == -DER_TX_RESTART) {
-		/* Retry with newer epoch. */
+	switch (rc) {
+	case -DER_TX_RESTART:
+		/*
+		 * Only standalone punches use this RPC. Retry with newer
+		 * epoch.
+		 */
 		opi->opi_epoch = crt_hlc_get();
-		flags &= ~ORF_RESEND;
-		memset(&dlh, 0, sizeof(dlh));
-		D_GOTO(renew, rc);
-	} else if (rc == -DER_AGAIN) {
-		flags |= ORF_RESEND;
-		D_GOTO(again, rc);
+		opi->opi_flags &= ~ORF_RESEND;
+		flags = 0;
+		goto again;
+	case -DER_AGAIN:
+		opi->opi_flags |= ORF_RESEND;
+		goto again;
+	default:
+		break;
 	}
 
 	if (!(opi->opi_flags & ORF_RESEND) &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		goto cleanup;
 
+out:
 	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
+
 cleanup:
 	obj_ioc_end(&ioc, rc);
 }

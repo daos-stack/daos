@@ -20,7 +20,7 @@ provides the DAOS python to python users.
 
 [pydaos](https://github.com/daos-stack/daos/blob/master/src/client/pydaos/pydaos_core.py)
 provides a native DAOS python interface exported by a C module. It integrates
-the DAOS key-value store API with python dictionnaries. Only strings are
+the DAOS key-value store API with python dictionaries. Only strings are
 supported for both the key and value for now.
 
 Key-value pair can be inserted/looked up once at a time (see put/get) or

@@ -114,7 +114,7 @@ cleanup() {
                     if [ -d $DAOS_BASE ]; then
                         ls -l $DAOS_BASE
                     else
-                        echo \"because it doesnt exist\"
+                        echo \"because it does not exist\"
                     fi
                     exit 1
                 fi

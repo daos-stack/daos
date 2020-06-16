@@ -48,6 +48,11 @@ struct dtx_handle {
 	daos_handle_t			 dth_coh;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			 dth_epoch;
+	/**
+	 * The upper bound of the epoch uncertainty. dth_epoch_bound ==
+	 * dth_epoch means that dth_epoch has no uncertainty.
+	 */
+	daos_epoch_t			 dth_epoch_bound;
 	/* The hash of the dkey to be modified if applicable */
 	uint64_t			 dth_dkey_hash;
 	/** Pool map version. */
@@ -56,10 +61,9 @@ struct dtx_handle {
 	uint32_t			 dth_intent;
 
 	uint32_t			 dth_sync:1, /* commit synchronously. */
+					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
-					 /* dti_cos has been committed. */
-					 dth_dti_cos_done:1,
 					 /* Modified shared items: object/key */
 					 dth_modify_shared:1,
 					 /* The DTX entry is in active table. */
@@ -122,7 +126,7 @@ enum dtx_status {
 
 int
 dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
-		 daos_epoch_t epoch, uint32_t pm_ver,
+		 daos_epoch_t epoch, bool epoch_uncertain, uint32_t pm_ver,
 		 daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t intent,
 		 struct daos_shard_tgt *tgts, int tgt_cnt,
 		 struct dtx_leader_handle *dlh);
@@ -137,7 +141,7 @@ typedef int (*dtx_sub_func_t)(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 int
 dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
-	  daos_epoch_t epoch, uint32_t pm_ver,
+	  daos_epoch_t epoch, bool epoch_uncertain, uint32_t pm_ver,
 	  daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t intent,
 	  struct dtx_id *dti_cos, int dti_cos_cnt, struct dtx_handle *dth);
 int

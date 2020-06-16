@@ -1,4 +1,4 @@
-.TH dmg 1 "3 June 2020"
+.TH dmg 1 "9 June 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -63,8 +63,6 @@ Perform tasks related to network devices attached to remote servers
 
 \fBAliases\fP: n
 
-.SS network list
-List all known OFI providers on remote servers that are understood by 'scan'
 .SS network scan
 Scan for network interface devices on remote servers
 
@@ -72,10 +70,7 @@ Scan for network interface devices on remote servers
 .TP
 .TP
 \fB\fB\-p\fR, \fB\-\-provider\fR\fP
-Filter device list to those that support the given OFI provider (default is the provider specified in daos_server.yml)
-.TP
-\fB\fB\-a\fR, \fB\-\-all\fR\fP
-Specify 'all' to see all devices on all providers.  Overrides --provider
+Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)
 .SS pool
 Perform tasks related to DAOS pools
 
@@ -175,6 +170,26 @@ Rank of the targets to be excluded
 .TP
 \fB\fB\-\-target-idx\fR\fP
 Comma-separated list of target idx(s) to be excluded from the rank
+.SS pool extend
+Extend a DAOS pool to include new ranks.
+
+\fBUsage\fP: pool extend [extend-OPTIONS]
+.TP
+
+\fBAliases\fP: ext
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of the DAOS pool to extend
+.TP
+\fB\fB\-\-ranks\fR (\fIrequired\fR)\fP
+Comma-separated list of ranks to add to the pool
+.TP
+\fB\fB\-s\fR, \fB\-\-scm-size\fR (\fIrequired\fR)\fP
+Size of SCM component of the original DAOS pool being extended
+.TP
+\fB\fB\-n\fR, \fB\-\-nvme-size\fR\fP
+Size of NVMe component of the original DAOS pool being extended, or none if not originally supplied to pool create.
 .SS pool get-acl
 Get a DAOS pool's Access Control List
 

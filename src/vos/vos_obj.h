@@ -192,7 +192,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		  struct vos_ts_set *ts_set);
 
 /**
- * Find an enty in the obj_index by @oid
+ * Find an entry in the obj_index by @oid
  * Created to us in tests for checking sanity of obj index
  * after deletion
  *
