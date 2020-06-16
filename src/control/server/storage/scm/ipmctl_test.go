@@ -31,6 +31,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
@@ -42,7 +43,7 @@ import (
 func MockDiscovery() ipmctl.DeviceDiscovery {
 	m := proto.MockScmModule()
 
-	return ipmctl.DeviceDiscovery{
+	result := ipmctl.DeviceDiscovery{
 		Physical_id:          uint16(m.Physicalid),
 		Channel_id:           uint16(m.Channelid),
 		Channel_pos:          uint16(m.Channelposition),
@@ -50,6 +51,10 @@ func MockDiscovery() ipmctl.DeviceDiscovery {
 		Socket_id:            uint16(m.Socketid),
 		Capacity:             m.Capacity,
 	}
+
+	_ = copy(result.Uid[:], m.Uid)
+
+	return result
 }
 
 // MockModule converts ipmctl type SCM module and returns storage/scm
@@ -67,6 +72,7 @@ func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
 		ControllerID:    uint32(d.Memory_controller_id),
 		SocketID:        uint32(d.Socket_id),
 		Capacity:        d.Capacity,
+		UID:             d.Uid.String(),
 	}
 }
 
@@ -443,6 +449,134 @@ func TestGetNamespaces(t *testing.T) {
 
 			AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
 			AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
+		})
+	}
+}
+
+func TestIpmctl_fwInfoStatusToUpdateStatus(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     uint32
+		expResult storage.ScmFirmwareUpdateStatus
+	}{
+		"unknown": {
+			input:     ipmctl.FWUpdateStatusUnknown,
+			expResult: storage.ScmUpdateStatusUnknown,
+		},
+		"success": {
+			input:     ipmctl.FWUpdateStatusSuccess,
+			expResult: storage.ScmUpdateStatusSuccess,
+		},
+		"failure": {
+			input:     ipmctl.FWUpdateStatusFailed,
+			expResult: storage.ScmUpdateStatusFailed,
+		},
+		"staged": {
+			input:     ipmctl.FWUpdateStatusStaged,
+			expResult: storage.ScmUpdateStatusStaged,
+		},
+		"out of range": {
+			input:     uint32(500),
+			expResult: storage.ScmUpdateStatusUnknown,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := scmFirmwareUpdateStatusFromIpmctl(tc.input)
+
+			AssertEqual(t, tc.expResult, result, "didn't match")
+		})
+	}
+}
+
+func TestIpmctl_GetFirmwareStatus(t *testing.T) {
+	testUID := "TestUID"
+	testActiveVersion := "1.0.0.1"
+	testStagedVersion := "2.0.0.2"
+	fwInfo := ipmctl.DeviceFirmwareInfo{
+		FWImageMaxSize: 1024,
+		FWUpdateStatus: ipmctl.FWUpdateStatusStaged,
+	}
+	_ = copy(fwInfo.ActiveFWVersion[:], testActiveVersion)
+	_ = copy(fwInfo.StagedFWVersion[:], testStagedVersion)
+
+	for name, tc := range map[string]struct {
+		inputUID  string
+		cfg       *mockIpmctlCfg
+		expErr    error
+		expResult *storage.ScmFirmwareInfo
+	}{
+		"empty deviceUID": {
+			expErr: errors.New("invalid SCM module UID"),
+		},
+		"ipmctl.GetFirmwareInfo failed": {
+			inputUID: testUID,
+			cfg: &mockIpmctlCfg{
+				getFWInfoRet: errors.New("mock GetFirmwareInfo failed"),
+			},
+			expErr: errors.Errorf("failed to get firmware info for device %q: mock GetFirmwareInfo failed", testUID),
+		},
+		"success": {
+			inputUID: testUID,
+			cfg: &mockIpmctlCfg{
+				fwInfo: fwInfo,
+			},
+			expResult: &storage.ScmFirmwareInfo{
+				ActiveVersion:     testActiveVersion,
+				StagedVersion:     testStagedVersion,
+				ImageMaxSizeBytes: fwInfo.FWImageMaxSize,
+				UpdateStatus:      storage.ScmUpdateStatusStaged,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			mockBinding := newMockIpmctl(tc.cfg)
+			cr := newCmdRunner(log, mockBinding, nil, nil)
+
+			result, err := cr.GetFirmwareStatus(tc.inputUID)
+
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestIpmctl_UpdateFirmware(t *testing.T) {
+	testUID := "testUID"
+	for name, tc := range map[string]struct {
+		inputUID string
+		cfg      *mockIpmctlCfg
+		expErr   error
+	}{
+		"bad UID": {
+			cfg:    &mockIpmctlCfg{},
+			expErr: errors.New("invalid SCM module UID"),
+		},
+		"success": {
+			inputUID: testUID,
+			cfg:      &mockIpmctlCfg{},
+		},
+		"ipmctl UpdateFirmware failed": {
+			inputUID: testUID,
+			cfg: &mockIpmctlCfg{
+				updateFirmwareRet: errors.New("mock UpdateFirmware failed"),
+			},
+			expErr: errors.Errorf("failed to update firmware for device %q: mock UpdateFirmware failed", testUID),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			mockBinding := newMockIpmctl(tc.cfg)
+			cr := newCmdRunner(log, mockBinding, nil, nil)
+
+			err := cr.UpdateFirmware(tc.inputUID, "/dont/care")
+
+			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
