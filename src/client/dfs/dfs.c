@@ -355,7 +355,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 		*exists = true;
 
 out:
-	if (fetch_sym)
+	if (value)
 		D_FREE(value);
 	return rc;
 }

@@ -195,7 +195,8 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
 	vos_ilog_fetch_finish(&ioc->ic_akey_info);
 	vos_cont_decref(ioc->ic_cont);
-	vos_ts_set_free(ioc->ic_ts_set);
+	if (ioc->ic_ts_set)
+		vos_ts_set_free(ioc->ic_ts_set);
 	D_FREE(ioc);
 }
 

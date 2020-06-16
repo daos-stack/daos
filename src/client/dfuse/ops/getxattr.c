@@ -54,12 +54,13 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
 			  &out_size);
 	if (rc != 0)
-		D_GOTO(err, rc);
+		D_GOTO(free, rc);
 
 	fuse_reply_buf(req, value, out_size);
 	D_FREE(value);
 	return;
-err:
+free:
 	D_FREE(value);
+err:
 	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }
