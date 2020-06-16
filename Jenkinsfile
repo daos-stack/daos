@@ -987,7 +987,7 @@ pipeline {
                                     failThresholdDefinitelyLost: '0',
                                     failThresholdInvalidReadWrite: '0',
                                     failThresholdTotal: '0',
-                                    pattern: 'dnt.*.memcheck.xml',
+                                    pattern: '*.memcheck.xml',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
                                     sourceSubstitutionPaths: '',
