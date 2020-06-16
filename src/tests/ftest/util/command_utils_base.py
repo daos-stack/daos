@@ -492,10 +492,10 @@ class TransportCredentials(YamlParameters):
         #       Key portion of Server Certificate
         #
 ##DH+
-#        self.allow_insecure = BasicParameter(True, True)
-#        self.ca_cert = BasicParameter(None)
-#        self.cert = BasicParameter(None)
-#        self.key = BasicParameter(None)
+        self.allow_insecure = BasicParameter(True, True)
+        self.ca_cert = BasicParameter(None)
+        self.cert = BasicParameter(None)
+        self.key = BasicParameter(None)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -511,6 +511,9 @@ class TransportCredentials(YamlParameters):
             yaml_data[self.title]["allow_insecure"] = self.allow_insecure.value
         else:
             yaml_data["allow_insecure"] = self.allow_insecure.value
+        print("======")
+        print("==>At  def get_yaml_data, yaml_data=", yaml_data)
+        print("======")
 
         return yaml_data
 

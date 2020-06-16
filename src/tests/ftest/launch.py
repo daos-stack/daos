@@ -760,7 +760,7 @@ def generate_certs():
     print(" ")
     print(" ")
     if not os.path.exists("./daosCA"):
-        call(["../../../../../utils/certs/gen_certificates.sh"])
+        subprocess.call(["../../../../../utils/certs/gen_certificates.sh"])
     print(" ")
     print(" ")
 ##DH--
