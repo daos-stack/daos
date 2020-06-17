@@ -246,7 +246,9 @@ class LogTest():
         self.nil_frees[loc] += 1
 
     def show_frees(self):
-        for (loc, count) in nil_frees.most_common(10):
+        for (loc, count) in self.nil_frees.most_common(10):
+            if count < 10:
+                break
             print('Null was freed {} times at {}'.format(count, loc))
 
     def check_log_file(self, abort_on_warning, show_memleaks=True):
@@ -417,7 +419,7 @@ class LogTest():
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
                     else:
-                        show_nill_free(line)
+                        self.show_nill_free(line)
                 elif line.is_realloc():
                     new_pointer = line.get_field(-3)
                     old_pointer = line.get_field(-1)[:-2].split(':')[-1]
