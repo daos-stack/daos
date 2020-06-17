@@ -20,7 +20,7 @@ DAOS is an open-source, software-defined storage (SDS) and storage-as-a-service 
 
 The primary storage for the first US Exascale supercomputer (the Aurora system at Argonne National Laboratory - ANL) will be a 230PB DAOS tier composed to deliver an aggregated bandwidth of at least 25TB/s. Intel is collaborating closely with different partners to propose DAOS-based solutions for production deployments. DAOS is gaining traction among the enterprise and hyperscalers.
 
-Designed to address evolving storage needs, DAOS is a new storage platform for the convergence of traditional modeling and simulation, data science analytics, and artificial intelligence. 
+Designed to address evolving storage needs, DAOS is a new storage platform for the convergence of traditional modeling and simulation, data science analytics, and artificial intelligence.
  
 
 Visit the [DAOS github.io](https://daos-stack.github.io/) page for more information. All DAOS project source code is maintained in the [https://github.com/daos-stack/daos](https://github.com/daos-stack/daos) repository.
@@ -65,7 +65,7 @@ DAOS 1.0 validation efforts were focused on anticipated initial use cases includ
 - Testing has been conducted using Intel Xeon processors, Intel 3D NAND and Optane based NVMe SSDs and Optane persistent memory modules although generally storage density was not tested at production levels.
 - DAOS uses the libfabric network abstraction layer and testing has been performed on a number of network specific providers, including the IB verbs, OPA PSM2, socket and TCP providers.  Network testing is on-going and none of the above providers should be considered fully tested at this time.
 - All DAOS 1.0 supported functionality has been tested with an emphasis on use cases with positive outcomes –error cases (e.g. DAOS server failure) have limited test cycles at this time.
-- Maximum scale-out of DAOS servers during test runs was 128.  Maximum scale-out of DAOS clients was 2048. 
+- Maximum scale-out of DAOS servers during test runs was 128.  Maximum scale-out of DAOS clients was 2048.
 - Soak testing with an emphasis on I/O jobs in combination with basic administrative actions has been run and found to be error free for periods up to 48 hours. As with functional testing the focus has been on positive path testing with failure paths and fault injection coming in a future release.
 
 
