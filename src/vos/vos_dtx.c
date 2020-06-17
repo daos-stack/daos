@@ -195,14 +195,15 @@ static int
 dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 		   d_iov_t *key, d_iov_t *val)
 {
-	/* It is possible that when commit the DTX for the first time,
-	 * it failed at removing the DTX entry from active table, but
-	 * at that time the DTX entry has already been added into the
-	 * committed table that is in DRAM. Currently, we do not have
-	 * efficient way to recover such DRAM based btree structure,
-	 * so just keep it there. Then when we re-commit such DTX, we
-	 * may come here.
-	 */
+	struct vos_dtx_act_ent	*dae_new = val->iov_buf;
+	struct vos_dtx_act_ent	*dae_old;
+
+	dae_old = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	D_ASSERTF(0, "NOT allow to update act DTX entry for "DF_DTI
+		  " from epoch "DF_X64" to "DF_X64"\n",
+		  DP_DTI(&DAE_XID(dae_old)),
+		  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+
 	return 0;
 }
 
@@ -277,6 +278,25 @@ dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
 		   d_iov_t *key, d_iov_t *val)
 {
 	struct vos_dtx_cmt_ent	*dce = val->iov_buf;
+
+	/* Two possible cases for that:
+	 *
+	 * Case one:
+	 * It is possible that when commit the DTX for the first time,
+	 * it failed at removing the DTX entry from active table, but
+	 * at that time the DTX entry has already been added into the
+	 * committed table that is in DRAM. Currently, we do not have
+	 * efficient way to recover such DRAM based btree structure,
+	 * so just keep it there. Then when we re-commit such DTX, we
+	 * may come here.
+	 *
+	 * Case two:
+	 * As the vos_dtx_cmt_reindex() logic going, some RPC handler
+	 * ULT may add more entries into the committed table. Then it
+	 * is possible that vos_dtx_cmt_reindex() logic hit the entry
+	 * in the committed blob that has already been added into the
+	 * indexed table.
+	 */
 
 	dce->dce_exist = 1;
 

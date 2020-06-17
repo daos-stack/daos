@@ -108,7 +108,7 @@ forward shards embedded in the RPC request, when the leader shard gets that IO
 request it handles it as below steps:
 -   firstly forwards the IO request to others shards
     For the request forwarding, it is offload to the vos target's offload
-    extreme to release the main IO service extreme from IO request sending and
+    xstream to release the main IO service xstream from IO request sending and
     reply receiving (see shard_req_forward).
 -   then serves the IO request locally
 -   waits the forwarded IO's completion and reply client IO request.
