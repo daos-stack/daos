@@ -618,10 +618,8 @@ out:
 		remap_list_free_all(remap_list);
 	}
 
-	if (dom_used)
-		D_FREE(dom_used);
-	if (tgts_used)
-		D_FREE(tgts_used);
+	D_FREE(dom_used);
+	D_FREE(tgts_used);
 
 	return rc;
 }

@@ -647,7 +647,6 @@ teardown_mvcc(void **state)
 
 	D_ASSERT(arg->custom != NULL);
 	D_FREE(arg->custom);
-	arg->custom = NULL;
 
 	return teardown_io(state);
 }

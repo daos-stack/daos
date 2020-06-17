@@ -642,8 +642,7 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *split_iods, uint64_t *split_offs)
 
 		/* Check each vector */
 		if (p_sgl->sg_iovs[i].iov_buf_len < size) {
-			if (p_sgl->sg_iovs[i].iov_buf != NULL)
-				D_FREE(p_sgl->sg_iovs[i].iov_buf);
+			D_FREE(p_sgl->sg_iovs[i].iov_buf);
 
 			D_ALLOC(p_sgl->sg_iovs[i].iov_buf, size);
 			/* obj_tls_fini() will free these buffer */
@@ -1782,20 +1781,16 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version)
 	oeo = crt_reply_get(rpc);
 	D_ASSERT(oeo != NULL);
 
-	if (oeo->oeo_kds.ca_arrays != NULL)
-		D_FREE(oeo->oeo_kds.ca_arrays);
+	D_FREE(oeo->oeo_kds.ca_arrays);
 
 	if (oeo->oeo_sgl.sg_iovs != NULL)
 		daos_sgl_fini(&oeo->oeo_sgl, true);
 
-	if (oeo->oeo_eprs.ca_arrays != NULL)
-		D_FREE(oeo->oeo_eprs.ca_arrays);
+	D_FREE(oeo->oeo_eprs.ca_arrays);
 
-	if (oeo->oeo_recxs.ca_arrays != NULL)
-		D_FREE(oeo->oeo_recxs.ca_arrays);
+	D_FREE(oeo->oeo_recxs.ca_arrays);
 
-	if (oeo->oeo_csum_iov.iov_buf != NULL)
-		D_FREE(oeo->oeo_csum_iov.iov_buf);
+	D_FREE(oeo->oeo_csum_iov.iov_buf);
 }
 
 static int
@@ -1931,7 +1926,6 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 			       DAOS_HDL_INVAL, sgls, idx);
 	if (oei->oei_kds_bulk) {
 		D_FREE(oeo->oeo_kds.ca_arrays);
-		oeo->oeo_kds.ca_arrays = NULL;
 		oeo->oeo_kds.ca_count = 0;
 	}
 

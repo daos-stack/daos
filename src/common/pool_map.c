@@ -909,8 +909,7 @@ pool_map_finalise(struct pool_map *map)
 
 	comp_sorter_fini(&map->po_target_sorter);
 
-	if (map->po_comp_fail_cnts != NULL)
-		D_FREE(map->po_comp_fail_cnts);
+	D_FREE(map->po_comp_fail_cnts);
 
 	if (map->po_domain_sorters != NULL) {
 		D_ASSERT(map->po_domain_layers != 0);
@@ -1453,8 +1452,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
  failed:
 	if (tree != NULL)
 		pool_tree_free(tree);
-	if (map != NULL)
-		D_FREE(map);
+	D_FREE(map);
 	return rc;
 }
 
@@ -2185,6 +2183,5 @@ pool_target_id_list_free(struct pool_target_id_list *id_list)
 	if (id_list == NULL)
 		return;
 
-	if (id_list->pti_ids)
-		D_FREE(id_list->pti_ids);
+	D_FREE(id_list->pti_ids);
 }

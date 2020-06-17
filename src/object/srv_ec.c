@@ -163,8 +163,7 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 
 out:
 	if (rc) {
-		if (buf != NULL)
-			D_FREE(buf);
+		D_FREE(buf);
 		obj_ec_tgt_oiod_fini(tgt_oiods);
 	}
 	return rc;

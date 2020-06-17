@@ -1188,8 +1188,7 @@ dss_srv_fini(bool force)
 		ABT_mutex_free(&xstream_data.xd_mutex);
 		/* fall through */
 	case XD_INIT_NONE:
-		if (xstream_data.xd_xs_ptrs != NULL)
-			D_FREE(xstream_data.xd_xs_ptrs);
+		D_FREE(xstream_data.xd_xs_ptrs);
 		D_DEBUG(DB_TRACE, "Finalized everything\n");
 	}
 	return 0;

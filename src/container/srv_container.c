@@ -781,7 +781,6 @@ static void
 recs_buf_fini(struct recs_buf *buf)
 {
 	D_FREE(buf->rb_recs);
-	buf->rb_recs = NULL;
 	buf->rb_recs_size = 0;
 	buf->rb_nrecs = 0;
 }
@@ -2306,8 +2305,7 @@ out:
 
 	if (rc != 0) {
 		/* Error in iteration */
-		if (args.conts)
-			D_FREE(args.conts);
+		D_FREE(args.conts);
 	} else {
 		*ncont = args.ncont;
 		*conts = args.conts;

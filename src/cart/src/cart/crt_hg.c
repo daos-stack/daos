@@ -590,12 +590,10 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	crt_gdata.cg_hg = hg_gdata;
 
 out:
-	if (info_string)
-		D_FREE(info_string);
+	D_FREE(info_string);
 
-	if (rc != DER_SUCCESS) {
+	if (rc != DER_SUCCESS)
 		D_FREE(hg_gdata);
-	}
 	return rc;
 }
 
@@ -756,8 +754,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 			"rc: %d.\n", idx, hg_ctx, rc);
 
 out:
-	if (info_string)
-		D_FREE(info_string);
+	D_FREE(info_string);
 	return rc;
 }
 

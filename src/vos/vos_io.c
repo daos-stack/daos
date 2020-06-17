@@ -137,15 +137,10 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
 	D_ASSERT(rsrvd_scm->rs_actv_at == 0);
 
-	if (rsrvd_scm->rs_actv_cnt != 0) {
+	if (rsrvd_scm->rs_actv_cnt != 0)
 		D_FREE(rsrvd_scm->rs_actv);
-		rsrvd_scm->rs_actv = NULL;
-	}
 
-	if (ioc->ic_umoffs != NULL) {
-		D_FREE(ioc->ic_umoffs);
-		ioc->ic_umoffs = NULL;
-	}
+	D_FREE(ioc->ic_umoffs);
 }
 
 static int
@@ -185,8 +180,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	if (ioc->ic_biod != NULL)
 		bio_iod_free(ioc->ic_biod);
 
-	if (ioc->ic_biov_csums != NULL)
-		D_FREE(ioc->ic_biov_csums);
+	D_FREE(ioc->ic_biov_csums);
 
 	if (ioc->ic_obj)
 		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);

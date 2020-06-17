@@ -512,8 +512,7 @@ out:
 	daos_prop_free(prop);
 
 	/** check for '\0' which is a static allocation from protobuf */
-	if (resp.svcreps)
-		D_FREE(resp.svcreps);
+	D_FREE(resp.svcreps);
 }
 
 void
@@ -1315,10 +1314,8 @@ out:
 	if (resp.pools) {
 		for (i = 0; i < resp.n_pools; i++) {
 			if (resp.pools[i]) {
-				if (resp.pools[i]->uuid)
-					D_FREE(resp.pools[i]->uuid);
-				if (resp.pools[i]->svcreps)
-					D_FREE(resp.pools[i]->svcreps);
+				D_FREE(resp.pools[i]->uuid);
+				D_FREE(resp.pools[i]->svcreps);
 				D_FREE(resp.pools[i]);
 			}
 		}
@@ -1405,8 +1402,7 @@ out:
 	if (resp.containers) {
 		for (i = 0; i < resp.n_containers; i++) {
 			if (resp.containers[i]) {
-				if (resp.containers[i]->uuid)
-					D_FREE(resp.containers[i]->uuid);
+				D_FREE(resp.containers[i]->uuid);
 				D_FREE(resp.containers[i]);
 			}
 		}
@@ -1757,8 +1753,7 @@ out:
 	mgmt__bio_health_req__free_unpacked(req, NULL);
 	D_FREE(resp);
 
-	if (bio_health != NULL)
-		D_FREE(bio_health);
+	D_FREE(bio_health);
 }
 
 void
@@ -1822,10 +1817,8 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	mgmt__dev_state_req__free_unpacked(req, NULL);
 
 	if (rc == 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
-		if (resp->dev_uuid != NULL)
-			D_FREE(resp->dev_uuid);
+		D_FREE(resp->dev_state);
+		D_FREE(resp->dev_uuid);
 	}
 
 	D_FREE(resp);
@@ -1892,10 +1885,8 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	mgmt__dev_state_req__free_unpacked(req, NULL);
 
 	if (rc == 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
-		if (resp->dev_uuid != NULL)
-			D_FREE(resp->dev_uuid);
+		D_FREE(resp->dev_state);
+		D_FREE(resp->dev_uuid);
 	}
 
 	D_FREE(resp);

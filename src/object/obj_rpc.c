@@ -322,7 +322,7 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	if (proc_op == CRT_PROC_FREE) {
 free:
-		if ((existing_flags & IOD_REC_EXIST) && iod->iod_recxs != NULL)
+		if (existing_flags & IOD_REC_EXIST)
 			D_FREE(iod->iod_recxs);
 	}
 
@@ -563,7 +563,7 @@ crt_proc_d_sg_list_t(crt_proc_t proc, d_sg_list_t *sgl)
 		}
 	}
 
-	if (proc_op == CRT_PROC_FREE && sgl->sg_iovs != NULL)
+	if (proc_op == CRT_PROC_FREE)
 		D_FREE(sgl->sg_iovs);
 
 	return rc;

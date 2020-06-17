@@ -736,8 +736,7 @@ out:
 		 "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
 		 DP_DTI(dti), DP_RC(rc));
 	if (rc != 0) {
-		if (dce != NULL)
-			D_FREE_PTR(dce);
+		D_FREE(dce);
 	} else {
 		*dce_p = dce;
 	}

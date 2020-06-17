@@ -293,8 +293,7 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 				rsvc_class(class)->sc_name(id, &name);
 				D_ERROR("%s: failed to stat %s: %d\n", name,
 					path, errno);
-				if (name != NULL)
-					D_FREE(name);
+				D_FREE(name);
 			}
 		}
 		D_FREE(path);

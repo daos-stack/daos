@@ -510,14 +510,11 @@ obj_ec_codec_fini(void)
 
 	for (i = 0; i < ocnr; i++) {
 		ec_codec = &oc_ec_codecs[i].ec_codec;
-		if (ec_codec->ec_en_matrix != NULL)
-			D_FREE(ec_codec->ec_en_matrix);
-		if (ec_codec->ec_gftbls != NULL)
-			D_FREE(ec_codec->ec_gftbls);
+		D_FREE(ec_codec->ec_en_matrix);
+		D_FREE(ec_codec->ec_gftbls);
 	}
 
 	D_FREE(oc_ec_codecs);
-	oc_ec_codecs = NULL;
 	oc_ec_codec_nr = 0;
 }
 

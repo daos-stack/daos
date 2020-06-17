@@ -709,8 +709,7 @@ out_check_self:
 out_unlock:
 	D_SPIN_UNLOCK(&csm->csm_lock);
 out:
-	if (cst != NULL)
-		D_FREE(cst);
+	D_FREE(cst);
 
 	if (rc && rc != -DER_ALREADY) {
 		if (rank_in_list)

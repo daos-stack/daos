@@ -58,7 +58,6 @@ dfuse_cb_listxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	D_FREE(value);
 	return;
 err:
-	if (value != NULL)
-		D_FREE(value);
+	D_FREE(value);
 	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }

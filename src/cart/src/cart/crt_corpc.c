@@ -259,8 +259,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_ERROR("crt_bulk_free failed, rc: %d.\n", rc);
 
 out:
-	if (iovs != NULL)
-		D_FREE(iovs);
+	D_FREE(iovs);
 	return rc;
 }
 

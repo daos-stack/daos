@@ -947,10 +947,8 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	}
 
 out:
-	if (kds)
-		D_FREE(kds);
-	if (enum_buf)
-		D_FREE(enum_buf);
+	D_FREE(kds);
+	D_FREE(enum_buf);
 
 	/* Populate return list */
 	return_list = PyList_New(4);

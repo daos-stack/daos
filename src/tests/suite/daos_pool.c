@@ -803,7 +803,6 @@ teardown_containers(void **state)
 	lcarg->nconts = 0;
 	D_FREE(lcarg->conts);
 	D_FREE(arg->pool_lc_args);
-	arg->pool_lc_args = NULL;
 
 	return test_case_teardown(state);
 }
@@ -953,7 +952,6 @@ list_containers_test(void **state)
 
 	/* Teardown for above 2 tests */
 	D_FREE(conts);
-	conts = NULL;
 
 	/***** Test: invalid nconts=NULL *****/
 	rc = daos_pool_list_cont(lcarg->tpool.poh, NULL /* nconts */,
@@ -980,7 +978,6 @@ list_containers_test(void **state)
 
 		/* Teardown */
 		D_FREE(conts);
-		conts = NULL;
 		print_message("success t%d: conts[] exact length\n", tnum++);
 
 		/***** Test: Under-sized buffer (negative) -DER_TRUNC *****/
@@ -1000,7 +997,6 @@ list_containers_test(void **state)
 
 		/* Teardown */
 		D_FREE(conts);
-		conts = NULL;
 	} /* if (lcarg->nconts  > 0) */
 
 	print_message("success\n");

@@ -1243,8 +1243,7 @@ dfs_umount(dfs_t *dfs)
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
-	if (dfs->prefix)
-		D_FREE(dfs->prefix);
+	D_FREE(dfs->prefix);
 
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
@@ -1468,8 +1467,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 		return EINVAL;
 
 	if (prefix == NULL) {
-		if (dfs->prefix)
-			D_FREE(dfs->prefix);
+		D_FREE(dfs->prefix);
 		return 0;
 	}
 
@@ -3678,8 +3676,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	}
 
 out:
-	if (xname)
-		D_FREE(xname);
+	D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }
@@ -3801,8 +3798,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	}
 
 out:
-	if (xname)
-		D_FREE(xname);
+	D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }

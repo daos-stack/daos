@@ -255,8 +255,7 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 out:
 	ioreq_fini(&req);
 	if (op->or_op == TEST_OP_UPDATE) {
-		if (buf != NULL)
-			D_FREE(buf);
+		D_FREE(buf);
 	} else {
 		if (rc == 0) {
 			*rbuf = buf;
@@ -343,8 +342,7 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 
 out:
 	if (op->or_op == TEST_OP_UPDATE) {
-		if (buf != NULL)
-			D_FREE(buf);
+		D_FREE(buf);
 	} else {
 		if (rc == 0) {
 			*rbuf = buf;
@@ -637,10 +635,8 @@ recx_parse(char *recx_str, daos_recx_t **recxs, int **values,
 
 	if (idx == 0 || brace_unmatch) {
 		print_message("bad recx_str %s\n", p);
-		if (recx_allocated)
-			D_FREE(recx_allocated);
-		if (value_allocated)
-			D_FREE(value_allocated);
+		D_FREE(recx_allocated);
+		D_FREE(value_allocated);
 		return -DER_INVAL;
 	}
 
@@ -702,14 +698,11 @@ test_op_rec_free(struct test_op_record *op_rec)
 	switch (op_rec->or_op) {
 	case TEST_OP_UPDATE:
 	case TEST_OP_FETCH:
-		if (op_rec->uf_arg.ua_recxs)
-			D_FREE(op_rec->uf_arg.ua_recxs);
-		if (op_rec->uf_arg.ua_values)
-			D_FREE(op_rec->uf_arg.ua_values);
+		D_FREE(op_rec->uf_arg.ua_recxs);
+		D_FREE(op_rec->uf_arg.ua_values);
 		break;
 	case TEST_OP_PUNCH:
-		if (op_rec->pu_arg.pa_recxs)
-			D_FREE(op_rec->pu_arg.pa_recxs);
+		D_FREE(op_rec->pu_arg.pa_recxs);
 		break;
 	default:
 		break;
@@ -728,10 +721,8 @@ test_key_rec_free(struct test_key_record *key_rec)
 		test_op_rec_free(op_rec);
 	}
 	d_list_del_init(&key_rec->or_list);
-	if (key_rec->or_dkey)
-		D_FREE(key_rec->or_dkey);
-	if (key_rec->or_akey)
-		D_FREE(key_rec->or_akey);
+	D_FREE(key_rec->or_dkey);
+	D_FREE(key_rec->or_akey);
 	if (key_rec->or_fd_array) {
 		close(key_rec->or_fd_array);
 		key_rec->or_fd_array = 0;
@@ -851,7 +842,7 @@ cmd_parse_add_exclude(test_arg_t *arg, int argc, char **argv,
 
 	*op = op_rec;
 out:
-	if (rc && op_rec)
+	if (rc)
 		D_FREE(op_rec);
 	return rc;
 }
@@ -926,10 +917,8 @@ cmd_parse_punch(test_arg_t *arg, int argc, char **argv,
 			      dkey, akey);
 
 out:
-	if (dkey)
-		D_FREE(dkey);
-	if (akey)
-		D_FREE(akey);
+	D_FREE(dkey);
+	D_FREE(akey);
 	if (rc && op_rec)
 		test_op_rec_free(op_rec);
 	return rc;
@@ -1036,10 +1025,8 @@ cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, int opc,
 		print_message("test_op_record_bind(dkey %s akey %s failed.\n",
 			      dkey, akey);
 out:
-	if (dkey)
-		D_FREE(dkey);
-	if (akey)
-		D_FREE(akey);
+	D_FREE(dkey);
+	D_FREE(akey);
 	if (rc && op_rec)
 		test_op_rec_free(op_rec);
 	return rc;
@@ -1094,8 +1081,7 @@ cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 		}
 	}
 out:
-	if (obj_class)
-		D_FREE(obj_class);
+	D_FREE(obj_class);
 
 	return rc;
 }
@@ -1177,7 +1163,7 @@ cmd_parse_pool(test_arg_t *arg, int argc, char *argv[],
 	op_rec->or_op = opc;
 	*op = op_rec;
 out:
-	if (rc && op_rec)
+	if (rc)
 		D_FREE(op_rec);
 	return rc;
 
@@ -1230,13 +1216,11 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 		}
 	} else if (strcmp(argv[0], "dkey") == 0) {
 		dkey = argv[1];
-		if (arg->eio_args.op_dkey != NULL)
-			D_FREE(arg->eio_args.op_dkey);
+		D_FREE(arg->eio_args.op_dkey);
 		D_STRNDUP(arg->eio_args.op_dkey, dkey, strlen(dkey));
 	} else if (strcmp(argv[0], "akey") == 0) {
 		akey = argv[1];
-		if (arg->eio_args.op_akey != NULL)
-			D_FREE(arg->eio_args.op_akey);
+		D_FREE(arg->eio_args.op_akey);
 		D_STRNDUP(arg->eio_args.op_akey, akey, strlen(akey));
 	} else if (strcmp(argv[0], "iod_size") == 0) {
 		arg->eio_args.op_iod_size = atoi(argv[1]);
@@ -1436,10 +1420,8 @@ cmd_line_run(test_arg_t *arg, struct test_op_record *op_rec)
 	}
 
 out:
-	if (buf)
-		D_FREE(buf);
-	if (f_buf)
-		D_FREE(f_buf);
+	D_FREE(buf);
+	D_FREE(f_buf);
 	return rc;
 }
 

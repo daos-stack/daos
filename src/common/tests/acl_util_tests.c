@@ -822,9 +822,8 @@ test_acl_to_strs_success(void **state)
 	}
 
 	/* Free up dynamically allocated strings */
-	for (i = 0; i < len; i++) {
+	for (i = 0; i < len; i++)
 		D_FREE(result[i]);
-	}
 	D_FREE(result);
 	daos_acl_free(acl);
 }

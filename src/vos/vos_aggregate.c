@@ -1459,36 +1459,30 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 	mw->mw_rsize = 0;
 	if (mw->mw_lgc_ents != NULL) {
 		D_FREE(mw->mw_lgc_ents);
-		mw->mw_lgc_ents = NULL;
 		mw->mw_lgc_max = 0;
 	}
 
 	if (io->ic_buf != NULL) {
 		D_FREE(io->ic_buf);
-		io->ic_buf = NULL;
 		io->ic_buf_len = 0;
 	}
 
 	if (io->ic_segs != NULL) {
 		D_FREE(io->ic_segs);
-		io->ic_segs = NULL;
 		io->ic_seg_max = 0;
 	}
 
 	if (io->ic_rsrvd_scm.rs_actv != NULL) {
 		D_FREE(io->ic_rsrvd_scm.rs_actv);
-		io->ic_rsrvd_scm.rs_actv = NULL;
 		io->ic_rsrvd_scm.rs_actv_cnt = 0;
 	}
 
 	if (io->ic_csum_recalcs != NULL) {
 		D_FREE(io->ic_csum_recalcs);
-		io->ic_csum_recalcs = NULL;
 		io->ic_csum_recalc_cnt = 0;
 	}
 	if (io->ic_csum_buf != NULL) {
 		D_FREE(io->ic_csum_buf);
-		io->ic_csum_buf = NULL;
 		io->ic_csum_buf_len = 0;
 	}
 }

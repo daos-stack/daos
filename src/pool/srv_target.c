@@ -726,8 +726,7 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0,
 					  DSS_ULT_IO);
-	if (coll_args.ca_exclude_tgts)
-		D_FREE(coll_args.ca_exclude_tgts);
+	D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -791,7 +790,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	}
 
 out:
-	if (rc != 0 && hdl != NULL)
+	if (rc != 0)
 		D_FREE(hdl);
 
 	D_DEBUG(DF_DSMS, DF_UUID": connect "DF_RC"\n",

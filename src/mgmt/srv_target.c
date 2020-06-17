@@ -401,8 +401,7 @@ tgt_vos_create_one(void *varg)
 		D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
 			DP_UUID(vpa->vpa_uuid), path, rc);
 
-	if (path)
-		D_FREE(path);
+	D_FREE(path);
 	return rc;
 }
 

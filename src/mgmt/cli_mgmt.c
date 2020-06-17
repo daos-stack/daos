@@ -380,10 +380,8 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 		}
 	}
 	if (rc != 0) {
-		for (; i >= 0; i--) {
-			if (p[i].uri != NULL)
-				D_FREE(p[i].uri);
-		}
+		for (; i >= 0; i--)
+			D_FREE(p[i].uri);
 		D_FREE(p);
 		goto out_resp;
 	}
@@ -560,10 +558,8 @@ get_attach_info_from_buf(int npsrbs, struct psr_buf *psrbs, int *npsrs,
 		}
 	}
 	if (rc != 0) {
-		for (; i >= 0; i--) {
-			if (p[i].uri != NULL)
-				D_FREE(p[i].uri);
-		}
+		for (; i >= 0; i--)
+			D_FREE(p[i].uri);
 		D_FREE(p);
 		return rc;
 	}

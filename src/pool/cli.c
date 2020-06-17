@@ -997,8 +997,7 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
 		(int)out->pto_addr_list.ca_count);
 
-	if (in->pti_addr_list.ca_arrays)
-		D_FREE(in->pti_addr_list.ca_arrays);
+	D_FREE(in->pti_addr_list.ca_arrays);
 
 	if (out->pto_addr_list.ca_arrays != NULL &&
 	    out->pto_addr_list.ca_count > 0) {

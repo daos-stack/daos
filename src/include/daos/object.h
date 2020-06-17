@@ -438,8 +438,7 @@ struct daos_recx_ep_list {
 static inline void
 daos_recx_ep_free(struct daos_recx_ep_list *list)
 {
-	if (list->re_items != NULL)
-		D_FREE(list->re_items);
+	D_FREE(list->re_items);
 	list->re_nr = 0;
 	list->re_total = 0;
 }

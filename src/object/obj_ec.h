@@ -361,8 +361,7 @@ obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
 static inline void
 obj_io_desc_fini(struct obj_io_desc *oiod)
 {
-	if (oiod->oiod_siods != NULL)
-		D_FREE(oiod->oiod_siods);
+	D_FREE(oiod->oiod_siods);
 	memset(oiod, 0, sizeof(*oiod));
 }
 

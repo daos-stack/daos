@@ -441,10 +441,8 @@ dc_cont_alloc(const uuid_t uuid)
 	uuid_copy(dc->dc_uuid, uuid);
 	D_INIT_LIST_HEAD(&dc->dc_obj_list);
 	D_INIT_LIST_HEAD(&dc->dc_po_list);
-	if (D_RWLOCK_INIT(&dc->dc_obj_list_lock, NULL) != 0) {
+	if (D_RWLOCK_INIT(&dc->dc_obj_list_lock, NULL) != 0)
 		D_FREE(dc);
-		dc = NULL;
-	}
 
 	return dc;
 }

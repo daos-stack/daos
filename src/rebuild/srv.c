@@ -703,8 +703,7 @@ static void
 rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 {
 	d_list_del(&rgt->rgt_list);
-	if (rgt->rgt_servers)
-		D_FREE(rgt->rgt_servers);
+	D_FREE(rgt->rgt_servers);
 
 	D_FREE(rgt);
 }

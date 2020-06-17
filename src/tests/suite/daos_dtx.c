@@ -82,8 +82,7 @@ dtx_check_replicas(const char *dkey, const char *akey, const char *msg,
 
 	daos_fail_loc_set(0);
 
-	if (fetch_buf != NULL)
-		D_FREE(fetch_buf);
+	D_FREE(fetch_buf);
 }
 
 static void
@@ -248,8 +247,7 @@ dtx_check_replicas_v2(const char *dkey, const char *akey, const char *msg,
 
 	daos_fail_value_set(0);
 
-	if (fetch_buf != NULL)
-		D_FREE(fetch_buf);
+	D_FREE(fetch_buf);
 
 	return count;
 }

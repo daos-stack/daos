@@ -332,8 +332,7 @@ sched_test_2()
 	}
 
 out:
-	if (verify_cnt)
-		D_FREE(verify_cnt);
+	D_FREE(verify_cnt);
 	TSE_TEST_EXIT(rc);
 	return rc;
 }
@@ -424,8 +423,7 @@ sched_test_3()
 	D_ASSERT(*counter == REINITS);
 
 out:
-	if (counter)
-		D_FREE(counter);
+	D_FREE(counter);
 	TSE_TEST_EXIT(rc);
 	return rc;
 }
@@ -564,8 +562,7 @@ sched_test_4()
 	D_ASSERT(*counter == NUM_REINITS * 2);
 
 out:
-	if (counter)
-		D_FREE(counter);
+	D_FREE(counter);
 	TSE_TEST_EXIT(rc);
 	return rc;
 }
@@ -813,8 +810,7 @@ sched_test_6()
 out:
 	if (task)
 		tse_task_decref(task);
-	if (counter)
-		D_FREE(counter);
+	D_FREE(counter);
 	TSE_TEST_EXIT(rc);
 	return rc;
 }

@@ -564,18 +564,12 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 			use_x11);
 
 out:
-	if (map_keys != NULL)
-		D_FREE(map_keys);
-	if (map_types != NULL)
-		D_FREE(map_types);
-	if (percent_moved != NULL)
-		D_FREE(percent_moved);
-	if (iter_layout != NULL)
-		D_FREE(iter_layout);
-	if (initial_layout != NULL)
-		D_FREE(initial_layout);
-	if (obj_table != NULL)
-		D_FREE(obj_table);
+	D_FREE(map_keys);
+	D_FREE(map_types);
+	D_FREE(percent_moved);
+	D_FREE(iter_layout);
+	D_FREE(initial_layout);
+	D_FREE(obj_table);
 }
 
 

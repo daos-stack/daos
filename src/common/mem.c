@@ -606,21 +606,18 @@ umem_fini_txd(struct umem_tx_stage_data *txd)
 	if (txd->txd_commit_max) {
 		D_ASSERT(txd->txd_commit_vec != NULL);
 		D_FREE(txd->txd_commit_vec);
-		txd->txd_commit_vec = NULL;
 		txd->txd_commit_max = 0;
 	}
 
 	if (txd->txd_abort_max) {
 		D_ASSERT(txd->txd_abort_vec != NULL);
 		D_FREE(txd->txd_abort_vec);
-		txd->txd_abort_vec = NULL;
 		txd->txd_abort_max = 0;
 	}
 
 	if (txd->txd_end_max) {
 		D_ASSERT(txd->txd_end_vec != NULL);
 		D_FREE(txd->txd_end_vec);
-		txd->txd_end_vec = NULL;
 		txd->txd_end_max = 0;
 	}
 }

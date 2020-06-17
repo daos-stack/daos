@@ -242,7 +242,6 @@ iod_release_buffer(struct bio_desc *biod)
 
 	D_ASSERT(rsrvd_dma->brd_regions != NULL);
 	D_FREE(rsrvd_dma->brd_regions);
-	rsrvd_dma->brd_regions = NULL;
 	rsrvd_dma->brd_rg_max = rsrvd_dma->brd_rg_cnt = 0;
 
 	bdb = iod_dma_buf(biod);
@@ -270,7 +269,6 @@ iod_release_buffer(struct bio_desc *biod)
 	}
 
 	D_FREE(rsrvd_dma->brd_dma_chks);
-	rsrvd_dma->brd_dma_chks = NULL;
 	rsrvd_dma->brd_chk_max = rsrvd_dma->brd_chk_cnt = 0;
 
 	biod->bd_buffer_prep = 0;

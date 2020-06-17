@@ -95,8 +95,7 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 	for (i = 0; i < nr; i++) {
 		daos_iov_free(&iods[i].iod_name);
 
-		if (iods[i].iod_recxs)
-			D_FREE(iods[i].iod_recxs);
+		D_FREE(iods[i].iod_recxs);
 	}
 
 	if (need_free)

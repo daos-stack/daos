@@ -67,13 +67,11 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	case DAOS_PROP_CO_OWNER:
 	case DAOS_PROP_PO_OWNER_GROUP:
 	case DAOS_PROP_CO_OWNER_GROUP:
-		if (entry->dpe_str)
-			D_FREE(entry->dpe_str);
+		D_FREE(entry->dpe_str);
 		break;
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
-		if (entry->dpe_val_ptr)
-			D_FREE(entry->dpe_val_ptr);
+		D_FREE(entry->dpe_val_ptr);
 		break;
 	case DAOS_PROP_PO_SVC_LIST:
 		if (entry->dpe_val_ptr)

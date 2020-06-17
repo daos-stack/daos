@@ -133,8 +133,7 @@ void
 rdb_tx_end(struct rdb_tx *tx)
 {
 	rdb_put(tx->dt_db);
-	if (tx->dt_entry != NULL)
-		D_FREE(tx->dt_entry);
+	D_FREE(tx->dt_entry);
 }
 
 /* Update operation codes */
@@ -311,8 +310,7 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 			return -DER_NOMEM;
 		if (tx->dt_entry_len > 0)
 			memcpy(new_buf, tx->dt_entry, tx->dt_entry_len);
-		if (tx->dt_entry != NULL)
-			D_FREE(tx->dt_entry);
+		D_FREE(tx->dt_entry);
 		tx->dt_entry = new_buf;
 		tx->dt_entry_cap = new_size;
 	}

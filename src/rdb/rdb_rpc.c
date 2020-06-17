@@ -107,7 +107,7 @@ crt_proc_msg_entry_t(crt_proc_t proc, msg_entry_t *p)
 			return -DER_HG;
 		}
 	}
-	if (proc_op == CRT_PROC_FREE && p->data.buf != NULL)
+	if (proc_op == CRT_PROC_FREE)
 		D_FREE(p->data.buf);
 
 	return 0;
@@ -155,7 +155,7 @@ crt_proc_msg_appendentries_t(crt_proc_t proc, msg_appendentries_t *p)
 			return -DER_HG;
 		}
 	}
-	if (proc_op == CRT_PROC_FREE && p->entries != NULL)
+	if (proc_op == CRT_PROC_FREE)
 		D_FREE(p->entries);
 
 	return 0;

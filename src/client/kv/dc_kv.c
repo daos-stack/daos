@@ -125,8 +125,7 @@ dc_kv_put(tse_task_t *task)
 	return 0;
 
 err_task:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (update_task)
 		tse_task_complete(update_task, rc);
 	tse_task_complete(task, rc);
@@ -212,8 +211,7 @@ dc_kv_get(tse_task_t *task)
 	return 0;
 
 err_task:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (fetch_task)
 		tse_task_complete(fetch_task, rc);
 	tse_task_complete(task, rc);
@@ -268,8 +266,7 @@ dc_kv_remove(tse_task_t *task)
 	return 0;
 
 err_task:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (punch_task)
 		tse_task_complete(punch_task, rc);
 	tse_task_complete(task, rc);

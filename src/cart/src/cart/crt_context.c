@@ -939,8 +939,7 @@ out:
 
 out_unlock:
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-	if (epi != NULL)
-		D_FREE(epi);
+	D_FREE(epi);
 	return rc;
 }
 

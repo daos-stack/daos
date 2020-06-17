@@ -113,10 +113,9 @@ daos_profile_destroy(struct daos_profile *dp)
 			profile_chunk_destroy(dpc);
 	}
 
-	if (dp->dp_dir_path)
-		D_FREE(dp->dp_dir_path);
+	D_FREE(dp->dp_dir_path);
 
-	D_FREE_PTR(dp);
+	D_FREE(dp);
 }
 
 static int

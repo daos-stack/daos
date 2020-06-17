@@ -175,14 +175,9 @@ free_io_params_cb(tse_task_t *task, void *data)
 	while (io_list) {
 		struct io_params *current = io_list;
 
-		if (current->iod.iod_recxs) {
-			D_FREE(current->iod.iod_recxs);
-			current->iod.iod_recxs = NULL;
-		}
-		if (!current->user_sgl_used && current->sgl.sg_iovs) {
+		D_FREE(current->iod.iod_recxs);
+		if (!current->user_sgl_used)
 			D_FREE(current->sgl.sg_iovs);
-			current->sgl.sg_iovs = NULL;
-		}
 
 		io_list = current->next;
 		D_FREE(current);
@@ -1633,10 +1628,8 @@ dc_array_get_size(tse_task_t *task)
 err_query_task:
 	tse_task_complete(query_task, rc);
 err_task:
-	if (kqp)
-		D_FREE(kqp);
-	if (query_task)
-		D_FREE(query_task);
+	D_FREE(kqp);
+	D_FREE(query_task);
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);
@@ -1667,8 +1660,7 @@ free_set_size_cb(tse_task_t *task, void *data)
 {
 	struct set_size_props *props = *((struct set_size_props **)data);
 
-	if (props->val)
-		D_FREE(props->val);
+	D_FREE(props->val);
 	if (props->array)
 		array_decref(props->array);
 	D_FREE(props);
@@ -1727,8 +1719,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -1801,8 +1792,7 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -1884,8 +1874,7 @@ err:
 	if (io_task)
 		tse_task_complete(io_task, rc);
 out:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	return rc;
 }
 
@@ -1957,8 +1946,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2035,8 +2023,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2238,8 +2225,7 @@ dc_array_set_size(tse_task_t *task)
 err_enum_task:
 	tse_task_complete(enum_task, rc);
 err_task:
-	if (set_size_props)
-		D_FREE(set_size_props);
+	D_FREE(set_size_props);
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);

@@ -170,10 +170,8 @@ populate_whitelist(struct spdk_env_opts *opts)
 	}
 
 	D_FREE(trid);
-	if (rc && opts->pci_whitelist != NULL) {
+	if (rc)
 		D_FREE(opts->pci_whitelist);
-		opts->pci_whitelist = NULL;
-	}
 
 	return rc;
 }
@@ -208,8 +206,7 @@ bio_spdk_env_init(void)
 	opts.env_context = "--log-level=lib.eal:4";
 
 	rc = spdk_env_init(&opts);
-	if (opts.pci_whitelist != NULL)
-		D_FREE(opts.pci_whitelist);
+	D_FREE(opts.pci_whitelist);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));

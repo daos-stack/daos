@@ -121,8 +121,7 @@ rdb_raft_fini_ae(msg_appendentries_t *ae)
 		for (i = 0; i < ae->n_entries; i++) {
 			msg_entry_t *e = &ae->entries[i];
 
-			if (e->data.buf != NULL)
-				D_FREE(e->data.buf);
+			D_FREE(e->data.buf);
 		}
 		D_FREE(ae->entries);
 	}

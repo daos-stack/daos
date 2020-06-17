@@ -271,24 +271,16 @@ pool_unit_teardown(void **state)
 	for (i = 0; i < arg->nfiles; i++) {
 		if (vts_file_exists(arg->fname[i]))
 			remove(arg->fname[i]);
-		if (arg->fname[i])
-			D_FREE(arg->fname[i]);
-		if (arg->ops_seq[i])
-			D_FREE(arg->ops_seq[i]);
+		D_FREE(arg->fname[i]);
+		D_FREE(arg->ops_seq[i]);
 	}
 
-	if (arg->fname)
-		D_FREE(arg->fname);
-	if (arg->seq_cnt)
-		D_FREE(arg->seq_cnt);
-	if (arg->ops_seq)
-		D_FREE(arg->ops_seq);
-	if (arg->fcreate)
-		D_FREE(arg->fcreate);
-	if (arg->poh)
-		D_FREE(arg->poh);
-	if (arg->uuid)
-		D_FREE(arg->uuid);
+	D_FREE(arg->fname);
+	D_FREE(arg->seq_cnt);
+	D_FREE(arg->ops_seq);
+	D_FREE(arg->fcreate);
+	D_FREE(arg->poh);
+	D_FREE(arg->uuid);
 
 	return 0;
 }

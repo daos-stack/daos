@@ -74,8 +74,7 @@ ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
 			op, version, rc);
 
 out:
-	if (uris != NULL)
-		D_FREE(uris);
+	D_FREE(uris);
 	if (ranks != NULL)
 		d_rank_list_free(ranks);
 	return rc;

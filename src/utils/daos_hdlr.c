@@ -302,8 +302,7 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 	D_PRINT("%s\n", buf);
 
 out_disconnect:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
@@ -376,8 +375,7 @@ pool_list_attrs_hdlr(struct cmd_args_s *ap)
 	}
 
 out_disconnect:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
@@ -587,8 +585,7 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	D_PRINT("\n");
 
 out:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	return rc;
 }
@@ -716,8 +713,7 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 	D_PRINT("%s\n", buf);
 
 out:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	return rc;
 
@@ -771,8 +767,7 @@ cont_list_attrs_hdlr(struct cmd_args_s *ap)
 	}
 
 out:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	return rc;
 

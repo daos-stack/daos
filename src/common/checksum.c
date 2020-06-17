@@ -222,7 +222,6 @@ static void
 sha1_destroy(struct daos_csummer *obj)
 {
 	D_FREE(obj->dcs_ctx);
-	obj->dcs_ctx = NULL;
 }
 
 static int
@@ -289,7 +288,6 @@ static void
 sha256_destroy(struct daos_csummer *obj)
 {
 	D_FREE(obj->dcs_ctx);
-	obj->dcs_ctx = NULL;
 }
 
 static int
@@ -349,7 +347,6 @@ static void
 sha512_destroy(struct daos_csummer *obj)
 {
 	D_FREE(obj->dcs_ctx);
-	obj->dcs_ctx = NULL;
 }
 
 static int

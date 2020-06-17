@@ -31,18 +31,9 @@ destroy_free_class(struct vea_free_class *vfc)
 {
 	vfc->vfc_lru_cnt = 0;
 
-	if (vfc->vfc_cursor) {
-		D_FREE(vfc->vfc_cursor);
-		vfc->vfc_cursor = NULL;
-	}
-	if (vfc->vfc_lrus) {
-		D_FREE(vfc->vfc_lrus);
-		vfc->vfc_lrus = NULL;
-	}
-	if (vfc->vfc_sizes) {
-		D_FREE(vfc->vfc_sizes);
-		vfc->vfc_sizes = NULL;
-	}
+	D_FREE(vfc->vfc_cursor);
+	D_FREE(vfc->vfc_lrus);
+	D_FREE(vfc->vfc_sizes);
 	d_binheap_destroy_inplace(&vfc->vfc_heap);
 }
 

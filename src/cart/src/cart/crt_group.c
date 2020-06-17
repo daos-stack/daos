@@ -272,12 +272,10 @@ crt_ui_destroy(struct crt_uri_item *ui)
 	D_ASSERT(ui->ui_ref == 0);
 	D_ASSERT(ui->ui_initialized == 1);
 
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		if (ui->ui_uri[i])
-			D_FREE(ui->ui_uri[i]);
-	}
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
+		D_FREE(ui->ui_uri[i]);
 
-	D_FREE_PTR(ui);
+	D_FREE(ui);
 }
 
 static inline char *
@@ -1111,8 +1109,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 		d_hash_table_destroy_inplace(&grp_priv->gp_s2p_table, true);
 	}
 
-	if (grp_priv->gp_psr_phy_addr != NULL)
-		D_FREE(grp_priv->gp_psr_phy_addr);
+	D_FREE(grp_priv->gp_psr_phy_addr);
 	D_FREE(grp_priv->gp_pub.cg_grpid);
 
 	D_RWLOCK_DESTROY(&grp_priv->gp_rwlock);
@@ -1703,8 +1700,7 @@ out:
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, rpc_req->cr_opc);
-	if (tmp_uri != NULL)
-		D_FREE(tmp_uri);
+	D_FREE(tmp_uri);
 }
 
 int

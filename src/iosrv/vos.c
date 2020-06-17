@@ -638,13 +638,11 @@ static void
 clear_iod(daos_iod_t *iod, d_sg_list_t *sgl, int *recxs_cap)
 {
 	daos_iov_free(&iod->iod_name);
-	if (iod->iod_recxs != NULL)
-		D_FREE(iod->iod_recxs);
+	D_FREE(iod->iod_recxs);
 	memset(iod, 0, sizeof(*iod));
 
 	if (sgl != NULL) {
-		if (sgl->sg_iovs != NULL)
-			D_FREE(sgl->sg_iovs);
+		D_FREE(sgl->sg_iovs);
 		memset(sgl, 0, sizeof(*sgl));
 	}
 

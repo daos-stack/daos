@@ -173,9 +173,7 @@ teardown_pools(void **state)
 	}
 	lparg->nsyspools = 0;
 	D_FREE(lparg->tpools);
-	lparg->tpools = NULL;
 	D_FREE(arg->mgmt_lp_args);
-	arg->mgmt_lp_args = NULL;
 
 	return test_case_teardown(state);
 }

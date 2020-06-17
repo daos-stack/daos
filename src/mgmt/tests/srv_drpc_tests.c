@@ -1504,9 +1504,8 @@ test_drpc_pool_create_invalid_acl(void **state)
 	expect_create_resp_with_error(&resp, -DER_INVAL);
 
 	/* clean up */
-	for (i = 0; i < num_acl; i++) {
+	for (i = 0; i < num_acl; i++)
 		D_FREE(bad_acl[i]);
-	}
 	D_FREE(bad_acl);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);

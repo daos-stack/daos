@@ -989,16 +989,12 @@ cleanup_nothread:
 				crt_bulk_free(latencies_bulk_hdl[m_idx]);
 		D_FREE(latencies_bulk_hdl);
 	}
-	if (latencies_sg_list != NULL)
-		D_FREE(latencies_sg_list);
-	if (latencies_iov != NULL)
-		D_FREE(latencies_iov);
-	if (ms_endpts != NULL)
-		D_FREE(ms_endpts);
+	D_FREE(latencies_sg_list);
+	D_FREE(latencies_iov);
+	D_FREE(ms_endpts);
 	if (latencies != NULL) {
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
-			if (latencies[m_idx] != NULL)
-				D_FREE(latencies[m_idx]);
+			D_FREE(latencies[m_idx]);
 		D_FREE(latencies);
 	}
 
@@ -1476,10 +1472,8 @@ int parse_endpoint_string(char *const opt_arg,
 	ret = 0;
 
 cleanup:
-	if (rank_valid_str != NULL)
-		D_FREE(rank_valid_str);
-	if (tag_valid_str != NULL)
-		D_FREE(tag_valid_str);
+	D_FREE(rank_valid_str);
+	D_FREE(tag_valid_str);
 
 	return ret;
 
@@ -1886,8 +1880,7 @@ int main(int argc, char *argv[])
 
 	/********************* Clean up *********************/
 cleanup:
-	if (all_params != NULL)
-		D_FREE(all_params);
+	D_FREE(all_params);
 	d_log_fini();
 
 	return ret;

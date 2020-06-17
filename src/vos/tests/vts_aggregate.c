@@ -329,7 +329,6 @@ verify_view(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 
 	D_FREE(buf_f);
 	D_FREE(ds->td_expected_view);
-	ds->td_expected_view = NULL;
 }
 
 static void

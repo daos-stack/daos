@@ -255,12 +255,9 @@ rebuild_objects_send_ult(void *data)
 	D_DEBUG(DB_REBUILD, DF_UUID"/%d objects send finish\n",
 		DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 out:
-	if (oids != NULL)
-		D_FREE(oids);
-	if (shards != NULL)
-		D_FREE(shards);
-	if (ephs != NULL)
-		D_FREE(ephs);
+	D_FREE(oids);
+	D_FREE(shards);
+	D_FREE(ephs);
 
 	rpt_put(rpt);
 }
@@ -421,10 +418,10 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 out:
-	if (tgts != tgt_array && tgts != NULL)
+	if (tgts != tgt_array)
 		D_FREE(tgts);
 
-	if (shards != shard_array && shards != NULL)
+	if (shards != shard_array)
 		D_FREE(shards);
 
 	if (map != NULL)

@@ -1167,8 +1167,7 @@ out:
 		if (svc->ps_pool != NULL)
 			fini_svc_pool(svc);
 	}
-	if (map_buf != NULL)
-		D_FREE(map_buf);
+	D_FREE(map_buf);
 	if (prop != NULL)
 		daos_prop_free(prop);
 	return rc;
@@ -1229,8 +1228,7 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 			DP_UUID(svc->ps_uuid), map_version, rc);
 
 out:
-	if (map_buf != NULL)
-		D_FREE(map_buf);
+	D_FREE(map_buf);
 	return rc;
 }
 
@@ -2054,8 +2052,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 					    &out->pco_space);
 out_map_version:
 	out->pco_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
-	if (map_buf)
-		D_FREE(map_buf);
+	D_FREE(map_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -2531,10 +2528,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	}
 
 out_free_cont_buf:
-	if (cont_buf) {
-		D_FREE(cont_buf);
-		cont_buf = NULL;
-	}
+	D_FREE(cont_buf);
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->plco_op.po_hint);
 	pool_svc_put_leader(svc);
@@ -2696,8 +2690,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 
 out_map_version:
 	out->pqo_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
-	if (map_buf)
-		D_FREE(map_buf);
+	D_FREE(map_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);

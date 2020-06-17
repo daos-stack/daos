@@ -569,10 +569,8 @@ static void
 free_exclude_targets_arg(struct exclude_targets_arg *eta)
 {
 	D_ASSERT(eta != NULL);
-	if (eta->eta_ranks != NULL)
-		D_FREE(eta->eta_ranks);
-	if (eta->eta_tgts != NULL)
-		D_FREE(eta->eta_tgts);
+	D_FREE(eta->eta_ranks);
+	D_FREE(eta->eta_tgts);
 	D_FREE(eta);
 }
 

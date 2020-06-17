@@ -333,8 +333,7 @@ ring_buf_destroy(struct ring_buf *buf)
 		for (i = 0; i < buf->rb_domain_nr; i++) {
 			struct ring_domain *rdom = &buf->rb_domains[i];
 
-			if (rdom->rd_targets != NULL)
-				D_FREE(rdom->rd_targets);
+			D_FREE(rdom->rd_targets);
 		}
 		D_FREE(buf->rb_domains);
 	}
@@ -512,8 +511,7 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 static void
 ring_free(struct pl_ring_map *rimap, struct pl_ring *ring)
 {
-	if (ring->ri_targets != NULL)
-		D_FREE(ring->ri_targets);
+	D_FREE(ring->ri_targets);
 }
 
 static void
@@ -691,11 +689,9 @@ ring_map_destroy(struct pl_map *map)
 	struct pl_ring_map *rimap = pl_map2rimap(map);
 	int		    i;
 
-	if (rimap->rmp_ring_hashes != NULL)
-		D_FREE(rimap->rmp_ring_hashes);
+	D_FREE(rimap->rmp_ring_hashes);
 
-	if (rimap->rmp_target_hashes != NULL)
-		D_FREE(rimap->rmp_target_hashes);
+	D_FREE(rimap->rmp_target_hashes);
 
 	if (rimap->rmp_rings != NULL) {
 		for (i = 0; i < rimap->rmp_ring_nr; i++)

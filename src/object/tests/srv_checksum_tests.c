@@ -244,15 +244,12 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 	for (i = 0; i < ctx->nr; i++) {
 		void *bio_buf = bio_iov2raw_buf(&ctx->bsgl.bs_iovs[i]);
 
-		if (bio_buf)
-			D_FREE(bio_buf);
+		D_FREE(bio_buf);
 
-		if (ctx->biov_csums[i].cs_csum)
-			D_FREE(ctx->biov_csums[i].cs_csum);
+		D_FREE(ctx->biov_csums[i].cs_csum);
 	}
 
-	if (ctx->iod.iod_recxs)
-		D_FREE(ctx->iod.iod_recxs);
+	D_FREE(ctx->iod.iod_recxs);
 
 	bio_sgl_fini(&ctx->bsgl);
 	daos_csummer_destroy(&ctx->csummer);

@@ -55,18 +55,15 @@ struct smd_pool_info {
 static inline void
 smd_free_dev_info(struct smd_dev_info *dev_info)
 {
-	if (dev_info->sdi_tgts != NULL)
-		D_FREE(dev_info->sdi_tgts);
+	D_FREE(dev_info->sdi_tgts);
 	D_FREE(dev_info);
 }
 
 static inline void
 smd_free_pool_info(struct smd_pool_info *pool_info)
 {
-	if (pool_info->spi_tgts != NULL)
-		D_FREE(pool_info->spi_tgts);
-	if (pool_info->spi_blobs != NULL)
-		D_FREE(pool_info->spi_blobs);
+	D_FREE(pool_info->spi_tgts);
+	D_FREE(pool_info->spi_blobs);
 	D_FREE(pool_info);
 }
 

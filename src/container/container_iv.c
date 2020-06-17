@@ -280,10 +280,8 @@ cont_iv_snap_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	if (rc)
 		D_GOTO(out, rc);
 out:
-	if (iv_entry != NULL)
-		D_FREE(iv_entry);
-	if (snaps)
-		D_FREE(snaps);
+	D_FREE(iv_entry);
+	D_FREE(snaps);
 	return rc;
 }
 
@@ -956,12 +954,9 @@ out:
 	if (rc) {
 		if (acl_alloc)
 			daos_acl_free(acl_alloc);
-		if (label_alloc)
-			D_FREE(label_alloc);
-		if (owner_alloc)
-			D_FREE(owner_alloc);
-		if (owner_grp_alloc)
-			D_FREE(owner_grp_alloc);
+		D_FREE(label_alloc);
+		D_FREE(owner_alloc);
+		D_FREE(owner_grp_alloc);
 	}
 	return rc;
 }

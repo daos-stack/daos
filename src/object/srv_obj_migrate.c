@@ -258,8 +258,7 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 	if (tls->mpt_pool)
 		ds_pool_child_put(tls->mpt_pool);
 
-	if (tls->mpt_svc_list.rl_ranks)
-		D_FREE(tls->mpt_svc_list.rl_ranks);
+	D_FREE(tls->mpt_svc_list.rl_ranks);
 
 	if (tls->mpt_clear_conts)
 		d_hash_table_destroy_inplace(&tls->mpt_cont_dest_tab,
@@ -776,8 +775,7 @@ migrate_one_destroy(struct migrate_one *mrone)
 		daos_iods_free(mrone->mo_punch_iods, mrone->mo_iod_alloc_num,
 			       true);
 
-	if (mrone->mo_akey_punch_ephs)
-		D_FREE(mrone->mo_akey_punch_ephs);
+	D_FREE(mrone->mo_akey_punch_ephs);
 
 	if (mrone->mo_sgls) {
 		for (i = 0; i < mrone->mo_iod_alloc_num; i++)
@@ -1293,8 +1291,7 @@ free:
 		tls->mpt_status = rc;
 	D_DEBUG(DB_REBUILD, "stop migrate obj "DF_UOID" for shard %u rc %d\n",
 		DP_UOID(arg->oid), arg->shard, rc);
-	if (arg->snaps)
-		D_FREE(arg->snaps);
+	D_FREE(arg->snaps);
 	D_FREE(arg);
 	migrate_pool_tls_put(tls);
 }
@@ -1571,8 +1568,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 		D_GOTO(free, rc);
 	}
 free:
-	if (snapshots)
-		D_FREE(snapshots);
+	D_FREE(snapshots);
 
 out_put:
 	ds_pool_put(dp);

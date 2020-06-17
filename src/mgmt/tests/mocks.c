@@ -352,10 +352,7 @@ mock_ds_mgmt_pool_list_cont_setup(void)
 
 void mock_ds_mgmt_pool_list_cont_teardown(void)
 {
-	if (ds_mgmt_pool_list_cont_out != NULL) {
-		D_FREE(ds_mgmt_pool_list_cont_out);
-		ds_mgmt_pool_list_cont_out = NULL;
-	}
+	D_FREE(ds_mgmt_pool_list_cont_out);
 }
 
 int			ds_mgmt_pool_query_return;

@@ -79,8 +79,7 @@ obj_ec_recxs_fini(struct obj_ec_recx_array *recxs)
 {
 	if (recxs == NULL)
 		return;
-	if (recxs->oer_recxs != NULL)
-		D_FREE(recxs->oer_recxs);
+	D_FREE(recxs->oer_recxs);
 	recxs->oer_nr = 0;
 	recxs->oer_stripe_total = 0;
 	obj_ec_pbuf_fini(recxs);
@@ -148,8 +147,7 @@ obj_ec_seg_sorter_init(struct obj_ec_seg_sorter *sorter, uint32_t tgt_nr,
 void
 obj_ec_seg_sorter_fini(struct obj_ec_seg_sorter *sorter)
 {
-	if (sorter->ess_tgts != NULL)
-		D_FREE(sorter->ess_tgts);
+	D_FREE(sorter->ess_tgts);
 	memset(sorter, 0, sizeof(*sorter));
 }
 
@@ -1398,8 +1396,7 @@ obj_ec_recov_alloc(struct daos_oclass_attr *oca)
 void
 obj_ec_recov_free(struct obj_reasb_req *reasb_req)
 {
-	if (reasb_req->orr_recov)
-		D_FREE(reasb_req->orr_recov);
+	D_FREE(reasb_req->orr_recov);
 }
 
 static bool

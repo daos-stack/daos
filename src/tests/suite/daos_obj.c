@@ -1856,9 +1856,8 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 
 	D_FREE(buf);
 	D_FREE(data_buf);
-	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
+	for (i = 0; i < PUNCH_NUM_KEYS; i++)
 		D_FREE(dkeys[i]);
-	}
 	ioreq_fini(&req);
 	MPI_Barrier(MPI_COMM_WORLD);
 }

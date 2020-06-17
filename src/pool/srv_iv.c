@@ -249,12 +249,9 @@ out:
 	if (rc) {
 		if (acl_alloc)
 			daos_acl_free(acl_alloc);
-		if (label_alloc)
-			D_FREE(label_alloc);
-		if (owner_alloc)
-			D_FREE(owner_alloc);
-		if (owner_grp_alloc)
-			D_FREE(owner_grp_alloc);
+		D_FREE(label_alloc);
+		D_FREE(owner_alloc);
+		D_FREE(owner_grp_alloc);
 		if (svc_list)
 			d_rank_list_free(dst_list);
 	}

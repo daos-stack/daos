@@ -199,8 +199,7 @@ obj_layout_free(struct dc_object *obj)
 	obj->cob_shards = NULL;
 	D_SPIN_UNLOCK(&obj->cob_spin);
 
-	if (layout != NULL)
-		D_FREE(layout);
+	D_FREE(layout);
 }
 
 static void
@@ -211,8 +210,7 @@ obj_free(struct d_hlink *hlink)
 	obj = container_of(hlink, struct dc_object, cob_hlink);
 	D_ASSERT(daos_hhash_link_empty(&obj->cob_hlink));
 	obj_layout_free(obj);
-	if (obj->cob_time_fetch_leader != NULL)
-		D_FREE(obj->cob_time_fetch_leader);
+	D_FREE(obj->cob_time_fetch_leader);
 	D_SPIN_DESTROY(&obj->cob_spin);
 	D_RWLOCK_DESTROY(&obj->cob_lock);
 	D_FREE(obj);
@@ -332,8 +330,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 
 	if (obj->cob_grp_size > 1 && srv_io_mode == DIM_DTX_FULL_ENABLED &&
 	    obj->cob_grp_nr < obj->cob_shards_nr / obj->cob_grp_size) {
-		if (obj->cob_time_fetch_leader != NULL)
-			D_FREE(obj->cob_time_fetch_leader);
+		D_FREE(obj->cob_time_fetch_leader);
 
 		obj->cob_grp_nr = obj->cob_shards_nr / obj->cob_grp_size;
 		D_ALLOC_ARRAY(obj->cob_time_fetch_leader, obj->cob_grp_nr);
@@ -631,8 +628,7 @@ obj_reasb_req_fini(struct obj_auxi_args *obj_auxi)
 		iod = reasb_req->orr_iods + i;
 		if (iod == NULL)
 			return;
-		if (iod->iod_recxs != NULL)
-			D_FREE(iod->iod_recxs);
+		D_FREE(iod->iod_recxs);
 		daos_sgl_fini(reasb_req->orr_sgls + i, false);
 		obj_io_desc_fini(reasb_req->orr_oiods + i);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
@@ -789,7 +785,6 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 			if (req_tgts->ort_shard_tgts !=
 				req_tgts->ort_tgts_inline)
 				D_FREE(req_tgts->ort_shard_tgts);
-			req_tgts->ort_shard_tgts = NULL;
 		}
 		if (req_tgts->ort_shard_tgts == NULL) {
 			D_ALLOC_ARRAY(req_tgts->ort_shard_tgts, shard_nr);
@@ -934,8 +929,7 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 	return 0;
 err:
 	dc_task_decref(task);
-	if (args->info)
-		D_FREE(args->info);
+	D_FREE(args->info);
 
 	return rc;
 }

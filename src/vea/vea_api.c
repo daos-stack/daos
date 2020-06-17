@@ -582,8 +582,7 @@ error:
 	if (rc == -DER_NONEXIST || rc == -DER_ENOENT)
 		rc = -DER_INVAL;
 
-	if (fca != NULL)
-		D_FREE(fca);
+	D_FREE(fca);
 	return rc;
 }
 

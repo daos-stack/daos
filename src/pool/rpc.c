@@ -277,8 +277,7 @@ pool_target_addr_list_free(struct pool_target_addr_list *addr_list)
 	if (addr_list == NULL)
 		return;
 
-	if (addr_list->pta_addrs)
-		D_FREE(addr_list->pta_addrs);
+	D_FREE(addr_list->pta_addrs);
 }
 
 uint64_t

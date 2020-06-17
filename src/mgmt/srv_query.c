@@ -193,7 +193,6 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 			}
 		}
 		D_FREE(resp->devices);
-		resp->devices = NULL;
 		resp->n_devices = 0;
 		goto out;
 	}
@@ -289,7 +288,6 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 			}
 		}
 		D_FREE(resp->pools);
-		resp->pools = NULL;
 		resp->n_pools = 0;
 		goto out;
 	}
@@ -352,10 +350,8 @@ out:
 	smd_free_dev_info(dev_info);
 
 	if (rc != 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
-		if (resp->dev_uuid != NULL)
-			D_FREE(resp->dev_uuid);
+		D_FREE(resp->dev_state);
+		D_FREE(resp->dev_uuid);
 	}
 
 	return rc;
@@ -452,10 +448,8 @@ out:
 	smd_free_dev_info(dev_info);
 
 	if (rc != 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
-		if (resp->dev_uuid != NULL)
-			D_FREE(resp->dev_uuid);
+		D_FREE(resp->dev_state);
+		D_FREE(resp->dev_uuid);
 	}
 
 	return rc;

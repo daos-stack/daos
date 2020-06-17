@@ -59,11 +59,8 @@ daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 	if (sgl == NULL || sgl->sg_iovs == NULL)
 		return;
 
-	for (i = 0; free_iovs && i < sgl->sg_nr; i++) {
-		if (sgl->sg_iovs[i].iov_buf != NULL) {
-			D_FREE(sgl->sg_iovs[i].iov_buf);
-		}
-	}
+	for (i = 0; free_iovs && i < sgl->sg_nr; i++)
+		D_FREE(sgl->sg_iovs[i].iov_buf);
 
 	D_FREE(sgl->sg_iovs);
 	memset(sgl, 0, sizeof(*sgl));
@@ -366,7 +363,6 @@ daos_iov_free(d_iov_t *iov)
 	D_ASSERT(iov->iov_buf_len > 0);
 
 	D_FREE(iov->iov_buf);
-	iov->iov_buf = NULL;
 	iov->iov_buf_len = 0;
 	iov->iov_len = 0;
 }

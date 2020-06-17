@@ -231,8 +231,7 @@ out:
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id);
 free:
-	if (snapshots != NULL)
-		D_FREE(snapshots);
+	D_FREE(snapshots);
 
 	return rc;
 }
@@ -1358,8 +1357,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0,
 					  DSS_ULT_IO);
-	if (coll_args.ca_exclude_tgts)
-		D_FREE(coll_args.ca_exclude_tgts);
+	D_FREE(coll_args.ca_exclude_tgts);
 
 	if (rc != 0) {
 		/* Once it exclude the target from the pool, since the target
@@ -1651,7 +1649,6 @@ cont_snap_update_one(void *vin)
 		if (cont->sc_snapshots != NULL) {
 			D_ASSERT(cont->sc_snapshots_nr > 0);
 			D_FREE(cont->sc_snapshots);
-			cont->sc_snapshots = NULL;
 		}
 	} else {
 		void	*buf;
