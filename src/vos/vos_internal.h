@@ -555,6 +555,7 @@ struct vos_rec_bundle {
 	uint32_t		 rb_ver;
 	/** tree class */
 	enum vos_tree_class	 rb_tclass;
+	bool			 rb_flat;
 };
 
 /**
