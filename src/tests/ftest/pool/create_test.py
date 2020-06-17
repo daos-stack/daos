@@ -219,13 +219,6 @@ class PoolCreateTests(TestWithServers):
             scm_ratio, 1 if nvme_ratio is None else nvme_ratio)
         self.pool = [
             self.get_pool(create=False, connect=False) for _ in range(quantity)]
-        if quantity > 1:
-            # Divide the pool size up into the specified quantity
-            for size in sizes:
-                if size:
-                    size.amount /= quantity
-                    if "." in str(size):
-                        size.convert_down()
         for pool in self.pool:
             pool.scm_size.update(str(sizes[0]), "scm_size")
             if nvme_ratio is not None:
@@ -299,8 +292,11 @@ class PoolCreateTests(TestWithServers):
 
         :avocado: tags=all,pr,hw,large,pool,create_performance
         """
-        # Create 100 pools using 70% of the available capacity
-        self.define_pools(100, 0.70, 0.70)
+        # Create some number of pools each using a equal amount of 50% of the
+        # available capacity, e.g. 0.5% for 100 pools.
+        quantity = self.params.get("quantity", "/run/pool/*", 1)
+        ratio = 0.5 / quantity
+        self.define_pools(quantity, ratio, ratio)
         self.check_pool_creation(3)
         self.system_stop()
 
@@ -330,12 +326,10 @@ class PoolCreateTests(TestWithServers):
         :avocado: tags=all,pr,hw,large,pool,create_no_space
         """
         # Define three pools to create:
-        #   - one using 90% of the available capacity of one server
-        #   - one using 90% of the available capacity of all servers
-        #   - one using 90% of the available capacity of the other server
-        # Triple the SCM and NVMe capacity percentages to offset the division
-        # of the pool sizes by the pool quantity performed by define_pools().
-        self.define_pools(3, 3 * 0.9, 3 * 0.9)
+        #   - one pool using 90% of the available capacity of one server
+        #   - one pool using 90% of the available capacity of all servers
+        #   - one pool using 90% of the available capacity of the other server
+        self.define_pools(3, 0.9, 0.9)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")
@@ -383,12 +377,10 @@ class PoolCreateTests(TestWithServers):
         :avocado: tags=all,pr,hw,large,pool,create_no_space_loop
         """
         # Define three pools to create:
-        #   - one using 90% of the available capacity of one server
-        #   - one using 90% of the available capacity of all servers
-        #   - one using 90% of the available capacity of the other server
-        # Triple the SCM and NVMe capacity percentages to offset the division
-        # of the pool sizes by the pool quantity performed by define_pools().
-        self.define_pools(3, 3 * 0.9, 3 * 0.9)
+        #   - one pool using 90% of the available capacity of one server
+        #   - one pool using 90% of the available capacity of all servers
+        #   - one pool using 90% of the available capacity of the other server
+        self.define_pools(3, 0.9, 0.9)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")
