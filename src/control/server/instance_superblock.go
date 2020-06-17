@@ -203,7 +203,7 @@ func (srv *IOServerInstance) ReadSuperblock() error {
 	return nil
 }
 
-// RemoveSuperblock removes a Superblock from storage.
+// RemoveSuperblock removes a superblock from storage.
 func (srv *IOServerInstance) RemoveSuperblock() error {
 	srv.setSuperblock(nil)
 

@@ -1,4 +1,4 @@
-.TH dmg 1 "9 June 2020"
+.TH dmg 1 "13 June 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -304,18 +304,12 @@ Format SCM and NVMe storage attached to remote servers.
 
 \fBAliases\fP: f
 
-.SS Format SCM and NVMe storage attached to remote servers.
 .TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 Show results of each SCM & NVMe device format operation
 .TP
 \fB\fB\-\-reformat\fR\fP
-Always reformat storage (CAUTION: Potentially destructive)
-.SS System Format Options
-Reformat an existing DAOS system
-.TP
-\fB\fB\-\-system\fR\fP
-Perform reformat of stopped DAOS servers in system
+Reformat storage overwriting any existing filesystem (CAUTION: Potentially destructive)
 .TP
 \fB\fB\-r\fR, \fB\-\-ranks\fR\fP
 Comma separated list of system ranks to format, default is all ranks

@@ -178,6 +178,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
+	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemQuery(ctx, cmd.ctlInvoker,
 		&control.SystemQueryReq{Ranks: ranks})
 	if err != nil {
@@ -281,6 +282,7 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
+	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStop(ctx, cmd.ctlInvoker, &control.SystemStopReq{
 		Prep:  true,
 		Kill:  true,
@@ -320,6 +322,7 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
+	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStart(ctx, cmd.ctlInvoker,
 		&control.SystemStartReq{Ranks: ranks})
 	if err != nil {

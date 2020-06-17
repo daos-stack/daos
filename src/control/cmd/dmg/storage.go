@@ -28,6 +28,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -155,34 +156,81 @@ type storageFormatCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
-	Reformat bool `long:"reformat" description:"Always reformat storage (CAUTION: Potentially destructive)"`
-	Group    struct {
-		System bool   `long:"system" description:"Perform reformat of stopped DAOS servers in system"`
-		Ranks  string `long:"ranks" short:"r" description:"Comma separated list of system ranks to format, default is all ranks"`
-	} `group:"System Format Options" description:"Reformat an existing DAOS system"`
+	Verbose  bool   `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
+	Reformat bool   `long:"reformat" description:"Reformat storage overwriting any existing filesystem (CAUTION: Potentially destructive)"`
+	Ranks    string `long:"ranks" short:"r" description:"Comma separated list of system ranks to format, default is all ranks"`
 }
 
-// Execute is run when storageFormatCmd activates
+// shouldReformatSystem queries system to interrogate membership before deciding
+// whether a system reformat is appropriate.
 //
-// run NVMe and SCM storage format on all connected servers
+// Reformat system if membership is not empty and all member ranks are stopped.
+func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []system.Rank) (bool, error) {
+	if cmd.Reformat {
+		cmd.log.Info("processing system reformat request")
+
+		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
+		if err != nil {
+			return false, errors.Wrap(err, "System-Query command failed")
+		}
+
+		if len(resp.Members) == 0 {
+			cmd.log.Debug("no system members, reformat host list")
+			if len(ranks) > 0 {
+				return false, errors.New(
+					"--ranks parameter invalid as membership is empty")
+			}
+
+			return false, nil
+		}
+
+		notStoppedRanks, err := system.NewRankSet("")
+		if err != nil {
+			return false, err
+		}
+		for _, member := range resp.Members {
+			if member.State() != system.MemberStateStopped {
+				if err := notStoppedRanks.Add(member.Rank); err != nil {
+					return false, errors.Wrap(err, "adding to rank set")
+				}
+			}
+		}
+		if notStoppedRanks.Count() > 0 {
+			return false, errors.Errorf(
+				"system reformat requires the following %s to be stopped: %s",
+				english.Plural(notStoppedRanks.Count(), "rank", "ranks"),
+				notStoppedRanks.String())
+		}
+
+		return true, nil
+	}
+
+	if len(ranks) > 0 {
+		return false, errors.New("--ranks parameter invalid if --reformat is not set")
+	}
+
+	return false, nil
+}
+
+// Execute is run when storageFormatCmd activates.
+//
+// Run NVMe and SCM storage format on all connected servers.
 func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 	ctx := context.Background()
 
-	if cmd.Group.System {
-		cmd.log.Info("system reformat selected")
+	ranks, err := system.ParseRanks(cmd.Ranks)
+	if err != nil {
+		return errors.Wrap(err, "parsing rank list")
+	}
 
-		if cmd.Reformat {
-			cmd.log.Info("--reformat is already implied by --system")
-		}
-
-		ranks, err := system.ParseRanks(cmd.Group.Ranks)
-		if err != nil {
-			return errors.Wrap(err, "parsing rank list")
-		}
-
-		resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
-			&control.SystemResetFormatReq{Ranks: ranks})
+	sysReformat, err := cmd.shouldReformatSystem(ctx, ranks)
+	if err != nil {
+		return err
+	}
+	if !sysReformat {
+		req := &control.StorageFormatReq{Reformat: cmd.Reformat}
+		req.SetHostList(cmd.hostlist)
+		resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 		if err != nil {
 			return err
 		}
@@ -190,13 +238,8 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		return cmd.printFormatResp(resp)
 	}
 
-	if cmd.Group.Ranks != "" {
-		cmd.log.Info("--ranks are ignored unless --system is set")
-	}
-
-	req := &control.StorageFormatReq{Reformat: cmd.Reformat}
-	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
+	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
+		&control.SystemResetFormatReq{Ranks: ranks})
 	if err != nil {
 		return err
 	}
