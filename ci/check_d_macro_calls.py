@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 
-import sys
-import subprocess
-
-CMD=['git', 'grep', '-n', '-B1', '-A1', '-e', 'D_FREE', '-e', 'D_FREE_PTR']
-
 """
 Script to check for D_FREE usage in the codebase.
 
@@ -22,7 +17,12 @@ $ ./check_d_free_calls.py | patch -p1
 
 """
 
-class code_line():
+import sys
+import subprocess
+
+class CodeLine():
+
+    """Class representing a single line of code from a diff"""
 
     def __init__(self, raw):
         try:
@@ -49,7 +49,7 @@ class code_line():
 
         # Set self.free_var to the name of anything being freed, or Null.
         if self.code.startswith('D_FREE'):
-            _, val = short.split('(',1)
+            _, val = short.split('(', 1)
             self.free_var = val[:-2]
         else:
             self.free_var = None
@@ -80,21 +80,22 @@ class code_line():
         self.new_text = None
 
     def _set_text(self, text):
-        # Mark a line as requiring change.
+        """Mark a line as requiring change."""
         self.new_text = text
         self.code = self.new_text.strip()
         self.changed = True
 
     def _get_text(self):
-        # Get the text for a line, which may already be marked
-        # as requiring change
+        """Get the text for a line,
+
+        which may already be marked as requiring change
+        """
         if self.new_text:
             return self.new_text
         return self.text
 
     def is_cond_on_var(self, var):
-        # Check if a line is a conditional on a variable
-        # being non-zero.
+        """Check if a line is a conditional on a variable being non-zero."""
         if not self.conditional:
             return False
         if var == self.cond_str:
@@ -104,10 +105,11 @@ class code_line():
         return False
 
     def is_assign_null(self, var):
-        # Check is a line is assigning a variable to NULL
+        """Check is a line is assigning a variable to NULL"""
         return self.code == '{} = NULL;'.format(var)
 
     def _is_cond_part_on_var(self, var):
+        """helper method for is_cond_part_on_var"""
         for ending in ['&& {}'.format(var),
                        '&& {} != NULL'.format(var)]:
             if self.cond_str.endswith(ending):
@@ -126,35 +128,39 @@ class code_line():
         return (False, None)
 
     def is_cond_part_on_var(self, var):
-        # Check if a conditional line includes a conditional on a variable
-        # in addition to another check.
+        """ Check if a conditional line includes a variable
+        in addition to another check.
+        """
         (ret, _) = self._is_cond_part_on_var(var)
         return ret
 
     def shorten_cond(self, var):
-        # If is_cond_part_on_var() returns true then remove the part of
-        # the conditional that is dependent on the variable.
+        """Remove var from conditional
+
+        If is_cond_part_on_var() returns true then remove the part of
+        the conditional that is dependent on the variable.
+        """
         (ret, new_code) = self._is_cond_part_on_var(var)
         assert ret
         self.code = new_code
         self._set_text(new_code)
 
     def remove_brace(self):
-        # Strip the open brace from the end of a conditional
+        """Strip the open brace from the end of a conditional"""
         assert self.conditional_brace
         self._set_text(self.text.rstrip('{ '))
         self.conditional_brace = False
 
     def drop_line(self):
-        # Mark a line as not for inclusion.
+        """Mark a line as not for inclusion."""
         self.include = False
 
     def shift_left(self):
-        # Move the code on a line left one tabstop.
+        """Move the code on a line left one tabstop."""
         self._set_text(self.text[1:])
 
     def remove_free_ptr(self):
-        # Replace use of D_FREE_PTR
+        """Replace use of D_FREE_PTR"""
         if 'D_FREE_PTR' in self.code:
             self._set_text(self._get_text().replace('D_FREE_PTR', 'D_FREE'))
 
@@ -219,6 +225,7 @@ def show_patch(lines):
             print(' {}'.format(line.text))
 
 def check_lines(lines):
+    """Run the checks"""
 
     for idx in range(len(lines)):
         if not lines[idx].include:
@@ -230,11 +237,13 @@ def check_lines(lines):
             lines[idx-2].remove_brace()
 
         # Check for assignment of NULL after free.
-        elif lines[idx].free_var and lines[idx+1].is_assign_null(lines[idx].free_var):
+        elif lines[idx].free_var and \
+             lines[idx+1].is_assign_null(lines[idx].free_var):
             lines[idx+1].drop_line()
 
         # Check for conditional free.
-        elif lines[idx].free_var and lines[idx-1].is_cond_on_var(lines[idx].free_var):
+        elif lines[idx].free_var and \
+             lines[idx-1].is_cond_on_var(lines[idx].free_var):
             if lines[idx-1].conditional_brace:
                 if lines[idx+1].close_brace:
                     lines[idx].shift_left()
@@ -245,7 +254,8 @@ def check_lines(lines):
                 lines[idx-1].drop_line()
 
         # Check for conditional free with other tests.
-        elif lines[idx].free_var and lines[idx-1].is_cond_part_on_var(lines[idx].free_var):
+        elif lines[idx].free_var and \
+             lines[idx-1].is_cond_part_on_var(lines[idx].free_var):
             if lines[idx-1].conditional_brace:
                 if lines[idx+1].close_brace:
                     lines[idx-1].remove_brace()
@@ -261,7 +271,7 @@ def main():
     to improve logging.
     """
 
-    args=['grep', '-n', '-B1', '-A1', '-e', 'D_FREE', '-e', 'D_FREE_PTR']
+    args = ['grep', '-n', '-B1', '-A1', '-e', 'D_FREE', '-e', 'D_FREE_PTR']
 
     if len(sys.argv) == 2:
         # If a file is passed on the command line then just check that.
@@ -273,6 +283,7 @@ def main():
         cmd.extend(args)
         cmd.append('src')
 
+    print(' '.join(cmd))
     rc = subprocess.run(cmd, stdout=subprocess.PIPE)
 
     stdout = rc.stdout.decode('utf-8')
@@ -283,7 +294,7 @@ def main():
             check_lines(match_lines)
             match_lines = []
             continue
-        match_lines.append(code_line(line))
+        match_lines.append(CodeLine(line))
     check_lines(match_lines)
 
 if __name__ == '__main__':

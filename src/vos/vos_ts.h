@@ -487,10 +487,8 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set);
  *
  * \param	ts_set[in]	Set to free
  */
-#define vos_ts_set_free(ts_set)			\
-	do {					\
-		D_FREE(ts_set);			\
-	} while (0)
+#define vos_ts_set_free(ts_set)	D_FREE(ts_set)
+
 
 /** Check the read low timestamp at current entry.
  *

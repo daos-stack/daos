@@ -241,11 +241,14 @@ class LogTest():
         self.nil_frees = Counter()
 
     def show_nill_free(self, line):
+        """Save the location of a nill free call"""
         loc = '{}:{}'.format(line.filename, line.lineno)
 
         self.nil_frees[loc] += 1
 
     def show_frees(self):
+        """Report the most common locations where D_FREE(NULL) is called"""
+
         for (loc, count) in self.nil_frees.most_common(10):
             if count < 10:
                 break

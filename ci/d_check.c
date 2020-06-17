@@ -21,14 +21,14 @@ main() {
 	if (buff)
 		D_FREE(buff);
 
-	/* Standalone D_FREE_PTR, will be removed if code
-	 * is being patched anyway but this is widely used
-	 * so left otherwise
+	/* This would be removed if it was adjacent to other
+	 * code which was being changed, but the use of
+	 * D_FREE_PTR here should be left
 	 */
 	D_FREE_PTR(buff);
 
 	/* for loop that uses both two sets of braces, but also
-	 * a conditional and assignes DATA to zero afterwards
+	 * a conditional and assigns DATA to zero afterwards
 	 */
 	for (i = 0; i++ ; i < 10) {
 		if (data) {
