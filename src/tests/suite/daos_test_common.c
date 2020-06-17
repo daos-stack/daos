@@ -34,6 +34,7 @@
 
 /** Server crt group ID */
 const char *server_group;
+const char *dmg_config_file;
 
 /** Pool service replicas */
 unsigned int svc_nreplicas = 1;
@@ -313,6 +314,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->gid = getegid();
 
 		arg->group = server_group;
+		arg->dmg_config = dmg_config_file;
 		uuid_clear(arg->pool.pool_uuid);
 		uuid_clear(arg->co_uuid);
 
@@ -871,6 +873,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	int		max_failure;
 	int		i;
 	int		rc;
+	char		dmg_cmd[DTS_CFG_MAX];
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -899,7 +902,15 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
-	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
+	/* build and invoke dmg cmd to stop the server */
+	if (arg->dmg_config == NULL)
+		dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
+				  "--force", rank);
+	else
+		dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
+				  "--force -o %s", rank, arg->dmg_config);
+	rc = system(dmg_cmd);
+	print_message(" %s rc 0x%x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 

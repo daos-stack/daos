@@ -190,7 +190,7 @@ void
 dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 	uint32_t count, char *d, ...);
 
-#define DTS_CFG_MAX 128
+#define DTS_CFG_MAX 256
 __attribute__ ((__format__(__printf__, 2, 3)))
 static inline void
 dts_create_config(char buf[DTS_CFG_MAX], const char *format, ...)

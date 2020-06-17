@@ -73,6 +73,7 @@ extern const char *server_group;
 
 /** Pool service replicas */
 extern unsigned int svc_nreplicas;
+extern const char *dmg_config_file;
 
 /** Checksum Type & info*/
 extern unsigned int dt_csum_type;
@@ -126,7 +127,8 @@ typedef struct {
 	bool			multi_rank;
 	int			myrank;
 	int			rank_size;
-	const char	       *group;
+	const char		*group;
+	const char		*dmg_config;
 	struct test_pool	pool;
 	uuid_t			co_uuid;
 	unsigned int		uid;
