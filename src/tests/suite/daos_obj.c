@@ -3148,6 +3148,9 @@ fetch_replica_unavail(void **state)
 		daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 				rank);
 
+		/* wait until reintegration is done */
+		test_rebuild_wait(&arg, 1);
+
 		assert_int_equal(rc, 0);
 	}
 	D_FREE(buf);

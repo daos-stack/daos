@@ -83,30 +83,71 @@ reint_check(struct pl_obj_layout *layout, struct pl_obj_layout *temp_layout,
 		uint32_t *spare_tgt_ranks, uint32_t *shard_ids, int num_reint,
 		uint32_t curr_fail_tgt)
 {
-	int i;
+	int i, j;
+	int temp_i;
+	int rebuilding;
+	int num_reint_found;
+	uint32_t shard_idx;
+	uint32_t target;
 	uint32_t original_target;
 	uint32_t reint_target;
+	struct pl_obj_shard curr_shard;
 
 	D_ASSERT(num_reint >= 0 && num_reint < 2);
+	num_reint_found = 0;
+	temp_i = 0;
+	i = 0;
 
 	/* can't rebuild non replicated date */
 	if (temp_layout->ol_grp_size == 1) {
 		D_ASSERT(num_reint == 0);
-		if (layout->ol_shards[0].po_target == curr_fail_tgt)
-			D_ASSERT(temp_layout->ol_shards[0].po_target == -1);
+		for (i = 0; i < layout->ol_nr; ++i) {
+			original_target = layout->ol_shards[i].po_target;
+			reint_target = temp_layout->ol_shards[i].po_target;
+
+			if (original_target == curr_fail_tgt)
+				D_ASSERT(reint_target == -1);
+		}
 		return;
 	}
 
-	for (i = 0; i < temp_layout->ol_nr; ++i) {
-		original_target = layout->ol_shards[i].po_target;
-		reint_target = temp_layout->ol_shards[i].po_target;
+	if (layout->ol_nr != temp_layout->ol_nr)
+		D_ASSERT(num_reint > 0);
+	i = 0;
+	while (i < layout->ol_nr) {
 
-		if (original_target == curr_fail_tgt) {
-			D_ASSERT(num_reint == 1);
-			D_ASSERT(original_target == spare_tgt_ranks[0]);
-			D_ASSERT(reint_target != original_target);
+		for (j = 0; j < layout->ol_grp_size; ++j) {
+			original_target = layout->ol_shards[i].po_target;
+			reint_target = temp_layout->ol_shards[temp_i].po_target;
+
+			if (original_target == curr_fail_tgt) {
+				D_ASSERT(num_reint == 1);
+				D_ASSERT(original_target == spare_tgt_ranks[0]);
+				D_ASSERT(reint_target != original_target);
+			}
+
+			i++;
+			temp_i++;
+		}
+
+		while (temp_i < temp_layout->ol_grp_size) {
+			curr_shard = temp_layout->ol_shards[temp_i];
+			shard_idx = curr_shard.po_shard;
+			target = curr_shard.po_target;
+			rebuilding = curr_shard.po_rebuilding;
+
+			if (shard_idx != -1) {
+				D_ASSERT(shard_idx == shard_ids[0]);
+				D_ASSERT(target == spare_tgt_ranks[0]);
+				D_ASSERT(rebuilding == 1);
+				D_ASSERT(num_reint_found < num_reint);
+			}
+
+			num_reint_found++;
+			temp_i++;
 		}
 	}
+	D_ASSERT(num_reint_found == num_reint);
 }
 
 void
