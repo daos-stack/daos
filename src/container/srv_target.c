@@ -59,6 +59,8 @@
  */
 #define DAOS_AGG_THRESHOLD	90 /* seconds */
 
+static daos_epoch_t ec_agg_epoch = 0;
+
 static inline int
 cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 {
@@ -68,7 +70,12 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	 */
 	if (cont->sc_abort_vos_aggregating)
 		return 1;
-	//ds_obj_ec_aggregate(cont);
+//	if (!run_ec)
+//	D_PRINT("starting ec_agg\n");
+	ec_agg_epoch = ds_obj_ec_aggregate(cont, ec_agg_epoch);
+	D_PRINT("completed ec_agg: %lu\n", ec_agg_epoch);
+
+
 	return vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc);
 }
 

@@ -631,25 +631,68 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	int				 rc = 0;
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
-	d_iov_set(&riov, NULL, 0);
-	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
-	if (rc == -DER_NONEXIST) {
-		rc = dbtree_lookup(cont->vc_dtx_committed_hdl,
-				   &kiov, NULL);
-		goto out;
-	}
-	if (rc != 0)
-		goto out;
+	/* For single replicated object, we trigger commit just after local
+	 * modification done. Under such case, the caller exactly knows the
+	 * @epoch and no need to lookup the active DTX table. On the other
+	 * hand, for modifying single replicated object, there is no DTX
+	 * entry in the active DTX table.
+	 */
+	if (epoch == 0) {
+		d_iov_set(&riov, NULL, 0);
+		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+		if (rc == -DER_NONEXIST) {
+			rc = dbtree_lookup(cont->vc_dtx_committed_hdl,
+					   &kiov, &riov);
+			if (rc == 0 && dck != NULL) {
+				dce = (struct vos_dtx_cmt_ent *)riov.iov_buf;
+				dck->oid = DCE_OID(dce);
+				dck->dkey_hash = DCE_DKEY_HASH(dce);
+				dce = NULL;
+			}
 
-	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+			goto out;
+		}
+
+		if (rc != 0)
+			goto out;
+
+		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+
+		if (dae->dae_aborted) {
+			D_ERROR("NOT allow to commit an aborted DTX "DF_DTI"\n",
+				DP_DTI(dti));
+			D_GOTO(out, rc = -DER_NONEXIST);
+		}
+
+		/* It has been committed before, but failed to be removed
+		 * from the active table, just remove it again.
+		 */
+		if (dae->dae_committed) {
+			if (dck != NULL) {
+				dck->oid = DAE_OID(dae);
+				dck->dkey_hash = DAE_DKEY_HASH(dae);
+			}
+
+			rc = dbtree_delete(cont->vc_dtx_active_hdl,
+					   BTR_PROBE_BYPASS, &kiov, NULL);
+			if (rc == 0)
+				dtx_evict_lid(cont, dae);
+
+			goto out;
+		}
+	}
 
 	D_ALLOC_PTR(dce);
 	if (dce == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	DCE_XID(dce) = *dti;
-	DCE_OID(dce) = DAE_OID(dae);
-	DCE_EPOCH(dce) = DAE_EPOCH(dae);
+	if (dae != NULL) {
+		memcpy(&dce->dce_base.dce_common, &dae->dae_base.dae_common,
+		       sizeof(dce->dce_base.dce_common));
+	} else {
+		DCE_XID(dce) = *dti;
+		DCE_EPOCH(dce) = epoch;
+	}
 	dce->dce_reindex = 0;
 
 	d_iov_set(&riov, dce, sizeof(*dce));

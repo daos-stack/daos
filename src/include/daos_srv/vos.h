@@ -905,13 +905,21 @@ enum vos_cont_opc {
 int
 vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc);
 
+/**
+ * Profile the VOS operation in standalone vos mode.
+ **/
+int
+vos_profile_start(char *path, int avg);
+void
+vos_profile_stop(void);
+
 daos_unit_oid_t
 vos_cmt_get_oid(d_iov_t *value);
 
 daos_epoch_t
 vos_cmt_get_epoch(d_iov_t *value);
 
-void
+int
 vos_agg_iterate(daos_handle_t coh, dbtree_iterate_cb_t cb, void *arg);
 
 struct vos_agg_set {
@@ -927,14 +935,6 @@ struct vos_agg_entry {
 	daos_epoch_t	ae_epoch;
 	daos_epoch_t	ae_epoch_lo;
 };
-
-/**
- * Profile the VOS operation in standalone vos mode.
- **/
-int
-vos_profile_start(char *path, int avg);
-void
-vos_profile_stop(void);
 
 #endif /* __VOS_API_H */
 

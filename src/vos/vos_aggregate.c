@@ -1493,7 +1493,6 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 		io->ic_csum_buf_len = 0;
 	}
 }
-
 static inline void
 recx2ext(daos_recx_t *recx, struct evt_extent *ext)
 {
@@ -1913,6 +1912,31 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 	io->ic_csum_recalc_func = func;
 }
 
+daos_epoch_t
+vos_cmt_get_epoch(d_iov_t *value)
+{
+        struct vos_dtx_cmt_ent	*dce = value->iov_buf;
+
+	return dce->dce_base.dce_epoch;
+}
+
+daos_unit_oid_t
+vos_cmt_get_oid(d_iov_t *value)
+{
+        struct vos_dtx_cmt_ent	*dce = value->iov_buf;
+
+	return dce->dce_base.dce_oid;
+}
+
+int
+vos_agg_iterate(daos_handle_t coh, dbtree_iterate_cb_t commited_dtx_cb,
+		void *arg)
+{
+	struct vos_container    *cont = vos_hdl2cont(coh);
+
+	return dbtree_iterate(cont->vc_dtx_committed_hdl, DAOS_INTENT_DEFAULT,
+			      false, commited_dtx_cb, arg);
+}
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
 {
