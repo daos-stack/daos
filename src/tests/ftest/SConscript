@@ -9,9 +9,10 @@ def scons():
 
     env.Install(ftest_install_dir, Glob('*.*'))
 
-    dirs = ['checksum', 'container', 'control', 'daos_test', 'data',
-            'io', 'network', 'object', 'osa', 'pool', 'rebuild',
-            'security', 'server', 'soak', 'unittest']
+    dirs = ['aggregation', 'checksum', 'container', 'control',
+            'daos_test', 'data', 'io', 'network', 'object', 'osa',
+            'pool', 'rebuild', 'security', 'server', 'soak',
+            'unittest']
 
     for sub_dir in dirs:
         env.Install(os.path.join(ftest_install_dir, sub_dir),
