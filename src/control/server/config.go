@@ -113,7 +113,7 @@ func (c *Configuration) WithRecreateSuperblocks() *Configuration {
 	return c
 }
 
-// WithProviderValidator sets the function that validates the provder
+// WithProviderValidator sets the function that validates the provider
 func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Configuration {
 	c.validateProviderFn = fn
 	return c
