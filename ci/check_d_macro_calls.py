@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import subprocess
 
 CMD=['git', 'grep', '-n', '-B1', '-A1', '-e', 'D_FREE', '-e', 'D_FREE_PTR']
@@ -222,13 +223,17 @@ def check_lines(lines):
     for idx in range(len(lines)):
         if not lines[idx].include:
             continue
+
+        # Check for braces which can be removed.
         elif lines[idx].close_brace and lines[idx-2].conditional_brace:
             lines[idx].drop_line()
             lines[idx-2].remove_brace()
 
+        # Check for assignment of NULL after free.
         elif lines[idx].free_var and lines[idx+1].is_assign_null(lines[idx].free_var):
             lines[idx+1].drop_line()
 
+        # Check for conditional free.
         elif lines[idx].free_var and lines[idx-1].is_cond_on_var(lines[idx].free_var):
             if lines[idx-1].conditional_brace:
                 if lines[idx+1].close_brace:
@@ -239,6 +244,7 @@ def check_lines(lines):
                 lines[idx].shift_left()
                 lines[idx-1].drop_line()
 
+        # Check for conditional free with other tests.
         elif lines[idx].free_var and lines[idx-1].is_cond_part_on_var(lines[idx].free_var):
             if lines[idx-1].conditional_brace:
                 if lines[idx+1].close_brace:
@@ -255,7 +261,19 @@ def main():
     to improve logging.
     """
 
-    rc = subprocess.run(CMD, stdout=subprocess.PIPE)
+    args=['grep', '-n', '-B1', '-A1', '-e', 'D_FREE', '-e', 'D_FREE_PTR']
+
+    if len(sys.argv) == 2:
+        # If a file is passed on the command line then just check that.
+        cmd = args
+        cmd.extend(['-H', sys.argv[1]])
+    else:
+        # Or use git to check the 'src' subdir.
+        cmd = ['git']
+        cmd.extend(args)
+        cmd.append('src')
+
+    rc = subprocess.run(cmd, stdout=subprocess.PIPE)
 
     stdout = rc.stdout.decode('utf-8')
 
@@ -266,6 +284,7 @@ def main():
             match_lines = []
             continue
         match_lines.append(code_line(line))
+    check_lines(match_lines)
 
 if __name__ == '__main__':
     main()

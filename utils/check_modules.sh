@@ -61,6 +61,7 @@ if [ -z "$*" ]; then
   flist+=" $(find src/client/dfuse/test/ -name \*.py | sort)"
   flist+=" $(find src/cart/ -name \*.py | sort)"
   flist+=" $(find utils/ -name \*.py | sort)"
+  flist+=" $(find ci/ -name \*.py | sort)"
 else
   flist=$*
 fi
