@@ -133,7 +133,7 @@ if [ -d "/mnt/daos" ]; then
              "${SL_PREFIX}/etc/vos_size_input.yaml"
     run_test "${SL_PREFIX}/bin/vos_size_dfs_sample"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
-             "$(pwd)/vos_dfs_sample.yaml"
+             "${SL_PREFIX}/etc/vos_dfs_sample.yaml"
 
 
     if [ $failed -eq 0 ]; then
