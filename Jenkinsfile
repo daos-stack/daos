@@ -1177,7 +1177,7 @@ pipeline {
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
                                           pragma_suffix: '-hw-medium',
-                                          test_tag: 'pr,hw,medium,ib2',
+                                          test_tag: 'pr,hw,medium,ib2,daos_test_rebuild',
                                           node_count: 5,
                                           ftest_arg: '"auto:Optane"'
                     }
