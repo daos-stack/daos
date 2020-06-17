@@ -47,7 +47,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)
-		D_GOTO(err, rc = -ENOMEM);
+		D_GOTO(err, rc = ENOMEM);
 
 	DFUSE_TRA_UP(ev, oh, "write");
 

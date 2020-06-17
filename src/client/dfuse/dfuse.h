@@ -159,6 +159,7 @@ struct dfuse_event {
 	daos_event_t	de_ev;
 	void		(*de_complete_cb)(struct dfuse_event *ev);
 	size_t		de_len;
+	void		*de_buff;
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;

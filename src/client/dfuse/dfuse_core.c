@@ -35,26 +35,22 @@ dfuse_progress_thread(void *arg)
 	struct dfuse_event *ev;
 
 	while (1) {
-		DFUSE_TRA_DEBUG(fs_handle, "sleeping");
 
 		errno = 0;
 		rc = sem_wait(&fs_handle->dpi_sem);
 		if (rc != 0) {
 			rc = errno;
+			DFUSE_TRA_ERROR(fs_handle,
+					"Error from sem_wait: %d", rc);
 		}
-
-		DFUSE_TRA_DEBUG(fs_handle, "wakeup");
 
 		if (fs_handle->dpi_shutdown)
 			return NULL;
-
-		DFUSE_TRA_DEBUG(fs_handle, "polling");
 
 		rc = daos_eq_poll(fs_handle->dpi_eq, 1,
 				DAOS_EQ_WAIT,
 				1,
 				&dev);
-		DFUSE_TRA_DEBUG(fs_handle, "poll returned %d", rc);
 
 		if (rc == 1) {
 			ev = container_of(dev, struct dfuse_event, de_ev);
@@ -411,6 +407,8 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 	sem_post(&fs_handle->dpi_sem);
 
 	pthread_join(fs_handle->dpi_thread, NULL);
+
+	sem_destroy(&fs_handle->dpi_sem);
 
 	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 

@@ -26,6 +26,18 @@
 
 #define READAHEAD_SIZE (1024 * 1024)
 
+static void
+dfuse_cb_read_complete(struct dfuse_event *ev)
+{
+	if (ev->de_ev.ev_error == 0)
+		DFUSE_REPLY_BUF(ev, ev->de_req, ev->de_buff, ev->de_len);
+	else
+		DFUSE_REPLY_ERR_RAW(ev, ev->de_req,
+				    daos_der2errno(ev->de_ev.ev_error));
+	D_FREE(ev->de_buff);
+}
+
+
 void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	      struct fuse_file_info *fi)
@@ -42,12 +54,10 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	size_t				buff_len = len;
 	bool				skip_read = false;
 	bool				readahead = false;
+	struct dfuse_event		*ev = NULL;
 
 	DFUSE_TRA_INFO(oh, "%#zx-%#zx requested pid=%d",
 		       position, position + len - 1, fc->pid);
-
-	DFUSE_TRA_DEBUG(oh, "Will try readahead file size %zi",
-			oh->doh_ie->ie_stat.st_size);
 
 	if (oh->doh_ie->ie_truncated &&
 	    position + len < oh->doh_ie->ie_stat.st_size &&
@@ -78,14 +88,27 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		readahead = true;
 	}
 
-	if (readahead)
+	if (readahead) {
 		buff_len += READAHEAD_SIZE;
+	} else {
+		if (!skip_read) {
+			D_ALLOC_PTR(ev);
+			if (ev == NULL)
+				D_GOTO(err, rc = ENOMEM);
+
+			rc = daos_event_init(&ev->de_ev,
+					     fs_handle->dpi_eq, NULL);
+			if (rc != -DER_SUCCESS)
+				D_GOTO(err, rc = daos_der2errno(rc));
+
+			ev->de_req = req;
+			ev->de_complete_cb = dfuse_cb_read_complete;
+		}
+	}
 
 	D_ALLOC(buff, buff_len);
-	if (!buff) {
-		DFUSE_REPLY_ERR_RAW(NULL, req, ENOMEM);
-		return;
-	}
+	if (!buff)
+		D_GOTO(err, rc = ENOMEM);
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov[0], (void *)buff, buff_len);
@@ -94,13 +117,19 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	if (skip_read) {
 		size = buff_len;
 	} else {
-		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position, &size,
-			      NULL);
+		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position,
+			ev ? &ev->de_len : &size,
+			ev ? &ev->de_ev : NULL);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_REPLY_ERR_RAW(oh, req, rc);
 			D_FREE(buff);
 			return;
 		}
+	}
+
+	if (ev) {
+		sem_post(&fs_handle->dpi_sem);
+		return;
 	}
 
 	if (size <= len) {
@@ -130,4 +159,10 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	DFUSE_REPLY_BUF(oh, req, buff, len);
 	D_FREE(buff);
+	return;
+
+
+err:
+	D_FREE(ev);
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }
