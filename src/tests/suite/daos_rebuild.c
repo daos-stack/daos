@@ -64,8 +64,8 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 
 	for (i = 0; i < arg_cnt; i++) {
 		daos_exclude_target(args[i]->pool.pool_uuid,
-				    args[i]->group, &args[i]->pool.svc,
-				    rank, tgt_idx);
+				    args[i]->group, args[i]->dmg_config,
+				    &args[i]->pool.svc, rank, tgt_idx);
 		sleep(2);
 	}
 }
@@ -79,9 +79,8 @@ rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 	for (i = 0; i < args_cnt; i++) {
 		if (!args[i]->pool.destroyed)
 			daos_add_target(args[i]->pool.pool_uuid,
-					args[i]->group,
-					&args[i]->pool.svc,
-					rank, tgt_idx);
+					args[i]->group, args[i]->dmg_config,
+					&args[i]->pool.svc, rank, tgt_idx);
 		sleep(2);
 	}
 }
@@ -161,7 +160,8 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 
 		for (i = 0; i < nr; i++)
 			daos_add_target(arg->pool.pool_uuid, arg->group,
-					&arg->pool.svc, failed_rank,
+					arg->dmg_config, &arg->pool.svc,
+					failed_rank,
 					failed_tgts ? failed_tgts[i] : -1);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -1384,6 +1384,7 @@ rebuild_multiple_tgts(void **state)
 			if (rank != leader) {
 				exclude_ranks[fail_cnt] = rank;
 				daos_exclude_server(arg->pool.pool_uuid,
+						    arg->dmg_config,
 						    arg->group,
 						    &arg->pool.svc,
 						    rank);
@@ -1411,7 +1412,8 @@ rebuild_multiple_tgts(void **state)
 	if (arg->myrank == 0) {
 		for (i = 0; i < 2; i++)
 			daos_add_server(arg->pool.pool_uuid, arg->group,
-					&arg->pool.svc, exclude_ranks[i]);
+					arg->dmg_config, &arg->pool.svc,
+					exclude_ranks[i]);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }

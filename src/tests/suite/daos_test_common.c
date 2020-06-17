@@ -814,28 +814,45 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 	return rc;
 }
 
-void
-daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-		    const d_rank_list_t *svc, d_rank_t rank,
-		    int tgt_idx)
+static void
+daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
+		    const char *grp, const char *dmg_config,
+		    const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
 {
-	struct d_tgt_list	targets;
-	int			rc;
+	char		dmg_cmd[DTS_CFG_MAX];
+	char		dmg_options[DTS_CFG_MAX] = {0};
+	int		rc;
 
-	/** exclude from the pool */
-	targets.tl_nr = 1;
-	targets.tl_ranks = &rank;
-	targets.tl_tgts = &tgt_idx;
-	rc = daos_pool_tgt_exclude(pool_uuid, grp, svc, &targets, NULL);
-	if (rc)
-		print_message("exclude pool failed rc %d\n", rc);
+	/* build and invoke dmg cmd */
+	if (tgt_idx != -1)
+		dts_create_config(dmg_options, " --target-idx=%d", tgt_idx);
+	if (dmg_config != NULL)
+		dts_create_config(dmg_options, " --config_path=%s", dmg_config);
+
+	dts_create_config(dmg_cmd,
+			"dmg pool %s -i --pool=%s --rank=%d %s",
+			sub_cmd, DP_UUID(pool_uuid), rank, dmg_options);
+
+	rc = system(dmg_cmd);
+	print_message("%s rc 0x%x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 
 void
-daos_add_target(const uuid_t pool_uuid, const char *grp,
-		const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
+daos_exclude_target(const uuid_t pool_uuid, const char *grp,
+		 const char *dmg_config, const d_rank_list_t *svc,
+		 d_rank_t rank, int tgt_idx)
 {
+	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config, svc,
+			rank, tgt_idx);
+}
+
+void
+daos_add_target(const uuid_t pool_uuid, const char *grp,
+		const char *dmg_config, const d_rank_list_t *svc,
+		d_rank_t rank, int tgt_idx)
+{
+#if 0
 	struct d_tgt_list	targets;
 	int			rc;
 
@@ -847,20 +864,26 @@ daos_add_target(const uuid_t pool_uuid, const char *grp,
 	if (rc)
 		print_message("add pool failed rc %d\n", rc);
 	assert_int_equal(rc, 0);
+#endif
+	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config, svc,
+			 rank, tgt_idx);
+
 }
 
 void
 daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-		    const d_rank_list_t *svc, d_rank_t rank)
+		    const char *dmg_config, const d_rank_list_t *svc,
+		    d_rank_t rank)
 {
-	daos_exclude_target(pool_uuid, grp, svc, rank, -1);
+	daos_exclude_target(pool_uuid, grp, dmg_config, svc, rank, -1);
 }
 
 void
 daos_add_server(const uuid_t pool_uuid, const char *grp,
-		const d_rank_list_t *svc, d_rank_t rank)
+		const char *dmg_config, const d_rank_list_t *svc,
+		d_rank_t rank)
 {
-	daos_add_target(pool_uuid, grp, svc, rank, -1);
+	daos_add_target(pool_uuid, grp, dmg_config, svc, rank, -1);
 }
 
 void
@@ -874,6 +897,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	int		i;
 	int		rc;
 	char		dmg_cmd[DTS_CFG_MAX];
+	char		dmg_options[DTS_CFG_MAX] = {0};
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -903,12 +927,12 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
 	/* build and invoke dmg cmd to stop the server */
-	if (arg->dmg_config == NULL)
-		dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
-				  "--force", rank);
-	else
-		dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
-				  "--force -o %s", rank, arg->dmg_config);
+	if (arg->dmg_config != NULL)
+		dts_create_config(dmg_options, " --config_path=%s",
+				  arg->dmg_config);
+
+	dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
+			  "--force %s", rank, dmg_options);
 	rc = system(dmg_cmd);
 	print_message(" %s rc 0x%x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
