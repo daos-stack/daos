@@ -436,7 +436,7 @@ committer()
 
 				if (epoch - ep_start == ITER_NR)
 					/**
-					 * all epochs are commited,
+					 * all epochs are committed,
 					 * we are done
 					 */
 					break;

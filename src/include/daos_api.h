@@ -44,7 +44,7 @@ enum {
 };
 
 /**
- * Generate a rank list from a string with a seprator argument. This is a
+ * Generate a rank list from a string with a separator argument. This is a
  * convenience function to generate the rank list required by
  * daos_pool_connect().
  *
@@ -68,7 +68,7 @@ d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
  *
  * \param[in]	coh	Container handle.
  * \param[out]	th	Returned transaction handle.
- * \param[in]	flags	Transaction flags.
+ * \param[in]	flags	Transaction flags (DAOS_TF_RDONLY, etc.).
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *

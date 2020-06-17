@@ -49,11 +49,20 @@ enum dtx_entry_flags {
 };
 
 struct dtx_entry {
-	/** The identifier of the DTX */
-	struct dtx_id		dte_xid;
-	/** The identifier of the modified object (shard). */
-	daos_unit_oid_t		dte_oid;
+	/** The identifier of the DTX. */
+	struct dtx_id			 dte_xid;
+	/** The pool map version when the DTX happened. */
+	uint32_t			 dte_ver;
+	/** The reference count. */
+	uint32_t			 dte_refs;
+	/** The DAOS targets participating in the DTX. */
+	struct dtx_memberships		*dte_mbs;
 };
+
+/* The 'dte_mbs' must be the last member of 'dtx_entry'. */
+D_CASSERT(sizeof(struct dtx_entry) ==
+	  offsetof(struct dtx_entry, dte_mbs) +
+	  sizeof(struct dtx_memberships *));
 
 enum vos_oi_attr {
 	/** Marks object as failed */
@@ -270,7 +279,7 @@ enum {
 };
 
 /**
- * Parameters for initialising VOS iterator
+ * Parameters for initializing VOS iterator
  */
 typedef struct {
 	/** standalone prepare:	pool connection handle or container open handle
@@ -355,6 +364,14 @@ typedef struct {
 			uint32_t		ie_dtx_ver;
 			/* The dkey hash for DTX iteration. */
 			uint16_t		ie_dtx_flags;
+			/** DTX tgt count. */
+			uint32_t		ie_dtx_tgt_cnt;
+			/** DTX modified group count. */
+			uint32_t		ie_dtx_grp_cnt;
+			/** DTX mbs data size. */
+			uint32_t		ie_dtx_mbs_dsize;
+			/** DTX participants information. */
+			void			*ie_dtx_mbs;
 		};
 	};
 	/* Flags to describe the entry */

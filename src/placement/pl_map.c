@@ -575,7 +575,7 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 	if (replicas == 1) {
 		shard = pl_get_shard(data, shard_idx);
 		if (shard->po_target == -1)
-			return -DER_NONEXIST;
+			return -DER_IO;
 
 		/* Single replicated object will not rebuild. */
 		D_ASSERT(!shard->po_rebuilding);
@@ -620,8 +620,8 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 		return pl_get_shard(data, pos)->po_shard;
 	}
 
-	/* If all the replicas are failed or in-rebuilding, then NONEXIST. */
-	return -DER_NONEXIST;
+	/* If all the replicas are failed or in-rebuilding, then EIO. */
+	return -DER_IO;
 }
 
 #define PL_HTABLE_BITS 7

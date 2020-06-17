@@ -39,6 +39,7 @@
 
 #include <daos.h>
 #include <daos/common.h>
+#include <daos/checksum.h>
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
@@ -319,24 +320,16 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
 		entry->dpe_str = strdup(value);
 	} else if (!strcmp(name, "cksum")) {
-		if (!strcmp(value, "off"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_OFF;
-		else if (!strcmp(value, "crc16"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC16;
-		else if (!strcmp(value, "crc32"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC32;
-		else if (!strcmp(value, "crc64"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC64;
-		else if (!strcmp(value, "sha1")) {
-			/* entry->dpe_val = DAOS_PROP_CO_CSUM_SHA1; */
-			fprintf(stderr, "'sha1' isn't supported yet, please use one of the CRC option\n");
-			return -DER_INVAL;
-		} else {
-			/* fprintf(stderr, "curently supported checksum types are 'off, crc[16,32,64], sha1'\n"); */
-			fprintf(stderr, "curently supported checksum types are 'off, crc[16,32,64]'\n");
+		int csum_type = daos_str2csumcontprop(value);
+
+		if (csum_type < 0) {
+			fprintf(stderr,
+				"currently supported checksum types are "
+				"'off, crc[16,32,64], sha[1,256,512]'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
+		entry->dpe_val = csum_type;
 	} else if (!strcmp(name, "cksum_size")) {
 		char *endp;
 		long val;

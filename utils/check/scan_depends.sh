@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This script installs the Red Hat CVS API tool and then runs
-# it against a list of pakages in the file ${PACKAGES} and produces
+# it against a list of packages in the file ${PACKAGES} and produces
 # a file ${CVE_LIST} with the CVE information found.
 #
 # Default for ${PACKAGES} is "daos_depends_packages"

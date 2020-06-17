@@ -35,7 +35,7 @@ class OpenClose(TestWithServers):
 
     def test_closehandle(self):
         """
-        Test container close function with container handle paramter.
+        Test container close function with container handle parameter.
 
         :avocado: tags=all,smoke,full_regression,tiny,container,closehandle
         """
