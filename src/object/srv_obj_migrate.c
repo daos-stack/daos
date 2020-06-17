@@ -1418,13 +1418,12 @@ destroy_existing_container(struct migrate_pool_tls *tls, uuid_t cont_uuid)
 		 * to test set membership. The link stored is just the simplest
 		 * base list type
 		 */
-		d_list_t *rlink;
+		struct migrate_init_cont_key *key;
 
 		D_DEBUG(DB_REBUILD,
 			"destroying pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID
 			" before reintegration\n", DP_UUID(tls->mpt_pool_uuid),
 			DP_UUID(cont_uuid), DP_UUID(tls->mpt_coh_uuid));
-
 
 		rc = ds_cont_tgt_destroy(tls->mpt_pool_uuid, cont_uuid);
 		if (rc != 0) {
@@ -1438,16 +1437,18 @@ destroy_existing_container(struct migrate_pool_tls *tls, uuid_t cont_uuid)
 		/* Insert a link into the hash table to mark this cont_uuid as
 		 * having already been initialized
 		 */
-		D_ALLOC_PTR(rlink);
-		if (rlink == NULL)
+		D_ALLOC_PTR(key);
+		if (key == NULL)
 			return -DER_NOMEM;
 
+		uuid_copy(key->cont_uuid, cont_uuid);
+		D_INIT_LIST_HEAD(&key->cont_link);
 		rc = d_hash_rec_insert(&tls->mpt_cont_dest_tab, cont_uuid,
-				       sizeof(uuid_t), rlink, true);
+				       sizeof(uuid_t), &key->cont_link, true);
 		if (rc) {
 			D_ERROR("Failed to insert uuid table entry "DF_RC"\n",
 				DP_RC(rc));
-			D_FREE(rlink);
+			D_FREE(key);
 			return rc;
 		}
 	}
