@@ -108,7 +108,7 @@ func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	c := newDefaultConfiguration(e).
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub)
+		WithGetNetworkDeviceClass(getDeviceClassStub)
 	c.Path = path
 
 	if err := c.Load(); err != nil {
@@ -148,7 +148,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 			configA := newDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub)
+				WithGetNetworkDeviceClass(getDeviceClassStub)
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
@@ -167,7 +167,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 			configB := newDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub)
+				WithGetNetworkDeviceClass(getDeviceClassStub)
 			if err := configB.SetPath(testFile); err != nil {
 				t.Fatal(err)
 			}
@@ -228,7 +228,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 		WithHyperthreads(true).
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub).
+		WithGetNetworkDeviceClass(getDeviceClassStub).
 		WithServers(
 			ioserver.NewConfig().
 				WithRank(0).
@@ -388,7 +388,7 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 			config := newDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub)
+				WithGetNetworkDeviceClass(getDeviceClassStub)
 
 			err = config.SetPath(relPath)
 			if err != nil {
@@ -501,13 +501,29 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 
 			conf := NewConfiguration().
 				WithFabricProvider("test").
-				WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub).
+				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithServers(tc.configA, tc.configB)
 
 			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}
+}
+
+func getDeviceClassStub(netdev string) (uint32, error) {
+	switch netdev {
+	case "eth0":
+		return 1, nil
+	case "eth1":
+		return 1, nil
+	case "ib0":
+		return 32, nil
+	case "ib1":
+		return 32, nil
+	default:
+		return 0, nil
+	}
+	return 0, nil
 }
 
 func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
@@ -519,7 +535,6 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 	configA := func() *ioserver.Config {
 		return ioserver.NewConfig().
 			WithLogFile("a").
-			WithFabricInterface("a").
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
 			WithScmMountPoint("a")
@@ -527,7 +542,6 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 	configB := func() *ioserver.Config {
 		return ioserver.NewConfig().
 			WithLogFile("b").
-			WithFabricInterface("b").
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
 			WithScmMountPoint("b")
@@ -538,29 +552,45 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 		configB *ioserver.Config
 		expErr  error
 	}{
-		"successful validation": {
+		"successful validation with matching INFINIBAND": {
 			configA: configA().
-				WithNetDevClass(ETHER),
+				WithFabricInterface("ib1"),
 			configB: configB().
-				WithNetDevClass(ETHER),
+				WithFabricInterface("ib0"),
 		},
-		"mismatching net dev class with primary INFINIBAND": {
+		"successful validation with mathching ETHERNET": {
 			configA: configA().
-				WithFabricInterface("netdev-infiniband").
-				WithNetDevClass(INFINIBAND),
+				WithFabricInterface("eth0"),
 			configB: configB().
-				WithFabricInterface("netdev-ethernet").
-				WithNetDevClass(ETHER),
-			expErr: FaultConfigInvalidNetDevClass(1, INFINIBAND, ETHER, "netdev-ethernet"),
+				WithFabricInterface("eth1"),
 		},
-		"mismatching net dev class with primary ETHERNET": {
+		"mismatching net dev class with primary server as ib0 / INFINIBAND": {
 			configA: configA().
-				WithFabricInterface("netdev-ethernet").
-				WithNetDevClass(ETHER),
+				WithFabricInterface("ib0"),
 			configB: configB().
-				WithFabricInterface("netdev-infiniband").
-				WithNetDevClass(INFINIBAND),
-			expErr: FaultConfigInvalidNetDevClass(1, ETHER, INFINIBAND, "netdev-infiniband"),
+				WithFabricInterface("eth0"),
+			expErr: FaultConfigInvalidNetDevClass(1, INFINIBAND, ETHER, "eth0"),
+		},
+		"mismatching net dev class with primary server as eth0 / ETHERNET": {
+			configA: configA().
+				WithFabricInterface("eth0"),
+			configB: configB().
+				WithFabricInterface("ib0"),
+			expErr: FaultConfigInvalidNetDevClass(1, ETHER, INFINIBAND, "ib0"),
+		},
+		"mismatching net dev class with primary server as ib1 / INFINIBAND": {
+			configA: configA().
+				WithFabricInterface("ib1"),
+			configB: configB().
+				WithFabricInterface("eth1"),
+			expErr: FaultConfigInvalidNetDevClass(1, INFINIBAND, ETHER, "eth1"),
+		},
+		"mismatching net dev class with primary server as eth1 / ETHERNET": {
+			configA: configA().
+				WithFabricInterface("eth1"),
+			configB: configB().
+				WithFabricInterface("ib0"),
+			expErr: FaultConfigInvalidNetDevClass(1, ETHER, INFINIBAND, "ib0"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -569,7 +599,7 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 
 			conf := NewConfiguration().
 				WithFabricProvider("test").
-				WithGetNetworkDeviceClass(netdetect.GetDeviceClassStub).
+				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithServers(tc.configA, tc.configB)
 
 			gotErr := conf.Validate(log)

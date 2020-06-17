@@ -61,7 +61,7 @@ type FabricConfig struct {
 	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
-	NetDevClass     uint32
+	//	NetDevClass     uint32
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -81,9 +81,9 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
 	}
-	if fc.NetDevClass == 0 {
-		fc.NetDevClass = other.NetDevClass
-	}
+	//	if fc.NetDevClass == 0 {
+	//		fc.NetDevClass = other.NetDevClass
+	//	}
 }
 
 // GetNumaNode retrieves the value configured by the YML if it was supplied
@@ -345,10 +345,10 @@ func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 }
 
 // WithNetDevClass defines the NetDevClass for this instance
-func (c *Config) WithNetDevClass(ndc uint32) *Config {
-	c.Fabric.NetDevClass = ndc
-	return c
-}
+//func (c *Config) WithNetDevClass(ndc uint32) *Config {
+//	c.Fabric.NetDevClass = ndc
+//	return c
+//}
 
 // WithTargetCount sets the number of VOS targets to run on this instance.
 func (c *Config) WithTargetCount(count int) *Config {

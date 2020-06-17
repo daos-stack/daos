@@ -474,13 +474,6 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 					srv.Fabric.Interface, numaNode)
 			}
 		}
-
-		if srv.Fabric.NetDevClass == 0 {
-			srv.Fabric.NetDevClass, err = c.getDeviceClassFn(srv.Fabric.Interface)
-			if err != nil {
-				return err
-			}
-		}
 	}
 
 	if len(c.Servers) > 1 {
@@ -552,12 +545,17 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 			seenBdevSet[dev] = idx
 		}
 
+		ndc, err := c.getDeviceClassFn(srv.Fabric.Interface)
+		if err != nil {
+			return err
+		}
+
 		switch idx {
 		case 0:
-			netDevClass = srv.Fabric.NetDevClass
+			netDevClass = ndc
 		default:
-			if srv.Fabric.NetDevClass != netDevClass {
-				return FaultConfigInvalidNetDevClass(idx, netDevClass, srv.Fabric.NetDevClass, srv.Fabric.Interface)
+			if ndc != netDevClass {
+				return FaultConfigInvalidNetDevClass(idx, netDevClass, ndc, srv.Fabric.Interface)
 			}
 		}
 	}

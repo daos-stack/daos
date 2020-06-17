@@ -218,7 +218,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 
 		if i == 0 {
-			netDevClass = srvCfg.Fabric.NetDevClass
+			netDevClass, err = cfg.getDeviceClassFn(srvCfg.Fabric.Interface)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
