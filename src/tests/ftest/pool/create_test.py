@@ -298,8 +298,9 @@ class PoolCreateTests(TestWithServers):
         ratio = 0.5 / quantity
         self.define_pools(quantity, ratio, ratio)
         self.check_pool_creation(3)
-        self.system_stop()
 
+        # Verify DAOS can be restarted in less than 2 minutes
+        self.system_stop()
         start = float(time.time())
         self.system_start()
         duration = float(time.time()) - start
@@ -307,6 +308,7 @@ class PoolCreateTests(TestWithServers):
             duration, 120,
             "DAOS not ready to accept requests with in 2 minutes")
 
+        # Verify all the pools exists after the restart
         pool_uuid_list = [pool.uuid for pool in self.pool]
         result = self.dmg.get_output("pool_list")
         self.assertListEqual(

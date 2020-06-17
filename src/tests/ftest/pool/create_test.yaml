@@ -27,3 +27,4 @@ server_config:
 pool:
   name: daos_server
   control_method: dmg
+  quantity: 100
