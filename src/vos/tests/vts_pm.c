@@ -1219,14 +1219,14 @@ cond_test(void **state)
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxxx", 'x');
 	/** Conditional update of non-existed key should fail */
-	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a", "b",
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 1, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE,
 		       -DER_NONEXIST, sgl, "foo");
 	/** Conditional punch of non-existed akey should fail */
 	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);
-	/** Key doesn't exist still, that supercedes read conflict */
+	/** Key doesn't exist still, that supersedes read conflict */
 	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);
@@ -1302,9 +1302,9 @@ static const struct CMUnitTest punch_model_tests[] = {
 int
 run_pm_tests(const char *cfg)
 {
-	char	test_name[100];
+	char	test_name[DTS_CFG_MAX];
 
-	sprintf(test_name, "VOS Punch Model tests %s", cfg);
+	dts_create_config(test_name, "VOS Punch Model tests %s", cfg);
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
 	return cmocka_run_group_tests_name(test_name,

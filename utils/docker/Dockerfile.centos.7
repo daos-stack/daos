@@ -61,7 +61,7 @@ RUN yum -y install epel-release; \
         pandoc patch python python-devel python36-devel python-magic   \
         python-pep8 python-pygit2 python2-pygithub python-requests     \
         readline-devel scons sg3_utils ShellCheck yasm pciutils        \
-        valgrind-devel python36-pylint man
+        valgrind-devel python36-pylint man java-1.8.0-openjdk maven
 
 # DAOS specific
 RUN yum -y install \
@@ -72,8 +72,8 @@ RUN yum -y install \
            python2-clustershell python2-Cython python2-pip     \
            python36-clustershell python36-paramiko             \
            python36-numpy python36-jira python3-pip            \
-           fuse3-devel python{36,}-distro                      \
-           libipmctl-devel openmpi3-devel hwloc-devel
+           fuse3-devel libipmctl-devel openmpi3-devel          \
+           hwloc-devel
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
@@ -81,11 +81,27 @@ RUN pip3 install avocado-framework; \
     pip3 install avocado-framework-plugin-result-html; \
     pip3 install avocado-framework-plugin-varianter-yaml-to-mux
 
+RUN pip install codespell
+
 # Add DAOS user
 ENV USER daos
 ENV PASSWD daos
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
+
+# set maven mirror
+RUN mkdir -p /home/$USER/.m2
+
+RUN echo -e "<settings>\n\
+	<mirrors>\n\
+		<mirror>\n\
+			<id>google-maven-central</id>\n\
+			<name>GCS Maven Central mirror</name>\n\
+			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+			<mirrorOf>central</mirrorOf>\n\
+		</mirror>\n\
+	</mirrors>\n\
+</settings>" > /home/$USER/.m2/settings.xml
 
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
@@ -98,31 +114,36 @@ ARG JENKINS_URL=""
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS=""
 ARG REPOS=""
-RUN if $QUICKBUILD; then                                                         \
-        echo -e "[repo.dc.hpdd.intel.com_repository_daos-stack-el-7-x86_64-stable-local]\n\
-name=created by dnf config-manager from https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local\n\
-baseurl=https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local\n\
+ARG REPO_URL=""
+ARG REPO_EL7=""
+RUN if $QUICKBUILD; then                                                      \
+        MY_REPO="${REPO_URL}${REPO_EL7}";                                     \
+        MY_NAME="${MY_REPO#*//}";                                             \
+        MY_NAME="${MY_NAME//\//_}";                                           \
+        echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
 enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;          \
-        for repo in $REPOS; do                                                   \
-            branch="master";                                                     \
-            build_number="lastSuccessfulBuild";                                  \
-            if [[ $repo = *@* ]]; then                                           \
-                branch="${repo#*@}";                                             \
-                repo="${repo%@*}";                                               \
-                if [[ $branch = *:* ]]; then                                     \
-                    build_number="${branch#*:}";                                 \
-                    branch="${branch%:*}";                                       \
-                fi;                                                              \
-            fi;                                                                  \
+gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
+        for repo in $REPOS; do                                                \
+            branch="master";                                                  \
+            build_number="lastSuccessfulBuild";                               \
+            if [[ $repo = *@* ]]; then                                        \
+                branch="${repo#*@}";                                          \
+                repo="${repo%@*}";                                            \
+                if [[ $branch = *:* ]]; then                                  \
+                    build_number="${branch#*:}";                              \
+                    branch="${branch%:*}";                                    \
+                fi;                                                           \
+            fi;                                                               \
             echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
 baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
 enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;          \
-        done;                                                                    \
-        echo "Installing: $QUICKBUILD_DEPS";                                     \
-        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 yum -y install;        \
+gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
+        done;                                                                 \
+        echo "Installing: $QUICKBUILD_DEPS";                                  \
+        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 yum -y install;     \
     fi
 
 # force an upgrade to get any newly built RPMs

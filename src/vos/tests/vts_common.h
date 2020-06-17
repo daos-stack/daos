@@ -123,7 +123,7 @@ int run_gc_tests(const char *cfg);
 int run_pm_tests(const char *cfg);
 int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators,
 		const char *cfg);
-int run_ts_tests(void);
+int run_ts_tests(const char *cfg);
 
 int run_ilog_tests(const char *cfg);
 int run_csum_extent_tests(const char *cfg);

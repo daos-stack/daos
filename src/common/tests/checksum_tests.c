@@ -66,6 +66,8 @@ static int fake_update_bytes_seen;
 static int
 fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
+	if (buf_len == 0)
+		return 0;
 	obj->dcs_csum_buf[0]++; /** Just increment the first byte */
 	fake_update_bytes_seen += buf_len;
 	strncpy(fake_update_buf, (char *)buf, buf_len);
@@ -82,10 +84,11 @@ fake_get_size(struct daos_csummer *obj)
 	return fake_get_size_result;
 }
 
-void
+int
 fake_reset(struct daos_csummer *obj)
 {
 	obj->dcs_csum_buf[0] = 0;
+	return 0;
 }
 
 static struct csum_ft fake_algo = {
@@ -229,7 +232,7 @@ test_daos_checksummer_with_single_iov_single_chunk(void **state)
 	iod.iod_size = 1;
 	iod.iod_type = DAOS_IOD_ARRAY;
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
 				    &actual);
 
 	assert_int_equal(0, rc);
@@ -271,7 +274,7 @@ test_daos_checksummer_with_unaligned_recx(void **state)
 	iod.iod_type = DAOS_IOD_ARRAY;
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
 				    &actual);
 
 	assert_int_equal(0, rc);
@@ -313,7 +316,7 @@ test_daos_checksummer_with_mult_iov_single_chunk(void **state)
 	iod.iod_type = DAOS_IOD_ARRAY;
 	fake_update_bytes_seen = 0;
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
 				    &actual);
 
 	assert_int_equal(0, rc);
@@ -342,7 +345,7 @@ test_daos_checksummer_with_multi_iov_multi_extents(void **state)
 	struct dcs_iod_csums	*actual;
 	int			 rc = 0;
 
-	fake_get_size_result = 4;
+	fake_get_size_result = fake_algo.cf_csum_len = 4;
 
 	daos_csummer_init(&csummer, &fake_algo, 16, 0);
 
@@ -362,7 +365,7 @@ test_daos_checksummer_with_multi_iov_multi_extents(void **state)
 	iod.iod_size = 1;
 	iod.iod_type = DAOS_IOD_ARRAY;
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
 				    &actual);
 
 	assert_int_equal(0, rc);
@@ -380,7 +383,6 @@ test_daos_checksummer_with_multi_iov_multi_extents(void **state)
 	daos_csummer_destroy(&csummer);
 
 }
-
 
 static void
 test_daos_checksummer_with_multiple_chunks(void **state)
@@ -412,7 +414,7 @@ test_daos_checksummer_with_multiple_chunks(void **state)
 	iod.iod_type = DAOS_IOD_ARRAY;
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
 				    &actual);
 
 	assert_int_equal(0, rc);
@@ -431,6 +433,251 @@ test_daos_checksummer_with_multiple_chunks(void **state)
 	daos_sgl_fini(&sgl, true);
 	daos_csummer_free_ic(csummer, &actual);
 	daos_csummer_destroy(&csummer);
+}
+
+static void
+get_map_test(void **state)
+{
+	daos_iom_t		map = {0};
+	struct daos_csum_range	range;
+	daos_recx_t		recxs[10];
+	uint32_t		i;
+	struct daos_csum_range	result;
+
+	for (i = 0; i < ARRAY_SIZE(recxs); i++) {
+		recxs[i].rx_idx = i * 10 + 1;
+		recxs[i].rx_nr = 5;
+	}
+	map.iom_recxs = recxs;
+	map.iom_nr = 1;
+
+	/** Includes only */
+	dcr_set_idx_nr(&range, 0, 10);
+	result = get_maps_idx_nr_for_range(&range, &map);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(1, result.dcr_nr);
+
+	/** Includes second */
+	map.iom_nr = 2;
+	dcr_set_idx_nr(&range, 10, 10);
+	result = get_maps_idx_nr_for_range(&range, &map);
+	assert_int_equal(1, result.dcr_lo);
+	assert_int_equal(1, result.dcr_nr);
+
+	/** Only includes second */
+	map.iom_nr = ARRAY_SIZE(recxs);
+	dcr_set_idx_nr(&range, 10, 10);
+	result = get_maps_idx_nr_for_range(&range, &map);
+	assert_int_equal(1, result.dcr_lo);
+	assert_int_equal(1, result.dcr_nr);
+
+	/** Only includes second and third */
+	dcr_set_idx_nr(&range, 10, 20);
+	result = get_maps_idx_nr_for_range(&range, &map);
+	assert_int_equal(1, result.dcr_lo);
+	assert_int_equal(2, result.dcr_nr);
+
+	/** includes 3, 4, 5  */
+	dcr_set_idx_nr(&range, 20, 30);
+	result = get_maps_idx_nr_for_range(&range, &map);
+	assert_int_equal(2, result.dcr_lo);
+	assert_int_equal(3, result.dcr_nr);
+
+	/** includes all */
+	dcr_set_idx_nr(&range, 0, 100);
+	result = get_maps_idx_nr_for_range(&range, &map);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(ARRAY_SIZE(recxs), result.dcr_nr);
+
+	/** includes none */
+	dcr_set_idx_nr(&range, 1000, 100);
+	result = get_maps_idx_nr_for_range(&range, &map);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(0, result.dcr_nr);
+
+	/** Overlapping should be included */
+	dcr_set_idx_nr(&range, 0, 3);
+	result = get_maps_idx_nr_for_range(&range, &map);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(1, result.dcr_nr);
+	dcr_set_idx_nr(&range, 14, 3);
+	result = get_maps_idx_nr_for_range(&range, &map);
+	assert_int_equal(1, result.dcr_lo);
+	assert_int_equal(1, result.dcr_nr);
+
+	/** Mapped area is larger than request */
+	dcr_set_idx_nr(&range, 3, 3);
+	map.iom_recxs[0].rx_idx = 0;
+	map.iom_recxs[0].rx_nr = 10;
+	map.iom_size = 8;
+	map.iom_nr = 1;
+	result = get_maps_idx_nr_for_range(&range, &map);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(1, result.dcr_nr);
+}
+
+#define MAP_MAX 10
+#define	HOLES_TESTCASE(...) \
+	holes_test_case(&(struct holes_test_args)__VA_ARGS__)
+struct holes_test_args {
+	uint32_t	 chunksize;
+	uint32_t	 record_size;
+	daos_recx_t	 map_recx[MAP_MAX];
+	daos_recx_t	 req_recx[MAP_MAX];
+	char		*expected_checksum_updates;
+	char		*sgl_data;
+};
+static void
+holes_test_case(struct holes_test_args *args)
+{
+	struct daos_csummer	*csummer;
+	d_sg_list_t		 sgl;
+	daos_iod_t		 iod = {0};
+	daos_iom_t		 map = {0};
+	struct dcs_iod_csums	*actual;
+	uint64_t		 total_req_size = 0;
+	int			 i;
+	int			 rc = 0;
+
+	int map_recx_nr = 0;
+	int req_recx_nr = 0;
+
+	while (map_recx_nr < MAP_MAX && args->map_recx[map_recx_nr].rx_nr > 0)
+		map_recx_nr++;
+	while (req_recx_nr < MAP_MAX && args->req_recx[req_recx_nr].rx_nr > 0)
+		req_recx_nr++;
+
+	/** Setup */
+	daos_csummer_init(&csummer, &fake_algo, args->chunksize, 0);
+	fake_update_buf = fake_update_buf_copy;
+	memset(fake_update_buf_copy, 0, ARRAY_SIZE(fake_update_buf_copy));
+	fake_get_size_result = fake_algo.cf_csum_len = 4;
+
+	iod.iod_nr = req_recx_nr;
+	iod.iod_recxs = args->req_recx;
+	iod.iod_size = args->record_size;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+
+	map.iom_recxs = args->map_recx;
+	map.iom_nr = map_recx_nr;
+	map.iom_size = args->record_size;
+	map.iom_type = DAOS_IOD_ARRAY;
+
+	dts_sgl_init_with_strings(&sgl, 1, args->sgl_data);
+	/** sanity check */
+	for (i = 0; i < req_recx_nr; i++)
+		total_req_size += args->req_recx[i].rx_nr * args->record_size;
+	if (total_req_size != daos_sgl_buf_size(&sgl))
+		fail_msg("Test not setup correctly. total_req_size[%lu] != "
+			 "daos_sgl_buf_size(&sgl)[%lu]",
+			 total_req_size, daos_sgl_buf_size(&sgl));
+
+	/** Act */
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, &map, 1, 0, NULL, 0,
+				    &actual);
+	assert_int_equal(0, rc);
+
+	/** Verify */
+	assert_string_equal(args->expected_checksum_updates,
+			    fake_update_buf_copy);
+
+	daos_sgl_fini(&sgl, true);
+	daos_csummer_free_ic(csummer, &actual);
+	daos_csummer_destroy(&csummer);
+}
+
+static void
+holes_1(void **state)
+{
+	HOLES_TESTCASE({
+		.chunksize = 1024 * 32,
+		.record_size = 1,
+		.map_recx = {
+			{.rx_idx = 2, .rx_nr = 6},
+			{.rx_idx = 10, .rx_nr = 6},
+		},
+		.req_recx = { {.rx_idx = 0, .rx_nr = 20} },
+		/** '_' represents holes */
+		.sgl_data = "__YYYYYY__ZZZZZZ___",
+		.expected_checksum_updates = "akey|YYYYYY|ZZZZZZ|",
+	});
+}
+
+static void
+holes_2(void **state)
+{
+	HOLES_TESTCASE({
+		.chunksize = 4,
+		.record_size = 1,
+		.map_recx = {
+			{.rx_idx = 2, .rx_nr = 6},
+			{.rx_idx = 10, .rx_nr = 6},
+		},
+		.req_recx = { {.rx_idx = 0, .rx_nr = 20} },
+		/** '_' represents holes */
+		.sgl_data = "__YYYYYY__ZZZZZZ___",
+		.expected_checksum_updates = "akey|YY|YYYY|ZZ|ZZZZ|",
+	});
+}
+
+static void
+holes_3(void **state)
+{
+	HOLES_TESTCASE({
+		.chunksize = 4,
+		.record_size = 1,
+		.map_recx = {
+			{.rx_idx = 2, .rx_nr = 4},
+			{.rx_idx = 10, .rx_nr = 6},
+		},
+		.req_recx = { {.rx_idx = 0, .rx_nr = 20} },
+		/** '_' represents holes */
+		.sgl_data = "__YYYY____ZZZZZZ___",
+		.expected_checksum_updates = "akey|YY|YY|ZZ|ZZZZ|",
+	});
+}
+
+static void
+holes_4(void **state)
+{
+	HOLES_TESTCASE({
+		.chunksize = 4,
+		.record_size = 1,
+		.map_recx = {
+			{.rx_idx = 2, .rx_nr = 4},
+			{.rx_idx = 20, .rx_nr = 6},
+		},
+		.req_recx = { {.rx_idx = 0, .rx_nr = 30} },
+		/** '_' represents holes */
+		.sgl_data = "__YYYY______________ZZZZZZ___",
+		.expected_checksum_updates = "akey|YY|YY|ZZZZ|ZZ|",
+	});
+}
+static void
+holes_5(void **state)
+{
+	HOLES_TESTCASE({
+		.chunksize = 1024,
+		.record_size = 2,
+		.map_recx = {
+			{.rx_idx = 1, .rx_nr = 1},
+			{.rx_idx = 3, .rx_nr = 1},
+			{.rx_idx = 5, .rx_nr = 1},
+			{.rx_idx = 7, .rx_nr = 1},
+			{.rx_idx = 9, .rx_nr = 1},
+			{.rx_idx = 11, .rx_nr = 1},
+			{.rx_idx = 13, .rx_nr = 1},
+			{.rx_idx = 15, .rx_nr = 1},
+			{.rx_idx = 17, .rx_nr = 1},
+			{.rx_idx = 19, .rx_nr = 1},
+		},
+		.req_recx = { {.rx_idx = 0, .rx_nr = 30} },
+		.sgl_data =
+		"__AA__AA__AA__AA__AA__AA__AA__AA__AA__AA___________________",
+		.expected_checksum_updates =
+			 "akey|AA|AA|AA|AA|AA|AA|AA|AA|AA|AA|",
+	});
 }
 
 /**
@@ -503,9 +750,11 @@ test_compare_checksums(void **state)
 	iod.iod_size = 1;
 	iod.iod_type = DAOS_IOD_ARRAY;
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0, &one);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod,
+				    NULL, 1, 0, NULL, 0, &one);
 	assert_int_equal(0, rc);
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0, &two);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod,
+				    NULL, 1, 0, NULL, 0, &two);
 	assert_int_equal(0, rc);
 
 	assert_true(daos_csummer_compare_csum_info(csummer, one->ic_data,
@@ -587,21 +836,22 @@ print_checksum(struct daos_csummer *csummer, struct dcs_csum_info *csum)
 {
 	uint32_t i, c;
 
-	D_PRINT("Type: %d\n", csum->cs_type);
-	D_PRINT("Name: %s\n", daos_csummer_get_name(csummer));
-	D_PRINT("Count: %d\n", csum->cs_nr);
-	D_PRINT("Len: %d\n", csum->cs_len);
-	D_PRINT("Buf Len: %d\n", csum->cs_buf_len);
-	D_PRINT("Chunk: %d\n", csum->cs_chunksize);
+	print_message("Type: %d\n", csum->cs_type);
+	print_message("Name: %s\n", daos_csummer_get_name(csummer));
+	print_message("Count: %d\n", csum->cs_nr);
+	print_message("Len: %d\n", csum->cs_len);
+	print_message("Buf Len: %d\n", csum->cs_buf_len);
+	print_message("Chunk: %d\n", csum->cs_chunksize);
 	for (c = 0; c < csum->cs_nr; c++) {
 		uint8_t *csum_bytes = ci_idx2csum(csum, c);
 
-		D_PRINT("Checksum[%02d]: 0x", c);
+		print_message("Checksum[%02d]: 0x", c);
 		for (i = 0; i < csum->cs_len; i++)
-			D_PRINT("%02x", csum_bytes[i]);
-		D_PRINT("\n");
+			print_message("%02x", csum_bytes[i]);
+		print_message("\n");
 	}
-	D_PRINT("\n");
+	print_message("\n");
+	fflush(stdout);
 }
 
 /**
@@ -610,13 +860,14 @@ print_checksum(struct daos_csummer *csummer, struct dcs_csum_info *csum)
  * -----------------------------------------------------------------------------
  */
 static void
-test_all_checksum_types(void **state)
+test_all_algo_basic(void **state)
 {
 	d_sg_list_t		 sgl;
 	daos_recx_t		 recxs;
 	enum DAOS_CSUM_TYPE	 type;
 	struct daos_csummer	*csummer = NULL;
-	struct dcs_iod_csums	*csums = NULL;
+	struct dcs_iod_csums	*csums1 = NULL;
+	struct dcs_iod_csums	*csums2 = NULL;
 	int			 csum_lens[CSUM_TYPE_END];
 	daos_iod_t		 iod = {0};
 	int			 rc;
@@ -625,14 +876,11 @@ test_all_checksum_types(void **state)
 	csum_lens[CSUM_TYPE_ISAL_CRC16_T10DIF]	= 2;
 	csum_lens[CSUM_TYPE_ISAL_CRC32_ISCSI]	= 4;
 	csum_lens[CSUM_TYPE_ISAL_CRC64_REFL]	= 8;
+	csum_lens[CSUM_TYPE_ISAL_SHA1]		= 20;
+	csum_lens[CSUM_TYPE_ISAL_SHA256]	= 256 / 8;
+	csum_lens[CSUM_TYPE_ISAL_SHA512]	= 512 / 8;
 
-	dts_sgl_init_with_strings(&sgl, 1, "Lorem ipsum dolor sit amet, "
-"consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
-"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation "
-"ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure "
-"dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
-"pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui "
-"officia deserunt mollit anim id est laborum.");
+	dts_sgl_init_with_strings(&sgl, 1, "Data");
 
 	recxs.rx_idx = 0;
 	recxs.rx_nr = daos_sgl_buf_size(&sgl);
@@ -640,28 +888,156 @@ test_all_checksum_types(void **state)
 	for (type = CSUM_TYPE_UNKNOWN + 1; type < CSUM_TYPE_END; type++) {
 		rc = daos_csummer_init(&csummer,
 				       daos_csum_type2algo(type), 128, 0);
-		assert_int_equal(0, rc);
+		if (rc != 0)
+			fail_msg("init failed for type: %d. " DF_RC,
+				type, DP_RC(rc));
 
+		d_iov_set(&iod.iod_name, "akey", sizeof("akey"));
 		iod.iod_nr = 1;
 		iod.iod_recxs = &recxs;
 		iod.iod_size = 1;
 		iod.iod_type = DAOS_IOD_ARRAY;
 
-		rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
-					    &csums);
+		rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0,
+					    NULL, 0,
+					    &csums1);
+		assert_int_equal(0, rc);
+		assert_int_equal(csum_lens[type],
+				 daos_csummer_get_csum_len(csummer));
+
+		/** run it a second time to make sure that checksums
+		 * are calculated the same and the reset, update, finish flow
+		 * works
+		 */
+		rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0,
+					    NULL, 0,
+					    &csums2);
 
 		assert_int_equal(0, rc);
 		assert_int_equal(csum_lens[type],
 				 daos_csummer_get_csum_len(csummer));
 
-		if (verbose)
-			print_checksum(csummer, &csums->ic_data[0]);
+		assert_memory_equal(csums1->ic_akey.cs_csum,
+				    csums2->ic_akey.cs_csum,
+				    csums1->ic_akey.cs_len);
+		assert_memory_equal(csums1->ic_data[0].cs_csum,
+				    csums2->ic_data[0].cs_csum,
+				    csums1->ic_data[0].cs_len);
 
-		daos_csummer_free_ic(csummer, &csums);
+		if (verbose) {
+			print_checksum(csummer, &csums1->ic_akey);
+			print_checksum(csummer, &csums1->ic_data[0]);
+		}
+
+		daos_csummer_free_ic(csummer, &csums1);
+		daos_csummer_free_ic(csummer, &csums2);
 		daos_csummer_destroy(&csummer);
 	}
 
 	daos_sgl_fini(&sgl, true);
+}
+
+static void
+test_do_not_need_to_call(void **state)
+{
+	enum DAOS_CSUM_TYPE	 type;
+	struct daos_csummer	*csummer = NULL;
+	const daos_size_t	 buffer_len = 512;
+	uint8_t			 buffer[512];
+	int			 i;
+	int			 rc;
+
+	for (type = CSUM_TYPE_UNKNOWN + 1; type < CSUM_TYPE_END; type++) {
+		memset(buffer, 0, buffer_len);
+		rc = daos_csummer_init(&csummer,
+				       daos_csum_type2algo(type), 128, 0);
+		assert_int_equal(0, rc);
+
+		daos_csummer_set_buffer(csummer, buffer, buffer_len);
+		rc = daos_csummer_reset(csummer);
+		assert_int_equal(0, rc);
+
+		rc = daos_csummer_finish(csummer);
+		assert_int_equal(0, rc);
+
+		/** checksum buffer should have been untouched */
+		for (i = 0; i < buffer_len; i++) {
+			if (buffer[i] != 0)
+				fail_msg("checksum type %d, buffer[%d] (%d) "
+					 "!= 0", type, i, buffer[i] != 0);
+		}
+		daos_csummer_destroy(&csummer);
+	}
+}
+static void
+test_repeat_updates(void **state)
+{
+	enum DAOS_CSUM_TYPE	 type;
+	struct daos_csummer	*csummer = NULL;
+	const daos_size_t	 data_buf_len = 512;
+	const daos_size_t	 update_chunks[] = {32, 64, 128, 256};
+	uint8_t			 data_buf[data_buf_len];
+	/** sha512 is largest */
+	const daos_size_t	 csum_buf_len = 512 / 8;
+	uint8_t			 csum_buf_1[csum_buf_len];
+	uint8_t			 csum_buf_2[csum_buf_len];
+	int			 i, c;
+	int			 rc;
+
+	memset(data_buf, 0xA, data_buf_len);
+
+	for (type = CSUM_TYPE_UNKNOWN + 1; type < CSUM_TYPE_END; type++) {
+		type = CSUM_TYPE_ISAL_SHA512;
+
+		struct csum_ft *ft = daos_csum_type2algo(type);
+
+		rc = daos_csummer_init(&csummer, ft, CSUM_NO_CHUNK, 0);
+		assert_int_equal(0, rc);
+		print_message("Checksum : %s\n",
+			      daos_csummer_get_name(csummer));
+
+		/** Calculate checksum for whole buffer */
+		memset(csum_buf_1, 0, csum_buf_len);
+		daos_csummer_set_buffer(csummer, csum_buf_1, csum_buf_len);
+		rc = daos_csummer_reset(csummer);
+		assert_int_equal(0, rc);
+		rc = daos_csummer_update(csummer, data_buf, data_buf_len);
+		assert_int_equal(0, rc);
+		rc = daos_csummer_finish(csummer);
+		assert_int_equal(0, rc);
+
+		/** calculate checksum for buffer in incremental updates */
+		for (c = 0; c < ARRAY_SIZE(update_chunks); c++) {
+			daos_size_t chunk = update_chunks[c];
+
+			memset(csum_buf_2, 0, csum_buf_len);
+
+			daos_csummer_set_buffer(csummer, csum_buf_2,
+						csum_buf_len);
+			rc = daos_csummer_reset(csummer);
+			assert_int_equal(0, rc);
+
+			for (i = 0; i < data_buf_len / chunk; i++) {
+				daos_csummer_update(csummer,
+						    data_buf + i * chunk,
+						    chunk);
+			}
+
+			rc = daos_csummer_finish(csummer);
+			assert_int_equal(0, rc);
+
+			for (i = 0; i < csum_buf_len; i++) {
+				if (csum_buf_1[i] != csum_buf_2[i])
+					fail_msg("checksum type %s, buffer[%d] "
+						 "(%d) != (%d)",
+						 daos_csummer_get_name(csummer),
+						 i,
+						 csum_buf_1[i], csum_buf_2[i]);
+			}
+
+		}
+		daos_csummer_destroy(&csummer);
+	}
 }
 
 /**
@@ -1038,6 +1414,12 @@ test_container_prop_to_csum_type(void **state)
 			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_CRC32));
 	assert_int_equal(CSUM_TYPE_ISAL_CRC64_REFL,
 			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_CRC64));
+	assert_int_equal(CSUM_TYPE_ISAL_SHA1,
+			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_SHA1));
+	assert_int_equal(CSUM_TYPE_ISAL_SHA256,
+			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_SHA256));
+	assert_int_equal(CSUM_TYPE_ISAL_SHA512,
+			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_SHA512));
 }
 
 static void
@@ -1046,9 +1428,11 @@ test_is_valid_csum(void **state)
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_OFF));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC32));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA1));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA256));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA512));
 
 	/** Not supported yet */
-	assert_false(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA1));
 	assert_false(daos_cont_csum_prop_is_valid(99));
 }
 
@@ -1057,9 +1441,11 @@ test_is_csum_enabled(void **state)
 {
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC32));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA1));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA256));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA512));
 
 	/** Not supported yet */
-	assert_false(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA1));
 	assert_false(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_OFF));
 	assert_false(daos_cont_csum_prop_is_enabled(9999));
 }
@@ -1084,7 +1470,7 @@ simple_sv(void **state)
 	iod.iod_size = daos_sgl_buf_size(&sgl);
 	iod.iod_type = DAOS_IOD_SINGLE;
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
 				    &actual);
 
 	assert_int_equal(0, rc);
@@ -1122,9 +1508,11 @@ test_compare_sv_checksums(void **state)
 	iod.iod_size = daos_sgl_buf_size(&sgl);
 	iod.iod_type = DAOS_IOD_SINGLE;
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0, &one);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod,
+				    NULL, 1, 0, NULL, 0, &one);
 	assert_int_equal(0, rc);
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0, &two);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod,
+				    NULL, 1, 0, NULL, 0, &two);
 	assert_int_equal(0, rc);
 
 	assert_true(daos_csummer_compare_csum_info(csummer, one->ic_data,
@@ -1157,25 +1545,29 @@ test_verify_sv_data(void **state)
 	iod.iod_type = DAOS_IOD_SINGLE;
 
 	/** Checksum not set in iod_csums but csummer is set so should error */
-	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0);
+	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0,
+				     NULL);
 	assert_int_equal(-DER_INVAL, rc);
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
 				    &iod_csums);
 	assert_int_equal(0, rc);
 
-	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0);
+	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0,
+				     NULL);
 	assert_int_equal(0, rc);
 
 	((char *)sgl.sg_iovs[0].iov_buf)[0]++; /** Corrupt the data */
-	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0);
+	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0,
+				     NULL);
 	assert_int_equal(-DER_CSUM, rc);
 
 	((char *)sgl.sg_iovs[0].iov_buf)[0]--; /** Un-corrupt the data */
 	/** Corrupt data elsewhere*/
 	sgl_buf_half = daos_sgl_buf_size(&sgl) / 2;
 	((char *)sgl.sg_iovs[0].iov_buf)[sgl_buf_half + 1]++;
-	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0);
+	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0,
+				     NULL);
 	assert_int_equal(-DER_CSUM, rc);
 
 	/** Clean up */
@@ -1207,7 +1599,7 @@ test_akey_csum(void **state)
 	iod.iod_type = DAOS_IOD_ARRAY;
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, 0, NULL, 0,
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
 				    &actual);
 	assert_int_equal(0, rc);
 
@@ -1240,6 +1632,23 @@ test_calc_rec_chunksize(void **state)
 		csum_record_chunksize(UINT_MAX, UINT_MAX - 1));
 }
 
+static void
+test_formatter(void **state)
+{
+	uint64_t csum_buf = 1234567890123456789;
+	char result[1024];
+	struct dcs_csum_info ci = {
+		.cs_csum = (uint8_t *)&csum_buf,
+		.cs_nr = 1,
+		.cs_chunksize = 1024,
+		.cs_buf_len = sizeof(csum_buf),
+		.cs_len = sizeof(csum_buf)
+		};
+
+	sprintf(result, DF_CI, DP_CI(ci));
+	assert_string_equal("{nr: 1, len: 8, first_csum: 1234567890123456789}",
+			    result);
+}
 
 static int test_setup(void **state)
 {
@@ -1252,66 +1661,92 @@ static int test_teardown(void **state)
 	return 0;
 }
 
+#define TEST(dsc, test) { dsc, test, test_setup, \
+				test_teardown }
+
 static const struct CMUnitTest tests[] = {
-	{"CSUM01: Test initialize and destroy checksummer",
-		test_init_and_destroy, test_setup, test_teardown},
-	{"CSUM02: Test update and get the checksum",
-		test_update_reset, test_setup, test_teardown},
-	{"CSUM03: Test update with multiple buffer",
-		test_update_with_multiple_buffers, test_setup, test_teardown},
-	{"CSUM04: Create checksum from a single iov, recx, and chunk",
-		test_daos_checksummer_with_single_iov_single_chunk,
-		test_setup, test_teardown},
-	{"CSUM05: Create checksum from unaligned recx",
-		test_daos_checksummer_with_unaligned_recx,
-		test_setup, test_teardown},
-	{"CSUM06: Create checksum from a multiple iov, single recx, and chunk",
-		test_daos_checksummer_with_mult_iov_single_chunk, test_setup,
-		test_teardown},
-	{"CSUM07: Create checksum from a multiple iov, multi recx, and chunk",
-		test_daos_checksummer_with_multi_iov_multi_extents,
-		test_setup, test_teardown},
-	{"CSUM08: More complicated daos checksumming",
-		test_daos_checksummer_with_multiple_chunks,
-		test_setup, test_teardown},
-	{"CSUM09: Test the different types of checksums",
-		test_all_checksum_types, test_setup, test_teardown},
-	{"CSUM10: Test map from container prop to csum type",
-		test_container_prop_to_csum_type, test_setup, test_teardown},
-	{"CSUM11: Some helper function tests",
-		test_helper_functions, test_setup, test_teardown},
-	{"CSUM12: Is Valid Checksum Property",
-		test_is_valid_csum, test_setup, test_teardown},
-	{"CSUM13: Is Checksum Property Enabled",
-		test_is_csum_enabled, test_setup, test_teardown},
-	{"CSUM14: A simple checksum comparison test",
-		simple_test_compare_checksums, test_setup, test_teardown},
-	{"CSUM15: Compare checksums after actual calculation",
-		test_compare_checksums, test_setup, test_teardown},
-	{"CSUM16: Get Allocation size",
-		test_get_iod_csum_allocation_size, test_setup, test_teardown},
-	{"CSUM17: Calculating number of chunks for range",
-		test_csum_chunk_count, test_setup, test_teardown},
-	{"CSUM18: Calculating number of chunks for an extent",
-		test_recx_calc_chunks, test_setup, test_teardown},
-	{"CSUM19: Get chunk alignment given an offset and the chunk size",
-		test_daos_align_to_floor_of_chunk, test_setup, test_teardown},
-	{"CSUM20: Get chunk from recx",
-		daos_recx_get_chunk_tests, test_setup, test_teardown},
-	{"CSUM21: Align range boundaries to chunk borders",
-		test_align_boundaries, test_setup, test_teardown},
-	{"CSUM22: Align range to a single chunk",
-		test_align_to_chunk, test_setup, test_teardown},
-	{"CSUM23: Single value",
-		simple_sv, test_setup, test_teardown},
-	{"CSUM24: Compare single values checksums",
-		test_compare_sv_checksums, test_setup, test_teardown},
-	{"CSUM25: Verify single value data",
-		test_verify_sv_data, test_setup, test_teardown},
-	{"CSUM26: iod csums includes 'a' key csum",
-		test_akey_csum, test_setup, test_teardown},
-	{"CSUM27: Calc record chunk size",
-		test_calc_rec_chunksize, test_setup, test_teardown},
+	TEST("CSUM01: Test initialize and destroy checksummer",
+	     test_init_and_destroy),
+	TEST("CSUM02: Test update and get the checksum",
+	     test_update_reset),
+	TEST("CSUM03: Test update with multiple buffer",
+	     test_update_with_multiple_buffers),
+	TEST("CSUM04: Create checksum from a single iov, recx, and chunk",
+	     test_daos_checksummer_with_single_iov_single_chunk),
+	TEST("CSUM05: Create checksum from unaligned recx",
+	     test_daos_checksummer_with_unaligned_recx),
+	TEST("CSUM06: Create checksum from a multiple iov, "
+	     "single recx, and chunk",
+	     test_daos_checksummer_with_mult_iov_single_chunk),
+	TEST("CSUM07: Create checksum from a multiple iov, "
+	     "multi recx, and chunk",
+	     test_daos_checksummer_with_multi_iov_multi_extents),
+	TEST("CSUM08: More complicated daos checksumming",
+	     test_daos_checksummer_with_multiple_chunks),
+
+	TEST("CSUM09.0: Test all checksum algorithms: checksum size and "
+	     "repeat calls result in same hash",
+	     test_all_algo_basic),
+	TEST("CSUM09.1: Test all checksum algorithms: when update is not "
+	     "called, checksum buffer does not change.",
+	     test_do_not_need_to_call),
+	TEST("CSUM09.2: Test all checksum algorithms: Repeat calls to update "
+	     "for different source buffers results in same checksum if all "
+	     "data passed at once ",
+	     test_repeat_updates),
+
+	TEST("CSUM10: Test map from container prop to csum type",
+	     test_container_prop_to_csum_type),
+	TEST("CSUM11: Some helper function tests",
+	     test_helper_functions),
+	TEST("CSUM12: Is Valid Checksum Property",
+	     test_is_valid_csum),
+	TEST("CSUM13: Is Checksum Property Enabled",
+	     test_is_csum_enabled),
+	TEST("CSUM14: A simple checksum comparison test",
+	     simple_test_compare_checksums),
+	TEST("CSUM15: Compare checksums after actual calculation",
+	     test_compare_checksums),
+	TEST("CSUM16: Get Allocation size",
+	     test_get_iod_csum_allocation_size),
+	TEST("CSUM17: Calculating number of chunks for range",
+	     test_csum_chunk_count),
+	TEST("CSUM18: Calculating number of chunks for an extent",
+	     test_recx_calc_chunks),
+	TEST("CSUM19: Get chunk alignment given an offset and the chunk size",
+	     test_daos_align_to_floor_of_chunk),
+	TEST("CSUM20: Get chunk from recx",
+	     daos_recx_get_chunk_tests),
+	TEST("CSUM21: Align range boundaries to chunk borders",
+	     test_align_boundaries),
+	TEST("CSUM22: Align range to a single chunk",
+	     test_align_to_chunk),
+	TEST("CSUM23: Single value",
+	     simple_sv),
+	TEST("CSUM24: Compare single values checksums",
+	     test_compare_sv_checksums),
+	TEST("CSUM25: Verify single value data",
+	     test_verify_sv_data),
+	TEST("CSUM26: iod csums includes 'a' key csum",
+	     test_akey_csum),
+	TEST("CSUM27: Calc record chunk size",
+	     test_calc_rec_chunksize),
+	TEST("CSUM28: Formatter",
+	     test_formatter),
+	TEST("CSUM28: Get the recxes from a map", get_map_test),
+	TEST("CSUM_HOLES01: With 2 mapped extents that leave a hole "
+	     "at the beginning, in between and "
+	     "at the end, all within a single chunk.", holes_1),
+	TEST("CSUM_HOLES02: With 2 mapped extents that leave a hole at the "
+	     "beginning, in between and at the end, with several chunks",
+	     holes_2),
+	TEST("CSUM_HOLES03: With 2 mapped extents with a hole that starts "
+	     "and ends in different chunks", holes_3),
+	TEST("CSUM_HOLES04: With 2 mapped extents with a hole that spans "
+	     "multiple chunks", holes_4),
+	TEST("CSUM_HOLES05: With record size 2 and many holes within a "
+	     "single chunk", holes_5),
+
 };
 
 int

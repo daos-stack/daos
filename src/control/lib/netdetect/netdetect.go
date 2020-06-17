@@ -26,7 +26,6 @@
 package netdetect
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../include
 #cgo LDFLAGS: -lhwloc -lfabric
 #include <stdlib.h>
 #include <hwloc.h>
@@ -38,6 +37,66 @@ package netdetect
 #include <rdma/fi_tagged.h>
 #include <rdma/fi_rma.h>
 #include <rdma/fi_errno.h>
+
+#if HWLOC_API_VERSION >= 0x00020000
+
+int cmpt_setFlags(hwloc_topology_t topology)
+{
+	return hwloc_topology_set_all_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_ALL);
+}
+
+hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx)
+{
+	return hwloc_get_obj_by_depth(topology, depth, idx);
+}
+
+uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth)
+{
+	return (uint)hwloc_get_nbobjs_by_depth(topology, depth);
+}
+
+int cmpt_get_parent_arity(hwloc_obj_t node)
+{
+	return node->parent->io_arity;
+}
+
+hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
+{
+	hwloc_obj_t child;
+	int i;
+
+	child = node->parent->io_first_child;
+	for (i = 0; i < idx; i++) {
+		child = child->next_sibling;
+	}
+	return child;
+}
+#else
+int cmpt_setFlags(hwloc_topology_t topology)
+{
+	return hwloc_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
+}
+
+hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx)
+{
+	return hwloc_get_obj_by_depth(topology, (uint)depth, idx);
+}
+
+uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth)
+{
+	return (uint)hwloc_get_nbobjs_by_depth(topology, (uint)depth);
+}
+
+int cmpt_get_parent_arity(hwloc_obj_t node)
+{
+	return node->parent->arity;
+}
+
+hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
+{
+	return node->parent->children[idx];
+}
+#endif
 
 #define getHFIUnitError -2
 typedef struct {
@@ -76,8 +135,6 @@ const (
 	bestfit
 	libFabricMajorVersion = 1
 	libFabricMinorVersion = 7
-	hwlocFlagsStandard    = 0
-	hwlocFlagsWholeSystem = 1
 	allHFIUsed            = -1
 	badAddress            = C.getHFIUnitError
 )
@@ -131,33 +188,25 @@ func (da *DeviceAffinity) String() string {
 }
 
 // initLib initializes the hwloc library.
-// supports hwlocFlagsStandard and hwlocFlagsWholeSystem
-// See hwloc.h for details on HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM
-func initLib(flags int) (C.hwloc_topology_t, error) {
+func initLib() (C.hwloc_topology_t, error) {
 	var topology C.hwloc_topology_t
-	var hwlocFlags C.ulong
+	var version C.uint
+
+	version = C.hwloc_get_api_version()
+	if (version >> 16) != (C.HWLOC_API_VERSION >> 16) {
+		return nil, errors.Errorf("compilation error - compiled for hwloc API 0x%x but using library API 0x%x\n", C.HWLOC_API_VERSION, version)
+	}
+
 	status := C.hwloc_topology_init(&topology)
 	if status != 0 {
 		return nil, errors.Errorf("hwloc_topology_init failure: %v", status)
 	}
 
-	switch flags {
-	case hwlocFlagsStandard:
-		hwlocFlags = hwlocFlagsStandard
-	case hwlocFlagsWholeSystem:
-		log.Debug("Setting HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM")
-		hwlocFlags = hwlocFlagsWholeSystem
-	default:
-		// Call cleanUp because we failed after hwloc_topology_init succeeded.
-		cleanUp(topology)
-		return nil, errors.Errorf("Invalid flag provided: %v", flags)
-	}
-
-	status = C.hwloc_topology_set_flags(topology, C.HWLOC_TOPOLOGY_FLAG_IO_DEVICES|hwlocFlags)
+	status = C.cmpt_setFlags(topology)
 	if status != 0 {
 		// Call cleanUp because we failed after hwloc_topology_init succeeded.
 		cleanUp(topology)
-		return nil, errors.Errorf("hwloc_topology_set_flags failure: %v", status)
+		return nil, errors.Errorf("hwloc setFlags failure: %v", status)
 	}
 
 	status = C.hwloc_topology_load(topology)
@@ -186,7 +235,7 @@ func getHwlocDeviceNames(deviceScanCfg DeviceScan) ([]string, error) {
 	}
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
-		node := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(deviceScanCfg.depth), C.uint(i))
+		node := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(deviceScanCfg.depth), C.uint(i))
 		if node == nil {
 			continue
 		}
@@ -201,7 +250,7 @@ func getHwlocDeviceNames(deviceScanCfg DeviceScan) ([]string, error) {
 func initDeviceScan() (DeviceScan, error) {
 	var deviceScanCfg DeviceScan
 
-	topology, err := initLib(hwlocFlagsStandard)
+	topology, err := initLib()
 	if err != nil {
 		log.Debugf("Error from initLib %v", err)
 		return deviceScanCfg,
@@ -217,7 +266,7 @@ func initDeviceScan() (DeviceScan, error) {
 	}
 	deviceScanCfg.depth = int(depth)
 
-	deviceScanCfg.numObj = uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
+	deviceScanCfg.numObj = uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
 	if deviceScanCfg.numObj == 0 {
 		defer cleanUp(deviceScanCfg.topology)
 		return deviceScanCfg,
@@ -280,7 +329,7 @@ func getNodeDirect(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	var i uint
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
-		node := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(deviceScanCfg.depth), C.uint(i))
+		node := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(deviceScanCfg.depth), C.uint(i))
 		if node == nil {
 			continue
 		}
@@ -295,7 +344,7 @@ func getNodeDirect(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 // getNodeSibling finds a node object that is the sibling of the device being matched.  The sibling will be something found
 // on the systemDevicesNameMap.
 func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
-
+	var i C.int
 	node := getNodeDirect(deviceScanCfg)
 	if node == nil || node.parent == nil {
 		return nil
@@ -305,10 +354,11 @@ func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	// For example, hfi1_0 is a valid hwloc node.name, but it is not found on the systemDeviceNameMap.
 	// The sibling of hfi1_0 is ib0, and ib0 *is* found on the systemDeviceNameMap.
 	// The sibling device has the same non-I/O ancestor and shares the same NUMA Node, so we want that.
-	if node.parent.arity > 0 {
-		count := C.uint(node.parent.arity)
-		children := (*[1 << 30]C.hwloc_obj_t)(unsafe.Pointer(node.parent.children))[:count:count]
-		for _, child := range children {
+
+	count := C.cmpt_get_parent_arity(node)
+	if count > 0 {
+		for i = 0; i < count; i++ {
+			child := C.cmpt_get_child(node, C.int(i))
 			if _, found := deviceScanCfg.systemDeviceNamesMap[C.GoString(child.name)]; found {
 				return child
 			}
@@ -322,22 +372,21 @@ func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 // that is not also a system device.  This allows differentiating between multiple devices
 // "ib0, ib1 ..." and the interface adapter they are connected to "hfi1_0, mlx4_0 ..."
 func getNodeAlias(deviceScanCfg DeviceScan) C.hwloc_obj_t {
+	var i C.int
 	node := getNodeDirect(deviceScanCfg)
 	if node == nil || node.parent == nil {
 		return nil
 	}
+
 	// This node will have a sibling if its parent has more than one child (arity > 0)
 	// Search for the first sibling node that has a different name than the search node name
 	// and is not found on the systemDeviceNames map.
-	if node.parent.arity > 0 {
-		count := C.uint(node.parent.arity)
-		log.Debugf("There are %d children of this parent node.", int(count))
-		children := (*[1 << 30]C.hwloc_obj_t)(unsafe.Pointer(node.parent.children))[:count:count]
-		for _, child := range children {
-			if C.GoString(node.name) != C.GoString(child.name) {
-				if _, found := deviceScanCfg.systemDeviceNamesMap[C.GoString(child.name)]; !found {
-					return child
-				}
+	count := C.cmpt_get_parent_arity(node)
+	if count > 0 {
+		for i = 0; i < count; i++ {
+			child := C.cmpt_get_child(node, C.int(i))
+			if _, found := deviceScanCfg.systemDeviceNamesMap[C.GoString(child.name)]; !found {
+				return child
 			}
 		}
 	}
@@ -404,7 +453,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	}
 
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
+	numObj := uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
 	if numObj == 0 {
 		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 		return 0, nil
@@ -413,7 +462,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	log.Debugf("There are %d NUMA nodes.", numObj)
 
 	for i = 0; i < numObj; i++ {
-		numanode := C.hwloc_get_obj_by_depth(topology, C.uint(depth), C.uint(i))
+		numanode := C.cmpt_get_obj_by_depth(topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			// We don't want the lack of NUMA information to be an error.
 			// If we get this far and can't access the NUMA topology data,
@@ -421,7 +470,8 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 			log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 			return 0, nil
 		}
-		if C.hwloc_bitmap_isincluded(ancestorNode.allowed_cpuset, numanode.allowed_cpuset) != 0 {
+
+		if C.hwloc_bitmap_isincluded(ancestorNode.cpuset, numanode.cpuset) != 0 {
 			return uint(numanode.logical_index), nil
 		}
 	}
@@ -439,7 +489,7 @@ func NumaAware() (bool, error) {
 	defer cleanUp(deviceScanCfg.topology)
 
 	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := int(C.hwloc_get_nbobjs_by_depth(deviceScanCfg.topology, C.uint(depth)))
+	numObj := int(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
 
 	return numObj > 0, nil
 }
@@ -457,7 +507,7 @@ func GetNUMASocketIDForPid(pid int32) (int, error) {
 	defer cleanUp(deviceScanCfg.topology)
 
 	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.hwloc_get_nbobjs_by_depth(deviceScanCfg.topology, C.uint(depth)))
+	numObj := uint(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
 	if numObj == 0 {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
@@ -474,7 +524,7 @@ func GetNUMASocketIDForPid(pid int32) (int, error) {
 	C.hwloc_cpuset_to_nodeset(deviceScanCfg.topology, cpuset, nodeset)
 
 	for i = 0; i < numObj; i++ {
-		numanode := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(depth), C.uint(i))
+		numanode := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			return 0, errors.Errorf("NUMA Node data is unavailable.")
 		}
@@ -511,7 +561,7 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 	var nodeset *C.char
 	var i uint
 
-	topology, err := initLib(hwlocFlagsStandard)
+	topology, err := initLib()
 	if err != nil {
 		log.Debugf("Error from initLib %v", err)
 		return nil,
@@ -530,12 +580,12 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 		netNames[deviceName] = struct{}{}
 	}
 
-	numObj := uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
+	numObj := uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
 	// for any OS object found in the network device list,
 	// detect and store the cpuset and nodeset of the ancestor node
 	// containing this object
 	for i = 0; i < numObj; i++ {
-		node := C.hwloc_get_obj_by_depth(topology, C.uint(depth), C.uint(i))
+		node := C.cmpt_get_obj_by_depth(topology, C.int(depth), C.uint(i))
 		if node == nil {
 			continue
 		}
@@ -642,7 +692,7 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 	var nodeset *C.char
 
 	if deviceScanCfg.topology == nil {
-		return DeviceAffinity{}, errors.New("hwloc libary not yet initialized")
+		return DeviceAffinity{}, errors.New("hwloc library not yet initialized")
 	}
 
 	if deviceScanCfg.targetDevice == "" {
@@ -1014,7 +1064,7 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	return nil
 }
 
-func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan) (map[string]struct{}, []FabricScan, error) {
+func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan, excludeMap map[string]struct{}) (map[string]struct{}, []FabricScan, error) {
 	log.Debugf("Device scan target device name: %s", deviceScanCfg.targetDevice)
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 	if err != nil {
@@ -1043,6 +1093,10 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 		Priority:   devCount,
 	}
 
+	if _, skip := excludeMap[scanResults.DeviceName]; skip {
+		return resultsMap, ScanResults, nil
+	}
+
 	results := scanResults.String()
 
 	if _, found := resultsMap[results]; !found {
@@ -1057,7 +1111,7 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
-func ScanFabric(provider string) ([]FabricScan, error) {
+func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 	var ScanResults []FabricScan
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
@@ -1103,6 +1157,11 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 	hfiDeviceCount := getHFIDeviceCount(deviceScanCfg.hwlocDeviceNames)
 	log.Debugf("There are %d hfi1 devices in the system", hfiDeviceCount)
 
+	excludeMap := make(map[string]struct{})
+	for _, iface := range excludes {
+		excludeMap[iface] = struct{}{}
+	}
+
 	for ; fi != nil; fi = fi.next {
 		if fi.domain_attr == nil || fi.domain_attr.name == nil || fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
 			continue
@@ -1135,7 +1194,7 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 				case allHFIUsed:
 					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
 						deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
-						resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults)
+						resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
 						if err != nil {
 							continue
 						}
@@ -1153,7 +1212,7 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 			}
 		}
 
-		resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults)
+		resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
 		if err != nil {
 			continue
 		}

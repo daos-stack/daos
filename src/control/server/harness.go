@@ -25,7 +25,6 @@ package server
 
 import (
 	"context"
-	"os"
 	"sync"
 	"time"
 
@@ -72,6 +71,27 @@ func (h *IOServerHarness) Instances() []*IOServerInstance {
 	h.RLock()
 	defer h.RUnlock()
 	return h.instances
+}
+
+// FilterInstancesByRank safely returns harness' IOServerInstances that match any
+// of a list of ranks.
+func (h *IOServerHarness) FilterInstancesByRank(ranks []system.Rank) ([]*IOServerInstance, error) {
+	h.RLock()
+	defer h.RUnlock()
+
+	out := make([]*IOServerInstance, 0, maxIOServers)
+
+	for _, i := range h.instances {
+		r, err := i.GetRank()
+		if err != nil {
+			return nil, errors.WithMessage(err, "filtering instances by rank")
+		}
+		if r.InList(ranks) {
+			out = append(out, i)
+		}
+	}
+
+	return out, nil
 }
 
 // AddInstance adds a new IOServer instance to be managed.
@@ -145,113 +165,13 @@ func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membersh
 	for _, srv := range h.Instances() {
 		// start first time then relinquish control to instance
 		go srv.Run(ctx, membership, cfg)
-		srv.startChan <- true
+		srv.startLoop <- true
 	}
 
 	<-ctx.Done()
 	h.log.Debug("shutting down harness")
 
 	return ctx.Err()
-}
-
-// StopInstances will signal harness-managed instances and return (doesn't wait
-// for child processes to exit).
-//
-// Iterate over instances and call Stop(sig) on each, return when all instances
-// have been sent signal. Error map returned for each rank stop attempt failure.
-func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...system.Rank) (map[system.Rank]error, error) {
-	h.log.Debugf("stopping instances %v", rankList)
-	if !h.isStarted() {
-		return nil, nil
-	}
-	if signal == nil {
-		return nil, errors.New("nil signal")
-	}
-
-	instances := h.Instances()
-	type rankRes struct {
-		rank system.Rank
-		err  error
-	}
-	resChan := make(chan rankRes, len(instances))
-	stopping := 0
-	for _, srv := range instances {
-		if !srv.isStarted() {
-			continue
-		}
-
-		rank, err := srv.GetRank()
-		if err != nil {
-			return nil, err
-		}
-
-		if len(rankList) != 0 && !rank.InList(rankList) {
-			h.log.Debugf("rank %d not in requested list, skipping...", rank)
-			continue // filtered out, no result expected
-		}
-
-		go func(s *IOServerInstance) {
-			err := s.Stop(signal)
-
-			select {
-			case <-ctx.Done():
-			case resChan <- rankRes{rank: rank, err: err}:
-			}
-		}(srv)
-		stopping++
-	}
-
-	stopErrors := make(map[system.Rank]error)
-	if stopping == 0 {
-		return stopErrors, nil
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case result := <-resChan:
-			stopping--
-			if result.err != nil {
-				stopErrors[result.rank] = result.err
-			}
-			if stopping == 0 {
-				return stopErrors, nil
-			}
-		}
-	}
-}
-
-// StartInstances will signal previously stopped instances to start.
-//
-// Explicitly specify ranks to start.
-func (h *IOServerHarness) StartInstances(rankList []system.Rank) error {
-	if len(rankList) == 0 {
-		errors.New("no ranks specified")
-	}
-	if !h.isStarted() {
-		return FaultHarnessNotStarted
-	}
-
-	for _, srv := range h.Instances() {
-		if srv.isStarted() {
-			continue
-		}
-
-		rank, err := srv.GetRank()
-		if err != nil {
-			return err
-		}
-
-		if !rank.InList(rankList) {
-			h.log.Debugf("rank %d not in requested list, skipping...", rank)
-			continue
-		}
-
-		srv.startChan <- true
-	}
-
-	return nil
 }
 
 type mgmtInfo struct {
@@ -272,22 +192,6 @@ func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
 	}
 
 	return mi, nil
-}
-
-// startedRanks returns rank assignment of configured harness instances that are
-// in a running state. Rank assignments can be nil.
-func (h *IOServerHarness) startedRanks() []system.Rank {
-	h.RLock()
-	defer h.RUnlock()
-
-	ranks := make([]system.Rank, 0, maxIOServers)
-	for _, srv := range h.instances {
-		if srv.hasSuperblock() && srv.isStarted() {
-			ranks = append(ranks, *srv.getSuperblock().Rank)
-		}
-	}
-
-	return ranks
 }
 
 // readyRanks returns rank assignment of configured harness instances that are

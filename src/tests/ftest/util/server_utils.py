@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ class DaosServerCommand(YamlCommand):
 
     NORMAL_PATTERN = "DAOS I/O server.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
+    REFORMAT_PATTERN = "Metadata format required"
 
     def __init__(self, path="", yaml_cfg=None, timeout=90):
         """Create a daos_server command object.
@@ -61,10 +62,10 @@ class DaosServerCommand(YamlCommand):
 
         # Command line parameters:
         # -d, --debug        Enable debug output
-        # -j, --json         Enable JSON output
+        # -J, --json-logging Enable JSON logging
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
-        self.json = FormattedParameter("--json", False)
+        self.json_logs = FormattedParameter("--json-logging", False)
         self.config = FormattedParameter("--config={}", default_yaml_file)
 
         # Additional daos_server command line parameters:
@@ -73,6 +74,9 @@ class DaosServerCommand(YamlCommand):
 
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
+
+        # Include the daos_io_server command launched by the daos_server command.
+        self._exe_names.append("daos_io_server")
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -121,10 +125,11 @@ class DaosServerCommand(YamlCommand):
         """
         if mode == "format":
             self.pattern = self.FORMAT_PATTERN
-            self.pattern_count = host_qty
+        elif mode == "reformat":
+            self.pattern = self.REFORMAT_PATTERN
         else:
             self.pattern = self.NORMAL_PATTERN
-            self.pattern_count = host_qty * len(self.yaml.server_params)
+        self.pattern_count = host_qty * len(self.yaml.server_params)
 
     @property
     def using_nvme(self):
@@ -316,7 +321,6 @@ class DaosServerManager(SubprocessManager):
         """
         super(DaosServerManager, self).__init__(server_command, manager)
         self.manager.job.sub_command_override = "start"
-        self._exe_names.append("daos_io_server")
 
         # Dmg command to access this group of servers which will be configured
         # to access the doas_servers when they are started
@@ -478,10 +482,11 @@ class DaosServerManager(SubprocessManager):
                 dev_type = "dcpm"
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
-    def detect_format_ready(self):
+    def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format."""
+        f_type = "format" if not reformat else "reformat"
         self.log.info("<SERVER> Waiting for servers to be ready for format")
-        self.manager.job.update_pattern("format", len(self._hosts))
+        self.manager.job.update_pattern(f_type, len(self._hosts))
         try:
             self.manager.run()
         except CommandFailure as error:

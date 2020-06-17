@@ -61,6 +61,7 @@ message LeaderQueryResp {
 
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
+	bool allRanks = 2;      // Return PSRs for all ranks, not just the MS replicas.
 }
 
 message GetAttachInfoResp {
@@ -111,4 +112,4 @@ message CreateMsReq {
 
 // SetUpReq is nil.
 
-// SetUpResp is idential to DaosResp.
+// SetUpResp is identical to DaosResp.

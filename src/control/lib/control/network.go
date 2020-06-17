@@ -24,7 +24,9 @@
 package control
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/mitchellh/hashstructure"
@@ -34,6 +36,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
@@ -54,6 +57,13 @@ type HostFabric struct {
 // a map of HostFabric configurations.
 func (hf *HostFabric) HashKey() (uint64, error) {
 	return hashstructure.Hash(hf, nil)
+}
+
+// AddInterface is a helper function that populates a HostFabric.
+func (hf *HostFabric) AddInterface(hfi *HostFabricInterface) {
+	hf.Interfaces = append(hf.Interfaces, hfi)
+	hf.Providers = append(hf.Providers, hfi.Provider)
+	hf.Providers = dedupeStringSlice(hf.Providers)
 }
 
 // HostFabricSet contains a HostFabric configuration and the
@@ -203,4 +213,66 @@ func NetworkScan(ctx context.Context, rpcClient Invoker, req *NetworkScanReq) (*
 	}
 
 	return nsr, nil
+}
+
+type (
+	// GetAttachInfoReq defines the request parameters for GetAttachInfo.
+	GetAttachInfoReq struct {
+		unaryRequest
+		msRequest
+		System   string
+		AllRanks bool
+	}
+
+	// PrimaryServiceRank provides a rank->uri mapping for a DAOS
+	// Primary Service Rank (PSR).
+	PrimaryServiceRank struct {
+		Rank uint32
+		Uri  string
+	}
+
+	GetAttachInfoResp struct {
+		ServiceRanks []*PrimaryServiceRank `json:"Psrs"`
+		// These CaRT settings are shared with the
+		// libdaos client to aid in CaRT initialization.
+		Provider        string
+		Interface       string
+		Domain          string
+		CrtCtxShareAddr uint32
+		CrtTimeout      uint32
+	}
+)
+
+func (gair *GetAttachInfoResp) String() string {
+	psrs := make([]string, len(gair.ServiceRanks))
+	for i, psr := range gair.ServiceRanks {
+		psrs[i] = fmt.Sprintf("%d:%s", psr.Rank, psr.Uri)
+	}
+
+	// Condensed format for debugging...
+	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d psrs(%d)=%s",
+		gair.Provider, gair.Interface, gair.Domain,
+		gair.CrtCtxShareAddr, gair.CrtTimeout,
+		len(psrs), strings.Join(psrs, ","),
+	)
+}
+
+// GetAttachInfo makes a request to the current MS leader in order to learn
+// the PSRs (rank/uri mapping) for the DAOS cluster. This information is used
+// by DAOS clients in order to make connections to DAOS servers over the storage fabric.
+func GetAttachInfo(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachInfoReq) (*GetAttachInfoResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).GetAttachInfo(ctx, &mgmtpb.GetAttachInfoReq{
+			Sys:      req.System,
+			AllRanks: req.AllRanks,
+		})
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	gair := new(GetAttachInfoResp)
+	return gair, convertMSResponse(ur, gair)
 }

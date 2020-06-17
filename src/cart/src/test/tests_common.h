@@ -92,13 +92,13 @@ tc_drain_queue(crt_context_t ctx)
 
 	/* TODO: Need better mechanism for tests to drain all queues */
 	for (i = 0; i < 1000; i++)
-		crt_progress(ctx, 1000, NULL, NULL);
+		crt_progress(ctx, 1000);
 
 	/* Drain the queue. Progress until 1 second timeout.  We need
 	 * a more robust method
 	 */
 	do {
-		rc = crt_progress(ctx, 1000000, NULL, NULL);
+		rc = crt_progress(ctx, 1000000);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			return rc;
@@ -134,7 +134,7 @@ tc_progress_fn(void *data)
 	}
 
 	while (g_shutdown == 0)
-		crt_progress(*p_ctx, 1000, NULL, NULL);
+		crt_progress(*p_ctx, 1000);
 
 	if (idx == 0)
 		crt_swim_fini();
@@ -221,7 +221,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 
 	/* This is needed until hg cancel is fully working.
 	 * RPCs in wait_for_ranks are expected to fail
-	 * and needs to be cancelled correctly.
+	 * and needs to be canceled correctly.
 	 * It should be removed when hg cancel is fixed - HG PR #284
 	 */
 	sleep(2);

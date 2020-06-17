@@ -45,6 +45,7 @@ from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
 from dmg_utils_params import \
     DmgYamlParameters, DmgTransportCredentials
+from dmg_utils import DmgCommand
 from server_utils import DaosServerCommand, DaosServerManager
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
@@ -137,8 +138,9 @@ class Test(avocadoTest):
     # pylint: enable=invalid-name
 
     def get_test_name(self):
-        """Obtain test name from self.__str__() """
+        """Obtain test name from self.__str__()."""
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
+
 
 class TestWithoutServers(Test):
     """Run tests without DAOS servers.
@@ -152,12 +154,12 @@ class TestWithoutServers(Test):
 
         self.client_mca = None
         self.orterun = None
+        self.ofi_prefix = None
         self.ompi_prefix = None
         self.basepath = None
         self.prefix = None
         self.bin = None
         self.daos_test = None
-        self.daosctl = None
         self.cart_prefix = None
         self.cart_bin = None
         self.tmp = None
@@ -186,9 +188,12 @@ class TestWithoutServers(Test):
         self.basepath = os.path.normpath(os.path.join(build_paths['PREFIX'],
                                                       '..') + os.path.sep)
         self.prefix = build_paths['PREFIX']
+        try:
+            self.ofi_prefix = build_paths['OFI_PREFIX']
+        except KeyError:
+            self.ofi_prefix = "/usr"
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
-        self.daosctl = os.path.join(self.bin, 'daosctl')
 
         # set default shared dir for daos tests in case DAOS_TEST_SHARED_DIR
         # is not set, for RPM env and non-RPM env.
@@ -235,6 +240,14 @@ class TestWithServers(TestWithoutServers):
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
         super(TestWithServers, self).__init__(*args, **kwargs)
+
+        # Add additional time to the test timeout for reporting running
+        # processes while stopping the daos_agent and daos_server.
+        tear_down_timeout = 30
+        self.timeout += tear_down_timeout
+        self.log.info(
+            "Increasing timeout by %s seconds for agent/server tear down: %s",
+            tear_down_timeout, self.timeout)
 
         self.server_group = None
         self.agent_managers = []
@@ -361,7 +374,7 @@ class TestWithServers(TestWithoutServers):
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos agents on all client
                 hosts specified in the test's yaml file.
-            servers (list): list of hosts running the doas servers to be used to
+            servers (list): list of hosts running the daos servers to be used to
                 define the access points in the agent yaml config file
 
         Raises:
@@ -552,7 +565,7 @@ class TestWithServers(TestWithoutServers):
             manager_list (list): list of SubprocessManager objects to start
         """
         user = getuser()
-        # We probalby want to do this parallel if end up with multiple managers
+        # We probably want to do this parallel if end up with multiple managers
         for manager in manager_list:
             self.log.info(
                 "Starting %s: group=%s, hosts=%s, config=%s",
@@ -583,7 +596,7 @@ class TestWithServers(TestWithoutServers):
             super(TestWithServers, self).tearDown()
         except OSError as error:
             errors.append(
-                "Error running inheritted teardown(): {}".format(error))
+                "Error running inherited teardown(): {}".format(error))
 
         # Fail the test if any errors occurred during tear down
         if errors:
@@ -618,7 +631,7 @@ class TestWithServers(TestWithoutServers):
                 containers = [containers]
             self.test_log.info("Destroying containers")
             for container in containers:
-                # Only close a container that has been openned by the test
+                # Only close a container that has been opened by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
                         container.close()
@@ -727,7 +740,7 @@ class TestWithServers(TestWithoutServers):
             # Overwrite the test id with the specified test name
             self.test_id = test_name
 
-        # Update the log file names.  The path is defined throught the
+        # Update the log file names.  The path is defined through the
         # DAOS_TEST_LOG_DIR environment variable.
         self.agent_log = "{}_daos_agent.log".format(self.test_id)
         self.server_log = "{}_daos_server.log".format(self.test_id)
@@ -755,7 +768,14 @@ class TestWithServers(TestWithoutServers):
             DmgCommand: New DmgCommand object.
 
         """
-        return self.server_managers[index].dmg
+        if self.server_managers:
+            return self.server_managers[index].dmg
+
+        dmg_config_file = self.get_config_file("daos", "dmg")
+        dmg_cfg = DmgYamlParameters(
+            dmg_config_file, self.server_group, DmgTransportCredentials())
+        dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
+        return DmgCommand(self.bin, dmg_cfg)
 
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.

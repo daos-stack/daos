@@ -195,7 +195,7 @@ type bridgeConnInvoker struct {
 }
 
 func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.UnaryRequest) (*control.UnaryResponse, error) {
-	// Use the testConn to fill out the calls slice for compatiblity
+	// Use the testConn to fill out the calls slice for compatibility
 	// with old-style Connection tests.
 	bci.conn.ConnectClients(nil)
 	bci.conn.appendInvocation(printRequest(bci.t, uReq))
@@ -209,6 +209,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolCreateResp{})
 	case *control.PoolDestroyReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolDestroyResp{})
+	case *control.PoolEvictReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolEvictResp{})
 	case *control.PoolSetPropReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolSetPropResp{
 			Property: &mgmtpb.PoolSetPropResp_Name{},
@@ -216,6 +218,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		})
 	case *control.SystemStopReq:
 		resp = control.MockMSResponse("", nil, &ctlpb.SystemStopResp{})
+	case *control.SystemResetFormatReq:
+		resp = control.MockMSResponse("", nil, &ctlpb.SystemResetFormatResp{})
 	case *control.SystemStartReq:
 		resp = control.MockMSResponse("", nil, &ctlpb.SystemStartResp{})
 	case *control.SystemQueryReq:
@@ -229,6 +233,10 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
+	case *control.PoolExcludeReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExcludeResp{})
+	case *control.PoolExtendReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
 	case *control.PoolReintegrateReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
 	}

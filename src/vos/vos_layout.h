@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 #define POOL_DF_VER_1				1
-#define POOL_DF_VERSION				4
+#define POOL_DF_VERSION				8
 
 /**
  * Durable format for VOS pool
@@ -145,70 +145,67 @@ enum vos_dtx_record_types {
 	DTX_RT_EVT	= 3,
 };
 
-enum vos_dtx_entry_flags {
-	/* The DTX is the leader */
-	DTX_EF_LEADER			= (1 << 0),
-	/* The DTX entry is invalid. */
-	DTX_EF_INVALID			= (1 << 1),
-};
-
-/** The agent of the record being modified via the DTX in both SCM and DRAM. */
-struct vos_dtx_record_df {
-	/** The DTX record type, see enum vos_dtx_record_types. */
-	uint32_t			dr_type;
-	/** The 64-bits alignment. */
-	uint32_t			dr_padding;
-	/** The modified record in the related tree in SCM. */
-	umem_off_t			dr_record;
-};
-
 #define DTX_INLINE_REC_CNT	4
-#define DTX_REC_CAP_DEFAULT	4
 
-
-/** Active DTX entry on-disk layout in both SCM and DRAM. */
-struct vos_dtx_act_ent_df {
+struct vos_dtx_ent_common {
 	/** The DTX identifier. */
-	struct dtx_id			dae_xid;
-	/** The identifier of the modified object (shard). */
-	daos_unit_oid_t			dae_oid;
-	/** The hashed dkey if applicable. */
-	uint64_t			dae_dkey_hash;
+	struct dtx_id			dec_xid;
 	/** The epoch# for the DTX. */
-	daos_epoch_t			dae_epoch;
-	/** The server generation when handles the DTX. */
-	uint64_t			dae_srv_gen;
-	/** The active DTX entry on-disk layout generation. */
-	uint64_t			dae_layout_gen;
-	/** The intent of related modification. */
-	uint32_t			dae_intent;
-	/** The index in the current vos_dtx_blob_df. */
-	int32_t				dae_index;
-	/** The inlined dtx records. */
-	struct vos_dtx_record_df	dae_rec_inline[DTX_INLINE_REC_CNT];
-	/** DTX flags, see enum vos_dtx_entry_flags. */
-	uint32_t			dae_flags;
-	/** The DTX records count, including inline case. */
-	uint32_t			dae_rec_cnt;
-	/** The offset for the list of vos_dtx_record_df if out of inline. */
-	umem_off_t			dae_rec_off;
+	daos_epoch_t			dec_epoch;
+	/** The identifier of the modified object (shard). */
+	daos_unit_oid_t			dec_oid;
+	/** The hashed dkey if applicable. */
+	uint64_t			dec_dkey_hash;
 };
-
-/* Assume dae_rec_cnt is next to dae_flags. */
-D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_cnt) ==
-	  offsetof(struct vos_dtx_act_ent_df, dae_flags) +
-	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_flags));
-
-/* Assume dae_rec_off is next to dae_rec_cnt. */
-D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_off) ==
-	  offsetof(struct vos_dtx_act_ent_df, dae_rec_cnt) +
-	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_rec_cnt));
 
 /** Committed DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_cmt_ent_df {
-	struct dtx_id			dce_xid;
-	daos_epoch_t			dce_epoch;
+	struct vos_dtx_ent_common	dce_common;
 };
+
+#define dce_xid		dce_common.dec_xid
+#define dce_epoch	dce_common.dec_epoch
+#define dce_oid		dce_common.dec_oid
+#define dce_dkey_hash	dce_common.dec_dkey_hash
+
+/** Active DTX entry on-disk layout in both SCM and DRAM. */
+struct vos_dtx_act_ent_df {
+	struct vos_dtx_ent_common	dae_common;
+	/** The allocated local id for the DTX entry */
+	uint32_t			dae_lid;
+	/** DTX flags, see enum dtx_entry_flags. */
+	uint16_t			dae_flags;
+	/** The index in the current vos_dtx_blob_df. */
+	int16_t				dae_index;
+	/** The inlined dtx records. */
+	umem_off_t			dae_rec_inline[DTX_INLINE_REC_CNT];
+	/** The DTX records count, including inline case. */
+	uint32_t			dae_rec_cnt;
+	/** For 64-bits alignment. */
+	uint32_t			dae_ver;
+	/** The offset for the list of dtx records if out of inline. */
+	umem_off_t			dae_rec_off;
+	/** The DTX targets count, either only inline case or all not inline. */
+	uint32_t			dae_tgt_cnt;
+	/** The DTX modification groups count. */
+	uint32_t			dae_grp_cnt;
+	/** Size of the area for dae_mbs_off. */
+	uint32_t			dae_mbs_dsize;
+	/** For 64-bits alignment. */
+	uint32_t			dae_padding;
+	/**
+	 * The inline DTX targets, can hold 3-way replicas for single
+	 * RDG that does not contains the original leader information.
+	 */
+	struct dtx_daos_target		dae_mbs_inline[2];
+	/** The offset for the dtx mbs if out of inline. */
+	umem_off_t			dae_mbs_off;
+};
+
+#define dae_xid		dae_common.dec_xid
+#define dae_epoch	dae_common.dec_epoch
+#define dae_oid		dae_common.dec_oid
+#define dae_dkey_hash	dae_common.dec_dkey_hash
 
 struct vos_dtx_blob_df {
 	/** Magic number, can be used to distinguish active or committed DTX. */
@@ -250,7 +247,6 @@ enum vos_io_stream {
 struct vos_cont_df {
 	uuid_t				cd_id;
 	uint64_t			cd_nobjs;
-	uint64_t			cd_dtx_resync_gen;
 	uint32_t			cd_ts_idx;
 	uint32_t			cd_pad;
 	daos_size_t			cd_used;
@@ -328,7 +324,11 @@ struct vos_irec_df {
 	/** pool map version */
 	uint32_t			ir_ver;
 	/** The DTX entry in SCM. */
-	umem_off_t			ir_dtx;
+	uint32_t			ir_dtx;
+	/** Minor epoch */
+	uint16_t			ir_minor_epc;
+	/** padding bytes */
+	uint16_t			ir_pad16;
 	/** length of value */
 	uint64_t			ir_size;
 	/**

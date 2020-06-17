@@ -21,9 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand
+from command_utils_base import \
+    CommandFailure, FormattedParameter, CommandWithParameters
+from command_utils import CommandWithSubCommand
 
 
 class DaosCommand(CommandWithSubCommand):
@@ -36,7 +36,50 @@ class DaosCommand(CommandWithSubCommand):
         # as below:
         # 03/31-21:32:24.53 wolf-3 2f69b198-8478-472e-b6c8-02a451f4de1b
         # UUID is made up of 36 characters of hex and -.
-        "pool_list_cont": r"([0-9a-f-]{36})"
+        "pool_list_cont": r"([0-9a-f-]{36})",
+        # Sample pool query output.
+        # 04/19-18:31:26.90 wolf-3 Pool 3e59b386-fda0-404e-af7e-3ff0a38d1f81,
+        #    ntarget=8, disabled=0
+        # 04/19-18:31:26.90 wolf-3 Pool space info:
+        # 04/19-18:31:26.90 wolf-3 - Target(VOS) count:8
+        # 04/19-18:31:26.90 wolf-3 - SCM:
+        # 04/19-18:31:26.90 wolf-3   Total size: 1000000000
+        # 04/19-18:31:26.90 wolf-3   Free: 999997440, min:124999680,
+        #     max:124999680, mean:124999680
+        # 04/19-18:31:26.90 wolf-3 - NVMe:
+        # 04/19-18:31:26.90 wolf-3   Total size: 0
+        # 04/19-18:31:26.90 wolf-3   Free: 0, min:0, max:0, mean:0
+        # 04/19-18:31:26.90 wolf-3 Rebuild idle, 0 objs, 0 recs
+        "pool_query": r"(?:Pool\s*([A-Za-z0-9-]+),\s*ntarget=([0-9])," +
+                      r"\s*disabled=([0-9])|Target\(VOS\) count:\s*([0-9])|" +
+                      r"(?:SCM:\s+.*|NVMe:\s+.*)Total\s+size:\s+([0-9]+)" +
+                      r"\s+.*Free:\s+([0-9]+),\s+min:([0-9]+),\s+" +
+                      r"max:([0-9]+),\s+mean:([0-9]+)|" +
+                      r"Rebuild\s*idle,\s*([0-9]+)\s*objs,\s*([0-9]+)\s*recs)",
+        # Sample list-attrs output.
+        # 04/19-21:16:31.62 wolf-3 Pool attributes:
+        # 04/19-21:16:31.62 wolf-3 attr0
+        # 04/19-21:16:31.62 wolf-3 attr1
+        "pool_list_attrs": r"\b([^:\s]+)\n",
+        # Sample get-attr output - no line break.
+        # 04/19-21:16:32.66 wolf-3 Pool's attr2 attribute value:
+        # 04/19-21:16:32.66 wolf-3 val2
+        "pool_get_attr": r"\b(\S+)$",
+        "container_query":
+            r"Pool UUID:\s+([0-9a-f-]+)\n" +
+            r"Container UUID:\s+([0-9a-f-]+)\n" +
+            r"Number of snapshots:\s+(\d+)\n" +
+            r"Latest Persistent Snapshot:\s+(\d+)\n" +
+            r"Highest Aggregated Epoch:\s+(\d+)",
+        # Sample get-attr output - no line break.
+        # 04/20-17:47:07.86 wolf-3 Container's attr1 attribute value:  04
+        # /20-17:47:07.86 wolf-3 val1
+        "container_get_attr": r"value:  \S+ \S+ (.+)$",
+        # Sample list output.
+        #  04/20-17:52:33.63 wolf-3 Container attributes:
+        #  04/20-17:52:33.63 wolf-3 attr1
+        #  04/20-17:52:33.63 wolf-3 attr2
+        "container_list_attrs": r"\n \S+ \S+ (.+)"
     }
 
     def __init__(self, path):
@@ -80,6 +123,8 @@ class DaosCommand(CommandWithSubCommand):
                 self.sub_command_class = self.ListAttrsSubCommand()
             elif self.sub_command.value == "get-attr":
                 self.sub_command_class = self.GetAttrSubCommand()
+            elif self.sub_command.value == "set-attr":
+                self.sub_command_class = self.SetAttrSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -146,6 +191,17 @@ class DaosCommand(CommandWithSubCommand):
                     DaosCommand.PoolSubCommand.GetAttrSubCommand,
                     self).__init__("get-attr")
                 self.attr = FormattedParameter("--attr={}")
+
+        class SetAttrSubCommand(CommonPoolSubCommand):
+            """Defines an object for the daos pool set-attr command."""
+
+            def __init__(self):
+                """Create a daos pool set-attr command object."""
+                super(
+                    DaosCommand.PoolSubCommand.SetAttrSubCommand,
+                    self).__init__("set-attr")
+                self.attr = FormattedParameter("--attr={}")
+                self.value = FormattedParameter("--value={}")
 
     class ContainerSubCommand(CommandWithSubCommand):
         """Defines an object for the daos container sub command."""
@@ -249,6 +305,9 @@ class DaosCommand(CommandWithSubCommand):
                 #               srv_cksum:  on, off
                 #               rf:         [0-4]
                 self.properties = FormattedParameter("--properties={}")
+                #   --acl-file=PATH
+                #           input file containing ACL
+                self.acl_file = FormattedParameter("--acl-file={}", None)
 
         class DestroySubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container destroy command."""
@@ -286,8 +345,13 @@ class DaosCommand(CommandWithSubCommand):
                 super(
                     DaosCommand.ContainerSubCommand.GetAclSubCommand,
                     self).__init__("get-acl")
-                self.outfile = FormattedParameter("--outfile={}")
+                # Additional daos container create parameters:
+                #   --verbose
+                #           verbose mode (get-acl)
                 self.verbose = FormattedParameter("--verbose", False)
+                #   --outfile=PATH
+                #           write ACL to file (get-acl)
+                self.outfile = FormattedParameter("--outfile={}")
 
         class OverwriteAclSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container overwrite-acl cmd."""
@@ -398,7 +462,7 @@ class DaosCommand(CommandWithSubCommand):
                     self).__init__("destroy-snap")
                 self.snap = FormattedParameter("--snap={}")
                 self.epc = FormattedParameter("--epc={}")
-                self.eprange = FormattedParameter("--eprange={}")
+                self.epcrange = FormattedParameter("--epcrange={}")
 
         class RollbackSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container rollback command."""
@@ -513,7 +577,7 @@ class DaosCommand(CommandWithSubCommand):
                 information.
 
         Raises:
-            CommandFailure: if the doas pool query command fails.
+            CommandFailure: if the daos pool query command fails.
 
         """
         self.set_sub_command("pool")
@@ -526,7 +590,8 @@ class DaosCommand(CommandWithSubCommand):
 
     def container_create(self, pool, sys_name=None, svc=None, cont=None,
                          path=None, cont_type=None, oclass=None,
-                         chunk_size=None, properties=None):
+                         chunk_size=None, properties=None, acl_file=None):
+        # pylint: disable=too-many-arguments
         """Create a container.
 
         Args:
@@ -545,13 +610,14 @@ class DaosCommand(CommandWithSubCommand):
                 Defaults to None.
             properties (str, optional): String of comma-separated <name>:<value>
                 pairs defining the container properties. Defaults to None
+            acl_file (str, optional): ACL file. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
                 information.
 
         Raises:
-            CommandFailure: if the doas container create command fails.
+            CommandFailure: if the daos container create command fails.
 
         """
         self.set_sub_command("container")
@@ -565,6 +631,7 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.oclass.value = oclass
         self.sub_command_class.sub_command_class.chunk_size.value = chunk_size
         self.sub_command_class.sub_command_class.properties.value = properties
+        self.sub_command_class.sub_command_class.acl_file.value = acl_file
         return self._get_result()
 
     def container_destroy(self, pool, svc, cont, force=None, sys_name=None):
@@ -584,7 +651,7 @@ class DaosCommand(CommandWithSubCommand):
                 information.
 
         Raises:
-            CommandFailure: if the doas container destroy command fails.
+            CommandFailure: if the daos container destroy command fails.
 
         """
         self.set_sub_command("container")
@@ -596,28 +663,231 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.force.value = force
         return self._get_result()
 
-    def pool_list_cont(self, pool, svc, sys_name=None, env=None):
-        """List containers in the given pool.
+    def container_get_acl(self, pool, svc, cont,
+                          verbose=False, outfile=None):
+        """Get the ACL for a given container.
 
         Args:
-            pool (String): Pool UUID
-            svc (String, optional): Service replicas. If there are multiple,
-                numbers must be separated by comma like 1,2,3
-            sys_name (String, optional): System name. Defaults to None.
-            env (dict, optional): dictionary of environment variable names and
-                values (EnvironmentVariables). Defaults to None.
+            pool (str): Pool UUID
+            svc (str): Service replicas
+            cont (str): Container for which to get the ACL.
+            verbose (bool, optional): Verbose mode.
+            outfile (str, optional): Write ACL to file.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
                 information.
 
         Raises:
-            CommandFailure: if the doas pool query command fails.
+            CommandFailure: if the daos container get-acl command fails.
+
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("get-acl")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.verbose.value = verbose
+        self.sub_command_class.sub_command_class.outfile.value = outfile
+        return self._get_result()
+
+    def pool_list_cont(self, pool, svc, sys_name=None):
+        """List containers in the given pool.
+
+        Args:
+            pool (str): Pool UUID
+            svc (str): Service replicas. If there are multiple, numbers must be
+                separated by comma like 1,2,3
+            sys_name (str, optional): System name. Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("list-containers")
         self.sub_command_class.sub_command_class.pool.value = pool
         self.sub_command_class.sub_command_class.svc.value = svc
         self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        self.env = env
+        return self._get_result()
+
+    def pool_set_attr(self, pool, attr, value, svc):
+        """Set pool attribute.
+
+        Args:
+            pool (str): Pool UUID.
+            attr (str): Attribute name.
+            value (str): Attribute value
+            svc (str): Service replicas.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("set-attr")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.attr.value = attr
+        self.sub_command_class.sub_command_class.value.value = value
+        self.sub_command_class.sub_command_class.svc.value = svc
+        return self._get_result()
+
+    def pool_get_attr(self, pool, attr, svc):
+        """Set pool attribute.
+
+        Args:
+            pool (str): Pool UUID.
+            attr (str): Pool UUID.
+            svc (str): Service replicas.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("get-attr")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.attr.value = attr
+        self.sub_command_class.sub_command_class.svc.value = svc
+        return self._get_result()
+
+    def pool_list_attrs(self, pool, svc):
+        """List pool attributes.
+
+        Args:
+            pool (str): Pool UUID.
+            svc (str): Service replicas.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("list-attrs")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        return self._get_result()
+
+    def container_query(self, pool, cont, svc=None, sys_name=None):
+        """Query a container.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            svc (str, optional): pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        return self._get_result()
+
+    def container_set_attr(
+            self, pool, cont, attr, val, svc=None, sys_name=None):
+        """Call daos container set-attr.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            attr (str): Attribute name.
+            val (str): Attribute value.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("set-attr")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.attr.value = attr
+        self.sub_command_class.sub_command_class.value.value = val
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        return self._get_result()
+
+    def container_get_attr(self, pool, cont, attr, svc=None, sys_name=None):
+        """Call daos container get-attr.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            attr (str): Attribute name.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("get-attr")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.attr.value = attr
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        return self._get_result()
+
+    def container_list_attrs(self, pool, cont, svc=None, sys_name=None):
+        """Call daos container list-attrs.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("list-attrs")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
         return self._get_result()

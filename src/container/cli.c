@@ -416,19 +416,19 @@ dc_cont_put(struct dc_cont *dc)
 	daos_hhash_link_putref(&dc->dc_hlink);
 }
 
-static void
+void
 dc_cont_hdl_link(struct dc_cont *dc)
 {
 	daos_hhash_link_insert(&dc->dc_hlink, DAOS_HTYPE_CO);
 }
 
-static void
+void
 dc_cont_hdl_unlink(struct dc_cont *dc)
 {
 	daos_hhash_link_delete(&dc->dc_hlink);
 }
 
-static struct dc_cont *
+struct dc_cont *
 dc_cont_alloc(const uuid_t uuid)
 {
 	struct dc_cont *dc;
@@ -554,80 +554,6 @@ out:
 }
 
 int
-dc_cont_local_close(daos_handle_t ph, daos_handle_t coh)
-{
-	struct dc_cont *cont = NULL;
-	struct dc_pool *pool = NULL;
-	int		rc = 0;
-
-	cont = dc_hdl2cont(coh);
-	if (cont == NULL)
-		return 0;
-
-	pool = dc_hdl2pool(ph);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	dc_cont_put(cont);
-
-	/* Remove the container from pool container list */
-	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
-	d_list_del_init(&cont->dc_po_list);
-	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-
-out:
-	if (cont != NULL)
-		dc_cont_put(cont);
-	if (pool != NULL)
-		dc_pool_put(pool);
-
-	return rc;
-}
-
-int
-dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
-		   unsigned int flags, daos_handle_t ph,
-		   daos_handle_t *coh)
-{
-	struct dc_cont	*cont = NULL;
-	struct dc_pool	*pool = NULL;
-	int		rc = 0;
-
-	if (!daos_handle_is_inval(*coh)) {
-		cont = dc_hdl2cont(*coh);
-		if (cont != NULL)
-			D_GOTO(out, rc);
-	}
-
-	cont = dc_cont_alloc(cont_uuid);
-	if (cont == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	D_ASSERT(!daos_handle_is_inval(ph));
-	pool = dc_hdl2pool(ph);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	uuid_copy(cont->dc_cont_hdl, cont_hdl_uuid);
-	cont->dc_capas = flags;
-
-	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
-	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
-	cont->dc_pool_hdl = ph;
-	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-
-	dc_cont_hdl_link(cont);
-	dc_cont2hdl(cont, coh);
-out:
-	if (cont != NULL)
-		dc_cont_put(cont);
-	if (pool != NULL)
-		dc_pool_put(pool);
-
-	return rc;
-}
-
-int
 dc_cont_open(tse_task_t *task)
 {
 	daos_cont_open_t	*args;
@@ -683,7 +609,7 @@ dc_cont_open(tse_task_t *task)
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
 	in->coi_flags = args->flags;
 	/** Determine which container properties need to be retrieved while
-	 * opening the contianer
+	 * opening the container
 	 */
 	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
 				  DAOS_CO_QUERY_PROP_CSUM_CHUNK;
@@ -1031,7 +957,7 @@ dc_cont_query(tse_task_t *task)
 	int			 rc;
 
 	args = dc_task_get_args(task);
-	D_ASSERTF(args != NULL, "Task Argumetn OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
@@ -1492,8 +1418,7 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 	struct dc_cont *cont = arg->coaa_cont;
 	int rc = task->dt_result;
 
-	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE ||
-	    rc == -DER_EVICTED) {
+	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE) {
 		tse_sched_t *sched = tse_task2sched(task);
 		daos_pool_query_t *pargs;
 		tse_task_t *ptask;

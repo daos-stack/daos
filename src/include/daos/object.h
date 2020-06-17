@@ -151,7 +151,7 @@ struct daos_obj_md {
 	};
 };
 
-/** object shard metadata stored in each contianer shard */
+/** object shard metadata stored in each container shard */
 struct daos_obj_shard_md {
 	/** ID of the object shard */
 	daos_unit_oid_t		smd_id;
@@ -169,9 +169,9 @@ struct daos_obj_shard {
 };
 
 struct daos_obj_layout {
-	uint32_t	ol_ver;
-	uint32_t	ol_class;
-	uint32_t	ol_nr;
+	uint32_t		 ol_ver;
+	uint32_t		 ol_class;
+	uint32_t		 ol_nr;
 	struct daos_obj_shard	*ol_shards[0];
 };
 
@@ -330,15 +330,15 @@ int dc_obj_query_class(tse_task_t *task);
 int dc_obj_list_class(tse_task_t *task);
 int dc_obj_open(tse_task_t *task);
 int dc_obj_close(tse_task_t *task);
-int dc_obj_punch(tse_task_t *task);
-int dc_obj_punch_dkeys(tse_task_t *task);
-int dc_obj_punch_akeys(tse_task_t *task);
+int dc_obj_punch_task(tse_task_t *task);
+int dc_obj_punch_dkeys_task(tse_task_t *task);
+int dc_obj_punch_akeys_task(tse_task_t *task);
 int dc_obj_query(tse_task_t *task);
 int dc_obj_query_key(tse_task_t *task);
 int dc_obj_sync(tse_task_t *task);
-int dc_obj_fetch_shard(tse_task_t *task);
-int dc_obj_fetch(tse_task_t *task);
-int dc_obj_update(tse_task_t *task);
+int dc_obj_fetch_shard_task(tse_task_t *task);
+int dc_obj_fetch_task(tse_task_t *task);
+int dc_obj_update_task(tse_task_t *task);
 int dc_obj_list_dkey(tse_task_t *task);
 int dc_obj_list_akey(tse_task_t *task);
 int dc_obj_list_rec(tse_task_t *task);
@@ -348,6 +348,17 @@ int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
+
+int dc_tx_open(tse_task_t *task);
+int dc_tx_commit(tse_task_t *task);
+int dc_tx_abort(tse_task_t *task);
+int dc_tx_open_snap(tse_task_t *task);
+int dc_tx_close(tse_task_t *task);
+int dc_tx_restart(tse_task_t *task);
+int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
+		     uint32_t flags, daos_handle_t *th);
+int dc_tx_local_close(daos_handle_t th);
+int dc_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 
 /** Decode shard number from enumeration anchor */
 static inline uint32_t
@@ -395,5 +406,75 @@ struct obj_enum_rec {
 	uint32_t		rec_version;
 	uint32_t		rec_flags;
 };
+
+enum daos_recx_type {
+	/** normal valid recx */
+	DRT_NORMAL	= 0,
+	/** hole recx */
+	DRT_HOLE	= 1,
+	/**
+	 * shadow valid recx, only used for EC degraded fetch to indicate
+	 * recx on shadow, i.e need-to-be-recovered recx.
+	 */
+	DRT_SHADOW	= 2,
+};
+
+struct daos_recx_ep {
+	daos_recx_t		re_recx;
+	daos_epoch_t		re_ep;
+	enum daos_recx_type	re_type;
+};
+
+struct daos_recx_ep_list {
+	/** #valid items in re_items array */
+	uint32_t		 re_nr;
+	/** #total items (capacity) in re_items array */
+	uint32_t		 re_total;
+	/** epoch valid flag, re_items' re_ep can be ignored when it is false */
+	uint32_t		 re_ep_valid:1;
+	struct daos_recx_ep	*re_items;
+};
+
+static inline void
+daos_recx_ep_free(struct daos_recx_ep_list *list)
+{
+	if (list->re_items != NULL)
+		D_FREE(list->re_items);
+	list->re_nr = 0;
+	list->re_total = 0;
+}
+
+static inline void
+daos_recx_ep_list_free(struct daos_recx_ep_list *list, unsigned int nr)
+{
+	unsigned int	i;
+
+	for (i = 0; i < nr; i++)
+		daos_recx_ep_free(&list[i]);
+	D_FREE(list);
+}
+
+static inline int
+daos_recx_ep_add(struct daos_recx_ep_list *list, struct daos_recx_ep *recx)
+{
+	struct daos_recx_ep	*new_items;
+	uint32_t		 nr;
+
+	if (list->re_total == list->re_nr) {
+		nr = (list->re_total == 0) ? 8 : (2 * list->re_total);
+		if (list->re_total == 0)
+			D_ALLOC_ARRAY(new_items, nr);
+		else
+			D_REALLOC_ARRAY(new_items, list->re_items, nr);
+		if (new_items == NULL)
+			return -DER_NOMEM;
+		list->re_items = new_items;
+		list->re_total = nr;
+	}
+
+	D_ASSERT(list->re_total > list->re_nr);
+	list->re_items[list->re_nr++] = *recx;
+	return 0;
+}
 
 #endif /* __DD_OBJ_H__ */

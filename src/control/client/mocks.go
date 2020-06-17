@@ -107,7 +107,7 @@ type mockMgmtCtlClient struct {
 
 func (m *mockMgmtCtlClient) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq, o ...grpc.CallOption) (*ctlpb.StoragePrepareResp, error) {
 	// return successful prepare results, state member messages
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	// initialize with zero values indicating mgmt.CTL_SUCCESS
 	return &ctlpb.StoragePrepareResp{
 		Nvme: &ctlpb.PrepareNvmeResp{
 			State: &MockSuccessState,
@@ -120,7 +120,7 @@ func (m *mockMgmtCtlClient) StoragePrepare(ctx context.Context, req *ctlpb.Stora
 
 func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq, o ...grpc.CallOption) (*ctlpb.StorageScanResp, error) {
 	// return successful query results, state member messages
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	// initialize with zero values indicating mgmt.CTL_SUCCESS
 	return &ctlpb.StorageScanResp{
 		Nvme: &ctlpb.ScanNvmeResp{
 			State:  &MockSuccessState,
@@ -158,6 +158,10 @@ func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemSto
 	return &ctlpb.SystemStopResp{}, nil
 }
 
+func (m *mockMgmtCtlClient) SystemResetFormat(ctx context.Context, req *ctlpb.SystemResetFormatReq, o ...grpc.CallOption) (*ctlpb.SystemResetFormatResp, error) {
+	return &ctlpb.SystemResetFormatResp{}, nil
+}
+
 func (m *mockMgmtCtlClient) SystemStart(ctx context.Context, req *ctlpb.SystemStartReq, o ...grpc.CallOption) (*ctlpb.SystemStartResp, error) {
 	return &ctlpb.SystemStartResp{}, nil
 }
@@ -167,7 +171,7 @@ type mockControlConfig struct {
 	connectErr     error
 }
 
-// implement mock/stub behaviour for Control
+// implement mock/stub behavior for Control
 type mockControl struct {
 	address   string
 	cfg       mockControlConfig

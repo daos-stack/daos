@@ -393,7 +393,7 @@ progress_function(void *data)
 	crt_context_t *p_ctx = (crt_context_t *)data;
 
 	while (g_do_shutdown == 0)
-		crt_progress(*p_ctx, 1000, NULL, NULL);
+		crt_progress(*p_ctx, 1000);
 
 	crt_context_destroy(*p_ctx, 1);
 
@@ -545,7 +545,7 @@ int main(int argc, char **argv)
 	else if (cur_op == OP_SHUTDOWN)
 		test_iv_shutdown();
 	else {
-		print_usage("Unsupported opration");
+		print_usage("Unsupported operation");
 		return -1;
 	}
 

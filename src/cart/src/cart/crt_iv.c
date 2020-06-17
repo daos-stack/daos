@@ -89,7 +89,7 @@ struct iv_fetch_cb_info {
 	/* Local bulk handle for iv value */
 	crt_bulk_t			 ifc_bulk_hdl;
 
-	/* Optional child's rpc and childs bulk handle, if child exists */
+	/* Optional child's rpc and child's bulk handle, if child exists */
 	crt_rpc_t			*ifc_child_rpc;
 	crt_bulk_t			 ifc_child_bulk;
 
@@ -115,7 +115,7 @@ struct pending_fetch {
 	d_list_t			 pf_link;
 };
 
-/* Struture for list of all pending fetches for given key */
+/* Structure for list of all pending fetches for given key */
 struct ivf_key_in_progress {
 	crt_iv_key_t	kip_key;
 	d_list_t	kip_pending_fetch_list;
@@ -1289,9 +1289,16 @@ static int
 crt_iv_parent_get(struct crt_ivns_internal *ivns_internal,
 		  d_rank_t root_node, d_rank_t *ret_node)
 {
-	return crt_iv_ranks_parent_get(ivns_internal,
-				       ivns_internal->cii_grp_priv->gp_self,
-				       root_node, ret_node);
+	d_rank_t self = ivns_internal->cii_grp_priv->gp_self;
+
+	if (self == CRT_NO_RANK) {
+		D_DEBUG(DB_TRACE, "%s: self rank not known yet\n",
+			ivns_internal->cii_grp_priv->gp_pub.cg_grpid);
+		return -DER_GRPVER;
+	}
+
+	return crt_iv_ranks_parent_get(ivns_internal, self, root_node,
+				       ret_node);
 }
 
 static void
@@ -1368,7 +1375,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 
 		rc = iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 		if (rc != 0) {
-			D_ERROR("ivo_on_put() returend rc = %d\n", rc);
+			D_ERROR("ivo_on_put() returned rc = %d\n", rc);
 			D_GOTO(send_error, rc);
 		}
 
@@ -2033,7 +2040,7 @@ crt_iv_sync_corpc_pre_forward(crt_rpc_t *rpc, void *arg)
 	return rc;
 }
 
-/* Calback structure for iv sync RPC */
+/* Callback structure for iv sync RPC */
 struct iv_sync_cb_info {
 	/* Local bulk handle to free in callback */
 	crt_bulk_t			isc_bulk_hdl;
@@ -2616,7 +2623,7 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 	D_ASSERT(rpc_priv != NULL);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
-	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub)) {
+	if (crt_ctx->cc_iv_resp_cb != NULL) {
 		int rc;
 		struct crt_cb_info *info;
 
@@ -2631,10 +2638,10 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 		info->cci_rpc = cb_info->cci_rpc;
 		info->cci_rc = cb_info->cci_rc;
 		info->cci_arg = cb_info->cci_arg;
-		rc = crt_ctx->cc_rpc_cb((crt_context_t)crt_ctx,
-					 info,
-					 handle_response_cb_internal,
-					 crt_ctx->cc_rpc_cb_arg);
+		rc = crt_ctx->cc_iv_resp_cb((crt_context_t)crt_ctx,
+					    info,
+					    handle_response_cb_internal,
+					    crt_ctx->cc_rpc_cb_arg);
 		if (rc) {
 			D_WARN("rpc_cb failed %d, do cb directly\n", rc);
 			RPC_DECREF(rpc_priv);
@@ -3089,6 +3096,12 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
+	if (ivns_internal->cii_grp_priv->gp_self == CRT_NO_RANK) {
+		IV_DBG(iv_key, "%s: self rank not known yet\n",
+		       ivns_internal->cii_grp_priv->gp_pub.cg_grpid);
+		D_GOTO(exit, rc = -DER_GRPVER);
+	}
+
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {
 		D_ERROR("Invalid class_id specified\n");
@@ -3204,6 +3217,9 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 		rc = -DER_INVAL;
 		update_comp_cb(ivns, class_id, iv_key, NULL, iv_value,
 			rc, cb_arg);
+
+		if (sync_type.ivs_comp_cb)
+			sync_type.ivs_comp_cb(sync_type.ivs_comp_cb_arg);
 		D_GOTO(exit, rc);
 	}
 
@@ -3247,6 +3263,11 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 
 	self_rank = ivns_internal->cii_grp_priv->gp_self;
+	if (self_rank == CRT_NO_RANK) {
+		D_DEBUG(DB_TRACE, "%s: self rank not known yet\n",
+			ivns_internal->cii_grp_priv->gp_pub.cg_grpid);
+		D_GOTO(exit, rc = -DER_GRPVER);
+	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {

@@ -382,7 +382,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 				       &pool->svc, DAOS_PC_RW,
 				       &poh, &pool->pool_info,
 				       NULL /* ev */);
-		if (rc != 0) { /* destroy straightaway */
+		if (rc != 0) { /* destroy straight away */
 			print_message("failed to connect pool: %d\n", rc);
 			poh = DAOS_HDL_INVAL;
 		}
@@ -498,15 +498,16 @@ test_teardown(void **state)
 			 * rebuild mechanism(REBUILD24/25), so even the
 			 * container is not closed, then delete will fail
 			 * here, but if we do not free the arg, then next
-			 * subtest might fail, expecially for rebuild test.
-			 * so let's destory the arg anyway. Though some pool
+			 * subtest might fail, especially for rebuild test.
+			 * so let's destroy the arg anyway. Though some pool
 			 * might be left here. XXX
 			 */
 			goto free;
 		}
 	}
 
-	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave) {
+	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave &&
+	    !arg->pool.destroyed) {
 		if (arg->myrank != 0) {
 			if (!daos_handle_is_inval(arg->pool.poh))
 				rc = daos_pool_disconnect(arg->pool.poh, NULL);
@@ -747,11 +748,11 @@ run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 		}
 
 		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
+			if (sub_tests[i] >= tests_size || sub_tests[i] < 0) {
 				print_message("No subtest %d\n", sub_tests[i]);
 				continue;
 			}
-			subtests[i] = tests[sub_tests[i] - 1];
+			subtests[i] = tests[sub_tests[i]];
 			subtestsnb++;
 		}
 

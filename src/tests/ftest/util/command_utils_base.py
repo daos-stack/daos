@@ -37,7 +37,7 @@ class BasicParameter(object):
         """Create a BasicParameter object.
 
         Args:
-            value (object): intial value for the parameter
+            value (object): initial value for the parameter
             default (object, optional): default value. Defaults to None.
         """
         self.value = value if value is not None else default
@@ -115,7 +115,7 @@ class NamedParameter(BasicParameter):
 
         Args:
             name (str): yaml key name
-            value (object): intial value for the parameter
+            value (object): initial value for the parameter
             default (object): default value for the param
         """
         super(NamedParameter, self).__init__(value, default)
@@ -289,7 +289,7 @@ class ObjectWithParameters(object):
 
 
 class CommandWithParameters(ObjectWithParameters):
-    """A class for command with paramaters."""
+    """A class for command with parameters."""
 
     def __init__(self, namespace, command, path=""):
         """Create a CommandWithParameters object.
@@ -332,7 +332,7 @@ class CommandWithParameters(ObjectWithParameters):
             if value != "":
                 params.append(value)
 
-        # Append the path to the command and preceed it with any other
+        # Append the path to the command and prepend it with any other
         # specified commands
         command_list = [] if self._pre_command is None else [self._pre_command]
         command_list.append(os.path.join(self._path, self._command))
@@ -480,7 +480,7 @@ class TransportCredentials(YamlParameters):
         # Transport credential parameters:
         #   - allow_insecure: false|true
         #       Specify 'false' to bypass loading certificates and use insecure
-        #       communications channnels
+        #       communications channels
         #
         #   - ca_cert: <file>, e.g. ".daos/daosCA.crt"
         #       Custom CA Root certificate for generated certs
@@ -534,7 +534,7 @@ class CommonConfig(YamlParameters):
         super(CommonConfig, self).__init__(
             "/run/common_config/*", None, None, transport)
 
-        # Common configuration paramters
+        # Common configuration parameters
         #   - name: <str>, e.g. "daos_server"
         #       Name associated with the DAOS system.
         #
@@ -544,7 +544,7 @@ class CommonConfig(YamlParameters):
         #       at port 10000 for local testing
         #
         #   - port: <int>, e.g. 10001
-        #       Default port number with whith to bind the daos_server. This
+        #       Default port number with with to bind the daos_server. This
         #       will also be used when connecting to access points if the list
         #       only contains host names.
         #
@@ -555,6 +555,15 @@ class CommonConfig(YamlParameters):
 
 class EnvironmentVariables(dict):
     """Dictionary of environment variable keys and values."""
+
+    def copy(self):
+        """Return a copy of this object.
+
+        Returns:
+            EnvironmentVariables: a copy of this object
+
+        """
+        return EnvironmentVariables(self)
 
     def get_list(self):
         """Get a list of environment variable assignments.
@@ -579,5 +588,8 @@ class EnvironmentVariables(dict):
             str: a string of export commands for each environment variable
 
         """
-        join_str = "{} export ".format(separator)
-        return "export {}{}".format(join_str.join(self.get_list()), separator)
+        export_list = ["export {}".format(export) for export in self.get_list()]
+        export_str = separator.join(export_list)
+        if export_str:
+            export_str = "".join([export_str, separator])
+        return export_str

@@ -653,7 +653,7 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 	int		rc = 0;
 	int		i;
 
-	rc = dc_tx_local_open(obj->cob_coh, epoch, &th);
+	rc = dc_tx_local_open(obj->cob_coh, epoch, DAOS_TF_RDONLY, &th);
 	if (rc != 0) {
 		D_ERROR("dc_tx_local-open failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -675,7 +675,7 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 
 		memset(cursor, 0, sizeof(*cursor));
 		/* We merge the recxs if they can be merged.
-		 * So always signle IOD.
+		 * So always single IOD.
 		 */
 		cursor->iod.iod_nr = 1;
 		cursor->iod.iod_recxs = &cursor->recx;

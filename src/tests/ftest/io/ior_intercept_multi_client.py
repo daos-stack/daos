@@ -37,17 +37,6 @@ class IorInterceptMultiClient(IorTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up each test case."""
-        super(IorInterceptMultiClient, self).setUp()
-        # This set up can be removed once the constraint
-        # in IorTestBase is removed. # DAOS-3320
-        self.hostlist_clients = self.params.get(
-            "test_clients", "/run/hosts/*")
-        self.hostfile_clients = write_host_file.write_host_file(
-            self.hostlist_clients, self.workdir,
-            self.hostfile_clients_slots)
-
     def test_ior_intercept_multi_client(self):
         """Jira ID: DAOS-3499.
 
@@ -91,7 +80,7 @@ class IorInterceptMultiClient(IorTestBase):
 
         # Verifying read performance
         # The read performance is almost same with or without intercept
-        # library. But arbitarily the read performance with interception
+        # library. But arbitrarily the read performance with interception
         # library can be bit lower than without it. Verifying that it is
         # not drastically lower by checking it is at least  60% or above.
         read_x = 0.6

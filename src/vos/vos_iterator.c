@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,7 +121,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	}
 
 	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialise cursor\n");
+		D_ERROR("Please call vos_iter_probe to initialize cursor\n");
 		return -DER_NO_PERM;
 	}
 
@@ -133,17 +133,9 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	rc = iter->it_ops->iop_nested_tree_fetch(iter, type, &info);
 
 	if (rc != 0) {
-		if ((type == VOS_ITER_RECX || type == VOS_ITER_SINGLE) &&
-		    rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "%s iterator does not exist\n",
-				dict->id_name);
-		else if (rc == -DER_INPROGRESS)
-			D_DEBUG(DB_TRACE, "Cannot fetch nested tree from "
-				"because of conflict modification: "DF_RC"\n",
-					DP_RC(rc));
-		else
-			D_ERROR("Problem fetching nested tree from iterator:"
-				" "DF_RC"\n", DP_RC(rc));
+		VOS_TX_TRACE_FAIL(rc, "Problem fetching nested tree (%s) from "
+				  "iterator: "DF_RC"\n", dict->id_name,
+				  DP_RC(rc));
 		return rc;
 	}
 
@@ -294,7 +286,7 @@ static inline int
 iter_verify_state(struct vos_iterator *iter)
 {
 	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialise cursor\n");
+		D_ERROR("Please call vos_iter_probe to initialize cursor\n");
 		return -DER_NO_PERM;
 	} else if (iter->it_state == VOS_ITS_END) {
 		D_DEBUG(DB_TRACE, "The end of iteration\n");
@@ -577,14 +569,9 @@ probe:
 			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
-			if (rc == -DER_INPROGRESS)
-				D_DEBUG(DB_TRACE, "Cannot probe because of "
-					"some conflict modification: "DF_RC"\n",
-					DP_RC(rc));
-			else
-				D_ERROR("failed to probe iterator (type=%d "
-					"anchor=%p): "DF_RC"\n",
-					type, probe_anchor, DP_RC(rc));
+			VOS_TX_TRACE_FAIL(rc, "Failed to probe iterator "
+					  "(type=%d anchor=%p): "DF_RC"\n",
+					  type, probe_anchor, DP_RC(rc));
 		}
 		D_GOTO(out, rc);
 	}
@@ -592,14 +579,9 @@ probe:
 	while (1) {
 		rc = vos_iter_fetch(ih, &iter_ent, anchor);
 		if (rc != 0) {
-			if (rc == -DER_INPROGRESS)
-				D_DEBUG(DB_TRACE, "Cannot fetch iterator "
-					"(type=%d) because of conflict "
-					"modification: "DF_RC"\n", type,
-					DP_RC(rc));
-			else
-				D_ERROR("failed to fetch iterator (type=%d): "
-					""DF_RC"\n", type, DP_RC(rc));
+			VOS_TX_TRACE_FAIL(rc, "Failed to fetch iterator "
+					  "(type=%d): "DF_RC"\n", type,
+					  DP_RC(rc));
 			break;
 		}
 
@@ -670,9 +652,9 @@ probe:
 
 		rc = vos_iter_next(ih);
 		if (rc) {
-			if (rc != -DER_NONEXIST)
-				D_ERROR("failed to iterate next (type=%d): "
-					""DF_RC"\n", type, DP_RC(rc));
+			VOS_TX_TRACE_FAIL(rc,
+					  "failed to iterate next (type=%d): "
+					  DF_RC"\n", type, DP_RC(rc));
 			break;
 		}
 	}
@@ -682,8 +664,8 @@ probe:
 		rc = 0;
 	}
 out:
-	if (rc < 0)
-		D_ERROR("abort iteration type:%d, "DF_RC"\n", type, DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "abort iteration type:%d, "DF_RC"\n", type,
+			DP_RC(rc));
 
 	vos_iter_finish(ih);
 	return rc;

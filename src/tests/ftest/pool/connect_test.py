@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,13 +23,12 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 
-from avocado.utils import process
 from apricot import TestWithServers
 
 import check_for_pool
+from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 # pylint: disable=fixme, broad-except
 class ConnectTest(TestWithServers):
@@ -61,24 +60,21 @@ class ConnectTest(TestWithServers):
             if result == 'FAIL':
                 expected_result = 'FAIL'
                 break
+
+        host1 = self.hostlist_servers[0]
+        host2 = self.hostlist_servers[1]
+
+        dmg = self.get_dmg_command()
+        scm_size = self.params.get("scm_size", "/run/pool*")
+
         try:
-            uid = os.geteuid()
-            gid = os.getegid()
+            result = dmg.pool_create(scm_size=scm_size, group=setid)
+            if result.exit_status == 0:
+                uuid_str, _ = get_pool_uuid_service_replicas_from_stdout(
+                    result.stdout)
+            else:
+                self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            # TODO make these params in the yaml
-            daosctl = self.basepath + '/install/bin/daosctl'
-
-            host1 = self.hostlist_servers[0]
-            host2 = self.hostlist_servers[1]
-
-            create_cmd = (
-                "{0} create-pool "
-                "-m {1} "
-                "-u {2} "
-                "-g {3} "
-                "-s {4} "
-                "-c 1".format(daosctl, "0731", uid, gid, setid))
-            uuid_str = """{0}""".format(process.system_output(create_cmd))
             print("uuid is {0}\n".format(uuid_str))
 
             exists = check_for_pool.check_for_pool(host1, uuid_str)
@@ -90,11 +86,9 @@ class ConnectTest(TestWithServers):
                 self.fail("Pool {0} not found on host {1}.\n".
                           format(uuid_str, host2))
 
-            connect_cmd = ('{0} connect-pool -i {1} '
-                           '-s {2} -r -l 0,1'.format(daosctl,
-                                                     uuid_str, setid))
-            process.system(connect_cmd)
-
+            result = dmg.pool_query(uuid_str)
+            if result.exit_status != 0:
+                self.fail("Could not connect to Pool {}\n".format(uuid_str))
 
             if expected_result == 'FAIL':
                 self.fail("Expected to fail but passed.\n")

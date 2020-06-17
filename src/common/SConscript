@@ -8,7 +8,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     # Hack alert, the argobots headers are required but the shared
-    # library isn't so add the dependancy so the include path
+    # library isn't so add the dependency so the include path
     # is correct, but set _libs to [] so that the library isn't
     # linked in.
 
@@ -16,6 +16,7 @@ def scons():
 
     if not platform_arm:
         prereqs.require(env, 'isal')
+        prereqs.require(env, 'isal_crypto')
 
     denv = env.Clone()
 
@@ -25,7 +26,8 @@ def scons():
                   'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
                   'drpc.c', 'drpc.pb-c.c', 'proc.c',
-                  'acl_api.c', 'acl_util.c', 'acl_principal.c']
+                  'acl_api.c', 'acl_util.c', 'acl_principal.c',
+                  'profile.c']
 
     common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib64/', common)

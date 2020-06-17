@@ -85,11 +85,6 @@
 #define SB_HI		0
 #define ROOT_HI		1
 
-enum {
-	DFS_WRITE,
-	DFS_READ
-};
-
 /** object struct that is instantiated for a DFS open object */
 struct dfs_obj {
 	/** DAOS object ID */
@@ -741,7 +736,7 @@ create_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 {
 	int			rc;
 
-	/** Allocate an OID for the dir - local operaiton */
+	/** Allocate an OID for the dir - local operation */
 	rc = oid_gen(dfs, cid, false, &dir->oid);
 	if (rc != 0)
 		return rc;
@@ -1414,7 +1409,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	dfs->coh = coh;
 	dfs->amode = (flags == 0) ? dfs_params->amode : (flags & O_ACCMODE);
 	dfs->uid = dfs_params->uid;
-	dfs->uid = dfs_params->gid;
+	dfs->gid = dfs_params->gid;
 	dfs->attr.da_id = dfs_params->id;
 	dfs->attr.da_chunk_size = dfs_params->chunk_size;
 	dfs->attr.da_oclass_id = dfs_params->oclass;
@@ -1723,7 +1718,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	dfs_obj_t		parent;
 	dfs_obj_t		*obj = NULL;
 	char			*token;
-	char			*rem, *sptr;
+	char			*rem, *sptr = NULL; /* bogus compiler warning */
 	bool			exists;
 	int			daos_mode;
 	struct dfs_entry	entry = {0};
@@ -3955,4 +3950,22 @@ dfs_umount_root_cont(dfs_t *dfs)
 
 	rc = daos_cont_close(coh, NULL);
 	return daos_der2errno(rc);
+}
+
+int
+dfs_obj_anchor_split(dfs_obj_t *obj, uint32_t *nr, daos_anchor_t *anchors)
+{
+	if (obj == NULL || nr == NULL || !S_ISDIR(obj->mode))
+		return EINVAL;
+
+	return daos_obj_anchor_split(obj->oh, nr, anchors);
+}
+
+int
+dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor)
+{
+	if (obj == NULL || !S_ISDIR(obj->mode))
+		return EINVAL;
+
+	return daos_obj_anchor_set(obj->oh, index, anchor);
 }

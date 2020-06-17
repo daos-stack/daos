@@ -21,7 +21,7 @@ failed=0
 failures=()
 log_num=0
 
-# this can be rmeoved once we are no longer using the old CI system
+# this can be removed once we are no longer using the old CI system
 if ${OLD_CI:-true}; then
 lock_test()
 {
@@ -79,10 +79,10 @@ if [ -d "/mnt/daos" ]; then
         SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
     fi
 
-    run_test build/src/cart/src/utest/test_linkage
-    run_test build/src/cart/src/utest/test_gurt
-    run_test build/src/cart/src/utest/utest_hlc
-    run_test build/src/cart/src/utest/utest_swim
+    run_test "${SL_BUILD_DIR}/src/cart/src/utest/test_linkage"
+    run_test "${SL_BUILD_DIR}/src/cart/src/utest/test_gurt"
+    run_test "${SL_BUILD_DIR}/src/cart/src/utest/utest_hlc"
+    run_test "${SL_BUILD_DIR}/src/cart/src/utest/utest_swim"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm
@@ -100,11 +100,11 @@ if [ -d "/mnt/daos" ]; then
     run_test src/common/tests/btree.sh dyn -s 20000
     run_test src/common/tests/btree.sh dyn perf -s 20000
     run_test src/common/tests/btree.sh dyn perf ukey -s 20000
-    run_test build/src/common/tests/umem_test
-    run_test build/src/common/tests/sched
-    run_test build/src/common/tests/drpc_tests
-    run_test build/src/client/api/tests/eq_tests
-    run_test build/src/bio/smd/tests/smd_ut
+    run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
+    run_test "${SL_BUILD_DIR}/src/common/tests/sched"
+    run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
+    run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
+    run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
     run_test src/vos/tests/evt_ctl.sh
     run_test src/vos/tests/evt_ctl.sh pmem
     run_test "${SL_PREFIX}/bin/vea_ut"
@@ -116,18 +116,18 @@ if [ -d "/mnt/daos" ]; then
         echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
     fi
     run_test src/control/run_go_tests.sh
-    run_test build/src/security/tests/cli_security_tests
-    run_test build/src/security/tests/srv_acl_tests
-    run_test build/src/common/tests/acl_api_tests
-    run_test build/src/common/tests/acl_valid_tests
-    run_test build/src/common/tests/acl_util_tests
-    run_test build/src/common/tests/acl_principal_tests
-    run_test build/src/common/tests/acl_real_tests
-    run_test build/src/common/tests/prop_tests
-    run_test build/src/iosrv/tests/drpc_progress_tests
-    run_test build/src/iosrv/tests/drpc_handler_tests
-    run_test build/src/iosrv/tests/drpc_listener_tests
-    run_test build/src/mgmt/tests/srv_drpc_tests
+    run_test "${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
+    run_test "${SL_BUILD_DIR}/src/security/tests/srv_acl_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/acl_api_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/acl_valid_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/acl_util_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
+    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_progress_tests"
+    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
+    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
+    run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
     run_test "${SL_PREFIX}/bin/vos_size"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
              "${SL_PREFIX}/etc/vos_size_input.yaml"

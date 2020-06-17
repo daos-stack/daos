@@ -22,7 +22,7 @@
 """
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers, skipForTicket
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand
 from test_utils_pool import TestPool
@@ -30,7 +30,7 @@ from test_utils_container import TestContainer
 
 
 class ContainerCreate(TestWithServers):
-    """Rebuild with conatiner creation test cases.
+    """Rebuild with container creation test cases.
 
     Test Class Description:
         These rebuild tests verify the ability to create additional containers
@@ -156,9 +156,11 @@ class ContainerCreate(TestWithServers):
             # Get ior params
             mpirun = Mpirun(IorCommand())
             mpirun.job.get_params(self)
-            mpirun.setup_command(
-                mpirun.job.get_default_env("mpirun"),
-                self.hostfile_clients, len(self.hostlist_clients))
+            mpirun.assign_hosts(
+                self.hostlist_clients, self.workdir,
+                self.hostfile_clients_slots)
+            mpirun.assign_processes(len(self.hostlist_clients))
+            mpirun.assign_environment(mpirun.job.get_default_env("mpirun"))
 
         # Cancel any tests with tickets already assigned
         if rank in (1, 2):
@@ -259,7 +261,7 @@ class ContainerCreate(TestWithServers):
                 status &= pool.check_rebuild_status(**rebuild_checks[index])
             self.assertTrue(status, "Error verifying pool info after rebuild")
 
-            # Verify that each of created containers exist by openning them
+            # Verify that each of created containers exist by opening them
             for index in range(start_index, len(self.container)):
                 count = "{}/{}".format(
                     index - start_index + 1, len(self.container) - start_index)

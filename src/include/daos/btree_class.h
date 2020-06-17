@@ -110,4 +110,9 @@ extern btr_ops_t dbtree_recx_ops;
  */
 #define DBTREE_CLASS_DTX_CF (DBTREE_DSM_BEGIN + 6)
 
+/**
+ * The key is dtx_cos_key: oid + dkey_hash
+ */
+#define DBTREE_CLASS_DTX_COS (DBTREE_DSM_BEGIN + 7)
+
 #endif /* __DAOS_SRV_BTREE_CLASS_H__ */

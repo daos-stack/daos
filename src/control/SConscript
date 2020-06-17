@@ -1,13 +1,13 @@
 #!/bin/env python
 """Build DAOS Control Plane"""
 #pylint: disable=too-many-locals
-import os
 import sys
+import os
 from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'DAOS_VERSION', 'CONF_DIR')
+Import('env', 'prereqs', 'DAOS_VERSION', 'CONF_DIR', 'gurt_lib')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -32,6 +32,16 @@ def get_install_src_dir(repopath, name):
 def get_install_bin_path(benv, name):
     """Get the final installation location for a binary with a given name"""
     return join(benv.subst("$PREFIX"), "bin", name)
+
+def is_firmware_mgmt_build(benv):
+    "Check whether this build has firmware management enabled."
+    return benv["FIRMWARE_MGMT"] == 1
+
+def get_build_tags(benv):
+    "Get custom go build tags."
+    if not is_firmware_mgmt_build(benv):
+        return ""
+    return "-tags firmware"
 
 #pylint: disable=too-many-arguments
 def install_go_bin(denv, gosrc, libs, name, install_name):
@@ -62,15 +72,17 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
         return '0x' + buildid.decode()
 
     def go_ldflags():
+        "Create the ldflags option for the Go build."
         return ' '.join(['-ldflags',
                          '"-X github.com/daos-stack/daos/src/control/build.DaosVersion=%s' % DAOS_VERSION,
                          '-X github.com/daos-stack/daos/src/control/build.ConfigDir=%s' % CONF_DIR,
                          '-B %s"' % gen_build_id()])
     # Must be run from the top of the source dir in order to
     # pick up the vendored modules.
-    denv.Command(build_bin, src,
-                 'cd %s; %s build -mod vendor -v %s -o %s %s' %
-                 (gosrc, GO_BIN, go_ldflags(), build_bin, install_src))
+    denv.Command(build_bin, src + gurt_lib,
+                 'cd %s; %s build -mod vendor -v %s %s -o %s %s' %
+                 (gosrc, GO_BIN, go_ldflags(), get_build_tags(denv),
+                  build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
     denv.InstallAs(install_bin, build_bin)
@@ -160,7 +172,7 @@ def scons():
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
                        sep=" ")
 
-    agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
+    agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
     dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
     drpcbin = install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
 
@@ -174,7 +186,7 @@ def scons():
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/cart/src/gurt "
                             "-L$BUILD_DIR/src/cart/src/cart "
-                            "-L$PREFIX/lib64 -L$SPDK_PREFIX/lib "
+                            "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access (need for clang build).
     senv.AppendENVPath("CGO_LDFLAGS", cgolibdirs + \
@@ -203,6 +215,11 @@ def scons():
                               "daos_admin")
 
     AlwaysBuild([serverbin, adminbin])
+
+    if is_firmware_mgmt_build(denv):
+        fwbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_firmware",
+                               "daos_firmware")
+        AlwaysBuild([fwbin])
 
 if __name__ == "SCons.Script":
     scons()

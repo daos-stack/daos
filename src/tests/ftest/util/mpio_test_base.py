@@ -49,7 +49,7 @@ class MpiioTests(TestWithServers):
     def setUp(self):
         super(MpiioTests, self).setUp()
 
-        # initialise daos_cmd
+        # initialize daos_cmd
         self.daos_cmd = DaosCommand(self.bin)
 
         # initialize a python pool object then create the underlying
@@ -62,7 +62,7 @@ class MpiioTests(TestWithServers):
         """Create a container.
 
         Args:
-            daos_cmd (DaosCommand): doas command to issue the container
+            daos_cmd (DaosCommand): daos command to issue the container
                 create
 
         Returns:
@@ -94,7 +94,7 @@ class MpiioTests(TestWithServers):
         if not self.mpio.mpich_installed(self.hostlist_clients):
             self.fail("Exiting Test: Mpich not installed")
 
-        # initialise test specific variables
+        # initialize test specific variables
         client_processes = self.params.get("np", '/run/client_processes/')
 
         # create container
