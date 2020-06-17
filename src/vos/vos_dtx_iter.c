@@ -177,6 +177,15 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	it_entry->ie_dtx_oid = DAE_OID(dae);
 	it_entry->ie_dtx_ver = DAE_VER(dae);
 	it_entry->ie_dtx_flags = DAE_FLAGS(dae);
+	it_entry->ie_dtx_tgt_cnt = DAE_TGT_CNT(dae);
+	it_entry->ie_dtx_grp_cnt = DAE_GRP_CNT(dae);
+	it_entry->ie_dtx_mbs_dsize = DAE_MBS_DSIZE(dae);
+	if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae)))
+		it_entry->ie_dtx_mbs = DAE_MBS_INLINE(dae);
+	else
+		it_entry->ie_dtx_mbs = umem_off2ptr(
+					&oiter->oit_cont->vc_pool->vp_umm,
+					DAE_MBS_OFF(dae));
 
 	D_DEBUG(DB_IO, "DTX iterator fetch the one "DF_DTI"\n",
 		DP_DTI(&DAE_XID(dae)));

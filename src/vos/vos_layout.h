@@ -146,7 +146,6 @@ enum vos_dtx_record_types {
 };
 
 #define DTX_INLINE_REC_CNT	4
-#define DTX_REC_CAP_DEFAULT	4
 
 struct vos_dtx_ent_common {
 	/** The DTX identifier. */
@@ -186,6 +185,21 @@ struct vos_dtx_act_ent_df {
 	uint32_t			dae_ver;
 	/** The offset for the list of dtx records if out of inline. */
 	umem_off_t			dae_rec_off;
+	/** The DTX targets count, either only inline case or all not inline. */
+	uint32_t			dae_tgt_cnt;
+	/** The DTX modification groups count. */
+	uint32_t			dae_grp_cnt;
+	/** Size of the area for dae_mbs_off. */
+	uint32_t			dae_mbs_dsize;
+	/** For 64-bits alignment. */
+	uint32_t			dae_padding;
+	/**
+	 * The inline DTX targets, can hold 3-way replicas for single
+	 * RDG that does not contains the original leader information.
+	 */
+	struct dtx_daos_target		dae_mbs_inline[2];
+	/** The offset for the dtx mbs if out of inline. */
+	umem_off_t			dae_mbs_off;
 };
 
 #define dae_xid		dae_common.dec_xid

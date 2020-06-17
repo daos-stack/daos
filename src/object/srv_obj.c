@@ -72,6 +72,47 @@ obj_rpc_is_fetch(crt_rpc_t *rpc)
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
 }
 
+/* For single RDG based DTX, parse DTX participants information
+ * from the client given dispatch targets information that does
+ * NOT contains the original leader information.
+ */
+static int
+obj_gen_dtx_mbs(struct daos_shard_tgt *tgts, uint32_t *tgt_cnt,
+		struct dtx_memberships **p_mbs)
+{
+	struct dtx_memberships	*mbs;
+	size_t			 size;
+	int			 i;
+	int			 j;
+
+	D_ASSERT(tgts != NULL);
+
+	size = sizeof(struct dtx_daos_target) * *tgt_cnt;
+	D_ALLOC(mbs, sizeof(*mbs) + size);
+	if (mbs == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0, j = 0; i < *tgt_cnt; i++) {
+		if (tgts[i].st_rank == TGTS_IGNORE)
+			continue;
+
+		mbs->dm_tgts[j++].ddt_id = tgts[i].st_tgt_id;
+	}
+
+	if (j == 0) {
+		D_FREE(mbs);
+		*tgt_cnt = 0;
+	} else {
+		mbs->dm_tgt_cnt = j;
+		mbs->dm_grp_cnt = 1;
+		mbs->dm_data_size = size;
+	}
+
+	*p_mbs = mbs;
+
+	return 0;
+}
+
 /**
  * After bulk finish, let's send reply, then release the resource.
  */
@@ -1386,6 +1427,9 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	daos_key_t			*dkey = &orw->orw_dkey;
 	struct obj_io_context		 ioc;
 	struct dtx_handle                dth = { 0 };
+	struct dtx_memberships		*mbs = NULL;
+	struct daos_shard_tgt		*tgts = NULL;
+	uint32_t			 tgt_cnt;
 	uint32_t			 opc = opc_get(rpc->cr_opc);
 	int				 rc;
 
@@ -1448,11 +1492,20 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = 0);
 	}
 
+	tgts = orw->orw_shard_tgts.ca_arrays;
+	tgt_cnt = orw->orw_shard_tgts.ca_count;
+
+	if (!daos_is_zero_dti(&orw->orw_dti) && tgt_cnt != 0) {
+		rc = obj_gen_dtx_mbs(tgts, &tgt_cnt, &mbs);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
 	rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, orw->orw_epoch,
 		       orw->orw_flags & ORF_EPOCH_UNCERTAIN, orw->orw_map_ver,
 		       &orw->orw_oid, orw->orw_dkey_hash, DAOS_INTENT_UPDATE,
 		       orw->orw_dti_cos.ca_arrays, orw->orw_dti_cos.ca_count,
-		       &dth);
+		       mbs, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1473,6 +1526,7 @@ out:
 
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coh);
+	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -1526,6 +1580,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	uint32_t			flags = 0;
 	uint32_t			opc = opc_get(rpc->cr_opc);
 	struct obj_ec_split_req		*split_req = NULL;
+	struct dtx_memberships		*mbs = NULL;
+	struct daos_shard_tgt		*tgts = NULL;
+	uint32_t			tgt_cnt;
 	uint32_t			version;
 	int				rc;
 
@@ -1567,7 +1624,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			       orw->orw_map_ver, &orw->orw_oid,
 			       orw->orw_dkey_hash, DAOS_INTENT_DEFAULT,
 			       orw->orw_dti_cos.ca_arrays,
-			       orw->orw_dti_cos.ca_count, &dth);
+			       orw->orw_dti_cos.ca_count, NULL, &dth);
 		D_ASSERTF(rc == 0, "%d\n", rc);
 
 		rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc, NULL, NULL,
@@ -1575,6 +1632,15 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		rc = dtx_end(&dth, ioc.ioc_coc, rc);
 
 		D_GOTO(out, rc);
+	}
+
+	tgts = orw->orw_shard_tgts.ca_arrays;
+	tgt_cnt = orw->orw_shard_tgts.ca_count;
+
+	if (!daos_is_zero_dti(&orw->orw_dti) && tgt_cnt != 0) {
+		rc = obj_gen_dtx_mbs(tgts, &tgt_cnt, &mbs);
+		if (rc != 0)
+			D_GOTO(out, rc);
 	}
 
 	version = orw->orw_map_ver;
@@ -1628,8 +1694,7 @@ again:
 	rc = dtx_leader_begin(ioc.ioc_coc, &orw->orw_dti, orw->orw_epoch,
 			      orw->orw_flags & ORF_EPOCH_UNCERTAIN, version,
 			      &orw->orw_oid, orw->orw_dkey_hash,
-			      DAOS_INTENT_UPDATE, orw->orw_shard_tgts.ca_arrays,
-			      orw->orw_shard_tgts.ca_count, &dlh);
+			      DAOS_INTENT_UPDATE, tgts, tgt_cnt, mbs, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1695,6 +1760,7 @@ out:
 cleanup:
 	D_TIME_END(time_start, OBJ_PF_UPDATE);
 	obj_ec_split_req_fini(split_req);
+	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -2076,6 +2142,9 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	struct dtx_handle		 dth = { 0 };
 	struct obj_io_context		 ioc;
 	struct obj_punch_in		*opi;
+	struct dtx_memberships		*mbs = NULL;
+	struct daos_shard_tgt		*tgts = NULL;
+	uint32_t			 tgt_cnt;
 	int				 rc;
 
 	opi = crt_req_get(rpc);
@@ -2109,12 +2178,21 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc);
 	}
 
+	tgts = opi->opi_shard_tgts.ca_arrays;
+	tgt_cnt = opi->opi_shard_tgts.ca_count;
+
+	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
+		rc = obj_gen_dtx_mbs(tgts, &tgt_cnt, &mbs);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
 	/* Start the local transaction */
 	rc = dtx_begin(ioc.ioc_coc, &opi->opi_dti, opi->opi_epoch,
 		       opi->opi_flags & ORF_EPOCH_UNCERTAIN, opi->opi_map_ver,
 		       &opi->opi_oid, opi->opi_dkey_hash, DAOS_INTENT_PUNCH,
 		       opi->opi_dti_cos.ca_arrays, opi->opi_dti_cos.ca_count,
-		       &dth);
+		       mbs, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -2136,6 +2214,7 @@ out:
 	/* Stop the local transaction */
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
+	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -2174,6 +2253,9 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	struct obj_punch_in		*opi;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc;
+	struct dtx_memberships		*mbs = NULL;
+	struct daos_shard_tgt		*tgts = NULL;
+	uint32_t			tgt_cnt;
 	uint32_t			flags = 0;
 	uint32_t			version;
 	int				rc;
@@ -2214,6 +2296,14 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	}
 
 	version = opi->opi_map_ver;
+	tgts = opi->opi_shard_tgts.ca_arrays;
+	tgt_cnt = opi->opi_shard_tgts.ca_count;
+
+	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
+		rc = obj_gen_dtx_mbs(tgts, &tgt_cnt, &mbs);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
 
 again:
 	/* Handle resend. */
@@ -2254,8 +2344,7 @@ again:
 	rc = dtx_leader_begin(ioc.ioc_coc, &opi->opi_dti, opi->opi_epoch,
 			      opi->opi_flags & ORF_EPOCH_UNCERTAIN, version,
 			      &opi->opi_oid, opi->opi_dkey_hash,
-			      DAOS_INTENT_PUNCH, opi->opi_shard_tgts.ca_arrays,
-			      opi->opi_shard_tgts.ca_count, &dlh);
+			      DAOS_INTENT_PUNCH, tgts, tgt_cnt, mbs, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -2306,6 +2395,7 @@ out:
 	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
 
 cleanup:
+	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -2389,7 +2479,7 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	rc = dtx_obj_sync(osi->osi_pool_uuid, osi->osi_co_uuid, ioc.ioc_coc,
-			  &osi->osi_oid, oso->oso_epoch, ioc.ioc_map_ver);
+			  &osi->osi_oid, oso->oso_epoch);
 
 out:
 	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);

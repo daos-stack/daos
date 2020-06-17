@@ -282,6 +282,11 @@ do {						\
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_VER(dae)		((dae)->dae_base.dae_ver)
 #define DAE_REC_OFF(dae)	((dae)->dae_base.dae_rec_off)
+#define DAE_TGT_CNT(dae)	((dae)->dae_base.dae_tgt_cnt)
+#define DAE_GRP_CNT(dae)	((dae)->dae_base.dae_grp_cnt)
+#define DAE_MBS_DSIZE(dae)	((dae)->dae_base.dae_mbs_dsize)
+#define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
+#define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
 	/* Link into vos_conter::vc_dtx_committed_list */
