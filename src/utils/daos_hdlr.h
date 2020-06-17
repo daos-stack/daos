@@ -28,6 +28,7 @@ enum fs_op {
 enum cont_op {
 	CONT_CREATE,
 	CONT_DESTROY,
+	CONT_COPY,
 	CONT_LIST_OBJS,
 	CONT_QUERY,
 	CONT_STAT,
@@ -77,9 +78,15 @@ struct cmd_args_s {
 	enum fs_op		fs_op;		/* filesystem sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
+	uuid_t			src_p_uuid;	/* --src_pool */
+	uuid_t			dst_p_uuid;	/* --dst_pool */
+	uuid_t			src_c_uuid;	/* --src_cont */
+	uuid_t			dst_c_uuid;	/* --dst_cont */
 	daos_handle_t		pool;
+	daos_handle_t		dst_pool;
 	uuid_t			c_uuid;		/* --cont */
 	daos_handle_t		cont;
+	daos_handle_t		dst_cont;
 	char			*mdsrv_str;	/* --svc */
 	d_rank_list_t		*mdsrv;
 	int			force;		/* --force */
@@ -205,6 +212,7 @@ int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_query_hdlr(struct cmd_args_s *ap);
 int cont_destroy_hdlr(struct cmd_args_s *ap);
+int cont_copy_hdlr(struct cmd_args_s *ap);
 int cont_get_prop_hdlr(struct cmd_args_s *ap);
 int cont_set_prop_hdlr(struct cmd_args_s *ap);
 int cont_list_attrs_hdlr(struct cmd_args_s *ap);

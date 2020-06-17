@@ -82,6 +82,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .I container \fR(\fIcont\fR) \fBCOMMAND\fRs:
 	  \fBcreate\fR           create a container
 .br
+	  \fBcopy\fR             copy a container
+.br
 	  \fBdestroy\fR          destroy a container
 .br
 	  \fBlist-objects\fR     list all objects in container
@@ -118,6 +120,11 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  <\fIpool\fR options>   (\fB--pool\fR, \fB--sys-name\fR, \fB--svc\fR)
 .br
 	  \fB--cont=\fRUUID      (optional) container UUID (or generated)
+.TP
+.I container \fBOPTION\fRs (copy a container):
+	  \fB--src=\fRSTR      <pool uuid>/<cont uuid> | <UNS path>
+.br
+	  \fB--dst=\fRSTR      <pool uuid>/<cont uuid> | <UNS path>
 .TP
 .I container \fBOPTION\fRs (create and link to namespace path):
 	  <\fIpool\fR/\fIcont\fR opts>   (\fB--pool\fR, \fB--sys-name\fR, \fB--svc\fR, \fB--cont\fR [optional])
