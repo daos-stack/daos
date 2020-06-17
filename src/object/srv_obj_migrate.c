@@ -1419,7 +1419,7 @@ destroy_existing_container(struct migrate_pool_tls *tls, uuid_t cont_uuid)
 		 * base list type
 		 */
 		struct migrate_init_cont_key *key;
- 
+
 		D_DEBUG(DB_REBUILD,
 			"destroying pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID
 			" before reintegration\n", DP_UUID(tls->mpt_pool_uuid),
@@ -1448,7 +1448,7 @@ destroy_existing_container(struct migrate_pool_tls *tls, uuid_t cont_uuid)
 		if (rc) {
 			D_ERROR("Failed to insert uuid table entry "DF_RC"\n",
 				DP_RC(rc));
-			D_FREE_PTR(key);
+			D_FREE(key);
 			return rc;
 		}
 	}
