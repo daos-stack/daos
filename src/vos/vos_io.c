@@ -357,7 +357,7 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info)
 
 /** Fetch the single value within the specified epoch range of an key */
 static int
-akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
+val_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		  daos_size_t *rsize, daos_size_t *gsize,
 		  struct vos_io_context *ioc)
 {
@@ -435,7 +435,7 @@ biov_align_lens(struct bio_iov *biov, struct evt_entry *ent, daos_size_t rsize)
 
 /** Fetch an extent from an akey */
 static int
-akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
+val_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		daos_recx_t *recx, daos_size_t *rsize_p,
 		struct vos_io_context *ioc)
 {
@@ -565,6 +565,59 @@ ioc_trim_tail_holes(struct vos_io_context *ioc)
 }
 
 static int
+val_fetch(struct vos_io_context *ioc, daos_iod_t *iod,
+	  daos_epoch_range_t *epr, daos_handle_t toh)
+{
+	int	i;
+	int	rc = 0;
+
+	if (iod->iod_type == DAOS_IOD_SINGLE) {
+		rc = val_fetch_single(toh, epr, &iod->iod_size,
+				      &iod->iod_size, ioc);
+		return rc;
+	}
+
+	iod->iod_size = 0;
+	for (i = 0; i < iod->iod_nr; i++) {
+		daos_size_t rsize;
+
+		if (iod->iod_recxs[i].rx_nr == 0) {
+			D_DEBUG(DB_IO,
+				"Skip empty read IOD at %d: idx %lu, nr %lu\n",
+				i, (unsigned long)iod->iod_recxs[i].rx_idx,
+				(unsigned long)iod->iod_recxs[i].rx_nr);
+			continue;
+		}
+
+		rc = val_fetch_recx(toh, epr, &iod->iod_recxs[i], &rsize, ioc);
+		if (rc != 0) {
+			D_DEBUG(DB_IO, "Failed to fetch index %d: "DF_RC"\n", i,
+				DP_RC(rc));
+			goto out;
+		}
+
+		/* Empty tree or all holes, DAOS array API relies on zero
+		 * iod_size to see if an array cell is empty.
+		 */
+		if (rsize == 0)
+			continue;
+
+		if (iod->iod_size == DAOS_REC_ANY)
+			iod->iod_size = rsize;
+
+		if (iod->iod_size != rsize) {
+			D_ERROR("Cannot support mixed record size "
+				DF_U64"/"DF_U64"\n", iod->iod_size, rsize);
+			rc = -DER_INVAL;
+			goto out;
+		}
+	}
+	ioc_trim_tail_holes(ioc);
+out:
+	return rc;
+}
+
+static int
 key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 	       const struct vos_ilog_info *parent, daos_epoch_range_t *epr_out,
 	       struct vos_ilog_info *info)
@@ -597,7 +650,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	struct vos_krec_df	*krec = NULL;
 	daos_epoch_range_t	 val_epr = {0};
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
-	int			 i, rc;
+	int			 rc;
 	int			 flags = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 
@@ -642,52 +695,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		}
 		goto out;
 	}
-
-	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size,
-				       &iod->iod_size, ioc);
-		goto out;
-	}
-
-	iod->iod_size = 0;
-	for (i = 0; i < iod->iod_nr; i++) {
-		daos_size_t rsize;
-
-		if (iod->iod_recxs[i].rx_nr == 0) {
-			D_DEBUG(DB_IO,
-				"Skip empty read IOD at %d: idx %lu, nr %lu\n",
-				i, (unsigned long)iod->iod_recxs[i].rx_idx,
-				(unsigned long)iod->iod_recxs[i].rx_nr);
-			continue;
-		}
-
-		rc = akey_fetch_recx(toh, &val_epr, &iod->iod_recxs[i], &rsize,
-				     ioc);
-		if (rc != 0) {
-			D_DEBUG(DB_IO, "Failed to fetch index %d: "DF_RC"\n", i,
-				DP_RC(rc));
-			goto out;
-		}
-
-		/*
-		 * Empty tree or all holes, DAOS array API relies on zero
-		 * iod_size to see if an array cell is empty.
-		 */
-		if (rsize == 0)
-			continue;
-
-		if (iod->iod_size == DAOS_REC_ANY)
-			iod->iod_size = rsize;
-
-		if (iod->iod_size != rsize) {
-			D_ERROR("Cannot support mixed record size "
-				DF_U64"/"DF_U64"\n", iod->iod_size, rsize);
-			rc = -DER_INVAL;
-			goto out;
-		}
-	}
-
-	ioc_trim_tail_holes(ioc);
+	rc = val_fetch(ioc, iod, &val_epr, toh);
 out:
 	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, is_array);
@@ -711,15 +719,24 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
+	int			 flags = 0;
 	int			 i, rc;
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
 		return rc;
 
+	if (obj_is_flat(obj)) {
+		if (ioc->ic_iod_nr > 1) {
+			D_ERROR("flat object does not support akey\n");
+			goto out;
+		}
+		if (ioc->ic_iods[0].iod_type == DAOS_IOD_ARRAY)
+			flags |= SUBTR_EVT;
+	}
+
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
-			      dkey, 0, DAOS_INTENT_DEFAULT, &krec,
-			      &toh);
+			      dkey, flags, DAOS_INTENT_DEFAULT, &krec, &toh);
 
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < ioc->ic_iod_nr; i++)
@@ -751,15 +768,20 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 		goto out;
 	}
 
-	for (i = 0; i < ioc->ic_iod_nr; i++) {
-		iod_set_cursor(ioc, i);
-		rc = akey_fetch(ioc, toh);
-		if (rc != 0)
-			break;
+	if (obj_is_flat(obj)) {
+		iod_set_cursor(ioc, 0);
+		rc = val_fetch(ioc, &ioc->ic_iods[0], &ioc->ic_epr, toh);
+	} else {
+		for (i = 0; i < ioc->ic_iod_nr; i++) {
+			iod_set_cursor(ioc, i);
+			rc = akey_fetch(ioc, toh);
+			if (rc != 0)
+				break;
+		}
 	}
 out:
 	if (!daos_handle_is_inval(toh))
-		key_tree_release(toh, false);
+		key_tree_release(toh, flags & SUBTR_EVT);
 
 	return rc;
 }
@@ -846,7 +868,7 @@ iod_update_biov(struct vos_io_context *ioc)
 }
 
 static int
-akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
+val_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 		   daos_size_t gsize, struct vos_io_context *ioc)
 {
 	struct vos_key_bundle	 kbund;
@@ -900,7 +922,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
  * See comment of vos_recx_fetch for explanation of @off_p.
  */
 static int
-akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
+val_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 		 struct dcs_csum_info *csum, daos_size_t rsize,
 		 struct vos_io_context *ioc)
 {
@@ -932,17 +954,55 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 }
 
 static int
+val_update(struct vos_io_context *ioc, daos_iod_t *iod, uint32_t pm_ver,
+	   daos_handle_t toh)
+{
+	struct dcs_csum_info *iod_csums = vos_ioc2csum(ioc);
+	struct dcs_csum_info *recx_csum = NULL;
+	int	i;
+	int	rc = 0;
+
+	if (iod->iod_type == DAOS_IOD_SINGLE) {
+		uint64_t	gsize;
+
+		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
+						   (uintptr_t)iod->iod_recxs;
+		rc = val_update_single(toh, pm_ver, iod->iod_size, gsize, ioc);
+		goto out;
+	} /* else: array */
+
+	for (i = 0; i < iod->iod_nr; i++) {
+		umem_off_t	umoff = iod_update_umoff(ioc);
+
+		if (iod->iod_recxs[i].rx_nr == 0) {
+			D_ASSERT(UMOFF_IS_NULL(umoff));
+			D_DEBUG(DB_IO,
+				"Skip empty write IOD at %d: idx %lu, nr %lu\n",
+				i, (unsigned long)iod->iod_recxs[i].rx_idx,
+				(unsigned long)iod->iod_recxs[i].rx_nr);
+			continue;
+		}
+
+		if (iod_csums != NULL)
+			recx_csum = &iod_csums[i];
+		rc = val_update_recx(toh, pm_ver, &iod->iod_recxs[i],
+				      recx_csum, iod->iod_size, ioc);
+		if (rc != 0)
+			goto out;
+	}
+out:
+	return rc;
+}
+
+static int
 akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 {
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec = NULL;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	struct dcs_csum_info	*iod_csums = vos_ioc2csum(ioc);
-	struct dcs_csum_info	*recx_csum = NULL;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	int			 flags = SUBTR_CREATE;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
-	int			 i;
 	int			 rc = 0;
 
 	D_DEBUG(DB_TRACE, "akey "DF_KEY" update %s value eph "DF_U64"\n",
@@ -965,34 +1025,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 		goto out;
 	}
 
-	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		uint64_t	gsize;
-
-		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
-						   (uintptr_t)iod->iod_recxs;
-		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc);
-		goto out;
-	} /* else: array */
-
-	for (i = 0; i < iod->iod_nr; i++) {
-		umem_off_t	umoff = iod_update_umoff(ioc);
-
-		if (iod->iod_recxs[i].rx_nr == 0) {
-			D_ASSERT(UMOFF_IS_NULL(umoff));
-			D_DEBUG(DB_IO,
-				"Skip empty write IOD at %d: idx %lu, nr %lu\n",
-				i, (unsigned long)iod->iod_recxs[i].rx_idx,
-				(unsigned long)iod->iod_recxs[i].rx_nr);
-			continue;
-		}
-
-		if (iod_csums != NULL)
-			recx_csum = &iod_csums[i];
-		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
-				      recx_csum, iod->iod_size, ioc);
-		if (rc != 0)
-			goto out;
-	}
+	rc = val_update(ioc, iod, pm_ver, toh);
 out:
 	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, is_array);
@@ -1004,8 +1037,9 @@ static int
 dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 {
 	struct vos_object	*obj = ioc->ic_obj;
-	daos_handle_t		 ak_toh;
+	daos_handle_t		 toh;
 	struct vos_krec_df	*krec;
+	int			 flags = SUBTR_CREATE;
 	bool			 subtr_created = false;
 	int			 i, rc;
 
@@ -1013,8 +1047,17 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 	if (rc != 0)
 		return rc;
 
+	if (obj_is_flat(obj)) {
+		if (ioc->ic_iod_nr > 1) {
+			D_ERROR("flat object does not support akey\n");
+			goto out;
+		}
+		if (ioc->ic_iods[0].iod_type == DAOS_IOD_ARRAY)
+			flags |= SUBTR_EVT;
+	}
+
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey,
-			      SUBTR_CREATE, DAOS_INTENT_UPDATE, &krec, &ak_toh);
+			      flags, DAOS_INTENT_UPDATE, &krec, &toh);
 	if (rc != 0) {
 		D_ERROR("Error preparing dkey tree: rc="DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1028,12 +1071,17 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 		goto out;
 	}
 
-	for (i = 0; i < ioc->ic_iod_nr; i++) {
-		iod_set_cursor(ioc, i);
+	if (obj_is_flat(obj)) {
+		iod_set_cursor(ioc, 0);
+		rc = val_update(ioc, &ioc->ic_iods[0], pm_ver, toh);
+	} else {
+		for (i = 0; i < ioc->ic_iod_nr; i++) {
+			iod_set_cursor(ioc, i);
 
-		rc = akey_update(ioc, pm_ver, ak_toh);
-		if (rc != 0)
-			goto out;
+			rc = akey_update(ioc, pm_ver, toh);
+			if (rc != 0)
+				goto out;
+		}
 	}
 out:
 	if (!subtr_created)
@@ -1043,8 +1091,8 @@ out:
 		goto release;
 
 release:
-	key_tree_release(ak_toh, false);
-
+	if (!daos_handle_is_inval(toh))
+		key_tree_release(toh, flags & SUBTR_EVT);
 	return rc;
 }
 
