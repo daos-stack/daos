@@ -22,12 +22,16 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import getpass
+import os
+import re
+import time
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import pcmd
 from dmg_utils import DmgCommand
+from bytes_utils import Bytes
 
 
 class ServerFailed(Exception):
@@ -628,3 +632,163 @@ class DaosServerManager(SubprocessManager):
                 "variable!".format(name))
 
         return self.get_config_value(setting)
+
+    def get_single_system_state(self):
+        """Get the current homogeneous DAOS system state.
+
+        Raises:
+            ServerFailed: if a single state for all servers is not detected
+
+        Returns:
+            str: the current DAOS system state
+
+        """
+        result = self.dmg.get_output("system_query")
+        if not result:
+            # The regex failed to get the rank and state
+            raise ServerFailed(
+                "Error obtaining {} output: {}".format(self.dmg, result))
+        if len(result) > 1:
+            # Multiple states for different ranks detected
+            raise ServerFailed(
+                "Multiple system states detected:\n  {}".format(
+                    "\n  ".join(result)))
+        if len(result[0]) != 2:
+            # Single state but missing ranks and state - should not occur.
+            raise ServerFailed(
+                "Unexpected result from {}: {}".format(self.dmg, result))
+        return result[0][1]
+
+    def check_system_state(self, valid_states, max_checks=1):
+        """Check that the DAOS system state is one of the provided states.
+
+        Fail the test if the current state does not match one of the specified
+        valid states.  Optionally the state check can loop multiple times,
+        sleeping one second between checks, by increasing the number of maximum
+        checks.
+
+        Args:
+            valid_states (list): expected DAOS system states as a list of
+                lowercase strings
+            max_checks (int, optional): number of times to check the state.
+                Defaults to 1.
+
+        Raises:
+            ServerFailed: if there was an error detecting the server state or
+                the detected state did not match one of the valid states
+
+        Returns:
+            str: the matching valid detected state
+
+        """
+        checks = 0
+        daos_state = "????"
+        while daos_state not in valid_states and checks < max_checks:
+            try:
+                daos_state = self.get_single_system_state().lower()
+            except ServerFailed as error:
+                raise error
+            checks += 1
+            time.sleep(1)
+        if daos_state not in valid_states:
+            raise ServerFailed(
+                "Error checking DAOS state, currently neither {} after "
+                "{} state check(s)!".format(valid_states, checks))
+        return daos_state
+
+    def system_start(self):
+        """Start the DAOS IO servers.
+
+        Raises:
+            ServerFailed: if there was an error starting the servers
+
+        """
+        self.log.info("Starting DAOS IO servers")
+        self.check_system_state(("stopped"))
+        result = self.dmg.system_start()
+        if result.exit_status != 0:
+            raise ServerFailed("Error starting DAOS:\n{}".format(result))
+
+    def system_stop(self):
+        """Stop the DAOS IO servers.
+
+        Raises:
+            ServerFailed: if there was an error stopping the servers
+
+        """
+        self.log.info("Stopping DAOS IO servers")
+        self.check_system_state(("started", "joined"))
+        result = self.dmg.system_stop()
+        if result.exit_status != 0:
+            raise ServerFailed("Error stopping DAOS:\n{}".format(result))
+
+    def get_available_storage(self):
+        """Get the available SCM and NVMe storage.
+
+        Raises:
+            ServerFailed: if there was an error stopping the servers
+
+        Returns:
+            list: a list of Bytes objects representing the maximum available
+                SCM size and NVMe size
+
+        """
+        using_dcpm = self.manager.job.using_dcpm
+        using_nvme = self.manager.job.using_nvme
+
+        if using_dcpm or using_nvme:
+            # Stop the DAOS IO servers in order to be able to scan the storage
+            self.system_stop()
+
+            # Scan all of the hosts for their SCM and NVMe storage
+            self.dmg.hostlist = self._hosts
+            result = self.dmg.storage_scan(verbose=True)
+            self.dmg.hostlist = self.get_config_value("access_points")
+            if result.exit_status != 0:
+                raise ServerFailed(
+                    "Error obtaining DAOS storage:\n{}".format(result))
+
+            # Find the sizes of the SCM and NVMe storage configured for use by
+            # the DAOS IO servers.  Convert the lists into hashable tuples so
+            # they can be used as dictionary keys.
+            scm_keys = [
+                os.path.basename(path)
+                for path in self.get_config_value("scm_list")
+                if path
+            ]
+            nvme_keys = self.get_config_value("bdev_list")
+            device_capacities = {}
+            for key in scm_keys + nvme_keys:
+                device_capacities[key] = None
+            for key in device_capacities:
+                regex = r"(?:{})\s+.*\d+\s+([0-9\.]+)\s+([A-Z])B".format(key)
+                data = re.findall(regex, result.stdout)
+                self.log.info("Storage detected for %s in %s:", key, data)
+                for size in data:
+                    capacity = Bytes(size[0], size[1])
+                    self.log.info("  %s", capacity)
+                    if device_capacities[key] is None:
+                        # Store this value if no other value exists
+                        device_capacities[key] = capacity
+                    elif capacity < device_capacities[key]:
+                        # Replace an existing capacity with a lesser value
+                        device_capacities[key] = capacity
+
+            # Sum the minimum available capacities for each SCM and NVMe device
+            storage = []
+            for keys in (scm_keys, nvme_keys):
+                storage.append(sum([device_capacities[key] for key in keys]))
+                storage[-1].convert_up()
+
+            # Restart the DAOS IO servers
+            self.system_start()
+
+        else:
+            # Report only the scm_size
+            scm_size = self.get_config_value("scm_size")
+            storage = [Bytes(scm_size, "G"), None]
+
+        self.log.info(
+            "Total available storage:  \nSCM:  %s\n  NVMe: %s", str(storage[0]),
+            str(storage[1]))
+        return storage

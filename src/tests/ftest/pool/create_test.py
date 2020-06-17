@@ -21,12 +21,10 @@ provided in Contract No. B609815.
 Any reproduction of computer software, computer software documentation, or
 portions thereof marked with this legend must also reproduce the markings.
 """
-import os
-import re
 import time
 
 from apricot import TestWithServers
-from bytes_utils import Bytes
+from server_utils import ServerFailed
 
 
 class PoolCreateTests(TestWithServers):
@@ -43,141 +41,6 @@ class PoolCreateTests(TestWithServers):
         super(PoolCreateTests, self).setUp()
         self.dmg = self.get_dmg_command()
 
-    def get_system_state(self):
-        """Get the current DAOS system state.
-
-        Returns:
-            str: the current DAOS system state
-
-        """
-        result = self.dmg.get_output("system_query")
-        if not result:
-            # The regex failed to get the rank and state
-            self.fail("Error obtaining {} output: {}".format(self.dmg, result))
-        if len(result) > 1:
-            # Multiple states for different ranks detected
-            self.fail(
-                "Multiple system states detected:\n  {}".format(
-                    "\n  ".join(result)))
-        if len(result[0]) != 2:
-            # Single state but missing ranks and state - should not occur.
-            self.fail("Unexpected result from {}: {}".format(self.dmg, result))
-        return result[0][1]
-
-    def check_system_state(self, valid_states, max_checks=1):
-        """Check that the DAOS system state is one of the provided states.
-
-        Fail the test if the current state does not match one of the specified
-        valid states.  Optionally the state check can loop multiple times,
-        sleeping one second between checks, by increasing the number of maximum
-        checks.
-
-        Args:
-            valid_states (list): expected DAOS system states as a list of
-                lowercase strings
-            max_checks (int, optional): number of times to check the state.
-                Defaults to 1.
-
-        Returns:
-            str: current detected state
-
-        """
-        checks = 0
-        daos_state = "????"
-        while daos_state not in valid_states and checks < max_checks:
-            daos_state = self.get_system_state().lower()
-            checks += 1
-            time.sleep(1)
-        if daos_state not in valid_states:
-            self.fail(
-                "Error checking DAOS state, currently neither {} after "
-                "{} state check(s)!".format(valid_states, checks))
-        return daos_state
-
-    def system_start(self):
-        """Start the DAOS IO servers."""
-        self.log.info("Starting DAOS IO servers")
-        self.check_system_state(("stopped"))
-        result = self.dmg.system_start()
-        if result.exit_status != 0:
-            self.fail("Error starting DAOS:\n{}".format(result))
-
-    def system_stop(self):
-        """Stop the DAOS IO servers."""
-        self.log.info("Stopping DAOS IO servers")
-        self.check_system_state(("started", "joined"))
-        result = self.dmg.system_stop()
-        if result.exit_status != 0:
-            self.fail("Error stopping DAOS:\n{}".format(result))
-
-    def get_available_storage(self):
-        """Get the available SCM and NVMe storage.
-
-        Returns:
-            list: a list of Bytes objects representing the maximum available
-                SCM size and NVMe size
-
-        """
-        using_dcpm = self.server_managers[0].manager.job.using_dcpm
-        using_nvme = self.server_managers[0].manager.job.using_nvme
-
-        if using_dcpm or using_nvme:
-            # Stop the DAOS IO servers in order to be able to scan the storage
-            self.system_stop()
-
-            # Scan all of the hosts for their SCM and NVMe storage
-            saved_hostlist = self.dmg.hostlist
-            self.dmg.hostlist = self.hostlist_servers
-            result = self.dmg.storage_scan(verbose=True)
-            self.dmg.hostlist = saved_hostlist
-            if result.exit_status != 0:
-                self.fail("Error obtaining DAOS storage:\n{}".format(result))
-
-            # Find the sizes of the SCM and NVMe storage configured for use by
-            # the DAOS IO servers.  Convert the lists into hashable tuples so
-            # they can be used as dictionary keys.
-            scm_keys = [
-                os.path.basename(path)
-                for path in self.server_managers[0].get_config_value("scm_list")
-                if path
-            ]
-            nvme_keys = self.server_managers[0].get_config_value("bdev_list")
-            device_capacities = {}
-            for key in scm_keys + nvme_keys:
-                device_capacities[key] = None
-            for key in device_capacities:
-                regex = r"(?:{})\s+.*\d+\s+([0-9\.]+)\s+([A-Z])B".format(key)
-                data = re.findall(regex, result.stdout)
-                self.log.info("Storage detected for %s in %s:", key, data)
-                for size in data:
-                    capacity = Bytes(size[0], size[1])
-                    self.log.info("  %s", capacity)
-                    if device_capacities[key] is None:
-                        # Store this value if no other value exists
-                        device_capacities[key] = capacity
-                    elif capacity < device_capacities[key]:
-                        # Replace an existing capacity with a lesser value
-                        device_capacities[key] = capacity
-
-            # Sum the minimum available capacities for each SCM and NVMe device
-            storage = []
-            for keys in (scm_keys, nvme_keys):
-                storage.append(sum([device_capacities[key] for key in keys]))
-                storage[-1].convert_up()
-
-            # Restart the DAOS IO servers
-            self.system_start()
-
-        else:
-            # Report only the scm_size
-            scm_size = self.server_managers[0].get_config_value("scm_size")
-            storage = [Bytes(scm_size, "G"), None]
-
-        self.log.info(
-            "Total available storage:  \nSCM:  %s\n  NVMe: %s", str(storage[0]),
-            str(storage[1]))
-        return storage
-
     def get_max_pool_sizes(self, scm_ratio=0.9, nvme_ratio=0.9):
         """Get the maximum pool sizes for the current server configuration.
 
@@ -192,7 +55,11 @@ class PoolCreateTests(TestWithServers):
                 SCM size and NVMe size
 
         """
-        sizes = self.get_available_storage()
+        try:
+            sizes = self.server_managers[0].get_available_storage()
+        except ServerFailed as error:
+            self.fail(error)
+
         ratios = (scm_ratio, nvme_ratio)
         for index, size in enumerate(sizes):
             if size and ratios[index] < 1:
@@ -300,9 +167,17 @@ class PoolCreateTests(TestWithServers):
         self.check_pool_creation(3)
 
         # Verify DAOS can be restarted in less than 2 minutes
-        self.system_stop()
+        try:
+            self.server_managers[0].system_stop()
+        except ServerFailed as error:
+            self.fail(error)
+
         start = float(time.time())
-        self.system_start()
+        try:
+            self.server_managers[0].system_start()
+        except ServerFailed as error:
+            self.fail(error)
+
         duration = float(time.time()) - start
         self.assertLessEqual(
             duration, 120,
