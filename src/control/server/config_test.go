@@ -118,6 +118,22 @@ func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	return c
 }
 
+func getDeviceClassStub(netdev string) (uint32, error) {
+	switch netdev {
+	case "eth0":
+		return 1, nil
+	case "eth1":
+		return 1, nil
+	case "ib0":
+		return 32, nil
+	case "ib1":
+		return 32, nil
+	default:
+		return 0, nil
+	}
+	return 0, nil
+}
+
 func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 	for name, tt := range map[string]struct {
 		inPath string
@@ -508,22 +524,6 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}
-}
-
-func getDeviceClassStub(netdev string) (uint32, error) {
-	switch netdev {
-	case "eth0":
-		return 1, nil
-	case "eth1":
-		return 1, nil
-	case "ib0":
-		return 32, nil
-	case "ib1":
-		return 32, nil
-	default:
-		return 0, nil
-	}
-	return 0, nil
 }
 
 func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
