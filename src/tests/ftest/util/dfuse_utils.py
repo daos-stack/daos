@@ -241,7 +241,8 @@ class Dfuse(DfuseCommand):
                 self.log.info('Waiting five seconds for dfuse to start')
                 time.sleep(5)
                 if not self.check_running(fail_on_error=False):
-                    self.log.info('Waiting twenty five seconds for dfuse to start')
+                    self.log.info('Waiting twenty five seconds for dfuse \
+                        to start')
                     time.sleep(25)
                     self.check_running()
 

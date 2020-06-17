@@ -21,34 +21,31 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import threading
-import general_utils
 
-from ClusterShell.NodeSet import NodeSet
 from command_utils import CommandFailure
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from dfuse_utils import Dfuse
-from fio_test_base import FioBase
+from apricot import TestWithServers
 
-class ContainerCheck(FioBase):
-    """Base Container check test class.
+class DfuseContainerCheck(TestWithServers):
+    """Base Dfuse Container check test class.
 
     :avocado: recursive
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize a ContainerCheck object."""
-        super(ContainerCheck, self).__init__(*args, **kwargs)
+        """Initialize a DfuseContainerCheck object."""
+        super(DfuseContainerCheck, self).__init__(*args, **kwargs)
         self.dfuse = None
-#        self.cont_count = None
-#        self.container = []
+        self.pool = None
+        self.container = None
 
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(ContainerCheck, self).setUp()
+        super(DfuseContainerCheck, self).setUp()
 
     def tearDown(self):
         """Tear down each test case."""
@@ -57,7 +54,7 @@ class ContainerCheck(FioBase):
                 self.dfuse.stop()
         finally:
             # Stop the servers and agents
-            super(ContainerCheck, self).tearDown()
+            super(DfuseContainerCheck, self).tearDown()
 
     def create_pool(self):
         """Create a TestPool object to use with ior."""
@@ -68,17 +65,6 @@ class ContainerCheck(FioBase):
 
         # Create a pool
         self.pool.create()
-
-    def create_cont(self):
-        """Create a TestContainer object to be used to create container."""
-        # Get container params
-        self.container = TestContainer(
-            self.pool, daos_command=DaosCommand(self.bin))
-        self.container.get_params(self)
-
-        # create container
-        self.container.create()
-#        self.container.append(container)
 
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse.
@@ -95,7 +81,7 @@ class ContainerCheck(FioBase):
 
         try:
             # start dfuse
-            self.dfuse.run()
+            self.dfuse.run(False)
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
                            str(self.dfuse),
@@ -103,7 +89,7 @@ class ContainerCheck(FioBase):
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
-    def test_containercheck(self):
+    def test_dfusecontainercheck(self):
         """Jira ID: DAOS-3635.
 
         Test Description:
@@ -115,21 +101,15 @@ class ContainerCheck(FioBase):
             Try to mount to dfuse and check the behaviour.
             Create container of type POSIX.
             Try to mount to dfuse and check the behaviour.
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,containercheck
+        :avocado: tags=all,small,full_regression,dfusecontainercheck
         """
         # get test params for cont and pool count
-        self.cont_types = self.params.get("cont_types", '/run/container/*')
-
-#        threads = []
+        cont_types = self.params.get("cont_types", '/run/container/*')
 
         # Create a pool and start dfuse.
         self.create_pool()
-#        # Get container params
-#        self.container = TestContainer(
-#            self.pool, daos_command=DaosCommand(self.bin))
-#        self.container.get_params(self)
-        
-        for cont_type in self.cont_types:
+
+        for cont_type in cont_types:
             # Get container params
             self.container = TestContainer(
                 self.pool, daos_command=DaosCommand(self.bin))
@@ -138,93 +118,27 @@ class ContainerCheck(FioBase):
             if cont_type == "POSIX":
                 self.container.type.update(cont_type)
             self.container.create()
-            self.start_dfuse()
-            if self.check_running(fail_on_error=False) and cont_type == "":
-                self.fail()
-            elif not self.check_running(fail_on_error=False) and cont_type == "POSIX":
-                self.log.info('Waiting five seconds for dfuse to start')
-                time.sleep(5)
-                if not self.check_running(fail_on_error=False):
-                    self.log.info('Waiting twenty five seconds for dfuse to start')
-                    time.sleep(25)
-                    self.check_running()
-
-            self.dfuse.stop()
+            try:
+                # mount fuse
+                self.start_dfuse()
+                # check if fuse got mounted
+                self.dfuse.check_running()
+                # fail the test if fuse mounts with non-posix type container
+                if cont_type == "":
+                    self.fail("Non-Posix type container got mounted over dfuse")
+            except CommandFailure as error:
+                # expected to throw CommandFailure exception for non-posix type
+                # container
+                if cont_type == "":
+                    self.log.info("Expected behaviour: Default container type \
+                        is expected to fail on dfuse mount: %s", str(error))
+                # fail the test if exception is caught for POSIX type container
+                elif cont_type == "POSIX":
+                    self.log.error("Posix Container dfuse mount \
+                        failed: %s", str(error))
+                    self.fail("Posix container type was expected to mount \
+                        over dfuse")
+            # stop fuse and container for next iteration
+            if not cont_type == "":
+                self.dfuse.stop()
             self.container.destroy(1)
-
-#            if cont_type == "" and self.start_dfuse():
-#                self.fail("Failed: Dfuse got mounted with Default Container type")
-#            elif cont_type == "POSIX" and not self.start_dfuse():
-#                self.fail("Failed: Dfuse did not mount with POSIX Container type")
-
-#            if not self.dfuse.check_running():
-#                continue
-#            else:
-#                self.fail("Failed: Dfuse got mounted with wrong Container type")
-#            self.container.destroy(1)
-            
-#        self.start_dfuse()
-        # create multiple containers in parallel
-#        cont_threads = []
-#        for _ in range(self.cont_count):
-#            cont_thread = threading.Thread(target=self.create_cont())
-#            cont_threads.append(cont_thread)
-#        # start container create job
-#        for cont_job in cont_threads:
-#            cont_job.start()
-#        # wait for container create to finish
-#        for cont_job in cont_threads:
-#            cont_job.join()
-
-        # check if all the created containers can be accessed and perform
-        # io on each container using fio in parallel
-#        for _, cont in enumerate(self.container):
-#            dfuse_cont_dir = self.dfuse.mount_dir.value + "/" + cont.uuid
-#            cmd = u"ls -a {}".format(dfuse_cont_dir)
-#            try:
-#                # execute bash cmds
-#                ret_code = general_utils.pcmd(
-#                    self.hostlist_clients, cmd, timeout=30)
-#                if 0 not in ret_code:
-#                    error_hosts = NodeSet(
-#                        ",".join(
-#                            [str(node_set) for code, node_set in
-#                             ret_code.items() if code != 0]))
-#                    raise CommandFailure(
-#                        "Error running '{}' on the following "
-#                        "hosts: {}".format(cmd, error_hosts))
-#            # report error if any command fails
-#            except CommandFailure as error:
-#                self.log.error("ContainerCheck Test Failed: %s",
-#                               str(error))
-#                self.fail("Test was expected to pass but "
-#                          "it failed.\n")
-#            # run fio on all containers
-#            thread = threading.Thread(target=self.execute_fio, args=(
-#                self.dfuse.mount_dir.value + "/" + cont.uuid, False))
-#            threads.append(thread)
-#            thread.start()
-
-#        # wait for all fio jobs to be finished
-#        for job in threads:
-#            job.join()
-#
-#        # destroy first container
-#        container_to_destroy = self.container[0].uuid
-#        self.container[0].destroy(1)
-
-        # check dfuse if it is running fine
-#        self.dfuse.check_running()
-#
-#        # try accessing destroyed container, it should fail
-#        try:
-#            self.execute_fio(self.dfuse.mount_dir.value + "/" + \
-#                container_to_destroy, False)
-#            self.fail("Fio was able to access destroyed container: {}".\
-#                format(self.container[0].uuid))
-#        except CommandFailure as error:
-#            self.log.info("This run is expected to fail")
-#
-#        # check dfuse is still running after attempting to access deleted
-        # container.
-#            self.dfuse.check_running()
