@@ -1,9 +1,12 @@
 package io.daos.obj;
 
+import io.daos.BufferAllocator;
 import io.daos.Constants;
 import io.daos.DaosObjectType;
 import org.junit.Assert;
 import org.junit.Test;
+
+import java.nio.ByteBuffer;
 
 public class DaosObjectIdTest {
 
@@ -29,5 +32,15 @@ public class DaosObjectIdTest {
     byte[] utfBytes = s.getBytes(Constants.KEY_CHARSET);
     String decoded = new String(utfBytes, Constants.KEY_CHARSET);
     Assert.assertEquals(s, decoded);
+  }
+
+  @Test
+  public void TestEncodeInteger() throws Exception {
+    ByteBuffer buffer = BufferAllocator.directBuffer(1);
+    int value = 100;
+    buffer.put((byte)value);
+    buffer.flip();
+    byte b = buffer.get();
+    Assert.assertEquals((int)b, value);
   }
 }

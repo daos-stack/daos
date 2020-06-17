@@ -33,6 +33,7 @@ import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -99,7 +100,7 @@ public class DaosObject {
   private ByteBuffer encodeKeys(List<String> keys) throws IOException {
     int bufferLen = 0;
     for (String key : keys) {
-      bufferLen += (key.length() + 4);
+      bufferLen += (key.length() + 2);
     }
     if (bufferLen == 0) {
       return null;
@@ -108,12 +109,15 @@ public class DaosObject {
     ByteBuffer buffer = BufferAllocator.directBuffer(bufferLen);
     buffer.order(Constants.DEFAULT_ORDER);
     int capacity = buffer.capacity();
-    bufferLen = 0;
     int keyLen;
     for (String key : keys) {
       byte[] bytes = key.getBytes(Constants.KEY_CHARSET);
-      keyLen = (4 + bytes.length);
-      if ((bufferLen + keyLen) > capacity) { // in case there is non ascii char
+      if (bytes.length > Short.MAX_VALUE) {
+        throw new IllegalArgumentException("key length in " + Constants.KEY_CHARSET +
+                      " should not exceed " + Short.MAX_VALUE);
+      }
+      keyLen = (2 + bytes.length);
+      if ((buffer.position() + keyLen) > capacity) { // in case there is non ascii char
         capacity *= 2;
         ByteBuffer newBuffer = BufferAllocator.directBuffer(capacity);
         newBuffer.order(Constants.DEFAULT_ORDER);
@@ -121,8 +125,7 @@ public class DaosObject {
         newBuffer.put(buffer);
         buffer = newBuffer;
       }
-      buffer.putInt(bytes.length).put(bytes);
-      bufferLen += keyLen;
+      buffer.putShort((short)bytes.length).put(bytes);
     }
     buffer.flip();
     return buffer;
@@ -145,9 +148,10 @@ public class DaosObject {
       return;
     }
     int nbrOfAkyes = akeys.size();
-    akeys.add(0, dkey);
-    ByteBuffer buffer = encodeKeys(akeys);
-    akeys.remove(0);
+    List<String> allKeys = new ArrayList<>(nbrOfAkyes + 1);
+    allKeys.add(dkey);
+    allKeys.addAll(akeys);
+    ByteBuffer buffer = encodeKeys(allKeys);
     client.punchObjectAkeys(objectPtr, 0, nbrOfAkyes, ((DirectBuffer)buffer).address(), buffer.limit());
   }
 
@@ -157,21 +161,27 @@ public class DaosObject {
     return DaosObjectAttribute.parseFrom(bytes);
   }
 
-  public void fetch(IOValueDesc desc) throws IOException {
+  public void fetch(IODataDesc desc) throws IOException {
     checkOpen();
     desc.encode();
 
-    client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(),
-        ((DirectBuffer)desc.getDescBuffer()).address(),
-      ((DirectBuffer)desc.getValueBuffer()).address());
+    client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), ((DirectBuffer)desc.getDescBuffer()).address(),
+      ((DirectBuffer)desc.getDataBuffer()).address());
   }
 
-  public void update(IOValueDesc desc) throws IOException {
+  /**
+   * update object with given <code>desc</code>.
+   *
+   * @param desc
+   * {@link IODataDesc} describes list of {@link io.daos.obj.IODataDesc.Entry} to update on dkey.
+   * @throws IOException
+   */
+  public void update(IODataDesc desc) throws IOException {
     checkOpen();
     desc.encode();
 
     client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), ((DirectBuffer)desc.getDescBuffer()).address(),
-      ((DirectBuffer)desc.getValueBuffer()).address());
+      ((DirectBuffer)desc.getDataBuffer()).address());
   }
 
   /**
@@ -187,19 +197,23 @@ public class DaosObject {
 
     // TODO: check completion of list
     client.listObjectDkeys(objectPtr, ((DirectBuffer)desc.getDescBuffer()).address(),
-      ((DirectBuffer)desc.getKeyBuffer()).address(), ((DirectBuffer)desc.getAnchorBuffer()).address(),
-      desc.getNbrOfKeysPerCall());
+      ((DirectBuffer)desc.getKeyBuffer()).address(), desc.getKeyBuffer().capacity(),
+      ((DirectBuffer)desc.getAnchorBuffer()).address(),
+      desc.getBatchSize());
     return null;
   }
 
   public List<String> listAkeys(IOKeyDesc desc) throws IOException {
     checkOpen();
+    if (desc.getDkey() == null) {
+      throw new IllegalArgumentException("dkey is needed when list akeys");
+    }
     desc.encode();
 
     // TODO: check completion of list
     client.listObjectAkeys(objectPtr, ((DirectBuffer)desc.getDescBuffer()).address(),
-      ((DirectBuffer)desc.getKeyBuffer()).address(), ((DirectBuffer)desc.getAnchorBuffer()).address(),
-      desc.getNbrOfKeysPerCall());
+      ((DirectBuffer)desc.getKeyBuffer()).address(), desc.getKeyBuffer().capacity(),
+      ((DirectBuffer)desc.getAnchorBuffer()).address(), desc.getBatchSize());
     return null;
   }
 
@@ -218,5 +232,152 @@ public class DaosObject {
     if (objectPtr != -1) {
       client.closeObject(objectPtr);
     }
+  }
+
+  /**
+   * create a new instance of {@link IODataDesc} and bind to the client.
+   *
+   * @param dkey
+   * distribution key
+   * @param entries
+   * list of entries describing records fetch or update
+   * @return {@link IODataDesc}
+   * @throws IOException
+   */
+  public IODataDesc createDataDesc(String dkey, List<IODataDesc.Entry> entries) throws IOException {
+    IODataDesc desc = new IODataDesc(dkey, entries);
+//    desc.setObjClient(client);
+    return desc;
+  }
+
+  /**
+   * create data description entry for fetch.
+   *
+   * @param key
+   * distribution key
+   * @param type
+   * iod type, {@see io.daos.obj.IODataDesc.IodType}
+   * @param offset
+   * offset inside akey from which to fetch data, should be a multiple of recordSize
+   * @param recordSize
+   * record size
+   * @param dataSize
+   * size of data to fetch, make it a multiple of recordSize as much as possible. zeros are padded to make actual
+   * request size a multiple of recordSize.
+   * @return data description entry
+   * @throws IOException
+   */
+  public IODataDesc.Entry createEntryForFetch(String key, IODataDesc.IodType type, int offset, int recordSize,
+                                              int dataSize) throws IOException {
+    IODataDesc.Entry entry = new IODataDesc.Entry(key, type, offset, recordSize, dataSize);
+//    entry.setObjClient(client);
+    return entry;
+  }
+
+  /**
+   * create data description entry for update.
+   *
+   * @param key
+   * distribution key
+   * @param type
+   * iod type, {@see io.daos.obj.IODataDesc.IodType}
+   * @param offset
+   * offset inside akey from which to update data, should be a multiple of recordSize
+   * @param recordSize
+   * record size
+   * @param dataBuffer
+   * byte buffer (direct buffer preferred) holding data to update. make sure dataBuffer is ready for being read,
+   * for example, buffer position and limit are set correctly for reading.
+   * make size a multiple of recordSize as much as possible. zeros are padded to make actual request size a multiple
+   * of recordSize.
+   * @return data description entry
+   * @throws IOException
+   */
+  public IODataDesc.Entry createEntryForUpdate(String key, IODataDesc.IodType type, int offset, int recordSize,
+                                               ByteBuffer dataBuffer) throws IOException {
+    IODataDesc.Entry entry = new IODataDesc.Entry(key, type, offset, recordSize, dataBuffer);
+//    entry.setObjClient(client);
+    return entry;
+  }
+
+  /**
+   * create new instance of {@link IOKeyDesc} with all parameters provided.
+   *
+   * @param dkey
+   * distribution key for listing akeys. null for listing dkeys
+   * @param nbrOfKeys
+   * number of keys to list. The listing could stop if <code>nbrOfKeys</code> exceeds actual number of keys
+   * @param keyLen
+   * approximate key length, so that buffer size can be well-calculated
+   * @param batchSize
+   * how many keys to list per native method call
+   * @return new instance of IOKeyDesc
+   * @throws IOException
+   */
+  public IOKeyDesc createKDWithAllParams(String dkey, int nbrOfKeys, int keyLen, int batchSize)
+                  throws IOException {
+    return new IOKeyDesc(dkey, nbrOfKeys, keyLen, batchSize);
+  }
+
+  /**
+   * create new instance of {@link IOKeyDesc} with default batch size,
+   * {@linkplain Constants#KEY_LIST_BATCH_SIZE_DEFAULT}.
+   *
+   * @param dkey
+   * distribution key for listing akeys. null for listing dkeys
+   * @param nbrOfKeys
+   * number of keys to list. The listing could stop if <code>nbrOfKeys</code> exceeds actual number of keys
+   * @param keyLen
+   * approximate key length, so that buffer size can be well-calculated
+   * @return new instance of IOKeyDesc
+   * @throws IOException
+   */
+  public IOKeyDesc createKDWithDefaultBs(String dkey, int nbrOfKeys, int keyLen) throws IOException {
+    return new IOKeyDesc(dkey, nbrOfKeys, keyLen);
+  }
+
+  /**
+   * create new instance {@link IOKeyDesc} with number of key specified and with default key length,
+   * {@linkplain Constants#KEY_LIST_LEN_DEFAULT} and batch size, {@linkplain Constants#KEY_LIST_BATCH_SIZE_DEFAULT}.
+   *
+   * @param dkey
+   * distribution key for listing akeys. null for listing dkeys
+   * @param nbrOfKeys
+   * number of keys to list. The listing could stop if <code>nbrOfKeys</code> exceeds actual number of keys
+   * @return new instance of IOKeyDesc
+   * @throws IOException
+   */
+  public IOKeyDesc createKDWithNbrOfKeys(String dkey, int nbrOfKeys) throws IOException {
+    return new IOKeyDesc(dkey, nbrOfKeys);
+  }
+
+  /**
+   * create new instance {@link IOKeyDesc} with all defaults to list all keys (Integer.MAX_VALUE) with default key
+   * length, {@linkplain Constants#KEY_LIST_LEN_DEFAULT} and batch size,
+   * {@linkplain Constants#KEY_LIST_BATCH_SIZE_DEFAULT}.
+   *
+   * @param dkey
+   * distribution key for listing akeys. null for listing dkeys
+   * @return new instance of IOKeyDesc
+   * @throws IOException
+   */
+  public IOKeyDesc createKD(String dkey) throws IOException {
+    return new IOKeyDesc(dkey);
+  }
+
+  /**
+   * create new instance {@link IOKeyDesc} with key length and batch size specified.
+   *
+   * @param dkey
+   * distribution key for listing akeys. null for listing dkeys
+   * @param keyLen
+   * approximate key length, so that buffer size can be well-calculated
+   * @param batchSize
+   * how many keys to list per native method call
+   * @return new instance of IOKeyDesc
+   * @throws IOException
+   */
+  public IOKeyDesc createKDWithKlAndBs(String dkey, int keyLen, int batchSize) throws IOException {
+    return new IOKeyDesc(dkey, Integer.MAX_VALUE, keyLen, batchSize);
   }
 }

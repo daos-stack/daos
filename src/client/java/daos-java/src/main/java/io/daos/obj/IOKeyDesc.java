@@ -29,15 +29,18 @@ import io.daos.Constants;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+/**
+ * A class to describe key listing, including approximate key length, number of keys to retrieve and batch size
+ */
 public class IOKeyDesc {
 
   private String dkey;
 
   private byte[] dkeyBytes;
 
-  private final int maxNbrOfKeys;
+  private final int nbrOfKeys;
 
-  private final int nbrOfKeysPerCall;
+  private final int batchSize;
 
   private final int keyLen;
 
@@ -47,31 +50,105 @@ public class IOKeyDesc {
 
   private final ByteBuffer keyBuffer;
 
-  public IOKeyDesc(String dkey, int maxNbrOfKeys, int keyLen, int bufferSize) throws IOException {
+  private boolean encoded;
+
+  /**
+   * constructor to set all parameters.
+   *
+   * @param dkey
+   * distribution key for listing akeys. null for listing dkeys
+   * @param nbrOfKeys
+   * number of keys to list. The listing could stop if <code>nbrOfKeys</code> exceeds actual number of keys
+   * @param keyLen
+   * approximate key length, so that buffer size can be well-calculated
+   * @param batchSize
+   * how many keys to list per native method call
+   * @throws IOException
+   */
+  protected IOKeyDesc(String dkey, int nbrOfKeys, int keyLen, int batchSize) throws IOException {
     this.dkey = dkey;
     if (dkey != null) {
       dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
+      if (dkeyBytes.length > Short.MAX_VALUE) {
+        throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET + " should not exceed "
+          + Short.MAX_VALUE);
+      }
     }
-    this.maxNbrOfKeys = maxNbrOfKeys;
+    if (nbrOfKeys < 1) {
+      throw new IllegalArgumentException("nbrOfKeys should be at least 1, " + nbrOfKeys);
+    }
+    this.nbrOfKeys = nbrOfKeys;
     this.keyLen = keyLen;
-    this.nbrOfKeysPerCall = bufferSize/keyLen;
-    // 1 for end of list
+    if (nbrOfKeys < batchSize) {
+      this.batchSize = nbrOfKeys;
+    } else {
+      this.batchSize = batchSize;
+    }
+    // 1 byte for anchor status
     anchorBuffer = BufferAllocator.directBuffer(1 + IOKeyDesc.getAnchorTypeLen());
     anchorBuffer.order(Constants.DEFAULT_ORDER);
-    // 4 for actual number of keys returned, (4 + dkeyBytes.length) for dkeys
-    int descLen = 4 + ((dkeyBytes == null) ? 0 : (4 + dkeyBytes.length))
-                  + IOKeyDesc.getKeyDescLen() * nbrOfKeysPerCall;
+    // 4 for actual number of keys returned, (2 + dkeyBytes.length) for dkeys
+    int descLen = 4 + ((dkeyBytes == null) ? 0 : (2 + dkeyBytes.length))
+                  + IOKeyDesc.getKeyDescLen() * this.batchSize;
+    if (descLen < 0) {
+      throw new IllegalArgumentException("too big batchSize. " + this.batchSize);
+    }
     descBuffer = BufferAllocator.directBuffer(descLen);
-    keyBuffer = BufferAllocator.directBuffer(keyLen * nbrOfKeysPerCall);
+    keyBuffer = BufferAllocator.directBuffer(keyLen * this.batchSize);
     descBuffer.order(Constants.DEFAULT_ORDER);
     keyBuffer.order(Constants.DEFAULT_ORDER);
   }
 
-  public int getNbrOfKeysPerCall() {
-    return nbrOfKeysPerCall;
+  /**
+   * constructor with default batch size, {@linkplain Constants#KEY_LIST_BATCH_SIZE_DEFAULT}.
+   *
+   * @param dkey
+   * distribution key for listing akeys. null for listing dkeys
+   * @param nbrOfKeys
+   * number of keys to list. The listing could stop if <code>nbrOfKeys</code> exceeds actual number of keys
+   * @param keyLen
+   * approximate key length, so that buffer size can be well-calculated
+   * @throws IOException
+   */
+  protected IOKeyDesc(String dkey, int nbrOfKeys, int keyLen) throws IOException {
+    this(dkey, nbrOfKeys, keyLen, Constants.KEY_LIST_BATCH_SIZE_DEFAULT);
+  }
+
+  /**
+   * constructor with default key length, {@linkplain Constants#KEY_LIST_LEN_DEFAULT} and batch size,
+   * {@linkplain Constants#KEY_LIST_BATCH_SIZE_DEFAULT}.
+   *
+   * @param dkey
+   * @param nbrOfKeys
+   * @throws IOException
+   */
+  protected IOKeyDesc(String dkey, int nbrOfKeys) throws IOException {
+    this(dkey, nbrOfKeys, Constants.KEY_LIST_LEN_DEFAULT, Constants.KEY_LIST_BATCH_SIZE_DEFAULT);
+  }
+
+  /**
+   * constructor to list all keys (Integer.MAX_VALUE) with default key length,
+   * {@linkplain Constants#KEY_LIST_LEN_DEFAULT} and batch size, {@linkplain Constants#KEY_LIST_BATCH_SIZE_DEFAULT}.
+   *
+   * @param dkey
+   * @throws IOException
+   */
+  protected IOKeyDesc(String dkey) throws IOException {
+    this(dkey, Integer.MAX_VALUE, Constants.KEY_LIST_LEN_DEFAULT, Constants.KEY_LIST_BATCH_SIZE_DEFAULT);
+  }
+
+  public int getKeyLen() {
+    return keyLen;
+  }
+
+  public int getBatchSize() {
+    return batchSize;
   }
 
   public ByteBuffer getDescBuffer() {
+    if (!encoded) {
+      throw new IllegalStateException("not encoded yet");
+    }
     return descBuffer;
   }
 
@@ -83,8 +160,20 @@ public class IOKeyDesc {
     return keyBuffer;
   }
 
-  public void encode() {
+  public String getDkey() {
+    return dkey;
+  }
 
+  public void encode() {
+    if (!encoded) {
+      descBuffer.position(4); // reserve for actual number of keys returned
+      if (dkeyBytes != null) {
+        descBuffer.putShort((short) dkeyBytes.length);
+        descBuffer.put(dkeyBytes);
+      }
+      anchorBuffer.put((byte) 0);
+      encoded = true;
+    }
   }
 
   public static int getKeyDescLen() {
