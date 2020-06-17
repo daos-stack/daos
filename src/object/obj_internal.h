@@ -182,11 +182,6 @@ struct migrate_pool_tls {
 	daos_handle_t		mpt_root_hdl;
 	struct btr_root		mpt_root;
 
-	/* Indicates whether containers should be cleared of all contents
-	 * before any data is migrated to them (via destroy & recreate)
-	 */
-	bool			mpt_clear_conts;
-
 	/* Hash table to store the container uuids which have already been
 	 * deleted (used by reintegration)
 	 */
@@ -221,6 +216,10 @@ struct migrate_pool_tls {
 	uint64_t		mpt_refcount;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
+	/* Indicates whether containers should be cleared of all contents
+	 * before any data is migrated to them (via destroy & recreate)
+	 */
+				mpt_clear_conts:1,
 				mpt_fini:1;
 };
 
