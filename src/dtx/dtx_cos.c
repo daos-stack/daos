@@ -65,7 +65,7 @@ struct dtx_cos_rec_child {
 	/* Link into related dcr_{reg,prio}_list. */
 	d_list_t		 dcrc_lo_link;
 	/* The DTX identifier. */
-	struct dtx_id		 dcrc_dti;
+	struct dtx_entry	*dcrc_dte;
 	/* The DTX epoch. */
 	daos_epoch_t		 dcrc_epoch;
 	/* Pointer to the dtx_cos_rec. */
@@ -73,7 +73,7 @@ struct dtx_cos_rec_child {
 };
 
 struct dtx_cos_rec_bundle {
-	struct dtx_id		*dti;
+	struct dtx_entry	*dte;
 	daos_epoch_t		 epoch;
 	uint32_t		 flags;
 };
@@ -133,7 +133,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		return -DER_NOMEM;
 	}
 
-	dcrc->dcrc_dti = *rbund->dti;
+	dcrc->dcrc_dte = dtx_entry_get(rbund->dte);
 	dcrc->dcrc_epoch = rbund->epoch;
 	dcrc->dcrc_ptr = dcr;
 
@@ -169,6 +169,7 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 				   dcrc_lo_link) {
 		d_list_del(&dcrc->dcrc_lo_link);
 		d_list_del(&dcrc->dcrc_gl_committable);
+		dtx_entry_put(dcrc->dcrc_dte);
 		D_FREE_PTR(dcrc);
 		cont->sc_dtx_committable_count--;
 	}
@@ -176,6 +177,7 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 				   dcrc_lo_link) {
 		d_list_del(&dcrc->dcrc_lo_link);
 		d_list_del(&dcrc->dcrc_gl_committable);
+		dtx_entry_put(dcrc->dcrc_dte);
 		D_FREE_PTR(dcrc);
 		cont->sc_dtx_committable_count--;
 	}
@@ -216,7 +218,7 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	if (dcrc == NULL)
 		return -DER_NOMEM;
 
-	dcrc->dcrc_dti = *rbund->dti;
+	dcrc->dcrc_dte = dtx_entry_get(rbund->dte);
 	dcrc->dcrc_epoch = rbund->epoch;
 	dcrc->dcrc_ptr = dcr;
 
@@ -248,12 +250,12 @@ btr_ops_t dtx_btr_cos_ops = {
 int
 dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		      daos_unit_oid_t *oid, daos_epoch_t epoch,
-		      struct dtx_entry **dtes)
+		      struct dtx_entry ***dtes)
 {
-	struct dtx_entry		*dte = NULL;
-	struct dtx_cos_rec_child	*dcrc;
-	uint32_t			 count;
-	uint32_t			 i = 0;
+	struct dtx_entry		**dte_buf = NULL;
+	struct dtx_cos_rec_child	 *dcrc;
+	uint32_t			  count;
+	uint32_t			  i = 0;
 
 	count = min(cont->sc_dtx_committable_count, max_cnt);
 	if (count == 0) {
@@ -261,8 +263,8 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		return 0;
 	}
 
-	D_ALLOC_ARRAY(dte, count);
-	if (dte == NULL)
+	D_ALLOC_ARRAY(dte_buf, count);
+	if (dte_buf == NULL)
 		return -DER_NOMEM;
 
 	d_list_for_each_entry(dcrc, &cont->sc_dtx_cos_list,
@@ -274,18 +276,16 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		if (epoch < dcrc->dcrc_epoch)
 			continue;
 
-		dte[i].dte_xid = dcrc->dcrc_dti;
-		dte[i].dte_oid = dcrc->dcrc_ptr->dcr_oid;
-
+		dte_buf[i] = dcrc->dcrc_dte;
 		if (++i >= count)
 			break;
 	}
 
 	if (i == 0) {
-		D_FREE(dte);
+		D_FREE(dte_buf);
 		*dtes = NULL;
 	} else {
-		*dtes = dte;
+		*dtes = dte_buf;
 	}
 
 	return i;
@@ -333,7 +333,7 @@ dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		return -DER_NOMEM;
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link)
-		dti[i++] = dcrc->dcrc_dti;
+		dti[i++] = dcrc->dcrc_dte->dte_xid;
 
 	D_ASSERT(i == count);
 	*dtis = dti;
@@ -364,12 +364,12 @@ dtx_lookup_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 	dcr = (struct dtx_cos_rec *)riov.iov_buf;
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
-		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) == 0)
+		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0)
 			return 0;
 	}
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_reg_list, dcrc_lo_link) {
-		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) == 0)
+		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0)
 			return 0;
 	}
 
@@ -377,7 +377,7 @@ dtx_lookup_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 }
 
 int
-dtx_add_cos(struct ds_cont_child *cont, struct dtx_id *dti,
+dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	    daos_unit_oid_t *oid, uint64_t dkey_hash,
 	    daos_epoch_t epoch, uint32_t flags)
 {
@@ -387,13 +387,14 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_id *dti,
 	d_iov_t				riov;
 	int				rc;
 
+	D_ASSERT(dte->dte_mbs != NULL);
 	D_ASSERT(epoch != DAOS_EPOCH_MAX);
 
 	key.oid = *oid;
 	key.dkey_hash = dkey_hash;
 	d_iov_set(&kiov, &key, sizeof(key));
 
-	rbund.dti = dti;
+	rbund.dte = dte;
 	rbund.epoch = epoch;
 	rbund.flags = flags;
 	d_iov_set(&riov, &rbund, sizeof(rbund));
@@ -403,7 +404,7 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_id *dti,
 
 	D_DEBUG(DB_IO, "Insert DTX "DF_DTI" to CoS cache, key %lu, "
 		"%s shared entry: rc = "DF_RC"\n",
-		DP_DTI(dti), (unsigned long)dkey_hash,
+		DP_DTI(&dte->dte_xid), (unsigned long)dkey_hash,
 		flags & DCF_SHARED ? "has" : "has not", DP_RC(rc));
 
 	return rc;
@@ -440,11 +441,12 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 	dcr = (struct dtx_cos_rec *)riov.iov_buf;
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
-		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) != 0)
+		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) != 0)
 			continue;
 
 		d_list_del(&dcrc->dcrc_gl_committable);
 		d_list_del(&dcrc->dcrc_lo_link);
+		dtx_entry_put(dcrc->dcrc_dte);
 		D_FREE_PTR(dcrc);
 
 		cont->sc_dtx_committable_count--;
@@ -454,11 +456,12 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 	}
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_reg_list, dcrc_lo_link) {
-		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) != 0)
+		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) != 0)
 			continue;
 
 		d_list_del(&dcrc->dcrc_gl_committable);
 		d_list_del(&dcrc->dcrc_lo_link);
+		dtx_entry_put(dcrc->dcrc_dte);
 		D_FREE_PTR(dcrc);
 
 		cont->sc_dtx_committable_count--;
