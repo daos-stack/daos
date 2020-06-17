@@ -249,6 +249,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/libgurt*
 %{_prefix}/etc/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
+%{_prefix}%{_sysconfdir}/vos_dfs_sample.yaml
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %{_libdir}/libdaos_common.so
 # TODO: this should move from daos_srv to daos

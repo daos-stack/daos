@@ -13,8 +13,8 @@ def scons():
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
     vtsenv = denv.Clone()
-    vtsenv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/api"])
-    vtsenv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
+    vtsenv.AppendUnique(LIBPATH=['$BUILD_DIR/src/client/api'])
+    vtsenv.AppendUnique(LIBPATH=['$BUILD_DIR/src/client/dfs'])
 
     vtsenv.Append(CPPDEFINES={'VOS_UNIT_TEST' : '1'})
 
@@ -29,13 +29,28 @@ def scons():
     evt_ctl = daos_build.program(denv, 'evt_ctl', ['evt_ctl.c', utest_utils],
                                  LIBS=libraries)
 
+    # Add runtime paths for vos_size_dfs_sample
+    vtsenv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/..')])
+    vtsenv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../../client/api')])
+    vtsenv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../../client/dfs')])
+    vtsenv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../../common')])
+
     vos_size = daos_build.program(denv, 'vos_size', ['vos_size.c'],
                                   LIBS=libraries)
 
-    libraries += ['daos', 'dfs']
+    libraries = ['daos', 'daos_common', 'dfs', 'gurt', 'cart', 'pmemobj']
     dfs_sample = daos_build.program(vtsenv, 'vos_size_dfs_sample',
                                     ['vos_size_dfs_sample.c'], LIBS=libraries)
 
+    # Create the VOS sample with the DFS layout
+    vtsenv['DFS_SAMPLE_DIR'] = '$BUILD_DIR/src/vos/tests'
+    sample_file = vtsenv.Command('$DFS_SAMPLE_DIR/vos_dfs_sample.yaml',
+                                 dfs_sample,
+                                 '$DFS_SAMPLE_DIR/vos_size_dfs_sample -f '
+                                 '$DFS_SAMPLE_DIR/vos_dfs_sample.yaml')
+
+    # Install artifacts
+    vtsenv.Install('$PREFIX/etc/', sample_file)
     denv.Install('$PREFIX/bin/', [vos_tests, vos_size, evt_ctl,
                                   dfs_sample, 'vos_size.py'])
     denv.Install('$PREFIX/etc/', ['vos_size_input.yaml'])
