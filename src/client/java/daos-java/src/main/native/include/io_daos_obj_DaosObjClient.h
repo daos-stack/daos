@@ -82,18 +82,18 @@ JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_updateObject
 /*
  * Class:     io_daos_obj_DaosObjClient
  * Method:    listObjectDkeys
- * Signature: (JJJJI)V
+ * Signature: (JJJIJI)V
  */
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_listObjectDkeys
-  (JNIEnv *, jobject, jlong, jlong, jlong, jlong, jint);
+  (JNIEnv *, jobject, jlong, jlong, jlong, jint, jlong, jint);
 
 /*
  * Class:     io_daos_obj_DaosObjClient
  * Method:    listObjectAkeys
- * Signature: (J[BJJJI)V
+ * Signature: (JJJIJI)V
  */
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_listObjectAkeys
-  (JNIEnv *, jobject, jlong, jbyteArray, jlong, jlong, jlong, jint);
+  (JNIEnv *, jobject, jlong, jlong, jlong, jint, jlong, jint);
 
 #ifdef __cplusplus
 }

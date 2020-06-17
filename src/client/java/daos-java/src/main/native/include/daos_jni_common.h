@@ -33,6 +33,14 @@
 #ifndef _INCLUDED_DAOS_JNI_COMMON
 #define _INCLUDED_DAOS_JNI_COMMON
 
+typedef struct {
+    uint16_t type;
+    uint32_t offset;
+    uint32_t record_size;
+    uint32_t bufferIdx;
+    uint32_t data_size;
+} record_desc_t;
+
 static jint JNI_VERSION = JNI_VERSION_1_8;
 
 static const int READ_DIR_BATCH_SIZE = 10;
@@ -56,7 +64,11 @@ static int ERROR_PATH_LEN = 256;
 static int ERROR_NOT_EXIST = 2;
 static int ERROR_LOOKUP_MAX_RETRIES = 100;
 
-
+static uint8_t KEY_LIST_CODE_EMPTY = (uint8_t)0;
+static uint8_t KEY_LIST_CODE_IN_USE = (uint8_t)1;
+static uint8_t KEY_LIST_CODE_ANCHOR_END = (uint8_t)2;
+static uint8_t KEY_LIST_CODE_KEY2BIG = (uint8_t)3;
+static uint8_t KEY_LIST_CODE_REACH_LIMIT = (uint8_t)4;
 
 /**
  * utility function to throw Java exception.

@@ -37,6 +37,16 @@ public final class Constants {
 
   public static final String KEY_CHARSET = "UTF-8";
 
+  public static final int KEY_LIST_BATCH_SIZE_DEFAULT = 128;
+
+  public static final int KEY_LIST_LEN_DEFAULT = 64;
+
+  public static final byte KEY_LIST_CODE_EMPTY = (byte)0;
+  public static final byte KEY_LIST_CODE_IN_USE = (byte)1;
+  public static final byte KEY_LIST_CODE_ANCHOR_END = (byte)2;
+  public static final byte KEY_LIST_CODE_KEY2BIG = (byte)3;
+  public static final byte KEY_LIST_CODE_REACH_LIMIT = (byte)4;
+
   public static final int KEY_LIST_MAX_BUF_PER_CALL = 64 * 1024;
 
   public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";

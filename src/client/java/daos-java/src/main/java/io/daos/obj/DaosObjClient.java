@@ -23,15 +23,14 @@
 
 package io.daos.obj;
 
-import io.daos.DaosClient;
-import io.daos.DaosObjectType;
-import io.daos.ForceCloseable;
-import io.daos.SharableClient;
+import io.daos.*;
 import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -43,6 +42,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DaosObjClient extends SharableClient implements ForceCloseable {
 
   private long contPtr;
+
+//  private DataTypesSizes dtSizes = new DataTypesSizes();
+//
+//  private int daosIodSingleSize;
+//  private int daosIodArraySize;
+//  private int dIovTSize;
 
   // keyed by poolId+contId
   private static final Map<String, DaosObjClient> pcObjMap = new ConcurrentHashMap<>();
@@ -66,9 +71,52 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
     DaosClient client = getClient();
     contPtr = client.getContPtr();
     client.registerForShutdown(this);
+//    ByteBuffer buffer = BufferAllocator.directBuffer(8);
+//    buffer.order(Constants.DEFAULT_ORDER);
+//    getDataTypesSizes(((DirectBuffer)buffer).address());
+//    dtSizes.parse(buffer);
+//    setDaosIodSize();
     setInited(true);
     log.info("DaosObjClient for {}, {} initialized", builder.getPoolId(), builder.getContId());
   }
+
+//  private void setDaosIodSize() {
+//    dIovTSize = dtSizes.getVoidPtrSize() + 2*dtSizes.getSizeTSzie(); // daos_key_t
+//    daosIodSingleSize = dIovTSize + // daos_key_t
+//                    dtSizes.getIodTypeTSize() + // daos_iod_type_t
+//                    8 + // daos_size_t
+//                    dtSizes.getUnsignedIntSize() + // unsigned int iod_nr
+//                    8; // daos_recx_t * or rx_idx field
+//    daosIodArraySize = daosIodSingleSize +
+//                    8; // rx_nr
+//    if (log.isDebugEnabled()) {
+//      StringBuilder sb = new StringBuilder();
+//      sb.append("iodTypeTSize: ").append(dtSizes.getIodTypeTSize()).append("\n");
+//      sb.append("sizeTSize: ").append(dtSizes.getSizeTSzie()).append("\n");
+//      sb.append("unsignedIntSize: ").append(dtSizes.getUnsignedIntSize()).append("\n");
+//      sb.append("voidPtrSize: ").append(dtSizes.getVoidPtrSize()).append("\n");
+//      sb.append("dIovTSize: ").append(dIovTSize).append("\n");
+//      sb.append("daosIodSingleSize: ").append(daosIodSingleSize).append("\n");
+//      sb.append("daosIodArraySize: ").append(daosIodArraySize).append("\n");
+//      log.debug(sb.toString());
+//    }
+//  }
+//
+//  public DataTypesSizes getDtSizes() {
+//    return dtSizes;
+//  }
+//
+//  public int getDaosIodSingleSize() {
+//    return daosIodSingleSize;
+//  }
+//
+//  public int getDaosIodArraySize() {
+//    return daosIodArraySize;
+//  }
+//
+//  public int getdIovTSize() {
+//    return dIovTSize;
+//  }
 
   /**
    * get a DAOS object with given <code>DaosObjectId</code>.
@@ -187,8 +235,8 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param nbrOfDesc
    * number of description in <code>descBuffer</code>
    * @param descBufferAddress
-   * address of direct byte buffer holds serialized dkey and list of {@link IOValueDesc} of akeys, types, record sizes,
-   * index in value buffer and how many records to fetch
+   * address of direct byte buffer holds serialized dkey and list of {@link IODataDesc} of akeys, types, offset, record
+   * sizes, index in value buffer and how many records to fetch
    * @param dataBufferAddress
    * address of direct data buffer which holds all records described in <code>descBuffer</code>. Actual fetch lengths
    * of each IODesc also updated in this buffer, like "actual len1+data1+actual len2+data2..."
@@ -205,8 +253,8 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param nbrOfDesc
    * number of description in <code>descBuffer</code>
    * @param descBufferAddress
-   * address of direct byte buffer holds serialized list of {@link IOValueDesc} of akeys, types, record sizes and how many
-   * records to update
+   * address of direct byte buffer holds serialized dkey and serialized list of {@link IODataDesc} of akeys, types,
+   * offset and record sizes, index in value buffer and how many records to update
    * @param dataBufferAddress
    * address of direct data buffer which holds all records described in <code>descBuffer</code>
    */
@@ -221,14 +269,16 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * address of description buffer
    * @param keyBufferAddress
    * address of direct byte buffer holds dkeys
+   * @param keyBufferLen
+   * length of keyBuffer
    * @param anchorBufferAddress
    * address of direct byte buffer holds anchor
    * @param nbrOfDesc
    * maximum number of dkeys to list. If actual number of dkeys exceed this value, user should call this method again
    * with <code>anchorBuffer</code>
    */
-  native void listObjectDkeys(long objectPtr, long descBufferAddress, long keyBufferAddress, long anchorBufferAddress,
-                              int nbrOfDesc);
+  native void listObjectDkeys(long objectPtr, long descBufferAddress, long keyBufferAddress, int keyBufferLen,
+                              long anchorBufferAddress, int nbrOfDesc);
 
   /**
    * list akeys of given object and dkey.
@@ -239,13 +289,15 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * address of description buffer, including dkey
    * @param keyBufferAddress
    * address of direct byte buffer holds akeys
+   * @param keyBufferLen
+   * length of keyBuffer
    * @param anchorBufferAddress
    * address of direct byte buffer holds anchor
    * @param nbrOfDesc
    * maximum number of akeys to list. If actual number of akeys exceed this value, user should call this method again
    * with <code>anchorBuffer</code>
    */
-  native void listObjectAkeys(long objectPtr, long descBufferAddress, long keyBufferAddress,
+  native void listObjectAkeys(long objectPtr, long descBufferAddress, long keyBufferAddress, int keyBufferLen,
                               long anchorBufferAddress, int nbrOfDesc);
 
   protected long getContPtr() {
@@ -324,6 +376,36 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
 
     protected DaosClient buildDaosClient() throws IOException {
       return (DaosClient) super.build();
+    }
+  }
+
+  public static class DataTypesSizes {
+    private short voidPtrSize;
+    private short sizeTSzie;
+    private short iodTypeTSize;
+    private short unsignedIntSize;
+
+    void parse(ByteBuffer buffer) {
+      voidPtrSize = buffer.getShort();
+      sizeTSzie = buffer.getShort();
+      iodTypeTSize = buffer.getShort();
+      unsignedIntSize = buffer.getShort();
+    }
+
+    public short getIodTypeTSize() {
+      return iodTypeTSize;
+    }
+
+    public short getSizeTSzie() {
+      return sizeTSzie;
+    }
+
+    public short getUnsignedIntSize() {
+      return unsignedIntSize;
+    }
+
+    public short getVoidPtrSize() {
+      return voidPtrSize;
     }
   }
 }
