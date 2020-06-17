@@ -93,8 +93,8 @@ class DfuseContainerCheck(TestWithServers):
         """Jira ID: DAOS-3635.
 
         Test Description:
-            Purpose of this test is to try and mount differrent container types
-            to dfuse and chck the behavior.
+            Purpose of this test is to try and mount different container types
+            to dfuse and check the behavior.
         Use cases:
             Create pool
             Create container of type default
