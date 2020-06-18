@@ -364,7 +364,6 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 		limit = max(cycle->sc_ults_tot * throttle / 100, 1);
 		diff = cycle->sc_ults_cnt[i] - limit;
 
-		D_ASSERT(cycle->sc_ults_tot > diff);
 		if (diff > 0 &&
 		    (cycle->sc_ults_tot - diff) > cycle->sc_age_net_bound[0]) {
 			cycle->sc_ults_cnt[i] -= diff;
