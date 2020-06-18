@@ -90,7 +90,8 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
-    env.AppendUnique(CPPPATH=[Dir('../gurt').srcnode()])
+    #env.AppendUnique(CPPPATH=[Dir('../gurt').srcnode()])
+    env.AppendUnique(CPPPATH=[Dir('../../../gurt').srcnode()])
 
     denv = env.Clone()
 
@@ -105,6 +106,9 @@ def scons():
         pp_env.AppendUnique(CPPPATH=[Dir('../include').srcnode(),
                                      Dir('.').srcnode()])
         prereqs.require(pp_env, 'mercury', headers_only=True)
+
+        pp_env.AppendUnique(CPPPATH=[Dir('../../../include').srcnode(),
+                                     Dir('.').srcnode()])
 
         # pylint: disable=no-member
         pp_files = pp_env.Preprocess(SRC)

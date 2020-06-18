@@ -39,9 +39,9 @@
 import os
 
 HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
-HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
-                'heap.h', 'errno.h', 'fault_inject.h', 'debug_setup.h',
-                'types.h', 'atomic.h']
+#HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
+#                'heap.h', 'errno.h', 'fault_inject.h', 'debug_setup.h',
+#                'types.h', 'atomic.h']
 
 def scons():
     """Scons function"""
@@ -50,21 +50,21 @@ def scons():
 
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('cart')])
-    env.AppendUnique(LIBPATH=[Dir('gurt')])
+    #env.AppendUnique(LIBPATH=[Dir('gurt')])
     env.AppendUnique(RPATH=[Dir('cart')])
-    env.AppendUnique(RPATH=[Dir('gurt')])
+    #env.AppendUnique(RPATH=[Dir('gurt')])
     env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('cart').path])
-    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('gurt').path])
+    #env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('gurt').path])
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('include', 'cart', header))
-    for header in HEADERS_GURT:
-        env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
-                    os.path.join('include', 'gurt', header))
+    #for header in HEADERS_GURT:
+    #    env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
+    #                os.path.join('include', 'gurt', header))
 
     # Generate the common libraries used by everyone
-    SConscript('gurt/SConscript')
+    #SConscript('gurt/SConscript')
     SConscript('swim/SConscript')
     SConscript('cart/SConscript')
 
@@ -89,9 +89,9 @@ def scons():
         broken_includes = False
         config_env = env.Clone()
         config = Configure(config_env)
-        for header in HEADERS_GURT:
-            if not config.CheckHeader(os.path.join('gurt', header)):
-                broken_includes = True
+        #for header in HEADERS_GURT:
+        #    if not config.CheckHeader(os.path.join('gurt', header)):
+        #        broken_includes = True
         for header in HEADERS:
             if not config.CheckHeader(os.path.join('cart', header)):
                 broken_includes = True
@@ -101,7 +101,8 @@ def scons():
             print("Broken local header files, cannot continue")
             Exit(2)
 
-    Default('gurt', 'swim', 'cart', 'test', 'self_test')
+    #Default('gurt', 'swim', 'cart', 'test', 'self_test')
+    Default('swim', 'cart', 'test', 'self_test')
 
 if __name__ == "SCons.Script":
     scons()

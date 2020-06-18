@@ -54,6 +54,7 @@ def scons():
 
     Export('env', 'prereqs', 'CART_VERSION')
     # generate targets in specific build dir to avoid polluting the source code
+    SConscript('../gurt/SConscript')
     SConscript('src/SConscript')
     SConscript('test/SConscript')
 
