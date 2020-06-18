@@ -1054,7 +1054,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	entry.oid.lo = RESERVED_LO;
 	entry.oid.hi = ROOT_HI;
 	daos_obj_generate_id(&entry.oid, 0, dattr.da_oclass_id, 0);
-	entry.mode = S_IFDIR | 0777;
+	entry.mode = S_IFDIR | 0755;
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	entry.chunk_size = dattr.da_chunk_size;
 
@@ -1151,16 +1151,24 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
 	D_ASSERT(entry != NULL);
 	rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
-	if (rc != 0)
+	if (rc == -DER_NONEXIST)
 		/** Set uid to nobody */
-		dfs->uid = 65534;
+		rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
+	if (rc) {
+		D_ERROR("Unable to convert owner to uid\n");
+		D_GOTO(err_dfs, rc = daos_der2errno(rc));
+	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
 	D_ASSERT(entry != NULL);
 	rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
-	if (rc != 0)
+	if (rc == -DER_NONEXIST)
 		/** Set gid to nobody */
-		dfs->gid = 65534;
+		rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
+	if (rc) {
+		D_ERROR("Unable to convert owner to gid\n");
+		D_GOTO(err_dfs, rc = daos_der2errno(rc));
+	}
 
 	/** Verify SB */
 	rc = open_sb(coh, false, &dfs->attr, &dfs->super_oh);
@@ -1419,7 +1427,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	dfs->root.oid.lo = RESERVED_LO;
 	dfs->root.oid.hi = ROOT_HI;
 	daos_obj_generate_id(&dfs->root.oid, 0, dfs->attr.da_oclass_id, 0);
-	dfs->root.mode = S_IFDIR | 0777;
+	dfs->root.mode = S_IFDIR | 0755;
 
 	obj_mode = get_daos_obj_mode(flags);
 	rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh, NULL);
