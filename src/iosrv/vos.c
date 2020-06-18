@@ -69,7 +69,7 @@ is_sgl_full(struct dss_enum_arg *arg, daos_size_t size)
 {
 	d_sg_list_t *sgl = arg->sgl;
 
-	/* Find avaible iovs in sgl
+	/* Find available iovs in sgl
 	 * XXX this is buggy because key descriptors require keys are stored
 	 * in sgl in the same order as descriptors, but it's OK for now because
 	 * we only use one IOV.

@@ -435,7 +435,7 @@ d_log_sync_mask(void)
 	D_MUTEX_LOCK(&d_log_lock);
 
 	/* Load debug mask environment (DD_MASK); only the facility log mask
-	 * will be returned and debug mask will be set iff fac mask = DEBUG
+	 * will be returned and debug mask will be set if fac mask = DEBUG
 	 * and dd_mask is not 0.
 	 */
 	debug_mask_load_env();

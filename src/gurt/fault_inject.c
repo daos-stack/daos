@@ -95,7 +95,7 @@ struct d_fi_gdata_t {
 };
 
 /**
- * global swith for fault injection. zero globally turns off fault injection,
+ * global switch for fault injection. zero globally turns off fault injection,
  * non-zero turns on fault injection
  */
 unsigned int			d_fault_inject;
@@ -484,7 +484,7 @@ d_fault_inject_init(void)
 
 	yaml_rc = yaml_parser_initialize(&parser);
 	if (yaml_rc != 1) {
-		D_ERROR("Failed to intialize yaml parser. rc: %d\n", yaml_rc);
+		D_ERROR("Failed to initialize yaml parser. rc: %d\n", yaml_rc);
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
@@ -617,7 +617,7 @@ d_fault_inject_is_enabled(void)
  * \return                   true if should inject fault, false if should not
  *                           inject fault
  *
- *                           support injecting X faults in Y occurances
+ *                           support injecting X faults in Y occurrences
  */
 bool
 d_should_fail(struct d_fault_attr_t *fault_attr)
@@ -625,7 +625,7 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 	bool			 rc = true;
 
 	if (!d_fi_initialized()) {
-		D_ERROR("fault injectiont not initalized.\n");
+		D_ERROR("fault injection not initialized.\n");
 		return false;
 	}
 

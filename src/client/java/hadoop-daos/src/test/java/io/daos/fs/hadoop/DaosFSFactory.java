@@ -1,3 +1,21 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.daos.fs.hadoop;
 
 import io.daos.dfs.DaosFile;
@@ -14,8 +32,8 @@ public class DaosFSFactory {
 
 //  public final static String pooluuid = "53a47469-ea2a-418e-89d3-6d1df1aaadb4";
 //  public final static String contuuid = "9e60aff2-ca28-45fe-bdb0-d1a6c182c342";
-  public final static String defaultPoolId = "11a46047-7e6f-4f85-97ef-54f3e5ac05fb";
-  public final static String defaultContId = "afe06875-0b38-4387-a94c-460e90ac3dc6";
+  public final static String defaultPoolId = "6112d3ac-f99b-4e46-a2ab-549d9d56c069";
+  public final static String defaultContId = "10e8b68a-c80a-4840-84fe-3b707ebb5475";
 
   public final static String pooluuid = System.getProperty("pool_id", defaultPoolId);
   public final static String contuuid = System.getProperty("cont_id", defaultContId);

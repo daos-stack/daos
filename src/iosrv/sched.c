@@ -46,7 +46,7 @@ struct sched_cycle {
 	 * execute few ULTs (if there is any) before next poll.
 	 *
 	 * bound[1]: Maximum network/NVMe poll age, scheduler will do an extra
-	 * poll if it's not polled after executing cerntain amout of ULTs.
+	 * poll if it's not polled after executing cerntain amount of ULTs.
 	 */
 	uint32_t	sc_age_net_bound[2];
 	uint32_t	sc_age_nvme_bound[2];
@@ -288,7 +288,7 @@ sched_pop_one(struct sched_data *data, ABT_pool pool, int pool_idx)
 	 * ABT_thread_join() is called.
 	 */
 	if (unit == ABT_UNIT_NULL)
-		D_DEBUG(DB_TRACE, "XS(%d) poped NULL unit for ABT pool(%d)\n",
+		D_DEBUG(DB_TRACE, "XS(%d) popped NULL unit for ABT pool(%d)\n",
 			dx->dx_xs_id, pool_idx);
 
 	cycle->sc_age_net++;
@@ -364,7 +364,6 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 		limit = max(cycle->sc_ults_tot * throttle / 100, 1);
 		diff = cycle->sc_ults_cnt[i] - limit;
 
-		D_ASSERT(cycle->sc_ults_tot > diff);
 		if (diff > 0 &&
 		    (cycle->sc_ults_tot - diff) > cycle->sc_age_net_bound[0]) {
 			cycle->sc_ults_cnt[i] -= diff;

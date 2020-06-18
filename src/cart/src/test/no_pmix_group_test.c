@@ -523,7 +523,7 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	/* Add non-existant primary rank - Negative test */
+	/* Add non-existent primary rank - Negative test */
 	rc = crt_group_secondary_rank_add(sec_grp1, 50, 15);
 	if (rc != -DER_OOG) {
 		D_ERROR("Expected -DER_OOG got %d\n", rc);
@@ -537,7 +537,7 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	/* Remove non existant rank - Negative test */
+	/* Remove non existent rank - Negative test */
 	rc = crt_group_rank_remove(sec_grp1, 105);
 	if (rc != -DER_OOG) {
 		D_ERROR("Expected -DER_OOG got %d\n", rc);
