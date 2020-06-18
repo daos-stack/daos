@@ -609,7 +609,7 @@ pipeline {
                     }
                     steps {
                         httpRequest url: env.JENKINS_URL +
-                                         'job/daos-stack/job/tools/job/PR-1' +
+                                         'job/daos-stack/job/tools/job/master' +
                                          '/lastSuccessfulBuild/artifact/' +
                                          'bullseyecoverage-linux.tar',
                                     httpMode: 'GET',
