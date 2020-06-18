@@ -69,7 +69,7 @@ class DaosCoreBase(TestWithServers):
         load_mpi("mpich")
         path = os.path.dirname(find_executable("mpirun"))
 
-        cmd = "{} -n {} -envlist D_LOG_FILE={} {} -s {} -{} {}".format(
+        cmd = "{}/mpirun -n {} -envlist D_LOG_FILE={} {} -s {} -{} {}".format(
             path, num_clients,
             get_log_file(self.client_log), self.daos_test, num_replicas,
             subtest, args)
