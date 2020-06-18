@@ -21,7 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
+from distutils.spawn import find_executable
+import os
 from avocado.utils import process
 from apricot import TestWithServers
 from env_modules import load_mpi
@@ -62,9 +63,14 @@ class DaosCoreBase(TestWithServers):
                                        '/run/daos_tests/num_replicas/*')
         scm_size = self.params.get("scm_size", '/run/pool/*')
         args = self.params.get("args", '/run/daos_tests/Tests/*', "")
+        dmg = self.get_dmg_command()
+        dmg_config_file = dmg.yaml.filename
 
-        cmd = "mpirun -n {} -envlist D_LOG_FILE={} {} -s {} -{} {}".format(
-            num_clients,
+        load_mpi("mpich")
+        path = os.path.dirname(find_executable("mpirun"))
+
+        cmd = "{} -n {} -envlist D_LOG_FILE={} {} -s {} -{} {}".format(
+            path, num_clients,
             get_log_file(self.client_log), self.daos_test, num_replicas,
             subtest, args)
 
