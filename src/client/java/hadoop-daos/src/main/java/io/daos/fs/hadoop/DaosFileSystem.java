@@ -454,10 +454,13 @@ public class DaosFileSystem extends FileSystem {
       if (uns) {
         qualifiedUnsPrefix = tmpUri + unsPrefix;
         qualifiedUnsWorkPath = qualifiedUnsPrefix + workPath;
-        workingDir = new Path(qualifiedUnsWorkPath);
+        this.uri = URI.create(qualifiedUnsPrefix);
+        this.workingDir = new Path(qualifiedUnsWorkPath)
+                .makeQualified(this.uri, this.getWorkingDirectory());
       } else {
+        this.uri = URI.create(tmpUri);
         this.workingDir = new Path(workPath)
-          .makeQualified(this.uri, this.getWorkingDirectory());
+                .makeQualified(this.uri, this.getWorkingDirectory());
       }
       // mkdir workingDir in DAOS
       daos.mkdir(workPath, true);
@@ -528,6 +531,8 @@ public class DaosFileSystem extends FileSystem {
       if (!path.startsWith(unsPrefix)) {
         path = path.startsWith("/") ? (qualifiedUnsPrefix + path) :
           (qualifiedUnsWorkPath + "/" + path);
+      } else {
+        path = qualifiedUnsPrefix.substring(0, qualifiedUnsPrefix.indexOf(unsPrefix)) + path;
       }
       return new Path(path);
     }
