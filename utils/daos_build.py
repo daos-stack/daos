@@ -24,8 +24,9 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
             env.AppendUnique(RPATH=[os.path.join(prefix, rpath)])
             continue
         relpath = os.path.relpath(rpath, prefix)
-        path = r'\$$ORIGIN/%s/%s' % (install_off, relpath)
         if relpath != rpath:
+            joined = os.path.normpath(os.path.join(install_off, relpath))
+            path = r'\$$ORIGIN/%s' % (joined)
             if set_cgo_ld:
                 env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath=$ORIGIN/%s/%s" %
                                   (install_off, relpath), sep=" ")

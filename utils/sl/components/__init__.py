@@ -170,7 +170,7 @@ def define_mercury(reqs):
                           '-DBUILD_TESTING=ON '
                           '-DNA_USE_OFI=ON '
                           '-DBUILD_DOCUMENTATION=OFF '
-                          '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC '
+                          '-DBUILD_SHARED_LIBS=ON ../mercury '
                           '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib '
                           '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ' +
                           check(reqs, 'ofi',
