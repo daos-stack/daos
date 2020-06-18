@@ -107,7 +107,7 @@ struct pool_domain {
 	/**
 	 * all targets within this domain
 	 * for the last level domain, it points to the first direct targets
-	 * for the intermediate domain, it ponts to the first indirect targets
+	 * for the intermediate domain, it points to the first indirect targets
 	 */
 	struct pool_target	*do_targets;
 };
@@ -265,9 +265,19 @@ pool_component_unavail(struct pool_component *comp, bool for_reint)
 {
 	uint8_t status = comp->co_status;
 
-	return	(status == PO_COMP_ST_DOWN) ||
-		(status == PO_COMP_ST_DOWNOUT) ||
-		(status == PO_COMP_ST_UP && !(for_reint));
+	/* If it's down or down-out it is definitely unavailable */
+	if ((status == PO_COMP_ST_DOWN) || (status == PO_COMP_ST_DOWNOUT))
+		return true;
+
+	/*
+	 * The component is unavailable if it's currently being reintegrated.
+	 * However when calculating the data movement for reintegration
+	 * We treat these nodes as being available for the placement map.
+	 */
+	if ((status == PO_COMP_ST_UP) && (for_reint == false))
+		return true;
+
+	return false;
 }
 
 static inline bool

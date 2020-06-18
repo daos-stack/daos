@@ -586,7 +586,7 @@ aggregate_pool_space(struct daos_pool_space *agg_ps,
 	D_ASSERT(agg_ps && ps);
 
 	if (ps->ps_ntargets == 0) {
-		D_DEBUG(DB_TRACE, "Skip emtpy space info\n");
+		D_DEBUG(DB_TRACE, "Skip empty space info\n");
 		return;
 	}
 
@@ -976,7 +976,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	}
 
 	if (update_map) {
-		struct dtx_resync_arg *arg;
+		struct dtx_scan_args	*arg;
 		int ret;
 
 		/* Since the map has been updated successfully, so let's

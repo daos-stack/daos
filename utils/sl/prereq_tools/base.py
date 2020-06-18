@@ -37,6 +37,7 @@ from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
 from SCons.Variables import ListVariable
+from SCons.Variables import BoolVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import SetOption
@@ -154,7 +155,7 @@ class MissingDefinition(Exception):
 
 
 class MissingPath(Exception):
-    """Exception raised when user speficies a path that doesn't exist
+    """Exception raised when user specifies a path that doesn't exist
 
     Attributes:
         variable    -- Variable specified
@@ -219,7 +220,7 @@ class MissingSystemLibs(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "%s has unmet dependancies required for build" % self.component
+        return "%s has unmet dependencies required for build" % self.component
 
 
 class DownloadRequired(Exception):
@@ -501,9 +502,9 @@ class WebRetriever():
             hexdigest = hashlib.md5(src.read()).hexdigest()
 
         if hexdigest != self.md5:
-            print("Removing exising file %s: md5 %s != %s" % (filename,
-                                                              self.md5,
-                                                              hexdigest))
+            print("Removing existing file %s: md5 %s != %s" % (filename,
+                                                               self.md5,
+                                                               hexdigest))
             os.remove(filename)
             return False
 
@@ -549,7 +550,7 @@ class WebRetriever():
 
         if self.url.endswith('.tar.gz') or self.url.endswith('.tgz'):
             if self.__dry_run:
-                print('Would unpack gziped tar file: %s' % basename)
+                print('Would unpack gzipped tar file: %s' % basename)
                 return
             try:
                 tfile = tarfile.open(basename, 'r:gz')
@@ -757,6 +758,8 @@ class PreReqComponent():
                                    'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
+        self.add_opts(BoolVariable('FIRMWARE_MGMT',
+                                   'Build in device firmware management.', 0))
         self._setup_compiler(warning_level)
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),

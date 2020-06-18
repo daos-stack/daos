@@ -48,7 +48,7 @@ class ReadArrayTest(RebuildTestBase):
             Configure 5 targets with 1 pool with a service leader quantity
             of 2.  Add 1 container to the pool configured with 3 replicas.
             Add 10 objects of 10 records each populated with an array of 5
-            values (currently a sufficent amount of data to be read fully
+            values (currently a sufficient amount of data to be read fully
             before rebuild completes) to a specific rank.  Exclude this
             rank and verify that rebuild is initiated.  While rebuild is
             active, confirm that all the objects and records can be read.

@@ -290,7 +290,7 @@ vos_ilog_ts_lookup(struct vos_ts_set *ts_set, struct ilog_df *ilog);
  *  NULL, it pulls in the negative entry.  The hash is calculated using
  *  vos_hash_get.
  *
- *  \param	ts_set[in]	The timestmap set
+ *  \param	ts_set[in]	The timestamp set
  *  \param	ilog[in]	The incarnation log
  *  \param	record[in]	The record to hash
  *  \param	rec_size[in]	The size of the record to hash
@@ -302,7 +302,7 @@ vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
 		  void *record, daos_size_t rec_size);
 
 /** Mark the last timestamp entry corresponding to the ilog as newly created
- *  \param	ts_set[in]	The timestmap set
+ *  \param	ts_set[in]	The timestamp set
  *  \param	ilog[in]	The incarnation log
  */
 void
