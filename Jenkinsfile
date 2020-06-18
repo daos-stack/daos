@@ -1231,13 +1231,13 @@ pipeline {
                                                   'spdk-devel libfabric-devel pmix numactl-devel ' +
                                                   'libipmctl-devel java-1.8.0-openjdk-headless'
                         httpRequest url: env.JENKINS_URL +
-                                         'job/daos-stack/job/tools/job/PR-1' +
+                                         'job/daos-stack/job/tools/job/master' +
                                          '/lastSuccessfulBuild/artifact/' +
                                          'bullseyecoverage-linux.tar',
                                     httpMode: 'GET',
                                     outputFile: 'bullseye.tar'
                         httpRequest url: env.JENKINS_URL +
-                                         'job/daos-stack/job/tools/job/PR-1' +
+                                         'job/daos-stack/job/tools/job/master' +
                                          '/lastSuccessfulBuild/artifact/' +
                                          'bullshtml.jar',
                                     httpMode: 'GET',
