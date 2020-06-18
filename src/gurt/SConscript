@@ -43,7 +43,7 @@ def scons():
                                   SHLIBVERSION=CART_VERSION)
     denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib,
                              SHLIBVERSION=CART_VERSION)
-
+    
     Default(gurt_lib)
     Export('gurt_lib', 'gurt_targets')
 

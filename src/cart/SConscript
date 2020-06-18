@@ -57,6 +57,7 @@ def scons():
     SConscript('../gurt/SConscript')
     SConscript('src/SConscript')
     SConscript('test/SConscript')
+    SConscript('../gurt/tests/SConscript')
 
     env.Install('$PREFIX/etc', ['utils/memcheck-cart.supp',
                                 'utils/fault-inject-cart.yaml'])

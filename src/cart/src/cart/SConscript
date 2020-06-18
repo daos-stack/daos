@@ -90,7 +90,6 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
-    #env.AppendUnique(CPPPATH=[Dir('../gurt').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('../../../gurt').srcnode()])
 
     denv = env.Clone()
