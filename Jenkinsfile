@@ -1296,7 +1296,8 @@ pipeline {
                                                export CMOCKA_XML_FILE=\"$DAOS_BASE\"/test_results/%g.xml
                                                cd $DAOS_BASE
                                                IS_CI=true OLD_CI=false utils/run_test.sh
-                                               java -jar bullshtml.jar test_coverage"''',
+                                               java -jar bullshtml.jar test_coverage
+					       mv test_coverage run_test.sh"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
