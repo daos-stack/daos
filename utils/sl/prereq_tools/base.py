@@ -43,7 +43,6 @@ from SCons.Script import GetOption
 from SCons.Script import SetOption
 from SCons.Script import Configure
 from SCons.Script import AddOption
-from SCons.Script import Builder
 from SCons.Script import SConscript
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
@@ -57,7 +56,6 @@ try:
 except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
-import re
 import copy
 if sys.version_info < (3, 0):
 # pylint: disable=import-error
@@ -311,113 +309,6 @@ def default_libpath():
     except Exception:
         pass
     return []
-
-def check_test(target, source, env, mode):
-    """Check the results of the test"""
-    val_str = ""
-    error_str = ""
-    with open(target[0].path, "r") as fobj:
-        for line in fobj.readlines():
-            if re.search("FAILED", line):
-                error_str = """
-Please see %s for the errors and fix
-the issues causing the TESTS to fail.
-""" % target[0].path
-                break
-        fobj.close()
-    if mode in ("memcheck", "helgrind"):
-        from xml.etree import ElementTree
-        for fname in target:
-            if str(fname).endswith(".xml"):
-                with open(str(fname), "r") as xmlfile:
-                    tree = ElementTree.parse(xmlfile)
-                error_types = {}
-                for node in tree.iter('error'):
-                    kind = node.find('./kind')
-                    if kind.text not in error_types:
-                        error_types[kind.text] = 0
-                    error_types[kind.text] += 1
-                if error_types:
-                    val_str += """
-Valgrind %s check failed.  See %s:""" % (mode, str(fname))
-                    for err in error_types:
-                        val_str += "\n%-3d %s errors" % (error_types[err], err)
-    if val_str != "":
-        print("""
-#########################################################%s
-#########################################################
-""" % val_str)
-
-    if error_str:
-        return """
-#########################################################
-Libraries built successfully but some unit TESTS failed.
-%s
-#########################################################
-""" % error_str
-    return None
-
-
-def define_check_test(mode=None):
-    """Define a function to create test checker"""
-    return lambda target, source, env: check_test(target, source, env, mode)
-
-
-def run_test(source, target, env, for_signature, mode=None):
-    """Create test actions."""
-    count = 1
-    sup_dir = os.path.dirname(source[0].srcnode().abspath)
-    sup_file = os.path.join(sup_dir, "%s.sup" % mode)
-    action = ['touch %s' % target[0]]
-    for test in source:
-        valgrind_str = ""
-        if mode in ["memcheck", "helgrind"]:
-            sup = ""
-            if os.path.exists(sup_file):
-                sup = "--suppressions=%s" % sup_file
-            valgrind_str = "valgrind --xml=yes --xml-file=%s " \
-                           "--child-silent-after-fork=yes " \
-                           "%s " % (target[count], sup)
-            if mode == "memcheck":
-                # Memory analysis
-                valgrind_str += "--partial-loads-ok=yes --leak-check=full "
-            elif mode == "helgrind":
-                # Thread analysis
-                valgrind_str += "--tool=helgrind "
-        count += 1
-        action.append("%s%s >> %s" % (valgrind_str,
-                                      str(test),
-                                      target[0]))
-    action.append("cat %s" % target[0])
-    action.append(define_check_test(mode=mode))
-    return action
-
-
-def modify_targets(target, source, env, mode=None):
-    """Emit the target list for the unit test builder"""
-    target = ["test_output"]
-    if mode in ("memcheck", "helgrind"):
-        for src in source:
-            basename = os.path.basename(str(src))
-            xml = "valgrind-%s-%s.xml" % (mode, basename)
-            target.append(xml)
-    return target, source
-
-
-def define_run_test(mode=None):
-    """Define a function to create test actions"""
-    return lambda source, target, env, for_signature: run_test(source,
-                                                               target,
-                                                               env,
-                                                               for_signature,
-                                                               mode)
-
-
-def define_modify_targets(mode=None):
-    """Define a function to create test targets"""
-    return lambda target, source, env: modify_targets(target, source,
-                                                      env, mode)
-
 
 class GitRepoRetriever():
     """Identify a git repository from which to download sources"""
@@ -681,7 +572,6 @@ class PreReqComponent():
 
         self.__dry_run = GetOption('no_exec')
         self.add_options()
-        self.__setup_unit_test_builders()
         self.__env.AddMethod(append_if_supported, "AppendIfSupported")
         self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
                              'BuildMockingUnitTests')
@@ -773,16 +663,11 @@ class PreReqComponent():
                                    'Build in device firmware management.', 0))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
-                      ('SRC_PREFIX',
-                       'Colon separated list of paths to look for source '
-                       'of prebuilt components.',
-                       None),
                       PathVariable('GOPATH',
                                    'Location of your GOPATH for the build',
                                    "%s/go" % self.__build_dir,
                                    PathVariable.PathIsDirCreate))
         self.setup_path_var('PREFIX')
-        self.setup_path_var('SRC_PREFIX', True)
         self.setup_path_var('GOPATH')
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
@@ -985,22 +870,6 @@ class PreReqComponent():
                                    'error', ['warning', 'warn', 'error'],
                                    ignorecase=1))
 
-    def __setup_unit_test_builders(self):
-        """Setup unit test builders for general use"""
-        AddOption('--utest-mode',
-                  dest='utest_mode',
-                  type='choice',
-                  choices=['native', 'memcheck', 'helgrind'],
-                  default='native',
-                  help="Specifies mode for running unit tests. " \
-                       "(native|memcheck|helgrind) [native]")
-
-        mode = GetOption("utest_mode")
-        test_run = Builder(generator=define_run_test(mode),
-                           emitter=define_modify_targets(mode))
-
-        self.__env.Append(BUILDERS={"RunTests": test_run})
-
     def __parse_build_deps(self):
         """Parse the build dependances command line flag"""
         build_deps = GetOption('build_deps')
@@ -1022,12 +891,6 @@ class PreReqComponent():
                 value = realpath(tmp)
             self.__env[var] = value
             self.__opts.args[var] = value
-
-    def update_src_path(self, name, value):
-        """Update a variable in the default construction environment"""
-        opt_name = '%s_SRC' % name.upper()
-        self.__env[opt_name] = value
-        self.__opts.args[opt_name] = value
 
     def add_opts(self, *variables):
         """Add options to the command line"""
@@ -1247,28 +1110,7 @@ class PreReqComponent():
         """Get the location of the sources for an external component"""
         if name in self.__src_path:
             return self.__src_path[name]
-        opt_name = '%s_SRC' % name.upper()
-        default_src_path = os.path.join(self.__build_dir, name)
-        self.add_opts(PathVariable(opt_name,
-                                   'Alternate path for %s source' % name,
-                                   default_src_path, PathVariable.PathAccept))
-        self.setup_path_var(opt_name)
-
-        src_path = self.__env.get(opt_name)
-        if src_path != default_src_path and not os.path.exists(src_path):
-            if not self.__dry_run:
-                raise MissingPath(opt_name)
-
-        if src_path == default_src_path:
-            # check the global source area
-            src_path_var = self.__env.get('SRC_PREFIX')
-            if src_path_var:
-                for path in src_path_var.split(os.pathsep):
-                    new_src_path = os.path.join(path, name)
-                    if os.path.exists(new_src_path):
-                        src_path = new_src_path
-                        self.update_src_path(name, src_path)
-                        break
+        src_path = os.path.join(self.__build_dir, name)
 
         self.__src_path[name] = src_path
         return src_path
@@ -1284,14 +1126,15 @@ class PreReqComponent():
             return None
         return self.configs.get(section, name)
 
-    def load_config(self, comp, src_opt):
+    def load_config(self, comp, path):
         """If the component has a config file to load, load it"""
         config_path = self.get_config("configs", comp)
         if config_path is None:
             return
-        full_path = self.__env.subst("$%s/%s" % (src_opt, config_path))
+        full_path = "%s/%s" % (path, config_path)
         print("Reading config file for %s from %s" % (comp, full_path))
         self.configs.read(full_path)
+
 # pylint: enable=too-many-public-methods
 
 class _Component():
@@ -1350,7 +1193,6 @@ class _Component():
         self.lib_path.extend(kw.get("extra_lib_path", []))
         self.include_path.extend(kw.get("extra_include_path", []))
         self.out_of_src_build = kw.get("out_of_src_build", False)
-        self.src_opt = '%s_SRC' % name.upper()
         self.crc_file = os.path.join(self.prereqs.get_build_dir(),
                                      '_%s.crc' % self.name)
         self.patch_path = self.prereqs.get_build_dir()
@@ -1400,7 +1242,6 @@ class _Component():
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
         if self.src_exists():
-            self.prereqs.update_src_path(self.name, self.src_path)
             print('Using existing sources at %s for %s' \
                 % (self.src_path, self.name))
             # NB: Don't apply patches to existing sources
@@ -1420,8 +1261,6 @@ class _Component():
         patches = self.resolve_patches()
         self.retriever.get(self.src_path, commit_sha=commit_sha,
                            patches=patches, branch=branch)
-
-        self.prereqs.update_src_path(self.name, self.src_path)
 
     def calculate_crc(self):
         """Calculate a CRC on the sources to detect changes"""
@@ -1596,7 +1435,6 @@ class _Component():
 
     def configure(self):
         """Setup paths for a required component"""
-        self.prereqs.setup_path_var(self.src_opt)
         if not self.retriever:
             self.prebuilt_path = "/usr"
         else:
@@ -1760,7 +1598,7 @@ class _Component():
             if not self.src_exists():
                 self.get()
 
-            self.prereqs.load_config(self.name, self.src_opt)
+            self.prereqs.load_config(self.name, self.src_path)
 
             if self.requires:
                 changes = self.prereqs.require(envcopy, *self.requires,
