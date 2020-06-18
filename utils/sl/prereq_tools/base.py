@@ -723,10 +723,10 @@ class PreReqComponent():
         self.__build_info = BuildInfo()
         self.__build_info.update("BUILD_DIR", self.__env.subst("$BUILD_DIR"))
 
-        build_dir_name = '_build.external'
+        build_dir_name = os.path.join(self.__env.get("BUILD_ROOT"), "external")
         install_dir = os.path.join(self.__top_dir, 'install')
         if arch:
-            build_dir_name = '_build.external-%s' % arch
+            build_dir_name += '-%s' % arch
             install_dir = os.path.join('install', str(arch))
 
             # Overwrite default file locations to allow multiple builds in the
