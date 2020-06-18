@@ -40,8 +40,8 @@ class DmgCommand(YamlCommand):
         "run":
             r"(.*)",
         "network_scan":
-            r"(?:|[-]+\s+(.*)\s+[-]+(?:\n|\n\r))(?:.*\s+(fabric_iface|"
-            r"provider|pinned_numa_node):\s+([a-z0-9+;_]+))",
+            r"[-]+(?:\n|\n\r)([a-z0-9-]+)(?:\n|\n\r)[-]+|NUMA\s+"
+            r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
         "pool_list":
             r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
         "pool_create":
