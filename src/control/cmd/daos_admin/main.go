@@ -47,8 +47,6 @@ func main() {
 
 // addMethodHandlers adds all of daos_admin's supported handler functions.
 func addMethodHandlers(app *pbin.App) {
-	app.AddHandler("Ping", &pingHandler{})
-
 	app.AddHandler("ScmMount", &scmMountUnmountHandler{})
 	app.AddHandler("ScmUnmount", &scmMountUnmountHandler{})
 	app.AddHandler("ScmFormat", &scmFormatCheckHandler{})

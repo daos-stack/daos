@@ -261,7 +261,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 
 	D_ASSERTF(tx->tx_sub_count == 0,
-		  "Invaild sub requests count %d when cleanup\n",
+		  "Invalid sub requests count %d when cleanup\n",
 		  tx->tx_sub_count);
 }
 
