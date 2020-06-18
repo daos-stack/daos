@@ -3150,6 +3150,9 @@ fetch_replica_unavail(void **state)
 				arg->dmg_config, &arg->pool.svc,
 				rank);
 
+		/* wait until reintegration is done */
+		test_rebuild_wait(&arg, 1);
+
 		assert_int_equal(rc, 0);
 	}
 	D_FREE(buf);
