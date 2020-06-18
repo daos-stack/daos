@@ -100,7 +100,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 	uint64_t		*snapshots = NULL;
 	int			snapshots_nr;
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
-	int			i, rc;
+	int			i, rc, agg_print = 0;
 
 	/* Check if it's ok to start aggregation in every 2 seconds */
 	*sleep = 2ULL * NSEC_PER_SEC;
@@ -198,13 +198,27 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		D_GOTO(free, rc = 0);
 
 	*sleep = 0;
+	if (getenv("DAOS_AGG_LOG_PRINT") != NULL)
+		agg_print = 1;
+
+	if (agg_print)
+		D_PRINT(DF_CONT"[%d]: MIN: %lu; HLC: %lu\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			tgt_id, epoch_min, hlc);
+
+
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: %lu; HLC: %lu\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_min, hlc);
 
 	for ( ; i < snapshots_nr && snapshots[i] < epoch_max; ++i) {
 		epoch_range.epr_hi = snapshots[i];
-		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
+		if (agg_print)
+			D_PRINT(DF_CONT"target[%d]: Aggregating {%lu -> %lu}\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+
+		D_DEBUG(DB_EPC, DF_CONT"target[%d]: Aggregating {%lu -> %lu}\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
@@ -219,7 +233,13 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		goto out;
 
 	epoch_range.epr_hi = epoch_max;
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
+	if (agg_print)
+		D_PRINT(DF_CONT"target[%d]: Aggregating {%lu -> %lu}\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+
+
+	D_DEBUG(DB_EPC, DF_CONT"target[%d]: Aggregating {%lu -> %lu}\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
@@ -227,6 +247,10 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 out:
 	if (rc == 0 && epoch_min == 0)
 		cont->sc_aggregation_full_scan_hlc = hlc;
+
+	if (agg_print)
+		D_PRINT(DF_CONT"target[%d]: Aggregating finished\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id);
 
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id);
