@@ -827,7 +827,7 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	if (tgt_idx != -1)
 		dts_create_config(dmg_options, " --target-idx=%d", tgt_idx);
 	if (dmg_config != NULL)
-		dts_create_config(dmg_options, " --config_path=%s", dmg_config);
+		dts_create_config(dmg_options, " -o %s", dmg_config);
 
 	dts_create_config(dmg_cmd,
 			"dmg pool %s -i --pool=%s --rank=%d %s",
@@ -928,8 +928,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 
 	/* build and invoke dmg cmd to stop the server */
 	if (arg->dmg_config != NULL)
-		dts_create_config(dmg_options, " --config_path=%s",
-				  arg->dmg_config);
+		dts_create_config(dmg_options, " -o %s", arg->dmg_config);
 
 	dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
 			  "--force %s", rank, dmg_options);
