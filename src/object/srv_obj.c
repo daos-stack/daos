@@ -1338,7 +1338,6 @@ obj_ioc_fini(struct obj_io_context *ioc)
 		ds_cont_child_put(ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
 	}
-	ioc->ioc_map_ver = 0;
 }
 
 /* Various check before access VOS */
