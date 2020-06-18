@@ -987,7 +987,7 @@ pipeline {
                                     failThresholdDefinitelyLost: '0',
                                     failThresholdInvalidReadWrite: '0',
                                     failThresholdTotal: '0',
-                                    pattern: '*.memcheck.xml',
+                                    pattern: 'dnt.*.memcheck.xml',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
                                     sourceSubstitutionPaths: '',
@@ -1016,9 +1016,97 @@ pipeline {
                                                       id: 'VM_test')
                         }
                     }
-                }
-            }
-        }
+                } // End run_test.sh stage
+                stage('run_test_valgrind.sh') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_stage('run_test') }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        script {
+                            if (quickbuild()) {
+                                // TODO: these should be gotten from the Requires: of RPMs
+                                qb_inst_rpms = " spdk-tools mercury boost-devel"
+                            }
+                        }
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 1,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
+                                       snapshot: true,
+                                       inst_repos: el7_component_repos + ' ' +
+                                                   component_repos(),
+                                       inst_rpms: 'gotestsum openmpi3 ' +
+                                                  'hwloc-devel argobots ' +
+                                                  'fuse3-libs fuse3 ' +
+                                                  'libisa-l-devel libpmem ' +
+                                                  'libpmemobj protobuf-c ' +
+                                                  'spdk-devel libfabric-devel '+
+                                                  'pmix numactl-devel ' +
+                                                  'libipmctl-devel' +
+                                                  qb_inst_rpms
+                        timeout(time:60, unit:'MINUTES') {
+                          runTest stashes: [ 'centos7-gcc-tests',
+                                           'centos7-gcc-install',
+                                           'centos7-gcc-build-vars' ],
+                                script: "SSH_KEY_ARGS=${env.SSH_KEY_ARGS} " +
+                                        "NODELIST=${env.NODELIST} " +
+                                        'ci/run_test_valgrind.sh',
+                                junit_files: 'test_results/*.xml'
+                        }
+                    }
+                    post {
+                      always {
+                            // https://issues.jenkins-ci.org/browse/JENKINS-58952
+                            // label is at the end
+                            // sh label: "Collect artifacts and tear down",
+                            //   script '''set -ex
+                            sh script: 'ci/run_test_post_always.sh',
+                               label: "Collect artifacts and tear down"
+                            junit 'test_results/*.xml'
+                            archiveArtifacts artifacts: 'run_test.sh/**'
+                            archiveArtifacts artifacts: 'vm_test/**'
+                            publishValgrind (
+                                    failBuildOnInvalidReports: true,
+                                    failBuildOnMissingReports: true,
+                                    failThresholdDefinitelyLost: '0',
+                                    failThresholdInvalidReadWrite: '0',
+                                    failThresholdTotal: '0',
+                                    pattern: '**/*memcheck.xml',
+                                    publishResultsForAbortedBuilds: false,
+                                    publishResultsForFailedBuilds: true,
+                                    sourceSubstitutionPaths: '',
+                                    unstableThresholdDefinitelyLost: '0',
+                                    unstableThresholdInvalidReadWrite: '0',
+                                    unstableThresholdTotal: '0'
+                            )
+                            recordIssues enabledForFailure: true,
+                                         failOnError: true,
+                                         referenceJobName: 'daos-stack/daos/master',
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         /* Set qualitygate to 1 new "NORMAL" priority message
+                                           * Supporting messages to help identify causes of
+                                           * problems are set to "LOW", and there are a
+                                           * number of intermittent issues during server
+                                           * shutdown that would normally be NORMAL but in
+                                           * order to have stable results are set to LOW.
+                                           */
+                                         qualityGates: [[threshold: 1, type: 'TOTAL_HIGH', unstable: true],
+                                                        [threshold: 1, type: 'TOTAL_ERROR', unstable: true],
+                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true]],
+                                         name: "Node local testing",
+                                         tool: issues(pattern: 'vm_test/nlt-errors.json',
+                                                      name: 'NLT results',
+                                                      id: 'VM_test')
+                        }
+                    }
+                } // End run_test_valgrind.sh stage
+            } // End parallel
+        } // End stage Unit test
         stage('Test') {
             when {
                 beforeAgent true

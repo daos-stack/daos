@@ -22,9 +22,6 @@ sudo ln -sf "$SL_PREFIX/share/spdk/scripts/setup.sh" /usr/share/spdk/scripts
 sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts
 sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
-# set CMOCKA envs here
-export CMOCKA_MESSAGE_OUTPUT=xml
-export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml
+# run_test.sh with valgrind
 cd "$DAOS_BASE"
-IS_CI=true OLD_CI=false utils/run_test.sh
-./utils/node_local_test.py all
+IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
