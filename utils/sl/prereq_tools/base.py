@@ -785,6 +785,14 @@ class PreReqComponent():
         self.setup_path_var('SRC_PREFIX', True)
         self.setup_path_var('GOPATH')
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
+        self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
+        try:
+            if self.__dry_run:
+                print('Would mkdir -p %s' % self.prereq_prefix)
+            else:
+                os.makedirs(self.prereq_prefix)
+        except:
+            pass
 
         self.setup_parallel_build()
 
@@ -1089,8 +1097,7 @@ class PreReqComponent():
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
-        prebuilt1 = os.path.join(env.subst("$PREFIX/prereq/$TTYPE_REAL"),
-                                 comp_def.name)
+        prebuilt1 = os.path.join(self.prereq_prefix, comp_def.name)
         prebuilt2 = self.__env.get('{}_PREFIX'.format(comp_def.name.upper()))
 
         if comp_def.src_path and \
@@ -1196,8 +1203,7 @@ class PreReqComponent():
             return self.__prebuilt_path[name]
 
         # check the global prebuilt area
-        prebuilt_path = self.__env.subst('$PREFIX/prereq/$TTYPE_REAL')
-        prebuilt = os.path.join(prebuilt_path, name)
+        prebuilt = os.path.join(self.prereq_prefix, name)
         if not os.path.exists(prebuilt):
             prebuilt = None
 
@@ -1227,8 +1233,7 @@ class PreReqComponent():
             self.save_component_prefix(comp_prefix, prebuilt_path)
             return (prebuilt_path, prefix)
 
-        target_prefix = self.__env.subst('$PREFIX/prereq/$TTYPE_REAL')
-        target_prefix = os.path.join(target_prefix, name)
+        target_prefix = os.path.join(self.prereq_prefix, name)
         self.save_component_prefix(comp_prefix, target_prefix)
 
         return (target_prefix, prefix)
