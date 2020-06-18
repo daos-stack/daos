@@ -28,12 +28,30 @@
 #include "place_obj_common.h"
 #include <daos_obj_class.h>
 
+
+void
+print_layout(struct pl_obj_layout *layout)
+{
+	int grp;
+	int sz;
+	int index;
+
+	for (grp = 0; grp < layout->ol_grp_nr; ++grp) {
+		printf("[");
+		for (sz = 0; sz < layout->ol_grp_size; ++sz) {
+			index = (grp * layout->ol_grp_size) + sz;
+			printf("%d ", layout->ol_shards[index].po_target);
+		}
+		printf("\b]");
+	}
+	printf("\n");
+}
+
 void
 plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
-		struct pl_map *pl_map, bool print_layout)
+		struct pl_map *pl_map, bool print_layout_flag)
 {
 	struct daos_obj_md	 md;
-	int			 i;
 	int			 rc;
 
 	memset(&md, 0, sizeof(md));
@@ -43,13 +61,8 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 	rc = pl_obj_place(pl_map, &md, NULL, layout);
 	D_ASSERT(rc == 0);
 
-	if (print_layout) {
-		D_PRINT("Layout of object "DF_OID"\n", DP_OID(oid));
-		for (i = 0; i < (*layout)->ol_nr; i++)
-			printf("%d ", (*layout)->ol_shards[i].po_target);
-
-		printf("\n");
-	}
+	if (print_layout_flag)
+		print_layout(*layout);
 }
 
 void
@@ -71,6 +84,7 @@ plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size,
 		D_ASSERT(num_allowed_failures >= 0);
 
 		if (target_num != -1) {
+
 			D_ASSERT(target_set[target_num] != 1);
 			target_set[target_num] = 1;
 		}
@@ -79,75 +93,162 @@ plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size,
 }
 
 void
-reint_check(struct pl_obj_layout *layout, struct pl_obj_layout *temp_layout,
-		uint32_t *spare_tgt_ranks, uint32_t *shard_ids, int num_reint,
-		uint32_t curr_fail_tgt)
+plt_obj_rebuild_layout_check(struct pl_obj_layout *layout,
+		struct pl_obj_layout *org_layout, uint32_t pool_size,
+		int *down_tgts, int num_down, int num_spares_left,
+		uint32_t num_spares_returned, uint32_t *spare_tgt_ranks,
+		uint32_t *shard_ids)
 {
-	int i, j;
-	int temp_i;
-	int rebuilding;
-	int num_reint_found;
-	uint32_t shard_idx;
-	uint32_t target;
-	uint32_t original_target;
-	uint32_t reint_target;
-	struct pl_obj_shard curr_shard;
+	uint32_t	curr_tgt_id;
+	uint32_t	spare_id;
+	int		i, layout_idx;
 
-	D_ASSERT(num_reint >= 0 && num_reint < 2);
-	num_reint_found = 0;
-	temp_i = 0;
-	i = 0;
+	/* Rebuild for DOWN targets should not generate an extended layout */
+	D_ASSERT(layout->ol_nr == org_layout->ol_nr);
 
-	/* can't rebuild non replicated date */
-	if (temp_layout->ol_grp_size == 1) {
-		D_ASSERT(num_reint == 0);
-		for (i = 0; i < layout->ol_nr; ++i) {
-			original_target = layout->ol_shards[i].po_target;
-			reint_target = temp_layout->ol_shards[i].po_target;
+	/* Rebuild targets should be no more than down targets */
+	D_ASSERT(num_spares_returned >= 0);
+	D_ASSERT(num_spares_returned <= num_down);
 
-			if (original_target == curr_fail_tgt)
-				D_ASSERT(reint_target == -1);
+	/* If rebuild returns targets they should be in the layout */
+	for (i = 0; i < num_spares_returned; ++i) {
+		spare_id = spare_tgt_ranks[i];
+		for (layout_idx = 0; layout_idx < layout->ol_nr; ++layout_idx) {
+			if (spare_id == layout->ol_shards[layout_idx].po_target)
+				break;
 		}
+		D_ASSERT(layout_idx < layout->ol_nr);
+
+		/* Target IDs for spare target shards should be -1 */
+		curr_tgt_id = layout->ol_shards[shard_ids[i]].po_target;
+		D_ASSERT(curr_tgt_id == spare_id);
+	}
+
+	/* Down targets should not be in the layout */
+	for (i = 0; i < num_down; ++i) {
+		spare_id = down_tgts[i];
+		for (layout_idx = 0; layout_idx < layout->ol_nr; ++layout_idx) {
+			curr_tgt_id = layout->ol_shards[layout_idx].po_target;
+			D_ASSERT(spare_id != curr_tgt_id);
+		}
+	}
+}
+
+void
+plt_obj_drain_layout_check(struct pl_obj_layout *layout,
+		struct pl_obj_layout *org_layout, uint32_t pool_size,
+		int *draining_tgts, int num_draining, int num_spares,
+		uint32_t num_spares_returned, uint32_t *spare_tgt_ranks,
+		uint32_t *shard_ids)
+{
+	uint32_t	curr_tgt_id;
+	uint32_t	spare_id;
+	bool		contains_drain_tgt;
+	int		i, layout_idx, org_idx;
+
+	contains_drain_tgt = false;
+	/* If layout before draining does not contain the element being drained
+	 * then skip most tests, this layout shouldn't be effected
+	 */
+	for (i = 0; i < num_draining; ++i) {
+		spare_id = draining_tgts[i];
+		for (org_idx = 0; org_idx < org_layout->ol_nr; ++org_idx) {
+			curr_tgt_id = org_layout->ol_shards[org_idx].po_target;
+			if (spare_id == curr_tgt_id) {
+				contains_drain_tgt = true;
+				break;
+			}
+		}
+
+		if (org_idx < org_layout->ol_nr)
+			break;
+	}
+
+	if (contains_drain_tgt == false) {
+		D_ASSERT(layout->ol_nr == org_layout->ol_nr);
+		D_ASSERT(num_spares_returned == 0);
 		return;
 	}
 
-	if (layout->ol_nr != temp_layout->ol_nr)
-		D_ASSERT(num_reint > 0);
-	i = 0;
-	while (i < layout->ol_nr) {
+	/* Rebuild targets should be no more than down targets */
+	D_ASSERT(num_spares_returned >= 0);
+	D_ASSERT(num_spares_returned <= num_draining);
 
-		for (j = 0; j < layout->ol_grp_size; ++j) {
-			original_target = layout->ol_shards[i].po_target;
-			reint_target = temp_layout->ol_shards[temp_i].po_target;
-
-			if (original_target == curr_fail_tgt) {
-				D_ASSERT(num_reint == 1);
-				D_ASSERT(original_target == spare_tgt_ranks[0]);
-				D_ASSERT(reint_target != original_target);
-			}
-
-			i++;
-			temp_i++;
+	/* If rebuild returns targets they should be in the layout */
+	for (i = 0; i < num_spares_returned; ++i) {
+		spare_id = spare_tgt_ranks[i];
+		for (layout_idx = 0; layout_idx < layout->ol_nr; ++layout_idx) {
+			if (spare_id == layout->ol_shards[layout_idx].po_target)
+				break;
 		}
+		D_ASSERT(layout_idx < layout->ol_nr);
 
-		while (temp_i < temp_layout->ol_grp_size) {
-			curr_shard = temp_layout->ol_shards[temp_i];
-			shard_idx = curr_shard.po_shard;
-			target = curr_shard.po_target;
-			rebuilding = curr_shard.po_rebuilding;
+	}
 
-			if (shard_idx != -1) {
-				D_ASSERT(shard_idx == shard_ids[0]);
-				D_ASSERT(target == spare_tgt_ranks[0]);
-				D_ASSERT(rebuilding == 1);
-				D_ASSERT(num_reint_found < num_reint);
-			}
+	/* Draining targets should be in the layout */
+	for (i = 0; i < num_draining; ++i) {
+		spare_id = draining_tgts[i];
+		for (layout_idx = 0; layout_idx < layout->ol_nr; ++layout_idx) {
+			if (spare_id == layout->ol_shards[layout_idx].po_target)
+				break;
+		}
+		D_ASSERT(layout_idx < layout->ol_nr);
+	}
+}
 
-			num_reint_found++;
-			temp_i++;
+void
+plt_obj_reint_layout_check(struct pl_obj_layout *layout,
+		struct pl_obj_layout *org_layout, uint32_t pool_size,
+		int *reint_tgts, int num_reint, int num_spares,
+		uint32_t num_spares_returned, uint32_t *spare_tgt_ranks,
+		uint32_t *shard_ids)
+{
+	uint32_t	reint_id;
+	uint32_t	curr_tgt_id;
+	uint8_t		*target_set;
+	bool		contains_reint_tgt;
+	int		i;
+
+	D_ALLOC_ARRAY(target_set, pool_size);
+	D_ASSERT(target_set != NULL);
+
+	/*
+	 * If org_layout does not contain a target to be reintegrated
+	 * then the layout should be the same as before reintegration
+	 * started
+	 */
+	contains_reint_tgt = false;
+	for (i = 0; i < org_layout->ol_nr; ++i) {
+		curr_tgt_id = org_layout->ol_shards[i].po_target;
+		if (curr_tgt_id != -1)
+			target_set[curr_tgt_id] = 1;
+	}
+
+	for (i = 0; i < num_reint; ++i) {
+		if (target_set[reint_tgts[i]] == 1) {
+			contains_reint_tgt = true;
+			target_set[reint_tgts[i]] = 2;
 		}
 	}
-	D_ASSERT(num_reint_found == num_reint);
+
+	if (contains_reint_tgt == false) {
+		D_ASSERT(plt_obj_layout_match(layout, org_layout));
+		D_ASSERT(num_spares_returned == 0);
+		return;
+	}
+
+	/* Layout should be extended */
+	D_ASSERT(org_layout->ol_nr < layout->ol_nr);
+
+	/* Rebuild targets should be no more than down targets */
+	D_ASSERT(num_spares_returned > 0);
+	D_ASSERT(num_spares_returned <= num_reint);
+
+	/* Layout should contain targets returned by rebuild */
+	for (i = 0; i < num_spares_returned; ++i) {
+		reint_id = spare_tgt_ranks[i];
+		D_ASSERT(target_set[reint_id] == 2);
+	}
 }
 
 void
@@ -172,13 +273,12 @@ plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
 }
 
 bool
-pt_obj_layout_match(struct pl_obj_layout *lo_1, struct pl_obj_layout *lo_2,
-		uint32_t dom_nr)
+plt_obj_layout_match(struct pl_obj_layout *lo_1, struct pl_obj_layout *lo_2)
 {
 	int	i;
 
-	D_ASSERT(lo_1->ol_nr == lo_2->ol_nr);
-	D_ASSERT(lo_1->ol_nr > 0 && lo_1->ol_nr <= dom_nr);
+	if (lo_1->ol_nr != lo_2->ol_nr)
+		return false;
 
 	for (i = 0; i < lo_1->ol_nr; i++) {
 		if (lo_1->ol_shards[i].po_target !=
@@ -207,6 +307,9 @@ plt_set_tgt_status(uint32_t id, int status, uint32_t ver,
 	case PO_COMP_ST_DOWN:
 		str = "PO_COMP_ST_DOWN";
 		break;
+	case PO_COMP_ST_DRAIN:
+		str = "PO_COMP_ST_DRAIN";
+		break;
 	case PO_COMP_ST_DOWNOUT:
 		str = "PO_COMP_ST_DOWNOUT";
 		break;
@@ -225,6 +328,14 @@ plt_set_tgt_status(uint32_t id, int status, uint32_t ver,
 	pool_map_update_failed_cnt(po_map);
 	rc = pool_map_set_version(po_map, ver);
 	D_ASSERT(rc == 0);
+}
+
+void
+plt_drain_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
+		bool pl_debug_msg)
+{
+	(*po_ver)++;
+	plt_set_tgt_status(id, PO_COMP_ST_DRAIN, *po_ver, po_map, pl_debug_msg);
 }
 
 void
