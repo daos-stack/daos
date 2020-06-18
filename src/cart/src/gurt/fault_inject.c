@@ -639,7 +639,7 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 	bool			 rc = true;
 
 	if (!d_fi_initialized()) {
-		D_ERROR("fault injectiont not initialized.\n");
+		D_ERROR("fault injection not initialized.\n");
 		return false;
 	}
 
