@@ -47,6 +47,8 @@ var methodAuthorizations = map[string]Component{
 	"/ctl.MgmtCtl/SystemResetFormat":  ComponentAdmin,
 	"/ctl.MgmtCtl/SystemStart":        ComponentAdmin,
 	"/ctl.MgmtCtl/NetworkScan":        ComponentAdmin,
+	"/ctl.MgmtCtl/FirmwareQuery":      ComponentAdmin,
+	"/ctl.MgmtCtl/FirmwareUpdate":     ComponentAdmin,
 	"/mgmt.MgmtSvc/Join":              ComponentServer,
 	"/mgmt.MgmtSvc/LeaderQuery":       ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolCreate":        ComponentAdmin,
