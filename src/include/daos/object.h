@@ -175,13 +175,19 @@ struct daos_obj_layout {
 	struct daos_obj_shard	*ol_shards[0];
 };
 
-#define TGTS_IGNORE		((d_rank_t)-1)
+/**
+ * can be used as st_rank to indicate target can be ignored for IO, for example
+ * update DAOS_OBJ_REPL_MAX obj with some target failed case.
+ */
+#define DAOS_TGT_IGNORE		((d_rank_t)-1)
 /** to identify each obj shard's target */
 struct daos_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
 	uint32_t		st_shard;	/* shard index */
-	uint32_t		st_tgt_idx;	/* target xstream index */
 	uint32_t		st_tgt_id;	/* target id */
+	uint16_t		st_tgt_idx;	/* target xstream index */
+	/* target idx for EC obj, only used for client */
+	uint16_t		st_ec_tgt;
 };
 
 static inline bool
@@ -448,6 +454,9 @@ static inline void
 daos_recx_ep_list_free(struct daos_recx_ep_list *list, unsigned int nr)
 {
 	unsigned int	i;
+
+	if (list == NULL)
+		return;
 
 	for (i = 0; i < nr; i++)
 		daos_recx_ep_free(&list[i]);
