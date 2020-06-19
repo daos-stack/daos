@@ -228,7 +228,6 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct vos_tls *tls = data;
 
-	D_ASSERT(d_list_empty(&tls->vtl_gc_pools));
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
 	umem_fini_txd(&tls->vtl_txd);
 	vos_ts_table_free(&tls->vtl_ts_table);

@@ -41,7 +41,7 @@ read_bulk(char *buff, size_t len, off_t position,
 	d_sg_list_t		sgl = {};
 	int rc;
 
-	DFUSE_TRA_INFO(entry, "%#zx-%#zx ", position, position + len - 1);
+	DFUSE_TRA_INFO(entry, "%#zx-%#zx", position, position + len - 1);
 
 	if (entry->fd_dfsoh) {
 		daos_size_t read_size = 0;
