@@ -166,9 +166,10 @@ class CodeLine():
 
 prev_file = None
 def show_patch(lines):
+    """Print a number of lines as a patch to stdout
 
-    # Print a number of lines as a patch to stdout, if any of the lines
-    # have been marked for change.
+    if any of the lines have been marked for change.
+    """
 
     global prev_file
     show = False
@@ -193,7 +194,7 @@ def show_patch(lines):
     # little benefit in keeping them.
     start = len(lines)
     end = 0
-    for idx in range(len(lines)):
+    for idx, line in enumerate(lines):
         line = lines[idx]
         if not (line.changed or not line.include):
             continue
@@ -227,40 +228,40 @@ def show_patch(lines):
 def check_lines(lines):
     """Run the checks"""
 
-    for idx in range(len(lines)):
-        if not lines[idx].include:
+    for idx, line in enumerate(lines):
+        if not line.include:
             continue
 
         # Check for braces which can be removed.
-        elif lines[idx].close_brace and lines[idx-2].conditional_brace:
-            lines[idx].drop_line()
+        elif line.close_brace and lines[idx-2].conditional_brace:
+            line.drop_line()
             lines[idx-2].remove_brace()
 
         # Check for assignment of NULL after free.
-        elif lines[idx].free_var and \
-             lines[idx+1].is_assign_null(lines[idx].free_var):
+        elif line.free_var and \
+             lines[idx+1].is_assign_null(line.free_var):
             lines[idx+1].drop_line()
 
         # Check for conditional free.
-        elif lines[idx].free_var and \
-             lines[idx-1].is_cond_on_var(lines[idx].free_var):
+        elif line.free_var and \
+             lines[idx-1].is_cond_on_var(line.free_var):
             if lines[idx-1].conditional_brace:
                 if lines[idx+1].close_brace:
-                    lines[idx].shift_left()
+                    line.shift_left()
                     lines[idx-1].drop_line()
                     lines[idx+1].drop_line()
             else:
-                lines[idx].shift_left()
+                line.shift_left()
                 lines[idx-1].drop_line()
 
         # Check for conditional free with other tests.
-        elif lines[idx].free_var and \
-             lines[idx-1].is_cond_part_on_var(lines[idx].free_var):
+        elif line.free_var and \
+             lines[idx-1].is_cond_part_on_var(line.free_var):
             if lines[idx-1].conditional_brace:
                 if lines[idx+1].close_brace:
                     lines[idx-1].remove_brace()
                     lines[idx+1].drop_line()
-            lines[idx-1].shorten_cond(lines[idx].free_var)
+            lines[idx-1].shorten_cond(line.free_var)
 
     show_patch(lines)
 
@@ -283,7 +284,6 @@ def main():
         cmd.extend(args)
         cmd.append('src')
 
-    print(' '.join(cmd))
     rc = subprocess.run(cmd, stdout=subprocess.PIPE)
 
     stdout = rc.stdout.decode('utf-8')
