@@ -1055,7 +1055,7 @@ pipeline {
                                 script: "SSH_KEY_ARGS=${env.SSH_KEY_ARGS} " +
                                         "NODELIST=${env.NODELIST} " +
                                         'ci/run_test_valgrind.sh',
-                                junit_files: 'test_results/*.xml'
+                                junit_files: 'valgrind_memcheck_results/*.xml'
                         }
                     }
                     post {
@@ -1064,11 +1064,11 @@ pipeline {
                             // label is at the end
                             // sh label: "Collect artifacts and tear down",
                             //   script '''set -ex
-                            sh script: 'ci/run_test_post_always.sh',
+                            sh script: 'ci/run_test_post_valgrind.sh',
                                label: "Collect artifacts and tear down"
-                            junit 'test_results/*.xml'
-                            archiveArtifacts artifacts: 'run_test.sh/**'
-                            archiveArtifacts artifacts: 'vm_test/**'
+                            junit 'valgrind_memcheck_results/*.xml'
+                            archiveArtifacts artifacts: 'run_test_valgrind.sh/**'
+                            archiveArtifacts artifacts: 'vm_test_valgrind/**'
                             publishValgrind (
                                     failBuildOnInvalidReports: true,
                                     failBuildOnMissingReports: true,
