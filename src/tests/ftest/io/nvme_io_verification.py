@@ -28,7 +28,7 @@ import avocado
 from pydaos.raw import DaosApiError
 from test_utils_pool import TestPool
 from ior_test_base import IorTestBase
-
+from dmg_utils import check_system_query_status
 
 class NvmeIoVerification(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -107,7 +107,7 @@ class NvmeIoVerification(IorTestBase):
             # destroy pool
             self.destroy_pools(self.pool)
 
-        @avocado.fail_on(DaosApiError)
+    @avocado.fail_on(DaosApiError)
     def test_nvme_server_restart(self):
         """Jira ID: DAOS-2650.
 
@@ -134,8 +134,8 @@ class NvmeIoVerification(IorTestBase):
         tests = self.params.get("ior_sequence", '/run/ior/*')
         processes = self.params.get("np", '/run/ior/*')
         transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
-        flag_write = self.params.get("write", '/run/ior/flag/*/')
-        flag_read = self.params.get("read", '/run/ior/flag/*/')
+        flag_write = self.params.get("write", '/run/ior/*/')
+        flag_read = self.params.get("read", '/run/ior/*/')
         block_size = self.ior_cmd.block_size.value
 
         # Loop for every IOR object type
@@ -157,7 +157,6 @@ class NvmeIoVerification(IorTestBase):
 
             for tsize in transfer_size:
                 # Get the current pool sizes
-#                size_before_ior = self.pool.info
 
                 # Run ior with the parameters specified for this pass
                 self.ior_cmd.transfer_size.update(tsize)
@@ -172,22 +171,19 @@ class NvmeIoVerification(IorTestBase):
                 self.run_ior(self.get_ior_job_manager_command(), processes)
 
                 # Stop all servers
-                dmg_command.system_stop(True)
+                self.get_dmg_command().system_stop(True)
 
                 # Start all servers
-                dmg_command.system_start()
+                self.get_dmg_command().system_start()
 
                 # check if all servers started as expected
-                scan_info = dmg_command.get_output("system_query")
+                scan_info = self.get_dmg_command().get_output("system_query")
                 if not check_system_query_status(scan_info):
                     self.fail("One or more servers crashed")
 
                 # read all the data written before server restart
                 self.ior_cmd.flags.update(flag_read)
                 self.run_ior(self.get_ior_job_manager_command(), processes)
-
-                # Verify IOR consumed the expected amount ofrom the pool
-#                self.verify_pool_size(size_before_ior, self.processes)
 
             # destroy pool
             self.destroy_pools(self.pool)

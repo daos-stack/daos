@@ -24,6 +24,9 @@ ior:
  client_processes:
    np: 16
  flags: "-w -W -r -R -k -vv"
+ flag_restart:
+   write: "-w -k -G=5"
+   read: "-r -R -k -G=5"
  repetitions: 1
  api: DAOS
  object_type: 'SX'
