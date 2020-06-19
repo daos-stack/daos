@@ -640,7 +640,7 @@ recx_with_full_stripe(uint32_t recx_idx, struct obj_ec_recx_array *r_array,
 		(r_idx)[tgt]++;						       \
 	} while (0)
 #define ec_vos_idx(idx)							       \
-	obj_ec_vos_recx_idx(idx, stripe_rec_nr, cell_rec_nr)
+	obj_ec_idx_daos2vos(idx, stripe_rec_nr, cell_rec_nr)
 
 /**
  * Add data recx to reassemble recx array.
@@ -868,13 +868,13 @@ dump_recx(daos_recx_t *recx, struct daos_oclass_attr *oca,
 
 	/* when oca != NULL, translate VOS idx to original daos index */
 	if (tgt < obj_ec_data_tgt_nr(oca)) {
-		start = obj_ec_idx_of_vos_idx(recx->rx_idx, stripe_rec_nr,
+		start = obj_ec_idx_vos2daos(recx->rx_idx, stripe_rec_nr,
 				obj_ec_cell_rec_nr(oca), tgt);
 		D_PRINT(" ["DF_U64", "DF_U64"]", start, recx->rx_nr);
 	} else {
 		if (recx->rx_idx & PARITY_INDICATOR) {
 			tmp_idx = recx->rx_idx & (~PARITY_INDICATOR);
-			start = obj_ec_idx_of_vos_idx(tmp_idx, stripe_rec_nr,
+			start = obj_ec_idx_vos2daos(tmp_idx, stripe_rec_nr,
 					obj_ec_cell_rec_nr(oca),
 					tgt - obj_ec_data_tgt_nr(oca));
 			D_PRINT(" [P_"DF_U64", "DF_U64"]", start,

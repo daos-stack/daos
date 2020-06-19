@@ -581,12 +581,13 @@ crt_proc_struct_daos_shard_tgt(crt_proc_t proc, struct daos_shard_tgt *st)
 	rc = crt_proc_uint32_t(proc, &st->st_shard);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &st->st_tgt_idx);
-	if (rc != 0)
-		return -DER_HG;
 	rc = crt_proc_uint32_t(proc, &st->st_tgt_id);
 	if (rc != 0)
 		return -DER_HG;
+	rc = crt_proc_uint16_t(proc, &st->st_tgt_idx);
+	if (rc != 0)
+		return -DER_HG;
+	/* st_ec_tgt need not pack */
 
 	return 0;
 }

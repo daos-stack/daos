@@ -143,6 +143,8 @@ enum obj_rpc_flags {
 	ORF_CREATE_MAP		= (1 << 5),
 	/** The epoch (e.g., orw_epoch for OBJ_RW) is uncertain. */
 	ORF_EPOCH_UNCERTAIN	= (1 << 6),
+	/** Erasure coding degraded fetch flag */
+	ORF_EC_DEGRADED		= (1 << 7),
 };
 
 struct obj_iod_array {
@@ -180,7 +182,8 @@ struct obj_iod_array {
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
-	((struct daos_shard_tgt)(orw_shard_tgts)	CRT_ARRAY)
+	((struct daos_shard_tgt)(orw_shard_tgts)	CRT_ARRAY) \
+	((uint32_t)		(orw_tgt_idx)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_RW	/* output fields */		 \
 	((int32_t)		(orw_ret)		CRT_VAR) \
