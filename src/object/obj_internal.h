@@ -50,13 +50,6 @@
  */
 #define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
 
-/* EC parity is stored in a private address range that is selected by setting
- * the most-significant bit of the offset (an unsigned long). This effectively
- * limits the addressing of user extents to the lower 63 bits of the offset
- * range. The client stack should enforce this limitation.
- */
-#define PARITY_INDICATOR (1UL << 63)
-
 /**
  * Bypass client I/O RPC, it means the client stack will complete the
  * fetch/update RPC immediately, nothing will be submitted to remote server.
@@ -74,7 +67,7 @@ struct dc_obj_shard {
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
-	uint32_t		do_target_idx;	/* target VOS index in node */
+	uint8_t			do_target_idx;	/* target VOS index in node */
 	uint32_t		do_target_rank;
 	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
@@ -151,6 +144,10 @@ struct obj_reasb_req {
 	 */
 	uint8_t				*tgt_bitmap;
 	struct obj_tgt_oiod		*tgt_oiods;
+	/* list of error targets */
+	uint32_t			*orr_err_list;
+	/* number of error targets */
+	uint32_t			 orr_nerrs;
 };
 
 static inline void
@@ -181,11 +178,6 @@ struct migrate_pool_tls {
 	/* Container/objects to be migrated will be attached to the tree */
 	daos_handle_t		mpt_root_hdl;
 	struct btr_root		mpt_root;
-
-	/* Indicates whether containers should be cleared of all contents
-	 * before any data is migrated to them (via destroy & recreate)
-	 */
-	bool			mpt_clear_conts;
 
 	/* Hash table to store the container uuids which have already been
 	 * deleted (used by reintegration)
@@ -221,6 +213,10 @@ struct migrate_pool_tls {
 	uint64_t		mpt_refcount;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
+	/* Indicates whether containers should be cleared of all contents
+	 * before any data is migrated to them (via destroy & recreate)
+	 */
+				mpt_clear_conts:1,
 				mpt_fini:1;
 };
 
@@ -269,6 +265,8 @@ struct shard_auxi_args {
 	uint16_t		 grp_idx;
 	/* only for EC, the start shard of the EC stripe */
 	uint32_t		 start_shard;
+	/* only for EC, the target idx [0, k + p) */
+	uint16_t		 ec_tgt_idx;
 };
 
 struct shard_rw_args {
@@ -400,6 +398,7 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
+bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
 
 static inline bool
 obj_retry_error(int err)

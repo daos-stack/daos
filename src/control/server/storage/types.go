@@ -61,6 +61,7 @@ type (
 		SocketID        uint32
 		PhysicalID      uint32
 		Capacity        uint64
+		UID             string
 	}
 
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
@@ -84,6 +85,17 @@ type (
 	}
 
 	ScmMountPoints []*ScmMountPoint
+
+	// ScmFirmwareUpdateStatus represents the status of a firmware update on the module.
+	ScmFirmwareUpdateStatus uint32
+
+	// ScmFirmwareInfo describes the firmware information of an SCM module.
+	ScmFirmwareInfo struct {
+		ActiveVersion     string
+		StagedVersion     string
+		ImageMaxSizeBytes uint32
+		UpdateStatus      ScmFirmwareUpdateStatus
+	}
 
 	// NvmeDeviceHealth represents a set of health statistics for a NVMe device.
 	NvmeDeviceHealth struct {
@@ -124,6 +136,17 @@ type (
 
 	// NvmeControllers is a type alias for []*NvmeController which implements fmt.Stringer.
 	NvmeControllers []*NvmeController
+)
+
+const (
+	// ScmUpdateStatusUnknown indicates that the firmware update status is unknown.
+	ScmUpdateStatusUnknown ScmFirmwareUpdateStatus = iota
+	// ScmUpdateStatusStaged indicates that a new firmware version has been staged.
+	ScmUpdateStatusStaged
+	// ScmUpdateStatusSuccess indicates that the firmware update was successfully applied.
+	ScmUpdateStatusSuccess
+	// ScmUpdateStatusFailed indicates that the firmware update failed.
+	ScmUpdateStatusFailed
 )
 
 func (sm *ScmModule) String() string {

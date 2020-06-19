@@ -154,6 +154,12 @@
 #helper_log_file: /tmp/daos_admin.log
 #
 #
+## Enable daos_firmware (privileged helper) logging.
+#
+## default: disabled (errors only to control plane log)
+#firmware_helper_log_file: /tmp/daos_firmware.log
+#
+#
 ## When per-server definitions exist, auto-allocation of resources is not
 ## performed. Without per-server definitions, node resources will
 ## automatically be assigned to servers based on NUMA ratings, there will
