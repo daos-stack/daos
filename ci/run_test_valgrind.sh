@@ -5,8 +5,7 @@
 set -ex
 
 # JENKINS-52781 tar function is breaking symlinks
-# rm -rf test_results
-# mkdir test_results
+
 # shellcheck disable=SC1091
 source ./.build_vars.sh
 rm -f "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
@@ -14,8 +13,8 @@ mkdir -p "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/"
 ln -s ../../../../../../../../src/control \
   "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
 DAOS_BASE=${SL_PREFIX%/install*}
-# rm -f dnt.*.memcheck.xml nlt-errors.json
-rm results-*-memcheck.xml nlt-errors.json
+ls
+rm -rf valgrind_memcheck_results || echo "marj>> doesn't exist? "
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
