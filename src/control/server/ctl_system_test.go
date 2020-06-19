@@ -271,6 +271,9 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			nilReq:    true,
 			expErrMsg: "nil request",
 		},
+		"empty membership": {
+			members: system.Members{},
+		},
 		"unfiltered rank results": {
 			members: system.Members{
 				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
