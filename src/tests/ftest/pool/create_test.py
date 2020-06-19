@@ -24,6 +24,7 @@ portions thereof marked with this legend must also reproduce the markings.
 import time
 
 from apricot import TestWithServers
+from bytes_utils import Bytes
 from server_utils import ServerFailed
 
 
@@ -93,7 +94,15 @@ class PoolCreateTests(TestWithServers):
                     self.fail(
                         "Unable to assign a max pool NVMe size; NVMe not "
                         "configured!")
-                pool.nvme_size.update(str(sizes[1]), "nvme_size")
+                # The minimum NVMe size is 8 GiB.
+                min_nvme_size = Bytes(8 * (2 ** 30 / 10 ** 9), "G")
+                if sizes[1] < min_nvme_size:
+                    self.log.warning(
+                        "Calculated NVMe size %s is too small.  Using %s "
+                        "minimum NVMe size.", str(sizes[1]), str(min_nvme_size))
+                    pool.nvme_size.update(str(min_nvme_size), "nvme_size")
+                else:
+                    pool.nvme_size.update(str(sizes[1]), "nvme_size")
 
     def check_pool_creation(self, max_duration):
         """Check the duration of each pool creation meets the requirement.
@@ -159,10 +168,10 @@ class PoolCreateTests(TestWithServers):
 
         :avocado: tags=all,pr,hw,large,pool,create_performance
         """
-        # Create some number of pools each using a equal amount of 50% of the
-        # available capacity, e.g. 0.5% for 100 pools.
+        # Create some number of pools each using a equal amount of 60% of the
+        # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
-        ratio = 0.5 / quantity
+        ratio = 0.6 / quantity
         self.define_pools(quantity, ratio, ratio)
         self.check_pool_creation(3)
 
