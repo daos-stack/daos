@@ -57,8 +57,9 @@ extern struct dss_module_key vos_module_key;
 #define VOS_POOL_HHASH_BITS 10 /* Upto 1024 pools */
 #define VOS_CONT_HHASH_BITS 20 /* Upto 1048576 containers */
 
-#define VOS_BLK_SHIFT		12	/* 4k */
-#define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
+extern unsigned int VOS_BLK_SHIFT;
+extern unsigned int VOS_BLK_SZ;
+
 #define VOS_BLOB_HDR_BLKS	1	/* block */
 
 /** hash seed for murmur hash */

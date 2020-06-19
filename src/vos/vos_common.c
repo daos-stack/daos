@@ -34,6 +34,7 @@
 #include <vos_internal.h>
 #include <daos/lru.h>
 #include <daos/btree_class.h>
+#include <math.h>
 
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -202,10 +203,29 @@ struct dss_module_key vos_module_key = {
 	.dmk_fini = vos_tls_fini,
 };
 
+unsigned int VOS_BLK_SZ;
+unsigned int VOS_BLK_SHIFT;
+
 static int
 vos_mod_init(void)
 {
-	int	 rc = 0;
+	int		rc = 0;
+	char		*media_limit;
+	unsigned	user_limit = 4096;
+
+
+	media_limit = getenv("DAOS_MEDIA_THRESHOLD");
+	if (media_limit) {
+		/** Check if user media selection limit is legal power of 2 */
+		user_limit =
+		((atoi(media_limit) & ((atoi(media_limit)) - 1)) == 0) ?
+			atoi(media_limit) : 4096;
+	}
+
+	VOS_BLK_SZ    = user_limit;
+	VOS_BLK_SHIFT = log10(VOS_BLK_SZ)/log10(2);
+	D_PRINT("Using VOS Media Selection threshold: %u, 2^%u\n",
+		VOS_BLK_SZ, VOS_BLK_SHIFT);
 
 	rc = vos_cont_tab_register();
 	if (rc) {
@@ -351,6 +371,7 @@ vos_init(void)
 		D_MUTEX_UNLOCK(&mutex);
 		return rc;
 	}
+
 
 #if VOS_STANDALONE
 	standalone_tls = vos_tls_init(NULL, NULL);
