@@ -121,13 +121,13 @@ func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 func getDeviceClassStub(netdev string) (uint32, error) {
 	switch netdev {
 	case "eth0":
-		return 1, nil
+		return netdetect.Ether, nil
 	case "eth1":
-		return 1, nil
+		return netdetect.Ether, nil
 	case "ib0":
-		return 32, nil
+		return netdetect.Infiniband, nil
 	case "ib1":
-		return 32, nil
+		return netdetect.Infiniband, nil
 	default:
 		return 0, nil
 	}
@@ -527,11 +527,6 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 }
 
 func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
-	const (
-		ETHER      = 1
-		INFINIBAND = 32
-	)
-
 	configA := func() *ioserver.Config {
 		return ioserver.NewConfig().
 			WithLogFile("a").
@@ -552,45 +547,45 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 		configB *ioserver.Config
 		expErr  error
 	}{
-		"successful validation with matching INFINIBAND": {
+		"successful validation with matching Infiniband": {
 			configA: configA().
 				WithFabricInterface("ib1"),
 			configB: configB().
 				WithFabricInterface("ib0"),
 		},
-		"successful validation with mathching ETHERNET": {
+		"successful validation with mathching Ethernet": {
 			configA: configA().
 				WithFabricInterface("eth0"),
 			configB: configB().
 				WithFabricInterface("eth1"),
 		},
-		"mismatching net dev class with primary server as ib0 / INFINIBAND": {
+		"mismatching net dev class with primary server as ib0 / Infiniband": {
 			configA: configA().
 				WithFabricInterface("ib0"),
 			configB: configB().
 				WithFabricInterface("eth0"),
-			expErr: FaultConfigInvalidNetDevClass(1, INFINIBAND, ETHER, "eth0"),
+			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Infiniband, netdetect.Ether, "eth0"),
 		},
-		"mismatching net dev class with primary server as eth0 / ETHERNET": {
+		"mismatching net dev class with primary server as eth0 / Ethernet": {
 			configA: configA().
 				WithFabricInterface("eth0"),
 			configB: configB().
 				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, ETHER, INFINIBAND, "ib0"),
+			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Ether, netdetect.Infiniband, "ib0"),
 		},
-		"mismatching net dev class with primary server as ib1 / INFINIBAND": {
+		"mismatching net dev class with primary server as ib1 / Infiniband": {
 			configA: configA().
 				WithFabricInterface("ib1"),
 			configB: configB().
 				WithFabricInterface("eth1"),
-			expErr: FaultConfigInvalidNetDevClass(1, INFINIBAND, ETHER, "eth1"),
+			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Infiniband, netdetect.Ether, "eth1"),
 		},
-		"mismatching net dev class with primary server as eth1 / ETHERNET": {
+		"mismatching net dev class with primary server as eth1 / Ethernet": {
 			configA: configA().
 				WithFabricInterface("eth1"),
 			configB: configB().
 				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, ETHER, INFINIBAND, "ib0"),
+			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Ether, netdetect.Infiniband, "ib0"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

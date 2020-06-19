@@ -139,6 +139,22 @@ const (
 	libFabricMinorVersion = 7
 	allHFIUsed            = -1
 	badAddress            = C.getHFIUnitError
+	// ARP protocol hardware identifiers: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
+	Netrom     = 0
+	Ether      = 1
+	Eether     = 2
+	Ax25       = 3
+	Pronet     = 4
+	Chaos      = 5
+	IEEE802    = 6
+	Arcnet     = 7
+	Appletlk   = 8
+	Dlci       = 15
+	Atm        = 19
+	Metricom   = 23
+	IEEE1394   = 24
+	Eui64      = 27
+	Infiniband = 32
 )
 
 // DeviceAffinity describes the essential details of a device and its NUMA affinity
@@ -1199,11 +1215,11 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 				case allHFIUsed:
 					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
 						deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
-						scanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
+						devScanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
 						if err != nil {
 							continue
 						}
-						ScanResults = append(ScanResults, *scanResults)
+						ScanResults = append(ScanResults, *devScanResults)
 						devCount++
 					}
 					continue
@@ -1218,11 +1234,11 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 			}
 		}
 
-		scanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
+		devScanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
 		if err != nil {
 			continue
 		}
-		ScanResults = append(ScanResults, *scanResults)
+		ScanResults = append(ScanResults, *devScanResults)
 		devCount++
 	}
 
@@ -1245,39 +1261,38 @@ func GetDeviceClass(netdev string) (uint32, error) {
 	return uint32(res), err
 }
 
-// Convert a network device class ID to a string identifier according to the table
-// found here: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
+// Convert a network device class ID to a string identifier
 func DevClassName(class uint32) string {
 	switch class {
-	case 0:
+	case Netrom:
 		return "NETROM"
-	case 1:
+	case Ether:
 		return "ETHER"
-	case 2:
+	case Eether:
 		return "EETHER"
-	case 3:
+	case Ax25:
 		return "AX25"
-	case 4:
+	case Pronet:
 		return "PRONET"
-	case 5:
+	case Chaos:
 		return "CHAOS"
-	case 6:
+	case IEEE802:
 		return "IEEE802"
-	case 7:
+	case Arcnet:
 		return "ARCNET"
-	case 8:
+	case Appletlk:
 		return "APPLETLK"
-	case 15:
+	case Dlci:
 		return "DLCI"
-	case 19:
+	case Atm:
 		return "ATM"
-	case 23:
+	case Metricom:
 		return "METRICOM"
-	case 24:
+	case IEEE1394:
 		return "IEEE1394"
-	case 27:
+	case Eui64:
 		return "EUI64"
-	case 32:
+	case Infiniband:
 		return "INFINIBAND"
 	default:
 		return "UNKNOWN"
