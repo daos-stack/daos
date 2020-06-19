@@ -38,6 +38,7 @@ from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
 from SCons.Variables import ListVariable
 from SCons.Variables import BoolVariable
+from SCons.Subst import Literal
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import SetOption
@@ -596,6 +597,8 @@ class PreReqComponent():
         if config_file is None:
             config_file = GetOption('build_config')
 
+        self.__env["LDFLAGS"] = "-Wl,-rpath=XORIGIN"
+        self.__env["ORIGIN"] = Literal(r"\$$ORIGIN")
         RUNNER.initialize(self.__env)
 
         self._setup_compiler(warning_level)
@@ -1156,6 +1159,7 @@ class _Component():
         extra_lib_path -- Subdirectories to add to dependent component path
         extra_include_path -- Subdirectories to add to dependent component path
         out_of_src_build -- Build from a different directory if set to True
+        patch_rpath -- Add appropriate relative rpaths to binaries
     """
 
     def __init__(self,
@@ -1170,6 +1174,7 @@ class _Component():
         self.use_installed = use_installed
         self.build_path = None
         self.prebuilt_path = None
+        self.patch_rpath = kw.get("patch_rpath", [])
         self.src_path = None
         self.prefix = None
         self.component_prefix = None
@@ -1179,6 +1184,8 @@ class _Component():
         self.libs_cc = kw.get("libs_cc", None)
         self.required_libs = kw.get("required_libs", [])
         self.required_progs = kw.get("required_progs", [])
+        if self.patch_rpath:
+            self.required_progs.append("patchelf")
         self.defines = kw.get("defines", [])
         self.headers = kw.get("headers", [])
         self.requires = kw.get("requires", [])
@@ -1261,44 +1268,6 @@ class _Component():
         patches = self.resolve_patches()
         self.retriever.get(self.src_path, commit_sha=commit_sha,
                            patches=patches, branch=branch)
-
-    def calculate_crc(self):
-        """Calculate a CRC on the sources to detect changes"""
-        new_crc = ''
-        if not self.src_path:
-            return new_crc
-        for (root, _, files) in os.walk(self.src_path):
-            for fname in files:
-                (_, ext) = os.path.splitext(fname)
-
-                # not fool proof but may be good enough
-
-                if ext in ['.c',
-                           '.h',
-                           '.cpp',
-                           '.cc',
-                           '.hpp',
-                           '.ac',
-                           '.in',
-                           '.py']:
-                    with open(os.path.join(root, fname), 'rb') as src:
-                        src_read = src.read()
-                        md5 = hashlib.md5(src_read)
-                        new_crc += md5.hexdigest()
-        return new_crc
-
-    def has_changes(self):
-        """Check the sources for changes since the last build"""
-
-        old_crc = ''
-        try:
-            with open(self.crc_file, 'r') as crcfile:
-                old_crc = crcfile.read()
-        except IOError:
-            pass
-        if old_crc == '':
-            return True
-        return False
 
     def has_missing_system_deps(self, env):
         """Check for required system libs"""
@@ -1546,9 +1515,6 @@ class _Component():
         if self.name in self.prereqs.installed:
             has_changes = False
 
-        if self.src_exists():
-            self.get()
-            has_changes = self.has_changes()
         return has_changes
 
     def _check_prereqs_build_deps(self):
@@ -1559,14 +1525,36 @@ class _Component():
             else:
                 raise BuildRequired(self.name)
 
-    def _update_crc_file(self):
-        """update the crc"""
-        new_crc = self.calculate_crc()
-        if self.__dry_run:
-            print('Would create a new crc file % s' % self.crc_file)
-        else:
-            with open(self.crc_file, 'w') as crcfile:
-                crcfile.write(new_crc)
+    def patch_rpaths(self):
+        """Run patchelf binary to add relative rpaths"""
+        rpath = ["$$ORIGIN"]
+        comp_path = self.component_prefix
+        if not comp_path or comp_path.startswith("/usr"):
+            return
+        if not os.path.exists(comp_path):
+            return
+        for prereq in self.requires:
+            rootpath = os.path.join(comp_path, '..', prereq)
+            if not os.path.exists(rootpath):
+                continue
+            for libdir in ['lib64', 'lib']:
+                path = os.path.join(rootpath, libdir)
+                if not os.path.exists(path):
+                    continue
+                rpath.append("$$ORIGIN/../../%s/%s" % (prereq, libdir))
+                break
+
+        for folder in self.patch_rpath:
+            path = os.path.join(comp_path, folder)
+            files = os.listdir(path)
+            for lib in files:
+                if not lib.endswith(".so"):
+                    continue
+                full_lib = os.path.join(path, lib)
+                cmd = "patchelf --set-rpath '%s' %s" % (":".join(rpath),
+                                                        full_lib)
+                if not RUNNER.run_commands([cmd]):
+                    print("Skipped patching %s" % full_lib)
 
     def build(self, env, needed_libs):
         """Build the component, if necessary
@@ -1591,7 +1579,7 @@ class _Component():
         # to be built first time scons is invoked.
         has_changes = self._has_changes()
 
-        if changes or has_changes or self.has_missing_targets(envcopy):
+        if has_changes or self.has_missing_targets(envcopy):
 
             self._check_prereqs_build_deps()
 
@@ -1619,9 +1607,10 @@ class _Component():
         if self.requires:
             self.prereqs.require(envcopy, *self.requires, needed_libs=None)
         self.set_environment(envcopy, self.libs)
+        if changes:
+            self.patch_rpaths()
         if self.has_missing_targets(envcopy) and not self.__dry_run:
             raise MissingTargets(self.name, None)
-        self._update_crc_file()
         return changes
 
 __all__ = ["GitRepoRetriever", "WebRetriever",

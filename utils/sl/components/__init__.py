@@ -129,15 +129,16 @@ def define_mercury(reqs):
                                   '--enable-psm2' +
                                   check(reqs, 'psm2',
                                         "=$PSM2_PREFIX "
-                                        'LDFLAGS="-Wl,--enable-new-dtags '
-                                        '-Wl,-rpath=$PSM2_PREFIX/lib64" ', ''),
+                                        'LDFLAGS="-Wl,--enable-new-dtags" ',
+                                        ''),
                                   ''),
                           'make $JOBS_OPT',
                           'make install'],
                 libs=['fabric'],
                 requires=exclude(reqs, 'psm2', ['psm2'], []),
                 headers=['rdma/fabric.h'],
-                package='libfabric-devel' if inst(reqs, 'ofi') else None)
+                package='libfabric-devel' if inst(reqs, 'ofi') else None,
+                patch_rpath=['lib'])
 
     reqs.define('openpa',
                 retriever=GitRepoRetriever(
@@ -171,8 +172,7 @@ def define_mercury(reqs):
                           '-DNA_USE_OFI=ON '
                           '-DBUILD_DOCUMENTATION=OFF '
                           '-DBUILD_SHARED_LIBS=ON ../mercury '
-                          '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib '
-                          '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ' +
+                          '-DMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ' +
                           check(reqs, 'ofi',
                                 '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
                                 '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
@@ -181,7 +181,8 @@ def define_mercury(reqs):
                 requires=[atomic, 'boost', 'ofi'] + libs,
                 extra_include_path=[os.path.join('include', 'na')],
                 out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None)
+                package='mercury-devel' if inst(reqs, 'mercury') else None,
+                patch_rpath=['lib'])
 
 
 
@@ -300,7 +301,7 @@ def define_components(reqs):
                           'cp dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
-                libs=['rte_bus_pci'])
+                libs=['rte_bus_pci'], patch_rpath=['lib'])
 
     url = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
         'v1.3.0/protobuf-c-1.3.0.tar.gz'
