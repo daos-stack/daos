@@ -123,7 +123,7 @@ struct crt_grp_priv {
 	/* PSR rank in attached group */
 	d_rank_t		 gp_psr_rank;
 	/* PSR rank list in attached group */
-	d_rank_list_t		 *gp_psr_rank_list;
+	d_rank_list_t		 gp_psr_rank_list;
 	/* index into above psr list */
 	uint32_t		 gp_psr_rank_index;
 	/* PSR phy addr address in attached group */
@@ -394,7 +394,7 @@ crt_grp_psr_list_set(struct crt_grp_priv *grp_priv,
 {
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 //	TBD D_FREE(grp_priv->gp_psr_phy_addr);
-	grp_priv->gp_psr_rank_list = psr_rank_list;
+	grp_priv->gp_psr_rank_list = *psr_rank_list;
 	grp_priv->gp_psr_rank_index = 0;
 //	D_STRNDUP(grp_priv->gp_psr_phy_addr, psr_addr,
 //		CRT_ADDR_STR_MAX_LEN);
