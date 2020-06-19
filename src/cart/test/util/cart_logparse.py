@@ -221,7 +221,7 @@ class LogLine():
         """Return a specific field from the line"""
         return self._fields[idx]
 
-    def _is_type(self, text, trace=True):
+    def _is_type(self, text, trace=True, base=2):
         """Checks for text in a log message
 
         Returns True if the line starts with the text provided
@@ -231,7 +231,7 @@ class LogLine():
 
         # Check that the contents of two arrays are equal, using text as is and
         # selecting only the correct entries of the fields array.
-        return text == self._fields[2:2+len(text)]
+        return text == self._fields[base:base+len(text)]
 
     def is_new(self):
         """Returns True if line is new descriptor"""
@@ -270,10 +270,10 @@ class LogLine():
     def is_callback(self):
         """Returns true if line is RPC callback"""
 
-        # TODO: This is broken for now but the RPCtrace has not been ported yet
-        # so there are no current users of it.
+        if self.function != 'crt_hg_req_send_cb':
+            return False
 
-        return self._is_type(['Invoking', 'RPC', 'callback'])
+        return self._is_type(['Invoking', 'RPC', 'callback'], base=5)
 
     def is_link(self):
         """Returns True if line is Link descriptor"""
