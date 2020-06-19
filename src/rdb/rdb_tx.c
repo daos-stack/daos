@@ -181,10 +181,46 @@ struct rdb_tx_op {
 	struct rdb_kvs_attr    *dto_attr;
 };
 
+struct rdb_tx_hdr {
+	uint32_t	critical;	/* use VOS_OF_CRIT for all ops in TX? */
+};
+
 #define DF_TX_OP	"%s("DF_IOV","DF_IOV","DF_IOV",%p)"
 #define DP_TX_OP(op)	rdb_tx_opc_str((op)->dto_opc),			\
 			DP_IOV(&(op)->dto_kvs), DP_IOV(&(op)->dto_key),	\
 			DP_IOV(&(op)->dto_value), op->dto_attr
+
+/* If buf is NULL, then just calculate and return the length required. */
+static size_t
+rdb_tx_hdr_encode(struct rdb_tx_hdr *hdr, void *buf)
+{
+	void	*p = buf;
+
+	if (buf != NULL)
+		*(uint32_t *)p = hdr->critical;
+
+	p += sizeof(uint32_t);
+
+	return p - buf;
+}
+
+static ssize_t
+rdb_tx_hdr_decode(const void *buf, size_t len, struct rdb_tx_hdr *hdr)
+{
+	struct rdb_tx_hdr	out = {};
+	const void	       *p = buf;
+
+	/* critical */
+	if (p + sizeof(uint32_t) > buf + len) {
+		D_ERROR("truncated hdr: %zu < %zu\n", len, sizeof(uint32_t));
+		return -DER_IO;
+	}
+	out.critical = *(const uint32_t *)p;
+	p += sizeof(uint32_t);
+
+	*hdr = out;
+	return p - buf;
+}
 
 /* If buf is NULL, then just calculate and return the length required. */
 static size_t
@@ -274,8 +310,12 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 static int
 rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 {
-	size_t	len;
-	int	rc;
+	struct rdb_tx_hdr	hdr;
+	size_t			op_len;
+	size_t			len;
+	bool			opc_is_critical;
+	const size_t		RDB_TX_CRITICAL_OPS_LIMIT = 8;
+	int			rc;
 
 	D_ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 &&
 		   tx->dt_entry_len == 0) ||
@@ -293,8 +333,15 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 	if (rc != 0)
 		return rc;
 
-	/* Calculate and check the additional bytes required. */
-	len = rdb_tx_op_encode(op, NULL);
+	/* Calculate and check the additional bytes required (no encoding).
+	 * Before first op: insert one uint32_t (boolean) "critical"
+	 * interpreted in the raft log_offer execution flow.
+	 */
+	op_len = rdb_tx_op_encode(op, NULL);
+	len = op_len;
+	if (tx->dt_entry_len == 0)
+		len += rdb_tx_hdr_encode(&hdr, NULL);
+
 	if (len > tx->dt_entry_cap - tx->dt_entry_len) {
 		size_t	new_size = tx->dt_entry_cap;
 		void   *new_buf;
@@ -317,9 +364,25 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 		tx->dt_entry_cap = new_size;
 	}
 
+	/* TX is critical if it is reasonably-sized, and any op is critical */
+	tx->dt_num_ops++;
+	opc_is_critical = ((op->dto_opc == RDB_TX_DESTROY_ROOT) ||
+			   (op->dto_opc == RDB_TX_DESTROY) ||
+			   (op->dto_opc == RDB_TX_DELETE));
+	if (tx->dt_entry_len == 0) {
+		hdr.critical = opc_is_critical ? 1 : 0;
+		tx->dt_entry_len += rdb_tx_hdr_encode(&hdr, tx->dt_entry);
+	} else if (tx->dt_num_ops > RDB_TX_CRITICAL_OPS_LIMIT) {
+		hdr.critical = 0;
+		rdb_tx_hdr_encode(&hdr, tx->dt_entry);
+	} else if (opc_is_critical) {
+		hdr.critical = 1;
+		rdb_tx_hdr_encode(&hdr, tx->dt_entry);
+	}
+
 	/* Now do the actual encoding. */
 	rdb_tx_op_encode(op, tx->dt_entry + tx->dt_entry_len);
-	tx->dt_entry_len += len;
+	tx->dt_entry_len += op_len;
 	return 0;
 }
 
@@ -481,7 +544,7 @@ rdb_oid_class(enum rdb_kvs_class class, rdb_oid_t *oid_class)
 
 static int
 rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
-		    d_iov_t *key, enum rdb_kvs_class class)
+		    d_iov_t *key, enum rdb_kvs_class class, bool crit)
 {
 	d_iov_t	value;
 	rdb_oid_t	oid_class;
@@ -530,7 +593,7 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	oid_number += 1;
 
 	/* Update the next object number. */
-	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, 1 /* n */,
+	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, 1 /* n */,
 			   &rdb_lc_oid_next, &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update next object number"DF_X64
@@ -540,7 +603,8 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 
 	/* Update the key in the parent object. */
 	d_iov_set(&value, &oid, sizeof(oid));
-	rc = rdb_lc_update(db->d_lc, index, parent, 1 /* n */, key, &value);
+	rc = rdb_lc_update(db->d_lc, index, parent, crit, 1 /* n */,
+			   key, &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update parent KVS: %d\n", DP_DB(db),
 			rc);
@@ -589,11 +653,12 @@ rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent,
 
 static int
 rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs,
-		    d_iov_t *key, d_iov_t *value)
+		    d_iov_t *key, d_iov_t *value, bool crit)
 {
 	int rc;
 
-	rc = rdb_lc_update(db->d_lc, index, kvs, 1 /* n */, key, value);
+	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */,
+			   key, value);
 	if (rc != 0)
 		D_ERROR(DF_DB": failed to update KVS "DF_X64": %d\n", DP_DB(db),
 			kvs, rc);
@@ -614,7 +679,7 @@ rdb_tx_apply_delete(struct rdb *db, uint64_t index, rdb_oid_t kvs,
 }
 
 static int
-rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op)
+rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit)
 {
 	struct rdb_kvs *kvs = NULL;
 	rdb_path_t	victim_path;
@@ -651,11 +716,12 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op)
 	switch (op->dto_opc) {
 	case RDB_TX_CREATE_ROOT:
 		rc = rdb_tx_apply_create(db, index, RDB_LC_ATTRS, &rdb_lc_root,
-					 op->dto_attr->dsa_class);
+					 op->dto_attr->dsa_class, crit);
 		break;
 	case RDB_TX_CREATE:
 		rc = rdb_tx_apply_create(db, index, kvs->de_object,
-					 &op->dto_key, op->dto_attr->dsa_class);
+					 &op->dto_key, op->dto_attr->dsa_class,
+					 crit);
 		break;
 	case RDB_TX_DESTROY_ROOT:
 		rc = rdb_tx_apply_destroy(db, index, RDB_LC_ATTRS,
@@ -667,7 +733,7 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op)
 		break;
 	case RDB_TX_UPDATE:
 		rc = rdb_tx_apply_update(db, index, kvs->de_object,
-					 &op->dto_key, &op->dto_value);
+					 &op->dto_key, &op->dto_value, crit);
 		break;
 	case RDB_TX_DELETE:
 		rc = rdb_tx_apply_delete(db, index, kvs->de_object,
@@ -726,20 +792,36 @@ rdb_tx_deterministic_error(int error)
 /*
  * Apply an entry and return the error only if a nondeterministic error
  * happens. This function tries to discard index if an error occurs.
+ * Interpret header to know if ops in the TX are deemed "critical".
  */
 int
 rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-	     void *result)
+	     void *result, bool *critp)
 {
-	const void     *p = buf;
-	int		rc = 0;
+	const void	       *p = buf;
+	ssize_t			n;
+	bool			crit = true;
+	int			rc = 0;
 
-	D_DEBUG(DB_TRACE, DF_DB": applying "DF_U64": buf=%p len="DF_U64"\n",
-		DP_DB(db), index, buf, len);
+	D_DEBUG(DB_TRACE, DF_DB": applying index "DF_U64": buf=%p len="DF_U64
+		" crit=%d\n", DP_DB(db), index, buf, len, crit);
+
+	if (buf) {
+		struct rdb_tx_hdr	hdr;
+
+		n = rdb_tx_hdr_decode(p, sizeof(struct rdb_tx_hdr), &hdr);
+		if (n < 0) {
+			D_ERROR(DF_DB": invalid header: buf=%p, len="DF_U64"\n",
+				DP_DB(db), buf, sizeof(struct rdb_tx_hdr));
+			rc = n;
+			goto err_checks;
+		}
+		p += n;
+		crit = hdr.critical;
+	}
 
 	while (p < buf + len) {
 		struct rdb_tx_op	op;
-		ssize_t			n;
 
 		n = rdb_tx_op_decode(p, buf + len - p, &op);
 		if (n < 0) {
@@ -748,7 +830,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 			rc = n;
 			break;
 		}
-		rc = rdb_tx_apply_op(db, index, &op);
+		rc = rdb_tx_apply_op(db, index, &op, crit);
 		if (rc != 0) {
 			if (!rdb_tx_deterministic_error(rc))
 				D_ERROR(DF_DB": failed to apply entry "DF_U64
@@ -756,9 +838,11 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 					index, op.dto_opc, p - buf, n, rc);
 			break;
 		}
+
 		p += n;
 	}
 
+err_checks:
 	/*
 	 * If an error occurs, empty the rdb_kvs cache (to evict any rdb_kvs
 	 * objects corresponding to KVSs created by this TX) and discard all
@@ -791,6 +875,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	if (result != NULL)
 		*(int *)result = rc;
 
+	*critp = crit;
 	return 0;
 }
 
