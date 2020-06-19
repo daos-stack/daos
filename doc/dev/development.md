@@ -24,31 +24,25 @@ components individually by replacing --build-deps=yes with
 configuration from before. For automated environment setup, source
 utils/sl/utils/setup_local.sh.
 
-```bash
-ARGOBOTS=${daos_prefix_path}/prereq/argobots
-CART=${daos_prefix_path}/prereq/cart
-FIO=${daos_prefix_path}/prereq/fio
-FUSE=${daos_prefix_path}/prereq/fuse
-ISAL=${daos_prefix_path}/prereq/isal
-MERCURY=${daos_prefix_path}/prereq/mercury
-OFI=${daos_prefix_path}/prereq/ofi
-OPENPA=${daos_prefix_path}/prereq/openpa
-PMDK=${daos_prefix_path}/prereq/pmdk
-PROTOBUFC=${daos_prefix_path}/prereq/protobufc
-SPDK=${daos_prefix_path}/prereq/spdk
+The install path should be relocatable with the exception that daos_admin
+will not be able to find the new location of daos and dependencies. All other
+libraries and binaries should work without any change due to relative
+paths.  Editing the .build-vars.sh file to replace the old with the new can
+restore the capability of setup_local.sh to automate path setup.
 
+To run daos_server, either the rpath in daos_admin needs to be patched to
+the new installation location of spdk and isal or LD_LIBRARY_PATH needs to
+be set.  This can be done using SL_SPDK_PREFIX and SL_ISAL_PREFIX set when
+sourcing setup_local.sh.
 
-PATH=$CART/bin/:${daos_prefix_path}/bin/:$PATH
-```
-
-With this approach, DAOS would get built using the prebuilt dependencies in
+With this approach, DAOS gets built using the prebuilt dependencies in
 ${daos_prefix_path}/prereq, and required options are saved for future compilations.
 So, after the first time, during development, only "scons --config=force" and
 "scons --config=force install" would suffice for compiling changes to DAOS
 source code.
 
 If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on
-the scons command line.   This option is also saved for future com pilations.
+the scons command line.   This option is also saved for future compilations.
 
 Additionally, users can specify BUILD_TYPE=[dev|release|debug] and scons will
 save the intermediate build for the various BUILD_TYPE, COMPILER, and TARGET_TYPE
