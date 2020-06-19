@@ -8,7 +8,7 @@ set -uex
 # shellcheck disable=SC1091
 source ./.build_vars.sh
 
-rm -rf run_test_valgrind.sh vm_test_valgrind
+rm -rf run_test_valgrind.sh
 DAOS_BASE="${SL_PREFIX%/install*}"
 NODE="${NODELIST%%,*}"
 

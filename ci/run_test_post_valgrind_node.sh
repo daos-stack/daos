@@ -4,8 +4,6 @@ set -uex
 
 cd "$DAOS_BASE"
 mkdir run_test_valgrind.sh
-mkdir vm_test_valgrind
-mv nlt-errors.json vm_test_valgrind/ || echo "not nlt-errors.json?"
 if ls /tmp/daos*.log > /dev/null; then
   mv /tmp/daos*.log run_test.sh/
 fi
