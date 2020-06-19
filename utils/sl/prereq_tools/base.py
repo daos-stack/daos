@@ -1528,11 +1528,19 @@ class _Component():
     def patch_rpaths(self):
         """Run patchelf binary to add relative rpaths"""
         rpath = ["$$ORIGIN"]
+        norigin = []
         comp_path = self.component_prefix
         if not comp_path or comp_path.startswith("/usr"):
             return
         if not os.path.exists(comp_path):
             return
+
+        for libdir in ['lib64', 'lib']:
+            path = os.path.join(comp_path, libdir)
+            if os.path.exists(path):
+                norigin.append(os.path.normpath(path))
+                break
+
         for prereq in self.requires:
             rootpath = os.path.join(comp_path, '..', prereq)
             if not os.path.exists(rootpath):
@@ -1542,8 +1550,10 @@ class _Component():
                 if not os.path.exists(path):
                     continue
                 rpath.append("$$ORIGIN/../../%s/%s" % (prereq, libdir))
+                norigin.append(os.path.normpath(path))
                 break
 
+        rpath += norigin
         for folder in self.patch_rpath:
             path = os.path.join(comp_path, folder)
             files = os.listdir(path)
