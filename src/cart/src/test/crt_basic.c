@@ -40,7 +40,7 @@
  */
 #include <cart/api.h>
 #include <cart/iv.h>
-#include <gurt/errno.h>
+#include <daos_errno.h>
 #include <cart/types.h>
 
 int main(void)

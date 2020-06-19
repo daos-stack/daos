@@ -44,9 +44,9 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
+#include <daos_errno.h>
 
 #include <gurt/types.h>
-#include <gurt/errno.h>
 #include <gurt/debug.h>
 #include <gurt/fault_inject.h>
 

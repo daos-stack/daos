@@ -24,7 +24,7 @@
 /**
  * This file is part of GURT.
  */
-#include "gurt/errno.h"
+#include <daos_errno.h>
 #include "gurt/debug.h"
 #include "gurt/list.h"
 #include "gurt/common.h"

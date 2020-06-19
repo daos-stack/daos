@@ -9,7 +9,7 @@ HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
            'daos_cont.h']
 HEADERS_SRV = ['vos.h', 'vos_types.h']
 HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
-                'heap.h', 'errno.h', 'fault_inject.h', 'debug_setup.h',
+                'heap.h', 'fault_inject.h', 'debug_setup.h',
                 'types.h', 'atomic.h']
 
 
@@ -36,7 +36,6 @@ def scons():
     for header in HEADERS_GURT:
         env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
                     'include/gurt/%s' % header)
-                    #os.path.join('include', 'gurt', header))
 
     #SConscript('gurt/SConscript')
     SConscript('cart/SConscript')

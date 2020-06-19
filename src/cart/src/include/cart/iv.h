@@ -51,7 +51,7 @@
 #include <uuid/uuid.h>
 
 #include <cart/types.h>
-#include <gurt/errno.h>
+#include <daos_errno.h>
 
 #if defined(__cplusplus)
 extern "C" {
