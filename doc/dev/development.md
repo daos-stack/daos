@@ -33,7 +33,14 @@ restore the capability of setup_local.sh to automate path setup.
 To run daos_server, either the rpath in daos_admin needs to be patched to
 the new installation location of spdk and isal or LD_LIBRARY_PATH needs to
 be set.  This can be done using SL_SPDK_PREFIX and SL_ISAL_PREFIX set when
-sourcing setup_local.sh.
+sourcing setup_local.sh.   This can also be done with the following commands
+
+```
+source utils/sl/setup_local.sh
+sudo -E utils/setup_daos_admin.sh [path to new location of daos]
+```
+
+This script is intended only for developer setup of daos_admin.
 
 With this approach, DAOS gets built using the prebuilt dependencies in
 ${daos_prefix_path}/prereq, and required options are saved for future compilations.
