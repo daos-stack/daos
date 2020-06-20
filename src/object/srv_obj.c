@@ -143,7 +143,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
 
-	D_DEBUG(DB_TRACE, "rpc %p opc %d send reply, pmv %d, status %d.\n",
+	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, status %d.\n",
 		rpc, opc_get(rpc->cr_opc), map_version, status);
 
 	rc = crt_reply_send(rpc);
@@ -1135,7 +1135,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		return rc;
 	}
 	dkey = (daos_key_t *)&orw->orw_dkey;
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_U64".\n",
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
 		tag, orw->orw_epoch);
@@ -1501,7 +1501,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		orw->orw_dkey_hash = obj_dkey2hash(dkey);
 	}
 
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
 		DF_U64", pmv %u/%u dti "DF_DTI".\n",
 		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(dkey),
@@ -1647,7 +1647,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
 		DF_U64", pmv %u/%u dti "DF_DTI".\n",
 		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(&orw->orw_dkey),
@@ -2038,6 +2038,12 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 			   oei->oei_co_hdl, oei->oei_co_uuid, opc, &ioc);
 	if (rc)
 		D_GOTO(out, rc);
+
+	D_DEBUG(DB_IO, "rpc %p opc %d oid "DF_UOID" tag/xs %d/%d pmv %u/%u\n",
+		rpc, opc, DP_UOID(oei->oei_oid),
+		dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id,
+		oei->oei_map_ver, ioc.ioc_map_ver);
 
 	anchors.ia_dkey = oei->oei_dkey_anchor;
 	anchors.ia_akey = oei->oei_akey_anchor;
