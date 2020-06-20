@@ -27,21 +27,17 @@ def scons():
     libs += ['vos', 'bio', 'pthread', 'abt', 'daos_tests']
 
     dts_common = denv.Object('dts_common.c')
-    penv = denv.Clone()
-    # Indirect requirement but needed because spdk has no RPATH on its
-    # internal libraries.
-    prereqs.require(penv, 'spdk')
-    daos_perf = daos_build.program(penv, 'daos_perf',
+    daos_perf = daos_build.program(denv, 'daos_perf',
                                    ['daos_perf.c', dts_common],
                                    LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_perf)
 
-    daos_racer = daos_build.program(penv, 'daos_racer',
+    daos_racer = daos_build.program(denv, 'daos_racer',
                                     ['daos_racer.c', dts_common],
                                     LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_racer)
 
-    obj_ctl = daos_build.program(penv, 'obj_ctl', ['obj_ctl.c', dts_common],
+    obj_ctl = daos_build.program(denv, 'obj_ctl', ['obj_ctl.c', dts_common],
                                  LIBS=libs)
     denv.Install('$PREFIX/bin/', obj_ctl)
 

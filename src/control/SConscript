@@ -209,7 +209,12 @@ def scons():
 
     serverbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_server",
                                "daos_server")
-    adminbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_admin",
+
+    #Admin binary is generally relocated so we need to add absolute rpaths
+    aenv = senv.Clone()
+    # Sets CGO_LDFLAGS
+    daos_build.add_rpaths(aenv, None, True, True)
+    adminbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_admin",
                               "daos_admin")
 
     AlwaysBuild([serverbin, adminbin])

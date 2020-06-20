@@ -8,7 +8,7 @@ def scons():
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common', 'daos_tests',
                  'gurt', 'cart', 'uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp']
 
-    prereqs.require(denv, 'argobots', 'spdk')
+    prereqs.require(denv, 'argobots')
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
