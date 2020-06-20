@@ -27,11 +27,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"reflect"
 	"sort"
 	"sync"
 
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // MemberState represents the activity state of DAOS system members.
@@ -180,12 +182,17 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 }
 
 func (sm *Member) String() string {
-	return fmt.Sprintf("%s/%d", sm.Addr, sm.Rank)
+	return fmt.Sprintf("%s/%d/%s", sm.Addr, sm.Rank, sm.State())
 }
 
 // State retrieves member state.
 func (sm *Member) State() MemberState {
 	return sm.state
+}
+
+// Equals verifies equivalency.
+func (sm *Member) Equals(m *Member) bool {
+	return reflect.DeepEqual(*sm, *m)
 }
 
 // NewMember returns a reference to a new member struct.
@@ -293,28 +300,21 @@ func (m *Membership) Add(member *Member) (int, error) {
 	return len(m.members), nil
 }
 
-// AddOrUpdate adds member to membership or updates member state if member
-// already exists in membership. Returns flag for whether member was created and
-// the previous state if updated.
+// AddOrUpdate adds member to membership or updates member if exists.
 //
 // Note: this method updates state without checking if state transition is
 //       legal so use with caution.
-func (m *Membership) AddOrUpdate(newMember *Member) (bool, *MemberState) {
+func (m *Membership) AddOrUpdate(newMember *Member) {
 	m.Lock()
 	defer m.Unlock()
 
-	oldMember, found := m.members[newMember.Rank]
-	if found {
-		os := oldMember.State()
-		m.members[newMember.Rank].state = newMember.State()
-		m.members[newMember.Rank].Info = newMember.Info
-
-		return false, &os
+	if oldMember, found := m.members[newMember.Rank]; found {
+		m.log.Debugf("updating system member: %s->%s", oldMember, newMember)
+	} else {
+		m.log.Debugf("adding system member: %s", newMember)
 	}
 
 	m.members[newMember.Rank] = newMember
-
-	return true, nil
 }
 
 // Remove removes member from membership, idempotent.
