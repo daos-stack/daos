@@ -45,7 +45,7 @@
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.
  */
-#define OBJ_BULK_LIMIT	(3584) /* (3K + 512) bytes */
+#define OBJ_BULK_LIMIT	(8192)
 
 /*
  * RPC operation codes
