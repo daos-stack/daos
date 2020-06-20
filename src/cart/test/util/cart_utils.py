@@ -312,14 +312,14 @@ class CartUtils():
         #pylint: disable=exec-used
         #pylint: disable=undefined-variable
         if not self.module_init:
-            exec(open(init_file).read())
+            exec(open(init_file).read()) # nosec
             self.module = module
             self.module_init = True
         #pylint: enable=exec-used
         #pylint: enable=undefined-variable
 
         try:
-            subprocess.check_call(['sh', '-l', '-c', 'module -V'])
+            subprocess.check_call(['/usr/bin/sh', '-l', '-c', 'module -V'])
         except subprocess.CalledProcessError:
             # older version of module return -1
             return self.init_mpi_old(load[0])

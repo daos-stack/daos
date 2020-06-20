@@ -286,7 +286,8 @@ class Runner():
                 retval = True
             else:
                 print('RUN: %s' % command)
-                if subprocess.call(command, shell=True,
+                list_command = list(command.split(" "))
+                if subprocess.call(list_command,
                                    env=self.env['ENV']) != 0:
                     retval = False
                     break
@@ -301,15 +302,12 @@ def default_libpath():
     """On debian systems, the default library path can be queried"""
     if not os.path.isfile('/etc/debian_version'):
         return []
-    try:
-        pipe = subprocess.Popen(['dpkg-architecture', '-qDEB_HOST_MULTIARCH'],
-                                stdout=subprocess.PIPE, stderr=DEVNULL)
-        (stdo, _) = pipe.communicate()
-        if pipe.returncode == 0:
-            archpath = stdo.decode().strip()
-            return ['lib/' + archpath]
-    except Exception:
-        pass
+    pipe = subprocess.Popen(['dpkg-architecture', '-qDEB_HOST_MULTIARCH'],
+                            stdout=subprocess.PIPE, stderr=DEVNULL) # nosec
+    (stdo, _) = pipe.communicate()
+    if pipe.returncode == 0:
+        archpath = stdo.decode().strip()
+        return ['lib/' + archpath]
     return []
 
 def check_test(target, source, env, mode):
@@ -740,14 +738,11 @@ class PreReqComponent():
 
         self.__build_dir = os.path.realpath(os.path.join(self.__top_dir,
                                                          build_dir_name))
-        try:
-            if self.__dry_run:
-                print('Would mkdir -p %s' % self.__build_dir)
-            else:
-                os.makedirs(self.__build_dir)
+        if self.__dry_run:
+            print('Would mkdir -p %s' % self.__build_dir)
+        else:
+            os.makedirs(self.__build_dir)
 
-        except Exception:
-            pass
         self.__prebuilt_path = {}
         self.__src_path = {}
 
@@ -1480,11 +1475,8 @@ class _Component():
         """Check the sources for changes since the last build"""
 
         old_crc = ''
-        try:
-            with open(self.crc_file, 'r') as crcfile:
-                old_crc = crcfile.read()
-        except IOError:
-            pass
+        with open(self.crc_file, 'r') as crcfile:
+            old_crc = crcfile.read()
         if old_crc == '':
             return True
         return False
@@ -1525,8 +1517,7 @@ class _Component():
                         env.SetOption('no_exec', True)
                     return True
         except AttributeError:
-            # This feature is new in scons 2.4
-            pass
+            print(" AttributeError exception: This feature is new in scons 2.4")
 
         config.Finish()
         if self.__check_only:
@@ -1641,13 +1632,10 @@ class _Component():
             self.build_path = \
                 os.path.join(self.prereqs.get_build_dir(), '%s.build'
                              % self.name)
-            try:
-                if self.__dry_run:
-                    print('Would mkdir -p %s' % self.build_path)
-                else:
-                    os.makedirs(self.build_path)
-            except:
-                pass
+            if self.__dry_run:
+                print('Would mkdir -p %s' % self.build_path)
+            else:
+                os.makedirs(self.build_path)
 
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with
@@ -1725,7 +1713,7 @@ class _Component():
         if self.__dry_run:
             print('Would empty %s' % path)
         else:
-            os.system("rm -rf %s" % path)
+            os.system("rm -rf %s" % path) # nosec
             os.mkdir(path)
 
     def _has_changes(self):

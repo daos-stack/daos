@@ -60,10 +60,8 @@ class WarningsFactory():
     https://github.com/jenkinsci/warnings-ng-plugin/blob/master/doc/Documentation.md
     """
 
-    # Error levels supported by the reporint are LOW, NORMAL, HIGH, ERROR.
-    # Errors from this list of functions are known to happen during shutdown
-    # for the time being, so are downgraded to LOW.
-    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'rdb_timerd')
+    # Error levels are LOW, NORMAL, HIGH, ERROR
+    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'vos_tls_fini', 'rdb_timerd')
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')
@@ -149,7 +147,7 @@ class WarningsFactory():
         entry['message'] = line.get_anon_msg()
         entry['severity'] = sev
         if line.function in self.FLAKY_FUNCTIONS and \
-           entry['severity'] != 'ERROR':
+           entry['severity'] == 'NORMAL':
             entry['severity'] = 'LOW'
         self.issues.append(entry)
         self.pending.append((line, message))
@@ -354,6 +352,7 @@ def il_cmd(dfuse, cmd):
     ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
+    print('Log results for il')
     log_test(dfuse.conf, log_file.name)
     return ret
 
@@ -563,7 +562,7 @@ def assert_file_size(ofd, size):
     """Verify the file size is as expected"""
     stat = os.fstat(ofd.fileno())
     print('Checking file size is {} {}'.format(size, stat.st_size))
-    assert stat.st_size == size
+    assertEqual(stat.st_size, size)
 
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
@@ -648,13 +647,13 @@ def show_cont(conf, pool):
     """Create a container and return a container list"""
     cmd = ['container', 'create', '--svc', '0', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
-    assert rc.returncode == 0
+    assertEqual(rc.returncode, 0)
     print('rc is {}'.format(rc))
 
     cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assertEqual(rc.returncode, 0)
     return rc.stdout.strip()
 
 def make_pool(daos, conf):
@@ -790,7 +789,7 @@ def run_container_query(conf, path):
 
     rc = run_daos_cmd(conf, cmd)
 
-    assert rc.returncode == 0
+    assertEqual(rc.returncode, 0)
 
     print(rc)
     output = rc.stdout.decode('utf-8')
@@ -825,7 +824,7 @@ def run_duns_overlay_test(server, conf):
                              uns_dir])
 
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assertEqual(rc.returncode, 0)
 
     dfuse = DFuse(server, conf, path=uns_dir)
 
@@ -958,7 +957,7 @@ def run_dfuse(server, conf):
     uns_stat = os.stat(uns_path)
     print(direct_stat)
     print(uns_stat)
-    assert uns_stat.st_ino == direct_stat.st_ino
+    assertEqual(uns_stat.st_ino, direct_stat.st_ino)
 
     dfuse.stop()
     print('Trying UNS with previous cont')
@@ -973,7 +972,7 @@ def run_dfuse(server, conf):
     uns_stat = os.stat(uns_path)
     print(direct_stat)
     print(uns_stat)
-    assert uns_stat.st_ino == direct_stat.st_ino
+    assertEqual(uns_stat.st_ino, direct_stat.st_ino)
     dfuse.stop()
 
     print('Reached the end, no errors')
@@ -984,12 +983,15 @@ def run_il_test(server, conf):
 
     pools = get_pool_list()
 
-    # TODO: This doesn't work with two pools, partly related to
-    # DAOS-5109 but there may be other issues.
+    # TODO: This doesn't work with two pools, there appears to be a bug
+    # relating to re-using container uuids across pools.
     while len(pools) < 1:
         pools = make_pool(daos, conf)
 
     print('pools are ', ','.join(pools))
+
+    containers = ['62176a51-8229-4e4c-ad1b-43aaace8a97a',
+                  '4ef12a58-c544-406c-8acf-56a2c0589cd6']
 
     dfuse = DFuse(server, conf)
     dfuse.start()
@@ -997,11 +999,8 @@ def run_il_test(server, conf):
     dirs = []
 
     for p in pools:
-        for _ in range(2):
-            # Use a unique ID for each container to avoid DAOS-5109
-            container = str(uuid.uuid4())
-
-            d = os.path.join(dfuse.dir, p, container)
+        for c in containers:
+            d = os.path.join(dfuse.dir, p, c)
             try:
                 print('Making directory {}'.format(d))
                 os.mkdir(d)
