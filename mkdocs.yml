@@ -61,7 +61,6 @@ nav:
         - 'Spark': 'user/spark.md'
     - Releases:
         - 'Release Notes': 'release/releaseNote_v1_0.md'
-        - 'Licensing': 'licenses/Licensing.md'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
