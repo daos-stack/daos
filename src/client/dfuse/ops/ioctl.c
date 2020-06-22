@@ -95,7 +95,7 @@ handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
 				    &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(free, rc = daos_der2errno(rc));
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
@@ -270,6 +270,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 
 		handle_doh_ioctl(oh, size, req);
 
+		return;
 	} else if (_IOC_NR(cmd) == DFUSE_IOCTL_REPLY_DOOH) {
 		size_t size = _IOC_SIZE(cmd);
 
@@ -284,7 +285,6 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	if (fc->uid != uid || fc->gid != gid)
 		D_GOTO(out_err, rc = EPERM);
 
-	D_GOTO(out_err, rc = EPERM);
 	DFUSE_TRA_INFO(oh, "trusted pid %d", fc->pid);
 
 	if (cmd == DFUSE_IOCTL_IL_SIZE) {

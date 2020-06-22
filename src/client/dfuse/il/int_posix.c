@@ -290,8 +290,14 @@ _fetch_dfs_obj(int fd,
 		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
 			DFUSE_IOCTL_REPLY_DOH, hsd_reply->fsr_dfs_size);
 
+		errno = 0;
 		rc = ioctl(fd, cmd, iov.iov_buf);
 		if (rc != 0) {
+			int err = errno;
+
+			DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
+				       err, strerror(err));
+
 			D_FREE(iov.iov_buf);
 			return rc;
 		}
@@ -312,6 +318,8 @@ _fetch_dfs_obj(int fd,
 		D_FREE(iov.iov_buf);
 	}
 
+	entry->fd_dfs = ioil_ioc.ioc_dfs;
+
 	D_ALLOC(iov.iov_buf, hsd_reply->fsr_dobj_size);
 	if (!iov.iov_buf)
 		return ENOMEM;
@@ -319,8 +327,14 @@ _fetch_dfs_obj(int fd,
 	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
 		   DFUSE_IOCTL_REPLY_DOOH, hsd_reply->fsr_dobj_size);
 
+	errno = 0;
 	rc = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
+		int err = errno;
+
+		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
+			       err, strerror(err));
+
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
@@ -345,11 +359,14 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	struct dfuse_hsd_reply hsd_reply;
 	int rc;
 
+	errno = 0;
 	rc = ioctl(fd, DFUSE_IOCTL_IL_DSIZE, &hsd_reply);
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl returned %d err %d", rc, err);
+		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
+			       err, strerror(err));
+
 		return rc;
 	}
 
@@ -371,11 +388,13 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 	int			cmd;
 	int			rc;
 
+	errno = 0;
 	rc = ioctl(fd, DFUSE_IOCTL_IL_SIZE, &hs_reply);
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl returned %d err %d", rc, err);
+		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
+			       err, strerror(err));
 		return rc;
 	}
 
@@ -397,8 +416,14 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
 		   DFUSE_IOCTL_REPLY_POH, hs_reply.fsr_pool_size);
 
+	errno = 0;
 	rc = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
+		int err = errno;
+
+		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
+			err, strerror(err));
+
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
@@ -422,8 +447,14 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
 		   DFUSE_IOCTL_REPLY_COH, hs_reply.fsr_cont_size);
 
+	errno = 0;
 	rc = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
+		int err = errno;
+
+		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
+			err, strerror(err));
+
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
@@ -482,11 +513,13 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (fd == -1)
 		return false;
 
+	errno = 0;
 	rc = ioctl(fd, DFUSE_IOCTL_IL, &il_reply);
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl call on %d failed %d %d", fd, rc, err);
+		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
+			       err, strerror(err));
 		return false;
 	}
 
@@ -626,8 +659,11 @@ dfuse_open(const char *pathname, int flags, ...)
 	if ((flags & (O_PATH | O_APPEND)) != 0)
 		status = DFUSE_IO_DIS_FLAG;
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status))
+	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
+		DFUSE_LOG_DEBUG("open(pathname=%s) interception not possible",
+				pathname);
 		goto finish;
+	}
 
 	if (flags & O_CREAT)
 		DFUSE_LOG_INFO("open(pathname=%s, flags=0%o, mode=0%o) = "

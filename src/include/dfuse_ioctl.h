@@ -82,7 +82,7 @@ struct dfuse_hsd_reply {
  * open file
  */
 #define DFUSE_IOCTL_IL_DSIZE ((int)_IOR(DFUSE_IOCTL_TYPE,		\
-				       DFUSE_IOCTL_REPLY_SIZE,		\
+				       DFUSE_IOCTL_REPLY_DSIZE,		\
 				       struct dfuse_hsd_reply))
 
 #endif /* __DFUSE_IOCTL_H__ */
