@@ -295,8 +295,8 @@ _fetch_dfs_obj(int fd,
 		if (rc != 0) {
 			int err = errno;
 
-			DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
-				       err, strerror(err));
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+					  err, strerror(err));
 
 			D_FREE(iov.iov_buf);
 			return rc;
@@ -332,8 +332,8 @@ _fetch_dfs_obj(int fd,
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
-			       err, strerror(err));
+		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+				  err, strerror(err));
 
 		D_FREE(iov.iov_buf);
 		return rc;
@@ -364,16 +364,16 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
-			       err, strerror(err));
+		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+				  err, strerror(err));
 
 		return rc;
 	}
 
 	if (hsd_reply.fsr_version != DFUSE_IOCTL_VERSION) {
-		DFUSE_LOG_INFO("ioctl version mismatch (fd=%d): expected "
-			       "%d got %d", fd, DFUSE_IOCTL_VERSION,
-			       hsd_reply.fsr_version);
+		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
+				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
+				  hsd_reply.fsr_version);
 		return EIO;
 	}
 
@@ -393,15 +393,20 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
-			       err, strerror(err));
+		if (err == EPERM)
+			DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
+				       err, strerror(err));
+		else
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+					  err, strerror(err));
+
 		return rc;
 	}
 
 	if (hs_reply.fsr_version != DFUSE_IOCTL_VERSION) {
-		DFUSE_LOG_INFO("ioctl version mismatch (fd=%d): expected "
-			       "%d got %d", fd, DFUSE_IOCTL_VERSION,
-			       hs_reply.fsr_version);
+		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
+				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
+				  hs_reply.fsr_version);
 		return EIO;
 	}
 
@@ -421,8 +426,8 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
-			err, strerror(err));
+		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+				 err, strerror(err));
 
 		D_FREE(iov.iov_buf);
 		return rc;
@@ -433,7 +438,7 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 
 	rc = daos_pool_global2local(iov, &ioil_ioc.ioc_poh);
 	if (rc) {
-		DFUSE_LOG_INFO("Failed to use pool handle %d", rc);
+		DFUSE_LOG_WARNING("Failed to use pool handle %d", rc);
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
@@ -452,8 +457,8 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
-			err, strerror(err));
+		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+				  err, strerror(err));
 
 		D_FREE(iov.iov_buf);
 		return rc;
@@ -464,7 +469,7 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 
 	rc = daos_cont_global2local(ioil_ioc.ioc_poh, iov, &ioil_ioc.ioc_coh);
 	if (rc) {
-		DFUSE_LOG_INFO("Failed to use cont handle %d", rc);
+		DFUSE_LOG_WARNING("Failed to use cont handle %d", rc);
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
@@ -524,9 +529,9 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	}
 
 	if (il_reply.fir_version != DFUSE_IOCTL_VERSION) {
-		DFUSE_LOG_INFO("ioctl version mismatch (fd=%d): expected "
-			       "%d got %d", fd, DFUSE_IOCTL_VERSION,
-			       il_reply.fir_version);
+		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
+				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
+				  il_reply.fir_version);
 		return false;
 	}
 
