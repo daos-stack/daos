@@ -165,34 +165,13 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	return resp, nil
 }
 
-// localInstances takes slice of uint32 rank identifiers and returns a slice
-// containing any local instances matching the supplied ranks.
-func (svc *mgmtSvc) localInstances(inRanks []uint32) ([]*IOServerInstance, error) {
-	localInstances := make([]*IOServerInstance, 0, maxIOServers)
-
-	for _, rank := range system.RanksFromUint32(inRanks) {
-		for _, instance := range svc.harness.Instances() {
-			instanceRank, err := instance.GetRank()
-			if err != nil {
-				return nil, errors.WithMessage(err, "localInstances()")
-			}
-			if !rank.Equals(instanceRank) {
-				continue // requested rank not local
-			}
-			localInstances = append(localInstances, instance)
-		}
-	}
-
-	return localInstances, nil
-}
-
 // drpcOnLocalRanks iterates over local instances issuing dRPC requests in
 // parallel and returning system member results when all have been received.
 func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksReq, method drpc.Method) ([]*system.MemberResult, error) {
 	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
 	defer cancel()
 
-	instances, err := svc.localInstances(req.GetRanks())
+	instances, err := svc.harness.FilterInstancesByRank(system.RanksFromUint32(req.GetRanks()))
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +274,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 		signal = syscall.SIGKILL
 	}
 
-	instances, err := svc.localInstances(req.GetRanks())
+	instances, err := svc.harness.FilterInstancesByRank(system.RanksFromUint32(req.GetRanks()))
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +357,7 @@ func (svc *mgmtSvc) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq) 
 	}
 	svc.log.Debugf("MgmtSvc.ResetFormatRanks dispatch, req:%+v\n", *req)
 
-	instances, err := svc.localInstances(req.GetRanks())
+	instances, err := svc.harness.FilterInstancesByRank(system.RanksFromUint32(req.GetRanks()))
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +423,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	}
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
 
-	instances, err := svc.localInstances(req.GetRanks())
+	instances, err := svc.harness.FilterInstancesByRank(system.RanksFromUint32(req.GetRanks()))
 	if err != nil {
 		return nil, err
 	}

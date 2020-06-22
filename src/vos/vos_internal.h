@@ -282,6 +282,11 @@ do {						\
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_VER(dae)		((dae)->dae_base.dae_ver)
 #define DAE_REC_OFF(dae)	((dae)->dae_base.dae_rec_off)
+#define DAE_TGT_CNT(dae)	((dae)->dae_base.dae_tgt_cnt)
+#define DAE_GRP_CNT(dae)	((dae)->dae_base.dae_grp_cnt)
+#define DAE_MBS_DSIZE(dae)	((dae)->dae_base.dae_mbs_dsize)
+#define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
+#define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
 	/* Link into vos_conter::vc_dtx_committed_list */
@@ -1094,9 +1099,9 @@ vos_space_sys_set(struct vos_pool *pool, daos_size_t *space_sys);
 int
 vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow);
 int
-vos_space_hold(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-	       daos_size_t *space_hld);
+vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods,
+	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
 
