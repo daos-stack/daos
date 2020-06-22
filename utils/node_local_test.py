@@ -60,8 +60,10 @@ class WarningsFactory():
     https://github.com/jenkinsci/warnings-ng-plugin/blob/master/doc/Documentation.md
     """
 
-    # Error levels are LOW, NORMAL, HIGH, ERROR
-    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'vos_tls_fini', 'rdb_timerd')
+    # Error levels supported by the reporint are LOW, NORMAL, HIGH, ERROR.
+    # Errors from this list of functions are known to happen during shutdown
+    # for the time being, so are downgraded to LOW.
+    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'rdb_timerd')
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')
@@ -147,7 +149,7 @@ class WarningsFactory():
         entry['message'] = line.get_anon_msg()
         entry['severity'] = sev
         if line.function in self.FLAKY_FUNCTIONS and \
-           entry['severity'] == 'NORMAL':
+           entry['severity'] != 'ERROR':
             entry['severity'] = 'LOW'
         self.issues.append(entry)
         self.pending.append((line, message))
@@ -352,7 +354,6 @@ def il_cmd(dfuse, cmd):
     ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
-    print('Log results for il')
     log_test(dfuse.conf, log_file.name)
     assert ret.returncode == 0
     return ret
@@ -984,8 +985,8 @@ def run_il_test(server, conf):
 
     pools = get_pool_list()
 
-    # TODO: This doesn't work with two pools, there appears to be a bug
-    # relating to re-using container uuids across pools.
+    # TODO: This doesn't work with two pools, partly related to
+    # DAOS-5109 but there may be other issues.
     while len(pools) < 1:
         pools = make_pool(daos, conf)
 
