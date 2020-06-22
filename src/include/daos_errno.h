@@ -189,7 +189,7 @@ extern "C" {
 #define D_DEFINE_RANGE_ERRSTR(name)				\
 	static const char * const g_##name##_error_strings[] = {\
 		D_FOREACH_##name##_ERR(D_DEFINE_ERRSTR)		\
-	}
+	};
 
 D_FOREACH_ERR_RANGE(D_DEFINE_RANGE_ERRNO)
 
