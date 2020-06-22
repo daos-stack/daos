@@ -922,19 +922,5 @@ vos_cmt_get_epoch(d_iov_t *value);
 int
 vos_agg_iterate(daos_handle_t coh, dbtree_iterate_cb_t cb, void *arg);
 
-struct vos_agg_set {
-	d_list_t	as_entries;
-	uuid_t		as_pool_uuid;
-	uint32_t	as_pool_version;
-	unsigned int	as_count;
-};
-
-struct vos_agg_entry {
-	d_list_t	ae_link;
-	daos_unit_oid_t	ae_oid;
-	daos_epoch_t	ae_epoch;
-	daos_epoch_t	ae_epoch_lo;
-};
-
 #endif /* __VOS_API_H */
 

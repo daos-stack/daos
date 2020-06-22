@@ -1036,8 +1036,10 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	filter.fr_ex.ex_lo = 0;
-	filter.fr_ex.ex_hi = ~(0ULL);
+	filter.fr_ex.ex_lo = oiter->it_recx.rx_idx;
+	filter.fr_ex.ex_hi = oiter->it_recx.rx_nr == 0 ? ~(0ULL) :
+			oiter->it_recx.rx_idx + oiter->it_recx.rx_nr - 1;
+
 	filter.fr_epr = oiter->it_epr;
 	filter.fr_punch = oiter->it_punched;
 	options = recx_get_flags(oiter);
@@ -1159,6 +1161,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->it_punched = 0;
 	oiter->it_epc_expr = param->ip_epc_expr;
 	oiter->it_flags = param->ip_flags;
+	oiter->it_recx = param->ip_recx;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
 	if (param->ip_flags & VOS_IT_FOR_REBUILD)
@@ -1370,8 +1373,9 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 				" rc = "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
-		filter.fr_ex.ex_lo = 0;
-		filter.fr_ex.ex_hi = ~(0ULL);
+		filter.fr_ex.ex_lo = info->ii_recx.rx_idx;
+		filter.fr_ex.ex_hi = info->ii_recx.rx_nr == 0 ? ~(0ULL) :
+				info->ii_recx.rx_idx + info->ii_recx.rx_nr - 1;
 		filter.fr_epr = oiter->it_epr;
 		filter.fr_punch = oiter->it_punched;
 		options = recx_get_flags(oiter);
