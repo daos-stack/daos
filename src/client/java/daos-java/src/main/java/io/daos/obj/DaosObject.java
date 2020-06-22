@@ -34,6 +34,7 @@ import sun.nio.ch.DirectBuffer;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -79,6 +80,15 @@ public class DaosObject {
   }
 
   /**
+   * is object open
+   *
+   * @return true for object open; false for not open or open failed
+   */
+  public boolean isOpen() {
+    return objectPtr != -1;
+  }
+
+  /**
    * open object with given <code>mode</code> if it hasn't been opened yet.
    *
    * @param mode
@@ -93,14 +103,15 @@ public class DaosObject {
   }
 
   public void punch() throws IOException {
-    checkOpen();
-    client.punchObject(objectPtr, 0);
+    if (objectPtr != -1) {
+      client.punchObject(objectPtr, 0);
+    }
   }
 
   private ByteBuffer encodeKeys(List<String> keys) throws IOException {
     int bufferLen = 0;
     for (String key : keys) {
-      bufferLen += (key.length() + 2);
+      bufferLen += (key.length() + Constants.ENCODED_LENGTH_KEY);
     }
     if (bufferLen == 0) {
       return null;
@@ -116,7 +127,7 @@ public class DaosObject {
         throw new IllegalArgumentException("key length in " + Constants.KEY_CHARSET +
                       " should not exceed " + Short.MAX_VALUE);
       }
-      keyLen = (2 + bytes.length);
+      keyLen = (Constants.ENCODED_LENGTH_KEY + bytes.length);
       if ((buffer.position() + keyLen) > capacity) { // in case there is non ascii char
         capacity *= 2;
         ByteBuffer newBuffer = BufferAllocator.directBuffer(capacity);
@@ -161,12 +172,29 @@ public class DaosObject {
     return DaosObjectAttribute.parseFrom(bytes);
   }
 
+  /**
+   * fetch object with given <code>desc</code>. User should get result from each entry, like below code snippet.
+   * <code>
+   *   for (Entry e : desc.getAkeyEntries()) {
+   *     int actualSize = e.getActualSize();
+   *     if (actualSize > 0 ) {
+   *       e.read(bytes) // or e.read(byteBuffer)
+   *     }
+   *   }
+   * </code>
+   *
+   * @param desc
+   * {@link IODataDesc} describes list of {@link io.daos.obj.IODataDesc.Entry} to fetch akeyes' data under dkey.
+   * @throws IOException
+   */
   public void fetch(IODataDesc desc) throws IOException {
     checkOpen();
     desc.encode();
 
-    client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), ((DirectBuffer)desc.getDescBuffer()).address(),
+    ByteBuffer descBuffer = desc.getDescBuffer();
+    client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), ((DirectBuffer)descBuffer).address(),
       ((DirectBuffer)desc.getDataBuffer()).address());
+    desc.parseResult();
   }
 
   /**
@@ -194,13 +222,16 @@ public class DaosObject {
   public List<String> listDkeys(IOKeyDesc desc) throws IOException {
     checkOpen();
     desc.encode();
-
     // TODO: check completion of list
+    // TODO: key2big, double size
     client.listObjectDkeys(objectPtr, ((DirectBuffer)desc.getDescBuffer()).address(),
       ((DirectBuffer)desc.getKeyBuffer()).address(), desc.getKeyBuffer().capacity(),
       ((DirectBuffer)desc.getAnchorBuffer()).address(),
       desc.getBatchSize());
-    return null;
+    ByteBuffer anchorBuffer = desc.getAnchorBuffer();
+    anchorBuffer.position(0);
+    System.out.println(anchorBuffer.get());
+    return desc.parseResult();
   }
 
   public List<String> listAkeys(IOKeyDesc desc) throws IOException {
@@ -235,69 +266,33 @@ public class DaosObject {
   }
 
   /**
-   * create a new instance of {@link IODataDesc} and bind to the client.
+   * create a new instance of {@link IODataDesc} for update
    *
    * @param dkey
    * distribution key
    * @param entries
-   * list of entries describing records fetch or update
+   * list of entries describing records update
    * @return {@link IODataDesc}
    * @throws IOException
    */
-  public IODataDesc createDataDesc(String dkey, List<IODataDesc.Entry> entries) throws IOException {
-    IODataDesc desc = new IODataDesc(dkey, entries);
-//    desc.setObjClient(client);
+  public IODataDesc createDataDescForUpdate(String dkey, List<IODataDesc.Entry> entries) throws IOException {
+    IODataDesc desc = new IODataDesc(dkey, entries, true);
     return desc;
   }
 
   /**
-   * create data description entry for fetch.
+   * create a new instance of {@link IODataDesc} for fetch
    *
-   * @param key
+   * @param dkey
    * distribution key
-   * @param type
-   * iod type, {@see io.daos.obj.IODataDesc.IodType}
-   * @param offset
-   * offset inside akey from which to fetch data, should be a multiple of recordSize
-   * @param recordSize
-   * record size
-   * @param dataSize
-   * size of data to fetch, make it a multiple of recordSize as much as possible. zeros are padded to make actual
-   * request size a multiple of recordSize.
-   * @return data description entry
+   * @param entries
+   * list of entries describing records fetch
+   * @return {@link IODataDesc}
    * @throws IOException
    */
-  public IODataDesc.Entry createEntryForFetch(String key, IODataDesc.IodType type, int offset, int recordSize,
-                                              int dataSize) throws IOException {
-    IODataDesc.Entry entry = new IODataDesc.Entry(key, type, offset, recordSize, dataSize);
-//    entry.setObjClient(client);
-    return entry;
-  }
-
-  /**
-   * create data description entry for update.
-   *
-   * @param key
-   * distribution key
-   * @param type
-   * iod type, {@see io.daos.obj.IODataDesc.IodType}
-   * @param offset
-   * offset inside akey from which to update data, should be a multiple of recordSize
-   * @param recordSize
-   * record size
-   * @param dataBuffer
-   * byte buffer (direct buffer preferred) holding data to update. make sure dataBuffer is ready for being read,
-   * for example, buffer position and limit are set correctly for reading.
-   * make size a multiple of recordSize as much as possible. zeros are padded to make actual request size a multiple
-   * of recordSize.
-   * @return data description entry
-   * @throws IOException
-   */
-  public IODataDesc.Entry createEntryForUpdate(String key, IODataDesc.IodType type, int offset, int recordSize,
-                                               ByteBuffer dataBuffer) throws IOException {
-    IODataDesc.Entry entry = new IODataDesc.Entry(key, type, offset, recordSize, dataBuffer);
-//    entry.setObjClient(client);
-    return entry;
+  public IODataDesc createDataDescForFetch(String dkey, List<IODataDesc.Entry> entries) throws IOException {
+    IODataDesc desc = new IODataDesc(dkey, entries, false);
+    return desc;
   }
 
   /**

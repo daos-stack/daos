@@ -29,7 +29,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.BufferOverflowException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.ReadOnlyBufferException;
 import java.util.List;
 
 /**
@@ -50,17 +53,21 @@ public class IODataDesc {
 
   private final List<Entry> akeyEntries;
 
-//  private DaosObjClient objClient;
-
   private int totalDescBufferLen;
 
+  private int totalRequestBufLen;
+
   private int totalDataBufferLen;
+
+  private boolean updateOrFetch;
 
   private ByteBuffer descBuffer;
 
   private ByteBuffer dataBuffer;
 
   private boolean encoded;
+
+  private boolean resultParsed;
 
   /**
    * constructor with list of {@link Entry}.
@@ -69,9 +76,11 @@ public class IODataDesc {
    * distribution key
    * @param keyEntries
    * list of description entries
+   * @param updateOrFetch
+   * true for update; false for fetch
    * @throws IOException
    */
-  protected IODataDesc(String dkey, List<Entry> keyEntries) throws IOException {
+  protected IODataDesc(String dkey, List<Entry> keyEntries, boolean updateOrFetch) throws IOException {
     this.dkey = dkey;
     this.dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
     if (dkeyBytes.length > Short.MAX_VALUE) {
@@ -79,16 +88,25 @@ public class IODataDesc {
                       + Short.MAX_VALUE);
     }
     this.akeyEntries = keyEntries;
-    totalDescBufferLen += (2 + dkeyBytes.length);
+    this.updateOrFetch = updateOrFetch;
+    totalRequestBufLen += (Constants.ENCODED_LENGTH_KEY + dkeyBytes.length);
     for (Entry entry : keyEntries) {
-      totalDescBufferLen += entry.getDescLen();
+      if (updateOrFetch != entry.updateOrFetch) {
+        throw new IllegalArgumentException("entry is " + updateOrFetch(entry.updateOrFetch) +". should be " +
+          updateOrFetch(updateOrFetch));
+      }
+      totalRequestBufLen += entry.getDescLen();
       totalDataBufferLen += entry.getBufferLen();
+    }
+    totalDescBufferLen += totalRequestBufLen;
+    if (!updateOrFetch) { // for returned actual size
+      totalDescBufferLen += keyEntries.size() * Constants.ENCODED_LENGTH_EXTENT;
     }
   }
 
-//  protected void setObjClient(DaosObjClient objClient) {
-//    this.objClient = objClient;
-//  }
+  private String updateOrFetch(boolean v) {
+    return v ? "update" : "fetch";
+  }
 
   /**
    * number of records to fetch or update.
@@ -100,12 +118,21 @@ public class IODataDesc {
   }
 
   /**
-   * total length of all encoded entries.
+   * total length of all encoded entries, including reserved buffer for holding sizes of returned data.
    *
    * @return total length
    */
   public int getDescBufferLen() {
     return totalDescBufferLen;
+  }
+
+  /**
+   * total length of all encoded entries to request data.
+   *
+   * @return
+   */
+  public int getRequestBufLen() {
+    return totalRequestBufLen;
   }
 
   /**
@@ -122,6 +149,9 @@ public class IODataDesc {
    * encode entries data to Data Buffer.
    */
   public void encode() {
+    if (resultParsed) {
+      throw new IllegalStateException("result is parsed. cannot encode again");
+    }
     if (!encoded) {
       this.descBuffer = BufferAllocator.directBuffer(getDescBufferLen());
       this.dataBuffer = BufferAllocator.directBuffer(getDataBufferLen());
@@ -134,6 +164,22 @@ public class IODataDesc {
         entry.encode(descBuffer);
       }
       encoded = true;
+    }
+  }
+
+  /**
+   * parse result after JNI call.
+   */
+  protected void parseResult() {
+    if (!resultParsed) {
+      // update actual size
+      int idx = getRequestBufLen();
+      for (IODataDesc.Entry entry : getAkeyEntries()) {
+        descBuffer.position(idx);
+        entry.setActualSize(descBuffer.getInt());
+        idx += Constants.ENCODED_LENGTH_EXTENT;
+      }
+      resultParsed = true;
     }
   }
 
@@ -161,6 +207,58 @@ public class IODataDesc {
     return dataBuffer;
   }
 
+  public List<Entry> getAkeyEntries() {
+    return akeyEntries;
+  }
+
+  /**
+   * create data description entry for fetch.
+   *
+   * @param key
+   * distribution key
+   * @param type
+   * iod type, {@see io.daos.obj.IODataDesc.IodType}
+   * @param offset
+   * offset inside akey from which to fetch data, should be a multiple of recordSize
+   * @param recordSize
+   * record size
+   * @param dataSize
+   * size of data to fetch, make it a multiple of recordSize as much as possible. zeros are padded to make actual
+   * request size a multiple of recordSize.
+   * @return data description entry
+   * @throws IOException
+   */
+  public static Entry createEntryForFetch(String key, IODataDesc.IodType type, int offset, int recordSize,
+                                              int dataSize) throws IOException {
+    IODataDesc.Entry entry = new IODataDesc.Entry(key, type, offset, recordSize, dataSize);
+    return entry;
+  }
+
+  /**
+   * create data description entry for update.
+   *
+   * @param key
+   * distribution key
+   * @param type
+   * iod type, {@see io.daos.obj.IODataDesc.IodType}
+   * @param offset
+   * offset inside akey from which to update data, should be a multiple of recordSize
+   * @param recordSize
+   * record size
+   * @param dataBuffer
+   * byte buffer (direct buffer preferred) holding data to update. make sure dataBuffer is ready for being read,
+   * for example, buffer position and limit are set correctly for reading.
+   * make size a multiple of recordSize as much as possible. zeros are padded to make actual request size a multiple
+   * of recordSize.
+   * @return data description entry
+   * @throws IOException
+   */
+  public static Entry createEntryForUpdate(String key, IODataDesc.IodType type, int offset, int recordSize,
+                                               ByteBuffer dataBuffer) throws IOException {
+    IODataDesc.Entry entry = new IODataDesc.Entry(key, type, offset, recordSize, dataBuffer);
+    return entry;
+  }
+
   /**
    * A entry to describe record update or fetch on given akey. For array, each entry object represents consecutive
    * records of given key. Multiple entries should be created for non-consecutive records of given key.
@@ -173,11 +271,8 @@ public class IODataDesc {
     private final int recordSize;
     private final int dataSize;
     private int paddedDataSize;
-//    private int iodSize;
     private ByteBuffer dataBuffer;
     private boolean updateOrFetch;
-
-//    private DaosObjClient objClient;
 
     private ByteBuffer globalBuffer;
     private int globalBufIdx = -1;
@@ -261,14 +356,88 @@ public class IODataDesc {
       this.updateOrFetch = true;
     }
 
-//    protected void setObjClient(DaosObjClient objClient) {
-//      this.objClient = objClient;
-//      if (type == IodType.ARRAY) {
-//        iodSize = objClient.getDaosIodArraySize();
-//      } else {
-//        iodSize = objClient.getDaosIodSingleSize();
-//      }
-//    }
+    /**
+     * get data buffer passed for update.
+     *
+     * @return
+     */
+    public ByteBuffer getDataBuffer() {
+      return dataBuffer;
+    }
+
+    /**
+     * get size of actual data returned.
+     *
+     * @return
+     */
+    public int getActualSize() {
+      if (updateOrFetch) {
+        throw new UnsupportedOperationException("it's entry for update");
+      }
+      return actualSize;
+    }
+
+    /**
+     * set size of actual data returned after fetch.
+     *
+     * @param actualSize
+     */
+    public void setActualSize(int actualSize) {
+      if (updateOrFetch) {
+        throw new UnsupportedOperationException("it's entry for update");
+      }
+      this.actualSize = actualSize;
+    }
+
+    /**
+     * read <code>length</code>of data from global buffer at this entry's index.
+     * make sure <code>length</code> is no more than actualSize
+     * @param bytes
+     * byte array data read to
+     * @param offset
+     * offset in byte array
+     * @param length
+     * length of data to read
+     */
+    public void get(byte[] bytes, int offset, int length) {
+      if ((offset | length | bytes.length - offset - length) < 0) {
+        throw new IndexOutOfBoundsException("bytes length: " + bytes.length +
+          ", offset: " + offset + ", length: " + length);
+      }
+      if (length > actualSize) {
+        throw new BufferUnderflowException();
+      }
+      globalBuffer.position(globalBufIdx + Constants.ENCODED_LENGTH_EXTENT);
+      globalBuffer.limit(globalBuffer.position() + actualSize);
+      globalBuffer.get(bytes, offset, length);
+    }
+
+    /**
+     * read <code>bytes.length()</code> of data from global buffer at this entry's index.
+     *
+     * @param bytes
+     * byte array data read to
+     */
+    public void get(byte[] bytes) {
+      get(bytes, 0, bytes.length);
+    }
+
+    /**
+     * read remaining() size of <code>destBuffer</code> from global buffer to <code>destBuffer</code>
+     * make sure remaining of <code>destBuffer</code> is no more than actualSize.
+     *
+     * @param destBuffer
+     * destination buffer
+     */
+    public void get(ByteBuffer destBuffer) {
+      int remaining = destBuffer.remaining();
+      if (remaining > actualSize) {
+        throw new BufferOverflowException();
+      }
+      globalBuffer.position(globalBufIdx + Constants.ENCODED_LENGTH_EXTENT);
+      globalBuffer.limit(globalBuffer.position() + Math.min(actualSize, remaining));
+      destBuffer.put(globalBuffer);
+    }
 
     /**
      * length of this entry when encoded into the Description Buffer.
@@ -289,7 +458,7 @@ public class IODataDesc {
      * @return length
      */
     public int getBufferLen() {
-      return 4 + paddedDataSize;
+      return Constants.ENCODED_LENGTH_EXTENT + paddedDataSize;
     }
 
     /**
