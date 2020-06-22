@@ -145,8 +145,8 @@ dc_obj_fetch_shard_task_create(daos_handle_t oh, daos_handle_t th,
 
 int
 dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-			 daos_key_t *dkey, unsigned int nr,
-			 daos_iod_t *iods, d_sg_list_t *sgls,
+			 daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+			 d_sg_list_t *sgls, void *extra_args,
 			 daos_iom_t *maps, daos_event_t *ev,
 			 tse_sched_t *tse, tse_task_t **task);
 int

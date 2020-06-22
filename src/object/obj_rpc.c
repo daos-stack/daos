@@ -394,6 +394,61 @@ static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
 }
 
 static int
+crt_proc_struct_daos_recx_ep_list(crt_proc_t proc,
+				  struct daos_recx_ep_list *list)
+{
+	crt_proc_op_t	proc_op;
+	int		i;
+	int		rc;
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &list->re_nr);
+	if (rc != 0)
+		return -DER_HG;
+	if (list->re_nr == 0)
+		return 0;
+
+	rc = crt_proc_bool(proc, &list->re_ep_valid);
+	if (rc != 0)
+		return -DER_HG;
+
+	switch (proc_op) {
+	case CRT_PROC_DECODE:
+		D_ALLOC_ARRAY(list->re_items, list->re_nr);
+		if (list->re_items == NULL)
+			return -DER_NOMEM;
+		list->re_total = list->re_nr;
+	case CRT_PROC_ENCODE:
+		for (i = 0; i < list->re_nr; i++) {
+			rc = crt_proc_daos_recx_t(proc,
+						  &list->re_items[i].re_recx);
+			if (rc != 0)
+				return -DER_HG;
+
+			rc = crt_proc_uint8_t(proc, &list->re_items[i].re_type);
+			if (rc != 0)
+				return -DER_HG;
+
+			if (list->re_ep_valid) {
+				rc = crt_proc_daos_epoch_t(proc,
+						&list->re_items[i].re_ep);
+				if (rc != 0)
+					return -DER_HG;
+			}
+		}
+		break;
+	default: /* CRT_PROC_FREE */
+		daos_recx_ep_free(list);
+		break;
+	}
+
+	return 0;
+}
+
+static int
 crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 {
 	struct obj_io_desc	*oiod;

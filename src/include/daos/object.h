@@ -387,6 +387,8 @@ enum daos_io_flags {
 	DIOF_TO_SPEC_SHARD	= 0x2,
 	/* The operation (enumeration) has specified epoch. */
 	DIOF_WITH_SPEC_EPOCH	= 0x4,
+	/* The operation is for EC recovering. */
+	DIOF_EC_RECOV		= 0x8,
 };
 
 /**
@@ -426,9 +428,9 @@ enum daos_recx_type {
 };
 
 struct daos_recx_ep {
-	daos_recx_t		re_recx;
-	daos_epoch_t		re_ep;
-	enum daos_recx_type	re_type;
+	daos_recx_t	re_recx;
+	daos_epoch_t	re_ep;
+	uint8_t		re_type;
 };
 
 struct daos_recx_ep_list {
@@ -437,7 +439,7 @@ struct daos_recx_ep_list {
 	/** #total items (capacity) in re_items array */
 	uint32_t		 re_total;
 	/** epoch valid flag, re_items' re_ep can be ignored when it is false */
-	uint32_t		 re_ep_valid:1;
+	bool			 re_ep_valid;
 	struct daos_recx_ep	*re_items;
 };
 
@@ -484,6 +486,46 @@ daos_recx_ep_add(struct daos_recx_ep_list *list, struct daos_recx_ep *recx)
 	D_ASSERT(list->re_total > list->re_nr);
 	list->re_items[list->re_nr++] = *recx;
 	return 0;
+}
+
+static inline void
+daos_recx_ep_list_set_ep_valid(struct daos_recx_ep_list *lists, unsigned int nr)
+{
+	unsigned int i;
+
+	for (i = 0; i < nr; i++)
+		lists[i].re_ep_valid = 1;
+}
+
+static inline bool
+daos_recx_ep_list_ep_valid(struct daos_recx_ep_list *list)
+{
+	return (list->re_ep_valid == 1);
+}
+
+static inline void
+daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
+{
+	struct daos_recx_ep_list	*list;
+	struct daos_recx_ep		*recx_ep;
+	unsigned int			 i, j;
+
+	if (lists == NULL || nr == 0) {
+		D_PRINT("empty daos_recx_ep_list.\n");
+		return;
+	}
+	for (i = 0; i < nr; i++) {
+		list = &lists[i];
+		D_PRINT("daos_recx_ep_list[%d], nr %d,total %d,ep_valid %d:\n",
+			i, list->re_nr, list->re_total, list->re_ep_valid);
+		for (j = 0; j < list->re_nr; j++) {
+			recx_ep = &list->re_items[j];
+			D_PRINT("[["DF_U64","DF_U64"], "DF_X64"]  ",
+				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
+				recx_ep->re_ep);
+		}
+		D_PRINT("\n");
+	}
 }
 
 #endif /* __DD_OBJ_H__ */
