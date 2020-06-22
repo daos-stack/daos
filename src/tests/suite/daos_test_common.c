@@ -914,6 +914,12 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	assert_int_equal(rc, 0);
 }
 
+int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
+                        daos_mgmt_pool_info_t *pools)
+{
+	return 0;
+}
+
 struct daos_acl *
 get_daos_acl_with_owner_perms(uint64_t perms)
 {
