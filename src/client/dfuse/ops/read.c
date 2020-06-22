@@ -45,19 +45,21 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	const struct fuse_ctx		*fc = fuse_req_ctx(req);
-	d_iov_t				iov[2] = {};
-	d_sg_list_t			sgl = {};
 	struct fuse_bufvec		fb = {};
-	daos_size_t			size;
 	void				*buff;
 	int				rc;
 	size_t				buff_len = len;
 	bool				skip_read = false;
 	bool				readahead = false;
+	bool				async = false;
 	struct dfuse_event		*ev = NULL;
 
 	DFUSE_TRA_INFO(oh, "%#zx-%#zx requested pid=%d",
 		       position, position + len - 1, fc->pid);
+
+	D_ALLOC_PTR(ev);
+	if (ev == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	if (oh->doh_ie->ie_truncated &&
 	    position + len < oh->doh_ie->ie_stat.st_size &&
@@ -92,12 +94,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		buff_len += READAHEAD_SIZE;
 	} else {
 		if (!skip_read) {
-			D_ALLOC_PTR(ev);
-			if (ev == NULL)
-				D_GOTO(err, rc = ENOMEM);
-
 			rc = daos_event_init(&ev->de_ev,
-					     fs_handle->dpi_eq, NULL);
+					fs_handle->dpi_eq, NULL);
 			if (rc != -DER_SUCCESS)
 				D_GOTO(err, rc = daos_der2errno(rc));
 
@@ -110,16 +108,16 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	if (!buff)
 		D_GOTO(err, rc = ENOMEM);
 
-	sgl.sg_nr = 1;
-	d_iov_set(&iov[0], (void *)buff, buff_len);
-	sgl.sg_iovs = iov;
+	ev->de_sgl.sg_nr = 1;
+	d_iov_set(&ev->de_iov, (void *)buff, buff_len);
+	ev->de_sgl.sg_iovs = &ev->de_iov;
 
 	if (skip_read) {
-		size = buff_len;
+		ev->de_len = buff_len;
 	} else {
-		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position,
-			ev ? &ev->de_len : &size,
-			ev ? &ev->de_ev : NULL);
+		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position,
+			&ev->de_len,
+			async ? &ev->de_ev : NULL);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_REPLY_ERR_RAW(oh, req, rc);
 			D_FREE(buff);
@@ -127,14 +125,15 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		}
 	}
 
-	if (ev) {
+	if (async) {
 		sem_post(&fs_handle->dpi_sem);
 		return;
 	}
 
-	if (size <= len) {
-		DFUSE_REPLY_BUF(oh, req, buff, size);
+	if (ev->de_len <= len) {
+		DFUSE_REPLY_BUF(oh, req, buff, ev->de_len);
 		D_FREE(buff);
+		D_FREE(ev);
 		return;
 	}
 
@@ -143,10 +142,10 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 		fb.count = 1;
 		fb.buf[0].mem = buff + len;
-		fb.buf[0].size = size - len;
+		fb.buf[0].size = ev->de_len - len;
 
 		DFUSE_TRA_INFO(oh, "%#zx-%#zx was readahead",
-			position + len, position + size - 1);
+			position + len, position + ev->de_len - 1);
 
 		rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session,
 						ino, position + len, &fb, 0);
@@ -159,10 +158,10 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	DFUSE_REPLY_BUF(oh, req, buff, len);
 	D_FREE(buff);
+	D_FREE(ev);
 	return;
 
-
 err:
-	D_FREE(ev);
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	D_FREE(ev);
 }

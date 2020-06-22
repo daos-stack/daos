@@ -40,8 +40,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 {
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	d_iov_t				iov = {};
-	d_sg_list_t			sgl = {};
 	int				rc;
 	struct dfuse_event		*ev;
 
@@ -59,9 +57,9 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	ev->de_len = len;
 	ev->de_complete_cb = dfuse_cb_write_complete;
 
-	sgl.sg_nr = 1;
-	d_iov_set(&iov, (void *)buff, len);
-	sgl.sg_iovs = &iov;
+	ev->de_sgl.sg_nr = 1;
+	d_iov_set(&ev->de_iov, (void *)buff, len);
+	ev->de_sgl.sg_iovs = &ev->de_iov;
 
 	/* Check for potentially using readahead on this file, ie_truncated
 	 * will only be set if caching is enabled so only check for the one
@@ -80,7 +78,8 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 		}
 	}
 
-	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &sgl, position, &ev->de_ev);
+	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl,
+		       position, &ev->de_ev);
 	if (rc != 0)
 		D_GOTO(err, 0);
 
