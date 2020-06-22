@@ -32,6 +32,7 @@
 
 #include <abt.h>
 #include <daos/rpc.h>
+#include <daos/cont_props.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/container.h>
@@ -233,28 +234,6 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 	}
 }
 
-bool
-cont_prop_csum_enabled(struct ds_iv_ns *ns, uuid_t co_hdl)
-{
-	int			rc;
-	daos_prop_t		cont_prop = {0};
-	struct daos_prop_entry	entry = {0};
-	uint32_t		csum_val;
-
-	entry.dpe_type = DAOS_PROP_CO_CSUM;
-	cont_prop.dpp_entries = &entry;
-	cont_prop.dpp_nr = 1;
-
-	rc = ds_cont_fetch_prop(ns, co_hdl, &cont_prop);
-	if (rc != 0)
-		return false;
-	csum_val = daos_cont_prop2csum(&cont_prop);
-	if (daos_cont_csum_prop_is_enabled(csum_val))
-		return true;
-	else
-		return false;
-}
-
 static int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  crt_bulk_t *remote_bulks, uint64_t *remote_offs,
@@ -426,22 +405,20 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 		struct obj_rw_in	*orw = crt_req_get(rpc);
 		struct ds_pool		*pool;
+		struct bio_sglist	*fbsgl;
+		d_sg_list_t		 fsgl;
+		int			*fbuffer;
 
 		pool = ds_pool_lookup(orw->orw_pool_uuid);
 		if (pool == NULL)
 			return -DER_NONEXIST;
-		if (cont_prop_csum_enabled(pool->sp_iv_ns, orw->orw_co_hdl)) {
-			struct bio_sglist	*fbsgl;
-			d_sg_list_t		 fsgl;
-			int			*fbuffer;
 
-			D_DEBUG(DB_IO, "Data corruption after RDMA\n");
-			fbsgl = vos_iod_sgl_at(ioh, 0);
-			bio_sgl_convert(fbsgl, &fsgl, false);
-			fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
-			*fbuffer += 0x2;
-			daos_sgl_fini(&fsgl, false);
-		}
+		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
+		fbsgl = vos_iod_sgl_at(ioh, 0);
+		bio_sgl_convert(fbsgl, &fsgl, false);
+		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+		*fbuffer += 0x2;
+		daos_sgl_fini(&fsgl, false);
 		ds_pool_put(pool);
 	}
 	return rc;
@@ -851,7 +828,7 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 	uint32_t	i;
 	int		rc;
 
-	if (!daos_csummer_initialized(csummer))
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
 		return 0;
 
 	rc = daos_csummer_verify_key(csummer, &orw->orw_dkey,
@@ -1160,8 +1137,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				    orw->orw_sgls.ca_count);
 		}
 
-		if (rma && daos_csummer_get_dedup(cont_hdl->sch_csummer) &&
-		    daos_csummer_get_dedupverify(cont_hdl->sch_csummer)) {
+		if (rma && cont_hdl->sch_props.dcp_dedup &&
+		    cont_hdl->sch_props.dcp_dedup_verify) {
 			/**
 			 * If dedped data need to be compared, then perform
 			 * the I/O are a regular one, we will check for dedup
@@ -1178,8 +1155,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				      orw->orw_epoch,
 				      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
 				      dkey, orw->orw_nr, iods, iod_csums,
-				daos_csummer_get_dedup(cont_hdl->sch_csummer),
-				daos_csummer_get_dedupsize(cont_hdl->sch_csummer),
+				      cont_hdl->sch_props.dcp_dedup,
+				      cont_hdl->sch_props.dcp_dedup_size,
 				      &ioh, dth);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
@@ -1233,16 +1210,19 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				DP_UOID(orw->orw_oid), rc);
 			goto post;
 		}
-		rc = csum_add2iods(ioh,
-				   orw->orw_iod_array.oia_iods,
-				   orw->orw_iod_array.oia_iod_nr,
-				   cont_hdl->sch_csummer,
-				   orwo->orw_iod_csums.ca_arrays);
+		if (cont_hdl->sch_props.dcp_csum_enabled) {
+			rc = csum_add2iods(ioh,
+					   orw->orw_iod_array.oia_iods,
+					   orw->orw_iod_array.oia_iod_nr,
+					   cont_hdl->sch_csummer,
+					   orwo->orw_iod_csums.ca_arrays);
 
-		if (rc) {
-			D_ERROR(DF_UOID" fetch verify failed: %d.\n",
-				DP_UOID(orw->orw_oid), rc);
-			goto post;
+			if (rc) {
+				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
+					DP_UOID(orw->orw_oid), rc);
+				goto post;
+
+			}
 		}
 	}
 
@@ -2474,6 +2454,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 
 	if (!obj_rpc_is_update(rpc) ||
 	    !daos_csummer_initialized(csummer) ||
+	    csummer->dcs_skip_data_verify ||
 	    !csummer->dcs_srv_verify)
 		return 0;
 

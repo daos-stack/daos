@@ -29,7 +29,7 @@
 #include <daos/common.h>
 #include <daos/dtx.h>
 #include <daos_security.h>
-#include <daos/checksum.h>
+#include <daos/cont_props.h>
 
 daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr)
