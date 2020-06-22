@@ -21,39 +21,28 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package hostlist
+// +build firmware
+
+package main
 
 import (
-	"unicode"
+	"os"
 
-	"github.com/pkg/errors"
+	"github.com/daos-stack/daos/src/control/pbin"
 )
 
-// CreateNumericList creates a special HostList that contains numeric entries
-// and ranges only (no hostname prefixes) from the supplied string representation.
-func CreateNumericList(stringRanges string) (*HostList, error) {
-	for _, r := range stringRanges {
-		if !unicode.IsLetter(r) {
-			continue
-		}
-		return nil, errors.Errorf(
-			"unexpected alphabetic character(s), got %q",
-			stringRanges)
+func main() {
+	app := pbin.NewApp().WithAllowedCallers("daos_server")
+
+	if logPath, set := os.LookupEnv(pbin.DaosFWLogFileEnvVar); set {
+		app = app.WithLogFile(logPath)
 	}
 
-	return parseBracketedHostList(stringRanges, outerRangeSeparators,
-		rangeOperator, true)
-}
+	app.AddHandler("ScmFirmwareQuery", &scmQueryHandler{})
+	app.AddHandler("ScmFirmwareUpdate", &scmUpdateHandler{})
 
-// CreateNumericSet creates a special HostSet containing numeric entries
-// and ranges only (no hostname prefixes) from the supplied string representation.
-func CreateNumericSet(stringRanges string) (*HostSet, error) {
-	hl, err := CreateNumericList(stringRanges)
+	err := app.Run()
 	if err != nil {
-		return nil, errors.Wrapf(err,
-			"creating numeric set from %q", stringRanges)
+		os.Exit(1)
 	}
-	hl.Uniq()
-
-	return &HostSet{list: hl}, nil
 }
