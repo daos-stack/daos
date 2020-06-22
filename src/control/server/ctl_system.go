@@ -138,6 +138,10 @@ func (svc *ControlService) SystemQuery(parent context.Context, pbReq *ctlpb.Syst
 		return nil, errors.New("nil request")
 	}
 
+	if len(svc.membership.Members()) == 0 {
+		return new(ctlpb.SystemQueryResp), nil
+	}
+
 	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)
 	defer cancel()
 
