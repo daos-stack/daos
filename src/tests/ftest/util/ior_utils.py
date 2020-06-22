@@ -170,12 +170,12 @@ class IorCommand(ExecutableCommand):
         if self.api.value in ["DAOS", "MPIIO"]:
             self.daos_group.update(group, "daos_group" if display else None)
             self.daos_cont.update(
-                cont_uuid if cont_uuid else uuid.uuid4(),
+                cont_uuid if cont_uuid else str(uuid.uuid4()),
                 "daos_cont" if display else None)
         else:
             self.dfs_group.update(group, "daos_group" if display else None)
             self.dfs_cont.update(
-                cont_uuid if cont_uuid else uuid.uuid4(),
+                cont_uuid if cont_uuid else str(uuid.uuid4()),
                 "daos_cont" if display else None)
 
     def set_daos_pool_params(self, pool, display=True):
