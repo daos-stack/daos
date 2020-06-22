@@ -958,7 +958,7 @@ pipeline {
                                                   'libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel '+
                                                   'pmix numactl-devel ' +
-                                                  'libipmctl-devel' +
+                                                  'libipmctl-devel ' +
 						  'python36-tabulate' +
                                                   qb_inst_rpms
                         timeout(time:60, unit:'MINUTES') {

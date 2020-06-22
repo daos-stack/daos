@@ -491,7 +491,6 @@ class LogTest():
 
     def rpc_reporting(self, pid):
         """RPC reporting for RPC state machine, for mutiprocesses"""
-        rpc_dict = {}
         op_state_counters = {}
         c_states = {}
         c_state_names = set()
@@ -512,7 +511,8 @@ class LogTest():
                 rpc_state = 'DEALLOCATED'
             elif line.endswith('submitted.'):
                 rpc_state = 'SUBMITTED'
-            elif line.function == 'crt_hg_req_send' and line.get_field(-6) == ('sent'):
+            elif line.function == 'crt_hg_req_send' and \
+                 line.get_field(-6) == ('sent'):
                 rpc_state = 'SENT'
 
             elif line.is_callback():
