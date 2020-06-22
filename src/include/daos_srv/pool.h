@@ -195,7 +195,7 @@ int ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop);
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
 int ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
-			 uint32_t version, struct pl_obj_layout **plo);
+			 uint32_t version);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);

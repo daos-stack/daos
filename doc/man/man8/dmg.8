@@ -1,4 +1,4 @@
-.TH dmg 1 "5 June 2020"
+.TH dmg 1 "13 June 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -63,8 +63,6 @@ Perform tasks related to network devices attached to remote servers
 
 \fBAliases\fP: n
 
-.SS network list
-List all known OFI providers on remote servers that are understood by 'scan'
 .SS network scan
 Scan for network interface devices on remote servers
 
@@ -72,10 +70,7 @@ Scan for network interface devices on remote servers
 .TP
 .TP
 \fB\fB\-p\fR, \fB\-\-provider\fR\fP
-Filter device list to those that support the given OFI provider (default is the provider specified in daos_server.yml)
-.TP
-\fB\fB\-a\fR, \fB\-\-all\fR\fP
-Specify 'all' to see all devices on all providers.  Overrides --provider
+Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)
 .SS pool
 Perform tasks related to DAOS pools
 
@@ -309,18 +304,12 @@ Format SCM and NVMe storage attached to remote servers.
 
 \fBAliases\fP: f
 
-.SS Format SCM and NVMe storage attached to remote servers.
 .TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 Show results of each SCM & NVMe device format operation
 .TP
 \fB\fB\-\-reformat\fR\fP
-Always reformat storage (CAUTION: Potentially destructive)
-.SS System Format Options
-Reformat an existing DAOS system
-.TP
-\fB\fB\-\-system\fR\fP
-Perform reformat of stopped DAOS servers in system
+Reformat storage overwriting any existing filesystem (CAUTION: Potentially destructive)
 .TP
 \fB\fB\-r\fR, \fB\-\-ranks\fR\fP
 Comma separated list of system ranks to format, default is all ranks

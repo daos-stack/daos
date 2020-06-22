@@ -4718,15 +4718,13 @@ out:
  * \param [IN]	pool_uuid	The pool UUID
  * \param [IN]	oid		The OID of the object to be checked
  * \param [IN]	version		The pool map version
- * \param [OUT]	plo		The pointer to the pl_obj_layout of the object
  *
  * \return			+1 if leader is on current server.
  * \return			Zero if the leader resides on another server.
  * \return			Negative value if error.
  */
 int
-ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
-		     uint32_t version, struct pl_obj_layout **plo)
+ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid, uint32_t version)
 {
 	struct ds_pool		*pool;
 	struct pl_map		*map = NULL;
@@ -4777,16 +4775,13 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 	if (rc < 0)
 		goto out;
 
-	if (myrank != target->ta_comp.co_rank) {
+	if (myrank != target->ta_comp.co_rank)
 		rc = 0;
-	} else {
-		if (plo != NULL)
-			*plo = layout;
+	else
 		rc = 1;
-	}
 
 out:
-	if (rc <= 0 && layout != NULL)
+	if (layout != NULL)
 		pl_obj_layout_free(layout);
 	if (map != NULL)
 		pl_map_decref(map);
