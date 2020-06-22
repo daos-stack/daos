@@ -86,6 +86,9 @@ class Test(avocadoTest):
         """Initialize a Test object."""
         super(Test, self).__init__(*args, **kwargs)
 
+        # Define a test ID using the test_* method name
+        self.test_id = self.get_test_name()
+
         # Support specifying timeout values with units, e.g. "1d 2h 3m 4s".
         # Any unit combination may be used, but they must be specified in
         # descending order. Spaces can optionally be used between units and
@@ -109,10 +112,14 @@ class Test(avocadoTest):
                 if dhms[index] is not None:
                     self.timeout += multiplier * int(dhms[index])
 
-        # param to add multiple timeouts for different tests under
-        # same test class
-        self.timeouts = self.params.get(self.get_test_name(),
-                                        "/run/timeouts/*")
+        # Support unique test case timeout values.  These test case specific
+        # timeouts are read from the test yaml using the test case method name
+        # as the key, e.g.:
+        #   timeouts:
+        #     test_quick: 120
+        #     test_long: 1200
+        self.timeouts = self.params.get(self.test_id, "/run/timeouts/*")
+
         # If not specified, set a default timeout of 1 minute.
         # Tests that require a longer timeout should set a "timeout: <int>"
         # entry in their yaml file.  All tests should have a timeout defined.
@@ -270,8 +277,6 @@ class TestWithServers(TestWithoutServers):
         self.client_log = None
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
-        self.test_id = "{}-{}".format(
-            os.path.split(self.filename)[1], self.name.str_uid)
         # self.debug = False
         # self.config = None
 
@@ -370,7 +375,7 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             agent_groups (dict, optional): dictionary of lists of hosts on
-                which to start the daos agent using a unquie server group name
+                which to start the daos agent using a unique server group name
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos agents on all client
                 hosts specified in the test's yaml file.
@@ -411,7 +416,7 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             server_groups (dict, optional): dictionary of lists of hosts on
-                which to start the daos server using a unquie server group name
+                which to start the daos server using a unique server group name
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos server on all server
                 hosts specified in the test's yaml file.

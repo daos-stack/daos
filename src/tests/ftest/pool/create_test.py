@@ -39,11 +39,11 @@ class PoolCreateTests(TestWithServers):
 
     def setUp(self):
         """Set up each test case."""
+        # Create test-case-specific DAOS log files
+        self.update_log_file_names()
+
         super(PoolCreateTests, self).setUp()
         self.dmg = self.get_dmg_command()
-
-        # Create test-specific DAOS log files
-        self.update_log_file_names(self.get_test_name())
 
     def get_max_pool_sizes(self, scm_ratio=0.9, nvme_ratio=0.9):
         """Get the maximum pool sizes for the current server configuration.
