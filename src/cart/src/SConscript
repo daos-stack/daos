@@ -53,7 +53,7 @@ def scons():
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('include', 'cart', header))
-    
+
     # Generate the common libraries used by everyone
     SConscript('swim/SConscript')
     SConscript('cart/SConscript')
