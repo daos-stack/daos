@@ -22,7 +22,11 @@ BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
-BuildRequires: libpsm2-devel
+%if (0%{?rhel} >= 7)
+BuildRequires: json-c-devel
+%else
+BuildRequires: libjson-c-devel
+%endif
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
@@ -142,6 +146,7 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: fio
+Requires: json-c
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
