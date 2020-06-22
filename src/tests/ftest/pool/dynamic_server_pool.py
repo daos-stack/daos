@@ -107,9 +107,9 @@ class DynamicServerPool(TestWithServers):
         if tl_update:
             self.pool.append(self.get_pool(create=False))
             self.pool[-1].target_list.update(ranks, "pool.target_list")
+            self.pool[-1].create()
         else:
             self.pool.append(self.get_pool())
-        self.pool[-1].create()
         self.expected_uuids.append(self.pool[-1].uuid.lower())
         self.uuid_to_ranks[self.pool[-1].uuid.lower()] = ranks
 
