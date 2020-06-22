@@ -852,19 +852,6 @@ daos_add_target(const uuid_t pool_uuid, const char *grp,
 		const char *dmg_config, const d_rank_list_t *svc,
 		d_rank_t rank, int tgt_idx)
 {
-#if 0
-	struct d_tgt_list	targets;
-	int			rc;
-
-	/** add tgt to the pool */
-	targets.tl_nr = 1;
-	targets.tl_ranks = &rank;
-	targets.tl_tgts = &tgt_idx;
-	rc = daos_pool_add_tgt(pool_uuid, grp, svc, &targets, NULL);
-	if (rc)
-		print_message("add pool failed rc %d\n", rc);
-	assert_int_equal(rc, 0);
-#endif
 	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config, svc,
 			 rank, tgt_idx);
 
