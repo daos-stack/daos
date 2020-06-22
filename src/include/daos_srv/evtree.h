@@ -214,6 +214,8 @@ struct evt_node {
 	uint16_t			tn_nr;
 	/** Magic number for validation */
 	uint32_t			tn_magic;
+	/** force alignment */
+	uint64_t			tn_paddings[2];
 	/** The entries in the node */
 	struct evt_node_entry		tn_rec[0];
 };

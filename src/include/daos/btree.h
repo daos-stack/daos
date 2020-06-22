@@ -82,6 +82,11 @@ struct btr_node {
 	uint64_t			tn_gen;
 	/** the first child, it is unused on leaf node */
 	umem_off_t			tn_child;
+	/**
+	 * PMDK allocation has 16 bytes header, force btr_node header
+	 * to be 64-byte aligned
+	 */
+	uint64_t			tn_paddings[3];
 	/** records in this node */
 	struct btr_record		tn_recs[0];
 };
