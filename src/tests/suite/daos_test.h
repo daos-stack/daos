@@ -380,6 +380,9 @@ int rebuild_sub_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 
+/* dmg cmd json output parser APIs */
+int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
+			daos_mgmt_pool_info_t *pools);
 static inline void
 daos_test_print(int rank, char *message)
 {

@@ -31,6 +31,7 @@
 #include <daos_prop.h>
 #include <daos_mgmt.h>
 #include "daos_test.h"
+#include <json-c/json.h>
 
 /** Server crt group ID */
 const char *server_group;
@@ -44,6 +45,7 @@ unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
 int		objclass;
+
 
 /* Create or import a single pool with option to store info in arg->pool
  * or an alternate caller-specified test_pool structure.
@@ -1016,4 +1018,116 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	daos_acl_free(acl);
 	D_FREE(user);
 	return prop;
+}
+
+/* JSON output handling for dmg command */
+static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
+{
+	long int  size = 0;
+	char *content = NULL;
+	char *filename = "/tmp/daos_dmg.json";
+	struct json_object *parsed_json;
+	int	  rc;
+
+	FILE *fp = fopen(filename, "w+");
+
+	if (!fp) {
+		print_message("fopen %s failed!\n", filename);
+		return NULL;
+	}
+
+	/* Need to make sure -j is in the dmg cmd? */
+	rc = system(dmg_cmd);
+	assert_int_equal(rc, 0);
+
+	/* get the content size and allocate buffer */
+	fseek(fp, 0, SEEK_END);
+	size = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+	D_ALLOC(content, size);
+	print_message("json output size is %ld\n", size);
+
+	if (fread(content, size, 1, fp) != 1) {
+		print_message("failed to read content of %s\n", filename);
+		fclose(fp);
+		free(content);
+		return NULL;
+	}
+	fclose(fp);
+
+	parsed_json = json_tokener_parse(content);
+
+	free(content);
+
+	return parsed_json;
+}
+
+int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
+			daos_mgmt_pool_info_t *pools)
+{
+	struct json_object	*parsed_json;
+	struct json_object	*pool_list;
+	struct json_object	*pool;
+	struct json_object	*uuid;
+	struct json_object	*rep_ranks;
+	struct json_object	*rank;
+	daos_size_t		npools_in;
+	char	uuid_str[DAOS_UUID_STR_SIZE];
+	int i, j;
+	int rl_nr;
+
+	if (npools == NULL)
+		return -DER_INVAL;
+	npools_in = *npools;
+
+	parsed_json = daos_dmg_json_contents("dmg pool list -i -j > "
+			"/tmp/daos_dmg.json");
+	if (parsed_json == NULL) {
+		print_message("daos_dmg_json_contents failed\n");
+		return -DER_INVAL;
+	}
+
+	json_object_object_get_ex(parsed_json, "Pools", &pool_list);
+	if (pool_list == NULL)
+		*npools = 0;
+	else
+		*npools = json_object_array_length(pool_list);
+	print_message("#pools %lu\n", *npools);
+
+	if (pools == NULL) {
+		/* no need to fill up a NULL pools buffer */
+		json_object_put(parsed_json);
+		return 0;
+	} else if (npools_in && (npools_in < *npools)) {
+		/* For non-NULL pools, the allocated non-zero buffer size is
+		 * not sufficient
+		 */
+		json_object_put(parsed_json);
+		return -DER_TRUNC;
+	}
+
+	for (i = 0; i < *npools; i++) {
+		pool = json_object_array_get_idx(pool_list, i);
+		json_object_object_get_ex(pool, "UUID", &uuid);
+		strcpy(uuid_str, json_object_get_string(uuid));
+		uuid_parse(uuid_str, pools[i].mgpi_uuid);
+		/* pool service replica ranks */
+		json_object_object_get_ex(pool, "Svcreps", &rep_ranks);
+		rl_nr = json_object_array_length(rep_ranks);
+		if (pools[i].mgpi_svc == NULL)
+			pools[i].mgpi_svc = d_rank_list_alloc(rl_nr);
+		print_message("pool uuid "DF_UUIDF" rl_nr %d\n",
+			DP_UUID(pools[i].mgpi_uuid), pools[i].mgpi_svc->rl_nr);
+
+		for (j = 0; j < pools[i].mgpi_svc->rl_nr; j++) {
+			rank = json_object_array_get_idx(rep_ranks, j);
+			pools[i].mgpi_svc->rl_ranks[j] =
+				json_object_get_int(rank);
+			print_message("rl_ranks = %d\n",
+				pools[i].mgpi_svc->rl_ranks[j]);
+		}
+	}
+
+	json_object_put(parsed_json);
+	return 0;
 }

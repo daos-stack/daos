@@ -155,7 +155,7 @@ def preload_prereqs(prereqs):
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
     reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
-            'uuid', 'crypto', 'fuse', 'protobufc']
+            'uuid', 'crypto', 'fuse', 'protobufc', 'json-c']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal', 'isal_crypto'])
     prereqs.load_definitions(prebuild=reqs)
