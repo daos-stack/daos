@@ -74,19 +74,6 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	hs_reply.fsr_cont_size = iov.iov_buf_len;
 
-	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
-	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
-
-	hs_reply.fsr_dfs_size = iov.iov_buf_len;
-
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
-				  &iov);
-	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
-
-	hs_reply.fsr_dobj_size = iov.iov_buf_len;
-
 	DFUSE_REPLY_IOCTL(oh, req, hs_reply);
 	return;
 err:
@@ -146,6 +133,36 @@ handle_coh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	return;
 free:
 	D_FREE(iov.iov_buf);
+err:
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+}
+
+static void
+handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
+{
+	struct dfuse_hsd_reply	hsd_reply = {0};
+	d_iov_t			iov = {};
+	int			rc;
+
+	DFUSE_TRA_INFO(oh, "Requested");
+
+	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
+
+	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+	hsd_reply.fsr_dfs_size = iov.iov_buf_len;
+
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
+				  &iov);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+	hsd_reply.fsr_dobj_size = iov.iov_buf_len;
+
+	DFUSE_REPLY_IOCTL(oh, req, hsd_reply);
+	return;
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }
@@ -238,13 +255,20 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		return;
 	}
 
-	/* These two are OK to pass across security domains */
-	if (cmd == DFUSE_IOCTL_IL_SIZE) {
-		if (out_bufsz < sizeof(struct dfuse_hs_reply))
+	/* The dfs handles are OK to pass across security domains because you
+	 * need the correct container handle to be able to use them.
+	 */
+	if (cmd == DFUSE_IOCTL_IL_DSIZE) {
+		if (out_bufsz < sizeof(struct dfuse_hsd_reply))
 			D_GOTO(out_err, rc = EIO);
-		handle_size_ioctl(oh, req);
+		handle_dsize_ioctl(oh, req);
 
 		return;
+
+	} else if (_IOC_NR(cmd) == DFUSE_IOCTL_REPLY_DOH) {
+		size_t size = _IOC_SIZE(cmd);
+
+		handle_doh_ioctl(oh, size, req);
 
 	} else if (_IOC_NR(cmd) == DFUSE_IOCTL_REPLY_DOOH) {
 		size_t size = _IOC_SIZE(cmd);
@@ -275,16 +299,6 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		size_t size = _IOC_SIZE(cmd);
 
 		handle_coh_ioctl(oh, size, req);
-
-	} else if (_IOC_NR(cmd) == DFUSE_IOCTL_REPLY_DOH) {
-		size_t size = _IOC_SIZE(cmd);
-
-		handle_doh_ioctl(oh, size, req);
-
-	} else if (_IOC_NR(cmd) == DFUSE_IOCTL_REPLY_DOOH) {
-		size_t size = _IOC_SIZE(cmd);
-
-		handle_dooh_ioctl(oh, size, req);
 
 	} else {
 		DFUSE_TRA_WARNING(oh, "Unknown IOCTL type %#x", cmd);

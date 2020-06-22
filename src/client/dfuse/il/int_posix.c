@@ -275,19 +275,49 @@ ioil_fini(void)
 
 static int
 _fetch_dfs_obj(int fd,
-	struct dfuse_hs_reply *hs_reply,
+	struct dfuse_hsd_reply *hsd_reply,
 	struct fd_entry *entry)
 {
 	d_iov_t			iov = {};
 	int			cmd;
 	int			rc;
 
-	D_ALLOC(iov.iov_buf, hs_reply->fsr_dobj_size);
+
+	if (!ioil_ioc.ioc_dfs) {
+		D_ALLOC(iov.iov_buf, hsd_reply->fsr_dfs_size);
+		if (!iov.iov_buf)
+			return ENOMEM;
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
+			DFUSE_IOCTL_REPLY_DOH, hsd_reply->fsr_dfs_size);
+
+		rc = ioctl(fd, cmd, iov.iov_buf);
+		if (rc != 0) {
+			D_FREE(iov.iov_buf);
+			return rc;
+		}
+
+		iov.iov_buf_len = hsd_reply->fsr_dfs_size;
+		iov.iov_len = iov.iov_buf_len;
+
+		rc = dfs_global2local(ioil_ioc.ioc_poh,
+				ioil_ioc.ioc_coh,
+				0,
+				iov, &ioil_ioc.ioc_dfs);
+		if (rc) {
+			DFUSE_LOG_WARNING("Failed to use dfs handle %d", rc);
+			D_FREE(iov.iov_buf);
+			return rc;
+		}
+
+		D_FREE(iov.iov_buf);
+	}
+
+	D_ALLOC(iov.iov_buf, hsd_reply->fsr_dobj_size);
 	if (!iov.iov_buf)
 		return ENOMEM;
 
 	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-		   DFUSE_IOCTL_REPLY_DOOH, hs_reply->fsr_dobj_size);
+		   DFUSE_IOCTL_REPLY_DOOH, hsd_reply->fsr_dobj_size);
 
 	rc = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
@@ -295,31 +325,27 @@ _fetch_dfs_obj(int fd,
 		return rc;
 	}
 
-	iov.iov_buf_len = hs_reply->fsr_dobj_size;
+	iov.iov_buf_len = hsd_reply->fsr_dobj_size;
 	iov.iov_len = iov.iov_buf_len;
 
 	rc = dfs_obj_global2local(entry->fd_dfs,
 				  0,
 				  iov,
 				  &entry->fd_dfsoh);
-	if (rc) {
-		DFUSE_LOG_INFO("Failed to use dfs object handle %d", rc);
-		D_FREE(iov.iov_buf);
-		return rc;
-	}
+	if (rc)
+		DFUSE_LOG_WARNING("Failed to use dfs object handle %d", rc);
 
 	D_FREE(iov.iov_buf);
-
-	return 0;
+	return rc;
 }
 
 static int
 fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 {
-	struct dfuse_hs_reply hs_reply;
+	struct dfuse_hsd_reply hsd_reply;
 	int rc;
 
-	rc = ioctl(fd, DFUSE_IOCTL_IL_SIZE, &hs_reply);
+	rc = ioctl(fd, DFUSE_IOCTL_IL_DSIZE, &hsd_reply);
 	if (rc != 0) {
 		int err = errno;
 
@@ -327,7 +353,14 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 		return rc;
 	}
 
-	return _fetch_dfs_obj(fd, &hs_reply, entry);
+	if (hsd_reply.fsr_version != DFUSE_IOCTL_VERSION) {
+		DFUSE_LOG_INFO("ioctl version mismatch (fd=%d): expected "
+			       "%d got %d", fd, DFUSE_IOCTL_VERSION,
+			       hsd_reply.fsr_version);
+		return EIO;
+	}
+
+	return _fetch_dfs_obj(fd, &hsd_reply, entry);
 }
 
 static int
@@ -346,11 +379,16 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 		return rc;
 	}
 
-	DFUSE_LOG_INFO("ioctl returned %zi %zi %zi %zi",
+	if (hs_reply.fsr_version != DFUSE_IOCTL_VERSION) {
+		DFUSE_LOG_INFO("ioctl version mismatch (fd=%d): expected "
+			       "%d got %d", fd, DFUSE_IOCTL_VERSION,
+			       hs_reply.fsr_version);
+		return EIO;
+	}
+
+	DFUSE_LOG_INFO("ioctl returned %zi %zi",
 		       hs_reply.fsr_pool_size,
-		       hs_reply.fsr_cont_size,
-		       hs_reply.fsr_dfs_size,
-		       hs_reply.fsr_dobj_size);
+		       hs_reply.fsr_cont_size);
 
 	D_ALLOC(iov.iov_buf, hs_reply.fsr_pool_size);
 	if (!iov.iov_buf)
@@ -402,34 +440,7 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 
 	D_FREE(iov.iov_buf);
 
-	D_ALLOC(iov.iov_buf, hs_reply.fsr_dfs_size);
-	if (!iov.iov_buf)
-		return ENOMEM;
-	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-		   DFUSE_IOCTL_REPLY_DOH, hs_reply.fsr_dfs_size);
-
-	rc = ioctl(fd, cmd, iov.iov_buf);
-	if (rc != 0) {
-		D_FREE(iov.iov_buf);
-		return rc;
-	}
-
-	iov.iov_buf_len = hs_reply.fsr_dfs_size;
-	iov.iov_len = iov.iov_buf_len;
-
-	rc = dfs_global2local(ioil_ioc.ioc_poh,
-			      ioil_ioc.ioc_coh,
-			      0,
-			      iov, &ioil_ioc.ioc_dfs);
-	if (rc) {
-		DFUSE_LOG_INFO("Failed to use dfs handle %d", rc);
-		D_FREE(iov.iov_buf);
-		return rc;
-	}
-
-	D_FREE(iov.iov_buf);
-
-	return _fetch_dfs_obj(fd, &hs_reply, entry);
+	return fetch_dfs_obj_handle(fd, entry);
 }
 
 static int
