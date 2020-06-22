@@ -93,7 +93,7 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		remap_add_one(remap_list, f_new);
 	} else {
 		f_new->fs_tgt_id = tgt->ta_comp.co_id;
-		d_list_add(&f_new->fs_list, remap_list);
+		d_list_add_tail(&f_new->fs_list, remap_list);
 	}
 
 	return 0;
@@ -399,4 +399,94 @@ next_fail:
 	(*current) = (*current)->next;
 }
 
+int
+pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
+{
+	struct pl_obj_shard	*new_shards;
+	struct failed_shard	*f_shard;
+	d_list_t		*current;
+	uint8_t                 *grp_map;
+	uint32_t                *grp_count;
+	uint32_t                max_fail_grp;
+	uint32_t		new_group_size;
+	uint32_t		grp;
+	uint32_t		grp_idx;
+	int i, j, k = 0;
+	int rc = 0;
 
+	grp_map = NULL;
+	grp_count = NULL;
+
+	/* Empty list, no extension needed */
+	if (extended_list == extended_list->next || layout->ol_grp_size == 1)
+		goto out;
+
+	D_ALLOC_ARRAY(grp_map, (layout->ol_nr / 8) + 1);
+	D_ALLOC_ARRAY(grp_count, layout->ol_grp_nr);
+	if (grp_count == NULL || grp_map == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	i = 0;
+	max_fail_grp = 0;
+
+	current = extended_list->next;
+	while (current != extended_list) {
+		f_shard = d_list_entry(current, struct failed_shard, fs_list);
+		grp = f_shard->fs_shard_idx / layout->ol_grp_size;
+
+		if (isset(grp_map, f_shard->fs_tgt_id) == false) {
+			setbit(grp_map, f_shard->fs_tgt_id);
+			grp_count[grp]++;
+
+			if (max_fail_grp < grp_count[grp])
+				max_fail_grp = grp_count[grp];
+		} else
+			d_list_del_init(&f_shard->fs_list);
+
+		current = current->next;
+	}
+
+
+	new_group_size = layout->ol_grp_size + max_fail_grp;
+	D_ALLOC_ARRAY(new_shards, new_group_size * layout->ol_grp_nr);
+	if (new_shards == NULL)
+		return -DER_NOMEM;
+
+	while (k < layout->ol_nr) {
+		for (j = 0; j < layout->ol_grp_size; ++j, ++k, ++i)
+			new_shards[i] = layout->ol_shards[k];
+		for (; j < new_group_size; ++j, ++i) {
+			new_shards[i].po_shard = -1;
+			new_shards[i].po_target = -1;
+		}
+	}
+
+	current = extended_list->next;
+	while (current != extended_list) {
+		f_shard = d_list_entry(current, struct failed_shard, fs_list);
+
+		grp = f_shard->fs_shard_idx / layout->ol_grp_size;
+		grp_idx = ((grp + 1) * layout->ol_grp_size) + grp;
+		grp_count[grp]--;
+		grp_idx += grp_count[grp];
+
+		new_shards[grp_idx].po_fseq = f_shard->fs_fseq;
+		new_shards[grp_idx].po_shard = f_shard->fs_shard_idx;
+		new_shards[grp_idx].po_target = f_shard->fs_tgt_id;
+		new_shards[grp_idx].po_rebuilding = 1;
+
+		current = current->next;
+	}
+
+	layout->ol_grp_size += max_fail_grp;
+	layout->ol_nr = layout->ol_grp_size * layout->ol_grp_nr;
+
+	D_FREE(layout->ol_shards);
+	layout->ol_shards = new_shards;
+
+out:
+	D_FREE(grp_map);
+	D_FREE(grp_count);
+	remap_list_free_all(extended_list);
+	return rc;
+}

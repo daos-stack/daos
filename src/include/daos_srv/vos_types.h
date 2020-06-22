@@ -212,6 +212,8 @@ enum {
 	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
 	/** replay punch (underwrite) */
 	VOS_OF_REPLAY_PC	= (1 << 8),
+	/* critical update - skip checks on SCM system/held space */
+	VOS_OF_CRIT		= (1 << 9),
 };
 
 /** Mask for any conditionals passed to to the fetch */
