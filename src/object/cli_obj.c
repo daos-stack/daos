@@ -91,7 +91,8 @@ struct obj_auxi_args {
 					 csum_report:1,
 					 no_retry:1,
 					 ec_wait_recov:1,
-					 ec_in_recov:1;
+					 ec_in_recov:1,
+					 new_shard_tasks:1;
 	/* request flags. currently only: ORF_RESEND, ORF_CSUM_REPORT */
 	uint32_t			 flags;
 	struct obj_req_tgts		 req_tgts;
@@ -656,7 +657,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	struct daos_oclass_attr	*oca;
 	int			 rc = 0;
 
-	if (obj_auxi->req_reasbed) {
+	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetch) {
 		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n",
 			DP_OID(oid));
 		return 0;
@@ -667,12 +668,14 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	if (!daos_oclass_is_ec(oid, &oca))
 		return 0;
 
-	obj_auxi->is_ec_obj = 1;
-	rc = obj_reasb_req_init(obj_auxi, args->iods, args->nr, oca);
-	if (rc) {
-		D_ERROR(DF_OID" obj_reasb_req_init failed %d.\n",
-			DP_OID(oid), rc);
-		return rc;
+	if (!obj_auxi->req_reasbed) {
+		obj_auxi->is_ec_obj = 1;
+		rc = obj_reasb_req_init(obj_auxi, args->iods, args->nr, oca);
+		if (rc) {
+			D_ERROR(DF_OID" obj_reasb_req_init failed %d.\n",
+				DP_OID(oid), rc);
+			return rc;
+		}
 	}
 
 	rc = obj_ec_req_reasb(args, oid, oca, reasb_req,
@@ -683,7 +686,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		obj_auxi->req_reasbed = true;
 		if (reasb_req->orr_iods != NULL)
 			args->iods = reasb_req->orr_iods;
-		if (reasb_req->orr_sgls != NULL)
+		if (reasb_req->orr_sgls != NULL && !reasb_req->orr_size_fetch)
 			args->sgls = reasb_req->orr_sgls;
 	} else {
 		D_ERROR(DF_OID" obj_ec_req_reasb failed %d.\n",
@@ -1521,7 +1524,8 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	crt_bulk_perm_t		bulk_perm;
 	int			rc = 0;
 
-	if (obj_auxi->io_retry)
+	if ((obj_auxi->io_retry && !obj_auxi->reasb_req.orr_size_fetched) ||
+	    obj_auxi->reasb_req.orr_size_fetch)
 		return 0;
 
 	/* inline fetch needs to pack sgls buffer into RPC so uses it to check
@@ -1533,6 +1537,7 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
 				   obj_auxi);
 	}
+	obj_auxi->reasb_req.orr_size_fetched = 0;
 
 	return rc;
 }
@@ -1606,7 +1611,7 @@ obj_req_size_valid(daos_size_t iod_size, daos_size_t sgl_size)
 
 static int
 obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-		  bool update)
+		  bool update, bool size_fetch)
 {
 	int	i;
 	int	rc;
@@ -1640,8 +1645,9 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 				D_ERROR("invalid update req with NULL sgl\n");
 				return -DER_INVAL;
 			}
-			if (!obj_recx_valid(iods[i].iod_nr, iods[i].iod_recxs,
-					   update)) {
+			if (!size_fetch &&
+			    !obj_recx_valid(iods[i].iod_nr, iods[i].iod_recxs,
+					    update)) {
 				D_ERROR("IOD_ARRAY should have valid recxs\n");
 				return -DER_INVAL;
 			}
@@ -1692,8 +1698,11 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dc_obj_epoch *epoch,
 	switch (opc) {
 	case DAOS_OBJ_RPC_FETCH: {
 		daos_obj_fetch_t	*f_args = args;
+		bool			 size_fetch;
 
-		if (!obj_auxi->io_retry && !obj_auxi->req_reasbed) {
+		size_fetch = obj_auxi->reasb_req.orr_size_fetch;
+		if ((!obj_auxi->io_retry && !obj_auxi->req_reasbed) ||
+		    size_fetch) {
 			if (f_args->dkey == NULL ||
 			    f_args->dkey->iov_buf == NULL || f_args->nr == 0) {
 				D_ERROR("Invalid fetch parameter.\n");
@@ -1701,7 +1710,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dc_obj_epoch *epoch,
 			}
 
 			rc = obj_iod_sgl_valid(f_args->nr, f_args->iods,
-					       f_args->sgls, false);
+					       f_args->sgls, false, size_fetch);
 			if (rc)
 				goto out;
 		}
@@ -1729,7 +1738,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dc_obj_epoch *epoch,
 			}
 
 			rc = obj_iod_sgl_valid(u_args->nr, u_args->iods,
-					       u_args->sgls, true);
+					       u_args->sgls, true, false);
 		}
 		/* !daos_handle_is_inval case will be handled by the caller. */
 		if (rc == 0 && daos_handle_is_inval(u_args->th)) {
@@ -1982,7 +1991,7 @@ shard_task_sched(tse_task_t *task, void *arg)
 	obj_auxi = shard_auxi->obj_auxi;
 	map_ver = obj_auxi->map_ver_req;
 	obj_task = obj_auxi->obj_task;
-	if (obj_auxi->io_retry) {
+	if (obj_auxi->io_retry && !obj_auxi->new_shard_tasks) {
 		/* For retried IO, check if the shard's target changed after
 		 * pool map query. If match then need not do anything, if
 		 * mismatch then need to re-schedule the shard IO on the new
@@ -2166,7 +2175,8 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		  req_tgts->ort_grp_nr * req_tgts->ort_grp_size;
 
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
-	if (obj_auxi->io_retry && obj_auxi->args_initialized) {
+	if (obj_auxi->io_retry && obj_auxi->args_initialized &&
+	    !obj_auxi->new_shard_tasks) {
 		switch (obj_auxi->opc) {
 		case DAOS_OBJ_RPC_FETCH:
 		case DAOS_OBJ_RPC_UPDATE:
@@ -2228,8 +2238,6 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			return rc;
 		}
 	}
-
-	D_ASSERT(!obj_auxi->args_initialized);
 
 	/* if with only one target, need not to create separate shard task */
 	if (tgts_nr == 1) {
@@ -2389,8 +2397,7 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 }
 
 static void
-obj_rw_csum_destroy(const struct dc_object *obj,
-			struct obj_auxi_args *obj_auxi)
+obj_rw_csum_destroy(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
 
@@ -2398,6 +2405,55 @@ obj_rw_csum_destroy(const struct dc_object *obj,
 		return;
 	daos_csummer_free_ci(csummer, &obj_auxi->rw_args.dkey_csum);
 	daos_csummer_free_ic(csummer, &obj_auxi->rw_args.iod_csums);
+}
+
+static void
+obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
+{
+	daos_iod_t	*uiods, *iods;
+	d_sg_list_t	*usgls;
+	d_list_t	*head;
+	unsigned int     iod_nr, i;
+	bool		 size_all_zero = true;
+
+	/* set iod_size to original user IOD */
+	uiods = obj_auxi->reasb_req.orr_uiods;
+	iods = obj_auxi->rw_args.api_args->iods;
+	iod_nr = obj_auxi->rw_args.api_args->nr;
+	D_ASSERT(uiods != iods);
+	for (i = 0; i < iod_nr; i++) {
+		if (uiods[i].iod_size != DAOS_REC_ANY) {
+			D_ASSERT(iods[i].iod_size == 0 ||
+				 iods[i].iod_size == uiods[i].iod_size);
+			size_all_zero = false;
+		} else {
+			uiods[i].iod_size = iods[i].iod_size;
+			D_DEBUG(DB_IO, DF_OID" set iod_size="DF_U64"\n",
+				DP_OID(obj->cob_md.omd_id),
+				iods[i].iod_size);
+			if (uiods[i].iod_size != 0)
+				size_all_zero = false;
+		}
+	}
+
+	if (size_all_zero) {
+		usgls = obj_auxi->reasb_req.orr_usgls;
+		for (i = 0; i < iod_nr; i++)
+			usgls[i].sg_nr_out = 0;
+	} else {
+		D_DEBUG(DB_IO, DF_OID" retrying IO after size fetch.\n",
+			DP_OID(obj->cob_md.omd_id));
+		/* remove the original shard fetch tasks and will
+		 * recreate new shard fetch tasks with new parameters.
+		 */
+		head = &obj_auxi->shard_task_head;
+		if (head != NULL) {
+			tse_task_list_traverse(head, shard_task_remove, NULL);
+			D_ASSERT(d_list_empty(head));
+		}
+		obj_auxi->new_shard_tasks = 1;
+		obj_auxi->io_retry = 1;
+	}
 }
 
 static int
@@ -2520,6 +2576,10 @@ obj_comp_cb(tse_task_t *task, void *data)
 			obj_auxi->to_leader = 1;
 	}
 
+	if (!obj_auxi->io_retry && task->dt_result == 0 &&
+	    obj_auxi->reasb_req.orr_size_fetch)
+		obj_size_fetch_cb(obj, obj_auxi);
+
 	if (pm_stale || obj_auxi->io_retry)
 		obj_retry_cb(task, obj, obj_auxi, pm_stale);
 
@@ -2637,6 +2697,7 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	else
 		dc_tx_get_dti(obj_auxi->th, &shard_arg->dti);
 
+	obj_auxi->rw_args.api_args	= obj_args;
 	shard_arg->api_args		= obj_args;
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;

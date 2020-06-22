@@ -149,7 +149,12 @@ struct obj_reasb_req {
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
-	uint32_t			 orr_recov:1; /* for recovery flag */
+	/* for data recovery flag */
+	uint32_t			 orr_recov:1,
+	/* for iod_size fetching flag */
+					 orr_size_fetch:1,
+	/* for iod_size fetched flag */
+					 orr_size_fetched:1;
 };
 
 static inline void

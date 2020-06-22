@@ -579,12 +579,18 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		if (fw_shard_tgts != NULL)
 			orw->orw_flags |= ORF_BULK_BIND;
 	} else {
-		/* Transfer data inline */
-		if (sgls != NULL)
-			orw->orw_sgls.ca_count = nr;
-		else
+		if (args->reasb_req && args->reasb_req->orr_size_fetch) {
+			/* NULL bulk and NULL sgl for size_fetch */
 			orw->orw_sgls.ca_count = 0;
-		orw->orw_sgls.ca_arrays = sgls;
+			orw->orw_sgls.ca_arrays = NULL;
+		} else {
+			/* Transfer data inline */
+			if (sgls != NULL)
+				orw->orw_sgls.ca_count = nr;
+			else
+				orw->orw_sgls.ca_count = 0;
+			orw->orw_sgls.ca_arrays = sgls;
+		}
 		orw->orw_bulks.ca_count = 0;
 		orw->orw_bulks.ca_arrays = NULL;
 	}

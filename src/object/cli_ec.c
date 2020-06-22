@@ -318,6 +318,9 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 	bool				 punch;
 	int				 i, j, idx, rc;
 
+	if (reasb_req->orr_size_fetched)
+		return 0;
+
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	ec_recx_array = &reasb_req->orr_recxs[iod_idx];
 	tgt_recx_nrs = ec_recx_array->oer_tgt_recx_nrs;
@@ -809,6 +812,7 @@ ec_data_seg_add(daos_recx_t *recx, daos_size_t iod_size, d_sg_list_t *sgl,
 	uint64_t	recx_size, recx_idx, recx_nr, iov_off, end;
 	uint32_t	i, iov_idx, tgt, iov_nr = 0;
 
+	D_ASSERT(iod_size > 0);
 	if (recx->rx_nr == 0)
 		return;
 	recx_size = recx->rx_nr * iod_size;
@@ -1136,10 +1140,25 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 					iod_size, sgl, sorter);
 				continue;
 			}
-			ec_data_recx_add(recx, riod->iod_recxs, ridx,
-					 tgt_recx_idxs, oca, update);
-			ec_data_seg_add(recx, iod_size, sgl, &iov_idx, &iov_off,
-					oca, iovs, iov_nr, sorter, update);
+			if (!reasb_req->orr_size_fetched)
+				ec_data_recx_add(recx, riod->iod_recxs, ridx,
+						 tgt_recx_idxs, oca, update);
+			if (!reasb_req->orr_size_fetch) {
+				/* After size query, server returns as zero
+				 * iod_size (Empty tree or all holes, DAOS array
+				 * API relies on zero iod_size to see if an
+				 * array cell is empty). In this case, set
+				 * iod_size as 1 to make sgl be splittable,
+				 * server will not really transfer data back.
+				 */
+				if (iod_size == 0) {
+					D_ASSERT(reasb_req->orr_size_fetched);
+					iod_size = 1;
+				}
+				ec_data_seg_add(recx, iod_size, sgl, &iov_idx,
+						&iov_off, oca, iovs, iov_nr,
+						sorter, update);
+			}
 			continue;
 		}
 
@@ -1185,7 +1204,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		ec_parity_seg_add(ec_recx_array, iod, oca, sorter);
 	}
 
-	if (!punch)
+	if (!punch && !reasb_req->orr_size_fetch)
 		obj_ec_seg_pack(sorter, rsgl);
 
 	/* generate the oiod/siod */
@@ -1266,6 +1285,9 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 	uint64_t			 cell_bytes;
 	uint32_t			 idx, tgt_nr;
 	int				 rc = 0;
+
+	if (reasb_req->orr_size_fetched)
+		return 0;
 
 	ec_recx_array = &reasb_req->orr_recxs[iod_idx];
 	punch = (update && iod->iod_size == DAOS_REC_ANY);
@@ -1373,8 +1395,33 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 	uint32_t		 iod_nr = args->nr;
 	int			 i, rc = 0;
 
-	reasb_req->orr_uiods = iods;
-	reasb_req->orr_usgls = sgls;
+	if (!reasb_req->orr_size_fetch) {
+		reasb_req->orr_uiods = iods;
+		reasb_req->orr_usgls = sgls;
+	}
+
+	/* If any array iod with unknown rec_size, firstly send a size_fetch
+	 * request to server to query it, and then retry the IO request to do
+	 * the real fetch. If only with single-value, need not size_fetch ahead.
+	 */
+	if (reasb_req->orr_size_fetch) {
+		reasb_req->orr_size_fetch = 0;
+		reasb_req->orr_size_fetched = 1;
+		iods = reasb_req->orr_uiods;
+	} else if (!update) {
+		bool	singv_only = true;
+
+		for (i = 0; i < iod_nr; i++) {
+			if (iods[i].iod_size == DAOS_REC_ANY)
+				reasb_req->orr_size_fetch = 1;
+			if (iods[i].iod_type == DAOS_IOD_ARRAY)
+				singv_only = false;
+		}
+		/* if only with single-value, need not size_fetch */
+		if (singv_only)
+			reasb_req->orr_size_fetch = 0;
+	}
+
 	for (i = 0; i < iod_nr; i++) {
 		if (iods[i].iod_type == DAOS_IOD_SINGLE) {
 			rc = obj_ec_singv_req_reasb(oid, &iods[i], &sgls[i],
@@ -1413,12 +1460,21 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 		}
 	}
 
-	for (i = 0; i < obj_ec_tgt_nr(oca); i++) {
+	for (i = 0; !reasb_req->orr_size_fetched && i < obj_ec_tgt_nr(oca);
+	     i++) {
 		if (isset(reasb_req->tgt_bitmap, i))
 			reasb_req->orr_tgt_nr++;
 	}
 
 	if (!update) {
+		if (reasb_req->tgt_oiods != NULL) {
+			/* re-init the tgt_oiods to re-calculate the oto_offs
+			 * after iod_size known.
+			 */
+			D_ASSERT(reasb_req->orr_size_fetched);
+			obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
+			reasb_req->tgt_oiods = NULL;
+		}
 		reasb_req->tgt_oiods = obj_ec_tgt_oiod_init(
 			reasb_req->orr_oiods, iod_nr, reasb_req->tgt_bitmap,
 			obj_ec_tgt_nr(oca) - 1, reasb_req->orr_tgt_nr);
@@ -2189,9 +2245,10 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 	}
 
 	for (i = 0, idx = 0; i < tgt_nr; i++, idx++) {
-		while (isclr(tgt_bitmap, idx))
+		while (isclr(tgt_bitmap, idx) && idx < OBJ_EC_MAX_M)
 			idx++;
-		D_ASSERT(idx <= tgt_max_idx);
+		if (idx > tgt_max_idx)
+			break;
 		tgt_oiod = &tgt_oiods[i];
 		tgt_oiod->oto_iod_nr = iod_nr;
 		tgt_oiod->oto_tgt_idx = idx;

@@ -2054,9 +2054,9 @@ basic_byte_array(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	d_iov_t	 dkey;
+	d_iov_t		 dkey;
 	d_sg_list_t	 sgl;
-	d_iov_t	 sg_iov[2];
+	d_iov_t		 sg_iov[2];
 	daos_iod_t	 iod;
 	daos_recx_t	 recx[5];
 	char		 stack_buf_out[STACK_BUF_LEN];
@@ -2066,6 +2066,7 @@ basic_byte_array(void **state)
 	char		 *buf;
 	char		 *buf_out;
 	int		 buf_len, tmp_len;
+	bool		 test_ec = false;
 	int		 step = 1;
 	int		 rc;
 
@@ -2076,8 +2077,12 @@ basic_byte_array(void **state)
 	dts_buf_render(stack_buf, STACK_BUF_LEN);
 	dts_buf_render(bulk_buf, TEST_BULK_BUF_LEN);
 
+test_ec_obj:
 	/** open object */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	if (test_ec)
+		oid = dts_oid_gen(dts_ec_obj_class, 0, arg->myrank);
+	else
+		oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -2142,7 +2147,8 @@ next_step:
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    NULL, NULL);
 	assert_int_equal(rc, 0);
-	assert_int_equal(sgl.sg_nr_out, 0);
+	if (!test_ec)
+		assert_int_equal(sgl.sg_nr_out, 0);
 
 	print_message("reading all data back ...\n");
 	memset(buf_out, 0, buf_len);
@@ -2156,7 +2162,8 @@ next_step:
 	/** Verify data consistency */
 	print_message("validating data ... sg_nr_out %d, iod_size %d.\n",
 		      sgl.sg_nr_out, (int)iod.iod_size);
-	assert_int_equal(sgl.sg_nr_out, 2);
+	if (!test_ec)
+		assert_int_equal(sgl.sg_nr_out, 2);
 	assert_memory_equal(buf, buf_out, buf_len);
 
 	print_message("short read should get iov_len with tail hole trimmed\n");
@@ -2176,8 +2183,10 @@ next_step:
 	/** Verify data consistency */
 	print_message("validating data ... sg_nr_out %d, iov_len %d.\n",
 		      sgl.sg_nr_out, (int)sgl.sg_iovs[0].iov_len);
-	assert_int_equal(sgl.sg_nr_out, 1);
-	assert_int_equal(sgl.sg_iovs[0].iov_len, tmp_len);
+	if (!test_ec) {
+		assert_int_equal(sgl.sg_nr_out, 1);
+		assert_int_equal(sgl.sg_iovs[0].iov_len, tmp_len);
+	}
 	assert_memory_equal(buf, buf_out, tmp_len);
 
 	if (step++ == 1)
@@ -2186,6 +2195,14 @@ next_step:
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
+
+	if (test_runable(arg, dts_ec_grp_size) && !test_ec) {
+		print_message("\nrun same test fr EC object ...\n");
+		test_ec = true;
+		step = 1;
+		goto test_ec_obj;
+	}
+
 	print_message("all good\n");
 	D_FREE(bulk_buf);
 	D_FREE(bulk_buf_out);
