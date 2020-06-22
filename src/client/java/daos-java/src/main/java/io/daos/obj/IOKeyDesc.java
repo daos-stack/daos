@@ -25,9 +25,15 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.Constants;
+import io.daos.DaosIOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A class to describe key listing, including approximate key length, number of keys to retrieve and batch size
@@ -42,7 +48,7 @@ public class IOKeyDesc {
 
   private final int batchSize;
 
-  private final int keyLen;
+  private final int akeyLen;
 
   private final ByteBuffer anchorBuffer;
 
@@ -50,7 +56,17 @@ public class IOKeyDesc {
 
   private final ByteBuffer keyBuffer;
 
+  private List<String> resultKeys;
+
+  private int suggestedKeyLen;
+
   private boolean encoded;
+
+  private boolean resultParsed;
+
+  private boolean continued;
+
+  private static final Logger log = LoggerFactory.getLogger(IOKeyDesc.class);
 
   /**
    * constructor to set all parameters.
@@ -59,13 +75,13 @@ public class IOKeyDesc {
    * distribution key for listing akeys. null for listing dkeys
    * @param nbrOfKeys
    * number of keys to list. The listing could stop if <code>nbrOfKeys</code> exceeds actual number of keys
-   * @param keyLen
+   * @param akeyLen
    * approximate key length, so that buffer size can be well-calculated
    * @param batchSize
    * how many keys to list per native method call
    * @throws IOException
    */
-  protected IOKeyDesc(String dkey, int nbrOfKeys, int keyLen, int batchSize) throws IOException {
+  protected IOKeyDesc(String dkey, int nbrOfKeys, int akeyLen, int batchSize) throws IOException {
     this.dkey = dkey;
     if (dkey != null) {
       dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
@@ -78,7 +94,7 @@ public class IOKeyDesc {
       throw new IllegalArgumentException("nbrOfKeys should be at least 1, " + nbrOfKeys);
     }
     this.nbrOfKeys = nbrOfKeys;
-    this.keyLen = keyLen;
+    this.akeyLen = akeyLen;
     if (nbrOfKeys < batchSize) {
       this.batchSize = nbrOfKeys;
     } else {
@@ -87,14 +103,15 @@ public class IOKeyDesc {
     // 1 byte for anchor status
     anchorBuffer = BufferAllocator.directBuffer(1 + IOKeyDesc.getAnchorTypeLen());
     anchorBuffer.order(Constants.DEFAULT_ORDER);
+    anchorBuffer.put((byte) 0);
     // 4 for actual number of keys returned, (2 + dkeyBytes.length) for dkeys
-    int descLen = 4 + ((dkeyBytes == null) ? 0 : (2 + dkeyBytes.length))
+    int descLen = 4 + ((dkeyBytes == null) ? 0 : (Constants.ENCODED_LENGTH_KEY + dkeyBytes.length))
                   + IOKeyDesc.getKeyDescLen() * this.batchSize;
     if (descLen < 0) {
       throw new IllegalArgumentException("too big batchSize. " + this.batchSize);
     }
     descBuffer = BufferAllocator.directBuffer(descLen);
-    keyBuffer = BufferAllocator.directBuffer(keyLen * this.batchSize);
+    keyBuffer = BufferAllocator.directBuffer(akeyLen * this.batchSize);
     descBuffer.order(Constants.DEFAULT_ORDER);
     keyBuffer.order(Constants.DEFAULT_ORDER);
   }
@@ -137,10 +154,6 @@ public class IOKeyDesc {
     this(dkey, Integer.MAX_VALUE, Constants.KEY_LIST_LEN_DEFAULT, Constants.KEY_LIST_BATCH_SIZE_DEFAULT);
   }
 
-  public int getKeyLen() {
-    return keyLen;
-  }
-
   public int getBatchSize() {
     return batchSize;
   }
@@ -164,16 +177,111 @@ public class IOKeyDesc {
     return dkey;
   }
 
+  public List<String> getResultKeys() {
+    return resultKeys;
+  }
+
+  /**
+   * get suggested key length after key2big error occurred.
+   *
+   * @return suggested key length
+   */
+  public int getSuggestedKeyLen() {
+    return suggestedKeyLen;
+  }
+
+  /**
+   * encode dkey, if any, to descBuffer and encode status to anchor buffer.
+   */
   public void encode() {
+    if (resultParsed) {
+      throw new IllegalStateException("result is parsed. cannot encode again");
+    }
     if (!encoded) {
-      descBuffer.position(4); // reserve for actual number of keys returned
-      if (dkeyBytes != null) {
+      descBuffer.position(0);
+      descBuffer.putInt(0); // reserve for actual number of keys returned
+      if ((!continued) && dkeyBytes != null) {
         descBuffer.putShort((short) dkeyBytes.length);
         descBuffer.put(dkeyBytes);
       }
-      anchorBuffer.put((byte) 0);
       encoded = true;
     }
+  }
+
+  /**
+   * continue to list more keys with existing anchor which is updated in JNI call.
+   * user should call this method before reusing this object to query more keys.
+   */
+  public void continueList() {
+    anchorBuffer.position(0);
+    byte stat = anchorBuffer.get();
+    if (stat == Constants.KEY_LIST_CODE_NOT_STARTED) {
+      return;
+    }
+    if (stat != Constants.KEY_LIST_CODE_REACH_LIMIT) {
+      throw new IllegalStateException("cannot continue the key listing due to anchor status is not limit-reached");
+    }
+    encoded = false;
+    resultKeys.clear();
+    resultKeys = null;
+    resultParsed = false;
+    continued = true;
+  }
+
+  /**
+   * to test if all keys are listed.
+   *
+   * @return true for end. no otherwise.
+   */
+  public boolean reachEnd() {
+    anchorBuffer.position(0);
+    return anchorBuffer.get() == Constants.KEY_LIST_CODE_ANCHOR_END;
+  }
+
+  /**
+   * parse result and store it to resultList after JNI call.
+   *
+   * @return result key list
+   * @throws UnsupportedEncodingException
+   */
+  protected List<String> parseResult() throws DaosIOException, UnsupportedEncodingException {
+    if (!resultParsed) {
+      resultKeys = new ArrayList<>();
+      // parse desc buffer and key buffer
+      descBuffer.position(0);
+      int retNbr = descBuffer.getInt();
+      if (retNbr == 0) { // check no result
+        resultParsed = true;
+        return resultKeys;
+      }
+
+      if (dkeyBytes != null) {
+        descBuffer.position(Constants.ENCODED_LENGTH_KEY + dkeyBytes.length);
+      }
+      anchorBuffer.position(0);
+      if (anchorBuffer.get() == Constants.KEY_LIST_CODE_KEY2BIG) { // check key2big
+        resultParsed = true;
+        suggestedKeyLen = (int)descBuffer.getLong() + 1;
+        throw new DaosIOException("key2big, need key length of " + suggestedKeyLen);
+      }
+
+      long keyLen;
+      short csumLen;
+      int idx = 0;
+      for (int i = 0; i < retNbr; i++) {
+        keyBuffer.position(idx);
+        keyLen = descBuffer.getLong();
+        byte bytes[] = new byte[(int)keyLen];
+        keyBuffer.get(bytes);
+        resultKeys.add(new String(bytes, Constants.KEY_CHARSET));
+        descBuffer.position(descBuffer.position() + 6); // uint32_t kd_val_type(4) + uint16_t kd_csum_type(2)
+        csumLen = descBuffer.getShort();
+        idx += keyLen + csumLen;
+      }
+      resultParsed = true;
+      return resultKeys;
+    }
+    return resultKeys;
   }
 
   public static int getKeyDescLen() {
