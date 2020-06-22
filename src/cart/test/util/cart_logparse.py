@@ -183,6 +183,7 @@ class LogLine():
         fields = []
         for entry in self._fields[2:]:
             field = None
+            # TODO: This should match a file offset range
             if entry.startswith('0x') and len(entry) > 5:
                 if entry.endswith(')'):
                     field = '0x...)'
