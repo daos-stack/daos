@@ -212,7 +212,7 @@ static d_hash_table_ops_t sched_pool_hash_ops = {
 };
 
 /*
- * d_hash_table_traverse() doesn't support item deletion in traverse
+ * d_hash_table_traverse() does not support item deletion in traverse
  * callback, so the stale 'spi' (pool was destroyed) will be added into
  * a purge list in traverse callback and being deleted later.
  */

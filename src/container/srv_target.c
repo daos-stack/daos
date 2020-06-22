@@ -167,7 +167,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		   sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
 		/*
 		 * When there isn't space pressure, don't aggregate too often,
-		 * otherwise, aggregation will be inefficent because the data
+		 * otherwise, aggregation will be inefficient because the data
 		 * to be aggregated could be changed by new update very soon.
 		 */
 		return 0;
