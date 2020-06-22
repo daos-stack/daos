@@ -35,6 +35,7 @@ import (
 func TestSystem_RankSet(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startList string
+		addRanks  []Rank
 		expOut    string
 		expCount  int
 		expRanks  []Rank
@@ -64,12 +65,21 @@ func TestSystem_RankSet(t *testing.T) {
 		},
 		"ranged rank list": {
 			startList: "2,3,10-19,0-9",
-			expOut:    "0-19",
-			expCount:  20,
+			addRanks:  []Rank{30, 32},
+			expOut:    "0-19,30,32",
+			expCount:  22,
 			expRanks: []Rank{
 				0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
 				10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+				30, 32,
 			},
+		},
+		"adding to empty list": {
+			startList: "",
+			addRanks:  []Rank{30, 32},
+			expOut:    "30,32",
+			expCount:  2,
+			expRanks:  []Rank{30, 32},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -77,6 +87,11 @@ func TestSystem_RankSet(t *testing.T) {
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
+			}
+			for _, r := range tc.addRanks {
+				if err := rs.Add(r); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			if diff := cmp.Diff(tc.expOut, rs.String()); diff != "" {
