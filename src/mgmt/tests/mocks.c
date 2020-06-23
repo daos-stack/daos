@@ -439,6 +439,13 @@ mock_ds_mgmt_exclude_setup(void)
 	uuid_clear(ds_mgmt_target_update_uuid);
 }
 
+void
+mock_ds_mgmt_drain_setup(void)
+{
+	ds_mgmt_target_update_return = 0;
+	uuid_clear(ds_mgmt_target_update_uuid);
+}
+
 int     ds_mgmt_pool_extend_return;
 uuid_t  ds_mgmt_pool_extend_uuid;
 int

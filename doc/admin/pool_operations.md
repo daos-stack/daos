@@ -251,6 +251,8 @@ the management API and tool and will be documented here once available.
 
 ### Target Exclusion and Self-Healing
 
+## Pool Exclude
+
 An operator can exclude one or more targets from a specific DAOS pool using the rank
 the target resides on as well as the target idx on that rank. If a target idx list is
 not provided then all targets on the rank will be excluded. Excluding a target will
@@ -265,8 +267,30 @@ $ dmg pool exclude --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},$
 The pool target exclude command accepts 3 parameters:
 
 * The pool UUID of the pool that the targets will be excluded from.
-* The rank of the target(s) te be excluded.
+* The rank of the target(s) to be excluded.
 * The target Indices of the targets to be excluded from that rank (optional).
+
+## Pool Drain
+
+Alternatively when an operator would like to remove one or more pool targets they
+can initiate a pool drain operation. A pool drain operation will initiate rebuild
+without excluding the designated target until after the rebuild is complete.
+This allows the target that will be excluded to continue to perform I/O while the rebuild
+operation is ongoing. This also allows non-replicated data to be rebuilt onto another target
+where as if a conventional failure occurred that data would be unable to be rebuilt and
+subsequently lost.
+
+**To drain a target from a pool:**
+
+```bash
+$ dmg pool drain --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
+```
+
+The pool target drain command accepts 3 parameters:
+
+* The pool UUID of the pool that the targets will be drained from.
+* The rank of the target(s) to be drained.
+* The target Indices of the targets to be drained from that rank (optional).
 
 ### Target Reintegration
 
