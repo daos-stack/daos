@@ -1038,7 +1038,8 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 
 	filter.fr_ex.ex_lo = oiter->it_recx.rx_idx;
 	filter.fr_ex.ex_hi = oiter->it_recx.rx_nr == 0 ? ~(0ULL) :
-				oiter->it_recx.rx_nr - 1;
+			oiter->it_recx.rx_idx + oiter->it_recx.rx_nr - 1;
+
 	filter.fr_epr = oiter->it_epr;
 	filter.fr_punch = oiter->it_punched;
 	options = recx_get_flags(oiter);
@@ -1374,7 +1375,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		}
 		filter.fr_ex.ex_lo = info->ii_recx.rx_idx;
 		filter.fr_ex.ex_hi = info->ii_recx.rx_nr == 0 ? ~(0ULL) :
-					info->ii_recx.rx_nr - 1;
+				info->ii_recx.rx_idx + info->ii_recx.rx_nr - 1;
 		filter.fr_epr = oiter->it_epr;
 		filter.fr_punch = oiter->it_punched;
 		options = recx_get_flags(oiter);
