@@ -148,8 +148,8 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw->orw_oid.id_shard = shard_tgt->st_shard;
 	uuid_copy(orw->orw_co_hdl, orw_parent->orw_co_hdl);
 	uuid_copy(orw->orw_co_uuid, orw_parent->orw_co_uuid);
-	orw->orw_shard_tgts.ca_count	= 0;
-	orw->orw_shard_tgts.ca_arrays	= NULL;
+	orw->orw_shard_tgts.ca_count	= orw_parent->orw_shard_tgts.ca_count;
+	orw->orw_shard_tgts.ca_arrays	= orw_parent->orw_shard_tgts.ca_arrays;
 	orw->orw_flags |= ORF_BULK_BIND | obj_exec_arg->flags;
 	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_count;
 	orw->orw_dti_cos.ca_arrays	= dth->dth_dti_cos;
@@ -262,8 +262,8 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	opi->opi_oid.id_shard = shard_tgt->st_shard;
 	uuid_copy(opi->opi_co_hdl, opi_parent->opi_co_hdl);
 	uuid_copy(opi->opi_co_uuid, opi_parent->opi_co_uuid);
-	opi->opi_shard_tgts.ca_count = 0;
-	opi->opi_shard_tgts.ca_arrays = NULL;
+	opi->opi_shard_tgts.ca_count = opi_parent->opi_shard_tgts.ca_count;
+	opi->opi_shard_tgts.ca_arrays = opi_parent->opi_shard_tgts.ca_arrays;
 	opi->opi_flags |= obj_exec_arg->flags;
 	opi->opi_dti_cos.ca_count = dth->dth_dti_cos_count;
 	opi->opi_dti_cos.ca_arrays = dth->dth_dti_cos;
