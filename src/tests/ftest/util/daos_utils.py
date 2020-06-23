@@ -79,7 +79,10 @@ class DaosCommand(CommandWithSubCommand):
         #  04/20-17:52:33.63 wolf-3 Container attributes:
         #  04/20-17:52:33.63 wolf-3 attr1
         #  04/20-17:52:33.63 wolf-3 attr2
-        "container_list_attrs": r"\n \S+ \S+ (.+)"
+        "container_list_attrs": r"\n \S+ \S+ (.+)",
+        # Sample create-snap output.
+        # snapshot/epoch 1582610056530034697 has been created
+        "container_create_snap": r"[A-Za-z\/]+\s[0-9]+\s[a-z\s]+"
     }
 
     def __init__(self, path):
@@ -442,6 +445,8 @@ class DaosCommand(CommandWithSubCommand):
                     DaosCommand.ContainerSubCommand.CreateSnapSubCommand,
                     self).__init__("create-snap")
                 self.snap = FormattedParameter("--snap={}")
+                self.epc = FormattedParameter("--epc={}")
+                self.epcrange = FormattedParameter("--epcrange={}")
 
         class ListSnapsSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container list-snaps command."""
@@ -889,5 +894,67 @@ class DaosCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.pool.value = pool
         self.sub_command_class.sub_command_class.svc.value = svc
         self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        return self._get_result()
+
+    def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
+        svc=None, sys_name=None):
+        """ Call daos container create-snap.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            snap_name (str, optional): Snapshot name.
+            epoch (str, optional): Epoch number.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("create-snap")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.snap.value = snap_name
+        self.sub_command_class.sub_command_class.epc.value = epoch
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        return self._get_result()
+
+    def container_destroy_snap(self, pool, cont, snap_name=None, epoch=None,
+        svc=None, sys_name=None):
+        """ Call daos container create-snap.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            snap_name (str, optional): Snapshot name.
+            epoch (str, optional): Epoch number.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool query command fails.
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("destroy-snap")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.snap.value = snap_name
+        self.sub_command_class.sub_command_class.epc.value = epoch
+        self.sub_command_class.sub_command_class.svc.value = svc
         self.sub_command_class.sub_command_class.sys_name.value = sys_name
         return self._get_result()

@@ -885,6 +885,34 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.verbose.value = verbose
         return self._get_result()
 
+    def system_stop(self, force=False):
+        """Stop the servers using dmg tool
+        Args:
+            force (bool): Stop servers forcfully. Default is set to False.
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+        """
+
+        self.set_sub_command("system")
+        self.sub_command_class.set_sub_command("stop")
+        self.sub_command_class.sub_command_class.force.value = force
+        return self._get_result()
+
+    def system_start(self):
+        """Start the servers using dmg tool
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+        """
+
+        self.set_sub_command("system")
+        self.sub_command_class.set_sub_command("start")
+        return self._get_result()
 
 def check_system_query_status(stdout_str):
     """Check if any server crashed
