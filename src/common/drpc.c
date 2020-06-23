@@ -162,10 +162,10 @@ unixcomm_close(struct unixcomm *handle)
 	D_FREE(handle);
 
 	if (ret < 0) {
-		rc = daos_errno2der(errno);
+		ret = daos_errno2der(errno);
 		D_ERROR("Failed to close socket fd %d, errno=%d\n",
 			fd, errno);
-		return rc;
+		return ret;
 	}
 
 	return -DER_SUCCESS;
