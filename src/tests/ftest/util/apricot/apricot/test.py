@@ -331,7 +331,7 @@ class TestWithServers(TestWithoutServers):
                 self.hostfile_clients_slots)
 
         # Display host information
-        self.log.info("---(1) HOST INFORMATION ---")
+        self.log.info("--- HOST INFORMATION ---")
         self.log.info("hostlist_servers:  %s", self.hostlist_servers)
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
         self.log.info("server_partition:  %s", self.server_partition)
@@ -392,7 +392,7 @@ class TestWithServers(TestWithoutServers):
             agent_groups = {
                 self.server_group: include_local_host(self.hostlist_clients)}
 
-        self.log.debug("--- (2)STARTING AGENT GROUPS: %s ---", agent_groups)
+        self.log.debug("--- STARTING AGENT GROUPS: %s ---", agent_groups)
 
         if isinstance(agent_groups, dict):
             for group, hosts in agent_groups.items():
@@ -558,13 +558,13 @@ class TestWithServers(TestWithoutServers):
     @fail_on(CommandFailure)
     def start_agent_managers(self):
         """Start the daos_agent processes on each specified list of hosts."""
-        self.log.info("--- (5)STARTING AGENTS ---")
+        self.log.info("--- STARTING AGENTS ---")
         self._start_manager_list("agent", self.agent_managers)
 
     @fail_on(CommandFailure)
     def start_server_managers(self):
         """Start the daos_server processes on each specified list of hosts."""
-        self.log.info("--- (5S)STARTING SERVERS ---")
+        self.log.info("--- STARTING SERVERS ---")
         self._start_manager_list("server", self.server_managers)
 
     def _start_manager_list(self, name, manager_list):

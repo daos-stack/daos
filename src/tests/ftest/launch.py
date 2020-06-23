@@ -676,8 +676,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                         args,
                         "  - Replacement: {} -> {}".format(
                             value, replacements[value]))
-    print(" ")
-    print("===>replacements= ", replacements)
+
     if replacements:
         # Read in the contents of the yaml file to retain the !mux entries
         print("Reading {}".format(yaml_file))
