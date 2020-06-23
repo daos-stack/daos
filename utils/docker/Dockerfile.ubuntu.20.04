@@ -17,7 +17,6 @@ ARG UID=1000
 # It's better to put the apt-get update in the same "cache layer" as the
 # apt-get install command so that the apt database is updated if/when the
 # installed packages list below is updated
-RUN ls
 
 # Install basic tools
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
