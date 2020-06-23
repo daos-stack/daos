@@ -267,6 +267,19 @@ int
 vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo);
 
 /**
+ * Query pool space by pool UUID
+ *
+ * \param pool_id [IN]	Pool UUID
+ * \param vps     [OUT]	Returned pool space info
+ *
+ * \return		Zero		: success
+ *			-DER_NONEXIST	: pool isn't opened
+ *			-ve		: error
+ */
+int
+vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps);
+
+/**
  * Create a container within a VOSP
  *
  * \param poh	[IN]	Pool open handle
@@ -333,12 +346,16 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  *
  * \param coh	  [IN]		Container open handle
  * \param epr	  [IN]		The epoch range of aggregation
- * \param func	  [IN]		Pointer to csum recalculation function
+ * \param csum_func  [IN]	Pointer to csum recalculation function
+ * \param yield_func [IN]	Pointer to customized yield function
+ * \param yield_arg  [IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *));
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
+	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
+	      void *yield_arg);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -357,11 +374,14 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *));
  * \param coh		[IN]	Container open handle
  * \param epr		[IN]	The epoch range to discard
  *				keys to discard
+ * \param yield_func	[IN]	Pointer to customized yield function
+ * \param yield_arg	[IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
+vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+	    bool (*yield_func)(void *arg), void *yield_arg);
 
 /**
  * VOS object API
@@ -895,8 +915,7 @@ int
 vos_gc_pool(daos_handle_t poh, int *credits);
 
 enum vos_cont_opc {
-	/** abort VOS aggregation **/
-	VOS_CO_CTL_ABORT_AGG,
+	VOS_CO_CTL_DUMMY,
 };
 
 /**

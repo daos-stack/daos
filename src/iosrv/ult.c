@@ -119,7 +119,6 @@ sched_ult2pool(int ult_type)
 	case DSS_ULT_REBUILD:
 		return DSS_POOL_REBUILD;
 	case DSS_ULT_AGGREGATE:
-		return DSS_POOL_AGGREGATE;
 	case DSS_ULT_GC:
 		return DSS_POOL_GC;
 	default:

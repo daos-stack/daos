@@ -51,6 +51,10 @@ vos_space_sys_init(struct vos_pool *pool)
 	gc_reserve_space(&pool->vp_space_sys[0]);
 	agg_reserve_space(&pool->vp_space_sys[0]);
 
+	/* NVMe isn't configured */
+	if (nvme_tot == 0)
+		POOL_NVME_SYS(pool) = 0;
+
 	if ((POOL_SCM_SYS(pool) * 2) > scm_tot) {
 		D_WARN("Disable SCM space reserving for tiny pool:"DF_UUID" "
 		       "sys["DF_U64"] > tot["DF_U64"]\n",
@@ -58,7 +62,7 @@ vos_space_sys_init(struct vos_pool *pool)
 		POOL_SCM_SYS(pool) = 0;
 	}
 
-	if (pool->vp_vea_info && (POOL_NVME_SYS(pool) * 2) > nvme_tot) {
+	if ((POOL_NVME_SYS(pool) * 2) > nvme_tot) {
 		D_WARN("Disable NVMe space reserving for tiny Pool:"DF_UUID" "
 		       "sys["DF_U64"] > tot["DF_U64"]\n",
 		       DP_UUID(pool->vp_id), POOL_NVME_SYS(pool), nvme_tot);
@@ -140,7 +144,9 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 
 	/* NVMe isn't configured for this VOS pool */
 	if (pool->vp_vea_info == NULL) {
+		NVME_TOTAL(vps) = 0;
 		NVME_FREE(vps) = 0;
+		NVME_SYS(vps) = 0;
 		return 0;
 	}
 
