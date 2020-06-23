@@ -931,7 +931,7 @@ migrate_one_queue(struct iter_obj_arg *iter_arg, daos_epoch_t epoch,
 	D_ASSERT(tls != NULL);
 	if (iod_eph_total == 0 || tls->mpt_version <= version ||
 	    tls->mpt_fini) {
-		D_DEBUG(DB_TRACE, "No need eph_total %d version %u"
+		D_DEBUG(DB_REBUILD, "No need eph_total %d version %u"
 			" migrate ver %ui fini %d\n", iod_eph_total, version,
 			tls->mpt_version, tls->mpt_fini);
 		D_GOTO(put, rc = 0);
