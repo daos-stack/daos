@@ -98,7 +98,7 @@ struct crt_common_hdr {
 	/* tag to which rpc request was sent to */
 	uint32_t	cch_dst_tag;
 	/* RPC id */
-	uint32_t	cch_rpcid;
+	uint64_t	cch_rpcid;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };

@@ -1392,7 +1392,7 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 static inline void
 crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 {
-	uint32_t	rpcid;
+	uint64_t	rpcid;
 
 	rpcid = atomic_fetch_add(&crt_gdata.cg_rpcid, 1);
 
