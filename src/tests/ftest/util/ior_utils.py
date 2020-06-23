@@ -128,7 +128,7 @@ class IorCommand(ExecutableCommand):
         self.dfs_pool = FormattedParameter("--dfs.pool {}")
         self.dfs_svcl = FormattedParameter("--dfs.svcl {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
-        self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
+        self.dfs_destroy = FormattedParameter("--dfs.destroy", False)
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
@@ -275,11 +275,21 @@ class IorCommand(ExecutableCommand):
         env["MPI_LIB"] = "\"\""
         env["FI_PSM2_DISCONNECT"] = "1"
 
+        # ior POSIX api doesn't require the below options.
+        if "POSIX" in manager_cmd:
+            return env
+
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
-            env["DAOS_POOL"] = self.daos_pool.value
-            env["DAOS_SVCL"] = self.daos_svcl.value
-            env["DAOS_CONT"] = self.daos_cont.value
-            env["IOR_HINT__MPI__romio_daos_obj_class"] = self.daos_oclass.value
+            if self.daos_pool.value is not None:
+                env["DAOS_POOL"] = self.daos_pool.value
+                env["DAOS_SVCL"] = self.daos_svcl.value
+                env["DAOS_CONT"] = self.daos_cont.value 
+                env["IOR_HINT__MPI__romio_daos_obj_class"] = self.daos_oclass.value
+            elif self.dfs_pool.value is not None:
+                env["DAOS_POOL"] = self.dfs_pool.value
+                env["DAOS_SVCL"] = self.dfs_svcl.value
+                env["DAOS_CONT"] = self.dfs_cont.value 
+                env["IOR_HINT__MPI__romio_dfs_obj_class"] = self.dfs_oclass.value
 
         return env
 
