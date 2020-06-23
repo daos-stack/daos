@@ -107,6 +107,7 @@ void
 drpc_call_free(Drpc__Call *call)
 {
 	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
+
 	drpc__call__free_unpacked(call, &alloc.alloc);
 }
 
@@ -145,6 +146,7 @@ void
 drpc_response_free(Drpc__Response *resp)
 {
 	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
+
 	drpc__response__free_unpacked(resp, &alloc.alloc);
 }
 

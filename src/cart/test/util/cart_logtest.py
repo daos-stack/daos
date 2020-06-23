@@ -146,14 +146,10 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'notify_ready': ('req.uri'),
                     'get_tgt_rank': ('tgts')}
 
-old_memleak_ok = ['dfuse_start',
-                  'expand_vector',
-                  'd_rank_list_alloc',
-                  'get_tpv',
-                  'get_new_entry',
-                  'get_attach_info',
-                  'drpc_call_create']
-memleak_ok = []
+memleak_ok = ['dfuse_start',
+              'expand_vector',
+              'get_tpv',
+              'get_new_entry']
 
 EFILES = ['src/common/misc.c',
           'src/common/prop.c',
