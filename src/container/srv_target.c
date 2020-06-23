@@ -855,7 +855,7 @@ cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 	rc = cont_iv_prop_fetch(hdl->sch_cont->sc_pool->spc_pool->sp_iv_ns,
-				hdl->sch_uuid, props);
+				hdl->sch_cont->sc_uuid, props);
 	if (rc != 0)
 		goto done;
 	csum_val = daos_cont_prop2csum(props);
