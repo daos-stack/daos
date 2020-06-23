@@ -114,7 +114,7 @@ evt_mbr_read(struct evt_rect *rout, const struct evt_node *node)
 {
 	rout->rc_ex = node->tn_mbr_ex;
 	rout->rc_epc = node->tn_mbr_epc;
-	rout->rc_minor_epc = node->tn_mbr_epc;
+	rout->rc_minor_epc = node->tn_mbr_minor_epc;
 }
 
 static void
@@ -122,7 +122,7 @@ evt_mbr_write(struct evt_node *node, const struct evt_rect *rin)
 {
 	node->tn_mbr_ex = rin->rc_ex;
 	node->tn_mbr_epc = rin->rc_epc;
-	node->tn_mbr_epc = rin->rc_minor_epc;
+	node->tn_mbr_minor_epc = rin->rc_minor_epc;
 }
 
 /**
