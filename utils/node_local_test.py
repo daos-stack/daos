@@ -267,10 +267,6 @@ class DaosServer():
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
-        agent_env = os.environ.copy()
-        # DAOS-??? Need to set this for agent
-        agent_env['LD_LIBRARY_PATH'] = os.path.join(self.conf['PREFIX'],
-                                                    'lib64')
         agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
         self._agent = subprocess.Popen([agent_bin,
@@ -279,7 +275,7 @@ class DaosServer():
                                         '--debug',
                                         '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
-                                       env=agent_env)
+                                       env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
         time.sleep(2)
         self.running = True

@@ -122,9 +122,10 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 			      vos_fetch_end(ioh, status);
 
 		if (rc != 0) {
-			D_ERROR(DF_UOID " %s end failed: %d\n",
-				DP_UOID(orwi->orw_oid),
-				update ? "Update" : "Fetch", rc);
+			D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
+				 DF_UOID " %s end failed: %d\n",
+				 DP_UOID(orwi->orw_oid),
+				 update ? "Update" : "Fetch", rc);
 			if (status == 0)
 				status = rc;
 		}
@@ -363,7 +364,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 				break;
 
 			if (length > remote_bulk_size) {
-				D_ERROR(DF_U64 "> %zu : %d\n", length,
+				D_DEBUG(DF_U64 " > %zu : %d\n", length,
 					remote_bulk_size, -DER_OVERFLOW);
 				rc = -DER_OVERFLOW;
 				break;
@@ -1247,8 +1248,9 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (rc == -DER_OVERFLOW)
 			rc = -DER_REC2BIG;
 
-		D_ERROR(DF_UOID" data transfer failed, dma %d rc "DF_RC"",
-			DP_UOID(orw->orw_oid), rma, DP_RC(rc));
+		D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
+			 DF_UOID" data transfer failed, dma %d rc "DF_RC"",
+			 DP_UOID(orw->orw_oid), rma, DP_RC(rc));
 		D_GOTO(post, rc);
 	}
 

@@ -51,9 +51,8 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	ctx = drpc_connect(argv[1]);
-
-	if (ctx == NULL) {
+	ret = drpc_connect(argv[1], &ctx);
+	if (ret != -DER_SUCCESS {
 		fprintf(stderr, "Unable to connect to %s\n", argv[1]);
 		exit(1);
 	}
