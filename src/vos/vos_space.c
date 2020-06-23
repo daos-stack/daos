@@ -267,9 +267,9 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 }
 
 int
-vos_space_hold(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-	       daos_size_t *space_hld)
+vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods,
+	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld)
 {
 	struct vos_pool_space	vps = { 0 };
 	daos_size_t		space_est[DAOS_MEDIA_MAX] = { 0, 0 };
@@ -282,6 +282,12 @@ vos_space_hold(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 			DP_UUID(pool->vp_id), DP_RC(rc));
 		return rc;
 	}
+
+	estimate_space(pool, dkey, iod_nr, iods, iods_csums, &space_est[0]);
+
+	/* if this is a critical update, skip SCM and NVMe sys/held checks */
+	if (flags & VOS_OF_CRIT)
+		goto success;
 
 	scm_left = SCM_FREE(&vps);
 	if (scm_left < SCM_SYS(&vps))
@@ -301,8 +307,6 @@ vos_space_hold(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 		/* 'NVMe held' has already been excluded from 'NVMe free' */
 	}
 
-	estimate_space(pool, dkey, iod_nr, iods, iods_csums, &space_est[0]);
-
 	if (scm_left < space_est[DAOS_MEDIA_SCM])
 		goto error;
 
@@ -311,6 +315,7 @@ vos_space_hold(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 			goto error;
 	}
 
+success:
 	space_hld[DAOS_MEDIA_SCM]	= space_est[DAOS_MEDIA_SCM];
 	space_hld[DAOS_MEDIA_NVME]	= space_est[DAOS_MEDIA_NVME];
 	POOL_SCM_HELD(pool)		+= space_hld[DAOS_MEDIA_SCM];
