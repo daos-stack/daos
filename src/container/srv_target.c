@@ -78,6 +78,10 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 	/* snapshot list isn't fetched yet */
 	if (cont->sc_aggregation_max == 0) {
 		D_DEBUG(DB_EPC, "No aggregation before snapshots fetched\n");
+		/* fetch snapshot list */
+		if (dss_get_module_info()->dmi_tgt_id == 0)
+			ds_cont_tgt_snapshots_refresh(cont->sc_pool->spc_uuid,
+						      cont->sc_uuid);
 		return false;
 	}
 
@@ -855,7 +859,7 @@ cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 	rc = cont_iv_prop_fetch(hdl->sch_cont->sc_pool->spc_pool->sp_iv_ns,
-				hdl->sch_uuid, props);
+				hdl->sch_cont->sc_uuid, props);
 	if (rc != 0)
 		goto done;
 	csum_val = daos_cont_prop2csum(props);
@@ -1328,7 +1332,6 @@ int
 ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		 uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas)
 {
-	struct ds_pool		*pool = NULL;
 	struct cont_tgt_open_arg arg;
 	struct dss_coll_ops	coll_ops = { 0 };
 	struct dss_coll_args	coll_args = { 0 };
@@ -1373,11 +1376,6 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 			DP_UUID(cont_hdl_uuid), DP_RC(rc));
 		return rc;
 	}
-
-	pool = ds_pool_lookup(pool_uuid);
-	D_ASSERT(pool != NULL);
-	ds_cont_tgt_snapshots_refresh(pool_uuid, cont_uuid);
-	ds_pool_put(pool);
 
 	return rc;
 }
