@@ -74,6 +74,10 @@ DP_RECT_DF(struct evt_rect_df *rect)
 	return df_rect_buf;
 }
 
+#define DF_MBR DF_EXT"@"DF_X64".%d"
+#define DP_MBR(node) \
+	DP_EXT(&(node)->tn_mbr_ex), (node)->tn_mbr_epc, (node)->tn_mbr_minor_epc
+
 enum {
 	/** no overlap */
 	RT_OVERLAP_NO		= 0,
@@ -105,23 +109,20 @@ static struct evt_policy_ops *evt_policies[] = {
 	NULL,
 };
 
-/** Return the MBR of a node */
-static struct evt_rect_df *
-evt_node_mbr_get(struct evt_node *node)
-{
-	return &node->tn_mbr;
-}
-
 static void
-evt_mbr_read(struct evt_rect *rout, struct evt_node *node)
+evt_mbr_read(struct evt_rect *rout, const struct evt_node *node)
 {
-	evt_rect_read(rout, evt_node_mbr_get(node));
+	rout->rc_ex = node->tn_mbr_ex;
+	rout->rc_epc = node->tn_mbr_epc;
+	rout->rc_minor_epc = node->tn_mbr_epc;
 }
 
 static void
 evt_mbr_write(struct evt_node *node, const struct evt_rect *rin)
 {
-	evt_rect_write(evt_node_mbr_get(node), rin);
+	node->tn_mbr_ex = rin->rc_ex;
+	node->tn_mbr_epc = rin->rc_epc;
+	node->tn_mbr_epc = rin->rc_minor_epc;
 }
 
 /**
@@ -143,14 +144,13 @@ evt_same_extent(const struct evt_extent *ex1, const struct evt_extent *ex2)
 }
 
 static bool
-evt_rect_same_extent(const struct evt_rect_df *rt1_df,
-		     const struct evt_rect *rt2)
+evt_mbr_same(const struct evt_node *node, const struct evt_rect *rect)
 {
-	struct evt_extent	ext;
-
-	evt_ext_read(&ext, rt1_df);
-
-	return evt_same_extent(&ext, &rt2->rc_ex);
+	if (evt_same_extent(&node->tn_mbr_ex, &rect->rc_ex) &&
+	    node->tn_mbr_epc == rect->rc_epc &&
+	    node->tn_mbr_minor_epc == rect->rc_minor_epc)
+		return true;
+	return false;
 }
 
 static bool
@@ -1413,15 +1413,15 @@ evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
 	int		 rc;
 	bool		 changed = 0;
 
-	V_TRACE(DB_TRACE, "Insert "DF_RECT" into "DF_RECT_DF"\n",
-		DP_RECT(&ent->ei_rect), DP_RECT_DF(evt_node_mbr_get(nd)));
+	V_TRACE(DB_TRACE, "Insert "DF_RECT" into "DF_MBR"\n",
+		DP_RECT(&ent->ei_rect), DP_MBR(nd));
 
 	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent, &changed, csum_bufp);
 	if (rc != 0)
 		return rc;
 
-	V_TRACE(DB_TRACE, "New MBR is "DF_RECT_DF", nr=%d\n",
-		DP_RECT_DF(evt_node_mbr_get(nd)), nd->tn_nr);
+	V_TRACE(DB_TRACE, "New MBR is "DF_MBR", nr=%d\n", DP_MBR(nd),
+		nd->tn_nr);
 	if (mbr_changed)
 		*mbr_changed = changed;
 
@@ -1447,7 +1447,7 @@ evt_node_weight_diff(struct evt_context *tcx, struct evt_node *nd,
 	memset(&wt_org, 0, sizeof(wt_org));
 	memset(&wt_new, 0, sizeof(wt_new));
 
-	evt_rect_read(&rtmp, &nd->tn_mbr);
+	evt_mbr_read(&rtmp, nd);
 	tcx->tc_ops->po_rect_weight(tcx, &rtmp, &wt_org);
 
 	evt_rect_merge(&rtmp, rect);
@@ -1617,7 +1617,7 @@ evt_epoch_dist(struct evt_context *tcx, struct evt_node *nd,
 	struct evt_rect	 mbr;
 	int64_t		 diff1, diff2;
 
-	evt_rect_read(&mbr, evt_node_mbr_get(nd));
+	evt_mbr_read(&mbr, nd);
 
 	diff1 = (mbr.rc_epc - rect->rc_epc) << 16;
 	if (diff1 < 0)
@@ -1668,7 +1668,7 @@ static int
 evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 		    uint8_t **csum_bufp)
 {
-	struct evt_rect_df	*mbr	  = NULL;
+	struct evt_node		*mbr	  = NULL;
 	struct evt_node		*nd_tmp   = NULL;
 	struct evt_rect		 rtmp;
 	umem_off_t		 nm_save  = UMOFF_NULL;
@@ -1709,14 +1709,14 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 			/* Update the child MBR stored in the current node
 			 * because MBR of child has been enlarged.
 			 */
-			evt_rect_read(&rtmp, mbr);
+			evt_mbr_read(&rtmp, mbr);
 			mbr_changed = evt_node_rect_update(tcx, nd_cur,
 							   trace->tr_at, &rtmp);
 			if (!mbr_changed || level == 0)
 				D_GOTO(out, 0);
 
 			/* continue to merge MBR with upper level node */
-			mbr = evt_node_mbr_get(nd_cur);
+			mbr = nd_cur;
 			level--;
 			continue;
 		}
@@ -1737,7 +1737,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 				D_GOTO(out, 0);
 
 			/* continue to merge MBR with upper level node */
-			mbr = evt_node_mbr_get(nd_cur);
+			mbr = nd_cur;
 			level--;
 			continue;
 		}
@@ -2137,10 +2137,8 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 		D_ASSERT(!leaf || at == 0);
 		V_TRACE(DB_TRACE,
-			"Checking mbr="DF_RECT_DF"("
-			DF_X64"), l=%d, a=%d, f=%d\n",
-			DP_RECT_DF(evt_node_mbr_get(node)), nd_off, level, at,
-			leaf);
+			"Checking mbr="DF_MBR"("DF_X64"), l=%d, a=%d, f=%d\n",
+			DP_MBR(node), nd_off, level, at, leaf);
 
 		ne = evt_node_entry_at(tcx, node, at);
 
@@ -2539,10 +2537,9 @@ evt_node_debug(struct evt_context *tcx, umem_off_t nd_off,
 	if (leaf || cur_level == debug_level || debug_level < 0) {
 		struct evt_rect_df *rect;
 
-		rect = evt_node_mbr_get(nd);
-		D_PRINT("%*snode="DF_X64", lvl=%d, mbr="DF_RECT_DF
+		D_PRINT("%*snode="DF_X64", lvl=%d, mbr="DF_MBR
 			", rect_nr=%d\n", cur_level * EVT_DEBUG_INDENT, "",
-			nd_off, cur_level, DP_RECT_DF(rect), nd->tn_nr);
+			nd_off, cur_level, DP_MBR(nd), nd->tn_nr);
 
 		if (leaf && debug_level == EVT_DEBUG_LEAF) {
 			for (i = 0; i < nd->tn_nr; i++) {
@@ -2596,7 +2593,7 @@ evt_debug(daos_handle_t toh, int debug_level)
 
 /** Common routines */
 typedef int (cmp_rect_cb)(struct evt_context *tcx,
-			  const struct evt_rect_df *mbr,
+			  const struct evt_node *nd,
 			  const struct evt_rect_df *rt1,
 			  const struct evt_rect_df *rt2);
 static int
@@ -2606,7 +2603,6 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 {
 	struct evt_node_entry	*ne = NULL;
 	struct evt_desc		*desc = NULL;
-	struct evt_rect_df	*mbr;
 	int			 i;
 	int			 rc;
 	bool			 leaf;
@@ -2615,17 +2611,16 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 	D_ASSERT(!evt_node_is_full(tcx, nd));
 
 	leaf = evt_node_is_leaf(tcx, nd);
-	mbr = evt_node_mbr_get(nd);
 	if (nd->tn_nr == 0) {
-		evt_rect_write(mbr, &ent->ei_rect);
+		evt_mbr_write(nd, &ent->ei_rect);
 		*changed = true;
 	} else {
 		struct evt_rect	rtmp;
 
-		evt_rect_read(&rtmp, mbr);
+		evt_mbr_read(&rtmp, nd);
 		*changed = evt_rect_merge(&rtmp, &ent->ei_rect);
 		if (*changed)
-			evt_rect_write(mbr, &rtmp);
+			evt_mbr_write(nd, &rtmp);
 	}
 
 	/* NB: can use binary search to optimize */
@@ -2636,7 +2631,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		ne = evt_node_entry_at(tcx, nd, i);
 
 		evt_rect_write(&df_tmp, &ent->ei_rect);
-		rc = cb(tcx, mbr, &ne->ne_rect, &df_tmp);
+		rc = cb(tcx, nd, &ne->ne_rect, &df_tmp);
 		if (rc < 0)
 			continue;
 
@@ -2781,7 +2776,6 @@ static int
 evt_common_adjust(struct evt_context *tcx, struct evt_node *nd,
 		  struct evt_node_entry *ne, int at, cmp_rect_cb cb)
 {
-	struct evt_rect_df	*mbr;
 	struct evt_node_entry	*etmp;
 	struct evt_node_entry	*dst_entry;
 	struct evt_node_entry	*src_entry;
@@ -2791,11 +2785,10 @@ evt_common_adjust(struct evt_context *tcx, struct evt_node *nd,
 	int			 offset;
 
 	D_ASSERT(!evt_node_is_leaf(tcx, nd));
-	mbr = evt_node_mbr_get(nd);
 
 	/* Check if we need to move the entry left */
 	for (i = at - 1, etmp = ne - 1; i >= 0; i--, etmp--) {
-		if (cb(tcx, mbr, &etmp->ne_rect, &ne->ne_rect) <= 0)
+		if (cb(tcx, nd, &etmp->ne_rect, &ne->ne_rect) <= 0)
 			break;
 	}
 
@@ -2814,7 +2807,7 @@ evt_common_adjust(struct evt_context *tcx, struct evt_node *nd,
 
 	/* Ok, now check if we need to move the entry right */
 	for (i = at + 1, etmp = ne + 1; i < nd->tn_nr; i++, etmp++) {
-		if (cb(tcx, mbr, &etmp->ne_rect, &ne->ne_rect) >= 0)
+		if (cb(tcx, nd, &etmp->ne_rect, &ne->ne_rect) >= 0)
 			break;
 	}
 
@@ -2848,7 +2841,7 @@ move:
 
 /** Rectangle comparison for sorting */
 static int
-evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect_df *mbr,
+evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_node *nd,
 		  const struct evt_rect_df *rt1, const struct evt_rect_df *rt2)
 {
 	struct evt_rect	rtmp1, rtmp2;
@@ -2897,7 +2890,7 @@ evt_mbr_dist(const struct evt_rect *mbr, const struct evt_rect *rect)
 }
 
 static int
-evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_rect_df *mbr,
+evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_node *nd,
 		   const struct evt_rect_df *rt1, const struct evt_rect_df *rt2)
 {
 	struct evt_rect	rtmp1, rtmp2, mtmp;
@@ -2905,7 +2898,7 @@ evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_rect_df *mbr,
 
 	evt_rect_read(&rtmp1, rt1);
 	evt_rect_read(&rtmp2, rt2);
-	evt_rect_read(&mtmp, mbr);
+	evt_mbr_read(&mtmp, nd);
 
 	dist1 = evt_mbr_dist(&mtmp, &rtmp1);
 	dist2 = evt_mbr_dist(&mtmp, &rtmp2);
@@ -3137,9 +3130,7 @@ evt_node_delete(struct evt_context *tcx)
 		for (i = 1; i < node->tn_nr; i++, ne++)
 			evt_rect_df_merge(&mbr, &ne->ne_rect);
 
-		if (evt_rect_same_extent(&node->tn_mbr, &mbr) &&
-		    node->tn_mbr.rd_epc == mbr.rc_epc &&
-		    node->tn_mbr.rd_minor_epc == mbr.rc_minor_epc)
+		if (evt_mbr_same(node, &mbr))
 			goto fix_trace; /* mbr hasn't changed */
 
 		evt_mbr_write(node, &mbr);
