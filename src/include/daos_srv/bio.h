@@ -207,12 +207,6 @@ bio_iov_set_raw_buf(struct bio_iov *biov, void *val)
 	biov->bi_buf = val;
 }
 
-static inline void
-bio_iov_alloc_raw_buf(struct bio_iov *biov, uint64_t len)
-{
-	D_ALLOC(biov->bi_buf, len);
-}
-
 static inline void *
 bio_iov2req_buf(const struct bio_iov *biov)
 {

@@ -36,8 +36,13 @@ class CodeLine():
         # Line of file, as it exists in the file.
         self.text = txt
 
+        self.mark_text = None
+
         # Work out self.code, the meaningful code on this line.
-        short = txt.strip()
+        right = txt.lstrip()
+        self.indent = txt[0:len(txt) - len(right)]
+        short = right.rstrip()
+
         self.code = short
         sc = short.find('/*')
         if sc != -1:
@@ -53,6 +58,17 @@ class CodeLine():
             self.free_var = val[:-2]
         else:
             self.free_var = None
+
+        # Set self.alloc_var to the name of anything being allocated, or Null.
+        if self.code.startswith('D_ALLOC_PTR'):
+            _, val = short.split('(', 1)
+            self.alloc_var = val[:-2]
+        elif self.code.startswith('D_ALLOC'):
+            _, val = short.split('(', 1)
+            (name, size) = val.split(',', 1)
+            self.alloc_var = name.strip()
+        else:
+            self.alloc_var = None
 
         self.conditional = False
         self.conditional_brace = False
@@ -79,6 +95,9 @@ class CodeLine():
         # New text, if self.changed is True
         self.new_text = None
 
+    def mark(self, text):
+        self.mark_text = text
+
     def _set_text(self, text):
         """Mark a line as requiring change."""
         self.new_text = text
@@ -94,6 +113,9 @@ class CodeLine():
             return self.new_text
         return self.text
 
+    def is_todo(self):
+        return 'TODO' in self.text
+
     def is_cond_on_var(self, var):
         """Check if a line is a conditional on a variable being non-zero."""
         if not self.conditional:
@@ -101,6 +123,16 @@ class CodeLine():
         if var == self.cond_str:
             return True
         if '{} != NULL'.format(var) == self.cond_str:
+            return True
+        return False
+
+    def is_cond_on_null_var(self, var):
+        """Check if a line is a conditional on a variable being zero."""
+        if not self.conditional:
+            return False
+        if '!{}'.format(var) == self.cond_str:
+            return True
+        if '{} == NULL'.format(var) == self.cond_str:
             return True
         return False
 
@@ -174,12 +206,16 @@ def show_patch(lines):
     global prev_file
     show = False
     removed = 0
+    added = 0
     for line in lines:
         if line.changed:
             show = True
         if not line.include:
             show = True
             removed += 1
+        if line.mark_text:
+            show = True
+            added += 1
 
     if not show:
         return
@@ -196,7 +232,7 @@ def show_patch(lines):
     end = 0
     for idx, line in enumerate(lines):
         line = lines[idx]
-        if not (line.changed or not line.include):
+        if not (line.changed or not line.include or line.mark_text):
             continue
         if idx < start:
             start = idx
@@ -212,11 +248,15 @@ def show_patch(lines):
         print('+++ a/{}'.format(lines[0].filename))
         prev_file = lines[0].filename
 
+    removed -= added
+
     print('@@ -{},{} +{},{} @@'.format(start_line,
                                        len(lines),
                                        start_line,
                                        len(lines) - removed))
     for line in lines:
+        if line.mark_text:
+            print('+{}/* TODO: {} */'.format(line.indent, line.mark_text))
         if line.changed:
             print('+{}'.format(line.new_text))
             print('-{}'.format(line.text))
@@ -263,7 +303,34 @@ def check_lines(lines):
                     lines[idx+1].drop_line()
             lines[idx-1].shorten_cond(line.free_var)
 
+        if 'test' in line.filename:
+            continue
+        if lines[idx-1].is_todo():
+            continue
+
+        continue
+
+        # These checks need some more work yet, and will require reworking
+        # of some code before they can be used.
+        if line.alloc_var:
+            next_line = idx + 1
+            if not line.text.endswith(';'):
+                continue
+                next_line += 1
+
+            if next_line > len(lines):
+                pass
+            elif lines[next_line].conditional:
+                if not lines[next_line].is_cond_on_null_var(line.alloc_var):
+                    line.mark('Revolve suspect code block')
+            elif lines[next_line].text == '' and len(lines) < next_line and \
+                 lines[next_line+1].conditional:
+                lines[next_line].drop_line()
+            else:
+                line.mark('Add check for alloc fail')
     show_patch(lines)
+
+CODE_MATCH = ['D_FREE', 'D_ALLOC']
 
 def main():
     """Check the source tree for D_FREE() usage.
@@ -272,7 +339,10 @@ def main():
     to improve logging.
     """
 
-    args = ['grep', '-n', '-B1', '-A1', '-e', 'D_FREE', '-e', 'D_FREE_PTR']
+    args = ['grep', '-n', '-B1', '-A1']
+
+    for match in CODE_MATCH:
+        args.extend(['-e', match])
 
     if len(sys.argv) == 2:
         # If a file is passed on the command line then just check that.
