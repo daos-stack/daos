@@ -39,6 +39,35 @@
 #include "rpc.h"
 #include <errno.h>
 
+/* Define a custom allocator so we can log and use fault injection
+ * in the DPRC code.
+ */
+
+struct drpc_alloc {
+	ProtobufCAllocator	alloc;
+	bool			oom;
+};
+
+static void *drpc_alloc(void *arg, size_t size)
+{
+	struct drpc_alloc *alloc = arg;
+	void *buf;
+
+	D_ALLOC(buf, size);
+	if (!buf)
+		alloc->oom = true;
+	return buf;
+}
+
+static void drpc_free(void *allocater_data, void *pointer)
+{
+	D_FREE(pointer);
+}
+
+#define PROTO_ALLOCATOR_INIT(self) {.alloc.alloc = drpc_alloc,	\
+			.alloc.free = drpc_free,\
+			.alloc.allocator_data = &self}
+
 struct cp_arg {
 	struct dc_mgmt_sys	*sys;
 	crt_rpc_t		*rpc;
@@ -300,6 +329,7 @@ static int
 get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 		struct sys_info *sy_info)
 {
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		*ctx;
 	Mgmt__GetAttachInfoReq	 req = MGMT__GET_ATTACH_INFO_REQ__INIT;
 	Mgmt__GetAttachInfoResp	*resp;
@@ -352,8 +382,10 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 		rc = -DER_MISC;
 		goto out_dresp;
 	}
-	resp = mgmt__get_attach_info_resp__unpack(NULL, dresp->body.len,
+	resp = mgmt__get_attach_info_resp__unpack(&alloc.alloc, dresp->body.len,
 						  dresp->body.data);
+	if (alloc.oom)
+		D_GOTO(out_dresp, rc = -DER_MISC);
 	if (resp == NULL) {
 		D_ERROR("failed to unpack GetAttachInfo response\n");
 		rc = -DER_MISC;
@@ -432,7 +464,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	}
 
 out_resp:
-	mgmt__get_attach_info_resp__free_unpacked(resp, NULL);
+	mgmt__get_attach_info_resp__free_unpacked(resp, &alloc.alloc);
 out_dresp:
 	drpc_response_free(dresp);
 out_dreq:

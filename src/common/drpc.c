@@ -37,11 +37,23 @@
 
 static int unixcomm_close(struct unixcomm *handle);
 
-static void *drpc_alloc(void *allocator_date, size_t size)
+/* Define a custom allocator so we can log and use fault injection
+ * in the DPRC code.
+ */
+
+struct drpc_alloc {
+	ProtobufCAllocator	alloc;
+	bool			oom;
+};
+
+static void *drpc_alloc(void *arg, size_t size)
 {
+	struct drpc_alloc *alloc = arg;
 	void *buf;
 
 	D_ALLOC(buf, size);
+	if (!buf)
+		alloc->oom = true;
 	return buf;
 }
 
@@ -50,11 +62,9 @@ static void drpc_free(void *allocater_data, void *pointer)
 	D_FREE(pointer);
 }
 
-/* Define a custom allocator so we can log and use fault injection
- * in the DPRC code.
- */
-static ProtobufCAllocator alloc = {.alloc = drpc_alloc,
-				   .free = drpc_free};
+#define PROTO_ALLOCATOR_INIT(self) {.alloc.alloc = drpc_alloc,	\
+			.alloc.free = drpc_free,\
+			.alloc.allocator_data = &self}
 
 /**
  * Allocate and initialize a new dRPC call Protobuf structure for a given dRPC
@@ -96,7 +106,8 @@ drpc_call_create(struct drpc *ctx, int32_t module, int32_t method)
 void
 drpc_call_free(Drpc__Call *call)
 {
-	drpc__call__free_unpacked(call, &alloc);
+	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
+	drpc__call__free_unpacked(call, &alloc.alloc);
 }
 
 /**
@@ -133,7 +144,8 @@ drpc_response_create(Drpc__Call *call)
 void
 drpc_response_free(Drpc__Response *resp)
 {
-	drpc__response__free_unpacked(resp, &alloc);
+	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
+	drpc__response__free_unpacked(resp, &alloc.alloc);
 }
 
 static struct unixcomm *
@@ -349,15 +361,6 @@ drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 	return buf_len;
 }
 
-static Drpc__Response *
-drpc_unmarshal_response(uint8_t *buff, size_t buflen)
-{
-	Drpc__Response *resp;
-
-	resp = drpc__response__unpack(&alloc, buflen, buff);
-	return resp;
-}
-
 /**
  * Issue a call over a drpc channel
  *
@@ -372,6 +375,7 @@ int
 drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 			Drpc__Response **resp)
 {
+	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Drpc__Response	*response = NULL;
 	uint8_t		*messagePb;
 	uint8_t		*responseBuf;
@@ -407,8 +411,10 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 		D_FREE(responseBuf);
 		return ret;
 	}
-	response = drpc_unmarshal_response(responseBuf, recv);
+	response = drpc__response__unpack(&alloc.alloc, recv, responseBuf);
 	D_FREE(responseBuf);
+	if (alloc.oom)
+		return -DER_NOMEM;
 	if (!response)
 		return -DER_MISC;
 
@@ -562,6 +568,7 @@ send_response(struct drpc *ctx, Drpc__Response *response)
 static int
 get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 {
+	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int		rc;
 	uint8_t		*buffer;
 	size_t		buffer_size = UNIXCOMM_MAXMSGSIZE;
@@ -578,8 +585,10 @@ get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 		return rc;
 	}
 
-	*call = drpc__call__unpack(&alloc, message_len, buffer);
+	*call = drpc__call__unpack(&alloc.alloc, message_len, buffer);
 	D_FREE(buffer);
+	if (alloc.oom)
+		return -DER_NOMEM;
 	if (*call == NULL) {
 		D_ERROR("Couldn't unpack message into Drpc__Call\n");
 		return -DER_PROTO;
