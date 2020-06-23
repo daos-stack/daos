@@ -37,6 +37,7 @@
 """Unit tests"""
 
 import os
+import daos_build
 
 #TEST_SRC = ['test_linkage.cpp', 'test_gurt.c', 'utest_hlc.c', 'utest_swim.c']
 TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c']
@@ -80,11 +81,9 @@ def scons():
         flags = []
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
-        testprog = test_env.Program(target=testname,
-                                    source=testobj + \
-                                    cart_targets + \
-                                    swim_targets + \
-                                    gurt_targets,
+        testprog = daos_build.test(test_env, target=testname,
+                                   source=testobj + cart_targets +
+                                   swim_targets + gurt_targets,
                                     LIBS=test_env["LIBS"] + ['yaml'],
                                     LINKFLAGS=flags)
         tests.append(testprog)
