@@ -887,7 +887,7 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 	return result;
 }
 
-static void cpyfield(JNIEnv *env, char *buffer, int *value,
+static inline void cpyfield(JNIEnv *env, char *buffer, int *value,
 		int valueLen, int expLen)
 {
 	if (valueLen != expLen) {

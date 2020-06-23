@@ -25,7 +25,6 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.Constants;
-import io.daos.DaosIOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +53,7 @@ public class IOKeyDesc {
 
   private final ByteBuffer descBuffer;
 
-  private final ByteBuffer keyBuffer;
+  private ByteBuffer keyBuffer;
 
   private List<String> resultKeys;
 
@@ -76,7 +75,8 @@ public class IOKeyDesc {
    * @param nbrOfKeys
    * number of keys to list. The listing could stop if <code>nbrOfKeys</code> exceeds actual number of keys
    * @param akeyLen
-   * approximate key length, so that buffer size can be well-calculated
+   * approximate key length, so that buffer size can be well-calculated. It may be increased after key2big error when
+   * list keys.
    * @param batchSize
    * how many keys to list per native method call
    * @throws IOException
@@ -208,6 +208,13 @@ public class IOKeyDesc {
     }
   }
 
+  private void resizeKeyBuffer() {
+    if (log.isDebugEnabled()) {
+      log.debug("resize key buffer size to " + getSuggestedKeyLen() * batchSize);
+    }
+    keyBuffer = BufferAllocator.directBuffer(getSuggestedKeyLen() * batchSize);
+  }
+
   /**
    * continue to list more keys with existing anchor which is updated in JNI call.
    * user should call this method before reusing this object to query more keys.
@@ -215,11 +222,15 @@ public class IOKeyDesc {
   public void continueList() {
     anchorBuffer.position(0);
     byte stat = anchorBuffer.get();
-    if (stat == Constants.KEY_LIST_CODE_NOT_STARTED) {
-      return;
+    if (log.isDebugEnabled()) {
+      log.debug("continue listing. state of anchor: " + stat);
     }
-    if (stat != Constants.KEY_LIST_CODE_REACH_LIMIT) {
-      throw new IllegalStateException("cannot continue the key listing due to anchor status is not limit-reached");
+    switch (stat) {
+      case Constants.KEY_LIST_CODE_NOT_STARTED: return;
+      case Constants.KEY_LIST_CODE_REACH_LIMIT: break;
+      case Constants.KEY_LIST_CODE_KEY2BIG: resizeKeyBuffer(); break;
+      default: throw new IllegalStateException("cannot continue the key listing due" +
+        " to incorrect anchor status " + stat);
     }
     encoded = false;
     resultKeys.clear();
@@ -240,11 +251,15 @@ public class IOKeyDesc {
 
   /**
    * parse result and store it to resultList after JNI call.
+   * When you get empty list, it could be one of two reasons.<br/>
+   * 1. list ended. You should check {@link #reachEnd()}.
+   * 2. key2big error. You should continue the listing by calling {@link #continueList()}
+   * and {@link DaosObject#listDkeys(IOKeyDesc)} or {@link DaosObject#listAkeys(IOKeyDesc)}
    *
    * @return result key list
    * @throws UnsupportedEncodingException
    */
-  protected List<String> parseResult() throws DaosIOException, UnsupportedEncodingException {
+  protected List<String> parseResult() throws UnsupportedEncodingException {
     if (!resultParsed) {
       resultKeys = new ArrayList<>();
       // parse desc buffer and key buffer
@@ -256,13 +271,16 @@ public class IOKeyDesc {
       }
 
       if (dkeyBytes != null) {
-        descBuffer.position(Constants.ENCODED_LENGTH_KEY + dkeyBytes.length);
+        descBuffer.position(descBuffer.position() + Constants.ENCODED_LENGTH_KEY + dkeyBytes.length);
       }
       anchorBuffer.position(0);
       if (anchorBuffer.get() == Constants.KEY_LIST_CODE_KEY2BIG) { // check key2big
         resultParsed = true;
         suggestedKeyLen = (int)descBuffer.getLong() + 1;
-        throw new DaosIOException("key2big, need key length of " + suggestedKeyLen);
+        if (log.isDebugEnabled()) {
+          log.debug("key2big. suggested length is " + suggestedKeyLen);
+        }
+        return resultKeys;
       }
 
       long keyLen;
