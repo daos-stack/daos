@@ -297,7 +297,7 @@ pipeline {
                         }
                     }
                     steps {
-                        pythonBanditCheck
+                        pythonBanditCheck()
                     }
                     post {
                         always {
