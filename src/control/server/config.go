@@ -51,6 +51,7 @@ const (
 
 type networkProviderValidation func(string, string) error
 type networkNUMAValidation func(string, uint) error
+type networkDeviceClass func(string) (uint32, error)
 
 // ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
 // These settings bring coherence between the client and server network configuration.
@@ -58,6 +59,7 @@ type ClientNetworkCfg struct {
 	Provider        string
 	CrtCtxShareAddr uint32
 	CrtTimeout      uint32
+	NetDevClass     uint32
 }
 
 // Configuration describes options for DAOS control plane.
@@ -99,6 +101,9 @@ type Configuration struct {
 
 	//a pointer to a function that validates the chosen numa node
 	validateNUMAFn networkNUMAValidation
+
+	//a pointer to a function that retrieves the IO server network device class
+	getDeviceClassFn networkDeviceClass
 }
 
 // WithRecreateSuperblocks indicates that a missing superblock should not be treated as
@@ -108,21 +113,21 @@ func (c *Configuration) WithRecreateSuperblocks() *Configuration {
 	return c
 }
 
-// WithProviderValidator is used for unit testing configurations that are not necessarily valid on the test machine.
-// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
-// in those tests that are not concerned with testing a truly valid configuration
-// for the test system.
+// WithProviderValidator sets the function that validates the provider
 func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Configuration {
 	c.validateProviderFn = fn
 	return c
 }
 
-// WithNUMAValidator is used for unit testing configurations that are not necessarily valid on the test machine.
-// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
-// in those tests that are not concerned with testing a truly valid configuration
-// for the test system.
+// WithNUMAValidator sets the function that validates the NUMA configuration
 func (c *Configuration) WithNUMAValidator(fn networkNUMAValidation) *Configuration {
 	c.validateNUMAFn = fn
+	return c
+}
+
+// WithGetNetworkDeviceClass sets the function that determines the network device class
+func (c *Configuration) WithGetNetworkDeviceClass(fn networkDeviceClass) *Configuration {
+	c.getDeviceClassFn = fn
 	return c
 }
 
@@ -321,6 +326,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 		ext:                ext,
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
+		getDeviceClassFn:   netdetect.GetDeviceClass,
 	}
 }
 
@@ -492,6 +498,7 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
 
+	var netDevClass uint32
 	for idx, srv := range c.Servers {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
 			srv.Fabric.Provider,
@@ -536,6 +543,20 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
 			}
 			seenBdevSet[dev] = idx
+		}
+
+		ndc, err := c.getDeviceClassFn(srv.Fabric.Interface)
+		if err != nil {
+			return err
+		}
+
+		switch idx {
+		case 0:
+			netDevClass = ndc
+		default:
+			if ndc != netDevClass {
+				return FaultConfigInvalidNetDevClass(idx, netDevClass, ndc, srv.Fabric.Interface)
+			}
 		}
 	}
 

@@ -128,6 +128,7 @@ const (
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
+	ServerConfigInvalidNetDevClass
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

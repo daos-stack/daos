@@ -30,6 +30,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -170,6 +171,15 @@ func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 		code.ServerConfigOverlappingBdevDeviceList,
 		fmt.Sprintf("the bdev_list value in IO server %d overlaps with entries in server %d", curIdx, seenIdx),
 		"ensure that each IO server has a unique set of bdev_list entries and restart",
+	)
+}
+
+func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
+	return serverFault(
+		code.ServerConfigInvalidNetDevClass,
+		fmt.Sprintf("IO server %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
+			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
+		"ensure that each IO server specifies a fabric_iface with a matching device class and restart",
 	)
 }
 
