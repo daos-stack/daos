@@ -24,6 +24,7 @@
 #include <spdk/stdinc.h>
 #include <spdk/nvme.h>
 #include <spdk/env.h>
+#include <spdk/vmd.h>
 
 #include "nvme_control_common.h"
 
@@ -185,6 +186,15 @@ _discover(prober probe, bool detach, health_getter get_health)
 	 *  called for each controller after the SPDK NVMe driver has completed
 	 *  initializing the controller we chose to attach.
 	 */
+
+	/* TODO: Move to spdk.go possibly? */
+	/* Enumerate VMD devices and hook them into the SPDK pci subsys*/	
+	rc = spdk_vmd_init();
+	if (rc != 0)
+		printf("Error initializing VMD\n");
+	else
+		printf("Initalized VMD\n");
+
 	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
 	if (rc != 0)
 		goto fail;

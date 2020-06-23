@@ -29,6 +29,7 @@
 #include <abt.h>
 #include <spdk/env.h>
 #include <spdk/nvme.h>
+#include <spdk/vmd.h>
 #include <spdk/thread.h>
 #include <spdk/bdev.h>
 #include <spdk/io_channel.h>
@@ -160,12 +161,15 @@ populate_whitelist(struct spdk_env_opts *opts)
 			break;
 		}
 
+		if (1) {
+		//D_ERROR("Remove --pci-whitelist DPDK param\n");
 		rc = opts_add_pci_addr(opts, &opts->pci_whitelist,
-				       trid->traddr);
+				       "0000:5d:05.5"/*trid->traddr*/);
 		if (rc < 0) {
 			D_ERROR("Invalid traddr=%s\n", trid->traddr);
 			rc = -DER_INVAL;
 			break;
+		}
 		}
 	}
 
@@ -214,6 +218,20 @@ bio_spdk_env_init(void)
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
+
+	if (spdk_conf_find_section(NULL, "Vmd") != NULL) {
+		/**
+		 * VMD is enabled in the daos_nvme.conf
+		 * Enumerate VMD devices and hook them into the SPDK PCI
+		 * subsystem.
+		 */
+		rc = spdk_vmd_init();
+		if (rc != 0) {
+			rc = -DER_INVAL; /* spdk_vmd_init() returns -1 */
+			D_ERROR("Failed to initialize VMD env, "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
 	}
 
 	spdk_unaffinitize_thread();
@@ -301,6 +319,9 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	} else if (env && strcasecmp(env, "AIO") == 0) {
 		D_WARN("AIO device will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
+	} else if (env && strcasecmp(env, "VMD") == 0) {
+		D_WARN("VMD device will be used!\n");
+		nvme_glb.bd_bdev_class = BDEV_CLASS_NVME;
 	}
 
 	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
@@ -620,6 +641,9 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 {
 	struct spdk_bdev *bdev;
 	int rc = 0;
+
+	if (spdk_bdev_first() == NULL)
+		D_ERROR("***spdk_bdev_first() = NULL\n");
 
 	for (bdev = spdk_bdev_first(); bdev != NULL;
 	     bdev = spdk_bdev_next(bdev)) {

@@ -89,5 +89,8 @@ func (e *Env) InitSPDKEnv(shmID int) (err error) {
 		return
 	}
 
+	// TODO: Either call spdk_vmd_init here or before spdk_probe
+	//rc := C.spdk_vmd_init()
+
 	return
 }

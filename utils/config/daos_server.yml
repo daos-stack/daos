@@ -248,6 +248,7 @@
 #  # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
 #  # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
 #  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
+#  # - "vmd" for Intel Volume Management Device, bdev_{size,number} ignored
 #  # Immutable after reformat.
 #
 #  # default: nvme
@@ -340,6 +341,7 @@
 #  # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
 #  # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
 #  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
+#  # - "vmd" for Intel Volume Management Device, bdev_{size,number} ignored
 #  # Immutable after reformat.
 #
 #  # When bdev_class is set to malloc, bdev_number is the number of devices
@@ -359,3 +361,14 @@
 #  # block devices that should be different across different server instance.
 #  bdev_class: kdev
 #  bdev_list: [/dev/sdc,/dev/sdd]
+#
+#  # When bdev_class is set to vmd, bdev_list is the list of unique Intel
+#  # Volume Managment Device IDs that should be different across different
+#  # server instance.
+#  # First make sure that bdev_include is set to the VMD address
+#  # Use "lspci | grep 201d" to find available VMD devices.
+#  # ie: bdev_include ["0000:5d:05.5"]
+#  # Then can set bdev_list to the NVMe SSDs behind the VMD addr
+#  # Use "./spdk/app/spdk_lspci/spdk_lspci"
+#  bdev_class: vmd
+#  bdev_list: ["5d0505:01:00.0","5d0505:03:00.0"]

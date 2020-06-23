@@ -85,3 +85,9 @@ servers:
   # bdev_list: [/tmp/daos-bdev]	# generate nvme.conf as follows:
               # [AIO]
               #   AIO /tmp/aiofile AIO1 4096
+
+  # If using Intel Volume Management Device
+  # bdev_class: vmd              # map to VOS_BDEV_CLASS=VMD
+  # bdev_list: [""0000:5d:05.5"] # generate nvme.conf as follows:
+              # [VMD]
+              #   Enable True

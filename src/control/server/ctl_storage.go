@@ -67,9 +67,9 @@ func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.
 // canAccessBdevs evaluates if any specified Bdevs are not accessible.
 func (c *StorageControlService) canAccessBdevs(sr *bdev.ScanResponse) (missing []string, ok bool) {
 	getController := func(pciAddr string) *storage.NvmeController {
-		for _, c := range sr.Controllers {
-			if c.PciAddr == pciAddr {
-				return c
+		for _, s := range sr.Controllers {
+			if s.PciAddr == pciAddr {
+				return s
 			}
 		}
 		return nil
