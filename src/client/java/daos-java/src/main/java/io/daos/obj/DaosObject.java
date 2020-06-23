@@ -38,6 +38,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
+ * A Java object representing underlying DAOS object.
  * //TODO: buffer management
  */
 public class DaosObject {
@@ -102,10 +103,14 @@ public class DaosObject {
     }
   }
 
+  /**
+   * punch entire object.
+   *
+   * @throws IOException
+   */
   public void punch() throws IOException {
-    if (objectPtr != -1) {
-      client.punchObject(objectPtr, 0);
-    }
+    checkOpen();
+    client.punchObject(objectPtr, 0);
   }
 
   private ByteBuffer encodeKeys(List<String> keys) throws IOException {
@@ -142,6 +147,13 @@ public class DaosObject {
     return buffer;
   }
 
+  /**
+   * punch given <code>dkeys</code>.
+   *
+   * @param dkeys
+   * dkey list
+   * @throws IOException
+   */
   public void punchDkeys(List<String> dkeys) throws IOException {
     checkOpen();
     ByteBuffer buffer = encodeKeys(dkeys);
@@ -152,6 +164,15 @@ public class DaosObject {
     client.punchObjectDkeys(objectPtr, 0, dkeys.size(), ((DirectBuffer)buffer).address(), buffer.limit());
   }
 
+  /**
+   * punch given <code>akeys</code> under <code>dkeys</code>.
+   *
+   * @param dkey
+   * distribution key
+   * @param akeys
+   * akey list
+   * @throws IOException
+   */
   public void punchAkeys(String dkey, List<String> akeys) throws IOException {
     checkOpen();
     if (akeys.isEmpty()) {
@@ -166,6 +187,12 @@ public class DaosObject {
     client.punchObjectAkeys(objectPtr, 0, nbrOfAkyes, ((DirectBuffer)buffer).address(), buffer.limit());
   }
 
+  /**
+   * query attribute.
+   *
+   * @return object attribute
+   * @throws IOException
+   */
   public DaosObjectAttribute queryAttribute() throws IOException {
     checkOpen();
     byte[] bytes = client.queryObjectAttribute(objectPtr);
@@ -178,6 +205,7 @@ public class DaosObject {
    *   for (Entry e : desc.getAkeyEntries()) {
    *     int actualSize = e.getActualSize();
    *     if (actualSize > 0 ) {
+   *       byte[] bytes = new byte[actualSize];
    *       e.read(bytes) // or e.read(byteBuffer)
    *     }
    *   }
@@ -185,6 +213,8 @@ public class DaosObject {
    *
    * @param desc
    * {@link IODataDesc} describes list of {@link io.daos.obj.IODataDesc.Entry} to fetch akeyes' data under dkey.
+   * Check {@link #createDataDescForFetch(String, List)} and
+   * {@link IODataDesc#createEntryForFetch(String, IODataDesc.IodType, int, int, int)}
    * @throws IOException
    */
   public void fetch(IODataDesc desc) throws IOException {
@@ -213,39 +243,48 @@ public class DaosObject {
   }
 
   /**
-   * list object dkeys.
+   * list object dkeys. dkeys can also get from {@link IOKeyDesc#getResultKeys()} after this method until
+   * {@link IOKeyDesc#continueList()}, which resets some fields for next key listing, is called.<br/>
+   * User should check {@link IOKeyDesc#reachEnd()} to see if all keys are listed. If not reach end, You should
+   * continue the listing by calling {@link IOKeyDesc#continueList()} and {@link DaosObject#listDkeys(IOKeyDesc)}
+   * or {@link DaosObject#listAkeys(IOKeyDesc)}.
    *
    * @param desc
-   * @return
+   * key description
+   * @return list of dkeys
    * @throws IOException
    */
   public List<String> listDkeys(IOKeyDesc desc) throws IOException {
     checkOpen();
     desc.encode();
-    // TODO: check completion of list
-    // TODO: key2big, double size
     client.listObjectDkeys(objectPtr, ((DirectBuffer)desc.getDescBuffer()).address(),
       ((DirectBuffer)desc.getKeyBuffer()).address(), desc.getKeyBuffer().capacity(),
       ((DirectBuffer)desc.getAnchorBuffer()).address(),
       desc.getBatchSize());
-    ByteBuffer anchorBuffer = desc.getAnchorBuffer();
-    anchorBuffer.position(0);
-    System.out.println(anchorBuffer.get());
     return desc.parseResult();
   }
 
+  /**
+   * list object akeys. akeys can also get from {@link IOKeyDesc#getResultKeys()} after this method until
+   * {@link IOKeyDesc#continueList()}, which resets some fields for next key listing, is called.<br/>
+   * User should check {@link IOKeyDesc#reachEnd()} to see if all keys are listed. If not reach end, You should
+   * continue the listing by calling {@link IOKeyDesc#continueList()} and {@link DaosObject#listDkeys(IOKeyDesc)}
+   * or {@link DaosObject#listAkeys(IOKeyDesc)}.
+   *
+   * @param desc
+   * @return
+   * @throws IOException
+   */
   public List<String> listAkeys(IOKeyDesc desc) throws IOException {
     checkOpen();
     if (desc.getDkey() == null) {
       throw new IllegalArgumentException("dkey is needed when list akeys");
     }
     desc.encode();
-
-    // TODO: check completion of list
     client.listObjectAkeys(objectPtr, ((DirectBuffer)desc.getDescBuffer()).address(),
       ((DirectBuffer)desc.getKeyBuffer()).address(), desc.getKeyBuffer().capacity(),
       ((DirectBuffer)desc.getAnchorBuffer()).address(), desc.getBatchSize());
-    return null;
+    return desc.parseResult();
   }
 
   private void checkOpen() throws IOException {
@@ -303,7 +342,8 @@ public class DaosObject {
    * @param nbrOfKeys
    * number of keys to list. The listing could stop if <code>nbrOfKeys</code> exceeds actual number of keys
    * @param keyLen
-   * approximate key length, so that buffer size can be well-calculated
+   * approximate key length, so that buffer size can be well-calculated. It may be increased after key2big error when
+   * list keys.
    * @param batchSize
    * how many keys to list per native method call
    * @return new instance of IOKeyDesc
@@ -323,7 +363,8 @@ public class DaosObject {
    * @param nbrOfKeys
    * number of keys to list. The listing could stop if <code>nbrOfKeys</code> exceeds actual number of keys
    * @param keyLen
-   * approximate key length, so that buffer size can be well-calculated
+   * approximate key length, so that buffer size can be well-calculated. It may be increased after key2big error when
+   * list keys.
    * @return new instance of IOKeyDesc
    * @throws IOException
    */

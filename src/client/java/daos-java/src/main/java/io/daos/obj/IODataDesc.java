@@ -99,8 +99,8 @@ public class IODataDesc {
       totalDataBufferLen += entry.getBufferLen();
     }
     totalDescBufferLen += totalRequestBufLen;
-    if (!updateOrFetch) { // for returned actual size
-      totalDescBufferLen += keyEntries.size() * Constants.ENCODED_LENGTH_EXTENT;
+    if (!updateOrFetch) { // for returned actual size and actual record size
+      totalDescBufferLen += keyEntries.size() * Constants.ENCODED_LENGTH_EXTENT * 2;
     }
   }
 
@@ -118,7 +118,8 @@ public class IODataDesc {
   }
 
   /**
-   * total length of all encoded entries, including reserved buffer for holding sizes of returned data.
+   * total length of all encoded entries, including reserved buffer for holding sizes of returned data and actual record
+   * size.
    *
    * @return total length
    */
@@ -218,19 +219,19 @@ public class IODataDesc {
    * distribution key
    * @param type
    * iod type, {@see io.daos.obj.IODataDesc.IodType}
-   * @param offset
-   * offset inside akey from which to fetch data, should be a multiple of recordSize
    * @param recordSize
    * record size
+   * @param offset
+   * offset inside akey from which to fetch data, should be a multiple of recordSize
    * @param dataSize
    * size of data to fetch, make it a multiple of recordSize as much as possible. zeros are padded to make actual
    * request size a multiple of recordSize.
    * @return data description entry
    * @throws IOException
    */
-  public static Entry createEntryForFetch(String key, IODataDesc.IodType type, int offset, int recordSize,
+  public static Entry createEntryForFetch(String key, IODataDesc.IodType type, int recordSize, int offset,
                                               int dataSize) throws IOException {
-    IODataDesc.Entry entry = new IODataDesc.Entry(key, type, offset, recordSize, dataSize);
+    IODataDesc.Entry entry = new IODataDesc.Entry(key, type, recordSize, offset, dataSize);
     return entry;
   }
 
@@ -241,10 +242,10 @@ public class IODataDesc {
    * distribution key
    * @param type
    * iod type, {@see io.daos.obj.IODataDesc.IodType}
-   * @param offset
-   * offset inside akey from which to update data, should be a multiple of recordSize
    * @param recordSize
    * record size
+   * @param offset
+   * offset inside akey from which to update data, should be a multiple of recordSize
    * @param dataBuffer
    * byte buffer (direct buffer preferred) holding data to update. make sure dataBuffer is ready for being read,
    * for example, buffer position and limit are set correctly for reading.
@@ -253,9 +254,9 @@ public class IODataDesc {
    * @return data description entry
    * @throws IOException
    */
-  public static Entry createEntryForUpdate(String key, IODataDesc.IodType type, int offset, int recordSize,
+  public static Entry createEntryForUpdate(String key, IODataDesc.IodType type, int recordSize, int offset,
                                                ByteBuffer dataBuffer) throws IOException {
-    IODataDesc.Entry entry = new IODataDesc.Entry(key, type, offset, recordSize, dataBuffer);
+    IODataDesc.Entry entry = new IODataDesc.Entry(key, type, recordSize, offset, dataBuffer);
     return entry;
   }
 
@@ -277,6 +278,7 @@ public class IODataDesc {
     private ByteBuffer globalBuffer;
     private int globalBufIdx = -1;
     private int actualSize; // to get from value buffer
+    private int actualRecSize;
 
     private static final Logger log = LoggerFactory.getLogger(Entry.class);
 
@@ -287,41 +289,45 @@ public class IODataDesc {
      * akey to fetch data from
      * @param type
      * akey value type
-     * @param
-     * offset inside akey, should be a multiple of recordSize
      * @param recordSize
      * akey record size
+     * @param offset
+     * offset inside akey, should be a multiple of recordSize
      * @param dataSize
      * size of data to fetch, make it a multiple of recordSize as much as possible. zeros are padded to make actual
      * request size a multiple of recordSize.
      * @throws IOException
      */
-    protected Entry(String key, IodType type, int offset, int recordSize, int dataSize) throws IOException {
+    protected Entry(String key, IodType type, int recordSize, int offset, int dataSize) throws IOException {
       this.key = key;
       this.type = type;
       this.keyBytes = key.getBytes(Constants.KEY_CHARSET);
       if (keyBytes.length > Short.MAX_VALUE) {
         throw new IllegalArgumentException("akey length in " + Constants.KEY_CHARSET + " should not exceed "
-          + Short.MAX_VALUE);
+          + Short.MAX_VALUE + ", akey: " + key);
       }
       this.offset = offset;
       this.recordSize = recordSize;
       this.dataSize = dataSize;
       if (offset%recordSize != 0) {
         throw new IllegalArgumentException("offset (" + offset + ") should be a multiple of recordSize (" + recordSize +
-                                          ").");
+                                          ")." + ", akey: " + key);
+      }
+      if (dataSize == 0) {
+        log.warn("data size is zero. " + ", akey: " + key);
       }
       switch (type) {
         case SINGLE:
           if (offset != 0) {
-            throw new IllegalArgumentException("offset should be zero for " + type);
+            throw new IllegalArgumentException("offset should be zero for " + type + ", akey: " + key);
           }
           if (dataSize > recordSize) {
-            throw new IllegalArgumentException("data size should be no more than record size for " + type);
+            throw new IllegalArgumentException("data size should be no more than record size for " + type +
+              ", akey: " + key);
           }
           break;
         case NONE: throw new IllegalArgumentException("need valid IodType, either " + IodType.ARRAY + " or " +
-                        IodType.SINGLE);
+                        IodType.SINGLE + ", akey: " + key);
       }
       // pad data size and make it a multiple of record size
       int r = dataSize % recordSize;
@@ -339,10 +345,10 @@ public class IODataDesc {
      * akey to update on
      * @param type
      * akey value type
-     * @param offset
-     * offset inside akey, should be a multiple of recordSize
      * @param recordSize
      * akey record size
+     * @param offset
+     * offset inside akey, should be a multiple of recordSize
      * @param dataBuffer
      * byte buffer (direct buffer preferred) holding data to update. make sure dataBuffer is ready for being read,
      * for example, buffer position and limit are set correctly for reading.
@@ -350,8 +356,8 @@ public class IODataDesc {
      * of recordSize.
      * @throws IOException
      */
-    protected Entry(String key, IodType type, int offset, int recordSize, ByteBuffer dataBuffer) throws IOException {
-      this(key, type, offset, recordSize, dataBuffer.limit() - dataBuffer.position());
+    protected Entry(String key, IodType type, int recordSize, int offset, ByteBuffer dataBuffer) throws IOException {
+      this(key, type, recordSize, offset, dataBuffer.remaining());
       this.dataBuffer = dataBuffer;
       this.updateOrFetch = true;
     }
@@ -372,7 +378,7 @@ public class IODataDesc {
      */
     public int getActualSize() {
       if (updateOrFetch) {
-        throw new UnsupportedOperationException("it's entry for update");
+        throw new UnsupportedOperationException("it's entry for update, akey: " + key);
       }
       return actualSize;
     }
@@ -384,13 +390,13 @@ public class IODataDesc {
      */
     public void setActualSize(int actualSize) {
       if (updateOrFetch) {
-        throw new UnsupportedOperationException("it's entry for update");
+        throw new UnsupportedOperationException("it's entry for update, akey: " + key);
       }
       this.actualSize = actualSize;
     }
 
     /**
-     * read <code>length</code>of data from global buffer at this entry's index.
+     * read <code>length</code> of data from global buffer at this entry's index.
      * make sure <code>length</code> is no more than actualSize
      * @param bytes
      * byte array data read to
@@ -402,11 +408,12 @@ public class IODataDesc {
     public void get(byte[] bytes, int offset, int length) {
       if ((offset | length | bytes.length - offset - length) < 0) {
         throw new IndexOutOfBoundsException("bytes length: " + bytes.length +
-          ", offset: " + offset + ", length: " + length);
+          ", offset: " + offset + ", length: " + length + ", akey: " + key);
       }
       if (length > actualSize) {
         throw new BufferUnderflowException();
       }
+      globalBuffer.clear();
       globalBuffer.position(globalBufIdx + Constants.ENCODED_LENGTH_EXTENT);
       globalBuffer.limit(globalBuffer.position() + actualSize);
       globalBuffer.get(bytes, offset, length);
@@ -453,7 +460,8 @@ public class IODataDesc {
     }
 
     /**
-     * length of this entry when encoded into the Data Buffer.
+     * length of this entry when encoded into the Data Buffer.<br/>
+     * one {@linkplain Constants#ENCODED_LENGTH_EXTENT} for actual size plus padded request data size<br/>
      *
      * @return length
      */
@@ -470,6 +478,9 @@ public class IODataDesc {
      * global data buffer
      */
     public void setGlobalDataBuffer(ByteBuffer globalBuffer) {
+      if (this.globalBuffer != null) {
+        throw new IllegalArgumentException("global buffer is set already. " + ", akey: " + key);
+      }
       this.globalBuffer = globalBuffer;
       this.globalBufIdx = globalBuffer.position();
       if (log.isDebugEnabled()) {
@@ -483,7 +494,8 @@ public class IODataDesc {
           globalBuffer.position(globalBuffer.position() + padSize);
         }
         if ((globalBuffer.position() - globalBufIdx) != getBufferLen()) {
-          throw new IllegalStateException("global buffer should be filled with data of size " + getBufferLen());
+          throw new IllegalStateException("global buffer should be filled with data of size " + getBufferLen() +
+            "akey: " + key);
         }
       } else { // fetch
         globalBuffer.position(globalBufIdx + getBufferLen());
@@ -498,7 +510,7 @@ public class IODataDesc {
      */
     public void encode(ByteBuffer descBuffer) {
       if (globalBufIdx == -1) {
-        throw new IllegalStateException("value buffer index is not set");
+        throw new IllegalStateException("value buffer index is not set, akey: " + key);
       }
       descBuffer.putShort((short)keyBytes.length)
                 .put(keyBytes)
