@@ -150,6 +150,7 @@ committed_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *value, void *arg)
 			entry->ae_oid = oid;
 			entry->ae_oca = oca;
 			entry->ae_epoch = epoch;
+			entry->ae_current_stripe.as_stripenum = ~0UL;
 			d_list_add_tail(&entry->ae_link, &agg_set->as_entries);
 			agg_set->as_count++;
 			rc = 0;
@@ -344,15 +345,16 @@ agg_process_stripe(struct ec_agg_entry *entry)
 
 	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
 		entry->ae_current_stripe.as_stripenum,
-		iter_param.ip_recx.rx_idx & (unsigned long)(~PARITY_INDICATOR));
-		//iter_param.ip_recx.rx_nr);
+		iter_param.ip_recx.rx_idx);
 
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry);
+	/*
 	D_PRINT("Parity query rc: %d, epoch: %lu, offset: %lu, length: %lu\n",
 		rc, entry->ae_par_extent.ape_epoch,
 		entry->ae_par_extent.ape_recx.rx_idx,
 		entry->ae_par_extent.ape_recx.rx_nr);
+		*/
 	agg_clear_extents(entry);
 	return rc;
 }
@@ -496,9 +498,7 @@ agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		//D_PRINT(" adding stripe  data: ex_lo: %lu, ex_hi: %lu\n",
 		//	ext.ex_lo, ext.ex_hi);
 	} else
-		D_PRINT("Outer iter parity, stripe: %lu, address: %lu\n",
-			agg_stripenum(agg_entry, entry->ie_recx.rx_idx &
-				      (~PARITY_INDICATOR)),
+		D_PRINT("Outer iter parity, address: %lu\n",
 			entry->ie_recx.rx_idx &
 				      (unsigned long)(~PARITY_INDICATOR));
 
@@ -570,8 +570,8 @@ agg_iterate(struct ec_agg_entry *agg_entry, daos_handle_t coh)
 	iter_param.ip_oid		= agg_entry->ae_oid;
 	iter_param.ip_epr.epr_lo	= agg_entry->ae_epoch_lo;
 	iter_param.ip_epr.epr_hi	= agg_entry->ae_epoch;
-	//iter_param.ip_recx.rx_idx	= 1 << 16;
-	//iter_param.ip_recx.rx_nr	= 1 << 18;
+	//iter_param.ip_recx.rx_idx	= (1 << 16) | PARITY_INDICATOR;
+	//iter_param.ip_recx.rx_nr	= 1 << 31;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 
