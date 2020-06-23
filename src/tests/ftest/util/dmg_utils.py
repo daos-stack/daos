@@ -66,15 +66,12 @@ class DmgCommand(YamlCommand):
             r"(?:Device\s+UUID|State):\s+([A-Za-z0-9-]+)",
         "storage_scan":
             r"([a-z0-9-]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
-            r"namespaces\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
-            r"controller",
+            r"modules\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+controller",
         "storage_scan_verbose":
             r"--------\n([a-z0-9-]+)\n--------|"
-            r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+"
-            r"([\d.]+) ([A-Z]+)|"
+            r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+([\d.]+) ([A-Z]+)|"
             r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
-            r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
-            r"[ ]+([A-Z]+)"
+            r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)[ ]+([A-Z]+)"
     }
 
     def __init__(self, path, yaml_cfg=None):
