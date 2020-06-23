@@ -954,6 +954,7 @@ pipeline {
                                        inst_rpms: 'gotestsum openmpi3 ' +
                                                   'hwloc-devel argobots ' +
                                                   'fuse3-libs fuse3 ' +
+                                                  'boost-devel ' +
                                                   'libisa-l-devel libpmem ' +
                                                   'libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel '+

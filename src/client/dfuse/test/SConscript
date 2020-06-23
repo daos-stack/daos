@@ -1,4 +1,5 @@
 """Build ping test"""
+import daos_build
 
 IOIL_TEST_SRC = ['test_ioil.c']
 IOIL_BUILD_STATIC = False
@@ -72,8 +73,8 @@ def scons():
     lfenv.AppendUnique(LIBS=['ioil', 'daos'])
 
     for test in IOIL_TEST_SRC:
-        il_test += tenv.Program(test)
-        il_test += lfenv.Program(test)
+        il_test += daos_build.test(tenv, test, install_off="../../../..")
+        il_test += daos_build.test(lfenv, test, install_off="../../../..")
 
     Default(il_test)
 

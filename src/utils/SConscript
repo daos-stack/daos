@@ -1,12 +1,13 @@
 """Build DAOS utilities"""
 import daos_build
+Import('env')
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
 
     denv = env.Clone()
+    # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
     daos_extra_files = denv.Object('daos_hdlr.c')

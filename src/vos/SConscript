@@ -17,10 +17,12 @@ def build_vos(env, standalone):
         denv.Append(CPPDEFINES={'VOS_STANDALONE' : '1'})
         denv.Append(OBJPREFIX="s_")
         install = 'lib64'
+        offset = ".."
         libname = 'vos'
     else:
         install = 'lib64/daos_srv'
         libname = 'vos_srv'
+        offset = "../.."
 
     files = FILES
     if GetOption("preprocess"):
@@ -29,7 +31,8 @@ def build_vos(env, standalone):
         #profiling tools will point at preprocessed file lines.
         files = denv.Preprocess(FILES)
 
-    vos = daos_build.library(denv, libname, files, LIBS=['vea'])
+    vos = daos_build.library(denv, libname, files, install_off=offset,
+                             LIBS=['vea'])
     denv.Install('$PREFIX/' + install, vos)
 
 def scons():
