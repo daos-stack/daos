@@ -247,7 +247,7 @@ is_master(struct ds_iv_entry *entry)
 }
 
 static int
-cont_iv_snap_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key)
+cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 {
 	struct cont_iv_entry	*iv_entry = NULL;
 	struct cont_iv_key	*civ_key = key2priv(key);
@@ -287,6 +287,116 @@ out:
 	return rc;
 }
 
+static void
+cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
+{
+	struct daos_prop_entry	*prop_entry;
+	struct daos_acl		*acl;
+	int			 i;
+
+	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
+	for (i = 0; i < CONT_PROP_NUM; i++) {
+		prop_entry = &prop->dpp_entries[i];
+		switch (prop_entry->dpe_type) {
+		case DAOS_PROP_CO_LABEL:
+			D_ASSERT(strlen(prop_entry->dpe_str) <=
+				 DAOS_PROP_LABEL_MAX_LEN);
+			strcpy(iv_prop->cip_label, prop_entry->dpe_str);
+			break;
+		case DAOS_PROP_CO_LAYOUT_TYPE:
+			iv_prop->cip_layout_type = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_LAYOUT_VER:
+			iv_prop->cip_layout_ver = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_CSUM:
+			iv_prop->cip_csum = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
+			iv_prop->cip_csum_chunk_size = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
+			iv_prop->cip_csum_server_verify = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_REDUN_FAC:
+			iv_prop->cip_redun_fac = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_REDUN_LVL:
+			iv_prop->cip_redun_lvl = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_SNAPSHOT_MAX:
+			iv_prop->cip_snap_max = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_COMPRESS:
+			iv_prop->cip_compress = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_ENCRYPT:
+			iv_prop->cip_encrypt = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_ACL:
+			acl = prop_entry->dpe_val_ptr;
+			if (acl != NULL)
+				memcpy(&iv_prop->cip_acl, acl,
+				       daos_acl_get_size(acl));
+			break;
+		case DAOS_PROP_CO_OWNER:
+			D_ASSERT(strlen(prop_entry->dpe_str) <=
+				 DAOS_ACL_MAX_PRINCIPAL_LEN);
+			strcpy(iv_prop->cip_owner, prop_entry->dpe_str);
+			break;
+		case DAOS_PROP_CO_OWNER_GROUP:
+			D_ASSERT(strlen(prop_entry->dpe_str) <=
+				 DAOS_ACL_MAX_PRINCIPAL_LEN);
+			strcpy(iv_prop->cip_owner_grp, prop_entry->dpe_str);
+			break;
+		default:
+			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
+			break;
+		}
+	}
+}
+
+static int
+cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
+{
+	struct cont_iv_entry	*iv_entry = NULL;
+	struct cont_iv_key	*civ_key = key2priv(key);
+	daos_handle_t		root_hdl;
+	d_iov_t			key_iov;
+	d_iov_t			val_iov;
+	uint32_t		entry_size;
+	daos_prop_t		*prop = NULL;
+	int			 rc;
+
+	rc = ds_cont_get_prop(entry->ns->iv_pool_uuid, civ_key->cont_uuid,
+			      &prop);
+	if (rc)
+		D_GOTO(out, rc);
+
+	entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
+	D_ALLOC(iv_entry, entry_size);
+	if (iv_entry == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf,
+		sizeof(root_hdl));
+
+	uuid_copy(iv_entry->cont_uuid, civ_key->cont_uuid);
+	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
+	d_iov_set(&val_iov, iv_entry, entry_size);
+	d_iov_set(&key_iov, civ_key, sizeof(*civ_key));
+
+	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+	if (rc)
+		D_GOTO(out, rc);
+out:
+	if (prop != NULL)
+		daos_prop_free(prop);
+	if (iv_entry != NULL)
+		D_FREE(iv_entry);
+	return rc;
+}
+
 static int
 cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		  d_sg_list_t *dst, d_sg_list_t *src, void **priv)
@@ -311,11 +421,18 @@ again:
 
 			class_id = entry->iv_class->iv_class_id;
 			if (class_id == IV_CONT_SNAP) {
-				rc = cont_iv_snap_ent_fetch(entry, key);
+				rc = cont_iv_snap_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-			} else if (class_id == IV_CONT_CAPA ||
-				   class_id == IV_CONT_PROP) {
+				D_ERROR("create cont snap iv entry failed "
+					""DF_RC"\n", DP_RC(rc));
+			} else if (class_id == IV_CONT_PROP) {
+				rc = cont_iv_prop_ent_create(entry, key);
+				if (rc == 0)
+					goto again;
+				D_ERROR("create cont prop iv entry failed "
+					""DF_RC"\n", DP_RC(rc));
+			} else if (class_id == IV_CONT_CAPA) {
 				/* Can not find the handle on leader */
 				rc = -DER_NONEXIST;
 			}
@@ -787,75 +904,6 @@ cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid)
 	return rc;
 }
 
-static void
-cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
-{
-	struct daos_prop_entry	*prop_entry;
-	struct daos_acl		*acl;
-	int			 i;
-
-	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
-	for (i = 0; i < CONT_PROP_NUM; i++) {
-		prop_entry = &prop->dpp_entries[i];
-		switch (prop_entry->dpe_type) {
-		case DAOS_PROP_CO_LABEL:
-			D_ASSERT(strlen(prop_entry->dpe_str) <=
-				 DAOS_PROP_LABEL_MAX_LEN);
-			strcpy(iv_prop->cip_label, prop_entry->dpe_str);
-			break;
-		case DAOS_PROP_CO_LAYOUT_TYPE:
-			iv_prop->cip_layout_type = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_LAYOUT_VER:
-			iv_prop->cip_layout_ver = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_CSUM:
-			iv_prop->cip_csum = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
-			iv_prop->cip_csum_chunk_size = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
-			iv_prop->cip_csum_server_verify = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_REDUN_FAC:
-			iv_prop->cip_redun_fac = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_REDUN_LVL:
-			iv_prop->cip_redun_lvl = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_SNAPSHOT_MAX:
-			iv_prop->cip_snap_max = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_COMPRESS:
-			iv_prop->cip_compress = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_ENCRYPT:
-			iv_prop->cip_encrypt = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_ACL:
-			acl = prop_entry->dpe_val_ptr;
-			if (acl != NULL)
-				memcpy(&iv_prop->cip_acl, acl,
-				       daos_acl_get_size(acl));
-			break;
-		case DAOS_PROP_CO_OWNER:
-			D_ASSERT(strlen(prop_entry->dpe_str) <=
-				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			strcpy(iv_prop->cip_owner, prop_entry->dpe_str);
-			break;
-		case DAOS_PROP_CO_OWNER_GROUP:
-			D_ASSERT(strlen(prop_entry->dpe_str) <=
-				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			strcpy(iv_prop->cip_owner_grp, prop_entry->dpe_str);
-			break;
-		default:
-			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
-			break;
-		}
-	}
-}
-
 static int
 cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 {
@@ -967,8 +1015,7 @@ out:
 }
 
 int
-cont_iv_prop_update(void *ns, uuid_t iv_key_uuid, uuid_t cont_uuid,
-		    daos_prop_t *prop)
+cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop)
 {
 	struct cont_iv_entry	*iv_entry;
 	uint32_t		 entry_size;
@@ -985,7 +1032,7 @@ cont_iv_prop_update(void *ns, uuid_t iv_key_uuid, uuid_t cont_uuid,
 	uuid_copy(iv_entry->cont_uuid, cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
 
-	rc = cont_iv_update(ns, IV_CONT_PROP, iv_key_uuid, iv_entry,
+	rc = cont_iv_update(ns, IV_CONT_PROP, cont_uuid, iv_entry,
 			    entry_size, CRT_IV_SHORTCUT_TO_ROOT,
 			    CRT_IV_SYNC_EAGER, false /* retry */);
 	D_FREE(iv_entry);
@@ -997,7 +1044,7 @@ out:
 struct iv_prop_ult_arg {
 	struct ds_iv_ns		*iv_ns;
 	daos_prop_t		*prop;
-	uuid_t			 cont_hdl_uuid;
+	uuid_t			 cont_uuid;
 	ABT_eventual		 eventual;
 };
 
@@ -1022,7 +1069,7 @@ cont_iv_prop_fetch_ult(void *data)
 	if (prop_fetch == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_hdl_uuid,
+	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_uuid,
 			   iv_entry, iv_entry_size, false /* retry */);
 	if (rc) {
 		D_ERROR("cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
@@ -1049,7 +1096,7 @@ out:
 }
 
 int
-cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_hdl_uuid,
+cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_uuid,
 		   daos_prop_t *cont_prop)
 {
 	struct iv_prop_ult_arg	arg;
@@ -1057,7 +1104,7 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_hdl_uuid,
 	int			*status;
 	int			rc;
 
-	if (ns == NULL || cont_prop == NULL || uuid_is_null(cont_hdl_uuid))
+	if (ns == NULL || cont_prop == NULL || uuid_is_null(cont_uuid))
 		return -DER_INVAL;
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
@@ -1065,7 +1112,7 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_hdl_uuid,
 		return dss_abterr2der(rc);
 
 	arg.iv_ns = ns;
-	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
+	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.prop = cont_prop;
 	arg.eventual = eventual;
 	rc = dss_ult_create(cont_iv_prop_fetch_ult, &arg,
@@ -1104,11 +1151,11 @@ ds_cont_revoke_snaps(struct ds_iv_ns *ns, uuid_t cont_uuid,
 }
 
 int
-ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t coh_uuid,
+ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t co_uuid,
 		   daos_prop_t *cont_prop)
 {
 	/* NB: it can be called from any xstream */
-	return cont_iv_prop_fetch(ns, coh_uuid, cont_prop);
+	return cont_iv_prop_fetch(ns, co_uuid, cont_prop);
 }
 
 int

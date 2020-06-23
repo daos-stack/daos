@@ -265,28 +265,6 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 	}
 }
 
-bool
-cont_prop_csum_enabled(struct ds_iv_ns *ns, uuid_t co_hdl)
-{
-	int			rc;
-	daos_prop_t		cont_prop = {0};
-	struct daos_prop_entry	entry = {0};
-	uint32_t		csum_val;
-
-	entry.dpe_type = DAOS_PROP_CO_CSUM;
-	cont_prop.dpp_entries = &entry;
-	cont_prop.dpp_nr = 1;
-
-	rc = ds_cont_fetch_prop(ns, co_hdl, &cont_prop);
-	if (rc != 0)
-		return false;
-	csum_val = daos_cont_prop2csum(&cont_prop);
-	if (daos_cont_csum_prop_is_enabled(csum_val))
-		return true;
-	else
-		return false;
-}
-
 static int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  crt_bulk_t *remote_bulks, uint64_t *remote_offs,
