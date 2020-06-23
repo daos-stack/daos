@@ -29,11 +29,13 @@
 
 struct drpc *drpc_connect_return; /* value to be returned */
 char drpc_connect_sockaddr[PATH_MAX + 1]; /* saved copy of input */
-struct drpc *
-drpc_connect(char *sockaddr)
+int
+drpc_connect(char *sockaddr, struct drpc **drpcp)
 {
 	strncpy(drpc_connect_sockaddr, sockaddr, PATH_MAX);
-	return drpc_connect_return;
+
+	*drpcp = drpc_connect_return;
+	return -DER_SUCCESS;
 }
 
 void

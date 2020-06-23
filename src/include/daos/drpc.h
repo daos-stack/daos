@@ -72,7 +72,7 @@ void drpc_response_free(Drpc__Response *resp);
 
 int drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 		Drpc__Response **resp);
-struct drpc *drpc_connect(char *sockaddr);
+int drpc_connect(char *sockaddr, struct drpc **);
 struct drpc *drpc_listen(char *sockaddr, drpc_handler_t handler);
 bool drpc_is_valid_listener(struct drpc *ctx);
 struct drpc *drpc_accept(struct drpc *listener_ctx);

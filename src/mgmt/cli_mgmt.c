@@ -345,11 +345,11 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 	/* Connect to daos_agent. */
 	D_ASSERT(dc_agent_sockpath != NULL);
-	ctx = drpc_connect(dc_agent_sockpath);
-	if (ctx == NULL) {
-		D_ERROR("failed to connect to %s\n", dc_agent_sockpath);
-		rc = -DER_BADPATH;
-		goto out;
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("failed to connect to %s " DF_RC "\n",
+			dc_agent_sockpath, DP_RC(rc));
+		D_GOTO(out, 0);
 	}
 
 	/* Prepare the GetAttachInfo request. */
