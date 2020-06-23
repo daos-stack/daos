@@ -37,6 +37,107 @@
 
 #include <gurt/common.h>
 
+static void
+noop_handler(int arg) {
+	return;
+}
+
+static int bg_fd;
+
+void
+dfuse_send_to_fg(int rc)
+{
+	if (bg_fd == 0)
+		return;
+
+	write(bg_fd, &rc, sizeof(rc));
+	close(bg_fd);
+	bg_fd = 0;
+	if (rc == 0)
+		return;
+
+	chdir("/");
+}
+
+static int
+dfuse_bg(struct dfuse_info *dfuse_info)
+{
+	sigset_t pset;
+	fd_set read_set = {};
+	int err;
+	struct sigaction sa = {};
+	pid_t child_pid;
+	sigset_t sset;
+	int rc;
+	int di_spipe[2];
+
+	rc = pipe(&di_spipe[0]);
+	if (rc)
+		return 1;
+
+	sigemptyset(&sset);
+	sigaddset(&sset, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &sset, NULL);
+
+	child_pid = fork();
+	if (child_pid == -1)
+		return 1;
+
+	if (child_pid == 0) {
+		int nfd;
+
+		bg_fd = di_spipe[1];
+
+		nfd = open("/dev/null", O_RDWR);
+
+		dup2(nfd, STDIN_FILENO);
+		dup2(nfd, STDOUT_FILENO);
+		dup2(nfd, STDERR_FILENO);
+		close(nfd);
+		return 0;
+
+	}
+
+	sa.sa_handler = noop_handler;
+	sa.sa_flags = 0;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGCHLD, &sa, NULL);
+
+	sigemptyset(&pset);
+
+	FD_ZERO(&read_set);
+	FD_SET(di_spipe[0], &read_set);
+
+	errno = 0;
+	rc = pselect(di_spipe[0] + 1, &read_set, NULL, NULL, NULL, &pset);
+	err = errno;
+
+	if (err == EINTR) {
+		printf("Child process died without reporting failure\n");
+		exit(2);
+	}
+
+	if (FD_ISSET(di_spipe[0], &read_set)) {
+		ssize_t b;
+		int child_ret;
+
+		b = read(di_spipe[0], &child_ret, sizeof(child_ret));
+		if (b != sizeof(child_ret)) {
+			printf("Read incorrect data %zd\n", b);
+			exit(2);
+		}
+		if (child_ret) {
+			printf("Exiting %d %s\n", child_ret, d_errstr(child_ret));
+			exit(-(child_ret + DER_ERR_GURT_BASE));
+		} else {
+			exit(0);
+		}
+	}
+
+	printf("Socket is not set\n");
+	exit(2);
+}
+
 static int
 ll_loop_fn(struct dfuse_info *dfuse_info)
 {
@@ -250,10 +351,13 @@ main(int argc, char **argv)
 	}
 
 	if (!dfuse_info->di_foreground) {
-		rc = daemon(0, 0);
-		if (rc)
-			return daos_errno2der(rc);
+		rc = dfuse_bg(dfuse_info);
+		if (rc != 0) {
+			printf("Failed to background\n");
+			return(2);
+		}
 	}
+
 
 	rc = daos_init();
 	if (rc != -DER_SUCCESS)
@@ -292,11 +396,11 @@ main(int argc, char **argv)
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
-	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d", rc);
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s", rc, strerror(rc));
 	if (rc == 0) {
 		if (dfuse_info->di_pool) {
 			printf("UNS configured on mount point but pool provided\n");
-			exit(1);
+			D_GOTO(out_dfs, ret = -DER_INVAL);
 		}
 		uuid_copy(dfp->dfp_pool, duns_attr.da_puuid);
 		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
@@ -320,10 +424,10 @@ main(int argc, char **argv)
 		}
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
-		D_GOTO(out_dfs, ret = rc);
+		D_GOTO(out_dfs, ret = daos_errno2der(rc));
 	} else {
 		/* Other errors from DUNS, it should have logged them already */
-		D_GOTO(out_dfs, ret = rc);
+		D_GOTO(out_dfs, ret = daos_errno2der(rc));
 	}
 
 	if (uuid_is_null(dfp->dfp_pool) == 0) {
@@ -423,9 +527,9 @@ out_svcl:
 out_dfuse:
 	DFUSE_TRA_DOWN(dfuse_info);
 	D_MUTEX_DESTROY(&dfuse_info->di_lock);
-	D_FREE(dfuse_info);
 	daos_fini();
 out_debug:
+	D_FREE(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	daos_debug_fini();
 out:
@@ -433,6 +537,9 @@ out:
 	 * user.  This needs to be less than 256 so only works for CaRT, not
 	 * DAOS error numbers.
 	 */
+
+	dfuse_send_to_fg(ret);
+
 	if (ret)
 		return -(ret + DER_ERR_GURT_BASE);
 	else
