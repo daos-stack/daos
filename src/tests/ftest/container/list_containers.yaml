@@ -4,3 +4,5 @@ hosts:
 timeout: 600
 server_config:
   name: daos_server
+transport_config:
+  allow_insecure: false

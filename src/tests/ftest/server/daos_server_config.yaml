@@ -166,3 +166,5 @@ server_config_val: !mux
       - "targets"
       - "ABDCD"
       - "FAIL"
+transport_config:
+  allow_insecure: false

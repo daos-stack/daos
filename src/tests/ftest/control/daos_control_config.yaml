@@ -65,29 +65,31 @@ control_config_val: !mux
     config_val:
        - "ca_cert"
        - "! @#$%^&*()_+{}|:<>?-=[];',./"
-       - "PASS"
+       - "FAIL"
   ca_cert_file_does_not_exist:
     config_val:
        - "ca_cert"
        - /tmp/does_not_exist.ext
-       - "PASS"
+       - "FAIL"
   cert_junk:
     config_val:
        - "cert"
        - "! @#$%^&*()_+{}|:<>?-=[];',./"
-       - "PASS"
+       - "FAIL"
   cert_file_does_not_exist:
     config_val:
        - "cert"
        - /tmp/does_not_exist.ext
-       - "PASS"
+       - "FAIL"
   key_junk:
     config_val:
        - "key"
        - "! @#$%^&*()_+{}|:<>?-=[];',./"
-       - "PASS"
+       - "FAIL"
   key_file_does_not_exist:
     config_val:
        - "key"
        - /tmp/does_not_exist.ext
-       - "PASS"
+       - "FAIL"
+transport_config:
+  allow_insecure: false

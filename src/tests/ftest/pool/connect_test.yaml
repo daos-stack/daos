@@ -19,3 +19,5 @@ tests:
       setname:
         - complete_rubbish
         - FAIL
+transport_config:
+  allow_insecure: false

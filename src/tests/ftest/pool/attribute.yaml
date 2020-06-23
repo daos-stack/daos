@@ -70,3 +70,5 @@ attrtests:
       value:
         - NULL
         - FAIL
+transport_config:
+  allow_insecure: false

@@ -477,25 +477,10 @@ class TransportCredentials(YamlParameters):
         """
         super(TransportCredentials, self).__init__(namespace, None, title)
 
-        # Transport credential parameters:
-        #   - allow_insecure: false|true
-        #       Specify 'false' to bypass loading certificates and use insecure
-        #       communications channels
-        #
-        #   - ca_cert: <file>, e.g. ".daos/daosCA.crt"
-        #       Custom CA Root certificate for generated certs
-        #
-        #   - cert: <file>, e.g. ".daos/daos_agent.crt"
-        #       Agent certificate for use in TLS handshakes
-        #
-        #   - key: <file>, e.g. ".daos/daos_agent.key"
-        #       Key portion of Server Certificate
-        #
-##DH+
-#        self.allow_insecure = BasicParameter(True, True)
-#        self.ca_cert = BasicParameter(None)
-#        self.cert = BasicParameter(None)
-#        self.key = BasicParameter(None)
+        self.allow_insecure = BasicParameter(True, True)
+        self.ca_cert = BasicParameter(None)
+        self.cert = BasicParameter(None)
+        self.key = BasicParameter(None)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.

@@ -614,6 +614,20 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
             key: getattr(args, value).split(",") if getattr(args, value) else []
             for key, value in YAML_KEYS.items()}
 
+        #Check for transport_config and allow_insecure from the test yaml
+        trans_conf_defined_in_yaml = False
+        if "transport_config" in yaml_data.keys():
+            trans_conf = yaml_data["transport_config"]
+            if "allow_insecure" in trans_conf.keys():
+                allow_insec_yaml = trans_conf["allow_insecure"]
+                trans_conf_defined_in_yaml = True
+            else:
+                # Report an error for the missing allow_insecure under
+                # transport_config
+                print("Error: allow_insecure missing on transport_config in "
+                      "the test yaml file.")
+                exit(1)
+
         # Assign replacement values for the test yaml entries to be replaced
         display(args, "Detecting replacements for {} in {}".format(
             yaml_keys, yaml_file))
@@ -662,7 +676,8 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                         args,
                         "  - Replacement: {} -> {}".format(
                             value, replacements[value]))
-
+    print(" ")
+    print("===>replacements= ", replacements)
     if replacements:
         # Read in the contents of the yaml file to retain the !mux entries
         print("Reading {}".format(yaml_file))
@@ -686,7 +701,6 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                 # Keep track of any placeholders without a replacement value
                 display(args, "  - Missing:   {}".format(key))
                 missing_replacements.append(key)
-
         if missing_replacements:
             # Report an error for all of the placeholders w/o a replacement
             print(
@@ -694,18 +708,16 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                     yaml_file, ", ".join(missing_replacements)))
             return None
 
-
-##DH++
-        yaml_data += "transport_config:\n"
-        if not args.insecure_mode:
-            yaml_data += "  allow_insecure: False"
+        if trans_conf_defined_in_yaml:
+            if not bool(allow_insec_yaml):
+                generate_certs()
         else:
-            yaml_data += "  allow_insecure: True"
-        print("******")
-        print("yaml_data= ", yaml_data)
-        print("******")
-        print("******")
-##DH--
+            yaml_data += "transport_config:\n"
+            if args.secure_mode:
+                yaml_data += "  allow_insecure: False"
+                generate_certs()
+            else:
+                yaml_data += "  allow_insecure: True"
 
         # Write the modified yaml file into a temporary file.  Use the path to
         # ensure unique yaml files for tests with the same filename.
@@ -724,6 +736,20 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
     # Return the untouched or modified yaml file
     return yaml_file
+
+
+def generate_certs():
+    """function to generate the certificates for the test.
+
+    Args: none
+    Returns: none
+
+    """
+    # Generate certificates if not exist
+    print(" ")
+    if not os.path.exists("./daosCA"):
+        subprocess.call(["../../../../../utils/certs/gen_certificates.sh"])
+    print(" ")
 
 
 def run_tests(test_files, tag_filter, args):
@@ -1295,12 +1321,10 @@ def main():
         "-s", "--sparse",
         action="store_true",
         help="limit output to pass/fail")
-##DH++
     parser.add_argument(
-        "-insec", "--insecure_mode",
+        "-sec", "--secure_mode",
         action="store_true",
-        help="test with insecure-mode")
-##DH--
+        help="launch test with secure-mode")
     parser.add_argument(
         "tags",
         nargs="*",
@@ -1347,22 +1371,6 @@ def main():
 
     # Create a temporary directory
     tmp_dir = TemporaryDirectory()
-
-##DH++
-    # Generate certificates if not exist
-    from subprocess import call
-    print(" ")
-    print(" ")
-    if not args.insecure_mode:
-        call(["pwd"])
-        if not os.path.exists("./daosCA"):
-            call(["../../../../../utils/certs/gen_certificates.sh"])
-    print("args.test_servers= ", args.test_servers)
-    print("args.insecure_mode= ", args.insecure_mode)
-    print(" ")
-    print(" ")
-##DH--
-
 
     # Create a dictionary of test and their yaml files
     test_files = get_test_files(test_list, args, tmp_dir)

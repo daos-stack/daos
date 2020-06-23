@@ -33,8 +33,7 @@ class DmgTransportCredentials(TransportCredentials):
         """Initialize a TransportConfig object."""
         super(DmgTransportCredentials, self).__init__(
             "/run/transport_config/*", "transport_config")
-##DH--            "/run/dmg/transport_config/*", "transport_config")
-##DH++ only dmg using the 1st "False"
+
         self.allow_insecure = BasicParameter(False, False)
         self.ca_cert = BasicParameter(None, "./daosCA/certs/daosCA.crt")
         self.cert = BasicParameter(None, "./daosCA/certs/admin.crt")

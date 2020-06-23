@@ -5,24 +5,15 @@ hosts:
     - server-A
   test_clients:
     - server-B
-  transport_config:
-    - allow_insecure: False
-    - ca_cert: ~/.daos/daosCA.crt
-    - cert: ~/.daos/daos_agent.crt
-    - key: ~/.daos/daos_agent.key
-    - server_name: server
-timeout: 600
+timeout: 1200
 server_config:
   name: daos_server
   port: 10001
-daos_server:
-  start:
-     insecure: False
 pool_acl:
-  scm_size: 134217728
+  scm_size: 1334217728
   user_prefix: daos_ci
-  num_user: 1
-  num_group: 1
+  num_user: 5
+  num_group: 5
   primary_secondary_group_test:
     primary_group:
       pg_permission:
@@ -76,3 +67,5 @@ pool_acl:
         sg_read_write:
           - deny
           - deny
+transport_config:
+  allow_insecure: false
