@@ -161,8 +161,8 @@ int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
  * Query container properties.
  *
  * \param[in]	ns	pool IV namespace
- * \param[in]	coh_uuid
- *			container handle uuid
+ * \param[in]	co_uuid
+ *			container uuid
  * \param[out]	cont_prop
  *			returned container properties
  *			If it is NULL, return -DER_INVAL;
@@ -180,7 +180,7 @@ int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
  *
  * \return		0 if Success, negative if failed.
  */
-int ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t coh_uuid,
+int ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t co_uuid,
 		       daos_prop_t *cont_prop);
 
 /** get all snapshots of the container from IV */
@@ -220,7 +220,7 @@ struct csum_recalc_args {
 	ABT_eventual		 csum_eventual;
 };
 
-/* Callback funtion to pass to vos_aggregation */
+/* Callback function to pass to vos_aggregation */
 void
 ds_csum_recalc(void *args);
 

@@ -38,6 +38,13 @@
 #define OBJ_TGT_BITMAP_LEN						\
 	(roundup(((OBJ_EC_MAX_M) / NBBY), 8))
 
+/* EC parity is stored in a private address range that is selected by setting
+ * the most-significant bit of the offset (an unsigned long). This effectively
+ * limits the addressing of user extents to the lower 63 bits of the offset
+ * range. The client stack should enforce this limitation.
+ */
+#define PARITY_INDICATOR (1ULL << 63)
+
 /** EC codec for object EC encoding/decoding */
 struct obj_ec_codec {
 	/** encode matrix, can be used to generate decode matrix */
@@ -150,7 +157,7 @@ struct obj_tgt_oiod {
 };
 
 /**
- * Splitted obj request (only used on leader shard for obj update).
+ * Split obj request (only used on leader shard for obj update).
  * For object update, client sends update request to leader, the leader need to
  * split it for different targets before dispatch.
  */
@@ -197,8 +204,8 @@ struct obj_ec_seg_sorter {
 };
 #define OBJ_EC_SEG_NIL		 (-1)
 
-/** for EC data recovery */
-struct obj_ec_recov {
+/** ISAL codec for EC data recovery */
+struct obj_ec_recov_codec {
 	unsigned char		*er_gftbls;	/* GF tables */
 	unsigned char		*er_de_matrix;	/* decode matrix */
 	unsigned char		*er_inv_matrix;	/* invert matrix */
@@ -208,6 +215,39 @@ struct obj_ec_recov {
 	bool			*er_in_err;	/* boolean array for targets */
 	uint32_t		 er_nerrs;	/* #targets in error */
 	uint32_t		 er_data_nerrs; /* #data-targets in error */
+};
+
+/* EC recovery task */
+struct obj_ec_recov_task {
+	daos_iod_t		ert_iod;
+	d_sg_list_t		ert_sgl;
+	daos_epoch_t		ert_epoch;
+	daos_handle_t		ert_th; /* read-only tx handle */
+};
+
+/** EC obj IO failure information */
+struct obj_ec_fail_info {
+	/* missed (to be recovered) recx list */
+	struct daos_recx_ep_list	*efi_recx_lists;
+	/* list of error targets */
+	uint32_t			*efi_tgt_list;
+	/* number of lists in efi_recx_lists/efi_stripe_lists, equal to #iods */
+	uint32_t			 efi_nrecx_lists;
+	/* number of error targets */
+	uint32_t			 efi_ntgts;
+	struct obj_ec_recov_codec	*efi_recov_codec;
+	/* to be recovered full-stripe list */
+	struct daos_recx_ep_list	*efi_stripe_lists;
+	/* The buffer for all the full-stripes in efi_stripe_lists.
+	 * One iov for each recx_ep (with 1 or more stripes), for each stripe
+	 * it contains ((k + p) * cell_byte_size) memory.
+	 */
+	d_sg_list_t			*efi_stripe_sgls;
+	/* For each daos_recx_ep in efi_stripe_lists will create one recovery
+	 * task to fetch the data from servers.
+	 */
+	struct obj_ec_recov_task	*efi_recov_tasks;
+	uint32_t			 efi_recov_ntasks;
 };
 
 struct obj_reasb_req;
@@ -240,10 +280,10 @@ struct obj_reasb_req;
  * Note that for replicated data on parity cells the VOS idx is unmapped
  * original daos recx idx to facilitate aggregation.
  */
-#define obj_ec_vos_recx_idx(idx, stripe_rec_nr, e_len)			\
+#define obj_ec_idx_daos2vos(idx, stripe_rec_nr, e_len)			\
 	((((idx) / (stripe_rec_nr)) * (e_len)) + ((idx) % (e_len)))
 /** Query the original daos idx of mapped VOS index */
-#define obj_ec_idx_of_vos_idx(vos_idx, stripe_rec_nr, e_len, tgt_idx)	       \
+#define obj_ec_idx_vos2daos(vos_idx, stripe_rec_nr, e_len, tgt_idx)	       \
 	((((vos_idx) / (e_len)) * stripe_rec_nr) + (tgt_idx) * (e_len) +       \
 	 (vos_idx) % (e_len))
 
@@ -366,6 +406,101 @@ obj_io_desc_fini(struct obj_io_desc *oiod)
 	memset(oiod, 0, sizeof(*oiod));
 }
 
+static inline void
+obj_recx_ep_list_idx_parity2daos(uint32_t nr, struct daos_recx_ep_list *lists,
+				 uint32_t tgt_idx, struct daos_oclass_attr *oca)
+{
+	struct daos_recx_ep_list	*list;
+	daos_recx_t			*recx;
+	uint64_t			 stripe_rec_nr =
+						obj_ec_stripe_rec_nr(oca);
+	uint64_t			 cell_rec_nr =
+						obj_ec_cell_rec_nr(oca);
+	uint32_t			 i, j;
+
+	if (lists == NULL)
+		return;
+	for (i = 0; i < nr; i++) {
+		list = &lists[i];
+		for (j = 0; j < list->re_nr; j++) {
+			recx = &list->re_items[j].re_recx;
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
+			recx->rx_idx &= ~PARITY_INDICATOR;
+			recx->rx_idx = obj_ec_idx_vos2daos(recx->rx_idx,
+						stripe_rec_nr, cell_rec_nr,
+						tgt_idx);
+		}
+	}
+}
+
+static inline void
+obj_iod_idx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
+		     struct daos_oclass_attr *oca)
+{
+	daos_iod_t	*iod;
+	daos_recx_t	*recx;
+	uint64_t	 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	uint64_t	 cell_rec_nr = obj_ec_cell_rec_nr(oca);
+	uint32_t	 i, j;
+
+	for (i = 0; i < iod_nr; i++) {
+		iod = &iods[i];
+		for (j = 0; j < iod->iod_nr; j++) {
+			recx = &iod->iod_recxs[j];
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) == 0);
+			recx->rx_idx = obj_ec_idx_vos2daos(recx->rx_idx,
+						stripe_rec_nr, cell_rec_nr,
+						tgt_idx);
+		}
+	}
+}
+
+static inline void
+obj_iod_idx_vos2parity(uint32_t iod_nr, daos_iod_t *iods)
+{
+	daos_iod_t	*iod;
+	daos_recx_t	*recx;
+	uint32_t	 i, j;
+
+	for (i = 0; i < iod_nr; i++) {
+		iod = &iods[i];
+		for (j = 0; j < iod->iod_nr; j++) {
+			recx = &iod->iod_recxs[j];
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) == 0);
+			recx->rx_idx |= PARITY_INDICATOR;
+		}
+	}
+}
+
+static inline void
+obj_iod_idx_parity2vos(uint32_t iod_nr, daos_iod_t *iods)
+{
+	daos_iod_t	*iod;
+	daos_recx_t	*recx;
+	uint32_t	 i, j;
+
+	for (i = 0; i < iod_nr; i++) {
+		iod = &iods[i];
+		for (j = 0; j < iod->iod_nr; j++) {
+			recx = &iod->iod_recxs[j];
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
+			recx->rx_idx &= ~PARITY_INDICATOR;
+		}
+	}
+}
+
+static inline bool
+obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
+{
+	uint32_t	i;
+
+	for (i = 0; i < nerrs; i++) {
+		if (err_list[i] == tgt_idx)
+			return true;
+	}
+	return false;
+}
+
 /* obj_class.c */
 int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
@@ -383,10 +518,16 @@ struct obj_tgt_oiod *obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods,
 			uint32_t tgt_max_idx, uint32_t tgt_nr);
 struct obj_tgt_oiod *obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods,
 			uint32_t tgt_nr, uint32_t tgt_idx);
-void obj_ec_recov_free(struct obj_reasb_req *reasb_req);
+int obj_ec_recov_add(struct obj_reasb_req *reasb_req,
+		     struct daos_recx_ep_list *recx_lists, unsigned int nr);
+struct obj_ec_fail_info *obj_ec_fail_info_get(struct obj_reasb_req *reasb_req,
+					      bool create, uint16_t p);
+void obj_ec_fail_info_reset(struct obj_reasb_req *reasb_req);
+void obj_ec_fail_info_free(struct obj_reasb_req *reasb_req);
 int obj_ec_recov_prep(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
-		      struct daos_oclass_attr *oca, uint32_t nerrs,
-		      uint32_t *err_list);
+		      daos_iod_t *iods, uint32_t iod_nr);
+void obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
+		       uint32_t iod_nr);
 
 /* srv_ec.c */
 struct obj_rw_in;

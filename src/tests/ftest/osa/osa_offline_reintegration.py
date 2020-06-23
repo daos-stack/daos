@@ -130,7 +130,7 @@ class OSAOfflineReintegration(TestWithServers):
                                  dmg_command=self.get_dmg_command())
             pool[val].get_params(self)
             # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].nvme_size.value /
+            pool[val].scm_size.value = int(pool[val].scm_size.value /
                                            num_pool)
             pool[val].nvme_size.value = int(pool[val].nvme_size.value /
                                             num_pool)
