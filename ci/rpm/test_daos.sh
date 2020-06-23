@@ -4,9 +4,6 @@ set -uex
 
 # DAOS_PKG_VERSION environment variable needs to be set for this script
 
-if git show -s --format=%B | grep "^Skip-test: true"; then
-  exit 0
-fi
 nodelist=(${NODELIST//,/ })
 src/tests/ftest/config_file_gen.py -n "${nodelist[0]}" \
   -a /tmp/daos_agent.yml -s /tmp/daos_server.yml

@@ -285,7 +285,7 @@ pipeline {
                       beforeAgent true
                       expression {
                           cachedCommitPragma(pragma: 'Skip-python-bandit',
-                                       def_val: 'true') != 'true'
+                                             def_val: 'true') != 'true'
                       }
                     }
                     agent {
@@ -297,8 +297,7 @@ pipeline {
                         }
                     }
                     steps {
-                        pythonBanditCheck script: 'ci/python_bandit_check.sh',
-                                          junit_files: 'bandit.xml'
+                        pythonBanditCheck
                     }
                     post {
                         always {
@@ -371,7 +370,7 @@ pipeline {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET',
                                               value: 'weekly-testing' }
-                            expression { ! skip_stage('leap15-rpm') }
+                            expression { ! skip_stage('build-leap15-rpm') }
                         }
                     }
                     agent {
@@ -409,7 +408,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            expression { ! skip_stage('centos7-gcc') }
+                            expression { ! skip_stage('build-centos7-gcc') }
                         }
                     }
                     agent {
@@ -593,7 +592,7 @@ pipeline {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
                             expression { ! quickbuild() }
-                            expression { ! skip_stage('ubuntu-clang') }
+                            expression { ! skip_stage('build-ubuntu-clang') }
                         }
                     }
                     agent {
@@ -734,7 +733,7 @@ pipeline {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
                             expression { ! quickbuild() }
-                            expression { ! skip_stage('leap15-icc') }
+                            expression { ! skip_stage('build-leap15-icc') }
                         }
                     }
                     agent {
@@ -1098,6 +1097,7 @@ pipeline {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET',
                                               value: 'weekly-testing' }
+                            expression { ! skip_stage('test') }
                             expression { ! skip_stage('test-centos-rpms') }
                         }
                     }
