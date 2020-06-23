@@ -52,7 +52,7 @@ main(int argc, char **argv)
 	}
 
 	ret = drpc_connect(argv[1], &ctx);
-	if (ret != -DER_SUCCESS {
+	if (ret != -DER_SUCCESS) {
 		fprintf(stderr, "Unable to connect to %s\n", argv[1]);
 		exit(1);
 	}
