@@ -34,8 +34,6 @@ from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
-from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj, DaosApiError)
 from mpio_utils import MpioUtils
 
 try:
@@ -203,7 +201,6 @@ class OSAOnlineReintegration(TestWithServers):
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
-                    time.sleep(5)
             self.pool = pool[val]
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
@@ -211,7 +208,6 @@ class OSAOnlineReintegration(TestWithServers):
             output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                    rank, t_string)
             self.log.info(output)
-            time.sleep(10)
             pver_exclude = self.get_pool_version()
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
@@ -221,7 +217,6 @@ class OSAOnlineReintegration(TestWithServers):
                                                        rank,
                                                        t_string)
             self.log.info(output)
-            time.sleep(10)
             pver_reint = self.get_pool_version()
             self.log.info("Pool Version after reintegrate %d", pver_reint)
             # Check pool version incremented after pool reintegrate
