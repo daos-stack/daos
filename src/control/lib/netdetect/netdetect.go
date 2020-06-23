@@ -120,7 +120,9 @@ import "C"
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
+	"strconv"
 	"strings"
 	"unsafe"
 
@@ -137,6 +139,22 @@ const (
 	libFabricMinorVersion = 7
 	allHFIUsed            = -1
 	badAddress            = C.getHFIUnitError
+	// ARP protocol hardware identifiers: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
+	Netrom     = 0
+	Ether      = 1
+	Eether     = 2
+	Ax25       = 3
+	Pronet     = 4
+	Chaos      = 5
+	IEEE802    = 6
+	Arcnet     = 7
+	Appletlk   = 8
+	Dlci       = 15
+	Atm        = 19
+	Metricom   = 23
+	IEEE1394   = 24
+	Eui64      = 27
+	Infiniband = 32
 )
 
 // DeviceAffinity describes the essential details of a device and its NUMA affinity
@@ -149,10 +167,11 @@ type DeviceAffinity struct {
 
 // FabricScan data encapsulates the results of the fabric scanning
 type FabricScan struct {
-	Provider   string
-	DeviceName string
-	NUMANode   uint
-	Priority   int
+	Provider    string
+	DeviceName  string
+	NUMANode    uint
+	Priority    int
+	NetDevClass uint32
 }
 
 func (fs FabricScan) String() string {
@@ -794,7 +813,7 @@ func mercuryToLibFabric(provider string) (string, error) {
 		return "gni", nil
 	default:
 	}
-	return "", errors.Errorf("fabric provider: %s not known by libfabric.  Use 'daos_server network list' to view supported providers", provider)
+	return "", errors.Errorf("unknown fabric provider %q", provider)
 }
 
 // convertMercuryToLibFabric converts a Mercury provider string containing one or more providers
@@ -811,7 +830,7 @@ func convertMercuryToLibFabric(provider string) (string, error) {
 	for _, subProvider := range tmp {
 		libFabricProvider, err := mercuryToLibFabric(subProvider)
 		if err != nil {
-			return "", errors.Errorf("fabric provider: '%s' is not known by libfabric.  Use 'daos_server network list' to view supported providers", subProvider)
+			return "", errors.Errorf("unknown fabric provider %q", subProvider)
 		}
 		libFabricProviderList += libFabricProvider + ";"
 	}
@@ -836,7 +855,7 @@ func libFabricToMercury(provider string) (string, error) {
 	default:
 	}
 
-	return "", errors.Errorf("fabric provider: %s not known by Mercury", provider)
+	return "", errors.Errorf("unknown fabric provider %q", provider)
 }
 
 // convertLibFabricToMercury converts a libfabric provider string containing one or more providers
@@ -1056,19 +1075,17 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 		return err
 	}
 	if deviceAffinity.NUMANode != numaNode {
-		return errors.Errorf("The NUMA node for device %s does not match the provided value %d. "+
-			"Remove the pinned_numa_node value from daos_server.yml then execute 'daos_server network scan' "+
-			"to see the valid NUMA node associated with the network device", device, numaNode)
+		return errors.Errorf("The NUMA node for device %s does not match the provided value %d.", device, numaNode)
 	}
 	log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
 	return nil
 }
 
-func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan, excludeMap map[string]struct{}) (map[string]struct{}, []FabricScan, error) {
+func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, excludeMap map[string]struct{}) (*FabricScan, error) {
 	log.Debugf("Device scan target device name: %s", deviceScanCfg.targetDevice)
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 	if err != nil {
-		return resultsMap, ScanResults, err
+		return nil, err
 	}
 
 	if deviceScanCfg.targetDevice != deviceAffinity.DeviceName {
@@ -1082,32 +1099,36 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 		// In this case, we want to omit this libfabric record from our results because it has no
 		// mercury equivalent provider.  There are many providers in libfabric that have no mercury
 		// equivalent, and we want to filter those out right here.
-		return resultsMap, ScanResults, err
+		return nil, err
 	}
 	log.Debugf("Mercury provider list: %v", mercuryProviderList)
 
+	devClass, err := GetDeviceClass(deviceAffinity.DeviceName)
+	if err != nil {
+		return nil, err
+	}
+
 	scanResults := FabricScan{
-		Provider:   mercuryProviderList,
-		DeviceName: deviceAffinity.DeviceName,
-		NUMANode:   deviceAffinity.NUMANode,
-		Priority:   devCount,
+		Provider:    mercuryProviderList,
+		DeviceName:  deviceAffinity.DeviceName,
+		NUMANode:    deviceAffinity.NUMANode,
+		Priority:    devCount,
+		NetDevClass: devClass,
 	}
 
 	if _, skip := excludeMap[scanResults.DeviceName]; skip {
-		return resultsMap, ScanResults, nil
+		return nil, errors.New("excluded device entry")
 	}
 
 	results := scanResults.String()
 
-	if _, found := resultsMap[results]; !found {
-		resultsMap[results] = struct{}{}
-		log.Debugf("\n%s", results)
-		ScanResults = append(ScanResults, scanResults)
-		devCount++
-	} else {
-		log.Debugf("Duplicate fabric scan record: \n%s", results)
+	if _, found := resultsMap[results]; found {
+		return nil, errors.New("duplicate entry")
 	}
-	return resultsMap, ScanResults, nil
+
+	resultsMap[results] = struct{}{}
+	log.Debugf("\n%s", results)
+	return &scanResults, nil
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
@@ -1194,10 +1215,11 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 				case allHFIUsed:
 					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
 						deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
-						resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
+						devScanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
 						if err != nil {
 							continue
 						}
+						ScanResults = append(ScanResults, *devScanResults)
 						devCount++
 					}
 					continue
@@ -1212,10 +1234,11 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 			}
 		}
 
-		resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults, excludeMap)
+		devScanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
 		if err != nil {
 			continue
 		}
+		ScanResults = append(ScanResults, *devScanResults)
 		devCount++
 	}
 
@@ -1223,4 +1246,55 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 		log.Debugf("libfabric found records matching provider \"%s\" but there were no valid system devices that matched.", provider)
 	}
 	return ScanResults, nil
+}
+
+// GetDeviceClass determines the device type according to what's stored in the filesystem
+// Returns an integer value corresponding to its ARP protocol hardware identifier
+// found here: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
+func GetDeviceClass(netdev string) (uint32, error) {
+	devClass, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%s/type", netdev))
+	if err != nil {
+		return 0, err
+	}
+
+	res, err := strconv.Atoi(strings.TrimSpace(string(devClass)))
+	return uint32(res), err
+}
+
+// Convert a network device class ID to a string identifier
+func DevClassName(class uint32) string {
+	switch class {
+	case Netrom:
+		return "NETROM"
+	case Ether:
+		return "ETHER"
+	case Eether:
+		return "EETHER"
+	case Ax25:
+		return "AX25"
+	case Pronet:
+		return "PRONET"
+	case Chaos:
+		return "CHAOS"
+	case IEEE802:
+		return "IEEE802"
+	case Arcnet:
+		return "ARCNET"
+	case Appletlk:
+		return "APPLETLK"
+	case Dlci:
+		return "DLCI"
+	case Atm:
+		return "ATM"
+	case Metricom:
+		return "METRICOM"
+	case IEEE1394:
+		return "IEEE1394"
+	case Eui64:
+		return "EUI64"
+	case Infiniband:
+		return "INFINIBAND"
+	default:
+		return "UNKNOWN"
+	}
 }
