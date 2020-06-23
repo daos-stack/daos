@@ -37,16 +37,22 @@
 
 #include <gurt/common.h>
 
+/* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
+ * presence makes pselect() return EINTR in the dfuse_bg() function which
+ * is used to detect abnormal exit.
+ */
 static void
 noop_handler(int arg) {
-	return;
 }
 
 static int bg_fd;
 
+/* Send a message to the foreground thread */
 void
 dfuse_send_to_fg(int rc)
 {
+	int nfd;
+
 	if (bg_fd == 0)
 		return;
 
@@ -57,8 +63,28 @@ dfuse_send_to_fg(int rc)
 		return;
 
 	chdir("/");
+
+	nfd = open("/dev/null", O_RDWR);
+	if (nfd == -1)
+		return;
+
+	dup2(nfd, STDIN_FILENO);
+	dup2(nfd, STDOUT_FILENO);
+	dup2(nfd, STDERR_FILENO);
+	close(nfd);
 }
 
+/* Optionally go into the background
+ *
+ * It's not possible to simply call daemon() here as if we do that after
+ * daos_init() then libfabric doesn't like it, and if we do it before
+ * then there are no reporting of errors.  Instead, roll our own where
+ * we create a socket pair, call fork(), and then communicate on the
+ * socket pair to allow the foreground process to stay around until
+ * the background process has completed.  Add in a check for SIGCHLD
+ * from the background in case of abnormal exit to avoid deadlocking
+ * the parent in this case.
+ */
 static int
 dfuse_bg(struct dfuse_info *dfuse_info)
 {
@@ -84,16 +110,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 		return 1;
 
 	if (child_pid == 0) {
-		int nfd;
-
 		bg_fd = di_spipe[1];
-
-		nfd = open("/dev/null", O_RDWR);
-
-		dup2(nfd, STDIN_FILENO);
-		dup2(nfd, STDOUT_FILENO);
-		dup2(nfd, STDERR_FILENO);
-		close(nfd);
 		return 0;
 
 	}
@@ -127,7 +144,8 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 			exit(2);
 		}
 		if (child_ret) {
-			printf("Exiting %d %s\n", child_ret, d_errstr(child_ret));
+			printf("Exiting %d %s\n", child_ret,
+				d_errstr(child_ret));
 			exit(-(child_ret + DER_ERR_GURT_BASE));
 		} else {
 			exit(0);
@@ -190,6 +208,8 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 	}
 
 	fuse_opt_free_args(args);
+
+	dfuse_send_to_fg(0);
 
 	rc = ll_loop_fn(dfuse_info);
 	fuse_session_unmount(dfuse_info->di_session);
@@ -354,7 +374,7 @@ main(int argc, char **argv)
 		rc = dfuse_bg(dfuse_info);
 		if (rc != 0) {
 			printf("Failed to background\n");
-			return(2);
+			return 2 ;
 		}
 	}
 
@@ -396,7 +416,8 @@ main(int argc, char **argv)
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
-	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s", rc, strerror(rc));
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
+		       rc, strerror(rc));
 	if (rc == 0) {
 		if (dfuse_info->di_pool) {
 			printf("UNS configured on mount point but pool provided\n");

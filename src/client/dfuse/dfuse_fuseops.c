@@ -96,8 +96,6 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "max_background %d", conn->max_background);
 	DFUSE_TRA_INFO(fs_handle,
 		       "congestion_threshold %d", conn->congestion_threshold);
-
-	dfuse_send_to_fg(0);
 }
 
 void
