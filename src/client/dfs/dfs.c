@@ -109,9 +109,9 @@ struct dfs {
 	bool			mounted;
 	/** lock for threadsafety */
 	pthread_mutex_t		lock;
-	/** uid - inherited from pool. TODO - make this from container. */
+	/** uid - inherited from container. */
 	uid_t			uid;
-	/** gid - inherited from pool. TODO - make this from container. */
+	/** gid - inherited from container. */
 	gid_t			gid;
 	/** Access mode (RDONLY, RDWR) */
 	int			amode;
@@ -127,7 +127,7 @@ struct dfs {
 	dfs_obj_t		root;
 	/** DFS container attributes (Default chunk size, oclass, etc.) */
 	dfs_attr_t		attr;
-	/** Optional Prefix to account for when resolving an absolute path */
+	/** Optional prefix to account for when resolving an absolute path */
 	char			*prefix;
 	daos_size_t		prefix_len;
 };
@@ -932,7 +932,7 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT,
 				     &dkey, SB_AKEYS, iods, sgls, NULL);
 		if (rc) {
-			D_ERROR("Failed to update SB info (%d)\n", rc);
+			D_ERROR("Failed to create DFS superblock (%d)\n", rc);
 			D_GOTO(err, rc = daos_der2errno(rc));
 		}
 
@@ -1107,13 +1107,10 @@ int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
 	dfs_t			*dfs;
-	daos_pool_info_t	pool_info = {};
 	daos_prop_t		*prop;
 	struct daos_prop_entry	*entry;
 	int			amode, obj_mode;
 	int			rc;
-
-
 
 	amode = (flags & O_ACCMODE);
 	obj_mode = get_daos_obj_mode(flags);
@@ -1129,21 +1126,18 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_query() Failed (%d)\n", rc);
-		daos_prop_free(prop);
-		return daos_der2errno(rc);
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_POSIX) {
 		D_ERROR("container is not of type POSIX\n");
-		daos_prop_free(prop);
-		return EINVAL;
+		D_GOTO(err_prop, rc = EINVAL);
 	}
-	daos_prop_free(prop);
 
 	D_ALLOC_PTR(dfs);
 	if (dfs == NULL)
-		return ENOMEM;
+		D_GOTO(err_prop, rc = ENOMEM);
 
 	dfs->poh = poh;
 	dfs->coh = coh;
@@ -1153,39 +1147,28 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (rc != 0)
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 
-	prop = daos_prop_alloc(0);
-	if (prop == NULL) {
-		D_ERROR("Failed to allocate prop.");
-		D_GOTO(err_dfs, rc = ENOMEM);
-	}
-
-	rc = daos_pool_query(poh, NULL, &pool_info, prop, NULL);
-	if (rc) {
-		D_ERROR("daos_pool_query() Failed (%d)\n", rc);
-		daos_prop_free(prop);
-		D_GOTO(err_dfs, rc = daos_der2errno(rc));
-	}
-
 	/* Convert the owner information to uid/gid */
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
 	D_ASSERT(entry != NULL);
 	rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
-	if (rc != 0) {
+	if (rc == -DER_NONEXIST)
+		/** Set uid to nobody */
+		rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
+	if (rc) {
 		D_ERROR("Unable to convert owner to uid\n");
-		daos_prop_free(prop);
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
 	D_ASSERT(entry != NULL);
 	rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
-	if (rc != 0) {
-		D_ERROR("Unable to convert owner-group to gid\n");
-		daos_prop_free(prop);
+	if (rc == -DER_NONEXIST)
+		/** Set gid to nobody */
+		rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
+	if (rc) {
+		D_ERROR("Unable to convert owner to gid\n");
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
-
-	daos_prop_free(prop);
 
 	/** Verify SB */
 	rc = open_sb(coh, false, &dfs->attr, &dfs->super_oh);
@@ -1199,7 +1182,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	daos_obj_generate_id(&dfs->root.parent_oid, 0, OC_RP_XSF, 0);
 	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode, 0, &dfs->root);
 	if (rc) {
-		D_ERROR("Failed to open root object\n");
+		D_ERROR("Failed to open root object (%d)\n", rc);
 		D_GOTO(err_super, rc);
 	}
 
@@ -1223,14 +1206,17 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	dfs->mounted = true;
 	*_dfs = dfs;
-
+	daos_prop_free(prop);
 	return rc;
+
 err_root:
 	daos_obj_close(dfs->root.oh, NULL);
 err_super:
 	daos_obj_close(dfs->super_oh, NULL);
 err_dfs:
 	D_FREE(dfs);
+err_prop:
+	daos_prop_free(prop);
 	return rc;
 }
 
@@ -3796,7 +3782,8 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	cond = DAOS_COND_DKEY_UPDATE | DAOS_COND_PUNCH;
 	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
 	if (rc) {
-		D_ERROR("Failed to punch extended attribute %s\n", name);
+		D_CDEBUG(rc == -DER_EXIST, DLOG_INFO, DLOG_ERR,
+			"Failed to punch extended attribute '%s'\n", name);
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 

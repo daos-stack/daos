@@ -230,8 +230,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_cont = vos_hdl2cont(coh);
 	vos_cont_addref(ioc->ic_cont);
 	ioc->ic_update = !read_only;
-	ioc->ic_size_fetch = fetch_flags & VOS_FETCH_SIZE_ONLY;
-	ioc->ic_save_recx = fetch_flags & VOS_FETCH_RECX_LIST;
+	ioc->ic_size_fetch = ((fetch_flags & VOS_FETCH_SIZE_ONLY) != 0);
+	ioc->ic_save_recx = ((fetch_flags & VOS_FETCH_RECX_LIST) != 0);
 	ioc->ic_read_conflict = false;
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->iod_csums = iod_csums;
@@ -685,11 +685,11 @@ akey_fetch_recx_get(daos_recx_t *iod_recx, struct daos_recx_ep_list *shadow,
 		fetch_recx->rx_nr = min((iod_recx->rx_idx + iod_recx->rx_nr),
 					(recx->rx_idx + recx->rx_nr)) -
 				    iod_recx->rx_idx;
+		D_ASSERT(fetch_recx->rx_nr > 0 &&
+			 fetch_recx->rx_nr <= iod_recx->rx_nr);
 		iod_recx->rx_idx += fetch_recx->rx_nr;
 		iod_recx->rx_nr -= fetch_recx->rx_nr;
 		*shadow_ep = recx_ep->re_ep;
-		D_ASSERT(fetch_recx->rx_nr > 0 &&
-			 fetch_recx->rx_nr <= iod_recx->rx_nr);
 		return;
 	}
 
@@ -1009,8 +1009,11 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 out:
 	update_ts_on_fetch(ioc, rc);
 
-	if (rc != 0)
+	if (rc != 0) {
+		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
+		ioc->ic_recx_lists = NULL;
 		return vos_fetch_end(vos_ioc2ioh(ioc), rc);
+	}
 	return 0;
 }
 
@@ -1818,8 +1821,9 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		return rc;
 
-	rc = vos_space_hold(vos_cont2pool(ioc->ic_cont), dkey, iod_nr, iods,
-			    iods_csums, &ioc->ic_space_held[0]);
+	/* flags may have VOS_OF_CRIT to skip sys/held checks here */
+	rc = vos_space_hold(vos_cont2pool(ioc->ic_cont), flags, dkey, iod_nr,
+			    iods, iods_csums, &ioc->ic_space_held[0]);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Hold space failed. "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));

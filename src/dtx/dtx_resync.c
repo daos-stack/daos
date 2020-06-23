@@ -37,11 +37,11 @@
 
 struct dtx_resync_entry {
 	d_list_t		dre_link;
-	struct dtx_entry	dre_dte;
 	daos_epoch_t		dre_epoch;
+	daos_unit_oid_t		dre_oid;
+	struct dtx_entry	dre_dte;
 };
 
-#define dre_oid		dre_dte.dte_oid
 #define dre_xid		dre_dte.dte_xid
 
 struct dtx_resync_head {
@@ -63,18 +63,19 @@ dtx_dre_release(struct dtx_resync_head *drh, struct dtx_resync_entry *dre)
 {
 	drh->drh_count--;
 	d_list_del(&dre->dre_link);
-	D_FREE_PTR(dre);
+	if (--(dre->dre_dte.dte_refs) == 0)
+		D_FREE(dre);
 }
 
 static int
 dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
-		  struct dtx_resync_head *drh, int count, uint32_t version)
+		  struct dtx_resync_head *drh, int count)
 {
-	struct dtx_resync_entry		*dre;
-	struct dtx_entry		*dte = NULL;
-	int				 rc = 0;
-	int				 i = 0;
-	int				 j = 0;
+	struct dtx_resync_entry		 *dre;
+	struct dtx_entry		**dte = NULL;
+	int				  rc = 0;
+	int				  i = 0;
+	int				  j = 0;
 
 	D_ASSERT(drh->drh_count >= count);
 
@@ -101,19 +102,25 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 		 * not committed, then commit it (again), that is harmless.
 		 */
 
-		dte[j].dte_xid = dre->dre_xid;
-		dte[j].dte_oid = dre->dre_oid;
-		++j;
+		dte[j++] = dtx_entry_get(&dre->dre_dte);
 
 next:
 		dtx_dre_release(drh, dre);
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(po_uuid, cont->sc_uuid, dte, j, version, false);
+		rc = dtx_commit(po_uuid, cont->sc_uuid, dte, j, false);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
+
+		for (i = 0; i < j; i++) {
+			D_ASSERT(dte[i]->dte_refs == 1);
+
+			dre = d_list_entry(dte[i], struct dtx_resync_entry,
+					   dre_dte);
+			D_FREE(dre);
+		}
 	} else {
 		rc = 0;
 	}
@@ -126,10 +133,10 @@ static int
 dtx_status_handle(struct dtx_resync_args *dra)
 {
 	struct ds_cont_child		*cont = dra->cont;
-	struct pl_obj_layout		*layout = NULL;
 	struct dtx_resync_head		*drh = &dra->tables;
 	struct dtx_resync_entry		*dre;
 	struct dtx_resync_entry		*next;
+	struct dtx_entry		*dte;
 	int				 count = 0;
 	int				 err = 0;
 	int				 rc;
@@ -138,13 +145,17 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		goto out;
 
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
-		if (layout != NULL) {
-			pl_obj_layout_free(layout);
-			layout = NULL;
+		if (dre->dre_dte.dte_mbs->dm_grp_cnt > 1) {
+			D_WARN("Not support to recover the DTX across more "
+			       "1 modification groups %d, skip it "DF_DTI"\n",
+			       dre->dre_dte.dte_mbs->dm_grp_cnt,
+			       DP_DTI(&dre->dre_xid));
+			dtx_dre_release(drh, dre);
+			continue;
 		}
 
 		rc = ds_pool_check_leader(dra->po_uuid, &dre->dre_oid,
-					  dra->version, &layout);
+					  dra->version);
 		if (rc <= 0) {
 			if (rc < 0)
 				D_WARN("Not sure about the leader for the DTX "
@@ -158,8 +169,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			continue;
 		}
 
-		rc = dtx_check(dra->po_uuid, cont->sc_uuid,
-			       &dre->dre_dte, layout);
+		rc = dtx_check(dra->po_uuid, cont->sc_uuid, &dre->dre_dte);
 
 		/* The DTX has been committed or ready to be committed on
 		 * some remote replica(s), let's commit the DTX globally.
@@ -210,8 +220,9 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		 * some other DTX(s). To avoid complex rollback logic, let's
 		 * abort the DTXs one by one, not batched.
 		 */
+		dte = &dre->dre_dte;
 		rc = dtx_abort(dra->po_uuid, cont->sc_uuid, dre->dre_epoch,
-			       &dre->dre_dte, 1, dra->version);
+			       &dte, 1);
 		if (rc < 0)
 			err = rc;
 
@@ -220,8 +231,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 commit:
 		if (++count >= DTX_THRESHOLD_COUNT) {
-			rc = dtx_resync_commit(dra->po_uuid, cont, drh, count,
-					       dra->version);
+			rc = dtx_resync_commit(dra->po_uuid, cont, drh, count);
 			if (rc < 0)
 				err = rc;
 			count = 0;
@@ -229,20 +239,16 @@ commit:
 	}
 
 	if (count > 0) {
-		rc = dtx_resync_commit(dra->po_uuid, cont, drh, count,
-				       dra->version);
+		rc = dtx_resync_commit(dra->po_uuid, cont, drh, count);
 		if (rc < 0)
 			err = rc;
 	}
-
-	if (layout != NULL)
-		pl_obj_layout_free(layout);
 
 out:
 	if (err >= 0)
 		/* Drain old committable DTX to help subsequent rebuild. */
 		err = dtx_obj_sync(dra->po_uuid, cont->sc_uuid, cont,
-				   NULL, dra->epoch, dra->version);
+				   NULL, dra->epoch);
 
 	return err;
 }
@@ -252,6 +258,9 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 {
 	struct dtx_resync_args		*dra = args;
 	struct dtx_resync_entry		*dre;
+	struct dtx_entry		*dte;
+	struct dtx_memberships		*mbs;
+	size_t				 size;
 
 	/* We commit the DTXs periodically, there will be not too many DTXs
 	 * to be checked when resync. So we can load all those uncommitted
@@ -269,13 +278,30 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_ver >= dra->version)
 		return 0;
 
-	D_ALLOC_PTR(dre);
+	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
+	D_ASSERT(ent->ie_dtx_tgt_cnt > 0);
+
+	size = sizeof(*dre) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize;
+	D_ALLOC(dre, size);
 	if (dre == NULL)
 		return -DER_NOMEM;
 
 	dre->dre_epoch = ent->ie_epoch;
-	dre->dre_xid = ent->ie_dtx_xid;
 	dre->dre_oid = ent->ie_dtx_oid;
+
+	dte = &dre->dre_dte;
+	mbs = (struct dtx_memberships *)(dte + 1);
+
+	mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
+	mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
+	mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
+	memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+
+	dte->dte_xid = ent->ie_dtx_xid;
+	dte->dte_ver = ent->ie_dtx_ver;
+	dte->dte_refs = 1;
+	dte->dte_mbs = mbs;
+
 	d_list_add_tail(&dre->dre_link, &dra->tables.drh_list);
 	dra->tables.drh_count++;
 
