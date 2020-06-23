@@ -46,7 +46,7 @@ type startCmd struct {
 }
 
 func (cmd *startCmd) Execute(_ []string) error {
-	cmd.log.Info("Starting daos_agent:")
+	cmd.log.Infof("Starting %s:", versionString())
 
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()

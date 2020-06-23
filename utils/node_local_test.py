@@ -60,8 +60,10 @@ class WarningsFactory():
     https://github.com/jenkinsci/warnings-ng-plugin/blob/master/doc/Documentation.md
     """
 
-    # Error levels are LOW, NORMAL, HIGH, ERROR
-    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'vos_tls_fini', 'rdb_timerd')
+    # Error levels supported by the reporint are LOW, NORMAL, HIGH, ERROR.
+    # Errors from this list of functions are known to happen during shutdown
+    # for the time being, so are downgraded to LOW.
+    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'rdb_timerd')
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')
@@ -147,7 +149,7 @@ class WarningsFactory():
         entry['message'] = line.get_anon_msg()
         entry['severity'] = sev
         if line.function in self.FLAKY_FUNCTIONS and \
-           entry['severity'] == 'NORMAL':
+           entry['severity'] != 'ERROR':
             entry['severity'] = 'LOW'
         self.issues.append(entry)
         self.pending.append((line, message))
@@ -331,7 +333,7 @@ class DaosServer():
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
-        # Show errors from server logs bug supress memory leaks as the server
+        # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
             # TODO: Enable memleak checking when server shutdown works.
@@ -352,7 +354,6 @@ def il_cmd(dfuse, cmd):
     ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
-    print('Log results for il')
     log_test(dfuse.conf, log_file.name)
     return ret
 
@@ -586,7 +587,7 @@ def import_daos(server, conf):
 def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
     """Run a DAOS command
 
-    Run a command, returing what subprocess.run() would.
+    Run a command, returning what subprocess.run() would.
 
     Enable logging, and valgrind for the command.
     """
@@ -983,15 +984,12 @@ def run_il_test(server, conf):
 
     pools = get_pool_list()
 
-    # TODO: This doesn't work with two pools, there appears to be a bug
-    # relating to re-using container uuids across pools.
+    # TODO: This doesn't work with two pools, partly related to
+    # DAOS-5109 but there may be other issues.
     while len(pools) < 1:
         pools = make_pool(daos, conf)
 
     print('pools are ', ','.join(pools))
-
-    containers = ['62176a51-8229-4e4c-ad1b-43aaace8a97a',
-                  '4ef12a58-c544-406c-8acf-56a2c0589cd6']
 
     dfuse = DFuse(server, conf)
     dfuse.start()
@@ -999,8 +997,11 @@ def run_il_test(server, conf):
     dirs = []
 
     for p in pools:
-        for c in containers:
-            d = os.path.join(dfuse.dir, p, c)
+        for _ in range(2):
+            # Use a unique ID for each container to avoid DAOS-5109
+            container = str(uuid.uuid4())
+
+            d = os.path.join(dfuse.dir, p, container)
             try:
                 print('Making directory {}'.format(d))
                 os.mkdir(d)

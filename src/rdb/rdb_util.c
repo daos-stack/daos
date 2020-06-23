@@ -274,7 +274,7 @@ static inline int
 rdb_vos_fetch_check(d_iov_t *value, d_iov_t *value_orig)
 {
 	/*
-	 * An emtpy value represents nonexistence. Keep the caller value intact
+	 * An empty value represents nonexistence. Keep the caller value intact
 	 * in this case.
 	 */
 	if (value->iov_len == 0) {
@@ -334,7 +334,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
 	rc = vos_fetch_begin(cont, uoid, epoch, 0 /* flags */, &rdb_dkey,
-			     1 /* n */, &iod, false /* size_fetch */, &io,
+			     1 /* n */, &iod, 0 /* fetch_flags */, NULL, &io,
 			     NULL /* dth */);
 	if (rc != 0)
 		return rc;
@@ -504,18 +504,19 @@ out:
 }
 
 int
-rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-	       d_iov_t akeys[], d_iov_t values[])
+rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, bool crit,
+	       int n, d_iov_t akeys[], d_iov_t values[])
 {
 	daos_unit_oid_t	uoid;
 	daos_iod_t	iods[n];
 	d_sg_list_t	sgls[n];
+	uint64_t	vos_flags = crit ? VOS_OF_CRIT : 0;
 
 	D_ASSERTF(n <= RDB_VOS_BATCH_MAX, "%d <= %d\n", n, RDB_VOS_BATCH_MAX);
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_UPDATE, n, akeys, values, iods);
 	rdb_vos_set_sgls(RDB_VOS_UPDATE, n, values, sgls);
-	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, 0 /* flags */,
+	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, vos_flags,
 			      &rdb_dkey, n, iods, NULL, sgls);
 }
 

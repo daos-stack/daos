@@ -185,6 +185,7 @@ class LogLine():
         fields = []
         for entry in self._fields[2:]:
             field = None
+            # TODO: This should match a file offset range
             if entry.startswith('0x') and len(entry) > 5:
                 if entry.endswith(')'):
                     field = '0x...)'
@@ -224,7 +225,7 @@ class LogLine():
     def _is_type(self, text, trace=True):
         """Checks for text in a log message
 
-        Retuns True if the line starts with the text provided
+        Returns True if the line starts with the text provided
         """
         if trace and not self.trace:
             return False

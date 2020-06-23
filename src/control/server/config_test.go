@@ -213,6 +213,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_control.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
+		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
@@ -354,8 +355,8 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 		inPath    string
 		expErrMsg string
 	}{
-		"path exists":       {inPath: "uncommentedDefault"},
-		"path doesnt exist": {expErrMsg: "no such file or directory"},
+		"path exists":         {inPath: "uncommentedDefault"},
+		"path does not exist": {expErrMsg: "no such file or directory"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			testDir, cleanup := CreateTestDir(t)

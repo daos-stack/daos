@@ -23,6 +23,8 @@ typedef struct _Mgmt__PoolEvictReq Mgmt__PoolEvictReq;
 typedef struct _Mgmt__PoolEvictResp Mgmt__PoolEvictResp;
 typedef struct _Mgmt__PoolExcludeReq Mgmt__PoolExcludeReq;
 typedef struct _Mgmt__PoolExcludeResp Mgmt__PoolExcludeResp;
+typedef struct _Mgmt__PoolExtendReq Mgmt__PoolExtendReq;
+typedef struct _Mgmt__PoolExtendResp Mgmt__PoolExtendResp;
 typedef struct _Mgmt__PoolReintegrateReq Mgmt__PoolReintegrateReq;
 typedef struct _Mgmt__PoolReintegrateResp Mgmt__PoolReintegrateResp;
 typedef struct _Mgmt__ListPoolsReq Mgmt__ListPoolsReq;
@@ -235,6 +237,51 @@ struct  _Mgmt__PoolExcludeResp
 };
 #define MGMT__POOL_EXCLUDE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_exclude_resp__descriptor) \
+    , 0 }
+
+
+/*
+ * PoolExtendReq supplies pool identifier and rank list.
+ */
+struct  _Mgmt__PoolExtendReq
+{
+  ProtobufCMessage base;
+  /*
+   * uuid of pool to add target up to
+   */
+  char *uuid;
+  /*
+   * ranks
+   */
+  size_t n_ranks;
+  uint32_t *ranks;
+  /*
+   * SCM size in bytes
+   */
+  uint64_t scmbytes;
+  /*
+   * NVMe size in bytes
+   */
+  uint64_t nvmebytes;
+};
+#define MGMT__POOL_EXTEND_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
+    , (char *)protobuf_c_empty_string, 0,NULL, 0, 0 }
+
+
+/*
+ * PoolExtendResp returns resultant state of Extend operation.
+ */
+struct  _Mgmt__PoolExtendResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+};
+#define MGMT__POOL_EXTEND_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
     , 0 }
 
 
@@ -744,6 +791,44 @@ Mgmt__PoolExcludeResp *
 void   mgmt__pool_exclude_resp__free_unpacked
                      (Mgmt__PoolExcludeResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__PoolExtendReq methods */
+void   mgmt__pool_extend_req__init
+                     (Mgmt__PoolExtendReq         *message);
+size_t mgmt__pool_extend_req__get_packed_size
+                     (const Mgmt__PoolExtendReq   *message);
+size_t mgmt__pool_extend_req__pack
+                     (const Mgmt__PoolExtendReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_extend_req__pack_to_buffer
+                     (const Mgmt__PoolExtendReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolExtendReq *
+       mgmt__pool_extend_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_extend_req__free_unpacked
+                     (Mgmt__PoolExtendReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolExtendResp methods */
+void   mgmt__pool_extend_resp__init
+                     (Mgmt__PoolExtendResp         *message);
+size_t mgmt__pool_extend_resp__get_packed_size
+                     (const Mgmt__PoolExtendResp   *message);
+size_t mgmt__pool_extend_resp__pack
+                     (const Mgmt__PoolExtendResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_extend_resp__pack_to_buffer
+                     (const Mgmt__PoolExtendResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolExtendResp *
+       mgmt__pool_extend_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_extend_resp__free_unpacked
+                     (Mgmt__PoolExtendResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__PoolReintegrateReq methods */
 void   mgmt__pool_reintegrate_req__init
                      (Mgmt__PoolReintegrateReq         *message);
@@ -1004,6 +1089,12 @@ typedef void (*Mgmt__PoolExcludeReq_Closure)
 typedef void (*Mgmt__PoolExcludeResp_Closure)
                  (const Mgmt__PoolExcludeResp *message,
                   void *closure_data);
+typedef void (*Mgmt__PoolExtendReq_Closure)
+                 (const Mgmt__PoolExtendReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolExtendResp_Closure)
+                 (const Mgmt__PoolExtendResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__PoolReintegrateReq_Closure)
                  (const Mgmt__PoolReintegrateReq *message,
                   void *closure_data);
@@ -1060,6 +1151,8 @@ extern const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_evict_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_exclude_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_exclude_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_reintegrate_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor;

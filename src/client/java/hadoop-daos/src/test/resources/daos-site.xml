@@ -11,7 +11,7 @@
   <property>
     <name>fs.daos.container.uuid</name>
     <value>uuid of container</value>
-    <description>UUID od DAOS container which created with "--type posix"</description>
+    <description>UUID of DAOS container which created with "--type posix"</description>
   </property>
   <property>
     <name>fs.daos.pool.svc</name>
@@ -56,4 +56,22 @@
       Value range is 1m - 2g.
     </description>
   </property>
+
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>target/build/test</value>
+    <description>A base for other temporary directories.</description>
+    <final>true</final>
+  </property>
+
+  <!--
+  To run these tests.
+
+  # Create a file auth-keys.xml  - DO NOT ADD TO REVISION CONTROL
+  # add the property test.fs.oss.name to point to an OSS filesystem URL
+  # Add the credentials for the service you are testing against
+  -->
+  <include xmlns="http://www.w3.org/2001/XInclude" href="auth-keys.xml">
+    <fallback/>
+  </include>
 </configuration>

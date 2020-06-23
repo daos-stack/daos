@@ -23,7 +23,7 @@ for details on hardware provisioning.
 
 ## Configuration
 
-A server configuration file which is passed on invokation contains details of
+A server configuration file which is passed on invocation contains details of
 global and per-io-server parameters related to hardware devices and
 environments.
 
