@@ -51,8 +51,6 @@ def scons():
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('cart')])
     env.AppendUnique(LIBPATH=[Dir('gurt')])
-    env.AppendUnique(RPATH=[Dir('cart')])
-    env.AppendUnique(RPATH=[Dir('gurt')])
     env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('cart').path])
     env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('gurt').path])
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
