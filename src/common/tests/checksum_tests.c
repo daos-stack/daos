@@ -518,7 +518,7 @@ get_map_test(void **state)
 }
 
 static void
-skip_stuff(void **state)
+test_skip_csum_calculations_when_skip_set(void **state)
 {
 	struct daos_csummer	*csummer;
 	d_sg_list_t		 sgl;
@@ -1789,7 +1789,8 @@ static const struct CMUnitTest tests[] = {
 	TEST("CSUM28: Formatter",
 	     test_formatter),
 	TEST("CSUM28: Get the recxes from a map", get_map_test),
-	TEST("CSUM29: Skip calculations based on csummer settings", skip_stuff),
+	TEST("CSUM29: Skip calculations based on csummer settings",
+	     test_skip_csum_calculations_when_skip_set),
 	TEST("CSUM_HOLES01: With 2 mapped extents that leave a hole "
 	     "at the beginning, in between and "
 	     "at the end, all within a single chunk.", holes_1),
