@@ -68,8 +68,10 @@ struct daos_node_overhead {
 
 /** Overheads for a tree */
 struct daos_tree_overhead {
-	/** Overhead for full size tree node */
-	struct daos_node_overhead	to_node_overhead;
+	/** Overhead for full size of leaf tree node */
+	struct daos_node_overhead	to_leaf_overhead;
+	/** Overhead for full size intermediate tree node */
+	int				to_int_node_size;
 	/** Overhead for dynamic tree nodes */
 	struct daos_node_overhead	to_dyn_overhead[MAX_TREE_ORDER_INC];
 	/** Number of dynamic tree node sizes */
