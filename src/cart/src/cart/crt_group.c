@@ -81,10 +81,11 @@ static int
 li_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
 {
 	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
-
 	*key_pp = (void *)&li->li_rank;
+	/* Some comment abbout something */
 	return sizeof(li->li_rank);
 }
+
 
 static uint32_t
 li_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
@@ -100,7 +101,6 @@ li_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink,
 	      const void *key, unsigned int ksize)
 {
 	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
-
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
 	return li->li_rank == *(d_rank_t *)key;
@@ -292,14 +292,14 @@ grp_li_uri_get(struct crt_lookup_item *li, int tag)
 	grp_priv = li->li_grp_priv;
 
 	rlink = d_hash_rec_find(&grp_priv->gp_uri_lookup_cache,
-				(void *)&rank, sizeof(rank));
+			(void *)&rank, sizeof(rank));
 	/* It's possible to have crt_lookup_item for which uri
 	 * info has not been populated yet
 	 */
 	if (rlink == NULL) {
 		D_DEBUG(DB_TRACE,
-			"Failed to find uri_info for %d:%d\n",
-			rank, tag);
+			 "Failed to find uri_info for %d:%d\n",
+			 rank, tag);
 		return NULL;
 	}
 
@@ -2375,12 +2375,13 @@ grp_get_free_index(struct crt_grp_priv *priv)
 	return ret;
 }
 
+
 static int
 grp_add_free_index(d_list_t *list, int index, bool tail)
 {
 	struct free_index *free_index;
-
 	D_ALLOC_PTR(free_index);
+
 	if (!free_index)
 		return -DER_NOMEM;
 
