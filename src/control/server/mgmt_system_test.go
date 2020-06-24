@@ -40,6 +40,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -267,7 +268,7 @@ func TestServer_MgmtSvc_PrepShutdownRanks(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			ioserverCount := maxIOServers
-			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			svc := newTestMgmtSvcMulti(t, log, ioserverCount, tc.setupAP)
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
 					srv._superblock = nil
@@ -419,7 +420,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 				tc.ioserverCount = maxIOServers
 			}
 
-			svc := newTestMgmtSvcMulti(log, tc.ioserverCount, tc.setupAP)
+			svc := newTestMgmtSvcMulti(t, log, tc.ioserverCount, tc.setupAP)
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
 					srv._superblock = nil
@@ -618,7 +619,7 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			ioserverCount := maxIOServers
-			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			svc := newTestMgmtSvcMulti(t, log, ioserverCount, tc.setupAP)
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
 					srv._superblock = nil
@@ -743,7 +744,7 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 
 			ctx := context.Background()
 
-			svc := newTestMgmtSvcMulti(log, tc.ioserverCount, tc.setupAP)
+			svc := newTestMgmtSvcMulti(t, log, tc.ioserverCount, tc.setupAP)
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
 					srv._superblock = nil
@@ -885,7 +886,7 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 
 			ctx := context.Background()
 
-			svc := newTestMgmtSvcMulti(log, tc.ioserverCount, tc.setupAP)
+			svc := newTestMgmtSvcMulti(t, log, tc.ioserverCount, tc.setupAP)
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
 					srv._superblock = nil
@@ -997,6 +998,53 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expAddr, gotAddr); diff != "" {
 				t.Fatalf("unexpected address (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mgmtSvc          *mgmtSvc
+		clientNetworkCfg *ClientNetworkCfg
+		req              *mgmtpb.GetAttachInfoReq
+		expResp          *mgmtpb.GetAttachInfoResp
+	}{
+		"Server uses verbs + Infiniband": {
+			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
+			req:              &mgmtpb.GetAttachInfoReq{},
+			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
+		},
+		"Server uses sockets + Ethernet": {
+			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
+			req:              &mgmtpb.GetAttachInfoReq{},
+			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+			harness := NewIOServerHarness(log)
+			srv := newTestIOServer(log, true)
+
+			if err := harness.AddInstance(srv); err != nil {
+				t.Fatal(err)
+			}
+			srv.setDrpcClient(newMockDrpcClient(nil))
+			harness.started.SetTrue()
+
+			cfg := new(mockDrpcClientConfig)
+			rb, _ := proto.Marshal(&mgmtpb.GetAttachInfoResp{})
+			cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, nil)
+			srv.setDrpcClient(newMockDrpcClient(cfg))
+			tc.mgmtSvc = newMgmtSvc(harness, nil, tc.clientNetworkCfg)
+			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
+			if gotErr != nil {
+				t.Fatalf("unexpected error: %+v\n", gotErr)
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
 	}

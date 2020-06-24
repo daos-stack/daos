@@ -18,7 +18,7 @@ def scons():
     denv.AppendUnique(LINKFLAGS=['-rdynamic'])
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
     # Generate I/O server program
     iosrv = daos_build.program(denv, 'daos_io_server',
