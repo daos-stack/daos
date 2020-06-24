@@ -7,7 +7,6 @@ hosts:
     - client-B
 timeout: 200
 server_config:
-  servers_per_host: 2
   name: daos_server
 zero_config: !mux
   set:

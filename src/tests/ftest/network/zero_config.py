@@ -41,6 +41,11 @@ class ZeroConfigTest(TestWithServers):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a ZeroConfigTest object."""
+        super(ZeroConfigTest, self).__init__(*args, **kwargs)
+        self.setup_start_servers = False
+
     def get_port_cnt(self, hosts, dev, port_counter):
         """Get the port count info for device names specified.
 
@@ -53,8 +58,9 @@ class ZeroConfigTest(TestWithServers):
             dict: a dictionary of data values for each NodeSet key
 
         """
-        b_path = "/sys/class/infiniband"
+        b_path = "/sys/class/infiniband/{}".format(dev)
         file = os.path.join(b_path, "ports/1/counters", port_counter)
+
         # Check if if exists for the host
         check_cmd = "test -f {}".format(file)
         result = pcmd(hosts, check_cmd, True, None, 0)
@@ -68,14 +74,14 @@ class ZeroConfigTest(TestWithServers):
         return get_host_data(hosts, cmd, text, error, 20)
 
     @fail_on(CommandFailure)
-    def verify_client_run(self, server_idx, exp_iface, env=False):
-        """Verify the interface assigned by runnning a libdaos client.
+    def verify_client_run(self, server_idx, exp_iface, env):
+        """Verify the interface assigned by running a libdaos client.
 
         Args:
             server_idx (int): server to get config from.
-            exp_iface (str): expected iterface to check.
+            exp_iface (str): expected interface to check.
             env (bool): add OFI_INTERFACE variable to exported variables of
-                client command. Defaults to False.
+                client command.
 
         Returns:
             bool: returns status
@@ -93,7 +99,7 @@ class ZeroConfigTest(TestWithServers):
 
         # Update env_name list to add OFI_INTERFACE if needed.
         if env:
-            self.update_env_names(["OFI_INTERFACE"])
+            daos_racer.update_env_names(["OFI_INTERFACE"])
         daos_racer.set_environment(
             daos_racer.get_environment(self.server_managers[server_idx]))
         daos_racer.run()
@@ -120,7 +126,7 @@ class ZeroConfigTest(TestWithServers):
         """JIRA ID: DAOS-4880.
 
         Test Description:
-            Test starting a single daos_server process on 2 different numa
+            Test starting a daos_server process on 2 different numa
             nodes and verify that client can start when OFI_INTERFACE is set
             or unset.
 
