@@ -666,7 +666,7 @@ For reference, key junction points in the flows are:
 
 ## Metadata Overhead
 
-VOS provides a tool vos_stats.py that can take a set of assumptions about how many keys and objects and VOS pools are in use and provide an estimate of metadata overhead.
+VOS provides a tool vos_size.py that can take a set of assumptions about how many keys and objects and VOS pools are in use and provide an estimate of metadata overhead.
 
 To run an example, first setup the paths
 ```
@@ -699,6 +699,24 @@ Metadata totals:
 Total bytes with user data: 2079047482K
 ```
 
+It is possible to take into account the space allocated by the DAOS File System. An example input yaml is installed to /etc/vos_dfs_sample.yaml. This file can also be generated using the information of the actual DAOS installation.
+```
+[~/daos]$ vos_size_dfs_sample -f ./vos_dfs_sample.yaml
+[~/daos]$ vos_size.py ./vos_dfs_sample.yaml
+Metadata totals:
+	pool                :        280   ( 0.00%)
+	container           :        680   ( 0.00%)
+	object              :     171.66 M ( 1.48%)
+	dkey                :     407.68 M ( 3.52%)
+	akey                :     564.58 M ( 4.88%)
+	single_value        :     132.56 M ( 1.15%)
+	array               :       2.33 G (20.59%)
+	total_meta          :       3.57 G (31.62%)
+	user_meta           :      15.26 M ( 0.13%)
+	user_value          :       7.71 G (68.25%)
+	scm_total           :       3.67 G (32.48%)
+Total bytes with user data:      11.30 G
+```
 <a id="81"></a>
 
 ## Replica Consistency

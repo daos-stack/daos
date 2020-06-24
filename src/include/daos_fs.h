@@ -38,6 +38,7 @@ extern "C" {
 #endif
 
 #include <dirent.h>
+#include <sys/stat.h>
 
 /** Maximum Path length */
 #define DFS_MAX_PATH		NAME_MAX

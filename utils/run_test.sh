@@ -131,6 +131,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_PREFIX}/bin/vos_size"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
              "${SL_PREFIX}/etc/vos_size_input.yaml"
+    run_test "${SL_PREFIX}/bin/vos_size_dfs_sample"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
              "${SL_PREFIX}/etc/vos_dfs_sample.yaml"
 

@@ -235,6 +235,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 # the 4 tools following it need it
 %{_libdir}/libdaos_tests.so
 %{_bindir}/vos_size
+%{_bindir}/vos_size_dfs_sample
 %{_bindir}/io_conf
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
@@ -362,6 +363,10 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Tue Jun 25 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-26
+- Add the vos_size_dfs_sample tool. It is used to generate dynamically
+  the vos_dfs_sample.yaml file using the real DFS super block data.
+
 * Tue Jun 23 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-25
 - Add -no-rpath option and use it for rpm build rather than modifying
   SCons files in place

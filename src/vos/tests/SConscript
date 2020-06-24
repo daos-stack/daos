@@ -8,11 +8,12 @@ def scons():
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common', 'daos_tests',
                  'gurt', 'cart', 'uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp']
 
-    prereqs.require(denv, 'argobots')
+    prereqs.require(denv, 'argobots', 'pmdk')
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     vtsenv = denv.Clone()
+
     vtsenv.Append(CPPDEFINES={'VOS_UNIT_TEST' : '1'})
 
     vos_test_src = ['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',
@@ -29,8 +30,42 @@ def scons():
     vos_size = daos_build.program(denv, 'vos_size', ['vos_size.c'],
                                   LIBS=libraries)
 
-    denv.Install('$PREFIX/bin/', [vos_tests, vos_size, evt_ctl, 'vos_size.py'])
-    denv.Install('$PREFIX/etc/', ['vos_size_input.yaml', 'vos_dfs_sample.yaml'])
+    # Build the vos_size_dfs_sample binary. It will run on the build system
+    dlenv = denv.Clone()
+    dlenv['DFS_SAMPLE_DIR'] = '$BUILD_DIR/src/vos/tests'
+
+    dlenv.AppendUnique(LIBPATH=['$BUILD_DIR/src/cart/src/cart'])
+    dlenv.AppendUnique(LIBPATH=['$BUILD_DIR/src/cart/src/gurt'])
+    dlenv.AppendUnique(LIBPATH=['$BUILD_DIR/src/client/api'])
+    dlenv.AppendUnique(LIBPATH=['$BUILD_DIR/src/client/dfs'])
+    dlenv.AppendUnique(LIBPATH=['$BUILD_DIR/src/common'])
+
+    libraries = ['daos', 'daos_common', 'dfs', 'gurt', 'cart', 'pmemobj']
+
+    dfs_sample = daos_build.program(dlenv, 'vos_size_dfs_sample',
+                                    ['vos_size_dfs_sample.c'], LIBS=libraries)
+
+    dfs_sample_bin = dlenv.Install('$PREFIX/bin/', [dfs_sample])
+
+    #pylint: disable=undefined-variable
+    Requires(dfs_sample_bin, '$PREFIX/lib64/libdaos.so')
+    Requires(dfs_sample_bin, '$PREFIX/lib64/libdaos_common.so')
+    Requires(dfs_sample_bin, '$PREFIX/lib64/libdfs.so')
+    #pylint: enable=undefined-variable
+
+    # Create the VOS sample yaml file with the DFS layout
+    run_dfs_sample = ['$PREFIX/bin/vos_size_dfs_sample -f '
+                      '$DFS_SAMPLE_DIR/vos_dfs_sample.yaml']
+
+    sample_file = dlenv.Command('$DFS_SAMPLE_DIR/vos_dfs_sample.yaml',
+                                dfs_sample_bin,
+                                run_dfs_sample)
+
+    # Install artifacts
+    dlenv.Install('$PREFIX/etc/', ['vos_size_input.yaml'])
+    dlenv.Install('$PREFIX/etc/', sample_file)
+    denv.Install('$PREFIX/bin/', [vos_tests, vos_size, evt_ctl,
+                                  'vos_size.py'])
 
 if __name__ == "SCons.Script":
     scons()
