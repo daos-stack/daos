@@ -4059,7 +4059,7 @@ addr_list_to_rank_list(struct pool_target_addr_list *in, d_rank_list_t **out)
 		return;
 
 	for (i = 0; i < in->pta_number; i++)
-		*(tmplist->rl_ranks) = *(in->pta_addrs[i].pta_rank);
+		tmplist->rl_ranks[i] = in->pta_addrs[i].pta_rank;
 
 	/* Make sure the list is unique, some targets might share ranks */
 	d_rank_list_dup_sort_uniq(out, tmplist);
