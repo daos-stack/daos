@@ -48,30 +48,40 @@ noop_handler(int arg) {
 static int bg_fd;
 
 /* Send a message to the foreground thread */
-void
+static int
 dfuse_send_to_fg(int rc)
 {
 	int nfd;
+	int ret;
 
 	if (bg_fd == 0)
-		return;
+		return -DER_SUCCESS;
 
-	write(bg_fd, &rc, sizeof(rc));
+	ret = write(bg_fd, &rc, sizeof(rc));
+
 	close(bg_fd);
 	bg_fd = 0;
-	if (rc == 0)
-		return;
 
-	chdir("/");
+	if (ret != sizeof(rc))
+		return -DER_MISC;
+
+	if (rc == 0)
+		return -DER_SUCCESS;
+
+	ret = chdir("/");
 
 	nfd = open("/dev/null", O_RDWR);
 	if (nfd == -1)
-		return;
+		return -DER_MISC;
 
 	dup2(nfd, STDIN_FILENO);
 	dup2(nfd, STDOUT_FILENO);
 	dup2(nfd, STDERR_FILENO);
 	close(nfd);
+
+	if (ret != 0)
+		return -DER_MISC;
+	return -DER_SUCCESS;
 }
 
 /* Optionally go into the background
@@ -209,7 +219,8 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 
 	fuse_opt_free_args(args);
 
-	dfuse_send_to_fg(0);
+	if (!dfuse_send_to_fg(0))
+		goto cleanup;
 
 	rc = ll_loop_fn(dfuse_info);
 	fuse_session_unmount(dfuse_info->di_session);

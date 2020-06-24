@@ -201,9 +201,6 @@ struct dfuse_dfs {
 
 /* dfuse_core.c */
 
-void
-dfuse_send_to_fg(int rc);
-
 /* Init a dfs struct and copy essential data */
 void
 dfuse_dfs_init(struct dfuse_dfs *dfs, struct dfuse_dfs *parent);
