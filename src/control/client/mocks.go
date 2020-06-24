@@ -142,10 +142,6 @@ type mgmtCtlNetworkScanDevicesClient struct {
 	grpc.ClientStream
 }
 
-func (m *mgmtCtlNetworkScanDevicesClient) Recv() (*ctlpb.DeviceScanReply, error) {
-	return &ctlpb.DeviceScanReply{}, nil
-}
-
 func (m *mockMgmtCtlClient) NetworkScan(ctx context.Context, in *ctlpb.NetworkScanReq, o ...grpc.CallOption) (*ctlpb.NetworkScanResp, error) {
 	return &ctlpb.NetworkScanResp{}, nil
 }
