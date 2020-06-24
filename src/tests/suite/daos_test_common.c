@@ -832,7 +832,11 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	if (dmg_config != NULL)
 		snprintf(dmg_cmd + strlen(dmg_cmd),
 		DTS_CFG_MAX - strlen(dmg_cmd), " -o %s", dmg_config);
-	dmg_cmd[strlen(dmg_cmd)] = 0;
+
+	if (strlen(dmg_cmd) >= DTS_CFG_MAX)
+		dmg_cmd[DTS_CFG_MAX - 1] = 0;
+	else
+		dmg_cmd[strlen(dmg_cmd)] = 0;
 
 	rc = system(dmg_cmd);
 	print_message("%s rc 0x%x\n", dmg_cmd, rc);
@@ -919,7 +923,11 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	 if (arg->dmg_config != NULL)
 		 snprintf(dmg_cmd + strlen(dmg_cmd),
 		 DTS_CFG_MAX - strlen(dmg_cmd), " -o %s", arg->dmg_config);
-	 dmg_cmd[strlen(dmg_cmd)] = 0;
+
+	if (strlen(dmg_cmd) >= DTS_CFG_MAX)
+		dmg_cmd[DTS_CFG_MAX - 1] = 0;
+	else
+		dmg_cmd[strlen(dmg_cmd)] = 0;
 
 	rc = system(dmg_cmd);
 	print_message(" %s rc 0x%x\n", dmg_cmd, rc);
