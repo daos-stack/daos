@@ -79,7 +79,7 @@ struct evt_desc {
  *   VOS/DTX.
  *
  * - Most part of this function table is about undo log callbacks, we might
- *   want to separate those fuctions to a dedicated function table for undo
+ *   want to separate those functions to a dedicated function table for undo
  *   log in the future. So both evtree & dbtree can share the same definition
  *   of undo log.
  */
@@ -224,14 +224,18 @@ struct evt_node_entry {
 
 /** evtree node: */
 struct evt_node {
-	/** the Minimum Bounding Box (MBR) bounds all its children */
-	struct evt_rect_df		tn_mbr;
+	/** Minimum bounding extent */
+	struct evt_extent		tn_mbr_ex;
+	/** Minimum bounding epoch */
+	daos_epoch_t			tn_mbr_epc;
+	/** Minimum bounding minor epoch */
+	uint16_t			tn_mbr_minor_epc;
 	/** bits to indicate it's a root or leaf */
 	uint16_t			tn_flags;
 	/** number of children or leaf records */
 	uint16_t			tn_nr;
 	/** Magic number for validation */
-	uint32_t			tn_magic;
+	uint16_t			tn_magic;
 	/** The entries in the node */
 	struct evt_node_entry		tn_rec[0];
 };
@@ -514,18 +518,18 @@ int evt_destroy(daos_handle_t toh);
 
 /**
  * This function drains rectangles from the tree, each time it deletes a
- * rectangle, it consumes a @credits, which is input paramter of this function.
+ * rectangle, it consumes a @credits, which is input parameter of this function.
  * It returns if all input credits are consumed or the tree is empty, in the
  * later case, it also destroys the evtree.
  *
  * \param toh		[IN]	 Tree open handle.
- * \param credis	[IN/OUT] Input and returned drain credits
+ * \param credits	[IN/OUT] Input and returned drain credits
  * \param destroyed	[OUT]	 Tree is empty and destroyed
  */
 int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
 
 /**
- * Insert a new extented version \a rect and its data memory ID \a addr to
+ * Insert a new extended version \a rect and its data memory ID \a addr to
  * a opened tree.
  *
  * \param toh		[IN]	The tree open handle
@@ -604,7 +608,7 @@ enum {
 };
 
 /**
- * Initialise an iterator.
+ * Initialize an iterator.
  *
  * \param toh		[IN]	Tree open handle
  * \param options	[IN]	Options for the iterator.

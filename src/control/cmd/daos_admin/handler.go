@@ -26,7 +26,6 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -35,16 +34,6 @@ import (
 
 func getNilRequestResp() *pbin.Response {
 	return pbin.NewResponseWithError(errors.New("nil request"))
-}
-
-// pingHandler implements the Ping method.
-type pingHandler struct{}
-
-func (h *pingHandler) Handle(_ logging.Logger, req *pbin.Request) *pbin.Response {
-	if req == nil {
-		return getNilRequestResp()
-	}
-	return pbin.NewResponseWithPayload(&pbin.PingResp{Version: build.DaosVersion})
 }
 
 // scmHandler provides the ability to set up the scm.Provider for SCM method handlers.

@@ -303,11 +303,15 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	rc = obj_reply_get_status(rw_args->rpc);
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS) {
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
-				""DF_RC"\n", rw_args->rpc, opc, DP_RC(rc));
+			D_DEBUG(DB_TRACE, "rpc %p opc %d to rank %d tag %d may "
+				"need retry: "DF_RC"\n", rw_args->rpc, opc,
+				rw_args->rpc->cr_ep.ep_rank,
+				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		} else {
-			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
-				rw_args->rpc, opc, DP_RC(rc));
+			D_ERROR("rpc %p opc %d to rank %d tag %d failed: "
+				DF_RC"\n", rw_args->rpc, opc,
+				rw_args->rpc->cr_ep.ep_rank,
+				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 			if (rc == -DER_REC2BIG && opc == DAOS_OBJ_RPC_FETCH) {
 				/* update the sizes in iods */
 				iods = orw->orw_iod_array.oia_iods;
@@ -331,6 +335,15 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		}
 
 		bool	is_ec_obj = false;
+
+		rc = obj_ec_recov_add(rw_args->shard_args->reasb_req,
+				      orwo->orw_rels.ca_arrays,
+				      orwo->orw_rels.ca_count);
+		if (rc) {
+			D_ERROR("fail to add recov list for "DF_UOID",rc %d.\n",
+				DP_UOID(orw->orw_oid), rc);
+			goto out;
+		}
 
 		iods = orw->orw_iod_array.oia_iods;
 		sizes = orwo->orw_iod_sizes.ca_arrays;
@@ -445,6 +458,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		uint32_t fw_cnt, tse_task_t *task)
 {
 	struct shard_rw_args	*args = shard_args;
+	struct shard_auxi_args	*auxi = &args->auxi;
 	daos_obj_rw_t		*api_args = args->api_args;
 	struct dc_pool		*pool;
 	daos_key_t		*dkey = api_args->dkey;
@@ -463,9 +477,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	obj_shard_addref(shard);
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE)) {
-		if (args->auxi.shard == daos_fail_value_get()) {
+		if (auxi->shard == daos_fail_value_get()) {
 			D_INFO("Set Shard %d update to return -DER_TIMEDOUT\n",
-			       args->auxi.shard);
+			       auxi->shard);
 			daos_fail_loc_set(DAOS_SHARD_OBJ_UPDATE_TIMEOUT |
 					  DAOS_FAIL_ONCE);
 		}
@@ -473,15 +487,18 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
 		if (srv_io_mode == DIM_CLIENT_DISPATCH) {
 			/* to trigger retry on all other shards */
-			if (args->auxi.shard != daos_fail_value_get()) {
+			if (auxi->shard != daos_fail_value_get()) {
 				D_INFO("complete shard %d update as "
-				       "-DER_TIMEDOUT.\n", args->auxi.shard);
+				       "-DER_TIMEDOUT.\n", auxi->shard);
 				D_GOTO(out_obj, rc = -DER_TIMEDOUT);
 			}
 		} else {
 			flags = ORF_DTX_SYNC;
 		}
 	}
+
+	if (auxi->epoch.oe_uncertain)
+		flags |= ORF_EPOCH_UNCERTAIN;
 
 	rc = dc_cont_hdl2uuid(shard->do_co_hdl, &cont_hdl_uuid, &cont_uuid);
 	if (rc != 0)
@@ -501,7 +518,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" %d %s rank:%d tag:%d eph "
 		DF_U64"\n", req, opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
 		(char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag,
-		args->auxi.epoch);
+		auxi->epoch.oe_value);
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 
@@ -519,19 +536,24 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		orw->orw_shard_tgts.ca_count = 0;
 		orw->orw_shard_tgts.ca_arrays = NULL;
 	}
-	orw->orw_map_ver = args->auxi.map_ver;
-	orw->orw_start_shard = args->auxi.start_shard;
+	orw->orw_map_ver = auxi->map_ver;
+	orw->orw_start_shard = auxi->start_shard;
 	orw->orw_oid = shard->do_id;
 	uuid_copy(orw->orw_pool_uuid, pool->dp_pool);
 	uuid_copy(orw->orw_co_hdl, cont_hdl_uuid);
 	uuid_copy(orw->orw_co_uuid, cont_uuid);
 	daos_dti_copy(&orw->orw_dti, &args->dti);
-	orw->orw_flags = args->auxi.flags | flags;
+	orw->orw_flags = auxi->flags | flags;
+	if (obj_op_is_ec_fetch(auxi->obj_auxi) &&
+	    (auxi->shard != (auxi->start_shard + auxi->ec_tgt_idx))) {
+		orw->orw_flags |= ORF_EC_DEGRADED;
+		orw->orw_tgt_idx = auxi->ec_tgt_idx;
+	}
 	orw->orw_dti_cos.ca_count = 0;
 	orw->orw_dti_cos.ca_arrays = NULL;
 
 	orw->orw_api_flags = api_args->flags;
-	orw->orw_epoch = args->auxi.epoch;
+	orw->orw_epoch = auxi->epoch.oe_value;
 	orw->orw_dkey_hash = args->dkey_hash;
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;
@@ -547,7 +569,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI"\n", opc, DP_UOID(shard->do_id),
 		(int)dkey->iov_len, (char *)dkey->iov_buf, tgt_ep.ep_rank,
-		tgt_ep.ep_tag, args->auxi.epoch, DP_DTI(&orw->orw_dti));
+		tgt_ep.ep_tag, auxi->epoch.oe_value, DP_DTI(&orw->orw_dti));
 
 	if (args->bulks != NULL) {
 		orw->orw_sgls.ca_count = 0;
@@ -570,7 +592,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	crt_req_addref(req);
 	rw_args.rpc = req;
 	rw_args.hdlp = (daos_handle_t *)pool;
-	rw_args.map_ver = &args->auxi.map_ver;
+	rw_args.map_ver = &auxi->map_ver;
 	rw_args.dobj = shard;
 	rw_args.shard_args = args;
 	/* remember the sgl to copyout the data inline for fetch */
@@ -664,7 +686,8 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
 	D_DEBUG(DB_IO, "opc=%d, rank=%d tag=%d epoch "DF_U64".\n",
-		 opc, tgt_ep.ep_rank, tgt_ep.ep_tag, args->pa_auxi.epoch);
+		 opc, tgt_ep.ep_rank, tgt_ep.ep_tag,
+		 args->pa_auxi.epoch.oe_value);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)
@@ -683,7 +706,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	opi->opi_map_ver	 = args->pa_auxi.map_ver;
 	opi->opi_api_flags	 = obj_args->flags;
-	opi->opi_epoch		 = args->pa_auxi.epoch;
+	opi->opi_epoch		 = args->pa_auxi.epoch.oe_value;
 	opi->opi_dkey_hash	 = args->pa_dkey_hash;
 	opi->opi_oid		 = oid;
 	opi->opi_dkeys.ca_count  = (dkey == NULL) ? 0 : 1;
@@ -703,6 +726,8 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(opi->opi_co_uuid, args->pa_cont_uuid);
 	daos_dti_copy(&opi->opi_dti, &args->pa_dti);
 	opi->opi_flags = args->pa_auxi.flags;
+	if (args->pa_auxi.epoch.oe_uncertain)
+		opi->opi_flags |= ORF_EPOCH_UNCERTAIN;
 	opi->opi_dti_cos.ca_count = 0;
 	opi->opi_dti_cos.ca_arrays = NULL;
 
@@ -973,7 +998,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_epr = *obj_args->eprs;
 	} else {
 		oei->oei_epr.epr_lo = 0;
-		oei->oei_epr.epr_hi = args->la_auxi.epoch;
+		oei->oei_epr.epr_hi = args->la_auxi.epoch.oe_value;
 	}
 
 	oei->oei_nr		= *obj_args->nr;
@@ -1376,7 +1401,7 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(osi->osi_pool_uuid, pool->dp_pool);
 	uuid_copy(osi->osi_co_uuid, cont_uuid);
 	osi->osi_oid		= shard->do_id;
-	osi->osi_epoch		= args->sa_auxi.epoch;
+	osi->osi_epoch		= args->sa_auxi.epoch.oe_value;
 	osi->osi_map_ver	= args->sa_auxi.map_ver;
 
 	rc = daos_rpc_send(req, task);

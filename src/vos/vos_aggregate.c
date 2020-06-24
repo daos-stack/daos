@@ -133,7 +133,7 @@ struct agg_merge_window {
 	struct agg_lgc_ent		*mw_lgc_ents;
 	unsigned int			 mw_lgc_max;
 	unsigned int			 mw_lgc_cnt;
-	/* I/O context for transfering data on flush */
+	/* I/O context for transferring data on flush */
 	struct agg_io_context		 mw_io_ctxt;
 	bool				 mw_csum_support;
 };
@@ -147,6 +147,8 @@ struct vos_agg_param {
 	daos_key_t		ap_akey;	/* current akey */
 	unsigned int		ap_discard:1;
 	struct umem_instance	*ap_umm;
+	bool			(*ap_yield_func)(void *arg);
+	void			*ap_yield_arg;
 	/* SV tree: Max epoch in specified iterate epoch range */
 	daos_epoch_t		 ap_max_epoch;
 	/* EV tree: Merge window for evtree aggregation */
@@ -951,7 +953,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	if (added_csum_segs) {
 		/* Additional data requird to verify checksums is read
 		 * into end of read buffer. This allows the write data
-		 * to be placed as a single contiguous range at begining
+		 * to be placed as a single contiguous range at beginning
 		 * of the buffer.
 		 */
 		rc = csum_append_added_segs(&bsgl, added_csum_segs);
@@ -1107,7 +1109,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr)) {
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
-			 * physical entry, in additon to re-assigning address.
+			 * physical entry, in addition to re-assigning address.
 			 */
 			phy_ent->pe_csum_info = ent_in->ei_csum;
 		}
@@ -1727,6 +1729,16 @@ out:
 	return rc;
 }
 
+static inline bool
+vos_aggregate_yield(struct vos_agg_param *agg_param)
+{
+	if (agg_param->ap_yield_func != NULL)
+		return agg_param->ap_yield_func(agg_param->ap_yield_arg);
+
+	bio_yield();
+	return false;
+}
+
 static int
 vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		     vos_iter_type_t type, vos_iter_param_t *param,
@@ -1768,11 +1780,6 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	if (cont->vc_abort_aggregation) {
-		D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
-		return 1;
-	}
-
 	agg_param->ap_credits++;
 
 	if (agg_param->ap_credits > agg_param->ap_credits_max ||
@@ -1786,7 +1793,10 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		 * see the comment in vos_agg_obj().
 		 */
 		reset_agg_pos(type, agg_param);
-		bio_yield();
+		if (vos_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
+			return 1;
+		}
 	}
 
 	return 0;
@@ -1881,7 +1891,6 @@ aggregate_enter(struct vos_container *cont, bool discard,
 		cont->vc_epr_aggregation = *epr;
 	}
 
-	cont->vc_abort_aggregation = 0;
 	return 0;
 }
 
@@ -1913,7 +1922,9 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 }
 
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
+	      void (*csum_func)(void *),
+	      bool (*yield_func)(void *arg), void *yield_arg)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	vos_iter_param_t	 iter_param = { 0 };
@@ -1949,7 +1960,9 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
 	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = false;
-	merge_window_init(&agg_param.ap_window, func);
+	agg_param.ap_yield_func = yield_func;
+	agg_param.ap_yield_arg = yield_arg;
+	merge_window_init(&agg_param.ap_window, csum_func);
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
@@ -1979,7 +1992,8 @@ exit:
 }
 
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
+vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+	    bool (*yield_func)(void *arg), void *yield_arg)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	vos_iter_param_t	 iter_param = { 0 };
@@ -2018,6 +2032,8 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
 	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = true;
+	agg_param.ap_yield_func = yield_func;
+	agg_param.ap_yield_arg = yield_arg;
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,

@@ -289,7 +289,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 
 	pool_df = vos_pool_pop2df(ph);
 
-	/* If the file is fallocated seperately we need the fallocated size
+	/* If the file is fallocated separately we need the fallocated size
 	 * for setting in the root object.
 	 */
 	if (!scm_sz) {
@@ -772,6 +772,23 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	if (rc)
 		D_ERROR("Query pool "DF_UUID" failed. "DF_RC"\n",
 			DP_UUID(pool->vp_id), DP_RC(rc));
+	return rc;
+}
+
+int
+vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
+{
+	struct vos_pool	*pool;
+	struct d_uuid	 ukey;
+	int		 rc;
+
+	uuid_copy(ukey.uuid, pool_id);
+	rc = pool_lookup(&ukey, &pool);
+	if (rc)
+		return rc;
+
+	rc = vos_space_query(pool, vps, false);
+	vos_pool_decref(pool);
 	return rc;
 }
 

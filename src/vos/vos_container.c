@@ -120,6 +120,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	rec->rec_off = offset;
 	return 0;
 failed:
+	/* Ignore umem_free failure. */
 	umem_free(&tins->ti_umm, offset);
 	return rc;
 }
@@ -302,7 +303,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 
 	rc = cont_df_lookup(vpool, &ukey, &args);
 	if (!rc) {
-		/* Check if attemt to reuse the same container uuid */
+		/* Check if attempt to reuse the same container uuid */
 		D_ERROR("Container already exists\n");
 		D_GOTO(exit, rc = -DER_EXIST);
 	}
@@ -532,9 +533,6 @@ vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc)
 	}
 
 	switch (opc) {
-	case VOS_CO_CTL_ABORT_AGG:
-		cont->vc_abort_aggregation = 1;
-		break;
 	default:
 		return -DER_NOSYS;
 	}

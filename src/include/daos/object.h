@@ -151,7 +151,7 @@ struct daos_obj_md {
 	};
 };
 
-/** object shard metadata stored in each contianer shard */
+/** object shard metadata stored in each container shard */
 struct daos_obj_shard_md {
 	/** ID of the object shard */
 	daos_unit_oid_t		smd_id;
@@ -169,19 +169,25 @@ struct daos_obj_shard {
 };
 
 struct daos_obj_layout {
-	uint32_t	ol_ver;
-	uint32_t	ol_class;
-	uint32_t	ol_nr;
+	uint32_t		 ol_ver;
+	uint32_t		 ol_class;
+	uint32_t		 ol_nr;
 	struct daos_obj_shard	*ol_shards[0];
 };
 
-#define TGTS_IGNORE		((d_rank_t)-1)
+/**
+ * can be used as st_rank to indicate target can be ignored for IO, for example
+ * update DAOS_OBJ_REPL_MAX obj with some target failed case.
+ */
+#define DAOS_TGT_IGNORE		((d_rank_t)-1)
 /** to identify each obj shard's target */
 struct daos_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
 	uint32_t		st_shard;	/* shard index */
-	uint32_t		st_tgt_idx;	/* target xstream index */
 	uint32_t		st_tgt_id;	/* target id */
+	uint16_t		st_tgt_idx;	/* target xstream index */
+	/* target idx for EC obj, only used for client */
+	uint16_t		st_ec_tgt;
 };
 
 static inline bool
@@ -381,6 +387,8 @@ enum daos_io_flags {
 	DIOF_TO_SPEC_SHARD	= 0x2,
 	/* The operation (enumeration) has specified epoch. */
 	DIOF_WITH_SPEC_EPOCH	= 0x4,
+	/* The operation is for EC recovering. */
+	DIOF_EC_RECOV		= 0x8,
 };
 
 /**
@@ -406,5 +414,118 @@ struct obj_enum_rec {
 	uint32_t		rec_version;
 	uint32_t		rec_flags;
 };
+
+enum daos_recx_type {
+	/** normal valid recx */
+	DRT_NORMAL	= 0,
+	/** hole recx */
+	DRT_HOLE	= 1,
+	/**
+	 * shadow valid recx, only used for EC degraded fetch to indicate
+	 * recx on shadow, i.e need-to-be-recovered recx.
+	 */
+	DRT_SHADOW	= 2,
+};
+
+struct daos_recx_ep {
+	daos_recx_t	re_recx;
+	daos_epoch_t	re_ep;
+	uint8_t		re_type;
+};
+
+struct daos_recx_ep_list {
+	/** #valid items in re_items array */
+	uint32_t		 re_nr;
+	/** #total items (capacity) in re_items array */
+	uint32_t		 re_total;
+	/** epoch valid flag, re_items' re_ep can be ignored when it is false */
+	bool			 re_ep_valid;
+	struct daos_recx_ep	*re_items;
+};
+
+static inline void
+daos_recx_ep_free(struct daos_recx_ep_list *list)
+{
+	if (list->re_items != NULL)
+		D_FREE(list->re_items);
+	list->re_nr = 0;
+	list->re_total = 0;
+}
+
+static inline void
+daos_recx_ep_list_free(struct daos_recx_ep_list *list, unsigned int nr)
+{
+	unsigned int	i;
+
+	if (list == NULL)
+		return;
+
+	for (i = 0; i < nr; i++)
+		daos_recx_ep_free(&list[i]);
+	D_FREE(list);
+}
+
+static inline int
+daos_recx_ep_add(struct daos_recx_ep_list *list, struct daos_recx_ep *recx)
+{
+	struct daos_recx_ep	*new_items;
+	uint32_t		 nr;
+
+	if (list->re_total == list->re_nr) {
+		nr = (list->re_total == 0) ? 8 : (2 * list->re_total);
+		if (list->re_total == 0)
+			D_ALLOC_ARRAY(new_items, nr);
+		else
+			D_REALLOC_ARRAY(new_items, list->re_items, nr);
+		if (new_items == NULL)
+			return -DER_NOMEM;
+		list->re_items = new_items;
+		list->re_total = nr;
+	}
+
+	D_ASSERT(list->re_total > list->re_nr);
+	list->re_items[list->re_nr++] = *recx;
+	return 0;
+}
+
+static inline void
+daos_recx_ep_list_set_ep_valid(struct daos_recx_ep_list *lists, unsigned int nr)
+{
+	unsigned int i;
+
+	for (i = 0; i < nr; i++)
+		lists[i].re_ep_valid = 1;
+}
+
+static inline bool
+daos_recx_ep_list_ep_valid(struct daos_recx_ep_list *list)
+{
+	return (list->re_ep_valid == 1);
+}
+
+static inline void
+daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
+{
+	struct daos_recx_ep_list	*list;
+	struct daos_recx_ep		*recx_ep;
+	unsigned int			 i, j;
+
+	if (lists == NULL || nr == 0) {
+		D_PRINT("empty daos_recx_ep_list.\n");
+		return;
+	}
+	for (i = 0; i < nr; i++) {
+		list = &lists[i];
+		D_PRINT("daos_recx_ep_list[%d], nr %d,total %d,ep_valid %d:\n",
+			i, list->re_nr, list->re_total, list->re_ep_valid);
+		for (j = 0; j < list->re_nr; j++) {
+			recx_ep = &list->re_items[j];
+			D_PRINT("[["DF_U64","DF_U64"], "DF_X64"]  ",
+				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
+				recx_ep->re_ep);
+		}
+		D_PRINT("\n");
+	}
+}
 
 #endif /* __DD_OBJ_H__ */

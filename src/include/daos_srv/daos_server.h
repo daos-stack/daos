@@ -247,9 +247,114 @@ struct dss_drpc_handler {
 	drpc_handler_t	handler;	/** dRPC handler for the module */
 };
 
+enum {
+	SCHED_REQ_IO	= 0,
+	SCHED_REQ_GC,
+	SCHED_REQ_MIGRATE,
+	SCHED_REQ_MAX,
+};
+
+struct sched_req_attr {
+	uuid_t		sra_pool_id;
+	uint32_t	sra_type;
+};
+
+static inline void
+sched_req_attr_init(struct sched_req_attr *attr, unsigned int type,
+		    uuid_t *pool_id)
+{
+	attr->sra_type = type;
+	uuid_copy(attr->sra_pool_id, *pool_id);
+}
+
+struct sched_request;	/* Opaque schedule request */
+
+/**
+ * Get A sched request.
+ *
+ * \param[in] attr	Sched request attributes.
+ * \param[in] ult	ULT attached to the sched request,
+ *			self ULT will be used when ult == ABT_THREAD_NULL.
+ *
+ * \retval		Sched request.
+ */
+struct sched_request *
+sched_req_get(struct sched_req_attr *attr, ABT_thread ult);
+
+/**
+ * Put A sched request.
+ *
+ * \param[in] req	Sched request.
+ *
+ * \retval		N/A
+ */
+void sched_req_put(struct sched_request *req);
+
+/**
+ * Suspend (or yield) a sched request attached ULT.
+ *
+ * \param[in] req	Sched request.
+ *
+ * \retval		N/A
+ */
+void sched_req_yield(struct sched_request *req);
+
+/**
+ * Put a sched request attached ULT to sleep for few msecs.
+ *
+ * \param[in] req	Sched request.
+ * \param[in] msec	Milli seconds.
+ *
+ * \retval		N/A
+ */
+void sched_req_sleep(struct sched_request *req, uint32_t msec);
+
+/**
+ * Wakeup a sched request attached ULT.
+ *
+ * \param[in] req	Sched request.
+ *
+ * \retval		N/A
+ */
+void sched_req_wakeup(struct sched_request *req);
+
+/**
+ * Wakeup a sched request attached ULT terminated.
+ *
+ * \param[in] req	Sched request.
+ * \param[in] abort	Abort the ULT or not.
+ *
+ * \retval		N/A
+ */
+void sched_req_wait(struct sched_request *req, bool abort);
+
+/**
+ * Check if a sched request is set as aborted.
+ *
+ * \param[in] req	Sched request.
+ *
+ * \retval		True for aborted, False otherwise.
+ */
+bool sched_req_is_aborted(struct sched_request *req);
+
+enum {
+	SCHED_SPACE_PRESS_NONE	= 0,
+	SCHED_SPACE_PRESS_LIGHT,
+	SCHED_SPACE_PRESS_SEVERE,
+};
+
+/**
+ * Check space pressure of the pool of current sched request.
+ *
+ * \param[in] req	Sched request.
+ *
+ * \retval		None, light or severe.
+ */
+int sched_req_space_check(struct sched_request *req);
+
 struct dss_module_ops {
-	/* The callback for each module will choose ABT pool to handle RPC */
-	ABT_pool (*dms_abt_pool_choose_cb)(crt_rpc_t *rpc, ABT_pool *pools);
+	/* Get schedule request attributes from RPC */
+	int (*dms_get_req_attr)(crt_rpc_t *rpc, struct sched_req_attr *attr);
 
 	/* Each module to start/stop the profiling */
 	int	(*dms_profile_start)(char *path, int avg);
@@ -504,7 +609,7 @@ enum {
 struct dss_acc_task {
 	/**
 	 * Type of offload for this operation
-	 * \param at_offload_type	[IN] type of accelaration
+	 * \param at_offload_type	[IN] type of acceleration
 	 */
 	int		at_offload_type;
 	/**
@@ -525,7 +630,7 @@ struct dss_acc_task {
 };
 
 /**
- * Generic offload call abstraction for accelaration with both
+ * Generic offload call abstraction for acceleration with both
  * ULT and FPGA
  */
 int dss_acc_offload(struct dss_acc_task *at_args);

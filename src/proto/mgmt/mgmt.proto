@@ -70,6 +70,8 @@ service MgmtSvc {
 	rpc PoolEvict(PoolEvictReq) returns (PoolEvictResp) {}
 	// Exclude a pool target.
 	rpc PoolExclude(PoolExcludeReq) returns (PoolExcludeResp) {}
+	// Extend a pool.
+	rpc PoolExtend(PoolExtendReq) returns (PoolExtendResp) {}
 	// Reintegrate a pool target.
 	rpc PoolReintegrate(PoolReintegrateReq) returns (PoolReintegrateResp) {}
 	// PoolQuery queries a DAOS pool.
@@ -86,18 +88,10 @@ service MgmtSvc {
 	rpc PoolDeleteACL(DeleteACLReq) returns (ACLResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
-	// Get BIO device health information.
-	rpc BioHealthQuery(BioHealthReq) returns (BioHealthResp) {}
-	// Get SMD device list.
-	rpc SmdListDevs(SmdDevReq) returns (SmdDevResp) {}
-	// Get SMD pool list.
-	rpc SmdListPools(SmdPoolReq) returns (SmdPoolResp) {}
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	rpc ListPools(ListPoolsReq) returns (ListPoolsResp) {}
-	// Get the current state of the device
-	rpc DevStateQuery(DevStateReq) returns (DevStateResp) {}
-	// Set the device state of an NVMe SSD to FAULTY
-	rpc StorageSetFaulty(DevStateReq) returns (DevStateResp) {}
+	// Query the per-server metadata
+	rpc SmdQuery(SmdQueryReq) returns (SmdQueryResp) {}
 	// List all containers in a pool
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
 	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)

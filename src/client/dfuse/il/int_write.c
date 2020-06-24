@@ -27,6 +27,8 @@
 #include "daos.h"
 #include "daos_array.h"
 
+#include "ioil.h"
+
 ssize_t
 ioil_do_writex(const char *buff, size_t len, off_t position,
 	       struct fd_entry *entry, int *errcode)
@@ -37,11 +39,26 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 	d_sg_list_t		sgl = {};
 	int rc;
 
-	DFUSE_TRA_INFO(entry, "%#zx-%#zx ", position, position + len - 1);
+	DFUSE_TRA_INFO(entry, "%#zx-%#zx", position, position + len - 1);
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
+
+
+	if (entry->fd_dfsoh) {
+		rc = dfs_write(entry->fd_dfs,
+			       entry->fd_dfsoh,
+			       &sgl,
+			       position,
+			       NULL);
+		if (rc) {
+			DFUSE_TRA_INFO(entry, "dfs_write() failed: %d",	rc);
+			*errcode = rc;
+			return -1;
+		}
+		return len;
+	}
 
 	iod.arr_nr = 1;
 	rg.rg_len = len;
