@@ -268,10 +268,10 @@ class TestPool(TestDaosApiBase):
         dmg.
 
         Args:
-            prop_name (str, optional): pool property name. Defaults to 
+            prop_name (str, optional): pool property name. Defaults to
                 None.
             prop_value (str, optional): value to be set for the property.
-                Defaults to None. 
+                Defaults to None.
 
         Returns:
             None
