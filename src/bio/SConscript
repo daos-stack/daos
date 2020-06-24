@@ -26,7 +26,8 @@ def scons():
     # Other libs
     libs += ['numa', 'dl', 'smd']
 
-    bio = daos_build.library(denv, "bio", Glob('*.c'), LIBS=libs)
+    bio = daos_build.library(denv, "bio", Glob('*.c'), install_off="../..",
+                             LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', bio)
 
 if __name__ == "SCons.Script":

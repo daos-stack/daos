@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       22%{?relval}%{?dist}
+Release:       24%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -34,8 +34,10 @@ BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
+BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
+BuildRequires: libisal_crypto-devel
 %endif
 BuildRequires: raft-devel >= 0.6.0
 BuildRequires: openssl-devel
@@ -179,7 +181,7 @@ This is the package needed to build software with the DAOS library.
 # remove rpathing from the build
 rpath_files="utils/daos_build.py"
 rpath_files+=" $(find . -name SConscript)"
-sed -i -e '/AppendUnique(RPATH=.*)/d' $rpath_files
+sed -i -e 's/[_a-zA-Z0-9]*\.AppendUnique(RPATH=.*)/pass/' $rpath_files
 
 %define conf_dir %{_sysconfdir}/daos
 
@@ -362,6 +364,13 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Tue Jun 16 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-24
+- Modify RPATH removal snippet to replace line with pass as some lines
+  can't be removed without breaking the code
+
+* Fri Jun 05 2020 Ryon Jensen <ryon.jensen@intel.com> - 1.1.0-23
+- Add libisa-l_crypto dependency
+
 * Fri Jun 05 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-22
 - Change server systemd run-as user to daos_server in unit file
 

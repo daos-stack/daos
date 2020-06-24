@@ -88,7 +88,8 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
  * \param dtis	[IN]	The array for DTX identifiers to be aborted.
  * \param count [IN]	The count of DTXs to be aborted.
  *
- * \return		Zero on success, negative value if error.
+ * \return		Negative value if error.
+ * \return		Others are for the count of aborted DTXs.
  */
 int
 vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
@@ -266,6 +267,19 @@ int
 vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo);
 
 /**
+ * Query pool space by pool UUID
+ *
+ * \param pool_id [IN]	Pool UUID
+ * \param vps     [OUT]	Returned pool space info
+ *
+ * \return		Zero		: success
+ *			-DER_NONEXIST	: pool isn't opened
+ *			-ve		: error
+ */
+int
+vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps);
+
+/**
  * Create a container within a VOSP
  *
  * \param poh	[IN]	Pool open handle
@@ -332,12 +346,16 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  *
  * \param coh	  [IN]		Container open handle
  * \param epr	  [IN]		The epoch range of aggregation
- * \param func	  [IN]		Pointer to csum recalculation function
+ * \param csum_func  [IN]	Pointer to csum recalculation function
+ * \param yield_func [IN]	Pointer to customized yield function
+ * \param yield_arg  [IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *));
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
+	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
+	      void *yield_arg);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -356,11 +374,14 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *));
  * \param coh		[IN]	Container open handle
  * \param epr		[IN]	The epoch range to discard
  *				keys to discard
+ * \param yield_func	[IN]	Pointer to customized yield function
+ * \param yield_arg	[IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
+vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+	    bool (*yield_func)(void *arg), void *yield_arg);
 
 /**
  * VOS object API
@@ -468,6 +489,15 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
 /**
  * I/O APIs
  */
+
+/**
+ * VOS fetch flags
+ * VOS_FETCH_SIZE_ONLY - only query iod_size
+ * VOS_FETCH_RECX_LIST - query recx list
+ */
+#define VOS_FETCH_SIZE_ONLY	(0x1U << 0)
+#define VOS_FETCH_RECX_LIST	(0x1U << 1)
+
 /**
  *
  * Find and return I/O source buffers for the data of the specified
@@ -483,14 +513,19 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
  *			is provided by \a iods.
- * \param flags [IN]	conditional flags
+ * \param cond_flags [IN]
+ *			conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of I/O descriptors in \a ios.
  * \param iods	[IN/OUT]
  *			Array of I/O descriptors. The returned record
  *			sizes are also restored in this parameter.
- * \param size_fetch[IN]
- *			Fetch size only
+ * \param fetch_flags [IN]
+ *			VOS fetch flags, VOS_FETCH_SIZE_ONLY or
+ *			VOS_FETCH_RECX_LIST.
+ * \param shadows [IN]	Optional shadow recx/epoch lists, one for each iod.
+ *			data of extents covered by these should not be returned
+ *			by fetch function. Only used for EC obj degraded fetch.
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
  *
@@ -498,8 +533,9 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  */
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t flags, daos_key_t *dkey, unsigned int nr,
-		daos_iod_t *iods, bool size_fetch, daos_handle_t *ioh,
+		uint64_t cond_flags, daos_key_t *dkey, unsigned int nr,
+		daos_iod_t *iods, uint32_t fetch_flags,
+		struct daos_recx_ep_list *shadows, daos_handle_t *ioh,
 		struct dtx_handle *dth);
 
 /**
@@ -559,6 +595,16 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       struct dtx_handle *dth);
+
+/**
+ * Get the recx/epoch list.
+ *
+ * \param ioh	[IN]	The I/O handle.
+ *
+ * \return		recx/epoch list.
+ */
+struct daos_recx_ep_list *
+vos_ioh2recx_list(daos_handle_t ioh);
 
 /**
  * Get the I/O descriptor.
@@ -869,8 +915,7 @@ int
 vos_gc_pool(daos_handle_t poh, int *credits);
 
 enum vos_cont_opc {
-	/** abort VOS aggregation **/
-	VOS_CO_CTL_ABORT_AGG,
+	VOS_CO_CTL_DUMMY,
 };
 
 /**

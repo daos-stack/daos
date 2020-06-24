@@ -87,6 +87,7 @@ print_usage(int rank)
 	print_message("daos_test -f|--filter TESTS\n");
 	print_message("daos_test -h|--help\n");
 	print_message("daos_test -u|--subtests\n");
+	print_message("daos_test -n|--dmg_config\n");
 	print_message("daos_test --csum_type CSUM_TYPE\n");
 	print_message("daos_test --csum_cs CHUNKSIZE\n");
 	print_message("daos_test --csum_sv\n");
@@ -305,6 +306,7 @@ main(int argc, char **argv)
 						CHECKSUM_ARG_VAL_CHUNKSIZE},
 		{"csum_sv",	no_argument,		NULL,
 						CHECKSUM_ARG_VAL_SERVERVERIFY},
+		{"dmg_config",	required_argument,	NULL,	'n'},
 		{"svcn",	required_argument,	NULL,	's'},
 		{"subtests",	required_argument,	NULL,	'u'},
 		{"exclude",	required_argument,	NULL,	'E'},
@@ -325,7 +327,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizxADKeoROg:s:u:E:f:Fw:W:hrNv",
+				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNv",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
@@ -337,6 +339,9 @@ main(int argc, char **argv)
 			break;
 		case 'g':
 			server_group = optarg;
+			break;
+		case 'n':
+			dmg_config_file = optarg;
 			break;
 		case 'h':
 			print_usage(rank);
@@ -372,7 +377,7 @@ main(int argc, char **argv)
 			if (test_io_dir == NULL)
 				return -1;
 		case CHECKSUM_ARG_VAL_TYPE:
-			dt_csum_type = atoi(optarg);
+			dt_csum_type = daos_checksum_test_arg2type(optarg);
 			break;
 		case CHECKSUM_ARG_VAL_CHUNKSIZE:
 			dt_csum_chunksize = atoi(optarg);

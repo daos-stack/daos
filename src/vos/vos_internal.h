@@ -224,7 +224,6 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_abort_aggregation:1,
 				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
 };
@@ -237,7 +236,9 @@ struct vos_dtx_act_ent {
 	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
-	unsigned int			 dae_committable:1;
+	unsigned int			 dae_committable:1,
+					 dae_committed:1,
+					 dae_aborted:1;
 };
 
 extern struct vos_tls	*standalone_tls;
@@ -280,6 +281,11 @@ do {						\
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_VER(dae)		((dae)->dae_base.dae_ver)
 #define DAE_REC_OFF(dae)	((dae)->dae_base.dae_rec_off)
+#define DAE_TGT_CNT(dae)	((dae)->dae_base.dae_tgt_cnt)
+#define DAE_GRP_CNT(dae)	((dae)->dae_base.dae_grp_cnt)
+#define DAE_MBS_DSIZE(dae)	((dae)->dae_base.dae_mbs_dsize)
+#define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
+#define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
 	/* Link into vos_conter::vc_dtx_committed_list */
@@ -371,8 +377,10 @@ vos_obj_tab_register();
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param cont_df	[IN]	Pointer to the on-disk VOS container.
+ *
+ * \return		0 on success and negative on failure.
  */
-void
+int
 vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
 
 /**
@@ -462,7 +470,11 @@ vos_dtx_prepared(struct dtx_handle *dth);
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int counti, daos_epoch_t epoch,
-			struct dtx_cos_key *dcks);
+			struct dtx_cos_key *dcks,
+			struct vos_dtx_act_ent **daes);
+void
+vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
+		    int count, bool abort);
 
 /**
  * Establish indexed active DTX table in DRAM.
@@ -1086,9 +1098,9 @@ vos_space_sys_set(struct vos_pool *pool, daos_size_t *space_sys);
 int
 vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow);
 int
-vos_space_hold(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-	       daos_size_t *space_hld);
+vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods,
+	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
 
