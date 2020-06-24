@@ -22,8 +22,9 @@ import time
 
 from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
+from test_utils_pool import check_aggregation
 from pydaos.raw import DaosSnapshot
-
+from server_utils_params import DaosServerYamlParameters
 
 class IoAggregation(IorTestBase):
     """Test class Description: DAOS server does not need to be restarted
@@ -35,6 +36,7 @@ class IoAggregation(IorTestBase):
         """Set up test before executing"""
         super(IoAggregation, self).setUp()
         self.dmg = self.get_dmg_command()
+        self.server_params = None
 
     def display_free_space(self):
         """ Display pool free space """
@@ -55,6 +57,7 @@ class IoAggregation(IorTestBase):
             application crashes.
         :avocado: tags=all,daosio,hw,medium,ib2,full_regression,ioaggregation
         """
+        aggregating_finished_count = 1
         # obtain ior write flags
         self.ior_cmd.signatute.update("123")
         # run ior and crash it during write process
@@ -94,8 +97,29 @@ class IoAggregation(IorTestBase):
             self.fail("One or more servers crashed")
 
         # check if aggregation finished
-        time.sleep(30)
-        free_space_after_aggregation = self.display_free_space()
+#        time.sleep(30)
+#        free_space_after_aggregation = self.display_free_space()
+
+        print("###Server Log File###: {}".format(self.log_dir + "/" + self.server_log))
+        line_num = check_aggregation(self.log_dir + "/" + self.server_log, "start MS", 2)[0]
+        print("###Line Number from Test class: {}".format(line_num))
+        if (check_aggregation(self.log_dir + "/" + self.server_log, "Aggregating finished", aggregating_finished_count, from_line=line_num))[1] and free_space_after_another_ior_write > self.display_free_space():
+            print("###Inside 1st if statement")
+            pass
+        else:
+            time.sleep(60)
+            aggregating_finished_count += 1
+            if (check_aggregation(self.log_dir + "/" + self.server_log, "Aggregating finished", aggregating_finished_count, from_line=line_num))[1] and free_space_after_another_ior_write > self.display_free_space():
+                print("###Inside else and if condition")
+                pass
+            else:
+                self.log.info("free_space_after_another_ior_write: %s", free_space_after_another_ior_write)
+                self.log.info("Final Free space: %s", self.display_free_space())
+                self.fail("Aggregation not completing as expected")
+            
+#        print(check_aggregation(self.log_dir + "/" + self.server_log, "Aggregating finished", 1, from_line=line_num))
+#        if check_aggregation(self.log_dir + "/" + self.server_log, "Aggregating", 2)[1]:
+#            print("")
 
 #        if free_space_before_snap != free_space_after_aggregation:
 #            self.fail("Aggregation is not returning the space properly")
