@@ -110,14 +110,6 @@ nvme_wipe_first_ns(char *ctrlr_pci_addr)
 		return ret;
 	}
 
-	if (spdk_nvme_ctrlr_get_next_active_ns(sequence.ctrlr, ns_id) != 0) {
-		/* unexpected, don't wipe */
-		snprintf(ret->err, sizeof(ret->err),
-			"expected a single active namespace, got multiple");
-		ret->rc = -NVMEC_ERR_MULTIPLE_ACTIVE_NS;
-		return ret;
-	}
-
 	sequence.ns = spdk_nvme_ctrlr_get_ns(sequence.ctrlr, ns_id);
 	if (!sequence.ns) {
 		snprintf(ret->err, sizeof(ret->err), "null ns");
