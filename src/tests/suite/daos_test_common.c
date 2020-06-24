@@ -918,11 +918,11 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
 	/* build and invoke dmg cmd to stop the server */
-	 snprintf(dmg_cmd, DTS_CFG_MAX, "dmg system stop -i -r %d --force",
-		  rank);
-	 if (arg->dmg_config != NULL)
-		 snprintf(dmg_cmd + strlen(dmg_cmd),
-		 DTS_CFG_MAX - strlen(dmg_cmd), " -o %s", arg->dmg_config);
+	snprintf(dmg_cmd, DTS_CFG_MAX, "dmg system stop -i -r %d --force",
+		 rank);
+	if (arg->dmg_config != NULL)
+		snprintf(dmg_cmd + strlen(dmg_cmd),
+		DTS_CFG_MAX - strlen(dmg_cmd), " -o %s", arg->dmg_config);
 
 	if (strlen(dmg_cmd) >= DTS_CFG_MAX)
 		dmg_cmd[DTS_CFG_MAX - 1] = 0;
