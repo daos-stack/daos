@@ -266,9 +266,8 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((daos_unit_oid_t)	(okqi_oid)		CRT_VAR) \
 	((uint64_t)		(okqi_epoch)		CRT_VAR) \
 	((uint32_t)		(okqi_map_ver)		CRT_VAR) \
-	((uint32_t)		(okqi_api_flags)	CRT_VAR) \
 	((uint32_t)		(okqi_flags)		CRT_VAR) \
-	((uint32_t)		(okqi_padding)		CRT_VAR) \
+	((uint64_t)		(okqi_api_flags)	CRT_VAR) \
 	((daos_key_t)		(okqi_dkey)		CRT_VAR) \
 	((daos_key_t)		(okqi_akey)		CRT_VAR) \
 	((daos_recx_t)		(okqi_recx)		CRT_VAR)
