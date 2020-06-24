@@ -237,7 +237,7 @@ unixcomm_connect(char *sockaddr, int flags, struct unixcomm **newcommp)
 		D_ERROR("Failed to connect to %s, errno=%d(%s)\n",
 			address.sun_path, errno, strerror(errno));
 		unixcomm_close(handle);
-		return ret;
+		return -DER_MISC;
 	}
 
 	*newcommp = handle;
