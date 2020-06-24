@@ -25,6 +25,7 @@ from __future__ import print_function
 
 import re
 import uuid
+import time
 from enum import IntEnum
 
 from command_utils_base import CommandFailure, FormattedParameter
@@ -136,6 +137,11 @@ class IorCommand(ExecutableCommand):
 
         # A list of environment variable names to set and export with ior
         self._env_names = ["D_LOG_FILE"]
+
+        # Attributes used to determine command success when run as a subprocess
+        # See self.check_ior_subprocess_status() for details.
+        self.pattern = None
+        self.pattern_count = 1
 
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
@@ -324,6 +330,68 @@ class IorCommand(ExecutableCommand):
             logger.info(m)
         logger.info("\n")
 
+
+    def check_ior_subprocess_status(self, sub_process, command,
+                                    pattern_timeout=10):
+        """Verify the status of the command started as a subprocess.
+
+        Continually search the subprocess output for a pattern (self.pattern)
+        until the expected number of patterns (self.pattern_count) have been
+        found (typically one per host) or the timeout (pattern_timeout)
+        is reached or the process has stopped.
+
+        Args:
+            sub_process (process.SubProcess): subprocess used to run the command
+            command (str): ior command being looked for
+            pattern_timeout: (int): check pattern until this timeout limit is
+                                    reached.
+        Returns:
+            bool: whether or not the command progress has been detected
+
+        """
+        complete = True
+        self.log.info(
+            "Checking status of the %s command in %s with a %s second timeout",
+            command, sub_process, pattern_timeout)
+
+        if self.pattern is not None:
+            detected = 0
+            complete = False
+            timed_out = False
+            start = time.time()
+
+            # Search for patterns in the subprocess output until:
+            #   - the expected number of pattern matches are detected (success)
+            #   - the time out is reached (failure)
+            #   - the subprocess is no longer running (failure)
+            while not complete and not timed_out and sub_process.poll() is None:
+                output = sub_process.get_stdout()
+                detected = len(re.findall(self.pattern, output))
+                complete = detected == self.pattern_count
+                timed_out = time.time() - start > pattern_timeout
+
+            # Summarize results
+            msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
+                detected, self.pattern_count, self.pattern,
+                time.time() - start, pattern_timeout)
+
+            if not complete:
+                # Report the error / timeout
+                self.log.info(
+                    "%s detected - %s:\n%s",
+                    "Time out" if timed_out else "Error",
+                    msg,
+                    sub_process.get_stdout())
+
+                # Stop the timed out process
+                if timed_out:
+                    self.stop()
+            else:
+                # Report the successful start
+                self.log.info(
+                    "%s subprocess startup detected - %s", command, msg)
+
+        return complete
 
 class IorMetrics(IntEnum):
     """Index Name and Number of each column in IOR result summary."""

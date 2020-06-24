@@ -223,6 +223,23 @@ class ExecutableCommand(CommandWithParameters):
             self.log.info("%s stopped successfully", self.command)
             self._process = None
 
+    def wait(self):
+        """Wait for the sub process to complete.
+
+        Returns:
+            int: return code of process
+
+        """
+        retcode = 0
+        if self._process is not None:
+            try:
+                retcode = self._process.wait()
+            except OSError as error:
+                self.log.error("Error while waiting %s", error)
+                retcode = 255
+
+        return retcode
+
     def get_subprocess_state(self, message=None):
         """Display the state of the subprocess.
 
