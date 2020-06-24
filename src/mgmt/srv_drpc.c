@@ -1730,16 +1730,17 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->error_count = bds.bds_error_count;
 	resp->temperature = bds.bds_temperature;
 	resp->media_errors = bds.bds_media_errors[0];
-	resp->read_errs = bds.bds_bio_read_errs;
-	resp->write_errs = bds.bds_bio_write_errs;
-	resp->unmap_errs = bds.bds_bio_unmap_errs;
-	resp->checksum_errs = bds.bds_checksum_errs;
-	resp->temp = bds.bds_temp_warning ? true : false;
-	resp->spare = bds.bds_avail_spare_warning ? true : false;
-	resp->readonly = bds.bds_read_only_warning ? true : false;
-	resp->device_reliability = bds.bds_dev_reliabilty_warning ?
+	resp->read_errors = bds.bds_bio_read_errs;
+	resp->write_errors = bds.bds_bio_write_errs;
+	resp->unmap_errors = bds.bds_bio_unmap_errs;
+	resp->checksum_errors = bds.bds_checksum_errs;
+	resp->temp_warn = bds.bds_temp_warning ? true : false;
+	resp->spare_warn = bds.bds_avail_spare_warning ? true : false;
+	resp->readonly_warn = bds.bds_read_only_warning ? true : false;
+	resp->device_reliability_warn = bds.bds_dev_reliabilty_warning ?
 					true : false;
-	resp->volatile_memory = bds.bds_volatile_mem_warning ? true : false;
+	resp->volatile_memory_warn = bds.bds_volatile_mem_warning ?
+					true : false;
 
 out:
 	resp->status = rc;

@@ -43,23 +43,27 @@ import (
 type HostStorage struct {
 	// NvmeDevices contains the set of NVMe controllers (SSDs)
 	// in this configuration.
-	NvmeDevices storage.NvmeControllers `hash:"set"`
+	NvmeDevices storage.NvmeControllers `hash:"set" json:"nvme_devices"`
 
 	// ScmModules contains the set of SCM modules (persistent
 	// memory DIMMs) in this configuration.
-	ScmModules storage.ScmModules `hash:"set"`
+	ScmModules storage.ScmModules `hash:"set" json:"scm_modules"`
 
 	// ScmNamespaces contains the set of prepared SCM namespaces
 	// (block devices) in this configuration.
-	ScmNamespaces storage.ScmNamespaces `hash:"set"`
+	ScmNamespaces storage.ScmNamespaces `hash:"set" json:"scm_namespaces"`
 
 	// ScmMountPoints contains the set of SCM mountpoints in
 	// this configuration.
-	ScmMountPoints storage.ScmMountPoints `hash:"set"`
+	ScmMountPoints storage.ScmMountPoints `hash:"set" json:"scm_mount_points"`
+
+	// SmdInfo contains information obtained by querying the
+	// host's metadata table, if available.
+	SmdInfo *SmdInfo `json:"smd_info"`
 
 	// RebootRequired indicates that a host reboot is necessary in order
 	// to achieve some goal (SCM prep, etc.)
-	RebootRequired bool
+	RebootRequired bool `json:"reboot_required"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -71,8 +75,8 @@ func (hs *HostStorage) HashKey() (uint64, error) {
 // HostStorageSet contains a HostStorage configuration and the
 // set of hosts matching this configuration.
 type HostStorageSet struct {
-	HostStorage *HostStorage
-	HostSet     *hostlist.HostSet
+	HostStorage *HostStorage      `json:"storage"`
+	HostSet     *hostlist.HostSet `json:"hosts"`
 }
 
 // NewHostStorageSet returns an initialized HostStorageSet for the given

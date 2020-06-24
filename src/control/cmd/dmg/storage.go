@@ -31,7 +31,7 @@ import (
 	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/system"
@@ -272,18 +272,23 @@ type setFaultyCmd struct {
 
 // nvmeSetFaultyCmd is the struct representing the set-faulty storage subcommand
 type nvmeSetFaultyCmd struct {
-	logCmd
-	connectedCmd
-	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to set" required:"1"`
+	smdQueryCmd
+	UUID  string `short:"u" long:"uuid" description:"Device UUID to set" required:"1"`
+	Force bool   `short:"f" long:"force" description:"Do not require confirmation"`
 }
 
 // Execute is run when nvmeSetFaultyCmd activates
 // Set the SMD device state of the given device to "FAULTY"
-func (s *nvmeSetFaultyCmd) Execute(args []string) error {
-	// Devuuid is a required command parameter
-	req := &mgmtpb.DevStateReq{DevUuid: s.Devuuid}
+func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
+	cmd.log.Info("WARNING: This command will permanently mark the device as unusable!")
+	if !cmd.Force && !common.GetConsent(cmd.log) {
+		return errors.New("consent not given")
+	}
 
-	s.log.Infof("Device State Info:\n%s\n", s.conns.StorageSetFaulty(req))
-
-	return nil
+	ctx := context.Background()
+	req := &control.SmdQueryReq{
+		UUID:      cmd.UUID,
+		SetFaulty: true,
+	}
+	return cmd.makeRequest(ctx, req)
 }

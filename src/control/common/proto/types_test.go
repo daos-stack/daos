@@ -42,9 +42,9 @@ func TestProto_ConvertNvmeDeviceHealth(t *testing.T) {
 	expNative := storage.MockNvmeDeviceHealth()
 	// set these manually, as the mock generators intentionally
 	// perturb these values
-	expNative.Temp = pb.Temp
-	expNative.PowerCycles = pb.Powercycles
-	expNative.PowerOnHours = pb.Poweronhours
+	expNative.Temperature = pb.Temperature
+	expNative.PowerCycles = pb.PowerCycles
+	expNative.PowerOnHours = pb.PowerOnHours
 
 	if diff := cmp.Diff(expNative, native); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)

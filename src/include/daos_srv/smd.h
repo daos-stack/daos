@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -202,5 +202,14 @@ int smd_pool_get_blob(uuid_t pool_id, int tgt_id, uint64_t *blob_id);
  * \return			Zero on success, negative value on error
  */
 int smd_pool_list(d_list_t *pool_list, int *pool_cnt);
+
+/**
+ * Convert device state to human-readable string
+ *
+ * \param [IN]	state		Device state
+ *
+ * \return			Static string representing enum value
+ */
+char *smd_state_enum_to_str(enum smd_dev_state state);
 
 #endif /* __SMD_H__ */

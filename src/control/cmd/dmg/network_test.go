@@ -36,7 +36,6 @@ func TestNetworkCommands(t *testing.T) {
 			"Perform network scan no provider",
 			"network scan",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
 			nil,
@@ -45,7 +44,6 @@ func TestNetworkCommands(t *testing.T) {
 			"Perform network scan with provider ofi+sockets (short)",
 			"network scan -p 'ofi+sockets'",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.NetworkScanReq{
 					Provider: "'ofi+sockets'",
 				}),
@@ -56,7 +54,6 @@ func TestNetworkCommands(t *testing.T) {
 			"Perform network scan with provider ofi+sockets (long)",
 			"network scan --provider 'ofi+sockets'",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.NetworkScanReq{
 					Provider: "'ofi+sockets'",
 				}),

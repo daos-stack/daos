@@ -1,4 +1,4 @@
-.TH dmg 1 "13 June 2020"
+.TH dmg 1 "23 June 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -347,50 +347,70 @@ Query storage commands, including raw NVMe SSD device health stats and internal 
 
 \fBAliases\fP: q
 
-.SS storage query blobstore-health
-Query internal blobstore health data.
+.SS storage query device-health
+Query the device health
 
-\fBUsage\fP: query blobstore-health [blobstore-health-OPTIONS]
-.TP
-
-\fBAliases\fP: b
-
-.TP
-\fB\fB\-u\fR, \fB\-\-devuuid\fR\fP
-Device/Blobstore UUID to query
-.TP
-\fB\fB\-t\fR, \fB\-\-tgtid\fR\fP
-VOS target ID to query
-.SS storage query device-state
-Query the device state (ie NORMAL or FAULTY).
-
-\fBUsage\fP: query device-state [device-state-OPTIONS]
+\fBUsage\fP: query device-health [device-health-OPTIONS]
 .TP
 
 \fBAliases\fP: d
 
 .TP
-\fB\fB\-u\fR, \fB\-\-devuuid\fR (\fIrequired\fR)\fP
-Device/Blobstore UUID to query
+\fB\fB\-u\fR, \fB\-\-uuid\fR (\fIrequired\fR)\fP
+Device UUID
+.SS storage query list-devices
+List storage devices on the server
+
+\fBUsage\fP: query list-devices [list-devices-OPTIONS]
+.TP
+
+\fBAliases\fP: d
+
+.TP
+\fB\fB\-r\fR, \fB\-\-rank\fR\fP
+Constrain operation to the specified server rank
+.TP
+\fB\fB\-b\fR, \fB\-\-health\fR\fP
+Include device health in results
+.TP
+\fB\fB\-u\fR, \fB\-\-uuid\fR\fP
+Device UUID (all devices if blank)
+.SS storage query list-pools
+List pools on the server
+
+\fBUsage\fP: query list-pools [list-pools-OPTIONS]
+.TP
+
+\fBAliases\fP: p
+
+.TP
+\fB\fB\-r\fR, \fB\-\-rank\fR\fP
+Constrain operation to the specified server rank
+.TP
+\fB\fB\-u\fR, \fB\-\-uuid\fR\fP
+Pool UUID (all pools if blank)
+.TP
+\fB\fB\-v\fR, \fB\-\-verbose\fR\fP
+Show more detail about pools
 .SS storage query nvme-health
-Query raw NVMe SPDK device statistics.
+Query the health of a NVMe device
 
 \fBAliases\fP: n
 
-.SS storage query smd
-Query per-server metadata.
+.SS storage query target-health
+Query the target health
 
-\fBUsage\fP: query smd [smd-OPTIONS]
+\fBUsage\fP: query target-health [target-health-OPTIONS]
 .TP
 
-\fBAliases\fP: s
+\fBAliases\fP: t
 
 .TP
-\fB\fB\-d\fR, \fB\-\-devices\fR\fP
-List all devices/blobstores stored in per-server metadata table.
+\fB\fB\-r\fR, \fB\-\-rank\fR (\fIrequired\fR)\fP
+Server rank hosting target
 .TP
-\fB\fB\-p\fR, \fB\-\-pools\fR\fP
-List all VOS pool targets stored in per-server metadata table.
+\fB\fB\-t\fR, \fB\-\-tgtid\fR (\fIrequired\fR)\fP
+VOS target ID to query
 .SS storage scan
 Scan SCM and NVMe storage attached to remote servers.
 
@@ -416,8 +436,11 @@ Manually set the device state of an NVMe SSD to FAULTY.
 \fBAliases\fP: n
 
 .TP
-\fB\fB\-u\fR, \fB\-\-devuuid\fR (\fIrequired\fR)\fP
-Device/Blobstore UUID to set
+\fB\fB\-u\fR, \fB\-\-uuid\fR (\fIrequired\fR)\fP
+Device UUID to set
+.TP
+\fB\fB\-f\fR, \fB\-\-force\fR\fP
+Do not require confirmation
 .SS system
 Perform distributed tasks related to DAOS system
 

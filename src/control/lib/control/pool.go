@@ -44,6 +44,21 @@ const (
 	defaultSvcReps = 1
 )
 
+type (
+	// Pool contains a unified representation of a DAOS Storage Pool.
+	Pool struct {
+		// UUID uniquely identifies a pool within the system.
+		UUID string
+		// ServiceReplicas is the list of ranks on which this pool's
+		// service replicas are running.
+		ServiceReplicas []system.Rank
+
+		// Info contains information about the pool learned from a
+		// query operation.
+		Info PoolInfo
+	}
+)
+
 // checkUUID is a helper function for validating that the supplied
 // UUID string parses as a valid UUID.
 func checkUUID(uuidStr string) error {
@@ -289,10 +304,8 @@ type (
 		Records uint64
 	}
 
-	// PoolQueryResp contains the pool query response.
-	PoolQueryResp struct {
-		Status          int32
-		UUID            string
+	// PoolInfo contains information about the pool.
+	PoolInfo struct {
 		TotalTargets    uint32
 		ActiveTargets   uint32
 		TotalNodes      uint32
@@ -302,6 +315,13 @@ type (
 		Rebuild         *PoolRebuildStatus
 		Scm             *StorageUsageStats
 		Nvme            *StorageUsageStats
+	}
+
+	// PoolQueryResp contains the pool query response.
+	PoolQueryResp struct {
+		Status int32
+		UUID   string
+		PoolInfo
 	}
 )
 

@@ -404,7 +404,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 				}
 			}
 
-			mgmtSvc := newTestMgmtSvcMulti(log, maxIOServers, false)
+			mgmtSvc := newTestMgmtSvcMulti(t, log, maxIOServers, false)
 			cs.harness = mgmtSvc.harness
 			cs.harness.started.SetTrue()
 			m := newMgmtSvcClient(
@@ -576,7 +576,7 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 				}
 			}
 
-			mgmtSvc := newTestMgmtSvcMulti(log, maxIOServers, false)
+			mgmtSvc := newTestMgmtSvcMulti(t, log, maxIOServers, false)
 			cs.harness = mgmtSvc.harness
 			cs.harness.started.SetTrue()
 			m := newMgmtSvcClient(
@@ -790,7 +790,7 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 				}
 			}
 
-			mgmtSvc := newTestMgmtSvcMulti(log, maxIOServers, false)
+			mgmtSvc := newTestMgmtSvcMulti(t, log, maxIOServers, false)
 			cs.harness = mgmtSvc.harness
 			cs.harness.started.SetTrue()
 			m := newMgmtSvcClient(
@@ -969,7 +969,7 @@ func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
 				}
 			}
 
-			mgmtSvc := newTestMgmtSvcMulti(log, maxIOServers, false)
+			mgmtSvc := newTestMgmtSvcMulti(t, log, maxIOServers, false)
 			cs.harness = mgmtSvc.harness
 			cs.harness.started.SetTrue()
 			m := newMgmtSvcClient(
