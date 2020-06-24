@@ -158,7 +158,7 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	rc = vos_obj_cache_create(LRU_CACHE_BITS,
 				  &imem_inst->vis_ocache);
 	if (rc) {
-		D_ERROR("Error in createing object cache\n");
+		D_ERROR("Error in creating object cache\n");
 		return rc;
 	}
 
@@ -228,7 +228,6 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct vos_tls *tls = data;
 
-	D_ASSERT(d_list_empty(&tls->vtl_gc_pools));
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
 	umem_fini_txd(&tls->vtl_txd);
 	vos_ts_table_free(&tls->vtl_ts_table);
@@ -262,12 +261,6 @@ vos_mod_init(void)
 	rc = vos_dtx_table_register();
 	if (rc) {
 		D_ERROR("DTX btree initialization error\n");
-		return rc;
-	}
-
-	rc = vos_dtx_cos_register();
-	if (rc != 0) {
-		D_ERROR("DTX CoS btree initialization error\n");
 		return rc;
 	}
 

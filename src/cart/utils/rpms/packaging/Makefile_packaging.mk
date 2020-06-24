@@ -1,5 +1,5 @@
 # Common Makefile for including
-# Needs the following variables set at a minium:
+# Needs the following variables set at a minimum:
 # NAME :=
 # SRC_EXT :=
 # SOURCE =

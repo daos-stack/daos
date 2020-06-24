@@ -104,12 +104,17 @@ char *DP_UUID(const void *uuid);
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
 #define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
+#ifdef DAOS_BUILD_RELEASE
+#define DF_KEY			"[%d]"
+#define DP_KEY(key)		(int)((key)->iov_len)
+#else
 char *daos_key2str(daos_key_t *key);
 
 #define DF_KEY			"[%d] %.*s"
 #define DP_KEY(key)		(int)(key)->iov_len,	\
-		                (int)(key)->iov_len,	\
-		                daos_key2str(key)
+				(int)(key)->iov_len,	\
+				daos_key2str(key)
+#endif
 
 #define DF_RECX			"["DF_U64"-"DF_U64"]"
 #define DP_RECX(r)		(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
@@ -182,6 +187,27 @@ daos_get_ntime(void)
 
 	d_gettime(&tv);
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
+static inline uint64_t
+daos_getntime_coarse(void)
+{
+	struct timespec	tv;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
+	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
+static inline int daos_gettime_coarse(uint64_t *time)
+{
+	struct timespec	now;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	if (rc == 0)
+		*time = now.tv_sec;
+
+	return rc;
 }
 
 /** Function table for combsort and binary search */
@@ -696,15 +722,4 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 	}
 }
 
-static inline int daos_gettime_coarse(uint64_t *time)
-{
-	struct timespec	now;
-	int		rc;
-
-	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-	if (rc == 0)
-		*time = now.tv_sec;
-
-	return rc;
-}
 #endif /* __DAOS_COMMON_H__ */

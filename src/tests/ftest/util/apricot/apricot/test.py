@@ -45,6 +45,7 @@ from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
 from dmg_utils_params import \
     DmgYamlParameters, DmgTransportCredentials
+from dmg_utils import DmgCommand
 from server_utils import DaosServerCommand, DaosServerManager
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
@@ -137,7 +138,7 @@ class Test(avocadoTest):
     # pylint: enable=invalid-name
 
     def get_test_name(self):
-        """Obtain test name from self.__str__() """
+        """Obtain test name from self.__str__()."""
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
 
 
@@ -159,7 +160,6 @@ class TestWithoutServers(Test):
         self.prefix = None
         self.bin = None
         self.daos_test = None
-        self.daosctl = None
         self.cart_prefix = None
         self.cart_bin = None
         self.tmp = None
@@ -194,7 +194,6 @@ class TestWithoutServers(Test):
             self.ofi_prefix = "/usr"
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
-        self.daosctl = os.path.join(self.bin, 'daosctl')
 
         # set default shared dir for daos tests in case DAOS_TEST_SHARED_DIR
         # is not set, for RPM env and non-RPM env.
@@ -566,7 +565,7 @@ class TestWithServers(TestWithoutServers):
             manager_list (list): list of SubprocessManager objects to start
         """
         user = getuser()
-        # We probalby want to do this parallel if end up with multiple managers
+        # We probably want to do this parallel if end up with multiple managers
         for manager in manager_list:
             self.log.info(
                 "Starting %s: group=%s, hosts=%s, config=%s",
@@ -597,7 +596,7 @@ class TestWithServers(TestWithoutServers):
             super(TestWithServers, self).tearDown()
         except OSError as error:
             errors.append(
-                "Error running inheritted teardown(): {}".format(error))
+                "Error running inherited teardown(): {}".format(error))
 
         # Fail the test if any errors occurred during tear down
         if errors:
@@ -632,7 +631,7 @@ class TestWithServers(TestWithoutServers):
                 containers = [containers]
             self.test_log.info("Destroying containers")
             for container in containers:
-                # Only close a container that has been openned by the test
+                # Only close a container that has been opened by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
                         container.close()
@@ -741,7 +740,7 @@ class TestWithServers(TestWithoutServers):
             # Overwrite the test id with the specified test name
             self.test_id = test_name
 
-        # Update the log file names.  The path is defined throught the
+        # Update the log file names.  The path is defined through the
         # DAOS_TEST_LOG_DIR environment variable.
         self.agent_log = "{}_daos_agent.log".format(self.test_id)
         self.server_log = "{}_daos_server.log".format(self.test_id)
@@ -769,7 +768,14 @@ class TestWithServers(TestWithoutServers):
             DmgCommand: New DmgCommand object.
 
         """
-        return self.server_managers[index].dmg
+        if self.server_managers:
+            return self.server_managers[index].dmg
+
+        dmg_config_file = self.get_config_file("daos", "dmg")
+        dmg_cfg = DmgYamlParameters(
+            dmg_config_file, self.server_group, DmgTransportCredentials())
+        dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
+        return DmgCommand(self.bin, dmg_cfg)
 
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.

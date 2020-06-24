@@ -43,7 +43,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with no arguments",
 			"system query",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemQueryReq{
 					Ranks: []Rank{},
 				}),
@@ -54,7 +53,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single rank",
 			"system query --ranks 0",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemQueryReq{
 					Ranks: []Rank{0},
 				}),
@@ -65,7 +63,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple ranks",
 			"system query --ranks 0,1,4",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemQueryReq{
 					Ranks: []Rank{0, 1, 4},
 				}),
@@ -76,7 +73,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query verbose",
 			"system query --verbose",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemQueryReq{
 					Ranks: []Rank{},
 				}),
@@ -87,7 +83,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with no arguments",
 			"system stop",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemStopReq{
 					Prep:  true,
 					Kill:  true,
@@ -100,7 +95,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with force",
 			"system stop --force",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemStopReq{
 					Prep:  true,
 					Kill:  true,
@@ -114,7 +108,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with single rank",
 			"system stop --ranks 0",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemStopReq{
 					Prep:  true,
 					Kill:  true,
@@ -127,7 +120,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple ranks",
 			"system stop --ranks 0,1,4",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemStopReq{
 					Prep:  true,
 					Kill:  true,
@@ -140,7 +132,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with no arguments",
 			"system start",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemStartReq{
 					Ranks: []Rank{},
 				}),
@@ -151,7 +142,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with single rank",
 			"system start --ranks 0",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemStartReq{
 					Ranks: []Rank{0},
 				}),
@@ -162,7 +152,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple ranks",
 			"system start --ranks 0,1,4",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemStartReq{
 					Ranks: []Rank{0, 1, 4},
 				}),
@@ -173,7 +162,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.LeaderQueryReq{
 					System: build.DefaultSystemName,
 				}),
@@ -184,7 +172,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system list-pools with default config",
 			"system list-pools",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.ListPoolsReq{
 					System: build.DefaultSystemName,
 				}),

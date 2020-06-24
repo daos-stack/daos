@@ -304,7 +304,7 @@ class DaosServerYamlParameters(YamlParameters):
             #   fabric_iface_port:      map to OFI_PORT=31416
             #   log_mask:               map to D_LOG_MASK env
             #   log_file:               map to D_LOG_FILE env
-            #   env_vars:               influences DAOS IO Server behaviour
+            #   env_vars:               influences DAOS IO Server behavior
             #       Add to enable scalable endpoint:
             #           - CRT_CREDIT_EP_CTX=0
             #           - CRT_CTX_SHARE_ADDR=1

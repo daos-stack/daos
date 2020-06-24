@@ -77,7 +77,7 @@ struct vos_gc {
 	/**
 	 * free an item collected by the current GC
 	 * It is unused for now, but we might need it if we want to support
-	 * GC_BIO, see commments in vos_gc_type.
+	 * GC_BIO, see comments in vos_gc_type.
 	 */
 	int			(*gc_free)(struct vos_gc *gc,
 					   struct vos_pool *pool,
@@ -229,11 +229,14 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool,
 static int
 gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, struct vos_gc_item *item)
 {
-	vos_dtx_table_destroy(&pool->vp_umm,
-			      umem_off2ptr(&pool->vp_umm, item->it_addr));
-	umem_free(&pool->vp_umm, item->it_addr);
+	int	rc;
 
-	return 0;
+	rc = vos_dtx_table_destroy(&pool->vp_umm,
+				   umem_off2ptr(&pool->vp_umm, item->it_addr));
+	if (rc == 0)
+		rc = umem_free(&pool->vp_umm, item->it_addr);
+
+	return rc;
 }
 
 static struct vos_gc	gc_table[] = {
@@ -295,26 +298,33 @@ gc_bin_free_bag(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 		umem_off_t bag_id)
 {
 	struct vos_gc_bag_df *bag = umem_off2ptr(umm, bag_id);
+	int		      rc;
 
 	D_ASSERT(bag_id == bin->bin_bag_first);
 	if (bag_id == bin->bin_bag_last) {
 		/* don't free the last bag, only reset it */
 		D_ASSERT(bin->bin_bag_nr == 1);
-		umem_tx_add_ptr(umm, bag, sizeof(*bag));
-		bag->bag_item_first = bag->bag_item_last = 0;
-		bag->bag_item_nr = 0;
-		return 0;
+		rc = umem_tx_add_ptr(umm, bag, sizeof(*bag));
+		if (rc == 0) {
+			bag->bag_item_first = bag->bag_item_last = 0;
+			bag->bag_item_nr = 0;
+		}
+
+		return rc;
 	}
 
 	D_ASSERT(bin->bin_bag_nr > 1);
 	D_ASSERT(bag->bag_next != UMOFF_NULL);
 
-	umem_tx_add_ptr(umm, bin, sizeof(*bin));
-	bin->bin_bag_first = bag->bag_next;
-	bin->bin_bag_nr--;
+	rc = umem_tx_add_ptr(umm, bin, sizeof(*bin));
+	if (rc == 0) {
+		bin->bin_bag_first = bag->bag_next;
+		bin->bin_bag_nr--;
 
-	umem_free(umm, bag_id);
-	return 0;
+		rc = umem_free(umm, bag_id);
+	}
+
+	return rc;
 }
 
 /**
@@ -327,6 +337,7 @@ gc_bin_find_bag(struct umem_instance *umm, struct vos_gc_bin_df *bin)
 	struct vos_gc_bag_df *bag = NULL;
 	umem_off_t	      bag_id;
 	int		      size;
+	int		      rc;
 
 	if (!UMOFF_IS_NULL(bin->bin_bag_last)) {
 		bag_id = bin->bin_bag_last;
@@ -341,16 +352,24 @@ gc_bin_find_bag(struct umem_instance *umm, struct vos_gc_bin_df *bin)
 	if (UMOFF_IS_NULL(bag_id))
 		return NULL;
 
-	umem_tx_add_ptr(umm, bin, sizeof(*bin));
-	bin->bin_bag_last = bag_id;
-	bin->bin_bag_nr++;
+	rc = umem_tx_add_ptr(umm, bin, sizeof(*bin));
+	if (rc != 0)
+		return NULL;
+
 	if (bag) { /* the original last bag */
-		umem_tx_add_ptr(umm, bag, sizeof(*bag));
+		rc = umem_tx_add_ptr(umm, bag, sizeof(*bag));
+		if (rc != 0)
+			return NULL;
+
 		bag->bag_next = bag_id;
 	} else {
 		/* this is a new bin */
 		bin->bin_bag_first = bag_id;
 	}
+
+	bin->bin_bag_last = bag_id;
+	bin->bin_bag_nr++;
+
 	return umem_off2ptr(umm, bag_id);
 }
 
@@ -361,6 +380,7 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	struct vos_gc_bag_df *bag;
 	struct vos_gc_item   *it;
 	int		      last;
+	int		      rc;
 
 	bag = gc_bin_find_bag(umm, bin);
 	if (!bag)
@@ -377,10 +397,13 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	if (last == bin->bin_bag_size)
 		last = 0;
 
-	umem_tx_add_ptr(umm, bag, sizeof(*bag));
-	bag->bag_item_last = last;
-	bag->bag_item_nr += 1;
-	return 0;
+	rc = umem_tx_add_ptr(umm, bag, sizeof(*bag));
+	if (rc == 0) {
+		bag->bag_item_last = last;
+		bag->bag_item_nr += 1;
+	}
+
+	return rc;
 }
 
 static struct vos_gc_item *
@@ -471,9 +494,12 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool, struct vos_gc_item *item)
 	D_DEBUG(DB_TRACE, "GC released a %s\n", gc->gc_name);
 	/* this is the real container|object|dkey|akey free */
 	if (gc->gc_free)
-		gc->gc_free(gc, pool, item);
+		rc = gc->gc_free(gc, pool, item);
 	else
-		umem_free(&pool->vp_umm, item->it_addr);
+		rc = umem_free(&pool->vp_umm, item->it_addr);
+
+	if (rc != 0)
+		goto failed;
 
 	switch (gc->gc_type) {
 	default:
@@ -500,7 +526,7 @@ failed:
  * Add an item for garbage collection, this item and all its sub-items will
  * be freed by vos_gc_run.
  *
- * NB: this function must be called within pmdk transactoin.
+ * NB: this function must be called within pmdk transaction.
  */
 int
 gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
@@ -850,10 +876,17 @@ vos_gc_pool(daos_handle_t poh, int *credits)
 		D_CRIT("GC failed %s\n", d_errstr(rc));
 		return 0; /* caller can't do anything for it */
 	}
-	total -= *credits; /* substract the remained credits */
+	total -= *credits; /* subtract the remained credits */
 
 	if (empty && total != 0) /* did something */
 		gc_log_pool(pool);
 
 	return 0;
+}
+
+inline void
+gc_reserve_space(daos_size_t *rsrvd)
+{
+	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * GC_CREDS_MAX;
+	rsrvd[DAOS_MEDIA_NVME]	+= 0;
 }

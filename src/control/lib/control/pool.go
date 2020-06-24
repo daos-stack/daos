@@ -25,7 +25,6 @@ package control
 
 import (
 	"context"
-	"os/user"
 	"strconv"
 	"strings"
 
@@ -37,11 +36,27 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
 	defaultSvcReps = 1
+)
+
+type (
+	// Pool contains a unified representation of a DAOS Storage Pool.
+	Pool struct {
+		// UUID uniquely identifies a pool within the system.
+		UUID string
+		// ServiceReplicas is the list of ranks on which this pool's
+		// service replicas are running.
+		ServiceReplicas []system.Rank
+
+		// Info contains information about the pool learned from a
+		// query operation.
+		Info PoolInfo
+	}
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -51,21 +66,30 @@ func checkUUID(uuidStr string) error {
 	return errors.Wrapf(err, "invalid UUID %q", uuidStr)
 }
 
-// formatNameGroup converts system names to principal and if both user and group
-// are unspecified, takes effective user name and that user's primary group.
-func formatNameGroup(usr string, grp string) (string, string, error) {
-	if usr == "" && grp == "" {
-		eUsr, err := user.Current()
+// formatNameGroup converts system names to principals, If user or group is not
+// provided, the effective user and/or effective group will be used.
+func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, error) {
+	if usr == "" || grp == "" {
+		eUsr, err := ext.Current()
 		if err != nil {
 			return "", "", err
 		}
 
-		eGrp, err := user.LookupGroupId(eUsr.Gid)
-		if err != nil {
-			return "", "", err
+		if usr == "" {
+			usr = eUsr.Username()
 		}
+		if grp == "" {
+			gid, err := eUsr.Gid()
+			if err != nil {
+				return "", "", err
+			}
+			eGrp, err := ext.LookupGroupID(gid)
+			if err != nil {
+				return "", "", err
+			}
 
-		usr, grp = eUsr.Username, eGrp.Name
+			grp = eGrp.Name
+		}
 	}
 
 	if usr != "" && !strings.Contains(usr, "@") {
@@ -83,7 +107,7 @@ func formatNameGroup(usr string, grp string) (string, string, error) {
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
 	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(in.User, in.UserGroup)
+	in.User, in.UserGroup, err = formatNameGroup(&auth.External{}, in.User, in.UserGroup)
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +235,47 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	return nil
 }
 
+// PoolEvictReq contains the parameters for a pool evict request.
+type PoolEvictReq struct {
+	msRequest
+	unaryRequest
+	UUID string
+	Sys  string
+}
+
+// PoolEvict performs a pool connection evict operation on a DAOS Management Server instance.
+func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+
+	// ensure we have a system name in the request
+	if req.Sys == "" {
+		req.Sys = build.DefaultSystemName
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
+			Uuid: req.UUID,
+			Sys:  req.Sys,
+		})
+	})
+
+	rpcClient.Debugf("Evict DAOS pool request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool evict failed")
+	}
+	rpcClient.Debugf("Evict DAOS pool response: %s\n", msResp)
+
+	return nil
+}
+
 type (
 	// PoolQueryReq contains the parameters for a pool query request.
 	PoolQueryReq struct {
@@ -239,10 +304,8 @@ type (
 		Records uint64
 	}
 
-	// PoolQueryResp contains the pool query response.
-	PoolQueryResp struct {
-		Status          int32
-		UUID            string
+	// PoolInfo contains information about the pool.
+	PoolInfo struct {
 		TotalTargets    uint32
 		ActiveTargets   uint32
 		TotalNodes      uint32
@@ -252,6 +315,13 @@ type (
 		Rebuild         *PoolRebuildStatus
 		Scm             *StorageUsageStats
 		Nvme            *StorageUsageStats
+	}
+
+	// PoolQueryResp contains the pool query response.
+	PoolQueryResp struct {
+		Status int32
+		UUID   string
+		PoolInfo
 	}
 )
 
@@ -420,6 +490,59 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 		return errors.Wrap(err, "pool Exclude failed")
 	}
 	rpcClient.Debugf("Exclude DAOS pool target response: %s\n", msResp)
+
+	return nil
+}
+
+func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err error) {
+	out = new(mgmtpb.PoolExtendReq)
+	if err = convert.Types(in, out); err != nil {
+		return nil, err
+	}
+
+	return
+}
+
+// PoolExtendReq struct contains request
+type PoolExtendReq struct {
+	unaryRequest
+	msRequest
+	UUID  string
+	Ranks []system.Rank
+	// TEMP SECTION
+	ScmBytes  uint64
+	NvmeBytes uint64
+	// END TEMP SECTION
+}
+
+// PoolExtend will extend the DAOS pool by the specified ranks.
+// This should automatically start the rebalance process.
+// Returns an error (including any DER code from DAOS).
+func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq) error {
+	pbReq, err := genPoolExtendRequest(req)
+	if err != nil {
+		return errors.Wrap(err, "failed to generate PoolExtend request")
+	}
+
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolExtend(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("Extend DAOS pool request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool extend failed")
+	}
+	rpcClient.Debugf("Extend DAOS pool response: %s\n", msResp)
 
 	return nil
 }

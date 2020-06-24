@@ -71,6 +71,11 @@ func NewForwarder(log logging.Logger, pbinName string) *Forwarder {
 	return fwd
 }
 
+// GetBinaryName returns the name of the binary requests will be forwarded to.
+func (f *Forwarder) GetBinaryName() string {
+	return f.pbinName
+}
+
 // SendReq is responsible for marshaling the forwarded request into a message
 // that is sent to the privileged binary, then unmarshaling the response for
 // the caller.

@@ -37,11 +37,11 @@ from general_utils import check_file_exists, stop_processes, get_log_file, \
 
 
 class ExecutableCommand(CommandWithParameters):
-    """A class for command with paramaters."""
+    """A class for command with parameters."""
 
     # A list of regular expressions for each class method that produces a
     # CmdResult object.  Used by the self.get_output() method to return specific
-    # values from the standard ouput yielded by the method.
+    # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
     def __init__(self, namespace, command, path="", subprocess=False):
@@ -222,6 +222,23 @@ class ExecutableCommand(CommandWithParameters):
 
             self.log.info("%s stopped successfully", self.command)
             self._process = None
+
+    def wait(self):
+        """Wait for the sub process to complete.
+
+        Returns:
+            int: return code of process
+
+        """
+        retcode = 0
+        if self._process is not None:
+            try:
+                retcode = self._process.wait()
+            except OSError as error:
+                self.log.error("Error while waiting %s", error)
+                retcode = 255
+
+        return retcode
 
     def get_subprocess_state(self, message=None):
         """Display the state of the subprocess.
@@ -719,7 +736,7 @@ class SubprocessManager(object):
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
-        Use the yaml file paramter values to assign the server command and
+        Use the yaml file parameter values to assign the server command and
         orterun command parameters.
 
         Args:
@@ -755,7 +772,7 @@ class SubprocessManager(object):
         self.manager.stop()
 
     def kill(self):
-        """Forcably terminate any sub process running on hosts."""
+        """Forcibly terminate any sub process running on hosts."""
         regex = self.manager.job.command_regex
         result = stop_processes(self._hosts, regex)
         if 0 in result and len(result) == 1:

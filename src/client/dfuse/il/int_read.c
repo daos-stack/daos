@@ -27,6 +27,8 @@
 #include "daos.h"
 #include "daos_array.h"
 
+#include "ioil.h"
+
 static ssize_t
 read_bulk(char *buff, size_t len, off_t position,
 	  struct fd_entry *entry, int *errcode)
@@ -39,7 +41,27 @@ read_bulk(char *buff, size_t len, off_t position,
 	d_sg_list_t		sgl = {};
 	int rc;
 
-	DFUSE_TRA_INFO(entry, "%#zx-%#zx ", position, position + len - 1);
+	DFUSE_TRA_INFO(entry, "%#zx-%#zx", position, position + len - 1);
+
+	if (entry->fd_dfsoh) {
+		daos_size_t read_size = 0;
+
+		sgl.sg_nr = 1;
+		d_iov_set(&iov, (void *)buff, len);
+		sgl.sg_iovs = &iov;
+		rc = dfs_read(entry->fd_dfs,
+			      entry->fd_dfsoh,
+			      &sgl,
+			      position,
+			      &read_size,
+			      NULL);
+		if (rc) {
+			DFUSE_TRA_INFO(entry, "dfs_read() failed: %d", rc);
+			*errcode = rc;
+			return -1;
+		}
+		return read_size;
+	}
 
 	rc = daos_array_get_size(entry->fd_aoh, DAOS_TX_NONE, &array_size,
 				 NULL);

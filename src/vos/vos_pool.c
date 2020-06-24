@@ -289,7 +289,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 
 	pool_df = vos_pool_pop2df(ph);
 
-	/* If the file is fallocated seperately we need the fallocated size
+	/* If the file is fallocated separately we need the fallocated size
 	 * for setting in the root object.
 	 */
 	if (!scm_sz) {
@@ -504,6 +504,11 @@ set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
 	struct daos_tree_overhead	ovhd = { 0 };
 	int				tclass, *size, rc;
 
+	if (id == VOS_SLAB_OBJ_DF) {
+		slab->unit_size = sizeof(struct vos_obj_df);
+		goto done;
+	}
+
 	size = &ovhd.to_node_overhead.no_size;
 
 	switch (id) {
@@ -533,6 +538,7 @@ set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
 		return rc;
 
 	slab->unit_size = *size;
+done:
 	D_ASSERT(slab->unit_size > 0);
 	D_DEBUG(DB_MGMT, "Slab ID:%d, Size:%lu\n", id, slab->unit_size);
 
@@ -705,6 +711,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
+	vos_space_sys_init(pool);
 	/* NB: probably should call gc_add_pool to clean up garbages left
 	 * behind by crash.
 	 */
@@ -749,9 +756,6 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 {
 	struct vos_pool		*pool;
 	struct vos_pool_df	*pool_df;
-	daos_size_t		 scm_used;
-	struct vea_attr		*attr;
-	struct vea_stat		*stat;
 	int			 rc;
 
 	pool = vos_hdl2pool(poh);
@@ -761,54 +765,31 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	pool_df = pool->vp_pool_df;
 
 	D_ASSERT(pinfo != NULL);
-	attr = &pinfo->pif_vea_attr;
-	stat = &pinfo->pif_vea_stat;
-	pinfo->pif_scm_sz = pool_df->pd_scm_sz;
-	pinfo->pif_nvme_sz = pool_df->pd_nvme_sz;
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
 	pinfo->pif_gc_stat = pool->vp_gc_stat;
 
-	/* query SCM free space */
-	rc = pmemobj_ctl_get(pool->vp_umm.umm_pool,
-			     "stats.heap.curr_allocated", &scm_used);
-	if (rc) {
-		D_ERROR("Failed to get SCM usage. "DF_RC"\n", DP_RC(rc));
-		return umem_tx_errno(rc);
-	}
+	rc = vos_space_query(pool, &pinfo->pif_space, true);
+	if (rc)
+		D_ERROR("Query pool "DF_UUID" failed. "DF_RC"\n",
+			DP_UUID(pool->vp_id), DP_RC(rc));
+	return rc;
+}
 
-	/*
-	 * FIXME: pmemobj_ctl_get() sometimes return an insane large
-	 * value, I suspect it's a PMDK defect. Let's ignore the error
-	 * and return success for this moment.
-	 */
-	if (pinfo->pif_scm_sz < scm_used) {
-		D_CRIT("scm_sz:"DF_U64" < scm_used:"DF_U64"\n",
-		       pinfo->pif_scm_sz, scm_used);
-		pinfo->pif_scm_free = 0;
-	} else {
-		pinfo->pif_scm_free = pinfo->pif_scm_sz - scm_used;
-	}
+int
+vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
+{
+	struct vos_pool	*pool;
+	struct d_uuid	 ukey;
+	int		 rc;
 
-	/* NVMe isn't configured for this VOS */
-	if (pool->vp_vea_info == NULL) {
-		pinfo->pif_nvme_free = 0;
-		memset(attr, 0, sizeof(*attr));
-		return 0;
-	}
-
-	/* query NVMe free space */
-	rc = vea_query(pool->vp_vea_info, attr, stat);
-	if (rc) {
-		D_ERROR("Failed to get NVMe usage. "DF_RC"\n", DP_RC(rc));
+	uuid_copy(ukey.uuid, pool_id);
+	rc = pool_lookup(&ukey, &pool);
+	if (rc)
 		return rc;
-	}
-	D_ASSERT(attr->va_blk_sz != 0);
-	pinfo->pif_nvme_free = attr->va_blk_sz * stat->vs_free_persistent;
-	D_ASSERTF(pinfo->pif_nvme_free <= pinfo->pif_nvme_sz,
-		  "nvme_free:"DF_U64", nvme_sz:"DF_U64", blk_sz:%u\n",
-		  pinfo->pif_nvme_free, pinfo->pif_nvme_sz, attr->va_blk_sz);
 
-	return 0;
+	rc = vos_space_query(pool, vps, false);
+	vos_pool_decref(pool);
+	return rc;
 }
 
 int
