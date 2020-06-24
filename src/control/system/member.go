@@ -338,20 +338,42 @@ func (m *Membership) Get(rank Rank) (*Member, error) {
 	return member, nil
 }
 
-// Ranks returns slice of ordered member ranks.
-func (m *Membership) Ranks(rankList ...Rank) (ranks []Rank) {
+// Ranks returns slice of all ordered member ranks.
+func (m *Membership) Ranks() (ranks []Rank) {
 	m.RLock()
 	defer m.RUnlock()
 
 	for rank := range m.members {
-		if len(rankList) != 0 && !rank.InList(rankList) {
-			continue
-		}
-
 		ranks = append(ranks, rank)
 	}
 
 	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
+
+	return
+}
+
+// CheckRanklist returns ordered slices of existing and missing membership ranks
+// from provided ranklist string.
+func (m *Membership) CheckRanklist(rankList string) (hit []Rank, miss []Rank, err error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	var ranks []Rank
+	ranks, err = ParseRanks(rankList)
+	if err != nil {
+		return
+	}
+
+	for _, rank := range ranks {
+		if _, found := m.members[rank]; !found {
+			miss = append(miss, rank)
+			continue
+		}
+		hit = append(hit, rank)
+	}
+
+	sort.Slice(hit, func(i, j int) bool { return hit[i] < hit[j] })
+	sort.Slice(miss, func(i, j int) bool { return miss[i] < miss[j] })
 
 	return
 }
@@ -387,7 +409,8 @@ func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
 // Hosts returns slice of control addresses that contain any of the ranks
 // in the input rank list.
 //
-// If input rank list is empty, return all hosts in membership.
+// If input rank list is empty, return all hosts in membership and ignore ranks
+// that are not in the membership.
 func (m *Membership) Hosts(rankList ...Rank) []string {
 	hostRanks := m.HostRanks(rankList...)
 	hosts := make([]string, 0, len(hostRanks))
@@ -402,22 +425,27 @@ func (m *Membership) Hosts(rankList ...Rank) []string {
 
 // Members returns slice of references to all system members ordered by rank.
 //
-// Empty rank list implies no filtering/include all.
+// Empty rank list implies no filtering/include all and ignore ranks that are
+// not in the membership.
 func (m *Membership) Members(rankList ...Rank) (ms Members) {
-	ranks := m.Ranks(rankList...)
-
 	m.RLock()
 	defer m.RUnlock()
 
-	for _, rank := range ranks {
-		if len(rankList) != 0 && !rank.InList(rankList) {
-			continue
+	if len(rankList) == 0 {
+		for _, member := range m.members {
+			ms = append(ms, member)
 		}
 
-		ms = append(ms, m.members[rank])
+		return
 	}
 
-	return ms
+	for _, rank := range rankList {
+		if member, exists := m.members[rank]; exists {
+			ms = append(ms, member)
+		}
+	}
+
+	return
 }
 
 // UpdateMemberStates updates member's state according to result state.

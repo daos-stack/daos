@@ -32,7 +32,9 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -91,7 +93,7 @@ func rankStateGroups(members system.Members) (system.RankGroups, error) {
 
 	groups := make(system.RankGroups)
 	for state, ranksStrBuf := range ranksInState {
-		rankSet, err := system.NewRankSet(
+		rankSet, err := system.CreateRankSet(
 			strings.TrimSuffix(ranksStrBuf.String(), ","))
 		if err != nil {
 			return nil, errors.WithMessage(err,
@@ -161,26 +163,55 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) error 
 	return nil
 }
 
+// rankListCmd enables rank or host list to be supplied with command to filter
+// which ranks are operated upon.
+type rankListCmd struct {
+	RankList string `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to operate on"`
+	HostList string `long:"rank-hosts" short:"h" description:"Hostlist representing hosts whose managed ranks are to be operated on"`
+}
+
+// validateRanksHosts validates rank and host lists have correct format.
+func (cmd *rankListCmd) validateRanksHosts() error {
+	hasRanks := len(cmd.RankList) > 0
+	hasHosts := len(cmd.HostList) > 0
+
+	switch {
+	case hasRanks && hasHosts:
+		return errors.New("--ranks and --rank-hosts options cannot be set together")
+	case hasRanks:
+		if _, err := system.ParseRanks(cmd.RankList); err != nil {
+			return errors.Wrap(err, "ranks list")
+		}
+	case hasHosts:
+		if _, err := hostlist.CreateSet(cmd.HostList); err != nil {
+			return errors.Wrap(err, "rank-hosts list")
+		}
+	}
+
+	return nil
+}
+
 // systemQueryCmd is the struct representing the command to query system status.
 type systemQueryCmd struct {
 	logCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	Verbose bool   `long:"verbose" short:"v" description:"Display more member details"`
-	Ranks   string `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to query"`
+	rankListCmd
+	Verbose bool `long:"verbose" short:"v" description:"Display more member details"`
 }
 
 // Execute is run when systemQueryCmd activates
 func (cmd *systemQueryCmd) Execute(_ []string) error {
-	ranks, err := system.ParseRanks(cmd.Ranks)
-	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
+	if err := cmd.validateRanksHosts(); err != nil {
+		return err
 	}
 
-	ctx := context.Background()
+	req := new(control.SystemQueryReq)
+	if err := convert.Types(cmd, req); err != nil {
+		return errors.Wrapf(err, "convert cmd to request type %T->%T", cmd, req)
+	}
 	// TODO DAOS-5079: group errors when ranks don't exist
-	resp, err := control.SystemQuery(ctx, cmd.ctlInvoker,
-		&control.SystemQueryReq{Ranks: ranks})
+	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return errors.Wrap(err, "System-Query command failed")
 	}
@@ -195,7 +226,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return nil
 	}
 
-	if len(cmd.Ranks) == 1 {
+	if len(cmd.RankList) == 1 {
 		return displaySystemQuerySingle(cmd.log, resp.Members)
 	}
 
@@ -236,7 +267,7 @@ func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
 
 	groups := make(system.RankGroups)
 	for strResult, ranksStrBuf := range ranksWithResult {
-		rankSet, err := system.NewRankSet(
+		rankSet, err := system.CreateRankSet(
 			strings.TrimSuffix(ranksStrBuf.String(), ","))
 		if err != nil {
 			return nil, errors.WithMessage(err,
@@ -268,27 +299,27 @@ type systemStopCmd struct {
 	logCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	Force bool   `long:"force" description:"Force stop DAOS system members"`
-	Ranks string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
+	rankListCmd
+	Force bool `long:"force" description:"Force stop DAOS system members"`
 }
 
 // Execute is run when systemStopCmd activates
 //
 // Perform prep and kill stages with stop command.
 func (cmd *systemStopCmd) Execute(_ []string) error {
-	ranks, err := system.ParseRanks(cmd.Ranks)
-	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
+	if err := cmd.validateRanksHosts(); err != nil {
+		return err
 	}
 
-	ctx := context.Background()
 	// TODO DAOS-5079: group errors when ranks don't exist
-	resp, err := control.SystemStop(ctx, cmd.ctlInvoker, &control.SystemStopReq{
-		Prep:  true,
-		Kill:  true,
-		Force: cmd.Force,
-		Ranks: ranks,
-	})
+	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker,
+		&control.SystemStopReq{
+			Prep:  true,
+			Kill:  true,
+			Force: cmd.Force,
+			//RankList: cmd.RankList,
+			//HostList: cmd.HostList,
+		})
 	if err != nil {
 		return errors.Wrap(err, "System-Stop command failed")
 	}
@@ -311,20 +342,17 @@ type systemStartCmd struct {
 	logCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	Ranks string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
+	rankListCmd
 }
 
 // Execute is run when systemStartCmd activates
 func (cmd *systemStartCmd) Execute(_ []string) error {
-	ranks, err := system.ParseRanks(cmd.Ranks)
-	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
+	if err := cmd.validateRanksHosts(); err != nil {
+		return err
 	}
 
-	ctx := context.Background()
-	// TODO DAOS-5079: group errors when ranks don't exist
-	resp, err := control.SystemStart(ctx, cmd.ctlInvoker,
-		&control.SystemStartReq{Ranks: ranks})
+	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker,
+		&control.SystemStartReq{}) //RankList: cmd.RankList, HostList: cmd.HostList})
 	if err != nil {
 		return errors.Wrap(err, "System-Start command failed")
 	}

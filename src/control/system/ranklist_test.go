@@ -83,7 +83,7 @@ func TestSystem_RankSet(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			rs, gotErr := NewRankSet(tc.startList)
+			rs, gotErr := CreateRankSet(tc.startList)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

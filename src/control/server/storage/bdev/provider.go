@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -204,7 +204,7 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 			c, err := p.backend.Format(dev)
 			if err != nil {
 				p.log.Errorf("%s format failed (%s)", req.Class, dev)
-				res.DeviceResponses[dev].Error = FaultFormatError(err)
+				res.DeviceResponses[dev].Error = FaultFormatError(dev, err)
 				continue
 			}
 			res.DeviceResponses[dev].Controller = c

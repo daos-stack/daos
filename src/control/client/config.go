@@ -72,7 +72,6 @@ type Configuration struct {
 	ControlPort     int      `yaml:"port"`
 	HostList        []string `yaml:"hostlist"`
 	RuntimeDir      string   `yaml:"runtime_dir"`
-	HostFile        string   `yaml:"host_file"`
 	LogFile         string   `yaml:"log_file"`
 	LogFileFormat   string   `yaml:"log_file_format"`
 	Path            string
@@ -126,6 +125,7 @@ func GetConfig(log logging.Logger, inPath string) (*Configuration, error) {
 	return c, nil
 }
 
+// SetPath attempts to resolve input path and assigns to config if successful.
 func (c *Configuration) SetPath(inPath string) error {
 	newPath, err := common.ResolvePath(inPath, c.Path)
 	if err != nil {

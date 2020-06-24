@@ -1,4 +1,5 @@
 //
+
 // (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,11 +39,15 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+type sysRequest struct {
+	RankList string
+	HostList string
+}
+
 // SystemJoinReq contains the inputs for the system join request.
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
-	Ranks []system.Rank
 }
 
 // SystemJoinResp contains the request response.
@@ -72,9 +77,9 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 type SystemStopReq struct {
 	unaryRequest
 	msRequest
+	sysRequest
 	Prep  bool
 	Kill  bool
-	Ranks []system.Rank
 	Force bool
 }
 
@@ -91,13 +96,12 @@ type SystemStopResp struct {
 // API to fanout to (selection or all) gRPC servers listening as part of the
 // DAOS system and retrieve results from the selected ranks hosted there.
 func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq) (*SystemStopResp, error) {
+	pbReq := new(ctlpb.SystemStopReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemStop(ctx, &ctlpb.SystemStopReq{
-			Prep:  req.Prep,
-			Kill:  req.Kill,
-			Force: req.Force,
-			Ranks: system.RanksToUint32(req.Ranks),
-		})
+		return ctlpb.NewMgmtCtlClient(conn).SystemStop(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system stop request: %s", req)
 
@@ -142,7 +146,7 @@ func getResetRankErrors(results system.MemberResults) (map[string][]string, []st
 type SystemResetFormatReq struct {
 	unaryRequest
 	msRequest
-	Ranks []system.Rank
+	sysRequest
 }
 
 // SystemResetFormatResp contains the request response.
@@ -172,10 +176,12 @@ type SystemResetFormatResp struct {
 //       on a host, remove any ranks that fail SystemResetFormat() from list before
 //       passing to StorageFormat()
 func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *SystemResetFormatReq) (*StorageFormatResp, error) {
+	pbReq := new(ctlpb.SystemResetFormatReq)
+	if err := convert.Types(resetReq, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", resetReq, pbReq)
+	}
 	resetReq.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemResetFormat(ctx, &ctlpb.SystemResetFormatReq{
-			Ranks: system.RanksToUint32(resetReq.Ranks),
-		})
+		return ctlpb.NewMgmtCtlClient(conn).SystemResetFormat(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system-reset-format request: %s", resetReq)
 
@@ -229,7 +235,7 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 type SystemStartReq struct {
 	unaryRequest
 	msRequest
-	Ranks []system.Rank
+	sysRequest
 }
 
 // SystemStartResp contains the request response.
@@ -244,10 +250,12 @@ type SystemStartResp struct {
 // API to fanout to (selection or all) gRPC servers listening as part of the
 // DAOS system and retrieve results from the selected ranks hosted there.
 func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartReq) (*SystemStartResp, error) {
+	pbReq := new(ctlpb.SystemStartReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemStart(ctx, &ctlpb.SystemStartReq{
-			Ranks: system.RanksToUint32(req.Ranks),
-		})
+		return ctlpb.NewMgmtCtlClient(conn).SystemStart(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system start request: %s", req)
 
@@ -264,7 +272,7 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 type SystemQueryReq struct {
 	unaryRequest
 	msRequest
-	Ranks []system.Rank
+	sysRequest
 }
 
 // SystemQueryResp contains the request response.
@@ -279,10 +287,12 @@ type SystemQueryResp struct {
 // API to fanout to (selection or all) gRPC servers listening as part of the
 // DAOS system and retrieve results from the selected ranks hosted there.
 func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryReq) (*SystemQueryResp, error) {
+	pbReq := new(ctlpb.SystemQueryReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemQuery(ctx, &ctlpb.SystemQueryReq{
-			Ranks: system.RanksToUint32(req.Ranks),
-		})
+		return ctlpb.NewMgmtCtlClient(conn).SystemQuery(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system query request: %s", req)
 

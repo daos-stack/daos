@@ -87,7 +87,9 @@ message SystemStartResp {
 
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
-	repeated uint32 ranks = 1; // system ranks to query
+	// repeated uint32 ranks = 1; // system ranks to query
+	string ranklist = 2;
+	string hostlist = 3;
 }
 
 // SystemQueryResp returns active system members.

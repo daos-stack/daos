@@ -116,7 +116,7 @@ func TestBdevPrepare(t *testing.T) {
 				ResetOnly: true,
 			},
 			mbc: &MockBackendConfig{
-				PrepareErr: errors.New("we shouldn't get this far!"),
+				PrepareErr: errors.New("we shouldnt get this far"),
 			},
 			expRes: &PrepareResponse{},
 		},
@@ -277,7 +277,9 @@ func TestBdevFormat(t *testing.T) {
 					},
 					storage.MockNvmeController(2).PciAddr: &DeviceFormatResponse{
 						Formatted: false,
-						Error:     FaultFormatError(errors.New("format failed")),
+						Error: FaultFormatError(
+							storage.MockNvmeController(2).PciAddr,
+							errors.New("format failed")),
 					},
 					storage.MockNvmeController(3).PciAddr: &DeviceFormatResponse{
 						Formatted:  true,

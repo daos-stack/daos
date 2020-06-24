@@ -68,23 +68,14 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		missingMembership bool
-		members           system.Members
-		ranks             []system.Rank
-		mResps            []*control.HostResponse
-		hostErrors        control.HostErrorsMap
-		expHosts          []string
-		expResults        system.MemberResults
-		expErrMsg         string
+		members    system.Members
+		ranks      []system.Rank
+		mResps     []*control.HostResponse
+		hostErrors control.HostErrorsMap
+		expHosts   []string
+		expResults system.MemberResults
+		expErrMsg  string
 	}{
-		"no membership": {
-			missingMembership: true,
-			expErrMsg:         "nil system membership",
-		},
-		"no members": {
-			members:   system.Members{},
-			expErrMsg: "empty system membership",
-		},
 		"unfiltered ranks": {
 			mResps: []*control.HostResponse{
 				{
@@ -220,16 +211,14 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 
 			emptyCfg := emptyMockConfig(t)
 			cs := mockControlService(t, log, emptyCfg, nil, nil, nil)
-			if !tc.missingMembership {
-				cs.membership = system.NewMembership(log)
+			cs.membership = system.NewMembership(log)
 
-				if tc.members == nil {
-					tc.members = defaultMembers
-				}
-				for _, m := range tc.members {
-					if _, err := cs.membership.Add(m); err != nil {
-						t.Fatal(err)
-					}
+			if tc.members == nil {
+				tc.members = defaultMembers
+			}
+			for _, m := range tc.members {
+				if _, err := cs.membership.Add(m); err != nil {
+					t.Fatal(err)
 				}
 			}
 
@@ -260,16 +249,21 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 
 func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
-		nilReq     bool
-		ranks      []uint32
-		members    system.Members
-		mResps     []*control.HostResponse
-		expMembers []*ctlpb.SystemMember
-		expErrMsg  string
+		missingMembership bool
+		nilReq            bool
+		ranks             []uint32
+		members           system.Members
+		mResps            []*control.HostResponse
+		expMembers        []*ctlpb.SystemMember
+		expErrMsg         string
 	}{
 		"nil req": {
 			nilReq:    true,
 			expErrMsg: "nil request",
+		},
+		"no membership": {
+			missingMembership: true,
+			expErrMsg:         "nil system membership",
 		},
 		"empty membership": {
 			members: system.Members{},
@@ -397,10 +391,12 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 
 			emptyCfg := emptyMockConfig(t)
 			cs := mockControlService(t, log, emptyCfg, nil, nil, nil)
-			cs.membership = system.NewMembership(log)
-			for _, m := range tc.members {
-				if _, err := cs.membership.Add(m); err != nil {
-					t.Fatal(err)
+			if !tc.missingMembership {
+				cs.membership = system.NewMembership(log)
+				for _, m := range tc.members {
+					if _, err := cs.membership.Add(m); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
 

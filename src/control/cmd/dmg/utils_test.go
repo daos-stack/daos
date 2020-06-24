@@ -264,13 +264,13 @@ func TestFormatHostGroups(t *testing.T) {
 func mockRankGroups(t *testing.T) system.RankGroups {
 	groups := make(system.RankGroups)
 
-	rs1, err := system.NewRankSet("0-9,11-19")
+	rs1, err := system.CreateRankSet("0-9,11-19")
 	if err != nil {
 		t.Fatal(err)
 	}
 	groups["foo/OK"] = rs1
 
-	rs2, err := system.NewRankSet("10,20-299")
+	rs2, err := system.CreateRankSet("10,20-299")
 	if err != nil {
 		t.Fatal(err)
 	}

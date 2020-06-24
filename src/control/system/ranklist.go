@@ -57,9 +57,9 @@ func fixBrackets(stringRanks string, remove bool) string {
 	return stringRanks
 }
 
-// NewRankSet creates a new HostList with ranks rather than hostnames from the
+// CreateRankSet creates a new HostList with ranks rather than hostnames from the
 // supplied string representation.
-func NewRankSet(stringRanks string) (*RankSet, error) {
+func CreateRankSet(stringRanks string) (*RankSet, error) {
 	rs := RankSet{}
 
 	if len(stringRanks) > 0 {
@@ -119,7 +119,7 @@ func (rs *RankSet) Ranks() ([]Rank, error) {
 // ParseRanks takes a string representation of a list of ranks e.g. 1-4,6 and
 // returns a slice of system.Rank type or error.
 func ParseRanks(stringRanks string) ([]Rank, error) {
-	rs, err := NewRankSet(stringRanks)
+	rs, err := CreateRankSet(stringRanks)
 	if err != nil {
 		return nil, errors.Wrapf(err, "creating rank set from '%s'", stringRanks)
 	}

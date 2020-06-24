@@ -184,7 +184,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 			return false, nil
 		}
 
-		notStoppedRanks, err := system.NewRankSet("")
+		notStoppedRanks, err := system.CreateRankSet("")
 		if err != nil {
 			return false, err
 		}
@@ -239,7 +239,7 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 	}
 
 	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
-		&control.SystemResetFormatReq{Ranks: ranks})
+		&control.SystemResetFormatReq{}) //Ranks: ranks})
 	if err != nil {
 		return err
 	}
