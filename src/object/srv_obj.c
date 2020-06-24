@@ -1891,7 +1891,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	 */
 	rc = dtx_begin(ioc->ioc_coc, &oei->oei_dti, oei->oei_epr.epr_hi,
 		       oei->oei_flags & ORF_EPOCH_UNCERTAIN, oei->oei_map_ver,
-		       &oei->oei_oid, 0, DAOS_INTENT_DEFAULT, NULL, 0, &dth);
+		       &oei->oei_oid, 0, DAOS_INTENT_DEFAULT, NULL, 0, NULL,
+		       &dth);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg, &dth);
@@ -2439,7 +2440,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	okqo = crt_reply_get(rpc);
 	D_ASSERT(okqo != NULL);
 
-	D_DEBUG(DB_IO, "flags = %d\n", okqi->okqi_api_flags);
+	D_DEBUG(DB_IO, "flags = "DF_U64"\n", okqi->okqi_api_flags);
 
 	if (okqi->okqi_epoch == DAOS_EPOCH_MAX || okqi->okqi_epoch == 0) {
 		okqi->okqi_epoch = crt_hlc_get();
@@ -2465,7 +2466,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	rc = dtx_begin(ioc.ioc_coc, &okqi->okqi_dti, okqi->okqi_epoch,
 		       okqi->okqi_flags & ORF_EPOCH_UNCERTAIN,
 		       okqi->okqi_map_ver, &okqi->okqi_oid, 0,
-		       DAOS_INTENT_DEFAULT, NULL, 0, &dth);
+		       DAOS_INTENT_DEFAULT, NULL, 0, NULL, &dth);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid,
