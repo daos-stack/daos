@@ -594,14 +594,6 @@ class LogTest():
                               format(op,
                                      counts['ALLOCATED'],
                                      counts['DEALLOCATED']))
-            # Sent can be more than completed because of corpcs but shouldn't
-            # be less
-            if counts['SENT'] > counts['COMPLETED']:
-                errors.append("ERROR: Opcode {}: sent Total = {}, "
-                              "Completed Total = {}". \
-                              format(op,
-                                     counts['SENT'],
-                                     counts['COMPLETED']))
 
         print('Opcode State Transition Tally')
         print(tabulate.tabulate(table,
