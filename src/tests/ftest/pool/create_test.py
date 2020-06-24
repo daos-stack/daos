@@ -23,7 +23,7 @@ portions thereof marked with this legend must also reproduce the markings.
 """
 import time
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from bytes_utils import Bytes
 from server_utils import ServerFailed
 
@@ -160,6 +160,7 @@ class PoolCreateTests(TestWithServers):
         self.define_pools(1, 0.9, 0.9)
         self.check_pool_creation(240)
 
+    @skipForTicket("DAOS-5202")
     def test_create_pool_quantity(self):
         """JIRA ID: DAOS-3599.
 
@@ -202,6 +203,7 @@ class PoolCreateTests(TestWithServers):
             pool_uuid_list, result,
             "Pool UUID list does not match after reboot")
 
+    @skipForTicket("DAOS-5203")
     def test_create_no_space(self):
         """JIRA ID: DAOS-3728.
 
@@ -250,6 +252,7 @@ class PoolCreateTests(TestWithServers):
             "should succeed."
         )
 
+    @skipForTicket("DAOS-5203")
     def test_create_no_space_loop(self):
         """JIRA ID: DAOS-3728.
 
