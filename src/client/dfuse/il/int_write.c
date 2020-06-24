@@ -39,7 +39,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 	d_sg_list_t		sgl = {};
 	int rc;
 
-	DFUSE_TRA_INFO(entry, "%#zx-%#zx ", position, position + len - 1);
+	DFUSE_TRA_INFO(entry, "%#zx-%#zx", position, position + len - 1);
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);

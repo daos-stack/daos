@@ -1110,8 +1110,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* query the container properties from RDB and update to IV */
 	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
-				 in->coi_op.ci_hdl, in->coi_op.ci_uuid,
-				 prop);
+				 in->coi_op.ci_uuid, prop);
 	daos_prop_free(prop);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_iv_prop_update failed %d.\n",
@@ -1704,7 +1703,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			return -DER_NOMEM;
 
 		rc = cont_iv_prop_fetch(pool_hdl->sph_pool->sp_iv_ns,
-					in->cqi_op.ci_hdl, iv_prop);
+					in->cqi_op.ci_uuid, iv_prop);
 		if (rc) {
 			D_ERROR("cont_iv_prop_fetch failed "DF_RC"\n",
 				DP_RC(rc));
@@ -1871,8 +1870,7 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 		D_GOTO(out, rc);
 
 	/* Update prop IV with merged prop */
-	rc = cont_iv_prop_update(pool->sp_iv_ns,
-				 hdl_uuid, cont->c_uuid, prop_iv);
+	rc = cont_iv_prop_update(pool->sp_iv_ns, cont->c_uuid, prop_iv);
 	if (rc)
 		D_ERROR(DF_UUID": failed to update prop IV for cont, "
 			"%d.\n", DP_UUID(cont->c_uuid), rc);
@@ -2740,3 +2738,44 @@ out:
 	crt_reply_send(rpc);
 }
 
+int
+ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
+{
+	daos_prop_t	*prop = NULL;
+	struct cont_svc	*svc;
+	struct rdb_tx	 tx;
+	struct cont	*cont = NULL;
+	int		 rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
+	cont_put(cont);
+
+	D_ASSERT(prop != NULL);
+	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
+
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	*prop_out = prop;
+
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+out_put:
+	cont_svc_put_leader(svc);
+	return rc;
+}
