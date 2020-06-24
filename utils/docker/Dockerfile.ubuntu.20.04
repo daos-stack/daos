@@ -17,6 +17,7 @@ ARG UID=1000
 # It's better to put the apt-get update in the same "cache layer" as the
 # apt-get install command so that the apt database is updated if/when the
 # installed packages list below is updated
+RUN ls
 
 # Install basic tools
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
@@ -29,7 +30,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             locales make meson nasm ninja-build pandoc patch            \
             pylint python-dev python3-dev scons sg3-utils uuid-dev      \
             yasm valgrind libhwloc-dev man fuse3 libfuse3-dev 		\
-	    openjdk-8-jdk maven
+	    openjdk-8-jdk maven libopenmpi-dev patchelf
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
