@@ -1564,10 +1564,10 @@ dkey_update_begin(struct vos_io_context *ioc)
 }
 
 int
-vos_publish_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
-		bool publish)
+vos_publish_scm(struct vos_container *cont, void *data, bool publish)
 {
-	int	rc = 0;
+	struct vos_rsrvd_scm	*rsrvd_scm = data;
+	int			 rc = 0;
 
 	D_ASSERT(rsrvd_scm->rs_actv_at <= rsrvd_scm->rs_actv_cnt);
 	if (rsrvd_scm->rs_actv_at == 0)
@@ -1720,8 +1720,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	umem = vos_ioc2umm(ioc);
 
-	err = umem_tx_begin(umem, vos_txd_get());
-	if (err)
+	err = vos_tx_begin(dth, umem);
+	if (err != 0)
 		goto out;
 
 	vos_dth_set(dth);
@@ -1749,13 +1749,6 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
 		ioc->ic_read_conflict = true;
 
-	/* Publish SCM reservations */
-	err = vos_publish_scm(ioc->ic_cont, &ioc->ic_rsrvd_scm, true);
-	if (err) {
-		D_ERROR("Publish SCM failed. "DF_RC"\n", DP_RC(err));
-		goto abort;
-	}
-
 	/* Update tree index */
 	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ? dth->dth_op_seq : 1);
 	if (err) {
@@ -1772,23 +1765,37 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 	}
 
-	/* Publish NVMe reservations */
-	err = vos_publish_blocks(ioc->ic_cont, &ioc->ic_blk_exts, true,
-				 VOS_IOS_GENERIC);
+	if (dth != NULL) {
+		struct dtx_rsrvd_uint	*dru;
 
-	if (dth != NULL && err == 0)
-		err = vos_dtx_prepared(dth);
+		D_ASSERT(dth->dth_op_seq >= 1);
+
+		dru = &dth->dth_rsrvds[dth->dth_op_seq - 1];
+		memcpy(&dru->dru_scm, &ioc->ic_rsrvd_scm,
+		       sizeof(ioc->ic_rsrvd_scm));
+		memset(&ioc->ic_rsrvd_scm, 0, sizeof(ioc->ic_rsrvd_scm));
+
+		D_INIT_LIST_HEAD(&dru->dru_nvme);
+		d_list_splice_init(&ioc->ic_blk_exts, &dru->dru_nvme);
+	} else {
+		/* Publish SCM reservations */
+		err = vos_publish_scm(ioc->ic_cont, &ioc->ic_rsrvd_scm, true);
+		if (err == 0)
+			/* Publish NVMe reservations */
+			err = vos_publish_blocks(ioc->ic_cont,
+						 &ioc->ic_blk_exts, true,
+						 VOS_IOS_GENERIC);
+	}
 
 abort:
-	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
+	err = vos_tx_end(dth, umem, err);
+
 out:
-	if (err != 0) {
-		vos_dtx_cleanup_dth(dth);
+	if (err != 0)
 		update_cancel(ioc);
-	} else if (daes != NULL) {
+	else if (daes != NULL)
 		vos_dtx_post_handle(ioc->ic_cont, daes,
 				    dth->dth_dti_cos_count, false);
-	}
 
 	D_FREE(daes);
 

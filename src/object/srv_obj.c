@@ -104,9 +104,15 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 	if (!daos_handle_is_inval(ioh)) {
 		bool update = obj_rpc_is_update(rpc);
 
-		rc = update ? vos_update_end(ioh, map_version, &orwi->orw_dkey,
-					     status, dth) :
-			      vos_fetch_end(ioh, status);
+		if (update) {
+			rc = dtx_sub_init(dth, &orwi->orw_oid,
+					  orwi->orw_dkey_hash);
+			if (rc == 0)
+				rc = vos_update_end(ioh, map_version,
+						&orwi->orw_dkey, status, dth);
+		} else {
+			rc = vos_fetch_end(ioh, status);
+		}
 
 		if (rc != 0) {
 			D_ERROR(DF_UOID " %s end failed: %d\n",
@@ -1519,10 +1525,10 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	}
 
 	rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, orw->orw_epoch,
-		       orw->orw_flags & ORF_EPOCH_UNCERTAIN, orw->orw_map_ver,
-		       &orw->orw_oid, orw->orw_dkey_hash, DAOS_INTENT_UPDATE,
-		       orw->orw_dti_cos.ca_arrays, orw->orw_dti_cos.ca_count,
-		       mbs, &dth);
+		       orw->orw_flags & ORF_EPOCH_UNCERTAIN, 1,
+		       orw->orw_map_ver, &orw->orw_oid,
+		       orw->orw_dti_cos.ca_arrays,
+		       orw->orw_dti_cos.ca_count, mbs, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1597,6 +1603,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct obj_ec_split_req		*split_req = NULL;
 	struct dtx_memberships		*mbs = NULL;
 	struct daos_shard_tgt		*tgts = NULL;
+	struct dtx_id			*dti_cos = NULL;
+	int				dti_cos_cnt;
 	uint32_t			tgt_cnt;
 	uint32_t			version;
 	int				rc;
@@ -1635,11 +1643,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		}
 
 		rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, orw->orw_epoch,
-			       orw->orw_flags & ORF_EPOCH_UNCERTAIN,
+			       orw->orw_flags & ORF_EPOCH_UNCERTAIN, 0,
 			       orw->orw_map_ver, &orw->orw_oid,
-			       orw->orw_dkey_hash, DAOS_INTENT_DEFAULT,
-			       orw->orw_dti_cos.ca_arrays,
-			       orw->orw_dti_cos.ca_count, NULL, &dth);
+			       NULL, 0, NULL, &dth);
 		D_ASSERTF(rc == 0, "%d\n", rc);
 
 		rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, &dth);
@@ -1693,8 +1699,20 @@ again:
 
 	D_TIME_START(time_start, OBJ_PF_UPDATE);
 
-	/*
-	 * Since we do not know if other replicas execute the
+	/* For leader case, we need to find out the potential conflict
+	 * (or share the same non-committed object/dkey) DTX(s) in the
+	 * CoS (committable) cache, piggyback them via the dispdatched
+	 * RPC to non-leaders. Then the non-leader replicas can commit
+	 * them before real modifications to avoid availability issues.
+	 */
+	D_FREE(dti_cos);
+	dti_cos_cnt = dtx_list_cos(ioc.ioc_coc, &orw->orw_oid,
+				   orw->orw_dkey_hash, DTX_THRESHOLD_COUNT,
+				   &dti_cos);
+	if (dti_cos_cnt < 0)
+		D_GOTO(out, rc = dti_cos_cnt);
+
+	/* Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
 	 * locally, we will start dtx and forward requests to
 	 * all replicas.
@@ -1706,9 +1724,9 @@ again:
 	 * the RPC to other replicas.
 	 */
 	rc = dtx_leader_begin(ioc.ioc_coc, &orw->orw_dti, orw->orw_epoch,
-			      orw->orw_flags & ORF_EPOCH_UNCERTAIN, version,
-			      &orw->orw_oid, orw->orw_dkey_hash,
-			      DAOS_INTENT_UPDATE, tgts, tgt_cnt, mbs, &dlh);
+			      orw->orw_flags & ORF_EPOCH_UNCERTAIN, 1, version,
+			      &orw->orw_oid, dti_cos, dti_cos_cnt,
+			      tgts, tgt_cnt, mbs, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1774,6 +1792,7 @@ cleanup:
 	D_TIME_END(time_start, OBJ_PF_UPDATE);
 	obj_ec_split_req_fini(split_req);
 	D_FREE(mbs);
+	D_FREE(dti_cos);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -2115,6 +2134,10 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 		dth = NULL;
 	}
 
+	rc = dtx_sub_init(dth, &opi->opi_oid, opi->opi_dkey_hash);
+	if (rc != 0)
+		goto out;
+
 	switch (opc) {
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_TGT_PUNCH:
@@ -2202,10 +2225,10 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 
 	/* Start the local transaction */
 	rc = dtx_begin(ioc.ioc_coc, &opi->opi_dti, opi->opi_epoch,
-		       opi->opi_flags & ORF_EPOCH_UNCERTAIN, opi->opi_map_ver,
-		       &opi->opi_oid, opi->opi_dkey_hash, DAOS_INTENT_PUNCH,
-		       opi->opi_dti_cos.ca_arrays, opi->opi_dti_cos.ca_count,
-		       mbs, &dth);
+		       opi->opi_flags & ORF_EPOCH_UNCERTAIN, 1,
+		       opi->opi_map_ver, &opi->opi_oid,
+		       opi->opi_dti_cos.ca_arrays,
+		       opi->opi_dti_cos.ca_count, mbs, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -2266,6 +2289,8 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	struct obj_io_context		ioc;
 	struct dtx_memberships		*mbs = NULL;
 	struct daos_shard_tgt		*tgts = NULL;
+	struct dtx_id			*dti_cos = NULL;
+	int				dti_cos_cnt;
 	uint32_t			tgt_cnt;
 	uint32_t			flags = 0;
 	uint32_t			version;
@@ -2340,8 +2365,20 @@ again:
 		goto cleanup;
 	}
 
-	/*
-	 * Since we do not know if other replicas execute the
+	/* For leader case, we need to find out the potential conflict
+	 * (or share the same non-committed object/dkey) DTX(s) in the
+	 * CoS (committable) cache, piggyback them via the dispdatched
+	 * RPC to non-leaders. Then the non-leader replicas can commit
+	 * them before real modifications to avoid availability issues.
+	 */
+	D_FREE(dti_cos);
+	dti_cos_cnt = dtx_list_cos(ioc.ioc_coc, &opi->opi_oid,
+				   opi->opi_dkey_hash, DTX_THRESHOLD_COUNT,
+				   &dti_cos);
+	if (dti_cos_cnt < 0)
+		D_GOTO(out, rc = dti_cos_cnt);
+
+	/* Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
 	 * locally, we will start dtx and forward requests to
 	 * all replicas.
@@ -2353,9 +2390,9 @@ again:
 	 * the RPC to other replicas.
 	 */
 	rc = dtx_leader_begin(ioc.ioc_coc, &opi->opi_dti, opi->opi_epoch,
-			      opi->opi_flags & ORF_EPOCH_UNCERTAIN, version,
-			      &opi->opi_oid, opi->opi_dkey_hash,
-			      DAOS_INTENT_PUNCH, tgts, tgt_cnt, mbs, &dlh);
+			      opi->opi_flags & ORF_EPOCH_UNCERTAIN, 1, version,
+			      &opi->opi_oid, dti_cos, dti_cos_cnt,
+			      tgts, tgt_cnt, mbs, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -2406,6 +2443,7 @@ out:
 
 cleanup:
 	D_FREE(mbs);
+	D_FREE(dti_cos);
 	obj_ioc_end(&ioc, rc);
 }
 
