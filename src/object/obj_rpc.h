@@ -193,6 +193,7 @@ struct obj_iod_array {
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
 	((struct dcs_iod_csums)	(orw_iod_csums)		CRT_ARRAY) \
+	((struct daos_recx_ep_list)	(orw_rels)	CRT_ARRAY) \
 	((daos_iom_t)		(orw_maps)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
@@ -352,6 +353,36 @@ obj_is_tgt_modification_opc(uint32_t opc)
 	       opc == DAOS_OBJ_RPC_TGT_PUNCH ||
 	       opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 	       opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+}
+
+static inline bool
+obj_rpc_is_update(crt_rpc_t *rpc)
+{
+	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE;
+}
+
+static inline bool
+obj_rpc_is_fetch(crt_rpc_t *rpc)
+{
+	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
+}
+
+static inline bool
+obj_rpc_is_punch(crt_rpc_t *rpc)
+{
+	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_DKEYS ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_AKEYS ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+}
+
+static inline bool
+obj_rpc_is_migrate(crt_rpc_t *rpc)
+{
+	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_MIGRATE;
 }
 
 #endif /* __DAOS_OBJ_RPC_H__ */

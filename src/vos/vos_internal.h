@@ -224,7 +224,6 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_abort_aggregation:1,
 				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
 };
@@ -1104,9 +1103,9 @@ vos_space_sys_set(struct vos_pool *pool, daos_size_t *space_sys);
 int
 vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow);
 int
-vos_space_hold(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-	       daos_size_t *space_hld);
+vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods,
+	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
 
