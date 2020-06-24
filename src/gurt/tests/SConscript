@@ -32,6 +32,7 @@ def scons():
 
     # pylint: disable=too-many-locals
     Import('env', 'prereqs', 'cart_targets', 'swim_targets', 'gurt_targets')
+    Import('cart_lib')
     # pylint: enable=too-many-locals
 
     #Use full path to wrap_cmocka.h for configure test.  Since standalone
@@ -70,6 +71,7 @@ def scons():
                                     LINKFLAGS=flags)
         tests.append(testprog)
 
+    test_env.Requires(tests, cart_lib)
     Default(tests)
 
 if __name__ == "SCons.Script":
