@@ -80,7 +80,7 @@ class DmgCommand(YamlCommand):
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
         "storage_scan":
             r"([a-z0-9-]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
-            r"modules\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+controller",
+            r"namespaces\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+controller",
         "storage_scan_verbose":
             r"--------\n([a-z0-9-]+)\n--------|"
             r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+([\d.]+) ([A-Z]+)|"
