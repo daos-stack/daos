@@ -175,7 +175,6 @@ static int
 new_unixcomm_socket(int flags, struct unixcomm **newcomm)
 {
 	struct unixcomm	*comm;
-	int rc;
 
 	*newcomm = NULL;
 
@@ -186,19 +185,17 @@ new_unixcomm_socket(int flags, struct unixcomm **newcomm)
 	errno = 0;
 	comm->fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (comm->fd < 0) {
-		rc = daos_errno2der(errno);
 		D_ERROR("Failed to open socket, errno=%d\n", errno);
 		D_FREE(comm);
-		return rc;
+		return -DER_MISC;
 	}
 
 	errno = 0;
 	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
-		rc = daos_errno2der(errno);
 		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
 			comm->fd, errno);
 		unixcomm_close(comm);
-		return rc;
+		return -DER_MISC;
 	}
 
 	comm->flags = flags;
@@ -262,20 +259,18 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcomm)
 	errno = 0;
 	if (bind(comm->fd, (struct sockaddr *)&address,
 		 sizeof(struct sockaddr_un)) < 0) {
-		rc = daos_errno2der(errno);
 		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
 			sockaddr, comm->fd, errno);
 		unixcomm_close(comm);
-		return rc;
+		return -DER_MISC;
 	}
 
 	errno = 0;
 	if (listen(comm->fd, SOMAXCONN) < 0) {
-		rc = daos_errno2der(errno);
 		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
 			comm->fd, errno);
 		unixcomm_close(comm);
-		return rc;
+		return -DER_MISC;
 	}
 
 	*newcomm = comm;

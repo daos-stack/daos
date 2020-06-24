@@ -95,7 +95,7 @@ test_drpc_connect_returns_null_if_connect_fails(void **state)
 	struct drpc *drpc;
 
 	assert_int_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
-	assert_null(&drpc);
+	assert_null(drpc);
 
 	/* Closed the socket */
 	assert_int_equal(close_fd, socket_return);
