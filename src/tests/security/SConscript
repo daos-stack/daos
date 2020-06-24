@@ -1,4 +1,5 @@
 """Build security test"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -14,10 +15,12 @@ def scons():
 
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
-    security_test = denv.Program('security_test', sec_sources, LIBS=libs)
+    security_test = daos_build.program(denv, 'security_test', sec_sources,
+                                       LIBS=libs)
     env.Install('$PREFIX/bin/', security_test)
 
-    acl_dump_test = denv.Program('acl_dump_test', acl_sources, LIBS=libs)
+    acl_dump_test = daos_build.program(denv, 'acl_dump_test', acl_sources,
+                                       LIBS=libs)
     env.Install('$PREFIX/bin/', acl_dump_test)
 
 if __name__ == "SCons.Script":

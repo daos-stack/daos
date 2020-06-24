@@ -62,7 +62,7 @@ def scons():
     tenv.AppendUnique(LIBPATH=['#/src/cart/src/cart'])
     tenv.AppendUnique(FLAGS='-pthread')
 
-    crt_launch = tenv.Program(CRT_LAUNCH)
+    crt_launch = daos_build.program(tenv, CRT_LAUNCH)
 
     tenv.Requires(crt_launch, [cart_lib, gurt_lib])
     tenv.Install(os.path.join("$PREFIX", 'bin'), crt_launch)

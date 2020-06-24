@@ -38,6 +38,7 @@
 """Build cart_ctl test"""
 
 import os
+import daos_build
 
 SRC = ['cart_ctl.c']
 
@@ -50,7 +51,7 @@ def scons():
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
     prereqs.require(tenv, 'mercury')
 
-    ctl = tenv.Program(SRC)
+    ctl = daos_build.program(tenv, SRC)
     tenv.Requires(ctl, [cart_lib, gurt_lib])
     tenv.Install(os.path.join("$PREFIX", 'bin'), ctl)
 

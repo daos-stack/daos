@@ -38,6 +38,7 @@
 """Build self test"""
 
 import os
+import daos_build
 
 SELF_TEST = 'self_test.c'
 
@@ -54,7 +55,7 @@ def scons():
     tenv.AppendUnique(LIBPATH=['#/src/cart/src/cart'])
     tenv.AppendUnique(FLAGS='-pthread')
 
-    self_test = tenv.Program(SELF_TEST)
+    self_test = daos_build.program(tenv, SELF_TEST)
     tenv.Requires(self_test, [cart_lib, gurt_lib])
     tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
 
