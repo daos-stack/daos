@@ -86,6 +86,8 @@ struct dc_tx {
 	struct dtx_id		 tx_id;
 	/** Container open handle */
 	daos_handle_t		 tx_coh;
+	/** Protects all fields below. */
+	pthread_mutex_t		 tx_lock;
 	/** The TX epoch. */
 	struct dc_obj_epoch	 tx_epoch;
 	/** The list of dc_tx_sub_req. */
@@ -115,6 +117,7 @@ dc_tx_free(struct d_hlink *hlink)
 	D_ASSERT(daos_hhash_link_empty(&tx->tx_hlink));
 
 	dc_pool_put(tx->tx_pool);
+	D_MUTEX_DESTROY(&tx->tx_lock);
 	D_FREE_PTR(tx);
 }
 
@@ -168,6 +171,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 {
 	daos_handle_t	 ph;
 	struct dc_tx	*tx;
+	int		 rc;
 
 	if (daos_handle_is_inval(coh))
 		return -DER_NO_HDL;
@@ -178,6 +182,12 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	D_ALLOC_PTR(tx);
 	if (tx == NULL)
 		return -DER_NOMEM;
+
+	rc = D_MUTEX_INIT(&tx->tx_lock, NULL);
+	if (rc != 0) {
+		D_FREE_PTR(tx);
+		return rc;
+	}
 
 	tx->tx_pool = dc_hdl2pool(ph);
 	D_ASSERT(tx->tx_pool != NULL);
@@ -275,6 +285,7 @@ dc_tx_set_epoch(daos_handle_t th, daos_epoch_t epoch)
 	if (tx == NULL)
 		return -DER_NO_HDL;
 
+	D_MUTEX_LOCK(&tx->tx_lock);
 	if (tx->tx_status != TX_OPEN && tx->tx_status != TX_FAILED) {
 		D_ERROR("Can't set epoch on non-open/non-failed state TX(%d)\n",
 			tx->tx_status);
@@ -285,6 +296,7 @@ dc_tx_set_epoch(daos_handle_t th, daos_epoch_t epoch)
 	} else {
 		tx->tx_epoch.oe_value = epoch;
 	}
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 
 	dc_tx_decref(tx);
 
@@ -315,8 +327,8 @@ dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti)
  * have to restart the transaction under such case.
  *
  * If the parameter @ptx is not NULL, then the transaction handle pointer to
- * the "dc_tx" will be returned via it, and then the caller can directly use
- * it without dc_tx_hdl2ptr() again.
+ * the "dc_tx" will be returned via it, with dc_tx.tx_lock locked, and then the
+ * caller can directly use it without dc_tx_hdl2ptr() again.
  */
 static int
 dc_tx_check_pmv_internal(daos_handle_t th, struct dc_tx **ptx)
@@ -331,6 +343,8 @@ dc_tx_check_pmv_internal(daos_handle_t th, struct dc_tx **ptx)
 	tx = dc_tx_hdl2ptr(th);
 	if (tx == NULL)
 		return -DER_NO_HDL;
+
+	D_MUTEX_LOCK(&tx->tx_lock);
 
 	/* For RDONLY TX, not check pool map version to force restart TX. */
 	if (tx->tx_pm_ver == 0 || tx->tx_flags & DAOS_TF_RDONLY)
@@ -349,10 +363,12 @@ dc_tx_check_pmv_internal(daos_handle_t th, struct dc_tx **ptx)
 	}
 
 out:
-	if (rc != 0 || ptx == NULL)
+	if (rc != 0 || ptx == NULL) {
+		D_MUTEX_UNLOCK(&tx->tx_lock);
 		dc_tx_decref(tx);
-	else
+	} else {
 		*ptx = tx;
+	}
 
 	return rc;
 }
@@ -363,6 +379,7 @@ dc_tx_check_pmv(daos_handle_t th)
 	return dc_tx_check_pmv_internal(th, NULL);
 }
 
+/* See dc_tx_check_pmv_internal for the semantics of ptx. */
 static int
 dc_tx_check(daos_handle_t th, bool check_write, struct dc_tx **ptx)
 {
@@ -396,11 +413,13 @@ dc_tx_check(daos_handle_t th, bool check_write, struct dc_tx **ptx)
 	}
 
 out:
-	if (rc != 0)
+	if (rc != 0) {
+		D_MUTEX_UNLOCK(&tx->tx_lock);
 		/* -1 for dc_tx_check_pmv_internal() held */
 		dc_tx_decref(tx);
-	else
+	} else {
 		*ptx = tx;
+	}
 
 	return rc;
 }
@@ -419,6 +438,7 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dc_obj_epoch *epoch,
 
 		*pm_ver = tx->tx_pm_ver;
 		*epoch = tx->tx_epoch;
+		D_MUTEX_UNLOCK(&tx->tx_lock);
 		dc_tx_decref(tx);
 	}
 
@@ -444,10 +464,12 @@ dc_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch)
 	 *	that. The caller can re-call hdl2epoch after some fetch or
 	 *	TX commit.
 	 */
+	D_MUTEX_LOCK(&tx->tx_lock);
 	if (tx->tx_epoch.oe_value != 0)
 		*epoch = tx->tx_epoch.oe_value;
 	else
 		rc = -DER_UNINIT;
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 	dc_tx_decref(tx);
 
 	return rc;
@@ -486,6 +508,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	crt_rpc_t		 *req = tcca->tcca_req;
 	int			  rc = task->dt_result;
 
+	D_MUTEX_LOCK(&tx->tx_lock);
+
 	if (rc == 0) {
 		tx->tx_status = TX_COMMITTED;
 		goto out;
@@ -505,6 +529,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 
 out:
 	crt_req_decref(req);
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 	/* -1 for dc_tx_commit() held */
 	dc_tx_decref(tx);
 
@@ -528,10 +553,12 @@ dc_tx_non_cpd_cb(daos_handle_t th, int result)
 	if (tx == NULL)
 		return -DER_NO_HDL;
 
+	D_MUTEX_LOCK(&tx->tx_lock);
 	if (result != 0)
 		tx->tx_status = TX_FAILED;
 	else
 		tx->tx_status = TX_COMMITTED;
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 
 	dc_tx_decref(tx);
 
@@ -542,11 +569,15 @@ static int
 dc_tx_commit_non_cpd(tse_task_t *task, struct dc_tx *tx)
 {
 	struct dc_tx_sub_req	*dtsr;
+	struct dc_obj_epoch	 epoch = tx->tx_epoch;
+	uint32_t		 pm_ver = tx->tx_pm_ver;
 	int			 rc;
 
 	tx->tx_status = TX_COMMITTING;
 	dtsr = d_list_entry(tx->tx_sub_reqs.next, struct dc_tx_sub_req,
 			    dtsr_link);
+
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 
 	if (dtsr->dtsr_opc == DAOS_OBJ_RPC_UPDATE) {
 		daos_obj_update_t	*args = dc_task_get_args(task);
@@ -560,7 +591,7 @@ dc_tx_commit_non_cpd(tse_task_t *task, struct dc_tx *tx)
 		args->sgls = dtsr->dtsr_sgls;
 		args->maps = NULL;
 
-		rc = dc_obj_update(task, &tx->tx_epoch, tx->tx_pm_ver, args);
+		rc = dc_obj_update(task, &epoch, pm_ver, args);
 	} else {
 		daos_obj_punch_t	*args = dc_task_get_args(task);
 
@@ -571,8 +602,7 @@ dc_tx_commit_non_cpd(tse_task_t *task, struct dc_tx *tx)
 		args->flags = dtsr->dtsr_flags;
 		args->akey_nr = dtsr->dtsr_nr;
 
-		rc = dc_obj_punch(task, &tx->tx_epoch, tx->tx_pm_ver,
-				  dtsr->dtsr_opc, args);
+		rc = dc_obj_punch(task, &epoch, pm_ver, dtsr->dtsr_opc, args);
 	}
 
 	/* -1 for dc_tx_commit() held */
@@ -633,6 +663,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx)
 	 */
 
 	tx->tx_status = TX_COMMITTING;
+	D_MUTEX_UNLOCK(&tx->tx_lock);
+
 	rc = daos_rpc_send(req, task);
 	if (rc != 0)
 		D_ERROR("CPD RPC failed rc "DF_RC"\n", DP_RC(rc));
@@ -643,6 +675,7 @@ out:
 	if (req != NULL)
 		crt_req_decref(req);
 
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 	/* -1 for dc_tx_commit() held */
 	dc_tx_decref(tx);
 	tse_task_complete(task, rc);
@@ -666,6 +699,8 @@ dc_tx_commit(tse_task_t *task)
 		D_ERROR("Invalid TX handle\n");
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 	}
+
+	D_MUTEX_LOCK(&tx->tx_lock);
 
 	if (tx->tx_flags & DAOS_TF_RDONLY) {
 		D_ERROR("Can't commit a RDONLY TX\n");
@@ -692,6 +727,7 @@ dc_tx_commit(tse_task_t *task)
 	return dc_tx_commit_trigger(task, tx);
 
 out_tx:
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 	dc_tx_decref(tx);
 
 out_task:
@@ -717,6 +753,8 @@ dc_tx_abort(tse_task_t *task)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 	}
 
+	D_MUTEX_LOCK(&tx->tx_lock);
+
 	if (tx->tx_status == TX_ABORTED)
 		D_GOTO(out_tx, rc = 0);
 
@@ -734,6 +772,7 @@ dc_tx_abort(tse_task_t *task)
 	tx->tx_status = TX_ABORTED;
 
 out_tx:
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 	dc_tx_decref(tx);
 
 out_task:
@@ -777,6 +816,7 @@ dc_tx_close(tse_task_t *task)
 	if (tx == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
+	D_MUTEX_LOCK(&tx->tx_lock);
 	if (tx->tx_status == TX_COMMITTING) {
 		D_ERROR("Can't close a TX in committing\n");
 		rc = -DER_BUSY;
@@ -786,6 +826,7 @@ dc_tx_close(tse_task_t *task)
 		/* -1 for create */
 		dc_tx_decref(tx);
 	}
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 
 	/* -1 for hdl2ptr */
 	dc_tx_decref(tx);
@@ -816,6 +857,7 @@ dc_tx_restart(tse_task_t *task)
 	if (tx == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
+	D_MUTEX_LOCK(&tx->tx_lock);
 	if (tx->tx_status != TX_OPEN && tx->tx_status != TX_FAILED) {
 		D_ERROR("Can't restart non-open/non-failed state TX (%d)\n",
 			tx->tx_status);
@@ -836,6 +878,7 @@ dc_tx_restart(tse_task_t *task)
 		 */
 		tx->tx_epoch.oe_value = crt_hlc_get();
 	}
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 
 	/* -1 for hdl2ptr */
 	dc_tx_decref(tx);
@@ -870,6 +913,7 @@ dc_tx_local_close(daos_handle_t th)
 	if (tx == NULL)
 		return -DER_NO_HDL;
 
+	D_MUTEX_LOCK(&tx->tx_lock);
 	if (tx->tx_status == TX_COMMITTING) {
 		D_ERROR("Can't close a TX in committing\n");
 		D_GOTO(out_tx, rc = -DER_BUSY);
@@ -881,6 +925,7 @@ dc_tx_local_close(daos_handle_t th)
 	dc_tx_decref(tx);
 
 out_tx:
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 	/* -1 for hdl2ptr */
 	dc_tx_decref(tx);
 
@@ -1177,6 +1222,7 @@ dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc)
 		break;
 	}
 
+	D_MUTEX_UNLOCK(&tx->tx_lock);
 	dc_tx_decref(tx);
 
 	return rc;
