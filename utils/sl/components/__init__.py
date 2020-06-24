@@ -129,7 +129,8 @@ def define_mercury(reqs):
                                   '--enable-psm2' +
                                   check(reqs, 'psm2',
                                         "=$PSM2_PREFIX "
-                                        'LDFLAGS="-Wl,--enable-new-dtags" ',
+                                        'LDFLAGS="-Wl,--enable-new-dtags ' +
+                                        '-Wl,-rpath=$PSM2_PREFIX/lib64" ',
                                         ''),
                                   ''),
                           'make $JOBS_OPT',
