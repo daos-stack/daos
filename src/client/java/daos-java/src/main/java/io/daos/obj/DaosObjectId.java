@@ -110,4 +110,9 @@ public class DaosObjectId {
     }
     return buffer;
   }
+
+  @Override
+  public String toString() {
+    return "object ID, high: " + high + ", low: " + low + ", encoded: " + encoded;
+  }
 }
