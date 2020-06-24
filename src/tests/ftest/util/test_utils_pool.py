@@ -267,6 +267,13 @@ class TestPool(TestDaosApiBase):
         It sets property for a given pool uuid using
         dmg.
 
+        Args:
+            prop_name (str, optional): pool property name.
+            prop_value (str, optional): value to be set for the property 
+
+        Returns:
+            None
+
         """
         if self.pool:
             self.log.info("Set-prop for Pool: %s", self.uuid)

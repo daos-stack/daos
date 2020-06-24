@@ -133,8 +133,8 @@ class IorTestBase(TestWithServers):
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
                 "daos:testFile". Is ignored when using POSIX through DFUSE.
-            update: If it is true, create pool and container else just
-                run the ior.
+            update (bool, optional): If it is true, create pool and container
+                else just run the ior.
 
         Returns:
             CmdResult: result of the ior command execution
