@@ -219,7 +219,7 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 
 	fuse_opt_free_args(args);
 
-	if (!dfuse_send_to_fg(0))
+	if (dfuse_send_to_fg(0) != -DER_SUCCESS)
 		goto cleanup;
 
 	rc = ll_loop_fn(dfuse_info);
