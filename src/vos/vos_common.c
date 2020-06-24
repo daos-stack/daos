@@ -134,8 +134,8 @@ again:
 	for (i = 0, rc = 0;
 	     i < dth->dth_modification_cnt && (rc == 0 || err != 0); i++) {
 		dru = &dth->dth_rsrvds[i];
-		if (dru->dru_scm.drs_ptr != NULL) {
-			rc = vos_publish_scm(cont, &dru->dru_scm, err == 0);
+		if (dru->dru_scm != NULL) {
+			rc = vos_publish_scm(cont, dru->dru_scm, err == 0);
 
 			/* FIXME: Currently, vos_publish_blocks() will release
 			 *	  reserved information in 'dru_nvme_list' from
@@ -148,7 +148,7 @@ again:
 							err == 0,
 							VOS_IOS_GENERIC);
 			if (err != 0)
-				D_FREE(dru->dru_scm.drs_ptr);
+				D_FREE(dru->dru_scm);
 		}
 	}
 
@@ -211,7 +211,7 @@ vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err)
 		for (i = 0; i < dth->dth_modification_cnt; i++) {
 			struct dtx_rsrvd_uint	*dru = &dth->dth_rsrvds[i];
 
-			D_FREE(dru->dru_scm.drs_ptr);
+			D_FREE(dru->dru_scm);
 		}
 	} else {
 		/* Aborted case. */

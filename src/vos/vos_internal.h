@@ -932,9 +932,11 @@ void
 vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh);
 
-int vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
+int
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
 
-int vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err);
+int
+vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err);
 
 /* vos_obj.c */
 int
@@ -969,24 +971,17 @@ vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 
 /* Reserve SCM through umem_reserve() for a PMDK transaction */
 struct vos_rsrvd_scm {
-	unsigned int		 rs_actv_cnt;
-	unsigned int		 rs_actv_at;
-	struct pobj_action	*rs_actv;
+	unsigned int		rs_actv_cnt;
+	unsigned int		rs_actv_at;
+	struct pobj_action	rs_actv[0];
 };
-
-D_CASSERT(offsetof(struct vos_rsrvd_scm, rs_actv_cnt) ==
-	  offsetof(struct dtx_rsrvd_scm, drs_cnt));
-D_CASSERT(offsetof(struct vos_rsrvd_scm, rs_actv_at) ==
-	  offsetof(struct dtx_rsrvd_scm, drs_at));
-D_CASSERT(offsetof(struct vos_rsrvd_scm, rs_actv) ==
-	  offsetof(struct dtx_rsrvd_scm, drs_ptr));
-D_CASSERT(sizeof(struct vos_rsrvd_scm) == sizeof(struct dtx_rsrvd_scm));
 
 umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 		daos_size_t size);
 int
-vos_publish_scm(struct vos_container *cont, void *data, bool publish);
+vos_publish_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
+		bool publish);
 int
 vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
 		   daos_size_t size, enum vos_io_stream ios, uint64_t *off);

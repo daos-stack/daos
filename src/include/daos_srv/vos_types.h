@@ -32,14 +32,8 @@
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
-struct dtx_rsrvd_scm {
-	uint32_t		drs_cnt;
-	uint32_t		drs_at;
-	void			*drs_ptr;
-};
-
 struct dtx_rsrvd_uint {
-	struct dtx_rsrvd_scm	dru_scm;
+	void			*dru_scm;
 	d_list_t		dru_nvme;
 };
 
