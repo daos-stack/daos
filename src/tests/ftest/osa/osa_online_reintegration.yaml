@@ -40,7 +40,7 @@ ior:
           ior_api:
             - DAOS
           obj_class:
-            - "SX"
+            - "RP_2GX"
     ior_test_sequence:
     #   - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
     #    The values are set to be in the multiples of 10.
