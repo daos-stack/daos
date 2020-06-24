@@ -121,53 +121,72 @@ class DmgCommand(DmgCommandBase):
         self.sub_command_class.sub_command_class.force.value = force
         return self._get_result()
 
-    def storage_set_faulty(self, devuuid):
+    def storage_set_faulty(self, uuid):
         """Get the result of the 'dmg storage set nvme-faulty' command.
 
         Args:
-            devuuid (str, optional): Device/Blobstore UUID to query.
-                Defaults to None.
+            uuid (str): Device UUID to query.
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("set")
         self.sub_command_class.sub_command_class.set_sub_command("nvme-faulty")
         self.sub_command_class. \
-            sub_command_class.sub_command_class.devuuid.value = devuuid
+            sub_command_class.sub_command_class.uuid.value = uuid
         return self._get_result()
 
-    def storage_query_smd(self, devices=False, pools=False):
-        """Get the result of the 'dmg storage query smd' command.
+    def storage_query_list_devices(self, rank=None, health=False):
+        """Get the result of the 'dmg storage query list-devices' command.
 
         Args:
-            devices (bool, optional): List all devices/blobstores stored in
-                per-server metadata table. Defaults to False.
-            pools (bool, optional): List all VOS pool targets stored in
-                per-server metadata table. Defaults to False.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg storage prepare command fails.
-
-        """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class.sub_command_class.set_sub_command("smd")
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.devices.value = devices
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.pools.value = pools
-        return self._get_result()
-
-    def storage_query_blobstore(self, devuuid, tgtid=None):
-        """Get the result of the 'dmg storage query blobstore-health' command.
-
-        Args:
-            devuuid (str, optional): Device/Blobstore UUID to query.
+            rank (int, optional): Limit response to devices on this rank.
                 Defaults to None.
-            tgtid (str, optional): VOS target ID to query. Defaults to None.
+            health (bool, optional): Include device health in response.
+                Defaults to false.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.set_sub_command("list-devices")
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.rank.value = rank
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.health.value = health
+        return self._get_result()
+
+    def storage_query_list_pools(self, rank=None):
+        """Get the result of the 'dmg storage query list-pools' command.
+
+        Args:
+            rank (int, optional): Limit response to pools on this rank.
+                Defaults to None.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.set_sub_command("list-pools")
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.rank.value = rank
+        return self._get_result()
+
+    def storage_query_device_health(self, uuid):
+        """Get the result of the 'dmg storage query device-health' command.
+
+        Args:
+            uuid (str): Device UUID to query.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -180,34 +199,34 @@ class DmgCommand(DmgCommandBase):
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("query")
         self.sub_command_class. \
-            sub_command_class.set_sub_command("blobstore-health")
+            sub_command_class.set_sub_command("device-health")
         self.sub_command_class. \
-            sub_command_class.sub_command_class.devuuid.value = devuuid
+            sub_command_class.sub_command_class.uuid.value = uuid
+        return self._get_result()
+
+    def storage_query_target_health(self, rank, tgtid):
+        """Get the result of the 'dmg storage query target-health' command.
+
+        Args:
+            rank (int): Rank hosting target.
+            tgtid (int): Target index to query.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class. \
+            sub_command_class.set_sub_command("device-health")
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.rank.value = rank
         self.sub_command_class. \
             sub_command_class.sub_command_class.tgtid.value = tgtid
-        return self._get_result()
-
-    def storage_query_device_state(self, devuuid):
-        """Get the result of the 'dmg storage query device-state' command.
-
-        Args:
-            devuuid (str, optional): Device/Blobstore UUID to query.
-                Defaults to None.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg storage prepare command fails.
-
-        """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class. \
-            sub_command_class.set_sub_command("device-state")
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.devuuid.value = devuuid
         return self._get_result()
 
     def storage_query_nvme_health(self):
