@@ -80,7 +80,6 @@ if [ -d "/mnt/daos" ]; then
     fi
 
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/test_linkage"
-    #run_test "${SL_BUILD_DIR}/src/cart/src/utest/test_gurt"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/utest_swim"
