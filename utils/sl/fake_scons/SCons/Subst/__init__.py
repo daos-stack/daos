@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2020 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -17,8 +17,15 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-"""Fake SCons"""
+"""Fake scons environment shutting up pylint on SCons files"""
 
-__all__ = ['Script',
-           'Variables',
-           'Subst']
+# pylint: disable=too-few-public-methods
+class Literal():
+    """Fake Literal"""
+
+    def __init__(self, lstr):
+        """constructor"""
+        self.lstr = lstr
+
+
+__all__ = ['Literal']

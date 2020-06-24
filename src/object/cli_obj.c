@@ -77,6 +77,10 @@ struct obj_auxi_args {
 	int				 result;
 	uint32_t			 map_ver_req;
 	uint32_t			 map_ver_reply;
+	/* flags for the obj IO task.
+	 * ec_wait_recov -- obj fetch wait another EC recovery task,
+	 * ec_in_recov -- a EC recovery task
+	 */
 	uint32_t			 io_retry:1,
 					 args_initialized:1,
 					 to_leader:1,
@@ -85,7 +89,9 @@ struct obj_auxi_args {
 					 is_ec_obj:1,
 					 csum_retry:1,
 					 csum_report:1,
-					 no_retry:1;
+					 no_retry:1,
+					 ec_wait_recov:1,
+					 ec_in_recov:1;
 	/* request flags. currently only: ORF_RESEND, ORF_CSUM_REPORT */
 	uint32_t			 flags;
 	struct obj_req_tgts		 req_tgts;
@@ -637,8 +643,7 @@ obj_reasb_req_fini(struct obj_auxi_args *obj_auxi)
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
 		reasb_req->tgt_oiods = NULL;
 	}
-	obj_ec_recov_free(reasb_req);
-	D_FREE(reasb_req->orr_err_list);
+	obj_ec_fail_info_free(reasb_req);
 	D_FREE(reasb_req->orr_iods);
 }
 
@@ -689,18 +694,6 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	return rc;
 }
 
-static bool
-obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
-{
-	uint32_t	i;
-
-	for (i = 0; i < nerrs; i++) {
-		if (err_list[i] == tgt_idx)
-			return true;
-	}
-	return false;
-}
-
 static int
 obj_ec_get_degrade(struct obj_auxi_args *obj_auxi, uint16_t fail_tgt_idx,
 		   uint32_t *parity_tgt_idx)
@@ -708,19 +701,18 @@ obj_ec_get_degrade(struct obj_auxi_args *obj_auxi, uint16_t fail_tgt_idx,
 	struct obj_reasb_req	*reasb_req = &obj_auxi->reasb_req;
 	uint16_t		 p = obj_ec_parity_tgt_nr(reasb_req->orr_oca);
 	uint16_t		 k = obj_ec_data_tgt_nr(reasb_req->orr_oca);
+	struct obj_ec_fail_info	*fail_info;
 	uint32_t		*err_list;
 	uint32_t		 nerrs, i;
 	bool			 with_parity = false;
 
 	D_ASSERT(fail_tgt_idx < k + p);
-	if (reasb_req->orr_err_list == NULL) {
-		D_ALLOC_ARRAY(reasb_req->orr_err_list, p);
-		if (reasb_req->orr_err_list == NULL)
-			return -DER_NOMEM;
-		reasb_req->orr_nerrs = 0;
-	}
-	err_list = reasb_req->orr_err_list;
-	nerrs = reasb_req->orr_nerrs;
+	fail_info = obj_ec_fail_info_get(reasb_req, true, p);
+	if (fail_info == NULL)
+		return -DER_NOMEM;
+
+	err_list = fail_info->efi_tgt_list;
+	nerrs = fail_info->efi_ntgts;
 	D_ASSERT(nerrs <= p);
 	if (nerrs == p) {
 		D_ERROR("already with %d error targets, not recoverable.\n", p);
@@ -731,8 +723,8 @@ obj_ec_get_degrade(struct obj_auxi_args *obj_auxi, uint16_t fail_tgt_idx,
 		D_ASSERT(err_list[i] != fail_tgt_idx);
 
 	err_list[nerrs] = fail_tgt_idx;
-	reasb_req->orr_nerrs++;
-	nerrs = reasb_req->orr_nerrs;
+	fail_info->efi_ntgts++;
+	nerrs = fail_info->efi_ntgts;
 
 	for (i = k; i < k + p; i++) {
 		if (!obj_ec_tgt_in_err(err_list, nerrs, i)) {
@@ -802,9 +794,6 @@ shard_open:
 		D_ASSERT(ec_deg_tgt >=
 			 obj_ec_data_tgt_nr(obj_auxi->reasb_req.orr_oca));
 		shard = start_shard + ec_deg_tgt;
-		D_DEBUG(DB_IO, DF_OID" shard %d fetch re-direct to shard %d.\n",
-			DP_OID(obj->cob_md.omd_id), start_shard + ec_tgt_idx,
-			start_shard + ec_deg_tgt);
 		ec_degrade = false;
 		goto shard_open;
 	}
@@ -1341,6 +1330,96 @@ err:
 	D_ERROR("Failed to retry task=%p(err=%d), io_retry=%d, rc "DF_RC".\n",
 		task, result, obj_auxi->io_retry, DP_RC(rc));
 	return rc;
+}
+
+static int
+recov_task_abort(tse_task_t *task, void *arg)
+{
+	int	rc = *((int *)arg);
+
+	tse_task_complete(task, rc);
+	return 0;
+}
+
+static void
+obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
+		struct obj_auxi_args *obj_auxi)
+{
+	struct obj_reasb_req		*reasb_req = &obj_auxi->reasb_req;
+	struct obj_ec_fail_info		*fail_info = reasb_req->orr_fail;
+	daos_obj_fetch_t		*args = dc_task_get_args(task);
+	tse_sched_t			*sched = tse_task2sched(task);
+	struct obj_ec_recov_task	*recov_task;
+	tse_task_t			*sub_task = NULL;
+	daos_handle_t			 coh = obj->cob_coh;
+	daos_handle_t			 th = DAOS_HDL_INVAL;
+	d_list_t			 task_list;
+	uint32_t			 i;
+	int				 rc;
+
+	rc = obj_ec_recov_prep(&obj_auxi->reasb_req, obj->cob_md.omd_id,
+			       args->iods, args->nr);
+	if (rc) {
+		D_ERROR("task %p "DF_OID" obj_ec_recov_prep failed "DF_RC".\n",
+			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+		goto out;
+	}
+
+	D_ASSERT(fail_info->efi_recov_ntasks > 0 &&
+		 fail_info->efi_recov_tasks != NULL);
+	D_INIT_LIST_HEAD(&task_list);
+	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
+		recov_task = &fail_info->efi_recov_tasks[i];
+		rc = dc_tx_local_open(coh, recov_task->ert_epoch, 0, &th);
+		if (rc) {
+			D_ERROR("task %p "DF_OID" dc_tx_local_open failed "
+				DF_RC".\n", task, DP_OID(obj->cob_md.omd_id),
+				DP_RC(rc));
+			goto out;
+		}
+		recov_task->ert_th = th;
+
+		rc = dc_obj_fetch_task_create(args->oh, th, DIOF_EC_RECOV,
+				args->dkey, 1, &recov_task->ert_iod,
+				&recov_task->ert_sgl, fail_info, NULL, NULL,
+				sched, &sub_task);
+		if (rc) {
+			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create "
+				"failed "DF_RC".\n", task,
+				DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+			goto out;
+		}
+
+		tse_task_list_add(sub_task, &task_list);
+
+		rc = dc_task_depend(task, 1, &sub_task);
+		if (rc != 0) {
+			D_ERROR("task %p "DF_OID" dc_task_depend failed "DF_RC
+				".\n", task, DP_OID(obj->cob_md.omd_id),
+				DP_RC(rc));
+			goto out;
+		}
+	}
+
+	rc = dc_task_resched(task);
+	if (rc != 0) {
+		D_ERROR("task %p "DF_OID" dc_task_resched failed "DF_RC".\n",
+			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+		goto out;
+	}
+
+out:
+	if (rc == 0) {
+		obj_auxi->ec_wait_recov = 1;
+		D_DEBUG(DB_IO, "scheduling %d recovery tasks for IO task %p.\n",
+			fail_info->efi_recov_ntasks, task);
+		tse_task_list_sched(&task_list, false);
+	} else {
+		task->dt_result = rc;
+		tse_task_list_traverse(&task_list, recov_task_abort, &rc);
+		D_ERROR("task %p "DF_OID" EC recovery failed "DF_RC".\n",
+			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+	}
 }
 
 struct obj_list_arg {
@@ -2428,6 +2507,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_retry_cb(task, obj, obj_auxi, pm_stale);
 
 	if (!obj_auxi->io_retry) {
+		struct obj_ec_fail_info	*fail_info;
+
 		switch (obj_auxi->opc) {
 		case DAOS_OBJ_RPC_SYNC:
 			if (task->dt_result != 0) {
@@ -2467,18 +2548,29 @@ obj_comp_cb(tse_task_t *task, void *data)
 			D_ASSERT(d_list_empty(head));
 		}
 		obj_bulk_fini(obj_auxi);
-		obj_reasb_req_fini(obj_auxi);
-		/* zero it as user might reuse/resched the task, for example
-		 * the usage in dac_array_set_size().
-		 */
-		memset(obj_auxi, 0, sizeof(*obj_auxi));
-	} else {
-		if (obj_auxi->reasb_req.orr_err_list) {
-			memset(obj_auxi->reasb_req.orr_err_list, 0,
-			       sizeof(*obj_auxi->reasb_req.orr_err_list) *
-			       obj_auxi->reasb_req.orr_nerrs);
+
+		fail_info = obj_auxi->reasb_req.orr_fail;
+		if (task->dt_result == 0 && fail_info != NULL) {
+			if (obj_auxi->ec_wait_recov) {
+				daos_obj_fetch_t *args = dc_task_get_args(task);
+
+				obj_ec_recov_data(&obj_auxi->reasb_req,
+					obj->cob_md.omd_id, args->nr);
+
+				obj_reasb_req_fini(obj_auxi);
+				memset(obj_auxi, 0, sizeof(*obj_auxi));
+			} else if (!obj_auxi->ec_in_recov) {
+				obj_ec_recov_cb(task, obj, obj_auxi);
+			}
+		} else {
+			obj_reasb_req_fini(obj_auxi);
+			/* zero it as user might reuse/resched the task, for
+			 * example the usage in dac_array_set_size().
+			 */
+			memset(obj_auxi, 0, sizeof(*obj_auxi));
 		}
-		obj_auxi->reasb_req.orr_nerrs = 0;
+	} else {
+		obj_ec_fail_info_reset(&obj_auxi->reasb_req);
 	}
 
 	obj_decref(obj);
@@ -2723,6 +2815,14 @@ dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args, uint32_t flags,
 		D_GOTO(out_task, rc);
 	}
 
+	if ((flags & DIOF_EC_RECOV) != 0) {
+		obj_auxi->ec_in_recov = 1;
+		obj_auxi->reasb_req.orr_fail = args->extra_arg;
+		obj_auxi->reasb_req.orr_recov = 1;
+	}
+	if (obj_auxi->ec_wait_recov)
+		goto out_task;
+
 	rc = obj_rw_req_reassemb(obj, args, obj_auxi);
 	if (rc) {
 		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
@@ -2807,7 +2907,9 @@ dc_obj_fetch_shard_task(tse_task_t *task)
 int
 dc_obj_fetch_task(tse_task_t *task)
 {
-	return dc_obj_fetch(task, dc_task_get_args(task), 0, 0);
+	daos_obj_fetch_t *args	= dc_task_get_args(task);
+
+	return dc_obj_fetch(task, args, args->flags, 0);
 }
 
 int

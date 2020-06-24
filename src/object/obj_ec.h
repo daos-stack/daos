@@ -204,8 +204,8 @@ struct obj_ec_seg_sorter {
 };
 #define OBJ_EC_SEG_NIL		 (-1)
 
-/** for EC data recovery */
-struct obj_ec_recov {
+/** ISAL codec for EC data recovery */
+struct obj_ec_recov_codec {
 	unsigned char		*er_gftbls;	/* GF tables */
 	unsigned char		*er_de_matrix;	/* decode matrix */
 	unsigned char		*er_inv_matrix;	/* invert matrix */
@@ -215,6 +215,39 @@ struct obj_ec_recov {
 	bool			*er_in_err;	/* boolean array for targets */
 	uint32_t		 er_nerrs;	/* #targets in error */
 	uint32_t		 er_data_nerrs; /* #data-targets in error */
+};
+
+/* EC recovery task */
+struct obj_ec_recov_task {
+	daos_iod_t		ert_iod;
+	d_sg_list_t		ert_sgl;
+	daos_epoch_t		ert_epoch;
+	daos_handle_t		ert_th; /* read-only tx handle */
+};
+
+/** EC obj IO failure information */
+struct obj_ec_fail_info {
+	/* missed (to be recovered) recx list */
+	struct daos_recx_ep_list	*efi_recx_lists;
+	/* list of error targets */
+	uint32_t			*efi_tgt_list;
+	/* number of lists in efi_recx_lists/efi_stripe_lists, equal to #iods */
+	uint32_t			 efi_nrecx_lists;
+	/* number of error targets */
+	uint32_t			 efi_ntgts;
+	struct obj_ec_recov_codec	*efi_recov_codec;
+	/* to be recovered full-stripe list */
+	struct daos_recx_ep_list	*efi_stripe_lists;
+	/* The buffer for all the full-stripes in efi_stripe_lists.
+	 * One iov for each recx_ep (with 1 or more stripes), for each stripe
+	 * it contains ((k + p) * cell_byte_size) memory.
+	 */
+	d_sg_list_t			*efi_stripe_sgls;
+	/* For each daos_recx_ep in efi_stripe_lists will create one recovery
+	 * task to fetch the data from servers.
+	 */
+	struct obj_ec_recov_task	*efi_recov_tasks;
+	uint32_t			 efi_recov_ntasks;
 };
 
 struct obj_reasb_req;
@@ -456,6 +489,18 @@ obj_iod_idx_parity2vos(uint32_t iod_nr, daos_iod_t *iods)
 	}
 }
 
+static inline bool
+obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
+{
+	uint32_t	i;
+
+	for (i = 0; i < nerrs; i++) {
+		if (err_list[i] == tgt_idx)
+			return true;
+	}
+	return false;
+}
+
 /* obj_class.c */
 int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
@@ -473,10 +518,16 @@ struct obj_tgt_oiod *obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods,
 			uint32_t tgt_max_idx, uint32_t tgt_nr);
 struct obj_tgt_oiod *obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods,
 			uint32_t tgt_nr, uint32_t tgt_idx);
-void obj_ec_recov_free(struct obj_reasb_req *reasb_req);
+int obj_ec_recov_add(struct obj_reasb_req *reasb_req,
+		     struct daos_recx_ep_list *recx_lists, unsigned int nr);
+struct obj_ec_fail_info *obj_ec_fail_info_get(struct obj_reasb_req *reasb_req,
+					      bool create, uint16_t p);
+void obj_ec_fail_info_reset(struct obj_reasb_req *reasb_req);
+void obj_ec_fail_info_free(struct obj_reasb_req *reasb_req);
 int obj_ec_recov_prep(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
-		      struct daos_oclass_attr *oca, uint32_t nerrs,
-		      uint32_t *err_list);
+		      daos_iod_t *iods, uint32_t iod_nr);
+void obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
+		       uint32_t iod_nr);
 
 /* srv_ec.c */
 struct obj_rw_in;

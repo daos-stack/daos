@@ -336,6 +336,15 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 		bool	is_ec_obj = false;
 
+		rc = obj_ec_recov_add(rw_args->shard_args->reasb_req,
+				      orwo->orw_rels.ca_arrays,
+				      orwo->orw_rels.ca_count);
+		if (rc) {
+			D_ERROR("fail to add recov list for "DF_UOID",rc %d.\n",
+				DP_UOID(orw->orw_oid), rc);
+			goto out;
+		}
+
 		iods = orw->orw_iod_array.oia_iods;
 		sizes = orwo->orw_iod_sizes.ca_arrays;
 

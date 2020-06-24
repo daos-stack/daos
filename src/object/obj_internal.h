@@ -129,6 +129,10 @@ struct dc_object {
  *    it, create oiod/siod to specify each shard/tgt's IO req.
  */
 struct obj_reasb_req {
+	/* original user input iods/sgls */
+	daos_iod_t			*orr_uiods;
+	d_sg_list_t			*orr_usgls;
+	/* reassembled iods/sgls */
 	daos_iod_t			*orr_iods;
 	d_sg_list_t			*orr_sgls;
 	struct obj_io_desc		*orr_oiods;
@@ -137,17 +141,15 @@ struct obj_reasb_req {
 	struct dcs_layout		*orr_singv_los;
 	uint32_t			 orr_tgt_nr;
 	struct daos_oclass_attr		*orr_oca;
-	struct obj_ec_recov		*orr_recov;
 	struct obj_ec_codec		*orr_codec;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
 	uint8_t				*tgt_bitmap;
 	struct obj_tgt_oiod		*tgt_oiods;
-	/* list of error targets */
-	uint32_t			*orr_err_list;
-	/* number of error targets */
-	uint32_t			 orr_nerrs;
+	/* IO failure information */
+	struct obj_ec_fail_info		*orr_fail;
+	uint32_t			 orr_recov:1; /* for recovery flag */
 };
 
 static inline void
@@ -442,10 +444,18 @@ int dc_obj_update(tse_task_t *task, struct dc_obj_epoch *epoch,
 int dc_obj_punch(tse_task_t *task, struct dc_obj_epoch *epoch, uint32_t map_ver,
 		 enum obj_rpc_opc opc, daos_obj_punch_t *api_args);
 
+/* handles, pointers for handling I/O */
+struct obj_io_context {
+	struct ds_cont_hdl	*ioc_coh;
+	struct ds_cont_child	*ioc_coc;
+	daos_handle_t		 ioc_vos_coh;
+	uint32_t		 ioc_map_ver;
+	bool			 ioc_began;
+};
+
 struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;
-	struct ds_cont_hdl	*cont_hdl;
-	struct ds_cont_child	*cont;
+	struct obj_io_context	*ioc;
 	void			*args;
 	uint32_t		 flags;
 };
