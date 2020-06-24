@@ -28,7 +28,7 @@ from avocado import fail_on
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
 from command_utils import CommandFailure
-from general_utils import pcmd, get_host_data
+from general_utils import check_file_exists, get_host_data
 
 
 class ZeroConfigTest(TestWithServers):
@@ -62,11 +62,9 @@ class ZeroConfigTest(TestWithServers):
         file = os.path.join(b_path, "ports/1/counters", port_counter)
 
         # Check if if exists for the host
-        check_cmd = "test -f {}".format(file)
-        result = pcmd(hosts, check_cmd, True, None, 0)
-        if len(result) > 1 or 0 not in result:
-            self.fail("Could not find {} on {}".format(
-                file, self.hostlist_clients[0]))
+        check_result = check_file_exists(hosts, file)
+        if not check_result[0]:
+            self.fail("{}: {} not found".format(check_result[1], file))
 
         cmd = "cat {}".format(file)
         text = "port_counter"
@@ -91,7 +89,7 @@ class ZeroConfigTest(TestWithServers):
 
         # Get counter values for hfi devices before and after
         cnt_before = self.get_port_cnt(
-            self.hostlist_clients[0], hfi_map[exp_iface], "port_rcv_data")
+            self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
 
         # Let's run daos_racer as a client
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
