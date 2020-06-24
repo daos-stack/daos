@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.nio.ReadOnlyBufferException;
 import java.util.List;
 
 /**
@@ -178,7 +177,8 @@ public class IODataDesc {
       for (IODataDesc.Entry entry : getAkeyEntries()) {
         descBuffer.position(idx);
         entry.setActualSize(descBuffer.getInt());
-        idx += Constants.ENCODED_LENGTH_EXTENT;
+        entry.setActualRecSize(descBuffer.getInt());
+        idx += 2 * Constants.ENCODED_LENGTH_EXTENT;
       }
       resultParsed = true;
     }
@@ -258,6 +258,30 @@ public class IODataDesc {
                                                ByteBuffer dataBuffer) throws IOException {
     IODataDesc.Entry entry = new IODataDesc.Entry(key, type, recordSize, offset, dataBuffer);
     return entry;
+  }
+
+  @Override
+  public String toString() {
+    return toString();
+  }
+
+  public String toString(int maxSize) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("dkey: ").append(dkey).append(", akey entries\n");
+    int nbr = 0;
+    for (Entry e : akeyEntries) {
+      sb.append("[").append(e.toString()).append("]");
+      nbr++;
+      if (sb.length() < maxSize) {
+        sb.append(',');
+      } else {
+        break;
+      }
+    }
+    if (nbr < akeyEntries.size()) {
+      sb.append("...");
+    }
+    return sb.toString();
   }
 
   /**
@@ -367,7 +391,7 @@ public class IODataDesc {
      *
      * @return
      */
-    public ByteBuffer getDataBuffer() {
+    protected ByteBuffer getDataBuffer() {
       return dataBuffer;
     }
 
@@ -378,7 +402,7 @@ public class IODataDesc {
      */
     public int getActualSize() {
       if (updateOrFetch) {
-        throw new UnsupportedOperationException("it's entry for update, akey: " + key);
+        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
       }
       return actualSize;
     }
@@ -390,14 +414,39 @@ public class IODataDesc {
      */
     public void setActualSize(int actualSize) {
       if (updateOrFetch) {
-        throw new UnsupportedOperationException("it's entry for update, akey: " + key);
+        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
       }
       this.actualSize = actualSize;
     }
 
     /**
+     * get actual record size.
+     *
+     * @return record size
+     */
+    public int getActualRecSize() {
+      if (updateOrFetch) {
+        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      }
+      return actualRecSize;
+    }
+
+    /**
+     * set actual record size.
+     *
+     * @param actualRecSize
+     */
+    public void setActualRecSize(int actualRecSize) {
+      if (updateOrFetch) {
+        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      }
+      this.actualRecSize = actualRecSize;
+    }
+
+    /**
      * read <code>length</code> of data from global buffer at this entry's index.
-     * make sure <code>length</code> is no more than actualSize
+     * make sure <code>length</code> is no more than actualSize.
+     *
      * @param bytes
      * byte array data read to
      * @param offset
@@ -406,6 +455,9 @@ public class IODataDesc {
      * length of data to read
      */
     public void get(byte[] bytes, int offset, int length) {
+      if (updateOrFetch) {
+        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      }
       if ((offset | length | bytes.length - offset - length) < 0) {
         throw new IndexOutOfBoundsException("bytes length: " + bytes.length +
           ", offset: " + offset + ", length: " + length + ", akey: " + key);
@@ -437,6 +489,9 @@ public class IODataDesc {
      * destination buffer
      */
     public void get(ByteBuffer destBuffer) {
+      if (updateOrFetch) {
+        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      }
       int remaining = destBuffer.remaining();
       if (remaining > actualSize) {
         throw new BufferOverflowException();
@@ -477,7 +532,7 @@ public class IODataDesc {
      * @param globalBuffer
      * global data buffer
      */
-    public void setGlobalDataBuffer(ByteBuffer globalBuffer) {
+    protected void setGlobalDataBuffer(ByteBuffer globalBuffer) {
       if (this.globalBuffer != null) {
         throw new IllegalArgumentException("global buffer is set already. " + ", akey: " + key);
       }
@@ -508,7 +563,7 @@ public class IODataDesc {
      * @param descBuffer
      * the description buffer
      */
-    public void encode(ByteBuffer descBuffer) {
+    protected void encode(ByteBuffer descBuffer) {
       if (globalBufIdx == -1) {
         throw new IllegalStateException("value buffer index is not set, akey: " + key);
       }
@@ -521,6 +576,14 @@ public class IODataDesc {
         descBuffer.putInt(paddedDataSize/recordSize);
       }
       descBuffer.putInt(globalBufIdx);
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder();
+      sb.append(updateOrFetch ? "update " : "fetch ").append("entry: ");
+      sb.append(key).append(type).append(recordSize).append(offset).append(dataSize);
+      return sb.toString();
     }
   }
 

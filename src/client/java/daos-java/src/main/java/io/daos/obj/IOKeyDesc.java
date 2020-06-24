@@ -302,6 +302,16 @@ public class IOKeyDesc {
     return resultKeys;
   }
 
+  @Override
+  public String toString() {
+    return "IOKeyDesc{" +
+      "dkey='" + dkey + '\'' +
+      ", nbrOfKeys=" + nbrOfKeys +
+      ", batchSize=" + batchSize +
+      ", akeyLen=" + akeyLen +
+      '}';
+  }
+
   public static int getKeyDescLen() {
     return 8    // daos_size_t kd_key_len
       + 4   // uint32_t kd_val_type

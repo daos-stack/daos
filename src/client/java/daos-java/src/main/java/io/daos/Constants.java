@@ -68,6 +68,7 @@ public final class Constants {
   public static final int ERROR_CODE_NOT_EXIST = 2;
   public static final int ERROR_CODE_FILE_EXIST = 17;
   public static final int ERROR_CODE_ILLEGAL_ARG = -1003;
+  public static final int ERROR_CODE_REC2BIG = -2013;
 
   public static final String ERROR_NAME_PREFIX = "CUSTOM_ERR";
 

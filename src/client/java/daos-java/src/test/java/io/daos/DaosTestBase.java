@@ -2,7 +2,7 @@ package io.daos;
 
 public class DaosTestBase {
   public static final String DEFAULT_POOL_ID = "322f9095-2639-4a1b-94f9-2234b5b16bbf";
-  public static final String DEFAULT_CONT_ID = "a2a84a5f-06d3-42eb-861c-97ddd83f1fae";
+  public static final String DEFAULT_CONT_ID = "de0ee617-5028-4b91-aa2c-3bc5fdc262fb";
 
   public static final String DEFAULT_OBJECT_CONT_ID = "a2a84a5f-06d3-42eb-861c-97ddd83f1fae";
 

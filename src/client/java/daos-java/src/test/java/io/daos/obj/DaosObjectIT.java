@@ -66,16 +66,15 @@ public class DaosObjectIT {
       list.clear();
       list.add(createEntryForUpdate("akey1", 20, 0, dataSize, bytes));
       desc = object.createDataDescForUpdate("dkey1", list);
-      Exception ee = null;
+      DaosIOException ee = null;
       try {
         object.update(desc);
       } catch (Exception e) {
-        ee = e;
+        ee = (DaosIOException)e.getCause();
       }
       Assert.assertNotNull(ee);
       Assert.assertTrue(ee instanceof DaosIOException);
-      DaosIOException de = (DaosIOException)ee;
-      Assert.assertEquals(Constants.ERROR_CODE_ILLEGAL_ARG, de.getErrorCode());
+      Assert.assertEquals(Constants.ERROR_CODE_ILLEGAL_ARG, ee.getErrorCode());
       // succeed on different key
       dataSize = 40;
       bytes = generateDataArray(dataSize);
@@ -238,12 +237,96 @@ public class DaosObjectIT {
       list2.add(entry);
       IODataDesc desc2 = object.createDataDescForFetch("dkey1", list2);
       object.fetch(desc2);
+      Assert.assertEquals(10, entry.getActualRecSize());
+      Assert.assertEquals(20, entry.getActualSize());
+      byte[] actualBytes = new byte[entry.getActualSize()];
+      entry.get(actualBytes);
+      byte[] bytes020 = Arrays.copyOfRange(bytes, 0, 20);
+      Assert.assertTrue(Arrays.equals(bytes020, actualBytes));
+      // with offset 20
+      list2.clear();
+      entry = createEntryForFetch("akey1", 20, 20, 10);
+      list2.add(entry);
+      desc2 = object.createDataDescForFetch("dkey1", list2);
+      object.fetch(desc2);
+      Assert.assertEquals(10, entry.getActualRecSize());
+      Assert.assertEquals(10, entry.getActualSize());
+      byte[] actualBytes2 = new byte[entry.getActualSize()];
+      entry.get(actualBytes2);
+      byte[] bytes1020 = Arrays.copyOfRange(bytes, 10, 20);
+      Assert.assertTrue(Arrays.equals(bytes1020, actualBytes2));
+      // fetch akey2, smaller record size, data size < actual record size
+      list2.clear();
+      entry = createEntryForFetch("akey2", 5, 0, 5);
+      list2.add(entry);
+      desc2 = object.createDataDescForFetch("dkey1", list2);
+      DaosIOException ee = null;
+      try {
+        object.fetch(desc2);
+      } catch (DaosObjectException e) {
+        ee = (DaosIOException)e.getCause();
+      }
+      Assert.assertNotNull(ee);
+      Assert.assertEquals(0, entry.getActualRecSize());
+      Assert.assertEquals(Constants.ERROR_CODE_REC2BIG, ee.getErrorCode());
+      // fetch akey1, smaller record size, data size >= total size
+      list2.clear();
+      entry = createEntryForFetch("akey1", 5, 0, 30);
+      list2.add(entry);
+      desc2 = object.createDataDescForFetch("dkey1", list2);
+      object.fetch(desc2);
+      Assert.assertEquals(10, entry.getActualRecSize());
+      Assert.assertEquals(30, entry.getActualSize());
+      actualBytes2 = new byte[entry.getActualSize()];
+      entry.get(actualBytes2);
+      Assert.assertTrue(Arrays.equals(bytes, actualBytes2));
+    } finally {
+      if (object.isOpen()) {
+        object.punch();
+      }
+      object.close();
+    }
+  }
+
+  @Test
+  public void testObjectFetchSignleWithIncorrectRecordSize() throws IOException {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    try {
+      object.open();
+      Assert.assertTrue(object.isOpen());
+      List<IODataDesc.Entry> list = new ArrayList<>();
+      int dataSize = 30;
+      byte[] bytes = generateDataArray(dataSize);
+      list.add(createEntryForUpdateWithTypeOfSingle("akey1", 30, 0, dataSize, bytes));
+      list.add(createEntryForUpdateWithTypeOfSingle("akey2", 30, 0, dataSize, bytes));
+      IODataDesc desc = object.createDataDescForUpdate("dkey1", list);
+      object.update(desc);
+      // fetch akey1, bigger record size
+      List<IODataDesc.Entry> list2 = new ArrayList<>();
+      IODataDesc.Entry entry = createEntryForFetchWithTypeOfSingle("akey2", 40, 0, 40);
+      list2.add(entry);
+      IODataDesc desc2 = object.createDataDescForFetch("dkey1", list2);
+      object.fetch(desc2);
+      Assert.assertEquals(30, entry.getActualRecSize());
       Assert.assertEquals(dataSize, entry.getActualSize());
       byte[] actualBytes = new byte[dataSize];
       entry.get(actualBytes);
       Assert.assertTrue(Arrays.equals(bytes, actualBytes));
-      // fetch akey2, smaller record size
-
+      // fetch akey1, smaller record size
+      list2.clear();
+      entry = createEntryForFetchWithTypeOfSingle("akey1", 20, 0, 20);
+      list2.add(entry);
+      desc2 = object.createDataDescForFetch("dkey1", list2);
+      DaosIOException ee = null;
+      try {
+        object.fetch(desc2);
+      } catch (DaosObjectException e) {
+        ee = (DaosIOException)e.getCause();
+      }
+      Assert.assertNotNull(ee);
+      Assert.assertEquals(Constants.ERROR_CODE_REC2BIG, ee.getErrorCode());
     } finally {
       if (object.isOpen()) {
         object.punch();
