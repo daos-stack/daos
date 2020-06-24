@@ -121,6 +121,11 @@ def set_defaults(env):
               action='store_true',
               default=False,
               help='Preprocess selected files for profiling')
+    AddOption('--no-rpath',
+              dest='no_rpath',
+              action='store_true',
+              default=False,
+              help='Disable rpath')
 
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])

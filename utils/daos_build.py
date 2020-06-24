@@ -16,6 +16,11 @@ class DaosLiteral(Literal):
 
 def add_rpaths(env, install_off, set_cgo_ld, is_bin):
     """Add relative rpath entries"""
+    if GetOption('no_rpath'):
+        if set_cgo_ld:
+            env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS "),
+                              sep=" ")
+        return
     env.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
     rpaths = env.subst("$RPATH_FULL").split()
     prefix = env.get("PREFIX")
