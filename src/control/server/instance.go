@@ -403,7 +403,7 @@ func (srv *IOServerInstance) registerMember(membership *system.Membership) error
 		return errors.Wrapf(err, "instance %d: failed to extract member details", idx)
 	}
 
-	membership.AddOrUpdate(m)
+	membership.AddOrReplace(m)
 
 	return nil
 }

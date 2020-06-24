@@ -146,7 +146,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 			newState = system.MemberStateJoined
 		}
 
-		svc.membership.AddOrUpdate(system.NewMember(
+		svc.membership.AddOrReplace(system.NewMember(
 			system.Rank(resp.GetRank()), req.GetUuid(), replyAddr, newState))
 	}
 

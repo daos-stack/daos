@@ -27,7 +27,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"reflect"
 	"sort"
 	"sync"
 
@@ -190,11 +189,6 @@ func (sm *Member) State() MemberState {
 	return sm.state
 }
 
-// Equals verifies equivalency.
-func (sm *Member) Equals(m *Member) bool {
-	return reflect.DeepEqual(*sm, *m)
-}
-
 // NewMember returns a reference to a new member struct.
 func NewMember(rank Rank, uuid string, addr net.Addr, state MemberState) *Member {
 	return &Member{Rank: rank, UUID: uuid, Addr: addr, state: state}
@@ -286,35 +280,49 @@ type Membership struct {
 	members map[Rank]*Member
 }
 
+func (m *Membership) addMember(member *Member) error {
+	if _, found := m.members[member.Rank]; found {
+		return FaultMemberExists(member.Rank)
+	}
+	m.log.Debugf("adding system member: %s", member)
+
+	m.members[member.Rank] = member
+
+	return nil
+}
+
+func (m *Membership) updateMember(member *Member) {
+	old := m.members[member.Rank]
+	m.log.Debugf("updating system member: %s->%s", old, member)
+
+	m.members[member.Rank] = member
+}
+
 // Add adds member to membership, returns member count.
 func (m *Membership) Add(member *Member) (int, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	if _, found := m.members[member.Rank]; found {
-		return -1, FaultMemberExists(member.Rank)
+	if err := m.addMember(member); err != nil {
+		return -1, err
 	}
-
-	m.members[member.Rank] = member
 
 	return len(m.members), nil
 }
 
-// AddOrUpdate adds member to membership or updates member if exists.
+// AddOrReplace adds member to membership or replaces member if it exists.
 //
 // Note: this method updates state without checking if state transition is
 //       legal so use with caution.
-func (m *Membership) AddOrUpdate(newMember *Member) {
+func (m *Membership) AddOrReplace(newMember *Member) {
 	m.Lock()
 	defer m.Unlock()
 
-	if oldMember, found := m.members[newMember.Rank]; found {
-		m.log.Debugf("updating system member: %s->%s", oldMember, newMember)
-	} else {
-		m.log.Debugf("adding system member: %s", newMember)
+	if err := m.addMember(newMember); err == nil {
+		return
 	}
 
-	m.members[newMember.Rank] = newMember
+	m.updateMember(newMember)
 }
 
 // Remove removes member from membership, idempotent.

@@ -26,6 +26,7 @@ package system
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -134,7 +135,13 @@ func TestMember_AddRemove(t *testing.T) {
 	}
 }
 
-func TestMember_AddOrUpdate(t *testing.T) {
+func assertMembersEqual(t *testing.T, a Member, b Member, msg string) {
+	t.Helper()
+	AssertTrue(t, reflect.DeepEqual(a, b),
+		fmt.Sprintf("%s: want %#v, got %#v", msg, a, b))
+}
+
+func TestMember_AddOrReplace(t *testing.T) {
 	m0a := *MockMember(t, 0, MemberStateStopped)
 	m1a := *MockMember(t, 1, MemberStateStopped)
 	m2a := *MockMember(t, 2, MemberStateStopped)
@@ -152,8 +159,8 @@ func TestMember_AddOrUpdate(t *testing.T) {
 	m2b.state = MemberStateJoined
 
 	for name, tc := range map[string]struct {
-		membersToAddOrUpdate Members
-		expMembers           Members
+		membersToAddOrReplace Members
+		expMembers            Members
 	}{
 		"add then update": {
 			Members{
@@ -183,8 +190,8 @@ func TestMember_AddOrUpdate(t *testing.T) {
 
 			ms := NewMembership(log)
 
-			for _, m := range tc.membersToAddOrUpdate {
-				ms.AddOrUpdate(m)
+			for _, m := range tc.membersToAddOrReplace {
+				ms.AddOrReplace(m)
 			}
 
 			AssertEqual(t, len(tc.expMembers), len(ms.members), name)
@@ -194,7 +201,7 @@ func TestMember_AddOrUpdate(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				AssertTrue(t, em.Equals(m), fmt.Sprintf("want %#v, got %#v", em, m))
+				assertMembersEqual(t, *em, *m, name)
 			}
 		})
 	}
