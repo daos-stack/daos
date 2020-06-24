@@ -81,8 +81,8 @@ struct ds_cont_child {
 				 sc_abort_vos_aggregating:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1;
-	/* Aggregate ULT */
-	struct dss_sleep_ult	 *sc_agg_ult;
+	/* Tracks the schedule request for aggregation ULT */
+	struct sched_request	*sc_agg_req;
 
 	/*
 	 * Snapshot delete HLC (0 means no change), which is used

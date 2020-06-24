@@ -533,9 +533,6 @@ vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc)
 	}
 
 	switch (opc) {
-	case VOS_CO_CTL_ABORT_AGG:
-		cont->vc_abort_aggregation = 1;
-		break;
 	default:
 		return -DER_NOSYS;
 	}

@@ -782,6 +782,23 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 }
 
 int
+vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
+{
+	struct vos_pool	*pool;
+	struct d_uuid	 ukey;
+	int		 rc;
+
+	uuid_copy(ukey.uuid, pool_id);
+	rc = pool_lookup(&ukey, &pool);
+	if (rc)
+		return rc;
+
+	rc = vos_space_query(pool, vps, false);
+	vos_pool_decref(pool);
+	return rc;
+}
+
+int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 {
 	struct vos_pool		*pool;
