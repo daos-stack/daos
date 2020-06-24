@@ -224,14 +224,18 @@ struct evt_node_entry {
 
 /** evtree node: */
 struct evt_node {
-	/** the Minimum Bounding Box (MBR) bounds all its children */
-	struct evt_rect_df		tn_mbr;
+	/** Minimum bounding extent */
+	struct evt_extent		tn_mbr_ex;
+	/** Minimum bounding epoch */
+	daos_epoch_t			tn_mbr_epc;
+	/** Minimum bounding minor epoch */
+	uint16_t			tn_mbr_minor_epc;
 	/** bits to indicate it's a root or leaf */
 	uint16_t			tn_flags;
 	/** number of children or leaf records */
 	uint16_t			tn_nr;
 	/** Magic number for validation */
-	uint32_t			tn_magic;
+	uint16_t			tn_magic;
 	/** The entries in the node */
 	struct evt_node_entry		tn_rec[0];
 };

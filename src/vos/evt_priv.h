@@ -113,7 +113,7 @@ struct evt_context {
 #define evt_off2ptr(tcx, offset)			\
 	umem_off2ptr(evt_umm(tcx), offset)
 
-#define EVT_NODE_MAGIC 0xfefef00d
+#define EVT_NODE_MAGIC 0xf00d
 #define EVT_DESC_MAGIC 0xbeefdead
 
 /** Convert an offset to a evtree node descriptor
