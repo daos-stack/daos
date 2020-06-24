@@ -53,6 +53,8 @@ class DmgCommand(YamlCommand):
             r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
             r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
             r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
+        "system_query":
+            r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+:[0-9]+)\s+[A-Za-z]+)",
         "storage_query_smd":
             r"(?:UUID|VOS\s+Target\s+IDs|SPDK Blobs):\s+([a-z0-9- ]+)",
         "storage_query_blobstore":
@@ -1022,6 +1024,58 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
         return self._get_result()
 
+    def system_query(self, rank=None, verbose=True):
+        """Query System to know status of servers
+
+        Args:
+            rank: Specify specific rank to obtain it's status
+                  Defaults to None, which means report all available
+                  ranks.
+            verbose (bool): To obtain detailed query report
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+        """
+
+        self.set_sub_command("system")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.rank.value = rank
+        self.sub_command_class.sub_command_class.verbose.value = verbose
+        return self._get_result()
+
+
+def check_system_query_status(stdout_str):
+    """Check if any server crashed
+
+    Args:
+        stdout_str (list): list obtained from 'dmg system query -v'
+    Result:
+        bool: True if no server crashed, False otherwise.
+    """
+    check = True
+    rank_info = []
+    failed_rank_list = []
+    # iterate to obtain failed rank list
+    for i, _ in enumerate(stdout_str):
+        rank_info.append(stdout_str[i][0])
+        print("rank_info: \n{}".format(rank_info))
+        for items in rank_info:
+            item = items.split()
+            if item[3] in ["Unknown", "Evicted", "Errored", "Unresponsive"]:
+                failed_rank_list.append(items)
+    # if failed rank list is not empty display the failed ranks
+    # and return False
+    if failed_rank_list:
+        for failed_list in failed_rank_list:
+            print("failed_list: {}\n".format(failed_list))
+            out = failed_list.split()
+            print("Rank {} failed with state '{}'".format(out[0], out[3]))
+        check = False
+    return check
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     """Get Pool UUID and Service replicas from stdout.
