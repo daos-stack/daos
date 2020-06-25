@@ -73,6 +73,8 @@ class DmgCommandBase(YamlCommand):
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
         "system_query":
             r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)",
+        "system_query_verbose":
+            r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+:[0-9]+)\s+[A-Za-z]+)",
         "system_start":
             r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
         "system_stop":

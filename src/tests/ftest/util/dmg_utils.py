@@ -501,12 +501,11 @@ class DmgCommand(DmgCommandBase):
         self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
         return self._get_result()
 
-    def system_query(self, rank=None, verbose=False):
-        """Query the state of the system.
+    def system_query(self, rank=None):
+        """Query the state of the system with verbose disabled.
 
         Args:
             rank (str, optional): rank to query. Defaults to None (query all).
-            verbose (bool, optional): create verbose output. Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -519,7 +518,27 @@ class DmgCommand(DmgCommandBase):
         self.set_sub_command("system")
         self.sub_command_class.set_sub_command("query")
         self.sub_command_class.sub_command_class.rank.value = rank
-        self.sub_command_class.sub_command_class.verbose.value = verbose
+        self.sub_command_class.sub_command_class.verbose.value = False
+        return self._get_result()
+
+    def system_query_verbose(self, rank=None):
+        """Query the state of the system with verbose enabled.
+
+        Args:
+            rank (str, optional): rank to query. Defaults to None (query all).
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        """
+        self.set_sub_command("system")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.rank.value = rank
+        self.sub_command_class.sub_command_class.verbose.value = True
         return self._get_result()
 
     def system_start(self):
