@@ -21,8 +21,8 @@ pool:
   control_method: dmg
   mode: 511
   name: daos_server
-  scm_size: 1G
-  nvme_size: 2G
+  scm_size: 5G
+  nvme_size: 10G
 macsio:
   interface: hdf5
   parallel_file_mode: SIF 1
