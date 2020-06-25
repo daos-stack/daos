@@ -931,4 +931,15 @@ int
 vos_profile_start(char *path, int avg);
 void
 vos_profile_stop(void);
+
+daos_unit_oid_t
+vos_cmt_get_oid(d_iov_t *value);
+
+daos_epoch_t
+vos_cmt_get_epoch(d_iov_t *value);
+
+int
+vos_agg_iterate(daos_handle_t coh, dbtree_iterate_cb_t cb, void *arg);
+
 #endif /* __VOS_API_H */
+

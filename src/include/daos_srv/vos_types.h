@@ -298,6 +298,8 @@ typedef struct {
 	daos_key_t		ip_dkey;
 	/** attribute key (VOS_ITER_DKEY/RECX/SINGLE, standalone only) */
 	daos_key_t		ip_akey;
+	/** address range (RECX); 0:0 is is entire range (0:~0ULL) */
+	daos_recx_t             ip_recx;
 	/** epoch validity range for the iterator (standalone only) */
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */

@@ -28,7 +28,9 @@
 #include <daos_srv/vos.h>
 #include <daos/object.h>	/* for daos_unit_oid_compare() */
 #include <daos/checksum.h>
+#include <daos/placement.h>
 #include <daos_srv/srv_csum.h>
+#include <daos_srv/pool.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
 
@@ -50,7 +52,6 @@
  * facilitate the data transfer from old physical entries to new coalesced
  * physical entries. If any old physical entry (not fully covered in current
  * window) straddles window end, it has to be head-truncated on window flush,
- * and the remaining part will be processed in next merge window.
  */
 
 /* EV tree physical entry */
@@ -1494,7 +1495,6 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 		io->ic_csum_buf_len = 0;
 	}
 }
-
 static inline void
 recx2ext(daos_recx_t *recx, struct evt_extent *ext)
 {
@@ -1921,6 +1921,31 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 	io->ic_csum_recalc_func = func;
 }
 
+daos_epoch_t
+vos_cmt_get_epoch(d_iov_t *value)
+{
+        struct vos_dtx_cmt_ent	*dce = value->iov_buf;
+
+	return dce->dce_base.dce_epoch;
+}
+
+daos_unit_oid_t
+vos_cmt_get_oid(d_iov_t *value)
+{
+        struct vos_dtx_cmt_ent	*dce = value->iov_buf;
+
+	return dce->dce_base.dce_oid;
+}
+
+int
+vos_agg_iterate(daos_handle_t coh, dbtree_iterate_cb_t commited_dtx_cb,
+		void *arg)
+{
+	struct vos_container    *cont = vos_hdl2cont(coh);
+
+	return dbtree_iterate(cont->vc_dtx_committed_hdl, DAOS_INTENT_DEFAULT,
+			      false, commited_dtx_cb, arg);
+}
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      void (*csum_func)(void *),
