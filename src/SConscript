@@ -37,7 +37,6 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
                     'include/gurt/%s' % header)
 
-    #SConscript('gurt/SConscript')
     SConscript('cart/SConscript')
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
