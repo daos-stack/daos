@@ -1066,7 +1066,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	bool				rma;
 	bool				bulk_bind;
 	bool				create_map;
-	bool				size_fetch = false;
+	bool				spec_fetch = false;
 	struct daos_recx_ep_list	*recov_lists = NULL;
 	daos_iod_t			*iods;
 	uint64_t			*offs;
@@ -1132,17 +1132,22 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 	} else {
 		uint64_t			 cond_flags;
-		uint32_t			 fetch_flags;
+		uint32_t			 fetch_flags = 0;
 		bool				 ec_deg_fetch;
 		struct daos_recx_ep_list	*shadows = NULL;
 
-		size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
-		fetch_flags = size_fetch ? VOS_FETCH_SIZE_ONLY : 0;
 		cond_flags = orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS;
 		bulk_op = CRT_BULK_PUT;
+		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
+			spec_fetch = true;
+			if (orw->orw_api_flags & VOS_COND_FETCH_MASK)
+				fetch_flags = VOS_FETCH_CHECK_EXISTENCE;
+			else
+				fetch_flags = VOS_FETCH_SIZE_ONLY;
+		}
 
 		ec_deg_fetch = orw->orw_flags & ORF_EC_DEGRADED;
-		if (ec_deg_fetch && !size_fetch) {
+		if (ec_deg_fetch && !spec_fetch) {
 			rc = obj_fetch_shadow(ioc->ioc_coc->sc_hdl,
 				orw->orw_oid, orw->orw_epoch, cond_flags,
 				dkey, orw->orw_nr, iods, orw->orw_tgt_idx,
@@ -1199,7 +1204,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		goto out;
 	}
 
-	if (obj_rpc_is_fetch(rpc) && !size_fetch) {
+	if (obj_rpc_is_fetch(rpc) && !spec_fetch) {
 		rc = obj_fetch_csum_init(ioc->ioc_coh, orw, orwo);
 		if (rc) {
 			D_ERROR(DF_UOID" fetch csum init failed: %d.\n",

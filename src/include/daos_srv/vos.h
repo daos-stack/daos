@@ -490,13 +490,16 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * I/O APIs
  */
 
-/**
- * VOS fetch flags
- * VOS_FETCH_SIZE_ONLY - only query iod_size
- * VOS_FETCH_RECX_LIST - query recx list
- */
-#define VOS_FETCH_SIZE_ONLY	(0x1U << 0)
-#define VOS_FETCH_RECX_LIST	(0x1U << 1)
+enum vos_fetch_flags {
+	/* only query iod_size */
+	VOS_FETCH_SIZE_ONLY		= (1 << 0),
+	/* query recx list */
+	VOS_FETCH_RECX_LIST		= (1 << 1),
+	/* only set read TS */
+	VOS_FETCH_SET_TS_ONLY		= (1 << 2),
+	/* check the target (obj/dkey/akey) existence */
+	VOS_FETCH_CHECK_EXISTENCE	= (1 << 3),
+};
 
 /**
  *
