@@ -124,6 +124,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -196,6 +197,7 @@ type logger interface {
 }
 
 var log logger = logging.NewStdoutLogger("netdetect")
+var mutex sync.Mutex
 
 // SetLogger sets the package-level logger
 func SetLogger(l logger) {
@@ -215,6 +217,9 @@ func initLib() (C.hwloc_topology_t, error) {
 	if (version >> 16) != (C.HWLOC_API_VERSION >> 16) {
 		return nil, errors.Errorf("compilation error - compiled for hwloc API 0x%x but using library API 0x%x\n", C.HWLOC_API_VERSION, version)
 	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	status := C.hwloc_topology_init(&topology)
 	if status != 0 {
@@ -519,10 +524,15 @@ func NumaAware() (bool, error) {
 func GetNUMASocketIDForPid(pid int32) (int, error) {
 	var i uint
 
-	deviceScanCfg, err := initDeviceScan()
+	var deviceScanCfg DeviceScan
+
+	topology, err := initLib()
 	if err != nil {
-		return 0, err
+		log.Debugf("Error from initLib %v", err)
+		return 0, errors.New("unable to initialize hwloc library")
 	}
+	deviceScanCfg.topology = topology
+
 	defer cleanUp(deviceScanCfg.topology)
 
 	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
