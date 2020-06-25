@@ -1,12 +1,9 @@
 hosts:
   test_servers:
-    - boro-14
-#    - server-A
-#    - server-B
+    - server-A
   test_clients:
-    - boro-14
-#    - client-C
-timeout: 900
+    - client-B
+timeout: 600
 server_config:
   name: daos_server
   servers:
@@ -18,11 +15,8 @@ server_config:
       - FI_SOCKETS_MAX_CONN_RETRY=1
       - FI_SOCKETS_CONN_TIMEOUT=2000
       - DD_MASK=all
-#    bdev_class: nvme
-#    bdev_list: ["0000:81:00.0"]
-#    scm_class: dcpm
-#    scm_list: ["/dev/pmem0"]
-    scm_size: 20
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0"]
 pool:
   createmode:
     mode_RW:
@@ -30,8 +24,8 @@ pool:
   createset:
     setname: daos_server
   createsize:
-    scm_size: 6000000000
-    nvme_size: 60000000000
+    scm_size: 5000000000
+    nvme_size: 10000000000
   createsvc:
     svcn: 1
 container:
@@ -53,6 +47,3 @@ ior:
   objectclass:
     SX:
       daos_oclass: "SX"
-#  subprocess: True
-dfuse:
-  mount_dir: "/tmp/daos_dfuse/"

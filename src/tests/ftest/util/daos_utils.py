@@ -898,7 +898,7 @@ class DaosCommand(CommandWithSubCommand):
         return self._get_result()
 
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
-        svc=None, sys_name=None):
+                              svc=None, sys_name=None):
         """ Call daos container create-snap.
 
         Args:
@@ -929,7 +929,7 @@ class DaosCommand(CommandWithSubCommand):
         return self._get_result()
 
     def container_destroy_snap(self, pool, cont, snap_name=None, epoch=None,
-        svc=None, sys_name=None):
+                               svc=None, sys_name=None):
         """ Call daos container create-snap.
 
         Args:

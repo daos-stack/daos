@@ -53,7 +53,8 @@ class DmgCommand(YamlCommand):
             r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
             r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
             r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
-        "system_query": r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+:[0-9]+)\s+[A-Za-z]+)",
+        "system_query":
+            r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+:[0-9]+)\s+[A-Za-z]+)",
         "storage_query_smd":
             r"(?:UUID|VOS\s+Target\s+IDs|SPDK Blobs):\s+([a-z0-9- ]+)",
         "storage_query_blobstore":
