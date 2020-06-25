@@ -12,4 +12,4 @@ pool:
     scm_size: 1073741824
     control_method: dmg
 transport_config:
-  allow_insecure: false
+  allow_insecure: False

@@ -52,4 +52,4 @@ pool_acl:
          - pass
          - pass
 transport_config:
-  allow_insecure: false
+  allow_insecure: False

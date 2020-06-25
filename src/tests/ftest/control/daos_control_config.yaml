@@ -92,4 +92,4 @@ control_config_val: !mux
        - /tmp/does_not_exist.ext
        - "FAIL"
 transport_config:
-  allow_insecure: false
+  allow_insecure: False

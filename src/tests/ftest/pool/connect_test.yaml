@@ -20,4 +20,4 @@ tests:
         - complete_rubbish
         - FAIL
 transport_config:
-  allow_insecure: false
+  allow_insecure: False

@@ -68,4 +68,4 @@ pool_acl:
           - deny
           - deny
 transport_config:
-  allow_insecure: false
+  allow_insecure: False

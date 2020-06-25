@@ -35,7 +35,7 @@ class DaosAgentTransportCredentials(TransportCredentials):
         super(DaosAgentTransportCredentials, self).__init__(
             "/run/transport_config/*", "transport_config")
 
-        self.allow_insecure = BasicParameter(False, False)
+        self.allow_insecure = BasicParameter(True, True)
         self.ca_cert = BasicParameter(None, "./daosCA/certs/daosCA.crt")
         self.cert = BasicParameter(None, "./daosCA/certs/agent.crt")
         self.key = BasicParameter(None, "./daosCA/certs/agent.key")
