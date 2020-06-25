@@ -41,12 +41,14 @@ import "C"
 import (
 	"fmt"
 	"unsafe"
+	"strings"
 )
 
 // ENV is the interface that provides SPDK environment management.
 type ENV interface {
 	InitSPDKEnv(int) error
 	InitVMDEnv() error
+	//ListVmdNvmeAddrs() error
 }
 
 // Env is a simple ENV implementation.
@@ -104,4 +106,62 @@ func (e *Env) InitVMDEnv() (err error) {
 	}
 
 	return
+}
+
+// List all NVMe SSD PCIe addresses behind VMD
+func ListVmdNvmeAddrs(devlist []string) (addrs []string, err error) {
+	var rc C.int
+	opts := C.struct_spdk_env_opts{}
+	C.spdk_env_opts_init(&opts)
+	// TODO: use devlist to construct opts.pci_whitelist
+	opts.env_context = unsafe.Pointer(C.CString("--pci-whitelist=0000:5d:05.5"))
+	rc = C.spdk_env_init(&opts)
+
+	// Initialize VMD before enumerating VMD devs
+	rc = C.spdk_vmd_init()
+	if err = Rc2err("spdk_vmd_init", rc); err != nil {
+		return nil, err
+	}
+
+	addr_buf := C.malloc(C.sizeof_char * 128)
+	defer C.free(unsafe.Pointer(addr_buf))
+
+	count := 0
+	pci_device := C.spdk_pci_get_first_device()
+	for pci_device != nil {
+		devType := C.spdk_pci_device_get_type(pci_device)
+		if strings.Compare(C.GoString(devType), "vmd") == 0 {
+			count += 1
+		}
+
+		pci_device = C.spdk_pci_get_next_device(pci_device)
+	}
+
+	addrs = make([]string, 0, count)
+
+	i := 0
+	pci_device = C.spdk_pci_get_first_device()
+	for pci_device != nil {
+		devType := C.spdk_pci_device_get_type(pci_device)
+
+		if strings.Compare(C.GoString(devType), "vmd") == 0 {
+			rc = C.spdk_pci_addr_fmt((*C.char)(addr_buf), C.sizeof_char * 128,
+						&pci_device.addr)
+			if rc != 0 {
+				if err = Rc2err("spdk_pci_addr_fmt", rc); err != nil {
+					continue
+				}
+			}
+
+			if i == count {
+				break
+			}
+			addrs = append(addrs, C.GoString((*C.char)(addr_buf)))
+		}
+
+		pci_device = C.spdk_pci_get_next_device(pci_device)
+		i += 1
+	}
+
+	return addrs, nil
 }

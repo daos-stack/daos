@@ -36,6 +36,7 @@ type (
 	InitRequest struct {
 		pbin.ForwardableRequest
 		SPDKShmID int
+		InitVmd bool
 	}
 
 	// InitResponse contains the results of a successful Init operation.
@@ -44,6 +45,7 @@ type (
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
+		InitVmd	bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -69,6 +71,7 @@ type (
 		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
+		InitVmd    bool
 	}
 
 	// DeviceFormatResponse contains device-specific Format operation results.
@@ -88,11 +91,11 @@ type (
 
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
-		Init(shmID ...int) error
+		Init(initvmd bool, shmID ...int) error
 		Reset() error
 		Prepare(hugePageCount int, targetUser string, pciWhitelist string) error
-		Scan() (storage.NvmeControllers, error)
-		Format(pciAddr string) (*storage.NvmeController, error)
+		Scan(initvmd bool) (storage.NvmeControllers, error)
+		Format(pciAddr string, initvmd bool) (*storage.NvmeController, error)
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -132,7 +135,7 @@ func (p *Provider) Init(req InitRequest) error {
 	if p.shouldForward(req) {
 		return p.fwd.Init(req)
 	}
-	return p.backend.Init(req.SPDKShmID)
+	return p.backend.Init(req.InitVmd, req.SPDKShmID)
 }
 
 // Scan attempts to perform a scan to discover NVMe components in the system.
@@ -141,7 +144,7 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		return p.fwd.Scan(req)
 	}
 
-	cs, err := p.backend.Scan()
+	cs, err := p.backend.Scan(req.InitVmd)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +207,7 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 			p.log.Infof("%s format for non-NVMe bdev skipped (%s)", req.Class, dev)
 		case storage.BdevClassNvme:
 			p.log.Infof("%s format starting (%s)", req.Class, dev)
-			c, err := p.backend.Format(dev)
+			c, err := p.backend.Format(dev, req.InitVmd)
 			if err != nil {
 				p.log.Errorf("%s format failed (%s)", req.Class, dev)
 				res.DeviceResponses[dev].Error = FaultFormatError(err)

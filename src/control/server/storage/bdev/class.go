@@ -30,12 +30,15 @@ import (
 	"path/filepath"
 	"syscall"
 	"text/template"
+	"strings"
+	"os/exec"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
 const (
@@ -48,19 +51,6 @@ const (
     AdminPollRate 100000
     HotplugEnable No
     HotplugPollRate 0
-`
-	vmdTempl = `[VMD]
-    Enable True
-
-[Nvme]
-{{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
-{{ end }}    RetryCount 4
-    TimeoutUsec 0
-    ActionOnTimeout None
-    AdminPollRate 100000
-    HotplugEnable No
-    HotplugPollRate 0
-
 `
 	// device block size hardcoded to 4096
 	fileTempl = `[AIO]
@@ -79,6 +69,22 @@ const (
 	msgBdevNone    = "in config, no nvme.conf generated for server"
 	msgBdevEmpty   = "bdev device list entry empty"
 	msgBdevBadSize = "backfile_size should be greater than 0"
+)
+
+const (
+	confOutVMD  = "daos_nvme.conf"
+	vmdTempl    = `[VMD]
+    Enable True
+
+[Nvme]
+{{ $host := .Config.Hostname }}{{ range $i, $e := .DevList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
+{{ end }}    RetryCount 4
+    TimeoutUsec 0
+    ActionOnTimeout None
+    AdminPollRate 100000
+    HotplugEnable No
+    HotplugPollRate 0
+`
 )
 
 // bdev describes parameters and behaviours for a particular bdev class.
@@ -173,11 +179,68 @@ func prepBdevFile(l logging.Logger, c storage.BdevConfig) error {
 	return nil
 }
 
+//  Convert DeviceList from VMD addresses to list of NVMe SSDs behind the VMDs.
+func prepBdevVmd(c storage.BdevConfig) ([]string, error) {
+	addrs, err := spdk.ListVmdNvmeAddrs(c.DeviceList)
+
+	// Remove VMD addrs from DeviceList and replace with NVMe addrs behind VMD
+	// "$lspci | grep  -i -E "$devaddr.*Volume Management Device|$devaddr.*201d"
+	lspciCmd := exec.Command("lspci")
+
+	for i, dev := range c.DeviceList {
+		// Remove leading "0000:" from device address, since once this device
+		// is unbound the prefix will be gone in lspci.
+		devNoPrefix := strings.TrimPrefix(dev, "0000:")
+		devCmd := fmt.Sprintf("%s.*Volume Management Device|%s.*201d", devNoPrefix, devNoPrefix)
+		vmdCmd := exec.Command("grep", "-i", "-E", devCmd)
+		var cmdOut bytes.Buffer
+		vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
+		vmdCmd.Stdout = &cmdOut
+		_ = lspciCmd.Start()
+		_ = vmdCmd.Run()
+		_ = lspciCmd.Wait()
+		if cmdOut.Len() == 0 {
+			continue
+		}
+
+		// fast method since order of DeviceList does not matter
+		c.DeviceList[i] = c.DeviceList[len(c.DeviceList)-1]
+		c.DeviceList[len(c.DeviceList)-1] = ""
+		c.DeviceList = c.DeviceList[:len(c.DeviceList)-1]
+	}
+
+	for _, dev := range addrs {
+		// add the new NVMe SSD behind VMD addrs
+		c.DeviceList = append(c.DeviceList, dev)
+	}
+
+
+	// This will return a new memory copy of c.DeviceList, since the size
+	// of the list got modified, changes are not visible outside of the function.
+	return c.DeviceList, err
+}
+
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
 func genFromTempl(cfg storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
-	t := template.Must(template.New(confOut).Parse(templ))
-	err = t.Execute(&out, cfg)
+	type Variables struct {
+		Config  storage.BdevConfig
+		DevList []string
+	}
+
+	if cfg.EnableVmd {
+		newDevList, _ := prepBdevVmd(cfg)
+		var DevVars Variables
+			DevVars = Variables{
+			Config: cfg,
+			DevList: newDevList,
+		}
+		t := template.Must(template.New(confOutVMD).Parse(templ))
+		err = t.Execute(&out, DevVars)
+	} else {
+		t := template.Must(template.New(confOut).Parse(templ))
+		err = t.Execute(&out, cfg)
+	}
 	return
 }
 
@@ -271,3 +334,4 @@ func (p *ClassProvider) GenConfigFile() (err error) {
 
 	return nil
 }
+

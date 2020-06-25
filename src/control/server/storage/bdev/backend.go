@@ -86,7 +86,8 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
-func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
+func (w *spdkWrapper) init(log logging.Logger, initVmd bool, initShmID ...int) (err error) {
+
 	if w.initialized {
 		return nil
 	}
@@ -106,9 +107,11 @@ func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 
-	// TODO: Only call init when VMD is enabled in config
-	if err := w.InitVMDEnv(); err != nil {
-		return errors.Wrap(err, "failed to initialize VMD")
+	// Only call init when VMD is enabled in config
+	if initVmd {
+		if err := w.InitVMDEnv(); err != nil {
+			return errors.Wrap(err, "failed to initialize VMD")
+		}
 	}
 
 	cs, err := w.Discover(log)
@@ -146,8 +149,8 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 	return newBackend(log, defaultScriptRunner(log))
 }
 
-func (b *spdkBackend) Init(shmID ...int) error {
-	if err := b.binding.init(b.log, shmID...); err != nil {
+func (b *spdkBackend) Init(initVmd bool, shmID ...int) error {
+	if err := b.binding.init(b.log, initVmd, shmID...); err != nil {
 		return err
 	}
 
@@ -169,8 +172,8 @@ func convertControllers(bcs []spdk.Controller) ([]*storage.NvmeController, error
 	return scs, nil
 }
 
-func (b *spdkBackend) Scan() (storage.NvmeControllers, error) {
-	if err := b.Init(); err != nil {
+func (b *spdkBackend) Scan(InitVmd bool) (storage.NvmeControllers, error) {
+	if err := b.Init(InitVmd); err != nil {
 		return nil, err
 	}
 
@@ -205,8 +208,8 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 	return scs[0], nil
 }
 
-func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
-	if err := b.Init(); err != nil {
+func (b *spdkBackend) Format(pciAddr string, InitVmd bool) (*storage.NvmeController, error) {
+	if err := b.Init(InitVmd); err != nil {
 		return nil, err
 	}
 

@@ -31,8 +31,11 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"os/exec"
 	"strings"
 	"syscall"
+	"bytes"
+	"bufio"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -86,6 +89,41 @@ func iommuDetected() bool {
 
 	return len(dmars) > 0
 }
+
+func vmdDetected() []string {
+	// Check available VMD devices with command:
+	// "$lspci | grep  -i -E "201d | Volume Management Device"
+	lspciCmd := exec.Command("lspci")
+	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
+	var cmdOut bytes.Buffer
+
+	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
+	vmdCmd.Stdout = &cmdOut
+	_ = lspciCmd.Start()
+	_ = vmdCmd.Run()
+	_ = lspciCmd.Wait()
+
+	if cmdOut.Len() == 0 {
+		return nil
+	}
+
+	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
+	vmdAddrs := make([]string, 0, vmdCount)
+
+	i := 0
+	scanner := bufio.NewScanner(&cmdOut)
+	for scanner.Scan() {
+		if i == vmdCount {
+			break
+		}
+		s := strings.Split(scanner.Text(), " ")
+		vmdAddrs = append(vmdAddrs, strings.TrimSpace(s[0]))
+		i += 1
+	}
+
+	return vmdAddrs
+}
+
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
@@ -145,6 +183,38 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
 	}
 
+	// Check for VMD devices, disabled by default
+	vmdDevs := []string{}
+	if cfg.DisableVmd {
+		vmdDevs = vmdDetected()
+		if vmdDevs != nil {
+			log.Debugf("VMD devices detected!\n")
+			log.Debugf("VMD devices: %v\n", vmdDevs)
+		}
+		if !iommuDetected() {
+			log.Errorf("IOMMU/VFIO not detected, unable to use VMD devices\n")
+			vmdDevs = nil
+		}
+	} else {
+		log.Debugf("VMD devices disabled\n")
+		vmdDevs = nil
+	}
+
+	// If VMD devices are going to be used, then need to run a separate
+	// SPDK setup with the VMD address as the PCI_WHITELIST
+	if vmdDevs != nil {
+		prepReqVmd := bdev.PrepareRequest{
+			PCIWhitelist:  strings.Join(vmdDevs, " "),
+			SkipReset:     true,
+			HugePageCount: prepReq.HugePageCount,
+			TargetUser:    prepReq.TargetUser,
+		}
+		log.Debugf("automatic VMD prepare req: %+v", prepReqVmd)
+		if _, err := bdevProvider.Prepare(prepReqVmd); err != nil {
+			log.Errorf("automatic NVMe prepare for VMD failed (check configuration?)\n%s", err)
+		}
+	}
+
 	hugePages, err := getHugePageInfo()
 	if err != nil {
 		return errors.Wrap(err, "unable to read system hugepage info")
@@ -158,21 +228,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 		if runningUser.Uid != "0" && !iommuDetected() {
 			return FaultIommuDisabled
-		}
-	}
-
-	// If VMD devices are set in config, then need to run a separate
-	// SPDK setup with the VMD address as the PCI_WHITELIST
-	if len(cfg.VmdInclude) > 0 {
-		prepReqVmd := bdev.PrepareRequest{
-			PCIWhitelist:  strings.Join(cfg.VmdInclude, ","),
-			SkipReset:     true,
-			HugePageCount: prepReq.HugePageCount,
-			TargetUser:    prepReq.TargetUser,
-		}
-		log.Debugf("automatic VMD prepare req: %+v", prepReqVmd)
-		if _, err := bdevProvider.Prepare(prepReqVmd); err != nil {
-			log.Errorf("automatic NVMe prepare for VMD failed (check configuration?)\n%s", err)
 		}
 	}
 
