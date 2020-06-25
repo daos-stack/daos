@@ -37,7 +37,8 @@ struct ec_agg_entry {
  */
 
 int
-ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_t start_epoch);
+ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_t start_epoch,
+		    bool process_committed);
 
 
 #endif

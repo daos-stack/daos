@@ -290,12 +290,15 @@ agg_recx_iter_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *) cb_arg;
 	int			 rc = 0;
 
-	D_PRINT("PRE\n");
 	D_ASSERT(type == VOS_ITER_RECX);
-	agg_entry->ae_par_extent.ape_recx = entry->ie_recx;
-	agg_entry->ae_par_extent.ape_epoch = entry->ie_epoch;
-	D_PRINT("epoch: %lu\n", entry->ie_epoch);
-
+	if (entry->ie_recx.rx_idx == (PARITY_INDICATOR |
+		(agg_entry->ae_current_stripe.as_stripenum *
+			agg_entry->ae_oca->u.ec.e_len))) {
+		agg_entry->ae_par_extent.ape_recx = entry->ie_recx;
+		agg_entry->ae_par_extent.ape_epoch = entry->ie_epoch;
+		D_PRINT("epoch: %lu\n", entry->ie_epoch);
+		return 1;
+	}
 	return rc;
 }
 /*
@@ -338,23 +341,23 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	//iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
 	*/
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
+	/*
 	iter_param.ip_recx.rx_idx = PARITY_INDICATOR |
 		(entry->ae_current_stripe.as_stripenum *
 			entry->ae_oca->u.ec.e_len);
 	iter_param.ip_recx.rx_nr = entry->ae_oca->u.ec.e_len;
-
+	*/
 	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
 		entry->ae_current_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
 
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry);
-	/*
+
 	D_PRINT("Parity query rc: %d, epoch: %lu, offset: %lu, length: %lu\n",
 		rc, entry->ae_par_extent.ape_epoch,
 		entry->ae_par_extent.ape_recx.rx_idx,
 		entry->ae_par_extent.ape_recx.rx_nr);
-		*/
 	agg_clear_extents(entry);
 	return rc;
 }
@@ -399,7 +402,8 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	*/
 	if (agg_stripenum(agg_entry, entry->ie_recx.rx_idx) !=
 			agg_entry->ae_current_stripe.as_stripenum) {
-		agg_process_stripe(agg_entry);
+		if (agg_entry->ae_current_stripe.as_stripenum != ~0UL)
+			agg_process_stripe(agg_entry);
 		agg_entry->ae_current_stripe.as_stripenum =
 			agg_stripenum(agg_entry,entry->ie_recx.rx_idx);
 		D_PRINT("stripenum: %lu\n",
@@ -583,8 +587,8 @@ agg_iterate(struct ec_agg_entry *agg_entry, daos_handle_t coh)
 
 }
 
-int
-ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_t start_epoch)
+static int
+agg_iterate_committed(struct ds_cont_child *cont, daos_epoch_t start_epoch)
 {
 	struct ec_agg_set	  agg_set = { 0 };
 	struct ec_agg_entry	 *agg_entry;
@@ -594,13 +598,12 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_t start_epoch)
 	uuid_copy(agg_set.as_pool_uuid, cont->sc_pool->spc_uuid);
 	agg_set.as_pool_version = cont->sc_pool->spc_pool->sp_map_version;
 	agg_set.as_start_epoch = start_epoch;
-	D_INIT_LIST_HEAD(&agg_set.as_entries);
 	rc = vos_agg_iterate(cont->sc_hdl, committed_dtx_cb, &agg_set);
-	D_PRINT("rc: %d, Count: %u\n", rc, agg_set.as_count);
 	if (agg_set.as_count) {
 		struct ec_agg_entry	*prev_agg_entry = NULL;
 		int			 i = 0;
 
+		rc = vos_agg_iterate(cont->sc_hdl, committed_dtx_cb, &agg_set);
 		D_ALLOC_ARRAY(agg_entry_array, agg_set.as_count);
 		if (agg_entry_array == NULL) {
 			D_PRINT("agg array allocation failed");
@@ -614,12 +617,10 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_t start_epoch)
 		daos_array_sort(agg_entry_array, agg_set.as_count, false,
 				&sort_ops);
 		daos_epoch_t lo = agg_entry_array[0]->ae_epoch;
-//		D_PRINT("lo: %lu\n", lo);
 		for (i = 0; i < agg_set.as_count; i++) {
 			agg_entry = agg_entry_array[i];
 			if (agg_entry->ae_epoch > start_epoch)
 				start_epoch = agg_entry->ae_epoch;
-//			D_PRINT("agg_entry->ae_epoch: %lu\n", agg_entry->ae_epoch);
 			if (prev_agg_entry && !agg_ent_oid_equal(prev_agg_entry,
 								 agg_entry)) {
 				prev_agg_entry->ae_epoch_lo = lo;
@@ -630,18 +631,12 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_t start_epoch)
 			}
 			prev_agg_entry = agg_entry;
 			prev_agg_entry->ae_epoch_lo = lo;
-//			D_PRINT("prev_agg_entry - lo: %lu\n",
-//				prev_agg_entry->ae_epoch_lo);
 		}
 		prev_agg_entry->ae_epoch_lo = lo;
 		D_FREE(agg_entry_array);
 		d_list_for_each_entry(agg_entry, &agg_set.as_entries, ae_link) {
 			D_INIT_LIST_HEAD(&agg_entry->
 					 ae_current_stripe.as_dextents);
-/*
-			D_PRINT("agg_entry: lo: %lu, high: %lu\n",
-				agg_entry->ae_epoch_lo, agg_entry->ae_epoch);
-*/
 			rc = agg_iterate(agg_entry, cont->sc_hdl);
 			if (rc != 0)
 				goto out;
@@ -653,4 +648,24 @@ out:
 		return rc;
 	else
 		return start_epoch;
+}
+
+static int
+agg_iterate_all(daos_handle_t coh)
+{
+	return 0;
+}
+
+int
+ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_t start_epoch,
+		    bool process_committed)
+{
+	int			  rc = 0;
+
+	if (!process_committed)
+		rc = agg_iterate_all(cont->sc_hdl);
+	else
+		rc = agg_iterate_committed(cont, start_epoch);
+
+	return rc;
 }
