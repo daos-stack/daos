@@ -24,7 +24,6 @@
 import os
 from time import sleep
 import ctypes
-import re
 
 from test_utils_base import TestDaosApiBase
 
@@ -677,52 +676,3 @@ class TestPool(TestDaosApiBase):
         elif not status:
             self.log.error("Errors detected reading data during rebuild")
         return status
-
-def check_aggregation(path, pattern, pattern_count=1, read_line=True, from_line=None):
-    """Check for Aggregation start/finish"""
-
-    log_file_path = path
-    regex = pattern
-#    read_line = True
-    status = False
-
-    with open(log_file_path, "r") as file:
-        if from_line:
-            for _ in range(from_line):
-                next(file)
-        match_list = []
-        lines_found = []
-#        line_count = 0
-        match_count = 0
-        if read_line == True:
-            for line_num, line in enumerate(file, 1):
-                for match in re.finditer(regex, line, re.S):
-#                    if match_count <= pattern_count:
-                    match_text = match.group()
-                    match_list.append(match_text)
-                    lines_found.append(line)
-                    match_count += 1
-#                        print("###Line Number where found: {}\n".format(line_num))
-                if match_count == pattern_count:
-                    status = True
-                    break
-                
-#                line_count += 1
-#                for match in re.finditer(regex, line, re.S):
-#                    match_text = match.group()
-#                    match_list.append(match_text)
-        else:
-            data = file.read()
-            if re.finditer(regex, data, re.S):
-                match_list.append(line)
-#            for match in re.finditer(regex, data, re.S):
-#                match_text = match.group()
-#                match_list.append(match_text)
-    file.close()
-
-    print("### Match count: {}".format(match_count))
-    print("### match_list ###: {}".format(match_list))
-    print("###Line Number where found: {}\n".format(line_num))
-    print("### lines_found ###: {}".format(lines_found))
-
-    return line_num, status
