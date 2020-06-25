@@ -94,7 +94,7 @@ type Namespace struct {
 // and describes the raw SPDK device health stats
 // of a controller (NVMe SSD).
 type DeviceHealth struct {
-	Temp            uint32
+	Temperature     uint32
 	TempWarnTime    uint32
 	TempCritTime    uint32
 	CtrlBusyTime    uint64
@@ -245,7 +245,7 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 // c2GoDeviceHealth is a private translation function
 func c2GoDeviceHealth(health *C.struct_dev_health_t) *DeviceHealth {
 	return &DeviceHealth{
-		Temp:            uint32(health.temperature),
+		Temperature:     uint32(health.temperature),
 		TempWarnTime:    uint32(health.warn_temp_time),
 		TempCritTime:    uint32(health.crit_temp_time),
 		CtrlBusyTime:    uint64(health.ctrl_busy_time),
