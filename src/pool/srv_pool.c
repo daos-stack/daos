@@ -3783,37 +3783,46 @@ redist_open_hdls_send_rpcs(uuid_t pool_uuid, d_iov_t *handles,
 	struct pool_tgt_fetch_hdls_in	*tf_in;
 	struct pool_tgt_fetch_hdls_out	*tf_out;
 	crt_opcode_t			opc;
-	int				topo;
-	int				rc;
+	int				rc = DER_SUCCESS;
+	int				i;
 
-	/* Collective RPC to destroy the pool on all of targets */
-	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
-	opc = DAOS_RPC_OPCODE(POOL_TGT_FETCH_HDLS, DAOS_POOL_MODULE, 1);
-	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx,
-				  NULL, ranks, opc, NULL, NULL,
-				  0, topo, &tf_req);
-	if (rc != 0) {
-		D_ERROR("crt_corpc_req_create failed, rc: "DF_RC".\n",
-			DP_RC(rc));
-		return rc;
+	/* Send an RPC to each rank with all of the open handles */
+	for (i = 0; i < ranks->rl_nr; i++) {
+		crt_endpoint_t svr_ep;
+
+		svr_ep.ep_grp = NULL;
+		svr_ep.ep_rank = ranks->rl_ranks[i];
+		svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_POOL, 0);
+		opc = DAOS_RPC_OPCODE(POOL_TGT_FETCH_HDLS, DAOS_POOL_MODULE, 1);
+		rc = crt_req_create(dss_get_module_info()->dmi_ctx, &svr_ep,
+				    opc, &tf_req);
+		if (rc != 0) {
+			D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "
+				DF_RC".\n", DP_RC(rc));
+			return rc;
+		}
+
+		tf_in = crt_req_get(tf_req);
+		D_ASSERT(tf_in != NULL);
+		uuid_copy(tf_in->tfi_pool_uuid, pool_uuid);
+		d_iov_set(&tf_in->tfi_hdls, handles->iov_buf,
+			  handles->iov_buf_len);
+
+		rc = dss_rpc_send(tf_req);
+		if (rc != 0) {
+			crt_req_decref(tf_req);
+			return rc;
+		}
+
+		tf_out = crt_reply_get(tf_req);
+		rc = tf_out->tfo_rc;
+		if (rc != 0) {
+			crt_req_decref(tf_req);
+			D_ERROR(DF_UUID": failed to send handle uuids to ranks "
+				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+			return rc;
+		}
 	}
-
-	tf_in = crt_req_get(tf_req);
-	D_ASSERT(tf_in != NULL);
-	uuid_copy(tf_in->tfi_pool_uuid, pool_uuid);
-	d_iov_set(&tf_in->tfi_hdls, handles->iov_buf, handles->iov_buf_len);
-
-	rc = dss_rpc_send(tf_req);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	tf_out = crt_reply_get(tf_req);
-	rc = tf_out->tfo_rc;
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to send handle uuids to ranks "
-			DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
-out_rpc:
-	crt_req_decref(tf_req);
 
 	return rc;
 }
