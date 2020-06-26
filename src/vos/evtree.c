@@ -32,6 +32,32 @@
 #define V_TRACE(...) D_DEBUG(__VA_ARGS__)
 #endif
 
+static inline void
+evt_ext_read(struct evt_extent *ext, const struct evt_rect *rin)
+{
+	*ext = rin->rc_ex;
+}
+
+/** Read and translate the rectangle in durable format to in-memory format */
+static inline void
+evt_rect_read(struct evt_rect *rout, const struct evt_rect *rin)
+{
+	rout->rc_epc = rin->rc_epc;
+	evt_ext_read(&rout->rc_ex, rin);
+};
+
+/** Translate and write a rectangle from in memory format to durable format */
+static inline void
+evt_rect_write(struct evt_rect *rout, const struct evt_rect *rin)
+{
+	rout->rc_ex = rin->rc_ex;
+	rout->rc_epc = rin->rc_epc;
+};
+
+#define DF_MBR DF_EXT"@"DF_X64
+#define DP_MBR(node) \
+	DP_EXT(&(node)->tn_mbr_ex), (node)->tn_mbr_epc
+
 enum {
 	/** no overlap */
 	RT_OVERLAP_NO		= 0,
@@ -63,8 +89,19 @@ static struct evt_policy_ops *evt_policies[] = {
 	NULL,
 };
 
-static struct evt_rect *evt_node_mbr_get(struct evt_context *tcx,
-					 struct evt_node *nd);
+static void
+evt_mbr_read(struct evt_rect *rout, const struct evt_node *node)
+{
+	rout->rc_ex = node->tn_mbr_ex;
+	rout->rc_epc = node->tn_mbr_epc;
+}
+
+static void
+evt_mbr_write(struct evt_node *node, const struct evt_rect *rin)
+{
+	node->tn_mbr_ex = rin->rc_ex;
+	node->tn_mbr_epc = rin->rc_epc;
+}
 
 /**
  * Returns true if the first rectangle \a rt1 is at least as wide as the second
@@ -78,11 +115,37 @@ evt_rect_is_wider(const struct evt_rect *rt1, const struct evt_rect *rt2)
 }
 
 static bool
-evt_rect_same_extent(const struct evt_rect *rt1, const struct evt_rect *rt2)
+evt_same_extent(const struct evt_extent *ex1, const struct evt_extent *ex2)
 {
-	return (rt1->rc_ex.ex_lo == rt2->rc_ex.ex_lo &&
-		rt1->rc_ex.ex_hi == rt2->rc_ex.ex_hi);
+	return (ex1->ex_lo == ex2->ex_lo &&
+		ex1->ex_hi == ex2->ex_hi);
 }
+
+static bool
+evt_mbr_same(const struct evt_node *node, const struct evt_rect *rect)
+{
+	if (evt_same_extent(&node->tn_mbr_ex, &rect->rc_ex) &&
+	    node->tn_mbr_epc == rect->rc_epc)
+		return true;
+	return false;
+}
+
+static bool
+time_cmp(uint64_t t1, uint64_t t2, int *out)
+{
+	if (t1 == t2) {
+		*out = RT_OVERLAP_SAME;
+		return true;
+	}
+
+	if (t1 < t2)
+		*out = RT_OVERLAP_OVER;
+	else
+		*out = RT_OVERLAP_UNDER;
+
+	return false;
+}
+
 /**
  * Check if two rectangles overlap with each other.
  *
@@ -104,14 +167,9 @@ evt_rect_overlap(const struct evt_rect *rt1, const struct evt_rect *rt2,
 	 * updates are from epc to INF.  Determine here what kind
 	 * of overlap exists.
 	 */
-	if (rt1->rc_epc == rt2->rc_epc)
-		*time = RT_OVERLAP_SAME;
-	else if (rt1->rc_epc < rt2->rc_epc)
-		*time = RT_OVERLAP_OVER;
-	else
-		*time = RT_OVERLAP_UNDER;
+	time_cmp(rt1->rc_epc, rt2->rc_epc, time);
 
-	if (evt_rect_same_extent(rt1, rt2))
+	if (evt_same_extent(&rt1->rc_ex, &rt2->rc_ex))
 		*range = RT_OVERLAP_SAME;
 	else if (evt_rect_is_wider(rt1, rt2))
 		*range = RT_OVERLAP_INCLUDED;
@@ -238,9 +296,9 @@ ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		D_FREE(ent_array->ea_ents);
 	ent_array->ea_ents = ents;
 	ent_array->ea_size = new_size;
+
 	return 0;
 }
-
 static inline struct evt_list_entry *
 evt_array_entry2le(struct evt_entry *ent)
 {
@@ -433,6 +491,16 @@ evt_array_entry2link(struct evt_entry *ent)
 	return &le->le_link;
 }
 
+/** Return true if ent1 is a later update (comparing epoch and minor epoch */
+static inline bool
+evt_ent_is_later(struct evt_entry *ent1, struct evt_entry *ent2)
+{
+	if (ent1->en_epoch > ent2->en_epoch)
+		return true;
+
+	return false;
+}
+
 static struct evt_entry *
 evt_find_next_visible(struct evt_entry *this_ent, d_list_t *head,
 		      d_list_t **next)
@@ -445,7 +513,7 @@ evt_find_next_visible(struct evt_entry *this_ent, d_list_t *head,
 	while (*next != head) {
 		next_ent = evt_array_link2entry(*next);
 
-		if (next_ent->en_epoch > this_ent->en_epoch)
+		if (evt_ent_is_later(next_ent, this_ent))
 			return next_ent; /* next_ent is a later update */
 		this_ext = &this_ent->en_sel_ext;
 		next_ext = &next_ent->en_sel_ext;
@@ -639,7 +707,7 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 			continue;
 		}
 
-		if (next_ent->en_epoch < this_ent->en_epoch) {
+		if (evt_ent_is_later(this_ent, next_ent)) {
 			/* Case #2, next rect is partially under this rect,
 			 * Truncate left end of next_ent, reinsert.
 			 *
@@ -963,8 +1031,8 @@ evt_desc_bio_free(struct evt_context *tcx, struct evt_desc *desc,
 }
 
 int
-evt_desc_log_status(struct evt_context *tcx, struct evt_desc *desc,
-		  int intent)
+evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
+		    struct evt_desc *desc, int intent)
 {
 	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
 
@@ -988,31 +1056,36 @@ evt_desc_log_add(struct evt_context *tcx, struct evt_desc *desc)
 }
 
 int
-evt_desc_log_del(struct evt_context *tcx, struct evt_desc *desc)
+evt_desc_log_del(struct evt_context *tcx, daos_epoch_t epoch,
+		 struct evt_desc *desc)
 {
 	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
 
 	D_ASSERT(cbs);
 	return cbs->dc_log_del_cb ?
-	       cbs->dc_log_del_cb(evt_umm(tcx), desc, cbs->dc_log_del_args) : 0;
+	       cbs->dc_log_del_cb(evt_umm(tcx), desc,
+				  cbs->dc_log_del_args) : 0;
 }
 
 static int
 evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 {
 	struct evt_desc	*desc;
+	struct evt_rect	 rect;
 	int		 rc;
 
 	if (UMOFF_IS_NULL(ne->ne_child))
 		return 0;
 
+	evt_rect_read(&rect, &ne->ne_rect);
+
 	desc = evt_off2desc(tcx, ne->ne_child);
-	rc = evt_desc_log_del(tcx, desc);
+	rc = evt_desc_log_del(tcx, rect.rc_epc, desc);
 	if (rc)
 		goto out;
 
 	rc = evt_desc_bio_free(tcx, desc,
-			       tcx->tc_inob * evt_rect_width(&ne->ne_rect));
+			       tcx->tc_inob * evt_rect_width(&rect));
 	if (rc)
 		goto out;
 
@@ -1045,54 +1118,58 @@ static umem_off_t
 evt_node_child_at(struct evt_context *tcx, struct evt_node *node,
 		  unsigned int at)
 {
-	struct evt_node_entry	*ne = evt_node_entry_at(tcx, node, at);
-
 	D_ASSERT(!evt_node_is_leaf(tcx, node));
-	return ne->ne_child;
+	return node->tn_child[at];
 }
 
-/** Return the rectangle at the offset of @at */
-struct evt_rect *
-evt_node_rect_at(struct evt_context *tcx, struct evt_node *node,
-		 unsigned int at)
+void
+evt_node_rect_read_at(struct evt_context *tcx, struct evt_node *node,
+		      unsigned int at, struct evt_rect *rout)
 {
-	struct evt_node_entry	*ne = evt_node_entry_at(tcx, node, at);
+	struct evt_node_entry	*ne;
+	struct evt_node		*child;
 
-	return &ne->ne_rect;
+	if (evt_node_is_leaf(tcx, node)) {
+		ne = evt_node_entry_at(tcx, node, at);
+		evt_rect_read(rout, &ne->ne_rect);
+	} else {
+		child = evt_off2node(tcx, evt_node_child_at(tcx, node, at));
+		evt_mbr_read(rout, child);
+	}
 }
+
 
 /**
- * Update the rectangle stored at the offset \a at of the specified node.
- * This function should update the MBR of the tree node the new rectangle
- * can enlarge the MBR.
+ * This function adjusts the location of the child record,
+ * if necessary and updates the mbr of the parent, if necessary.
  *
- * XXX, It will be ignored if the change shrinks the MBR of the node, this
- * should be fixed in the future.
- *
- * \param	tn_off [IN]	Tree node offset
- * \param	at	[IN]	Rectangle offset within the tree node.
- * \return	true		Node MBR changed
- *		false		No changed.
+ * \param[in]	tcx	Evtree context
+ * \param[in]	node	Node with MBR to update
+ * \param[in]	child	Child node to add
+ * \param[in]	at	Location of child record in node
+ * \return	true	Node MBR changed
+ *		false	No changed.
  */
 static bool
-evt_node_rect_update(struct evt_context *tcx, struct evt_node *node,
-		     unsigned int at, struct evt_rect *rect)
+evt_node_mbr_update(struct evt_context *tcx, struct evt_node *node,
+		    const struct evt_node *child, int at)
 {
-	struct evt_node_entry	*etmp;
-	struct evt_rect		*rtmp;
+	struct evt_rect		 rin;
+	struct evt_rect		 rout;
 	bool			 changed;
-
-	/* update the rectangle at the specified position */
-	etmp = evt_node_entry_at(tcx, node, at);
-	etmp->ne_rect = *rect;
 
 	/* make adjustments to the position of the rectangle */
 	if (tcx->tc_ops->po_adjust)
-		tcx->tc_ops->po_adjust(tcx, node, etmp, at);
+		tcx->tc_ops->po_adjust(tcx, node, at);
+
+	evt_mbr_read(&rin, child);
 
 	/* merge the rectangle with the current node */
-	rtmp = evt_node_mbr_get(tcx, node);
-	changed = evt_rect_merge(rtmp, rect);
+	evt_mbr_read(&rout, node);
+	changed = evt_rect_merge(&rout, &rin);
+
+	if (changed)
+		evt_mbr_write(node, &rout);
 
 	return changed;
 }
@@ -1102,10 +1179,13 @@ evt_node_rect_update(struct evt_context *tcx, struct evt_node *node,
  * node.
  */
 static int
-evt_node_size(struct evt_context *tcx)
+evt_node_size(struct evt_context *tcx, bool leaf)
 {
-	return sizeof(struct evt_node) +
-	       sizeof(struct evt_node_entry) * tcx->tc_order;
+	size_t entry_size;
+
+	entry_size = leaf ? sizeof(struct evt_node_entry) : sizeof(uint64_t);
+
+	return sizeof(struct evt_node) + entry_size * tcx->tc_order;
 }
 
 /** Allocate a evtree node */
@@ -1115,13 +1195,14 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 {
 	struct evt_node		*nd;
 	umem_off_t		 nd_off;
+	bool			 leaf = (flags & EVT_NODE_LEAF);
 
-	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx));
+	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx, leaf));
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
 	V_TRACE(DB_TRACE, "Allocate new node "DF_U64" %d bytes\n",
-		nd_off, evt_node_size(tcx));
+		nd_off, evt_node_size(tcx, leaf));
 	nd = evt_off2ptr(tcx, nd_off);
 	nd->tn_flags = flags;
 	nd->tn_magic = EVT_NODE_MAGIC;
@@ -1136,7 +1217,8 @@ evt_node_tx_add(struct evt_context *tcx, struct evt_node *nd)
 	if (!evt_has_tx(tcx))
 		return 0;
 
-	return umem_tx_add_ptr(evt_umm(tcx), nd, evt_node_size(tcx));
+	return umem_tx_add_ptr(evt_umm(tcx), nd,
+			       evt_node_size(tcx, evt_node_is_leaf(tcx, nd)));
 }
 
 static inline int
@@ -1168,8 +1250,8 @@ evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level,
 
 	empty = true;
 	for (i = nd->tn_nr - 1; i >= 0; i--) {
-		ne = evt_node_entry_at(tcx, nd, i);
 		if (leaf) {
+			ne = evt_node_entry_at(tcx, nd, i);
 			/* NB: This will be replaced with a callback */
 			rc = evt_node_entry_free(tcx, ne);
 			if (rc)
@@ -1185,7 +1267,7 @@ evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level,
 				break;
 			}
 		} else {
-			rc = evt_node_destroy(tcx, ne->ne_child, level + 1,
+			rc = evt_node_destroy(tcx, nd->tn_child[i], level + 1,
 					      &empty);
 			if (rc) {
 				D_ERROR("destroy failed: %s\n", d_errstr(rc));
@@ -1222,31 +1304,24 @@ out:
 	return rc;
 }
 
-/** Return the MBR of a node */
-static struct evt_rect *
-evt_node_mbr_get(struct evt_context *tcx, struct evt_node *node)
-{
-	return &node->tn_mbr;
-}
-
 /** (Re)compute MBR for a tree node */
 static void
 evt_node_mbr_cal(struct evt_context *tcx, struct evt_node *node)
 {
-	struct evt_rect *mbr;
+	struct evt_rect	 mbr;
 	int		 i;
 
 	D_ASSERT(node->tn_nr != 0);
 
-	mbr = &node->tn_mbr;
-	*mbr = *evt_node_rect_at(tcx, node, 0);
+	evt_node_rect_read_at(tcx, node, 0, &mbr);
 	for (i = 1; i < node->tn_nr; i++) {
-		struct evt_rect *rect;
+		struct evt_rect rect;
 
-		rect = evt_node_rect_at(tcx, node, i);
-		evt_rect_merge(mbr, rect);
+		evt_node_rect_read_at(tcx, node, i, &rect);
+		evt_rect_merge(&mbr, &rect);
 	}
-	V_TRACE(DB_TRACE, "Compute out MBR "DF_RECT", nr=%d\n", DP_RECT(mbr),
+	evt_mbr_write(node, &mbr);
+	V_TRACE(DB_TRACE, "Compute out MBR "DF_RECT", nr=%d\n", DP_RECT(&mbr),
 		node->tn_nr);
 }
 
@@ -1279,20 +1354,20 @@ evt_node_split(struct evt_context *tcx, bool leaf,
  */
 static int
 evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
-		const struct evt_entry_in *ent, bool *mbr_changed)
+		const struct evt_entry_in *ent, bool *mbr_changed, uint8_t **csum_bufp)
 {
 	int		 rc;
 	bool		 changed = 0;
 
-	V_TRACE(DB_TRACE, "Insert "DF_RECT" into "DF_RECT"\n",
-		DP_RECT(&ent->ei_rect), DP_RECT(evt_node_mbr_get(tcx, nd)));
+	V_TRACE(DB_TRACE, "Insert "DF_RECT" into "DF_MBR"\n",
+		DP_RECT(&ent->ei_rect), DP_MBR(nd));
 
-	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent, &changed);
+	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent, &changed, csum_bufp);
 	if (rc != 0)
 		return rc;
 
-	V_TRACE(DB_TRACE, "New MBR is "DF_RECT", nr=%d\n",
-		DP_RECT(evt_node_mbr_get(tcx, nd)), nd->tn_nr);
+	V_TRACE(DB_TRACE, "New MBR is "DF_MBR", nr=%d\n", DP_MBR(nd),
+		nd->tn_nr);
 	if (mbr_changed)
 		*mbr_changed = changed;
 
@@ -1318,7 +1393,7 @@ evt_node_weight_diff(struct evt_context *tcx, struct evt_node *nd,
 	memset(&wt_org, 0, sizeof(wt_org));
 	memset(&wt_new, 0, sizeof(wt_new));
 
-	rtmp = nd->tn_mbr;
+	evt_mbr_read(&rtmp, nd);
 	tcx->tc_ops->po_rect_weight(tcx, &rtmp, &wt_org);
 
 	evt_rect_merge(&rtmp, rect);
@@ -1485,12 +1560,16 @@ static int64_t
 evt_epoch_dist(struct evt_context *tcx, struct evt_node *nd,
 	       const struct evt_rect *rect)
 {
-	struct evt_rect	*mbr = evt_node_mbr_get(tcx, nd);
+	struct evt_rect	 mbr;
+	int64_t		 diff1;
 
-	if (mbr->rc_epc > rect->rc_epc)
-		return mbr->rc_epc - rect->rc_epc;
+	evt_mbr_read(&mbr, nd);
 
-	return rect->rc_epc - mbr->rc_epc;
+	diff1 = (mbr.rc_epc - rect->rc_epc);
+	if (diff1 < 0)
+		diff1 = -diff1;
+
+	return diff1;
 }
 
 /** Select a node from two for the rectangle \a rect being inserted */
@@ -1528,9 +1607,10 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
  * parent is also full.
  */
 static int
-evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
+evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
+		    uint8_t **csum_bufp)
 {
-	struct evt_rect		*mbr	  = NULL;
+	struct evt_node		*mbr	  = NULL;
 	struct evt_node		*nd_tmp   = NULL;
 	umem_off_t		 nm_save  = UMOFF_NULL;
 	struct evt_entry_in	 entry	  = *ent_new;
@@ -1560,9 +1640,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 		if (mbr_update) {
 			D_ASSERT(nd_tmp != NULL);
 			mbr_update = false;
-			mbr_changed = evt_node_rect_update(tcx, nd_cur,
-					   trace->tr_at,
-					   evt_node_mbr_get(tcx, nd_tmp));
+			mbr_changed = evt_node_mbr_update(tcx, nd_cur, nd_tmp,
+							  trace->tr_at);
 		}
 
 		if (mbr) { /* This is set only if no more insert or split */
@@ -1570,13 +1649,13 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 			/* Update the child MBR stored in the current node
 			 * because MBR of child has been enlarged.
 			 */
-			mbr_changed = evt_node_rect_update(tcx, nd_cur,
-							   trace->tr_at, mbr);
+			mbr_changed = evt_node_mbr_update(tcx, nd_cur, mbr,
+							  trace->tr_at);
 			if (!mbr_changed || level == 0)
 				D_GOTO(out, 0);
 
 			/* continue to merge MBR with upper level node */
-			mbr = evt_node_mbr_get(tcx, nd_cur);
+			mbr = nd_cur;
 			level--;
 			continue;
 		}
@@ -1585,7 +1664,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 			bool	changed;
 
 			rc = evt_node_insert(tcx, nd_cur, nm_save,
-					     &entry, &changed);
+					     &entry, &changed, csum_bufp);
 			if (rc != 0)
 				D_GOTO(failed, rc);
 
@@ -1597,7 +1676,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 				D_GOTO(out, 0);
 
 			/* continue to merge MBR with upper level node */
-			mbr = evt_node_mbr_get(tcx, nd_cur);
+			mbr = nd_cur;
 			level--;
 			continue;
 		}
@@ -1622,7 +1701,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 		 * new created node.
 		 */
 		nd_tmp = evt_select_node(tcx, &entry.ei_rect, nd_cur, nd_new);
-		rc = evt_node_insert(tcx, nd_tmp, nm_save, &entry, NULL);
+		rc = evt_node_insert(tcx, nd_tmp, nm_save, &entry, NULL,
+				     csum_bufp);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 
@@ -1631,7 +1711,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 		 * - If the current node is root, create a new root
 		 */
 		nm_save = nm_new;
-		entry.ei_rect = *evt_node_mbr_get(tcx, nd_new);
+		evt_mbr_read(&entry.ei_rect, nd_new);
 		if (level != 0) { /* not root */
 			level--;
 			/* After splitting, MBR of the current node has been
@@ -1656,7 +1736,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 			D_GOTO(failed, rc);
 		nd_new = evt_off2node(tcx, nm_new);
 
-		rc = evt_node_insert(tcx, nd_new, nm_save, &entry, NULL);
+		rc = evt_node_insert(tcx, nd_new, nm_save, &entry, NULL,
+				     csum_bufp);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 
@@ -1674,7 +1755,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 		/* continue the loop and insert the original root node into
 		 * the new root node.
 		 */
-		entry.ei_rect = *evt_node_mbr_get(tcx, nd_cur);
+		evt_mbr_read(&entry.ei_rect, nd_cur);
 		nm_save = nm_cur;
 	}
  out:
@@ -1687,7 +1768,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 
 /** Insert a single entry to evtree */
 static int
-evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
+evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent,
+		 uint8_t **csum_bufp)
 {
 	umem_off_t		nd_off;
 	int			level;
@@ -1745,11 +1827,12 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 	}
 	D_ASSERT(level == tcx->tc_depth - 1);
 
-	return evt_insert_or_split(tcx, ent);
+	return evt_insert_or_split(tcx, ent, csum_bufp);
 }
 
 static int
-evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
+evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent,
+	      uint8_t **csum_bufp)
 {
 	struct evt_desc		*dst_desc;
 	struct evt_trace	*trace;
@@ -1777,9 +1860,42 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 
 	dst_desc->dc_ex_addr = ent->ei_addr;
 	dst_desc->dc_ver = ent->ei_ver;
-	evt_desc_csum_fill(tcx, dst_desc, ent);
+	evt_desc_csum_fill(tcx, dst_desc, ent, csum_bufp);
 
 	return 0;
+}
+
+/** For hole extents that are too large for a single entry, search the tree
+ *  first and only insert holes where an extent is visible
+ */
+static int
+evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
+{
+	struct evt_entry	*ent;
+	struct evt_entry_in	 hole;
+	daos_epoch_range_t	 epr = {0, entry->ei_rect.rc_epc};
+	struct evt_entry_array	 ent_array;
+	int			 rc = 0;
+
+	evt_ent_array_init(&ent_array);
+	rc = evt_find(toh, &epr, &entry->ei_rect.rc_ex, &ent_array);
+	if (rc != 0)
+		goto done;
+
+	evt_ent_array_for_each(ent, &ent_array) {
+		if (bio_addr_is_hole(&ent->en_addr))
+			continue; /* Skip holes */
+		/** Insert a hole to cover the record */
+		hole = *entry;
+		hole.ei_rect.rc_ex = ent->en_sel_ext;
+		rc = evt_insert(toh, &hole);
+		if (rc != 0)
+			break;
+	}
+done:
+	evt_ent_array_fini(&ent_array);
+
+	return rc;
 }
 
 /**
@@ -1788,7 +1904,7 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
+evt_insert(daos_handle_t toh, struct evt_entry_in *entry)
 {
 	struct evt_context	*tcx;
 	struct evt_entry_array	 ent_array;
@@ -1803,6 +1919,16 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		D_ERROR("Variable record size not supported in evtree:"
 			" %d != %d\n", entry->ei_inob, tcx->tc_inob);
 		return -DER_INVAL;
+	}
+
+	if (evt_rect_width(&entry->ei_rect) > MAX_RECT_WIDTH) {
+		if (bio_addr_is_hole(&entry->ei_addr))
+			return evt_large_hole_insert(toh, entry);
+		D_ERROR("Extent is too large\n");
+		/** If it's a punch, we can do a find on the rectangle and
+		 *  punch visible extents but for now, just reject the update
+		 */
+		return -DER_NO_PERM;
 	}
 
 	evt_ent_array_init_internal(&ent_array, 1);
@@ -1832,6 +1958,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		tcx->tc_inob = tcx->tc_root->tr_inob = entry->ei_inob;
 	}
 
+
 	D_ASSERT(ent_array.ea_ent_nr <= 1);
 	if (ent_array.ea_ent_nr == 1) {
 		/*
@@ -1840,12 +1967,12 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		 * No copy for duplicate punch.
 		 */
 		if (entry->ei_inob > 0)
-			rc = evt_desc_copy(tcx, entry);
+			rc = evt_desc_copy(tcx, entry, NULL);
 		goto out;
 	}
 
 	/* Phase-2: Inserting */
-	rc = evt_insert_entry(tcx, entry);
+	rc = evt_insert_entry(tcx, entry, NULL);
 
 	/* No need for evt_ent_array_fill as there will be no allocations
 	 * with 1 entry in the list
@@ -1861,42 +1988,43 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node, unsigned int at,
 	       struct evt_entry *entry)
 {
 	struct evt_desc	   *desc;
-	struct evt_rect	   *rect;
+	struct evt_rect     rect;
 	daos_off_t	    offset;
 	daos_size_t	    width;
 	daos_size_t	    nr;
 
-	rect = evt_node_rect_at(tcx, node, at);
+	evt_node_rect_read_at(tcx, node, at, &rect);
 	desc = evt_node_desc_at(tcx, node, at);
 
 	offset = 0;
-	width = evt_rect_width(rect);
+	width = evt_rect_width(&rect);
 
 	entry->en_visibility = 0; /* Unknown */
 
-	if (rect_srch && rect_srch->rc_ex.ex_lo > rect->rc_ex.ex_lo) {
-		offset = rect_srch->rc_ex.ex_lo - rect->rc_ex.ex_lo;
+	if (rect_srch && rect_srch->rc_ex.ex_lo > rect.rc_ex.ex_lo) {
+		offset = rect_srch->rc_ex.ex_lo - rect.rc_ex.ex_lo;
 		D_ASSERTF(width > offset, DF_U64"/"DF_U64"\n", width, offset);
 		width -= offset;
 		entry->en_visibility = EVT_PARTIAL;
 	}
 
-	if (rect_srch && rect_srch->rc_ex.ex_hi < rect->rc_ex.ex_hi) {
-		nr = rect->rc_ex.ex_hi - rect_srch->rc_ex.ex_hi;
+	if (rect_srch && rect_srch->rc_ex.ex_hi < rect.rc_ex.ex_hi) {
+		nr = rect.rc_ex.ex_hi - rect_srch->rc_ex.ex_hi;
 		D_ASSERTF(width > nr, DF_U64"/"DF_U64"\n", width, nr);
 		width -= nr;
 		entry->en_visibility = EVT_PARTIAL;
 	}
 
-	entry->en_epoch = rect->rc_epc;
-	entry->en_ext = entry->en_sel_ext = rect->rc_ex;
+	entry->en_epoch = rect.rc_epc;
+	entry->en_ext = entry->en_sel_ext = rect.rc_ex;
 	entry->en_sel_ext.ex_lo += offset;
 	entry->en_sel_ext.ex_hi = entry->en_sel_ext.ex_lo + width - 1;
 
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
 	evt_entry_csum_fill(tcx, desc, entry);
-	entry->en_avail_rc = evt_desc_log_status(tcx, desc, intent);
+	entry->en_avail_rc = evt_desc_log_status(tcx, entry->en_epoch, desc,
+						 intent);
 
 	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
@@ -1932,7 +2060,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	level = at = 0;
 	nd_off = tcx->tc_root->tr_node;
 	while (1) {
-		struct evt_node_entry	*ne;
 		struct evt_node		*node;
 		bool			 leaf;
 
@@ -1941,29 +2068,26 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 		D_ASSERT(!leaf || at == 0);
 		V_TRACE(DB_TRACE,
-			"Checking mbr="DF_RECT"("DF_X64"), l=%d, a=%d, f=%d\n",
-			DP_RECT(evt_node_mbr_get(tcx, node)), nd_off, level, at,
-			leaf);
+			"Checking mbr="DF_MBR"("DF_X64"), l=%d, a=%d, f=%d\n",
+			DP_MBR(node), nd_off, level, at, leaf);
 
-		ne = evt_node_entry_at(tcx, node, at);
-
-		for (i = at; i < node->tn_nr; i++, ne++) {
+		for (i = at; i < node->tn_nr; i++) {
 			struct evt_entry	*ent;
-			struct evt_rect		*rtmp;
 			struct evt_desc		*desc;
+			struct evt_rect		 rtmp;
 			int			 time_overlap;
 			int			 range_overlap;
 
-			rtmp = &ne->ne_rect;
+			evt_node_rect_read_at(tcx, node, i, &rtmp);
 
-			if (evt_filter_rect(filter, rtmp, leaf)) {
+			if (evt_filter_rect(filter, &rtmp, leaf)) {
 				V_TRACE(DB_TRACE, "Filtered "DF_RECT" filter=("
-					DF_FILTER")\n", DP_RECT(rtmp),
+					DF_FILTER")\n", DP_RECT(&rtmp),
 					DP_FILTER(filter));
 				continue; /* Doesn't match the filter */
 			}
 
-			evt_rect_overlap(rtmp, rect, &range_overlap,
+			evt_rect_overlap(&rtmp, rect, &range_overlap,
 					 &time_overlap);
 			switch (range_overlap) {
 			default:
@@ -1997,10 +2121,11 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				break;
 			}
 			V_TRACE(DB_TRACE, "Found overlapped leaf rect: "DF_RECT
-				"\n", DP_RECT(rtmp));
+				"\n", DP_RECT(&rtmp));
 
 			desc = evt_node_desc_at(tcx, node, i);
-			rc = evt_desc_log_status(tcx, desc, intent);
+			rc = evt_desc_log_status(tcx, rtmp.rc_epc, desc,
+						 intent);
 			/* Skip the unavailable record. */
 			if (rc == ALB_UNAVAILABLE)
 				continue;
@@ -2033,7 +2158,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 						"overwrite not supported:"
 						DF_RECT" overlaps with "DF_RECT
 						"\n", DP_RECT(rect),
-						DP_RECT(rtmp));
+						DP_RECT(&rtmp));
 					rc = -DER_NO_PERM;
 					goto out;
 				}
@@ -2338,20 +2463,19 @@ evt_node_debug(struct evt_context *tcx, umem_off_t nd_off,
 	 * otherwise only output debug info for the specified tree level.
 	 */
 	if (leaf || cur_level == debug_level || debug_level < 0) {
-		struct evt_rect *rect;
+		struct evt_rect rect;
 
-		rect = evt_node_mbr_get(tcx, nd);
-		D_PRINT("%*snode="DF_X64", lvl=%d, mbr="DF_RECT
+		D_PRINT("%*snode="DF_X64", lvl=%d, mbr="DF_MBR
 			", rect_nr=%d\n", cur_level * EVT_DEBUG_INDENT, "",
-			nd_off, cur_level, DP_RECT(rect), nd->tn_nr);
+			nd_off, cur_level, DP_MBR(nd), nd->tn_nr);
 
 		if (leaf && debug_level == EVT_DEBUG_LEAF) {
 			for (i = 0; i < nd->tn_nr; i++) {
-				rect = evt_node_rect_at(tcx, nd, i);
+				evt_node_rect_read_at(tcx, nd, i, &rect);
 
 				D_PRINT("%*s    rect[%d] = "DF_RECT"\n",
 					cur_level * EVT_DEBUG_INDENT, "", i,
-					DP_RECT(rect));
+					DP_RECT(&rect));
 			}
 		}
 
@@ -2396,17 +2520,17 @@ evt_debug(daos_handle_t toh, int debug_level)
  */
 
 /** Common routines */
-typedef int (cmp_rect_cb)(struct evt_context *tcx, const struct evt_rect *mbr,
+typedef int (cmp_rect_cb)(struct evt_context *tcx,
+			  const struct evt_node *nd,
 			  const struct evt_rect *rt1,
 			  const struct evt_rect *rt2);
 static int
 evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		  umem_off_t in_off, const struct evt_entry_in *ent,
-		  bool *changed, cmp_rect_cb cb)
+		  bool *changed, cmp_rect_cb cb, uint8_t **csum_bufp)
 {
 	struct evt_node_entry	*ne = NULL;
 	struct evt_desc		*desc = NULL;
-	struct evt_rect		*mbr;
 	int			 i;
 	int			 rc;
 	bool			 leaf;
@@ -2415,32 +2539,40 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 	D_ASSERT(!evt_node_is_full(tcx, nd));
 
 	leaf = evt_node_is_leaf(tcx, nd);
-	mbr = evt_node_mbr_get(tcx, nd);
 	if (nd->tn_nr == 0) {
-		*mbr = ent->ei_rect;
+		evt_mbr_write(nd, &ent->ei_rect);
 		*changed = true;
 	} else {
-		*changed = evt_rect_merge(mbr, &ent->ei_rect);
+		struct evt_rect	rtmp;
+
+		evt_mbr_read(&rtmp, nd);
+		*changed = evt_rect_merge(&rtmp, &ent->ei_rect);
+		if (*changed)
+			evt_mbr_write(nd, &rtmp);
 	}
 
 	/* NB: can use binary search to optimize */
 	for (i = 0; i < nd->tn_nr; i++) {
-		int	nr;
+		struct evt_rect	rtmp;
+		int		nr;
 
-		ne = evt_node_entry_at(tcx, nd, i);
+		evt_node_rect_read_at(tcx, nd, i, &rtmp);
 
-		rc = cb(tcx, mbr, &ne->ne_rect, &ent->ei_rect);
+		rc = cb(tcx, nd, &rtmp, &ent->ei_rect);
 		if (rc < 0)
 			continue;
 
 		if (!leaf) {
 			nr = nd->tn_nr - i;
-			memmove(ne + 1, ne, nr * sizeof(*ne));
+			memmove(&nd->tn_child[i + 1], &nd->tn_child[i],
+				nr * sizeof(nd->tn_child[0]));
 			break;
 		}
 
+		ne = evt_node_entry_at(tcx, nd, i);
 		desc = evt_off2desc(tcx, ne->ne_child);
-		rc = evt_desc_log_status(tcx, desc, DAOS_INTENT_CHECK);
+		rc = evt_desc_log_status(tcx, ne->ne_rect.rc_epc, desc,
+					 DAOS_INTENT_CHECK);
 		if (rc != ALB_UNAVAILABLE) {
 			nr = nd->tn_nr - i;
 			memmove(ne + 1, ne, nr * sizeof(*ne));
@@ -2470,7 +2602,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		if (i != 0 && leaf) {
 			ne = evt_node_entry_at(tcx, nd, i - 1);
 			desc = evt_off2desc(tcx, ne->ne_child);
-			rc = evt_desc_log_status(tcx, desc, DAOS_INTENT_CHECK);
+			rc = evt_desc_log_status(tcx, ne->ne_rect.rc_epc,
+						 desc, DAOS_INTENT_CHECK);
 			if (rc == ALB_UNAVAILABLE) {
 				umem_off_t	off = ne->ne_child;
 
@@ -2482,30 +2615,27 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 				D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, "
 					"off "UMOFF_PF" (2)\n",
 					i, nd->tn_nr, UMOFF_P(off));
+				i = nd->tn_nr - 1;
 			}
 		}
-
-		if (!reuse)
-			ne = evt_node_entry_at(tcx, nd, nd->tn_nr);
 	}
 
-	ne->ne_rect = ent->ei_rect;
 	if (leaf) {
-		umem_off_t	desc_off;
+		umem_off_t desc_off;
+		uint32_t   csum_buf_size =
+				evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+		size_t     desc_size = sizeof(struct evt_desc) + csum_buf_size;
+		ne = evt_node_entry_at(tcx, nd, i);
 
-		uint32_t csum_buf_size =
-			evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+		evt_rect_write(&ne->ne_rect, &ent->ei_rect);
 
 		if (csum_buf_size > 0)
 			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
 						"for checksum", csum_buf_size);
-
-		size_t allocation_size = sizeof(struct evt_desc) +
-					 csum_buf_size;
-
-		desc_off = umem_zalloc(evt_umm(tcx), allocation_size);
+		desc_off = umem_zalloc(evt_umm(tcx), desc_size);
 		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOSPACE;
+
 		ne->ne_child = desc_off;
 		desc = evt_off2ptr(tcx, desc_off);
 		rc = evt_desc_log_add(tcx, desc);
@@ -2518,10 +2648,10 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
-		evt_desc_csum_fill(tcx, desc, ent);
+		evt_desc_csum_fill(tcx, desc, ent, csum_bufp);
 		desc->dc_ver = ent->ei_ver;
 	} else {
-		ne->ne_child = in_off;
+		nd->tn_child[i] = in_off;
 	}
 
 	if (!reuse)
@@ -2536,17 +2666,38 @@ evt_common_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
 {
 	memset(weight, 0, sizeof(*weight));
 	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
-	weight->wt_minor = 0; /* Disable minor weight in favor of distance */
+	weight->wt_minor = 0;
 
 	return 0;
+}
+
+void
+evt_split_common(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
+		 struct evt_node *nd_dst, int idx)
+{
+	void	*entry_src;
+	void	*entry_dst;
+	size_t	 entry_size;
+
+	if (leaf) {
+		entry_src = evt_node_entry_at(tcx, nd_src, idx);
+		entry_dst = evt_node_entry_at(tcx, nd_dst, 0);
+		entry_size = sizeof(struct evt_node_entry);
+	} else {
+		entry_src = &nd_src->tn_child[idx];
+		entry_dst = &nd_dst->tn_child[0];
+		entry_size = sizeof(nd_dst->tn_child[0]);
+	}
+
+	memcpy(entry_dst, entry_src, entry_size * (nd_src->tn_nr - idx));
+	nd_dst->tn_nr = nd_src->tn_nr - idx;
+	nd_src->tn_nr = idx;
 }
 
 static int
 evt_even_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 	       struct evt_node *nd_dst)
 {
-	struct evt_node_entry	*entry_src;
-	struct evt_node_entry	*entry_dst;
 	int		    nr;
 
 	D_ASSERT(nd_src->tn_nr == tcx->tc_order);
@@ -2558,44 +2709,39 @@ evt_even_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 	 */
 	nr += (nd_src->tn_nr % 2 != 0);
 
-	entry_src = evt_node_entry_at(tcx, nd_src, nr);
-	entry_dst = evt_node_entry_at(tcx, nd_dst, 0);
-	memcpy(entry_dst, entry_src, sizeof(*entry_dst) * (nd_src->tn_nr - nr));
-
-	nd_dst->tn_nr = nd_src->tn_nr - nr;
-	nd_src->tn_nr = nr;
+	evt_split_common(tcx, leaf, nd_src, nd_dst, nr);
 	return 0;
 }
 
 static int
 evt_common_adjust(struct evt_context *tcx, struct evt_node *nd,
-		  struct evt_node_entry *ne, int at, cmp_rect_cb cb)
+		  int at, cmp_rect_cb cb)
 {
-	struct evt_rect		*mbr;
-	struct evt_node_entry	*etmp;
-	struct evt_node_entry	*dst_entry;
-	struct evt_node_entry	*src_entry;
-	struct evt_node_entry	 cached_entry;
+	uint64_t		*dst_entry;
+	uint64_t		*src_entry;
+	uint64_t		 cached_entry;
+	struct evt_rect		 rtmp, rect;
 	int			 count;
 	int			 i;
 	int			 offset;
 
 	D_ASSERT(!evt_node_is_leaf(tcx, nd));
-	mbr = evt_node_mbr_get(tcx, nd);
+
+	evt_node_rect_read_at(tcx, nd, at, &rect);
 
 	/* Check if we need to move the entry left */
-	for (i = at - 1, etmp = ne - 1; i >= 0; i--, etmp--) {
-		if (cb(tcx, mbr, &etmp->ne_rect, &ne->ne_rect) <= 0)
+	for (i = at - 1; i >= 0; i--) {
+		evt_node_rect_read_at(tcx, nd, i, &rtmp);
+		if (cb(tcx, nd, &rtmp, &rect) <= 0)
 			break;
 	}
 
 	i++;
 	if (i != at) {
 		/* The entry needs to move left */
-		etmp++;
-		dst_entry = etmp + 1;
-		src_entry = etmp;
-		cached_entry = *ne;
+		dst_entry = &nd->tn_child[i + 1];
+		src_entry = &nd->tn_child[i];
+		cached_entry = nd->tn_child[at];
 
 		count = at - i;
 		offset = -count;
@@ -2603,19 +2749,19 @@ evt_common_adjust(struct evt_context *tcx, struct evt_node *nd,
 	}
 
 	/* Ok, now check if we need to move the entry right */
-	for (i = at + 1, etmp = ne + 1; i < nd->tn_nr; i++, etmp++) {
-		if (cb(tcx, mbr, &etmp->ne_rect, &ne->ne_rect) >= 0)
+	for (i = at + 1; i < nd->tn_nr; i++) {
+		evt_node_rect_read_at(tcx, nd, i, &rtmp);
+		if (cb(tcx, nd, &rtmp, &rect) >= 0)
 			break;
 	}
 
 	i--;
 	if (i != at) {
 		/* the entry needs to move right */
-		etmp--;
+		dst_entry = &nd->tn_child[at];
+		src_entry = &nd->tn_child[at + 1];
+		cached_entry = nd->tn_child[at];
 		count = i - at;
-		dst_entry = ne;
-		src_entry = dst_entry + 1;
-		cached_entry = *ne;
 		offset = count;
 		goto move;
 	}
@@ -2624,7 +2770,7 @@ evt_common_adjust(struct evt_context *tcx, struct evt_node *nd,
 move:
 	/* Execute the move */
 	memmove(dst_entry, src_entry, sizeof(*dst_entry) * count);
-	*etmp = cached_entry;
+	nd->tn_child[i] = cached_entry;
 
 	return offset;
 }
@@ -2638,7 +2784,7 @@ move:
 
 /** Rectangle comparison for sorting */
 static int
-evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
+evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_node *nd,
 		  const struct evt_rect *rt1, const struct evt_rect *rt2)
 {
 	return evt_rect_cmp(rt1, rt2);
@@ -2647,17 +2793,16 @@ evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
 static int
 evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		umem_off_t in_off, const struct evt_entry_in *ent,
-		bool *changed)
+		bool *changed, uint8_t **csum_bufp)
 {
 	return evt_common_insert(tcx, nd, in_off, ent, changed,
-				 evt_ssof_cmp_rect);
+				 evt_ssof_cmp_rect, csum_bufp);
 }
 
 static int
-evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd,
-		struct evt_node_entry *ne, int at)
+evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd, int at)
 {
-	return evt_common_adjust(tcx, nd, ne, at, evt_ssof_cmp_rect);
+	return evt_common_adjust(tcx, nd, at, evt_ssof_cmp_rect);
 }
 
 static struct evt_policy_ops evt_ssof_pol_ops = {
@@ -2682,13 +2827,16 @@ evt_mbr_dist(const struct evt_rect *mbr, const struct evt_rect *rect)
 }
 
 static int
-evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
+evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_node *nd,
 		   const struct evt_rect *rt1, const struct evt_rect *rt2)
 {
-	int64_t	dist1, dist2;
+	struct evt_rect	mtmp;
+	int64_t		dist1, dist2;
 
-	dist1 = evt_mbr_dist(mbr, rt1);
-	dist2 = evt_mbr_dist(mbr, rt2);
+	evt_mbr_read(&mtmp, nd);
+
+	dist1 = evt_mbr_dist(&mtmp, rt1);
+	dist2 = evt_mbr_dist(&mtmp, rt2);
 
 	if (dist1 < dist2)
 		return -1;
@@ -2703,24 +2851,23 @@ static int
 evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 		struct evt_node *nd_dst)
 {
-	struct evt_node_entry	*entry_src;
-	struct evt_node_entry	*entry_dst;
-	struct evt_rect		*mbr;
+	struct evt_rect		 mbr;
+	struct evt_rect		 rtmp;
 	int			 nr;
 	int			 delta;
 	int			 boundary;
 	bool			 cond;
 	int64_t			 dist;
 
-	mbr = evt_node_mbr_get(tcx, nd_src);
+	evt_mbr_read(&mbr, nd_src);
 
 	D_ASSERT(nd_src->tn_nr == tcx->tc_order);
 	nr = nd_src->tn_nr / 2;
 
 	nr += nd_src->tn_nr % 2;
 
-	entry_src = evt_node_entry_at(tcx, nd_src, nr);
-	dist = evt_mbr_dist(mbr, &entry_src->ne_rect);
+	evt_node_rect_read_at(tcx, nd_src, nr, &rtmp);
+	dist = evt_mbr_dist(&mbr, &rtmp);
 
 	if (dist == 0) /* special case if middle node is equal distance */
 		goto done;
@@ -2733,34 +2880,28 @@ evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 		nr += delta;
 		if (nr == boundary)
 			break;
-		entry_src = evt_node_entry_at(tcx, nd_src, nr);
-		dist = evt_mbr_dist(mbr, &entry_src->ne_rect);
+		evt_node_rect_read_at(tcx, nd_src, nr, &rtmp);
+		dist = evt_mbr_dist(&mbr, &rtmp);
 	} while ((dist > 0) == cond);
 
 done:
-	entry_src = evt_node_entry_at(tcx, nd_src, nr);
-	entry_dst = evt_node_entry_at(tcx, nd_dst, 0);
-	memcpy(entry_dst, entry_src, sizeof(*entry_dst) * (nd_src->tn_nr - nr));
-
-	nd_dst->tn_nr = nd_src->tn_nr - nr;
-	nd_src->tn_nr = nr;
+	evt_split_common(tcx, leaf, nd_src, nd_dst, nr);
 	return 0;
 }
 
 static int
 evt_sdist_insert(struct evt_context *tcx, struct evt_node *nd,
 		umem_off_t in_off, const struct evt_entry_in *ent,
-		bool *changed)
+		bool *changed, uint8_t **csum_bufp)
 {
 	return evt_common_insert(tcx, nd, in_off, ent, changed,
-				 evt_sdist_cmp_rect);
+				 evt_sdist_cmp_rect, csum_bufp);
 }
 
 static int
-evt_sdist_adjust(struct evt_context *tcx, struct evt_node *nd,
-		 struct evt_node_entry *ne, int at)
+evt_sdist_adjust(struct evt_context *tcx, struct evt_node *nd, int at)
 {
-	return evt_common_adjust(tcx, nd, ne, at, evt_sdist_cmp_rect);
+	return evt_common_adjust(tcx, nd, at, evt_sdist_cmp_rect);
 }
 
 static struct evt_policy_ops evt_sdist_pol_ops = {
@@ -2792,7 +2933,6 @@ evt_tcx_fix_trace(struct evt_context *tcx, int level)
 	struct evt_trace	*trace;
 	struct evt_node		*pn;
 	struct evt_node		*nd;
-	struct evt_node_entry	*ne;
 	int			 index;
 
 	/* Go up if we have no more entries at this level. */
@@ -2819,8 +2959,8 @@ evt_tcx_fix_trace(struct evt_context *tcx, int level)
 	for (index = level + 1; index < tcx->tc_depth; index++) {
 		trace = &tcx->tc_trace[index - 1];
 		nd = evt_off2node(tcx, trace->tr_node);
-		ne = evt_node_entry_at(tcx, nd, trace->tr_at);
-		evt_tcx_set_trace(tcx, index, ne->ne_child, 0, false);
+		evt_tcx_set_trace(tcx, index, nd->tn_child[trace->tr_at], 0,
+				  false);
 	}
 
 	return 0;
@@ -2833,6 +2973,10 @@ evt_node_delete(struct evt_context *tcx)
 	struct evt_trace	*trace;
 	struct evt_node		*node;
 	struct evt_node_entry	*ne;
+	void			*data;
+	umem_off_t		*child_offp;
+	umem_off_t		 child_off;
+	size_t			 child_size;
 	umem_off_t		 nm_cur;
 	umem_off_t		 old_cur = UMOFF_NULL;
 	bool			 leaf;
@@ -2854,10 +2998,20 @@ evt_node_delete(struct evt_context *tcx)
 		node = evt_off2node(tcx, nm_cur);
 		leaf = evt_node_is_leaf(tcx, node);
 
-		ne = evt_node_entry_at(tcx, node, trace->tr_at);
-
+		if (leaf) {
+			ne = evt_node_entry_at(tcx, node, trace->tr_at);
+			data = ne;
+			child_off = ne->ne_child;
+			child_offp = &ne->ne_child;
+			child_size = sizeof(*ne);
+		} else {
+			child_offp = &node->tn_child[trace->tr_at];
+			data = child_offp;
+			child_off = *child_offp;
+			child_size = sizeof(child_off);
+		}
 		if (!UMOFF_IS_NULL(old_cur))
-			D_ASSERT(old_cur == ne->ne_child);
+			D_ASSERT(old_cur == child_off);
 		if (leaf) {
 			/* Free the evt_desc */
 			rc = evt_node_entry_free(tcx, ne);
@@ -2886,7 +3040,7 @@ evt_node_delete(struct evt_context *tcx)
 		}
 
 		/* If it's not a leaf, it will already have been deleted */
-		ne->ne_child = UMOFF_NULL;
+		*child_offp = UMOFF_NULL;
 
 		/* Ok, remove the rect at the current trace */
 		count = node->tn_nr - trace->tr_at - 1;
@@ -2895,7 +3049,7 @@ evt_node_delete(struct evt_context *tcx)
 		if (count == 0)
 			break;
 
-		memmove(ne, ne + 1, sizeof(*ne) * count);
+		memmove(data, data + child_size, child_size * count);
 
 		break;
 	};
@@ -2904,21 +3058,21 @@ evt_node_delete(struct evt_context *tcx)
 
 	/* Update MBR and bubble up */
 	while (1) {
+		struct evt_rect	rect;
 		struct evt_rect	mbr;
 		int		i;
 		int		offset;
 
-		ne -= trace->tr_at;
-		mbr = ne->ne_rect;
-		ne++;
-		for (i = 1; i < node->tn_nr; i++, ne++)
-			evt_rect_merge(&mbr, &ne->ne_rect);
+		evt_node_rect_read_at(tcx, node, 0, &mbr);
+		for (i = 1; i < node->tn_nr; i++) {
+			evt_node_rect_read_at(tcx, node, i, &rect);
+			evt_rect_merge(&mbr, &rect);
+		}
 
-		if (evt_rect_same_extent(&node->tn_mbr, &mbr) &&
-		    node->tn_mbr.rc_epc == mbr.rc_epc)
+		if (evt_mbr_same(node, &mbr))
 			goto fix_trace; /* mbr hasn't changed */
 
-		node->tn_mbr = mbr;
+		evt_mbr_write(node, &mbr);
 
 		if (level == 0)
 			goto fix_trace;
@@ -2936,13 +3090,10 @@ evt_node_delete(struct evt_context *tcx)
 			trace->tr_tx_added = true;
 		}
 
-		ne = evt_node_entry_at(tcx, node, trace->tr_at);
-		ne->ne_rect = mbr;
-
 		/* make adjustments to the position of the rectangle */
 		if (!tcx->tc_ops->po_adjust)
 			continue;
-		offset = tcx->tc_ops->po_adjust(tcx, node, ne, trace->tr_at);
+		offset = tcx->tc_ops->po_adjust(tcx, node, trace->tr_at);
 		if (offset == 0)
 			continue;
 
@@ -2951,7 +3102,6 @@ evt_node_delete(struct evt_context *tcx)
 			D_ASSERTF(trace->tr_at >= -offset,
 				  "at:%u, offset:%d\n", trace->tr_at, offset);
 			trace->tr_at += offset;
-			ne = evt_node_entry_at(tcx, node, trace->tr_at);
 		}
 	}
 
@@ -3029,7 +3179,7 @@ evt_csum_buf_len(const struct evt_context *tcx,
 
 void
 evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
-		   const struct evt_entry_in *ent)
+		   const struct evt_entry_in *ent, uint8_t **csum_bufp)
 {
 	const struct dcs_csum_info	*csum = &ent->ei_csum;
 	daos_size_t			 csum_buf_len;
@@ -3044,6 +3194,8 @@ evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 			csum->cs_buf_len, csum_buf_len);
 	} else {
 		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
+		if (csum_bufp != NULL)
+			*csum_bufp = desc->pt_csum;
 	}
 }
 
@@ -3088,6 +3240,24 @@ evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size)
 	result.ex_lo = chunk.dcr_lo;
 
 	return result;
+}
+
+void
+evt_entry_csum_update(const struct evt_extent *const ext,
+		      const struct evt_extent *const sel,
+		      struct dcs_csum_info *csum_info)
+{
+	uint32_t csum_to_remove;
+
+	D_ASSERT(csum_info->cs_chunksize > 0);
+	D_ASSERT(sel->ex_lo >= ext->ex_lo);
+
+	csum_to_remove = (sel->ex_lo - ext->ex_lo)
+			 / csum_info->cs_chunksize;
+
+	csum_info->cs_csum += csum_info->cs_len * csum_to_remove;
+	csum_info->cs_nr -= csum_to_remove;
+	csum_info->cs_buf_len -= csum_info->cs_len * csum_to_remove;
 }
 
 int
