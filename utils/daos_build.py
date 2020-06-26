@@ -1,7 +1,6 @@
 """Common DAOS build functions"""
 from SCons.Subst import Literal
 from SCons.Script import GetOption
-from SCons.Script import Dir
 from env_modules import load_mpi
 from distutils.spawn import find_executable
 import os
