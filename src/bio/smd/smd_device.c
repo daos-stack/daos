@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,7 +119,7 @@ smd_dev_unassign(uuid_t dev_id, int tgt_id)
 	return -DER_NOSYS;
 }
 
-static char *
+char *
 smd_state_enum_to_str(enum smd_dev_state state)
 {
 	switch (state) {

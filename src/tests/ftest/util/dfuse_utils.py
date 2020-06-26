@@ -47,8 +47,7 @@ class DfuseCommand(ExecutableCommand):
         self.foreground = FormattedParameter("--foreground", False)
 
         # Environment variable names to export when running dfuse
-        self._env_names = [
-            "OFI_INTERFACE", "OFI_PORT", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]
+        self._env_names = ["D_LOG_FILE"]
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse params for the DAOS group, pool, and container uuid.

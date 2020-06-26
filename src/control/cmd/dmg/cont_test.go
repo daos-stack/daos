@@ -51,7 +51,6 @@ func TestContSetOwnerCommand(t *testing.T) {
 			"Set owner user",
 			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --user=%s", testPoolUUID, testContUUID, testUser),
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.ContSetOwnerReq{
 					PoolUUID: testPoolUUID.String(),
 					ContUUID: testContUUID.String(),
@@ -65,7 +64,6 @@ func TestContSetOwnerCommand(t *testing.T) {
 			"Set owner group",
 			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --group=%s", testPoolUUID, testContUUID, testGroup),
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.ContSetOwnerReq{
 					PoolUUID: testPoolUUID.String(),
 					ContUUID: testContUUID.String(),
@@ -80,7 +78,6 @@ func TestContSetOwnerCommand(t *testing.T) {
 			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --user=%s --group=%s",
 				testPoolUUID, testContUUID, testUser, testGroup),
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.ContSetOwnerReq{
 					PoolUUID: testPoolUUID.String(),
 					ContUUID: testContUUID.String(),
