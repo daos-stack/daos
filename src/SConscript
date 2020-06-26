@@ -12,6 +12,8 @@ HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'heap.h', 'fault_inject.h', 'debug_setup.h',
                 'types.h', 'atomic.h']
 
+# Keep versioned libs for now to avoid any conflict with 1.0
+CART_VERSION = "4.7.0"
 
 def scons():
     """Execute build"""
@@ -23,7 +25,7 @@ def scons():
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
 
     env.AppendUnique(LIBPATH=[Dir('gurt')])
-    env.AppendUnique(RPATH=[Dir('gurt')])
+    env.AppendUnique(RPATH_FULL=[Dir('gurt')])
     env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('gurt').path])
 
     # Generic DAOS includes
@@ -37,6 +39,10 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
                     'include/gurt/%s' % header)
 
+    env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
+    Export('env', 'CART_VERSION')
+
+    SConscript('gurt/SConscript')
     SConscript('cart/SConscript')
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
