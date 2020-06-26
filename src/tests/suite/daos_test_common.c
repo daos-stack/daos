@@ -823,20 +823,13 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	int		rc;
 
 	/* build and invoke dmg cmd */
-	snprintf(dmg_cmd, DTS_CFG_MAX, "dmg pool %s -i --pool=%s --rank=%d",
-		 sub_cmd, DP_UUID(pool_uuid), rank);
+	dts_create_config(dmg_cmd, "dmg pool %s -i --pool=%s --rank=%d",
+			  sub_cmd, DP_UUID(pool_uuid), rank);
 
 	if (tgt_idx != -1)
-		snprintf(dmg_cmd + strlen(dmg_cmd),
-		DTS_CFG_MAX - strlen(dmg_cmd), " --target-idx=%d", tgt_idx);
+		dts_append_config(dmg_cmd, " --target-idx=%d", tgt_idx);
 	if (dmg_config != NULL)
-		snprintf(dmg_cmd + strlen(dmg_cmd),
-		DTS_CFG_MAX - strlen(dmg_cmd), " -o %s", dmg_config);
-
-	if (strlen(dmg_cmd) >= DTS_CFG_MAX)
-		dmg_cmd[DTS_CFG_MAX - 1] = 0;
-	else
-		dmg_cmd[strlen(dmg_cmd)] = 0;
+		dts_append_config(dmg_cmd, " -o %s", dmg_config);
 
 	rc = system(dmg_cmd);
 	print_message("%s rc 0x%x\n", dmg_cmd, rc);
@@ -918,16 +911,9 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
 	/* build and invoke dmg cmd to stop the server */
-	snprintf(dmg_cmd, DTS_CFG_MAX, "dmg system stop -i -r %d --force",
-		 rank);
+	dts_create_config(dmg_cmd, "dmg system stop -i -r %d --force", rank);
 	if (arg->dmg_config != NULL)
-		snprintf(dmg_cmd + strlen(dmg_cmd),
-		DTS_CFG_MAX - strlen(dmg_cmd), " -o %s", arg->dmg_config);
-
-	if (strlen(dmg_cmd) >= DTS_CFG_MAX)
-		dmg_cmd[DTS_CFG_MAX - 1] = 0;
-	else
-		dmg_cmd[strlen(dmg_cmd)] = 0;
+		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
 
 	rc = system(dmg_cmd);
 	print_message(" %s rc 0x%x\n", dmg_cmd, rc);
