@@ -63,9 +63,9 @@
 #define RPC_TRACE(mask, rpc, fmt, ...)					\
 	do {								\
 		D_TRACE_DEBUG(mask, (rpc),				\
-			"[opc=0x%x xid=0x%x rank:tag=%d:%d] " fmt,	\
+			"[opc=0x%x rpcid=0x%lx rank:tag=%d:%d] " fmt,	\
 			(rpc)->crp_pub.cr_opc,				\
-			(rpc)->crp_req_hdr.cch_xid,			\
+			(rpc)->crp_req_hdr.cch_rpcid,			\
 			(rpc)->crp_pub.cr_ep.ep_rank,			\
 			(rpc)->crp_pub.cr_ep.ep_tag,			\
 			## __VA_ARGS__);				\
@@ -75,9 +75,9 @@
 #define RPC_ERROR(rpc, fmt, ...)					\
 	do {								\
 		D_TRACE_ERROR((rpc),					\
-			"[opc=0x%x xid=0x%x rank:tag=%d:%d] " fmt,	\
+			"[opc=0x%x rpcid=0x%lx rank:tag=%d:%d] " fmt,	\
 			(rpc)->crp_pub.cr_opc,				\
-			(rpc)->crp_req_hdr.cch_xid,			\
+			(rpc)->crp_req_hdr.cch_rpcid,			\
 			(rpc)->crp_pub.cr_ep.ep_rank,			\
 			(rpc)->crp_pub.cr_ep.ep_tag,			\
 			## __VA_ARGS__);				\
