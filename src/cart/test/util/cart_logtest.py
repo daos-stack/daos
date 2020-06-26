@@ -146,11 +146,6 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'notify_ready': ('req.uri'),
                     'get_tgt_rank': ('tgts')}
 
-memleak_ok = ['dfuse_start',
-              'expand_vector',
-              'get_tpv',
-              'get_new_entry']
-
 EFILES = ['src/common/misc.c',
           'src/common/prop.c',
           'src/cart/crt_hg_proc.c',
@@ -457,8 +452,6 @@ class LogTest():
         # once this is stable.
         lost_memory = False
         for (_, line) in regions.items():
-            if line.function in memleak_ok:
-                continue
             pointer = line.get_field(-1).rstrip('.')
             if pointer in active_desc:
                 show_line(line, 'NORMAL', 'descriptor not freed')
