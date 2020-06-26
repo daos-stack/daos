@@ -209,23 +209,23 @@ class OSAOnlineReintegration(TestWithServers):
             output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                    rank, t_string)
             self.log.info(output)
-            time.sleep(5)
-            
+            time.sleep(60)
+
             pver_exclude = self.get_pool_version()
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_exclude > pver_begin,
+            self.assertTrue(pver_exclude > (pver_begin + 1),
                             "Pool Version Error:  After exclude")
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                        rank,
                                                        t_string)
             self.log.info(output)
-            time.sleep(5)
+            time.sleep(60)
 
             pver_reint = self.get_pool_version()
             self.log.info("Pool Version after reintegrate %d", pver_reint)
             # Check pool version incremented after pool reintegrate
-            self.assertTrue(pver_reint > pver_exclude,
+            self.assertTrue(pver_reint > (pver_exclude + 1),
                             "Pool Version Error:  After reintegrate")
             # Wait to finish the threads
             for thrd in threads:
