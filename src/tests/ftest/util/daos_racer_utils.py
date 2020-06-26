@@ -54,7 +54,7 @@ class DaosRacerCommand(ExecutableCommand):
         # daos_racer command.  The values for these names are populated by the
         # get_environment() method and added to command line by the
         # set_environment() method.
-        self._env_names = ["OFI_INTERFACE", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]
+        self._env_names = ["D_LOG_FILE"]
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
