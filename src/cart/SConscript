@@ -56,5 +56,6 @@ def scons():
     env.Install('$PREFIX/etc', ['utils/memcheck-cart.supp',
                                 'utils/fault-inject-cart.yaml'])
 
+
 if __name__ == "SCons.Script":
     scons()
