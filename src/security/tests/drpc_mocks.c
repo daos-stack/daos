@@ -34,10 +34,10 @@ drpc_connect(char *sockaddr, struct drpc **drpcp)
 {
 	strncpy(drpc_connect_sockaddr, sockaddr, PATH_MAX);
 
-	if (drpc_connect_return) {
-		*drpcp = drpc_connect_return;
+	*drpcp = drpc_connect_return;
+	if (drpc_connect_return)
 		return -DER_SUCCESS;
-	}
+
 	return -DER_BADPATH;
 }
 

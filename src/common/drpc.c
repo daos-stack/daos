@@ -164,7 +164,7 @@ unixcomm_close(struct unixcomm *handle)
 	if (ret < 0) {
 		D_ERROR("Failed to close socket fd %d, errno=%d\n",
 			fd, errno);
-		return -DER_MISC;
+		return daos_errno2der(errno);
 	}
 
 	return -DER_SUCCESS;
@@ -317,7 +317,7 @@ unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 	if (bsent < 0) {
 		D_ERROR("Failed to sendmsg on socket fd %d, errno=%d\n",
 			hndl->fd, errno);
-		ret = -DER_MISC;
+		ret = daos_errno2der(errno);
 	} else {
 		if (sent != NULL)
 			*sent = bsent;
@@ -346,7 +346,7 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 	if (brcvd < 0) {
 		D_ERROR("Failed to recvmsg on socket fd %d, errno=%d\n",
 			hndl->fd, errno);
-		ret = -DER_MISC;
+		ret = daos_errno2der(errno);
 	} else {
 		if (rcvd != NULL)
 			*rcvd = brcvd;
