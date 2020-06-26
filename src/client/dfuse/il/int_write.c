@@ -33,46 +33,23 @@ ssize_t
 ioil_do_writex(const char *buff, size_t len, off_t position,
 	       struct fd_entry *entry, int *errcode)
 {
-	daos_array_iod_t	iod;
-	daos_range_t		rg;
 	d_iov_t			iov = {};
 	d_sg_list_t		sgl = {};
 	int rc;
 
-	DFUSE_TRA_INFO(entry, "%#zx-%#zx", position, position + len - 1);
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "%#zx-%#zx",
+		       position, position + len - 1);
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
-
-	if (entry->fd_dfsoh) {
-		rc = dfs_write(entry->fd_dfs,
-			       entry->fd_dfsoh,
-			       &sgl,
-			       position,
-			       NULL);
-		if (rc) {
-			DFUSE_TRA_INFO(entry, "dfs_write() failed: %d",	rc);
-			*errcode = rc;
-			return -1;
-		}
-		return len;
-	}
-
-	iod.arr_nr = 1;
-	rg.rg_len = len;
-	rg.rg_idx = position;
-	iod.arr_rgs = &rg;
-
-	rc = daos_array_write(entry->fd_aoh, DAOS_TX_NONE, &iod, &sgl,
-			      NULL);
+	rc = dfs_write(entry->fd_dfs, entry->fd_dfsoh, &sgl, position, NULL);
 	if (rc) {
-		DFUSE_TRA_INFO(entry, "daos_array_write() failed %d", rc);
-		*errcode = daos_der2errno(rc);
+		DFUSE_TRA_INFO(entry, "dfs_write() failed: %d",	rc);
+		*errcode = rc;
 		return -1;
 	}
-
 	return len;
 }
 

@@ -31,7 +31,6 @@
 #include "daos_fs.h"
 
 struct fd_entry {
-	daos_handle_t	fd_aoh;
 	dfs_obj_t	*fd_dfsoh;
 	dfs_t		*fd_dfs;
 	off_t		fd_pos;
