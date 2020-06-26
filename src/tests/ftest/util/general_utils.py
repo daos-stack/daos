@@ -591,7 +591,7 @@ def parse_log_file(path, pattern, pattern_count=1, from_line=None,
             if match_count == pattern_count:
                 status = True
                 break
-            for match in re.finditer(regex, line, re.S):
+            for match in re.finditer(regex, line, re.DOTALL):
                 match_text = match.group()
                 match_list.append(match_text)
                 lines_found.append(line)
