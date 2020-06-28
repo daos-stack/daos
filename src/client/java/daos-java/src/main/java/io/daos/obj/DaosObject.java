@@ -41,7 +41,15 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * A Java object representing underlying DAOS object.
+ * A Java object representing underlying DAOS object. It should be instantiated from {@link DaosObjClient} with
+ * {@link DaosObjectId} which is encoded already.<br/>
+ * Before doing any update/fetch/list, {@link #open()} method should be called first. After that, you should close this
+ * object by calling {@link #close()} method.<br/>
+ * For update/fetch methods, {@link IODataDesc} should be created from this object with list of entries to describe
+ * which akey and which part to be updated/fetched.<br/>
+ * For key list methods, {@link IOKeyDesc} should be create from this object. You have several choices to specify
+ * parameters, like number of keys to list, key length and batch size. By tuning these parameters, you can list dkeys or
+ * akeys efficiently with proper amount of resources. See createKD... methods inside this class.
  * //TODO: buffer management
  */
 public class DaosObject {

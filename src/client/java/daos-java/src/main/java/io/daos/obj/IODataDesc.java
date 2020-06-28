@@ -44,6 +44,13 @@ import java.util.List;
  *   There are two buffers, Description Buffer and Data Buffer. The Description Buffer holds record description, like
  *   its akey, type, size and index in the Data Buffer. the Data Buffer holds actual data for either update or fetch.
  * </p>
+ * <p>
+ *   For update entries, user should call {@link #createEntryForUpdate(String, IodType, int, int, ByteBuffer)}.
+ *   And {@link #createEntryForFetch(String, IodType, int, int, int)} for fetch entries. Results of fetch should be get
+ *   from each entry by calling one of {@link Entry#get(byte[])}, {@link Entry#get(byte[], int, int)} and
+ *   {@link Entry#get(ByteBuffer)}. For each IODataDesc object, there must be only one type of action, either update or
+ *   fetch, among all its entries.
+ * </p>
  */
 public class IODataDesc {
 
@@ -221,7 +228,8 @@ public class IODataDesc {
    * @param type
    * iod type, {@see io.daos.obj.IODataDesc.IodType}
    * @param recordSize
-   * record size
+   * record size. Should be provided with correct value. Or you may get error or wrong fetch result. You can call
+   * {@link DaosObject#getRecordSize(String, String)} to get correct value if you don't know yet.
    * @param offset
    * offset inside akey from which to fetch data, should be a multiple of recordSize
    * @param dataSize
@@ -244,7 +252,8 @@ public class IODataDesc {
    * @param type
    * iod type, {@see io.daos.obj.IODataDesc.IodType}
    * @param recordSize
-   * record size
+   * record size. Should be same record size as the first update if any. You can call
+   * {@link DaosObject#getRecordSize(String, String)} to get correct value if you don't know yet.
    * @param offset
    * offset inside akey from which to update data, should be a multiple of recordSize
    * @param dataBuffer

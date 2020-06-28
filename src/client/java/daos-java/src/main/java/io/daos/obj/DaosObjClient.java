@@ -34,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A sharable Java DAOS Object client to wrap all object related APIs.
- * {@link DaosObject} and {@link DaosObjectId} should be create from this client.
+ * {@link DaosObject} should be create from this client for calling DAOS object APIs indirectly.
  * It registers itself to shutdown manager in {@link DaosClient} to release resources in case of abnormal shutdown.
  */
 public class DaosObjClient extends SharableClient implements ForceCloseable {

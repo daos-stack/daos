@@ -5,17 +5,27 @@ daos-java and hadoop-daos.
 
 ### daos-java
 
-It wraps most of common APIs from daos_fs.h and daos_uns.h, as well as some pool and container connection related APIs
-from daos_pool.h and daos_cont.h. There are three main classes, DaosFsClient, DaosFile and DaosUns.
+It wraps most of common APIs from daos_fs.h and daos_obj.h, as well as some pool and container connection related APIs
+from daos_pool.h and daos_cont.h. There are five main classes, DaosClient, DaosFsClient, DaosObjClient, DaosFile and
+DaosObject.
+
+* DaosClient
+Java DAOS client for common pool/container operations which is indirectly invoked via JNI. Other types of client, like
+DFS client and Object client, should reference this base client for pool/container related operations. Besides, it also
+does some common works, like loading dynamic library, libdaos-jni.so at startup and registering shutdown hook for
+closing all registered clients and finalize DAOS safely.
 
 * DaosFsClient
+It delegates pool/container related APIs to DaosClient. By default, there will be single instance of DaosFsClient per
+pool and container. All DAOS DFS calls are from this class which has all native methods implementations in jni which
+call DAOS APIs directly. It provides a few public APIs, move, delete, mkdir, exists, for simple non-repetitive file
+operations. They release all opened files, if any, immediately. If you have multiple operations on same file in short
+period of time, you should use DaosFile which can be instantiated by calling getFile methods.
 
-There will be single instance of DaosFsClient per pool and container. All DAOS DFS/UNS calls and init/finalize, are from
-this class which has all native methods implementations in jni which call DAOS APIs directly. It provides a few public
-APIs, move, delete, mkdir, exists, for simple non-repetitive file operations. They release all opened files, if any,
-immediately. If you have multiple operations on same file in short period of time, you should use DaosFile which can be
-instantiated by calling getFile methods.
-It also has some DAOS UNS native methods which should be indirectly accessed via DaosUns.
+* DaosObjClient
+Same as DaosFsClient, it delegates pool/container related APIs to DaosClient. And it's sharable client per pool and
+container. All DAOS object JNI calls are from this class. User should not use this client for object calls directly, but
+use DaosObject which is created from this client.
 
 * DaosFile
 
@@ -36,6 +46,16 @@ parameters. Use below command to show its usage in details.
 ```bash
 $ java -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns --help
 ```
+
+* DaosObject
+
+A Java object representing underlying DAOS object. It should be instantiated from DaosObjClient with DaosObjectId which
+is encoded already. Before doing any update/fetch/list, its open() method should be called first. After that, you should
+close this object by calling its close() method. For update/fetch methods, IODataDesc should be created from this object
+with list of entries to describe which akey and which part to be updated/fetched. For key list methods, IOKeyDesc should
+be create from this object. You have several choices to specify parameters, like number of keys to list, key length and
+batch size. By tuning these parameters, you can list dkeys or akeys efficiently with proper amount of resources. See
+createKD... methods inside this class.
 
 ### hadoop-daos
 
