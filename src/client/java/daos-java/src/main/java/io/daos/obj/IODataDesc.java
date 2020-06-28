@@ -25,6 +25,7 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.Constants;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -323,6 +324,9 @@ public class IODataDesc {
      * @throws IOException
      */
     protected Entry(String key, IodType type, int recordSize, int offset, int dataSize) throws IOException {
+      if (StringUtils.isBlank(key)) {
+        throw new IllegalArgumentException("key is blank");
+      }
       this.key = key;
       this.type = type;
       this.keyBytes = key.getBytes(Constants.KEY_CHARSET);
@@ -337,8 +341,8 @@ public class IODataDesc {
         throw new IllegalArgumentException("offset (" + offset + ") should be a multiple of recordSize (" + recordSize +
                                           ")." + ", akey: " + key);
       }
-      if (dataSize == 0) {
-        log.warn("data size is zero. " + ", akey: " + key);
+      if (dataSize <= 0) {
+        throw new IllegalArgumentException("need positive data size, " + dataSize);
       }
       switch (type) {
         case SINGLE:
@@ -387,18 +391,9 @@ public class IODataDesc {
     }
 
     /**
-     * get data buffer passed for update.
-     *
-     * @return
-     */
-    protected ByteBuffer getDataBuffer() {
-      return dataBuffer;
-    }
-
-    /**
      * get size of actual data returned.
      *
-     * @return
+     * @return actual data size returned
      */
     public int getActualSize() {
       if (updateOrFetch) {

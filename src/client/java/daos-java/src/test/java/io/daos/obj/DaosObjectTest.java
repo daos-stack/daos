@@ -1,7 +1,7 @@
 package io.daos.obj;
 
-import io.daos.DaosClient;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
@@ -20,6 +20,22 @@ import java.util.Collections;
 @SuppressStaticInitializationFor("io.daos.DaosClient")
 public class DaosObjectTest {
 
+  private  DaosObject object;
+
+  @Before
+  public void setup() throws Exception {
+    PowerMockito.mockStatic(DaosObjClient.class);
+    DaosObjectId oid = new DaosObjectId();
+    oid.encode();
+    DaosObjClient client = Mockito.mock(DaosObjClient.class);
+    long contPtr = 12345;
+    long address = ((DirectBuffer) oid.getBuffer()).address();
+    long objPtr = 6789;
+    Mockito.when(client.getContPtr()).thenReturn(contPtr);
+    Mockito.when(client.openObject(contPtr, address, OpenMode.UNKNOWN.getValue())).thenReturn(objPtr);
+    object = new DaosObject(client, oid);
+  }
+
   @Test
   public void testObjectIdEncode() throws Exception {
     DaosObjectId oid = new DaosObjectId();
@@ -37,16 +53,6 @@ public class DaosObjectTest {
 
   @Test
   public void testPunchEmptyDkeys() throws Exception {
-    PowerMockito.mockStatic(DaosObjClient.class);
-    DaosObjectId oid = new DaosObjectId();
-    oid.encode();
-    DaosObjClient client = Mockito.mock(DaosObjClient.class);
-    long contPtr = 12345;
-    long address = ((DirectBuffer) oid.getBuffer()).address();
-    long objPtr = 6789;
-    Mockito.when(client.getContPtr()).thenReturn(contPtr);
-    Mockito.when(client.openObject(contPtr, address, OpenMode.UNKNOWN.getValue())).thenReturn(objPtr);
-    DaosObject object = new DaosObject(client, oid);
     Exception ee = null;
     try {
       object.open();
@@ -61,16 +67,6 @@ public class DaosObjectTest {
 
   @Test
   public void testPunchEmptyAkeys() throws Exception {
-    PowerMockito.mockStatic(DaosObjClient.class);
-    DaosObjectId oid = new DaosObjectId();
-    oid.encode();
-    DaosObjClient client = Mockito.mock(DaosObjClient.class);
-    long contPtr = 12345;
-    long address = ((DirectBuffer) oid.getBuffer()).address();
-    long objPtr = 6789;
-    Mockito.when(client.getContPtr()).thenReturn(contPtr);
-    Mockito.when(client.openObject(contPtr, address, OpenMode.UNKNOWN.getValue())).thenReturn(objPtr);
-    DaosObject object = new DaosObject(client, oid);
     Exception ee = null;
     try {
       object.open();
@@ -81,5 +77,41 @@ public class DaosObjectTest {
     Assert.assertNotNull(ee);
     Assert.assertTrue(ee instanceof DaosObjectException);
     Assert.assertTrue(ee.getMessage().contains("no akeys specified when punch akeys"));
+  }
+
+  @Test
+  public void testListAkeysWithNullDkey() throws Exception {
+    Exception ee = null;
+    try {
+      object.open();
+      IOKeyDesc desc = object.createKD(null);
+      object.listAkeys(desc);
+    } catch (Exception e) {
+      ee = e;
+    }
+    Assert.assertNotNull(ee);
+    Assert.assertTrue(ee instanceof DaosObjectException);
+    Assert.assertTrue(ee.getMessage().contains("dkey is needed when list akeys"));
+  }
+
+  @Test
+  public void testGetRecordSizeWithNullKey() throws Exception {
+    IllegalArgumentException ee = null;
+    try {
+      object.open();
+      object.getRecordSize(null, "akey");
+    } catch (IllegalArgumentException e) {
+      ee = e;
+    }
+    Assert.assertNotNull(ee);
+    Assert.assertTrue(ee.getMessage().contains("dkey is blank"));
+    ee = null;
+    try {
+      object.getRecordSize("dkey", null);
+    } catch (IllegalArgumentException e) {
+      ee = e;
+    }
+    Assert.assertNotNull(ee);
+    Assert.assertTrue(ee.getMessage().contains("akey is blank"));
   }
 }

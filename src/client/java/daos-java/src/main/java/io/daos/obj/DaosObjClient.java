@@ -269,6 +269,18 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
   native void listObjectAkeys(long objectPtr, long descBufferAddress, long keyBufferAddress, int keyBufferLen,
                               long anchorBufferAddress, int nbrOfDesc) throws DaosIOException;
 
+  /**
+   * get record size of given dkey and akey encoded in direct buffer with given <code>address</code>.
+   *
+   * @param objectPtr
+   * handle of opened object
+   * @param address
+   * address of direct byte buffer holds dkey and akey
+   * @return record size
+   * @throws DaosIOException
+   */
+  native int getRecordSize(long objectPtr, long address) throws DaosIOException;
+
   protected long getContPtr() {
     return contPtr;
   }

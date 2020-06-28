@@ -95,6 +95,14 @@ JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_listObjectDkeys
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_listObjectAkeys
   (JNIEnv *, jobject, jlong, jlong, jlong, jint, jlong, jint);
 
+/*
+ * Class:     io_daos_obj_DaosObjClient
+ * Method:    getRecordSize
+ * Signature: (JJ)I
+ */
+JNIEXPORT jint JNICALL Java_io_daos_obj_DaosObjClient_getRecordSize
+  (JNIEnv *, jobject, jlong, jlong);
+
 #ifdef __cplusplus
 }
 #endif
