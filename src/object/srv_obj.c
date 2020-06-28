@@ -1019,7 +1019,6 @@ obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	daos_handle_t			 ioh = DAOS_HDL_INVAL;
 	int				 rc;
 
-	obj_iod_idx_vos2parity(iod_nr, iods);
 	oca = daos_oclass_attr_find(oid.id_pub);
 	if (oca == NULL || !DAOS_OC_IS_EC(oca)) {
 		rc = -DER_INVAL;
@@ -1028,6 +1027,7 @@ obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto out;
 	}
 
+	obj_iod_idx_vos2parity(iod_nr, iods);
 	rc = vos_fetch_begin(coh, oid, epoch, cond_flags, dkey, iod_nr, iods,
 			     VOS_FETCH_RECX_LIST, NULL, &ioh, NULL);
 	if (rc) {
@@ -1042,9 +1042,8 @@ obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 out:
 	obj_iod_idx_parity2vos(iod_nr, iods);
 	if (rc == 0) {
-		obj_iod_idx_vos2daos(iod_nr, iods, tgt_idx, oca);
-		obj_recx_ep_list_idx_parity2daos(iod_nr, *pshadows, tgt_idx,
-						 oca);
+		obj_shadow_list_vos2daos(iod_nr, *pshadows, oca);
+		rc = obj_iod_recx_vos2daos(iod_nr, iods, tgt_idx, oca);
 	}
 	return rc;
 }

@@ -372,8 +372,8 @@ obj_ec_recx_cell_nr(daos_recx_t *recx, struct daos_oclass_attr *oca)
 	if (start > end)
 		return 1;
 	return (end - start) / obj_ec_cell_rec_nr(oca) +
-	       (recx->rx_idx % obj_ec_cell_rec_nr(oca)) +
-	       (recx_end % obj_ec_cell_rec_nr(oca));
+	       ((recx->rx_idx % obj_ec_cell_rec_nr(oca)) != 0) +
+	       ((recx_end % obj_ec_cell_rec_nr(oca)) != 0);
 }
 
 static inline int
@@ -406,9 +406,10 @@ obj_io_desc_fini(struct obj_io_desc *oiod)
 	memset(oiod, 0, sizeof(*oiod));
 }
 
+/* translate the queried VOS shadow list to daos extents */
 static inline void
-obj_recx_ep_list_idx_parity2daos(uint32_t nr, struct daos_recx_ep_list *lists,
-				 uint32_t tgt_idx, struct daos_oclass_attr *oca)
+obj_shadow_list_vos2daos(uint32_t nr, struct daos_recx_ep_list *lists,
+			 struct daos_oclass_attr *oca)
 {
 	struct daos_recx_ep_list	*list;
 	daos_recx_t			*recx;
@@ -416,7 +417,7 @@ obj_recx_ep_list_idx_parity2daos(uint32_t nr, struct daos_recx_ep_list *lists,
 						obj_ec_stripe_rec_nr(oca);
 	uint64_t			 cell_rec_nr =
 						obj_ec_cell_rec_nr(oca);
-	uint32_t			 i, j;
+	uint32_t			 i, j, stripe_nr;
 
 	if (lists == NULL)
 		return;
@@ -424,17 +425,76 @@ obj_recx_ep_list_idx_parity2daos(uint32_t nr, struct daos_recx_ep_list *lists,
 		list = &lists[i];
 		for (j = 0; j < list->re_nr; j++) {
 			recx = &list->re_items[j].re_recx;
+			D_ASSERT(recx->rx_idx % cell_rec_nr == 0);
+			stripe_nr = roundup(recx->rx_nr, cell_rec_nr) /
+				    cell_rec_nr;
 			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
 			recx->rx_idx &= ~PARITY_INDICATOR;
 			recx->rx_idx = obj_ec_idx_vos2daos(recx->rx_idx,
 						stripe_rec_nr, cell_rec_nr,
-						tgt_idx);
+						0);
+			recx->rx_nr = stripe_rec_nr * stripe_nr;
 		}
 	}
 }
 
-static inline void
-obj_iod_idx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
+/* Break iod's recxs on cell_size boundary, for the use case that translate
+ * mapped VOS extend to original daos extent - one mapped VOS extend possibly
+ * corresponds to multiple original dis-continuous daos extents.
+ */
+static inline int
+obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
+{
+	daos_recx_t	*recx, *new_recx;
+	uint64_t	 cell_size = obj_ec_cell_rec_nr(oca);
+	uint64_t	 rec_nr;
+	uint32_t	 i, j, stripe_nr;
+
+	for (i = 0; i < iod->iod_nr; i++) {
+		recx = &iod->iod_recxs[i];
+		stripe_nr = obj_ec_recx_cell_nr(recx, oca);
+		D_ASSERT(stripe_nr >= 1);
+		if (stripe_nr == 1)
+			continue;
+		D_ALLOC_ARRAY(new_recx, stripe_nr + iod->iod_nr - 1);
+		if (new_recx == NULL)
+			return -DER_NOMEM;
+		for (j = 0; j < i; j++)
+			new_recx[j] = iod->iod_recxs[j];
+		rec_nr = recx->rx_nr;
+		for (j = 0; j < stripe_nr; j++) {
+			if (j == 0) {
+				new_recx[i].rx_idx = recx->rx_idx;
+				new_recx[i].rx_nr = cell_size - recx->rx_idx;
+				rec_nr -= new_recx[i].rx_nr;
+			} else {
+				new_recx[i + j].rx_idx =
+					new_recx[i + j - 1].rx_idx +
+					new_recx[i + j - 1].rx_nr;
+				D_ASSERT(new_recx[i + j].rx_idx % cell_size ==
+					 0);
+				if (j == stripe_nr - 1) {
+					new_recx[i + j].rx_nr = rec_nr;
+				} else {
+					new_recx[i + j].rx_nr = cell_size;
+					rec_nr -= cell_size;
+				}
+			}
+		}
+		for (j = i + 1; j < iod->iod_nr; j++)
+			new_recx[j + stripe_nr] = iod->iod_recxs[j];
+		i += (stripe_nr - 1);
+		iod->iod_nr += (stripe_nr - 1);
+		D_FREE(iod->iod_recxs);
+		iod->iod_recxs = new_recx;
+	}
+
+	return 0;
+}
+
+/* translate iod's recxs from mapped VOS extend to unmapped daos extents */
+static inline int
+obj_iod_recx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
 		     struct daos_oclass_attr *oca)
 {
 	daos_iod_t	*iod;
@@ -442,9 +502,16 @@ obj_iod_idx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
 	uint64_t	 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	uint64_t	 cell_rec_nr = obj_ec_cell_rec_nr(oca);
 	uint32_t	 i, j;
+	int		 rc;
 
 	for (i = 0; i < iod_nr; i++) {
 		iod = &iods[i];
+
+		rc = obj_iod_break(iod, oca);
+		if (rc != 0) {
+			D_ERROR("obj_iod_break failed, "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
 		for (j = 0; j < iod->iod_nr; j++) {
 			recx = &iod->iod_recxs[j];
 			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) == 0);
@@ -453,6 +520,8 @@ obj_iod_idx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
 						tgt_idx);
 		}
 	}
+
+	return 0;
 }
 
 static inline void
