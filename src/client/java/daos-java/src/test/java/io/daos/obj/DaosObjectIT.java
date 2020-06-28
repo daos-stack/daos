@@ -744,6 +744,30 @@ public class DaosObjectIT {
     return bytes;
   }
 
+  @Test
+  public void testGetRecordSize() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    try {
+      object.open();
+      List<IODataDesc.Entry> list = new ArrayList<>();
+      int dataSize = 30;
+      byte[] bytes = generateDataArray(dataSize);
+      list.add(createEntryForUpdate("akey1", 1, 0, dataSize, bytes));
+      IODataDesc desc = object.createDataDescForUpdate("dkey1", list);
+      object.update(desc);
+      Assert.assertEquals(1, object.getRecordSize("dkey1", "akey1"));
+      Assert.assertEquals(0, object.getRecordSize("dkey1", "akey2"));
+      Assert.assertEquals(0, object.getRecordSize("dkey2", "akey2"));
+    } finally {
+      if (object.isOpen()) {
+        object.punch();
+      }
+      object.close();
+    }
+  }
+
   @AfterClass
   public static void afterClass() throws IOException {
     if (client != null) {

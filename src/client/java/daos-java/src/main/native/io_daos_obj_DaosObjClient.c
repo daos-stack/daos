@@ -548,22 +548,36 @@ Java_io_daos_obj_DaosObjClient_listObjectAkeys(JNIEnv *env,
 }
 
 JNIEXPORT jint JNICALL
-Java_io_daos_obj_DaosObjClient_getDataTypesSizes(JNIEnv *env,
-        jobject clientObject, jlong bufferAddress)
+Java_io_daos_obj_DaosObjClient_getRecordSize(JNIEnv *env,
+        jobject clientObject, jlong objectHandle, jlong bufferAddress)
 {
     char *buffer = (char *)bufferAddress;
-    uint16_t void_ptr_size = sizeof(void *);
-    uint16_t size_t_size = sizeof(size_t);
-    uint16_t iod_type_t_size = sizeof(daos_iod_type_t);
-    uint16_t unsigned_int_size = sizeof(unsigned int);
-    int idx = 0;
+    daos_handle_t oh;
+    daos_key_t dkey;
+    daos_key_t akey;
+    daos_anchor_t anchor;
+    daos_recx_t recx;
+    daos_epoch_range_t erange;
+    uint16_t key_len;
+    uint64_t size;
+    uint32_t nbr = 1;
+    int rc;
 
-    memcpy(buffer, &void_ptr_size, 2);
+    memcpy(&oh, &objectHandle, sizeof(oh));
+    memset(&anchor, 0, sizeof(anchor));
+    memcpy(&key_len, buffer, 2);
     buffer += 2;
-    memcpy(buffer, &size_t_size, 2);
+    d_iov_set(&dkey, buffer, key_len);
+    buffer += key_len;
+    memcpy(&key_len, buffer, 2);
     buffer += 2;
-    memcpy(buffer, &iod_type_t_size, 2);
-    buffer += 2;
-    memcpy(buffer, &unsigned_int_size, 2);
-    return 8;
+    d_iov_set(&akey, buffer, key_len);
+    rc = daos_obj_list_recx(oh, DAOS_TX_NONE, &dkey, &akey, &size, &nbr, &recx,
+                            &erange, &anchor, false, NULL);
+    if (rc) {
+        char *tmp = "Failed to get record size";
+
+        throw_exception_const_msg_object(env, tmp, rc);
+    }
+    return (jint)size;
 }

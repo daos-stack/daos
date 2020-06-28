@@ -107,9 +107,6 @@ public class IOKeyDesc {
     // 4 for actual number of keys returned, (2 + dkeyBytes.length) for dkeys
     int descLen = 4 + ((dkeyBytes == null) ? 0 : (Constants.ENCODED_LENGTH_KEY + dkeyBytes.length))
                   + IOKeyDesc.getKeyDescLen() * this.batchSize;
-    if (descLen < 0) {
-      throw new IllegalArgumentException("too big batchSize. " + this.batchSize);
-    }
     descBuffer = BufferAllocator.directBuffer(descLen);
     keyBuffer = BufferAllocator.directBuffer(akeyLen * this.batchSize);
     descBuffer.order(Constants.DEFAULT_ORDER);
@@ -166,15 +163,25 @@ public class IOKeyDesc {
   }
 
   public ByteBuffer getAnchorBuffer() {
+    if (!encoded) {
+      throw new IllegalStateException("not encoded yet");
+    }
     return anchorBuffer;
   }
 
   public ByteBuffer getKeyBuffer() {
+    if (!encoded) {
+      throw new IllegalStateException("not encoded yet");
+    }
     return keyBuffer;
   }
 
   public String getDkey() {
     return dkey;
+  }
+
+  public byte[] getDkeyBytes() {
+    return dkeyBytes;
   }
 
   public List<String> getResultKeys() {

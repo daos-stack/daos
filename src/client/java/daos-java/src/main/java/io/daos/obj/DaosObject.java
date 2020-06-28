@@ -28,6 +28,7 @@ import io.daos.BufferAllocator;
 import io.daos.Constants;
 import io.daos.DaosIOException;
 import io.daos.obj.attr.DaosObjectAttribute;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sun.nio.ch.DirectBuffer;
@@ -132,19 +133,12 @@ public class DaosObject {
 
   private ByteBuffer encodeKeys(List<String> keys) throws DaosObjectException {
     int bufferLen = 0;
+    List<byte[]> keyBytesList = new ArrayList<>(keys.size());
     for (String key : keys) {
-      bufferLen += (key.length() + Constants.ENCODED_LENGTH_KEY);
-    }
-    if (bufferLen == 0) {
-      return null;
-    }
-    // encode keys to buffer
-    ByteBuffer buffer = BufferAllocator.directBuffer(bufferLen);
-    buffer.order(Constants.DEFAULT_ORDER);
-    int capacity = buffer.capacity();
-    int keyLen;
-    for (String key : keys) {
-      byte[] bytes;
+      if (StringUtils.isBlank(key)) {
+        throw new IllegalArgumentException("one of akey is blank");
+      }
+      byte bytes[];
       try {
         bytes = key.getBytes(Constants.KEY_CHARSET);
       } catch (UnsupportedEncodingException e) {
@@ -152,17 +146,18 @@ public class DaosObject {
       }
       if (bytes.length > Short.MAX_VALUE) {
         throw new IllegalArgumentException("key length in " + Constants.KEY_CHARSET +
-                      " should not exceed " + Short.MAX_VALUE);
+          " should not exceed " + Short.MAX_VALUE);
       }
-      keyLen = (Constants.ENCODED_LENGTH_KEY + bytes.length);
-      if ((buffer.position() + keyLen) > capacity) { // in case there is non ascii char
-        capacity *= 2;
-        ByteBuffer newBuffer = BufferAllocator.directBuffer(capacity);
-        newBuffer.order(Constants.DEFAULT_ORDER);
-        buffer.flip();
-        newBuffer.put(buffer);
-        buffer = newBuffer;
-      }
+      keyBytesList.add(bytes);
+      bufferLen += (bytes.length + Constants.ENCODED_LENGTH_KEY);
+    }
+    if (bufferLen == 0) {
+      return null;
+    }
+    // encode keys to buffer
+    ByteBuffer buffer = BufferAllocator.directBuffer(bufferLen);
+    buffer.order(Constants.DEFAULT_ORDER);
+    for (byte[] bytes : keyBytesList) {
       buffer.putShort((short)bytes.length).put(bytes);
     }
     buffer.flip();
@@ -373,7 +368,7 @@ public class DaosObject {
    */
   public List<String> listAkeys(IOKeyDesc desc) throws DaosObjectException {
     checkOpen();
-    if (desc.getDkey() == null) {
+    if (StringUtils.isBlank(desc.getDkey())) {
       throw new DaosObjectException(oid, "dkey is needed when list akeys");
     }
     desc.encode();
@@ -392,6 +387,60 @@ public class DaosObject {
       return desc.parseResult();
     } catch (UnsupportedEncodingException e) {
       throw new DaosObjectException(oid, "failed to parse result of listed akeys", e);
+    }
+  }
+
+  /**
+   * get record size of given <code>dkey</code> and <code>akey</code>.
+   *
+   * @param dkey
+   * distribution key
+   * @param akey
+   * attribute key
+   * @return record size. 0 if dkey or akey don't exist.
+   * @throws DaosObjectException
+   */
+  public int getRecordSize(String dkey, String akey) throws DaosObjectException {
+    checkOpen();
+    if (StringUtils.isBlank(dkey)) {
+      throw new IllegalArgumentException("dkey is blank");
+    }
+    if (StringUtils.isBlank(akey)) {
+      throw new IllegalArgumentException("akey is blank");
+    }
+    byte dkeyBytes[];
+    byte akeyBytes[];
+    try {
+      dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
+      if (dkeyBytes.length > Short.MAX_VALUE) {
+        throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET +
+          " should not exceed " + Short.MAX_VALUE);
+      }
+    } catch (UnsupportedEncodingException e) {
+      throw new DaosObjectException(oid, "failed to encode dkey " + dkey + " in " + Constants.KEY_CHARSET, e);
+    }
+    try {
+      akeyBytes = akey.getBytes(Constants.KEY_CHARSET);
+      if (akeyBytes.length > Short.MAX_VALUE) {
+        throw new IllegalArgumentException("akey length in " + Constants.KEY_CHARSET +
+          " should not exceed " + Short.MAX_VALUE);
+      }
+    } catch (UnsupportedEncodingException e) {
+      throw new DaosObjectException(oid, "failed to encode akey " + akey + " in " + Constants.KEY_CHARSET, e);
+    }
+    ByteBuffer buffer = BufferAllocator.directBuffer(dkeyBytes.length + akeyBytes.length + 4);
+    buffer.order(Constants.DEFAULT_ORDER);
+    buffer.putShort((short)dkeyBytes.length);
+    buffer.put(dkeyBytes);
+    buffer.putShort((short)akeyBytes.length);
+    buffer.put(akeyBytes);
+    if (log.isDebugEnabled()) {
+      log.debug("get record size for " + dkey + ", akey " + akey);
+    }
+    try {
+      return client.getRecordSize(objectPtr, ((DirectBuffer)buffer).address());
+    } catch (DaosIOException e) {
+      throw new DaosObjectException(oid, "failed to get record size for " + dkey + ", akey " + akey, e);
     }
   }
 
