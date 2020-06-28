@@ -807,22 +807,11 @@ sched_req_sleep(struct sched_request *req, uint32_t msecs)
 	struct dss_xstream	*dx = dss_current_xstream();
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_request	*tmp;
-	int			 rc;
 
 	D_ASSERT(req != NULL);
 	if (msecs == 0 || info->si_stop || req->sr_abort) {
 		sched_req_yield(req);
 		return;
-	}
-
-	/* Don't put GC & aggregation ULTs in sleep under space pressure */
-	if (req->sr_attr.sra_type == SCHED_REQ_GC) {
-		D_ASSERT(req->sr_pool_info != NULL);
-		rc = check_space_pressure(dx, req->sr_pool_info, false);
-		if (rc != 0) {	/* under space pressure */
-			sched_req_yield(req);
-			return;
-		}
 	}
 
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
@@ -847,10 +836,8 @@ sched_req_wakeup(struct sched_request *req)
 {
 	D_ASSERT(req != NULL);
 	/* The request is not in sleep */
-	if (req->sr_wakeup_time == 0) {
-		D_ASSERT(d_list_empty(&req->sr_link));
+	if (req->sr_wakeup_time == 0)
 		return;
-	}
 
 	D_ASSERT(!d_list_empty(&req->sr_link));
 	d_list_del_init(&req->sr_link);
