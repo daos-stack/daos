@@ -1305,16 +1305,16 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 		return EINVAL;
 	}
 
-	rc = dc_cont_hdl2uuid(dfs->coh, &coh_uuid, &cont_uuid);
-	if (rc != 0)
-		return daos_der2errno(rc);
-
 	glob_buf_size = dfs_glob_buf_size();
 
 	if (glob->iov_buf == NULL) {
 		glob->iov_buf_len = glob_buf_size;
 		return 0;
 	}
+
+	rc = dc_cont_hdl2uuid(dfs->coh, &coh_uuid, &cont_uuid);
+	if (rc != 0)
+		return daos_der2errno(rc);
 
 	if (glob->iov_buf_len < glob_buf_size) {
 		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
@@ -2394,16 +2394,16 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 		return EINVAL;
 	}
 
-	rc = dc_cont_hdl2uuid(dfs->coh, &coh_uuid, &cont_uuid);
-	if (rc != 0)
-		return daos_der2errno(rc);
-
 	glob_buf_size = dfs_obj_glob_buf_size();
 
 	if (glob->iov_buf == NULL) {
 		glob->iov_buf_len = glob_buf_size;
 		return 0;
 	}
+
+	rc = dc_cont_hdl2uuid(dfs->coh, &coh_uuid, &cont_uuid);
+	if (rc != 0)
+		return daos_der2errno(rc);
 
 	if (glob->iov_buf_len < glob_buf_size) {
 		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
@@ -2549,7 +2549,7 @@ read_cb(tse_task_t *task, void *data)
 	return rc;
 }
 
-int
+static int
 dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	     d_sg_list_t *sgl, daos_size_t buf_size, daos_size_t *read_size,
 	     daos_event_t *ev)

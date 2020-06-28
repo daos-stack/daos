@@ -31,19 +31,28 @@
  *
  * DSS_POOL_NET_POLL	Network poll ULT
  * DSS_POOL_NVME_POLL	NVMe poll ULT
- * DSS_POOL_IO		Update/Fetch, enumeration RPC handler ULTs
- * DSS_POOL_REBUILD	Rebuild scan & pull ULTs
- * DSS_POOL_AGGREGATE	VOS aggregation ULTs
- * DSS_POOL_MISC	GC & Misc ULTs
+ * DSS_POOL_IO		Update/Fetch/Punch, enumeration RPC handler ULTs
+ * DSS_POOL_REBUILD	Rebuild/Reint scan & pull ULTs
+ * DSS_POOL_GC		Space reclaiming ULTs like GC or aggregation
  */
 enum {
 	DSS_POOL_NET_POLL	= 0,
 	DSS_POOL_NVME_POLL,
 	DSS_POOL_IO,
 	DSS_POOL_REBUILD,
-	DSS_POOL_AGGREGATE,
 	DSS_POOL_GC,
 	DSS_POOL_CNT,
+};
+
+struct sched_info {
+	uint64_t		 si_cur_ts;	/* Current timestamp */
+	d_list_t		 si_idle_list;	/* All unused requests */
+	d_list_t		 si_sleep_list;	/* All sleeping requests */
+	d_list_t		 si_fifo_list;	/* All IO requests in FIFO */
+	d_list_t		 si_purge_list;	/* Stale sched_pool_info */
+	struct d_hash_table	*si_pool_hash;	/* All sched_pool_info */
+	uint32_t		 si_req_cnt;	/* Total inuse request count */
+	unsigned int		 si_stop:1;
 };
 
 /** Per-xstream configuration data */
@@ -55,6 +64,7 @@ struct dss_xstream {
 	ABT_pool		dx_pools[DSS_POOL_CNT];
 	ABT_sched		dx_sched;
 	ABT_thread		dx_progress;
+	struct sched_info	dx_sched_info;
 	d_list_t		dx_sleep_ult_list;
 	tse_sched_t		dx_sched_dsc;
 	struct dss_rpc_cntr	dx_rpc_cntrs[DSS_RC_MAX];
@@ -115,7 +125,10 @@ int dss_xstream_cnt(void);
 /* sched.c */
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
-int sched_set_throttle(int pool_idx, unsigned int percent);
+int sched_set_throttle(unsigned int type, unsigned int percent);
+int sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
+		      void (*func)(void *), void *arg);
+void sched_stop(struct dss_xstream *dx);
 
 /* tls.c */
 void dss_tls_fini(struct dss_thread_local_storage *dtls);
