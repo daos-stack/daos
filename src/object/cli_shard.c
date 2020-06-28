@@ -266,7 +266,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	uint64_t		*sizes;
 	int			opc;
 	int                     ret = task->dt_result;
-	int			i, j;
+	int			i;
 	int			rc = 0;
 
 	opc = opc_get(rw_args->rpc->cr_opc);
@@ -325,6 +325,10 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	*rw_args->map_ver = obj_reply_map_version_get(rw_args->rpc);
 
 	if (opc == DAOS_OBJ_RPC_FETCH) {
+		struct obj_reasb_req	*reasb_req =
+						rw_args->shard_args->reasb_req;
+		bool			 is_ec_obj;
+
 		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
 			/** Should have 1 map per iod */
 			D_ASSERT(orwo->orw_maps.ca_count == orw->orw_nr);
@@ -334,23 +338,10 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			}
 		}
 
-		bool	is_ec_obj = false;
-
-		rc = obj_ec_recov_add(rw_args->shard_args->reasb_req,
-				      orwo->orw_rels.ca_arrays,
-				      orwo->orw_rels.ca_count);
-		if (rc) {
-			D_ERROR("fail to add recov list for "DF_UOID",rc %d.\n",
-				DP_UOID(orw->orw_oid), rc);
-			goto out;
-		}
-
+		is_ec_obj = (reasb_req != NULL) &&
+			    DAOS_OC_IS_EC(reasb_req->orr_oca);
 		iods = orw->orw_iod_array.oia_iods;
 		sizes = orwo->orw_iod_sizes.ca_arrays;
-
-		if (rw_args->shard_args->reasb_req != NULL &&
-		    DAOS_OC_IS_EC(rw_args->shard_args->reasb_req->orr_oca))
-			is_ec_obj = true;
 
 		if (orwo->orw_iod_sizes.ca_count != orw->orw_nr) {
 			D_ERROR("out:%u != in:%u for "DF_UOID" with eph "
@@ -361,9 +352,23 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 
+		if (is_ec_obj) {
+			rc = obj_ec_recov_add(reasb_req,
+					      orwo->orw_rels.ca_arrays,
+					      orwo->orw_rels.ca_count);
+			if (rc) {
+				D_ERROR("fail to add recov list for "DF_UOID
+					",rc %d.\n", DP_UOID(orw->orw_oid), rc);
+				goto out;
+			}
+		}
+
 		/* update the sizes in iods */
 		for (i = 0; i < orw->orw_nr; i++)
 			iods[i].iod_size = sizes[i];
+
+		if (is_ec_obj && reasb_req->orr_size_fetch)
+			goto out;
 
 		if (orwo->orw_sgls.ca_count > 0) {
 			/* inline transfer */
@@ -371,16 +376,14 @@ dc_rw_cb(tse_task_t *task, void *arg)
 						     orw->orw_nr,
 						     orwo->orw_sgls.ca_arrays,
 						     orwo->orw_sgls.ca_count);
-		} else if (rw_args->rwaa_sgls != NULL && !is_ec_obj) {
-			/* XXX need some extra handling for EC obj */
+		} else if (rw_args->rwaa_sgls != NULL) {
 			/* for bulk transfer it needs to update sg_nr_out */
 			d_sg_list_t	*sgls = rw_args->rwaa_sgls;
-			d_iov_t		*iov;
 			uint32_t	*nrs;
 			uint32_t	 nrs_count;
 			daos_size_t	*replied_sizes;
+			daos_size_t	*size_array = NULL;
 			daos_size_t	 data_size, size_in_iod;
-			daos_size_t	 buf_size;
 
 			nrs = orwo->orw_nrs.ca_arrays;
 			nrs_count = orwo->orw_nrs.ca_count;
@@ -391,6 +394,16 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				D_GOTO(out, rc = -DER_PROTO);
 			}
 
+			/*  For EC obj, record the daos_sizes from shards and
+			 *  obj layer will handle it (obj_ec_fetch_set_sgl).
+			 */
+			if (is_ec_obj) {
+				D_ASSERT(orw->orw_tgt_idx <
+					 obj_ec_tgt_nr(reasb_req->orr_oca));
+				size_array = reasb_req->orr_data_sizes +
+					     orw->orw_tgt_idx * orw->orw_nr;
+			}
+
 			for (i = 0; i < orw->orw_nr; i++) {
 				/* server returned bs_nr_out is only to check
 				 * if it is empty record in that case just set
@@ -398,7 +411,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				 * iov_len by checking with iods as server
 				 * filled the buffer from beginning.
 				 */
-				if (nrs[i] == 0) {
+				if (!is_ec_obj && nrs[i] == 0) {
 					sgls[i].sg_nr_out = 0;
 					continue;
 				}
@@ -408,22 +421,13 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					sgls[i].sg_nr_out = sgls[i].sg_nr;
 					continue;
 				}
+				if (is_ec_obj) {
+					size_array[i] = replied_sizes[i];
+					continue;
+				}
 				data_size = replied_sizes[i];
 				D_ASSERT(data_size <= size_in_iod);
-				buf_size = 0;
-				for (j = 0; j < sgls[i].sg_nr; j++) {
-					iov = &sgls[i].sg_iovs[j];
-					buf_size += iov->iov_buf_len;
-					if (buf_size < data_size) {
-						iov->iov_len = iov->iov_buf_len;
-						continue;
-					}
-
-					iov->iov_len = iov->iov_buf_len -
-						       (buf_size - data_size);
-					sgls[i].sg_nr_out = j + 1;
-					break;
-				}
+				dc_sgl_out_set(&sgls[i], data_size);
 			}
 		}
 
@@ -544,11 +548,10 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(orw->orw_co_uuid, cont_uuid);
 	daos_dti_copy(&orw->orw_dti, &args->dti);
 	orw->orw_flags = auxi->flags | flags;
+	orw->orw_tgt_idx = auxi->ec_tgt_idx;
 	if (obj_op_is_ec_fetch(auxi->obj_auxi) &&
-	    (auxi->shard != (auxi->start_shard + auxi->ec_tgt_idx))) {
+	    (auxi->shard != (auxi->start_shard + auxi->ec_tgt_idx)))
 		orw->orw_flags |= ORF_EC_DEGRADED;
-		orw->orw_tgt_idx = auxi->ec_tgt_idx;
-	}
 	orw->orw_dti_cos.ca_count = 0;
 	orw->orw_dti_cos.ca_arrays = NULL;
 

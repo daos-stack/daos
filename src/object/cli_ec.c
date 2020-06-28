@@ -1109,7 +1109,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	daos_recx_t			*recx, *full_recx, tmp_recx;
 	d_iov_t				*iovs = NULL;
 	uint32_t			 i, j, k, idx, last;
-	uint32_t			 tgt_nr, empty_nr;
+	uint32_t			 tgt_nr, empty_nr, valid_tgt_nr;
 	uint32_t			 iov_idx = 0, iov_nr = sgl->sg_nr;
 	uint64_t			 iov_off = 0, recx_end, full_end;
 	uint64_t			 rec_nr, iod_size = iod->iod_size;
@@ -1242,9 +1242,11 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		last = tgt_recx_idxs[i] + tgt_recx_nrs[i];
 	}
 	oiod->oiod_nr = idx;
+	valid_tgt_nr = 0;
 	for (i = 0, rec_nr = 0, last = 0; i < tgt_nr; i++) {
 		if (tgt_recx_nrs[i] == 0)
 			continue;
+		valid_tgt_nr++;
 		siod = &oiod->oiod_siods[tidx[i]];
 		siod->siod_tgt_idx = i;
 		siod->siod_idx = tgt_recx_idxs[i];
@@ -1256,6 +1258,8 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		}
 		last = tgt_recx_idxs[i] + tgt_recx_nrs[i];
 	}
+	D_ASSERT(valid_tgt_nr >= 1);
+	reasb_req->orr_single_tgt = (valid_tgt_nr == 1);
 
 #if EC_DEBUG
 	obj_reasb_req_dump(reasb_req, sgl, oca, stripe_rec_nr, iod_idx);
@@ -1488,6 +1492,93 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 
 out:
 	return rc;
+}
+
+static daos_size_t
+obj_ec_recx_size(daos_iod_t *iod, struct obj_shard_iod *siod,
+		 daos_size_t iod_size)
+{
+	uint32_t	 i;
+	daos_size_t	 size = 0;
+
+	for (i = 0; i < siod->siod_nr; i++)
+		size += iod->iod_recxs[siod->siod_idx + i].rx_nr;
+
+	return size * iod_size;
+}
+
+void
+obj_ec_fetch_set_sgl(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
+{
+	daos_iod_t			*uiods, *uiod, *riods, *riod;
+	d_sg_list_t			*usgls, *usgl;
+	daos_recx_t			*recx;
+	struct daos_oclass_attr		*oca = reasb_req->orr_oca;
+	struct obj_tgt_oiod		*toiod;
+	struct obj_io_desc		*oiod;
+	daos_size_t			 data_size, recx_size;
+	daos_size_t			 size_in_iod, tail_hole_size;
+	uint64_t			 stripe_rec_nr;
+	uint64_t			 cell_rec_nr;
+	int				 last_tgt, start, end, i, j;
+	bool				 recheck;
+
+	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	cell_rec_nr = obj_ec_cell_rec_nr(oca);
+	uiods = reasb_req->orr_uiods;
+	usgls = reasb_req->orr_usgls;
+	riods = reasb_req->orr_iods;
+	for (i = 0; i < iod_nr; i++) {
+		uiod = &uiods[i];
+		riod = &riods[i];
+		usgl = &usgls[i];
+		usgl->sg_nr_out = 0;
+		tail_hole_size = 0;
+		size_in_iod =  daos_iods_len(uiod, 1);
+		if (uiod->iod_size == 0)
+			continue;
+		if (uiod->iod_type == DAOS_IOD_SINGLE) {
+			dc_sgl_out_set(usgl, uiod->iod_size);
+			continue;
+		}
+		recx = &uiod->iod_recxs[uiod->iod_nr - 1];
+		last_tgt = obj_ec_tgt_of_recx_idx(
+				recx->rx_idx + recx->rx_nr - 1,
+				stripe_rec_nr, cell_rec_nr);
+		D_ASSERT(last_tgt < obj_ec_tgt_nr(oca));
+		start = last_tgt;
+		end = 0;
+		recheck = false;
+tgt_check:
+		for (j = start; j >= end; j--) {
+			toiod = obj_ec_tgt_oiod_get(reasb_req->tgt_oiods,
+					reasb_req->orr_tgt_nr, j);
+			if (toiod == NULL)
+				continue;
+			D_ASSERT(iod_nr == toiod->oto_iod_nr);
+			oiod = &toiod->oto_oiods[i];
+			recx_size = obj_ec_recx_size(riod, oiod->oiod_siods,
+						     uiod->iod_size);
+			data_size = *(reasb_req->orr_data_sizes +
+				      j * iod_nr + i);
+			if (data_size == 0) {
+				tail_hole_size += recx_size;
+				continue;
+			}
+			D_ASSERT(data_size <= recx_size);
+			tail_hole_size += recx_size - data_size;
+			D_ASSERT(tail_hole_size <= size_in_iod);
+			dc_sgl_out_set(usgl, size_in_iod - tail_hole_size);
+			return;
+		}
+		if (!recheck) {
+			recheck = true;
+			start = obj_ec_tgt_nr(oca) - 1;
+			end = last_tgt + 1;
+			if (start > end)
+				goto tgt_check;
+		}
+	}
 }
 
 static struct obj_ec_recov_codec *

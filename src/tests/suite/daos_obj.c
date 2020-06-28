@@ -2143,12 +2143,13 @@ next_step:
 	recx[3].rx_nr	= buf_len;
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= &recx[3];
+	iod.iod_size	= DAOS_REC_ANY;
+	assert_int_equal(iod.iod_size, 0);
 	d_iov_set(&sg_iov[1], buf_out + tmp_len, buf_len - tmp_len);
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    NULL, NULL);
 	assert_int_equal(rc, 0);
-	if (!test_ec)
-		assert_int_equal(sgl.sg_nr_out, 0);
+	assert_int_equal(sgl.sg_nr_out, 0);
 
 	print_message("reading all data back ...\n");
 	memset(buf_out, 0, buf_len);
@@ -2162,8 +2163,7 @@ next_step:
 	/** Verify data consistency */
 	print_message("validating data ... sg_nr_out %d, iod_size %d.\n",
 		      sgl.sg_nr_out, (int)iod.iod_size);
-	if (!test_ec)
-		assert_int_equal(sgl.sg_nr_out, 2);
+	assert_int_equal(sgl.sg_nr_out, 2);
 	assert_memory_equal(buf, buf_out, buf_len);
 
 	print_message("short read should get iov_len with tail hole trimmed\n");
@@ -2183,10 +2183,8 @@ next_step:
 	/** Verify data consistency */
 	print_message("validating data ... sg_nr_out %d, iov_len %d.\n",
 		      sgl.sg_nr_out, (int)sgl.sg_iovs[0].iov_len);
-	if (!test_ec) {
-		assert_int_equal(sgl.sg_nr_out, 1);
-		assert_int_equal(sgl.sg_iovs[0].iov_len, tmp_len);
-	}
+	assert_int_equal(sgl.sg_nr_out, 1);
+	assert_int_equal(sgl.sg_iovs[0].iov_len, tmp_len);
 	assert_memory_equal(buf, buf_out, tmp_len);
 
 	if (step++ == 1)

@@ -566,7 +566,7 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 	struct obj_reasb_req		*reasb_req = &obj_auxi->reasb_req;
 	daos_size_t			 size_iod, size_sgl, size_oiod;
 	daos_size_t			 size_recx, size_tgt_nr, size_singv;
-	daos_size_t			 size_sorter, buf_size;
+	daos_size_t			 size_sorter, size_array, buf_size;
 	daos_iod_t			*uiod, *riod;
 	struct obj_ec_recx_array	*ec_recx;
 	void				*buf;
@@ -580,11 +580,12 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 	size_recx = roundup(sizeof(struct obj_ec_recx_array) * iod_nr, 8);
 	size_sorter = roundup(sizeof(struct obj_ec_seg_sorter) * iod_nr, 8);
 	size_singv = roundup(sizeof(struct dcs_layout) * iod_nr, 8);
+	size_array = sizeof(daos_size_t) * obj_ec_tgt_nr(oca) * iod_nr;
 	/* for oer_tgt_recx_nrs/_idxs */
-	size_tgt_nr = roundup(sizeof(uint32_t) *
-			      (oca->u.ec.e_k + oca->u.ec.e_p), 8);
+	size_tgt_nr = roundup(sizeof(uint32_t) * obj_ec_tgt_nr(oca), 8);
 	buf_size = size_iod + size_sgl + size_oiod + size_recx + size_sorter +
-		   size_singv + size_tgt_nr * iod_nr * 2 + OBJ_TGT_BITMAP_LEN;
+		   size_singv + size_array +
+		   size_tgt_nr * iod_nr * 2 + OBJ_TGT_BITMAP_LEN;
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL)
 		return -DER_NOMEM;
@@ -602,6 +603,8 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 	tmp_ptr += size_sorter;
 	reasb_req->orr_singv_los = (void *)tmp_ptr;
 	tmp_ptr += size_singv;
+	reasb_req->orr_data_sizes = (void *)tmp_ptr;
+	tmp_ptr += size_array;
 	reasb_req->tgt_bitmap = (void *)tmp_ptr;
 	tmp_ptr += OBJ_TGT_BITMAP_LEN;
 
@@ -686,7 +689,9 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		obj_auxi->req_reasbed = true;
 		if (reasb_req->orr_iods != NULL)
 			args->iods = reasb_req->orr_iods;
-		if (reasb_req->orr_sgls != NULL && !reasb_req->orr_size_fetch)
+		if (reasb_req->orr_sgls != NULL &&
+		    !reasb_req->orr_size_fetch &&
+		    !reasb_req->orr_single_tgt)
 			args->sgls = reasb_req->orr_sgls;
 	} else {
 		D_ERROR(DF_OID" obj_ec_req_reasb failed %d.\n",
@@ -2625,7 +2630,6 @@ obj_comp_cb(tse_task_t *task, void *data)
 			tse_task_list_traverse(head, shard_task_remove, NULL);
 			D_ASSERT(d_list_empty(head));
 		}
-		obj_bulk_fini(obj_auxi);
 
 		fail_info = obj_auxi->reasb_req.orr_fail;
 		new_tgt_fail = obj_auxi->ec_wait_recov &&
@@ -2645,6 +2649,16 @@ obj_comp_cb(tse_task_t *task, void *data)
 				obj_ec_recov_cb(task, obj, obj_auxi);
 			}
 		} else {
+			if (obj_auxi->is_ec_obj && task->dt_result == 0 &&
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH &&
+			    obj_auxi->bulks != NULL) {
+				daos_obj_fetch_t *args = dc_task_get_args(task);
+
+				obj_ec_fetch_set_sgl(&obj_auxi->reasb_req,
+						     args->nr);
+			}
+
+			obj_bulk_fini(obj_auxi);
 			obj_reasb_req_fini(obj_auxi);
 			/* zero it as user might reuse/resched the task, for
 			 * example the usage in dac_array_set_size().
