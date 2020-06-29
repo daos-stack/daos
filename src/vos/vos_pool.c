@@ -712,9 +712,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
 	vos_space_sys_init(pool);
-	/* NB: probably should call gc_add_pool to clean up garbages left
-	 * behind by crash.
-	 */
+	/* Ensure GC is triggered after server restart */
+	gc_add_pool(pool);
 	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
 	return 0;
 failed:

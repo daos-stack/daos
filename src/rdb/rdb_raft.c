@@ -1443,6 +1443,18 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 	return 0;
 }
 
+static inline bool
+rdb_gc_yield(void *arg)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+
+	if (dss_xstream_exiting(dx))
+		return true;
+
+	ABT_thread_yield();
+	return false;
+}
+
 /* Daemon ULT for compacting polled entries (i.e., indices <= base). */
 static void
 rdb_compactd(void *arg)
@@ -1474,7 +1486,7 @@ rdb_compactd(void *arg)
 				": %d\n", DP_DB(db), base, rc);
 			break;
 		}
-		dss_gc_run(db->d_pool, -1);
+		vos_gc_pool_run(db->d_pool, -1, rdb_gc_yield, NULL);
 	}
 	D_DEBUG(DB_MD, DF_DB": compactd stopping\n", DP_DB(db));
 }

@@ -107,6 +107,84 @@ ds_pool_child_purge(struct pool_tls *tls)
 	}
 }
 
+static void
+gc_ult(void *arg)
+{
+	struct ds_pool_child	*child = (struct ds_pool_child *)arg;
+	struct dss_module_info	*dmi = dss_get_module_info();
+	int			 rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT started\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+
+	D_ASSERT(child->spc_gc_req != NULL);
+	while (!dss_ult_exiting(child->spc_gc_req)) {
+
+		rc = vos_gc_pool_run(child->spc_hdl, -1, dss_ult_yield,
+				     (void *)child->spc_gc_req);
+		if (rc < 0)
+			D_ERROR(DF_UUID"[%d]: GC pool run failed. "DF_RC"\n",
+				DP_UUID(child->spc_uuid), dmi->dmi_tgt_id,
+				DP_RC(rc));
+
+		if (dss_ult_exiting(child->spc_gc_req))
+			break;
+
+		/* Sleep 2 seconds */
+		sched_req_sleep(child->spc_gc_req, 2ULL * 1000);
+	}
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT stopped\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+}
+
+static int
+start_gc_ult(struct ds_pool_child *child)
+{
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+	ABT_thread		 gc = ABT_THREAD_NULL;
+	int			 rc;
+
+	D_ASSERT(child != NULL);
+	D_ASSERT(child->spc_gc_req == NULL);
+
+	rc = dss_ult_create(gc_ult, child, DSS_ULT_GC, DSS_TGT_SELF, 0, &gc);
+	if (rc) {
+		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT. %d\n",
+			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, rc);
+		return rc;
+	}
+
+	D_ASSERT(gc != ABT_THREAD_NULL);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
+	child->spc_gc_req = sched_req_get(&attr, gc);
+	if (child->spc_gc_req == NULL) {
+		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
+		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+		ABT_thread_join(gc);
+		return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
+static void
+stop_gc_ult(struct ds_pool_child *child)
+{
+	D_ASSERT(child != NULL);
+	/* GC ULT is not started */
+	if (child->spc_gc_req == NULL)
+		return;
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
+		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	sched_req_wait(child->spc_gc_req, true);
+	sched_req_put(child->spc_gc_req);
+	child->spc_gc_req = NULL;
+}
+
 struct pool_child_lookup_arg {
 	struct ds_pool *pla_pool;
 	void	       *pla_uuid;
@@ -162,12 +240,19 @@ pool_child_add_one(void *varg)
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
 
+	rc = start_gc_ult(child);
+	if (rc != 0) {
+		D_FREE(child);
+		return rc;
+	}
+
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 	/* Load all containers */
 	rc = ds_cont_child_start_all(child);
 	if (rc) {
 		d_list_del_init(&child->spc_list);
 		ds_cont_child_stop_all(child);
+		stop_gc_ult(child);
 		vos_pool_close(child->spc_hdl);
 		D_FREE(child);
 		return rc;
@@ -192,6 +277,7 @@ pool_child_delete_one(void *uuid)
 
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
+	stop_gc_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
 	ds_pool_child_put(child); /* -1 for lookup */

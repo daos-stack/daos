@@ -33,9 +33,9 @@
 #include "vos_internal.h"
 
 enum {
-	GC_CREDS_MIN	= 1,	/**< minimum credits for vos_gc_run */
+	GC_CREDS_MIN	= 1,	/**< minimum credits for vos_gc_run/pool() */
 	GC_CREDS_PRIV	= 256,	/**< credits for internal usage */
-	GC_CREDS_MAX	= 4096,	/**< maximum credits for vos_gc_run */
+	GC_CREDS_MAX	= 4096,	/**< maximum credits for vos_gc_run/pool() */
 };
 
 /**
@@ -524,7 +524,7 @@ failed:
 
 /**
  * Add an item for garbage collection, this item and all its sub-items will
- * be freed by vos_gc_run.
+ * be freed by vos_gc_run/pool().
  *
  * NB: this function must be called within pmdk transaction.
  */
@@ -761,7 +761,8 @@ gc_log_pool(struct vos_pool *pool)
  * This function returns when there is nothing to reclaim or consumed all
  * credits. It returns the remainded credits.
  */
-int
+#if VOS_STANDALONE
+static int
 vos_gc_run(int *credits)
 {
 	struct vos_tls	*tls	 = vos_tls_get();
@@ -822,6 +823,7 @@ vos_gc_run(int *credits)
 	*credits = creds;
 	return rc;
 }
+#endif
 
 /**
  * Function for VOS standalone mode, it reclaims all the deleted items.
@@ -867,7 +869,7 @@ vos_gc_pool(daos_handle_t poh, int *credits)
 	if (!pool)
 		return -DER_NO_HDL;
 
-	if (d_list_empty(&pool->vp_gc_link))
+	if (!gc_have_pool(pool))
 		return 0; /* nothing to reclaim for this pool */
 
 	total = *credits;
@@ -878,10 +880,81 @@ vos_gc_pool(daos_handle_t poh, int *credits)
 	}
 	total -= *credits; /* subtract the remained credits */
 
-	if (empty && total != 0) /* did something */
-		gc_log_pool(pool);
+	if (empty) {
+		if (total != 0) /* did something */
+			gc_log_pool(pool);
+		gc_del_pool(pool);
+	}
 
 	return 0;
+}
+
+static inline bool
+vos_gc_yield(bool (*yield_func)(void *arg), void *yield_arg)
+{
+	if (yield_func != NULL)
+		return yield_func(yield_arg);
+
+	bio_yield();
+	return false;
+}
+
+int
+vos_gc_pool_run(daos_handle_t poh, int credits,
+		bool (*yield_func)(void *arg), void *yield_arg)
+{
+	struct vos_pool	*pool = vos_hdl2pool(poh);
+	int		 rc, total = 0;
+
+	D_ASSERT(!daos_handle_is_inval(poh));
+	if (!gc_have_pool(pool))
+		return 0; /* nothing to reclaim for this pool */
+
+	/*
+	 * Pause flushing free extents in VEA aging buffer, otherwise,
+	 * there'll be way more fragments to be processed.
+	 */
+	vos_pool_ctl(poh, VOS_PO_CTL_VEA_PLUG);
+
+	while (1) {
+		int	creds = GC_CREDS_PRIV;
+
+		if (credits > 0 && (credits - total) < creds)
+			creds = credits - total;
+
+		total += creds;
+		rc = vos_gc_pool(poh, &creds);
+		if (rc) {
+			D_ERROR("GC pool failed: %s\n", d_errstr(rc));
+			break;
+		}
+		total -= creds; /* subtract the remainded credits */
+		if (creds != 0)
+			break; /* reclaimed everything */
+
+		if (credits > 0 && total >= credits)
+			break; /* consumed all credits */
+
+		if (vos_gc_yield(yield_func, yield_arg)) {
+			D_DEBUG(DB_TRACE, "GC pool run aborted\n");
+			rc = 1;
+			break;
+		}
+	}
+
+	/* Unplug and make the freed extents available immediately. */
+	vos_pool_ctl(poh, VOS_PO_CTL_VEA_UNPLUG);
+
+	if (total != 0) /* did something */
+		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
+	return rc;
+}
+
+inline bool
+vos_gc_pool_idle(daos_handle_t poh)
+{
+	D_ASSERT(!daos_handle_is_inval(poh));
+	return !gc_have_pool(vos_hdl2pool(poh));
 }
 
 inline void
