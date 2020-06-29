@@ -385,7 +385,7 @@ main(int argc, char **argv)
 		rc = dfuse_bg(dfuse_info);
 		if (rc != 0) {
 			printf("Failed to background\n");
-			return 2 ;
+			return 2;
 		}
 	}
 
