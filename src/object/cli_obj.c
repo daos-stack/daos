@@ -1396,10 +1396,10 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		}
 		recov_task->ert_th = th;
 
-		rc = dc_obj_fetch_task_create(args->oh, th, DIOF_EC_RECOV,
-				args->dkey, 1, &recov_task->ert_iod,
-				&recov_task->ert_sgl, fail_info, NULL, NULL,
-				sched, &sub_task);
+		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
+					DIOF_EC_RECOV, &recov_task->ert_iod,
+					&recov_task->ert_sgl, NULL, fail_info,
+					NULL, sched, &sub_task);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create "
 				"failed "DF_RC".\n", task,
@@ -2802,15 +2802,16 @@ out:
 }
 
 int
-dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args, uint32_t flags,
-	     uint32_t shard)
+dc_obj_fetch_task(tse_task_t *task)
 {
+	daos_obj_fetch_t	*args = dc_task_get_args(task);
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
 	uint8_t                 *tgt_bitmap = NIL_BITMAP;
 	unsigned int		 map_ver = 0;
 	uint64_t		 dkey_hash;
 	struct dc_obj_epoch	 epoch;
+	uint32_t		 shard = 0;
 	int			 rc;
 	uint8_t                  csum_bitmap = 0;
 
@@ -2837,7 +2838,7 @@ dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args, uint32_t flags,
 		D_GOTO(out_task, rc);
 	}
 
-	if ((flags & DIOF_EC_RECOV) != 0) {
+	if ((args->extra_flags & DIOF_EC_RECOV) != 0) {
 		obj_auxi->ec_in_recov = 1;
 		obj_auxi->reasb_req.orr_fail = args->extra_arg;
 		obj_auxi->reasb_req.orr_recov = 1;
@@ -2853,11 +2854,14 @@ dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args, uint32_t flags,
 	}
 
 	dkey_hash = obj_dkey2hash(args->dkey);
-	obj_auxi->spec_shard = (flags & DIOF_TO_SPEC_SHARD) != 0;
-	if (obj_auxi->spec_shard)
+	obj_auxi->spec_shard = (args->extra_flags & DIOF_TO_SPEC_SHARD) != 0;
+	if (obj_auxi->spec_shard) {
 		D_ASSERT(!obj_auxi->to_leader);
-	else
-		obj_auxi->to_leader = (flags & DIOF_TO_LEADER) != 0;
+
+		shard = *(int *)args->extra_arg;
+	} else {
+		obj_auxi->to_leader = (args->extra_flags & DIOF_TO_LEADER) != 0;
+	}
 
 	/* for CSUM error, build a bitmap with only the next target set,
 	 * based current obj->auxi.req_tgt.ort_shart_tgts[0].st_shard.
@@ -2881,6 +2885,7 @@ dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args, uint32_t flags,
 		if (obj_auxi->is_ec_obj)
 			tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
 	}
+
 	rc = obj_req_get_tgts(obj, (int *)&shard, args->dkey, dkey_hash,
 			      tgt_bitmap, map_ver, obj_auxi->to_leader,
 			      obj_auxi->spec_shard, obj_auxi);
@@ -2916,22 +2921,6 @@ dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args, uint32_t flags,
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
-}
-
-int
-dc_obj_fetch_shard_task(tse_task_t *task)
-{
-	struct daos_obj_fetch_shard	*args = dc_task_get_args(task);
-
-	return dc_obj_fetch(task, &args->base, args->flags, args->shard);
-}
-
-int
-dc_obj_fetch_task(tse_task_t *task)
-{
-	daos_obj_fetch_t *args	= dc_task_get_args(task);
-
-	return dc_obj_fetch(task, args, args->flags, 0);
 }
 
 int
