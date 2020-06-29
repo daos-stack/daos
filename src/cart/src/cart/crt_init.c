@@ -102,7 +102,8 @@ static int data_init(int server, crt_init_options_t *opt)
 	bool		share_addr = false;
 	uint32_t	ctx_num = 1;
 	uint32_t	fi_univ_size = 0;
-	uint32_t	mem_pin_disable =  0;
+	uint32_t	mem_pin_disable = 0;
+	uint64_t	start_rpcid;
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -129,6 +130,13 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_addr = NULL;
 	crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
 	crt_gdata.cg_share_na = false;
+
+	srand(d_timeus_secdiff(0) + getpid());
+	start_rpcid = ((uint64_t)rand()) << 32;
+
+	crt_gdata.cg_rpcid = start_rpcid;
+
+	D_DEBUG(DB_ALL, "Starting RPCID 0x%lx\n", start_rpcid);
 
 	/* Apply CART-890 workaround for server side only */
 	if (server) {

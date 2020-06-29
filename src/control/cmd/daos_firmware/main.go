@@ -20,36 +20,29 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package client
+
+// +build firmware
+
+package main
 
 import (
-	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/fault/code"
+	"os"
+
+	"github.com/daos-stack/daos/src/control/pbin"
 )
 
-var (
-	FaultUnknown = clientFault(
-		code.ClientUnknown,
-		"unknown client error",
-		"",
-	)
-	FaultConfigBadControlPort = clientFault(
-		code.ClientConfigBadControlPort,
-		"invalid control port in configuration",
-		"specify a nonzero control port in configuration ('port' parameter) and retry the client application",
-	)
-	FaultConfigBadAccessPoints = clientFault(
-		code.ClientConfigBadAccessPoints,
-		"invalid list of access points in configuration",
-		"only a single access point is currently supported, specify only one and retry the client application",
-	)
-)
+func main() {
+	app := pbin.NewApp().WithAllowedCallers("daos_server")
 
-func clientFault(code code.Code, desc, res string) *fault.Fault {
-	return &fault.Fault{
-		Domain:      "client",
-		Code:        code,
-		Description: desc,
-		Resolution:  res,
+	if logPath, set := os.LookupEnv(pbin.DaosFWLogFileEnvVar); set {
+		app = app.WithLogFile(logPath)
+	}
+
+	app.AddHandler("ScmFirmwareQuery", &scmQueryHandler{})
+	app.AddHandler("ScmFirmwareUpdate", &scmUpdateHandler{})
+
+	err := app.Run()
+	if err != nil {
+		os.Exit(1)
 	}
 }
