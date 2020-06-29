@@ -139,27 +139,15 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, errors.Wrap(err, "unmarshal Join response")
 	}
 
-	// if join successful, record membership
+	// if join response indicates success, update membership
 	if resp.GetStatus() == 0 {
 		newState := system.MemberStateEvicted
 		if resp.GetState() == mgmtpb.JoinResp_IN {
 			newState = system.MemberStateJoined
 		}
 
-		member := system.NewMember(system.Rank(resp.GetRank()), req.GetUuid(), replyAddr, newState)
-
-		created, oldState := svc.membership.AddOrUpdate(member)
-		if created {
-			svc.log.Debugf("new system member: rank %d, addr %s",
-				resp.GetRank(), replyAddr)
-		} else {
-			svc.log.Debugf("updated system member: rank %d, addr %s, %s->%s",
-				member.Rank, replyAddr, *oldState, newState)
-			if *oldState == newState {
-				svc.log.Errorf("unexpected same state in rank %d update (%s->%s)",
-					member.Rank, *oldState, newState)
-			}
-		}
+		svc.membership.AddOrReplace(system.NewMember(
+			system.Rank(resp.GetRank()), req.GetUuid(), replyAddr, newState))
 	}
 
 	return resp, nil
