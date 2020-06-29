@@ -518,7 +518,10 @@ void
 daos_fail_value_set(uint64_t val);
 void
 daos_fail_num_set(uint64_t num);
-
+uint64_t
+daos_shard_fail_value(uint16_t *shards, int nr);
+bool
+daos_shard_in_fail_value(uint16_t shard);
 int
 daos_fail_check(uint64_t id);
 
@@ -611,8 +614,13 @@ enum {
 #define DAOS_CSUM_CORRUPT_UPDATE_DKEY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x24)
 #define DAOS_CSUM_CORRUPT_FETCH_DKEY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x25)
 
- /** This fault simulates corruption on disk. Must be set on server side. */
+/** This fault simulates corruption on disk. Must be set on server side. */
 #define DAOS_CSUM_CORRUPT_DISK		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x26)
+/**
+ * This fault simulates shard fetch failure. Can be used to test EC degraded
+ * fetch.
+ */
+#define DAOS_FAIL_SHARD_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
