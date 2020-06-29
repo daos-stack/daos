@@ -1520,7 +1520,7 @@ test_drpc_pool_create_invalid_acl(void **state)
 static int
 drpc_exclude_setup(void **state)
 {
-	mock_ds_mgmt_exclude_setup();
+	mock_ds_mgmt_tgt_update_setup();
 	return 0;
 }
 
@@ -1625,7 +1625,7 @@ test_drpc_exclude_success(void **state)
 static int
 drpc_drain_setup(void **state)
 {
-	mock_ds_mgmt_drain_setup();
+	mock_ds_mgmt_tgt_update_setup();
 	return 0;
 }
 

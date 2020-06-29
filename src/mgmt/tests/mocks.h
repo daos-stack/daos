@@ -134,18 +134,11 @@ extern void		*ds_mgmt_pool_query_info_ptr;
 void mock_ds_mgmt_pool_query_setup(void);
 
 /*
- * Mock ds_mgmt_exclude
+ * Mock ds_mgmt_tgt_state_update
  */
 extern int		ds_mgmt_target_update_return;
 extern uuid_t		ds_mgmt_target_update_uuid;
-void mock_ds_mgmt_exclude_setup(void);
-
-/*
- * Mock ds_mgmt_drain
- */
-extern int		ds_mgmt_target_update_return;
-extern uuid_t		ds_mgmt_target_update_uuid;
-void mock_ds_mgmt_drain_setup(void);
+void mock_ds_mgmt_tgt_update_setup(void);
 
 /*
  * Mock ds_mgmt_evict
