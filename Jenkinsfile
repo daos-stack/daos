@@ -1073,7 +1073,7 @@ pipeline {
                                     failThresholdDefinitelyLost: '0',
                                     failThresholdInvalidReadWrite: '0',
                                     failThresholdTotal: '0',
-                                    pattern: '**/*memcheck.xml',
+                                    pattern: 'run_test_valgrind.sh/*memcheck.xml',
                                     publishResultsForAbortedBuilds: false,
                                     publishResultsForFailedBuilds: true,
                                     sourceSubstitutionPaths: '',
