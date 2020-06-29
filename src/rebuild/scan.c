@@ -369,12 +369,16 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		shards = shard_array;
 	}
 
-	if (rpt->rt_rebuild_op == RB_OP_FAIL
-	    || rpt->rt_rebuild_op == RB_OP_DRAIN) {
+	if (rpt->rt_rebuild_op == RB_OP_FAIL) {
 		rebuild_nr = pl_obj_find_rebuild(map, &md, NULL,
 						 rpt->rt_rebuild_ver,
 						 tgts, shards,
 						 rpt->rt_tgts_num, myrank);
+	} else if (rpt->rt_rebuild_op == RB_OP_DRAIN) {
+		rebuild_nr = pl_obj_find_rebuild(map, &md, NULL,
+						 rpt->rt_rebuild_ver,
+						 tgts, shards,
+						 rpt->rt_tgts_num, -1);
 	} else if (rpt->rt_rebuild_op == RB_OP_ADD) {
 		rebuild_nr = pl_obj_find_reint(map, &md, NULL,
 					       rpt->rt_rebuild_ver,
@@ -488,7 +492,9 @@ rebuild_scanner(void *data)
 	struct umem_attr		uma;
 	int				rc;
 
-	if (is_current_tgt_unavail(rpt)) {
+	if (is_current_tgt_unavail(rpt) ||
+	   (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
+	    rpt->rt_rebuild_op == RB_OP_DRAIN)) {
 		D_DEBUG(DB_TRACE, DF_UUID" skip scan\n",
 			DP_UUID(rpt->rt_pool_uuid));
 		return 0;
