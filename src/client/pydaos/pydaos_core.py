@@ -45,6 +45,7 @@ ObjClassID = enum.Enum(
      if key.startswith("OC_")})
 
 class KvNotFound(Exception):
+    """Raised by get_kv_by_name if KV does not exist"""
     pass
 
 class ObjID(object):
