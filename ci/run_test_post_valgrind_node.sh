@@ -5,10 +5,7 @@ set -uex
 cd "$DAOS_BASE"
 mkdir run_test_valgrind.sh
 if ls /tmp/daos*.log > /dev/null; then
-  mv /tmp/daos*.log run_test.sh/
-fi
-if ls /tmp/dnt*.log > /dev/null; then
-  mv /tmp/dnt*.log vm_test/
+  mv /tmp/daos*.log run_test_valgrind.sh/
 fi
 # servers can sometimes take a while to stop when the test is done
 x=0

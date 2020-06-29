@@ -1081,25 +1081,6 @@ pipeline {
                                     unstableThresholdInvalidReadWrite: '0',
                                     unstableThresholdTotal: '0'
                             )
-                            recordIssues enabledForFailure: true,
-                                         failOnError: true,
-                                         referenceJobName: 'daos-stack/daos/master',
-                                         ignoreFailedBuilds: false,
-                                         ignoreQualityGate: true,
-                                         /* Set qualitygate to 1 new "NORMAL" priority message
-                                           * Supporting messages to help identify causes of
-                                           * problems are set to "LOW", and there are a
-                                           * number of intermittent issues during server
-                                           * shutdown that would normally be NORMAL but in
-                                           * order to have stable results are set to LOW.
-                                           */
-                                         qualityGates: [[threshold: 1, type: 'TOTAL_HIGH', unstable: true],
-                                                        [threshold: 1, type: 'TOTAL_ERROR', unstable: true],
-                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true]],
-                                         name: "Node local testing",
-                                         tool: issues(pattern: 'vm_test/nlt-errors.json',
-                                                      name: 'NLT results',
-                                                      id: 'VM_test')
                         }
                     }
                 } // End run_test_valgrind.sh stage
