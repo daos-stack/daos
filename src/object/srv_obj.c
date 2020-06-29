@@ -50,19 +50,6 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
 		    struct daos_csummer *csummer);
 
-static bool
-obj_rpc_is_update(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE;
-}
-
-static bool
-obj_rpc_is_fetch(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
-}
-
 /* For single RDG based DTX, parse DTX participants information
  * from the client given dispatch targets information that does
  * NOT contains the original leader information.
@@ -263,28 +250,6 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 			buf   += nob;
 		}
 	}
-}
-
-bool
-cont_prop_csum_enabled(struct ds_iv_ns *ns, uuid_t co_hdl)
-{
-	int			rc;
-	daos_prop_t		cont_prop = {0};
-	struct daos_prop_entry	entry = {0};
-	uint32_t		csum_val;
-
-	entry.dpe_type = DAOS_PROP_CO_CSUM;
-	cont_prop.dpp_entries = &entry;
-	cont_prop.dpp_nr = 1;
-
-	rc = ds_cont_fetch_prop(ns, co_hdl, &cont_prop);
-	if (rc != 0)
-		return false;
-	csum_val = daos_cont_prop2csum(&cont_prop);
-	if (daos_cont_csum_prop_is_enabled(csum_val))
-		return true;
-	else
-		return false;
 }
 
 static int
@@ -1054,7 +1019,6 @@ obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	daos_handle_t			 ioh = DAOS_HDL_INVAL;
 	int				 rc;
 
-	obj_iod_idx_vos2parity(iod_nr, iods);
 	oca = daos_oclass_attr_find(oid.id_pub);
 	if (oca == NULL || !DAOS_OC_IS_EC(oca)) {
 		rc = -DER_INVAL;
@@ -1063,6 +1027,7 @@ obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto out;
 	}
 
+	obj_iod_idx_vos2parity(iod_nr, iods);
 	rc = vos_fetch_begin(coh, oid, epoch, cond_flags, dkey, iod_nr, iods,
 			     VOS_FETCH_RECX_LIST, NULL, &ioh, NULL);
 	if (rc) {
@@ -1077,9 +1042,8 @@ obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 out:
 	obj_iod_idx_parity2vos(iod_nr, iods);
 	if (rc == 0) {
-		obj_iod_idx_vos2daos(iod_nr, iods, tgt_idx, oca);
-		obj_recx_ep_list_idx_parity2daos(iod_nr, *pshadows, tgt_idx,
-						 oca);
+		obj_shadow_list_vos2daos(iod_nr, *pshadows, oca);
+		rc = obj_iod_recx_vos2daos(iod_nr, iods, tgt_idx, oca);
 	}
 	return rc;
 }
