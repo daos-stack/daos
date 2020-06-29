@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2019 Intel Corporation.
+* (C) Copyright 2019-2020 Intel Corporation.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
 #include <spdk/env.h>
 
 #include "nvme_control_common.h"
+
+struct ctrlr_entry	*g_controllers;
 
 static bool
 probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,

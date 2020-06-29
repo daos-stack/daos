@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <daos.h>
 #include <daos/common.h>
+#include <daos/checksum.h>
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
@@ -819,32 +820,19 @@ cont_decode_props(daos_prop_t *props)
 		fprintf(stderr, "checksum type property not found\n");
 		rc = -DER_INVAL;
 	} else {
+		struct csum_ft *csum;
+
 		D_PRINT("checksum type:\t\t");
-		switch (entry->dpe_val) {
-		case DAOS_PROP_CO_CSUM_OFF:
+		if (entry->dpe_val == DAOS_PROP_CO_CSUM_OFF) {
 			D_PRINT("off\n");
-			break;
-		case DAOS_PROP_CO_CSUM_CRC16:
-			D_PRINT("crc16\n");
-			break;
-		case DAOS_PROP_CO_CSUM_CRC32:
-			D_PRINT("crc32\n");
-			break;
-		case DAOS_PROP_CO_CSUM_CRC64:
-			D_PRINT("crc64\n");
-			break;
-		case DAOS_PROP_CO_CSUM_SHA1:
-			D_PRINT("sha1\n");
-			break;
-		case DAOS_PROP_CO_CSUM_SHA256:
-			D_PRINT("sha256\n");
-			break;
-		case DAOS_PROP_CO_CSUM_SHA512:
-			D_PRINT("sha512\n");
-			break;
-		default:
-			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
-			break;
+		} else {
+			csum = daos_csum_type2algo(
+				daos_contprop2csumtype(entry->dpe_val));
+			if (csum == NULL)
+				D_PRINT("<unknown value> ("DF_X64")\n",
+					entry->dpe_val);
+			else
+				D_PRINT("%s\n", csum->cf_name);
 		}
 	}
 
@@ -881,7 +869,7 @@ cont_decode_props(daos_prop_t *props)
 			D_PRINT("off\n");
 			break;
 		case DAOS_PROP_CO_DEDUP_MEMCMP:
-			D_PRINT("memcomp\n");
+			D_PRINT("memcmp\n");
 			break;
 		case DAOS_PROP_CO_DEDUP_HASH:
 			D_PRINT("hash\n");
