@@ -53,17 +53,31 @@ class DmgCommand(YamlCommand):
             r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
             r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
             r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
-        "storage_query_smd":
-            r"(?:UUID|VOS\s+Target\s+IDs|SPDK Blobs):\s+([a-z0-9- ]+)",
-        "storage_query_blobstore":
-            r"(?:Device\s+UUID|Read\s+errors|Write\s+errors|Unmap\s+errors|"
-            r"Checksum\s+errors|Error\s+log\s+entries|Media\s+errors|"
-            r"Temperature|Available\s+Spare|Device\s+Reliability|"
-            r"Read\s+Only|Volatile\s+Memory\s+Backup):\s+([A-Za-z0-9- ]+)",
-        "storage_query_device_state":
-            r"(?:Device\s+UUID|State):\s+([A-Za-z0-9-]+)",
+        "system_query":
+            r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+:[0-9]+)\s+[A-Za-z]+)",
+        "storage_query_list_pools":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Pools\s+|UUID:([a-z0-9-]+)\s+"
+            r"|Rank:(\d+)\s+Targets:\[([0-9 ]+)\](\s+Blobs:\[([0-9 ]+)\])?",
+        "storage_query_list_devices":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
+            r"Targets:\[([0-9 ]+)\]\s+Rank:(\d+)\s+State:(\w+)",
+        "storage_query_device_health":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
+            r"Targets:\[([0-9 ]+)\]\s+Rank:(\d+)\s+State:(\w+)|"
+            r"(?:Read\s+Errors|Write\s+Errors|Unmap\s+Errors|Checksum\s+Errors|"
+            r"Error\s+Log\s+Entries|Media\s+Errors|Temperature|"
+            r"Available\s+Spare|Device\s+Reliability|Read\s+Only|"
+            r"Volatile\s+Memory\s+Backup):\s?([A-Za-z0-9- ]+)",
+        "storage_query_target_health":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
+            r"Targets:\[([0-9 ]+)\]\s+Rank:(\d+)\s+State:(\w+)|"
+            r"(?:Read\s+Errors|Write\s+Errors|Unmap\s+Errors|Checksum\s+Errors|"
+            r"Error\s+Log\s+Entries|Media\s+Errors|Temperature|"
+            r"Available\s+Spare|Device\s+Reliability|Read\s+Only|"
+            r"Volatile\s+Memory\s+Backup):\s?([A-Za-z0-9- ]+)",
         "storage_set_faulty":
-            r"(?:Device\s+UUID|State):\s+([A-Za-z0-9-]+)",
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
+            r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
 
     def __init__(self, path, yaml_cfg=None):
@@ -397,43 +411,18 @@ class DmgCommand(YamlCommand):
             def get_sub_command_class(self):
                 # pylint: disable=redefined-variable-type
                 """Get the dmg pool sub command object."""
-                if self.sub_command.value == "blobstore-health":
-                    self.sub_command_class = self.BlobstoreHealthSubCommand()
-                elif self.sub_command.value == "device-state":
-                    self.sub_command_class = self.DeviceStateSubCommand()
-                elif self.sub_command.value == "nvme-health":
+                if self.sub_command.value == "nvme-health":
                     self.sub_command_class = self.NvmeHealthSubCommand()
-                elif self.sub_command.value == "smd":
-                    self.sub_command_class = self.SmdSubCommand()
+                elif self.sub_command.value == "target-health":
+                    self.sub_command_class = self.TargetHealthSubCommand()
+                elif self.sub_command.value == "device-health":
+                    self.sub_command_class = self.DeviceHealthSubCommand()
+                elif self.sub_command.value == "list-pools":
+                    self.sub_command_class = self.ListPoolsSubCommand()
+                elif self.sub_command.value == "list-devices":
+                    self.sub_command_class = self.ListDevicesSubCommand()
                 else:
                     self.sub_command_class = None
-
-            class BlobstoreHealthSubCommand(CommandWithParameters):
-                """Defines a dmg storage query blobstore-health object."""
-
-                def __init__(self):
-                    """Create a dmg storage query blobstore-health object."""
-                    super(
-                        DmgCommand.StorageSubCommand.QuerySubCommand.
-                        BlobstoreHealthSubCommand,
-                        self).__init__(
-                            "/run/dmg/storage/query/blobstore-health/*",
-                            "blobstore-health")
-                    self.devuuid = FormattedParameter("-u {}", None)
-                    self.tgtid = FormattedParameter("-t {}", None)
-
-            class DeviceStateSubCommand(CommandWithParameters):
-                """Defines a dmg storage query device-state object."""
-
-                def __init__(self):
-                    """Create a dmg storage query device-state object."""
-                    super(
-                        DmgCommand.StorageSubCommand.QuerySubCommand.
-                        DeviceStateSubCommand,
-                        self).__init__(
-                            "/run/dmg/storage/query/device-state/*",
-                            "device-state")
-                    self.devuuid = FormattedParameter("-u {}", None)
 
             class NvmeHealthSubCommand(CommandWithParameters):
                 """Defines a dmg storage query nvme-health object."""
@@ -447,19 +436,61 @@ class DmgCommand(YamlCommand):
                             "/run/dmg/storage/query/nvme-health/*",
                             "nvme-health")
 
-            class SmdSubCommand(CommandWithParameters):
-                """Defines a dmg storage query smd object."""
+            class TargetHealthSubCommand(CommandWithParameters):
+                """Defines a dmg storage query target-health object."""
 
                 def __init__(self):
-                    """Create a dmg storage query smd object."""
+                    """Create a dmg storage query target-health object."""
                     super(
                         DmgCommand.StorageSubCommand.QuerySubCommand.
-                        SmdSubCommand,
+                        TargetHealthSubCommand,
                         self).__init__(
-                            "/run/dmg/storage/query/smd/*",
-                            "smd")
-                    self.devices = FormattedParameter("-d", False)
-                    self.pools = FormattedParameter("-p", False)
+                            "/run/dmg/storage/query/target-health/*",
+                            "target-health")
+                    self.rank = FormattedParameter("-r {}", None)
+                    self.tgtid = FormattedParameter("-t {}", None)
+
+            class DeviceHealthSubCommand(CommandWithParameters):
+                """Defines a dmg storage query device-health object."""
+
+                def __init__(self):
+                    """Create a dmg storage query device-health object."""
+                    super(
+                        DmgCommand.StorageSubCommand.QuerySubCommand.
+                        DeviceHealthSubCommand,
+                        self).__init__(
+                            "/run/dmg/storage/query/device-health/*",
+                            "device-health")
+                    self.uuid = FormattedParameter("-u {}", None)
+
+            class ListDevicesSubCommand(CommandWithParameters):
+                """Defines a dmg storage query list-devices object."""
+
+                def __init__(self):
+                    """Create a dmg storage query list-devices object."""
+                    super(
+                        DmgCommand.StorageSubCommand.QuerySubCommand.
+                        ListDevicesSubCommand,
+                        self).__init__(
+                            "/run/dmg/storage/query/list-devices/*",
+                            "list-devices")
+                    self.rank = FormattedParameter("-r {}", None)
+                    self.uuid = FormattedParameter("-u {}", None)
+                    self.health = FormattedParameter("-b", False)
+
+            class ListPoolsSubCommand(CommandWithParameters):
+                """Defines a dmg storage query list-pools object."""
+
+                def __init__(self):
+                    """Create a dmg storage query list-pools object."""
+                    super(
+                        DmgCommand.StorageSubCommand.QuerySubCommand.
+                        ListPoolsSubCommand,
+                        self).__init__(
+                            "/run/dmg/storage/query/list-pools/*",
+                            "list-pools")
+                    self.rank = FormattedParameter("-r {}", None)
+                    self.uuid = FormattedParameter("-u {}", None)
 
         class ScanSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage scan command."""
@@ -661,53 +692,72 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.force.value = force
         return self._get_result()
 
-    def storage_set_faulty(self, devuuid):
+    def storage_set_faulty(self, uuid):
         """Get the result of the 'dmg storage set nvme-faulty' command.
 
         Args:
-            devuuid (str, optional): Device/Blobstore UUID to query.
-                Defaults to None.
+            uuid (str): Device UUID to query.
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("set")
         self.sub_command_class.sub_command_class.set_sub_command("nvme-faulty")
         self.sub_command_class. \
-            sub_command_class.sub_command_class.devuuid.value = devuuid
+            sub_command_class.sub_command_class.uuid.value = uuid
         return self._get_result()
 
-    def storage_query_smd(self, devices=False, pools=False):
-        """Get the result of the 'dmg storage query smd' command.
+    def storage_query_list_devices(self, rank=None, health=False):
+        """Get the result of the 'dmg storage query list-devices' command.
 
         Args:
-            devices (bool, optional): List all devices/blobstores stored in
-                per-server metadata table. Defaults to False.
-            pools (bool, optional): List all VOS pool targets stored in
-                per-server metadata table. Defaults to False.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg storage prepare command fails.
-
-        """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class.sub_command_class.set_sub_command("smd")
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.devices.value = devices
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.pools.value = pools
-        return self._get_result()
-
-    def storage_query_blobstore(self, devuuid, tgtid=None):
-        """Get the result of the 'dmg storage query blobstore-health' command.
-
-        Args:
-            devuuid (str, optional): Device/Blobstore UUID to query.
+            rank (int, optional): Limit response to devices on this rank.
                 Defaults to None.
-            tgtid (str, optional): VOS target ID to query. Defaults to None.
+            health (bool, optional): Include device health in response.
+                Defaults to false.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.set_sub_command("list-devices")
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.rank.value = rank
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.health.value = health
+        return self._get_result()
+
+    def storage_query_list_pools(self, rank=None):
+        """Get the result of the 'dmg storage query list-pools' command.
+
+        Args:
+            rank (int, optional): Limit response to pools on this rank.
+                Defaults to None.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.set_sub_command("list-pools")
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.rank.value = rank
+        return self._get_result()
+
+    def storage_query_device_health(self, uuid):
+        """Get the result of the 'dmg storage query device-health' command.
+
+        Args:
+            uuid (str): Device UUID to query.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -720,34 +770,34 @@ class DmgCommand(YamlCommand):
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("query")
         self.sub_command_class. \
-            sub_command_class.set_sub_command("blobstore-health")
+            sub_command_class.set_sub_command("device-health")
         self.sub_command_class. \
-            sub_command_class.sub_command_class.devuuid.value = devuuid
+            sub_command_class.sub_command_class.uuid.value = uuid
+        return self._get_result()
+
+    def storage_query_target_health(self, rank, tgtid):
+        """Get the result of the 'dmg storage query target-health' command.
+
+        Args:
+            rank (int): Rank hosting target.
+            tgtid (int): Target index to query.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class. \
+            sub_command_class.set_sub_command("device-health")
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.rank.value = rank
         self.sub_command_class. \
             sub_command_class.sub_command_class.tgtid.value = tgtid
-        return self._get_result()
-
-    def storage_query_device_state(self, devuuid):
-        """Get the result of the 'dmg storage query device-state' command.
-
-        Args:
-            devuuid (str, optional): Device/Blobstore UUID to query.
-                Defaults to None.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg storage prepare command fails.
-
-        """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class. \
-            sub_command_class.set_sub_command("device-state")
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.devuuid.value = devuuid
         return self._get_result()
 
     def storage_query_nvme_health(self):
@@ -1022,6 +1072,58 @@ class DmgCommand(YamlCommand):
         self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
         return self._get_result()
 
+    def system_query(self, rank=None, verbose=True):
+        """Query System to know status of servers
+
+        Args:
+            rank: Specify specific rank to obtain it's status
+                  Defaults to None, which means report all available
+                  ranks.
+            verbose (bool): To obtain detailed query report
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+        """
+
+        self.set_sub_command("system")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.rank.value = rank
+        self.sub_command_class.sub_command_class.verbose.value = verbose
+        return self._get_result()
+
+
+def check_system_query_status(stdout_str):
+    """Check if any server crashed
+
+    Args:
+        stdout_str (list): list obtained from 'dmg system query -v'
+    Result:
+        bool: True if no server crashed, False otherwise.
+    """
+    check = True
+    rank_info = []
+    failed_rank_list = []
+    # iterate to obtain failed rank list
+    for i, _ in enumerate(stdout_str):
+        rank_info.append(stdout_str[i][0])
+        print("rank_info: \n{}".format(rank_info))
+        for items in rank_info:
+            item = items.split()
+            if item[3] in ["Unknown", "Evicted", "Errored", "Unresponsive"]:
+                failed_rank_list.append(items)
+    # if failed rank list is not empty display the failed ranks
+    # and return False
+    if failed_rank_list:
+        for failed_list in failed_rank_list:
+            print("failed_list: {}\n".format(failed_list))
+            out = failed_list.split()
+            print("Rank {} failed with state '{}'".format(out[0], out[3]))
+        check = False
+    return check
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     """Get Pool UUID and Service replicas from stdout.
