@@ -51,7 +51,6 @@ def scons():
     # generate targets in specific build dir to avoid polluting the source code
     SConscript('src/SConscript')
     SConscript('test/SConscript')
-    SConscript('../gurt/tests/SConscript')
 
     env.Install('$PREFIX/etc', ['utils/memcheck-cart.supp',
                                 'utils/fault-inject-cart.yaml'])

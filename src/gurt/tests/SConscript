@@ -32,8 +32,7 @@ def scons():
         return
 
     # pylint: disable=too-many-locals
-    Import('env', 'prereqs', 'cart_targets', 'swim_targets', 'gurt_targets')
-    Import('cart_lib')
+    Import('env', 'prereqs', 'gurt_targets')
     # pylint: enable=too-many-locals
 
     #Use full path to wrap_cmocka.h for configure test.  Since standalone
@@ -64,13 +63,11 @@ def scons():
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
         testprog = daos_build.test(test_env, target=testname,
-                                   source=testobj + cart_targets + \
-                                   swim_targets + gurt_targets,
+                                   source=testobj + gurt_targets,
                                    LIBS=test_env["LIBS"] + ['yaml'],
                                    LINKFLAGS=flags)
         tests.append(testprog)
 
-    test_env.Requires(tests, cart_lib)
     Default(tests)
 
 if __name__ == "SCons.Script":
