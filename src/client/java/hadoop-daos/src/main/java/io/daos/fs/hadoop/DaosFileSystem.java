@@ -454,11 +454,8 @@ public class DaosFileSystem extends FileSystem {
       if (uns) {
         qualifiedUnsPrefix = tmpUri + unsPrefix;
         qualifiedUnsWorkPath = qualifiedUnsPrefix + workPath;
-        this.uri = URI.create(qualifiedUnsPrefix);
-        this.workingDir = new Path(qualifiedUnsWorkPath)
-                .makeQualified(this.uri, this.getWorkingDirectory());
+        workingDir = new Path(qualifiedUnsWorkPath);
       } else {
-        this.uri = URI.create(tmpUri);
         this.workingDir = new Path(workPath)
                 .makeQualified(this.uri, this.getWorkingDirectory());
       }
