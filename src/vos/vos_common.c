@@ -35,6 +35,7 @@
 #include <daos/lru.h>
 #include <daos/btree_class.h>
 
+struct bio_xs_context	*vsa_xsctxt_inst;
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static bool vsa_nvme_init;
