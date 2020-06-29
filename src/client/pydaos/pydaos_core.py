@@ -24,6 +24,7 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 
 import enum
 import uuid
+import pickle
 import sys
 
 # pylint: disable=no-name-in-module
@@ -42,6 +43,9 @@ ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
     {key: value for key, value in pydaos_shim.__dict__.items()
      if key.startswith("OC_")})
+
+class KvNotFound(Exception):
+    pass
 
 class ObjID(object):
     """
@@ -153,6 +157,30 @@ class Cont(object):
             raise PyDError("failed to generate root object identifier", ret)
         oid = ObjID(hi, lo)
         return KVObj(self.coh, oid, self)
+
+    def get_kv_by_name(self, name, root=None, create=False):
+        """Return KV by name.
+
+        Allow selection of root (or parent) container, and
+        optionally create kv if not found"""
+
+        if not root:
+            root = self.rootkv()
+        if name in root:
+            object_data = pickle.loads(root[name])
+            return self.kv(object_data['oid'])
+
+        if not create:
+            raise KvNotFound
+
+        new_kv = self.newkv()
+        # Create a new entry in the root kv, where the entry
+        # itself is a dick, and the 'oid' entry is the object
+        # of the new, referenced kv.  This allows for future
+        # expansion of the definition without changing
+        # existing containers.
+        root[name] = pickle.dumps({'oid': new_kv.oid})
+        return new_kv
 
     def __str__(self):
         return '{}@{}'.format(self.cuuid, self.puuid)
