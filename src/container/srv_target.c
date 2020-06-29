@@ -89,10 +89,10 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 static int
 cont_csummer_init(struct ds_cont_child *cont)
 {
-	daos_prop_t	*props;
-	uint32_t	 csum_val;
-	int		 rc;
-	struct cont_props *cont_props;
+	daos_prop_t		*props;
+	uint32_t		csum_val;
+	int			rc;
+	struct cont_props	*cont_props;
 
 	D_ASSERT(cont != NULL);
 	cont_props = &cont->sc_props;

@@ -454,8 +454,8 @@ dc_cont_alloc(const uuid_t uuid)
 static void
 dc_cont_csum_init(struct dc_cont *cont, struct cont_props cont_props)
 {
-	uint32_t csum_type = cont_props.dcp_csum_type;
-	bool dedup_only = false;
+	uint32_t	csum_type = cont_props.dcp_csum_type;
+	bool		dedup_only = false;
 
 	if (csum_type == DAOS_PROP_CO_CSUM_OFF) {
 		dedup_only = true;
@@ -1715,17 +1715,6 @@ out:
 	return rc;
 }
 
-static void
-csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
-{
-	struct csum_ft *csum_algo;
-
-	csum_algo = daos_csum_type2algo(cont_glob->dcg_csum_type);
-	daos_csummer_init(&cont->dc_csummer, csum_algo,
-			  cont_glob->dcg_csum_chunksize,
-			  cont_glob->dcg_csum_srv_verify);
-}
-
 static int
 dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	    daos_handle_t *coh)
@@ -1773,7 +1762,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_chunksize = cont_glob->dcg_csum_chunksize;
 	cont->dc_props.dcp_dedup_size = cont_glob->dcg_dedup_th;
 	cont->dc_props.dcp_dedup_verify = cont_glob->dcg_dedup_verify;
-	csum_cont_g2l(cont_glob, cont);
+	dc_cont_csum_init(cont, cont->dc_props);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
