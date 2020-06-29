@@ -271,6 +271,10 @@ pool_component_unavail(struct pool_component *comp, bool for_reint)
 	if ((status == PO_COMP_ST_DOWN) || (status == PO_COMP_ST_DOWNOUT))
 		return true;
 
+	/* Targets being drained should not be used */
+	if (status == PO_COMP_ST_DRAIN)
+		return true;
+
 	/*
 	 * The component is unavailable if it's currently being reintegrated.
 	 * However when calculating the data movement for reintegration
