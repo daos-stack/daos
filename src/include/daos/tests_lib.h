@@ -210,7 +210,7 @@ static inline void
 dts_append_config(char buf[DTS_CFG_MAX], const char *format, ...)
 {
 	va_list	ap;
-	int	count = strlen(buf);
+	int	count = strnlen(buf, DTS_CFG_MAX);
 
 	va_start(ap, format);
 	vsnprintf(buf + count, DTS_CFG_MAX - count, format, ap);
