@@ -8,7 +8,7 @@ if ls /tmp/daos*.log > /dev/null; then
   mv /tmp/daos*.log run_test_valgrind.sh/
 fi
 ls
-ls valgrind_memcheck_results || echo "marj>> doesn't exist?"
+ls valgrind_memcheck_results || echo "marj>> does not exist?"
 if ls valgrind_memcheck_results/*.xml > /dev/null; then
   mv valgrind_memcheck_results/*.xml run_test_valgrind.sh/
 fi

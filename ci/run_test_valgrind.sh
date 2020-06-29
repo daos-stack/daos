@@ -14,7 +14,7 @@ ln -s ../../../../../../../../src/control \
   "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
 DAOS_BASE=${SL_PREFIX%/install*}
 ls
-rm -rf valgrind_memcheck_results || echo "marj>> doesn't exist? "
+rm -rf valgrind_memcheck_results || echo "marj>> does not exist? "
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
