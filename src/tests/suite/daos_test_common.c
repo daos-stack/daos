@@ -914,12 +914,6 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	assert_int_equal(rc, 0);
 }
 
-int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
-                        daos_mgmt_pool_info_t *pools)
-{
-	return 0;
-}
-
 struct daos_acl *
 get_daos_acl_with_owner_perms(uint64_t perms)
 {
@@ -1005,4 +999,37 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	daos_acl_free(acl);
 	D_FREE(user);
 	return prop;
+}
+
+/* JSON output handling for dmg command */
+static char *daos_dmg_json_contents(const char *dmg_cmd)
+{
+	char buffer[128];
+	char *result = "";
+
+	/* Need to make sure -j is in the dmg cmd? */
+	FILE* pipe = popen(dmg_cmd, "r");
+	if (!pipe) {
+		return "popen failed!";
+	}
+
+	// read till end of process:
+	while (!feof(pipe)) {
+	// use buffer to read and add to result
+	if (fgets(buffer, 128, pipe) != NULL)
+		result += buffer;
+	}
+
+	pclose(pipe);
+	return result;
+}
+
+int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
+			daos_mgmt_pool_info_t *pools)
+{
+	char *json = NULL;
+
+	json = daos_dmg_json_contents("dmg pool list -i -j");
+	print_message("npools %d, %s\n", *npools, json)
+	return 0;
 }

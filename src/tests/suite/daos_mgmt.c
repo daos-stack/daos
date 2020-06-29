@@ -304,6 +304,9 @@ list_pools_test(void **state)
 
 	/***** Test: retrieve number of pools in system *****/
 	npools = npools_orig = 0xABC0; /* Junk value (e.g., uninitialized) */
+	/* test only */
+	rc = daos_json_list_pool(arg, &npools, NULL /* pools */);
+
 	rc = daos_mgmt_list_pools(arg->group, &npools, NULL /* pools */,
 			NULL /* ev */);
 	assert_int_equal(rc, 0);
