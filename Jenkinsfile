@@ -1055,7 +1055,7 @@ pipeline {
                                            'centos7-gcc-build-vars' ],
                                 script: "SSH_KEY_ARGS=${env.SSH_KEY_ARGS} " +
                                         "NODELIST=${env.NODELIST} " +
-                                        'ci/run_test_valgrind.sh',
+                                        'ci/run_test_valgrind.sh'
                         }
                     }
                     post {
