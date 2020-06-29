@@ -72,7 +72,7 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val	= 1,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM,
-		.dpe_val	= DAOS_PROP_CO_CSUM_OFF,
+		.dpe_val	= DAOS_PROP_CO_CSUM_CRC64,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM_CHUNK_SIZE,
 		.dpe_val	= 32 * 1024, /** 32K */
