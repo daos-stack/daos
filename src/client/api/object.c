@@ -160,19 +160,10 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev)
 {
 	tse_task_t	*task;
-	uint32_t	*ptr = NULL;
-	uint32_t	 extra_flags = 0;
-	uint32_t	 shard;
 	int		 rc;
 
-	if (DAOS_FAIL_CHECK(DAOS_OBJ_SPECIAL_SHARD)) {
-		extra_flags = DIOF_TO_SPEC_SHARD;
-		shard = daos_fail_value_get();
-		ptr = &shard;
-	}
-
-	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, extra_flags,
-				      iods, sgls, maps, ptr, ev, NULL, &task);
+	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, 0, iods,
+				      sgls, maps, NULL, ev, NULL, &task);
 	if (rc)
 		return rc;
 

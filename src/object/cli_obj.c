@@ -94,6 +94,7 @@ struct obj_auxi_args {
 					 ec_in_recov:1;
 	/* request flags. currently only: ORF_RESEND, ORF_CSUM_REPORT */
 	uint32_t			 flags;
+	uint32_t			 specified_shard;
 	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
@@ -2854,11 +2855,23 @@ dc_obj_fetch_task(tse_task_t *task)
 	}
 
 	dkey_hash = obj_dkey2hash(args->dkey);
+
+	if (args->extra_arg == NULL &&
+	    DAOS_FAIL_CHECK(DAOS_OBJ_SPECIAL_SHARD))
+		args->extra_flags |= DIOF_TO_SPEC_SHARD;
+
 	obj_auxi->spec_shard = (args->extra_flags & DIOF_TO_SPEC_SHARD) != 0;
 	if (obj_auxi->spec_shard) {
 		D_ASSERT(!obj_auxi->to_leader);
 
-		shard = *(int *)args->extra_arg;
+		if (args->extra_arg != NULL) {
+			shard = *(int *)args->extra_arg;
+		} else if (obj_auxi->io_retry) {
+			shard = obj_auxi->specified_shard;
+		} else {
+			shard = daos_fail_value_get();
+			obj_auxi->specified_shard = shard;
+		}
 	} else {
 		obj_auxi->to_leader = (args->extra_flags & DIOF_TO_LEADER) != 0;
 	}
@@ -3094,7 +3107,12 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 		shard = dc_obj_anchor2shard(args->dkey_anchor);
 		obj_auxi->spec_shard = 1;
 	} else if (DAOS_FAIL_CHECK(DAOS_OBJ_SPECIAL_SHARD)) {
-		shard = daos_fail_value_get();
+		if (obj_auxi->io_retry) {
+			shard = obj_auxi->specified_shard;
+		} else {
+			shard = daos_fail_value_get();
+			obj_auxi->specified_shard = shard;
+		}
 		obj_auxi->spec_shard = 1;
 	} else {
 		obj_auxi->spec_shard = 0;
