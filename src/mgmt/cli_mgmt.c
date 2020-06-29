@@ -39,35 +39,6 @@
 #include "rpc.h"
 #include <errno.h>
 
-/* Define a custom allocator so we can log and use fault injection
- * in the DPRC code.
- */
-
-struct drpc_alloc {
-	ProtobufCAllocator	alloc;
-	bool			oom;
-};
-
-static void *drpc_alloc(void *arg, size_t size)
-{
-	struct drpc_alloc *alloc = arg;
-	void *buf;
-
-	D_ALLOC(buf, size);
-	if (!buf)
-		alloc->oom = true;
-	return buf;
-}
-
-static void drpc_free(void *allocater_data, void *pointer)
-{
-	D_FREE(pointer);
-}
-
-#define PROTO_ALLOCATOR_INIT(self) {.alloc.alloc = drpc_alloc,	\
-			.alloc.free = drpc_free,\
-			.alloc.allocator_data = &self}
-
 struct cp_arg {
 	struct dc_mgmt_sys	*sys;
 	crt_rpc_t		*rpc;

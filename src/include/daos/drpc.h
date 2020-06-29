@@ -44,6 +44,25 @@ struct unixcomm {
 
 typedef void (*drpc_handler_t)(Drpc__Call *, Drpc__Response *);
 
+/* Define a custom allocator so we can log and use fault injection
+ * in the DRPC code.
+ */
+
+struct drpc_alloc {
+	ProtobufCAllocator	alloc;
+	bool			oom;
+};
+
+void *
+daos_drpc_alloc(void *arg, size_t size);
+
+void
+daos_drpc_free(void *allocater_data, void *pointer);
+
+#define PROTO_ALLOCATOR_INIT(self) {.alloc.alloc = daos_drpc_alloc,	\
+				    .alloc.free = daos_drpc_free,	\
+				    .alloc.allocator_data = &self}
+
 /**
  * dRPC connection context. This includes all details needed to communicate
  * on the dRPC channel.

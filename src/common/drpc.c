@@ -39,12 +39,8 @@
  * in the DRPC code.
  */
 
-struct drpc_alloc {
-	ProtobufCAllocator	alloc;
-	bool			oom;
-};
-
-static void *drpc_alloc(void *arg, size_t size)
+void *
+daos_drpc_alloc(void *arg, size_t size)
 {
 	struct drpc_alloc *alloc = arg;
 	void *buf;
@@ -55,14 +51,11 @@ static void *drpc_alloc(void *arg, size_t size)
 	return buf;
 }
 
-static void drpc_free(void *allocater_data, void *pointer)
+void
+daos_drpc_free(void *allocater_data, void *pointer)
 {
 	D_FREE(pointer);
 }
-
-#define PROTO_ALLOCATOR_INIT(self) {.alloc.alloc = drpc_alloc,	\
-			.alloc.free = drpc_free,\
-			.alloc.allocator_data = &self}
 
 /**
  * Allocate and initialize a new dRPC call Protobuf structure for a given dRPC
@@ -172,12 +165,12 @@ unixcomm_close(struct unixcomm *handle)
 }
 
 static int
-new_unixcomm_socket(int flags, struct unixcomm **newcomm)
+new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 {
 	struct unixcomm	*comm;
 	int		ret;
 
-	*newcomm = NULL;
+	*newcommp = NULL;
 
 	D_ALLOC_PTR(comm);
 	if (comm == NULL)
@@ -203,7 +196,7 @@ new_unixcomm_socket(int flags, struct unixcomm **newcomm)
 
 	comm->flags = flags;
 
-	*newcomm = comm;
+	*newcommp = comm;
 
 	return 0;
 }
@@ -248,13 +241,13 @@ unixcomm_connect(char *sockaddr, int flags, struct unixcomm **newcommp)
 }
 
 static int
-unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcomm)
+unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
 {
 	struct sockaddr_un	address;
 	struct unixcomm		*comm;
 	int			ret;
 
-	*newcomm = NULL;
+	*newcommp = NULL;
 
 	ret = new_unixcomm_socket(flags, &comm);
 	if (ret != 0)
@@ -280,7 +273,7 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcomm)
 		return ret;
 	}
 
-	*newcomm = comm;
+	*newcommp = comm;
 
 	return 0;
 }
