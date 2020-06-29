@@ -36,7 +36,7 @@
 #include <fcntl.h>
 
 /* Define a custom allocator so we can log and use fault injection
- * in the DPRC code.
+ * in the DRPC code.
  */
 
 struct drpc_alloc {
@@ -155,9 +155,10 @@ unixcomm_close(struct unixcomm *handle)
 	int fd;
 
 	if (!handle)
-		return -DER_SUCCESS;
+		return 0;
 
 	fd = handle->fd;
+	errno = 0;
 	ret = close(fd);
 	D_FREE(handle);
 
@@ -167,13 +168,14 @@ unixcomm_close(struct unixcomm *handle)
 		return daos_errno2der(errno);
 	}
 
-	return -DER_SUCCESS;
+	return 0;
 }
 
 static int
 new_unixcomm_socket(int flags, struct unixcomm **newcomm)
 {
 	struct unixcomm	*comm;
+	int		ret;
 
 	*newcomm = NULL;
 
@@ -184,24 +186,26 @@ new_unixcomm_socket(int flags, struct unixcomm **newcomm)
 	errno = 0;
 	comm->fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (comm->fd < 0) {
+		ret = daos_errno2der(errno);
 		D_ERROR("Failed to open socket, errno=%d\n", errno);
 		D_FREE(comm);
-		return -DER_MISC;
+		return ret;
 	}
 
 	errno = 0;
 	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
+		ret = daos_errno2der(errno);
 		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
 			comm->fd, errno);
 		unixcomm_close(comm);
-		return -DER_MISC;
+		return ret;
 	}
 
 	comm->flags = flags;
 
 	*newcomm = comm;
 
-	return -DER_SUCCESS;
+	return 0;
 }
 
 static void
@@ -223,22 +227,24 @@ unixcomm_connect(char *sockaddr, int flags, struct unixcomm **newcommp)
 	*newcommp = NULL;
 
 	ret = new_unixcomm_socket(flags, &handle);
-	if (ret != -DER_SUCCESS)
+	if (ret != 0)
 		return ret;
 
 	fill_socket_address(sockaddr, &address);
+	errno = 0;
 	ret = connect(handle->fd, (struct sockaddr *) &address,
 			sizeof(address));
 	if (ret < 0) {
+		ret = daos_errno2der(ret);
 		D_ERROR("Failed to connect to %s, errno=%d(%s)\n",
 			address.sun_path, errno, strerror(errno));
 		unixcomm_close(handle);
-		return -DER_MISC;
+		return ret;
 	}
 
 	*newcommp = handle;
 
-	return -DER_SUCCESS;
+	return 0;
 }
 
 static int
@@ -246,35 +252,37 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcomm)
 {
 	struct sockaddr_un	address;
 	struct unixcomm		*comm;
-	int rc;
+	int			ret;
 
 	*newcomm = NULL;
 
-	rc = new_unixcomm_socket(flags, &comm);
-	if (rc != -DER_SUCCESS)
-		return rc;
+	ret = new_unixcomm_socket(flags, &comm);
+	if (ret != 0)
+		return ret;
 
 	fill_socket_address(sockaddr, &address);
 	errno = 0;
 	if (bind(comm->fd, (struct sockaddr *)&address,
 		 sizeof(struct sockaddr_un)) < 0) {
+		ret = daos_errno2der(errno);
 		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
 			sockaddr, comm->fd, errno);
 		unixcomm_close(comm);
-		return -DER_MISC;
+		return ret;
 	}
 
 	errno = 0;
 	if (listen(comm->fd, SOMAXCONN) < 0) {
+		ret = daos_errno2der(errno);
 		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
 			comm->fd, errno);
 		unixcomm_close(comm);
-		return -DER_MISC;
+		return ret;
 	}
 
 	*newcomm = comm;
 
-	return -DER_SUCCESS;
+	return 0;
 }
 
 static struct unixcomm *
@@ -313,6 +321,7 @@ unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 	msg.msg_iov = iov;
 	msg.msg_iovlen = 1;
 
+	errno = 0;
 	bsent = sendmsg(hndl->fd, &msg, 0);
 	if (bsent < 0) {
 		D_ERROR("Failed to sendmsg on socket fd %d, errno=%d\n",
@@ -342,6 +351,7 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 	msg.msg_iov = iov;
 	msg.msg_iovlen = 1;
 
+	errno = 0;
 	brcvd = recvmsg(hndl->fd, &msg, 0);
 	if (brcvd < 0) {
 		D_ERROR("Failed to recvmsg on socket fd %d, errno=%d\n",
@@ -392,14 +402,14 @@ int
 drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 			Drpc__Response **resp)
 {
-	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Drpc__Response	*response = NULL;
-	uint8_t		*messagePb;
-	uint8_t		*responseBuf;
-	int		pbLen;
-	ssize_t		sent;
-	ssize_t		recv = 0;
-	int		ret;
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Drpc__Response		*response = NULL;
+	uint8_t			*messagePb;
+	uint8_t			*responseBuf;
+	int			pbLen;
+	ssize_t			sent;
+	ssize_t			recv = 0;
+	int			ret;
 
 	msg->sequence = ctx->sequence++;
 	pbLen = drpc_marshal_call(msg, &messagePb);
@@ -451,16 +461,17 @@ init_drpc_ctx(struct drpc *ctx, struct unixcomm *comm, drpc_handler_t handler)
 /**
  * Connect to a drpc socket server on the given path.
  *
- * \param sockaddr	Path to unix domain socket in the filesystem.
+ * \param[in]  sockaddr	Path to unix domain socket in the filesystem.
+ * \param[out]    drpcp Drpc context representing the connection.
  *
- * \returns		Drpc context representing the connection.
+ * \returns	On success returns 0 otherwise returns negative error condition.
  */
 int
 drpc_connect(char *sockaddr, struct drpc **drpcp)
 {
 	struct drpc	*ctx;
 	struct unixcomm	*comms;
-	int rc;
+	int		ret;
 
 	*drpcp = NULL;
 
@@ -468,16 +479,16 @@ drpc_connect(char *sockaddr, struct drpc **drpcp)
 	if (!ctx)
 		return -DER_NOMEM;
 
-	rc = unixcomm_connect(sockaddr, 0, &comms);
-	if (rc != -DER_SUCCESS) {
+	ret = unixcomm_connect(sockaddr, 0, &comms);
+	if (ret != 0) {
 		D_FREE(ctx);
-		return rc;
+		return ret;
 	}
 
 	init_drpc_ctx(ctx, comms, NULL);
 	*drpcp = ctx;
 
-	return -DER_SUCCESS;
+	return 0;
 }
 
 /**
@@ -509,7 +520,7 @@ drpc_listen(char *sockaddr, drpc_handler_t handler)
 		return NULL;
 
 	rc = unixcomm_listen(sockaddr, O_NONBLOCK, &comm);
-	if (rc != -DER_SUCCESS) {
+	if (rc != 0) {
 		D_FREE(ctx);
 		return NULL;
 	}
@@ -592,11 +603,11 @@ send_response(struct drpc *ctx, Drpc__Response *response)
 static int
 get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 {
-	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
-	int		rc;
-	uint8_t		*buffer;
-	size_t		buffer_size = UNIXCOMM_MAXMSGSIZE;
-	ssize_t		message_len = 0;
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int			rc;
+	uint8_t			*buffer;
+	size_t			buffer_size = UNIXCOMM_MAXMSGSIZE;
+	ssize_t			message_len = 0;
 
 	D_ALLOC(buffer, buffer_size);
 	if (buffer == NULL)
@@ -604,7 +615,7 @@ get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 
 	rc = unixcomm_recv(ctx->comm, buffer, buffer_size,
 				&message_len);
-	if (rc != DER_SUCCESS) {
+	if (rc != 0) {
 		D_FREE(buffer);
 		return rc;
 	}
