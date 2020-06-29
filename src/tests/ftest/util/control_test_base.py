@@ -68,17 +68,34 @@ class ControlTestBase(TestWithServers):
 
         return get_host_data(self.dmg.hostlist, cmd, text, error, 20)
 
-    def get_smd_info(self, devices=False, pools=False):
-        """Get device smd information.
+    def get_device_info(self, rank=None, health=None):
+        """Query storage device information.
 
         Args:
-            devices (bool, optional): Get devices info. Defaults to False.
-            pools (bool, optional): Get pool info. Defaults to False.
+            rank (int, optional): Limit response to devices on this rank.
+                Defaults to None.
+            health (bool, optional): Include device health in response.
+                Defaults to false.
 
         Returns:
-            list: device info containing lists with [UUID, VOS tgt IDs, blobs].
+            list: device info containing lists with queried device information.
 
         """
-        kwargs = {"devices": devices, "pools": pools}
-        smd_info = self.get_dmg_output("storage_query_smd", **kwargs)
-        return [smd_info[i:(i + 2)] for i in range(0, len(smd_info), 2)]
+        kwargs = {"rank": rank, "health": health}
+        if health:
+            method_regex = "storage_query_device_health"
+        else:
+            method_regex = "storage_query_list_devices"
+        return self.get_dmg_output(method_regex, **kwargs)
+
+    def get_pool_info(self, uuid=None, rank=None, verbose=False):
+        """Query pool information.
+
+        Args:
+            uuid (str): Device UUID to query. Defaults to None.
+            rank (int, optional): Limit response to devices on this rank.
+                Defaults to None.
+            verbose (bool, optional): create verbose output. Defaults to False.
+        """
+        kwargs = {"uuid": uuid, "rank": rank, "verbose": verbose}
+        return self.get_dmg_output("storage_query_list_pools", **kwargs)
