@@ -646,6 +646,7 @@ int dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
 		daos_anchor_t *anchor);
 
 int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
+		unsigned int flags, unsigned int shard,
 		daos_key_t *dkey, unsigned int nr,
 		daos_iod_t *iods, d_sg_list_t *sgls,
 		daos_iom_t *maps);
