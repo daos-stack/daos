@@ -7,6 +7,11 @@ mkdir run_test_valgrind.sh
 if ls /tmp/daos*.log > /dev/null; then
   mv /tmp/daos*.log run_test_valgrind.sh/
 fi
+ls
+ls valgrind_memcheck_results || echo "marj>> doesn't exist?"
+if ls valgrind_memcheck_results/*.xml > /dev/null; then
+  mv valgrind_memcheck_results/*.xml run_test_valgrind.sh/
+fi
 # servers can sometimes take a while to stop when the test is done
 x=0
 while [ "$x" -lt 10 ] &&
