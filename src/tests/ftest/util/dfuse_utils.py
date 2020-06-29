@@ -198,9 +198,12 @@ class Dfuse(DfuseCommand):
                     "following hosts: {}".format(self.mount_dir.value,
                                                  failed_nodes))
 
-    def run(self):
+    def run(self, check=True):
         """Run the dfuse command.
 
+        Args:
+            check (bool): Check if dfuse mounted properly after
+                mount is executed.
         Raises:
             CommandFailure: In case dfuse run command fails
 
@@ -232,13 +235,15 @@ class Dfuse(DfuseCommand):
                 "Error starting dfuse on the following hosts: {}".format(
                     error_hosts))
 
-        if not self.check_running(fail_on_error=False):
-            self.log.info('Waiting five seconds for dfuse to start')
-            time.sleep(5)
+        if check:
             if not self.check_running(fail_on_error=False):
-                self.log.info('Waiting twenty five seconds for dfuse to start')
-                time.sleep(25)
-                self.check_running()
+                self.log.info('Waiting five seconds for dfuse to start')
+                time.sleep(5)
+                if not self.check_running(fail_on_error=False):
+                    self.log.info('Waiting twenty five seconds for dfuse \
+                        to start')
+                    time.sleep(25)
+                    self.check_running()
 
     def check_running(self, fail_on_error=True):
         """Check dfuse is running.
