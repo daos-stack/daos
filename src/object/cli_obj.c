@@ -730,6 +730,7 @@ obj_ec_get_degrade(struct obj_auxi_args *obj_auxi, uint16_t fail_tgt_idx,
 		if (!obj_ec_tgt_in_err(err_list, nerrs, i)) {
 			*parity_tgt_idx = i;
 			with_parity = true;
+			break;
 		}
 	}
 	D_ASSERT(with_parity);
@@ -760,6 +761,14 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	start_shard = shard - ec_tgt_idx;
 shard_open:
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
+	if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH &&
+	    DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_FETCH) &&
+	    daos_shard_in_fail_value(shard + 1)) {
+		rc = -DER_NONEXIST;
+		D_ERROR("obj_shard_open failed on shard %d, "DF_RC"\n",
+			shard, DP_RC(rc));
+	}
+
 	if (rc == 0) {
 		if (obj_op_is_ec_fetch(obj_auxi) && obj_shard->do_rebuilding) {
 			ec_degrade = true;
@@ -793,7 +802,15 @@ shard_open:
 		}
 		D_ASSERT(ec_deg_tgt >=
 			 obj_ec_data_tgt_nr(obj_auxi->reasb_req.orr_oca));
+		if (obj_auxi->ec_in_recov) {
+			D_DEBUG(DB_IO, DF_OID" shard %d failed in recovery.\n",
+				DP_OID(obj->cob_md.omd_id), shard);
+			D_GOTO(out, rc = -DER_BAD_TARGET);
+		}
 		shard = start_shard + ec_deg_tgt;
+		D_DEBUG(DB_IO, DF_OID" shard %d fetch re-direct to shard %d.\n",
+			DP_OID(obj->cob_md.omd_id), start_shard + ec_tgt_idx,
+			start_shard + ec_deg_tgt);
 		ec_degrade = false;
 		goto shard_open;
 	}
@@ -2508,6 +2525,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 	if (!obj_auxi->io_retry) {
 		struct obj_ec_fail_info	*fail_info;
+		bool new_tgt_fail = false;
 
 		switch (obj_auxi->opc) {
 		case DAOS_OBJ_RPC_SYNC:
@@ -2550,8 +2568,11 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_bulk_fini(obj_auxi);
 
 		fail_info = obj_auxi->reasb_req.orr_fail;
-		if (task->dt_result == 0 && fail_info != NULL) {
-			if (obj_auxi->ec_wait_recov) {
+		new_tgt_fail = obj_auxi->ec_wait_recov &&
+			       task->dt_result == -DER_BAD_TARGET;
+		if (fail_info != NULL && (task->dt_result == 0 ||
+					  new_tgt_fail)) {
+			if (obj_auxi->ec_wait_recov && task->dt_result == 0) {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
 
 				obj_ec_recov_data(&obj_auxi->reasb_req,
@@ -2559,7 +2580,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 				obj_reasb_req_fini(obj_auxi);
 				memset(obj_auxi, 0, sizeof(*obj_auxi));
-			} else if (!obj_auxi->ec_in_recov) {
+			} else if (!obj_auxi->ec_in_recov || new_tgt_fail) {
+				task->dt_result = 0;
 				obj_ec_recov_cb(task, obj, obj_auxi);
 			}
 		} else {
