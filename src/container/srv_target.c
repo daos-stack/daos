@@ -45,7 +45,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/iv.h>
-#include <daos_srv/obj_ec.h>
+#include <daos_srv/srv_obj_ec.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
