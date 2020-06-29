@@ -528,6 +528,8 @@ public class DaosFileSystem extends FileSystem {
       if (!path.startsWith(unsPrefix)) {
         path = path.startsWith("/") ? (qualifiedUnsPrefix + path) :
           (qualifiedUnsWorkPath + "/" + path);
+      } else {
+        path = qualifiedUnsPrefix.substring(0, qualifiedUnsPrefix.indexOf(unsPrefix)) + path;
       }
       return new Path(path);
     }
