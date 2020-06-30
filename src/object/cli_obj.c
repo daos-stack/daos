@@ -675,6 +675,9 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	}
 	obj_auxi->iod_nr = args->nr;
 
+	if (args->extra_flags & DIOF_CHECK_EXISTENCE)
+		return 0;
+
 	/** XXX possible re-order/merge for both replica and EC */
 	if (!daos_oclass_is_ec(oid, &oca))
 		return 0;
@@ -2555,13 +2558,20 @@ obj_comp_cb(tse_task_t *task, void *data)
 		case DAOS_OBJ_RPC_UPDATE:
 			if (daos_handle_is_valid(obj_auxi->th))
 				dc_tx_non_cpd_cb(obj_auxi->th, task->dt_result);
-			/* Fall through. */
-		case DAOS_OBJ_RPC_FETCH:
+			obj_rw_csum_destroy(obj, obj_auxi);
+			break;
+		case DAOS_OBJ_RPC_FETCH: {
+			daos_obj_fetch_t	*args = dc_task_get_args(task);
+
 			/** checksums sent and not retrying,
 			 * can destroy now
 			 */
 			obj_rw_csum_destroy(obj, obj_auxi);
+
+			if (args->extra_flags & DIOF_CHECK_EXISTENCE)
+				dc_tx_check_existence_cb(args->extra_arg, task);
 			break;
+		}
 		case DAOS_OBJ_RPC_PUNCH:
 		case DAOS_OBJ_RPC_PUNCH_DKEYS:
 		case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -2915,6 +2925,9 @@ dc_obj_fetch_task(tse_task_t *task)
 			tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
 	}
 
+	if (args->extra_flags & DIOF_CHECK_EXISTENCE)
+		tgt_bitmap = NIL_BITMAP;
+
 	rc = obj_req_get_tgts(obj, (int *)&shard, args->dkey, dkey_hash,
 			      tgt_bitmap, map_ver, obj_auxi->to_leader,
 			      obj_auxi->spec_shard, obj_auxi);
@@ -3043,7 +3056,7 @@ dc_obj_update_task(tse_task_t *task)
 
 	if (daos_handle_is_valid(args->th)) {
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, args, DAOS_OBJ_RPC_UPDATE);
+		rc = dc_tx_attach(args->th, args, DAOS_OBJ_RPC_UPDATE, task);
 		goto comp;
 	}
 	/* submit the update */
@@ -3312,7 +3325,7 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 
 	if (daos_handle_is_valid(args->th)) {
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, args, opc);
+		rc = dc_tx_attach(args->th, args, opc, task);
 		goto comp;
 	}
 	/* submit the punch */
