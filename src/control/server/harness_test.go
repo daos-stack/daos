@@ -51,7 +51,7 @@ import (
 
 const (
 	testShortTimeout   = 60 * time.Millisecond
-	testMediumTimeout  = 10 * testShortTimeout
+	testMediumTimeout  = 30 * testShortTimeout
 	testLongTimeout    = 2 * testMediumTimeout
 	delayedFailTimeout = 5 * testShortTimeout
 )
@@ -448,8 +448,8 @@ func TestServer_Harness_Start(t *testing.T) {
 			}(ctx)
 
 			waitDrpcReady := make(chan struct{})
+			t.Log("waiting for dRPC to be ready")
 			go func(ctxIn context.Context) {
-				t.Log("waiting for dRPC to be ready")
 				for {
 					ready := true
 					for _, srv := range instances {
@@ -504,8 +504,8 @@ func TestServer_Harness_Start(t *testing.T) {
 			}
 
 			waitReady := make(chan struct{})
+			t.Log("waitng for ready")
 			go func(ctxIn context.Context) {
-				t.Log("waitng for ready")
 				for {
 					if len(harness.readyRanks()) == len(instances) {
 						close(waitReady)
@@ -523,7 +523,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			case <-waitReady:
 				t.Log("instances setup and ready")
 			case <-ctx.Done():
-				t.Log("instances did not get to ready state")
+				t.Logf("instances did not get to ready state (%s)", ctx.Err())
 			}
 
 			if atomic.LoadUint32(&instanceStarts) != tc.expStartCount {
