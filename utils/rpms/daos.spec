@@ -242,6 +242,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_bindir}/rdbt
 %{_bindir}/vos_size_dfs_sample.py
 %{_bindir}/vos_size.py
+%{_libdir}/libdfs_internal.so
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
