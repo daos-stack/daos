@@ -60,7 +60,7 @@ struct vos_io_context {
 	unsigned int		 ic_sgl_at;
 	unsigned int		 ic_iov_at;
 	/** reserved SCM extents */
-	struct vos_rsrvd_scm	 ic_rsrvd_scm;
+	struct vos_rsrvd_scm	*ic_rsrvd_scm;
 	/** reserved offsets for SCM update */
 	umem_off_t		*ic_umoffs;
 	unsigned int		 ic_umoffs_cnt;
@@ -132,16 +132,12 @@ iod_empty_sgl(struct vos_io_context *ioc, unsigned int sgl_at)
 static void
 vos_ioc_reserve_fini(struct vos_io_context *ioc)
 {
-	struct vos_rsrvd_scm *rsrvd_scm = &ioc->ic_rsrvd_scm;
-
-	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
-	D_ASSERT(rsrvd_scm->rs_actv_at == 0);
-
-	if (rsrvd_scm->rs_actv_cnt != 0) {
-		D_FREE(rsrvd_scm->rs_actv);
-		rsrvd_scm->rs_actv = NULL;
+	if (ioc->ic_rsrvd_scm != NULL) {
+		D_ASSERT(ioc->ic_rsrvd_scm->rs_actv_at == 0);
+		D_FREE(ioc->ic_rsrvd_scm);
 	}
 
+	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
 	if (ioc->ic_umoffs != NULL) {
 		D_FREE(ioc->ic_umoffs);
 		ioc->ic_umoffs = NULL;
@@ -151,8 +147,9 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 static int
 vos_ioc_reserve_init(struct vos_io_context *ioc)
 {
-	struct vos_rsrvd_scm	*rsrvd_scm;
-	int			 i, total_acts = 0;
+	size_t	size;
+	int	total_acts = 0;
+	int	i;
 
 	if (!ioc->ic_update)
 		return 0;
@@ -170,12 +167,13 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 	if (vos_ioc2umm(ioc)->umm_ops->mo_reserve == NULL)
 		return 0;
 
-	rsrvd_scm = &ioc->ic_rsrvd_scm;
-	D_ALLOC_ARRAY(rsrvd_scm->rs_actv, total_acts);
-	if (rsrvd_scm->rs_actv == NULL)
+	size = sizeof(*ioc->ic_rsrvd_scm) +
+		sizeof(struct pobj_action) * total_acts;
+	D_ALLOC(ioc->ic_rsrvd_scm, size);
+	if (ioc->ic_rsrvd_scm == NULL)
 		return -DER_NOMEM;
 
-	rsrvd_scm->rs_actv_cnt = total_acts;
+	ioc->ic_rsrvd_scm->rs_actv_cnt = total_acts;
 	return 0;
 }
 
@@ -1321,8 +1319,9 @@ vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 	if (vos_cont2umm(cont)->umm_ops->mo_reserve != NULL) {
 		struct pobj_action *act;
 
+		D_ASSERT(rsrvd_scm != NULL);
 		D_ASSERT(rsrvd_scm->rs_actv_cnt > rsrvd_scm->rs_actv_at);
-		D_ASSERT(rsrvd_scm->rs_actv != NULL);
+
 		act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
 
 		umoff = umem_reserve(vos_cont2umm(cont), act, size);
@@ -1375,7 +1374,7 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	if (media == DAOS_MEDIA_SCM) {
 		umem_off_t	umoff;
 
-		umoff = vos_reserve_scm(ioc->ic_cont, &ioc->ic_rsrvd_scm, size);
+		umoff = vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size);
 		if (!UMOFF_IS_NULL(umoff)) {
 			ioc->ic_umoffs[ioc->ic_umoffs_cnt] = umoff;
 			ioc->ic_umoffs_cnt++;
@@ -1569,11 +1568,11 @@ vos_publish_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 {
 	int	rc = 0;
 
-	D_ASSERT(rsrvd_scm->rs_actv_at <= rsrvd_scm->rs_actv_cnt);
-	if (rsrvd_scm->rs_actv_at == 0)
+	if (rsrvd_scm == NULL || rsrvd_scm->rs_actv_at == 0)
 		return 0;
 
-	D_ASSERT(rsrvd_scm->rs_actv != NULL);
+	D_ASSERT(rsrvd_scm->rs_actv_at <= rsrvd_scm->rs_actv_cnt);
+
 	if (publish)
 		rc = umem_tx_publish(vos_cont2umm(cont), rsrvd_scm->rs_actv,
 				     rsrvd_scm->rs_actv_at);
@@ -1617,7 +1616,7 @@ update_cancel(struct vos_io_context *ioc)
 
 	/* Cancel SCM reservations or free persistent allocations */
 	if (vos_cont2umm(ioc->ic_cont)->umm_ops->mo_reserve != NULL) {
-		vos_publish_scm(ioc->ic_cont, &ioc->ic_rsrvd_scm, false);
+		vos_publish_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, false);
 	} else if (ioc->ic_umoffs_cnt != 0) {
 		struct umem_instance *umem = vos_ioc2umm(ioc);
 		int i;
@@ -1720,8 +1719,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	umem = vos_ioc2umm(ioc);
 
-	err = umem_tx_begin(umem, vos_txd_get());
-	if (err)
+	err = vos_tx_begin(dth, umem);
+	if (err != 0)
 		goto out;
 
 	vos_dth_set(dth);
@@ -1749,13 +1748,6 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
 		ioc->ic_read_conflict = true;
 
-	/* Publish SCM reservations */
-	err = vos_publish_scm(ioc->ic_cont, &ioc->ic_rsrvd_scm, true);
-	if (err) {
-		D_ERROR("Publish SCM failed. "DF_RC"\n", DP_RC(err));
-		goto abort;
-	}
-
 	/* Update tree index */
 	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ? dth->dth_op_seq : 1);
 	if (err) {
@@ -1772,23 +1764,36 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 	}
 
-	/* Publish NVMe reservations */
-	err = vos_publish_blocks(ioc->ic_cont, &ioc->ic_blk_exts, true,
-				 VOS_IOS_GENERIC);
+	if (dth != NULL) {
+		struct dtx_rsrvd_uint	*dru;
 
-	if (dth != NULL && err == 0)
-		err = vos_dtx_prepared(dth);
+		D_ASSERT(dth->dth_op_seq >= 1);
+
+		dru = &dth->dth_rsrvds[dth->dth_op_seq - 1];
+		dru->dru_scm = ioc->ic_rsrvd_scm;
+		ioc->ic_rsrvd_scm = NULL;
+
+		D_INIT_LIST_HEAD(&dru->dru_nvme);
+		d_list_splice_init(&ioc->ic_blk_exts, &dru->dru_nvme);
+	} else {
+		/* Publish SCM reservations */
+		err = vos_publish_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, true);
+		if (err == 0)
+			/* Publish NVMe reservations */
+			err = vos_publish_blocks(ioc->ic_cont,
+						 &ioc->ic_blk_exts, true,
+						 VOS_IOS_GENERIC);
+	}
 
 abort:
-	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
+	err = vos_tx_end(dth, umem, err);
+
 out:
-	if (err != 0) {
-		vos_dtx_cleanup_dth(dth);
+	if (err != 0)
 		update_cancel(ioc);
-	} else if (daes != NULL) {
+	else if (daes != NULL)
 		vos_dtx_post_handle(ioc->ic_cont, daes,
 				    dth->dth_dti_cos_count, false);
-	}
 
 	D_FREE(daes);
 

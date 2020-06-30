@@ -101,8 +101,6 @@ void dtx_batched_commit(void *arg);
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 			  daos_unit_oid_t *oid, daos_epoch_t epoch,
 			  struct dtx_entry ***dtes);
-int dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
-		 uint64_t dkey_hash, int max, struct dtx_id **dtis);
 int dtx_lookup_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		   daos_unit_oid_t *oid, uint64_t dkey_hash);
 int dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
