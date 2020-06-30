@@ -829,22 +829,30 @@ $ sudo journalctl --unit daos_agent.service
 
 To validate that the DAOS system is properly installed, the `daos_test`
 suite can be executed. Ensure the DAOS Agent is configured before running
-`daos_test` and that the following environment variables are properly set:
+`daos_test`.  If the agent is using a non-default path for the socket, then
+configure `DAOS_AGENT_DRPC_DIR` in the client environment to point to this new
+location.
 
-- `CRT_PHY_ADDR_STR` must be set to match the provider specified in the server
-  yaml configuration file (e.g. export `CRT_PHY_ADDR_STR="ofi+sockets"`)
+DAOS automatically configures a client with a compatible fabric provider,
+network interface and network domain that will allow it to connect to the DAOS
+system.  A client application may override one or more of these settings by
+configuring environment variables in the client's shell prior to launch.
 
-- `OFI_INTERFACE` is set to the network interface you want to user on the client
-  node.
+To manually configure the fabric provider, set `CRT_PHY_ADDR_STR` such as:
+```
+export CRT_PHY_ADDR_STR="ofi+sockets"
+```
+To manually configure the network interface, set `OFI_INTERFACE` such as:
+```
+export OFI_INTERFACE=lo
+```
+When manually configuring an Infiniband device with a verbs provider, the network
+device domain is required.  To manually configure the domain, set `OFI_DOMAIN` such as:
+```
+export OFI_DOMAIN=hfi1_0
+```
 
-- `OFI_DOMAIN` must optionally be set for infiniband deployments.
-
-- `DAOS_AGENT_DRPC_DIR` must also optionally be set if the agent is using a
-  non-default path for the socket.
-
-While those environment variables need to be set up for DAOS v1.0, versions 1.2
-and upward automatically set up the environment via the agent and don't require
-any special environment set up to run applications.
+Launch the client application:
 
 ```bash
 mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
