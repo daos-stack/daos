@@ -507,21 +507,23 @@ class DmgCommand(DmgCommandBase):
         self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
         return self._get_result()
 
-    def system_query(self, rank=None, verbose=False):
-        """Query the state of the system.
+    def system_query(self, rank=None, verbose=True):
+        """Query System to know status of servers
 
         Args:
-            rank (str, optional): rank to query. Defaults to None (query all).
-            verbose (bool, optional): create verbose output. Defaults to False.
+            rank: Specify specific rank to obtain it's status
+                  Defaults to None, which means report all available
+                  ranks.
+            verbose (bool): To obtain detailed query report
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg system query command fails.
-
+            CommandFailure: if the dmg storage prepare command fails.
         """
+
         self.set_sub_command("system")
         self.sub_command_class.set_sub_command("query")
         self.sub_command_class.sub_command_class.rank.value = rank

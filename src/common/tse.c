@@ -852,7 +852,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	}
 
 	if (dtp->dtp_completed) {
-		D_ERROR("Can't add a depedency for a completed task (%p)\n",
+		D_ERROR("Can't add a dependency for a completed task (%p)\n",
 			task);
 		return -DER_NO_PERM;
 	}
@@ -982,7 +982,7 @@ tse_task_reinit(tse_task_t *task)
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (dsp->dsp_cancelling) {
-		D_ERROR("Scheduler is cancelling, can't re-insert task\n");
+		D_ERROR("Scheduler is canceling, can't re-insert task\n");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 

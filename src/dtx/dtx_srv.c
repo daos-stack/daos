@@ -64,8 +64,8 @@ dtx_handler(crt_rpc_t *rpc)
 				count = din->di_dtx_array.ca_count - i;
 
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count);
-			if (rc == 0 && rc1 != 0)
+			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, NULL);
+			if (rc == 0 && rc1 < 0)
 				rc = rc1;
 
 			i += count;
@@ -79,7 +79,7 @@ dtx_handler(crt_rpc_t *rpc)
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			rc1 = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
 					    dtis, count);
-			if (rc == 0 && rc1 != 0)
+			if (rc == 0 && rc1 < 0)
 				rc = rc1;
 
 			i += count;
@@ -91,7 +91,8 @@ dtx_handler(crt_rpc_t *rpc)
 			rc = -DER_PROTO;
 		else
 			rc = vos_dtx_check(cont->sc_hdl,
-					   din->di_dtx_array.ca_arrays);
+					   din->di_dtx_array.ca_arrays,
+					   NULL, NULL, false);
 		break;
 	default:
 		rc = -DER_INVAL;
@@ -119,8 +120,13 @@ dtx_init(void)
 {
 	int	rc;
 
-	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF, BTR_FEAT_UINT_KEY,
+	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
+				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 				   &dbtree_dtx_cf_ops);
+	if (rc == 0)
+		rc = dbtree_class_register(DBTREE_CLASS_DTX_COS, 0,
+					   &dtx_btr_cos_ops);
+
 	return rc;
 }
 

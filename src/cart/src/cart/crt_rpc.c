@@ -41,6 +41,8 @@
 
 #include "crt_internal.h"
 
+#define CRT_CTL_MAX_LOG_MSG_SIZE 256
+
 void
 crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 {
@@ -55,6 +57,30 @@ crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 		d_fault_inject_enable();
 	else
 		d_fault_inject_disable();
+
+	out_args->rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
+}
+
+void
+crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_log_add_msg_in	*in_args;
+	struct crt_ctl_log_add_msg_out	*out_args;
+	int				rc = 0;
+
+	in_args = crt_req_get(rpc_req);
+	out_args = crt_reply_get(rpc_req);
+
+	if (in_args->log_msg == NULL) {
+		D_ERROR("Empty log message\n");
+		rc = -DER_INVAL;
+	} else {
+		D_INFO("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
+			in_args->log_msg);
+	}
 
 	out_args->rc = rc;
 	rc = crt_reply_send(rpc_req);
@@ -172,6 +198,8 @@ CRT_RPC_DEFINE(crt_ctl_fi_toggle, CRT_ISEQ_CTL_FI_TOGGLE,
 	       CRT_OSEQ_CTL_FI_TOGGLE)
 
 CRT_RPC_DEFINE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
+CRT_RPC_DEFINE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
+		CRT_OSEQ_CTL_LOG_ADD_MSG)
 
 /* Define for crt_internal_rpcs[] array population below.
  * See CRT_INTERNAL_RPCS_LIST macro definition
@@ -1364,15 +1392,15 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 static inline void
 crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 {
-	uint32_t	xid;
+	uint64_t	rpcid;
 
-	xid = atomic_fetch_add(&crt_gdata.cg_xid, 1);
+	rpcid = atomic_fetch_add(&crt_gdata.cg_rpcid, 1);
 
 	rpc_priv->crp_req_hdr.cch_opc = opc;
-	rpc_priv->crp_req_hdr.cch_xid = xid;
+	rpc_priv->crp_req_hdr.cch_rpcid = rpcid;
 
 	rpc_priv->crp_reply_hdr.cch_opc = opc;
-	rpc_priv->crp_reply_hdr.cch_xid = xid;
+	rpc_priv->crp_reply_hdr.cch_rpcid = rpcid;
 }
 
 int

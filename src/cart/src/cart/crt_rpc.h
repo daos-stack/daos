@@ -97,8 +97,8 @@ struct crt_common_hdr {
 	d_rank_t	cch_src_rank;
 	/* tag to which rpc request was sent to */
 	uint32_t	cch_dst_tag;
-	/* Transfer id */
-	uint32_t	cch_xid;
+	/* RPC id */
+	uint64_t	cch_rpcid;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
@@ -200,7 +200,7 @@ struct crt_rpc_priv {
 				crp_have_ep:1,
 				/* RPC is tracked by the context */
 				crp_ctx_tracked:1,
-				/* 1 if RPC is succesfully put on the wire */
+				/* 1 if RPC is successfully put on the wire */
 				crp_on_wire:1;
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
@@ -289,7 +289,10 @@ struct crt_rpc_priv {
 		crt_hdlr_ctl_fi_attr_set, NULL),			\
 	X(CRT_OPC_CTL_LOG_SET,						\
 		0, &CQF_crt_ctl_log_set,				\
-		crt_hdlr_ctl_log_set, NULL)
+		crt_hdlr_ctl_log_set, NULL),				\
+	X(CRT_OPC_CTL_LOG_ADD_MSG,					\
+		0, &CQF_crt_ctl_log_add_msg,				\
+		crt_hdlr_ctl_log_add_msg, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -540,6 +543,15 @@ CRT_RPC_DECLARE(crt_ctl_fi_toggle,
 	((int32_t)		(rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
+
+#define CRT_ISEQ_CTL_LOG_ADD_MSG	/* input fields */	\
+	((d_string_t)		(log_msg)	CRT_VAR)
+
+#define CRT_OSEQ_CTL_LOG_ADD_MSG	/* output fields */	\
+	((int32_t)		(rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
+		CRT_OSEQ_CTL_LOG_ADD_MSG)
 
 /* Internal macros for crt_req_(add|dec)ref from within cart.  These take
  * a crt_internal_rpc pointer and provide better logging than the public

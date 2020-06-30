@@ -25,14 +25,21 @@ package main
 
 import (
 	"os"
+	"strings"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
+)
+
+const (
+	defaultExcludeInterfaces = "lo"
 )
 
 type netScanCmd struct {
 	logCmd
 	jsonOutputCmd
-	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is all providers)"`
+	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is all local providers)"`
 }
 
 func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
@@ -43,9 +50,6 @@ func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
 }
 
 func (cmd *netScanCmd) Execute(_ []string) error {
-	var provider string
-	defer os.Exit(0)
-
 	numaAware, err := netdetect.NumaAware()
 	if err != nil {
 		exitWithError(cmd.log, err)
@@ -56,33 +60,40 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		cmd.printUnlessJson("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
-	switch {
-	case len(cmd.FabricProvider) > 0:
-		provider = cmd.FabricProvider
-		cmd.printUnlessJson("Scanning fabric for provider: %s\n", provider)
-	default:
-		cmd.printUnlessJson("Scanning fabric for all providers\n")
+	provider := cmd.FabricProvider
+	if strings.EqualFold(cmd.FabricProvider, "all") {
+		provider = ""
 	}
 
-	results, err := netdetect.ScanFabric(provider)
+	results, err := netdetect.ScanFabric(provider, defaultExcludeInterfaces)
 	if err != nil {
 		exitWithError(cmd.log, err)
 		return nil
 	}
 
-	if provider == "" {
-		provider = "All"
-	}
-
-	cmd.printUnlessJson("\nFabric scan found %d devices matching the provider spec: %s\n\n", len(results), provider)
-
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(os.Stdout, results)
 	}
 
-	for _, sr := range results {
-		cmd.printUnlessJson("OFI_INTERFACE: %-16sCRT_PHY_ADDR_STR: %-25sNUMA affinity: %d", sr.DeviceName, sr.Provider, sr.NUMANode)
+	hf := &control.HostFabric{}
+	for _, fi := range results {
+		hf.AddInterface(&control.HostFabricInterface{
+			Provider: fi.Provider,
+			Device:   fi.DeviceName,
+			NumaNode: uint32(fi.NUMANode),
+		})
 	}
+
+	hfm := make(control.HostFabricMap)
+	if err := hfm.Add("localhost", hf); err != nil {
+		return err
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
 
 	return nil
 }

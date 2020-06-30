@@ -104,12 +104,17 @@ char *DP_UUID(const void *uuid);
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
 #define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
+#ifdef DAOS_BUILD_RELEASE
+#define DF_KEY			"[%d]"
+#define DP_KEY(key)		(int)((key)->iov_len)
+#else
 char *daos_key2str(daos_key_t *key);
 
 #define DF_KEY			"[%d] %.*s"
 #define DP_KEY(key)		(int)(key)->iov_len,	\
-		                (int)(key)->iov_len,	\
-		                daos_key2str(key)
+				(int)(key)->iov_len,	\
+				daos_key2str(key)
+#endif
 
 #define DF_RECX			"["DF_U64"-"DF_U64"]"
 #define DP_RECX(r)		(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
@@ -182,6 +187,27 @@ daos_get_ntime(void)
 
 	d_gettime(&tv);
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
+static inline uint64_t
+daos_getntime_coarse(void)
+{
+	struct timespec	tv;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
+	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
+static inline int daos_gettime_coarse(uint64_t *time)
+{
+	struct timespec	now;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	if (rc == 0)
+		*time = now.tv_sec;
+
+	return rc;
 }
 
 /** Function table for combsort and binary search */
@@ -490,7 +516,10 @@ void
 daos_fail_value_set(uint64_t val);
 void
 daos_fail_num_set(uint64_t num);
-
+uint64_t
+daos_shard_fail_value(uint16_t *shards, int nr);
+bool
+daos_shard_in_fail_value(uint16_t shard);
 int
 daos_fail_check(uint64_t id);
 
@@ -583,8 +612,13 @@ enum {
 #define DAOS_CSUM_CORRUPT_UPDATE_DKEY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x24)
 #define DAOS_CSUM_CORRUPT_FETCH_DKEY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x25)
 
- /** This fault simulates corruption on disk. Must be set on server side. */
+/** This fault simulates corruption on disk. Must be set on server side. */
 #define DAOS_CSUM_CORRUPT_DISK		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x26)
+/**
+ * This fault simulates shard fetch failure. Can be used to test EC degraded
+ * fetch.
+ */
+#define DAOS_FAIL_SHARD_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
@@ -696,15 +730,4 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 	}
 }
 
-static inline int daos_gettime_coarse(uint64_t *time)
-{
-	struct timespec	now;
-	int		rc;
-
-	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-	if (rc == 0)
-		*time = now.tv_sec;
-
-	return rc;
-}
 #endif /* __DAOS_COMMON_H__ */
