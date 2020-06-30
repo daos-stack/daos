@@ -151,7 +151,6 @@ unixcomm_close(struct unixcomm *handle)
 		return 0;
 
 	fd = handle->fd;
-	errno = 0;
 	ret = close(fd);
 	D_FREE(handle);
 
@@ -168,7 +167,6 @@ static int
 new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 {
 	struct unixcomm	*comm;
-	int		ret;
 
 	*newcommp = NULL;
 
@@ -176,22 +174,18 @@ new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 	if (comm == NULL)
 		return -DER_NOMEM;
 
-	errno = 0;
 	comm->fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (comm->fd < 0) {
-		ret = daos_errno2der(errno);
 		D_ERROR("Failed to open socket, errno=%d\n", errno);
 		D_FREE(comm);
-		return ret;
+		return -DER_MISC;
 	}
 
-	errno = 0;
 	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
-		ret = daos_errno2der(errno);
 		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
 			comm->fd, errno);
 		unixcomm_close(comm);
-		return ret;
+		return -DER_MISC;
 	}
 
 	comm->flags = flags;
@@ -254,23 +248,19 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
 		return ret;
 
 	fill_socket_address(sockaddr, &address);
-	errno = 0;
 	if (bind(comm->fd, (struct sockaddr *)&address,
 		 sizeof(struct sockaddr_un)) < 0) {
-		ret = daos_errno2der(errno);
 		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
 			sockaddr, comm->fd, errno);
 		unixcomm_close(comm);
-		return ret;
+		return -DER_MISC;
 	}
 
-	errno = 0;
 	if (listen(comm->fd, SOMAXCONN) < 0) {
-		ret = daos_errno2der(errno);
 		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
 			comm->fd, errno);
 		unixcomm_close(comm);
-		return ret;
+		return -DER_MISC;
 	}
 
 	*newcommp = comm;
@@ -314,7 +304,6 @@ unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 	msg.msg_iov = iov;
 	msg.msg_iovlen = 1;
 
-	errno = 0;
 	bsent = sendmsg(hndl->fd, &msg, 0);
 	if (bsent < 0) {
 		D_ERROR("Failed to sendmsg on socket fd %d, errno=%d\n",
@@ -344,7 +333,6 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 	msg.msg_iov = iov;
 	msg.msg_iovlen = 1;
 
-	errno = 0;
 	brcvd = recvmsg(hndl->fd, &msg, 0);
 	if (brcvd < 0) {
 		D_ERROR("Failed to recvmsg on socket fd %d, errno=%d\n",
