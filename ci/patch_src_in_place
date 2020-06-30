@@ -6,11 +6,17 @@ def_ignore="SPLIT_STRING,SSCANF_TO_KSTRTO,PREFER_KERNEL_TYPES"
 def_ignore+=",USE_NEGATIVE_ERRNO,CAMELCASE,STATIC_CONST_CHAR_ARRAY"
 def_ignore+=",COMPARISON_TO_NULL,COMPLEX_MACRO,BIT_MACRO,SPACING"
 
-if [ -x code_review/checkpatch.pl ]
+CP=../code_review/checkpatch.pl
+if [ ! -x $CP ]
+then
+	CP=./code_review/checkpatch.pl
 fi
+
+if [ -x $CP ]
+then
     for FILE in `git ls-tree --full-tree --name-only HEAD -r src | grep -v src/control/vendor | grep -v .go\$ | grep -v pb-c | grep -v debug_setup.h`
     do
 
-        ./code_review/checkpatch.pl --quiet --no-tree -file --show-types --no-summary --ignore $def_ignore --strict $FILE --fix-inplace
+        $CP --quiet --no-tree -file --show-types --no-summary --ignore $def_ignore --strict $FILE --fix-inplace
     done
 fi
