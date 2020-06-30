@@ -165,7 +165,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 
 int
 vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
-		 daos_handle_t *ih)
+		 daos_handle_t *ih, struct dtx_handle *dth)
 {
 	struct vos_iter_dict	*dict;
 	struct vos_iterator	*iter;
@@ -532,7 +532,7 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg)
+	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
 {
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
 	vos_iter_entry_t	iter_ent = {0};
@@ -547,7 +547,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 
 	anchor = type2anchor(type, anchors);
 
-	rc = vos_iter_prepare(type, param, &ih);
+	rc = vos_iter_prepare(type, param, &ih, dth);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			daos_anchor_set_eof(anchor);
@@ -627,7 +627,7 @@ probe:
 
 			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
 					 recursive, anchors, pre_cb, post_cb,
-					 arg);
+					 arg, dth);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
