@@ -125,6 +125,13 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 		if fs.DeviceName == "lo" {
 			continue
 		}
+
+		if fs.NetDevClass != resp.NetDevClass {
+			aic.log.Debugf("Excluding device: %s, network device class: %s from attachInfoCache.  Does not match server network device class: %s\n",
+				fs.DeviceName, netdetect.DevClassName(fs.NetDevClass), netdetect.DevClassName(resp.NetDevClass))
+			continue
+		}
+
 		resp.Interface = fs.DeviceName
 		// by default, the domain is the deviceName
 		resp.Domain = fs.DeviceName
