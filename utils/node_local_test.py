@@ -233,14 +233,9 @@ class DaosServer():
         if os.path.exists(self._log_file):
             os.unlink(self._log_file)
 
-        # self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
-        # Disable this for now, as the filename is logged without a error in
-        # the fault injection testing so it's causing inconsisency in the
-        # errors generated.
-        # self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
-        # self.agent_dir = self._agent_dir.name
+        self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
+        self.agent_dir = self._agent_dir.name
 
-        self.agent_dir = '/tmp/dnt_agent_changeme'
         if not os.path.exists(self.agent_dir):
             os.mkdir(self.agent_dir)
 
