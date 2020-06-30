@@ -224,7 +224,6 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_abort_aggregation:1,
 				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
 };
@@ -302,7 +301,7 @@ struct vos_dtx_cmt_ent {
 #define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 
 /* in-memory structures standalone instance */
-struct bio_xs_context		*vsa_xsctxt_inst;
+extern struct bio_xs_context		*vsa_xsctxt_inst;
 extern int vos_evt_feats;
 
 static inline struct bio_xs_context *
