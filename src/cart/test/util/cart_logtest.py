@@ -41,7 +41,7 @@ This provides consistency checking for CaRT log files.
 
 import sys
 import pprint
-from collections import OrderedDict, Counter
+from collections import OrderedDict
 
 import cart_logparse
 
@@ -239,21 +239,6 @@ class LogTest():
         self.hide_fi_calls = False
         self.fi_triggered = False
         self.fi_location = None
-        self.nil_frees = Counter()
-
-    def show_nill_free(self, line):
-        """Save the location of a nill free call"""
-        loc = '{}:{}'.format(line.filename, line.lineno)
-
-        self.nil_frees[loc] += 1
-
-    def show_frees(self):
-        """Report the most common locations where D_FREE(NULL) is called"""
-
-        for (loc, count) in self.nil_frees.most_common(10):
-            if count < 10:
-                break
-            print('Null was freed {} times at {}'.format(count, loc))
 
     def check_log_file(self, abort_on_warning, show_memleaks=True):
         """Check a single log file for consistency"""
@@ -427,8 +412,6 @@ class LogTest():
                         else:
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
-                    else:
-                        self.show_nill_free(line)
                 elif line.is_realloc():
                     new_pointer = line.get_field(-3)
                     old_pointer = line.get_field(-1)[:-2].split(':')[-1]

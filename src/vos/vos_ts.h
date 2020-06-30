@@ -483,12 +483,13 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set);
 
 /** Free an allocated timestamp set
  *
- * Implemented as a macro to improve logging.
- *
  * \param	ts_set[in]	Set to free
  */
-#define vos_ts_set_free(ts_set)	D_FREE(ts_set)
-
+static inline void
+vos_ts_set_free(struct vos_ts_set *ts_set)
+{
+	D_FREE(ts_set);
+}
 
 /** Check the read low timestamp at current entry.
  *
