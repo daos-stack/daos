@@ -50,13 +50,6 @@
  */
 #define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
 
-/* EC parity is stored in a private address range that is selected by setting
- * the most-significant bit of the offset (an unsigned long). This effectively
- * limits the addressing of user extents to the lower 63 bits of the offset
- * range. The client stack should enforce this limitation.
- */
-#define PARITY_INDICATOR (1UL << 63)
-
 /**
  * Bypass client I/O RPC, it means the client stack will complete the
  * fetch/update RPC immediately, nothing will be submitted to remote server.
@@ -74,7 +67,7 @@ struct dc_obj_shard {
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
-	uint32_t		do_target_idx;	/* target VOS index in node */
+	uint8_t			do_target_idx;	/* target VOS index in node */
 	uint32_t		do_target_rank;
 	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
@@ -136,6 +129,10 @@ struct dc_object {
  *    it, create oiod/siod to specify each shard/tgt's IO req.
  */
 struct obj_reasb_req {
+	/* original user input iods/sgls */
+	daos_iod_t			*orr_uiods;
+	d_sg_list_t			*orr_usgls;
+	/* reassembled iods/sgls */
 	daos_iod_t			*orr_iods;
 	d_sg_list_t			*orr_sgls;
 	struct obj_io_desc		*orr_oiods;
@@ -144,13 +141,15 @@ struct obj_reasb_req {
 	struct dcs_layout		*orr_singv_los;
 	uint32_t			 orr_tgt_nr;
 	struct daos_oclass_attr		*orr_oca;
-	struct obj_ec_recov		*orr_recov;
 	struct obj_ec_codec		*orr_codec;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
 	uint8_t				*tgt_bitmap;
 	struct obj_tgt_oiod		*tgt_oiods;
+	/* IO failure information */
+	struct obj_ec_fail_info		*orr_fail;
+	uint32_t			 orr_recov:1; /* for recovery flag */
 };
 
 static inline void
@@ -181,11 +180,6 @@ struct migrate_pool_tls {
 	/* Container/objects to be migrated will be attached to the tree */
 	daos_handle_t		mpt_root_hdl;
 	struct btr_root		mpt_root;
-
-	/* Indicates whether containers should be cleared of all contents
-	 * before any data is migrated to them (via destroy & recreate)
-	 */
-	bool			mpt_clear_conts;
 
 	/* Hash table to store the container uuids which have already been
 	 * deleted (used by reintegration)
@@ -221,6 +215,10 @@ struct migrate_pool_tls {
 	uint64_t		mpt_refcount;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
+	/* Indicates whether containers should be cleared of all contents
+	 * before any data is migrated to them (via destroy & recreate)
+	 */
+				mpt_clear_conts:1,
 				mpt_fini:1;
 };
 
@@ -269,6 +267,8 @@ struct shard_auxi_args {
 	uint16_t		 grp_idx;
 	/* only for EC, the start shard of the EC stripe */
 	uint32_t		 start_shard;
+	/* only for EC, the target idx [0, k + p) */
+	uint16_t		 ec_tgt_idx;
 };
 
 struct shard_rw_args {
@@ -400,6 +400,7 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
+bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
 
 static inline bool
 obj_retry_error(int err)
@@ -443,10 +444,18 @@ int dc_obj_update(tse_task_t *task, struct dc_obj_epoch *epoch,
 int dc_obj_punch(tse_task_t *task, struct dc_obj_epoch *epoch, uint32_t map_ver,
 		 enum obj_rpc_opc opc, daos_obj_punch_t *api_args);
 
+/* handles, pointers for handling I/O */
+struct obj_io_context {
+	struct ds_cont_hdl	*ioc_coh;
+	struct ds_cont_child	*ioc_coc;
+	daos_handle_t		 ioc_vos_coh;
+	uint32_t		 ioc_map_ver;
+	bool			 ioc_began;
+};
+
 struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;
-	struct ds_cont_hdl	*cont_hdl;
-	struct ds_cont_child	*cont;
+	struct obj_io_context	*ioc;
 	void			*args;
 	uint32_t		 flags;
 };
@@ -457,6 +466,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dth, void *arg, int idx,
 int
 ds_obj_remote_punch(struct dtx_leader_handle *dth, void *arg, int idx,
 		    dtx_sub_comp_cb_t comp_cb);
+
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_update_handler(crt_rpc_t *rpc);

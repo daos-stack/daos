@@ -22,7 +22,6 @@ def build_shim_module(env, lib_prefix, version):
 
     new_env.Replace(LIBS=['daos', 'duns'])
     new_env.AppendUnique(LIBPATH=["../dfs"])
-    new_env.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../../..')])
 
     daos_build.clear_icc_env(new_env)
 
@@ -32,6 +31,7 @@ def build_shim_module(env, lib_prefix, version):
                                SHLIBPREFIX="",
                                CPPFLAGS=extra_flags)
     base = daos_build.library(new_env, target=tgt_name, source=[obj],
+                              install_off="../../../..",
                               SHLINK='gcc -pthread -shared',
                               SHLINKFLAGS=[],
                               SHLIBPREFIX="",

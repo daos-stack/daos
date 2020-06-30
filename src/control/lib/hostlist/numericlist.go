@@ -50,7 +50,8 @@ func CreateNumericList(stringRanges string) (*HostList, error) {
 func CreateNumericSet(stringRanges string) (*HostSet, error) {
 	hl, err := CreateNumericList(stringRanges)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err,
+			"creating numeric set from %q", stringRanges)
 	}
 	hl.Uniq()
 
