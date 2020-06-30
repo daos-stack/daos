@@ -472,8 +472,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-gcc-centos7",
-                                             tools: [ gcc4(pattern: '*-build.log'),
-                                                      cppCheck(pattern: '*-build.log') ],
+                                             tools: [ gcc4(pattern: 'centos7-gcc-build.log'),
+                                                      cppCheck(pattern: 'centos7-gcc-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -514,6 +514,7 @@ pipeline {
                                    prebuild: 'rm -rf bandit.xml',
                                    COMPILER: "clang",
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'centos7-clang-build.log',
                                    failure_artifacts: 'config.log-centos7-clang'
                     }
                     post {
@@ -522,7 +523,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-centos7-clang",
-                                             tools: [ clang(), cppCheck() ],
+                                             tools: [ clang(pattern: 'centos7-clang-build.log'),
+                                                      cppCheck(pattern: 'centos7-clang-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -560,6 +562,7 @@ pipeline {
                         sconsBuild clean: "_build.external${arch}",
                                    prebuild: 'rm -rf bandit.xml',
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'ubuntu20.04-gcc-build.log',
                                    failure_artifacts: 'config.log-ubuntu20.04-gcc'
                     }
                     post {
@@ -568,7 +571,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-ubuntu20",
-                                             tools: [ gcc4(), cppCheck() ],
+                                             tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log'),
+                                                      cppCheck(pattern: 'ubuntu20.04-gcc-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -609,6 +613,7 @@ pipeline {
                                    prebuild: 'rm -rf bandit.xml',
                                    COMPILER: "clang",
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'ubuntu20.04-clang-build.log',
                                    failure_artifacts: 'config.log-ubuntu20.04-clag'
                     }
                     post {
@@ -617,7 +622,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-ubuntu20-clang",
-                                             tools: [ clang(), cppCheck() ],
+                                             tools: [ clang(pattern: 'ubuntu20.04-clang-build.log'),
+                                                      cppCheck(pattern: 'ubuntu20.04-clang-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -655,6 +661,7 @@ pipeline {
                         sconsBuild clean: "_build.external${arch}",
                                    prebuild: 'rm -rf bandit.xml',
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'leap15-gcc-build.log',
                                    failure_artifacts: 'config.log-leap15-gcc'
                     }
                     post {
@@ -663,7 +670,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-gcc-leap15",
-                                             tools: [ gcc4(), cppCheck() ],
+                                             tools: [ gcc4(pattern: 'leap15-gcc-build.log'),
+                                                      cppCheck(pattern: 'leap15-gcc-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -701,6 +709,7 @@ pipeline {
                         sconsBuild clean: "_build.external${arch}",
                                    COMPILER: "clang",
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'leap15-clang-build.log',
                                    failure_artifacts: 'config.log-leap15-clang'
                     }
                     post {
@@ -709,7 +718,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-leap15-clang",
-                                             tools: [ clang(), cppCheck() ],
+                                             tools: [ clang(pattern: 'leap15-clang-build.log'),
+                                                      cppCheck(pattern: 'leap15-clang-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -751,6 +761,7 @@ pipeline {
                                    prebuild: 'rm -rf src/rdb/raft/CLinkedListQueue',
                                    COMPILER: "icc",
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'leap15-icc-build.log',
                                    TARGET_PREFIX: 'install/opt',
                                    failure_artifacts: 'config.log-leap15-icc'
                     }
@@ -760,7 +771,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-leap15-intelc",
-                                             tools: [ intel(), cppCheck() ],
+                                             tools: [ intel(pattern: 'leap15-icc-build.log'),
+                                                      cppCheck(pattern: 'leap15-icc-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
