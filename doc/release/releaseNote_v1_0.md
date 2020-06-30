@@ -1,6 +1,6 @@
 # DAOS Version 1.0 Release Notes
 
-We are pleased to announce the release of DAOS version 1.0, a key DAOS milestone focused on a newly created high-performance object store that is ultimately shifting the HPC and big data paradigm. Recently awarded the top spot in the [IO500 10-node Challenge](https://www.vi4io.org/io500/list/19-11/10node?fields=information__system,information__institution,information__storage_vendor,information__filesystem_type,information__client_nodes,information__client_total_procs,io500__score,io500__bw,io500__md,information__data,information__list_id&equation=&sort_asc=false&sort_by=io500__score&radarmax=6&query=), DAOS is fully optimized for Intel¬Æ architecture and non-volatile memory (NVM).
+We are pleased to announce the release of DAOS version 1.0, a key DAOS milestone focused on a newly created high-performance object store that is ultimately shifting the HPC and big data paradigm. Recently awarded the top spot in the [IO500 10-node Challenge](https://www.vi4io.org/io500/list/19-11/10node?fields=information__system,information__institution,information__storage_vendor,information__filesystem_type,information__client_nodes,information__client_total_procs,io500__score,io500__bw,io500__md,information__data,information__list_id&equation=&sort_asc=false&sort_by=io500__score&radarmax=6&query=), DAOS is fully optimized for IntelÆ architecture and non-volatile memory (NVM).
 
 This release is targeted towards benchmarking, partner integration, evaluation, and brings support for the following features:
 
@@ -16,7 +16,7 @@ This release is targeted towards benchmarking, partner integration, evaluation, 
 
 This release is not yet intended for production use.
 
-DAOS is an open-source, software-defined storage (SDS) and storage-as-a-service (STaaS) platform. This technology was developed from the ground up for nextgen NVM technologies like Intel¬Æ 3D NAND Technology and Intel¬Æ Optane‚Ñ¢ technology. DAOS operates end-to-end in user-space for ease of deployment and to maximize IOPS, bandwidth, and minimize latency. DAOS is a scale-out solution allowing small and medium deployments to grow as much as required (i.e., 100‚Äôs of PB with millions of client nodes and thousands of storage servers) to serve the most demanding scientific, Big Data and AI workloads.
+DAOS is an open-source, software-defined storage (SDS) and storage-as-a-service (STaaS) platform. This technology was developed from the ground up for nextgen NVM technologies like IntelÆ 3D NAND Technology and IntelÆ Optane‚¢ technology. DAOS operates end-to-end in user-space for ease of deployment and to maximize IOPS, bandwidth, and minimize latency. DAOS is a scale-out solution allowing small and medium deployments to grow as much as required (i.e., 100‚s of PB with millions of client nodes and thousands of storage servers) to serve the most demanding scientific, Big Data and AI workloads.
 
 The primary storage for the first US Exascale supercomputer (the Aurora system at Argonne National Laboratory - ANL) will be a 230PB DAOS tier composed to deliver an aggregated bandwidth of at least 25TB/s. Intel is collaborating closely with different partners to propose DAOS-based solutions for production deployments. DAOS is gaining traction among the enterprise and hyperscalers.
 
@@ -24,6 +24,10 @@ Designed to address evolving storage needs, DAOS is a new storage platform for t
 
 
 Visit the [DAOS github.io](https://daos-stack.github.io/) page for more information. All DAOS project source code is maintained in the [https://github.com/daos-stack/daos](https://github.com/daos-stack/daos) repository.
+
+
+Please visit this [link](https://wiki.hpdd.intel.com/display/DC/DAOS+v1.0+Licensing)
+for more information on the licenses.
 
 ## Software Dependencies
 Reference the [Software Installation](https://daos-stack.github.io/admin/installation/) section of the [DAOS Administration Guide](https://daos-stack.github.io/admin/hardware/) for more details.
@@ -42,14 +46,14 @@ DAOS requires a 64-bit processor architecture and is primarily developed on Inte
 
 
 
-### Network Requirements¬∂
+### Network Requirements
 The DAOS network layer relies on libfabrics and supports OFI providers for Ethernet/sockets, InfiniBand/verbs. An RDMA-capable fabric is preferred for better performance. DAOS can support multiple rails by binding different instances of the DAOS server to individual network cards.
 
 The DAOS control plane provides methods for administering and managing the DAOS servers using a secure socket layer interface. An additional out-of-band network connecting the nodes in the DAOS service cluster is required for DAOS administration. Management traffic between clients and servers use IP over Fabric.
 
 
-### Storage Requirements¬∂
-DAOS requires each storage node to have direct access to storage-class memory (SCM). While DAOS is primarily tested and tuned for Intel¬Æ Optane‚Ñ¢ DC Persistent Memory, the DAOS software stack is built over the Persistent Memory Development Kit (PMDK) and the DAX feature of the Linux operating systems as described in the [SNIA NVM Programming Model](https://www.snia.org/sites/default/files/technical_work/final/NVMProgrammingModel_v1.2.pdf) . As a result, the open-source DAOS software stack should be able to run transparently over any storage-class memory supported by the PMDK.
+### Storage Requirements
+DAOS requires each storage node to have direct access to storage-class memory (SCM). While DAOS is primarily tested and tuned for IntelÆ Optane‚¢ DC Persistent Memory, the DAOS software stack is built over the Persistent Memory Development Kit (PMDK) and the DAX feature of the Linux operating systems as described in the [SNIA NVM Programming Model](https://www.snia.org/sites/default/files/technical_work/final/NVMProgrammingModel_v1.2.pdf) . As a result, the open-source DAOS software stack should be able to run transparently over any storage-class memory supported by the PMDK.
 
 The storage node should be equipped with NVMe (non-volatile memory express) SSDs to provide capacity. HDDs, as well as SATA and SAS SSDs, are not supported by DAOS. Both NVMe 3D-NAND and Optane SSDs are supported.. NVMe-oF devices should theoretically work with the user-space storage stack but have not been tested.
 
@@ -64,7 +68,7 @@ DAOS 1.0 validation efforts were focused on anticipated initial use cases includ
 - Testing has been performed on Centos 7.7 and SLES 15 with Centos being used in the majority of the test cycles.
 - Testing has been conducted using Intel Xeon processors, Intel 3D NAND and Optane based NVMe SSDs and Optane persistent memory modules although generally storage density was not tested at production levels.
 - DAOS uses the libfabric network abstraction layer and testing has been performed on a number of network specific providers, including the IB verbs, OPA PSM2, socket and TCP providers.  Network testing is on-going and none of the above providers should be considered fully tested at this time.
-- All DAOS 1.0 supported functionality has been tested with an emphasis on use cases with positive outcomes ‚Äìerror cases (e.g. DAOS server failure) have limited test cycles at this time.
+- All DAOS 1.0 supported functionality has been tested with an emphasis on use cases with positive outcomes ‚error cases (e.g. DAOS server failure) have limited test cycles at this time.
 - Maximum scale-out of DAOS servers during test runs was 128.  Maximum scale-out of DAOS clients was 2048.
 - Soak testing with an emphasis on I/O jobs in combination with basic administrative actions has been run and found to be error free for periods up to 48 hours. As with functional testing the focus has been on positive path testing with failure paths and fault injection coming in a future release.
 
@@ -77,7 +81,7 @@ DAOS supports two tiers of storage: Storage Class Memory (SCM) and NVMe SSDs. Ea
 
 As a part of the NVMe support, an extent-based block allocator was implemented and designed specifically for DAOS NVMe block device space management, including efficient management of smaller 4KB block allocations. A server module was also implemented for issuing I/O over NVMe SSDs. This involves internally managing a per-xstream DMA-safe buffer for SPDK DMA transfer over NVMe SSDs. The module also persistently tracks important server metadata.  This per-server metadata includes the health state of each NVMe SSD, as well as the mapping between NVMe SSDs, DAOS server xstreams, DAOS pools, and allocated blocks IDs.
 
-Two other key components include faulty device detection and device health monitoring. DAOS handles storing NVMe SSD health data, including raw NVMe device health as well as I/O error and checksum errors counters. If and when an I/O error occurs, an event notification will be sent to the console to notify the administrator. Management utility commands are also available for administrators to query all NVMe device health stats to gauge the general health of the system. DAOS currently only supports manual faulty device events, with future work including auto-detection upon configurable faulty criteria. This would involve an administrator manually setting the device state of an NVMe SSD to ‚ÄúFAULTY‚Äù using the management utility, which will trigger the appropriate rebuild of data and exclusion of the faulty device from the system. Reintegration and hotplug of NVMe SSDs are not currently supported in DAOS 1.0 but will be a part of a future release.
+Two other key components include faulty device detection and device health monitoring. DAOS handles storing NVMe SSD health data, including raw NVMe device health as well as I/O error and checksum errors counters. If and when an I/O error occurs, an event notification will be sent to the console to notify the administrator. Management utility commands are also available for administrators to query all NVMe device health stats to gauge the general health of the system. DAOS currently only supports manual faulty device events, with future work including auto-detection upon configurable faulty criteria. This would involve an administrator manually setting the device state of an NVMe SSD to ‚FAULTY‚ using the management utility, which will trigger the appropriate rebuild of data and exclusion of the faulty device from the system. Reintegration and hotplug of NVMe SSDs are not currently supported in DAOS 1.0 but will be a part of a future release.
 
 ### Per-Pool ACL
 Access to DAOS data is controlled through a simple identity based access control mechanism specified on a per pool basis. The access credentials for a DAOS client process are determined by the agent running on the compute node. This credential is validated against the Access Control List present on the DAOS server to determine the level of access granted to a specific user. The ACL mechanism support access permissions on an individual and group basis as well as a mechanism for supporting fall through users. As of DAOS 1.0, the set of permissions on a pool are very simple but will be extended when container-based ACLs are introduced in a future version.
@@ -115,20 +119,17 @@ The ndctl package maintainers have confirmed that this is a kernel regression th
 If you must evaluate DAOS on an OPA fabric, we recommend using IP over fabric/sockets for evaluation.  For benchmarking, PSM2 over OPA offers a better picture of DAOS performance, but the PSM2 provider is not fully functional.  For a discussion of issues and options, contact us via the [mailing list](https://daos.groups.io/g/daos).
 
 ### Replication and Self-healing
-While replication and self-healing features have been fully implemented, those features haven‚Äôt been thoroughly tested in 1.0. As a result, they are supported as preview features and will be fully supported in the next release. The storage node fault detection has thus been disabled by default and failed storage nodes have to be excluded manually to trigger automatic repair. Please refer to the [Pool Modifications] (https://daos-stack.github.io/admin/pool_operations/#pool-modifications)section of the administration guide for more information.
+While replication and self-healing features have been fully implemented, those features haven‚t been thoroughly tested in 1.0. As a result, they are supported as preview features and will be fully supported in the next release. The storage node fault detection has thus been disabled by default and failed storage nodes have to be excluded manually to trigger automatic repair. Please refer to the [Pool Modifications] (https://daos-stack.github.io/admin/pool_operations/#pool-modifications)section of the administration guide for more information.
 
 ### Limited bandwidth to SCM with some update/write operations
-With a configuration of only Intel¬Æ Optane‚Ñ¢ Pmem for storage in a DAOS pool (no SSDs), a known limitation currently exists on the write/update performance with bulk transfers to the SCM with all network providers which limits the BW per storage server.
+With a configuration of only IntelÆ Optane‚¢ Pmem for storage in a DAOS pool (no SSDs), a known limitation currently exists on the write/update performance with bulk transfers to the SCM with all network providers which limits the BW per storage server.
 
 ### Aggregation Issue
 The aggregation service is only activated after the system has idled for more than 5 seconds, so the aggregation is always suspended if there are sustained I/O requests from application. As a result, storage node will run out of SCM space even there is plenty of free space in SSD.
 
 
-
-
-
 ## Fixed Issues Details
 First release, this section will be updated in subsequent releases
+
 ## Change Log
 No changes for this first release.
-
