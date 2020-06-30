@@ -23,7 +23,7 @@ theme:
     feature:
         tabs: true
 
-docs_dir: doc
+docs_dir: ./
 
 markdown_extensions:
     - admonition
