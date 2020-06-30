@@ -936,7 +936,7 @@ csum_enum_verify(const struct obj_enum_args *enum_args,
  * what can and set the destination iov len to needed len and let caller
  * decide what to do.
  */
-static void
+static int
 dc_enumerate_copy_csum(d_iov_t *dst, const d_iov_t *src)
 {
 	if (dst != NULL && src->iov_len > 0) {
@@ -944,7 +944,10 @@ dc_enumerate_copy_csum(d_iov_t *dst, const d_iov_t *src)
 		       min(dst->iov_buf_len,
 			   src->iov_len));
 		dst->iov_len = src->iov_len;
+		if (dst->iov_len > dst->iov_buf_len)
+			return -DER_TRUNC;
 	}
+	return 0;
 }
 
 static int
@@ -971,8 +974,6 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	oeo = crt_reply_get(enum_args->rpc);
 	rc = obj_reply_get_status(enum_args->rpc);
 
-	dc_enumerate_copy_csum(enum_args->csum, &oeo->oeo_csum_iov);
-
 	if (rc != 0) {
 		if (rc == -DER_KEY2BIG) {
 			D_DEBUG(DB_IO, "key size "DF_U64" too big.\n",
@@ -987,6 +988,11 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		}
 		D_GOTO(out, rc);
 	}
+
+	rc = dc_enumerate_copy_csum(enum_args->csum, &oeo->oeo_csum_iov);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	*enum_args->eaa_map_ver = obj_reply_map_version_get(enum_args->rpc);
 
 	if (enum_args->eaa_size)

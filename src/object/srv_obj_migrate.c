@@ -1181,14 +1181,8 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 				break;
 			}
 			continue;
-		} else if (rc) {
-			/* container might have been destroyed. Or there is
-			 * no spare target left for this object see
-			 * obj_grp_valid_shard_get()
-			 */
-			rc = (rc == -DER_NONEXIST) ? 0 : rc;
-			break;
-		} else if (csum.iov_len > csum.iov_buf_len) {
+		} else if (rc == -DER_TRUNC &&
+			   csum.iov_len > csum.iov_buf_len) {
 			D_DEBUG(DB_TRACE, "migrate obj csum buf "
 					  "not large enough. Increase and try "
 					  "again");
@@ -1203,7 +1197,15 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 				break;
 			}
 			continue;
+		} else if (rc) {
+			/* container might have been destroyed. Or there is
+			 * no spare target left for this object see
+			 * obj_grp_valid_shard_get()
+			 */
+			rc = (rc == -DER_NONEXIST) ? 0 : rc;
+			break;
 		}
+
 		if (num == 0)
 			break;
 

@@ -1699,97 +1699,6 @@ test_ci_serialize(void **state)
 	assert_null(actual);
 }
 
-static void
-test_ic_serialize(void **state)
-{
-	struct dcs_iod_csums	*result = NULL;
-	d_iov_t			 iov = {0};
-	const daos_size_t	 iov_buf_len = 100;
-	uint8_t			*iov_buf[iov_buf_len];
-	uint32_t		 csum_len = 8;
-	uint32_t		 csum_type = FAKE_CSUM_TYPE;
-	int			 rc = 0;
-
-	uint64_t		 csum_bufs[10] = {
-		0x1234567890A,
-		0x1234567890B,
-		0x1234567890C,
-		0x1234567890D,
-		0x1234567890E,
-		0x1234567890F,
-		0x1234567891A,
-		0x1234567891B,
-		0x1234567891C,
-		0x1234567891D,
-		};
-
-	struct dcs_csum_info	 data_csum_info[3] = {
-		{
-			.cs_nr = 1,
-			.cs_len = csum_len, .cs_buf_len = csum_len,
-			.cs_chunksize = CSUM_NO_CHUNK,
-			.cs_type = csum_type,
-			.cs_csum = (uint8_t *)&csum_bufs[0]
-		},
-		{
-			.cs_nr = 2,
-			.cs_len = csum_len,
-			.cs_buf_len = csum_len * 2,
-			.cs_chunksize = CSUM_NO_CHUNK,
-			.cs_type = csum_type,
-			.cs_csum = (uint8_t *)&csum_bufs[1]
-		},
-		{
-			.cs_nr = 3,
-			.cs_len = csum_len, .cs_buf_len = csum_len,
-			.cs_chunksize = CSUM_NO_CHUNK,
-			.cs_type = csum_type,
-			.cs_csum = (uint8_t *)&csum_bufs[3]
-		},
-	};
-
-	struct dcs_iod_csums iod_csum = {
-		.ic_nr = 1,
-		.ic_akey = { .cs_nr = 1,
-			.cs_len = csum_len, .cs_buf_len = csum_len,
-			.cs_chunksize = CSUM_NO_CHUNK,
-			.cs_type = csum_type,
-			.cs_csum = (uint8_t *)&csum_bufs[7]
-		},
-		.ic_data = data_csum_info
-	};
-
-	memset(iov_buf, 0, iov_buf_len);
-
-	d_iov_set(&iov, iov_buf, ic_size(&iod_csum) - 1);
-	iov.iov_len = 0;
-
-	rc = ic_serialize(&iod_csum, &iov);
-	assert_int_equal(-DER_TRUNC, rc);
-
-	if (iov_buf_len < ic_size(&iod_csum))
-		fail_msg("Test cannot continue because the iov "
-			 "buffer isn't big enough");
-
-	d_iov_set(&iov, iov_buf, iov_buf_len);
-	iov.iov_len = 0;
-
-	rc = ic_serialize(&iod_csum, &iov);
-	assert_int_equal(0, rc);
-	assert_true(iov.iov_len > 0);
-
-	ic_iov2iod_csum(&result, &iov);
-
-	assert_non_null(result);
-	assert_ic_equal(iod_csum, *result);
-
-	/** test casting iov to iod csum with too small iov_buf */
-	d_iov_set(&iov, iov_buf, 10);
-	rc = ic_iov2iod_csum(&result, &iov);
-	assert_int_equal(-DER_TRUNC, rc);
-	assert_null(result);
-}
-
 static int
 csum_test_setup(void **state)
 {
@@ -1877,7 +1786,6 @@ static const struct CMUnitTest tests[] = {
 	     test_formatter),
 	TEST("CSUM28: Get the recxes from a map", get_map_test),
 	TEST("CSUM29: csum_info serialization", test_ci_serialize),
-	TEST("CSUM30: csum_info serialization", test_ic_serialize),
 	TEST("CSUM_HOLES01: With 2 mapped extents that leave a hole "
 	     "at the beginning, in between and "
 	     "at the end, all within a single chunk.", holes_1),

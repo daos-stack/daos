@@ -1831,6 +1831,7 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	daos_anchor_t		anchor = {0};
 	daos_anchor_t		dkey_anchor = {0};
 	daos_anchor_t		akey_anchor = {0};
+	daos_anchor_t		zero_anchor = {0};
 	d_iov_t			csum_iov = {0};
 	d_sg_list_t		sgl = {0};
 	const uint32_t		akey_nr = 5;
@@ -1868,7 +1869,11 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	rc = tst_obj_list_obj(ctx.oh, NULL, &ctx.dkey, NULL, NULL, &nr, kds,
 			      &sgl, &anchor, &dkey_anchor, &akey_anchor,
 			      &csum_iov);
-	assert_int_equal(0, rc);
+	assert_int_equal(-DER_TRUNC, rc);
+	/** ensure anchors don't change.  */
+	assert_memory_equal(&zero_anchor, &anchor, sizeof(zero_anchor));
+	assert_memory_equal(&zero_anchor, &dkey_anchor, sizeof(zero_anchor));
+	assert_memory_equal(&zero_anchor, &akey_anchor, sizeof(zero_anchor));
 
 	/** csum iov buf len shouldn't change, but iov_len should reflect
 	 * what's needed to hold all csum info. Caller can decide what to do

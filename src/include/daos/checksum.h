@@ -426,37 +426,6 @@ uint8_t *
 ic_idx2csum(struct dcs_iod_csums *iod_csum, uint32_t iod_idx,
 	    uint32_t csum_idx);
 
-/** return the size needed to serialize an iod_csums structure. Should include
- * the size of the structure, all csum_infos and the length of all csum buffers
- */
-daos_size_t
-ic_size(struct dcs_iod_csums *obj);
-
-/** serialize an iod_csums object into an iov buffer. The length of the csum
- * bufs is described by the csum info. The akey csum info is part of the
- * iod_csums struct. The layout of the serialized structures is as follows and
- * was done this way so that it's easy to "cast" the memory directly to an
- * iod_csums structure when received and only the csum_buf points would need
- * to be updated.
- * [ iod_csums structure	]
- * [ akey csum buf		]
- * [ data csum_info struct 1	]
- * [ data csum_info struct 2	]
- * [ data csum_info struct n	]
- * [ data csum buf 1		]
- * [ data csum buf 2		]
- * [ data csum buf n		]
- */
-int
-ic_serialize(struct dcs_iod_csums *iod_csums, d_iov_t *iov);
-
-/**
- * "cast" a serialized iod_csums back to an iod_csums. See \ic_serialize for
- * details on the structure in the memory
- */
-int
-ic_iov2iod_csum(struct dcs_iod_csums **obj, d_iov_t *iov);
-
 /**
  * -----------------------------------------------------------------------------
  * struct dcs_csum_info Functions
