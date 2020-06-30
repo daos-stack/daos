@@ -165,6 +165,14 @@ int
 vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
 
 /**
+ * Cleanup local DTX when local modification failed.
+ *
+ * \param dth	[IN]	The DTX handle.
+ */
+void
+vos_dtx_cleanup(struct dtx_handle *dth);
+
+/**
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
  *

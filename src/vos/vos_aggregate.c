@@ -112,7 +112,7 @@ struct agg_io_context {
 	unsigned int		 ic_seg_max;
 	unsigned int		 ic_seg_cnt;
 	/* Reserved SCM extents for new physical entries */
-	struct vos_rsrvd_scm	 ic_rsrvd_scm;
+	struct vos_rsrvd_scm	*ic_rsrvd_scm;
 	/* Reserved NVMe extents for new physical entries */
 	d_list_t		 ic_nvme_exts;
 	void			 (*ic_csum_recalc_func)(void *);
@@ -294,7 +294,8 @@ merge_window_status(struct agg_merge_window *mw)
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
 
 	D_ASSERT(io->ic_seg_cnt == 0);
-	D_ASSERT(io->ic_rsrvd_scm.rs_actv_at == 0);
+	D_ASSERT(io->ic_rsrvd_scm == NULL ||
+		 io->ic_rsrvd_scm->rs_actv_at == 0);
 	D_ASSERT(d_list_empty(&io->ic_nvme_exts));
 
 	D_ASSERT(mw->mw_ext.ex_lo <= mw->mw_ext.ex_hi);
@@ -327,8 +328,7 @@ merge_window_status(struct agg_merge_window *mw)
 	D_ASSERT(io->ic_buf == NULL);
 	D_ASSERT(io->ic_seg_max == 0);
 	D_ASSERT(io->ic_segs == NULL);
-	D_ASSERT(io->ic_rsrvd_scm.rs_actv_cnt == 0);
-	D_ASSERT(io->ic_rsrvd_scm.rs_actv == NULL);
+	D_ASSERT(io->ic_rsrvd_scm == NULL);
 
 	return MW_CLOSED;
 }
@@ -632,7 +632,7 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 	media = vos_media_select(vos_obj2pool(obj), DAOS_IOD_ARRAY, size);
 
 	if (media == DAOS_MEDIA_SCM) {
-		off = vos_reserve_scm(obj->obj_cont, &io->ic_rsrvd_scm, size);
+		off = vos_reserve_scm(obj->obj_cont, io->ic_rsrvd_scm, size);
 		if (UMOFF_IS_NULL(off)) {
 			D_ERROR("Reserve "DF_U64" from SCM failed.\n", size);
 			return -DER_NOSPACE;
@@ -1027,18 +1027,27 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	int			 rc = 0;
 
 	scm_max = MAX(io->ic_seg_cnt, 200);
-	if (io->ic_rsrvd_scm.rs_actv_cnt < scm_max) {
-		D_REALLOC(scm_exts, io->ic_rsrvd_scm.rs_actv,
-			  scm_max * sizeof(*scm_exts));
-		if (scm_exts == NULL)
+	if (io->ic_rsrvd_scm == NULL ||
+	    io->ic_rsrvd_scm->rs_actv_cnt < scm_max) {
+		struct vos_rsrvd_scm	*rsrvd_scm;
+		size_t			 size;
+
+		size = sizeof(*io->ic_rsrvd_scm) *
+			sizeof(*scm_exts) * scm_max;
+
+		if (io->ic_rsrvd_scm == NULL)
+			D_ALLOC(rsrvd_scm, size);
+		else
+			D_REALLOC(rsrvd_scm, io->ic_rsrvd_scm, size);
+		if (rsrvd_scm == NULL)
 			return -DER_NOMEM;
 
-		io->ic_rsrvd_scm.rs_actv = scm_exts;
-		io->ic_rsrvd_scm.rs_actv_cnt = scm_max;
+		io->ic_rsrvd_scm = rsrvd_scm;
+		io->ic_rsrvd_scm->rs_actv_cnt = scm_max;
 	}
-	memset(io->ic_rsrvd_scm.rs_actv, 0,
-	       io->ic_rsrvd_scm.rs_actv_cnt * sizeof(*scm_exts));
-	D_ASSERT(io->ic_rsrvd_scm.rs_actv_at == 0);
+	memset(io->ic_rsrvd_scm->rs_actv, 0,
+	       io->ic_rsrvd_scm->rs_actv_cnt * sizeof(*scm_exts));
+	D_ASSERT(io->ic_rsrvd_scm->rs_actv_at == 0);
 
 	for (i = 0; i < io->ic_seg_cnt; i++) {
 		lgc_seg = &io->ic_segs[i];
@@ -1082,7 +1091,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		return rc;
 
 	/* Publish SCM reservations */
-	rc = vos_publish_scm(obj->obj_cont, &io->ic_rsrvd_scm, true);
+	rc = vos_publish_scm(obj->obj_cont, io->ic_rsrvd_scm, true);
 	if (rc) {
 		D_ERROR("Publish SCM extents error: "DF_RC"\n", DP_RC(rc));
 		goto abort;
@@ -1209,7 +1218,7 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 
 	D_ASSERT(obj != NULL);
 	if (rc) {
-		vos_publish_scm(obj->obj_cont, &io->ic_rsrvd_scm, false);
+		vos_publish_scm(obj->obj_cont, io->ic_rsrvd_scm, false);
 
 		if (!d_list_empty(&io->ic_nvme_exts))
 			vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts,
@@ -1218,7 +1227,8 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 
 	/* Reset io context */
 	D_ASSERT(d_list_empty(&io->ic_nvme_exts));
-	D_ASSERT(io->ic_rsrvd_scm.rs_actv_at == 0);
+	D_ASSERT(io->ic_rsrvd_scm == NULL ||
+		 io->ic_rsrvd_scm->rs_actv_at == 0);
 	io->ic_seg_cnt = 0;
 }
 
@@ -1477,11 +1487,7 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 		io->ic_seg_max = 0;
 	}
 
-	if (io->ic_rsrvd_scm.rs_actv != NULL) {
-		D_FREE(io->ic_rsrvd_scm.rs_actv);
-		io->ic_rsrvd_scm.rs_actv = NULL;
-		io->ic_rsrvd_scm.rs_actv_cnt = 0;
-	}
+	D_FREE(io->ic_rsrvd_scm);
 
 	if (io->ic_csum_recalcs != NULL) {
 		D_FREE(io->ic_csum_recalcs);
