@@ -215,25 +215,30 @@ struct evt_rect_df {
 struct evt_node_entry {
 	/* Rectangle for the entry */
 	struct evt_rect_df	ne_rect;
-	/* Offset to child entry
-	 * Intermediate node:	struct evt_node
-	 * Leaf node:		struct evt_desc
-	 */
+	/* Offset to struct evt_desc */
 	uint64_t		ne_child;
 };
 
 /** evtree node: */
 struct evt_node {
-	/** the Minimum Bounding Box (MBR) bounds all its children */
-	struct evt_rect_df		tn_mbr;
+	/** Minimum bounding extent */
+	struct evt_extent		tn_mbr_ex;
+	/** Minimum bounding epoch */
+	daos_epoch_t			tn_mbr_epc;
+	/** Minimum bounding minor epoch */
+	uint16_t			tn_mbr_minor_epc;
 	/** bits to indicate it's a root or leaf */
 	uint16_t			tn_flags;
 	/** number of children or leaf records */
 	uint16_t			tn_nr;
 	/** Magic number for validation */
-	uint32_t			tn_magic;
-	/** The entries in the node */
-	struct evt_node_entry		tn_rec[0];
+	uint16_t			tn_magic;
+	union {
+		/** Leaf: The entries in the node */
+		struct evt_node_entry	tn_rec[0];
+		/** Intermediate: MBR is in child node. */
+		uint64_t		tn_child[0];
+	};
 };
 
 struct evt_root {
@@ -450,12 +455,11 @@ struct evt_policy_ops {
 	 */
 	int	(*po_split)(struct evt_context *tcx, bool leaf,
 			    struct evt_node *nd_src, struct evt_node *nd_dst);
-	/** Move adjusted \a entry within a node after mbr update.
-	 * Returns the offset from at to where the entry was moved
+	/** Adjust, if necessary, the location of the child entry.  Return the
+	 *  offset from at of where it was moved.
 	 */
-	int	(*po_adjust)(struct evt_context *tcx,
-			     struct evt_node *node,
-			     struct evt_node_entry *ne, int at);
+	int	(*po_adjust)(struct evt_context *tcx, struct evt_node *node,
+			     int at);
 	/**
 	 * Calculate weight of a rectangle \a rect and return it to \a weight.
 	 */

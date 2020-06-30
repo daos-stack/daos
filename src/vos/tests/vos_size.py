@@ -266,13 +266,14 @@ class MetaOverhead(object):
         if self.meta["trees"][key]["num_dynamic"] != 0:
             max_dyn = self.meta["trees"][key]["dynamic"][-1]["order"]
         if num_values > max_dyn:
-            node_size = self.meta["trees"][key]["node_size"]
+            leaf_node_size = self.meta["trees"][key]["leaf_node_size"]
+            int_node_size = self.meta["trees"][key]["int_node_size"]
             tree_nodes = (num_values * 2 + order - 1) / order
-            return node_size, tree_nodes
+            return leaf_node_size, int_node_size, tree_nodes
 
         for item in self.meta["trees"][key]["dynamic"]:
             if item["order"] >= num_values:
-                return item["size"], 1
+                return item["size"], item["size"], 1
         raise "Bug parsing dynamic tree order information!!!"
 
 
@@ -282,9 +283,14 @@ class MetaOverhead(object):
         key = tree["key"]
         num_values = tree["count"]
         record_size = self.meta["trees"][key]["record_msize"]
-        node_size, tree_nodes = self.get_dynamic(key, num_values)
+        leaf_size, int_size, tree_nodes = self.get_dynamic(key, num_values)
         rec_overhead = num_values * record_size
-        overhead = tree_nodes * node_size + rec_overhead
+        if leaf_size != int_size and tree_nodes != 1:
+            leafs = tree_nodes / 2
+            ints = tree_nodes - leafs
+            overhead = leafs * leaf_size + ints * int_size + rec_overhead
+        else:
+            overhead = tree_nodes * leaf_size + rec_overhead
         if key == "akey" or key == "single_value" or key == "array":
             #key refers to child tree
             if tree["overhead"] == "user":
