@@ -45,7 +45,7 @@
 #include <math.h>
 
 #include "tests_common.h"
-#include "gurt/errno.h"
+#include "daos_errno.h"
 
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")

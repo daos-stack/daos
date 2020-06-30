@@ -39,8 +39,8 @@
 import os
 import daos_build
 
-TEST_SRC = ['test_linkage.cpp', 'test_gurt.c', 'utest_hlc.c', 'utest_swim.c']
-LIBPATH = [Dir('../cart'), Dir('../gurt')]
+TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c']
+LIBPATH = [Dir('../cart'), Dir('../../../gurt')]
 
 def scons():
     """Scons function"""
@@ -82,8 +82,8 @@ def scons():
         testprog = daos_build.test(test_env, target=testname,
                                    source=testobj + cart_targets +
                                    swim_targets + gurt_targets,
-                                    LIBS=test_env["LIBS"] + ['yaml'],
-                                    LINKFLAGS=flags)
+                                   LIBS=test_env["LIBS"] + ['yaml'],
+                                   LINKFLAGS=flags)
         tests.append(testprog)
 
     test_env.Requires(tests, cart_lib)
