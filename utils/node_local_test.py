@@ -498,7 +498,6 @@ class DFuse():
                 pass
             total_time += 1
             if total_time > 60:
-                # TODO: Tune this down once DAOS-4465 has landed.
                 raise Exception('Timeout starting dfuse')
 
     def _close_files(self):
