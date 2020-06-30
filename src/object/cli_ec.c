@@ -1980,14 +1980,14 @@ obj_ec_sgl_copy(d_sg_list_t *sgl, uint64_t off, void *buf, uint64_t size)
 	int			rc;
 
 	/* to skip the sgl to offset - off */
-	rc = daos_sgl_processor(sgl, &sgl_idx, off, NULL, NULL);
+	rc = daos_sgl_processor(sgl, false, &sgl_idx, off, NULL, NULL);
 	D_ASSERT(rc == 0);
 
 	arg.buf = buf;
 	arg.size = size;
 	arg.copied = 0;
 	/* to copy data from [buf, buf + size) to sgl */
-	rc = daos_sgl_processor(sgl, &sgl_idx, size, oes_copy, &arg);
+	rc = daos_sgl_processor(sgl, false, &sgl_idx, size, oes_copy, &arg);
 	D_ASSERT(rc == 0);
 }
 
