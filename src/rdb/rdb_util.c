@@ -542,7 +542,7 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 	range.epr_lo = low;
 	range.epr_hi = high;
 
-	return vos_discard(cont, &range);
+	return vos_discard(cont, &range, NULL, NULL);
 }
 
 int
@@ -554,5 +554,5 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 	epr.epr_lo = 0;
 	epr.epr_hi = high;
 
-	return vos_aggregate(cont, &epr, NULL);
+	return vos_aggregate(cont, &epr, NULL, NULL, NULL);
 }

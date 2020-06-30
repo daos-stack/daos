@@ -444,10 +444,18 @@ int dc_obj_update(tse_task_t *task, struct dc_obj_epoch *epoch,
 int dc_obj_punch(tse_task_t *task, struct dc_obj_epoch *epoch, uint32_t map_ver,
 		 enum obj_rpc_opc opc, daos_obj_punch_t *api_args);
 
+/* handles, pointers for handling I/O */
+struct obj_io_context {
+	struct ds_cont_hdl	*ioc_coh;
+	struct ds_cont_child	*ioc_coc;
+	daos_handle_t		 ioc_vos_coh;
+	uint32_t		 ioc_map_ver;
+	bool			 ioc_began;
+};
+
 struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;
-	struct ds_cont_hdl	*cont_hdl;
-	struct ds_cont_child	*cont;
+	struct obj_io_context	*ioc;
 	void			*args;
 	uint32_t		 flags;
 };
@@ -458,6 +466,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dth, void *arg, int idx,
 int
 ds_obj_remote_punch(struct dtx_leader_handle *dth, void *arg, int idx,
 		    dtx_sub_comp_cb_t comp_cb);
+
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_update_handler(crt_rpc_t *rpc);

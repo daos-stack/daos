@@ -43,8 +43,7 @@ class MultipleContainerDelete(IorTestBase):
 
         Test Description:
             Purpose of this test is to verify the container delete
-            returns all space used by a container without leaving
-            garbage.
+            returns all space used by a container without leak
         Use case:
             Create a pool spanning 4 servers.
             Capture the pool space.
@@ -68,7 +67,7 @@ class MultipleContainerDelete(IorTestBase):
 
         initial_free_space = self.get_pool_space(storage_index)
 
-        for i in range(1000):
+        for i in range(20):
             self.create_cont()
             self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
@@ -89,7 +88,14 @@ class MultipleContainerDelete(IorTestBase):
             print(el)
         print("\n")
         print("Free Space after cont destroy = {}".format(new_free_space))
-        #self.assertTrue(new_free_space  == expected_free_space)
+        self.stop_servers()
+        time.sleep(20)
+        self.start_servers()
+        time.sleep(20)
+        free_space = self.get_pool_space(storage_index)
+        print("Free space after server restart = {}".format(free_space))
+        
+        #self.assertTrue(new_free_space  == initial_free_space)
 
 
     def get_pool_space(self, storage_index):

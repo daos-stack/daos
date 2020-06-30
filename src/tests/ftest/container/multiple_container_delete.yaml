@@ -11,9 +11,9 @@ server_config:
     name: daos_server
     servers:
         log_mask: INFO
-        #bdev_class: nvme
+        bdev_class: nvme
         #bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
-        #bdev_list: ["0000:05:00.0"]
+        bdev_list: ["0000:05:00.0"]
         #scm_class: dcpm
         #scm_list: ["/dev/pmem0"]
 pool:
@@ -21,7 +21,7 @@ pool:
     name: daos_server
     #scm_size: 25000000000
     scm_size: 4000000000
-    #nvme_size: 250000000000
+    nvme_size: 250000000000
     svcn: 1
     control_method: dmg
 container:
