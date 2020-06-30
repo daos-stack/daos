@@ -171,7 +171,7 @@ ctl_vos_list(struct dts_io_credit *cred)
 	else
 		type = VOS_ITER_AKEY;
 
-	rc = vos_iter_prepare(type, &param, &ih);
+	rc = vos_iter_prepare(type, &param, &ih, NULL);
 	if (rc == -DER_NONEXIST) {
 		D_PRINT("No matched object or key\n");
 		D_GOTO(out, rc = 0);

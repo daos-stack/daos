@@ -597,7 +597,7 @@ ts_iterate_internal(uint32_t type, vos_iter_param_t *param,
 	daos_handle_t		ih;
 	int			rc;
 
-	rc = vos_iter_prepare(type, param, &ih);
+	rc = vos_iter_prepare(type, param, &ih, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			rc = 0;

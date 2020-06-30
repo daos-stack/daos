@@ -693,9 +693,10 @@ struct dss_enum_arg {
 	daos_unit_oid_t		oid;		/* for unpack */
 };
 
-int
-dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	      struct vos_iter_anchors *anchors, struct dss_enum_arg *arg);
+struct dtx_handle;
+int dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+		  struct vos_iter_anchors *anchors, struct dss_enum_arg *arg,
+		  struct dtx_handle *dth);
 
 /** Maximal number of iods (i.e., akeys) in dss_enum_unpack_io.ui_iods */
 #define DSS_ENUM_UNPACK_MAX_IODS 16

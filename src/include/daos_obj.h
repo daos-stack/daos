@@ -478,8 +478,6 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * Caller should provide at least one of the output parameters.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	th	Optional transaction handle to query with.
- *			Use DAOS_TX_NONE for an independent transaction.
  * \param[out]	oa	Returned object attributes.
  * \param[out]	ranks	Ordered list of ranks where the object is stored.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -493,8 +491,8 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
-	       d_rank_list_t *ranks, daos_event_t *ev);
+daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
+	       daos_event_t *ev);
 
 /*
  * Object I/O API
@@ -519,9 +517,7 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *		iods	[in]: Array of I/O descriptors. Each descriptor is
  *			associated with a given akey and describes the list of
  *			record extents to fetch from the array.
- *			A different epoch can be passed for each extent via
- *			\a iods[]::iod_eprs[] and in this case, \a epoch will be
- *			ignored. [out]: Checksum of each extent is returned via
+ *			[out]: Checksum of each extent is returned via
  *			\a iods[]::iod_csums[]. If the record size of an
  *			extent is unknown (i.e. set to DAOS_REC_ANY as input),
  *			then the actual record size will be returned in
@@ -583,9 +579,6 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	iods	Array of I/O descriptor. Each descriptor is associated
  *			with an array identified by its akey and describes the
  *			list of record extent to update.
- *			A different epoch can be passed for each extent via
- *			\a iods[]::iod_eprs[] and in this case, \a epoch will be
- *			ignored.
  *			Checksum of each record extent is stored in
  *			\a iods[]::iod_csums[]. If the record size of an extent
  *			is zero, then it is effectively a punch for the

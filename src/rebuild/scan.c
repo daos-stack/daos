@@ -465,7 +465,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, NULL, arg);
+			 rebuild_obj_scan_cb, NULL, arg, NULL);
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;
@@ -529,7 +529,7 @@ rebuild_scanner(void *data)
 	arg.yield_freq = DEFAULT_YIELD_FREQ;
 	if (!rebuild_status_match(rpt, PO_COMP_ST_UP)) {
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-				 rebuild_container_scan_cb, NULL, &arg);
+				 rebuild_container_scan_cb, NULL, &arg, NULL);
 	}
 
 	ds_pool_child_put(child);
