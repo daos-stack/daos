@@ -41,6 +41,9 @@
 #define NIL_BITMAP		(NULL)
 
 #define OBJ_TGT_INLINE_NR	(23)
+
+/* Just for test master branch. */
+
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
