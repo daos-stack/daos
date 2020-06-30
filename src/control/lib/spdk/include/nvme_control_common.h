@@ -122,7 +122,7 @@ struct dev_health_entry {
 	int					 inflight;
 };
 
-struct ctrlr_entry	*g_controllers;
+extern struct ctrlr_entry	*g_controllers;
 
 /**
  * Attach call back function to report a device that has been
