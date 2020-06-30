@@ -850,7 +850,7 @@ calc_csum_recx_with_no_map(struct daos_csummer *obj, size_t csum_nr,
 						 rec_chunksize, i);
 
 		bytes_for_csum = chunk.dcr_nr * rec_len;
-		rc = daos_sgl_processor(sgl, idx, bytes_for_csum,
+		rc = daos_sgl_processor(sgl, false, idx, bytes_for_csum,
 					checksum_sgl_cb, obj);
 		if (rc != 0) {
 			D_ERROR("daos_sgl_processor error: %d\n", rc);
@@ -946,13 +946,13 @@ calc_csum_recx_with_map(struct daos_csummer *obj, size_t csum_nr,
 			if (mapped_chunk.dcr_lo > prev_idx) {
 				bytes_to_skip = (mapped_chunk.dcr_lo - prev_idx)
 						* rec_len;
-				daos_sgl_processor(sgl, idx,
+				daos_sgl_processor(sgl, false, idx,
 						   bytes_to_skip,
 						   sgl_process_nop_cb, NULL);
 				consumed_bytes += bytes_to_skip;
 			}
 			bytes_for_csum = mapped_chunk.dcr_nr * rec_len;
-			rc = daos_sgl_processor(sgl, idx, bytes_for_csum,
+			rc = daos_sgl_processor(sgl, false, idx, bytes_for_csum,
 						checksum_sgl_cb, obj);
 			consumed_bytes += bytes_for_csum;
 			if (rc != 0) {
@@ -968,7 +968,7 @@ calc_csum_recx_with_map(struct daos_csummer *obj, size_t csum_nr,
 	if (consumed_bytes < recx->rx_nr * rec_len) {
 		/** Nothing mapped for recx or tail unmapped */
 		bytes_to_skip = (recx->rx_nr * rec_len) - consumed_bytes;
-		daos_sgl_processor(sgl, idx, bytes_to_skip,
+		daos_sgl_processor(sgl, false, idx, bytes_to_skip,
 				   sgl_process_nop_cb, NULL);
 		consumed_bytes += bytes_to_skip;
 	}
@@ -1052,7 +1052,7 @@ calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 			else
 				skip_size = rec_len + (singv_idx - last_idx) *
 						      singv_lo->cs_bytes;
-			rc = daos_sgl_processor(sgl, &sgl_idx, skip_size,
+			rc = daos_sgl_processor(sgl, false, &sgl_idx, skip_size,
 						NULL, NULL);
 			if (rc)
 				return rc;
@@ -1071,7 +1071,7 @@ calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 		daos_csummer_set_buffer(obj, csum_buf, csums->cs_len);
 		daos_csummer_reset(obj);
 
-		rc = daos_sgl_processor(sgl, &sgl_idx, csum_buf_len,
+		rc = daos_sgl_processor(sgl, false, &sgl_idx, csum_buf_len,
 					checksum_sgl_cb, obj);
 		if (rc)
 			return rc;
