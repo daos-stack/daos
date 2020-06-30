@@ -1803,9 +1803,8 @@ cleanup:
 static void
 obj_enum_complete(crt_rpc_t *rpc, int status, int map_version)
 {
-	struct obj_key_enum_out *oeo;
-	struct obj_key_enum_in *oei;
-	int rc;
+	struct obj_key_enum_out	*oeo;
+	int			 rc;
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
@@ -1813,8 +1812,6 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version)
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
-	oei = crt_req_get(rpc);
-	D_ASSERT(oei != NULL);
 	oeo = crt_reply_get(rpc);
 	D_ASSERT(oeo != NULL);
 
@@ -1843,7 +1840,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	int			opc = opc_get(rpc->cr_opc);
 	int			type;
 	int			rc;
+	int			rc_tmp;
 	bool			recursive = false;
+	struct dtx_handle	dth = {0};
 
 	enum_arg->csummer = ioc->ioc_coh->sch_csummer;
 	/* prepare enumeration parameters */
@@ -1908,7 +1907,23 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		DAOS_FAIL_CHECK(DAOS_VC_LOST_REPLICA))
 		D_GOTO(failed, rc =  -DER_NONEXIST);
 
-	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg);
+	/*
+	 * If oei->oei_dti is not zero, an epoch range is not specified by the
+	 * user. (See obj_list_common and obj_req_valid.) oei->oei_epr.epr_hi
+	 * is our epoch. (See dc_obj_shard_list.)
+	 */
+	rc = dtx_begin(ioc->ioc_coc, &oei->oei_dti, oei->oei_epr.epr_hi,
+		       oei->oei_flags & ORF_EPOCH_UNCERTAIN, oei->oei_map_ver,
+		       &oei->oei_oid, 0, DAOS_INTENT_DEFAULT, NULL, 0, NULL,
+		       &dth);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+
+	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg, &dth);
+
+	/* dss_enum_pack may return 1. */
+	rc_tmp = dtx_end(&dth, ioc->ioc_coc, rc > 0 ? 0 : rc);
+	if (rc_tmp != 0)
+		rc = rc_tmp;
 
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_ev = anchors->ia_sv;
@@ -2459,6 +2474,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	daos_key_t			*dkey;
 	daos_key_t			*akey;
 	struct obj_io_context		 ioc;
+	struct dtx_handle		 dth = {0};
 	int				 rc;
 
 	okqi = crt_req_get(rpc);
@@ -2466,10 +2482,11 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	okqo = crt_reply_get(rpc);
 	D_ASSERT(okqo != NULL);
 
-	D_DEBUG(DB_IO, "flags = %d\n", okqi->okqi_flags);
+	D_DEBUG(DB_IO, "flags = "DF_U64"\n", okqi->okqi_api_flags);
 
 	if (okqi->okqi_epoch == DAOS_EPOCH_MAX || okqi->okqi_epoch == 0) {
 		okqi->okqi_epoch = crt_hlc_get();
+		okqi->okqi_flags &= ~ORF_EPOCH_UNCERTAIN;
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", okqi->okqi_epoch);
 	}
 
@@ -2483,14 +2500,24 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	akey = &okqi->okqi_akey;
 	d_iov_set(&okqo->okqo_akey, NULL, 0);
 	d_iov_set(&okqo->okqo_dkey, NULL, 0);
-	if (okqi->okqi_flags & DAOS_GET_DKEY)
+	if (okqi->okqi_api_flags & DAOS_GET_DKEY)
 		dkey = &okqo->okqo_dkey;
-	if (okqi->okqi_flags & DAOS_GET_AKEY)
+	if (okqi->okqi_api_flags & DAOS_GET_AKEY)
 		akey = &okqo->okqo_akey;
 
+	rc = dtx_begin(ioc.ioc_coc, &okqi->okqi_dti, okqi->okqi_epoch,
+		       okqi->okqi_flags & ORF_EPOCH_UNCERTAIN,
+		       okqi->okqi_map_ver, &okqi->okqi_oid, 0,
+		       DAOS_INTENT_DEFAULT, NULL, 0, NULL, &dth);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid,
-			       VOS_USE_TIMESTAMPS | okqi->okqi_flags,
-			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx);
+			       VOS_USE_TIMESTAMPS | okqi->okqi_api_flags,
+			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx,
+			       &dth);
+
+	rc = dtx_end(&dth, ioc.ioc_coc, rc);
+
 out:
 	obj_reply_set_status(rpc, rc);
 	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);
