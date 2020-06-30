@@ -851,9 +851,7 @@ device domain is required.  To manually configure the domain, set `OFI_DOMAIN` s
 ```
 export OFI_DOMAIN=hfi1_0
 ```
-
-Launch the client application:
-
+### Launch the client application
 ```bash
 mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
 ```
