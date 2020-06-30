@@ -96,6 +96,10 @@ struct io_bypass io_bypass_dict[] = {
 		.iob_str	= IOBP_ENV_PM_SNAP,
 	},
 	{
+		.iob_bit	= IOBP_PM_TX,
+		.iob_str	= IOBP_ENV_PM_TX,
+	},
+	{
 		.iob_bit	= IOBP_OFF,
 		.iob_str	= NULL,
 	},
