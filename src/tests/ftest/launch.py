@@ -1025,7 +1025,7 @@ def install_debuginfos():
     # installation
     path = os.path.sep + os.path.join('usr', 'share', 'spdk', 'include')
     if os.path.islink(path):
-        cmds.append = [["sudo", "rm", "-f", path]]
+        cmds.append(["sudo", "rm", "-f", path])
 
     if USE_DEBUGINFO_INSTALL:
         yum_args = [
