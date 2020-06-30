@@ -1936,9 +1936,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	 * is our epoch. (See dc_obj_shard_list.)
 	 */
 	rc = dtx_begin(ioc->ioc_coc, &oei->oei_dti, oei->oei_epr.epr_hi,
-		       oei->oei_flags & ORF_EPOCH_UNCERTAIN, oei->oei_map_ver,
-		       &oei->oei_oid, 0, DAOS_INTENT_DEFAULT, NULL, 0, NULL,
-		       &dth);
+		       oei->oei_flags & ORF_EPOCH_UNCERTAIN, 1,
+		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, NULL, &dth);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg, &dth);
@@ -2529,9 +2528,9 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 		akey = &okqo->okqo_akey;
 
 	rc = dtx_begin(ioc.ioc_coc, &okqi->okqi_dti, okqi->okqi_epoch,
-		       okqi->okqi_flags & ORF_EPOCH_UNCERTAIN,
-		       okqi->okqi_map_ver, &okqi->okqi_oid, 0,
-		       DAOS_INTENT_DEFAULT, NULL, 0, NULL, &dth);
+		       okqi->okqi_flags & ORF_EPOCH_UNCERTAIN, 1,
+		       okqi->okqi_map_ver, &okqi->okqi_oid, NULL, 0, NULL,
+		       &dth);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid,
