@@ -41,14 +41,14 @@ static void test_sgl_get_bytes_with_single_iov(void **state)
 	dts_sgl_init_with_strings(&sgl, 1, "abcd");
 
 	/** Get the first byte of the sgl */
-	daos_sgl_get_bytes(&sgl, &idx, 1, &buf, &len);
+	daos_sgl_get_bytes(&sgl, false, &idx, 1, &buf, &len);
 	assert_int_equal(0, idx.iov_idx);
 	assert_int_equal(1, idx.iov_offset);
 	assert_int_equal('a', *(char *)buf);
 	assert_int_equal(1, len);
 
 	/** Get the next two bytes */
-	daos_sgl_get_bytes(&sgl, &idx, 2, &buf, &len);
+	daos_sgl_get_bytes(&sgl, false, &idx, 2, &buf, &len);
 	assert_int_equal(0, idx.iov_idx);
 	assert_int_equal(3, idx.iov_offset);
 	assert_int_equal('b', *(char *)buf);
@@ -68,7 +68,7 @@ static void test_sgl_get_bytes_with_multiple_iovs(void **state)
 
 	dts_sgl_init_with_strings(&sgl, 2, "a", "b");
 
-	end = daos_sgl_get_bytes(&sgl, &idx, 3, &buf, &len);
+	end = daos_sgl_get_bytes(&sgl, false, &idx, 3, &buf, &len);
 	assert_int_equal('a', *(char *)buf);
 	/** even though 3 requested, only got 2 because can only process a
 	 * single iov at a time.
@@ -78,7 +78,7 @@ static void test_sgl_get_bytes_with_multiple_iovs(void **state)
 	assert_int_equal(0, idx.iov_offset);
 	assert_false(end);
 
-	end = daos_sgl_get_bytes(&sgl, &idx, 2, &buf, &len);
+	end = daos_sgl_get_bytes(&sgl, false, &idx, 2, &buf, &len);
 	assert_int_equal(2, len);
 	assert_int_equal('b', *(char *)buf);
 	/** idx points to after the sgl when done */
@@ -100,7 +100,7 @@ static void test_sgl_get_bytes_trying_to_exceed_len(void **state)
 
 	dts_sgl_init_with_strings(&sgl, 1, "a");
 	sgl_len = sgl.sg_iovs[0].iov_len;
-	end = daos_sgl_get_bytes(&sgl, &idx, sgl_len + 1, &buf, &len);
+	end = daos_sgl_get_bytes(&sgl, false, &idx, sgl_len + 1, &buf, &len);
 
 	assert_int_equal(sgl_len, len); /** len is still only sgl_len */
 	assert_true(end); /** yep, still the end */
@@ -132,7 +132,7 @@ static void test_completely_process_sgl(void **state)
 
 	dts_sgl_init_with_strings(&sgl, 2, "a", "bc");
 
-	daos_sgl_processor(&sgl, &idx, 6, dummy_sgl_cb, NULL);
+	daos_sgl_processor(&sgl, false, &idx, 6, dummy_sgl_cb, NULL);
 
 	assert_int_equal(2, sgl_cb_call_count); /** one for each iov in sgl */
 	sgl_cb_buf[1] = '_'; /** Remove '\0' */
@@ -152,12 +152,12 @@ static void test_process_sgl_span_iov_with_diff_requests(void **state)
 
 	dts_sgl_init_with_strings(&sgl, 2, "abc", "def");
 
-	daos_sgl_processor(&sgl, &idx, 2, dummy_sgl_cb, NULL);
+	daos_sgl_processor(&sgl, false, &idx, 2, dummy_sgl_cb, NULL);
 	assert_int_equal(1, sgl_cb_call_count);
 
 	sgl_cb_call_count = 0; /** reset */
 
-	daos_sgl_processor(&sgl, &idx, 6, dummy_sgl_cb, NULL);
+	daos_sgl_processor(&sgl, false, &idx, 6, dummy_sgl_cb, NULL);
 
 	/** callback called twice. Once for first iov (wasn't
 	 * 'consumed' with initial processor request), then another

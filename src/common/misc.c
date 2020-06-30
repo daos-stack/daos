@@ -253,11 +253,11 @@ daos_sgls_packed_size(d_sg_list_t *sgls, int nr, daos_size_t *buf_size)
 }
 
 bool
-daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-		   size_t buf_len_req,
-		   uint8_t **p_buf, size_t *p_buf_len)
+daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
+		   daos_size_t buf_len_req, uint8_t **p_buf, size_t *p_buf_len)
 {
-	size_t buf_len = 0;
+	daos_size_t buf_len = 0;
+	daos_size_t len;
 
 	if (p_buf_len != NULL)
 	*p_buf_len = 0;
@@ -265,7 +265,10 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 	if (idx->iov_idx >= sgl->sg_nr)
 		return true; /** no data in sgl to get bytes from */
 
-	D_ASSERT(idx->iov_offset < sgl->sg_iovs[idx->iov_idx].iov_len);
+	len = check_buf ? sgl->sg_iovs[idx->iov_idx].iov_buf_len :
+		sgl->sg_iovs[idx->iov_idx].iov_len;
+
+	D_ASSERT(idx->iov_offset < len);
 	/** Point to current idx */
 	if (p_buf != NULL)
 		*p_buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
@@ -274,14 +277,13 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 	 * Determine how many bytes to be used from buf by using
 	 * minimum between requested bytes and bytes left in IOV buffer
 	 */
-	buf_len = MIN(buf_len_req,
-		       sgl->sg_iovs[idx->iov_idx].iov_len - idx->iov_offset);
+	buf_len = MIN(buf_len_req, len - idx->iov_offset);
 
 	/** Increment index */
 	idx->iov_offset += buf_len;
 
 	/** If end of iov was reached, go to next iov */
-	if (idx->iov_offset == sgl->sg_iovs[idx->iov_idx].iov_len) {
+	if (idx->iov_offset == len) {
 		idx->iov_idx++;
 		idx->iov_offset = 0;
 	}
@@ -293,21 +295,22 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 }
 
 int
-daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-		       size_t requested_bytes,
-		       daos_sgl_process_cb process_cb, void *cb_args)
+daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
+		   size_t requested_bytes, daos_sgl_process_cb process_cb,
+		   void *cb_args)
 {
 	uint8_t		*buf = NULL;
 	size_t		 len = 0;
 	bool		 end = false;
 	int		 rc  = 0;
 
-	/**
-	 * loop until all bytes are consumed, the end of the sgl is reached,
-	 *  or an error occurs
+	/*
+	 * loop until all bytes are consumed, the end of the sgl is reached, or
+	 * an error occurs
 	 */
 	while (requested_bytes > 0 && !end && !rc) {
-		end = daos_sgl_get_bytes(sgl, idx, requested_bytes, &buf, &len);
+		end = daos_sgl_get_bytes(sgl, check_buf, idx, requested_bytes,
+					 &buf, &len);
 		requested_bytes -= len;
 		if (process_cb != NULL)
 			rc = process_cb(buf, len, cb_args);
