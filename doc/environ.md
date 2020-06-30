@@ -92,6 +92,11 @@ Whether to aggregate unreferenced epochs. `BOOL`. Default to false.
 ### `DAOS_TARGET_OVERSUBSCRIBE`
 Whether to accept target number oversubscribe for daos server. `BOOL`. Default to false.
 
+### `DAOS_POOL_CREATE_TIMEOUT`
+
+Pool target create timeout used during pool creations in seconds. `INTEGER`.
+Default to CRT_TIMEOUT or 60 s if CRT_TIMEOUT is zero or not set.
+
 ## Client
 
 Environment variables in this section only apply to the client side.

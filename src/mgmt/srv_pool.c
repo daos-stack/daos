@@ -110,6 +110,18 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 	return DER_SUCCESS;
 }
 
+static uint32_t
+pool_tgt_create_timeout(void)
+{
+	unsigned int t = 60;
+
+	d_getenv_int("CRT_TIMEOUT", &t);
+	if (t == 0)
+		t = 60;
+	d_getenv_int("DAOS_POOL_CREATE_TIMEOUT", &t);
+	return t;
+}
+
 static int
 ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 			      d_rank_list_t *rank_list, size_t scm_size,
@@ -117,6 +129,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 {
 	crt_rpc_t			*tc_req;
 	crt_opcode_t			opc;
+	uint32_t			timeout = pool_tgt_create_timeout();
 	struct mgmt_tgt_create_in	*tc_in;
 	struct mgmt_tgt_create_out	*tc_out;
 	d_rank_t			*tc_out_ranks;
@@ -138,6 +151,9 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 			DP_UUID(pool_uuid), DP_RC(rc));
 		return rc;
 	}
+	D_DEBUG(DB_MGMT, DF_UUID": timeout=%u\n", DP_UUID(pool_uuid), timeout);
+	rc = crt_req_set_timeout(tc_req, timeout);
+	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
