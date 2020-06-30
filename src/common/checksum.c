@@ -453,7 +453,7 @@ daos_str2csumcontprop(const char *value)
 	int t;
 
 	for (t = CSUM_TYPE_UNKNOWN + 1; t < CSUM_TYPE_END; t++) {
-		char *name = algo_table[t]->cf_name;
+		char *name = algo_table[t - 1]->cf_name;
 
 		if (!strncmp(name, value,
 			     min(strlen(name), strlen(value)) + 1)) {
