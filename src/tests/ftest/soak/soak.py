@@ -139,7 +139,7 @@ class SoakTestBase(TestWithServers):
         # Check if requested reservation is allowed in partition
         # NOTE: Slurm reservation and partition are created before soak runs.
         # CI uses partition=daos_client and no reservation.
-        # A21 uses partition=normal/default and reservation=doas-test.
+        # A21 uses partition=normal/default and reservation=daos-test.
         # Partition and reservation names are updated in the yaml file.
         # It is assumed that if there is no reservation (CI only), then all
         # the nodes in the partition will be used for soak.
