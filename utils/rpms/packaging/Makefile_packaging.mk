@@ -2,7 +2,6 @@
 # Needs the following variables set at a minimum:
 # NAME :=
 # SRC_EXT :=
-# SOURCE =
 
 # Put site overrides (i.e. REPOSITORY_URL, DAOS_STACK_*_LOCAL_REPO) in here
 -include Makefile.local
@@ -87,8 +86,10 @@ endef
 endif
 
 BUILD_OS ?= leap.15
-CHROOT_NAME ?= opensuse-leap-15.1-x86_64
 PACKAGING_CHECK_DIR ?= ../packaging
+PR_REPOS         := $(shell set -x; git show -s --format=%B | sed -ne 's/^PR-repos: *\(.*\)/\1/p')
+LEAP_15_PR_REPOS := $(shell set -x; git show -s --format=%B | sed -ne 's/^PR-repos-leap15: *\(.*\)/\1/p')
+EL_7_PR_REPOS    := $(shell set -x; git show -s --format=%B | sed -ne 's/^PR-repos-el7: *\(.*\)/\1/p')
 COMMON_RPM_ARGS := --define "%_topdir $$PWD/_topdir" $(BUILD_DEFINES)
 DIST    := $(shell rpm $(COMMON_RPM_ARGS) --eval %{?dist})
 ifeq ($(DIST),)
