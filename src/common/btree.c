@@ -3962,9 +3962,10 @@ dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
 	ovhd->to_record_msize = ops->to_rec_msize(alloc_overhead);
 	ovhd->to_node_rec_msize = btr_size;
 
-	ovhd->to_node_overhead.no_order = tree_order;
-	ovhd->to_node_overhead.no_size = alloc_overhead +
+	ovhd->to_leaf_overhead.no_order = tree_order;
+	ovhd->to_leaf_overhead.no_size = alloc_overhead +
 		sizeof(struct btr_node) + btr_size * tree_order;
+	ovhd->to_int_node_size = ovhd->to_leaf_overhead.no_size;
 
 	order_idx = 0;
 

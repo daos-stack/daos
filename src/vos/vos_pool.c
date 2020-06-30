@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -509,7 +509,7 @@ set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
 		goto done;
 	}
 
-	size = &ovhd.to_node_overhead.no_size;
+	size = &ovhd.to_leaf_overhead.no_size;
 
 	switch (id) {
 	case VOS_SLAB_OBJ_NODE:
@@ -523,6 +523,10 @@ set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
 		break;
 	case VOS_SLAB_EVT_NODE:
 		tclass = VOS_TC_ARRAY;
+		break;
+	case VOS_SLAB_EVT_NODE_SM:
+		tclass = VOS_TC_ARRAY;
+		size = &ovhd.to_int_node_size;
 		break;
 	case VOS_SLAB_EVT_DESC:
 		tclass = VOS_TC_ARRAY;

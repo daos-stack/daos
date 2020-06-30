@@ -182,7 +182,7 @@ struct ilog_entry {
 	int32_t		ie_status;
 };
 
-#define ILOG_PRIV_SIZE 424
+#define ILOG_PRIV_SIZE 456
 /** Structure for storing the full incarnation log for ilog_fetch.  The
  * fields shouldn't generally be accessed directly but via the iteration
  * APIs below.
