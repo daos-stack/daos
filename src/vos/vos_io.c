@@ -77,7 +77,8 @@ struct vos_io_context {
 				 ic_size_fetch:1,
 				 ic_save_recx:1,
 				 ic_read_ts_only:1,
-				 ic_check_existence:1;
+				 ic_check_existence:1,
+				 ic_remove:1;
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -234,6 +235,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_read_ts_only = ((fetch_flags & VOS_FETCH_SET_TS_ONLY) != 0);
 	ioc->ic_check_existence =
 		((fetch_flags & VOS_FETCH_CHECK_EXISTENCE) != 0);
+	ioc->ic_remove =
+		((cond_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_read_conflict = false;
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->iod_csums = iod_csums;
@@ -1145,7 +1148,12 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
-	rc = evt_insert(toh, &ent, NULL);
+	if (ioc->ic_remove) {
+		ent.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
+		rc = evt_remove_all(toh, &ent.ei_rect);
+	} else {
+		rc = evt_insert(toh, &ent, NULL);
+	}
 
 	return rc;
 }

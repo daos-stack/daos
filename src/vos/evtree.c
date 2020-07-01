@@ -3218,6 +3218,63 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	return evt_tx_end(tcx, rc);
 }
 
+int
+evt_remove_all(daos_handle_t toh, const struct evt_rect *rect)
+{
+	struct evt_context	*tcx;
+	struct evt_entry	*entry;
+	struct evt_entry_array	 ent_array;
+	struct evt_filter	 filter;
+	int			 rc;
+
+	tcx = evt_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	evt_ent_array_init(&ent_array);
+
+	filter.fr_ex = rect->rc_ex;
+	filter.fr_epr.epr_lo = 0;
+	filter.fr_epr.epr_hi = rect->rc_epc;
+	filter.fr_punch = 0;
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
+				&filter, rect, &ent_array);
+	if (rc != 0) {
+		D_ERROR("ent_array_fill failed: "DF_RC"\n", DP_RC(rc));
+		goto done;
+	}
+
+	if (ent_array.ea_ent_nr == 0)
+		return 0;
+
+	evt_ent_array_for_each(entry, &ent_array) {
+		struct evt_rect	to_delete;
+
+		if (entry->en_visibility & EVT_PARTIAL) {
+			rc = -DER_NO_PERM;
+			D_ERROR("Removing partial extents not allowed:"
+				" Specified rect "DF_RECT" overlaps "DF_EXT"\n",
+				DP_RECT(rect), DP_EXT(&entry->en_ext));
+			break;
+		}
+
+		to_delete.rc_ex = entry->en_ext;
+		to_delete.rc_epc = entry->en_epoch;
+		to_delete.rc_minor_epc = entry->en_minor_epc;
+		rc = evt_delete(toh, &to_delete, NULL);
+		if (rc != 0) {
+			D_ERROR("Failed to delete "DF_RECT"\n",
+				DP_RECT(&to_delete));
+			break;
+		}
+	}
+
+done:
+	evt_ent_array_fini(&ent_array);
+
+	return rc;
+}
+
 daos_size_t
 evt_csum_count(const struct evt_context *tcx,
 	       const struct evt_extent *extent)
