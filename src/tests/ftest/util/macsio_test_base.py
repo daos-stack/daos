@@ -42,20 +42,8 @@ class MacsioTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super(MacsioTestBase, self).setUp()
-        self.manager = self.get_manager_command()
+        self.manager = Mpirun(None, subprocess=False)
         self.macsio = self.get_macsio_command()
-
-    def get_manager_command(self, job=None):
-        """Get the job manager command object.
-
-        Args:
-            job (ExecutableCommand, optional): job to manage. Defaults to None.
-
-        Returns:
-            Mpirun: JobManager object defining a the job manager command
-
-        """
-        return Mpirun(job, subprocess=False)
 
     def get_macsio_command(self):
         """Get the MacsioCommand object.
