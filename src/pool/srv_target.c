@@ -1061,7 +1061,7 @@ ds_pool_tgt_dist_hdls_handler(crt_rpc_t *rpc)
 
 		if ((char *)conn - (char *)in->tfi_hdls.iov_buf +
 		    sizeof(struct pool_iv_conn) +
-		    conn->pic_cred_size <= in->tfi_hdls.iov_buf_len) {
+		    conn->pic_cred_size > in->tfi_hdls.iov_buf_len) {
 			D_ERROR(DF_UUID": dist_hdls got invalid size buffer."
 				"Expected: %zu, got: %zu\n",
 				DP_UUID(pool->sp_uuid),
