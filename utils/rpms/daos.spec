@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       25%{?relval}%{?dist}
+Release:       26%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -59,7 +59,7 @@ BuildRequires: python-devel python36-devel
 # that code should be rewritten to use the python libraries provided for
 # os detection
 # prefer over libpsm2-compat
-BuildRequires: libpsm_infinipath1
+#BuildRequires: libpsm_infinipath1
 # prefer over libcurl4-mini
 BuildRequires: libcurl4
 BuildRequires: distribution-release
@@ -77,7 +77,7 @@ BuildRequires: systemd-rpm-macros
 BuildRequires: libcurl4
 # have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
 # have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
-BuildRequires: libpsm_infinipath1
+#BuildRequires: libpsm_infinipath1
 %endif # 0%{?is_opensuse}
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
@@ -142,9 +142,9 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: fio
-%if (0%{?suse_version} >= 1315)
-Requires: libpsm_infinipath1
-%endif
+#%if (0%{?suse_version} >= 1315)
+#Requires: libpsm_infinipath1
+#%endif
 
 
 %description tests
@@ -362,6 +362,9 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Wed Jul 1 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-26
+- Remove infinipath from requirements
+
 * Tue Jun 23 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-25
 - Add -no-rpath option and use it for rpm build rather than modifying
   SCons files in place
