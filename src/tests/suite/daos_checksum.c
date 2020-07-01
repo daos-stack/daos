@@ -898,6 +898,21 @@ overlapping_after_first_chunk(void **state)
 }
 
 static void
+request_second_half_of_chunk(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 1024,
+		.csum_prop_type = dts_csum_prop_type,
+		.server_verify = false,
+		.rec_size = 1,
+		.recx_cfgs = {
+			{.idx = 0, .nr = 1024, .data = "12345678"},
+		},
+		.fetch_recx = {.rx_idx = 512, .rx_nr = 512},
+	});
+}
+
+static void
 extents_with_holes_1(void **state)
 {
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
@@ -1413,6 +1428,40 @@ many_iovs_with_single_values(void **state)
 	assert_int_equal(0, rc);
 }
 
+static void
+request_non_existent_data(void **state)
+{
+	int			rc;
+	struct csum_test_ctx	ctx;
+
+	setup_from_test_args(&ctx, *state);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024, dts_csum_oc);
+	setup_simple_data(&ctx);
+
+	ctx.update_iod.iod_recxs[0].rx_idx = 1;
+	ctx.update_iod.iod_recxs[0].rx_nr = 1;
+
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT,
+			     &ctx.dkey, 1, &ctx.update_iod,
+			     &ctx.update_sgl, NULL);
+	assert_success(rc);
+
+	ctx.fetch_iod.iod_recxs[0].rx_idx = 0;
+	ctx.fetch_iod.iod_recxs[0].rx_nr = 1;
+	ctx.fetch_iod.iod_recxs[1].rx_idx = 1;
+	ctx.fetch_iod.iod_recxs[1].rx_nr = 1;
+	ctx.fetch_iod.iod_recxs[2].rx_idx = 3;
+	ctx.fetch_iod.iod_recxs[2].rx_nr = 1;
+	ctx.fetch_iod.iod_recxs[3].rx_idx = 4;
+	ctx.fetch_iod.iod_recxs[3].rx_nr = 1;
+	ctx.fetch_iod.iod_nr = 4;
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey,
+			    1, &ctx.fetch_iod,
+			    &ctx.fetch_sgl, NULL, NULL);
+	assert_success(rc);
+}
+
 static bool
 rank_in_placement(uint32_t rank, struct daos_obj_layout *placement)
 {
@@ -1916,6 +1965,8 @@ static const struct CMUnitTest csum_tests[] = {
 		record_size_larger_than_chunksize),
 	CSUM_TEST("DAOS_CSUM03.4: Setup multiple overlapping/unaligned extents",
 		  overlapping_after_first_chunk),
+	CSUM_TEST("DAOS_CSUM03.5: Request the second half of a chunk",
+		  request_second_half_of_chunk),
 	CSUM_TEST("DAOS_CSUM04.1: With holes between extents. All in 1 chunk",
 		  extents_with_holes_1),
 	CSUM_TEST("DAOS_CSUM04.2: With holes at beginning and end. of extent."
@@ -1939,12 +1990,13 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM08: Update/Fetch A Key", test_update_fetch_a_key),
 	CSUM_TEST("DAOS_CSUM09: Update/Fetch D Key", test_update_fetch_d_key),
 	CSUM_TEST("DAOS_CSUM10: Enumerate A Keys", test_enumerate_a_key),
-	CSUM_TEST("DAOS_CSUM11: Enumerate objects", test_enumerate_object),
-	CSUM_TEST("DAOS_CSUM12: Enumerate objects with too small csum buffer",
+	CSUM_TEST("DAOS_CSUM11: Enumerate D Keys", test_enumerate_d_key),
+	CSUM_TEST("DAOS_CSUM12: Enumerate objects", test_enumerate_object),
+	CSUM_TEST("DAOS_CSUM13: Enumerate objects with too small csum buffer",
 		  test_enumerate_object_csum_buf_too_small),
-	CSUM_TEST("DAOS_CSUM13: Enumerate D Keys", test_enumerate_d_key),
 	CSUM_TEST("DAOS_CSUM14: Many IODs", many_iovs_with_single_values),
-	CSUM_TEST("DAOS_CSUM15: Many IODs", many_iovs_with_single_values),
+	CSUM_TEST("DAOS_CSUM15: Request non existent data",
+		  request_non_existent_data),
 
 	CSUM_TEST("DAOS_CSUM_REBUILD01: Array, Data is inlined", rebuild_1),
 	CSUM_TEST("DAOS_CSUM_REBUILD02: Array, Data not inlined, not bulk",
