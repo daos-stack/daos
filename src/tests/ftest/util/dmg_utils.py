@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-many-lines,too-many-public-methods
+
 from __future__ import print_function
 
 from getpass import getuser

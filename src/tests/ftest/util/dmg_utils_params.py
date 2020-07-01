@@ -21,7 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
 
 #from command_utils_base import \
 #    BasicParameter, YamlParameters, TransportCredentials

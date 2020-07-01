@@ -784,7 +784,8 @@ class TestWithServers(TestWithoutServers):
 
         dmg_config_file = self.get_config_file("daos", "dmg")
         dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group, DmgTransportCredentials(self.workdir))
+            dmg_config_file, self.server_group, DmgTransportCredentials(
+                self.workdir))
         dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
         return DmgCommand(self.bin, dmg_cfg)
 
@@ -878,34 +879,3 @@ class TestWithServers(TestWithoutServers):
                 to True.
         """
         self.container = self.get_container(pool, namespace, create)
-
-    def start_additional_servers(self, additional_servers, index=0):
-        """Start additional servers.
-
-        This method can be used to start a new daos_server during a test.
-
-        Args:
-            additional_servers (list of str): List of hostnames to start
-                daos_server.
-            index (int): Determines which server_managers to use when creating
-                the new server.
-        """
-        self.server_managers.append(
-            DaosServerManager(
-                self.server_managers[index].manager.job,
-                self.manager_class,
-                self.server_managers[index].dmg.yaml
-            )
-        )
-        self.server_managers[-1].manager.assign_environment(
-            EnvironmentVariables({"PATH": None}), True)
-        self.server_managers[-1].hosts = (
-            additional_servers, self.workdir, self.hostfile_servers_slots)
-
-        self.log.info(
-            "Starting %s: group=%s, hosts=%s, config=%s", "server",
-            self.server_managers[-1].get_config_value("name"),
-            self.server_managers[-1].hosts,
-            self.server_managers[-1].get_config_value("filename"))
-        self.server_managers[-1].verify_socket_directory(getuser())
-        self.server_managers[-1].start()

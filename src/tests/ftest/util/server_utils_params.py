@@ -35,7 +35,8 @@ class DaosServerTransportCredentials(TransportCredentials):
     def __init__(self, log_dir):
         """Initialize a TransportConfig object."""
         super(DaosServerTransportCredentials, self).__init__(
-            "/run/server_config/transport_config/*", "transport_config", log_dir)
+            "/run/server_config/transport_config/*",
+            "transport_config", log_dir)
         self.client_cert_dir = LogParameter(log_dir, None, "clients")
         self.cert = LogParameter(log_dir, None, "server.crt")
         self.key = LogParameter(log_dir, None, "server.key")
@@ -288,6 +289,31 @@ class DaosServerYamlParameters(YamlParameters):
                     "".join(log_name),
                     "server_config.server[{}].log_file".format(index))
 
+    def get_interface_envs(self, index=0):
+        """Get the environment variable names and values for the interfaces.
+
+        Args:
+            index (int, optional): server index from which to obtain the
+                environment variable values. Defaults to 0.
+
+        Returns:
+            EnvironmentVariables: a dictionary of environment variable names
+                and their values extracted from the daos_server yaml
+                configuration file.
+
+        """
+        env = EnvironmentVariables()
+        mapping = {
+            "OFI_INTERFACE": "fabric_iface",
+            "OFI_PORT": "fabric_iface_port",
+            "CRT_PHY_ADDR_STR": "provider",
+        }
+        for key, name in mapping.items():
+            value = self.server_params[index].get_value(name)
+            if value is not None:
+                env[key] = value
+
+        return env
 
     class PerServerYamlParameters(YamlParameters):
         """Defines the configuration yaml parameters for a single server."""
