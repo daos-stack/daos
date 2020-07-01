@@ -1326,7 +1326,12 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 		goto out;
 	}
 
-	return dc_task_schedule(task, true);
+	rc = dc_task_schedule(task, true);
+
+	/* Return positive value to notify the sponsor to not call
+	 * complete() the task until the checking existence callback.
+	 */
+	return rc == 0 ? 1 : rc;
 
 out:
 	if (iods != NULL && iods != iods_or_akeys) {

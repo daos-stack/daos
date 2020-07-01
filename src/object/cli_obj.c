@@ -3062,7 +3062,8 @@ dc_obj_update_task(tse_task_t *task)
 	/* submit the update */
 	return dc_obj_update(task, &epoch, map_ver, args);
 comp:
-	tse_task_complete(task, rc);
+	if (rc <= 0)
+		tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -3331,7 +3332,8 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 	/* submit the punch */
 	return dc_obj_punch(task, &epoch, map_ver, opc, args);
 comp:
-	tse_task_complete(task, rc);
+	if (rc <= 0)
+		tse_task_complete(task, rc);
 	return rc;
 }
 
