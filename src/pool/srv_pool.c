@@ -3780,9 +3780,6 @@ out:
  *
  * This code is a bridge that allows a reintegrating node to be told about the
  * needed handles until that IV retrieval mechanism is built.
- *
- * In particular, this code is likely to break as the number of open handles
- * exceeds the maximum size of in-band RPC data.
  */
 static int
 redist_open_hdls_send_rpcs(uuid_t pool_uuid, d_iov_t *handles,
