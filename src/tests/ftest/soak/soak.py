@@ -116,9 +116,7 @@ class SoakTestBase(TestWithServers):
         # Create the remote log directories on all client nodes
         self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
         self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
-        self.sharedlog_dir = os.getenv(
-            "DAOS_TEST_SHARED_DIR", os.path.expanduser(
-                "~/daos_test")) + "/soak"
+        self.sharedlog_dir = self.tmp + "/soak"
         self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
         # Fail if slurm partition is not defined
         if not self.client_partition:
