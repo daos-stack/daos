@@ -84,8 +84,8 @@ message PoolExcludeResp {
 // PoolDrainReq supplies pool identifier, rank, and target_idxs.
 message PoolDrainReq {
 	string uuid = 1; // uuid of pool to add target up to
-	uint32 rank = 2; // target to move to the up state
-	repeated uint32 targetidx = 3; // target ranks
+	uint32 rank = 2; // rank to move to the up state
+	repeated uint32 targetidx = 3; // rank targets
 }
 
 // PoolDrainResp returns resultant state of Drain operation.
