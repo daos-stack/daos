@@ -702,6 +702,67 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 }
 
 void
+ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolExtendReq	*req = NULL;
+	Mgmt__PoolExtendResp	resp;
+	d_rank_list_t		*rank_list = NULL;
+	uuid_t			uuid;
+	uint8_t			*body;
+	size_t			len;
+	int			rc;
+
+	mgmt__pool_extend_resp__init(&resp);
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_extend_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (Extend target)\n");
+		return;
+	}
+
+	rc = uuid_parse(req->uuid, uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
+			DP_RC(rc));
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rank_list = uint32_array_to_rank_list(req->ranks, req->n_ranks);
+	if (rank_list == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_extend(uuid, rank_list, "pmem", req->scmbytes,
+				req->nvmebytes);
+
+	if (rc != 0) {
+		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->uuid,
+			DP_RC(rc));
+	}
+
+out:
+	if (rank_list != NULL)
+		d_rank_list_free(rank_list);
+	resp.status = rc;
+	len = mgmt__pool_extend_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_extend_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_extend_req__free_unpacked(req, NULL);
+}
+
+void
 ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__PoolReintegrateReq	*req = NULL;
@@ -1669,16 +1730,17 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->error_count = bds.bds_error_count;
 	resp->temperature = bds.bds_temperature;
 	resp->media_errors = bds.bds_media_errors[0];
-	resp->read_errs = bds.bds_bio_read_errs;
-	resp->write_errs = bds.bds_bio_write_errs;
-	resp->unmap_errs = bds.bds_bio_unmap_errs;
-	resp->checksum_errs = bds.bds_checksum_errs;
-	resp->temp = bds.bds_temp_warning ? true : false;
-	resp->spare = bds.bds_avail_spare_warning ? true : false;
-	resp->readonly = bds.bds_read_only_warning ? true : false;
-	resp->device_reliability = bds.bds_dev_reliabilty_warning ?
+	resp->read_errors = bds.bds_bio_read_errs;
+	resp->write_errors = bds.bds_bio_write_errs;
+	resp->unmap_errors = bds.bds_bio_unmap_errs;
+	resp->checksum_errors = bds.bds_checksum_errs;
+	resp->temp_warn = bds.bds_temp_warning ? true : false;
+	resp->spare_warn = bds.bds_avail_spare_warning ? true : false;
+	resp->readonly_warn = bds.bds_read_only_warning ? true : false;
+	resp->device_reliability_warn = bds.bds_dev_reliabilty_warning ?
 					true : false;
-	resp->volatile_memory = bds.bds_volatile_mem_warning ? true : false;
+	resp->volatile_memory_warn = bds.bds_volatile_mem_warning ?
+					true : false;
 
 out:
 	resp->status = rc;

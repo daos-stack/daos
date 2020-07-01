@@ -87,10 +87,10 @@ struct dc_tx {
 	/** Container open handle */
 	daos_handle_t		 tx_coh;
 	/** The TX epoch. */
-	daos_epoch_t		 tx_epoch;
+	struct dc_obj_epoch	 tx_epoch;
 	/** The list of dc_tx_sub_req. */
 	d_list_t		 tx_sub_reqs;
-	/** Transaction flags (RDONLY, ZERO_COPY, etc.) */
+	/** Transaction flags (DAOS_TF_RDONLY, DAOS_TF_ZERO_COPY, etc.) */
 	uint64_t		 tx_flags;
 	/** The sub requests count */
 	uint32_t		 tx_sub_count;
@@ -192,9 +192,11 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	 *	  It will be replaced by dc_tx_set_epoch when server side HLC
 	 *	  based solution ready.
 	 */
-	tx->tx_epoch = epoch;
-	if (tx->tx_epoch == 0)
-		tx->tx_epoch = daos_dti2epoch(&tx->tx_id);
+	tx->tx_epoch.oe_value = epoch;
+	if (tx->tx_epoch.oe_value == 0) {
+		tx->tx_epoch.oe_value = daos_dti2epoch(&tx->tx_id);
+		tx->tx_epoch.oe_uncertain = true;
+	}
 
 	tx->tx_coh = coh;
 	tx->tx_flags = flags;
@@ -259,7 +261,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 
 	D_ASSERTF(tx->tx_sub_count == 0,
-		  "Invaild sub requests count %d when cleanup\n",
+		  "Invalid sub requests count %d when cleanup\n",
 		  tx->tx_sub_count);
 }
 
@@ -281,7 +283,7 @@ dc_tx_set_epoch(daos_handle_t th, daos_epoch_t epoch)
 		D_ERROR("Can't repeated set epoch on TX unless restart it\n");
 		rc = -DER_NO_PERM;
 	} else {
-		tx->tx_epoch = epoch;
+		tx->tx_epoch.oe_value = epoch;
 	}
 
 	dc_tx_decref(tx);
@@ -404,7 +406,8 @@ out:
 }
 
 int
-dc_tx_hdl2epoch_and_pmv(daos_handle_t th, daos_epoch_t *epoch, uint32_t *pm_ver)
+dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dc_obj_epoch *epoch,
+			uint32_t *pm_ver)
 {
 	struct dc_tx	*tx = NULL;
 	int		 rc;
@@ -441,8 +444,8 @@ dc_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch)
 	 *	that. The caller can re-call hdl2epoch after some fetch or
 	 *	TX commit.
 	 */
-	if (tx->tx_epoch != 0)
-		*epoch = tx->tx_epoch;
+	if (tx->tx_epoch.oe_value != 0)
+		*epoch = tx->tx_epoch.oe_value;
 	else
 		rc = -DER_UNINIT;
 	dc_tx_decref(tx);
@@ -555,9 +558,9 @@ dc_tx_commit_non_cpd(tse_task_t *task, struct dc_tx *tx)
 		args->nr = dtsr->dtsr_nr;
 		args->iods = dtsr->dtsr_iods;
 		args->sgls = dtsr->dtsr_sgls;
-		args->maps = NULL;
+		args->ioms = NULL;
 
-		rc = dc_obj_update(task, tx->tx_epoch, tx->tx_pm_ver, args);
+		rc = dc_obj_update(task, &tx->tx_epoch, tx->tx_pm_ver, args);
 	} else {
 		daos_obj_punch_t	*args = dc_task_get_args(task);
 
@@ -568,7 +571,7 @@ dc_tx_commit_non_cpd(tse_task_t *task, struct dc_tx *tx)
 		args->flags = dtsr->dtsr_flags;
 		args->akey_nr = dtsr->dtsr_nr;
 
-		rc = dc_obj_punch(task, tx->tx_epoch, tx->tx_pm_ver,
+		rc = dc_obj_punch(task, &tx->tx_epoch, tx->tx_pm_ver,
 				  dtsr->dtsr_opc, args);
 	}
 
@@ -793,6 +796,11 @@ out_task:
 	return rc;
 }
 
+/**
+ * Restart a transaction that has encountered a -DER_TX_RESTART. This shall not
+ * be used to restart a transaction created by dc_tx_open_snap or
+ * dc_tx_local_open, either of which shall not encounter -DER_TX_RESTART.
+ */
 int
 dc_tx_restart(tse_task_t *task)
 {
@@ -816,13 +824,17 @@ dc_tx_restart(tse_task_t *task)
 		dc_tx_cleanup(tx);
 		tx->tx_status = TX_OPEN;
 
-		/* FIXME: The tx_epoch should be reset as zero, but before
+		/*
+		 * Increasing the epoch doesn't change our knowledge of its
+		 * uncertainty on the client side.
+		 *
+		 * FIXME: The tx_epoch should be reset as zero, but before
 		 *	  server side HLC based solution ready, we temporarily
 		 *	  set it as client side HLC.
 		 *
 		 *	tx->tx_epoch = 0;
 		 */
-		tx->tx_epoch = crt_hlc_get();
+		tx->tx_epoch.oe_value = crt_hlc_get();
 	}
 
 	/* -1 for hdl2ptr */

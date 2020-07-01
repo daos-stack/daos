@@ -22,7 +22,7 @@ Current state of work can be summarized as follow :
     a symlink to the Linux Kernel/VFS.
 
 -   the <absolute-prefix> can be specified as the new `daos=<absolute-prefix>`
-    Lustre Client mount option, or also thru the new `llite.*.daos_prefix`
+    Lustre Client mount option, or also through the new `llite.*.daos_prefix`
     Lustre dynamic tuneable. And both <pool-uuid> and <container-uuid> are
     extracted from foreign file/dir LOV/LMV EA.
 
@@ -32,7 +32,7 @@ Current state of work can be summarized as follow :
     pools/containers as `<pool-uuid>/<container-uuid>` relative paths.
 
 -   `daos` foreign support is enabled at mount time with `daos=` option
-    present, or dynamically thru `llite.*.daos_enable` setting.
+    present, or dynamically through `llite.*.daos_enable` setting.
 
 ## Data Migration
 

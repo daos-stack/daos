@@ -112,7 +112,7 @@ struct agg_io_context {
 	unsigned int		 ic_seg_max;
 	unsigned int		 ic_seg_cnt;
 	/* Reserved SCM extents for new physical entries */
-	struct vos_rsrvd_scm	 ic_rsrvd_scm;
+	struct vos_rsrvd_scm	*ic_rsrvd_scm;
 	/* Reserved NVMe extents for new physical entries */
 	d_list_t		 ic_nvme_exts;
 	void			 (*ic_csum_recalc_func)(void *);
@@ -133,7 +133,7 @@ struct agg_merge_window {
 	struct agg_lgc_ent		*mw_lgc_ents;
 	unsigned int			 mw_lgc_max;
 	unsigned int			 mw_lgc_cnt;
-	/* I/O context for transfering data on flush */
+	/* I/O context for transferring data on flush */
 	struct agg_io_context		 mw_io_ctxt;
 	bool				 mw_csum_support;
 };
@@ -147,6 +147,8 @@ struct vos_agg_param {
 	daos_key_t		ap_akey;	/* current akey */
 	unsigned int		ap_discard:1;
 	struct umem_instance	*ap_umm;
+	bool			(*ap_yield_func)(void *arg);
+	void			*ap_yield_arg;
 	/* SV tree: Max epoch in specified iterate epoch range */
 	daos_epoch_t		 ap_max_epoch;
 	/* EV tree: Merge window for evtree aggregation */
@@ -292,7 +294,8 @@ merge_window_status(struct agg_merge_window *mw)
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
 
 	D_ASSERT(io->ic_seg_cnt == 0);
-	D_ASSERT(io->ic_rsrvd_scm.rs_actv_at == 0);
+	D_ASSERT(io->ic_rsrvd_scm == NULL ||
+		 io->ic_rsrvd_scm->rs_actv_at == 0);
 	D_ASSERT(d_list_empty(&io->ic_nvme_exts));
 
 	D_ASSERT(mw->mw_ext.ex_lo <= mw->mw_ext.ex_hi);
@@ -325,8 +328,7 @@ merge_window_status(struct agg_merge_window *mw)
 	D_ASSERT(io->ic_buf == NULL);
 	D_ASSERT(io->ic_seg_max == 0);
 	D_ASSERT(io->ic_segs == NULL);
-	D_ASSERT(io->ic_rsrvd_scm.rs_actv_cnt == 0);
-	D_ASSERT(io->ic_rsrvd_scm.rs_actv == NULL);
+	D_ASSERT(io->ic_rsrvd_scm == NULL);
 
 	return MW_CLOSED;
 }
@@ -630,7 +632,7 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 	media = vos_media_select(vos_obj2pool(obj), DAOS_IOD_ARRAY, size);
 
 	if (media == DAOS_MEDIA_SCM) {
-		off = vos_reserve_scm(obj->obj_cont, &io->ic_rsrvd_scm, size);
+		off = vos_reserve_scm(obj->obj_cont, io->ic_rsrvd_scm, size);
 		if (UMOFF_IS_NULL(off)) {
 			D_ERROR("Reserve "DF_U64" from SCM failed.\n", size);
 			return -DER_NOSPACE;
@@ -951,7 +953,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	if (added_csum_segs) {
 		/* Additional data requird to verify checksums is read
 		 * into end of read buffer. This allows the write data
-		 * to be placed as a single contiguous range at begining
+		 * to be placed as a single contiguous range at beginning
 		 * of the buffer.
 		 */
 		rc = csum_append_added_segs(&bsgl, added_csum_segs);
@@ -1025,18 +1027,27 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	int			 rc = 0;
 
 	scm_max = MAX(io->ic_seg_cnt, 200);
-	if (io->ic_rsrvd_scm.rs_actv_cnt < scm_max) {
-		D_REALLOC(scm_exts, io->ic_rsrvd_scm.rs_actv,
-			  scm_max * sizeof(*scm_exts));
-		if (scm_exts == NULL)
+	if (io->ic_rsrvd_scm == NULL ||
+	    io->ic_rsrvd_scm->rs_actv_cnt < scm_max) {
+		struct vos_rsrvd_scm	*rsrvd_scm;
+		size_t			 size;
+
+		size = sizeof(*io->ic_rsrvd_scm) *
+			sizeof(*scm_exts) * scm_max;
+
+		if (io->ic_rsrvd_scm == NULL)
+			D_ALLOC(rsrvd_scm, size);
+		else
+			D_REALLOC(rsrvd_scm, io->ic_rsrvd_scm, size);
+		if (rsrvd_scm == NULL)
 			return -DER_NOMEM;
 
-		io->ic_rsrvd_scm.rs_actv = scm_exts;
-		io->ic_rsrvd_scm.rs_actv_cnt = scm_max;
+		io->ic_rsrvd_scm = rsrvd_scm;
+		io->ic_rsrvd_scm->rs_actv_cnt = scm_max;
 	}
-	memset(io->ic_rsrvd_scm.rs_actv, 0,
-	       io->ic_rsrvd_scm.rs_actv_cnt * sizeof(*scm_exts));
-	D_ASSERT(io->ic_rsrvd_scm.rs_actv_at == 0);
+	memset(io->ic_rsrvd_scm->rs_actv, 0,
+	       io->ic_rsrvd_scm->rs_actv_cnt * sizeof(*scm_exts));
+	D_ASSERT(io->ic_rsrvd_scm->rs_actv_at == 0);
 
 	for (i = 0; i < io->ic_seg_cnt; i++) {
 		lgc_seg = &io->ic_segs[i];
@@ -1080,7 +1091,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		return rc;
 
 	/* Publish SCM reservations */
-	rc = vos_publish_scm(obj->obj_cont, &io->ic_rsrvd_scm, true);
+	rc = vos_publish_scm(obj->obj_cont, io->ic_rsrvd_scm, true);
 	if (rc) {
 		D_ERROR("Publish SCM extents error: "DF_RC"\n", DP_RC(rc));
 		goto abort;
@@ -1107,7 +1118,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr)) {
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
-			 * physical entry, in additon to re-assigning address.
+			 * physical entry, in addition to re-assigning address.
 			 */
 			phy_ent->pe_csum_info = ent_in->ei_csum;
 		}
@@ -1207,7 +1218,7 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 
 	D_ASSERT(obj != NULL);
 	if (rc) {
-		vos_publish_scm(obj->obj_cont, &io->ic_rsrvd_scm, false);
+		vos_publish_scm(obj->obj_cont, io->ic_rsrvd_scm, false);
 
 		if (!d_list_empty(&io->ic_nvme_exts))
 			vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts,
@@ -1216,7 +1227,8 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 
 	/* Reset io context */
 	D_ASSERT(d_list_empty(&io->ic_nvme_exts));
-	D_ASSERT(io->ic_rsrvd_scm.rs_actv_at == 0);
+	D_ASSERT(io->ic_rsrvd_scm == NULL ||
+		 io->ic_rsrvd_scm->rs_actv_at == 0);
 	io->ic_seg_cnt = 0;
 }
 
@@ -1475,11 +1487,7 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 		io->ic_seg_max = 0;
 	}
 
-	if (io->ic_rsrvd_scm.rs_actv != NULL) {
-		D_FREE(io->ic_rsrvd_scm.rs_actv);
-		io->ic_rsrvd_scm.rs_actv = NULL;
-		io->ic_rsrvd_scm.rs_actv_cnt = 0;
-	}
+	D_FREE(io->ic_rsrvd_scm);
 
 	if (io->ic_csum_recalcs != NULL) {
 		D_FREE(io->ic_csum_recalcs);
@@ -1727,6 +1735,16 @@ out:
 	return rc;
 }
 
+static inline bool
+vos_aggregate_yield(struct vos_agg_param *agg_param)
+{
+	if (agg_param->ap_yield_func != NULL)
+		return agg_param->ap_yield_func(agg_param->ap_yield_arg);
+
+	bio_yield();
+	return false;
+}
+
 static int
 vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		     vos_iter_type_t type, vos_iter_param_t *param,
@@ -1768,11 +1786,6 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	if (cont->vc_abort_aggregation) {
-		D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
-		return 1;
-	}
-
 	agg_param->ap_credits++;
 
 	if (agg_param->ap_credits > agg_param->ap_credits_max ||
@@ -1786,7 +1799,10 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		 * see the comment in vos_agg_obj().
 		 */
 		reset_agg_pos(type, agg_param);
-		bio_yield();
+		if (vos_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
+			return 1;
+		}
 	}
 
 	return 0;
@@ -1881,7 +1897,6 @@ aggregate_enter(struct vos_container *cont, bool discard,
 		cont->vc_epr_aggregation = *epr;
 	}
 
-	cont->vc_abort_aggregation = 0;
 	return 0;
 }
 
@@ -1913,7 +1928,9 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 }
 
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
+	      void (*csum_func)(void *),
+	      bool (*yield_func)(void *arg), void *yield_arg)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	vos_iter_param_t	 iter_param = { 0 };
@@ -1949,12 +1966,14 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
 	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = false;
-	merge_window_init(&agg_param.ap_window, func);
+	agg_param.ap_yield_func = yield_func;
+	agg_param.ap_yield_arg = yield_arg;
+	merge_window_init(&agg_param.ap_window, csum_func);
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
-			 &agg_param);
+			 &agg_param, NULL);
 	if (rc != 0) {
 		close_merge_window(&agg_param.ap_window, rc);
 		goto exit;
@@ -1979,7 +1998,8 @@ exit:
 }
 
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
+vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+	    bool (*yield_func)(void *arg), void *yield_arg)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	vos_iter_param_t	 iter_param = { 0 };
@@ -2018,11 +2038,13 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
 	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = true;
+	agg_param.ap_yield_func = yield_func;
+	agg_param.ap_yield_arg = yield_arg;
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
-			 &agg_param);
+			 &agg_param, NULL);
 
 	aggregate_exit(cont, true);
 	return rc;

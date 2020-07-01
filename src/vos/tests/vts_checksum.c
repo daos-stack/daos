@@ -107,7 +107,7 @@ void
 csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 {
 	struct dcs_csum_info	*csum_infos;
-	struct dcs_iod_csums	 iod_csums;
+	struct dcs_iod_csums	 iod_csums = {0};
 	daos_iod_t		 iod = {0};
 	daos_recx_t		 recx[MAX_RECX];
 	d_sg_list_t		 sgl;
@@ -146,6 +146,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 
 	D_ALLOC_ARRAY(csum_infos, update_recx_nr);
 	iod_csums.ic_data = csum_infos;
+	iod_csums.ic_nr = update_recx_nr;
 
 	for (i = 0; i < update_recx_nr; i++) {
 		uint64_t csum_buf_len;
@@ -189,7 +190,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	 * how the server object layer already interfaces with VOS)
 	 */
 	vos_fetch_begin(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
-			false, &ioh);
+			0, NULL, &ioh, NULL);
 
 	biod = vos_ioh2desc(ioh);
 	bsgl = bio_iod_sgl(biod, 0);

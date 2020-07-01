@@ -91,8 +91,8 @@
 
 extern struct dss_module_key vos_module_key;
 
-#define VOS_POOL_HHASH_BITS 10 /* Upto 1024 pools */
-#define VOS_CONT_HHASH_BITS 20 /* Upto 1048576 containers */
+#define VOS_POOL_HHASH_BITS 10 /* Up to 1024 pools */
+#define VOS_CONT_HHASH_BITS 20 /* Up to 1048576 containers */
 
 #define VOS_BLK_SHIFT		12	/* 4k */
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
@@ -196,22 +196,14 @@ struct vos_container {
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
 	daos_handle_t		vc_dtx_committed_hdl;
-	/* The objects with committable DTXs in DRAM. */
-	daos_handle_t		vc_dtx_cos_hdl;
 	/** The root of the B+ tree for ative DTXs. */
 	struct btr_root		vc_dtx_active_btr;
 	/** The root of the B+ tree for committed DTXs. */
 	struct btr_root		vc_dtx_committed_btr;
-	/* The DTX COS-btree. */
-	struct btr_root		vc_dtx_cos_btr;
-	/* The global list for committable DTXs. */
-	d_list_t		vc_dtx_committable_list;
 	/* The global list for committed DTXs. */
 	d_list_t		vc_dtx_committed_list;
 	/* The temporary list for committed DTXs during re-index. */
 	d_list_t		vc_dtx_committed_tmp_list;
-	/* The count of committable DTXs. */
-	uint32_t		vc_dtx_committable_count;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
 	/* The items count in vc_dtx_committed_tmp_list. */
@@ -232,10 +224,8 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_abort_aggregation:1,
 				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
-	uint64_t		vc_dtx_resync_gen;
 };
 
 struct vos_dtx_act_ent {
@@ -246,11 +236,13 @@ struct vos_dtx_act_ent {
 	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
+	unsigned int			 dae_committable:1,
+					 dae_committed:1,
+					 dae_aborted:1;
 };
 
 extern struct vos_tls	*standalone_tls;
 #ifdef VOS_STANDALONE
-unsigned int tmp_count;
 #define VOS_TIME_START(start, op)		\
 do {						\
 	if (standalone_tls->vtl_dp == NULL)	\
@@ -281,13 +273,21 @@ do {						\
 #define DAE_OID(dae)		((dae)->dae_base.dae_oid)
 #define DAE_DKEY_HASH(dae)	((dae)->dae_base.dae_dkey_hash)
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
-#define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
-#define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
-#define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
+#define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
+#define DAE_VER(dae)		((dae)->dae_base.dae_ver)
 #define DAE_REC_OFF(dae)	((dae)->dae_base.dae_rec_off)
+#define DAE_TGT_CNT(dae)	((dae)->dae_base.dae_tgt_cnt)
+#define DAE_GRP_CNT(dae)	((dae)->dae_base.dae_grp_cnt)
+#define DAE_MBS_DSIZE(dae)	((dae)->dae_base.dae_mbs_dsize)
+#define DAE_OID_CNT(dae)	((dae)->dae_base.dae_oid_cnt)
+#define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
+#define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
+#define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
+#define DAE_OID_INLINE(dae)	((dae)->dae_base.dae_oid_inline)
+#define DAE_OID_OFF(dae)	((dae)->dae_base.dae_oid_off)
 
 struct vos_dtx_cmt_ent {
 	/* Link into vos_conter::vc_dtx_committed_list */
@@ -299,9 +299,13 @@ struct vos_dtx_cmt_ent {
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
+#define DCE_OID(dce)		((dce)->dce_base.dce_oid)
+#define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
+#define DCE_OID_OFF(dce)	((dce)->dce_base.dce_oid_off)
+#define DCE_OID_CNT(dce)	DCE_DKEY_HASH(dce)
 
 /* in-memory structures standalone instance */
-struct bio_xs_context		*vsa_xsctxt_inst;
+extern struct bio_xs_context		*vsa_xsctxt_inst;
 extern int vos_evt_feats;
 
 static inline struct bio_xs_context *
@@ -376,9 +380,11 @@ vos_obj_tab_register();
  * Called from vos_cont_destroy
  *
  * \param umm		[IN]	Instance of an unified memory class.
- * \param cont_df	[IN]	Pointer to the on-disk VOS containter.
+ * \param cont_df	[IN]	Pointer to the on-disk VOS container.
+ *
+ * \return		0 on success and negative on failure.
  */
-void
+int
 vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
 
 /**
@@ -419,7 +425,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param record	[IN]	Address (offset) of the record (in SCM)
- *				to associate witht the transaction.
+ *				to associate with the transaction.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  * \param dtx		[OUT]	tx_id is returned.  Caller is responsible
  *				to save it in the record.
@@ -429,12 +435,6 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			uint32_t type, uint32_t *tx_id);
-
-/**
- * Cleanup DTX handle (in DRAM things) when related PMDK transaction failed.
- */
-void
-vos_dtx_cleanup_dth(struct dtx_handle *dth);
 
 /** Return the already active dtx id, if any */
 uint32_t
@@ -467,41 +467,12 @@ vos_dtx_prepared(struct dtx_handle *dth);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int counti, daos_epoch_t epoch);
-
-/**
- * Register dbtree class for DTX CoS, it is called within vos_init().
- *
- * \return		0 on success and negative on failure.
- */
-int
-vos_dtx_cos_register(void);
-
-/**
- * Remove the DTX from the CoS cache.
- *
- * \param cont		[IN]	Pointer to the container.
- * \param oid		[IN]	Pointer to the object ID.
- * \param xid		[IN]	Pointer to the DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
- *
- * \return		Zero on success.
- * \return		Other negative value if error.
- */
-int
-vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct dtx_id *xid, uint64_t dkey_hash);
-
-/**
- * Query the oldest DTX's timestamp in the CoS cache.
- *
- * \param cont	[IN]	Pointer to the container.
- *
- * \return		The oldest DTX's timestamp in the CoS cache.
- *			Zero if the CoS cache is empty.
- */
-uint64_t
-vos_dtx_cos_oldest(struct vos_container *cont);
+			int counti, daos_epoch_t epoch,
+			struct dtx_cos_key *dcks,
+			struct vos_dtx_act_ent **daes);
+void
+vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
+		    int count, bool abort);
 
 /**
  * Establish indexed active DTX table in DRAM.
@@ -526,14 +497,12 @@ enum vos_tree_class {
 	VOS_BTR_OBJ_TABLE	= (VOS_BTR_BEGIN + 3),
 	/** container index table */
 	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
-	/** DAOS two-phase commit transation table (active) */
+	/** DAOS two-phase commit transaction table (active) */
 	VOS_BTR_DTX_ACT_TABLE	= (VOS_BTR_BEGIN + 5),
-	/** DAOS two-phase commit transation table (committed) */
+	/** DAOS two-phase commit transaction table (committed) */
 	VOS_BTR_DTX_CMT_TABLE	= (VOS_BTR_BEGIN + 6),
-	/** The objects with committable DTXs in DRAM */
-	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 7),
 	/** The VOS incarnation log tree */
-	VOS_BTR_ILOG		= (VOS_BTR_BEGIN + 8),
+	VOS_BTR_ILOG		= (VOS_BTR_BEGIN + 7),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
@@ -786,7 +755,7 @@ void vos_cont_decref(struct vos_container *cont);
 enum vos_iter_state {
 	/** iterator has no valid cursor */
 	VOS_ITS_NONE,
-	/** iterator has valide cursor (user can call next/probe) */
+	/** iterator has valid cursor (user can call next/probe) */
 	VOS_ITS_OK,
 	/** end of iteration, no more entries */
 	VOS_ITS_END,
@@ -954,12 +923,19 @@ enum {
 	SUBTR_EVT	= (1 << 1),	/**< subtree is evtree */
 };
 
+/* vos_common.c */
 int
 vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob);
 
 void
 vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh);
+
+int
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
+
+int
+vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err);
 
 /* vos_obj.c */
 int
@@ -994,9 +970,9 @@ vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 
 /* Reserve SCM through umem_reserve() for a PMDK transaction */
 struct vos_rsrvd_scm {
-	unsigned int		 rs_actv_cnt;
-	unsigned int		 rs_actv_at;
-	struct pobj_action	*rs_actv;
+	unsigned int		rs_actv_cnt;
+	unsigned int		rs_actv_at;
+	struct pobj_action	rs_actv[0];
 };
 
 umem_off_t
@@ -1101,7 +1077,8 @@ enum {
 	VOS_SLAB_EVT_NODE	= 3,
 	VOS_SLAB_EVT_DESC	= 4,
 	VOS_SLAB_OBJ_DF		= 5,
-	VOS_SLAB_MAX		= 6
+	VOS_SLAB_EVT_NODE_SM	= 6,
+	VOS_SLAB_MAX		= 7
 };
 D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
 
@@ -1127,9 +1104,9 @@ vos_space_sys_set(struct vos_pool *pool, daos_size_t *space_sys);
 int
 vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow);
 int
-vos_space_hold(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-	       daos_size_t *space_hld);
+vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods,
+	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
 

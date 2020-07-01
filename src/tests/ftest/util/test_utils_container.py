@@ -274,7 +274,7 @@ class TestContainer(TestDaosApiBase):
         # for enabling different container properties
         self.input_params = DaosInputParams()
 
-        # Optional daos command objec to use with the USE_DAOS control method
+        # Optional daos command object to use with the USE_DAOS control method
         self.daos = daos_command
 
         # Optional daos command argument values to use with the USE_DAOS control
@@ -292,7 +292,7 @@ class TestContainer(TestDaosApiBase):
         self.written_data = []
 
     def __str__(self):
-        """Return a string representaion of this TestContainer object.
+        """Return a string representation of this TestContainer object.
 
         Returns:
             str: the container's UUID, if defined
@@ -303,11 +303,13 @@ class TestContainer(TestDaosApiBase):
         return super(TestContainer, self).__str__()
 
     @fail_on(DaosApiError)
-    def create(self, uuid=None, con_in=None):
+    def create(self, uuid=None, con_in=None, acl_file=None):
         """Create a container.
 
         Args:
-            uuid (str, optional): contianer uuid. Defaults to None.
+            uuid (str, optional): container uuid. Defaults to None.
+            con_in (optional): to be defined. Defaults to None.
+            acl_file (str, optional): path of the ACL file. Defaults to None.
         """
         self.destroy()
         self.log.info(
@@ -346,6 +348,7 @@ class TestContainer(TestDaosApiBase):
                 "oclass": self.oclass.value,
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
+                "acl_file": acl_file,
             }
             self._log_method("daos.container_create", kwargs)
             uuid = self.daos.get_output("container_create", **kwargs)[0]
@@ -482,8 +485,8 @@ class TestContainer(TestDaosApiBase):
         """Check the container info attributes.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -492,8 +495,8 @@ class TestContainer(TestDaosApiBase):
                 Defaults to None.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:

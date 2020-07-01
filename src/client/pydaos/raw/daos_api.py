@@ -1838,7 +1838,7 @@ class DaosContainer(object):
                       txn=daos_cref.DAOS_TX_NONE):
         """Read an array value from the specified object.
 
-        rec_count --number of records (array indicies) to read
+        rec_count --number of records (array indices) to read
         rec_size --each value in the array must be this size
 
         """
@@ -2105,7 +2105,7 @@ class DaosContainer(object):
         return:
             None
         raise:
-            DaosApiError raised incase of API return code is nonzero
+            DaosApiError raised in case of API return code is nonzero
         """
         self.coh = coh
         func = self.context.get_function('cont-aggregate')

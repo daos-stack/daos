@@ -131,8 +131,8 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 }
 
 int
-daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
-	       d_rank_list_t *ranks, daos_event_t *ev)
+daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
+	       daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
@@ -162,7 +162,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	tse_task_t	*task;
 	int		rc;
 
-	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, iods, sgls,
+	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, iods, sgls, NULL,
 				      maps, ev, NULL, &task);
 	if (rc)
 		return rc;

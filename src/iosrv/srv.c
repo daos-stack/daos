@@ -312,7 +312,7 @@ dss_rpc_cntr_enter(enum dss_rpc_cntr_id id)
 
 /**
  * Decrease the active counter for the RPC type, also increase error counter
- * if @faield is true.
+ * if @failed is true.
  */
 void
 dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool error)
@@ -329,12 +329,11 @@ static int
 dss_iv_resp_hdlr(crt_context_t *ctx, void *hdlr_arg,
 		 void (*real_rpc_hdlr)(void *), void *arg)
 {
-	ABT_pool	pool, *pools = arg;
-	int		rc;
+	struct dss_xstream	*dx = (struct dss_xstream *)arg;
+	int			 rc;
 
-	pool = pools[DSS_POOL_IO];
-	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
-			       ABT_THREAD_ATTR_NULL, NULL);
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_IO], real_rpc_hdlr,
+			       hdlr_arg, ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
 
@@ -342,16 +341,27 @@ static int
 dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	     void (*real_rpc_hdlr)(void *), void *arg)
 {
-	ABT_pool	*pools = arg;
-	ABT_pool	 pool;
-	int		 rc;
+	struct dss_xstream	*dx = (struct dss_xstream *)arg;
+	crt_rpc_t		*rpc = (crt_rpc_t *)hdlr_arg;
+	unsigned int		 mod_id = opc_get_mod_id(rpc->cr_opc);
+	struct dss_module	*module = dss_module_get(mod_id);
+	struct sched_req_attr	 attr = { 0 };
+	int			 rc = -DER_NOSYS;
 
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
 		return 0;
+	/*
+	 * The mod_id for the RPC originated from CART is 0xfe, and 'module'
+	 * will be NULL for this case.
+	 */
+	if (module != NULL && module->sm_mod_ops != NULL &&
+	    module->sm_mod_ops->dms_get_req_attr != NULL)
+		rc = module->sm_mod_ops->dms_get_req_attr(rpc, &attr);
 
-	pool = pools[DSS_POOL_IO];
+	if (rc == 0)
+		return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
 
-	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_IO], real_rpc_hdlr, rpc,
 			       ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
@@ -378,6 +388,9 @@ static void
 wait_all_exited(struct dss_xstream *dx)
 {
 	D_DEBUG(DB_TRACE, "XS(%d) draining ULTs.\n", dx->dx_xs_id);
+
+	sched_stop(dx);
+
 	while (1) {
 		size_t	total_size = 0;
 		int	i;
@@ -461,8 +474,7 @@ dss_srv_handler(void *arg)
 		}
 
 		rc = crt_context_register_rpc_task(dmi->dmi_ctx, dss_rpc_hdlr,
-						   dss_iv_resp_hdlr,
-						   dx->dx_pools);
+						   dss_iv_resp_hdlr, dx);
 		if (rc != 0) {
 			D_ERROR("failed to register process cb "DF_RC"\n",
 				DP_RC(rc));
@@ -540,14 +552,14 @@ dss_srv_handler(void *arg)
 
 	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
-	/* initialized everything for the ULT, notify the creater */
+	/* initialized everything for the ULT, notify the creator */
 	D_ASSERT(!xstream_data.xd_ult_signal);
 	xstream_data.xd_ult_signal = true;
 	xstream_data.xd_ult_init_rc = 0;
 	ABT_cond_signal(xstream_data.xd_ult_init);
 
 	/* wait until all xstreams are ready, otherwise it is not safe
-	 * to run lock-free dss_collective, althought this race is not
+	 * to run lock-free dss_collective, although this race is not
 	 * realistically possible in the DAOS stack.
 	 */
 	ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
@@ -594,7 +606,7 @@ tls_fini:
 signal:
 	if (signal_caller) {
 		ABT_mutex_lock(xstream_data.xd_mutex);
-		/* initialized everything for the ULT, notify the creater */
+		/* initialized everything for the ULT, notify the creator */
 		D_ASSERT(!xstream_data.xd_ult_signal);
 		xstream_data.xd_ult_signal = true;
 		xstream_data.xd_ult_init_rc = rc;
@@ -1059,9 +1071,9 @@ compute_checksum_acc(void *args)
 }
 
 /**
- * Generic offload call - abstraction for accelaration with
+ * Generic offload call - abstraction for acceleration with
  *
- * \param[in] at_args	accelaration tasks with both ULT and FPGA
+ * \param[in] at_args	acceleration tasks with both ULT and FPGA
  */
 int
 dss_acc_offload(struct dss_acc_task *at_args)
@@ -1135,7 +1147,7 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 			break;
 		}
 		D_WARN("set rebuild percentage to "DF_U64"\n", value);
-		rc = sched_set_throttle(DSS_POOL_REBUILD, value);
+		rc = sched_set_throttle(SCHED_REQ_MIGRATE, value);
 		break;
 	default:
 		D_ERROR("invalid key_id %d\n", key_id);

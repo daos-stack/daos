@@ -46,7 +46,7 @@ extern "C" {
 typedef enum {
 	DAOS_OPC_INVALID	= -1,
 
-	/** Managment APIs */
+	/** Management APIs */
 	DAOS_OPC_SVC_RIP = 0,
 	DAOS_OPC_POOL_CREATE,
 	DAOS_OPC_POOL_DESTROY,
@@ -189,7 +189,7 @@ typedef struct {
 	unsigned char		*uuid;
 } daos_pool_create_t;
 
-/** pool destory args */
+/** pool destroy args */
 typedef struct {
 	/** UUID of the pool to destroy. */
 	const uuid_t		uuid;
@@ -387,7 +387,7 @@ typedef struct {
 	daos_handle_t		coh;
 } daos_cont_close_t;
 
-/** Container destory args */
+/** Container destroy args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
@@ -709,7 +709,9 @@ typedef struct {
 	/** Scatter / gather list for a memory descriptor. */
 	d_sg_list_t		*sgls;
 	/** IO Map - only valid for fetch. */
-	daos_iom_t		*maps;
+	daos_iom_t		*ioms;
+	/** extra arguments, for example obj_ec_fail_info for DIOF_EC_RECOV */
+	void			*extra_arg;
 } daos_obj_rw_t;
 
 /** fetch args struct */
@@ -1003,7 +1005,7 @@ typedef struct {
  * \param dep_tasks [IN]
  *			Array of tasks that new task will wait on completion
  *			before it's scheduled.
- * \param taskp	[OUT]	Pointer to task to be created/initalized with the op.
+ * \param taskp	[OUT]	Pointer to task to be created/initialized with the op.
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid parameter

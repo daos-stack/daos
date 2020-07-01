@@ -33,37 +33,9 @@ import (
 func TestNetworkCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"Get network provider list",
-			"network list",
-			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			nil,
-		},
-		{
 			"Perform network scan no provider",
 			"network scan",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			nil,
-		},
-		{
-			"Perform network scan all providers long",
-			"network scan --all",
-			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.NetworkScanReq{}),
-			}, " "),
-			nil,
-		},
-		{
-			"Perform network scan all providers short",
-			"network scan -a",
-			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
 			nil,
@@ -72,7 +44,6 @@ func TestNetworkCommands(t *testing.T) {
 			"Perform network scan with provider ofi+sockets (short)",
 			"network scan -p 'ofi+sockets'",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.NetworkScanReq{
 					Provider: "'ofi+sockets'",
 				}),
@@ -83,7 +54,6 @@ func TestNetworkCommands(t *testing.T) {
 			"Perform network scan with provider ofi+sockets (long)",
 			"network scan --provider 'ofi+sockets'",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.NetworkScanReq{
 					Provider: "'ofi+sockets'",
 				}),

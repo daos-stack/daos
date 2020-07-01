@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -256,9 +256,9 @@ typedef struct {
 } umem_ops_t;
 
 
-#define UMM_SLABS_CNT	6
+#define UMM_SLABS_CNT	7
 
-/** attributes to initialise an unified memroy class */
+/** attributes to initialize an unified memory class */
 struct umem_attr {
 	umem_class_id_t			 uma_id;
 	PMEMobjpool			*uma_pool;

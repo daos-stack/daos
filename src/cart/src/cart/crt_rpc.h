@@ -97,8 +97,8 @@ struct crt_common_hdr {
 	d_rank_t	cch_src_rank;
 	/* tag to which rpc request was sent to */
 	uint32_t	cch_dst_tag;
-	/* Transfer id */
-	uint32_t	cch_xid;
+	/* RPC id */
+	uint64_t	cch_rpcid;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
@@ -200,7 +200,7 @@ struct crt_rpc_priv {
 				crp_have_ep:1,
 				/* RPC is tracked by the context */
 				crp_ctx_tracked:1,
-				/* 1 if RPC is succesfully put on the wire */
+				/* 1 if RPC is successfully put on the wire */
 				crp_on_wire:1;
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;

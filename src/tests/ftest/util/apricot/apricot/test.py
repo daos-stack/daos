@@ -45,6 +45,7 @@ from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
 from dmg_utils_params import \
     DmgYamlParameters, DmgTransportCredentials
+from dmg_utils import DmgCommand
 from server_utils import DaosServerCommand, DaosServerManager
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
@@ -137,7 +138,7 @@ class Test(avocadoTest):
     # pylint: enable=invalid-name
 
     def get_test_name(self):
-        """Obtain test name from self.__str__() """
+        """Obtain test name from self.__str__()."""
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
 
 
@@ -564,7 +565,7 @@ class TestWithServers(TestWithoutServers):
             manager_list (list): list of SubprocessManager objects to start
         """
         user = getuser()
-        # We probalby want to do this parallel if end up with multiple managers
+        # We probably want to do this parallel if end up with multiple managers
         for manager in manager_list:
             self.log.info(
                 "Starting %s: group=%s, hosts=%s, config=%s",
@@ -595,7 +596,7 @@ class TestWithServers(TestWithoutServers):
             super(TestWithServers, self).tearDown()
         except OSError as error:
             errors.append(
-                "Error running inheritted teardown(): {}".format(error))
+                "Error running inherited teardown(): {}".format(error))
 
         # Fail the test if any errors occurred during tear down
         if errors:
@@ -630,7 +631,7 @@ class TestWithServers(TestWithoutServers):
                 containers = [containers]
             self.test_log.info("Destroying containers")
             for container in containers:
-                # Only close a container that has been openned by the test
+                # Only close a container that has been opened by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
                         container.close()
@@ -739,7 +740,7 @@ class TestWithServers(TestWithoutServers):
             # Overwrite the test id with the specified test name
             self.test_id = test_name
 
-        # Update the log file names.  The path is defined throught the
+        # Update the log file names.  The path is defined through the
         # DAOS_TEST_LOG_DIR environment variable.
         self.agent_log = "{}_daos_agent.log".format(self.test_id)
         self.server_log = "{}_daos_server.log".format(self.test_id)
@@ -767,7 +768,14 @@ class TestWithServers(TestWithoutServers):
             DmgCommand: New DmgCommand object.
 
         """
-        return self.server_managers[index].dmg
+        if self.server_managers:
+            return self.server_managers[index].dmg
+
+        dmg_config_file = self.get_config_file("daos", "dmg")
+        dmg_cfg = DmgYamlParameters(
+            dmg_config_file, self.server_group, DmgTransportCredentials())
+        dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
+        return DmgCommand(self.bin, dmg_cfg)
 
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.
@@ -859,3 +867,34 @@ class TestWithServers(TestWithoutServers):
                 to True.
         """
         self.container = self.get_container(pool, namespace, create)
+
+    def start_additional_servers(self, additional_servers, index=0):
+        """Start additional servers.
+
+        This method can be used to start a new daos_server during a test.
+
+        Args:
+            additional_servers (list of str): List of hostnames to start
+                daos_server.
+            index (int): Determines which server_managers to use when creating
+                the new server.
+        """
+        self.server_managers.append(
+            DaosServerManager(
+                self.server_managers[index].manager.job,
+                self.manager_class,
+                self.server_managers[index].dmg.yaml
+            )
+        )
+        self.server_managers[-1].manager.assign_environment(
+            EnvironmentVariables({"PATH": None}), True)
+        self.server_managers[-1].hosts = (
+            additional_servers, self.workdir, self.hostfile_servers_slots)
+
+        self.log.info(
+            "Starting %s: group=%s, hosts=%s, config=%s", "server",
+            self.server_managers[-1].get_config_value("name"),
+            self.server_managers[-1].hosts,
+            self.server_managers[-1].get_config_value("filename"))
+        self.server_managers[-1].verify_socket_directory(getuser())
+        self.server_managers[-1].start()

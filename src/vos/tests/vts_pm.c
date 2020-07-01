@@ -144,7 +144,8 @@ vos_check(void **state, vos_iter_param_t *param, vos_iter_type_t type,
 	struct vos_iter_anchors	 anchors = {0};
 	int			 rc;
 
-	rc = vos_iterate(param, type, true, &anchors, count_cb, NULL, &counts);
+	rc = vos_iterate(param, type, true, &anchors, count_cb, NULL, &counts,
+			 NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(expected->num_objs, counts.num_objs);
 	assert_int_equal(expected->num_dkeys, counts.num_dkeys);
@@ -733,7 +734,7 @@ punch_model_test(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_RECX | DAOS_GET_MAX,
-			       11, &dkey, &akey, &rex);
+			       11, &dkey, &akey, &rex, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(rex.rx_idx, 0);
 	assert_int_equal(rex.rx_nr, strlen(latest));
@@ -1226,7 +1227,7 @@ cond_test(void **state)
 	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);
-	/** Key doesn't exist still, that supercedes read conflict */
+	/** Key doesn't exist still, that supersedes read conflict */
 	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);

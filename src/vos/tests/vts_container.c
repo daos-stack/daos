@@ -89,7 +89,7 @@ co_ops_run(void **state)
 					printf("UUID clear did not work\n");
 				break;
 			default:
-				fail_msg("Unkown Ops!\n");
+				fail_msg("Unknown Ops!\n");
 				break;
 			}
 			assert_int_equal(ret, 0);
@@ -246,7 +246,7 @@ co_uuid_iter_test(struct vc_test_args *arg)
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl = arg->poh;
 
-	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &ih);
+	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &ih, NULL);
 	if (rc != 0) {
 		print_error("Failed to prepare co iterator\n");
 		return rc;

@@ -73,11 +73,9 @@ struct ds_cont_child {
 				 sc_dtx_aggregating:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
-				 sc_vos_aggregating:1,
-				 sc_abort_vos_aggregating:1,
 				 sc_stopping:1;
-	/* Aggregate ULT */
-	struct dss_sleep_ult	 *sc_agg_ult;
+	/* Tracks the schedule request for aggregation ULT */
+	struct sched_request	*sc_agg_req;
 
 	/*
 	 * Snapshot delete HLC (0 means no change), which is used
@@ -102,6 +100,16 @@ struct ds_cont_child {
 	uint64_t		*sc_snapshots;
 	uint32_t		 sc_snapshots_nr;
 	uint32_t		 sc_open;
+
+	uint64_t		 sc_dtx_committable_count;
+	/* The objects with committable DTXs in DRAM. */
+	daos_handle_t		 sc_dtx_cos_hdl;
+	/* The DTX COS-btree. */
+	struct btr_root		 sc_dtx_cos_btr;
+	/* The global list for committable DTXs. */
+	d_list_t		 sc_dtx_cos_list;
+	/* The pool map version for the latest DTX resync on the container. */
+	uint32_t		 sc_dtx_resync_ver;
 };
 
 /*
@@ -151,8 +159,8 @@ int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
  * Query container properties.
  *
  * \param[in]	ns	pool IV namespace
- * \param[in]	coh_uuid
- *			container handle uuid
+ * \param[in]	co_uuid
+ *			container uuid
  * \param[out]	cont_prop
  *			returned container properties
  *			If it is NULL, return -DER_INVAL;
@@ -170,7 +178,7 @@ int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
  *
  * \return		0 if Success, negative if failed.
  */
-int ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t coh_uuid,
+int ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t co_uuid,
 		       daos_prop_t *cont_prop);
 
 /** get all snapshots of the container from IV */
@@ -210,7 +218,7 @@ struct csum_recalc_args {
 	ABT_eventual		 csum_eventual;
 };
 
-/* Callback funtion to pass to vos_aggregation */
+/* Callback function to pass to vos_aggregation */
 void
 ds_csum_recalc(void *args);
 

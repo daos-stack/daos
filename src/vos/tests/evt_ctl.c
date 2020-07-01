@@ -230,7 +230,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, daos_epoch_t *high,
 		*should_pass = false;
 	}
 parse_rect:
-	rect->rc_ex.ex_lo = atoll(str);
+	rect->rc_ex.ex_lo = strtoull(str, NULL, 10);
 
 	tmp = strchr(str, EVT_SEP_EXT);
 	if (tmp == NULL) {
@@ -239,7 +239,7 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_ex.ex_hi = atoll(str);
+	rect->rc_ex.ex_hi = strtoull(str, NULL, 10);
 	tmp = strchr(str, EVT_SEP_EPC);
 	if (tmp == NULL) {
 		D_PRINT("Invalid input string %s\n", str);
@@ -247,13 +247,13 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_epc = atoll(str);
+	rect->rc_epc = strtoull(str, NULL, 10);
 	tmp = strchr(str, EVT_SEP_MNR);
 	if (tmp == NULL) {
 		rect->rc_minor_epc = 1;
 	} else {
 		str = tmp + 1;
-		rect->rc_minor_epc = atoll(str);
+		rect->rc_minor_epc = atoi(str);
 	}
 
 	if (high) {
@@ -262,7 +262,7 @@ parse_rect:
 		if (tmp == NULL)
 			goto parse_value;
 		str = tmp + 1;
-		*high = atoll(str);
+		*high = strtoull(str, NULL, 10);
 	}
 
 parse_value:
@@ -1896,7 +1896,7 @@ test_evt_overlap_split(struct test_arg *arg, int major_num, int minor_num)
 
 finish:
 	if (tree_depth_fail)
-		fail_msg("Node not splitted\n");
+		fail_msg("Node not split\n");
 	D_FREE(expected_data);
 	D_FREE(expected_epochs);
 	rc = evt_destroy(toh);

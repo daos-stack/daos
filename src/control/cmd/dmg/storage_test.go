@@ -24,11 +24,16 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -38,10 +43,9 @@ func TestStorageCommands(t *testing.T) {
 
 	runCmdTests(t, []cmdTest{
 		{
-			"Format without reformat",
+			"Format",
 			"storage format",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.StorageFormatReq{}),
 			}, " "),
 			nil,
@@ -50,40 +54,32 @@ func TestStorageCommands(t *testing.T) {
 			"Format with reformat",
 			"storage format --reformat",
 			strings.Join([]string{
-				"ConnectClients",
+				printRequest(t, &control.SystemQueryReq{}),
 				printRequest(t, &control.StorageFormatReq{Reformat: true}),
 			}, " "),
 			nil,
 		},
 		{
-			"Reformat system without ranks filter",
-			"storage format --system",
+			"Format with invalid ranks filter",
+			"storage format --ranks 1-3",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemResetFormatReq{Ranks: []system.Rank{}}),
-				"ConnectClients",
-				printRequest(t, storageFormatReq),
+				printRequest(t, &control.StorageFormatReq{}),
 			}, " "),
-			nil,
+			errors.New("--ranks parameter invalid"),
 		},
 		{
-			"Reformat system with ranks filter",
-			"storage format --system --ranks 0,1,2,3,4", // TODO DAOS-4454: enable [0-4] syntax
+			"Non-system reformat with invalid ranks filter",
+			"storage format --reformat --ranks 0-4",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemResetFormatReq{
-					Ranks: []system.Rank{0, 1, 2, 3, 4},
-				}),
-				"ConnectClients",
-				printRequest(t, storageFormatReq),
+				printRequest(t, &control.SystemQueryReq{}),
+				printRequest(t, &control.StorageFormatReq{Reformat: true}),
 			}, " "),
-			nil,
+			errors.New("--ranks parameter invalid"),
 		},
 		{
 			"Scan",
 			"storage scan",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.StorageScanReq{}),
 			}, " "),
 			nil,
@@ -91,20 +87,19 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Prepare without force",
 			"storage prepare",
-			"ConnectClients",
-			fmt.Errorf("consent not given"),
+			"",
+			errors.New("consent not given"),
 		},
 		{
 			"Prepare with nvme-only and scm-only",
 			"storage prepare --force --nvme-only --scm-only",
-			"ConnectClients",
-			fmt.Errorf("nvme-only and scm-only options should not be set together"),
+			"",
+			errors.New("nvme-only and scm-only options should not be set together"),
 		},
 		{
 			"Prepare with scm-only",
 			"storage prepare --force --scm-only",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.StoragePrepareReq{
 					SCM: &control.ScmPrepareReq{},
 				}),
@@ -115,7 +110,6 @@ func TestStorageCommands(t *testing.T) {
 			"Prepare with nvme-only",
 			"storage prepare --force --nvme-only",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.StoragePrepareReq{
 					NVMe: &control.NvmePrepareReq{},
 				}),
@@ -126,13 +120,12 @@ func TestStorageCommands(t *testing.T) {
 			"Prepare with non-existent option",
 			"storage prepare --force --nvme",
 			"",
-			fmt.Errorf("unknown flag `nvme'"),
+			errors.New("unknown flag `nvme'"),
 		},
 		{
 			"Prepare with force and reset",
 			"storage prepare --force --reset",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.StoragePrepareReq{
 					NVMe: &control.NvmePrepareReq{Reset: true},
 					SCM:  &control.ScmPrepareReq{Reset: true},
@@ -144,7 +137,6 @@ func TestStorageCommands(t *testing.T) {
 			"Prepare with force",
 			"storage prepare --force",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.StoragePrepareReq{
 					NVMe: &control.NvmePrepareReq{Reset: false},
 					SCM:  &control.ScmPrepareReq{Reset: false},
@@ -153,24 +145,112 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Set FAULTY device status",
-			"storage set nvme-faulty --devuuid abcd",
-			"ConnectClients StorageSetFaulty-dev_uuid:\"abcd\" ",
+			"Set FAULTY device status (force)",
+			"storage set nvme-faulty --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d -f",
+			printRequest(t, &control.SmdQueryReq{
+				UUID:      "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				SetFaulty: true,
+			}),
 			nil,
+		},
+		{
+			"Set FAULTY device status (without force)",
+			"storage set nvme-faulty --uuid abcd",
+			"StorageSetFaulty",
+			errors.New("consent not given"),
+		},
+		{
+			"Set FAULTY device status (with > 1 host)",
+			"-l host-[1-2] storage set nvme-faulty -f --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"StorageSetFaulty",
+			errors.New("> 1 host"),
 		},
 		{
 			"Set FAULTY device status without device specified",
 			"storage set nvme-faulty",
-			"ConnectClients StorageSetFaulty",
-			fmt.Errorf("the required flag `-u, --devuuid' was not specified"),
+			"StorageSetFaulty",
+			errors.New("the required flag `-u, --uuid' was not specified"),
 		},
 		{
 			"Nonexistent subcommand",
 			"storage quack",
 			"",
-			fmt.Errorf("Unknown command"),
+			errors.New("Unknown command"),
 		},
 	})
+}
+
+func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
+	for name, tc := range map[string]struct {
+		reformat bool
+		rankList []system.Rank
+		uErr     error
+		members  []*ctlpb.SystemMember
+		expOK    bool
+		expErr   error
+	}{
+		"no reformat with rank list": {
+			rankList: []system.Rank{0, 1},
+			expErr:   errors.New("--ranks parameter invalid"),
+		},
+		"no reformat without rank list": {},
+		"empty membership": {
+			reformat: true,
+		},
+		"failed member query": {
+			reformat: true,
+			uErr:     errors.New("system failed"),
+			expErr:   errors.New("system failed"),
+		},
+		"rank not stopped": {
+			reformat: true,
+			members: []*ctlpb.SystemMember{
+				{Rank: 0, State: uint32(system.MemberStateStopped)},
+				{Rank: 1, State: uint32(system.MemberStateJoined)},
+			},
+			expErr: errors.New("system reformat requires the following 1 rank to be stopped: 1"),
+		},
+		"ranks not stopped": {
+			reformat: true,
+			members: []*ctlpb.SystemMember{
+				{Rank: 0, State: uint32(system.MemberStateJoined)},
+				{Rank: 1, State: uint32(system.MemberStateStopped)},
+				{Rank: 5, State: uint32(system.MemberStateJoined)},
+				{Rank: 2, State: uint32(system.MemberStateJoined)},
+				{Rank: 4, State: uint32(system.MemberStateJoined)},
+				{Rank: 3, State: uint32(system.MemberStateJoined)},
+				{Rank: 6, State: uint32(system.MemberStateStopped)},
+			},
+			expErr: errors.New("system reformat requires the following 5 ranks to be stopped: 0,2-5"),
+		},
+		"system reformat": {
+			reformat: true,
+			members: []*ctlpb.SystemMember{
+				{Rank: 0, State: uint32(system.MemberStateStopped)},
+				{Rank: 0, State: uint32(system.MemberStateStopped)},
+			},
+			expOK: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryError: tc.uErr,
+				UnaryResponse: control.MockMSResponse("host1", nil,
+					&ctlpb.SystemQueryResp{Members: tc.members}),
+			})
+			cmd := storageFormatCmd{}
+			cmd.log = log
+			cmd.Reformat = tc.reformat
+			cmd.ctlInvoker = mi
+
+			ok, err := cmd.shouldReformatSystem(context.Background(), tc.rankList)
+			common.CmpErr(t, tc.expErr, err)
+			common.AssertEqual(t, tc.expOK, ok, name)
+		})
+	}
 }
 
 //func TestScanDisplay(t *testing.T) {
