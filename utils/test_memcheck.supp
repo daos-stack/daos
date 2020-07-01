@@ -1,0 +1,584 @@
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:possible
+   fun:calloc
+   fun:array_alloc_one
+   fun:lrua_array_alloc
+   fun:vos_ts_table_alloc
+   fun:alloc_ts_cache
+   fun:ts_test_init
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_ts_tests
+   fun:run_all_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:vea_reserve
+   ...
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:(below main)
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   ...
+   fun:dl_open_worker
+   ...
+   obj:/usr/lib64/libibverbs.so.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:possible
+   fun:calloc
+   fun:_dl_allocate_tls
+   fun:pthread_create@@GLIBC_*
+   fun:eq_test_4
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:alloc_word_desc
+   fun:make_bare_word
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:make_variable_value
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:calloc
+   obj:/usr/lib64/librdmacm.so.*
+   ...
+   fun:rdma_create_id
+   fun:vrb_init_info
+   fun:fi_verbs_ini
+   fun:fi_ini
+   fun:fi_getinfo@@FABRIC_*
+   fun:na_ofi_getinfo
+   fun:na_ofi_check_protocol
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   obj:/usr/lib64/librdmacm.so.*
+   ...
+   fun:rdma_bind_addr
+   fun:vrb_init_info
+   fun:fi_verbs_ini
+   fun:fi_ini
+   fun:fi_getinfo@@FABRIC_*
+   fun:na_ofi_getinfo
+   fun:na_ofi_check_protocol
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:calloc
+   fun:drpc_call
+   fun:request_credentials_via_drpc
+   ...
+   fun:_cmocka_run_group_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:__strncpy_sse2_unaligned
+   fun:strncpy
+   fun:test_evt_various_data_size_internal
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_internal_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:calloc
+   fun:btr_context_create
+   fun:dbtree_open_inplace_ex
+   fun:tree_open_create
+   fun:key_tree_prepare
+   fun:key_punch
+   fun:vos_obj_punch
+   fun:puncha_with_flags.isra.*
+   fun:conflicting_rw_exec_one
+   fun:conflicting_rw_exec
+   fun:conflicting_rw
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_mvcc_tests
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:malloc
+   fun:vts_alloc_gen_fname
+   fun:io_obj_cache_test
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_io_test
+   fun:run_all_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:command_connect
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:malloc
+   fun:strndup
+   fun:prop_to_acl_response
+   ...
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:fd_to_buffered_stream
+   fun:with_input_from_buffered_stream
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:add_unwind_protect
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:calloc
+   fun:register_cb
+   fun:tse_task_register_cbs
+   fun:sched_test_2
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:calloc
+   fun:gc_bin_find_bag
+   fun:gc_bin_add_item
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:possible
+   fun:calloc
+   fun:vos_ts_table_alloc
+   fun:alloc_ts_cache
+   fun:ts_test_init
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_ts_tests
+   fun:run_all_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   ...
+   fun:array_create
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:malloc
+   fun:eq_test_consumer
+   fun:start_thread
+   fun:clone
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:set_default_locale
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:calloc
+   fun:gc_cont_run
+   fun:gc_cont_test
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_gc_tests
+   fun:run_all_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:User
+   fun:pmemobj_tx_add_snapshot
+   fun:pmemobj_tx_add_common.constprop.*
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:calloc
+   ...
+   fun:btr_insert
+   fun:btr_upsert
+   fun:dbtree_update
+   fun:vos_cont_create
+   fun:cont_init
+   fun:dts_ctx_init
+   fun:gc_setup
+   ...
+   fun:run_all_tests
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:calloc
+   fun:test_evt_iter_flags
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_internal_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:calloc
+   fun:evt_tcx_create
+   fun:evt_tcx_clone
+   fun:evt_iter_prepare
+   fun:test_evt_overlap_split_internal
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_internal_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:cmd_init
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:malloc
+   fun:do_alloc
+   ...
+   fun:protobuf_c_message_unpack
+   fun:expect_drpc_list_cont_resp_with_containers
+   ...
+   fun:_cmocka_run_group_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:hash_insert
+    ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:execute_command
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:make_*
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:set_locale_var
+   fun:set_default_lang
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:calloc
+   fun:ent_array_resize
+   fun:ent_array_alloc.isra.*
+   fun:evt_ent_array_fill
+   fun:evt_iter_probe_sorted
+   fun:evt_iter_probe
+   ...
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:malloc
+   fun:utest_alloc
+   fun:bio_alloc_init
+   fun:bio_strdup
+   fun:ts_add_rect
+   fun:ts_cmd_run
+   fun:ts_group
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_cmd_line_test
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:calloc
+   fun:pool_file_setup
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_pool_test
+   fun:run_all_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:calloc
+   fun:generate_view
+   fun:aggregate_basic
+   fun:aggregate_21
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_aggregate_tests
+   fun:run_all_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:set_lang
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:calloc
+   fun:vea_hint_load
+   fun:ut_interleaved_ops
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:(below main)
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:possible
+   fun:calloc
+   ...
+   obj:/usr/lib64/libmlx4.so.*
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:possible
+   fun:calloc
+   fun:lrua_array_alloc
+   fun:vos_ts_table_alloc
+   fun:alloc_ts_cache
+   fun:ts_test_init
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_ts_tests
+   fun:run_all_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   ...
+   fun:_dl_init
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:calloc
+   fun:pack_validate_resp_in_drpc_call_resp_body
+   fun:init_valid_cred
+   fun:init_default_cred
+   fun:test_cont_can_delete
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:crt_hg_init
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:malloc
+   fun:xmalloc
+   fun:make_word_list
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   ...
+   fun:copy_command
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:malloc
+   fun:xmalloc
+   fun:array_create_element
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:definite
+   fun:calloc
+   fun:evt_tcx_create
+   fun:evt_tcx_clone
+   fun:evt_iter_prepare
+   fun:test_evt_overlap_split
+   ...
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:indirect
+   fun:calloc
+   fun:ent_array_resize
+   fun:ent_array_alloc.isra.*
+   fun:evt_ent_array_fill
+   fun:evt_iter_probe_sorted
+   fun:evt_iter_probe
+   fun:test_evt_overlap_split
+   ...
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds:possible
+   fun:calloc
+   fun:lrua_array_alloc_one
+   fun:lrua_array_alloc
+   fun:vos_ts_table_alloc
+   fun:alloc_ts_cache
+   fun:ts_test_init
+   obj:/usr/lib64/libcmocka.so.*
+   fun:_cmocka_run_group_tests
+   fun:run_ts_tests
+   fun:run_all_tests
+   fun:main
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:calloc
+   fun:sk_btr_gen_keys
+   ...
+   fun:main
+}
