@@ -68,8 +68,10 @@ struct daos_node_overhead {
 
 /** Overheads for a tree */
 struct daos_tree_overhead {
-	/** Overhead for full size tree node */
-	struct daos_node_overhead	to_node_overhead;
+	/** Overhead for full size of leaf tree node */
+	struct daos_node_overhead	to_leaf_overhead;
+	/** Overhead for full size intermediate tree node */
+	int				to_int_node_size;
 	/** Overhead for dynamic tree nodes */
 	struct daos_node_overhead	to_dyn_overhead[MAX_TREE_ORDER_INC];
 	/** Number of dynamic tree node sizes */
@@ -320,15 +322,17 @@ daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
  * return true, meaning the end was reached.
  *
  * @param[in]		sgl		sgl to be read from
+ * @param[in]		check_buf	if true process on the sgl buf len
+					instead of iov_len
  * @param[in/out]	idx		index into the sgl to start reading from
  * @param[in]		buf_len_req	number of bytes requested
  * @param[out]		p_buf		resulting pointer to buffer
- * @param[out]		p_buf_len		length of buffer
+ * @param[out]		p_buf_len	length of buffer
  *
  * @return		true if end of SGL was reached
  */
-bool daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-			size_t buf_len_req,
+bool daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf,
+			struct daos_sgl_idx *idx, size_t buf_len_req,
 			uint8_t **p_buf, size_t *p_buf_len);
 
 typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
@@ -337,6 +341,7 @@ typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
  * each contiguous set of bytes provided in the SGL's I/O vectors.
  *
  * @param sgl		sgl to process
+ * @param check_buf	if true process on the sgl buf len instead of iov_len
  * @param idx		index to keep track of what's been processed
  * @param requested_bytes		number of bytes to process
  * @param process_cb	callback function for the processing
@@ -345,8 +350,8 @@ typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
  * @return		Result of the callback function.
  *			Expectation is 0 is success.
  */
-int daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-		       size_t requested_bytes,
+int daos_sgl_processor(d_sg_list_t *sgl, bool check_buf,
+		       struct daos_sgl_idx *idx, size_t requested_bytes,
 		       daos_sgl_process_cb process_cb, void *cb_args);
 
 char *daos_str_trimwhite(char *str);
