@@ -60,6 +60,10 @@ BUILD_TYPE setting, TARGET_TYPE can be explicitly set to a BUILD_TYPE setting
 to always use that set of prerequisites.  These settings are stored in daos.conf
 so setting the values on subsequent builds is not necessary.
 
+If needed, ALT_PREFIX can be set to a colon separated prefix path where to
+look for already built components.  If set, the build will check these
+paths for components before proceeding to build.
+
 ## Go dependencies
 
 Developers contributing Go code may need to change the external dependencies
