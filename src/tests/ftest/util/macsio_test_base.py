@@ -42,7 +42,7 @@ class MacsioTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super(MacsioTestBase, self).setUp()
-        self.manager = Mpirun(None, subprocess=False)
+        self.manager = Mpirun(None, subprocess=False, mpitype="mpich")
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):
