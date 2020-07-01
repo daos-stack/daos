@@ -488,7 +488,7 @@ class TransportCredentials(YamlParameters):
         """
         super(TransportCredentials, self).__init__(namespace, None, title)
         self.ca_cert = LogParameter(log_dir, None, "daosCA.crt")
-        self.allow_insecure = BasicParameter(True, True)
+        self.allow_insecure = BasicParameter(False, False)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
