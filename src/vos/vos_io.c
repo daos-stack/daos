@@ -355,7 +355,8 @@ vos_ioc2ioh(struct vos_io_context *ioc)
 static struct dcs_csum_info *
 vos_ioc2csum(struct vos_io_context *ioc)
 {
-	if (ioc->iod_csums != NULL)
+	/** is enabled and has csums (might not for punch) */
+	if (ioc->iod_csums != NULL && ioc->iod_csums[ioc->ic_sgl_at].ic_nr > 0)
 		return ioc->iod_csums[ioc->ic_sgl_at].ic_data;
 	return NULL;
 }

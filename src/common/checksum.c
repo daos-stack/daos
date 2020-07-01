@@ -960,9 +960,6 @@ calc_csum_recx(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 	for (i = 0; i < nr; i++) { /** for each extent/checksum info */
 		csum_nr = daos_recx_calc_chunks(recxs[i], rec_len,
 						rec_chunksize);
-		C_TRACE("Calculating %zu checksum(s) for Array Value "
-			DF_RECX"\n",
-			csum_nr, DP_RECX(recxs[i]));
 
 		if (map != NULL)
 			rc = calc_csum_recx_with_map(obj, csum_nr, &recxs[i],
@@ -974,6 +971,11 @@ calc_csum_recx(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 							rec_chunksize, &idx);
 		if (rc != 0)
 			return rc;
+
+		C_TRACE("Calculating %zu checksum(s) for Array Value "
+				DF_RECX", data_len: %lu -> "DF_CI"\n",
+			csum_nr, DP_RECX(recxs[i]), sgl->sg_iovs[0].iov_len,
+			DP_CI(csums[i]));
 	}
 
 	return 0;
@@ -994,7 +996,7 @@ calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 	if (!(daos_csummer_initialized(obj)))
 		return 0;
 
-	C_TRACE("Calculating checksum for Single Value\n");
+	C_TRACE("Calculating checksum for Single Value (len=%lu)\n", rec_len);
 	if (singv_lo != NULL && singv_lo->cs_even_dist == 1) {
 		D_ASSERT(singv_lo->cs_bytes > 0 &&
 			 singv_lo->cs_bytes < rec_len);
@@ -1041,6 +1043,9 @@ calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 
 		daos_csummer_finish(obj);
 	}
+
+	C_TRACE("Calculating checksum for Single Value (len=%lu) -> "
+		DF_CI"\n", rec_len, DP_CI(csums[0]));
 
 	return 0;
 }
@@ -1192,6 +1197,8 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 
 	rc = calc_for_iov(csummer, key, dkey_csum_buf, size);
 	if (rc == 0) {
+		C_TRACE("Calculating checksum for Key "DF_KEY" -> "DF_CI"\n",
+			DP_KEY(key), DP_CI(*csum_info));
 		*p_csum = csum_info;
 	} else {
 		D_ERROR("calc_for_iov error: %d\n", rc);
