@@ -344,8 +344,8 @@ class TestWithServers(TestWithoutServers):
         if self.hostlist_clients:
             hosts.extend(self.hostlist_clients)
         self.stop_leftover_processes(["orterun"], hosts)
-        self.insecure_mode = self.params.get("allow_insecure",
-                                             "/run/server_config/transport_config/*")
+        self.insecure_mode = self.params.get(
+            "allow_insecure", "/run/server_config/transport_config/*")
         self.log.info("transport_mode, insecure_mode:  %s", self.insecure_mode)
 
         # Start the clients (agents)
