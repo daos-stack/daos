@@ -366,7 +366,7 @@ dss_ult_exiting(struct sched_request *req)
  * \param[in] req	Sched request.
  *
  * \retval		True:  Abort ULT;
- *			False: Yield then continue;	
+ *			False: Yield then continue;
  */
 static inline bool
 dss_ult_yield(void *arg)
