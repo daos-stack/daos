@@ -202,6 +202,8 @@ class DmgCommand(YamlCommand):
                 self.sub_command_class = self.UpdateAclSubCommand()
             elif self.sub_command.value == "exclude":
                 self.sub_command_class = self.ExcludeSubCommand()
+            elif self.sub_command.value == "drain":
+                self.sub_command_class = self.DrainSubCommand()
             elif self.sub_command.value == "reintegrate":
                 self.sub_command_class = self.ReintegrateSubCommand()
             else:
@@ -234,6 +236,19 @@ class DmgCommand(YamlCommand):
                     DmgCommand.PoolSubCommand.ExcludeSubCommand,
                     self).__init__(
                         "/run/dmg/pool/exclude/*", "exclude")
+                self.pool = FormattedParameter("--pool={}", None)
+                self.rank = FormattedParameter("--rank={}", None)
+                self.tgt_idx = FormattedParameter("--target-idx={}", None)
+
+        class DrainSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool drain command."""
+
+            def __init__(self):
+                """Create a dmg pool drain command object."""
+                super(
+                    DmgCommand.PoolSubCommand.DrainSubCommand,
+                    self).__init__(
+                        "/run/dmg/pool/drain/*", "drain")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
@@ -1044,6 +1059,29 @@ class DmgCommand(YamlCommand):
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("exclude")
+        self.sub_command_class.sub_command_class.pool.value = pool_uuid
+        self.sub_command_class.sub_command_class.rank.value = rank
+        self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
+        return self._get_result()
+
+    def pool_drain(self, pool_uuid, rank, tgt_idx=None):
+        """Drain a daos_server from the pool
+
+        Args:
+            pool (str): Pool uuid.
+            rank (int): Rank of the daos_server to drain
+            tgt_idx (int): target to be excluded from the pool
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool drain command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("drain")
         self.sub_command_class.sub_command_class.pool.value = pool_uuid
         self.sub_command_class.sub_command_class.rank.value = rank
         self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
