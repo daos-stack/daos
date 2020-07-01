@@ -3155,6 +3155,17 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	if (args->dkey == NULL)
 		dc_obj_shard2anchor(args->dkey_anchor, shard);
 
+	if (daos_handle_is_valid(args->th)) {
+		rc = dc_tx_get_dti(args->th, &obj_auxi->l_args.la_dti);
+		/*
+		 * The obj_req_valid call above has already verified this
+		 * transaction handle.
+		 */
+		D_ASSERTF(rc == 0, "%d\n", rc);
+	} else {
+		daos_dti_gen(&obj_auxi->l_args.la_dti, true /* zero */);
+	}
+
 	D_DEBUG(DB_IO, "list opc %d "DF_OID" dkey %llu\n", opc,
 		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash);
 
@@ -3448,7 +3459,7 @@ struct shard_query_key_args {
 	uuid_t			 kqa_cont_uuid;
 	daos_obj_query_key_t	*kqa_api_args;
 	uint64_t		 kqa_dkey_hash;
-	daos_epoch_t		 kqa_epoch;
+	struct dtx_id		 kqa_dti;
 };
 
 static int
@@ -3477,10 +3488,11 @@ shard_query_key_task(tse_task_t *task)
 	tse_task_stack_push_data(task, &args->kqa_dkey_hash,
 				 sizeof(args->kqa_dkey_hash));
 	api_args = args->kqa_api_args;
-	rc = dc_obj_shard_query_key(obj_shard, args->kqa_epoch, api_args->flags,
-				    obj, api_args->dkey, api_args->akey,
-				    api_args->recx, args->kqa_coh_uuid,
-				    args->kqa_cont_uuid,
+	rc = dc_obj_shard_query_key(obj_shard, &args->kqa_auxi.epoch,
+				    api_args->flags, obj, api_args->dkey,
+				    api_args->akey, api_args->recx,
+				    args->kqa_coh_uuid, args->kqa_cont_uuid,
+				    &args->kqa_dti,
 				    &args->kqa_auxi.obj_auxi->map_ver_reply,
 				    task);
 
@@ -3529,6 +3541,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	unsigned int		map_ver = 0;
 	uint64_t		dkey_hash;
 	struct dc_obj_epoch	epoch;
+	struct dtx_id		dti;
 	int			i = 0;
 	int			rc;
 
@@ -3543,6 +3556,17 @@ dc_obj_query_key(tse_task_t *api_task)
 
 		dc_io_epoch_set(&epoch);
 		D_DEBUG(DB_IO, "set query epoch "DF_U64"\n", epoch.oe_value);
+	}
+
+	if (daos_handle_is_valid(api_args->th)) {
+		rc = dc_tx_get_dti(api_args->th, &dti);
+		/*
+		 * The dc_tx_hdl2epoch_and_pmv call above has already verified
+		 * this transaction handle.
+		 */
+		D_ASSERTF(rc == 0, "%d\n", rc);
+	} else {
+		daos_dti_gen(&dti, true /* zero */);
 	}
 
 	obj = obj_hdl2ptr(api_args->oh);
@@ -3659,13 +3683,14 @@ dc_obj_query_key(tse_task_t *api_task)
 
 		args = tse_task_buf_embedded(task, sizeof(*args));
 		args->kqa_api_args	= api_args;
-		args->kqa_epoch		= epoch.oe_value;
+		args->kqa_auxi.epoch	= epoch;
 		args->kqa_auxi.shard	= shard;
 		args->kqa_auxi.target	= obj_shard2tgtid(obj, shard);
 		args->kqa_auxi.map_ver	= map_ver;
 		args->kqa_auxi.obj	= obj;
 		args->kqa_auxi.obj_auxi	= obj_auxi;
 		args->kqa_dkey_hash	= dkey_hash;
+		args->kqa_dti		= dti;
 		uuid_copy(args->kqa_coh_uuid, coh_uuid);
 		uuid_copy(args->kqa_cont_uuid, cont_uuid);
 

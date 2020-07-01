@@ -423,6 +423,7 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
  * \param[in]		recursive	iterate to next level recursively
  * \param[in]		anchors		iteration anchors
  * \param[in,out]	arg		enumeration argument
+ * \param[in]		dth		DTX handle
  *
  * \retval		0	enumeration complete
  * \retval		1	buffer(s) full
@@ -430,7 +431,8 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
  */
 int
 dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	      struct vos_iter_anchors *anchors, struct dss_enum_arg *arg)
+	      struct vos_iter_anchors *anchors, struct dss_enum_arg *arg,
+	      struct dtx_handle *dth)
 {
 	int	rc;
 
@@ -438,7 +440,7 @@ dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 		 type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
 
 	rc = vos_iterate(param, type, recursive, anchors, enum_pack_cb, NULL,
-			 arg);
+			 arg, dth);
 
 	D_DEBUG(DB_IO, "enum type %d tag %d rc "DF_RC"\n", type,
 		dss_get_module_info()->dmi_tgt_id, DP_RC(rc));
