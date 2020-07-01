@@ -455,7 +455,7 @@ ts_remove_rect(void **state)
 	D_PRINT("Remove all "DF_RECT" expect_pass=%s\n", DP_RECT(&rect),
 		should_pass ? "true" : "false");
 
-	rc = evt_remove_all(ts_toh, &rect.rc_ex, &rect.rc_epc);
+	rc = evt_remove_all(ts_toh, &rect.rc_ex, rect.rc_epc);
 
 	if (should_pass) {
 		if (rc != 0)
