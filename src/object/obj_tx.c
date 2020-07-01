@@ -558,7 +558,7 @@ dc_tx_commit_non_cpd(tse_task_t *task, struct dc_tx *tx)
 		args->nr = dtsr->dtsr_nr;
 		args->iods = dtsr->dtsr_iods;
 		args->sgls = dtsr->dtsr_sgls;
-		args->maps = NULL;
+		args->ioms = NULL;
 
 		rc = dc_obj_update(task, &tx->tx_epoch, tx->tx_pm_ver, args);
 	} else {

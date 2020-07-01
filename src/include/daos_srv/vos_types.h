@@ -32,6 +32,11 @@
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
+struct dtx_rsrvd_uint {
+	void			*dru_scm;
+	d_list_t		dru_nvme;
+};
+
 enum dtx_cos_flags {
 	DCF_SHARED	= (1 << 0),
 };

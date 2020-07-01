@@ -290,7 +290,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx)
+		  daos_recx_t *recx, struct dtx_handle *dth)
 {
 	struct vos_object	*obj;
 	struct open_query	 query;
