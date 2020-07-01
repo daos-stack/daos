@@ -3219,26 +3219,33 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 }
 
 int
-evt_remove_all(daos_handle_t toh, const struct evt_rect *rect)
+evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
+	       daos_epoch_t epoch)
 {
 	struct evt_context	*tcx;
 	struct evt_entry	*entry;
 	struct evt_entry_array	 ent_array;
 	struct evt_filter	 filter;
 	int			 rc;
+	struct evt_rect		 rect;
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	rect.rc_ex = *ext;
+	rect.rc_epc = epoch;
+	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
+
+
 	evt_ent_array_init(&ent_array);
 
-	filter.fr_ex = rect->rc_ex;
+	filter.fr_ex = rect.rc_ex;
 	filter.fr_epr.epr_lo = 0;
-	filter.fr_epr.epr_hi = rect->rc_epc;
+	filter.fr_epr.epr_hi = rect.rc_epc;
 	filter.fr_punch = 0;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
-				&filter, rect, &ent_array);
+				&filter, &rect, &ent_array);
 	if (rc != 0) {
 		D_ERROR("ent_array_fill failed: "DF_RC"\n", DP_RC(rc));
 		goto done;
@@ -3254,7 +3261,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_rect *rect)
 			rc = -DER_NO_PERM;
 			D_ERROR("Removing partial extents not allowed:"
 				" Specified rect "DF_RECT" overlaps "DF_EXT"\n",
-				DP_RECT(rect), DP_EXT(&entry->en_ext));
+				DP_RECT(&rect), DP_EXT(&entry->en_ext));
 			break;
 		}
 

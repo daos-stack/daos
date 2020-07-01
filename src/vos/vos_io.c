@@ -1148,12 +1148,11 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
-	if (ioc->ic_remove) {
-		ent.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
-		rc = evt_remove_all(toh, &ent.ei_rect);
-	} else {
-		rc = evt_insert(toh, &ent, NULL);
-	}
+
+	if (ioc->ic_remove)
+		return evt_remove_all(toh, &ent.ei_rect.rc_ex, epoch);
+
+	rc = evt_insert(toh, &ent, NULL);
 
 	return rc;
 }
