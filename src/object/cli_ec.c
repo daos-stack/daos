@@ -1907,16 +1907,21 @@ obj_ec_recov_prep(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 	int			 rc;
 
 	D_ASSERT(iod_nr == fail_info->efi_nrecx_lists);
-	rc = obj_ec_stripe_list_init(fail_info->efi_recx_lists,
-				    fail_info->efi_nrecx_lists,
-				    reasb_req->orr_oca,
-				   &fail_info->efi_stripe_lists);
-	if (rc)
-		goto out;
+	/* when new target failed in recovery, the efi_stripe_lists and
+	 * efi_recov_tasks already initialized.
+	 */
+	if (fail_info->efi_stripe_lists == NULL) {
+		rc = obj_ec_stripe_list_init(fail_info->efi_recx_lists,
+					    fail_info->efi_nrecx_lists,
+					    reasb_req->orr_oca,
+					   &fail_info->efi_stripe_lists);
+		if (rc)
+			goto out;
 
-	rc = obj_ec_recov_task_init(reasb_req, oid, iods, iod_nr);
-	if (rc)
-		goto out;
+		rc = obj_ec_recov_task_init(reasb_req, oid, iods, iod_nr);
+		if (rc)
+			goto out;
+	}
 
 	rc = obj_ec_recov_codec_init(reasb_req, oid, fail_info->efi_ntgts,
 				     fail_info->efi_tgt_list);
@@ -1974,71 +1979,104 @@ obj_ec_sgl_copy(d_sg_list_t *sgl, uint64_t off, void *buf, uint64_t size)
 	struct oes_copy_arg	arg;
 	int			rc;
 
-	rc = daos_sgl_processor(sgl, &sgl_idx, off, NULL, NULL);
+	/* to skip the sgl to offset - off */
+	rc = daos_sgl_processor(sgl, false, &sgl_idx, off, NULL, NULL);
 	D_ASSERT(rc == 0);
 
 	arg.buf = buf;
 	arg.size = size;
 	arg.copied = 0;
-	rc = daos_sgl_processor(sgl, &sgl_idx, size, oes_copy, &arg);
+	/* to copy data from [buf, buf + size) to sgl */
+	rc = daos_sgl_processor(sgl, false, &sgl_idx, size, oes_copy, &arg);
 	D_ASSERT(rc == 0);
 }
 
+/* copy the recovered data back to missed (to be recovered) recx list */
 static void
 obj_ec_recov_fill_back(daos_iod_t *iod, d_sg_list_t *sgl,
+		       struct daos_recx_ep_list *recov_list,
 		       struct daos_recx_ep_list *stripe_list,
 		       d_sg_list_t *stripe_sgl, uint64_t stripe_total_sz,
 		       uint64_t stripe_rec_nr)
 {
 	void		*stripe_buf;
-	daos_recx_t	 recx, stripe_recx, ovl;
-	uint64_t	 stripe_off, off, recx_nr, stripe_total_nr, stripe_nr;
+	daos_recx_t	 recov_recx, stripe_recx, iod_recx, ovl = {0};
+	uint64_t	 stripe_off, iod_off, tmp_off, rec_nr;
+	uint64_t	 stripe_total_nr, stripe_nr;
 	uint64_t	 iod_size = iod->iod_size;
+	bool		 overlapped;
 	uint32_t	 i, j, k;
 
-	recx_nr = 0;
-	for (i = 0; i < iod->iod_nr; i++) {
-		recx = iod->iod_recxs[i];
-		off = recx_nr * iod_size;
+	for (i = 0; i < recov_list->re_nr; i++) {
+		recov_recx = recov_list->re_items[i].re_recx;
+again:
+		/* calculate the offset of to-be-recovered recx in original
+		 * user iod/sgl.
+		 */
+		rec_nr = 0;
+		overlapped = false;
+		for (j = 0; j < iod->iod_nr; j++) {
+			iod_recx = iod->iod_recxs[j];
+			if (!DAOS_RECX_PTR_OVERLAP(&recov_recx, &iod_recx)) {
+				rec_nr += iod_recx.rx_nr;
+				continue;
+			}
+			overlapped = true;
+			D_ASSERT(recov_recx.rx_idx >= iod_recx.rx_idx);
+			ovl.rx_idx = recov_recx.rx_idx;
+			ovl.rx_nr = min(recov_recx.rx_idx + recov_recx.rx_nr,
+					iod_recx.rx_idx + iod_recx.rx_nr) -
+				    ovl.rx_idx;
+			rec_nr += recov_recx.rx_idx - iod_recx.rx_idx;
+		}
+		D_ASSERT(overlapped);
+		iod_off = rec_nr * iod_size;
+
+		/* break the to-be-recovered recx per stripe, can copy
+		 * corresponding data in recovered full stripe to original
+		 * user sgl.
+		 */
 		stripe_total_nr = 0;
-		stripe_nr = 0;
 		for (j = 0; j < stripe_list->re_nr; j++) {
 			stripe_recx = stripe_list->re_items[j].re_recx;
-			stripe_recx.rx_nr = stripe_rec_nr;
+			D_ASSERT(stripe_recx.rx_nr % stripe_rec_nr == 0);
 			stripe_nr = stripe_recx.rx_nr / stripe_rec_nr;
+			stripe_recx.rx_nr = stripe_rec_nr;
 			for (k = 0; k < stripe_nr; k++) {
 				stripe_off = stripe_total_nr * stripe_total_sz;
 				stripe_buf = stripe_sgl->sg_iovs[0].iov_buf +
 					     stripe_off;
-				if (DAOS_RECX_PTR_OVERLAP(&recx,
-							  &stripe_recx)) {
-					ovl.rx_idx =
-						max(recx.rx_idx,
-						    stripe_recx.rx_idx);
-					ovl.rx_nr =
-						min(recx.rx_idx + recx.rx_nr,
-						    stripe_recx.rx_idx +
-						    stripe_recx.rx_nr) -
-						ovl.rx_idx;
-					off += (ovl.rx_idx - recx.rx_idx) *
-					       iod_size;
-					stripe_off +=
-					    (ovl.rx_idx - stripe_recx.rx_idx) *
-					    iod_size;
-					obj_ec_sgl_copy(sgl, off,
-							stripe_buf + stripe_off,
-							ovl.rx_nr * iod_size);
-					recx.rx_idx += ovl.rx_nr;
-					recx.rx_nr -= ovl.rx_nr;
-					if (recx.rx_nr == 0)
+				if (DAOS_RECX_PTR_OVERLAP(&ovl, &stripe_recx)) {
+					D_ASSERT(ovl.rx_idx >=
+						 stripe_recx.rx_idx);
+					rec_nr = min(ovl.rx_idx + ovl.rx_nr,
+						     stripe_recx.rx_idx +
+						     stripe_recx.rx_nr) -
+						 ovl.rx_idx;
+					tmp_off = iod_size *
+					    (ovl.rx_idx - stripe_recx.rx_idx);
+					obj_ec_sgl_copy(sgl, iod_off,
+							stripe_buf + tmp_off,
+							rec_nr * iod_size);
+					ovl.rx_idx += rec_nr;
+					ovl.rx_nr -= rec_nr;
+					if (ovl.rx_nr == 0)
 						goto next;
 				}
 				stripe_recx.rx_idx += stripe_rec_nr;
 				stripe_total_nr++;
 			}
 		}
+
 next:
-		recx_nr += iod->iod_recxs[i].rx_nr;
+		D_ASSERT(ovl.rx_nr == 0);
+		D_ASSERT(ovl.rx_idx <= recov_recx.rx_idx + recov_recx.rx_nr);
+		if (ovl.rx_idx < recov_recx.rx_idx + recov_recx.rx_nr) {
+			recov_recx.rx_nr = recov_recx.rx_idx + recov_recx.rx_nr
+					   - ovl.rx_idx;
+			recov_recx.rx_idx = ovl.rx_idx;
+			goto again;
+		}
 	}
 }
 
@@ -2051,14 +2089,16 @@ obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 	struct obj_ec_fail_info		*fail_info = reasb_req->orr_fail;
 	struct obj_ec_recov_codec	*codec = fail_info->efi_recov_codec;
 	struct daos_oclass_attr		*oca = reasb_req->orr_oca;
-	struct daos_recx_ep_list	*stripe_list;
+	struct daos_recx_ep_list	*stripe_list, *recov_list;
 	struct daos_recx_ep_list	*stripe_lists =
 						fail_info->efi_stripe_lists;
+	struct daos_recx_ep_list	*recov_lists =
+						fail_info->efi_recx_lists;
 	d_sg_list_t			*stripe_sgls =
 						fail_info->efi_stripe_sgls;
 	d_sg_list_t			*stripe_sgl, *sgl;
 	daos_iod_t			*iod;
-	void				*buf_rsgl, *buf_stripe;
+	void				*buf_stripe;
 	uint32_t			 i, j, sidx, stripe_nr;
 	uint64_t			 cell_sz, stripe_total_sz;
 	uint64_t			 stripe_rec_nr =
@@ -2067,16 +2107,19 @@ obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 
 	for (i = 0; i < iod_nr; i++) {
 		stripe_list = &stripe_lists[i];
-		if (stripe_list->re_nr == 0)
+		recov_list = &recov_lists[i];
+		if (recov_list->re_nr == 0 || stripe_list->re_nr == 0) {
+			D_ASSERT(recov_list->re_nr == 0 &&
+				 stripe_list->re_nr == 0);
 			continue;
+		}
 
 		iod = &iods[i];
 		sgl = &sgls[i];
 		stripe_sgl = &stripe_sgls[i];
 		cell_sz = obj_ec_cell_rec_nr(oca) * iod->iod_size;
 		stripe_total_sz = cell_sz * obj_ec_tgt_nr(oca);
-		buf_rsgl = stripe_sgl->sg_iovs[0].iov_buf;
-		buf_stripe = buf_rsgl;
+		buf_stripe = stripe_sgl->sg_iovs[0].iov_buf;
 		for (j = 0; j < stripe_list->re_nr; j++) {
 			recx_ep = &stripe_list->re_items[j];
 			stripe_nr = recx_ep->re_recx.rx_nr / stripe_rec_nr;
@@ -2086,8 +2129,9 @@ obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 				buf_stripe += stripe_total_sz;
 			}
 		}
-		obj_ec_recov_fill_back(iod, sgl, stripe_list, stripe_sgl,
-				       stripe_total_sz, stripe_rec_nr);
+		obj_ec_recov_fill_back(iod, sgl, recov_list, stripe_list,
+				       stripe_sgl, stripe_total_sz,
+				       stripe_rec_nr);
 	}
 }
 
