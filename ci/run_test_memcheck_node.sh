@@ -24,6 +24,6 @@ sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
 # run_test.sh with valgrind memcheck
 cd "$DAOS_BASE"
-IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck VALGRIND_SUPP=utils/empty.supp utils/run_test.sh
+IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
 mkdir -p valgrind_memcheck_results
 mv results-*-memcheck.xml valgrind_memcheck_results
