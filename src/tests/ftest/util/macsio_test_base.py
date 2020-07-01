@@ -55,7 +55,7 @@ class MacsioTestBase(TestWithServers):
             Mpirun: JobManager object defining a the job manager command
 
         """
-        return Mpirun(job, self.bin)
+        return Mpirun(job, subprocess=False)
 
     def get_macsio_command(self):
         """Get the MacsioCommand object.

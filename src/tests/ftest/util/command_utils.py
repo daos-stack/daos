@@ -30,7 +30,7 @@ import signal
 from avocado.utils import process
 
 from command_utils_base import \
-    CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
+    CommandFailure, BasicParameter, ObjectWithParameters, \
     CommandWithParameters, YamlParameters, EnvironmentVariables
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError
@@ -157,7 +157,7 @@ class ExecutableCommand(CommandWithParameters):
             self._process = process.SubProcess(**kwargs)
             self._process.start()
 
-            # Deterime if the command has launched correctly using its
+            # Determine if the command has launched correctly using its
             # check_subprocess_status() method.
             if not self.check_subprocess_status(self._process):
                 msg = "Command '{}' did not launch correctly".format(self)
@@ -367,8 +367,8 @@ class CommandWithSubCommand(ExecutableCommand):
         #       <sub_command>:
         #           <sub_command>_sub_command: <sub_command_sub_command>
         #
-        self.sub_command = NamedParameter(
-            "{}_sub_command".format(self._command), None)
+        self.sub_command = BasicParameter(
+            None, yaml_key="{}_sub_command".format(self._command))
 
         # Define the class to represent the active sub-command and it's specific
         # parameters.  Multiple sub-commands may be available, but only one can
